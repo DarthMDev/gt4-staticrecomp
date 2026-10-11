@@ -1,5 +1,16 @@
 # Project status
 
+Owner-requested resumption review, 2026-10-11 (documentation only):
+read the current handoff, recent journal, slice100 evidence and decisions
+0040/0041; baseline `f58c345` matched origin/main by `git ls-remote` and the
+working tree was clean. Local gt4boot and PCSX2 executable hashes still match
+the handoff. CORE, analysis ELF, ISO, Python, capture folders, four archived
+helpers and Desktop ZIP are present; their payload hashes were not rechecked
+in this review. No PCSX2 process found, no build/test/reference run launched.
+Slice101 remains **not started**, as requested by the owner. Production
+frontier and last verified test results below are unchanged; see
+`docs/journal/2026-10-11.md`. Lower historical summaries are qualified below.
+
 Owner-requested model-switch checkpoint, 2026-10-09:
 **read `docs/RETOMADA.md` for the self-contained resumption guide**. Code at
 `2e0de29`, publication docs at `434dcc8`, both pushed to origin/main; this
@@ -1682,8 +1693,9 @@ suite/90k differential recheck 4/4 green (14.24 s), production target unchanged.
 
 - Build: VS 2022 Build Tools 17.14 + MSVC 19.44 + Ninja 1.13.2 + CMake 4.3.1;
   commands in `AGENTS.md` and `README.md`.
-- Tests: 53/53 CTest + Python 73 (67 run, 6 skip), re-run at slice 89
-  (2026-10-09) on the fixed model. The translation tests, `gt4run` and
+- Tests: latest full run at slice100: 53/53 CTest + Python 91
+  (85 run, 6 skip), recorded above; not rerun during the 2026-10-11 review.
+  The translation tests, `gt4run` and
   `gt4boot` exist only where the local CORE does; `gt4boot_build`
   builds the whole-program module on demand.
 - Local inputs (ignored): ISO at the repository root;
@@ -1742,7 +1754,7 @@ suite/90k differential recheck 4/4 green (14.24 s), production target unchanged.
   module entries (correctness first; 278,120 instructions in the boot run).
   The two performance alternatives (resume entries per halt address, inline
   syscall calls in generated code) remain open.
-- **The boot marches** (slice 89): after the semaphore id-space fix
+- **Historical boot march, not the current frontier** (slice 89): after the semaphore id-space fix
   (decision 0039) the old event-starved park is gone — A/B/C stamp with
   distinct handles, the job submits (+0x34=1 between services 3,000 and
   3,500) and the run reaches the 200M-step budget (3,697,027 services,
@@ -1750,8 +1762,11 @@ suite/90k differential recheck 4/4 green (14.24 s), production target unchanged.
   slice-77/78 "guest-side knot" wording is superseded: the knot was the
   model's handle collision (raw 319 = 0x13F vs raw 63). The live no-card
   reference (slice 88) reaches the main menu with no input and stays the
-  comparison anchor. Next: a longer march and the new frontier.
-- The cooperative scheduler was **exercised end to end by the boot run** in
+  comparison anchor. These later boot states preceded the corrected final
+  interrupt-return preemption in slice95; current production excludes root
+  before its first instruction (slices95-96), as recorded at the top.
+- **Historical scheduler exercise, not a current thread census:** the
+  cooperative scheduler was **exercised end to end by the boot run** in
   the fifth slice (the game's own CreateThread/StartThread/ChangeThreadPriority/
   WaitSema sequence) and now runs up to twelve threads under VBlank and timer
   wakeups, with thread switches deferred while a handler runs (decision
@@ -1771,25 +1786,29 @@ suite/90k differential recheck 4/4 green (14.24 s), production target unchanged.
 
 ## Next actions
 
-1. Slice 97: measure reference-relative time/work around the update loop's
-   delay and root execution, then design a defensible shared clock contract.
-   Slice 96 proved WaitSema's 1 ms charge consumes the whole requested 1 ms,
-   interrupting root before any guest instruction; handler/return exclusions
-   do not fix it. Account for computation outside services and identical
-   observation points in both engines; no guessed instruction/cycle factor.
-   Do not undo correct preemption, force turns or special-case waits.
-   Any adopted semantic change needs model identity/compatibility review
-   and regression tests. Slice-94 rates belong to old interrupt_model 3.
-   Historical reference/model-3 device flag/callback-head matching does not
-   establish current phase alignment; BIOS semaphore counts remain unverified.
-   No experiments are running;
-   all temporary instrumentation/quantum edits were removed and rebuilt.
+The owner requested a review only on 2026-10-11. The following is pending
+work, not authorization to start it during this session.
+
+1. Slice101 (not started): separately qualify an interpreter diagnostic/Devel
+   reference build, then observe first slot exception EPC/BD, BIOS-selected
+   return and failure chain, including the handled likely-slot gap. Follow
+   `docs/RETOMADA.md` section 8 and decision0041; release Step Into is not a
+   one-word trace. The matched reference update1000-us/root-work interval
+   remains required before designing a shared clock contract. Slice97's
+   retry/frame samples selected idle and do not supply this interval.
+   Preserve correct preemption; no guessed instruction/cycle conversion,
+   forced root turns or WaitSema exception. Any semantic change needs
+   compatibility review and regression tests. No experiment was launched.
 2. Performance: resume entries or inline syscall calls to shrink the
    interpreted gaps; jump-table dispatch for computed `jr` into local blocks.
 3. Keep the journal and this file current after every working session.
 
 ## Journal
 
+- [2026-10-11](journal/2026-10-11.md) — owner-requested resumption review;
+  current frontier and slice100 limits checked against the handoff, local
+  executable hashes confirmed, historical summary labels refreshed;
+  documentation only, slice101 not started and no tests rerun.
 - [2026-10-01](journal/2026-10-01.md) — fork setup, environment validation,
   decoder expansion, Ghidra verification, working rules, M6-M8 lessons, M7
   slices 1-2, M8 function map, M9 state model, M10 interpreter, M11/M12
