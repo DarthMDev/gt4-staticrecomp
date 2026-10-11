@@ -1,5 +1,12 @@
 # Project status
 
+Tooling question reviewed, 2026-10-11 (documentation only): EE Reloaded can
+broaden independent EE instruction analysis, but does not supply the live
+trap/return and update/root timing evidence currently missing. Recommendation
+is a separately pinned analysis audit, not a project restart; no extension
+installed and slice101 remains not started. Evidence and limits:
+`docs/reverse-engineering/ghidra-ee-reloaded-assessment.md`.
+
 Owner-requested resumption review, 2026-10-11 (documentation only):
 read the current handoff, recent journal, slice100 evidence and decisions
 0040/0041; baseline `f58c345` matched origin/main by `git ls-remote` and the
