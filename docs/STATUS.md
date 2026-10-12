@@ -1,6 +1,8 @@
 # Project status
 
 Closed slice 108, 2026-10-12; baseline 55dc5c7, branch slice108-frame-writer.
+Publication108: ccb06c14db9941975603c1260420466dbf5fa720 pushed branch/main;
+remote main hash matched and working tree clean after fast-forward.
 Confirmed local cause: N1300 notify GetThreadId charge147456 completes shared
 BUSCLK accumulator2310144->0, queues INTC2 and injects handler4AB430 over
 update thread3, savedPC5ADB98/RA5768F0. Exact bridge slot store4AB4AC writes
