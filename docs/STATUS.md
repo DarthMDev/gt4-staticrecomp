@@ -1,6 +1,8 @@
 # Project status
 
 Closed slice106,2026-10-12; baselinecba6d81, branch slice106-frame-sync-result.
+Publication106:28a413df28402572c68b63bad05d7dfd9cc2ec95 pushed branch/main;
+remote main hash matched, working tree clean after fast-forward.
 **First post-message frame-sync result observed:** reference enterscurrent3/
 synced3, waits and returns0; original-policy model enters4/3 and returns1.
 Both havecontrols6186DC/E4=0/1 andquit0. ActualnextGetThreadRA4A06B0 with
