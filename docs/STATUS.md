@@ -1,5 +1,43 @@
 # Project status
 
+Closed slice 108, 2026-10-12; baseline 55dc5c7, branch slice108-frame-writer.
+Confirmed local cause: N1300 notify GetThreadId charge147456 completes shared
+BUSCLK accumulator2310144->0, queues INTC2 and injects handler4AB430 over
+update thread3, savedPC5ADB98/RA5768F0. Exact bridge slot store4AB4AC writes
+70002050 frame3->4, synced3; same main receiver remains{0,1}. Private100
+returns from that interrupt, not idle. CP0EIE clears; deferred context owns
+the interrupted PC, not unchanged Cause/EPC. Current INTC STAT was latched
+already; new queue entry qualifies occurrence, not a guessed status edge.
+
+Fresh reference40windows/280states and reduced120/120 common states exact,
+including new PDB-qualified phase/INTC/DMAC fields. Notify/release stay3/3 in
+GS blank(mode2), start1810604814/delta65601. DelayedGSdue1810670415 is not
+nextINTC2; subsequent VBlankstart derives1815524934 if timing unchanged.
+These are local phase quantities, not full service costs or elapsed alignment.
+Earlier receive phase divergence and matched1000us update wait remain open.
+
+Private observer47/47 repeat records and full repeat checkpoint exact;
+fresh10k production full checkpoint equals107 producer. All guest state,
+models/services match observer; only explicit binary diagnostic provenance
+differs. Fresh work8946341/fullstate interpreter equal in three controls.
+Final map qualifies private kernel/state/driver/compare objects; production
+source/module/libs/exe839adaa22f48... unchanged. Gates54CTest/Python97(91/6)
+inherited from107, not rerun108. Rejected first ODR build and superseded
+no-map capture retained. All owner3/originalBIOS6/copies12 unchanged, both
+references closed normally. Independent native/source/map/framing/phase
+review accepted; automated causal/repeat controls pass. 25helpers/54artifacts
+pinned; metadata6420d600444ac476894ae66ac533cc1023bd583b5d712562a1c9c16a0386d30f.
+Evidence docs/reverse-engineering/slice108-frame-writer.md, decision0049,
+lesson108 and docs/inputs/slice108-frame-writer.json. No runtime/clock/IRQ
+change or functional boot claim.
+
+Next **slice109 — earlier receive/first-update phase and work anchors**.
+Qualify native registration/reference frame writer/INTC2 context and model
+charge history before the earlier receive split, including non-service work.
+Keep correct IRQ and current1ms/service until a replacement is justified;
+do not align elapsed time by frame numbers or guess a universal quantum.
+Lower slice107 and older summaries are historical checkpoints.
+
 Closed slice107,2026-10-12; baseline5fc4e81, branch slice107-update-prefix.
 Publication107:177569071becc079482872c451ae0ea99fa93fd4 pushed branch/main;
 remote main hash matched and working tree clean after fast-forward.

@@ -109,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 107, baseline `5fc4e81`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 108, baseline `55dc5c7`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with closed slice101/102/103/104/105/106/107 updates. Its original checkpoint is
+prefixed with closed slice101/102/103/104/105/106/107/108 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -260,12 +260,26 @@ historical; root `HANDOFF.md` is archival machine-move material.
   profileLF/CRLFhash correction verified, no inputmanifestchange. Owner3/BIOS6/
   copies24 preserved, all3refsclosed,25helpersprivate. Evidence107/metadata/
   decision0048/lesson. No runtime/clock/IRQ change or boot claim.
-- Next: **slice 108 — counter writer and interrupt ownership in notify->release**.
-  Capture exact model frame store, CP0/INTC/DMAC/handler/elapsed accumulator
-  before/after servicecharge and dispatch; preserve diagnostic identity and
-  fullstate controls. Qualify reference event/frame phase. First causal source
-  and1000us reference match remain open; keep correctIRQ and1ms/service,
-  no guessedquantum/forcedwake or absoluteframe elapsedtime alignment.
+- Slice108 evidence-only: exact model N1300 notify charge147456 completes
+  accumulator2310144->0 and queuesINTC2. Handler4AB430 overupdate3 saves
+  PC5ADB98/RA5768F0; bridge slotstore4AB4AC writes70002050 frame3->4/synced3
+  withsame mainreceiver{0,1}. Private100 returns thatinterrupt, notidle;
+  deferredcontext ownsPC, CP0Cause/EPCunchanged. Queueentry isnewoccurrence,
+  INTCSTATalreadylatched. Reference40windows280states/reduced120/120exact,
+  PDB-qualified phase staysGSblank2/3/3; delayedGSdue notnextINTC2. Local
+  phase doesnotalignelapsedtime. Model47/47records andfullrepeatCPTexact;
+  freshproduction10k equals107wholeCPT, observerallgueststate/models/services
+  equal withdiagnosticbinaryprovenance. Work8946341/interpreterequal;
+  finalmapprivateobjectsqualified. Productionexe/module/libs/sourceunchanged,
+  gates54/97inherited107. Rejected ODR build never run; superseded no-map capture
+  retained. Owner3/BIOS6/copies12preserved, bothrefsclosed.25helpers54artifacts;
+  evidence108/metadata/decision0049/lesson. No clock/IRQchange orbootclaim.
+- Next: **slice 109 — earlier receive/first-update phase and work anchors**.
+  Qualify native registration, reference frame writer/INTC2 context and model
+  charge history before the earlier receive split, including non-service work.
+  Keep correctIRQ and1ms/service until a replacement is justified. First
+  preceding causal phase source and1000us reference match remain open;
+  no guessedquantum/forcedwake or absolute elapsedtime alignment byframes.
   Qualify engine/phase and any new observation identities per segment before
   any work->time policy; do not assume both PCSX2 engines agree or call
   release Step Into a word trace. The synthetic trap chain is observed;

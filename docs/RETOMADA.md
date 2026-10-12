@@ -1,5 +1,18 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, fatia 108 encerrada.** A origem
+local do quadro extra foi comprovada: a cobrança de tempo da primeira
+notificação completa o período de vídeo do modelo, dispara INTC2 e chama
+o manipulador do jogo. Sua instrução 4AB4AC escreve quadro 3 -> 4 antes
+de a fila liberar a principal. Na referência, o mesmo trecho segue em
+3/3 numa fase diferente do vídeo; o próximo evento GS não é novo VBlank.
+47/47 registros do modelo e 120/120 estados comuns da referência se repetem
+exatamente. Estado completo em 10 mil serviços coincide com produção;
+runtime/clock/IRQ e executável preservados. Gates 54/97 herdados da 107.
+Próxima 109 qualifica a diferença anterior de fase e trabalho entre serviços
+antes de escolher uma política de tempo. Boot ainda não funcional.
+Evidência108, decisão0049 e STATUS são a retomada atual; blocos abaixo históricos.
+
 **Atualização operacional — 2026-10-12, slice107 encerrada.** Localizamos
 um trecho menor da diferença: atualização e notify entram3/3 nos dois;
 o mesmo nó da principal passa receiver->pending. Referência segue3/3,
