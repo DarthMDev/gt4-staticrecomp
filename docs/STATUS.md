@@ -1,5 +1,27 @@
 # Project status
 
+2026-10-12 — slice110 external runtime menu pilot closed, baseline95dd453,
+branch `codex/runtime-menu-pilot-110`, decision0052. Owner continuation of0051.
+Confirmed native Windows/Clang CPU pilot reaches mainmenu and navigable
+Arcade circuit/car selection with our pinned USA2.00 inputs. Guest enters
+name L, formats new private card and writes8650752bytes; new coldboot copies
+and rereads that pinned card without initialsetup. Reduced1500frame repeat
+ends normally56.566s;14 common100..1400PPM are byte-identical to longer run.
+Long3000requested car probe times out at180s/lastcapture2700, retained as
+incomplete; actual FordKa3D observed, no race/stability claim. GTMode control
+opens map and L's Home/day1/Cr10000, confirming saved profile identity.
+GTMode1500 ends normally113.343s. Seven logs have zero actually-called
+missing imports/unhandled syscalls/unknownIOP/server/cardwritefailures;
+oneCFC2(28) warning each remains. Not a full handled-service fidelity audit.
+Frozen study/production clock/IRQ/kernel unchanged.
+Tracked hash-checked launcher uses new private outputs, optional pinned seed,
+literal argv, and rejects zero-exit guest stops as execution completion.
+Native54/54CTest60.11s +Python104(98run/6skip)73.546s green; final launcher7
+controls0.183s. Productiongt4bootSHA839adaa...6dfab rechecked unchanged.
+Next: coherent MIT runtime integration on Windows; qualify Win32/GPU and
+explicit native Vulkan, retain independent contracts and observe unknowns.
+Stable game/race/audio/XInput/fullsave coverage and adoption remain open.
+
 2026-10-12 — owner-directed acceleration study closed on
 `codex/reference-acceleration-study`, baseline `59c89f6`.
 Three projects cloned/pinned under ignored `private/references/`:

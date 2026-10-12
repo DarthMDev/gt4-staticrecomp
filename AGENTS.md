@@ -24,8 +24,11 @@ slice110 diagnostic priority: audit/use external bases to reach functional
 boot sooner. Decision0051/report external-recomp-acceleration-2026-10-12
 qualify a private ps2-web-recomp native Windows/Clang CPU pilot reaching
 real initial screens with our pinned inputs. Production remains MSVC and
-unchanged; external model/checkpoints are separate. Next qualify profile
-input/mainmenu and coherent runtime integration, preserving contract gates.
+unchanged; external model/checkpoints are separate. Slice110/decision0052
+qualify profile entry/card creation, reread coldboot mainmenu, navigable Arcade
+and GT Mode map. Reduced menu repeat has14 byte-identical captures. Next
+qualify coherent runtime integration and Win32/GPU/native Vulkan, preserving
+contract gates. No race, broad save coverage or stable production adoption.
 Decomp CORE published SHA1 matches ours; reuse metadata with verification.
 PS2Recomp GPLv3 and contract differences require explicit boundaries.
 EE Reloaded is auxiliary, not a prerequisite for the execution pilot.
@@ -303,9 +306,15 @@ historical; root `HANDOFF.md` is archival machine-move material.
   Evidence109/metadata/0050/lesson. No runtime/time/IRQchange orbootclaim.
 - Next (owner priority2026-10-12): **external runtime integration pilot**.
   See decision0051/report external-recomp-acceleration-2026-10-12 and STATUS.
-  Complete headless native Windows/Clang build already reaches real initial
-  GT4 screens with pinned USA2.00 inputs; qualify profile-name -> mainmenu,
-  actually used unknown services, then GPU/Win32/Vulkan. Production unchanged.
+  Slice110/0052: complete Windows/Clang CPU runtime reaches mainmenu, Arcade
+  circuits/manufacturers/FordKa3D and GT Mode map with pinned USA2.00 inputs.
+  Guest-created private card is copied/hash-verified and reread on coldboot;
+  original preserved.1500frame repeat normal,14/14 common100..1400PPM exact.
+  Long3000car probe timeout180s/lastcapture2700 retained, not stability/race.
+  Hash-checked launcher now tracked with seven synthetic controls;54CTest/
+  Python104(98run6skip) green. Productionexe839adaa...6dfab unchanged.
+  Next coherent runtime integration, actually used unknown services and
+  WindowsGPU/Win32/nativeVulkan. Broader save fidelity/adoption open.
   The former slice110 diagnostic below is retained as historical evidence,
   not the current first action: pending INTC2 origin/lifetime before reset.
   Qualify occurrence/queue/STAT-W1C/delivery/mask/CPUgate and earlierreference

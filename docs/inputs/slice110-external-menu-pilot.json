@@ -1,0 +1,1697 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-12",
+  "baseline_commit": "95dd453d92e4504972b4354a6c167db685017edf",
+  "purpose": "Isolated external Windows CPU profile/menu pilot; production unchanged",
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "runtime_identity_manifest": "docs/inputs/external-recomp-references.json",
+  "inputs_manifests": [
+    "docs/inputs/usa-v2.00.json",
+    "docs/inputs/usa-v2.00-native.json"
+  ],
+  "execution_model": "external diagnostic NTSC/software GS; not production checkpoints",
+  "runs": [
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\card-reread5\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "3000",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\card-reread5\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\card-reread5\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\card-reread5\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross",
+        "--press",
+        "1500:cross",
+        "--press",
+        "1800:cross",
+        "--press",
+        "2100:start",
+        "--press",
+        "2400:cross",
+        "--press",
+        "2700:right"
+      ],
+      "timeout_seconds": 180,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": null,
+      "timed_out": true,
+      "completed_requested_frames": false,
+      "elapsed_seconds": 180.92336860019714,
+      "last_captured_frame": "frame_02700.ppm",
+      "directory": "private/slice110-menu-pilot/card-reread5",
+      "warning_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_default_warnings": 1,
+        "memory_card_write_failures": 0
+      },
+      "warning_examples": {
+        "cfc2_default_warnings": "[vu0] cfc2 28"
+      },
+      "stopped_line": null,
+      "card_file_present": true
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\gt-mode7\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "1500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\gt-mode7\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\gt-mode7\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\gt-mode7\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:down",
+        "--press",
+        "630:cross",
+        "--press",
+        "1100:cross"
+      ],
+      "timeout_seconds": 120,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 1500,
+      "reported_budget": 7373114942,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 113.34255920001306,
+      "last_captured_frame": "frame_01500.ppm",
+      "directory": "private/slice110-menu-pilot/gt-mode7",
+      "warning_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_default_warnings": 1,
+        "memory_card_write_failures": 0
+      },
+      "warning_examples": {
+        "cfc2_default_warnings": "[vu0] cfc2 28"
+      },
+      "stopped_line": "[ee] stopped after 1500 frames, 7373114942 cycles: frame limit reached",
+      "card_file_present": true
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\menu-repeat6\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "1500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\menu-repeat6\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\menu-repeat6\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\menu-repeat6\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross"
+      ],
+      "timeout_seconds": 120,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 1500,
+      "reported_budget": 7372994805,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 56.565667000133544,
+      "last_captured_frame": "frame_01500.ppm",
+      "directory": "private/slice110-menu-pilot/menu-repeat6",
+      "warning_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_default_warnings": 1,
+        "memory_card_write_failures": 0
+      },
+      "warning_examples": {
+        "cfc2_default_warnings": "[vu0] cfc2 28"
+      },
+      "stopped_line": "[ee] stopped after 1500 frames, 7372994805 cycles: frame limit reached",
+      "card_file_present": true
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "2000",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control1\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control1\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control1\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:cross",
+        "--press",
+        "600:left",
+        "--press",
+        "630:cross",
+        "--press",
+        "660:right",
+        "--press",
+        "690:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1000:start",
+        "--press",
+        "1200:cross"
+      ],
+      "timeout_seconds": 110,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "exit_code": 0,
+      "timed_out": false,
+      "elapsed_seconds": 52.84266579989344,
+      "last_captured_frame": "frame_02000.ppm",
+      "directory": "private/slice110-menu-pilot/name-control1",
+      "warning_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_default_warnings": 1,
+        "memory_card_write_failures": 0
+      },
+      "warning_examples": {
+        "cfc2_default_warnings": "[vu0] cfc2 28"
+      },
+      "stopped_line": "[ee] stopped after 2000 frames, 9830538451 cycles: frame limit reached",
+      "card_file_present": false
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control2\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "2000",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control2\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control2\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control2\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "950:left",
+        "--press",
+        "980:cross",
+        "--press",
+        "1010:right",
+        "--press",
+        "1040:cross",
+        "--press",
+        "1300:cross",
+        "--press",
+        "1500:start"
+      ],
+      "timeout_seconds": 110,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade",
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 2000,
+      "reported_budget": 9830538451,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 65.37951230001636,
+      "last_captured_frame": "frame_02000.ppm",
+      "directory": "private/slice110-menu-pilot/name-control2",
+      "warning_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_default_warnings": 1,
+        "memory_card_write_failures": 0
+      },
+      "warning_examples": {
+        "cfc2_default_warnings": "[vu0] cfc2 28"
+      },
+      "stopped_line": "[ee] stopped after 2000 frames, 9830538451 cycles: frame limit reached",
+      "card_file_present": false
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control3\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "3000",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control3\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control3\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control3\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "950:left",
+        "--press",
+        "980:cross",
+        "--press",
+        "1010:right",
+        "--press",
+        "1040:cross",
+        "--press",
+        "1300:cross",
+        "--press",
+        "1700:cross",
+        "--press",
+        "2000:cross"
+      ],
+      "timeout_seconds": 180,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade",
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 3000,
+      "reported_budget": 14745738451,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 125.16658999980427,
+      "last_captured_frame": "frame_03000.ppm",
+      "directory": "private/slice110-menu-pilot/name-control3",
+      "warning_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_default_warnings": 1,
+        "memory_card_write_failures": 0
+      },
+      "warning_examples": {
+        "cfc2_default_warnings": "[vu0] cfc2 28"
+      },
+      "stopped_line": "[ee] stopped after 3000 frames, 14745738451 cycles: frame limit reached",
+      "card_file_present": false
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control4\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "4500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control4\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control4\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice110-menu-pilot\\name-control4\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "950:left",
+        "--press",
+        "980:cross",
+        "--press",
+        "1010:right",
+        "--press",
+        "1040:cross",
+        "--press",
+        "1300:cross",
+        "--press",
+        "1700:cross",
+        "--press",
+        "2000:cross",
+        "--press",
+        "2300:right",
+        "--press",
+        "2330:cross",
+        "--press",
+        "2700:cross",
+        "--press",
+        "3000:cross",
+        "--press",
+        "3300:cross",
+        "--press",
+        "4100:right"
+      ],
+      "timeout_seconds": 300,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade",
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 4500,
+      "reported_budget": 22118538822,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 160.71529059996828,
+      "last_captured_frame": "frame_04500.ppm",
+      "directory": "private/slice110-menu-pilot/name-control4",
+      "warning_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_default_warnings": 1,
+        "memory_card_write_failures": 0
+      },
+      "warning_examples": {
+        "cfc2_default_warnings": "[vu0] cfc2 28"
+      },
+      "stopped_line": "[ee] stopped after 4500 frames, 22118538822 cycles: frame limit reached",
+      "card_file_present": true
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "6a9d2d82e9884842590f714cc085780eb2a8b91d5e0507adf58c084f6fd1531b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "928f0c9c9097d366e2692d7892297973522d22f20575199c2b17bba77acc916f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00600.png",
+      "size_bytes": 107161,
+      "sha256": "3bd52f3136e09823c7126f0671674d0528c82fe3a531285bbd1380cde9dd60bb"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "5ae1f7d011df999713cb0ed7a0e1beb4b246b7425ea6f1816f7170ce322f546d"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "108127bfc29e9f021a6413078279de5e23661d68ba8e0e6a33ce5e47f8984352"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "41ecfa77363e8ff25d35dd08da3bdca679c35208a003eb952714523edc8be1e1"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "28cfca0dd503ccace28f497acbb5c814af28177482419708af8d418d7f307986"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01000.png",
+      "size_bytes": 180482,
+      "sha256": "91240ba0f44a22eed9a5fe1fb3710b7e58764a3b87ffea9dd0e6855dea21ac23"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04cdfd9999cc6b2b64976d71ff3ef1f105be18282f3bbbfb7b0e7ece396ace2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0efad9e77562e91645fdaf0d05dedcd4270bb139fa29014bc3a1550ed3bf6d83"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "e55893bdd585b4712544c1a030109a41184cc5ab4e9ab85b9db04a670c4e70fe"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "b85c1ea5d8966b0e763fee3346c7b29e5609a707eaab51ea783722ae404126a8"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01400.png",
+      "size_bytes": 151893,
+      "sha256": "1e96489ad397369fb3f7ca6238af86240da15ecfca50e5935077261a65af14e5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "4357be3627cbacd66a56ec86de510547210d0f875ca0ce48bf4cec627699ee32"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "4db91f5f0af8ad11725d6512717acb47f219b4af8b48d2fd705564f7900d20e7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "cfa90a68cc04bb8f4a9c07b164f5214de0048afb951f565cdf3cde3ac3969bda"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "cfa90a68cc04bb8f4a9c07b164f5214de0048afb951f565cdf3cde3ac3969bda"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "cfa90a68cc04bb8f4a9c07b164f5214de0048afb951f565cdf3cde3ac3969bda"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01900.png",
+      "size_bytes": 89626,
+      "sha256": "6ef5e56a93f060d81a5c8d440356a1576dffba6bb2b1277444df95c84bd4a616"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "2b1cbfb0b8670fdd4288cc54c9f4743ac3e685956c5941a7bcd7b278d446644f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "2b1cbfb0b8670fdd4288cc54c9f4743ac3e685956c5941a7bcd7b278d446644f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "2b1cbfb0b8670fdd4288cc54c9f4743ac3e685956c5941a7bcd7b278d446644f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02200.png",
+      "size_bytes": 89626,
+      "sha256": "6ef5e56a93f060d81a5c8d440356a1576dffba6bb2b1277444df95c84bd4a616"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "2b1cbfb0b8670fdd4288cc54c9f4743ac3e685956c5941a7bcd7b278d446644f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "2b1cbfb0b8670fdd4288cc54c9f4743ac3e685956c5941a7bcd7b278d446644f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "2b1cbfb0b8670fdd4288cc54c9f4743ac3e685956c5941a7bcd7b278d446644f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02500.png",
+      "size_bytes": 99911,
+      "sha256": "3ad3a51733897ef5ef650e185b373087e61737f9d9710b04434b671bf2162bb5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b3ef39c69091de716e01aca43055d430da043a0c85811a40f0021d0e17aca8b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "a05cb1b16670b607032d13838e85d1e3f16ecde1f8e2cee2289e070361adfce0"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "b5e683cc477f6b13c8201545b62fa7a06412a04d75725f4f13fc62172e41a598"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/probe-source.py",
+      "size_bytes": 6232,
+      "sha256": "9a992c9bc80235346ff9a8b42d7b3176e4c3e7e6938fedaeafdd025e9350190b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/probe.log",
+      "size_bytes": 349994767,
+      "sha256": "4ccdf83f59d145d97fe8f2c50baf55fdf983456ef95e01503f2ca4b9154cd477"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/result.json",
+      "size_bytes": 2283,
+      "sha256": "963af936345997e6cdf8b57afc5d551e8bffd75b593d04e798fc69641fac2735"
+    },
+    {
+      "path": "private/slice110-menu-pilot/card-reread5/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "6a9d2d82e9884842590f714cc085780eb2a8b91d5e0507adf58c084f6fd1531b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "928f0c9c9097d366e2692d7892297973522d22f20575199c2b17bba77acc916f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "5ae1f7d011df999713cb0ed7a0e1beb4b246b7425ea6f1816f7170ce322f546d"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00700.png",
+      "size_bytes": 914,
+      "sha256": "b6e4c687a28144804e7f71a0c15ccfb2d9250feaba3cb7d918b91552bd3738a2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "905479599ab72f7fdb9f7e89a70d368ba276376fa7bc88c7f399b548a3a452c9"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "17e44e901a0c76d2d3e1938ea68e3876b8d9a6d49064b860be73b8ac9ef9623c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01000.png",
+      "size_bytes": 152921,
+      "sha256": "7aed16ba3be8e3a4beb5e6b7832d70a0288600fdd5af04ee05aba1321070326b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "6443f4dce78b2ae844b069aa2febb7860a437c018816431934966450c64e66d9"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "2ec8711fa841f76e349d680e35218ab8f7e313f9dddb86197799f99bd6b58cb6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01200.png",
+      "size_bytes": 130311,
+      "sha256": "b7289c7c6e4636bb3b8ad9f8ffc7116bd1dd8674b4cb302d2ffb06ff4977b4fc"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "6254adc8ba11767229eb35851fce149c93425bdfbe04e587d12664815f22b9c3"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "b06453ae7eeb819273c99ab1ed622470a04fd6345a667c131838ea2ad4f9d8a5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01400.png",
+      "size_bytes": 130455,
+      "sha256": "01cf2307dcfa1b5251c9dd4425ae76a5220ba9b6e753b89b998523d55e3392f7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8d41556e5827e709e26543efb67435209f14013e5ed4264237af126f6a6214e3"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01500.png",
+      "size_bytes": 130540,
+      "sha256": "603093542380b35e095bc5586edb79d3e8e577920728950642f3ab1149b67556"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "11e577b5dfc1224b8aa83f9003f22603d9061d5a81a5bd98bd38adaed6da8c31"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/probe-source.py",
+      "size_bytes": 6348,
+      "sha256": "fbc122521bec0fcabeec05d1171490ddb7eaae131a6c3b9f53d90b123508cdd6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/probe.log",
+      "size_bytes": 393430499,
+      "sha256": "e2c6074ccfe5a8af10773203095d121e5c99a6cf8e95697811a576fcee4f4680"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/result.json",
+      "size_bytes": 1898,
+      "sha256": "3e18df3c8c0f7f30de770ba01d82191577edf8128e03896a5983210a424a0418"
+    },
+    {
+      "path": "private/slice110-menu-pilot/gt-mode7/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "6a9d2d82e9884842590f714cc085780eb2a8b91d5e0507adf58c084f6fd1531b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "928f0c9c9097d366e2692d7892297973522d22f20575199c2b17bba77acc916f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00600.png",
+      "size_bytes": 107161,
+      "sha256": "3bd52f3136e09823c7126f0671674d0528c82fe3a531285bbd1380cde9dd60bb"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "5ae1f7d011df999713cb0ed7a0e1beb4b246b7425ea6f1816f7170ce322f546d"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "108127bfc29e9f021a6413078279de5e23661d68ba8e0e6a33ce5e47f8984352"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "41ecfa77363e8ff25d35dd08da3bdca679c35208a003eb952714523edc8be1e1"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "28cfca0dd503ccace28f497acbb5c814af28177482419708af8d418d7f307986"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01000.png",
+      "size_bytes": 180482,
+      "sha256": "91240ba0f44a22eed9a5fe1fb3710b7e58764a3b87ffea9dd0e6855dea21ac23"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04cdfd9999cc6b2b64976d71ff3ef1f105be18282f3bbbfb7b0e7ece396ace2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0efad9e77562e91645fdaf0d05dedcd4270bb139fa29014bc3a1550ed3bf6d83"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "e55893bdd585b4712544c1a030109a41184cc5ab4e9ab85b9db04a670c4e70fe"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "b85c1ea5d8966b0e763fee3346c7b29e5609a707eaab51ea783722ae404126a8"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01400.png",
+      "size_bytes": 151893,
+      "sha256": "1e96489ad397369fb3f7ca6238af86240da15ecfca50e5935077261a65af14e5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "4357be3627cbacd66a56ec86de510547210d0f875ca0ce48bf4cec627699ee32"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "4db91f5f0af8ad11725d6512717acb47f219b4af8b48d2fd705564f7900d20e7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/probe-source.py",
+      "size_bytes": 6232,
+      "sha256": "9a992c9bc80235346ff9a8b42d7b3176e4c3e7e6938fedaeafdd025e9350190b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/probe.log",
+      "size_bytes": 191189599,
+      "sha256": "5a0e28e299a4421b33185dcbbfd74542e447f5152a86c846264751007f8fd29e"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/result.json",
+      "size_bytes": 1915,
+      "sha256": "e427362099e05e3de66c8f19115b90e5e3bf37520834bbb0fc33fb18f6d08a73"
+    },
+    {
+      "path": "private/slice110-menu-pilot/menu-repeat6/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "88d232234988852f7e9bcfb38f38c5c07743f1ec4a8c8adefe645a04f8c6eea6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "a17b8d6fdde8e4f0745084550a03189eb28c77ef98757b9e514f33c8cd062d94"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "9abddefddca7e09cae93911e5c27cf4f7d27c948e7e67f3ae9413e156826f1f9"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00600.png",
+      "size_bytes": 79516,
+      "sha256": "5528a9f25e33ebc5467a6e9e243a5e00224674f182f605f4c4659ee84b38a866"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "8640b6b1600871482936f3a11bfb149a47f70c1d3f88c5d86b6ffbb9cb09ccd5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00700.png",
+      "size_bytes": 71527,
+      "sha256": "a1cf5f8b1f24cb209ee5f6a0a34d39b7e2677efcb368a73a168b62709960620b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "45472e778fa0d9bf7f82d03bb82b75b9e938473cedfb5e5b56308546b4be0c1b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "d96a67cbc5c327db90b1f28d6e053519baa3195823040f0461886a054d6102b2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "a8121f88719c679dfb7a4de67ac9925047919479d2acf94081d0e35207d954c5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01000.png",
+      "size_bytes": 79790,
+      "sha256": "e4d94086bc0fde78f46234c85c658ad90baeaf66c81a3da3a450e2b778a003f1"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "1ffeca4336f06840ee907f04e8e2371e5607542594ef176cb61f4e561745eac2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "8f27afbbf048191b77abcdca66fe29df944e0a470b78b94e1a62a155ca573b00"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "8c4acd89168ec377893b4ae1a9a0b2962ff5b6aa0cb780e4f7f1802b8896912c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01300.png",
+      "size_bytes": 106127,
+      "sha256": "fd4b7b0cd6a0d76129c871f07a7c7119f1d8cb32edd02eb5f3befa514f994ea5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "d79fc38725c55f47a8cf22262d0192845ffe88c282cba2f43d226f10a5faa902"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "d79fc38725c55f47a8cf22262d0192845ffe88c282cba2f43d226f10a5faa902"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/probe-source.py",
+      "size_bytes": 2290,
+      "sha256": "537654bb96c525c4e713f3ffd1eb85496b08a0834c4d4cae037e0f99b0d8e158"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/probe.log",
+      "size_bytes": 137223817,
+      "sha256": "78e241095d9a9cccb4f8dd97268d9bf278df46e54ae2371828b1dd98ca0649a1"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control1/result.json",
+      "size_bytes": 1739,
+      "sha256": "b6a43dde48baa176914a512a899d717195e3a1a77552c80e85e581f7a87e3e7a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "88d232234988852f7e9bcfb38f38c5c07743f1ec4a8c8adefe645a04f8c6eea6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "a17b8d6fdde8e4f0745084550a03189eb28c77ef98757b9e514f33c8cd062d94"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "9abddefddca7e09cae93911e5c27cf4f7d27c948e7e67f3ae9413e156826f1f9"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "8640b6b1600871482936f3a11bfb149a47f70c1d3f88c5d86b6ffbb9cb09ccd5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "d79fc38725c55f47a8cf22262d0192845ffe88c282cba2f43d226f10a5faa902"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01000.png",
+      "size_bytes": 104926,
+      "sha256": "72f5031483acabc8cf089dfc26f626b8eea5ef2a50791bcedc4d9bd8a9993ca9"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "f68dedfa415bd458fc3c5804cb28ba04291764735c7485b382c9fae181412c39"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01100.png",
+      "size_bytes": 110021,
+      "sha256": "07b421fedb3cbb0ce65c69be6f14af46e58e73fccd5f5e0104d9b896db670079"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "92e6fc93e045cfec06a0666ecb5743aacee3298f45777f50f4f803a0239cc17f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "41fc63266142d1191b8871b8d9504f78dcbcfff178f966cb051c050fda675c84"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01300.png",
+      "size_bytes": 110106,
+      "sha256": "c8f8849fe616e9ee821b5fd36655bba207106f745222042c2e9d704ee0860804"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "7afd2e831c3002db710792f75bb40267f8d7370535f76da0407dcbfea6479687"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "6feebcce85ec3e8fa27b58d991a646a2a7867174c93d86584c55b8e0c3b7cb9f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "19a7fdacbedfea36076cfa30b4e6610e764866ec9b91bcfa40911a1251ebbc2d"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01600.png",
+      "size_bytes": 107799,
+      "sha256": "f7fd4998a14ade25b8313fa626468726fd10a2862bac5ac25ef2a1da2e8ce8ac"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "20b3fcb478fd806374b4afd29de9df873c2f953dc86f986ec20b8edab5a00426"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "1b9899eff93112699d2292ae5d9578d2298f4de403bb9333f33d58f8e02c008c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "cfe983df1e869d77f8251745174fc72c9c018446e7f1fd05a43814480f4c248d"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "5a1904ab128b774e34a41891a0d8c8aa2caa7727f7d1951545851e5fc9524ae3"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "9731a1f6e189f42d34ea9b7b10e64145b4c3b5ee50c3f1d58444d380006acba7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/probe-source.py",
+      "size_bytes": 5122,
+      "sha256": "c5f07d2dcb23f9019e408054b43b8f2efbc4e655e3c56bc9ff55673779cad683"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/probe.log",
+      "size_bytes": 177014730,
+      "sha256": "49815b427cebb7cc58f19f2e1d280d7ec7df20b7e33761d81ab9f5e1e707ac76"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/result.json",
+      "size_bytes": 1975,
+      "sha256": "2518a9bc270dec34d46ecb8cd6734b849c7b0e8975ea092e92bb77f2b6af7db2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control2/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "88d232234988852f7e9bcfb38f38c5c07743f1ec4a8c8adefe645a04f8c6eea6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "a17b8d6fdde8e4f0745084550a03189eb28c77ef98757b9e514f33c8cd062d94"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "9abddefddca7e09cae93911e5c27cf4f7d27c948e7e67f3ae9413e156826f1f9"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "8640b6b1600871482936f3a11bfb149a47f70c1d3f88c5d86b6ffbb9cb09ccd5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "d79fc38725c55f47a8cf22262d0192845ffe88c282cba2f43d226f10a5faa902"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "f68dedfa415bd458fc3c5804cb28ba04291764735c7485b382c9fae181412c39"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "92e6fc93e045cfec06a0666ecb5743aacee3298f45777f50f4f803a0239cc17f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "41fc63266142d1191b8871b8d9504f78dcbcfff178f966cb051c050fda675c84"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "7afd2e831c3002db710792f75bb40267f8d7370535f76da0407dcbfea6479687"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "6feebcce85ec3e8fa27b58d991a646a2a7867174c93d86584c55b8e0c3b7cb9f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "19a7fdacbedfea36076cfa30b4e6610e764866ec9b91bcfa40911a1251ebbc2d"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "20b3fcb478fd806374b4afd29de9df873c2f953dc86f986ec20b8edab5a00426"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "1b9899eff93112699d2292ae5d9578d2298f4de403bb9333f33d58f8e02c008c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01800.png",
+      "size_bytes": 110312,
+      "sha256": "8a2bfe670bb62d5c465a714547d7cd6b51e47d1b63c2f8ebfac93f16a8affd67"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "d9ce48dd67fc35299e7b2d6e836d9fe2a2ba70ace890150bded1eed31f5a0837"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "bae4c0a1bf395ae805458045928432a14329cb918ee51a1938910842cdd6fdb4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02000.png",
+      "size_bytes": 110329,
+      "sha256": "ef038d1f4ef48e4018eaadbdaae126a5348b8c9724c3138d43523a5777db15af"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "ecc0d905253b83166a14cbc1dcf49b5db6c49f3f31b7261908332c920cef0e5b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "7d65aa260fdb1ef0683abb8d6bf21449cb76e16cae8ffd156f1bd8c7806edf33"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02200.png",
+      "size_bytes": 110728,
+      "sha256": "52ec12a644ca34dc08233f54a408425e33a29bd9b44ae4f230a8ba871dde3a8b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "090ee697e7bc84a10d94298ae859f5c709dad948e234e79ca2847b6ed55c3b82"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "7674fa8d4f83161e8b4262092125f43b2d40ca61d45515b45e7121384a8b88cf"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "a8b0f9a48e55f87a29d89b06dfd39000b606642aab4cf849bd42f1c12ff3dd96"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "3f1fd39ebcda29a33ff561102a77614eedf4010f00296f6fae4777f2d27c3e46"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "832d7809612f87cc5bb2468ea6537e7951259151b7bb05c06357ac278d6e47cb"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "ae182854ea2c7b232a9ed0e7423ae7c8802b0c4deb714f6c34b1a7c722387078"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02800.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b0d54328dc46cb4c75c2dce6c333fa06459f09ad9637fde1b0033ebc3d8561c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_02900.ppm",
+      "size_bytes": 860175,
+      "sha256": "7d65aa260fdb1ef0683abb8d6bf21449cb76e16cae8ffd156f1bd8c7806edf33"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/frames/frame_03000.ppm",
+      "size_bytes": 860175,
+      "sha256": "090ee697e7bc84a10d94298ae859f5c709dad948e234e79ca2847b6ed55c3b82"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/probe-source.py",
+      "size_bytes": 5227,
+      "sha256": "9271dc9836159a8bd38e3a34f8ae9515f17815c60d75cc81bd6204d28c46f1c0"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/probe.log",
+      "size_bytes": 284838753,
+      "sha256": "591ae3e52a921948a1a79ed89ee819b9ff4276d9e4a30ad972e8dac32be245d2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/result.json",
+      "size_bytes": 2252,
+      "sha256": "12b13a4d76d30a1ad83ea4017f99931934f4f2383511c4f192a99f46e7a86d8c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control3/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "88d232234988852f7e9bcfb38f38c5c07743f1ec4a8c8adefe645a04f8c6eea6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "a17b8d6fdde8e4f0745084550a03189eb28c77ef98757b9e514f33c8cd062d94"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "9abddefddca7e09cae93911e5c27cf4f7d27c948e7e67f3ae9413e156826f1f9"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "8640b6b1600871482936f3a11bfb149a47f70c1d3f88c5d86b6ffbb9cb09ccd5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "4639b5a475f183acd0489dd6c72a878c818543727e0c31b72996c317b505c0b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "d79fc38725c55f47a8cf22262d0192845ffe88c282cba2f43d226f10a5faa902"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "f68dedfa415bd458fc3c5804cb28ba04291764735c7485b382c9fae181412c39"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "92e6fc93e045cfec06a0666ecb5743aacee3298f45777f50f4f803a0239cc17f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "41fc63266142d1191b8871b8d9504f78dcbcfff178f966cb051c050fda675c84"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "7afd2e831c3002db710792f75bb40267f8d7370535f76da0407dcbfea6479687"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "6feebcce85ec3e8fa27b58d991a646a2a7867174c93d86584c55b8e0c3b7cb9f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "19a7fdacbedfea36076cfa30b4e6610e764866ec9b91bcfa40911a1251ebbc2d"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "20b3fcb478fd806374b4afd29de9df873c2f953dc86f986ec20b8edab5a00426"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "1b9899eff93112699d2292ae5d9578d2298f4de403bb9333f33d58f8e02c008c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "d9ce48dd67fc35299e7b2d6e836d9fe2a2ba70ace890150bded1eed31f5a0837"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "bae4c0a1bf395ae805458045928432a14329cb918ee51a1938910842cdd6fdb4"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "ecc0d905253b83166a14cbc1dcf49b5db6c49f3f31b7261908332c920cef0e5b"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "7d65aa260fdb1ef0683abb8d6bf21449cb76e16cae8ffd156f1bd8c7806edf33"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "090ee697e7bc84a10d94298ae859f5c709dad948e234e79ca2847b6ed55c3b82"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "7674fa8d4f83161e8b4262092125f43b2d40ca61d45515b45e7121384a8b88cf"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02400.png",
+      "size_bytes": 108339,
+      "sha256": "a8a56de8df61768fb2d4530e7c6ad8233e307eb255e05012cf418e7455280ab8"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "006038f1de6d5773d6e891582cb3e5ad9e706ee965e0319594f1d25775abedd2"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "a80024470d7cb8c0774c60e540737577b31f3b48f0971434584d5402c44c0f4c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "211af468c0e1d46fe032f8e1b24242ffd325eb0af2568cc73c07b87b388c419e"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "4cf92ba8ef71fa63e3a8f8431ad46531c0f68c8fc1dfc593cf07f0d04077a1a6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02800.png",
+      "size_bytes": 112645,
+      "sha256": "21200c3443d75edc50ecbdc93f8f2d5d348ef66f608ea0b87533f742a4febfd8"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02800.ppm",
+      "size_bytes": 860175,
+      "sha256": "e804ec9a169bc860af83ea8407560d2ee39f7015285b1704a0eb9acd92c821c6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_02900.ppm",
+      "size_bytes": 860175,
+      "sha256": "1cbfa00003efb7ad9b4343e6dd8dfb537530afb65d6b18637ff6e5cae61a9dad"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03000.ppm",
+      "size_bytes": 860175,
+      "sha256": "2d666dc55fb91c671700ffee8a21a73af115337139004e9632a667c73b8ce9fd"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03100.png",
+      "size_bytes": 106596,
+      "sha256": "cb1a212c999067e9fac582687bcd3ab4b939848b567c8dafbf2a1e01bdf4261c"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03100.ppm",
+      "size_bytes": 860175,
+      "sha256": "34367630f7e63f5b24af19194c9dfc45eeb945420c356f55d82a92b764ce2105"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03200.ppm",
+      "size_bytes": 860175,
+      "sha256": "c4aafb2f687edb1fc058d3f9f04aca5f74ea8b9390c05147b7f2fa3969baeabc"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03300.ppm",
+      "size_bytes": 860175,
+      "sha256": "9bbb7ae4b7df096cf440a53ab9ee82a5f9fd213854be38196dee2330815a82b7"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03400.png",
+      "size_bytes": 111668,
+      "sha256": "a72a1725b43fe0c5bd3363f12606b4a15d87e8d3620d41eebeec31e858507b48"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03400.ppm",
+      "size_bytes": 860175,
+      "sha256": "d815c6aa02ede8e245dac430704ff9dba99212362ccf909e47bfebc8b7b85e0a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03500.ppm",
+      "size_bytes": 860175,
+      "sha256": "525b1d5d1602ca47c3faad233d44739999ac0e4c489cbfe123940c8e38ec41ef"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03600.ppm",
+      "size_bytes": 860175,
+      "sha256": "b098236c4c66de6ad08985781443b33306aaab25e7b50e918356cb10e8dc6d02"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03700.ppm",
+      "size_bytes": 860175,
+      "sha256": "1ddbcf30eb9c19a849f4814aa009e67e2de6bd3ac52ed4dd08d3fd4de5c66f8a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03800.ppm",
+      "size_bytes": 860175,
+      "sha256": "234c2017639a945e4bf7cec716591a30ee20a28098de9bbc83a37ef3065db40f"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_03900.ppm",
+      "size_bytes": 860175,
+      "sha256": "688698abd1ece25efb6bcbe91640a85befe134855839d1cf2ede87d99299c336"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04000.png",
+      "size_bytes": 111363,
+      "sha256": "0db55d7b7d678972f97bb0f7658fdb931b9019b0ebee46f9428ed17c9ccf103e"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04000.ppm",
+      "size_bytes": 860175,
+      "sha256": "b1bc6a3c143f1e74d311eee6e6c1efe2031839d9e613556abd9259cfc3676e93"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04100.ppm",
+      "size_bytes": 860175,
+      "sha256": "289ff2628589724fcd96a56d02f5fb62f4a7193be200ab89ab599f61dcffb536"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04200.png",
+      "size_bytes": 111618,
+      "sha256": "66c52459abb0a41d8f91c2c34f82d695cd1ecc5f00ff500c0f8a3b793330fd3a"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04200.ppm",
+      "size_bytes": 860175,
+      "sha256": "5cbbd8b7912a53b00e633ca6e51d623c08cbf0f61472cb55b6882a2bbe92ad80"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04300.ppm",
+      "size_bytes": 860175,
+      "sha256": "1542a3f5787b23ed2208c3ba11218ae6025221ed32847fc41a2e007c36cb5d97"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04400.ppm",
+      "size_bytes": 860175,
+      "sha256": "53191f1783c402b6b2b74088599aea81d84939d1932f8b07570cd6fae0ee6156"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04500.png",
+      "size_bytes": 111653,
+      "sha256": "c5eb36a9d9f71c28f9504e58a25d69332d516c0caa6cda06de3f71283b96b383"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/frames/frame_04500.ppm",
+      "size_bytes": 860175,
+      "sha256": "bebf88a879e7893badc74a161fcab9eb17228d7727d8e15a2f11f0c67f1bf6a5"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/probe-source.py",
+      "size_bytes": 5227,
+      "sha256": "9271dc9836159a8bd38e3a34f8ae9515f17815c60d75cc81bd6204d28c46f1c0"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/probe.log",
+      "size_bytes": 325380473,
+      "sha256": "895a434a2759e140c6cb0c32ae9c7cb53d643b17ebd1094111f77915675252fc"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/result.json",
+      "size_bytes": 2822,
+      "sha256": "1d50c804e797159ec82494f6cbdd4696b2508bd3969fdf52d685b636d7308863"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "scripts/external_runtime_probe.py",
+      "size_bytes": 6348,
+      "sha256": "fbc122521bec0fcabeec05d1171490ddb7eaae131a6c3b9f53d90b123508cdd6"
+    },
+    {
+      "path": "tests/python/test_external_runtime_probe.py",
+      "size_bytes": 8956,
+      "sha256": "f96eac783132dd6b4aa2e90f994163616e5c90ebba1431148cd3a992052eb241"
+    },
+    {
+      "path": "build/gt4boot.exe",
+      "size_bytes": 110391296,
+      "sha256": "839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab"
+    },
+    {
+      "path": "private/slice110-menu-pilot/collect_evidence.py",
+      "size_bytes": 4740,
+      "sha256": "7a9d9ae713ba0f89bb94cf0c4ca55dfca2d3a77d9ed2c77bda7e65b0a8203c04"
+    }
+  ],
+  "verification": {
+    "ctest": {
+      "passed": 54,
+      "total": 54,
+      "seconds": 60.11
+    },
+    "python": {
+      "total": 104,
+      "run": 98,
+      "skipped": 6,
+      "seconds": 73.546
+    },
+    "final_launcher_controls": {
+      "passed": 7,
+      "seconds": 0.183
+    }
+  },
+  "acceptance": {
+    "mainmenu": true,
+    "arcade_navigation": true,
+    "gt_mode_and_named_home": true,
+    "initial_profile_card_reread": true,
+    "race": false,
+    "broad_save_coverage": false,
+    "stable_game": false,
+    "native_vulkan": false,
+    "production_adoption": false
+  },
+  "repeat_comparison": {
+    "method": "full PPM byte SHA256/size",
+    "equal": 14,
+    "compared": 14,
+    "frames": [
+      "frame_00100.ppm",
+      "frame_00200.ppm",
+      "frame_00300.ppm",
+      "frame_00400.ppm",
+      "frame_00500.ppm",
+      "frame_00600.ppm",
+      "frame_00700.ppm",
+      "frame_00800.ppm",
+      "frame_00900.ppm",
+      "frame_01000.ppm",
+      "frame_01100.ppm",
+      "frame_01200.ppm",
+      "frame_01300.ppm",
+      "frame_01400.ppm"
+    ]
+  }
+}

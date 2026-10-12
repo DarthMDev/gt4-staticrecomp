@@ -1,5 +1,16 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização — 2026-10-12, fatia110/piloto externo.** Menu principal e
+navegação Arcade/circuitos/carros confirmados no Windows com nossos inputs.
+Nome L/cartão novo foram criados pelo jogo; nova execução com cópia do cartão
+reconhece os dados. Repetição1500 encerra normal e14capturas são idênticas;
+probe longo expira180s/última2700, sem corrida qualificada. FordKa3D real
+observado; GT Mode abre mapa e L's Home/dia1/Cr10000, confirmando nome relido.
+Launcher rastreável com hashes/seed privado e gate de motivo,
+54CTest e104Python(98/6) verdes. Produção preservada; integração coerente
+Windows/Win32/GPU/Vulkan é próxima prioridade. Relatório110/0052/manifest
+completam esta atualização; bloco0051 abaixo é o checkpoint anterior.
+
 **Prioridade atual — 2026-10-12, estudo de aceleração/0051.** Os três
 repositórios pedidos estão clonados/pinados em `private/references/`.
 Nosso CORE tem o mesmo hash publicado pelo gt4-decomp: aproveitar nomes e
