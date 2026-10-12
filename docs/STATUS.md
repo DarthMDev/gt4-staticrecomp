@@ -1,7 +1,8 @@
 # Project status
 
 Closed slice102, 2026-10-12, baseline `75d139a`, branch
-`slice102-matched-update-interval`; publication pending. Matched reference
+`slice102-matched-update-interval`; published as `5d61ef4` on branch/main,
+remote HEAD independently matched and working tree clean. Matched reference
 symbols/source and independent dumpbin qualify dynarec block-cycle endpoints
 in real-disc boot: **429 complete windows / 430 entries / 3004 states**.
 Two retained2000-us timer retries have1110-cycle vector-to-context intervals,
