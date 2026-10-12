@@ -23,6 +23,10 @@ variants rather than claiming universal evidence. Run full gates and fresh
 boot to determine causal progress. Correct IRQ preemption/time remain.
 Closed102 and lower summaries are historical checkpoints.
 
+Publication103: `a26eb6953109f021f9533006702d1218634f6697` pushed
+on branch and fast-forward main; ls-remote independently matches. Final
+`cmake --build build` reports no work; production remains unchanged.
+
 Closed slice102, 2026-10-12, baseline `75d139a`, branch
 `slice102-matched-update-interval`; published as `5d61ef4` on branch/main,
 remote HEAD independently matched and working tree clean. Matched reference
