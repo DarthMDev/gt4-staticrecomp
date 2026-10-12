@@ -1,0 +1,737 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-12",
+  "baseline_commit": "59c89f69d0c4a8ae305603df6ade2fd7a957b12c",
+  "purpose": "External reference audit and isolated native NTSC compatibility pilot; production unchanged",
+  "references": [
+    {
+      "name": "ps2-web-recomp",
+      "url": "https://github.com/snuri00/ps2-web-recomp",
+      "commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+      "shallow": true,
+      "license": "MIT",
+      "source_pins": [
+        {
+          "path": "private/references/ps2-web-recomp/README.md",
+          "size_bytes": 15136,
+          "sha256": "d9d3a1ead3f4f13bbe85071674d7aa99aa6f9eb3813c17e34ab4052f84bb008f"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/LICENSE",
+          "size_bytes": 1088,
+          "sha256": "a264d27e10ee6b584f09ca1d821490e3d4118fe63a0f36d21072f29df6088ca2"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/CMakeLists.txt",
+          "size_bytes": 5596,
+          "sha256": "7cb53c8746e3e0b0dbf6f937f9a0fea9419dde4f27141ba43374c8a4f899629a"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/scripts/port.sh",
+          "size_bytes": 6330,
+          "sha256": "e725acb16cc96ecdc1f814d76d9531710346ab399e144d997e08a90b28306deb"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/scripts/gt4_core.py",
+          "size_bytes": 3074,
+          "sha256": "df4c2e9c6e5ff486b97ea33f8a4be16c9a71fa916cb906d672536e6b7c381a51"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/scripts/setup.sh",
+          "size_bytes": 955,
+          "sha256": "20a272b7270ae9040650226e5ac60fa021ec2fe82d2e3e66bf77e4062bf9c85e"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/scripts/fetch_wgpu.sh",
+          "size_bytes": 380,
+          "sha256": "c30fa2e38fe63a1da1a61391075d9dd288dcd470d94f989db5057891aab1a411"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/recomp/main.cpp",
+          "size_bytes": 6664,
+          "sha256": "58884ef4b66936c980981d19ffa66be44072a901f8489d122c9572af611d3ca9"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/recomp/elf.cpp",
+          "size_bytes": 4314,
+          "sha256": "8f3a7177686d3831a5339a8c06fdde52fee7b267b07c7635212c16f4c7a32d62"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/recomp/r5900.cpp",
+          "size_bytes": 9825,
+          "sha256": "ed8f3e8b3efc6192abdb3b42b1939a2e6d406d968b54818d638116705103cc38"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/recomp/analysis.cpp",
+          "size_bytes": 10337,
+          "sha256": "ff7b4d67af8ac4d4f4aa1eeb0a1ace0370df198e9d3230eac576c3f2168fcf62"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/recomp/codegen.cpp",
+          "size_bytes": 46865,
+          "sha256": "f0f11552fee26f6ae377f77264ac16641787806d4ad24c1635715aa9e1b6d361"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/recomp/snr2.cpp",
+          "size_bytes": 5591,
+          "sha256": "f05f7cbe7c5e4004fc348e19258eb53c6b92cb30ffe071667653fc77cedb5165"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/dispatch.cpp",
+          "size_bytes": 6353,
+          "sha256": "691c1d045b928ef789338f0954ec820fc0fd4e938cd2b2940743b3ad6005f995"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/system.cpp",
+          "size_bytes": 19873,
+          "sha256": "f30c8dd90c40e930635375ae2a3091f052655d797744de4348a5c7261a710bb2"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/kernel.cpp",
+          "size_bytes": 30126,
+          "sha256": "003c9e0a0e2c1cb61a6fd8ec846a4798c3027ed933b6825c6377112106f0168a"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/hw.cpp",
+          "size_bytes": 10069,
+          "sha256": "3fefa5a15284b7f4780c49820bc3d007746e84bae4cb74dec883269d759ce944"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/cop.cpp",
+          "size_bytes": 1647,
+          "sha256": "09f3889a91b6f98cd9286de289f8c45d85c89e50d54d70795903a7249192546d"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/include/ps2/cpu.hpp",
+          "size_bytes": 1746,
+          "sha256": "3c31346e6b62d33c0d20c30c467f65a3dc54d3a2f8086ba2e885a8969e202427"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/include/ps2/fpu.hpp",
+          "size_bytes": 4924,
+          "sha256": "8a6c9d9e6ff72050b84e47838b2462ad035cb462be6baf6be56b830805be96e8"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/include/ps2/vu_ops.hpp",
+          "size_bytes": 13433,
+          "sha256": "ebe66e4f6d5fff35ae41c0a6e5d19cedae2b68fe8d6e0d2e3b350c6df3461d5d"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/vu_micro.cpp",
+          "size_bytes": 43406,
+          "sha256": "5fc349d96364f72818da96cd2376637421d3d4d9150547c22034863c15d22a1d"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/cpu.cpp",
+          "size_bytes": 10065,
+          "sha256": "c44d7274cb80115b489d6f2a2d3be505cacdcb124733a9b69ba38d371d4f0d5a"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/kernel.cpp",
+          "size_bytes": 29782,
+          "sha256": "0b49c73ed46e538415dad5958a60ca1b73616a1691668099020d8f5ccb072df4"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/libs.cpp",
+          "size_bytes": 49896,
+          "sha256": "768d67abea4d1bc2ee61d0da12e2198e9dcc1f617a553631aaf4bafebe7b40ff"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/sif.cpp",
+          "size_bytes": 35791,
+          "sha256": "182a24218d719a669b3742867f9901b49d2e1043393f2211e93363dc0180dacc"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/cdvd.cpp",
+          "size_bytes": 7177,
+          "sha256": "3fd89abe328211d5c6c69d8256af0d6697b4556b0e7e3bf678ad135a58e1738b"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/cdvdfsv.cpp",
+          "size_bytes": 7021,
+          "sha256": "c313e10af0baaf63d9bd31040c168f38936c979c37fdce45afdf060d11560fbe"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/sio2.cpp",
+          "size_bytes": 14246,
+          "sha256": "add0dcff27ddb3d497e6138c3bd6f77272eeb3a0a33d02920eece215255057ea"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/iop/spu2.cpp",
+          "size_bytes": 21053,
+          "sha256": "84809a6aa1892da83caa3858b3e7a344b447210d049ab3c2a264696217caa4d9"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/gs/gs.cpp",
+          "size_bytes": 50584,
+          "sha256": "0a9fbfc53b4dffeaa43ae05c6e7f7f5d1fe8b5aa987d1a4ba94405177a708264"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/gs/queue.cpp",
+          "size_bytes": 5232,
+          "sha256": "5c5667d53eae4403644c72e7932a1d757ae5b02ca4438ee07dabfb16436dc411"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/gs/gpu/gpu.cpp",
+          "size_bytes": 86599,
+          "sha256": "bfd1b54921d3f4d6c8496433739ea97be6d675d3d7941e5ccb2f35e99e833465"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/gs/gpu/gpu.hpp",
+          "size_bytes": 1743,
+          "sha256": "e99ea5d37565f55a3737dfcd76f79c700e789986803b7384eb0c5c666106f944"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/runtime/src/ipu/tables.hpp",
+          "size_bytes": 9124,
+          "sha256": "4bf1fad57d5ac755db87c7a85b4c9298ad408312e7f6dd3a1a57db807f3705fb"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/host/main.cpp",
+          "size_bytes": 4303,
+          "sha256": "561d977743b0da7af528b86da4d5c5eb744e1b8ac9072487485f7ed3b790f007"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/host/window.cpp",
+          "size_bytes": 13712,
+          "sha256": "12b32d18b3a68aa139168c12e4dc9d99eb847b2e862696706af89b59b302fa30"
+        },
+        {
+          "path": "private/references/ps2-web-recomp/host/profile.cpp",
+          "size_bytes": 3623,
+          "sha256": "cff6c72ccd6f2f8f2e02c26b29dcca15a7580a86c9df7ffc4d16e2342a2d8a2e"
+        }
+      ]
+    },
+    {
+      "name": "gt4-decomp",
+      "url": "https://github.com/gustavocanepa/gt4-decomp",
+      "commit": "c4b82c9b90b8ad712edfb6653cafb8451379a2db",
+      "shallow": true,
+      "license": "MIT with per-library notices",
+      "source_pins": [
+        {
+          "path": "private/references/gt4-decomp/README.md",
+          "size_bytes": 6636,
+          "sha256": "5dcd5cc78977c3fb336286b80e8f3e1bbbd99c88b0d21bf6afbdc2867e9b7a0f"
+        },
+        {
+          "path": "private/references/gt4-decomp/LICENSE",
+          "size_bytes": 1120,
+          "sha256": "ec3655e0c0fa85fa8a7b382ff404ac229184e8b5aa519d05bbd612b499a095b2"
+        },
+        {
+          "path": "private/references/gt4-decomp/THIRD_PARTY.md",
+          "size_bytes": 17088,
+          "sha256": "b7e290ba39fc5be6c56e6ec08acbecbe261267f03c703e864056c783bd2554bb"
+        },
+        {
+          "path": "private/references/gt4-decomp/orig/README.md",
+          "size_bytes": 833,
+          "sha256": "2d2fb21830c3235b3299a1c308c82907a561e4744da6e142e8964aed16dacc4e"
+        },
+        {
+          "path": "private/references/gt4-decomp/project.toml",
+          "size_bytes": 8119,
+          "sha256": "a73da6ee6262406446d4b031fd7abee67248b97c7cdfebe98aed2a4167265c03"
+        },
+        {
+          "path": "private/references/gt4-decomp/config/gt4.yaml",
+          "size_bytes": 1740,
+          "sha256": "507c99376f5a2834f24af717e595d499f6585f3f8e40f60d56698249a90a6f9d"
+        },
+        {
+          "path": "private/references/gt4-decomp/config/symbol_addrs.txt",
+          "size_bytes": 502049,
+          "sha256": "3016b16d44bbeb374ecd79676fdf92ec152460c561bace0eeeac9a47871cced6"
+        },
+        {
+          "path": "private/references/gt4-decomp/config/units.txt",
+          "size_bytes": 19300,
+          "sha256": "83594b4259f2f9ffb94789d3dd20c153db96c73242ac190daeaa03fc9a3cc8d4"
+        },
+        {
+          "path": "private/references/gt4-decomp/tools/find_functions.py",
+          "size_bytes": 2357,
+          "sha256": "cce8da7eb69ddc3b81a6a31f924c06473d110d45681a1b0ab3e45d6f777b3537"
+        },
+        {
+          "path": "private/references/gt4-decomp/tools/inventory.py",
+          "size_bytes": 2367,
+          "sha256": "04fde45d3ada0077cb0a3618935f6f7ea5534086fb8ee0bd11ffe79a49da3837"
+        },
+        {
+          "path": "private/references/gt4-decomp/tools/build.py",
+          "size_bytes": 28829,
+          "sha256": "04ce67915eddd478c30dfb4c0a6b04837dcd74415e25b480e169d2707610d213"
+        },
+        {
+          "path": "private/references/gt4-decomp/tools/splat.sh",
+          "size_bytes": 812,
+          "sha256": "1355f33d3223276fa6c27e42fb60d8b723af2c077f08b1c9643a693aaf50f8a3"
+        },
+        {
+          "path": "private/references/gt4-decomp/tools/core2elf.py",
+          "size_bytes": 7371,
+          "sha256": "e396d9f09536f79c6aaa556a6b6800afd68594fe4dd4a29413df8dd20b96876b"
+        },
+        {
+          "path": "private/references/gt4-decomp/knowledge/architecture.md",
+          "size_bytes": 20672,
+          "sha256": "bd993c7dc987decc7ecfe481573d554491ecb5a9f542f1a835dba8b2be3e5c33"
+        }
+      ]
+    },
+    {
+      "name": "PS2Recomp",
+      "url": "https://github.com/ran-j/PS2Recomp",
+      "commit": "2c5fbb9389e11dd95693385969490c9e8e6f57b4",
+      "shallow": true,
+      "license": "GPL-3.0",
+      "source_pins": [
+        {
+          "path": "private/references/PS2Recomp/README.md",
+          "size_bytes": 9423,
+          "sha256": "b94e8be650aebb82caf74293da5afcc208f3dd968e9987c71e5eb180f8d1381d"
+        },
+        {
+          "path": "private/references/PS2Recomp/LICENSE",
+          "size_bytes": 35497,
+          "sha256": "970d10bc4e72edc210b38ad790f86b8f4fa65974ca02c92f8e1c9608049c1150"
+        },
+        {
+          "path": "private/references/PS2Recomp/CMakeLists.txt",
+          "size_bytes": 3307,
+          "sha256": "e41eed927848dfde26f6741639dd6c98c516a2e29917f63aa08973cb6a9eb064"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xAnalyzer/Readme.md",
+          "size_bytes": 4254,
+          "sha256": "ae66a33a71b9a0f78fbe84a0cc9b6f1c89b98b2737b9228982c923c2c174b1a1"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xRecomp/tools/ghidra/ExportPS2Functions.java",
+          "size_bytes": 52399,
+          "sha256": "ca2691c4182d6a2e262829451b76e8469687d2715eae749a14223bc3d9a56bca"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xRecomp/src/lib/ps2_recompiler.cpp",
+          "size_bytes": 95379,
+          "sha256": "90328bc6921e1caf5a5279142aeaf61b1a0b8f6a065980d49f58e43605e89fe9"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xRuntime/CMakeLists.txt",
+          "size_bytes": 20294,
+          "sha256": "b933fb5ee22832fd844de5616d55bd8851d269a43e7732243107d1a8cb6fdcae"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xRuntime/src/lib/Kernel/EeScheduler.cpp",
+          "size_bytes": 66275,
+          "sha256": "00a6098355d4cbaf7ddebc188d411b5be46db189c136417fd00e15109ffc8303"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xRuntime/src/lib/Kernel/Syscalls/Thread.cpp",
+          "size_bytes": 15160,
+          "sha256": "d7cce4022a48026726b2f82727c70bdd38608a74539f619eb39018d05aca14a2"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xRuntime/src/lib/Kernel/Stubs/Unimplemented.cpp",
+          "size_bytes": 1868,
+          "sha256": "0adfcd68f4608b71e3eafa30fcc7605f52f0e9c4d5cabc5372d59a0bb8c55c16"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xRuntime/src/lib/gs/gs_cpu_backend.cpp",
+          "size_bytes": 76633,
+          "sha256": "91ae874ff1aa583ccd64252437c0194f307eb2510d0f4ef646278b84ae55643e"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xIOP/README.md",
+          "size_bytes": 2473,
+          "sha256": "536538955174e16bda7ddaa690fc62a6ec8147e3bc26570f535a6d339254ca01"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xIOP/CMakeLists.txt",
+          "size_bytes": 2672,
+          "sha256": "5877638d1afb117ccacf925f064a041313c1ae4a890ef4e1f696fc496116fe4e"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xIOP/tests/iop_emulator_tests.cpp",
+          "size_bytes": 54252,
+          "sha256": "c06ea037da6f75af5273292a945fa1a8752fed1eca7a2e7b2165d82116bab743"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xIOP/tests/iop_import_tests.cpp",
+          "size_bytes": 14004,
+          "sha256": "50b4d78d4fd710a9e02b3b03a6391d5f88df8942482b6762ab6509dd38c63ee7"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xIOP/tests/iop_compatibility_tests.cpp",
+          "size_bytes": 15051,
+          "sha256": "355ce0234d423685648fc13c152e65855de8c0ed0387f57b4a6b6d6e6c1539f3"
+        },
+        {
+          "path": "private/references/PS2Recomp/ps2xIOP/tests/iop_import_version_tests.cpp",
+          "size_bytes": 7813,
+          "sha256": "091807a384cf0040f22df810d47e1a0620e19a8575829c46200e193bce2fb740"
+        }
+      ]
+    }
+  ],
+  "local_inputs": [
+    {
+      "path": "private/fingerprint-check/CORE.GT4",
+      "size_bytes": 2020861,
+      "sha256": "85d26aa8430154967b2633eede929286694ac39e99762527edcec365fd642ff9"
+    },
+    {
+      "path": "private/reconstructed/SCUS_973.28.elf",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "private/reference-acceleration-study/build-eerecomp.cmd",
+      "size_bytes": 529,
+      "sha256": "b1d2857160a020b48700414669676778587d6100cf4b9eaada51367b5d4fbdc8"
+    },
+    {
+      "path": "private/reference-acceleration-study/build-runtime.cmd",
+      "size_bytes": 586,
+      "sha256": "85435eaa113fa51462ac53a4d596cb8ba463458b851cc0545ac4ff6ffe051089"
+    },
+    {
+      "path": "private/reference-acceleration-study/build-game.cmd",
+      "size_bytes": 465,
+      "sha256": "d3ec43f07d1a7c1ac5a65dfbe069e12e0f6abe1e2c5b8a76d6b6b6e20fba4aa5"
+    },
+    {
+      "path": "private/reference-acceleration-study/test-ps2recomp-iop.cmd",
+      "size_bytes": 704,
+      "sha256": "bab55c6b0d66ff9ef60387c5423359b3cd16de8543a68fc6c72318456ae3817c"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe.py",
+      "size_bytes": 2361,
+      "sha256": "15b2c5224cac6c6886bbcb5537834ea134bf95f547bc2ee8f3a82a29378d9bfe"
+    },
+    {
+      "path": "private/reference-acceleration-study/collect_evidence.py",
+      "size_bytes": 6915,
+      "sha256": "50c79e9deb09e9a72b745816203918891c985c53a679e2517b51eb77d650a3f2"
+    },
+    {
+      "path": "private/reference-acceleration-study/eerecomp.exe",
+      "size_bytes": 692224,
+      "sha256": "5aec705e31da349c941414fd54be264000459c3cb0d22727e7d810b5b24b03c0"
+    },
+    {
+      "path": "private/reference-acceleration-study/compiler.log",
+      "size_bytes": 87,
+      "sha256": "ec178d83b5cabac3aed59f65345b5d185836b03dff45d8aafa6e6349c7f683c4"
+    },
+    {
+      "path": "private/reference-acceleration-study/counts.json",
+      "size_bytes": 263,
+      "sha256": "a001e41be8b00c67e047dc51dceb669a73be0ea24f9c05a20368563e438b1165"
+    },
+    {
+      "path": "private/reference-acceleration-study/generation.log",
+      "size_bytes": 158,
+      "sha256": "7670990a5fdb7d9e4913319c71ed5e644b9214a3a3bc065c40761faabcae2687"
+    },
+    {
+      "path": "private/reference-acceleration-study/usa-v2-eerecomp-stats.txt",
+      "size_bytes": 4111,
+      "sha256": "4a18493cbcd55554e4d51e2cff8a60c8f68dcc5fd9ed676cc61e4e1a05ecf2c3"
+    },
+    {
+      "path": "private/reference-acceleration-study/usa-v2-decomp-jal.csv",
+      "size_bytes": 266901,
+      "sha256": "2d00174a49d8c1b56aa4c4da9ea56b549143c2516a577b3499a3575e1a6f6fbc"
+    },
+    {
+      "path": "private/reference-acceleration-study/verified-disc.sha256",
+      "size_bytes": 66,
+      "sha256": "145f43836926b0b61494f59de8895146a865c1516a73b2573ccc0b70abbefc13"
+    },
+    {
+      "path": "private/reference-acceleration-study/runtime-configure.log",
+      "size_bytes": 488,
+      "sha256": "46017d53aa6cd283725245ff2eba363d45b1efd1e922b61629b777a52e3c4f6d"
+    },
+    {
+      "path": "private/reference-acceleration-study/runtime-build.log",
+      "size_bytes": 4493986,
+      "sha256": "f7341155b08dc9ebd0e3c6bb7e0493f041eb580df5217d967122ca83ae0cab74"
+    },
+    {
+      "path": "private/reference-acceleration-study/game-configure.log",
+      "size_bytes": 173,
+      "sha256": "71594c646b104f340ddee2354bd090a7472c66ac5a53f7bfdf3ac34dbabfa208"
+    },
+    {
+      "path": "private/reference-acceleration-study/game-build.log",
+      "size_bytes": 49473,
+      "sha256": "ae66855c2c882340ae8362970a9af358f445979817cfef11c1885bfae6712063"
+    },
+    {
+      "path": "private/reference-acceleration-study/runtime-build/ps2run.exe",
+      "size_bytes": 54339072,
+      "sha256": "4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe.log",
+      "size_bytes": 302740,
+      "sha256": "9c9e9d3097684c2966ae53e9fcf4772d9c9459410122da68dccafc184d9f01b0"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-result.json",
+      "size_bytes": 1001,
+      "sha256": "40a783f1205d9f451d2e207a96924cc5a0cdf9a86492364bbe4c7b7830248578"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/probe.log",
+      "size_bytes": 1893994,
+      "sha256": "0c9f19e7825bafde3b983c062677ee3a577b9889ed0c95e964432cf4ff04f9c1"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/probe-result.json",
+      "size_bytes": 1447,
+      "sha256": "5da514c8f634539135de117c6c111dcbf2d831c43f3785a9e90eb1eb0e4a2599"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frame-summary.json",
+      "size_bytes": 996,
+      "sha256": "cdfaccf2de5f725a7200013aeeddb981d9f5d1bfd71bb817fe165c767c0ca18d"
+    },
+    {
+      "path": "private/reference-acceleration-study/ps2recomp-iop-configure.log",
+      "size_bytes": 545,
+      "sha256": "36cb594f3ae3f5a43b8fc3c58e0f512616b52076942e299c19eadeb8caf22b97"
+    },
+    {
+      "path": "private/reference-acceleration-study/ps2recomp-iop-build.log",
+      "size_bytes": 2727,
+      "sha256": "4dc0d0648a5704469dec8e2a3d0efd9d072b958f673af3f2a4dcb1bae402a9a7"
+    },
+    {
+      "path": "private/reference-acceleration-study/ps2recomp-iop-tests.log",
+      "size_bytes": 612,
+      "sha256": "02f9ccc5d395b75cbad44d673e240f45fd4c050103f4421b862dd47f41dfbed2"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00030.png",
+      "size_bytes": 4511,
+      "sha256": "02d95f82e1eea4f6c3061229536ac136a6f599531b56f57af9e6c35d31f23135"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00030.ppm",
+      "size_bytes": 860175,
+      "sha256": "1da6f88f4ea803b41e413ecd0207638a5b779e16f766499ff8c7f22da2f0f42c"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00060.png",
+      "size_bytes": 3468,
+      "sha256": "d998a4d8515fc4b9ee5933a2f22bef7697dba74bf7f00a610493e4944b92e32b"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00060.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00090.png",
+      "size_bytes": 3468,
+      "sha256": "d998a4d8515fc4b9ee5933a2f22bef7697dba74bf7f00a610493e4944b92e32b"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00090.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00120.png",
+      "size_bytes": 3468,
+      "sha256": "d998a4d8515fc4b9ee5933a2f22bef7697dba74bf7f00a610493e4944b92e32b"
+    },
+    {
+      "path": "private/reference-acceleration-study/frames/frame_00120.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_00300.png",
+      "size_bytes": 78257,
+      "sha256": "caddbae2b82829d1e2f46e10715c080dc43295c3cd4dd362cbfd72a0054385a9"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "88d232234988852f7e9bcfb38f38c5c07743f1ec4a8c8adefe645a04f8c6eea6"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_00600.png",
+      "size_bytes": 79516,
+      "sha256": "5528a9f25e33ebc5467a6e9e243a5e00224674f182f605f4c4659ee84b38a866"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "8640b6b1600871482936f3a11bfb149a47f70c1d3f88c5d86b6ffbb9cb09ccd5"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_00900.png",
+      "size_bytes": 106157,
+      "sha256": "94870071d5c0dcad492cbec84179770b7a49bca879348983f8322b75e2388e9b"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "d79fc38725c55f47a8cf22262d0192845ffe88c282cba2f43d226f10a5faa902"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_01200.png",
+      "size_bytes": 107783,
+      "sha256": "702b882d505349dcc3b46f5c99158ffbdebd2e6ff267fbf9581fdd13b47f94ed"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "621a816e93c1c286a670b7fc84bb3ca55711a420ec8c1d6770bac441a6754dd6"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_01500.png",
+      "size_bytes": 106157,
+      "sha256": "94870071d5c0dcad492cbec84179770b7a49bca879348983f8322b75e2388e9b"
+    },
+    {
+      "path": "private/reference-acceleration-study/probe-3600/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "d79fc38725c55f47a8cf22262d0192845ffe88c282cba2f43d226f10a5faa902"
+    }
+  ],
+  "decomp_counts": {
+    "core_sha1": "30031137ce494323816bb707b90d3ec0d07937d2",
+    "core_sha256": "85d26aa8430154967b2633eede929286694ac39e99762527edcec365fd642ff9",
+    "decomp_source_files": 23631,
+    "symbol_function_aliases": 8360,
+    "symbol_unique_function_addresses": 5596
+  },
+  "tools": {
+    "analyzer": "MSVC 14.44.35207 x64 C++20",
+    "runtime": "Clang 23.1.2 x86_64-pc-windows-msvc C++20 Release",
+    "iop_tests": "MSVC 14.44.35207 x64 Debug CMake/Ninja"
+  },
+  "acceptance": {
+    "first_guest_image": true,
+    "initial_setup_input_transitions": true,
+    "main_menu": false,
+    "race": false,
+    "stable_boot": false,
+    "vulkan": false,
+    "xinput": false,
+    "game_save_reload": false,
+    "production_ctest_rerun": false,
+    "external_iop_ctest": "4/4 pass"
+  },
+  "disc": {
+    "sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+    "size_bytes": 5314478080
+  },
+  "production_executable": {
+    "path": "build/gt4boot.exe",
+    "size_bytes": 110391296,
+    "sha256": "839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab"
+  },
+  "probe120": {
+    "arguments": [
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\SCUS_973.28",
+      "--ntsc",
+      "--disc",
+      "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+      "--frames",
+      "120",
+      "--misses",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\misses.txt",
+      "--memcard",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\probe-card.ps2",
+      "--trace-iop",
+      "--trace-io",
+      "--frames-dir",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\frames",
+      "--frame-every",
+      "30"
+    ],
+    "timeout_seconds": 45,
+    "exit_code": 0,
+    "timed_out": false,
+    "elapsed_seconds": 0.9126132000237703,
+    "frame_files": [
+      "frame_00030.ppm",
+      "frame_00060.ppm",
+      "frame_00090.ppm",
+      "frame_00120.ppm"
+    ]
+  },
+  "probe3600": {
+    "arguments": [
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\runtime-build\\ps2run.exe",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\SCUS_973.28",
+      "--ntsc",
+      "--disc",
+      "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+      "--frames",
+      "3600",
+      "--misses",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\probe-3600\\misses.txt",
+      "--memcard",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\probe-3600\\probe-card.ps2",
+      "--trace-iop",
+      "--trace-io",
+      "--frames-dir",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\reference-acceleration-study\\probe-3600\\frames",
+      "--frame-every",
+      "300",
+      "--press",
+      "300:start",
+      "--press",
+      "600:cross",
+      "--press",
+      "900:cross",
+      "--press",
+      "1200:cross",
+      "--press",
+      "1500:cross",
+      "--press",
+      "1800:cross",
+      "--press",
+      "2100:cross",
+      "--press",
+      "2400:cross",
+      "--press",
+      "2700:cross",
+      "--press",
+      "3000:cross",
+      "--press",
+      "3300:cross"
+    ],
+    "timeout_seconds": 45,
+    "exit_code": null,
+    "timed_out": true,
+    "elapsed_seconds": 45.016524999868125,
+    "frame_files": [
+      "frame_00300.ppm",
+      "frame_00600.ppm",
+      "frame_00900.ppm",
+      "frame_01200.ppm",
+      "frame_01500.ppm"
+    ]
+  },
+  "generated": {
+    "file_count": 328,
+    "size_bytes": 86375038,
+    "inventory_sha256": "7a1a0909aa7197657ccb09a485d5bbb362d29afd3c08f28ffe7e134c0bf7d087"
+  }
+}

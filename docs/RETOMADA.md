@@ -1,5 +1,20 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Prioridade atual — 2026-10-12, estudo de aceleração/0051.** Os três
+repositórios pedidos estão clonados/pinados em `private/references/`.
+Nosso CORE tem o mesmo hash publicado pelo gt4-decomp: aproveitar nomes e
+estruturas com verificação; 30 mil versus15 mil é splat versus chamadas.
+Piloto completo ps2-web-recomp compilado intacto no Windows/Clang, CPU:
+discoUSA2.00/ELF validados, apresentação Sony, criação de dados e entrada
+de nome reais. Probe120 encerra normal; probe3600 termina no limite host45s
+após pelo menos1625. Menu principal/corrida/estabilidade ainda abertos.
+Produção preservada; próximos esforços priorizam piloto de integração do
+runtime MIT e navegação inicial, não a antiga próxima fatia de observação.
+PS2Recomp IOP4/4 passa; GPLv3 e retorno de prioridade divergente impedem
+importação cega. Relatório externo/manifest/0051 e STATUS são atuais.
+Vulkan direto, áudio, XInput e saves reais permanecem metas; GPU doador
+wgpu/Win32 ainda não foi validado. Blocos abaixo são históricos.
+
 **Atualização operacional — 2026-10-12, fatia109 encerrada.** O quadro extra
 anterior ao receiver nasce na chargeN1267 da principal; handler4AB4AC escreve
 1→2 antes do receiver2/2. Na referência, registro/enable0/0 já têm INTC2

@@ -1,5 +1,41 @@
 # Project status
 
+2026-10-12 — owner-directed acceleration study closed on
+`codex/reference-acceleration-study`, baseline `59c89f6`.
+Three projects cloned/pinned under ignored `private/references/`:
+`snuri00/ps2-web-recomp` (priority), `gustavocanepa/gt4-decomp`, and
+`ran-j/PS2Recomp`. Decision0051 accepts isolated external-runtime pilot;
+production remains unchanged and boot goal incomplete.
+
+Confirmed decomp CORE SHA1 equals our pinned USA2.00 CORE, despite different
+disc labels. External JAL scanner independently returns15068;30962 is the
+wider splat inventory, not proof of a missing half or EE Reloaded advantage.
+23631C/C++ sources,8360functionaliases/5596unique named addresses counted.
+External eerecomp on nativeELF:1240374instructions,14660functions,
+135093entries,326units. MSVC analyzer and wholeClang23.1.2 headlessCPU
+runtime/game build succeed unchanged, Windows x64, private only.
+
+New concrete progress: own ISO/ELF hash-verified, nativeNTSC120frame pilot
+shows real SCEA Presents,23IOP modules,17EEthreads,1215GSprimitives; normal
+frame-limit stop0.913s. Separate45s bounded probe requests3600 but reaches
+atleast1625 before host timeout; captured real create-game-data and player
+name entry screens with input transitions. NOT mainmenu/race/stableboot,
+NOT production gt4boot progression, NOT Vulkan or performance benchmark.
+Unknown DEV9 import resolution warnings retained. New private cards only.
+PS2Recomp standaloneIOP4/4CTest passes0.28s; its EE priority return still
+KE_OK differs from our qualified104. MIT donor/GPLv3 boundary recorded.
+
+Next: integration pilot from the complete MIT runtime, qualify profile-name
+input -> mainmenu from coldboot and enumerate actually used unknown services;
+retain our decoder/contract tests and existing reference evidence. Prepare
+WindowsGPU/Win32 and explicitVulkan later; no blind kernel/time transplant,
+no generic-success acceptance. EE Reloaded auxiliary, not prerequisite.
+Report `docs/reverse-engineering/external-recomp-acceleration-2026-10-12.md`,
+metadata `docs/inputs/external-recomp-references.json`, decision0051.
+Production54CTest/Python97 gates inherited107, notrerun for documentation.
+The historical slice110 action below remains diagnostic context, not the
+current owner's first priority.
+
 Closed slice109, 2026-10-12; baseline b525fc4, branch slice109-frame-phase-origin.
 Publication109:30622ffad1c1ffbefdf22ae02f6b33bbdb2169f4 pushed branch/main;
 remote mainhash matched andtreeclean afterfast-forward. This checkpoint

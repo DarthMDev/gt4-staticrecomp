@@ -19,6 +19,17 @@ decision needs owner input. After causal boot progress, pursue native Vulkan
 rendering, audio, XInput controls and real game saves; preserve those goals
 without substituting a replay/mock screen for guest output.
 
+Owner-directed acceleration study 2026-10-12 supersedes the next ordinary
+slice110 diagnostic priority: audit/use external bases to reach functional
+boot sooner. Decision0051/report external-recomp-acceleration-2026-10-12
+qualify a private ps2-web-recomp native Windows/Clang CPU pilot reaching
+real initial screens with our pinned inputs. Production remains MSVC and
+unchanged; external model/checkpoints are separate. Next qualify profile
+input/mainmenu and coherent runtime integration, preserving contract gates.
+Decomp CORE published SHA1 matches ours; reuse metadata with verification.
+PS2Recomp GPLv3 and contract differences require explicit boundaries.
+EE Reloaded is auxiliary, not a prerequisite for the execution pilot.
+
 ## Roles and autonomy
 
 - The agent is the engineer and decision maker for technical work: it plans,
@@ -290,7 +301,13 @@ historical; root `HANDOFF.md` is archival machine-move material.
   owner3/BIOS6/copies18preserved,3refsclosed,33helpers53artifacts pinned.
   Firstwatchattemptrejectedretained; publicationpathrepaircheckedarchives.
   Evidence109/metadata/0050/lesson. No runtime/time/IRQchange orbootclaim.
-- Next: **slice110 — pending INTC2 origin/lifetime before registration/reset**.
+- Next (owner priority2026-10-12): **external runtime integration pilot**.
+  See decision0051/report external-recomp-acceleration-2026-10-12 and STATUS.
+  Complete headless native Windows/Clang build already reaches real initial
+  GT4 screens with pinned USA2.00 inputs; qualify profile-name -> mainmenu,
+  actually used unknown services, then GPU/Win32/Vulkan. Production unchanged.
+  The former slice110 diagnostic below is retained as historical evidence,
+  not the current first action: pending INTC2 origin/lifetime before reset.
   Qualify occurrence/queue/STAT-W1C/delivery/mask/CPUgate and earlierreference
   phase/gatereturn; locate modelbit2withqueueempty beforechoosingcorrection.
   This replaces the former109action below, retained as its historical scope:
