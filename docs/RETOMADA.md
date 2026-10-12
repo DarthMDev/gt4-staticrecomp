@@ -1,5 +1,17 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, slice102 encerrada.** Observação
+qualificada do boot real na referência:429 janelas completas, dois retries
+de2000us e89 esperas de quadro; pedido1000us não observado. A mensagem
+acorda a0=1 e a espera de quadro restaura o contexto receive anterior.
+Repetição reduzida confirma54/54 estados registrados. Produção permanece
+idêntica, gates completos anteriores continuam válidos; não é progresso
+novo do boot do nosso runtime. Próximo103 segue esse contexto até o próximo
+bloqueio e compara fase/pilha/fila com o modelo. Evidência completa em
+`docs/reverse-engineering/slice102-matched-update-interval.md` e STATUS.
+Capturas/helpers privados; ownerINI/saves/BIOS preservados, referências fechadas.
+As atualizações inferiores registram suas próprias etapas históricas.
+
 **Atualização operacional — 2026-10-11, slice101 encerrada.** A investigação
 capturou o primeiro trap/retorno BIOS no interpretador por símbolos oficiais
 conferidos com a release pinada. Treze controles +duas repetições passaram;

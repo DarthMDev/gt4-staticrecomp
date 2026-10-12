@@ -13,6 +13,12 @@ This repository (github.com/moesuito/gt4-staticrecomp) is the working fork.
 Upstream (github.com/Kaezzey/gt4-staticrecomp) is a read-only reference: we do
 not push or open pull requests there.
 
+Owner priorities reaffirmed 2026-10-11: continue verified small slices
+autonomously toward real game boot, reporting progress and asking when a
+decision needs owner input. After causal boot progress, pursue native Vulkan
+rendering, audio, XInput controls and real game saves; preserve those goals
+without substituting a replay/mock screen for guest output.
+
 ## Roles and autonomy
 
 - The agent is the engineer and decision maker for technical work: it plans,
@@ -103,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-11 (slice 101, baseline `4c11f6b`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 102, baseline `75d139a`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with the closed slice101 update. Its original checkpoint is
+prefixed with closed slice101/102 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -190,7 +196,18 @@ historical; root `HANDOFF.md` is archival machine-move material.
   no existing acceptance expression weakened.
   Tripwires armed; M35's pad promoter watched
   (the first padman bind reopens input work).
-- Next: **slice 102 — matched real update 1000-us/root interval**, not started.
+- Slice102 real-disc dynarec:429 complete windows/430 entries/3004 states;
+  independently decoded block-cycle stores qualify vector/context endpoints.
+  Two2000us retries cost1110 reference cycles between those boundaries,
+  select idle with nearly full deadlines.89 frame waits; no observed1000us
+  update match. Message wake a0=1 precedes frame wait restoring the earlier
+  receive context. Reduced repeat54/54 recorded states identical, including
+  cycles/arguments/stack/timer/frame. No production policy change;0043 accepts
+  observation only. Five references closed; owner files/sixBIOS/18copies
+  preserved.22helpers private; docs/inputs/slice102-reference-intervals.json.
+- Next: **slice 103 — first message-wake/main continuation/next block**.
+  Align semantic caller/stack/queue/frame and main's subsequent work before
+  choosing a lifecycle or time change. The1000us matched interval stays open.
   Qualify engine/phase and any new observation identities per segment before
   any work->time policy; do not assume both PCSX2 engines agree or call
   release Step Into a word trace. The synthetic trap chain is observed;

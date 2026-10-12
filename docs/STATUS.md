@@ -1,5 +1,32 @@
 # Project status
 
+Closed slice102, 2026-10-12, baseline `75d139a`, branch
+`slice102-matched-update-interval`; publication pending. Matched reference
+symbols/source and independent dumpbin qualify dynarec block-cycle endpoints
+in real-disc boot: **429 complete windows / 430 entries / 3004 states**.
+Two retained2000-us timer retries have1110-cycle vector-to-context intervals,
+select idle and retain nearly all their deadlines. **No update1000-us match**
+in the bounded census;89 actual frame waits occur instead.
+
+Message prefix: receive sleeps, update wakes a0=1, subsequent frame wait
+restores the same receive context. Reduced repeat matches **54/54** recorded
+states including cycles/arguments/stack/timer/frame fields. Main's subsequent
+ordinary work/next blocking reason remain unknown; phase alignment is open.
+Decision0043 accepts observation only; no production clock/kernel/checkpoint
+change. Production4c1dd903... remains identical; slice101 full gates53/53 CTest
+and Python91 (85 executed/6 skipped) apply, not a newly claimed suite run.
+Five references closed normally; owner INI/saves/six BIOS and18 private BIOS
+copies preserved.22 helpers/captures private, metadata c9876d55... only public.
+
+Next **slice103 — first message-wake/main continuation/next block**. Compare
+semantic caller/stack/queue/frame against the model before a clock/lifecycle
+decision; no forced wake, priority change or guessed work-to-time conversion.
+Owner authorizes autonomous verified slices toward real boot, then native
+Vulkan/audio/XInput/saves. Evidence:
+`docs/reverse-engineering/slice102-matched-update-interval.md`;
+`docs/inputs/slice102-reference-intervals.json`.
+Lower closed-slice summaries remain historical.
+
 Closed slice101, 2026-10-11, baseline `4c11f6b`, branch
 `slice101-interpreter-trap-observation`. Matched official PDB and original
 host observer qualified first interpreter trap/BIOS-selected return in
