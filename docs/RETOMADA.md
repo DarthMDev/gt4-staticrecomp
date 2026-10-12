@@ -1,5 +1,13 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, slice106 encerrada.** Resultado
+da primeira sync pós-mensagem comprovado: referência espera/devolve0,
+modelo jáatrasado/devolve1; valor chega à próxima iteração. Entradas já
+diferiam3/3 versus4/3; origem causal anterior ainda desconhecida. Referência
+31janelas/217estados, repetição93/93 iguais. Diagnóstico somenteleitura com
+estado10k byteigualprodução/proveniência própria; nenhuma mudança runtime.
+Próximo107 rastreia prefixo anterior, semajustarclock/IRQ. Evidência106/STATUS.
+
 **Atualização operacional — 2026-10-12, slice105 encerrada.** CDVD_INIT
 modo0 agora responde os16bytes comprovados em duas conclusões reais;
 repetição12/12 e módulos da imagem conferem. RPC2 recusa checkpointRPC1.

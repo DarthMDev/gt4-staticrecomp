@@ -1,0 +1,273 @@
+{
+  "schema": 1,
+  "date": "2026-10-12",
+  "baseline": "cba6d81",
+  "scope": "Evidence-only first post-message frame-sync input/result and actual next iteration; no production change",
+  "production": {
+    "sha256": "32687d1173d5cb31d1b9b5003437ceb38b2bd20a98f1a005045c4e425233b3fc",
+    "size_bytes": 110391296
+  },
+  "models": {
+    "time": 3,
+    "interrupt": 4,
+    "kernel": 3,
+    "rpc": 2,
+    "translation": 2
+  },
+  "inputs": {
+    "core": {
+      "sha256": "85d26aa8430154967b2633eede929286694ac39e99762527edcec365fd642ff9",
+      "size_bytes": 2020861
+    },
+    "disc": {
+      "sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "size_bytes": 5314478080
+    },
+    "native_elf": {
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c",
+      "size_bytes": 6123004
+    }
+  },
+  "reference": {
+    "exe_sha256": "0506a196f5bc76d47f618e68d40519c766bbf5959b8aa88d5b91cee1dcb48037",
+    "pdb_sha256": "99b483451a79da4237585aa9da2ffc9a844dcd128e8628921a0f12832336de6f",
+    "symbols_sha256": "23745618476f12a90493aca73029c88a33fe64f10ec3b86b8d85409259aacdfe",
+    "codeview_guid": "7833e0ae-b1fc-c437-4c4c-44205044422e",
+    "codeview_age": 1,
+    "source_commit": "aa7ab4306e269075784c7ac3eb4b45e6e6c53445"
+  },
+  "reference_qualification": "Inherited103/105 pinned PE/PDB/dynarec materialized-boundary route; new GPR/RAM/scratch/node fields independently source/ELF qualified. Not an instruction trace.",
+  "observations": {
+    "complete_windows": 31,
+    "qualified_states": 217,
+    "reduced_states": 93,
+    "exact_common_states": 93,
+    "excluded_repeat_fields": [
+      "host_rva",
+      "sequence",
+      "thread"
+    ],
+    "first_message_wake_target": 1,
+    "reference_update_thread_local": 5,
+    "model_update_thread_local": 3,
+    "control_branch": 0,
+    "interval": 1,
+    "quit_flag": 0,
+    "update_object": "006de790",
+    "sync_raise_caller": "001078f0",
+    "sync_restore_caller": "0010799c",
+    "reference_raise_frame_synced": [
+      3,
+      3
+    ],
+    "model_raise_frame_synced": [
+      4,
+      3
+    ],
+    "reference_restore_frame_synced": [
+      4,
+      4
+    ],
+    "model_restore_frame_synced": [
+      5,
+      4
+    ],
+    "reference_sync_result": 0,
+    "model_sync_result": 1,
+    "next_service": "GetThreadId2F/RA4A06B0",
+    "next_outer_caller": "00101748",
+    "reference_next_saved_result": 0,
+    "model_next_saved_result": 1,
+    "reference_frame_sleep_restores_main": "PC5ADBC8/RA57689C",
+    "reference_main_next_block": "RPC_BIND WaitSema/RA5B18B4 selects idle81FC0",
+    "model_next_timer_wait_update_outer": [
+      "00578b20",
+      "00101760"
+    ],
+    "frontier": "Input frame difference already differs at bracket; result follows observed branch. First causal source precedes this bracket and is still unknown"
+  },
+  "model_observer": {
+    "service_records": 42,
+    "range": [
+      1299,
+      1340
+    ],
+    "callback_phase": "Before handler and before accepted-service/time advance; Driver source audited",
+    "diagnostic_provenance": "slice106-read-only-observer prefix; no clock-policy change",
+    "10000_control": "context_memory/kernel/banks/services/semantic identity byte-identical to105production, provenance intentionally different",
+    "work_and_full_state_interpreter_identical": true,
+    "completed_work": 8946341,
+    "source_inputs": {
+      "tools\\gt4boot\\main.cpp": {
+        "sha256": "4805bce5f9f70e8e3d5df755ebf91e87fe83ad5d8d42fd6f2e1e74146b073075",
+        "size_bytes": 76740
+      },
+      "build\\translated-whole-program.hpp": {
+        "sha256": "422beda4e169523d1cc9ab0111af9be831d408c18029c3e1b44014d57f1b2d3f",
+        "size_bytes": 215945387
+      },
+      "build\\gt4recomp_decode.lib": {
+        "sha256": "fcb98b8ce42dacc50499f063677d629b7772a799ca7103016d391e60c221fb02",
+        "size_bytes": 12194418
+      },
+      "build\\gt4recomp_executable.lib": {
+        "sha256": "a40980f652a031003e00867637f7e75156738bc2de6ee3d9a297aefce1695818",
+        "size_bytes": 3784338
+      },
+      "build\\gt4recomp_input.lib": {
+        "sha256": "f67b1ff0870a8311d2c36a4bd12e493e0546516c2702e9fcddd8756e00a15fac",
+        "size_bytes": 546322
+      },
+      "build\\_deps\\zlib-build\\zlibstaticd.lib": {
+        "sha256": "2aa89ee4ac0dab735b511cd19c3d5d0b0e709dbd27e147454f7f27bc116a771b",
+        "size_bytes": 325834
+      }
+    },
+    "w4_generated_warning_count": 15409,
+    "w4_generated_warning_codes": {
+      "C4102": 303,
+      "C4189": 2,
+      "C4702": 15104
+    },
+    "warning_scope": "Only preexisting generated C4702/C4102/C4189 under extra/W4; retained, production compiler flags/build unchanged"
+  },
+  "preservation": {
+    "owner_files_unchanged": 3,
+    "original_bios_unchanged": 6,
+    "isolated_bios_unchanged": 12,
+    "both_references_closed_normally": true
+  },
+  "gates": {
+    "inherited_unchanged_production": {
+      "ctest_passed": 54,
+      "ctest_seconds": 197.75,
+      "python_collected": 97,
+      "python_executed": 91,
+      "python_skipped": 6,
+      "python_seconds": 63.473,
+      "launcher_fixtures": 6
+    },
+    "new_full_suite_claimed": false
+  },
+  "helpers": {
+    "model-build.cmd": {
+      "sha256": "d6c5c360232c80dc7a758bae591171ee5d9629c493ab802192183deb15487b25",
+      "size_bytes": 680
+    },
+    "model-main.cpp": {
+      "sha256": "c79f19bf617d37980ca27b84b5187853bf5cdfc0a4f0fc3504a410be12941848",
+      "size_bytes": 79608
+    },
+    "model-model_observer.exe": {
+      "sha256": "506a939ac8f2d12dc2313f123fad52995c716dff85752fd50599d03e35cd5e94",
+      "size_bytes": 110393856
+    },
+    "model-source-inputs.json": {
+      "sha256": "634eedcf62964f08722784c8e96dda7ab9ebe8dfca9244d60cb923fccae4f261",
+      "size_bytes": 938
+    },
+    "reference-build-observer.cmd": {
+      "sha256": "1215f07bbb41c84b72446bf85ee6f2b449fd29a1a598319fd8e35d1b5a9b0294",
+      "size_bytes": 283
+    },
+    "reference-host_observer.cpp": {
+      "sha256": "43f9d5be043ce3144d3309c034b98b2b74de3988402aaaba7c97660a1b6caf52",
+      "size_bytes": 31535
+    },
+    "reference-host_observer.exe": {
+      "sha256": "739ee2f22613219d6de330c4ba6f71fff59fee69f4e248d7f159a2aac74b1f62",
+      "size_bytes": 260096
+    },
+    "slice106-build-state-comparator.cmd": {
+      "sha256": "bef44649652b8cf8b6fd664757aea1f7cf54dff4014fcf79fcf15caa2b24a91e",
+      "size_bytes": 450
+    },
+    "slice106-compare-observer-state.cpp": {
+      "sha256": "a9ffe05cb43c4309654e857c3de24b3ecb279f04180a214575aa990d1eea3a52",
+      "size_bytes": 2029
+    },
+    "slice106-compare-observer-state.exe": {
+      "sha256": "77ecc0b637ad5589a39e62c09bbacc5ae3eaac6a197290d0aa75f3099df56efd",
+      "size_bytes": 195584
+    },
+    "slice106-model-census.py": {
+      "sha256": "c28b35008b30878d9aebbc8982fe46a1fa0b687c0b9c2f2a36e3daee14fe1556",
+      "size_bytes": 1457
+    },
+    "slice106-prepare-model-observer.py": {
+      "sha256": "55991c774d12139de1dda2ef9b399d47e2d7a961909055022c067f97e540ead2",
+      "size_bytes": 5201
+    },
+    "slice106-prepare-reference.py": {
+      "sha256": "9da3ede5070f638d548d4d9271bee5f33c9d04a3c97fb5a0f9287582f21e0fcf",
+      "size_bytes": 7194
+    },
+    "slice106-publish-evidence.py": {
+      "sha256": "1e15d8536a2b2ade27affee4a9b28add00eac2b45bfb1ebd68429e1ce2041745",
+      "size_bytes": 11572
+    }
+  },
+  "captures": {
+    "qualified1/trace.jsonl": {
+      "sha256": "183e231ff4123daca25f43f75ba91518f0af7cbbb982b6551c61be5df9d169d5",
+      "size_bytes": 402090
+    },
+    "qualified1/observer.stdout": {
+      "sha256": "c53f5cb87cbb74e66fa3c3d7082c0b839783bbb65ed3c1ef09bccb08db536b85",
+      "size_bytes": 280
+    },
+    "qualified1/observer.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    "reduced1/trace.jsonl": {
+      "sha256": "cf5a17fe679924e228b82ff3d85c32d025b876ba4741152071a3472676997df6",
+      "size_bytes": 159316
+    },
+    "reduced1/observer.stdout": {
+      "sha256": "7cb901738c40a7253ef0e6dfa672436ff71d44397ac7ab6776be74c44872a4fe",
+      "size_bytes": 278
+    },
+    "reduced1/observer.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    "preservation.json": {
+      "sha256": "fa4fa92b3708751723a822bb1c943a6b36c327dc51aacbb683d3f699f159ff06",
+      "size_bytes": 2727
+    },
+    "model/census.json": {
+      "sha256": "dd6984e1498a232b5a2247ed43a13c889913afeba50740444b69bc29ca348278",
+      "size_bytes": 468
+    },
+    "model/census.stdout": {
+      "sha256": "09d31ff0e77ccebc9393ac291dc18fac9b2a545ed0705301c58736b06d3a1667",
+      "size_bytes": 38431
+    },
+    "model/observer-10000.stdout": {
+      "sha256": "6b88924ac88ebe95a805013e735a543e408928b662d807cc3e78a72a8584b4e3",
+      "size_bytes": 20602
+    },
+    "model/observer-10000.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    "model/observer-10000.bin": {
+      "sha256": "039e7ca7b31504e01d8e0f75e2ce8060a1c31e2eebb6406c5aebe7aae5f95409",
+      "size_bytes": 33589606
+    },
+    "model/observer-qualification.stdout": {
+      "sha256": "56d83f96d4272f1d4a17ae261498e4f7686e4fb64169c38897b8464953579451",
+      "size_bytes": 98
+    },
+    "model/observer-build.stdout": {
+      "sha256": "1c8cae7705f74138b4f6341216f2904d7459f6bea55c8d8a525a96c94d9666d0",
+      "size_bytes": 1776750
+    },
+    "model/observer-build.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    }
+  },
+  "limits": "No aligned absolute frames or elapsed timing asserted. New result split is explained by different inputs; no bug in sync implementation proven. Fallback endpoints not used. First causal timing/lifecycle source and matched1000us reference interval remain open."
+}

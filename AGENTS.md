@@ -109,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 105, baseline `ad70361`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 106, baseline `cba6d81`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with closed slice101/102/103/104/105 updates. Its original checkpoint is
+prefixed with closed slice101/102/103/104/105/106 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -231,10 +231,21 @@ historical; root `HANDOFF.md` is archival machine-move material.
   ASCII,16headers recorded/header timestamp schedules recompile; C/CXX only,
   RC audit debt. Six launcher fixtures and54CTest/Python97(91/6) pass.
   Evidence105/metadata, decision0046 and lesson in docs; clock/IRQ unchanged.
-- Next: **slice 106 — first frame-sync result after the message wake**.
-  BracketRA1078F0->10799C, controls6186DC/E4, frame/synced/queue and s5 result;
-  eventual SleepThreadRA4A2248 and actual main continuation. Entry mismatch
-  means trace earlier, not fit a quantum. Keep correct IRQ and clock.
+- Slice106 evidence-only:31referencewindows217states/reduced93/93exact.
+  First post-message sync entersreference3/3/model4/3 withcontrols0/1;
+  referenceSleep restoresactualmainreceive/work/RPC_BIND then idle. Restore
+  s5=0reference/1model reachesnextGetThreadRA4A06B0/outer101748 in savedstack.
+  Model timerWait retainsupdateouter578B20/101760;1000us value staticcaller,
+  notlivea0(semaid). Read-only modelobserver10k fullstate/identity/services
+  byteequalproduction with explicitdiagnosticprovenance; code/module/libs
+  pinned. ExtraW4generatedwarnings retained; unchangedproduction54/97gates
+  inherited. Owner3/BIOS6/copies12 preserved,14helpersprivate, refsclosed.
+  Evidence106/metadata/decision0047/lesson. No clock/IRQ change orbootclaim.
+- Next: **slice 107 — prefix before first message/sync entry**.
+  The observed result split follows already different frame inputs. Trace
+  earlier object/frame-queue/receive/message phase and actual caller/stack;
+  do not treat absolute frame mismatch as elapsed-time alignment or fit a
+  quantum. Keep correct IRQ and clock; first causal source remains unknown.
   Align semantic caller/stack/queue/frame and main's subsequent work before
   choosing a lifecycle or time change. The1000us matched interval stays open.
   Qualify engine/phase and any new observation identities per segment before

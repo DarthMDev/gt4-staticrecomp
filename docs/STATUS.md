@@ -1,5 +1,40 @@
 # Project status
 
+Closed slice106,2026-10-12; baselinecba6d81, branch slice106-frame-sync-result.
+**First post-message frame-sync result observed:** reference enterscurrent3/
+synced3, waits and returns0; original-policy model enters4/3 and returns1.
+Both havecontrols6186DC/E4=0/1 andquit0. ActualnextGetThreadRA4A06B0 with
+outer101748 saves the result in stack+0 (0reference/1model). Model follows
+timerWaitRA5AEDC0 with updateouter578B20/101760;1000us derives from the
+qualified caller/consumer, not livea0 (semaphore103).
+
+Reference31completewindows/217states, reduced93/93commonstates exactlyequal.
+Its frameSleep restoresordinarymain5ADBC8/RA57689C, actualmainservices then
+RPC_BIND wait selectingidle. Input difference already precedes result:
+**first causal timing/lifecycle source remains unknown; no clock fix adopted.**
+No stable/functional boot, production clock/IRQ and allmodelidentities unchanged.
+
+Read-only private modelobserver logs42pre-handler/pre-charge boundaries.
+Diagnostic10k context_memory/kernel/banks/models/servicecount byteequalactual
+105production; explicitprovenance differs. Work8,946,341/fullstate interpreter
+identical. Module/libs/production hashes unchanged;54/54CTest andPython97
+(91/6) inherited from105, not rerun. ExtraW4diagnosticgeneratedwarnings logged
+(C4702/C4102/C4189), nonefromnewlogger; no warning-free diagnostic claim.
+Owner3files/originalBIOS6/copies12 unchanged, both referencesclosednormally.
+14helpers archivedprivate; metadata d0912b5e68a82b42af732e9378b8cd0eb0ceb47a767407d7a695d11bdedad848.
+Evidence: docs/reverse-engineering/slice106-first-frame-sync-result.md,
+docs/inputs/slice106-frame-sync-result.json, decision0047, lesson106.
+Independent final review accepted evidence and verified36hashes/sizes.
+
+Next **slice107 — prefix before first message/sync entry**.
+Trace prior object/frame-queue/receive/message phase with actualcaller/stack,
+controls/waiter and main continuation. Absoluteframe difference does not align
+elapsedboot time. Preserve correctIRQ/preemption and1ms/service until a
+reference-backed policy exists; no guessedquantum/forcedwake/work->cyclefit.
+Matched1000us reference interval remainsopen.
+Publication105 cba6d81f5a2f5b2c7af16ba7059ce939f500ebc8 pushed branch/main;
+remote mainhash matched and tree clean before106. Lower summaries historical.
+
 Closed slice105,2026-10-12; baselinead70361, branch slice105-cdvd-init-response.
 CDVD_INIT80000592/function0 mode0/send4/recv16 now returns the independently
 observed four words{1,0x226,0x226,0}. Two real completions/reduced12/12 states
