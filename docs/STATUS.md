@@ -1,10 +1,11 @@
 # Project status
 
 2026-10-12 — slice111 native Vulkan pilot closed, baselinebd9ae77,
-branch codex/vulkan-renderer-pilot-111, decision0053. Real GPU compute
+branch codex/vulkan-renderer-pilot-111, decision0053.
 Evidence/code commit7a8e0a2 pushed to origin/main and pilot branch;
 localmain advanced only by fast-forward, frozen source/runtime pins preserved.
-rasterization/textures/readback and live Win32 output reach menu/circuit/car3D.
+Real GPU compute rasterization/textures/readback and live Win32 output
+reach menu/circuit/car3D.
 Frozen MIT batching/WGSL reused through Naga30.0.0/SPIR-V, separate Clang
 target; scale1/coherent buffers/synchronous fences, maintenance1 present
 lifetime, bounds checks and resource cleanup. No CPU upload-only acceptance.
