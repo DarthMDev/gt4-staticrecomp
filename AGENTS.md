@@ -109,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 106, baseline `cba6d81`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 107, baseline `5fc4e81`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with closed slice101/102/103/104/105/106 updates. Its original checkpoint is
+prefixed with closed slice101/102/103/104/105/106/107 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -192,7 +192,7 @@ historical; root `HANDOFF.md` is archival machine-move material.
   accepts this observation route only. Evidence/metadata:
   `docs/reverse-engineering/slice101-interpreter-trap-observation.md`,
   `docs/inputs/slice101-interpreter-traps.json`.
-- Gates: 54/54 CTest + Python 97 (91 run, 6 skip), re-run at slice 105;
+- Gates: 54/54 CTest + Python 97 (91 run, 6 skip), re-run at slice 107;
   no existing acceptance expression weakened.
   Tripwires armed; M35's pad promoter watched
   (the first padman bind reopens input work).
@@ -241,13 +241,31 @@ historical; root `HANDOFF.md` is archival machine-move material.
   pinned. ExtraW4generatedwarnings retained; unchangedproduction54/97gates
   inherited. Owner3/BIOS6/copies12 preserved,14helpersprivate, refsclosed.
   Evidence106/metadata/decision0047/lesson. No clock/IRQ change orbootclaim.
-- Next: **slice 107 — prefix before first message/sync entry**.
-  The observed result split follows already different frame inputs. Trace
-  earlier object/frame-queue/receive/message phase and actual caller/stack;
-  do not treat absolute frame mismatch as elapsed-time alignment or fit a
-  quantum. Keep correct IRQ and clock; first causal source remains unknown.
-  Align semantic caller/stack/queue/frame and main's subsequent work before
-  choosing a lifecycle or time change. The1000us matched interval stays open.
+- Slice107 evidence-only:40referencewindows280states/reduced120/120exact;
+  firstupdate/notify3/3 both, same main waiter receiver->pending, but model
+  adds frame before release4/3 while reference stays3/3 through wake/sync.
+  Qualified callers/stack/queue; numeric IDs/addresses local. Modelprivate100
+  at1604 already4/3 while waiter stillreceiver. Earlier receivephase differs;
+  no absolute elapsedtime alignment. All80cycledebits +2/RIP+18 independently
+  qualified;67/151rawendpointdeltas are not full costs or conversions.
+  Read-only121modelrecords1220..1340, explicitmainRAMpointerbounds, diagnostic
+  10k fullstate/models/services byteequal105/work8946341/interpreterequal.
+  Independent framing audit passes. Final restored build54CTest200.59s and
+  Python97(91/6)61.739s pass; fresh10k gueststate/models/work identicalold
+  producer/observer, only git_commit provenance differs. Newexe839adaa22f48...
+  separately pinned; oldexe/six producerinputs frozen before rebuild. Main/
+  module unchanged, libs rebuilt. VSamd64+UTF8 required before configuration
+  and build/autoregen; outside-VS/OEM850 attempts failed loudly, retained.
+  Broadgetter initial capture and preguardmodel rejected/retained; generated
+  profileLF/CRLFhash correction verified, no inputmanifestchange. Owner3/BIOS6/
+  copies24 preserved, all3refsclosed,25helpersprivate. Evidence107/metadata/
+  decision0048/lesson. No runtime/clock/IRQ change or boot claim.
+- Next: **slice 108 — counter writer and interrupt ownership in notify->release**.
+  Capture exact model frame store, CP0/INTC/DMAC/handler/elapsed accumulator
+  before/after servicecharge and dispatch; preserve diagnostic identity and
+  fullstate controls. Qualify reference event/frame phase. First causal source
+  and1000us reference match remain open; keep correctIRQ and1ms/service,
+  no guessedquantum/forcedwake or absoluteframe elapsedtime alignment.
   Qualify engine/phase and any new observation identities per segment before
   any work->time policy; do not assume both PCSX2 engines agree or call
   release Step Into a word trace. The synthetic trap chain is observed;
@@ -262,7 +280,12 @@ historical; root `HANDOFF.md` is archival machine-move material.
   0x1604 is deferred return (Patch/Interrupt), NOT idle. Draft decisions
   0037/0038 are superseded. Serialize builds and tests using their binaries
   on Windows: parallel CLI tests can lock linker outputs.
-- Build (VS Developer PowerShell):
+- Build (VS Developer PowerShell, UTF8 session):
+  Run `chcp 65001` before configure and build/autoregeneration. Fresh CMake
+  detection otherwise decodes this installation's UTF8 compiler include
+  prefix as OEM850; the launcher correctly refuses the resulting metadata.
+  A stale compiler-detection cache may retain that bad prefix; see107RE for
+  the qualified recovery. Do not configure from a plain non-VS shell.
   `cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=cl`
   then `cmake --build build` then `ctest --test-dir build --output-on-failure`.
 - Python tests:

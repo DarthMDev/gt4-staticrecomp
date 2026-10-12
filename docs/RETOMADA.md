@@ -1,5 +1,18 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, slice107 encerrada.** Localizamos
+um trecho menor da diferença: atualização e notify entram3/3 nos dois;
+o mesmo nó da principal passa receiver->pending. Referência segue3/3,
+modelo chega4/3 durante notify->release, antes da sync. Ainda faltam a
+escrita exata do contador e a causa/posse da interrupção. Referência40janelas/
+280estados, repetição120/120 exatos; diagnóstico10k estado completo igual
+à produção. Build final reconstruído/verificado54CTest+Python97(91/6),
+estado10k igual e sóproveniência do commit diferente. VS+UTF8 necessário
+antes de configurar/build; artefatos antigos preservados. Runtime/clock/IRQ
+preservados, boot ainda não funcional.
+Próximo108 observa escrita/interrupt/time nesse intervalo; não ajusta quantum.
+Evidência107, decisão0048 e STATUS são a retomada atual; blocos abaixo históricos.
+
 **Atualização operacional — 2026-10-12, slice106 encerrada.** Resultado
 da primeira sync pós-mensagem comprovado: referência espera/devolve0,
 modelo jáatrasado/devolve1; valor chega à próxima iteração. Entradas já

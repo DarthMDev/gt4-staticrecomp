@@ -1,5 +1,44 @@
 # Project status
 
+Closed slice107,2026-10-12; baseline5fc4e81, branch slice107-update-prefix.
+First update and notify getters enter3/3 in both executions. The same main
+waiter moves receiver->pending through qualified queue6D6774/callers/stack.
+Reference stays3/3 through release/wake/sync; model has4/3 at release, with
+private100/PC1604 already4/3 while the waiter is still receiver. Local frame
+split narrowed to notifyGetThreadRA5768F0->releaseGetThreadRA576674.
+Earlier receive phases also differ and are retained; equal3/3 is not equal
+elapsed boot time. Exact writer/IRQ cause/ownership/residual phase unknown.
+
+Reference40windows/280states; reduced120/120 common states exactly equal,
+including new queue/node/lock fields. All80 cycle debit stores independently
+qualified +2/RIP+18; raw endpoint deltas67/151 are not full costs/conversions.
+Model121records1220..1340, explicit diagnostic provenance, RAM-only pointer
+guards; 10k fullserializedstate/models/services byteequal105production and
+work8,946,341/fullstate interpreterequal, independently reviewed. Runtime
+source/clock/models unchanged; final rebuilt producer54/54CTest200.59s and
+Python97(91/6)61.739s pass. Fresh10k matches old producer state/observer;
+only git_commit provenance differs. Executable839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab.
+Old exe/six producer inputs frozen and pinned before rebuilding; main/module
+unchanged, rebuilt libraries separately pinned. Actual header dependencies,
+timestamp invalidation/restored no-work verified. Configure/build/autoregen
+require VSamd64+UTF8(chcp65001); outside-VS/OEM850 attempts rejected/logged.
+25helpers/59artifacts private, owner3/BIOS6/copies24 preserved; all3references
+closed normally. Initial broad selector and preguard model rejected/retained;
+manual profile LF/CRLF hash correction verified without changing inputs.
+Metadata0adaac422a297a5ed8a3ff9708756554950e9f3c60329e95f0f66f460d023f2c.
+Evidence docs/reverse-engineering/slice107-update-prefix.md, decision0048,
+lesson107 and docs/inputs/slice107-update-prefix.json. No clock/IRQ change,
+no functional boot claim. Independent capture/framing/preservation review
+accepted; final operational annex validated with full gates and fresh controls.
+
+Next **slice108 — identify writer and interrupt ownership in notify->release**.
+Capture bounded model counter store, CP0/INTC/DMAC/handler/time accumulator
+before/after charge/dispatch. Qualify reference event/frame phase; account
+non-service work before any work->time policy. Keep original1ms/service,
+correct IRQ return, diagnostic provenance and full-state controls. No guessed
+quantum/forcedwake;1000us matched reference interval remains open.
+Lower slice106 and older summaries are historical checkpoints.
+
 Closed slice106,2026-10-12; baselinecba6d81, branch slice106-frame-sync-result.
 Publication106:28a413df28402572c68b63bad05d7dfd9cc2ec95 pushed branch/main;
 remote main hash matched, working tree clean after fast-forward.
