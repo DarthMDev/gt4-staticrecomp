@@ -1,5 +1,23 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-11, slice101 encerrada.** A investigação
+capturou o primeiro trap/retorno BIOS no interpretador por símbolos oficiais
+conferidos com a release pinada. Treze controles +duas repetições passaram;
+BEQ/BGEZ/BEQL tomados voltam ao slot e iniciam a cadeia de falha documentada,
+plain/false comuns retornam à continuação e BEQL false anula. Runtime e
+relógio permanecem iguais; gap likely5/1 vs1/0 ainda aberto. Gates atuais:
+CTest53/53; Python91 (85 executados/6skip). Owner INI/BIOS/slot9/backup
+preservados, referência fechada normalmente. Artefatos da etapa em
+`private/pcsx2/sstates/slice101-interpreter-trap-observation/`,17 helpers
+arquivados em `helpers/`; hashes em `docs/inputs/slice101-interpreter-traps.json`.
+Leia [evidência101](reverse-engineering/slice101-interpreter-trap-observation.md)
+e [STATUS](STATUS.md). **Próxima slice102:** medir intervalo real de
+atualização1000us/principal com fase/motor qualificados; ainda não iniciada.
+O checkpoint original de2026-10-09 abaixo permanece histórico; suas frases
+“slice101 não iniciada” e desconhecimento do primeiro retorno foram superados
+por esta atualização. O ZIP histórico de fontes não foi atualizado nesta etapa.
+
+
 Checkpoint solicitado pelo dono em **2026-10-09**, depois da slice 100.
 Este documento permite continuar sem depender do histórico da conversa.
 Leia primeiro `docs/STATUS.md`; `AGENTS.md` contém o acordo de trabalho.
@@ -194,7 +212,7 @@ um `.cmd` com `call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTo
 `docs/environment.md` registra também a armadilha de relink: após mudanças
 em C++, não confiar só no build default; construir `gt4boot` explicitamente.
 
-## 8. Próximo trabalho — ainda não iniciado
+## 8. Proposta histórica no checkpoint — slice101 agora encerrada
 
 **Slice 101 proposta:** observar o primeiro trap em slot no interpretador,
 o retorno escolhido pelo BIOS e a cadeia de falha, incluindo o gap likely.

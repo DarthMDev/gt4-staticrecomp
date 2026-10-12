@@ -1,5 +1,38 @@
 # Project status
 
+Closed slice101, 2026-10-11, baseline `4c11f6b`, branch
+`slice101-interpreter-trap-observation`. Matched official PDB and original
+host observer qualified first interpreter trap/BIOS-selected return in
+**13 synthetic controls +2 reduced repeats**. Taken BEQ/BGEZ/BEQL enter
+vector with EPC=B/BD1; BIOS selects slot S; actual ERET returns S/EXL0/v0=1,
+then repeats SYSCALL with BIOS-modified v1=BC and enters a bounded TLB chain.
+Plain/ordinary false return S+4; BEQL false annuls; six effect controls agree.
+Reduced repeats match76/500 target-forward observations (not instruction
+counts). Independent review approved the13-case matrix and preserved hashes.
+
+No production behavior/clock/checkpoint change; gt4boot byte-identical to
+slice98. Known fake-service likely-slot gap native5/1 vs interpreter1/0
+remains characterized, not fixed. The corrected production starvation
+frontier below is unchanged; synthetic service2F does not measure its timing.
+Gates re-run: warning-free/no-work build, **53/53 CTest (50.37s)**,
+**91 Python (85 executed/6 skipped,69.789s)**; existing socket ResourceWarnings.
+CORE/native analysis ELF/ISO verified against manifests. Owner INI/slot9/
+backup, six original BIOS and78 isolated BIOS copies preserved. Reference
+closed normally; no process remains. Fifteen accepted traces and17 archived
+helpers remain private; only hash-pinned metadata/docs committed.
+
+Next **slice102 — matched real update1000-us/root interval**, not started.
+Qualify engine/phase per segment before any work-to-time policy; do not guess
+slot return, alter correct preemption or special-case WaitSema. A future
+resumable-slot change needs explicit pending state and serialization/comparator
+coverage, separately justified. Decision0042 accepts this observation route;
+0041's production constraints remain. Evidence:
+`docs/reverse-engineering/slice101-interpreter-trap-observation.md`;
+metadata: `docs/inputs/slice101-interpreter-traps.json`.
+Read `docs/RETOMADA.md` for local resumption; its slice100 checkpoint is
+historical and qualified by the dated slice101 update at its top. All lower
+review/handoff summaries describe their own closed sessions.
+
 Tooling question reviewed, 2026-10-11 (documentation only): EE Reloaded can
 broaden independent EE instruction analysis, but does not supply the live
 trap/return and update/root timing evidence currently missing. Recommendation

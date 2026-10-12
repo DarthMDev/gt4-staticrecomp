@@ -103,11 +103,11 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-09 (slice 100, baseline `63a3fc8`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-11 (slice 101, baseline `4c11f6b`, green):
 
-Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09).
-It records the closed slice100, local artifacts, qualified limits and the
-not-yet-started slice101; root `HANDOFF.md` is archival machine-move material.
+Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
+prefixed with the closed slice101 update. Its original checkpoint is
+historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
   whole-text scan finds 497 unsupported words of 1,334,917 (467 inside
@@ -172,16 +172,30 @@ not-yet-started slice101; root `HANDOFF.md` is archival machine-move material.
   still unknown. 31 captures re-extracted; owner INI/BIOS/slot9+backup
   hashes preserved, isolated process closed normally. No runtime change.
   Evidence: `docs/reverse-engineering/slice100-live-branch-controls.md`.
-- Gates: 53/53 CTest + Python 91 (85 run, 6 skip), re-run at slice 100;
+  Slice101 resolves that synthetic interpreter unknown using the exact
+  release's matched official PDB and a separately qualified host observer.
+  Thirteen controls plus two reduced repeats: taken BEQ/BGEZ/BEQL first
+  vector EPC=B/BD1; BIOS selects slot S; ERET returns S/EXL0/v0=1, repeated
+  syscall with BIOS-modified v1=BC -> JALR0 -> TLB Cause8/EPC0 and bounded
+  later BIOS chain. Plain/ordinary false return S+4; BEQL false annuls;
+  six effect controls agree. State writes are not instruction counts.
+  Reduced repeats match76/500 observations; independent review approved.
+  No production or clock change; fake-service likely gap remains5/1 vs1/0.
+  Fifteen accepted traces/17 helpers private; owner INI/saves/BIOS preserved,
+  all78 isolated BIOS copies match. Reference closed normally. Decision0042
+  accepts this observation route only. Evidence/metadata:
+  `docs/reverse-engineering/slice101-interpreter-trap-observation.md`,
+  `docs/inputs/slice101-interpreter-traps.json`.
+- Gates: 53/53 CTest + Python 91 (85 run, 6 skip), re-run at slice 101;
   no existing acceptance expression weakened.
   Tripwires armed; M35's pad promoter watched
   (the first padman bind reopens input work).
-- Next: **slice 101 — separately qualified interpreter trap observation**.
-  Pin any diagnostic/Devel reference build anew; capture first slot vector
-  EPC/BD, BIOS-selected return and interpreter failure chain; include handled
-  likely-slot gap. Do not call release interpreter Step Into a word trace.
-  Match reference update 1000-us/root
-  interval before any work->time policy; do not assume both PCSX2 engines agree.
+- Next: **slice 102 — matched real update 1000-us/root interval**, not started.
+  Qualify engine/phase and any new observation identities per segment before
+  any work->time policy; do not assume both PCSX2 engines agree or call
+  release Step Into a word trace. The synthetic trap chain is observed;
+  a future production slot-resume change still requires explicit pending
+  state, serialization/comparator coverage and separately justified semantics.
   Account identically, including non-service computation;
   do not guess an instruction/cycle conversion or special-case WaitSema.
   Slice-94 attribution/exclusion rates concern the old interrupt_model 3,

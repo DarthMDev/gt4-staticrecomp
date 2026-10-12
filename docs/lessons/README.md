@@ -106,6 +106,11 @@ explicitly as pointers, never smoothed over.
 
 ## Earlier notes (outside the backlog)
 
+Later bounded investigations (outside the historical twenty-two):
+[slice100 — reference is not hardware](slice100-reference-is-not-hardware.md)
+and [slice101 — observing the BIOS return](slice101-bios-return-is-an-observation.md).
+Their evidence documents qualify what was measured and what remains unknown.
+
 Three single-milestone notes predate the backlog convention and
 are kept as-is: [M6](m6.md), [M7](m7.md), and [M8](m8.md). They
 are not audited below and are not part of the twenty-two.
