@@ -33,6 +33,12 @@ Read `docs/RETOMADA.md` for local resumption; its slice100 checkpoint is
 historical and qualified by the dated slice101 update at its top. All lower
 review/handoff summaries describe their own closed sessions.
 
+Publication: slice101 `2c23800` pushed on its branch, fast-forward merged
+and pushed to origin/main; remote HEAD independently matched. Working tree
+clean after merge, production and metadata hashes unchanged, no reference
+process. Only documentation/metadata differ from baseline; no source/script/
+test/CMake changes, so preceding full gates apply to identical production.
+
 Tooling question reviewed, 2026-10-11 (documentation only): EE Reloaded can
 broaden independent EE instruction analysis, but does not supply the live
 trap/return and update/root timing evidence currently missing. Recommendation
