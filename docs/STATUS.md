@@ -1,6 +1,8 @@
 # Project status
 
 Closed slice107,2026-10-12; baseline5fc4e81, branch slice107-update-prefix.
+Publication107:177569071becc079482872c451ae0ea99fa93fd4 pushed branch/main;
+remote main hash matched and working tree clean after fast-forward.
 First update and notify getters enter3/3 in both executions. The same main
 waiter moves receiver->pending through qualified queue6D6774/callers/stack.
 Reference stays3/3 through release/wake/sync; model has4/3 at release, with
