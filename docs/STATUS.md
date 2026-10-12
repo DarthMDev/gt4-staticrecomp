@@ -1,5 +1,28 @@
 # Project status
 
+Closed slice103,2026-10-12, baseline `b29eb99`, branch
+`slice103-message-wake-prefix`. **Priority-return divergence confirmed**:
+reference24->1 returns24, game saves/selects it and restores24; model returns
+zero, then restores priority0. Nine fresh checkpoints/two native-interpreter
+comparisons agree. Independent reference20 complete windows/140 states;
+reduced repeat60/60 states exact, including s2/s4/s5/message/clock fields.
+Main resumes receive then reaches synchronous RPC_BIND WaitSema25, selects
+idle. IDs/stacks/frame phase differ; no word counts or new clock policy.
+
+Production SHA4c1dd903... unchanged; original53/53 CTest and Python91(85/6)
+gates inherited, not re-run. Original owner files/six BIOS and12 isolated
+copies preserved; both references closed normally. Decision0044 accepts
+evidence and next-fix scope;10 archived helpers/private captures, metadata
+a4cf7957... only public. Independent read-only review approved causal chain
+and repeat. Evidence: `docs/reverse-engineering/slice103-message-wake-prefix.md`.
+
+Next **slice104 — fix evidenced priority return, before clock policy**.
+Test nonzero old-priority return and preservation across preemption; bump
+kernel semantic identity and reject older checkpoints. Qualify unobserved
+variants rather than claiming universal evidence. Run full gates and fresh
+boot to determine causal progress. Correct IRQ preemption/time remain.
+Closed102 and lower summaries are historical checkpoints.
+
 Closed slice102, 2026-10-12, baseline `75d139a`, branch
 `slice102-matched-update-interval`; published as `5d61ef4` on branch/main,
 remote HEAD independently matched and working tree clean. Matched reference

@@ -1,5 +1,15 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, slice103 encerrada.** Divergência
+causal no retorno de ChangeThreadPriority: referência devolve24, modelo0,
+e o jogo restaura esse retorno como prioridade. Nove snapshots/duas comparações;
+referência20janelas/140estados e repetição reduzida60/60 estados iguais.
+Referência retoma receive principal e bloqueia em RPC_BIND; RUN dentro do
+handler nativo não é trabalho comum da principal. Produção inalterada,
+owner files/BIOS preservados, duas referências fechadas. Próximo104 corrige
+contrato com testes/identidadekernel/bootfresh, sem mudar relógio ou IRQ.
+Evidência em `docs/reverse-engineering/slice103-message-wake-prefix.md`.
+
 **Atualização operacional — 2026-10-12, slice102 encerrada.** Observação
 qualificada do boot real na referência:429 janelas completas, dois retries
 de2000us e89 esperas de quadro; pedido1000us não observado. A mensagem

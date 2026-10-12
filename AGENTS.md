@@ -109,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 102, baseline `75d139a`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 103, baseline `b29eb99`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with closed slice101/102 updates. Its original checkpoint is
+prefixed with closed slice101/102/103 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -205,7 +205,20 @@ historical; root `HANDOFF.md` is archival machine-move material.
   cycles/arguments/stack/timer/frame. No production policy change;0043 accepts
   observation only. Five references closed; owner files/sixBIOS/18copies
   preserved.22helpers private; docs/inputs/slice102-reference-intervals.json.
-- Next: **slice 103 — first message-wake/main continuation/next block**.
+- Slice103: first message priority chain confirmed independently. Normal
+  current-thread24->1 returns24 and1->24 returns1; game saves that return
+  and restores24. Model returns0, consumes it and restores0. Nine fresh
+  snapshots/two diffs;20 reference windows/140 states, reduced60/60 exact.
+  Reference main resumes receive then blocks in synchronous RPC_BIND,
+  selecting idle. Model RUN root in timer callback is not ordinary progress.
+  No production/time change, owner files/BIOS preserved, two references closed.
+  Evidence: `docs/reverse-engineering/slice103-message-wake-prefix.md`,
+  `docs/inputs/slice103-message-priority.json`; decision0044.
+- Next: **slice 104 — priority-return contract correction**, not started.
+  Test nonzero return and preservation across preemption; bump kernel model,
+  refuse old checkpoints, qualify unobserved variants and run full gates/fresh
+  boot. Keep correct IRQ preemption and clock. Earlier103 timing plans follow
+  this confirmed service divergence.
   Align semantic caller/stack/queue/frame and main's subsequent work before
   choosing a lifecycle or time change. The1000us matched interval stays open.
   Qualify engine/phase and any new observation identities per segment before
