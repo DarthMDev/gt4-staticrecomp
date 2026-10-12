@@ -109,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 108, baseline `55dc5c7`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice109, baseline `b525fc4`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with closed slice101/102/103/104/105/106/107/108 updates. Its original checkpoint is
+prefixed with closed slice101/102/103/104/105/106/107/108/109 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -274,7 +274,26 @@ historical; root `HANDOFF.md` is archival machine-move material.
   gates54/97inherited107. Rejected ODR build never run; superseded no-map capture
   retained. Owner3/BIOS6/copies12preserved, bothrefsclosed.25helpers54artifacts;
   evidence108/metadata/decision0049/lesson. No clock/IRQchange orbootclaim.
-- Next: **slice 109 — earlier receive/first-update phase and work anchors**.
+- Slice109 evidence-only:534modelrecords/repeatexact, wholeCPTrepeatexact,
+  productionwholeCPT equals108/fullstatework8946341 interpreterequal. N1267
+  maingetterqueue617D04 charge2359296->49152 queuesINTC2, store4AB4AC1->2
+  overmain1/savedPC5ADB98 before receiver1284already2/2. Reference42windows/
+  298states,294full/126reduced commonexact; four calibratedfastmemDr2writes
+  withhostEA/value/width+EEblock/ELF qualify4AB4AC, rawPC4AB460stale.
+  Registration/enable0/0 alreadyINTC2latchedmasked; firstwriter1/0 same
+  renderMode0/start1801186298 before nextVBlank. Priorpendingdelivery
+  highconfidence, notimmediateEnable orqualifiedorigin/interruptedowner.
+  ModelSTAT804/MASK800queueempty needs earlierlifetimeaudit; don't blindly
+  reconstructqueuefromSTAT/duplicatepreviousdelivery. N1284chargequeues2
+  beforeidle; resetrawPC107730stale/nativeSQ5A4924. Work405460/79services,
+  405381nonservice/no conversion. Productionunchanged/gates54/97inherited107;
+  owner3/BIOS6/copies18preserved,3refsclosed,33helpers53artifacts pinned.
+  Firstwatchattemptrejectedretained; publicationpathrepaircheckedarchives.
+  Evidence109/metadata/0050/lesson. No runtime/time/IRQchange orbootclaim.
+- Next: **slice110 — pending INTC2 origin/lifetime before registration/reset**.
+  Qualify occurrence/queue/STAT-W1C/delivery/mask/CPUgate and earlierreference
+  phase/gatereturn; locate modelbit2withqueueempty beforechoosingcorrection.
+  This replaces the former109action below, retained as its historical scope:
   Qualify native registration, reference frame writer/INTC2 context and model
   charge history before the earlier receive split, including non-service work.
   Keep correctIRQ and1ms/service until a replacement is justified. First

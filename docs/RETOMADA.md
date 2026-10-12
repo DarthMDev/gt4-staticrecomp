@@ -1,5 +1,19 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, fatia109 encerrada.** O quadro extra
+anterior ao receiver nasce na chargeN1267 da principal; handler4AB4AC escreve
+1→2 antes do receiver2/2. Na referência, registro/enable0/0 já têm INTC2
+pendente e o primeiro writer1/0 ocorre ainda na fase render anterior ao
+próximo VBlank. Escritor comprovado por alias fastmem calibrada, endereço/
+valor/largura host e bloco EE/ELF; rawPC está atrasado. Origem da pendência
+e contexto original continuam abertos; reconstituir fila do STAT cegamente
+arriscaria duplicar uma ocorrência. Próxima110 atribui esse lifetime/gate/
+acknowledgement antes da menor correção. Modelo534/534, referência294/294
+completos comuns e126/126 reduzidos exatos; fresh10k estado/work iguais,
+produção/runtime/clock/IRQ preservados. Owner/BIOS/cópias18 intactos,
+três referências fechadas. Gates54/97 herdados107. Boot ainda não funcional.
+Evidência109, decisão0050 e STATUS são atuais; blocos abaixo históricos.
+
 **Atualização operacional — 2026-10-12, fatia 108 encerrada.** A origem
 local do quadro extra foi comprovada: a cobrança de tempo da primeira
 notificação completa o período de vídeo do modelo, dispara INTC2 e chama

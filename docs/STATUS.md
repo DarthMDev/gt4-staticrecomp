@@ -1,5 +1,42 @@
 # Project status
 
+Closed slice109, 2026-10-12; baseline b525fc4, branch slice109-frame-phase-origin.
+Goal turn made progress: earlier extra frame is caused by N1267 main getter
+charge2359296->49152, INTC2, store4AB4AC1->2 overmain1/savedPC5ADB98;
+receiverSleepN1284 already2/2 versusreference1/0. Model534/534records repeat,
+whole repeat CPT exact, fresh10k fullstate/work8946341 interpreter equal;
+productionwholeCPT equals108, onlyobserver binary diagnosticprovenance differs.
+
+Reference calibrated fastmem alias (Dr2) resolves zero-hit backing watch:
+four writes0->1->2->3->4, effectivehostaddress/value/width and matchedEE
+JITblock4AB430/32words qualify exactstore4AB4AC. RawPC4AB460 is stale.
+42windows298states; earlier294/294full and126/126reduced common states exact.
+INTC2 alreadylatched/masked atregistration0/0; firstwriter1/0 stillsame
+renderMode0/start1801186298, before nextVBlankdeadline. Priorpending delivery
+highconfidence, NOT immediateEnableIntc orqualifiedinterruptedowner/origin.
+Modelregistration STAT804/MASK800 withqueueempty; source/lifetime unknown.
+Do not blindly reconstructqueuefromSTAT orduplicateanold deliveredoccurrence.
+
+N1284servicechargequeuesINTC2 beforeidleframeadvance, sameentrycoalesced;
+do notattribute thirdincrement solelytoidle. ResetobservedPC107730 also
+stale: native memsetSQ5A4924 lower64, notSD107730. Workwindow405460/79services,
+405381nonservice,80advances14106624ticks; no work/timeconversion adopted.
+Productionexe/module/libs/source/clock/IRQ unchanged;54CTest/Python97(91/6)
+gates inherited107, notrerun109. Owner3/originalBIOS6/copies18 preserved;
+all3references closednormally. Firstwatchattempt retained/rejectedaswriter,
+publicationwrongsourcepath recoveredbycheckingexistingarchivehashes.
+33helpers/53artifacts pinned; independent writer/state/publicationreview.
+Metadatafb9c07f9fca00ad85fc299f563bcc6146a46037e726c818cc5cabb646958db0a.
+Evidence docs/reverse-engineering/slice109-phase-origin.md, decision0050,
+lesson109 and docs/inputs/slice109-phase-origin.json. Boot stillnotfunctional.
+
+Next **slice110 — origin/lifetime of pending INTC2 before registration/reset**.
+Qualify occurrences, queue, STAT/W1C, delivery, masks and CPUgate; reference
+earlierphase/gatereturn and modelbit2withqueueempty beforechoosingcorrection.
+Keep1ms/service/correctpreemption; no guessedquantum orforcedwake. Snapshot/
+dispatch contracts and fullwork accounting remain required for anychange.
+The rest of this file preserves earlier historical checkpoints.
+
 Closed slice 108, 2026-10-12; baseline 55dc5c7, branch slice108-frame-writer.
 Publication108: ccb06c14db9941975603c1260420466dbf5fa720 pushed branch/main;
 remote main hash matched and working tree clean after fast-forward.
@@ -33,7 +70,7 @@ Evidence docs/reverse-engineering/slice108-frame-writer.md, decision0049,
 lesson108 and docs/inputs/slice108-frame-writer.json. No runtime/clock/IRQ
 change or functional boot claim.
 
-Next **slice109 — earlier receive/first-update phase and work anchors**.
+Historical next action from108: **slice109 — earlier phase/work anchors**, closed above.
 Qualify native registration/reference frame writer/INTC2 context and model
 charge history before the earlier receive split, including non-service work.
 Keep correct IRQ and current1ms/service until a replacement is justified;
