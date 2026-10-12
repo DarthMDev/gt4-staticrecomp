@@ -29,6 +29,12 @@ First frame-sync divergence remains the parallel causal timing question.
 Do not guess quantum/reply or force wake; stable functional boot goal active.
 Lower summaries are historical checkpoints.
 
+Publication104: `7f859fe830804e325a5fed370ef62dc9e65ae0ed` pushed on
+branch and fast-forward main; remote HEAD independently matched, tree clean.
+105 source preparation persisted in `docs/reverse-engineering/slice105-cdvd-init-contract.md`
+and source-only metadata. Four official sources/ELF hash/JAL targets verified;
+live response/implementation remain unstarted, no accepted reply values.
+
 Closed slice103,2026-10-12, baseline `b29eb99`, branch
 `slice103-message-wake-prefix`. **Priority-return divergence confirmed**:
 reference24->1 returns24, game saves/selects it and restores24; model returns
