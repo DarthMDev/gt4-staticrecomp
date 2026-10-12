@@ -270,6 +270,10 @@ int main() {
               "a pre-slice-104 priority-return model is refused naming kernel");
         check(refuses_naming(rpc_bump, "rpc"),
               "a foreign rpc model is refused naming rpc");
+        ModelCompatibility before_cdvd_init = current_model_compatibility();
+        before_cdvd_init.rpc_model = 1;
+        check(refuses_naming(before_cdvd_init, "rpc"),
+              "a pre-slice-105 CDVD reply model is refused naming rpc");
         check(refuses_naming(translation_bump, "translation"),
               "a foreign translation model is refused naming translation");
         // Pre-P00 files carry no semantic identity: forensic, never a

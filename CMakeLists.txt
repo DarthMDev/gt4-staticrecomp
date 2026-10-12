@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
-project(GT4Recomp VERSION 0.1.0 LANGUAGES CXX)
+# zlib already requires C; detect both compilers here so their include
+# metadata prefixes are available in this directory as well as its child.
+project(GT4Recomp VERSION 0.1.0 LANGUAGES C CXX)
 
 # Compression is a utility dependency. Parsing and image construction are ours.
 include(FetchContent)
@@ -12,6 +14,28 @@ FetchContent_Declare(zlib
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
 FetchContent_MakeAvailable(zlib)
+if(MSVC)
+    set(msvc_include_launcher "${CMAKE_CURRENT_SOURCE_DIR}/tools/build/normalize_msvc_includes.cmake")
+    # Changing the launcher must invalidate compiler commands as well.
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${msvc_include_launcher}")
+    file(SHA256 "${msvc_include_launcher}" msvc_include_launcher_hash)
+    # Normalize only /showIncludes metadata, using each detected language
+    # prefix. Locale/code-page differences otherwise let Ninja retain stale
+    # objects with zero header dependencies (slice 105). An English language
+    # pack is not required; all other diagnostics stay in their original form.
+    foreach(language IN ITEMS C CXX)
+        set(CMAKE_${language}_COMPILER_LAUNCHER
+            "${CMAKE_COMMAND};-DINCLUDE_PREFIX=${CMAKE_${language}_CL_SHOWINCLUDES_PREFIX};-DNORMALIZER_HASH=${msvc_include_launcher_hash};-P;${msvc_include_launcher};--")
+    endforeach()
+    # FetchContent created these C targets before the launcher defaults.
+    foreach(zlib_target IN ITEMS zlib zlibstatic)
+        if(TARGET ${zlib_target})
+            set_property(TARGET ${zlib_target} PROPERTY C_COMPILER_LAUNCHER
+                "${CMAKE_C_COMPILER_LAUNCHER}")
+        endif()
+    endforeach()
+    set(CMAKE_CL_SHOWINCLUDES_PREFIX "Note: including file: ")
+endif()
 
 add_library(gt4recomp_core STATIC src/common/project.cpp)
 target_include_directories(gt4recomp_core PUBLIC include)
@@ -295,6 +319,14 @@ if(BUILD_TESTING)
         add_test(NAME gt4boot_build
             COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --target gt4boot)
         set_tests_properties(gt4boot_build PROPERTIES FIXTURES_SETUP gt4boot)
+        # A stale main object can supply old inline compatibility defaults
+        # even when the checkpoint unit binary passes. Check the actual
+        # shipped executable's semantic identity independently (slice 105).
+        add_test(NAME gt4boot_model_identity
+            COMMAND gt4boot "${GT4_LOCAL_CORE}" --services 1 --quiet)
+        set_tests_properties(gt4boot_model_identity PROPERTIES
+            FIXTURES_REQUIRED gt4boot
+            PASS_REGULAR_EXPRESSION "model time=3 interrupt=4 kernel=3 rpc=2 translation=2")
         # The pinned driver/interpreter differential horizon. This checks
         # shared-model consistency, not a boot phase or visible output:
         # slice 95's corrected interrupt-return preemption exposes an

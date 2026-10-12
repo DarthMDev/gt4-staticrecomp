@@ -1,5 +1,44 @@
 # Project status
 
+Closed slice105,2026-10-12; baselinead70361, branch slice105-cdvd-init-response.
+CDVD_INIT80000592/function0 mode0/send4/recv16 now returns the independently
+observed four words{1,0x226,0x226,0}. Two real completions/reduced12/12 states
+and native disc modules qualify the reply. Other variants stop before reply
+or completion. Existing SIF result/RPC_END/DMAC path retained, no forced wake.
+RPC identity2 rejects actual104RPC1 checkpoint; time3/IRQ4/kernel3/translation2
+and serialized layouts unchanged.
+
+Gates54/54CTest197.75s; Python97(91executed/6skip)63.473s, six launcher fixtures.
+90k/10k AOT/interpreter full-state and work identical:22,566,329/8,946,341.
+Strict/default10k complete checkpoints identical. Fresh strict10k/100k:
+three threads/two RPC pairs/zero unknown calls/zero GIF payload. Root remains
+READY64/saved5ADBC8 and update RUN24. Frame/synced526/524 then5926/5925.
+The strict unknown-CDVD stop is removed; ordinary-main frontier persists.
+**No stable or functional boot yet.**
+
+Integration exposed stale objects: localized /showIncludes bytes differed
+between rules and compiler; Ninja recorded zero headers. English-only clean
+build also failed dependency qualification. Both attempts/captures rejected.
+Final UTF-8 C/CXX launcher normalizes only include line prefixes to ASCII,
+stops on unknown metadata/unpreservable arguments and hashes its own command
+identity. Actual main records16headers; header timestamp schedules recompile,
+restoration yields no-work. RC/other output encodings remain audit debt.
+Final binary32687d1173d5cb31d1b9b5003437ceb38b2bd20a98f1a005045c4e425233b3fc.
+Metadataefaa9ca6fa607b024eebdfde8205cd1bbf49eaaf341387b7754d5a837c1c1328.
+Independent read-only review verified45hashes and accepted the evidence.
+Owner3files/originalBIOS6/isolatedcopies12 unchanged; both references closed.
+Seventeen final private helpers archived. Code/tests/docs ready for publication.
+Evidence: docs/reverse-engineering/slice105-cdvd-init-response.md,
+docs/inputs/slice105-cdvd-init-response.json, decision0046, lesson105.
+
+Next **slice106 — first frame-sync result after the message wake**.
+Bracket priorityRA1078F0->10799C; record controls6186DC/E4, frame/synced/queue,
+s3/s4/s5, stack, waiter and actual main continuation, eventual SleepRA4A2248.
+An entry mismatch means the divergence precedes the bracket: trace earlier.
+Keep correct IRQ preemption and production1ms/service. No guessed quantum,
+forced wake or instruction/cycle conversion. Matched1000us interval stays open.
+Lower summaries are historical checkpoints.
+
 Closed slice104,2026-10-12, baseline1eb31a8, branch `slice104-priority-return`.
 **Priority return corrected**: target previous priority written before dispatch;
 nonzero restore/preemption/snapshot/resume and target/caller distinction tested.

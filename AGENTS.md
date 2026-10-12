@@ -109,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 104, baseline `1eb31a8`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 105, baseline `ad70361`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with closed slice101/102/103/104 updates. Its original checkpoint is
+prefixed with closed slice101/102/103/104/105 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -139,7 +139,7 @@ historical; root `HANDOFF.md` is archival machine-move material.
   update RUN/prio0, 2 RPC pairs, zero GIF payload. Less boot progression is
   recorded honestly; old later phases depended on omitted preemption.
   Production still uses 1 ms/service; reference-backed time policy remains
-  open. Semantic interrupt_model 4, time 3, kernel 3, RPC 1, translation 2;
+  open. Semantic interrupt_model 4, time 3, kernel 3, RPC 2, translation 2;
   GT4CPT3/GT4KERN2 layout unchanged, old interrupt-model-3 checkpoints refused.
   Slice 96: all 270 one-shot 1000-us waits really block with a full 1 ms
   left; WaitSema's own 1 ms charge expires them and TIM2 interrupts root
@@ -192,7 +192,7 @@ historical; root `HANDOFF.md` is archival machine-move material.
   accepts this observation route only. Evidence/metadata:
   `docs/reverse-engineering/slice101-interpreter-trap-observation.md`,
   `docs/inputs/slice101-interpreter-traps.json`.
-- Gates: 53/53 CTest + Python 91 (85 run, 6 skip), re-run at slice 104;
+- Gates: 54/54 CTest + Python 97 (91 run, 6 skip), re-run at slice 105;
   no existing acceptance expression weakened.
   Tripwires armed; M35's pad promoter watched
   (the first padman bind reopens input work).
@@ -222,10 +222,19 @@ historical; root `HANDOFF.md` is archival machine-move material.
   53/53CTest+Python91(85/6);90k/10k differential fullstate/work green.
   Strict mode refuses preexisting80000592/fn0; defaultempty reply is not
   validated boot. Evidence104/metadata and decision0045 in docs.
-- Next: **slice 105 — qualify80000592/function0 protocol and response**.
-  SDK identifies CDVDInit; guest580CD8/client874FA8/recv6570C0. Obtain real
-  response/consumer/completion evidence before implementation. First frame
-  sync divergence remains open. Keep correct IRQ preemption and clock.
+- Slice105 qualifies CDVD_INIT80000592/fn0 mode0/send4/recv16 with two real
+  completions{1,226hex,226hex,0}, reduced12/12 states and native disc modules.
+  Other variants stop; real SIF result/endpacket/DMAC path retained. RPC2
+  refuses actualRPC1, strict/default10k checkpoints identical;0unknown at
+  strict10k/100k. RootREADY64/5ADBC8/updateRUN24,0GIF, no functional boot.
+  Main header dependency bug fixed: UTF-8 localized metadata normalized to
+  ASCII,16headers recorded/header timestamp schedules recompile; C/CXX only,
+  RC audit debt. Six launcher fixtures and54CTest/Python97(91/6) pass.
+  Evidence105/metadata, decision0046 and lesson in docs; clock/IRQ unchanged.
+- Next: **slice 106 — first frame-sync result after the message wake**.
+  BracketRA1078F0->10799C, controls6186DC/E4, frame/synced/queue and s5 result;
+  eventual SleepThreadRA4A2248 and actual main continuation. Entry mismatch
+  means trace earlier, not fit a quantum. Keep correct IRQ and clock.
   Align semantic caller/stack/queue/frame and main's subsequent work before
   choosing a lifecycle or time change. The1000us matched interval stays open.
   Qualify engine/phase and any new observation identities per segment before

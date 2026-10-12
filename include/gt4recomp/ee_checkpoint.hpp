@@ -91,7 +91,7 @@ struct ModelCompatibility {
     std::uint32_t time_model = 3;         // the service clock and timer advance
     std::uint32_t interrupt_model = 4;    // occurrence, pending, mask, dispatch, handler frames
     std::uint32_t kernel_model = 3;       // kernel service tables, ids and returns
-    std::uint32_t rpc_model = 1;          // SIF/RPC replies and backing stores
+    std::uint32_t rpc_model = 2;          // SIF/RPC replies and backing stores
     std::uint32_t translation_model = 2;  // decoder and AOT emitter semantics
 };
 
@@ -115,6 +115,8 @@ struct ModelCompatibility {
 // preempts for a higher-priority READY thread, exact interrupted PC saved).
 // Slice 104 bumps kernel to 3 (ChangeThreadPriority returns the previous
 // priority, retained in the caller's saved context across preemption).
+// Slice 105 bumps RPC to 2 (validated CDVD_INIT mode 0 returns the pinned
+// four-word reply rather than the historical empty result).
 [[nodiscard]] constexpr ModelCompatibility current_model_compatibility() noexcept {
     return ModelCompatibility{};
 }

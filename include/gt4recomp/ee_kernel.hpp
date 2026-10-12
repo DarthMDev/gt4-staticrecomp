@@ -636,6 +636,12 @@ private:
     // receive buffer and sends the SIFRPC end packet.
     void answer_sif_rpc_call(GuestState& state, std::uint32_t command_buffer,
                              std::uint32_t size);
+    // The pinned CDVD_INIT mode-0 contract (slice 105). Validate the entire
+    // request/receive shape before producing any reply or completion.
+    [[nodiscard]] std::uint32_t answer_cdvd_init(
+        GuestState& state, std::uint32_t request, std::uint32_t request_size,
+        std::uint32_t receive_buffer, std::uint32_t receive_size,
+        std::uint8_t* result);
     // Handles `SIF_CMD_RESET_CMD`: records the requested IOP image and
     // completes the modeled reboot by announcing SIFINIT|CMDINIT|BOOTEND in
     // SMFLAG, the bits the game's boot-completion wait polls. The game

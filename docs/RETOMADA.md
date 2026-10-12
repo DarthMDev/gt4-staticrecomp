@@ -1,5 +1,14 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, slice105 encerrada.** CDVD_INIT
+modo0 agora responde os16bytes comprovados em duas conclusões reais;
+repetição12/12 e módulos da imagem conferem. RPC2 recusa checkpointRPC1.
+Falha nas dependências de headers do build corrigida e verificada no objeto
+real;54/54CTest ePython97(91/6), diferenciais90k/10k verdes. Strict10k/100k
+sem RPC desconhecido, mas principal READY64/5ADBC8/updateRUN24 e zeroGIF.
+Boot ainda não funcional. Próximo106 observa primeiro resultado de sync de
+quadro após mensagem, sem mudarclock/IRQ. Evidência105 eSTATUS atuais.
+
 **Atualização operacional — 2026-10-12, slice104 encerrada.** Runtime
 corrigido: retorno da prioridade anterior preservado antes de preempção.
 Kernel3 recusa checkpointkernel2; clock/IRQ iguais. CTest53/53 ePython91

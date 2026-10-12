@@ -333,6 +333,9 @@ RpcPairClass Kernel::classify_rpc_pair(std::uint32_t sid,
         }
         return RpcPairClass::Unknown;
     }
+    if (sid == 0x80000592u && function == 0u) {
+        return RpcPairClass::ImplementedVerified;
+    }
     if (sid == 0x80000001u) {
         if (function == 0xFFu) {
             return RpcPairClass::CompatConstant;
@@ -389,7 +392,7 @@ const char* Kernel::rpc_pair_candidate_name(std::uint32_t sid) noexcept {
         case 0x53505554u: return "SPUT audio transfer (PDISPU2, Opus candidate)";
         case 0x80000001u: return "SIF manager (SIFMAN, established)";
         case 0x80000006u: return "FILEIO file server (established)";
-        case 0x80000592u: return "SCE-range numeric SID (unidentified)";
+        case 0x80000592u: return "CDVD init (pinned CDVDFSV server)";
         // String-coded worker servers seen bound in the boot: the four
         // ASCII bytes are read mechanically (the same reading that spells
         // PCDV, MPG1 or SPUP), but no function, buffer or consumer is
@@ -413,6 +416,10 @@ const char* Kernel::rpc_pair_candidate_name(std::uint32_t sid) noexcept {
 
 const char* Kernel::rpc_pair_note(std::uint32_t sid,
                                   std::uint32_t function) noexcept {
+    if (sid == 0x80000592u && function == 0u) {
+        return "CDVD_INIT mode 0, send 4/recv 16: pinned disc modules and "
+               "two live completions; other modes/formats stop (slice 105)";
+    }
     if (sid == 0x50434456u) {
         if (function == 2u) {
             return "volume registration: checksum recomputed from the image, "
@@ -2984,6 +2991,43 @@ std::uint32_t Kernel::answer_disc_volume_size(std::uint8_t* result,
     return reply_size;
 }
 
+std::uint32_t Kernel::answer_cdvd_init(
+    GuestState& state, std::uint32_t request, std::uint32_t request_size,
+    std::uint32_t receive_buffer, std::uint32_t receive_size,
+    std::uint8_t* result) {
+    const bool request_mapped = state.memory().contains(request, 4);
+    const bool receive_mapped = state.memory().contains(receive_buffer, 16);
+    const std::uint32_t mode =
+        request_mapped ? state.memory().read_word(request) : 0xFFFFFFFFu;
+    if (request_size != 4 || receive_size != 16 || !request_mapped
+        || !receive_mapped || mode != 0) {
+        char context[280];
+        std::snprintf(context, sizeof context,
+                      "Unsupported CDVD_INIT sid 0x80000592 fn 0 at pc "
+                      "0x%08X thread %u (mode 0x%08X send %u recv %u "
+                      "request 0x%08X mapped %u recvbuf 0x%08X mapped %u)",
+                      state.pc(), current_thread_id_, mode, request_size,
+                      receive_size, request, request_mapped ? 1u : 0u,
+                      receive_buffer, receive_mapped ? 1u : 0u);
+        throw std::runtime_error(context);
+    }
+    // Slice 105 qualifies this observable response, not execution of IOP
+    // instructions: the pinned Sony CDVDFSV callback returns success and
+    // versions from CDVDFSV/CDVDMAN. Both disc modules declare 0x0226;
+    // two real mode-0 completions independently return diagnostic zero.
+    // The SDK's server constants and unobserved modes are not substitutes.
+    constexpr std::uint32_t reply_words[] = {1, 0x0226, 0x0226, 0};
+    for (std::uint32_t index = 0; index < 4; ++index) {
+        const std::uint32_t value = reply_words[index];
+        const std::uint32_t offset = index * 4;
+        result[offset + 0] = static_cast<std::uint8_t>(value);
+        result[offset + 1] = static_cast<std::uint8_t>(value >> 8);
+        result[offset + 2] = static_cast<std::uint8_t>(value >> 16);
+        result[offset + 3] = static_cast<std::uint8_t>(value >> 24);
+    }
+    return 16;
+}
+
 std::uint32_t Kernel::answer_file_open(GuestState& state, std::uint32_t request,
                                        std::uint32_t request_size,
                                        std::uint8_t* result,
@@ -3168,7 +3212,10 @@ void Kernel::answer_sif_rpc_call(GuestState& state, std::uint32_t command_buffer
     }
     std::uint8_t result[576] = {};
     std::uint32_t result_size = 0;
-    if (sid == 0x80000006u && rpc_number == 0u && server != nullptr) {
+    if (sid == 0x80000592u && rpc_number == 0u && server != nullptr) {
+        result_size = answer_cdvd_init(state, server->buffer, send_size,
+                                      recvbuf, recv_size, result);
+    } else if (sid == 0x80000006u && rpc_number == 0u && server != nullptr) {
         result_size = answer_file_open(state, server->buffer,
                                        state.memory().read_word(command_buffer + 36),
                                        result, sizeof result);

@@ -1,0 +1,392 @@
+{
+  "schema": 1,
+  "date": "2026-10-12",
+  "baseline": "ad70361",
+  "scope": "Pinned CDVD_INIT mode-zero reply, real completion and corrected executable dependency evidence; metadata only",
+  "production": {
+    "sha256": "32687d1173d5cb31d1b9b5003437ceb38b2bd20a98f1a005045c4e425233b3fc",
+    "size_bytes": 110391296
+  },
+  "models": {
+    "time": 3,
+    "interrupt": 4,
+    "kernel": 3,
+    "rpc": 2,
+    "translation": 2
+  },
+  "inputs": {
+    "core": {
+      "sha256": "85d26aa8430154967b2633eede929286694ac39e99762527edcec365fd642ff9",
+      "size_bytes": 2020861
+    },
+    "disc": {
+      "sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "size_bytes": 5314478080
+    },
+    "native_elf": {
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c",
+      "size_bytes": 6123004
+    }
+  },
+  "reference": {
+    "exe_sha256": "0506a196f5bc76d47f618e68d40519c766bbf5959b8aa88d5b91cee1dcb48037",
+    "pdb_sha256": "99b483451a79da4237585aa9da2ffc9a844dcd128e8628921a0f12832336de6f",
+    "symbols_sha256": "23745618476f12a90493aca73029c88a33fe64f10ec3b86b8d85409259aacdfe",
+    "codeview_guid": "7833e0ae-b1fc-c437-4c4c-44205044422e",
+    "codeview_age": 1,
+    "source_commit": "aa7ab4306e269075784c7ac3eb4b45e6e6c53445"
+  },
+  "reference_qualification": "Inherited102/103 matched PE/PDB/layout and dynarec boundary flush/cycle stores.105 named GPR/RAM ranges qualified by native caller. No instruction/time conversion.",
+  "source_contract_manifest": {
+    "sha256": "c819b24739046e7a0102ea2e3f63ecca6687d8c9bdb43201533f9f07ff828cd7",
+    "size_bytes": 2597
+  },
+  "disc_module_audit": {
+    "disc": {
+      "sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "size_bytes": 5314478080
+    },
+    "ioprp": {
+      "lba": 1551,
+      "size_bytes": 278465,
+      "sha256": "782690377b32380f4a44cac19a542fd34c4b071c910d4a02dd8124e5f07e2e5a"
+    },
+    "modules": {
+      "CDVDMAN": {
+        "name": "CDVDMAN",
+        "offset": 124384,
+        "size_bytes": 85165,
+        "ext_offset": 412,
+        "ext_size": 28,
+        "sha256": "fc3a1ac2ed8f41498d463a8e2c315e22626a6fa2c0331ae77d6bb267a2dc6503",
+        "module_name": "cdvd_driver",
+        "iopmod_version": 550,
+        "extinfo_version": 550
+      },
+      "CDVDFSV": {
+        "name": "CDVDFSV",
+        "offset": 209552,
+        "size_bytes": 33429,
+        "ext_offset": 440,
+        "ext_size": 32,
+        "sha256": "6706fca2021399e614fd87faf99146be1a5f2d4c9b1aaaa17cfbc5b0e14ddf5a",
+        "module_name": "cdvd_ee_driver",
+        "iopmod_version": 550,
+        "extinfo_version": 550
+      }
+    },
+    "native_checks": 17,
+    "reply_expected_high_confidence": [
+      1,
+      550,
+      550
+    ],
+    "diagnostic_initial": 0,
+    "limits": "Static diagnosis does not prove runtime diagnostic or completion; module VAs before relocation."
+  },
+  "live_observation": {
+    "qualified_states": 28,
+    "complete_windows": 4,
+    "reduced_states": 12,
+    "repeat_matches": 12,
+    "repeat_excluded_fields": [
+      "host_rva",
+      "sequence",
+      "thread"
+    ],
+    "completions": [
+      {
+        "mode": 0,
+        "semaphore": 17,
+        "reply_words": [
+          1,
+          550,
+          550,
+          0
+        ],
+        "wait_entry_sequence": 0,
+        "completion_entry_sequence": 7
+      },
+      {
+        "mode": 0,
+        "semaphore": 21,
+        "reply_words": [
+          1,
+          550,
+          550,
+          0
+        ],
+        "wait_entry_sequence": 14,
+        "completion_entry_sequence": 21
+      }
+    ],
+    "preservation": {
+      "owner_files_unchanged": 3,
+      "original_bios_unchanged": 6,
+      "isolated_bios_unchanged": 12,
+      "normal_shutdown_all_runs": true
+    },
+    "limits": "Reply/completion observed, consumer return statically derived only. Both requests mode0. No latency or lifecycle policy."
+  },
+  "contract": {
+    "sid": "80000592",
+    "function": 0,
+    "request_mode": 0,
+    "send_bytes": 4,
+    "recv_bytes": 16,
+    "reply_words": [
+      1,
+      550,
+      550,
+      0
+    ],
+    "client": "00874fa8",
+    "send_buffer": "00875000",
+    "receive_buffer": "006570c0",
+    "caller": "00580e40",
+    "wait_caller": "005b1b74",
+    "completion_caller": "005b1b7c",
+    "live_consumer_return": "Unknown",
+    "consumer_return_high_confidence": 1,
+    "unknown_variants_stop": true
+  },
+  "build_dependency_qualification": {
+    "main_object": "CMakeFiles/gt4boot.dir/tools/gt4boot/main.cpp.obj",
+    "compatibility_header_recorded": true,
+    "changed_header_schedules_main_recompile": true,
+    "header_timestamp_restored": true,
+    "unchanged_build_has_no_work": true,
+    "limits": "C/CXX dependency qualification. RC localized cmcldeps prefix remains unaudited."
+  },
+  "build_tools": {
+    "cmake": "cmake version 4.3.3",
+    "msvc": "19.44.35228 x64",
+    "compiler_output_encoding": "UTF-8",
+    "launcher": {
+      "sha256": "94db7b65833b553ffe69767b307b44b6819d521b4ee6093080cb0f2139997ed8",
+      "size_bytes": 2953
+    },
+    "embedded_provenance": "ad70361 plus slice105 tracked changes; binary hash is authoritative",
+    "limits": "Qualified local C/CXX includes. RC and other output encodings remain unaudited."
+  },
+  "gates": {
+    "ctest_passed": 54,
+    "ctest_seconds": 197.75,
+    "python_collected": 97,
+    "python_executed": 91,
+    "python_skipped": 6,
+    "python_seconds": 63.473,
+    "launcher_fixtures": 6
+  },
+  "fresh_differentials": {
+    "90000": {
+      "completed_work": 22566329,
+      "accepted_services": 90000,
+      "full_state_identical": true
+    },
+    "10000": {
+      "completed_work": 8946341,
+      "accepted_services": 10000,
+      "full_state_identical": true
+    }
+  },
+  "strict_default_checkpoint_identical": true,
+  "old_actual_rpc1_checkpoint_refused": true,
+  "observations": {
+    "root_ready_priority": 64,
+    "root_saved_pc": "005adbc8",
+    "update_run_priority": 24,
+    "threads": 3,
+    "rpc_pairs": 2,
+    "unknown_rpc_calls": 0,
+    "gif_payload_bytes": 0,
+    "10000_frame_synced": [
+      526,
+      524
+    ],
+    "100000_frame_synced": [
+      5926,
+      5925
+    ],
+    "boot_progress": "Strict unknown CDVD reply removed; ordinary main frontier remains, functional boot not reached"
+  },
+  "rejected_integration_attempts": [
+    "Mixed104/105 executable with RPC1, zero main header dependencies",
+    "English-only clean build with RPC2/refusal but still zero main header dependencies"
+  ],
+  "helpers": {
+    "build-observer.cmd": {
+      "sha256": "1215f07bbb41c84b72446bf85ee6f2b449fd29a1a598319fd8e35d1b5a9b0294",
+      "size_bytes": 283
+    },
+    "host_observer.cpp": {
+      "sha256": "027fe816da9f140131b84ebef086d580c7de21e09c45e49680a0bcee4ad08ce5",
+      "size_bytes": 28285
+    },
+    "host_observer.exe": {
+      "sha256": "47a2fe559f678807b0e40c8f8995f742b198ef03f69d12ed048c45d7aef227dd",
+      "size_bytes": 257536
+    },
+    "slice105-audit-disc-modules.py": {
+      "sha256": "a9a9a5141403c66132b0596b509c1491264a213eb9355ddde164ab2aaa2804e4",
+      "size_bytes": 5685
+    },
+    "slice105-build-inspector.cmd": {
+      "sha256": "39691dc9c26dbd4fe051ca752dcf2f1b48c6eca3eba3a9ae9eb00a3d37778248",
+      "size_bytes": 512
+    },
+    "slice105-build-probe.cmd": {
+      "sha256": "8faf677f23a7809446ca5fd4f7154e0b3c00c21e3448e2ee8739cba1348d084b",
+      "size_bytes": 231
+    },
+    "slice105-check-build-dependencies.py": {
+      "sha256": "31cef039c4afe46a826dc271d8797cdc4f28d94b1c34160926dac9b8c9b18bbf",
+      "size_bytes": 2300
+    },
+    "slice105-configure-observer.py": {
+      "sha256": "2553784e4708004d49171b0a2558e47a84e4c1d6890a5bf0fd3e2ad59eed7ea4",
+      "size_bytes": 3526
+    },
+    "slice105-fresh-boot.py": {
+      "sha256": "d5a18b7f0370aa89df8df3ceae68cf170f5c73b265481838be1d531396141c8b",
+      "size_bytes": 3265
+    },
+    "slice105-inspect-stops.cpp": {
+      "sha256": "33ef81a6b5b06d737874c522341e0f8dd153ab4ebbe4f1f9866b3ce2fb54c043",
+      "size_bytes": 4152
+    },
+    "slice105-inspect-stops.exe": {
+      "sha256": "0bd106937f24411fe22064fcb591852709d0f868fbb10cbe920b36454e684b96",
+      "size_bytes": 517632
+    },
+    "slice105-pin-gate.py": {
+      "sha256": "ee39c08d68565af2b46d56f3791d4be95f646973760702742d3504c8f984bde6",
+      "size_bytes": 968
+    },
+    "slice105-prepare-reference.py": {
+      "sha256": "ee7955ada8d8e0bfdffd9e2739f17c42e694dd07b57151a45712c5020a29016e",
+      "size_bytes": 2320
+    },
+    "slice105-publish-metadata.py": {
+      "sha256": "89e4cc010963f1255b853f0e0bcaea607c5198fb9cb68a9d03fb04575f22c9ed",
+      "size_bytes": 10462
+    },
+    "slice105-rebuild.cmd": {
+      "sha256": "1ee18a06b165f9329fe357af4d54e9033a007aed7192cca450abc389cbd401ee",
+      "size_bytes": 481
+    },
+    "slice105-validate-live.py": {
+      "sha256": "1e4cb8fe32e26804e167b7acb70f87ed5b31f452ce11c3f99beaf89c5836aeb7",
+      "size_bytes": 4104
+    },
+    "slice105-verify.cmd": {
+      "sha256": "0129882ac2e5c5eeb92a2534d5d428754e1561c5710665e53334b2d12557350b",
+      "size_bytes": 294
+    }
+  },
+  "captures": {
+    "qualified1/trace.jsonl": {
+      "sha256": "bac203bcd5484147b7a660a6fdd49d682fc7fa6fd642d02d729c3ed7cb86693f",
+      "size_bytes": 45602
+    },
+    "reduced1/trace.jsonl": {
+      "sha256": "5bc7eda13a0f620917cd49020aab971cee0b613b21e191d9492a3b0795c40b23",
+      "size_bytes": 18022
+    },
+    "live-analysis.json": {
+      "sha256": "5d596ac2300ab304c6cc5405e8a5d6d13f8df3fcd2093144d441d6f8fceeb034",
+      "size_bytes": 952
+    },
+    "disc-module-audit.json": {
+      "sha256": "6e8dac089e7c67850bf848e8ca99afc11f97e2d399ea285defca96db1f75c7d6",
+      "size_bytes": 1216
+    },
+    "preservation.json": {
+      "sha256": "404a04e609ff6d3858dbaf589496f7c65cfce56f56303d080c6d385630aff3df",
+      "size_bytes": 2725
+    },
+    "verified-model-runs.json": {
+      "sha256": "d70f5c9c40dd2ab0fad8b4b6f2e92fc76119bd9b3f45d9d4961d3d4df897e04b",
+      "size_bytes": 4012
+    },
+    "build-dependency-analysis.json": {
+      "sha256": "c721c19e39d37c192f5187503836e2ab8c844d02f03c256abf6d5de0df9e04be",
+      "size_bytes": 344
+    },
+    "main-object-dependencies.txt": {
+      "sha256": "ef9d1f9456c14dd57edc81c6ca5eea09cedab07957073db8c5effcf768c8e9fb",
+      "size_bytes": 733
+    },
+    "header-change-dry-run.stdout": {
+      "sha256": "9956ca40abec91e6266cf30f85a4c6963c939a26550a82d11e16f401b1821a95",
+      "size_bytes": 557
+    },
+    "header-change-dry-run.stderr": {
+      "sha256": "78a9b6ad59c3b6732eb83a493e12fef725b4b054eeeb96e797d843d1e417b9c8",
+      "size_bytes": 1099
+    },
+    "header-restored-dry-run.stdout": {
+      "sha256": "330898d286bd71e5faa2700cc7c0384e2e8551e6a03b668cac13f738ded258fb",
+      "size_bytes": 58
+    },
+    "gate90000-normalized-summary.txt": {
+      "sha256": "b5981165922a9ef9492bb54fe9fd7d56b56af389d1f7135e950701516d65dbef",
+      "size_bytes": 403
+    },
+    "gates-normalized-LastTest.log": {
+      "sha256": "c33faf675e4aed2d323c6bdb1578ce8338679dd7c2b6c85c7af15879e4f8471d",
+      "size_bytes": 3285774
+    },
+    "gates-normalized-reviewed.stdout": {
+      "sha256": "c5e82cc5d587e5172faa1b07a17f9acd9a05eab68780a89c7d78ab81caa7fba1",
+      "size_bytes": 18195
+    },
+    "gates-normalized-reviewed.stderr": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 0
+    },
+    "python-reviewed.stdout": {
+      "sha256": "f511ca0b313f0970ac0191b996bf967524dd2aceabf3bd9c17eb30401db9a6c3",
+      "size_bytes": 982
+    },
+    "python-reviewed.stderr": {
+      "sha256": "a768f002f497d8cae59a3113bb6baf2037a3e345200f07cab27c55bf6b18ac79",
+      "size_bytes": 594
+    },
+    "verified-model/contexts.jsonl": {
+      "sha256": "d01d54172f64b902ab599e2cc29f4d6f1c7bc557d0b5f7a398f3d42dd90072d9",
+      "size_bytes": 2584
+    },
+    "verified-model/old-rpc1.stderr": {
+      "sha256": "3b9a95ecf8e0cce3e679a9aa0816cd4263d8f6ebce9a397f74d74f51be0eacae",
+      "size_bytes": 187
+    },
+    "verified-model/strict-10000.stdout": {
+      "sha256": "13a68cccb70f6788cbbf4e03d623ff576759a48e38a6cc162025aff6a05b8193",
+      "size_bytes": 3650
+    },
+    "verified-model/strict-100000.stdout": {
+      "sha256": "faa11b656c92a5f57ce6f5c5b4b8df686a240a7b754e0e04e363d4f85663acc6",
+      "size_bytes": 3487
+    },
+    "verified-model/default-10000.stdout": {
+      "sha256": "0a434fcc42fab7cf81242eabb18d4eb592f2f99d0567c4ded0b1ee47b97d57d7",
+      "size_bytes": 3473
+    }
+  },
+  "checkpoints": {
+    "verified-model/strict-10000.bin": {
+      "sha256": "b50e59261b42ba25268d98115c973f39c7497a5542687839527045a637b843d8",
+      "size_bytes": 33589578
+    },
+    "verified-model/strict-100000.bin": {
+      "sha256": "ba8ced93c54874c6d985b87afdf35da36086103d82bb23379c4c82224bed6b48",
+      "size_bytes": 33589578
+    },
+    "verified-model/default-10000.bin": {
+      "sha256": "b50e59261b42ba25268d98115c973f39c7497a5542687839527045a637b843d8",
+      "size_bytes": 33589578
+    }
+  },
+  "limits": "Mode0 observed twice in dynarec reference. SID/function linked via pinned caller/client, not live packet capture. Consumer final v0 unobserved; timing/IOP lifecycle/other modes unchanged and unqualified."
+}

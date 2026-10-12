@@ -1352,6 +1352,179 @@ int main() {
               "default mode answers empty again after strict turns off");
     }
 
+    // Slice 105: the qualified CDVD_INIT reply travels through the existing
+    // SIF payload/endpacket/DMAC path. Invalid variants cannot complete.
+    for (const bool request_mapped : {true, false}) {
+        Kernel kernel;
+        GuestMemory memory(0x00100000, 0x00100000);
+        memory.map_region(0, 0x10000);
+        memory.map_region(0x00080000, 64);
+        if (request_mapped) memory.map_region(0x00030000, 16);
+        GuestState state(std::move(memory));
+        check(setup_root(kernel, state), "CDVD root ready");
+        RegisterBank sif_registers(0x1000F200u, 0x100u);
+        sif_registers.map_into(state.memory());
+        DmacStatusUnit dmac;
+        dmac.map_into(state.memory());
+        kernel.set_dmac_unit(&dmac);
+        state.write_gpr32(4, 5);
+        state.write_gpr32(5, thread_function);
+        state.write_gpr32(7, 0);
+        kernel.add_dmac_handler(state);
+        state.write_gpr32(4, 5);
+        kernel.enable_dmac(state);
+        const auto drain_completion = [&](Kernel& active) {
+            ServiceTable services;
+            active.register_services(services);
+            const ServiceHandler* finish = services.find(Kernel::patch_return_service);
+            check(active.pending_interrupts() == 1 && dmac.completion_pending(5)
+                      && active.start_interrupt(state), "CDVD completion dispatches SIF handler");
+            state.memory().write_word(DmacStatusUnit::window_base + DmacStatusUnit::stat_offset, 1u << 5);
+            check(finish != nullptr && (*finish)(state) == ServiceOutcome::Jumped
+                      && active.pending_interrupts() == 0 && !dmac.completion_pending(5),
+                  "CDVD previous completion is drained before next call");
+        };
+        constexpr std::uint32_t packet = 0x00100200;
+        constexpr std::uint32_t descriptors = 0x00100300;
+        constexpr std::uint32_t request = 0x00100500;
+        constexpr std::uint32_t ee_buffer = 0x00180000;
+        constexpr std::uint32_t receive = 0x00181000;
+        const auto transfer_packet = [&](Kernel& active) {
+            state.memory().write_word(descriptors + 16, packet);
+            state.memory().write_word(descriptors + 20, 0x00080000);
+            state.memory().write_word(descriptors + 24, state.memory().read_word(packet));
+            state.memory().write_word(descriptors + 28, 0);
+            state.write_gpr32(4, descriptors + 16);
+            state.write_gpr32(5, 1);
+            return active.sif_set_dma(state);
+        };
+        state.memory().write_word(packet, 20);
+        state.memory().write_word(packet + 8, 0x80000002u);
+        state.memory().write_word(packet + 16, ee_buffer);
+        check(transfer_packet(kernel) == ServiceOutcome::Handled, "CDVD SIF handshake");
+        drain_completion(kernel);
+        state.memory().write_word(packet, 64);
+        state.memory().write_word(packet + 8, 0x80000009u);
+        state.memory().write_word(packet + 32, 0x80000592u);
+        check(transfer_packet(kernel) == ServiceOutcome::Handled, "CDVD bind");
+        const std::uint32_t handle = state.memory().read_word(ee_buffer + 36);
+        const std::uint32_t server_buffer = state.memory().read_word(ee_buffer + 40);
+        check(server_buffer == 0x00030000, "CDVD first server buffer");
+        drain_completion(kernel);
+        const auto call = [&](Kernel& active, std::uint32_t mode, std::uint32_t send_size,
+                              std::uint32_t receive_size, std::uint32_t destination,
+                              std::uint32_t function) {
+            state.set_pc(0x00100040);
+            state.memory().write_word(packet + 8, 0x8000000Au);
+            state.memory().write_word(packet + 16, 7);
+            state.memory().write_word(packet + 20, 0x00100580);
+            state.memory().write_word(packet + 24, 3);
+            state.memory().write_word(packet + 28, 0x00100600);
+            state.memory().write_word(packet + 32, function);
+            state.memory().write_word(packet + 36, send_size);
+            state.memory().write_word(packet + 40, destination);
+            state.memory().write_word(packet + 44, receive_size);
+            state.memory().write_word(packet + 52, handle);
+            state.memory().write_word(request, mode);
+            if (!request_mapped) return transfer_packet(active);
+            state.memory().write_word(descriptors, request);
+            state.memory().write_word(descriptors + 4, server_buffer);
+            state.memory().write_word(descriptors + 8, 4);
+            state.memory().write_word(descriptors + 12, 0);
+            state.memory().write_word(descriptors + 16, packet);
+            state.memory().write_word(descriptors + 20, 0x00080000);
+            state.memory().write_word(descriptors + 24, 64);
+            state.memory().write_word(descriptors + 28, 0);
+            state.write_gpr32(4, descriptors);
+            state.write_gpr32(5, 2);
+            return active.sif_set_dma(state);
+        };
+        const auto rejects = [&](std::uint32_t mode, std::uint32_t send_size,
+                                 std::uint32_t receive_size, std::uint32_t destination,
+                                 std::uint32_t function, const char* expected) {
+            const auto read_bytes = [&](std::uint32_t address, std::uint32_t size) {
+                std::vector<std::uint8_t> bytes;
+                for (std::uint32_t offset = 0; offset < size; ++offset)
+                    bytes.push_back(state.memory().read_byte(address + offset));
+                return bytes;
+            };
+            for (std::uint32_t offset = 0; offset < 16; ++offset)
+                state.memory().write_byte(receive + offset, 0xA5);
+            for (std::uint32_t offset = 0; offset < 64; ++offset)
+                state.memory().write_byte(ee_buffer + offset, 0x5A);
+            const auto before_kernel = kernel.save_kernel_state();
+            const auto before_device = dmac.registers_snapshot();
+            const auto before_reply = read_bytes(receive, 16);
+            const auto before_end = read_bytes(ee_buffer, 64);
+            bool stopped = false;
+            try { (void)call(kernel, mode, send_size, receive_size, destination, function); }
+            catch (const std::runtime_error& error) {
+                const std::string_view message(error.what());
+                stopped = message.find(expected) != std::string_view::npos
+                    && message.find("0x80000592") != std::string_view::npos;
+            }
+            check(stopped && kernel.save_kernel_state() == before_kernel
+                      && dmac.registers_snapshot() == before_device
+                      && read_bytes(receive, 16) == before_reply
+                      && read_bytes(ee_buffer, 64) == before_end
+                      && kernel.pending_interrupts() == 0,
+                  "CDVD unsupported request leaves reply/endpacket/completion untouched");
+        };
+        if (!request_mapped) {
+            for (const bool strict : {false, true}) {
+                kernel.set_strict_rpc(strict);
+                rejects(0, 4, 16, receive, 0, "Unsupported CDVD_INIT");
+            }
+            continue;
+        }
+        for (const bool strict : {false, true}) {
+            kernel.set_strict_rpc(strict);
+            rejects(5, 4, 16, receive, 0, "Unsupported CDVD_INIT");
+            rejects(1, 4, 16, receive, 0, "Unsupported CDVD_INIT");
+            rejects(0, 3, 16, receive, 0, "Unsupported CDVD_INIT");
+            rejects(0, 8, 16, receive, 0, "Unsupported CDVD_INIT");
+            rejects(0, 4, 15, receive, 0, "Unsupported CDVD_INIT");
+            rejects(0, 4, 20, receive, 0, "Unsupported CDVD_INIT");
+            rejects(0, 4, 16, 0xFFFFFFFFu, 0, "Unsupported CDVD_INIT");
+            state.memory().write_word(receive - 4, 0xABCDEF01);
+            state.memory().write_word(receive + 16, 0x12345678);
+            check(call(kernel, 0, 4, 16, receive, 0) == ServiceOutcome::Handled
+                      && state.pc() == 0x00100040 && kernel.current_thread_id() == 1
+                      && state.memory().read_word(receive) == 1
+                      && state.memory().read_word(receive + 4) == 0x226
+                      && state.memory().read_word(receive + 8) == 0x226
+                      && state.memory().read_word(receive + 12) == 0
+                      && state.memory().read_word(receive - 4) == 0xABCDEF01
+                      && state.memory().read_word(receive + 16) == 0x12345678,
+                  "CDVD observed mode replies fully with preserved canaries and no direct dispatch");
+            const RpcPairStats& stats = kernel.rpc_pair_stats().at(Kernel::rpc_pair_key(0x80000592u, 0));
+            check(stats.first_send_size == 4 && stats.first_recv_size == 16
+                      && stats.first_result_size == 16 && stats.first_request_words[0] == 0,
+                  "CDVD telemetry reports complete qualified reply");
+            check(state.memory().read_word(ee_buffer + 8) == 0x80000008u
+                      && state.memory().read_word(ee_buffer + 16) == 7
+                      && state.memory().read_word(ee_buffer + 20) == 0x00100580
+                      && state.memory().read_word(ee_buffer + 24) == 3
+                      && state.memory().read_word(ee_buffer + 28) == 0x00100600
+                      && state.memory().read_word(ee_buffer + 32) == 0x8000000Au,
+                  "CDVD reply uses RPC_END with original correlation fields");
+            drain_completion(kernel);
+        }
+        kernel.set_strict_rpc(true);
+        rejects(0, 4, 16, receive, 1, "Strict RPC stop");
+        Kernel restored;
+        restored.load_kernel_state(kernel.save_kernel_state());
+        restored.set_dmac_unit(&dmac);
+        restored.set_strict_rpc(true);
+        check(call(restored, 0, 4, 16, receive, 0) == ServiceOutcome::Handled
+                  && state.memory().read_word(receive + 4) == 0x226,
+              "CDVD restored server binding retains qualified behavior");
+        drain_completion(restored);
+        check(Kernel::classify_rpc_pair(0x80000592u, 0) == RpcPairClass::ImplementedVerified
+                  && Kernel::classify_rpc_pair(0x80000592u, 1) == RpcPairClass::Unknown,
+              "CDVD only observed function is implemented");
+    }
+
     // Handled services advance the model's clock (decision 0016): a counting
     // timer moves by its clock's share of one millisecond, its compare fires
     // when the counter crosses COMP, and a frame of slices raises VBlank.
