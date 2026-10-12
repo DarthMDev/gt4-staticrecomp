@@ -26,6 +26,16 @@ qualification before optimization/adoption. Stable game/fullsave remain open.
 Evidence RE111/metadata111/lesson111 and reproducible experimental build
 record the boundary; frozen donor, production time/IRQ/kernel untouched.
 
+Owner future graphics goals, 2026-10-12: custom internal resolutions,
+better effects/textures and native gameplay ultrawide with undistorted,
+repositioned HUD. Preserve these goals after functional/stable gameplay;
+this does not replace next112 fidelity/race qualification. Current pilot
+is scale1 with fixed4:3 presentation. Donor WGSL has scaling logic, but
+new scales require buffer/dispatch/readback/effects validation. Ultrawide
+needs game camera/projection/culling and HUD layout work as well as Vulkan
+output; changing window size alone cannot establish expanded world view.
+Specific GT4 hooks, achievable performance and enhancement scope unknown.
+
 2026-10-12 — slice110 external runtime menu pilot closed, baseline95dd453,
 branch `codex/runtime-menu-pilot-110`, decision0052. Owner continuation of0051.
 Evidence commit `67f65ba` published to origin/main and pilot branch;
