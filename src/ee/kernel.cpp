@@ -746,8 +746,11 @@ ServiceOutcome Kernel::change_thread_priority(GuestState& state) {
         write_error(state);
         return ServiceOutcome::Handled;
     }
+    const std::int32_t previous_priority = thread->current_priority;
     thread->current_priority = static_cast<std::int32_t>(priority);
-    state.write_gpr64(2, 0);
+    // The guest saves this return to undo a temporary priority boost.
+    // Write it before dispatch so a preempted caller retains its return.
+    state.write_gpr64(2, static_cast<std::uint64_t>(previous_priority));
     if (preempt_if_outranked(state)) {
         return ServiceOutcome::Switched;
     }

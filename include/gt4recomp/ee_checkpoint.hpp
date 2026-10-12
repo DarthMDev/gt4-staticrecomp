@@ -90,7 +90,7 @@ using BankRegisters = std::vector<std::pair<std::uint32_t, std::uint32_t>>;
 struct ModelCompatibility {
     std::uint32_t time_model = 3;         // the service clock and timer advance
     std::uint32_t interrupt_model = 4;    // occurrence, pending, mask, dispatch, handler frames
-    std::uint32_t kernel_model = 2;       // kernel service tables, ids and returns
+    std::uint32_t kernel_model = 3;       // kernel service tables, ids and returns
     std::uint32_t rpc_model = 1;          // SIF/RPC replies and backing stores
     std::uint32_t translation_model = 2;  // decoder and AOT emitter semantics
 };
@@ -113,6 +113,8 @@ struct ModelCompatibility {
 // the game's 8-bit handle space, freed ids reusable).
 // Slice 95 completes decision 0013: interrupt to 4 (final handler return
 // preempts for a higher-priority READY thread, exact interrupted PC saved).
+// Slice 104 bumps kernel to 3 (ChangeThreadPriority returns the previous
+// priority, retained in the caller's saved context across preemption).
 [[nodiscard]] constexpr ModelCompatibility current_model_compatibility() noexcept {
     return ModelCompatibility{};
 }

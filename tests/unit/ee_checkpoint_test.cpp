@@ -264,6 +264,10 @@ int main() {
               "a pre-slice-95 return-preemption model is refused naming interrupt");
         check(refuses_naming(kernel_bump, "kernel"),
               "a foreign kernel model is refused naming kernel");
+        ModelCompatibility before_priority_return = current_model_compatibility();
+        before_priority_return.kernel_model = 2;
+        check(refuses_naming(before_priority_return, "kernel"),
+              "a pre-slice-104 priority-return model is refused naming kernel");
         check(refuses_naming(rpc_bump, "rpc"),
               "a foreign rpc model is refused naming rpc");
         check(refuses_naming(translation_bump, "translation"),

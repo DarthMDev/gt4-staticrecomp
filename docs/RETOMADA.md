@@ -1,5 +1,14 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização operacional — 2026-10-12, slice104 encerrada.** Runtime
+corrigido: retorno da prioridade anterior preservado antes de preempção.
+Kernel3 recusa checkpointkernel2; clock/IRQ iguais. CTest53/53 ePython91
+(85/6) verdes, diferenciais90k/10k idênticos. Snapshot mostra restauração24,
+mas principal aindaREADY64/receive5ADBC8 e zeroGIF; boot não funcional.
+StrictRPC recusa80000592/fn0. Próximo105 qualifica respostaCDVDInit com
+fonte/caller pinados e referência antes de implementar. Evidência104 em
+`docs/reverse-engineering/slice104-previous-priority-return.md` eSTATUS.
+
 **Atualização operacional — 2026-10-12, slice103 encerrada.** Divergência
 causal no retorno de ChangeThreadPriority: referência devolve24, modelo0,
 e o jogo restaura esse retorno como prioridade. Nove snapshots/duas comparações;

@@ -1,5 +1,34 @@
 # Project status
 
+Closed slice104,2026-10-12, baseline1eb31a8, branch `slice104-priority-return`.
+**Priority return corrected**: target previous priority written before dispatch;
+nonzero restore/preemption/snapshot/resume and target/caller distinction tested.
+Kernel semantic identity3 rejects actual103 kernel2 checkpoint. Time3/IRQ4/
+RPC1/translation2 and GT4CPT3/GT4KERN2 layout unchanged. PS2Tek pin corroborates
+i* return documentarily; TH_SELF/dormant/i-reschedule remain explicit audit debt.
+
+Full gates **53/53 CTest91.81s; Python91(85 executed/6skip),61.568s**.
+Fresh90k and10k full-state/work differentials green, respectively22,566,319
+and8,946,331 completed. Nine snapshots confirm s5/s2/a1=24, update24.
+**Boot frontier persists**: root READY64/saved5ADBC8, update RUN24, only three
+threads/two RPC pairs, zero GIF payload at10k/100k. RUN root at1328 is timer
+callback5ADCD4/RA5AEF68, not ordinary continuation. No stable/functional boot.
+
+Fresh strict boot refuses preexisting **80000592/function0**, send4/recv16,
+thread1/PC5AE064. Default-policy observations retain unknown empty answers;
+they do not prove strict boot. Production8e44209c..., metadata8a7a141a...,
+eight archived private helpers. Evidence:
+`docs/reverse-engineering/slice104-previous-priority-return.md`; decision0045.
+Earlier fullCTest outside Developer environment failedC1083, then correctly
+re-run green; rejected attempt preserved. No owner-file/reference mutation.
+
+Next **slice105 — independently qualify80000592/function0 protocol/reply**.
+Pinned SDK identifies CDVD init and guest caller580CD8/client874FA8/recv6570C0;
+reference values and consumer still need observation before implementation.
+First frame-sync divergence remains the parallel causal timing question.
+Do not guess quantum/reply or force wake; stable functional boot goal active.
+Lower summaries are historical checkpoints.
+
 Closed slice103,2026-10-12, baseline `b29eb99`, branch
 `slice103-message-wake-prefix`. **Priority-return divergence confirmed**:
 reference24->1 returns24, game saves/selects it and restores24; model returns

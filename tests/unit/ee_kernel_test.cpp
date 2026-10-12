@@ -224,6 +224,98 @@ int main() {
               "the root is saved after its syscall with v0 = 0");
     }
 
+    // The message-release path uses the returned previous priority to
+    // restore a temporary boost (independent reference slice103: 24->1->24).
+    {
+        Kernel kernel;
+        GuestState state = make_state();
+        check(setup_root(kernel, state), "priority-return root ready");
+        state.write_gpr32(4, 1);
+        state.write_gpr32(5, 24);
+        check(kernel.change_thread_priority(state) == ServiceOutcome::Handled
+                  && state.read_gpr32(2) == 0,
+              "initial priority change returns the old zero priority");
+        state.write_gpr32(5, 1);
+        check(kernel.change_thread_priority(state) == ServiceOutcome::Handled
+                  && state.read_gpr64(2) == 24,
+              "temporary boost returns the previous nonzero priority");
+        const std::uint32_t saved_priority = state.read_gpr32(2);
+        state.write_gpr32(5, saved_priority);
+        check(kernel.change_thread_priority(state) == ServiceOutcome::Handled
+                  && state.read_gpr64(2) == 1
+                  && kernel.threads()[0].current_priority == 24,
+              "restoring the returned priority keeps the update thread at 24");
+        state.write_gpr32(5, 128);
+        check(kernel.change_thread_priority(state) == ServiceOutcome::Handled
+                  && state.read_gpr32(2) == 0xFFFFFFFFu
+                  && kernel.threads()[0].current_priority == 24,
+              "invalid priority preserves priority and returns an error");
+        state.write_gpr32(4, 999);
+        state.write_gpr32(5, 1);
+        check(kernel.change_thread_priority(state) == ServiceOutcome::Handled
+                  && state.read_gpr32(2) == 0xFFFFFFFFu
+                  && kernel.threads()[0].current_priority == 24,
+              "unknown thread preserves the valid thread and returns an error");
+    }
+
+    // The interruptive registration returns the target's priority, even
+    // when the caller and target differ. This does not qualify scheduling.
+    {
+        Kernel kernel;
+        GuestState state = make_state();
+        check(setup_root(kernel, state), "interruptive return root ready");
+        state.write_gpr32(4, 1);
+        state.write_gpr32(5, 24);
+        kernel.change_thread_priority(state);
+        check(start_second_thread(kernel, state, 77, 0),
+              "lower-priority target ready");
+        ServiceTable services;
+        kernel.register_services(services);
+        const ServiceHandler* handler = services.find(static_cast<std::uint32_t>(-0x2A));
+        state.write_gpr32(4, 2);
+        state.write_gpr32(5, 91);
+        check(handler != nullptr && (*handler)(state) == ServiceOutcome::Handled
+                  && state.read_gpr64(2) == 77
+                  && kernel.current_thread_id() == 1
+                  && kernel.threads()[0].current_priority == 24
+                  && kernel.threads()[1].current_priority == 91,
+              "interruptive service returns the other target's old priority");
+    }
+
+    // Preemption must save the caller's return, not replace the incoming
+    // thread's v0. Kernel serialization must retain this nonzero return.
+    {
+        Kernel kernel;
+        GuestState state = make_state();
+        check(setup_root(kernel, state), "nonzero preemption root ready");
+        state.write_gpr32(4, 1);
+        state.write_gpr32(5, 24);
+        kernel.change_thread_priority(state);
+        check(start_second_thread(kernel, state, 24, 0xCAFEu),
+              "equal-priority second thread ready");
+        state.set_pc(0x00100020);
+        state.write_gpr32(4, 1);
+        state.write_gpr32(5, 64);
+        check(kernel.change_thread_priority(state) == ServiceOutcome::Switched
+                  && kernel.current_thread_id() == 2
+                  && kernel.threads()[0].context.pc == 0x00100024u
+                  && kernel.threads()[0].context.gpr[2] == 24,
+              "preemption saves the caller's previous priority and next pc");
+        check(state.pc() == thread_function && state.read_gpr32(4) == 0xCAFEu
+                  && state.read_gpr64(2) == 0,
+              "incoming thread retains its own registers");
+        Kernel restored;
+        restored.load_kernel_state(kernel.save_kernel_state());
+        check(restored.current_thread_id() == 2
+                  && restored.threads()[0].context.gpr[2] == 24
+                  && restored.threads()[0].current_priority == 64,
+              "kernel snapshot retains the pending priority return");
+        check(restored.sleep_thread(state) == ServiceOutcome::Switched
+                  && restored.current_thread_id() == 1
+                  && state.pc() == 0x00100024u && state.read_gpr64(2) == 24,
+              "resumed caller receives the saved nonzero priority return");
+    }
+
     // WaitSema blocks the root, SignalSema releases it, and SleepThread
     // hands the CPU back to the released thread.
     {

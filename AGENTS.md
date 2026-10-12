@@ -109,10 +109,10 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 103, baseline `b29eb99`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice 104, baseline `1eb31a8`, green):
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
-prefixed with closed slice101/102/103 updates. Its original checkpoint is
+prefixed with closed slice101/102/103/104 updates. Its original checkpoint is
 historical; root `HANDOFF.md` is archival machine-move material.
 
 - Recompiler pipeline M0–M29 complete: decoder covers 349 operations;
@@ -139,7 +139,7 @@ historical; root `HANDOFF.md` is archival machine-move material.
   update RUN/prio0, 2 RPC pairs, zero GIF payload. Less boot progression is
   recorded honestly; old later phases depended on omitted preemption.
   Production still uses 1 ms/service; reference-backed time policy remains
-  open. Semantic interrupt_model 4, time 3, kernel 2, RPC 1, translation 2;
+  open. Semantic interrupt_model 4, time 3, kernel 3, RPC 1, translation 2;
   GT4CPT3/GT4KERN2 layout unchanged, old interrupt-model-3 checkpoints refused.
   Slice 96: all 270 one-shot 1000-us waits really block with a full 1 ms
   left; WaitSema's own 1 ms charge expires them and TIM2 interrupts root
@@ -192,7 +192,7 @@ historical; root `HANDOFF.md` is archival machine-move material.
   accepts this observation route only. Evidence/metadata:
   `docs/reverse-engineering/slice101-interpreter-trap-observation.md`,
   `docs/inputs/slice101-interpreter-traps.json`.
-- Gates: 53/53 CTest + Python 91 (85 run, 6 skip), re-run at slice 101;
+- Gates: 53/53 CTest + Python 91 (85 run, 6 skip), re-run at slice 104;
   no existing acceptance expression weakened.
   Tripwires armed; M35's pad promoter watched
   (the first padman bind reopens input work).
@@ -214,11 +214,18 @@ historical; root `HANDOFF.md` is archival machine-move material.
   No production/time change, owner files/BIOS preserved, two references closed.
   Evidence: `docs/reverse-engineering/slice103-message-wake-prefix.md`,
   `docs/inputs/slice103-message-priority.json`; decision0044.
-- Next: **slice 104 — priority-return contract correction**, not started.
-  Test nonzero return and preservation across preemption; bump kernel model,
-  refuse old checkpoints, qualify unobserved variants and run full gates/fresh
-  boot. Keep correct IRQ preemption and clock. Earlier103 timing plans follow
-  this confirmed service divergence.
+- Slice104 corrects return-only contract: previous target priority before
+  dispatch; kernel_model3 rejects old2. Nonzero restore/preemption/snapshot/
+  resume/other-target tests; documentary PS2Tek i* return support, remaining
+  TH_SELF/dormant/i-reschedule audit debt explicit. Fresh update priority24,
+  root stillREADY64 at5ADBC8, three threads/twoRPC pairs/zeroGIF at10k/100k.
+  53/53CTest+Python91(85/6);90k/10k differential fullstate/work green.
+  Strict mode refuses preexisting80000592/fn0; defaultempty reply is not
+  validated boot. Evidence104/metadata and decision0045 in docs.
+- Next: **slice 105 — qualify80000592/function0 protocol and response**.
+  SDK identifies CDVDInit; guest580CD8/client874FA8/recv6570C0. Obtain real
+  response/consumer/completion evidence before implementation. First frame
+  sync divergence remains open. Keep correct IRQ preemption and clock.
   Align semantic caller/stack/queue/frame and main's subsequent work before
   choosing a lifecycle or time change. The1000us matched interval stays open.
   Qualify engine/phase and any new observation identities per segment before
