@@ -2,6 +2,8 @@
 
 2026-10-12 — slice110 external runtime menu pilot closed, baseline95dd453,
 branch `codex/runtime-menu-pilot-110`, decision0052. Owner continuation of0051.
+Evidence commit `67f65ba` published to origin/main and pilot branch;
+working tree clean after publication, source/production/seed hashes preserved.
 Confirmed native Windows/Clang CPU pilot reaches mainmenu and navigable
 Arcade circuit/car selection with our pinned USA2.00 inputs. Guest enters
 name L, formats new private card and writes8650752bytes; new coldboot copies

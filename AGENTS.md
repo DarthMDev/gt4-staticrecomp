@@ -123,7 +123,9 @@ Additional standards:
 
 ## Quick reference
 
-Live state: `docs/STATUS.md`. As of 2026-10-12 (slice109, baseline `b525fc4`, green):
+Live state: `docs/STATUS.md`. As of 2026-10-12 (slice110, evidence `67f65ba`, green):
+External menu pilot qualified separately; production semantics unchanged.
+The slice95–109 observations below remain historical/contract context.
 
 Owner-requested model-switch handoff: `docs/RETOMADA.md` (2026-10-09), now
 prefixed with closed slice101/102/103/104/105/106/107/108/109 updates. Its original checkpoint is
