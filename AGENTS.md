@@ -33,6 +33,14 @@ Decomp CORE published SHA1 matches ours; reuse metadata with verification.
 PS2Recomp GPLv3 and contract differences require explicit boundaries.
 EE Reloaded is auxiliary, not a prerequisite for the execution pilot.
 
+Slice111/decision0053 qualifies a separate direct native Vulkan compute
+backend and Win32 presentation: real menus/circuit selection/FordKa3D,
+normal3000-frame stop,15/15headless/window PPM identical. Production stays
+unchanged. Next112: first CPU/GPU pixel divergence (frame400) and Vulkan
+validation evidence, then controlled race/loading qualification. Do not call
+menu/car3D stable racing or adopt external semantics without contract gates.
+See docs/reverse-engineering/slice111-native-vulkan.md and its input manifest.
+
 ## Roles and autonomy
 
 - The agent is the engineer and decision maker for technical work: it plans,

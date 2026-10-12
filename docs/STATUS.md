@@ -1,5 +1,28 @@
 # Project status
 
+2026-10-12 — slice111 native Vulkan pilot closed, baselinebd9ae77,
+branch codex/vulkan-renderer-pilot-111, decision0053. Real GPU compute
+rasterization/textures/readback and live Win32 output reach menu/circuit/car3D.
+Frozen MIT batching/WGSL reused through Naga30.0.0/SPIR-V, separate Clang
+target; scale1/coherent buffers/synchronous fences, maintenance1 present
+lifetime, bounds checks and resource cleanup. No CPU upload-only acceptance.
+Headless1500 normal27.321s, window1500 normal32.222s,15/15PPM exact;
+window3000 normal121.951s shows FordKa3D, no race claim. Final headless1500
+normal24.919s after bounds guards; comparison in pinned111manifest.
+Final W4 window repeat1500 normal30.679s also15/15exact;9/9SPIR-V
+reproduced, sixruns(1rejected)/248artifacts/17sourcepins preserved.
+Full4MiB sprite/mask/restore/serial and nine fragmented formats pass;
+13Win32 presentations/minzero/resize restore pass. Python108(102run/6skip)
+73.505s plus final new-target5 and launcher7 controls green, CTest54/54
+52.21s. ProductionSHA839adaa...6dfab and originalseedSHA unchanged.
+CPU/GPU divergence starts frame400(142RGBbytes), cause unknown; no tolerance
+acceptance. No installed Khronos validation layer, only RTX3060Laptop
+exercised; scale1/nearest4:3/no temporal fields, no audio/XInput/fullscreen.
+Next112: pixel divergence + validation evidence and controlled race/load
+qualification before optimization/adoption. Stable game/fullsave remain open.
+Evidence RE111/metadata111/lesson111 and reproducible experimental build
+record the boundary; frozen donor, production time/IRQ/kernel untouched.
+
 2026-10-12 — slice110 external runtime menu pilot closed, baseline95dd453,
 branch `codex/runtime-menu-pilot-110`, decision0052. Owner continuation of0051.
 Evidence commit `67f65ba` published to origin/main and pilot branch;

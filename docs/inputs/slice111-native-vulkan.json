@@ -1,0 +1,2070 @@
+{
+  "runtime": {
+    "path": "private/slice111-vulkan/build/gt4vulkan.exe",
+    "size_bytes": 54431232,
+    "sha256": "cc6635e4141de1a97fa6067363056acca2327682b8507af75cf55dfb39c01f96"
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice111-vulkan/shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ],
+  "schema_version": 1,
+  "date": "2026-10-12",
+  "baseline_commit": "bd9ae7797be63a43866863193c9ca931590addfa",
+  "purpose": "Isolated direct native Vulkan compute GS and Win32 pilot; production unchanged",
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "parent_manifests": [
+    "docs/inputs/external-recomp-references.json",
+    "docs/inputs/slice110-external-menu-pilot.json",
+    "docs/inputs/usa-v2.00.json",
+    "docs/inputs/usa-v2.00-native.json"
+  ],
+  "execution_model": "external diagnostic NTSC primary GPU scale1; no production checkpoints",
+  "tools": {
+    "clang": "23.1.2",
+    "rust": "1.95.0",
+    "naga": "30.0.0",
+    "vulkan_loader": "1.4.341",
+    "vulkan_headers": "1.4.362",
+    "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU",
+    "gpu_api": "1.4.351",
+    "driver": "616.56",
+    "validation_layer": "unavailable"
+  },
+  "gates": {
+    "ctest": {
+      "passed": 54,
+      "total": 54,
+      "seconds": 52.21
+    },
+    "python_full": {
+      "total": 108,
+      "run": 102,
+      "skipped": 6,
+      "seconds": 73.505
+    },
+    "python_native_final": {
+      "passed": 5,
+      "seconds": 2.986
+    },
+    "python_launcher_final": {
+      "passed": 7,
+      "seconds": 0.154
+    }
+  },
+  "production_executable": {
+    "path": "build/gt4boot.exe",
+    "size_bytes": 110391296,
+    "sha256": "839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab"
+  },
+  "preserved_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "final_repeat_comparison": {
+    "headless": [
+      {
+        "frame": "frame_00100.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00200.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00300.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00400.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00500.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00600.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00700.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00800.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00900.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01000.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01100.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01200.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01300.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01400.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01500.ppm",
+        "identical": true
+      }
+    ],
+    "window": [
+      {
+        "frame": "frame_00100.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00200.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00300.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00400.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00500.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00600.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00700.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00800.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_00900.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01000.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01100.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01200.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01300.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01400.ppm",
+        "identical": true
+      },
+      {
+        "frame": "frame_01500.ppm",
+        "identical": true
+      }
+    ]
+  },
+  "runs": [
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless1\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "1500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless1\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless1\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless1\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross"
+      ],
+      "timeout_seconds": 240,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "14380bc4f0d8830614a9db9f1c9c4f71cbc9f4cf9494abab1da3468b1876cb30",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 1500,
+      "reported_budget": 7372994805,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 27.320832600118592,
+      "frames": [
+        "frame_00100.ppm",
+        "frame_00200.ppm",
+        "frame_00300.ppm",
+        "frame_00400.ppm",
+        "frame_00500.ppm",
+        "frame_00600.ppm",
+        "frame_00700.ppm",
+        "frame_00800.ppm",
+        "frame_00900.ppm",
+        "frame_01000.ppm",
+        "frame_01100.ppm",
+        "frame_01200.ppm",
+        "frame_01300.ppm",
+        "frame_01400.ppm",
+        "frame_01500.ppm"
+      ],
+      "run_directory": "private/slice111-vulkan/game-headless1",
+      "acceptance": "accepted_bounded_renderer_probe",
+      "diagnostic_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_28_warning": 1
+      },
+      "graphics_observations": [
+        "[vulkan] device=NVIDIA GeForce RTX 3060 Laptop GPU api=1.4.351; direct compute, scale=1, synchronous",
+        "[vulkan] GS mode=primary; CPU raster=disabled",
+        "[vulkan] 1496 submits, dispatches: upload=22661 copy_read=0 copy_write=0 load_clut=2677 display=15 raster=2503 resolve=0 snapshot=0 decode=19115",
+        "[vulkan] Win32 presentations=0"
+      ]
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window2\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "1500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window2\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window2\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window2\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross",
+        "--window"
+      ],
+      "timeout_seconds": 240,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "5969b95b7994f9799e44cd55a5af847cc2a8fed45204e55041585cd45b06115e",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 1500,
+      "reported_budget": 7372978648,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 36.612128200009465,
+      "frames": [
+        "frame_00100.ppm",
+        "frame_00200.ppm",
+        "frame_00300.ppm",
+        "frame_00400.ppm",
+        "frame_00500.ppm",
+        "frame_00600.ppm",
+        "frame_00700.ppm",
+        "frame_00800.ppm",
+        "frame_00900.ppm",
+        "frame_01000.ppm",
+        "frame_01100.ppm",
+        "frame_01200.ppm",
+        "frame_01300.ppm",
+        "frame_01400.ppm",
+        "frame_01500.ppm"
+      ],
+      "run_directory": "private/slice111-vulkan/game-window2",
+      "acceptance": "rejected_input_precedence_and_unfrozen_producer",
+      "diagnostic_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_28_warning": 1
+      },
+      "graphics_observations": [
+        "[vulkan] device=NVIDIA GeForce RTX 3060 Laptop GPU api=1.4.351; direct compute, scale=1, synchronous",
+        "[vulkan] GS mode=primary; CPU raster=disabled",
+        "[vulkan] Win32 swapchain 944x681, format=44; GPU blit, no temporal field blend",
+        "[window] real guest GPU output through native Vulkan",
+        "[vulkan] 1511 submits, dispatches: upload=1774 copy_read=0 copy_write=0 load_clut=1512 display=1510 raster=1472 resolve=0 snapshot=0 decode=0",
+        "[vulkan] Win32 presentations=1495"
+      ]
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window3\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "1500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window3\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window3\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window3\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross",
+        "--window"
+      ],
+      "timeout_seconds": 180,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "0516eaed22b6e837201afdf2e91c4057d8b9931368a62ed6475996f230561f4f",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 1500,
+      "reported_budget": 7372994805,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 32.22185349999927,
+      "frames": [
+        "frame_00100.ppm",
+        "frame_00200.ppm",
+        "frame_00300.ppm",
+        "frame_00400.ppm",
+        "frame_00500.ppm",
+        "frame_00600.ppm",
+        "frame_00700.ppm",
+        "frame_00800.ppm",
+        "frame_00900.ppm",
+        "frame_01000.ppm",
+        "frame_01100.ppm",
+        "frame_01200.ppm",
+        "frame_01300.ppm",
+        "frame_01400.ppm",
+        "frame_01500.ppm"
+      ],
+      "run_directory": "private/slice111-vulkan/game-window3",
+      "acceptance": "accepted_bounded_renderer_probe",
+      "diagnostic_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_28_warning": 1
+      },
+      "graphics_observations": [
+        "[vulkan] device=NVIDIA GeForce RTX 3060 Laptop GPU api=1.4.351; direct compute, scale=1, synchronous",
+        "[vulkan] GS mode=primary; CPU raster=disabled",
+        "[vulkan] Win32 swapchain 944x681, format=44; GPU blit, no temporal field blend",
+        "[window] real guest GPU output through native Vulkan",
+        "[vulkan] 1511 submits, dispatches: upload=22661 copy_read=0 copy_write=0 load_clut=2677 display=1510 raster=2503 resolve=0 snapshot=0 decode=19115",
+        "[vulkan] Win32 presentations=1495"
+      ]
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window4\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "3000",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window4\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window4\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window4\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross",
+        "--press",
+        "1600:cross",
+        "--press",
+        "1800:cross",
+        "--press",
+        "2100:cross",
+        "--window"
+      ],
+      "timeout_seconds": 180,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "0516eaed22b6e837201afdf2e91c4057d8b9931368a62ed6475996f230561f4f",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 3000,
+      "reported_budget": 14745820383,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 121.9513032999821,
+      "frames": [
+        "frame_00100.ppm",
+        "frame_00200.ppm",
+        "frame_00300.ppm",
+        "frame_00400.ppm",
+        "frame_00500.ppm",
+        "frame_00600.ppm",
+        "frame_00700.ppm",
+        "frame_00800.ppm",
+        "frame_00900.ppm",
+        "frame_01000.ppm",
+        "frame_01100.ppm",
+        "frame_01200.ppm",
+        "frame_01300.ppm",
+        "frame_01400.ppm",
+        "frame_01500.ppm",
+        "frame_01600.ppm",
+        "frame_01700.ppm",
+        "frame_01800.ppm",
+        "frame_01900.ppm",
+        "frame_02000.ppm",
+        "frame_02100.ppm",
+        "frame_02200.ppm",
+        "frame_02300.ppm",
+        "frame_02400.ppm",
+        "frame_02500.ppm",
+        "frame_02600.ppm",
+        "frame_02700.ppm",
+        "frame_02800.ppm",
+        "frame_02900.ppm",
+        "frame_03000.ppm"
+      ],
+      "run_directory": "private/slice111-vulkan/game-window4",
+      "acceptance": "accepted_bounded_renderer_probe",
+      "diagnostic_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_28_warning": 1
+      },
+      "graphics_observations": [
+        "[vulkan] device=NVIDIA GeForce RTX 3060 Laptop GPU api=1.4.351; direct compute, scale=1, synchronous",
+        "[vulkan] GS mode=primary; CPU raster=disabled",
+        "[vulkan] Win32 swapchain 944x681, format=44; GPU blit, no temporal field blend",
+        "[window] real guest GPU output through native Vulkan",
+        "[vulkan] 3026 submits, dispatches: upload=97809 copy_read=0 copy_write=0 load_clut=23398 display=3025 raster=29703 resolve=0 snapshot=2542 decode=262154",
+        "[vulkan] Win32 presentations=2995"
+      ]
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless5\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "1500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless5\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless5\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-headless5\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross"
+      ],
+      "timeout_seconds": 180,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "57360c7cfc495998611b3fd2a36e05ce17a26ec901f058fefac272c6b7032e03",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 1500,
+      "reported_budget": 7372994805,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 24.91906400001608,
+      "frames": [
+        "frame_00100.ppm",
+        "frame_00200.ppm",
+        "frame_00300.ppm",
+        "frame_00400.ppm",
+        "frame_00500.ppm",
+        "frame_00600.ppm",
+        "frame_00700.ppm",
+        "frame_00800.ppm",
+        "frame_00900.ppm",
+        "frame_01000.ppm",
+        "frame_01100.ppm",
+        "frame_01200.ppm",
+        "frame_01300.ppm",
+        "frame_01400.ppm",
+        "frame_01500.ppm"
+      ],
+      "run_directory": "private/slice111-vulkan/game-headless5",
+      "acceptance": "accepted_bounded_renderer_probe",
+      "diagnostic_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_28_warning": 1
+      },
+      "graphics_observations": [
+        "[vulkan] device=NVIDIA GeForce RTX 3060 Laptop GPU api=1.4.351; direct compute, scale=1, synchronous",
+        "[vulkan] GS mode=primary; CPU raster=disabled",
+        "[vulkan] 1496 submits, dispatches: upload=22661 copy_read=0 copy_write=0 load_clut=2677 display=15 raster=2503 resolve=0 snapshot=0 decode=19115",
+        "[vulkan] Win32 presentations=0"
+      ]
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window6\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "1500",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window6\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window6\\misses.txt",
+        "--frames-dir",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice111-vulkan\\game-window6\\frames",
+        "--frame-every",
+        "100",
+        "--trace-syscalls",
+        "--press",
+        "300:start",
+        "--press",
+        "600:cross",
+        "--press",
+        "900:cross",
+        "--press",
+        "1200:cross",
+        "--window"
+      ],
+      "timeout_seconds": 180,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "cc6635e4141de1a97fa6067363056acca2327682b8507af75cf55dfb39c01f96",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": true,
+      "reported_frames": 1500,
+      "reported_budget": 7372994805,
+      "reason": "frame limit reached",
+      "elapsed_seconds": 30.679207700071856,
+      "frames": [
+        "frame_00100.ppm",
+        "frame_00200.ppm",
+        "frame_00300.ppm",
+        "frame_00400.ppm",
+        "frame_00500.ppm",
+        "frame_00600.ppm",
+        "frame_00700.ppm",
+        "frame_00800.ppm",
+        "frame_00900.ppm",
+        "frame_01000.ppm",
+        "frame_01100.ppm",
+        "frame_01200.ppm",
+        "frame_01300.ppm",
+        "frame_01400.ppm",
+        "frame_01500.ppm"
+      ],
+      "run_directory": "private/slice111-vulkan/game-window6",
+      "acceptance": "accepted_bounded_renderer_probe",
+      "diagnostic_census": {
+        "unhandled_syscalls": 0,
+        "actually_called_missing_imports": 0,
+        "unknown_iop_instructions": 0,
+        "unknown_rpc_servers": 0,
+        "cfc2_28_warning": 1
+      },
+      "graphics_observations": [
+        "[vulkan] device=NVIDIA GeForce RTX 3060 Laptop GPU api=1.4.351; direct compute, scale=1, synchronous",
+        "[vulkan] GS mode=primary; CPU raster=disabled",
+        "[vulkan] Win32 swapchain 944x681, format=44; GPU blit, no temporal field blend",
+        "[window] real guest GPU output through native Vulkan",
+        "[vulkan] 1511 submits, dispatches: upload=22661 copy_read=0 copy_write=0 load_clut=2677 display=1510 raster=2503 resolve=0 snapshot=0 decode=19115",
+        "[vulkan] Win32 presentations=1495"
+      ]
+    }
+  ],
+  "tracked_source_pins": [
+    {
+      "path": "experimental/vulkan/build.cmd",
+      "size_bytes": 1129,
+      "sha256": "d37b699211602c8a6197186500461bcfaa4f16efe3afa86e7f5bb8cf40f626cb"
+    },
+    {
+      "path": "experimental/vulkan/CMakeLists.txt",
+      "size_bytes": 2069,
+      "sha256": "0fe2d2b7c13ea93faab64b9d91a849e1c4158adba77c0e0a0436bdd7715f52cc"
+    },
+    {
+      "path": "experimental/vulkan/fixture.cpp",
+      "size_bytes": 6441,
+      "sha256": "ff03f8c5434af03e5e6aea6e101249158e7a248c9f2d5ad3b0c283be1e48fb85"
+    },
+    {
+      "path": "experimental/vulkan/gpu_helpers.inc",
+      "size_bytes": 1879,
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+    },
+    {
+      "path": "experimental/vulkan/gpu_init.inc",
+      "size_bytes": 1720,
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+    },
+    {
+      "path": "experimental/vulkan/gpu_tail.inc",
+      "size_bytes": 4523,
+      "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626"
+    },
+    {
+      "path": "experimental/vulkan/native_vulkan.cpp",
+      "size_bytes": 36772,
+      "sha256": "91b792d59d5d9753938c1c62ba5c474e869673bb7d81821e5da70da8809dadd2"
+    },
+    {
+      "path": "experimental/vulkan/native_vulkan.hpp",
+      "size_bytes": 3398,
+      "sha256": "465e177a3abd84b617c9eb25943e872ddf2cb909498179ed9843e7a221c54129"
+    },
+    {
+      "path": "experimental/vulkan/THIRD_PARTY.md",
+      "size_bytes": 1312,
+      "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4"
+    },
+    {
+      "path": "experimental/vulkan/window.cpp",
+      "size_bytes": 3361,
+      "sha256": "a81679a1a1f1af8d917f677bdb962b91311df34eab6e58bbaf590527e7fcfd48"
+    },
+    {
+      "path": "experimental/vulkan/window.hpp",
+      "size_bytes": 124,
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+    },
+    {
+      "path": "tools/wgsl_spirv/Cargo.lock",
+      "size_bytes": 7397,
+      "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561"
+    },
+    {
+      "path": "tools/wgsl_spirv/Cargo.toml",
+      "size_bytes": 151,
+      "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8"
+    },
+    {
+      "path": "tools/wgsl_spirv/src/main.rs",
+      "size_bytes": 2229,
+      "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae"
+    },
+    {
+      "path": "scripts/prepare_external_vulkan.py",
+      "size_bytes": 5400,
+      "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee"
+    },
+    {
+      "path": "scripts/external_runtime_probe.py",
+      "size_bytes": 7597,
+      "sha256": "706481d15b1aad223e2ff203f644cdfed44afb0074c79e9e19a2eed6a8b8244d"
+    },
+    {
+      "path": "tests/python/test_native_vulkan.py",
+      "size_bytes": 4514,
+      "sha256": "428a3cf2d5a2d4314cfb00feb9e53db9e5f388f0359bfc3d405858dd28ad79e0"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+      "size_bytes": 68855896,
+      "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+    },
+    {
+      "path": "private/slice111-vulkan/arcade-gpu.png",
+      "size_bytes": 148681,
+      "sha256": "17dcef5257f85ea1e6eb242f6872ac1384ec4368b27a20625cb67c71af9cbdc8"
+    },
+    {
+      "path": "private/slice111-vulkan/build/gt4vulkan.exe",
+      "size_bytes": 54431232,
+      "sha256": "cc6635e4141de1a97fa6067363056acca2327682b8507af75cf55dfb39c01f96"
+    },
+    {
+      "path": "private/slice111-vulkan/build/ps2runtime_vulkan.lib",
+      "size_bytes": 3577322,
+      "sha256": "c3fc3107b2dce4c62c97350521a81049a11dd517b1bafc98d778d53b4c590b23"
+    },
+    {
+      "path": "private/slice111-vulkan/build/vulkan_fixture.exe",
+      "size_bytes": 484864,
+      "sha256": "4bb52cb73b23c46c5e34ec69d58f3df966af3f0e531d6a44d5d6a6ff5947204e"
+    },
+    {
+      "path": "private/slice111-vulkan/build.cmd",
+      "size_bytes": 620,
+      "sha256": "0b1bf9d7f7b1e4e0df453709bcc8f02337cc6e795e79ac2519acaf0842af5efd"
+    },
+    {
+      "path": "private/slice111-vulkan/build.log",
+      "size_bytes": 111,
+      "sha256": "22dee41dabd31a95ce3d18d23ddcd765d1165403265365af1a854d5401ce03bf"
+    },
+    {
+      "path": "private/slice111-vulkan/configure.log",
+      "size_bytes": 152,
+      "sha256": "81e0cdbdd43eedef2e329de56705ad914c7c7233fb47a8eafb91bdad24be5186"
+    },
+    {
+      "path": "private/slice111-vulkan/cpu-gpu-comparison1.json",
+      "size_bytes": 2416,
+      "sha256": "583d9c0644f57b5531e416e339ccbcd32f06cf672e93a8c80f481c966a350124"
+    },
+    {
+      "path": "private/slice111-vulkan/ctest.log",
+      "size_bytes": 6007,
+      "sha256": "0ab7b9e2af5ab8116869d0e97597f868d666d4b60a18cb14f2a53da574b5c250"
+    },
+    {
+      "path": "private/slice111-vulkan/final-repeat-comparison.json",
+      "size_bytes": 2309,
+      "sha256": "983dd814e59a84d37ca35f43fa1452726a246a5c6a02598c46d4df1881dcb0c0"
+    },
+    {
+      "path": "private/slice111-vulkan/finalize_evidence.py",
+      "size_bytes": 6959,
+      "sha256": "0750a7583c78784c2614eb840896430c46c45ad7afde148ccfbbcf24b2376e7c"
+    },
+    {
+      "path": "private/slice111-vulkan/fixture-build.log",
+      "size_bytes": 122,
+      "sha256": "a763f1280d5b748cbf5bd7b2ce51b0dfcbb1b49b33e49565aaf7ea143a1d7447"
+    },
+    {
+      "path": "private/slice111-vulkan/fixture-final.log",
+      "size_bytes": 1346,
+      "sha256": "d72c4cf51b0f557a713204017325cf4a758654fc87d6092b3ca067a35f401d98"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/probe.log",
+      "size_bytes": 191189924,
+      "sha256": "ef434e4899976c692b7228525c426b79e6e5213c262c6dabaab4dc9c1dcda411"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/producer.exe",
+      "size_bytes": 54422528,
+      "sha256": "14380bc4f0d8830614a9db9f1c9c4f71cbc9f4cf9494abab1da3468b1876cb30"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/result.json",
+      "size_bytes": 1889,
+      "sha256": "f699851f3a23666389824f63cd81b9c7c5158420de8470a77059862ad1da888d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless1/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/probe.log",
+      "size_bytes": 191189924,
+      "sha256": "43c14279d3ddf8a06c4b77f791256d2456b0459d856bc6587d3eac52151d1cc6"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/result.json",
+      "size_bytes": 1888,
+      "sha256": "198346085a1c6b48f372a14532c21722b53c9894abc1f0c035df713fbe3c1c03"
+    },
+    {
+      "path": "private/slice111-vulkan/game-headless5/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "80e2004cf527235da4dfe134ade1b178fe23a0bb6fa34e7688b76cbdd64cd061"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "1a1196e51c07674181dd14326788a19cde02e2b9c87f0898c586739870f61b26"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "7032b294c1600733f19104b87266b0bebfc34bb54fa3d963b6242205f8a9e4ec"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "59925c6f384c7782fd40af1c735b8ee0cee01854ff254872628fa2b5a3ce2f3b"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "32c8d25ee062901875bda0a66b2219108abb50e3c9f558027ef382077b2c75ae"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "cb3d260c42ba147288ea4d237c8de1d257a015e9918e2d2a98fdadf473a7a914"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "7344071148073adc9ea67e9bc6b729125a3e644b0ccc79dae50606a885d6c58e"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "4ac16c7677f74f1554d802d9ab47ff4c865a4521fd2f44530745492e9d7be5c0"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "3c5b67cb4dea96969017b1b2f4c865e5f52d393eb8d426ef2b778b614cb4737e"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "9d937142c60fd467b3e58d6452aac37fa48d633748d9dc3412fb4332a090b029"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "793efcea3d152509b928342e998839bf927efae505b8893623466ffffd43c26c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "248a1814846b5d991cdaa4af60483b87a65b370655df84f1ee3f2f16f95a2a7d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/probe.log",
+      "size_bytes": 234294011,
+      "sha256": "aaa7367ff4c317ea0c8f59e1cf7e04ffa59a878c8d29cbc8076addccaf7e4be6"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/result.json",
+      "size_bytes": 1898,
+      "sha256": "740629ec326ebf006a4651d3da962aa7ac9ec82aa359ef9391de4343aa88ef9a"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window2/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/probe.log",
+      "size_bytes": 191190061,
+      "sha256": "417b795b5caa37a42e1d7f37a3c2feaf73956385d507f12b4455e5e8c2e52351"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/result.json",
+      "size_bytes": 1897,
+      "sha256": "03e0892c2f25339188f8e81e4feaae465524b1df240c86a88f70f82c7784ee08"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window3/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "21785a921c1ab200787131e6c195a1f67c7d918c0271089cbc22fd6aa5a7afa0"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "11e0568ad2c9726e10024b8035aaa58c84fcc1326c1c995a16861f63cdbc4688"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b322eddb4d9d27a6b13882983b4040f082eae1b08653553dd43563c6eb5dbba"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "dc0dd985ffa18cbe3669d62f73c18f52e837960c8928f26517920b69468da70d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b51a8694b62c7e3bb921180a85025d15c5fe1c9dc85158255d9120114a80eb3d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "d84b18dfbff707f7eefe7802b72079390e76bfb8d05b5423faef5411dde6a021"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e8579e46d5195331139da914f39377067691bda30f0358777d347b898d679d70"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02800.ppm",
+      "size_bytes": 860175,
+      "sha256": "7f4da70d6ea79372dd28e7b22e23117fcc01e792651692024bac07ce7af1ae41"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_02900.ppm",
+      "size_bytes": 860175,
+      "sha256": "cf5c814b567b9e5fa22185d5664e3c5a607c511ce729c7cd7454727b95f5dc5e"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/frames/frame_03000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a3e980306849bb56ad6f10c0e3eee7ed66780547e90904a4a0a3545c94e150d2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/probe.log",
+      "size_bytes": 326496739,
+      "sha256": "51e80ec60f5a8d51913a278a4d42306bb604757f1420c83df6cd538f385d6090"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/result.json",
+      "size_bytes": 2363,
+      "sha256": "a262a4b4239fe7efa9bd4328226de2144468d4ce7678131e602d14acefd1b1f8"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window4/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/probe.log",
+      "size_bytes": 191190061,
+      "sha256": "789b68544cf578147aba35c6ede1dc42cb1f4ae1f2dd4b6472441ef96ad1c29d"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/result.json",
+      "size_bytes": 1898,
+      "sha256": "1b97ffc25eaa564afaca4a625d580577a47d6bee82aeeab6c827ec93e6c1aa24"
+    },
+    {
+      "path": "private/slice111-vulkan/game-window6/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice111-vulkan/launcher-final.log",
+      "size_bytes": 110,
+      "sha256": "139f868e1dc6eadf4ab807329062d79ee8c0c3aedd16049df94f18ef9b49037c"
+    },
+    {
+      "path": "private/slice111-vulkan/menu-gpu.png",
+      "size_bytes": 104550,
+      "sha256": "cb4c85d5d8d1a5f0109528f05dc1835485c119d343a899bafe7b35dc3901429f"
+    },
+    {
+      "path": "private/slice111-vulkan/port/gpu.cpp",
+      "size_bytes": 56890,
+      "sha256": "48b0954b711a75e402e8699f93bba739a452d6905ed920b772a4a462d5cacdc4"
+    },
+    {
+      "path": "private/slice111-vulkan/port/gpu.hpp",
+      "size_bytes": 1747,
+      "sha256": "7b4227a1c0fbe685bd097bbeb1c6a1db8c0391c13522d557d37dc3cba9b3bb1b"
+    },
+    {
+      "path": "private/slice111-vulkan/port/gs.cpp",
+      "size_bytes": 50577,
+      "sha256": "16caf05ea21bd16c415f6d07f8af67a7a5bb9166d44b6324217037139e01db93"
+    },
+    {
+      "path": "private/slice111-vulkan/port/main.cpp",
+      "size_bytes": 4336,
+      "sha256": "99564a06d2006cb22c9479682d764e975683c36c2f55a6c25c5d122330785f8e"
+    },
+    {
+      "path": "private/slice111-vulkan/producer-final.exe",
+      "size_bytes": 54431232,
+      "sha256": "57360c7cfc495998611b3fd2a36e05ce17a26ec901f058fefac272c6b7032e03"
+    },
+    {
+      "path": "private/slice111-vulkan/producer-release-final.exe",
+      "size_bytes": 54431232,
+      "sha256": "cc6635e4141de1a97fa6067363056acca2327682b8507af75cf55dfb39c01f96"
+    },
+    {
+      "path": "private/slice111-vulkan/producer-window-fixed.exe",
+      "size_bytes": 54431232,
+      "sha256": "0516eaed22b6e837201afdf2e91c4057d8b9931368a62ed6475996f230561f4f"
+    },
+    {
+      "path": "private/slice111-vulkan/python-targeted-final.log",
+      "size_bytes": 108,
+      "sha256": "d2bef3d2728ed4480feb15afff7b6ab25f53e2f872754eab78ed3f2c31a27d78"
+    },
+    {
+      "path": "private/slice111-vulkan/python-tests.log",
+      "size_bytes": 1588,
+      "sha256": "685ac024c71b7eea365f36d3c4329de0bde28094fcf061cb58f03b67be55b9b8"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/build.cmd",
+      "size_bytes": 1129,
+      "sha256": "d37b699211602c8a6197186500461bcfaa4f16efe3afa86e7f5bb8cf40f626cb"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/CMakeLists.txt",
+      "size_bytes": 2069,
+      "sha256": "0fe2d2b7c13ea93faab64b9d91a849e1c4158adba77c0e0a0436bdd7715f52cc"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/fixture.cpp",
+      "size_bytes": 6441,
+      "sha256": "ff03f8c5434af03e5e6aea6e101249158e7a248c9f2d5ad3b0c283be1e48fb85"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/gpu_helpers.inc",
+      "size_bytes": 1879,
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/gpu_init.inc",
+      "size_bytes": 1720,
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/gpu_tail.inc",
+      "size_bytes": 4523,
+      "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/native_vulkan.cpp",
+      "size_bytes": 36772,
+      "sha256": "91b792d59d5d9753938c1c62ba5c474e869673bb7d81821e5da70da8809dadd2"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/native_vulkan.hpp",
+      "size_bytes": 3398,
+      "sha256": "465e177a3abd84b617c9eb25943e872ddf2cb909498179ed9843e7a221c54129"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/THIRD_PARTY.md",
+      "size_bytes": 1312,
+      "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/window.cpp",
+      "size_bytes": 3361,
+      "sha256": "a81679a1a1f1af8d917f677bdb962b91311df34eab6e58bbaf590527e7fcfd48"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/experimental/vulkan/window.hpp",
+      "size_bytes": 124,
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/scripts/external_runtime_probe.py",
+      "size_bytes": 7597,
+      "sha256": "706481d15b1aad223e2ff203f644cdfed44afb0074c79e9e19a2eed6a8b8244d"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/scripts/prepare_external_vulkan.py",
+      "size_bytes": 5400,
+      "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/tests/python/test_native_vulkan.py",
+      "size_bytes": 4514,
+      "sha256": "428a3cf2d5a2d4314cfb00feb9e53db9e5f388f0359bfc3d405858dd28ad79e0"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/tools/wgsl_spirv/Cargo.lock",
+      "size_bytes": 7397,
+      "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/tools/wgsl_spirv/Cargo.toml",
+      "size_bytes": 151,
+      "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8"
+    },
+    {
+      "path": "private/slice111-vulkan/qualified-source/tools/wgsl_spirv/src/main.rs",
+      "size_bytes": 2229,
+      "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae"
+    },
+    {
+      "path": "private/slice111-vulkan/repro-build-final.log",
+      "size_bytes": 1154,
+      "sha256": "5e1a9330cd98bfa81a7273e9adabf1ce302f644917929a1ba16e098315bcfeed"
+    },
+    {
+      "path": "private/slice111-vulkan/repro-build.log",
+      "size_bytes": 1169,
+      "sha256": "2310af7bc1f65bc4b26b01ba0d1282ea7828dbb8d8506d60fa53c6060fab0826"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-compiler/release/gt4-wgsl-spirv.exe",
+      "size_bytes": 2545152,
+      "sha256": "05a859920ba74813bc030bc69651ba124d6c42c6344a0118c27d13b3b75cd6bf"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-compiler-final.log",
+      "size_bytes": 150,
+      "sha256": "1a5e02df30a0c1d46061d3f9dd1a12abe65becf3a3165c9cef033c59e94a0a65"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice111-vulkan/shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    },
+    {
+      "path": "private/slice111-vulkan/vulkaninfo.txt",
+      "size_bytes": 311036,
+      "sha256": "b643771f5c19873cc6a3be41e9dc12c3f3388fe0f32343b6a93e1ce0d3d16923"
+    },
+    {
+      "path": "private/slice111-vulkan/window-headless-comparison.json",
+      "size_bytes": 1008,
+      "sha256": "0370abac4a1633eb6f3e2e8ed9e9c3ee34b85d5eca43f070ddfe14a335ade2d8"
+    },
+    {
+      "path": "private/slice111-vulkan/window3-screen-later.png",
+      "size_bytes": 329586,
+      "sha256": "96f8804a1f579f79782bed07c7de744a51f46eaa2a9f191cfdbd66ee5a373179"
+    },
+    {
+      "path": "private/slice111-vulkan/window3-screen.png",
+      "size_bytes": 271098,
+      "sha256": "474b8916ce7778e1ce09c87c41702954f50448be5d9f69671883974502280cc5"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-screenshots.json",
+      "size_bytes": 1822,
+      "sha256": "9d7717f5d3def3dca3ee765f6d6c6e34ece327bab9a2cad6972013caead6df2b"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible0.png",
+      "size_bytes": 128756,
+      "sha256": "fa7d2353c187598e30c575e4c9cb3cec0b6cf84db685c63a3eef8e9eb9e9e875"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible1.png",
+      "size_bytes": 170760,
+      "sha256": "591733cae4e29d86df89f098004a94ab1cbd3f3103eb4b27a77633f6b00dafac"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible2.png",
+      "size_bytes": 202855,
+      "sha256": "2f2702a4ab6b0e2f57e8b0abd4e9395f371685b894f9e5d7b3389aa9309a175b"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible3.png",
+      "size_bytes": 119719,
+      "sha256": "e6925aa91b56a402ff514b30aa1d3fd309fd8f6ffb94d6f6f6ed62f0c8d4e88c"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible4.png",
+      "size_bytes": 119814,
+      "sha256": "7d17fc423dacd004c99af6c23939c7254a46856dad1766536e499892f88a8293"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible5.png",
+      "size_bytes": 137025,
+      "sha256": "9cd22880c46aade305b1204f536dbca5f27ba3517becce3aeebf6ca9fe069e88"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible6.png",
+      "size_bytes": 127255,
+      "sha256": "386cf5daac7df1b99db7184e445f9cd88c76bc2ac48bdd2c8887fc5af3309572"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible7.png",
+      "size_bytes": 117426,
+      "sha256": "be8c2e116d872e441a668b86749d2a5692ad9dba3d6d4cb0176a050c3768fe50"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible8.png",
+      "size_bytes": 97410,
+      "sha256": "059ab96d7eb505c43b331060617908ff23e45babc0ed28a48e8ba6e384191613"
+    },
+    {
+      "path": "private/slice111-vulkan/window4-visible9.png",
+      "size_bytes": 98450,
+      "sha256": "3aa22876189f70eae08a6ebb7ed8cea6884552c3706762fece21b69567135865"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/CHANGELOG.md",
+      "size_bytes": 20438,
+      "sha256": "562d6e77b5f5f3cff4d3e98c86658bb1ad1af191892be2f8ca1a0b90f61d0ee0"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/LICENSE.txt",
+      "size_bytes": 1118,
+      "sha256": "1c38a4cda5a3c6671b75eb0a14e7d67c7726a6bd0e4a80ee836980a9123a61de"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/README.md",
+      "size_bytes": 14266,
+      "sha256": "d8e76fcb83690417b07c997bbc47ddf8eb8cd09b76e30d0c50ebf03fb9cca2fd"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_mem_alloc.h",
+      "size_bytes": 791952,
+      "sha256": "5a9e72076a28a2659586e7ab9e9bf1539c079e034726f19611f282c4ec093790"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_av1std.h",
+      "size_bytes": 17088,
+      "sha256": "110d61f53214322f4d0aec8f77a7cec40c1517829b125c0d01d6fc9fdf0fdd83"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_av1std_decode.h",
+      "size_bytes": 4366,
+      "sha256": "fa2e85e9669f1666badfab9211de9dbe279bc2adc3ed095635313712ced9219d"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_av1std_encode.h",
+      "size_bytes": 6129,
+      "sha256": "5bb49198ac7a63c810115c62c9ab44b2e60f20c60869a68a813730f30777db5f"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_h264std.h",
+      "size_bytes": 14275,
+      "sha256": "84d669c6010443e268f940e57a26e3ff0c4050c9c434b79efaaa1bfa3d3d203c"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_h264std_decode.h",
+      "size_bytes": 2807,
+      "sha256": "fbee59666126c323b2bacc0b4b2c6fd1d1a28ced72e4c6791026a730f05bc129"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_h264std_encode.h",
+      "size_bytes": 7032,
+      "sha256": "cd7e050bc0062d791a5e4e3cc97efdd4b9b3838214168785743fb48ebd5a041a"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_h265std.h",
+      "size_bytes": 23892,
+      "sha256": "d3ae5c05dca0765d950e53aa1aafc9526be8be6be72b373803c70c94086665a1"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_h265std_decode.h",
+      "size_bytes": 2503,
+      "sha256": "4ce92dc8ff11f8f9652b01713992f1235b6c88694a658b8fe8777ac7c79fb5df"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_h265std_encode.h",
+      "size_bytes": 7626,
+      "sha256": "182114ca162aae8b3c1ed3c9693852126b2dda009712e387a1ab6f475ab8058e"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_vp9std.h",
+      "size_bytes": 5542,
+      "sha256": "b4a35526ddf93652c6244e26a71f6d2d9536c0bd5aebde35ed777d1cd8a64978"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codec_vp9std_decode.h",
+      "size_bytes": 2446,
+      "sha256": "ac1ac9e1494a26855e327001fa6ffa26020eb5bf852dab1ea3e89939ced3d5ee"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vk_video/vulkan_video_codecs_common.h",
+      "size_bytes": 703,
+      "sha256": "cf775e4d74384e3d4ed5657fb7d87faa4a7eaf6fee21f4f4113640565494a924"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vk_icd.h",
+      "size_bytes": 8472,
+      "sha256": "46a46bf9bb5176becff061262f1093c1caa9ef33a2ec6f3432e8b1da1ce2c436"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vk_layer.h",
+      "size_bytes": 7373,
+      "sha256": "5ad88b2b4108855d6c53d81da654a5663953e2102fb1f6e3ba47b2d7f8c95ade"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vk_mem_alloc.h",
+      "size_bytes": 791952,
+      "sha256": "5a9e72076a28a2659586e7ab9e9bf1539c079e034726f19611f282c4ec093790"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vk_platform.h",
+      "size_bytes": 2915,
+      "sha256": "1fc08c530b46e587295aafb19493eb9d434e963f7e48d3a323adbee06f59976c"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan.h",
+      "size_bytes": 1722,
+      "sha256": "2d1a6f00bfdcddbe1c68bf5f574a0fc4cf95c4be9eae683123b6db8af9d1a1de"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_android.h",
+      "size_bytes": 6496,
+      "sha256": "4f5afd4b0b31b655b7e6a27d9954ab232f0f3cd8bfa6a340335ba939d20648c7"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_beta.h",
+      "size_bytes": 17794,
+      "sha256": "cbee78bfb43fb7faac49e1da0d8b7c46132036ea6c021469650f2e57888da505"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_core.h",
+      "size_bytes": 1389548,
+      "sha256": "131b7691cf01b153c2e4ac7c0dcb6ff8247e4647c17bc1012437cc28da613f16"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_directfb.h",
+      "size_bytes": 2018,
+      "sha256": "e68438c77132d629ce6c05eae7f21ff8818a6b743b2adcdeaee2c1669f7bc4e9"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_fuchsia.h",
+      "size_bytes": 13189,
+      "sha256": "46915b5d3390cf9d6c46baa13fa6792b7f8c172187d00662d7843cd0bba2b8f0"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_ggp.h",
+      "size_bytes": 2008,
+      "sha256": "be82c59a2459d70a6ceaab715d7c3470a61cc791131babb7e70f66906bffb23a"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_ios.h",
+      "size_bytes": 1409,
+      "sha256": "cd5a5f1b33ca5904d08df8a90ac41c8be5ac604d30e023b8036f19430f56c151"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_macos.h",
+      "size_bytes": 1441,
+      "sha256": "d7ff1957e199b1c2e128c148d5e66637e5e49dae35ec5a97db87fca5e02d4c04"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_metal.h",
+      "size_bytes": 8317,
+      "sha256": "ae36aacf5139410c9608e702e56d42770a5ba264f0e9dfc9ef52605bda4be47f"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_ohos.h",
+      "size_bytes": 4233,
+      "sha256": "005aaa229cf9961e3edc09a0f47c9c3593cbc57ca15a9cacbb521bef27455b7e"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_screen.h",
+      "size_bytes": 4314,
+      "sha256": "06563ce3cdbda16f74976fabf42132d514625f53dec7974fa9330972990edfb7"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_vi.h",
+      "size_bytes": 1382,
+      "sha256": "2adb9ae5b758783548e79398f3ecad65af1e536bbeb701b3628ede54467999ec"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_wayland.h",
+      "size_bytes": 2018,
+      "sha256": "f9b46a0805eeea61b42c2a52d783cf65690ad330c1869ac422c4a2b81adcebaf"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_win32.h",
+      "size_bytes": 16136,
+      "sha256": "9dc4d69efa98e5d2b94458c60861b963ab5fe18b7af6be20ec7e6c020086c1d5"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_xcb.h",
+      "size_bytes": 2033,
+      "sha256": "ba4bfcef79ec4479aa6309d206cb075fbcfec1c9b625ffae39531a49904a08ef"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_xlib.h",
+      "size_bytes": 2014,
+      "sha256": "cdd0677b5a5130994630c8fa21f6cdc2655cf5310bc416f332c5b8d386eed06f"
+    },
+    {
+      "path": "private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include/vulkan/vulkan_xlib_xrandr.h",
+      "size_bytes": 1554,
+      "sha256": "d2131832eecbd4e53cac6cf67ecae05b655fbe0fb8543440d7b285b3495d2ae7"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    },
+    {
+      "path": "private/slice111-vulkan/shader-repeat-final.log",
+      "size_bytes": 247,
+      "sha256": "bb75d6d205ee92f92f77aa5ef02ca29203a85c9f01c6a41d154b34dfcdd87096"
+    }
+  ],
+  "claims": {
+    "real_gpu_rasterization": true,
+    "live_native_window": true,
+    "bounded_3000_frame_car_selection": true,
+    "race": false,
+    "stable_game": false,
+    "pixel_exact_cpu_equivalence": false,
+    "hardware_ps2_fidelity": false,
+    "production_adoption": false,
+    "audio": false,
+    "xinput": false
+  },
+  "open_limits": [
+    "first CPU/GPU divergence frame400",
+    "no Khronos validation layer",
+    "scale1 synchronous primary GPU",
+    "nearest4:3; no temporal field blending",
+    "copy_read/copy_write/resolve not dispatched by game probes",
+    "inherited CFC2(28) zero-return simplification",
+    "handled runtime services not all independently qualified"
+  ],
+  "repeated_spirv_identical_count": 9
+}

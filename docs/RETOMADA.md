@@ -1,5 +1,15 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização — 2026-10-12, fatia111/Vulkan nativo.** Desenho real por compute
+na GPU e apresentação Win32 confirmados no piloto Clang separado. Menus,
+Nürburgring e FordKa3D na janela;3000quadros terminam normalmente.
+15/15capturas Vulkan headless/janela coincidem. Fixtures de4MiB/noveformatos,
+readback/snapshot/resize e gates verdes; produção/seed preservados.
+Diferença CPU/GPU aparece no quadro400, causa aberta; validação Khronos
+ainda indisponível, escala1/interlace temporal/áudio/XInput são limites.
+Próxima112: divergência de pixels e qualificação de corrida/carregamento;
+consultar STATUS/decisão0053/relatório111/manifest111 antes de modificar.
+
 **Atualização — 2026-10-12, fatia110/piloto externo.** Menu principal e
 navegação Arcade/circuitos/carros confirmados no Windows com nossos inputs.
 Nome L/cartão novo foram criados pelo jogo; nova execução com cópia do cartão

@@ -1,4 +1,4 @@
-"""Run the qualified external CPU pilot with pinned inputs and private outputs."""
+"""Run a qualified external pilot with pinned inputs and private outputs."""
 
 import argparse
 import json
@@ -34,7 +34,8 @@ def summarize_exit(log_text, frame_count, exit_code, timed_out):
     return summary
 
 
-def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None):
+def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
+              runtime_manifest=None, window=False):
     workspace = workspace.resolve()
     run_directory = run_directory.resolve()
     private_root = workspace / 'private'
@@ -50,7 +51,20 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     native = json.loads((inputs / 'usa-v2.00-native.json').read_text(encoding='utf-8'))
     disc_manifest = json.loads((inputs / 'usa-v2.00.json').read_text(encoding='utf-8'))
     executable_pin = next(item for item in reference['artifacts'] if item['path'].endswith('/ps2run.exe'))
+    if runtime_manifest is not None:
+        runtime_manifest = runtime_manifest.resolve()
+        if not runtime_manifest.is_relative_to(inputs):
+            raise ValueError('Runtime manifest must be inside docs/inputs')
+        runtime_evidence = json.loads(runtime_manifest.read_text(encoding='utf-8'))
+        executable_pin = runtime_evidence['runtime']
+        for dependency in runtime_evidence.get('runtime_dependencies', []):
+            dependency_path = (workspace / dependency['path']).resolve()
+            if not dependency_path.is_relative_to(private_root):
+                raise ValueError('Runtime dependency must be inside private/')
+            verify_file(dependency_path, {key: dependency[key] for key in ('size_bytes', 'sha256')})
     executable = workspace / executable_pin['path']
+    if not executable.resolve().is_relative_to(private_root):
+        raise ValueError('Runtime executable must be inside private/')
     verify_file(executable, {key: executable_pin[key] for key in ('size_bytes', 'sha256')})
     core = workspace / 'private/fingerprint-check/CORE.GT4'
     verify_file(core, disc_manifest['files']['/CORE.GT4;1'])
@@ -88,6 +102,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
                  '--frame-every', '100', '--trace-syscalls']
     for press in presses:
         arguments.extend(['--press', press])
+    if window:
+        arguments.append('--window')
     result = {'arguments': arguments, 'timeout_seconds': timeout_seconds,
               'disc_sha256': disc_manifest['disc']['sha256'],
               'runtime_sha256': executable_pin['sha256']}
@@ -117,10 +133,12 @@ def main():
     parser.add_argument('--timeout', type=int, default=110)
     parser.add_argument('--press', action='append', default=[])
     parser.add_argument('--card-seed', type=Path, help='Copy a private card pinned in slice110 evidence')
+    parser.add_argument('--runtime-manifest', type=Path, help='Select a separately pinned experimental runtime')
+    parser.add_argument('--window', action='store_true', help='Present real guest output in a native window')
     options = parser.parse_args()
     try:
         result = run_probe(ROOT, options.run_directory, options.frames, options.timeout,
-                           options.press, options.card_seed)
+                           options.press, options.card_seed, options.runtime_manifest, options.window)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')
     print(json.dumps(result, indent=2))
