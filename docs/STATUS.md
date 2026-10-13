@@ -30,6 +30,11 @@ frozen producer/source capsules and RE112/manifest112/lesson112/0054 preserve
 all gates. Next113: owner keyboard/physical controller test when available,
 then measure runtime/GPU/audio starvation and qualify longer driving/saves.
 Custom resolutions/effects/textures/ultrawide remain deferred owner goals.
+Evidence/code commitc4853169b592e95e7b4cf3437f169b37814fd44c published to
+origin/main and origin/codex/audio-xinput-pilot-112; main advanced from d7f25fe
+by ancestor-checked fast-forward.367 private artifact pins/23 published source
+pins preserve frozen producers; current implementation pins match producer.
+All experimental windows/processes closed, working tree clean at publication.
 
 2026-10-12 — slice111 native Vulkan pilot closed, baselinebd9ae77,
 branch codex/vulkan-renderer-pilot-111, decision0053.
