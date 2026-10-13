@@ -56,6 +56,18 @@ Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.
 144 distinct scenes require game render/update hooks, not repeated scanout.
 
+Owner subsequently requested a comprehensive scene-renderer/native-port plan:
+docs/NATIVE-PORT-PLAN.md supersedes ROADMAP phase order; docs/AGENT-WORKFLOW.md
+defines bounded model routing and independent review. Initial owner-selected
+target: Windows, entry-level dedicated GPU, internal1080p at60FPS; exact hardware
+and feasibility are not yet qualified. Final direction excludes JIT and retires
+PS2 graphics/execution/device dependencies in distinct gated phases. No-JIT
+already holds for current Windows; it does not mean zero emulation.
+Recommended first package is reproducible EE generation and one-car model/camera
+contract research. Publishing these plans does not authorize all implementation
+stages, external worker dispatch/provider setup or scheduled24/7 execution.
+Game script/content VMs are distinct from PS2 instruction interpretation.
+
 ## Autonomy and communication
 
 - Engineer plans, implements, verifies, documents, commits and pushes to origin.

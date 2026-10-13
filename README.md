@@ -6,7 +6,7 @@ GT4Recomp is a static recompilation project targeting **Gran Turismo 4 USA v2.00
 
 **The game already boots, navigates menus, and enters real racing gameplay.** The current base features Vulkan rendering, Windows audio, keyboard support, an XInput controller implementation, and persistent memory card storage. We are in an experimental development phase: the immediate challenge is turning this milestone into a reliable gameplay experience.
 
-[Detailed Status](docs/STATUS.md) · [Development Roadmap](docs/ROADMAP.md) · [Build Guide](docs/BUILD.md)
+[Detailed Status](docs/STATUS.md) · [Native Port Plan](docs/NATIVE-PORT-PLAN.md) · [Build Guide](docs/BUILD.md)
 
 ## Current Status
 
@@ -42,19 +42,21 @@ These are **development goals**, not currently available features. The internal 
 
 The main game code is translated ahead-of-time (AOT) into C++ and compiled to run natively on **x86-64**. Host PC integration provides a native Windows window, **Vulkan**, audio, and input.
 
-The current architecture is a **hybrid recompilation**: IOP and Vector Units (VU) remain interpreted, and PS2 hardware services are software models. The current Vulkan backend also preserves the constraints of the original graphics subsystem. This does not prevent evolving the presentation, timing model, or renderer; subsystem migrations will be undertaken as proven necessary.
+The current architecture is a **hybrid recompilation**: IOP and VU microprograms remain interpreted, and PS2 hardware services are software models. VU0 macro operations are translated with the EE. The current Vulkan backend reproduces the original graphics subsystem's behavior. The planned renderer will instead receive game geometry, materials, camera and visual state directly, with remaining services migrated in separate phases.
 
 For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
 ## Next Steps
 
-1. Establish fully reproducible ahead-of-time recompilation and clean build generation.
-2. Qualify controls, audio, saves, and stability across more real-world gameplay scenarios.
-3. Profile execution bottlenecks, improving performance and frametime consistency.
-4. Decouple game logic timing from presentation; generate intermediate frames between simulation steps to deliver high-refresh rendering.
-5. Advance progressive output, internal resolution scaling, and graphical features.
+1. Establish reproducible EE generation and qualify a game-level model/camera interface.
+2. Draw one live showroom car with a dedicated native Vulkan renderer, then expand to real racing.
+3. Add progressive internal resolution, ultrawide and independent simulation/presentation timing.
+4. Expand native graphics coverage and replace remaining PS2 execution/device dependencies through verified contracts.
+5. Qualify a lightweight 1080p/60 FPS preset on Windows with an entry-level dedicated GPU; add optional remaster effects and textures.
 
-We work in small, incremental steps with recorded evidence and verification before merging changes. The [Roadmap](docs/ROADMAP.md) outlines the planned sequence, dependencies, and validation criteria. There is no announced timeline for completing these milestones.
+These are proposed phases, not completed features or published minimum requirements. The exact entry-level machine remains to be selected. Controls, audio, saves and stability must be qualified throughout; the delegated performance investigation supplies evidence rather than assumptions about bottlenecks.
+
+We work in small steps with recorded evidence and verification before merging changes. The [Native Port Plan](docs/NATIVE-PORT-PLAN.md) defines dependencies, claim boundaries and completion gates; the [Agent Workflow](docs/AGENT-WORKFLOW.md) describes economical workers and independent review. There is no announced completion timeline.
 
 ## Testing and Development
 
@@ -81,7 +83,9 @@ The active runtime foundation comes from the MIT-licensed [ps2-web-recomp](https
 Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The original recompiler engine has been archived on the [`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013) branch. The `main` branch is dedicated exclusively to the current native base.
 
 - [STATUS](docs/STATUS.md): Confirmed milestones and pending tasks.
-- [ROADMAP](docs/ROADMAP.md): Roadmap for framerate decoupling, rendering upgrades, and native subsystem evolution.
+- [NATIVE-PORT-PLAN](docs/NATIVE-PORT-PLAN.md): Phased game-scene renderer, eventual native service/core migration, and 1080p/60 target.
+- [AGENT-WORKFLOW](docs/AGENT-WORKFLOW.md): Model routing, task contracts, review and future unattended queue policy.
+- [ROADMAP](docs/ROADMAP.md): Earlier timing analysis and selective migration proposal, retained as technical context.
 - [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
 - [BUILD](docs/BUILD.md): Build environment setup and verification procedures.
 - [LEGACY](docs/LEGACY.md): Preservation and retrieval of archived work.

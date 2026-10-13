@@ -17,7 +17,8 @@ This does not eliminate subsystem emulation:
 | Subsystem | Confirmed implementation in donor |
 |---|---|
 | IOP | `runtime/src/iop/cpu.cpp:61–74` fetches/decodes R3000 instructions; `iop/kernel.cpp:144–167` binds imports to HLE services |
-| VU0/VU1 | `runtime/src/vu_micro.cpp:788–812` uses compiled microprogram when registered, otherwise interprets |
+| VU microprograms | `runtime/src/vu_micro.cpp:788–812` supports registered compiled VU1 microprograms, otherwise interprets; current programs are interpreted |
+| VU0 macro operations | `recomp/codegen.cpp:389`, cases around 670–720 emit native C++ helpers with EE code; `Vcallms`/`Vcallmsr` enter separate micro execution |
 | VU JIT | `runtime/src/vu_jit_web.cpp:18–30` returns mode 0 outside Emscripten; no Windows JIT is active |
 | VU AOT Registration | No registration generated in current set; `vu_micro.cpp:978` provides an empty weak registry |
 | Kernel/hardware | Memory models, timers, interrupts, DMA, VIF, disc, SIF/IOP, IPU, SPU2, and memory card |
@@ -55,5 +56,16 @@ The 16:9 viewport matches the original GT4 option for camera/HUD. This does not 
 Full EE/IOP/VU/GS/SPU2 fidelity, long-term stability, root cause of sluggishness,
 input double-triggering, audio continuity, and physical XInput validation.
 Past observations from the original model do not automatically validate this
-different runtime. The owner requested recording performance/input issues only for now;
-this architecture analysis is neither a performance profile nor a fix.
+different runtime. Performance investigation is now delegated to OpenCode;
+Codex prepared the handoff, and input fixes remain outside that investigation.
+This architecture analysis is neither a performance profile nor a fix.
+
+## Proposed Native Scene Renderer
+
+[Native Port Plan](NATIVE-PORT-PLAN.md) describes game-level geometry/material/camera
+extraction before PS2 packet generation, a first live-car forward renderer, then
+race coverage and retirement of graphics/service models. It is a proposal, not
+the current implementation. Initial performance goal: entry-level dedicated
+Windows GPU, 1080p/60; exact hardware and measured feasibility remain open.
+Retaining a legacy GS HUD or interpreter fallback does not meet the corresponding
+full native claim. Content/script VMs are distinct from PS2 instruction emulation.

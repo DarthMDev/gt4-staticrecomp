@@ -3,6 +3,13 @@
 2026-10-13, following slice 114 / commit e431fb3. Planning requested by owner;
 no implementation, performance profiling, or new race run in this revision.
 
+**2026-10-13 planning update:** [Native Port Plan](NATIVE-PORT-PLAN.md) supersedes
+the phase ordering below for the owner's game-scene renderer/remaster direction.
+This document retains the earlier timing mechanisms and contracts as context.
+The owner selected entry-level dedicated Windows graphics at 1080p/60 as the first
+target, and a no-JIT final architecture. [Agent Workflow](AGENT-WORKFLOW.md)
+defines bounded economical tasks and review; neither plan starts implementation.
+
 ## Recommendation
 
 Maintain the hybrid base as a functional baseline and modify it incrementally. Eliminating
@@ -104,8 +111,9 @@ Headless/no-presentation test controls must maintain execution and required GS o
 do not arbitrarily disable the GPU and assume equivalence.
 
 Complete with attribution sufficient to select the first optimization target,
-repeatable controls, and explicit bounds. The prior instruction to only
-record issues remains in effect: this phase has not yet been executed.
+repeatable controls, and explicit bounds. The prior record-only restriction is
+superseded for the owner-delegated OpenCode investigation; Codex does not execute
+that work. This planning document establishes no measured profiling results.
 
 ### 3. Decouple Presentation from Guest Timestep Progression
 
@@ -135,9 +143,12 @@ If VU dominates, first leverage donor infrastructure to register GT4 VU1
 microprograms AOT: collect program contents/variants across qualified scenarios, translate,
 recompile, and compare registers, flags, memory, and GIF packets against the interpreter.
 Account for self-modifying/dynamic microcode and preserve content-based identity; do not index solely by program counter (PC).
-Unrecognized microprograms retain an explicit, observable interpreted fallback path.
-VU0 requires its own interface contract and support. A Windows JIT is an alternative if dynamic
-variations make AOT impractical, but carries a larger implementation surface.
+For developer/reference experiments, unrecognized microprograms retain an
+explicit, observable interpreted fallback. A release claiming no instruction
+interpretation must exclude that fallback and fail unsupported cases explicitly.
+VU0 requires its own interface contract and support. The owner's subsequent
+no-JIT goal excludes a Windows JIT alternative. Account for dynamic variants
+offline or replace their game-facing purpose; unknown code must remain explicit.
 
 If synchronization/GS dominates, prioritize that path before VU. If IOP dominates,
 evaluate AOT for active modules or HLE replacement of targeted services,
@@ -179,6 +190,10 @@ high-resolution textures, and modern visual effects. This work can proceed in pa
 decoupled rendering once interface boundaries are formalized.
 
 ## Scope and Commencement Decision
+
+**Superseded phase order:** the native scene-renderer sequence and first package
+are now defined in [Native Port Plan](NATIVE-PORT-PLAN.md). The following paragraph
+records the earlier recommendation, not the current implementation instruction.
 
 Recommended first milestone: reproducible EE code generation recipe and automated build pipeline.
 Follow with a measured timing baseline and the first slice of presentation/timing decoupling;

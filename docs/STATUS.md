@@ -48,18 +48,29 @@ on the archive branch; the active test suite covers the surviving codebase.
 
 ## Next Work, When Authorized
 
-Architecture roadmap requested following slice 114: [ROADMAP.md](ROADMAP.md). Complete elimination
-of emulation is not required to decouple presentation framerate from simulation speed. First recommendation:
-reproducible EE generation and clean build; followed by measured baselines and independent presentation/simulation timing.
-Native VU/IOP migration only upon proven overhead; generating 144 distinct frames requires
-GT4 update/render hooks and interpolated visual states.
-Read-only review of code and documentation for this pass; no profiling or execution.
+The owner requested a comprehensive native-renderer/native-port and multi-model plan:
+[Native Port Plan](NATIVE-PORT-PLAN.md), [Agent Workflow](AGENT-WORKFLOW.md).
+Initial target selected by owner: Windows, entry-level dedicated GPU, internal
+1920x1080 at 60 FPS. Exact hardware/preset and achieved throughput remain Unknown.
 
-Qualify input/physical controllers, audio, saves, and stability; profile performance bottlenecks
-without premature assumptions. Next, decouple rendering from physics for 144 FPS / monitor refresh
-while maintaining 100% game speed; progressive-scan output, internal resolution scaling (1080p/1440p/4K), and launcher.
-Visual effects, textures, and ultrawide camera/HUD adjustments follow later.
-None of these enhancements were implemented during the cleanup.
+Recommended first package: reproducible EE generation and bounded model/camera
+contract research, followed by one live showroom car drawn through a game-level
+Vulkan renderer. Expand to racing, progressive/internal resolution and temporal
+separation; retire all graphics paths, then remaining execution/device dependencies
+through separate qualified service/core migrations. AOT alone does not mean zero
+emulation. No Windows JIT is active today; the proposed port does not introduce one.
+
+The new plan supersedes the phase order of [ROADMAP.md](ROADMAP.md), whose timing
+analysis remains useful. Eliminating IOP/VU models is not a prerequisite for
+FPS independence; 144 distinct scenes require qualified visual state/hooks.
+Plans include economical worker routing, independent review, serial integration
+and owner-operated gameplay gates. No workers, provider setup or recurring jobs
+were dispatched outside the read-only planning review.
+
+This revision is documentation only: no renderer/code generation implementation,
+profiling, build, game run or new qualification result. Existing OpenCode changes
+and the owner's session/card are preserved. Input, audio, save and stability work
+continues to require its own authorized package and acceptance controls.
 
 Technical reference: [Architecture](ARCHITECTURE.md), [Build](BUILD.md),
 [Legacy Archive](LEGACY.md), [Slice 114 Report](reverse-engineering/slice114-native-base-cleanup.md).
