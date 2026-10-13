@@ -72,6 +72,14 @@ results; new extraction uses a fresh capsule and reviewed caps/fixtures. The
 packed RoFS version matches 0x00030001; qualified pages inflate before XOR 0x55,
 including non-final flush segments. Do not adopt private experiments as production
 tooling or assume GTPS2ModelTool has complete GT4 support.
+Slice120 adds bounded offline scripts/gt4_volume.py and public fixtures:
+docs/VOLUME-READER.md, docs/inputs/slice120-car-identity.json. Verify the whole
+ISO and frozen catalogue hashes; extract explicit selections only into fresh
+private capsules. Caps:8 files,16MiB per file,32MiB aggregate stored/decoded.
+Ford Ka '01 is confirmed as SpecDB ka_01/code59, but menu/LOD mapping is Unknown.
+Do not guess from11 Ford-prefixed files or assume GT5 MODEL_INFO exists in GT4.
+SpecDB Huffman decoding remains private research, not an adopted production
+decoder. No model/texture payload or live hook qualified; P1 remains open.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

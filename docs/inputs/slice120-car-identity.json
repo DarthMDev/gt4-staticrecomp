@@ -1,0 +1,173 @@
+{
+  "classification": "Confirmed bounded selected extraction and offline Ford Ka SpecDB identity; model/live join Unknown",
+  "baseline_commit": "310f1fc",
+  "branch": "codex/gt4-car-identity-120",
+  "iso_pin": {
+    "sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+    "size_bytes": 5314478080
+  },
+  "input_verification": "Whole ISO SHA/size then ISO9660 and catalogue on the same open handle before every extraction/metadata read; unchanged pins",
+  "catalogue": {
+    "catalogue_sha256": "c308312caf6cb2e0fed42158c5463bdb353d35ac8e773ef55fa4f8634f397d9b",
+    "decoded_catalogue_sha256": "04368b3d5bd5b6a355e532375e03873051235d2445c5abfaa189918c48862afb"
+  },
+  "catalogue_counts": {
+    "pages": 407,
+    "records": 18562,
+    "directories": 210,
+    "files": 18352
+  },
+  "caps": {
+    "catalogue_stored_bytes": 2097152,
+    "catalogue_decoded_bytes": 2097152,
+    "selected_files": 8,
+    "per_file_stored_and_decoded_bytes": 16777216,
+    "total_stored_and_decoded_bytes": 33554432
+  },
+  "selected_files": [
+    {
+      "catalogue_path": "specdb/GT4_US2560/GENERIC_CAR.idi",
+      "output_file": "asset-00.bin",
+      "kind": 2,
+      "volume_offset": 30289920,
+      "stored_bytes": 8882,
+      "decoded_bytes": 19074,
+      "stored_sha256": "c8f3fbc7f51dd4779ab341b1e205fa02d1dc0a1a421a53c3a4ff0c52db91bdef",
+      "decoded_sha256": "271f729edd2866d91931d31239f6a22a996857513725bd3b7aec7d6ee703e13d"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/GENERIC_CAR.dbt",
+      "output_file": "asset-01.bin",
+      "kind": 2,
+      "volume_offset": 28776448,
+      "stored_bytes": 11743,
+      "decoded_bytes": 17960,
+      "stored_sha256": "5b926ef9acc3f50d05b50d06c567cec95c9a2d890ab25b9762d6f98bb6e00cac",
+      "decoded_sha256": "d118aa3268735f83ad91dfada757496861c995ef508292fcff958d67c7e895b3"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/CAR_NAME_american.idi",
+      "output_file": "asset-02.bin",
+      "kind": 2,
+      "volume_offset": 26368000,
+      "stored_bytes": 9698,
+      "decoded_bytes": 21208,
+      "stored_sha256": "7d5a6e65ab1fd35f2f912d363c941f20e98f73fb43234498acb48f0e3f856db8",
+      "decoded_sha256": "6a1d09fc1326ed6e93a3e591c412f1537fc7f206576d22cd36483cde52732b1b"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/CAR_NAME_american.dbt",
+      "output_file": "asset-03.bin",
+      "kind": 2,
+      "volume_offset": 29341696,
+      "stored_bytes": 9810,
+      "decoded_bytes": 16177,
+      "stored_sha256": "1bd14025d5b29a243b9b41e9fa790ddb8c67a4f4bc9ae3477078baf2fb643240",
+      "decoded_sha256": "ae1d25a3a98cbf035ad64486b6b7ab377baa1a832a4a13bf961e036397b01061"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/american_StrDB.sdb",
+      "output_file": "asset-04.bin",
+      "kind": 2,
+      "volume_offset": 30390272,
+      "stored_bytes": 30427,
+      "decoded_bytes": 85130,
+      "stored_sha256": "e708dd97c1e3d56f7cc9239d7a5c76db35b765c4e779b3f393735278136b9ac6",
+      "decoded_sha256": "4ec24e465a2c0262781a5bffae4ecf38f5a890e8ef166624e97c71cf1fce03ef"
+    }
+  ],
+  "selected_stored_bytes": 70560,
+  "selected_decoded_bytes": 159549,
+  "identity": {
+    "classification": "Independent offline code-list Huffman replay; no live/file join",
+    "car_code": 59,
+    "label": "ka_01",
+    "display_name": "Ford Ka `01",
+    "generic_table_id": 0,
+    "localized_table_id": 39,
+    "name_grade_shortname_indices": [
+      84,
+      84,
+      84
+    ],
+    "narration_id_raw": 435,
+    "generic_row_sha256": "17c89b9c155420044472c90e8173a79d479779f7caf86a25474cc8460efa2367",
+    "localized_row_sha256": "422b238d996d668fa3b0dac0d769f26e43725f36968215bafc1f0c71710be794",
+    "generic_row_size": 24,
+    "localized_row_size": 16,
+    "hand_authored_dictionary_control": true
+  },
+  "paired_idi_dbt_code_sets_equal": {
+    "generic_car": true,
+    "car_name_american": true
+  },
+  "table_counts": {
+    "generic_car": 722,
+    "car_name_american": 804,
+    "american_strings": 3326
+  },
+  "model_asset_join": {
+    "classification": "Unknown",
+    "exact_ka_01_menu_and_lod_paths_present": false,
+    "ford_prefixed_menu_candidate_count": 11,
+    "model_info_pair_present": false,
+    "model_payloads_read": 0,
+    "failed_model_info_selection": "Absent path rejected before payload reads/output creation",
+    "default_parts_bridge": "Not justified: schema describes equipment/component keys"
+  },
+  "controls": {
+    "public_volume_tests": 22,
+    "private_specdb_controls": {
+      "type1_literal_row": true,
+      "type0_template_copy": true,
+      "type2_template_patch": true,
+      "missing_row_rejected": true,
+      "truncated_huffman_rejected": true
+    },
+    "parent_hand_authored_dictionary": true,
+    "parent_worker_replay_equal": true,
+    "ctest_passed": 3,
+    "ctest_total": 3,
+    "python_passed": 81,
+    "python_skipped": 0,
+    "ctest_seconds": 11.79,
+    "native_rebuild_needed": false,
+    "ctest_build": "private/slice118-ee-candidates/baseline/build"
+  },
+  "tools": {
+    "python": "3.14.5",
+    "pycdlib": "1.20.0"
+  },
+  "public_tool_sha256": {
+    "scripts/gt4_volume.py": "eb863c9a604d3b0fe36bb455f54699f50d6a17d8dc1cb8e73461c86b35bba460",
+    "tests/python/test_gt4_volume.py": "5f716620fc83f044a49d4d7cd192ccdba943f1c7f1c48abfea2c1c7ef89de70e"
+  },
+  "private_artifact_sha256": {
+    "specdb-files/manifest.json": "b4da41fe2fd7236752ae4b5de8358c0ef831aaed38d893d8710063599fae7c5c",
+    "specdb-research/specdb-contract.md": "53d830f6b12b1693214a56e1476d6f9798ac4fcdbd3a0f138700c5b2299abff0",
+    "specdb-research/inspect_specdb.py": "146e378727e310fa3587b9fcb5275f03fabbd19bfb28bcce3b2dcad61de37fa3",
+    "specdb-research/results.json": "8ef5380f9372c1f4dc713fbc462026f24b199c9ec6f45dc0f534fac60beea3c0",
+    "specdb-research/metadata.json": "5c13d0e9607cb2cdaa9166a54f5ed858215b0a3d05f8d8447574d1c80a0876f1",
+    "parent_identity_check.py": "4c7bd7fb81bd7b83204692cb399805d88807bb97eee34321d7972b6b2679a9a5",
+    "parent-identity-check.json": "31fd0f15fd8650ee51e4be658034db252956b1d656e99a9c65a4b84831578082",
+    "parent-worker-replay.json": "8ef5380f9372c1f4dc713fbc462026f24b199c9ec6f45dc0f534fac60beea3c0",
+    "car-directory-leads.json": "128ebc0cc361bcae15cfcb022bbb182e4013768d504e60c8d4d8073133ec52ae",
+    "specdb-table-leads.json": "ddcbc5d520953390932a63fbc0e011fdf7e7e2c96d4fcf17913e2c21e94e3645",
+    "rofs-review/source-contract.md": "bd7e170997088e1463f87f852209bfbfeb7c4c7721cb350208a109d30a6c1b72",
+    "model-header-research/header-probe-contract.md": "b684d15d69a232524e9fd8fca8015410925ed28102c10da627c5182d6e9a0a6f",
+    "ctest-baseline.log": "d3a8d200a26e077b840b7ca1e18427f06dcdfa4a685883ff7b440c536ca170de"
+  },
+  "limitations": [
+    "Leaf enumeration, not qualified B-tree key routing or reciprocal links",
+    "Private experimental SpecDB probe not adopted as a production decoder; malformed/charset coverage incomplete",
+    "Independent selected-row decoder uses full Huffman code list rather than worker lookup; primary format facts still shared",
+    "NarrationID is an integer, not a localized SDB index",
+    "CAR4/MDLS/Tex1 source contracts only; no model/texture payload or live hook qualified",
+    "Trusted private-worktree output contract; hostile concurrent filesystem replacement not qualified"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Map game asset-loader SpecDB car code/label to actual menu/LOD basename before one-model/texture parsing"
+}

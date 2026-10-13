@@ -9,8 +9,13 @@ live car observation was performed. **No named car is qualified yet.**
 succeed in a bounded private Luna experiment, independently replayed by the parent.
 The slice 118 findings below retain their checkpoint context. Subsequent evidence
 resolves the codec and packed-version interpretation; named-car identity, payloads
-and live instances remain unqualified. See [references](NENKAI-REFERENCES.md) and
+and live instances remain unqualified at slice 119. See [references](NENKAI-REFERENCES.md) and
 [slice 119 metadata](inputs/slice119-nenkai-assets.json).
+
+**Current slice 120 update:** offline USA SpecDB identity now confirms Ford Ka
+'01 / `ka_01` / code 59. Its actual model filename and live instance remain
+Unknown. The appended slice 120 section records selected extraction, independent
+row replay, public reader controls and the next loader-mapping boundary.
 
 ## Confirmed local observations
 
@@ -145,3 +150,56 @@ extract only USA v2.00 identity resources needed for one-car mapping under a fre
 capped extraction contract. MDLS/texture parsing and live-hook qualification follow
 that mapping. P1 remains in progress; no native car drawing or P2/P3 renderer was
 implemented.
+
+## Slice 120 — Selected extraction and offline named-car identity
+
+**Confirmed:** maintainable [volume tooling](VOLUME-READER.md) reproduces both
+slice 119 catalogue hashes/counts and validates a fresh five-file extraction.
+The whole ISO pin is verified before every extraction/metadata read, then the
+same handle supplies ISO9660/catalogue/payload data. Selected SpecDB payloads
+total **70,560 stored bytes / 159,549 decoded bytes**, all kind 2 PS2ZIP with
+matching complements, bounded raw DEFLATE, EOF, exact sizes and no trailing input.
+Hashes/extents/methods are in [slice 120 metadata](inputs/slice120-car-identity.json).
+
+Luna's private IDI/DBT/SDB probe establishes:
+
+| Selected identity | Result |
+|---|---|
+| USA folder | `GT4_US2560` |
+| GENERIC_CAR / CAR_NAME_american label | `ka_01` in both |
+| Shared row ID | 59 |
+| IDI table IDs / paired counts | 0 / 722 and 39 / 804; IDI and paired DBT code sets agree |
+| Selected row sizes | 24 and 16 bytes |
+| Name / Grade / ShortName SDB indexes | 84 / 84 / 84 |
+| Display name | Ford Ka '01; stored ASCII uses a literal backtick before 01 |
+| NarrationID | Raw integer 435; **not** interpreted as an SDB index |
+
+The parent independently decodes the two rows using bit-by-bit lookup in the
+complete Huffman code list, rather than the worker's eight-bit acceleration
+table. Both row SHA-256 values, label/code/table IDs and the exact selected ASCII
+string agree. One hand-authored dictionary control passes; replaying the frozen
+worker probe also reproduces results and its five synthetic type-0/type-1/type-2,
+missing-row and truncated-stream controls. Format sources are still shared:
+this is independent implementation evidence, not independent PS2 fidelity.
+The SpecDB probe remains private; general endian/charset/compression/malformed
+coverage is not qualified. No full table row data or game payload is published.
+
+**Unknown:** actual model filename. Neither menu nor LOD has an exact `ka_01`
+basename. Eleven Ford-prefixed menu leaves are candidate leads only. MODEL_INFO
+IDI/DBT is absent in this GT4 folder; that source-schema assumption cannot supply
+the missing link. An attempted explicit MODEL_INFO selection fails before any
+payload reads/output creation. DEFAULT_PARTS schema describes equipment/component
+keys, not a demonstrated model-filename bridge; no speculative extra extraction.
+
+Source-only CAR4/MDLS/Tex1 header research identifies nested relative offsets,
+minimum header sizes and per-color texture indirection. No model or texture
+payload was read, no parser adopted and no geometry/live rendering qualified.
+Next: map the executable asset-loader car code/label to the actual menu/LOD
+basename, then qualify a single container/model/texture reader with public
+independent fixtures. A reviewed header-only candidate probe needs a justified
+target and its own fresh extraction contract. Do not guess a car from its prefix.
+
+Public reader controls pass 22/22. Baseline candidate CTest passes 3/3 in 11.79 s;
+Python discovery 81/81 with zero skips. No new native build was needed. P1 stays
+open; runtime, game session, saves/locks, OpenCode branch, input, timing and
+performance are unchanged.

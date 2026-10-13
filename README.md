@@ -66,8 +66,10 @@ The EE translator/library can now be rebuilt from verified inputs. Initial model
 and camera mapping is documented, and an isolated experiment has recovered one
 omitted callback pair with compilation checks. These foundations are still being
 qualified. Separate baseline/recovered runtime candidates are prepared for owner
-validation. Bounded one-car research now decodes the volume catalogue and verifies
-car/SpecDB directory leads, with named-car identity and payloads still pending.
+validation. Tested offline tooling now reads the volume catalogue and extracts
+selected resources. The Ford Ka '01 is identified in the correct version's
+database; its model-file mapping, geometry/textures and live integration remain
+pending. See the [one-car research ledger](docs/CAR-ASSET-RESEARCH.md).
 The dedicated game-scene renderer has not started replacing live graphics.
 
 ## Testing and Development

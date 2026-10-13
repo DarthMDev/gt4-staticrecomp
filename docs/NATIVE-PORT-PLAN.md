@@ -174,6 +174,10 @@ metadata but leaves page decoding and the named-car/live-instance mapping open.
 Bounded private catalogue decoding and independent directory/file-bound checks
 now pass; car/SpecDB directory leads are observed. A production reader, named-car
 crosswalk, payload parsing and live-instance mapping remain open.
+**Slice 120:** [bounded volume tooling](VOLUME-READER.md) and public controls
+pass; selected USA SpecDB extraction and independent offline Ford Ka '01
+identity replay succeed. The actual menu/LOD basename is still Unknown;
+model/texture decoding, live ownership and all P1 exit gates remain open.
 
 **Dependencies:** P0 for executable hooks; static research may start earlier.
 **Work:** map one model boundary to actual generated EE functions and callers.

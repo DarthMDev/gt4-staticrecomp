@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 119, pinned Nenkai references and bounded RoFS catalogue decoding.
+2026-10-13 — Slice 120, bounded volume tooling and offline Ford Ka SpecDB identity.
 Playable base remains slice 114. Implementation branch:
-`codex/nenkai-asset-research-119`, based on renderer-scope clarification dc46c0b.
+`codex/gt4-car-identity-120`, based on slice 119 commit 310f1fc.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -47,6 +47,19 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Unknown:** production reader/lookup qualification, named-car crosswalk,
   model/texture payloads and live instance/camera effects. No asset payload was
   read and no renderer or performance change was made in slice 119.
+- **Confirmed (slice 120):** public bounded volume reader reproduces slice 119
+  catalogue hashes/counts. Five selected SpecDB files extracted after whole-ISO
+  verification on the same handle; strict PS2ZIP framing, sizes and hashes pass.
+- **Confirmed (slice 120):** offline `ka_01` / car code 59 resolves to Ford Ka '01
+  in USA GT4_US2560. Name/Grade/ShortName use localized string 84; NarrationID
+  is raw integer 435. Worker and independent parent code-list Huffman replay
+  match both selected rows. SpecDB decoding remains a private research probe.
+- **Confirmed (slice 120):** 22 new public controls pass; existing baseline
+  candidate CTest 3/3 and Python 81/81, zero skips. No native code/build change.
+- **Unknown:** which menu/LOD file corresponds to this car; exact `ka_01`
+  basenames and MODEL_INFO pair are absent. Eleven Ford-prefixed leaves remain
+  candidates, not identified assets. No model/texture payload read or live hook added.
+  B-tree key routing and comprehensive format/fidelity qualification remain open.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
@@ -55,7 +68,8 @@ results and remaining gates. [EE Candidates](EE-CANDIDATES.md) and
 [Car Asset Research](CAR-ASSET-RESEARCH.md) cover slice 118. P0/P1 remain **in
 progress**: [Nenkai References](NENKAI-REFERENCES.md) and
 [slice 119 metadata](inputs/slice119-nenkai-assets.json) record subsequent catalogue
-progress; candidate gameplay, remaining entry coverage and one real car's
+progress. [Volume Reader](VOLUME-READER.md) and [slice 120 metadata](inputs/slice120-car-identity.json)
+record the selected extraction and offline identity; candidate gameplay, remaining entry coverage and one real car's
 data/conventions are pending. Production library, default launcher and runtime
 have not been replaced. Candidate checks do not qualify game boot or racing.
 The owner's active OpenCode baseline session was preserved during build qualification.

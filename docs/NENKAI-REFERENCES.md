@@ -69,3 +69,20 @@ timing change, deferred rendering or graphical remaster is implemented here.
 
 The reusable worker scope is [P1-119](tasks/P1-NENKAI-ASSET-RESEARCH.md). Keep
 frozen capsule/source pins; a new extraction attempt uses a new output identity.
+
+## Slice 120 — Reusable reader and file-payload framing
+
+[Bounded volume tooling](VOLUME-READER.md) now reproduces the catalogue and
+extracts explicit selections with public controls. Slice 119 remains frozen.
+
+**High confidence from primary sources; Confirmed on five selected SpecDB
+files:** PS2ZIP starts with bytes `C5 EE F7 FF` (LE `0xFFF7EEC5`), a LE 32-bit
+negative decoded-size complement, then raw DEFLATE at byte 8. File decoding
+does not use the catalogue XOR step. Sources:
+[PDTools PS2ZIP.cs:131-159](https://github.com/Nenkai/PDTools/blob/ffe0bb26377ac9ff62f40951c1c0b16c5d9a380f/PDTools.Compression/PS2ZIP.cs#L131)
+(MIT), [GT4FS PS2Zip.cs:19-55](https://github.com/Razer2015/GT4FS/blob/b938f71fd939e0ea44c38839a50ffb66cfd2067a/GT.Shared/Polyphony/PS2Zip.cs#L19)
+and [BTree.cs:227-254](https://github.com/Razer2015/GT4FS/blob/b938f71fd939e0ea44c38839a50ffb66cfd2067a/GT4FS.Core/BTree.cs#L227).
+GT4FS probes the marker independently of record kind; the new reader documents
+a stricter supported subset and rejects unqualified combinations. GT4FS has
+no inspected root license: only format facts were used; no implementation was
+copied or linked. PDTools was not built or linked.

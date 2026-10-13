@@ -75,3 +75,12 @@ producers. Binaries, SPIR-V files, and generated code remain untracked by Git.
 `Jogar-GT4.cmd` manages `private/manual-play/card.ps2`, per-session backups, and exclusive
 locking. It never reseeds an existing memory card. When initializing a new card,
 it uses the 16:9 or 4:3 seed corresponding to the `--aspect` argument.
+
+## Offline selected-asset research
+
+[Volume Reader](VOLUME-READER.md) documents the bounded, hash-verified
+`scripts/gt4_volume.py` command. It needs the tooling Python/pycdlib and owner
+ISO, not a native rebuild. It writes only explicit selections to a fresh
+ignored capsule and preserves all inputs/pins. Its public synthetic tests are
+included automatically in existing Python discovery/CTest. SpecDB parsing in
+slice 120 remains a private experiment, not a general supported decoder.

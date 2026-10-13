@@ -31,3 +31,10 @@ package or implementation was built, copied into this runtime or linked. GT4FS
 and the Modding Hub have no root license in the inspected checkouts; their
 format facts are research references, not adopted dependencies. MIT tool/template
 licenses and the separate SharpTriStrip BSD terms remain with their local sources.
+
+Slice 120's offline RoFS/PS2ZIP reader is an original implementation using
+referenced format facts, with independent synthetic fixtures. No GT4FS source
+was copied. The private SpecDB probe references MIT PDTools and remains ignored;
+it is not imported into the runtime or distributed as a supported decoder.
+[Volume Reader](../docs/VOLUME-READER.md) and the pinned Nenkai source map record
+the supported subset, attribution and qualification limits.

@@ -143,6 +143,10 @@ mapping are still open; no selected asset or live instance is qualified.
 At that checkpoint these were unknown. [Slice 119](NENKAI-REFERENCES.md) now
 decodes the catalogue privately with independent hash/count/extent checks;
 named-car mapping, model/texture payloads and live-instance qualification remain open.
+**Slice 120:** [the asset ledger](CAR-ASSET-RESEARCH.md) confirms offline Ford
+Ka '01 SpecDB identity with independent selected-row decoding. Bounded public
+volume tooling is tested; the car's menu/LOD basename remains Unknown. This
+does not identify a live instance or qualify any geometry/camera convention.
 
 1. Continue the omitted-entry/callback ledger using explicit seed provenance and
    error behavior; preserve the baseline producer. [Slice 117](EE-CALLBACK-COVERAGE.md)
