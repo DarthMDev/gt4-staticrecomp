@@ -14,6 +14,10 @@ set(GT4_SHADER_DIR "${GT4_ROOT}/private/slice114-native-base/shaders" CACHE PATH
     "Directory with the qualified SPIR-V modules")
 set(PORT "${GT4_PORT_DIR}")
 set(SHADERS "${GT4_SHADER_DIR}")
+# Bounded experiments may derive a few donor translation units with measurement
+# only; empty keeps the frozen donor checkout as the source of every unit.
+set(GT4_RUNTIME_DIR "" CACHE PATH
+    "Derived donor runtime sources; empty uses the frozen donor checkout")
 set(VULKAN_HEADERS "${GT4_ROOT}/private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include")
 set(GAME_LIBRARY "${GT4_ROOT}/private/reference-acceleration-study/runtime-build/ps2game.lib")
 if(NOT EXISTS "${GAME_LIBRARY}")
@@ -26,12 +30,23 @@ endif()
 set(RUNTIME_SOURCES memory dispatch system kernel hw cop disc dmac vif vu_micro vu_jit vu_jit_web)
 set(RUNTIME_FILES)
 foreach(source IN LISTS RUNTIME_SOURCES)
-    list(APPEND RUNTIME_FILES "${DONOR}/runtime/src/${source}.cpp")
+    # A bounded experiment may replace one donor translation unit with a
+    # derived copy that only adds measurement; the frozen donor stays default.
+    if(GT4_RUNTIME_DIR AND EXISTS "${GT4_RUNTIME_DIR}/${source}.cpp")
+        list(APPEND RUNTIME_FILES "${GT4_RUNTIME_DIR}/${source}.cpp")
+    else()
+        list(APPEND RUNTIME_FILES "${DONOR}/runtime/src/${source}.cpp")
+    endif()
 endforeach()
 foreach(source IN ITEMS ipu/ipu gs/gif gs/queue gs/raster
                         iop/cpu iop/kernel iop/libs iop/hw iop/spu2 iop/sio2
                         iop/io iop/cdvd iop/sif iop/cdvdfsv)
-    list(APPEND RUNTIME_FILES "${DONOR}/runtime/src/${source}.cpp")
+    get_filename_component(unit "${source}" NAME)
+    if(GT4_RUNTIME_DIR AND EXISTS "${GT4_RUNTIME_DIR}/${unit}.cpp")
+        list(APPEND RUNTIME_FILES "${GT4_RUNTIME_DIR}/${unit}.cpp")
+    else()
+        list(APPEND RUNTIME_FILES "${DONOR}/runtime/src/${source}.cpp")
+    endif()
 endforeach()
 add_library(ps2runtime_vulkan STATIC ${RUNTIME_FILES} "${PORT}/gs.cpp" "${PORT}/gpu.cpp" native_vulkan.cpp)
 target_include_directories(ps2runtime_vulkan PUBLIC "${DONOR}/runtime/include" "${DONOR}/runtime/src"

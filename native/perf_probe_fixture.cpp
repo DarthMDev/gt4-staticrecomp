@@ -7,9 +7,11 @@
 
 #include "perf_probe.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <stdexcept>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -39,8 +41,8 @@ void check_accounting() {
   probe.set_report_period_seconds(3600);
   probe.restart();  // One call arms the interval clock; three cycles are measured.
   probe.frame_boundary(gt4::perf::GuestSample{});
-  const std::uint64_t vblank_us = 500, submit_wait_us = 2500,
-                      present_wait_us = 400, workgroups = 64ull * 8ull;
+  const std::uint64_t vblank_us = 500, submit_wait_us = 800,
+                      present_wait_us = 200, workgroups = 64ull * 8ull;
   for (int cycle = 0; cycle < 3; ++cycle) {
     probe.close_stage(Stage::host_vblank, vblank_us);
     probe.close_stage(Stage::gs_upload, 400);
@@ -53,7 +55,7 @@ void check_accounting() {
     probe.add_audio(800, 800);
     // Real sleep longer than the host callback so the attribution below is an
     // exact identity instead of a clamped estimate.
-    Sleep(2000);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2));
     probe.frame_boundary(gt4::perf::GuestSample{4915200ull * (cycle + 1),
                                                static_cast<std::uint64_t>(cycle + 1),
                                                10ull * (cycle + 1),

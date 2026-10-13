@@ -17,7 +17,19 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+// The performance probe needs a host clock and a diagnostic variable. The
+// donor translation units that include this header are platform-neutral
+// sources, so the Windows headers must not leak SDK macros into them:
+// rpcndr.h defines the legacy macro `small`, which collides with a variable in
+// ps2/vu_ops.hpp, so it is removed right after the include. NOMINMAX keeps the
+// min/max macros out as well.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
+#ifdef small
+#undef small
+#endif
 
 #include <algorithm>
 #include <array>
@@ -58,6 +70,13 @@ enum class Stage {
   gs_execute,  // GS compute submission and its completion wait
   present,     // acquire, blit submission and present
   audio_push,  // WinMM sample production from the guest SPU2
+  // Subsystem attribution of the guest execution time. `ee_dispatch` is the
+  // translated EE execution; `vu_interpret` and `vif_gif` run inside it, while
+  // `iop_run` is a sibling of it.
+  ee_dispatch,
+  vu_interpret,
+  vif_gif,
+  iop_run,
   // Blocking waits observed on the emulation thread. Their time is already
   // included in the enclosing stage above; they are recorded separately to
   // attribute the wait instead of the work. They never nest inside each other.
@@ -249,6 +268,14 @@ inline const char *stage_name(Stage stage) {
     return "present";
   case Stage::audio_push:
     return "audio_push";
+  case Stage::ee_dispatch:
+    return "ee_dispatch";
+  case Stage::vu_interpret:
+    return "vu_interpret";
+  case Stage::vif_gif:
+    return "vif_gif";
+  case Stage::iop_run:
+    return "iop_run";
   case Stage::gs_submit_wait:
     return "gs_submit_wait";
   case Stage::acquire_wait:
@@ -381,6 +408,22 @@ inline void Probe::print_interval(std::FILE *stream, const char *reason) {
                "audio_push %.2f\n",
                per_frame(Stage::gs_upload), per_frame(Stage::gs_execute),
                per_frame(Stage::present), per_frame(Stage::audio_push));
+  // Subsystem attribution of the guest execution outside the host callback.
+  const double guest_ms =
+      guest_between_us_ / 1000.0 / static_cast<double>(frames_);
+  const double dispatch_ms = per_frame(Stage::ee_dispatch);
+  const double iop_ms = per_frame(Stage::iop_run);
+  const double other_ms =
+      guest_ms - dispatch_ms - iop_ms > 0 ? guest_ms - dispatch_ms - iop_ms : 0;
+  std::fprintf(stream,
+               "[perf]   attribution ms: guest_between %.2f = ee_dispatch %.2f "
+               "(%.0f%%) + iop_run %.2f + other %.2f\n",
+               guest_ms, dispatch_ms, 100.0 * dispatch_ms / guest_ms, iop_ms,
+               other_ms);
+  std::fprintf(stream,
+               "[perf]   nested inside ee_dispatch ms: vu_interpret %.2f "
+               "vif_gif %.2f\n",
+               per_frame(Stage::vu_interpret), per_frame(Stage::vif_gif));
   std::fprintf(stream,
                "[perf]   counts per frame: executes %.2f dispatches %.0f "
                "workgroups %.0f presents %.2f upload bytes %.0f\n",
