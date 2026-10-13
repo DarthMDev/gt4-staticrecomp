@@ -84,7 +84,8 @@ struct Totals {
 };
 
 // Guest-side counters sampled once per guest VBlank frame. The host supplies
-// them so the probe stays independent of the runtime implementation.
+// them so the probe stays independent of the runtime implementation. They are
+// cumulative runtime counters; the probe stores their deltas.
 struct GuestSample {
   std::uint64_t guest_cycles = 0;    // ps2::now()
   std::uint64_t guest_frames = 0;    // ps2::frames_run()
@@ -146,6 +147,9 @@ public:
   std::uint64_t interval_us() const { return interval_us_; }
   std::uint64_t guest_between_us() const { return guest_between_us_; }
   std::uint64_t blocked_us() const { return blocked_us_; }
+  std::uint64_t guest_cycles() const { return guest_cycles_; }
+  std::uint64_t guest_primitives() const { return guest_primitives_; }
+  std::uint64_t guest_vu1_calls() const { return guest_vu1_calls_; }
 
   void add_dispatch(std::uint64_t workgroups) {
     if (!enabled_)
@@ -170,6 +174,13 @@ public:
 
   std::uint64_t frames() const { return frames_; }
 
+  // Keeps at most kPeriodCapacity of the most recent frame periods.
+  void record_period(std::uint64_t period_us) {
+    if (periods_.size() == kPeriodCapacity)
+      periods_.erase(periods_.begin());
+    periods_.push_back(period_us);
+  }
+
   // Formats one measurement interval. Exposed for tests, which pass a file
   // stream through the caller.
   void print_interval(std::FILE *stream, const char *reason);
@@ -183,7 +194,7 @@ private:
       period_seconds_ = std::atoi(spec.c_str());
     if (period_seconds_ < 1)
       period_seconds_ = 1;
-    periods_.assign(kPeriodCapacity, 0);
+    periods_.reserve(kPeriodCapacity);
   }
 
   static constexpr std::size_t kPeriodCapacity = 4096;
@@ -204,6 +215,10 @@ private:
   std::uint64_t audio_in_frames_ = 0, audio_completed_frames_ = 0;
   std::uint64_t guest_cycles_ = 0;
   std::uint64_t guest_primitives_ = 0, guest_vu1_calls_ = 0;
+  std::uint64_t last_guest_cycles_ = 0, last_guest_primitives_ = 0,
+                last_guest_vu1_calls_ = 0;
+  // Bounded history of frame periods for percentiles; the oldest sample is
+  // dropped once an interval exceeds the capacity.
   std::vector<std::uint64_t> periods_;
 };
 
@@ -259,6 +274,8 @@ inline void Probe::restart() {
   dispatches_ = workgroups_ = presentations_ = presentation_bytes_ = 0;
   audio_in_frames_ = audio_completed_frames_ = 0;
   guest_cycles_ = guest_primitives_ = guest_vu1_calls_ = 0;
+  last_guest_cycles_ = last_guest_primitives_ = last_guest_vu1_calls_ = 0;
+  periods_.clear();
   last_report_us_ = now;
   last_vblank_us_ = 0;
   first_frame_ = true;
@@ -277,16 +294,26 @@ inline void Probe::frame_boundary(const GuestSample &guest) {
     first_frame_ = false;
     last_frame_us_ = now;
     last_report_us_ = now;
+    // Cumulative runtime counters: remember the baseline before storing deltas.
+    last_guest_cycles_ = guest.guest_cycles;
+    last_guest_primitives_ = guest.gs_primitives;
+    last_guest_vu1_calls_ = guest.vu1_interpreted;
     return;
   }
   const std::uint64_t period_us = now - last_frame_us_;
   last_frame_us_ = now;
   ++frames_;
   interval_us_ += period_us;
-  periods_[frames_ % kPeriodCapacity] = period_us;
-  guest_cycles_ += guest.guest_cycles;
-  guest_primitives_ += guest.gs_primitives;
-  guest_vu1_calls_ += guest.vu1_interpreted;
+  record_period(period_us);
+  if (guest.guest_cycles >= last_guest_cycles_)
+    guest_cycles_ += guest.guest_cycles - last_guest_cycles_;
+  last_guest_cycles_ = guest.guest_cycles;
+  if (guest.gs_primitives >= last_guest_primitives_)
+    guest_primitives_ += guest.gs_primitives - last_guest_primitives_;
+  last_guest_primitives_ = guest.gs_primitives;
+  if (guest.vu1_interpreted >= last_guest_vu1_calls_)
+    guest_vu1_calls_ += guest.vu1_interpreted - last_guest_vu1_calls_;
+  last_guest_vu1_calls_ = guest.vu1_interpreted;
   // Everything outside the host VBlank callback is guest execution, GS
   // batching and whatever wait that work performs on this thread.
   guest_between_us_ += period_us > last_vblank_us_ ? period_us - last_vblank_us_
@@ -302,10 +329,7 @@ inline void Probe::print_interval(std::FILE *stream, const char *reason) {
     std::fprintf(stream, "[perf] %s: no complete guest frame yet\n", reason);
     return;
   }
-  const std::size_t samples = static_cast<std::size_t>(
-      std::min<std::uint64_t>(frames_, kPeriodCapacity));
-  std::vector<std::uint64_t> sorted(periods_.end() - static_cast<std::ptrdiff_t>(samples),
-                                   periods_.end());
+  std::vector<std::uint64_t> sorted(periods_);
   std::sort(sorted.begin(), sorted.end());
   const auto percentile = [&sorted](double fraction) {
     const std::size_t index = static_cast<std::size_t>(
@@ -314,16 +338,20 @@ inline void Probe::print_interval(std::FILE *stream, const char *reason) {
   };
   const double interval_seconds = interval_us_ / 1000000.0;
   const double fps = frames_ / interval_seconds;
-  // The guest advances one NTSC VBlank per guest frame.
   const double guest_seconds = guest_cycles_ / 294912000.0;
   const double work_us =
       static_cast<double>(interval_us_) - static_cast<double>(blocked_us_);
   std::fprintf(stream,
-               "[perf] %s: %llu guest frames in %.2fs wall = %.1f frames/s; "
-               "guest %llu cycles = %.2fs at 294.912 MHz (%.1f%% of real time)\n",
+               "[perf] %s: %llu guest frames in %.2fs wall = %.1f frames/s "
+               "(%.1f%% of the 60 Hz guest VBlank rate)\n",
                reason, static_cast<unsigned long long>(frames_),
-               interval_seconds, fps, static_cast<unsigned long long>(guest_cycles_),
-               guest_seconds, 100.0 * guest_seconds / interval_seconds);
+               interval_seconds, fps,
+               100.0 * fps / 60.0);
+  std::fprintf(stream,
+               "[perf]   guest progress: %llu guest cycles = %.2fs at "
+               "294.912 MHz = %.1f%% of hardware rate in wall time\n",
+               static_cast<unsigned long long>(guest_cycles_), guest_seconds,
+               100.0 * guest_seconds / interval_seconds);
   std::fprintf(stream,
                "[perf]   frame period ms: median %.2f p95 %.2f p99 %.2f max %.2f "
                "(%.1f ms budget at 60 Hz)\n",

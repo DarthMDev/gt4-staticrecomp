@@ -56,7 +56,8 @@ void check_accounting() {
     Sleep(2000);
     probe.frame_boundary(gt4::perf::GuestSample{4915200ull * (cycle + 1),
                                                static_cast<std::uint64_t>(cycle + 1),
-                                               10, 20});
+                                               10ull * (cycle + 1),
+                                               20ull * (cycle + 1)});
   }
   require(probe.frames() == 3, "three completed guest cycles expected");
   const auto &submits = probe.stage(Stage::gs_submit_wait);
@@ -73,6 +74,11 @@ void check_accounting() {
           "guest execution attribution does not close the cycle budget");
   require(probe.interval_us() >= probe.blocked_us(),
           "blocked time exceeds the measured interval");
+  // Cumulative guest counters are stored as deltas between frames.
+  require(probe.guest_cycles() == 3ull * 4915200ull,
+          "guest cycle delta is not the difference between samples");
+  require(probe.guest_primitives() == 30 && probe.guest_vu1_calls() == 60,
+          "guest primitive and VU1 call deltas are not differences");
   std::fprintf(stderr,
                "[fixture] probe accounting: %llu frames, blocked %.2f ms of "
                "%.2f ms, guest between %.2f ms\n",
@@ -95,10 +101,12 @@ void check_report_prints_every_attribution() {
   while (std::fgets(line, sizeof line, stream))
     text += line;
   std::fclose(stream);
-  for (const char *needle : {"frames/s", "frame period ms", "median",
-                             "guest_between", "host_vblank", "gs_submit",
-                             "acquire", "present_wait", "audio", "gs_execute",
-                             "dispatches", "primitives", "1146880"})
+  for (const char *needle : {"frames/s", "guest VBlank rate", "guest progress",
+                             "hardware rate", "frame period ms", "median",
+                             "guest_between", "host_vblank", "gs_submit_wait",
+                             "acquire_wait", "present_wait", "audio_wait",
+                             "gs_execute", "dispatches", "primitives",
+                             "1146880"})
     require(text.find(needle) != std::string::npos,
             (std::string("probe report lacks '") + needle + "'").c_str());
   std::fprintf(stderr, "[fixture] probe report: attribution lines complete\n");
