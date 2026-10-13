@@ -21,7 +21,7 @@ class NativeVulkanTests(unittest.TestCase):
             root = Path(folder)
             inputs = root / 'docs/inputs'
             inputs.mkdir(parents=True)
-            (inputs / 'slice113-native-video.json').write_text(json.dumps({
+            (inputs / 'slice114-native-base.json').write_text(json.dumps({
                 'default_card_seed': {'path': 'private/wide.ps2'},
                 'standard_card_seed': {'path': 'private/standard.ps2'}}))
             for aspect, seed in (('16:9', root / 'private/wide.ps2'),
@@ -147,7 +147,7 @@ class NativeVulkanTests(unittest.TestCase):
             self.assertFalse((root / 'private/reject').exists())
 
     def test_real_vulkan_fixture_if_qualified_build_exists(self):
-        executable = prepare.ROOT / 'private/slice113-video/build/vulkan_fixture.exe'
+        executable = prepare.ROOT / 'private/slice114-native-base/build/vulkan_fixture.exe'
         if not executable.is_file():
             self.skipTest('Private native Vulkan pilot not built on this machine')
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=30)
@@ -160,7 +160,7 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('display 2048x2048 halved=0: all pixels match CPU', result.stderr)
 
     def test_real_windows_audio_and_input_fixture_if_built(self):
-        executable = prepare.ROOT / 'private/slice113-video/build/host_io_fixture.exe'
+        executable = prepare.ROOT / 'private/slice114-native-base/build/host_io_fixture.exe'
         if not executable.is_file():
             self.skipTest('Private native audio/input pilot not built on this machine')
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
@@ -170,7 +170,7 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('PASS: real Windows audio completion', result.stderr)
 
     def test_native_card_lock_refuses_overlapping_game_process(self):
-        executable = prepare.ROOT / 'private/slice113-video/build/gt4vulkan.exe'
+        executable = prepare.ROOT / 'private/slice114-native-base/build/gt4vulkan.exe'
         if not executable.is_file():
             self.skipTest('Private native audio/input pilot not built on this machine')
         kernel = ctypes.WinDLL('kernel32', use_last_error=True)

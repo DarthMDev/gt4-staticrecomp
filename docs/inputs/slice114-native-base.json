@@ -1,0 +1,1233 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-13",
+  "status": "accepted_active_native_base_legacy_archived",
+  "baseline_commit": "95f615519b992c65505d77da35af825fc6a13a53",
+  "archive_branch": "codex/archive-original-recomp-20261013",
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "runtime": {
+    "path": "private/slice114-native-base/build/gt4vulkan.exe",
+    "size_bytes": 54451712,
+    "sha256": "c634a3d32c9b3c32d2b0ab9d769d0682572a2f35761e397669e044117e2dc033"
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice114-native-base/shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ],
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "parent_manifests": [
+    "slice113-native-video.json",
+    "slice113-owner-results.json"
+  ],
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "tools": {
+    "clang": "23.1.2",
+    "windows_sdk": "10.0.26100.0",
+    "winmm_xinput_file_version": "10.0.26100.8875",
+    "naga": "30.0.0",
+    "python": "3.14.5",
+    "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU"
+  },
+  "preserved_runtime113": {
+    "path": "private/slice113-video/build/gt4vulkan.exe",
+    "size_bytes": 54451712,
+    "sha256": "4b82682903449767c6f5108f8d16afecab32692f949e642ca78afa25f1576cb5"
+  },
+  "preservation": "All ignored data/cards/frozen producer locations retained",
+  "architecture": {
+    "EE": "AOT native x86-64",
+    "IOP": "interpreter and HLE",
+    "VU": "interpreted in current Windows producer",
+    "GS": "native Vulkan compute"
+  },
+  "scope": "Archive original engine; adopt existing native base, reorganize build/docs only",
+  "gates": {
+    "ctest": {
+      "passed": 3,
+      "total": 3,
+      "elapsed_seconds": 11.13
+    },
+    "python": {
+      "passed": 32,
+      "total": 32,
+      "skipped": 0,
+      "elapsed_seconds": 5.812
+    },
+    "native_build_warnings": 0,
+    "unchanged_shaders": "9/9 exact113",
+    "scope_note": "Original engine54CTest/117Python population archived, not weakened"
+  },
+  "boot_smoke": {
+    "arguments": [
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\slice114-native-base\\build\\gt4vulkan.exe",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\slice114-native-base\\boot-smoke\\SCUS_973.28",
+      "--ntsc",
+      "--disc",
+      "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+      "--frames",
+      "120",
+      "--memcard",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\slice114-native-base\\boot-smoke\\card.ps2",
+      "--misses",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\slice114-native-base\\boot-smoke\\misses.txt",
+      "--frames-dir",
+      "C:\\Antigravity\\gt4-staticrecomp\\private\\slice114-native-base\\boot-smoke\\frames",
+      "--frame-every",
+      "100",
+      "--trace-syscalls"
+    ],
+    "timeout_seconds": 45,
+    "presentation_aspect": "16:9",
+    "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+    "runtime_sha256": "c634a3d32c9b3c32d2b0ab9d769d0682572a2f35761e397669e044117e2dc033",
+    "card_seed": {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    "exit_code": 0,
+    "timed_out": false,
+    "completed_requested_frames": true,
+    "reported_frames": 120,
+    "reported_budget": 589983844,
+    "reason": "frame limit reached",
+    "elapsed_seconds": 2.0813223998993635,
+    "frames": [
+      "frame_00100.ppm"
+    ]
+  },
+  "boot_frame100_comparison": {
+    "byte_equal": true,
+    "new": {
+      "path": "private/slice114-native-base/boot-smoke/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    "preserved113": {
+      "path": "private/slice113-video/options-nav1/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    }
+  },
+  "cleanup": {
+    "archive_branch": "codex/archive-original-recomp-20261013",
+    "archive_commit": "95f615519b992c65505d77da35af825fc6a13a53",
+    "tracked_before": 466,
+    "removed_count": 411,
+    "removed_groups": {
+      "GPT_FEEDBACK.md": 1,
+      "HANDOFF.md": 1,
+      "OPUS_FEEDBACK.md": 1,
+      "PLAN.md": 1,
+      "docs": 294,
+      "include": 17,
+      "scripts": 12,
+      "src": 20,
+      "tests": 48,
+      "tools": 16
+    },
+    "removed": [
+      "GPT_FEEDBACK.md",
+      "HANDOFF.md",
+      "OPUS_FEEDBACK.md",
+      "PLAN.md",
+      "docs/RETOMADA.md",
+      "docs/architecture/README.md",
+      "docs/architecture/ps2-overview.md",
+      "docs/decisions/0001-initial-build.md",
+      "docs/decisions/0002-disc-fingerprinting.md",
+      "docs/decisions/0003-native-image-and-analysis-policy.md",
+      "docs/decisions/0004-driver-boundary-classification.md",
+      "docs/decisions/0005-thread-scheduler.md",
+      "docs/decisions/0006-kernel-patches.md",
+      "docs/decisions/0007-timer-registers.md",
+      "docs/decisions/0008-osd-and-device-banks.md",
+      "docs/decisions/0009-sif-and-interrupt-injection.md",
+      "docs/decisions/0010-rpc-vblank-and-device-windows.md",
+      "docs/decisions/0011-timer-ticks-and-dma-completions.md",
+      "docs/decisions/0012-semaphore-handle-bits.md",
+      "docs/decisions/0013-handler-execution.md",
+      "docs/decisions/0014-service-handshakes.md",
+      "docs/decisions/0015-sif-register-mirror-and-liblgdev-sync.md",
+      "docs/decisions/0016-service-clock.md",
+      "docs/decisions/0017-disc-image-file-service.md",
+      "docs/decisions/0018-gt4-volume-reader.md",
+      "docs/decisions/0019-pcdv-disc-reads.md",
+      "docs/decisions/0020-dual-layer-disc-and-pcdv-volume-ops.md",
+      "docs/decisions/0021-prts-block-cache.md",
+      "docs/decisions/0022-checkpoint-resume.md",
+      "docs/decisions/0023-async-iop-framing.md",
+      "docs/decisions/0024-chained-checkpoints-and-idle-budget.md",
+      "docs/decisions/0025-coalesce-pending-interrupts.md",
+      "docs/decisions/0026-first-originating-event.md",
+      "docs/decisions/0027-autosave-checkpoints.md",
+      "docs/decisions/0028-p00-checkpoint-baseline-and-compatibility.md",
+      "docs/decisions/0029-p01-p02-timers-interrupts.md",
+      "docs/decisions/0030-p03-advance-machine.md",
+      "docs/decisions/0031-p04-handler-arguments-and-idle.md",
+      "docs/decisions/0032-p05-jr-and-explicit-module-exit.md",
+      "docs/decisions/0033-p06-dma-payload-and-chains.md",
+      "docs/decisions/0034-delivery-granularity-contract-draft.md",
+      "docs/decisions/0034-delivery-granularity-contract.md",
+      "docs/decisions/0035-p07-rpc-telemetry.md",
+      "docs/decisions/0036-p08-widened-state-comparison.md",
+      "docs/decisions/0037-first-unblocking-traffic-draft.md",
+      "docs/decisions/0038-f-first-event-mechanism-draft.md",
+      "docs/decisions/0039-semaphore-id-space.md",
+      "docs/decisions/0040-completed-guest-work-observation.md",
+      "docs/decisions/0041-qualify-reference-branch-events.md",
+      "docs/decisions/0042-symbol-qualified-interpreter-traps.md",
+      "docs/decisions/0043-materialized-reference-intervals.md",
+      "docs/decisions/0044-message-priority-return-evidence.md",
+      "docs/decisions/0045-previous-priority-return.md",
+      "docs/decisions/0046-cdvd-init-mode-zero.md",
+      "docs/decisions/0047-frame-sync-result-observation.md",
+      "docs/decisions/0048-update-prefix-observation.md",
+      "docs/decisions/0049-frame-writer-and-video-phase.md",
+      "docs/decisions/0050-earlier-phase-and-pending-intc2.md",
+      "docs/environment.md",
+      "docs/inputs/slice101-interpreter-traps.json",
+      "docs/inputs/slice102-reference-intervals.json",
+      "docs/inputs/slice103-message-priority.json",
+      "docs/inputs/slice104-priority-return.json",
+      "docs/inputs/slice105-cdvd-init-response.json",
+      "docs/inputs/slice105-cdvd-source-contract.json",
+      "docs/inputs/slice106-frame-sync-result.json",
+      "docs/inputs/slice107-update-prefix.json",
+      "docs/inputs/slice108-frame-writer.json",
+      "docs/inputs/slice109-phase-origin.json",
+      "docs/inputs/usa-v2.00-disassembly-regions.json",
+      "docs/inputs/usa-v2.00-disassembly.json",
+      "docs/inputs/usa-v2.00-live-ram.json",
+      "docs/inputs/usa-v2.00-reference.json",
+      "docs/journal/2026-10-01.md",
+      "docs/journal/2026-10-02.md",
+      "docs/journal/2026-10-03.md",
+      "docs/journal/2026-10-04.md",
+      "docs/journal/2026-10-08.md",
+      "docs/journal/2026-10-09.md",
+      "docs/journal/2026-10-11.md",
+      "docs/journal/2026-10-12.md",
+      "docs/lessons/README.md",
+      "docs/lessons/autosave-tooling.md",
+      "docs/lessons/checkpoint-system.md",
+      "docs/lessons/m0-m1-scaffolding.md",
+      "docs/lessons/m13-m16-first-execution.md",
+      "docs/lessons/m14-live-observation.md",
+      "docs/lessons/m17-m21-advanced-control.md",
+      "docs/lessons/m2-m5-foundation.md",
+      "docs/lessons/m22-m24-vu0-macro.md",
+      "docs/lessons/m25-m29-scale-up.md",
+      "docs/lessons/m30-bios-driver.md",
+      "docs/lessons/m30-delay-library.md",
+      "docs/lessons/m30-disc-file.md",
+      "docs/lessons/m30-handshakes-clock.md",
+      "docs/lessons/m30-long-boot.md",
+      "docs/lessons/m30-scheduler-patches.md",
+      "docs/lessons/m30-sif-rpc.md",
+      "docs/lessons/m30-timer-osd.md",
+      "docs/lessons/m32-march-tripwire.md",
+      "docs/lessons/m32-tripwire-event.md",
+      "docs/lessons/m33-recon-assets.md",
+      "docs/lessons/m6.md",
+      "docs/lessons/m7-m12-tooling.md",
+      "docs/lessons/m7.md",
+      "docs/lessons/m8.md",
+      "docs/lessons/numbers-refresh.md",
+      "docs/lessons/slice100-reference-is-not-hardware.md",
+      "docs/lessons/slice101-bios-return-is-an-observation.md",
+      "docs/lessons/slice102-relogio-e-contexto.md",
+      "docs/lessons/slice103-retorno-e-prioridade.md",
+      "docs/lessons/slice104-corrigir-sem-confundir-boot.md",
+      "docs/lessons/slice105-resposta-e-build.md",
+      "docs/lessons/slice106-entrada-antes-do-resultado.md",
+      "docs/lessons/slice107-fila-antes-do-quadro.md",
+      "docs/lessons/slice108-quem-escreve-o-quadro.md",
+      "docs/lessons/slice109-pendencia-e-alias-de-memoria.md",
+      "docs/lessons/slice93-time-and-starvation.md",
+      "docs/lessons/slice94-attribution-is-not-a-cure.md",
+      "docs/lessons/slice95-return-is-not-a-syscall.md",
+      "docs/lessons/slice96-selected-does-not-mean-executed.md",
+      "docs/lessons/slice97-reference-cycles-are-not-a-quantum.md",
+      "docs/lessons/slice98-completed-work-is-not-time.md",
+      "docs/lessons/slice99-a-reference-can-have-two-answers.md",
+      "docs/plans/asset-viewer-roadmap.md",
+      "docs/plans/checkpoint-resume-mapping.md",
+      "docs/plans/live-pcsx2-session-playbook.md",
+      "docs/plans/pcsx2-tooling-note.md",
+      "docs/references/README.md",
+      "docs/references/used-tools.md",
+      "docs/reverse-engineering/asset-gif-emitter-hunt.md",
+      "docs/reverse-engineering/asset-gs-chute-indirect.md",
+      "docs/reverse-engineering/asset-page-cipher-static.md",
+      "docs/reverse-engineering/asset-tex0-data-origins.md",
+      "docs/reverse-engineering/asset-texture-gpb-recon.md",
+      "docs/reverse-engineering/autosave-slice56-implemented.md",
+      "docs/reverse-engineering/feedback-triage-2026-10-04.md",
+      "docs/reverse-engineering/ghidra-ee-reloaded-assessment.md",
+      "docs/reverse-engineering/incident-1606-differential-and-blind-gate.md",
+      "docs/reverse-engineering/input-identity.md",
+      "docs/reverse-engineering/m10-interpreter.md",
+      "docs/reverse-engineering/m11-synthetic-programs.md",
+      "docs/reverse-engineering/m12-branching-programs.md",
+      "docs/reverse-engineering/m13-first-function.md",
+      "docs/reverse-engineering/m14-live-observation.md",
+      "docs/reverse-engineering/m15-cop1-mmi.md",
+      "docs/reverse-engineering/m16-unaligned-and-multiply.md",
+      "docs/reverse-engineering/m17-thunks-and-syscall-boundaries.md",
+      "docs/reverse-engineering/m18-critical-edges.md",
+      "docs/reverse-engineering/m19-cop0-and-shifts.md",
+      "docs/reverse-engineering/m20-fully-decoding-text.md",
+      "docs/reverse-engineering/m21-trap-slots-and-the-largest-module.md",
+      "docs/reverse-engineering/m22-vu0-macro-moves.md",
+      "docs/reverse-engineering/m23-vu0-macro-arithmetic.md",
+      "docs/reverse-engineering/m24-trapping-and-parallel-multiply.md",
+      "docs/reverse-engineering/m25-translator-runtime-fallback.md",
+      "docs/reverse-engineering/m26-translation-survey.md",
+      "docs/reverse-engineering/m27-indirect-flow-boundaries.md",
+      "docs/reverse-engineering/m28-module-dispatch.md",
+      "docs/reverse-engineering/m29-whole-program-build.md",
+      "docs/reverse-engineering/m30-bios-services-and-bridge.md",
+      "docs/reverse-engineering/m30-driver-first-slice.md",
+      "docs/reverse-engineering/m30-kernel-patches.md",
+      "docs/reverse-engineering/m30-osd-and-the-iop-wall.md",
+      "docs/reverse-engineering/m30-sif-and-interrupt-injection.md",
+      "docs/reverse-engineering/m30-slice10-semaphore-handles-and-the-delay-library.md",
+      "docs/reverse-engineering/m30-slice11-timer-library-nodes.md",
+      "docs/reverse-engineering/m30-slice12-handler-execution.md",
+      "docs/reverse-engineering/m30-slice13-service-handshakes.md",
+      "docs/reverse-engineering/m30-slice14-sif-register-mirror.md",
+      "docs/reverse-engineering/m30-slice15-service-clock.md",
+      "docs/reverse-engineering/m30-slice16-disc-image.md",
+      "docs/reverse-engineering/m30-slice17-archive-path.md",
+      "docs/reverse-engineering/m30-slice18-gt4-volume-reader.md",
+      "docs/reverse-engineering/m30-slice19-file-item-records.md",
+      "docs/reverse-engineering/m30-slice20-pcdv-disc-reads.md",
+      "docs/reverse-engineering/m30-slice21-driver-disc-walk.md",
+      "docs/reverse-engineering/m30-slice22-dual-layer-and-pcdv-volume.md",
+      "docs/reverse-engineering/m30-slice23-archive-parser-fault-diagnosed.md",
+      "docs/reverse-engineering/m30-slice24-engine-stream-and-static-object.md",
+      "docs/reverse-engineering/m30-slice25-sound-library-stream-and-objects.md",
+      "docs/reverse-engineering/m30-slice26-assign-fills-the-stream.md",
+      "docs/reverse-engineering/m30-slice27-stream-content-reconstructed.md",
+      "docs/reverse-engineering/m30-slice28-stream-writers-by-call-site.md",
+      "docs/reverse-engineering/m30-slice29-instruments-and-the-formatter.md",
+      "docs/reverse-engineering/m30-slice30-stream-serialized-content.md",
+      "docs/reverse-engineering/m30-slice31-records-from-the-null-pointer.md",
+      "docs/reverse-engineering/m30-slice32-resolver-handler-registry.md",
+      "docs/reverse-engineering/m30-slice33-handler-registration.md",
+      "docs/reverse-engineering/m30-slice34-archive-open-handler.md",
+      "docs/reverse-engineering/m30-slice35-stream-pool-and-queued-open.md",
+      "docs/reverse-engineering/m30-slice36-handler-state-matches.md",
+      "docs/reverse-engineering/m30-slice37-archive-buffers-and-the-worker-insert.md",
+      "docs/reverse-engineering/m30-slice38-stack-watch-and-the-missing-completion.md",
+      "docs/reverse-engineering/m30-slice39-pump-state-machine.md",
+      "docs/reverse-engineering/m30-slice40-context-vtable-and-the-wait.md",
+      "docs/reverse-engineering/m30-slice41-worker-and-the-result-field.md",
+      "docs/reverse-engineering/m30-slice42-block-cache-and-the-sound-open.md",
+      "docs/reverse-engineering/m30-slice43-beyond-the-step-limit.md",
+      "docs/reverse-engineering/m30-slice44-why-the-pointer-is-odd.md",
+      "docs/reverse-engineering/m30-slice45-the-fatal-query.md",
+      "docs/reverse-engineering/m30-slice46-the-copy-out-cursor.md",
+      "docs/reverse-engineering/m30-slice47-no-wall-to-243m.md",
+      "docs/reverse-engineering/m30-slice48-wait-graph.md",
+      "docs/reverse-engineering/m30-slice49-waiter-classes.md",
+      "docs/reverse-engineering/m30-slice50-stimulus-probes.md",
+      "docs/reverse-engineering/m30-slice8-rpc-and-vblank.md",
+      "docs/reverse-engineering/m30-slice9-timer-and-dma-completions.md",
+      "docs/reverse-engineering/m30-thread-scheduler.md",
+      "docs/reverse-engineering/m30-timer-and-interrupts.md",
+      "docs/reverse-engineering/m32-slice1-server-inventory.md",
+      "docs/reverse-engineering/m32-slice10-coalesce.md",
+      "docs/reverse-engineering/m32-slice11-lockstep.md",
+      "docs/reverse-engineering/m32-slice12-natural-firing.md",
+      "docs/reverse-engineering/m32-slice13-designation.md",
+      "docs/reverse-engineering/m32-slice14-band-swept-twice.md",
+      "docs/reverse-engineering/m32-slice15-sub-service-sliver.md",
+      "docs/reverse-engineering/m32-slice16-completion-paths.md",
+      "docs/reverse-engineering/m32-slice17-walk-traced-live.md",
+      "docs/reverse-engineering/m32-slice18-worker-requests.md",
+      "docs/reverse-engineering/m32-slice19-gates-open.md",
+      "docs/reverse-engineering/m32-slice2-job-queue.md",
+      "docs/reverse-engineering/m32-slice20-march-paused.md",
+      "docs/reverse-engineering/m32-slice21-announcement-audit.md",
+      "docs/reverse-engineering/m32-slice22-cheapest-event.md",
+      "docs/reverse-engineering/m32-slice29-pump-path.md",
+      "docs/reverse-engineering/m32-slice3-first-packets.md",
+      "docs/reverse-engineering/m32-slice30-first-event-live.md",
+      "docs/reverse-engineering/m32-slice31-tripwire-watch.md",
+      "docs/reverse-engineering/m32-slice32-service-surface.md",
+      "docs/reverse-engineering/m32-slice33-ring-producer.md",
+      "docs/reverse-engineering/m32-slice34-poster-caught.md",
+      "docs/reverse-engineering/m32-slice4-waiters-unwound.md",
+      "docs/reverse-engineering/m32-slice5-delay-node-fires.md",
+      "docs/reverse-engineering/m32-slice6-long-legs.md",
+      "docs/reverse-engineering/m32-slice7-who-fired.md",
+      "docs/reverse-engineering/m32-slice8-steady-march.md",
+      "docs/reverse-engineering/m32-slice9-wrap-miss.md",
+      "docs/reverse-engineering/m33-recon-dry-pipe.md",
+      "docs/reverse-engineering/m33-slice24-heartbeat-trace.md",
+      "docs/reverse-engineering/m33-slice25-lazy-wrappers.md",
+      "docs/reverse-engineering/m33-slice26-switch-cases.md",
+      "docs/reverse-engineering/m33-slice27-write-watch.md",
+      "docs/reverse-engineering/m33-slice28-asset-dumps.md",
+      "docs/reverse-engineering/m35-slice35-pad-groundwork.md",
+      "docs/reverse-engineering/m6-disassembly.md",
+      "docs/reverse-engineering/m7-control-flow.md",
+      "docs/reverse-engineering/m8-function-map.md",
+      "docs/reverse-engineering/m9-guest-state.md",
+      "docs/reverse-engineering/numbers-refresh-slice58.md",
+      "docs/reverse-engineering/slice100-live-branch-controls.md",
+      "docs/reverse-engineering/slice101-interpreter-trap-observation.md",
+      "docs/reverse-engineering/slice102-matched-update-interval.md",
+      "docs/reverse-engineering/slice103-message-wake-prefix.md",
+      "docs/reverse-engineering/slice104-previous-priority-return.md",
+      "docs/reverse-engineering/slice105-cdvd-init-contract.md",
+      "docs/reverse-engineering/slice105-cdvd-init-response.md",
+      "docs/reverse-engineering/slice106-first-frame-sync-result.md",
+      "docs/reverse-engineering/slice107-update-prefix.md",
+      "docs/reverse-engineering/slice108-frame-writer.md",
+      "docs/reverse-engineering/slice109-phase-origin.md",
+      "docs/reverse-engineering/slice64-p00-baseline.md",
+      "docs/reverse-engineering/slice65-p01-p02-timers-interrupts.md",
+      "docs/reverse-engineering/slice66-p03-advance-machine.md",
+      "docs/reverse-engineering/slice67-p04-handler-idle.md",
+      "docs/reverse-engineering/slice68-p05-jr-exits.md",
+      "docs/reverse-engineering/slice69-p06-dma-payload.md",
+      "docs/reverse-engineering/slice70-1606-hunt.md",
+      "docs/reverse-engineering/slice71-raise-census.md",
+      "docs/reverse-engineering/slice72-optiona-prototype.md",
+      "docs/reverse-engineering/slice73-p07-rpc-telemetry.md",
+      "docs/reverse-engineering/slice74-p08-comparator.md",
+      "docs/reverse-engineering/slice75-p09-fresh-prefix.md",
+      "docs/reverse-engineering/slice76-march-inventory.md",
+      "docs/reverse-engineering/slice77-sema-signaler.md",
+      "docs/reverse-engineering/slice78-sema63-hunt.md",
+      "docs/reverse-engineering/slice79-pcsx2-observation.md",
+      "docs/reverse-engineering/slice80-recreation-path.md",
+      "docs/reverse-engineering/slice81-traffic-design.md",
+      "docs/reverse-engineering/slice82-walker-hunt.md",
+      "docs/reverse-engineering/slice83-discriminants.md",
+      "docs/reverse-engineering/slice84-h1h2-tiebreak.md",
+      "docs/reverse-engineering/slice85-staged-live-attempt.md",
+      "docs/reverse-engineering/slice86-p10-traffic.md",
+      "docs/reverse-engineering/slice87-e2-livelist.md",
+      "docs/reverse-engineering/slice88-live-no-card-session.md",
+      "docs/reverse-engineering/slice89-semaphore-id-space-fix.md",
+      "docs/reverse-engineering/slice90-post-gate-steady-loop.md",
+      "docs/reverse-engineering/slice91-post-gate-wait.md",
+      "docs/reverse-engineering/slice92-message-module-and-starved-workers.md",
+      "docs/reverse-engineering/slice93-scheduler-and-device-semaphore.md",
+      "docs/reverse-engineering/slice94-clock-charge-attribution.md",
+      "docs/reverse-engineering/slice95-interrupt-return-preemption.md",
+      "docs/reverse-engineering/slice96-update-loop-and-delay-balance.md",
+      "docs/reverse-engineering/slice97-reference-delay-timing.md",
+      "docs/reverse-engineering/slice98-completed-guest-work.md",
+      "docs/reverse-engineering/slice99-branch-slot-event-audit.md",
+      "docs/reverse-engineering/tripwire-recheck-01.md",
+      "include/gt4recomp/disc_image.hpp",
+      "include/gt4recomp/ee_checkpoint.hpp",
+      "include/gt4recomp/ee_compare.hpp",
+      "include/gt4recomp/ee_decode.hpp",
+      "include/gt4recomp/ee_device.hpp",
+      "include/gt4recomp/ee_disassemble.hpp",
+      "include/gt4recomp/ee_driver.hpp",
+      "include/gt4recomp/ee_flow.hpp",
+      "include/gt4recomp/ee_functions.hpp",
+      "include/gt4recomp/ee_interpreter.hpp",
+      "include/gt4recomp/ee_kernel.hpp",
+      "include/gt4recomp/ee_services.hpp",
+      "include/gt4recomp/ee_state.hpp",
+      "include/gt4recomp/ee_timer.hpp",
+      "include/gt4recomp/executable_image.hpp",
+      "include/gt4recomp/gt4_volume.hpp",
+      "include/gt4recomp/project.hpp",
+      "scripts/build_reference.ps1",
+      "scripts/ghidra/CompareDisassembly.java",
+      "scripts/ghidra/VerifyAnalysisZeroFill.java",
+      "scripts/ghidra/VerifyDecoderSamples.java",
+      "scripts/ghidra/VerifyReferenceImport.java",
+      "scripts/inspect_reference.py",
+      "scripts/pcsx2_pine.py",
+      "scripts/pcsx2_savestate.py",
+      "scripts/reference_branch_fixture.py",
+      "scripts/sample_disassembly.py",
+      "scripts/synth_programs.py",
+      "scripts/verify_native_image.py",
+      "src/common/project.cpp",
+      "src/ee/checkpoint.cpp",
+      "src/ee/compare.cpp",
+      "src/ee/decode.cpp",
+      "src/ee/device.cpp",
+      "src/ee/disassemble.cpp",
+      "src/ee/driver.cpp",
+      "src/ee/flow.cpp",
+      "src/ee/functions.cpp",
+      "src/ee/interpreter.cpp",
+      "src/ee/kernel.cpp",
+      "src/ee/services.cpp",
+      "src/ee/state.cpp",
+      "src/ee/timer.cpp",
+      "src/ee/vu_macro.cpp",
+      "src/ee/vu_macro.hpp",
+      "src/executable/analysis_elf.cpp",
+      "src/executable/core_image.cpp",
+      "src/executable/disc_image.cpp",
+      "src/executable/gt4_volume.cpp",
+      "tests/data/synth-branching.txt",
+      "tests/data/synth-module-exits.txt",
+      "tests/data/synth-straight.txt",
+      "tests/python/test_blocks_cli.py",
+      "tests/python/test_cfg_cli.py",
+      "tests/python/test_disassembly_cli.py",
+      "tests/python/test_funcs_cli.py",
+      "tests/python/test_msvc_include_launcher.py",
+      "tests/python/test_native_cli.py",
+      "tests/python/test_pcsx2_pine.py",
+      "tests/python/test_pcsx2_savestate.py",
+      "tests/python/test_reference_branch_fixture.py",
+      "tests/python/test_reference_inspection.py",
+      "tests/python/test_synth_programs.py",
+      "tests/python/test_translate_cli.py",
+      "tests/unit/disc_image_test.cpp",
+      "tests/unit/ee_cfg_test.cpp",
+      "tests/unit/ee_checkpoint_test.cpp",
+      "tests/unit/ee_compare_test.cpp",
+      "tests/unit/ee_decode_test.cpp",
+      "tests/unit/ee_device_test.cpp",
+      "tests/unit/ee_disassemble_test.cpp",
+      "tests/unit/ee_driver_test.cpp",
+      "tests/unit/ee_flow_test.cpp",
+      "tests/unit/ee_functions_test.cpp",
+      "tests/unit/ee_interpreter_test.cpp",
+      "tests/unit/ee_kernel_test.cpp",
+      "tests/unit/ee_module_exit_test.cpp",
+      "tests/unit/ee_startup_run_test.cpp",
+      "tests/unit/ee_state_test.cpp",
+      "tests/unit/ee_synth_test.cpp",
+      "tests/unit/ee_timer_test.cpp",
+      "tests/unit/ee_translation_101c28_test.cpp",
+      "tests/unit/ee_translation_549378_test.cpp",
+      "tests/unit/ee_translation_56df58_test.cpp",
+      "tests/unit/ee_translation_572438_test.cpp",
+      "tests/unit/ee_translation_579780_test.cpp",
+      "tests/unit/ee_translation_58ce48_test.cpp",
+      "tests/unit/ee_translation_5b72a8_test.cpp",
+      "tests/unit/ee_translation_branch_test.cpp",
+      "tests/unit/ee_translation_cacheflush_test.cpp",
+      "tests/unit/ee_translation_calls_test.cpp",
+      "tests/unit/ee_translation_startup_test.cpp",
+      "tests/unit/ee_translation_test.cpp",
+      "tests/unit/ee_translation_thunk_test.cpp",
+      "tests/unit/executable_image_test.cpp",
+      "tests/unit/gt4_volume_test.cpp",
+      "tests/unit/project_test.cpp",
+      "tools/build/normalize_msvc_includes.cmake",
+      "tools/common/boundary_text.hpp",
+      "tools/common/hex_value.hpp",
+      "tools/common/parse_number.hpp",
+      "tools/common/verified_core.cpp",
+      "tools/common/verified_core.hpp",
+      "tools/gt4blocks/main.cpp",
+      "tools/gt4boot/build_info.hpp.in",
+      "tools/gt4boot/main.cpp",
+      "tools/gt4cfg/main.cpp",
+      "tools/gt4core/main.cpp",
+      "tools/gt4disasm/main.cpp",
+      "tools/gt4funcs/main.cpp",
+      "tools/gt4recomp/main.cpp",
+      "tools/gt4run/main.cpp",
+      "tools/gt4translate/main.cpp"
+    ],
+    "kept": [
+      ".gitignore",
+      "AGENTS.md",
+      "CMakeLists.txt",
+      "Jogar-GT4.cmd",
+      "README.md",
+      "docs/STATUS.md",
+      "docs/decisions/0051-external-runtime-acceleration-pilot.md",
+      "docs/decisions/0052-external-profile-menu-probe.md",
+      "docs/decisions/0053-native-vulkan-pilot.md",
+      "docs/decisions/0054-windows-audio-xinput.md",
+      "docs/decisions/0055-native-widescreen-video.md",
+      "docs/inputs/external-recomp-references.json",
+      "docs/inputs/slice110-external-menu-pilot.json",
+      "docs/inputs/slice111-native-vulkan.json",
+      "docs/inputs/slice112-native-input-audio.json",
+      "docs/inputs/slice113-native-video.json",
+      "docs/inputs/slice113-owner-results.json",
+      "docs/inputs/usa-v2.00-native.json",
+      "docs/inputs/usa-v2.00.json",
+      "docs/journal/2026-10-13.md",
+      "docs/lessons/slice110-whole-runtime-menu.md",
+      "docs/lessons/slice111-native-vulkan.md",
+      "docs/lessons/slice112-native-input-audio.md",
+      "docs/lessons/slice113-native-video.md",
+      "docs/requirements.md",
+      "docs/reverse-engineering/external-recomp-acceleration-2026-10-12.md",
+      "docs/reverse-engineering/slice110-external-menu-pilot.md",
+      "docs/reverse-engineering/slice111-native-vulkan.md",
+      "docs/reverse-engineering/slice112-native-input-audio.md",
+      "docs/reverse-engineering/slice113-native-video.md",
+      "experimental/vulkan/CMakeLists.txt",
+      "experimental/vulkan/THIRD_PARTY.md",
+      "experimental/vulkan/build.cmd",
+      "experimental/vulkan/fixture.cpp",
+      "experimental/vulkan/gpu_helpers.inc",
+      "experimental/vulkan/gpu_init.inc",
+      "experimental/vulkan/gpu_tail.inc",
+      "experimental/vulkan/host_io.cpp",
+      "experimental/vulkan/host_io.hpp",
+      "experimental/vulkan/host_io_fixture.cpp",
+      "experimental/vulkan/native_vulkan.cpp",
+      "experimental/vulkan/native_vulkan.hpp",
+      "experimental/vulkan/window.cpp",
+      "experimental/vulkan/window.hpp",
+      "scripts/external_runtime_probe.py",
+      "scripts/gt4disc.py",
+      "scripts/play_external_runtime.py",
+      "scripts/prepare_external_vulkan.py",
+      "scripts/requirements.txt",
+      "tests/python/test_external_runtime_probe.py",
+      "tests/python/test_gt4disc.py",
+      "tests/python/test_native_vulkan.py",
+      "tools/wgsl_spirv/Cargo.lock",
+      "tools/wgsl_spirv/Cargo.toml",
+      "tools/wgsl_spirv/src/main.rs"
+    ],
+    "ignored_data_policy": "Preserve all ignored inputs, cards, captures and frozen producers"
+  },
+  "preserved_original_executable": {
+    "path": "build/gt4boot.exe",
+    "size_bytes": 110391296,
+    "sha256": "839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab"
+  },
+  "unchanged_runtime_implementation": "Paths/build/default manifest changed; no guest clock, graphics, input or physics fix",
+  "reproduction_limit": "Preexisting pinned private AOT library required; ISO-to-binary pipeline not automated",
+  "tracked_source_pins": [
+    {
+      "path": "native/build.cmd",
+      "sha256": "8467fb6436ed95c84f029c7666d1cc76bb95a35821b329a864ca163a33096d95",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/build.cmd",
+        "size_bytes": 1154,
+        "sha256": "8467fb6436ed95c84f029c7666d1cc76bb95a35821b329a864ca163a33096d95"
+      }
+    },
+    {
+      "path": "native/CMakeLists.txt",
+      "sha256": "c1a1c4fed6faa3a84abe7434c74a5addd6262195779d0b91f4e2c9595d18bf04",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/CMakeLists.txt",
+        "size_bytes": 2876,
+        "sha256": "c1a1c4fed6faa3a84abe7434c74a5addd6262195779d0b91f4e2c9595d18bf04"
+      }
+    },
+    {
+      "path": "native/fixture.cpp",
+      "sha256": "c9e6d2924cab561d87febae043e0a009232e7786164081ac32c75bc89bfcf9b7",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/fixture.cpp",
+        "size_bytes": 11678,
+        "sha256": "c9e6d2924cab561d87febae043e0a009232e7786164081ac32c75bc89bfcf9b7"
+      }
+    },
+    {
+      "path": "native/gpu_helpers.inc",
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/gpu_helpers.inc",
+        "size_bytes": 1879,
+        "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+      }
+    },
+    {
+      "path": "native/gpu_init.inc",
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/gpu_init.inc",
+        "size_bytes": 1720,
+        "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+      }
+    },
+    {
+      "path": "native/gpu_tail.inc",
+      "sha256": "ddb564b14bf5930552011785153ee011a48a08080a259f3f47588a62d020da1e",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/gpu_tail.inc",
+        "size_bytes": 5271,
+        "sha256": "ddb564b14bf5930552011785153ee011a48a08080a259f3f47588a62d020da1e"
+      }
+    },
+    {
+      "path": "native/host_io.cpp",
+      "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/host_io.cpp",
+        "size_bytes": 10814,
+        "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2"
+      }
+    },
+    {
+      "path": "native/host_io.hpp",
+      "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/host_io.hpp",
+        "size_bytes": 2004,
+        "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3"
+      }
+    },
+    {
+      "path": "native/host_io_fixture.cpp",
+      "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/host_io_fixture.cpp",
+        "size_bytes": 5385,
+        "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b"
+      }
+    },
+    {
+      "path": "native/native_vulkan.cpp",
+      "sha256": "cc7168a43e8612d2275d3a8ec1378946eb5efd5d1f7c43ffbdc86620d89a6c24",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/native_vulkan.cpp",
+        "size_bytes": 38383,
+        "sha256": "cc7168a43e8612d2275d3a8ec1378946eb5efd5d1f7c43ffbdc86620d89a6c24"
+      }
+    },
+    {
+      "path": "native/native_vulkan.hpp",
+      "sha256": "d724a7275ca7a18522c3ed594731e31398bd00578132a55ad141fb1763629503",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/native_vulkan.hpp",
+        "size_bytes": 3817,
+        "sha256": "d724a7275ca7a18522c3ed594731e31398bd00578132a55ad141fb1763629503"
+      }
+    },
+    {
+      "path": "native/THIRD_PARTY.md",
+      "sha256": "e7847c414fab28ade9f1503d956d6b798aff6456fa220008890c2ad3bf64ec55",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/THIRD_PARTY.md",
+        "size_bytes": 1510,
+        "sha256": "e7847c414fab28ade9f1503d956d6b798aff6456fa220008890c2ad3bf64ec55"
+      }
+    },
+    {
+      "path": "native/window.cpp",
+      "sha256": "d6f98280f5234d48c932d39299ea160c06678b6f0b4e3bd44aed6a98320a7297",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/window.cpp",
+        "size_bytes": 6752,
+        "sha256": "d6f98280f5234d48c932d39299ea160c06678b6f0b4e3bd44aed6a98320a7297"
+      }
+    },
+    {
+      "path": "native/window.hpp",
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/native/window.hpp",
+        "size_bytes": 124,
+        "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+      }
+    },
+    {
+      "path": "CMakeLists.txt",
+      "sha256": "376c89e089f3fa57f2c401390a495ea7208c5594032404bdeb736ae356b57c8b",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/CMakeLists.txt",
+        "size_bytes": 1357,
+        "sha256": "376c89e089f3fa57f2c401390a495ea7208c5594032404bdeb736ae356b57c8b"
+      }
+    },
+    {
+      "path": "Jogar-GT4.cmd",
+      "sha256": "3896dedc0ffaa96aed7fd81045deed0578d705f4db318359580ce8051f4c9cf3",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/Jogar-GT4.cmd",
+        "size_bytes": 196,
+        "sha256": "3896dedc0ffaa96aed7fd81045deed0578d705f4db318359580ce8051f4c9cf3"
+      }
+    },
+    {
+      "path": "scripts/gt4disc.py",
+      "sha256": "0e7f33451ce7573c70744013faddc5b0cfa240bdf7ad1b63fb3001bc4db674a9",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/scripts/gt4disc.py",
+        "size_bytes": 6442,
+        "sha256": "0e7f33451ce7573c70744013faddc5b0cfa240bdf7ad1b63fb3001bc4db674a9"
+      }
+    },
+    {
+      "path": "scripts/requirements.txt",
+      "sha256": "b671ea80a15c56fe8972e634bf604714576656db74dc4929eecf36edc1fe2e90",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/scripts/requirements.txt",
+        "size_bytes": 79,
+        "sha256": "b671ea80a15c56fe8972e634bf604714576656db74dc4929eecf36edc1fe2e90"
+      }
+    },
+    {
+      "path": "scripts/external_runtime_probe.py",
+      "sha256": "46d400f6f384b3a470b67a092f99c9bcb2cb8504cd5628816c9c5dc1df8c0a02",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/scripts/external_runtime_probe.py",
+        "size_bytes": 10614,
+        "sha256": "46d400f6f384b3a470b67a092f99c9bcb2cb8504cd5628816c9c5dc1df8c0a02"
+      }
+    },
+    {
+      "path": "scripts/play_external_runtime.py",
+      "sha256": "d592c22a9eb70468b8062bc2e87b655bfc16c9bf6d7e033e1a4177188290ad7a",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/scripts/play_external_runtime.py",
+        "size_bytes": 2697,
+        "sha256": "d592c22a9eb70468b8062bc2e87b655bfc16c9bf6d7e033e1a4177188290ad7a"
+      }
+    },
+    {
+      "path": "scripts/prepare_external_vulkan.py",
+      "sha256": "62c52d3383c362aca2407d0502b7f19a64a09715926e073c99211c6783220969",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/scripts/prepare_external_vulkan.py",
+        "size_bytes": 5502,
+        "sha256": "62c52d3383c362aca2407d0502b7f19a64a09715926e073c99211c6783220969"
+      }
+    },
+    {
+      "path": "tests/python/test_gt4disc.py",
+      "sha256": "4bc4dabfa57a667f9ef981bd5d139b03a26fdd52cf7b28f8649231e384f21908",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/tests/python/test_gt4disc.py",
+        "size_bytes": 5345,
+        "sha256": "4bc4dabfa57a667f9ef981bd5d139b03a26fdd52cf7b28f8649231e384f21908"
+      }
+    },
+    {
+      "path": "tests/python/test_external_runtime_probe.py",
+      "sha256": "99b80fafef581098dfc6332a871ec149075265257fec79439536137b279f192f",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/tests/python/test_external_runtime_probe.py",
+        "size_bytes": 13214,
+        "sha256": "99b80fafef581098dfc6332a871ec149075265257fec79439536137b279f192f"
+      }
+    },
+    {
+      "path": "tests/python/test_native_vulkan.py",
+      "sha256": "7a14fc49304ed16bec30c298a5c09cc29705d1021a6b63ff641fd5aa0bba4a96",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/tests/python/test_native_vulkan.py",
+        "size_bytes": 11848,
+        "sha256": "7a14fc49304ed16bec30c298a5c09cc29705d1021a6b63ff641fd5aa0bba4a96"
+      }
+    },
+    {
+      "path": "tools/wgsl_spirv/Cargo.toml",
+      "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/tools/wgsl_spirv/Cargo.toml",
+        "size_bytes": 151,
+        "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8"
+      }
+    },
+    {
+      "path": "tools/wgsl_spirv/Cargo.lock",
+      "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/tools/wgsl_spirv/Cargo.lock",
+        "size_bytes": 7397,
+        "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561"
+      }
+    },
+    {
+      "path": "tools/wgsl_spirv/src/main.rs",
+      "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae",
+      "frozen_copy": {
+        "path": "private/slice114-native-base/source-publication/tools/wgsl_spirv/src/main.rs",
+        "size_bytes": 2229,
+        "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae"
+      }
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "private/slice114-native-base/boot-smoke/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice114-native-base/boot-smoke/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice114-native-base/boot-smoke/probe.log",
+      "size_bytes": 29356937,
+      "sha256": "4f2e1eaba801dd549a59d6fdc4c24653b6be9c71ce0f8ae56bc36b1df2248ec9"
+    },
+    {
+      "path": "private/slice114-native-base/boot-smoke/result.json",
+      "size_bytes": 1455,
+      "sha256": "da94520c0461a558905a62ca01a7a92d7340c39609fb782a682bfc2c01851e5d"
+    },
+    {
+      "path": "private/slice114-native-base/boot-smoke/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice114-native-base/boot-smoke-launch.log",
+      "size_bytes": 1455,
+      "sha256": "da94520c0461a558905a62ca01a7a92d7340c39609fb782a682bfc2c01851e5d"
+    },
+    {
+      "path": "private/slice114-native-base/build/CMakeFiles/4.3.3/CompilerIdCXX/CMakeCXXCompilerId.exe",
+      "size_bytes": 111616,
+      "sha256": "80a63041864ad5d1fa3a75f0477301af85c501a2778367e1037af19a00cd6bd2"
+    },
+    {
+      "path": "private/slice114-native-base/build/gt4vulkan.exe",
+      "size_bytes": 54451712,
+      "sha256": "c634a3d32c9b3c32d2b0ab9d769d0682572a2f35761e397669e044117e2dc033"
+    },
+    {
+      "path": "private/slice114-native-base/build/host_io_fixture.exe",
+      "size_bytes": 30720,
+      "sha256": "94c1f5dcfb827ea1f4dc73db1e674a2b9507c3e9f1e1cc7eca3f646bd68a0a48"
+    },
+    {
+      "path": "private/slice114-native-base/build/native_host_io.lib",
+      "size_bytes": 55306,
+      "sha256": "f67c38a418362916fc011d55b2b9406521f947dbd26d3f8b0cbff4dc1796c40a"
+    },
+    {
+      "path": "private/slice114-native-base/build/ps2runtime_vulkan.lib",
+      "size_bytes": 3589056,
+      "sha256": "f05bd04adb0f01f9c984874012a7d1a5b36652d21ed3681de15ae0a07372e71e"
+    },
+    {
+      "path": "private/slice114-native-base/build/vulkan_fixture.exe",
+      "size_bytes": 492544,
+      "sha256": "92644e4bbbb5dc95e4284447e2ff267b49f8739a1b63e325fca20ae54dfaa1d3"
+    },
+    {
+      "path": "private/slice114-native-base/build.log",
+      "size_bytes": 6363,
+      "sha256": "6c9d7b490e7d806fee1139ac35baddce5fa0c00a9affd8d875e1d2f707fc8781"
+    },
+    {
+      "path": "private/slice114-native-base/cleanup-plan.json",
+      "size_bytes": 24503,
+      "sha256": "4a09b523a17dd0f99b562d84e0a08b4bf6836f7ae568c0375845268e54deef65"
+    },
+    {
+      "path": "private/slice114-native-base/ctest.log",
+      "size_bytes": 482,
+      "sha256": "0446b2a19148fb69799954358b95c3df675906fcaf24766ece097820d4e878fe"
+    },
+    {
+      "path": "private/slice114-native-base/finalize-metadata.py",
+      "size_bytes": 4580,
+      "sha256": "3fb6e520110a8d98d9f06aef7e00a9ebaeb93fc4e7a9d9156e68d71d10f7d69b"
+    },
+    {
+      "path": "private/slice114-native-base/port/gpu.cpp",
+      "size_bytes": 57655,
+      "sha256": "81f764b99d5b229e95a3162f241e47e8c71aa96f0a6bbf9b2424085bf4b2ba4d"
+    },
+    {
+      "path": "private/slice114-native-base/port/gpu.hpp",
+      "size_bytes": 1783,
+      "sha256": "28e50f7b1af97a9bb4ef42501048699d329ac7303ba98226baab87679f31c71f"
+    },
+    {
+      "path": "private/slice114-native-base/port/gs.cpp",
+      "size_bytes": 50577,
+      "sha256": "16caf05ea21bd16c415f6d07f8af67a7a5bb9166d44b6324217037139e01db93"
+    },
+    {
+      "path": "private/slice114-native-base/port/main.cpp",
+      "size_bytes": 4336,
+      "sha256": "99564a06d2006cb22c9479682d764e975683c36c2f55a6c25c5d122330785f8e"
+    },
+    {
+      "path": "private/slice114-native-base/prepare-manifest.py",
+      "size_bytes": 2338,
+      "sha256": "57522b98a4f27ac636658ba7191fda41ee5226a8abe1486a9c45669e0853e9fe"
+    },
+    {
+      "path": "private/slice114-native-base/producer.exe",
+      "size_bytes": 54451712,
+      "sha256": "c634a3d32c9b3c32d2b0ab9d769d0682572a2f35761e397669e044117e2dc033"
+    },
+    {
+      "path": "private/slice114-native-base/python.log",
+      "size_bytes": 1404,
+      "sha256": "080dedc8961312b5679923a246a0dd4a2a20d2dd9a8043c16158384bdc922298"
+    },
+    {
+      "path": "private/slice114-native-base/remove-tracked.txt",
+      "size_bytes": 18690,
+      "sha256": "b2a45f70b8e55e2ccccc4c996f08af10fb7d8ea1fd465ff93cc2ba1bb5641d32"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice114-native-base/shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/CMakeLists.txt",
+      "size_bytes": 1357,
+      "sha256": "376c89e089f3fa57f2c401390a495ea7208c5594032404bdeb736ae356b57c8b"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/Jogar-GT4.cmd",
+      "size_bytes": 196,
+      "sha256": "3896dedc0ffaa96aed7fd81045deed0578d705f4db318359580ce8051f4c9cf3"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/build.cmd",
+      "size_bytes": 1154,
+      "sha256": "8467fb6436ed95c84f029c7666d1cc76bb95a35821b329a864ca163a33096d95"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/CMakeLists.txt",
+      "size_bytes": 2876,
+      "sha256": "c1a1c4fed6faa3a84abe7434c74a5addd6262195779d0b91f4e2c9595d18bf04"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/fixture.cpp",
+      "size_bytes": 11678,
+      "sha256": "c9e6d2924cab561d87febae043e0a009232e7786164081ac32c75bc89bfcf9b7"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/gpu_helpers.inc",
+      "size_bytes": 1879,
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/gpu_init.inc",
+      "size_bytes": 1720,
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/gpu_tail.inc",
+      "size_bytes": 5271,
+      "sha256": "ddb564b14bf5930552011785153ee011a48a08080a259f3f47588a62d020da1e"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/host_io.cpp",
+      "size_bytes": 10814,
+      "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/host_io.hpp",
+      "size_bytes": 2004,
+      "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/host_io_fixture.cpp",
+      "size_bytes": 5385,
+      "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/native_vulkan.cpp",
+      "size_bytes": 38383,
+      "sha256": "cc7168a43e8612d2275d3a8ec1378946eb5efd5d1f7c43ffbdc86620d89a6c24"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/native_vulkan.hpp",
+      "size_bytes": 3817,
+      "sha256": "d724a7275ca7a18522c3ed594731e31398bd00578132a55ad141fb1763629503"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/THIRD_PARTY.md",
+      "size_bytes": 1510,
+      "sha256": "e7847c414fab28ade9f1503d956d6b798aff6456fa220008890c2ad3bf64ec55"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/window.cpp",
+      "size_bytes": 6752,
+      "sha256": "d6f98280f5234d48c932d39299ea160c06678b6f0b4e3bd44aed6a98320a7297"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/native/window.hpp",
+      "size_bytes": 124,
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/scripts/external_runtime_probe.py",
+      "size_bytes": 10614,
+      "sha256": "46d400f6f384b3a470b67a092f99c9bcb2cb8504cd5628816c9c5dc1df8c0a02"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/scripts/gt4disc.py",
+      "size_bytes": 6442,
+      "sha256": "0e7f33451ce7573c70744013faddc5b0cfa240bdf7ad1b63fb3001bc4db674a9"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/scripts/play_external_runtime.py",
+      "size_bytes": 2697,
+      "sha256": "d592c22a9eb70468b8062bc2e87b655bfc16c9bf6d7e033e1a4177188290ad7a"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/scripts/prepare_external_vulkan.py",
+      "size_bytes": 5502,
+      "sha256": "62c52d3383c362aca2407d0502b7f19a64a09715926e073c99211c6783220969"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/scripts/requirements.txt",
+      "size_bytes": 79,
+      "sha256": "b671ea80a15c56fe8972e634bf604714576656db74dc4929eecf36edc1fe2e90"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/tests/python/test_external_runtime_probe.py",
+      "size_bytes": 13214,
+      "sha256": "99b80fafef581098dfc6332a871ec149075265257fec79439536137b279f192f"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/tests/python/test_gt4disc.py",
+      "size_bytes": 5345,
+      "sha256": "4bc4dabfa57a667f9ef981bd5d139b03a26fdd52cf7b28f8649231e384f21908"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/tests/python/test_native_vulkan.py",
+      "size_bytes": 11848,
+      "sha256": "7a14fc49304ed16bec30c298a5c09cc29705d1021a6b63ff641fd5aa0bba4a96"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/tools/wgsl_spirv/Cargo.lock",
+      "size_bytes": 7397,
+      "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/tools/wgsl_spirv/Cargo.toml",
+      "size_bytes": 151,
+      "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8"
+    },
+    {
+      "path": "private/slice114-native-base/source-publication/tools/wgsl_spirv/src/main.rs",
+      "size_bytes": 2229,
+      "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae"
+    }
+  ]
+}

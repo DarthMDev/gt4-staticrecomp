@@ -98,7 +98,7 @@ class ProbeTests(unittest.TestCase):
             path.write_bytes(('synthetic ' + name).encode())
             paths[name] = path
         executable = dict(file_pin(paths['runner']), path='private/donor/ps2run.exe')
-        (inputs / 'external-recomp-references.json').write_text(json.dumps({'artifacts': [executable]}))
+        (inputs / 'slice114-native-base.json').write_text(json.dumps({'runtime': executable}))
         elf = file_pin(paths['elf'])
         (inputs / 'usa-v2.00-native.json').write_text(json.dumps({
             'native_elf_size': elf['size_bytes'], 'native_elf_sha256': elf['sha256']}))

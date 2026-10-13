@@ -1,211 +1,105 @@
 # GT4Recomp
 
-A learning-first, GT4-specific static recompilation project targeting C++20
-and Windows x86-64. The intended result translates the selected game's R5900
-code ahead of time and supplies the PS2 services that execution requires.
+Gran Turismo 4 USA v2.00 para Windows x86-64, com código principal recompilado
+e integração nativa de Vulkan, áudio e controles. O objetivo inicial é executar
+o jogo de forma funcional e estável. Depois, tornar seu código legível e
+modificável e desenvolver melhorias gráficas e de jogabilidade.
 
-Local experimental play: [Jogar-GT4.cmd](Jogar-GT4.cmd) opens the separately
-qualified native Vulkan/audio/XInput pilot when its private pinned inputs and
-build are present. Presentation defaults to16:9; `Jogar-GT4.cmd --aspect 4:3`
-selects4:3. F6 toggles presentation; match the original GT4 Screen Ratio setting
-so camera/HUD use the intended aspect. New cards use an aspect-matching seed;
-existing saves are preserved. [Video controls](docs/reverse-engineering/slice113-native-video.md)
-and [audio/input evidence](docs/reverse-engineering/slice112-native-input-audio.md)
-describe saves, validation and remaining performance/fidelity limits. Game data
-and generated code are not distributed. Production MSVC remains separate.
+A base de execução atual vem de
+[ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp), congelada no commit
+`1b4808793a12c45125262fd2d5f50a9ec9f7c020`. Nosso port usa Windows e Vulkan;
+não executa uma página web nem WebAssembly.
 
-## Build
+## É nativo? Ainda existe emulação?
 
-[M6 disassembly](docs/reverse-engineering/m6-disassembly.md) adds `gt4disasm` for
-selected real GT4 ranges. Ten regions were inspected: after the 2026-10-01
-decoder expansion and Ghidra re-verification, 417 of 488 words match Ghidra
-(352 non-NOP) and 71 remained explicitly unsupported. At that milestone the
-decoder supported 39 operations, including the REGIMM branch family,
-JALR/SYSCALL, LD/SD/SB/LH and
-SLT/SLTU/DADDU. Later expansions added LB/LBU/SRA/SLTI/SLTIU/XORI, corrected
-SLT/SLTU/SLTI/SLTIU to their 64-bit comparison semantics, added the COP1/MMI
-extensions, the unaligned-access and multiply/divide families, COP0 with the
-break boundary, the 64-bit shift family, the VU0 macro instruction set with
-its vector state, moves, quad accesses and the full macro arithmetic, and the
-trapping arithmetic with the parallel multiply/divide family (349 operations
-in total, with PCSX2 used as the semantic reference; CACHE
-and PREF decode as the no-op hints they are). An honest whole-text scan puts
-the remaining unsupported words at 497 of 1,334,917 — 467 of them inside the
-text's trailing 700-word data table (a table, not code), leaving 30
-unsupported words in the real code region (26 COP2 macro function-0x38
-words in real code plus the known four: two DMA-dependent BC0F and two
-words at an unassigned encoding inside the exception handler — slice-58
-address audit); the first
-350,000 words — every sampled region — decode
-cleanly. The game's startup executes in
-the interpreter from
-its ELF entry to the first BIOS syscall — and, through `gt4translate`, as a
-native C++ module verified identical to the interpreter after 942,695
-instructions; tail thunks and syscall boundaries translate too, stopping at
-service calls exactly like the interpreter, and the translator reaches the
-VU0 macro and trapping operations through the verified runtime executor
-(the module 0x0056DF58 verifies that path end to end). A whole-text survey
-(`gt4translate --survey`) reports that **99.5% of the game's 15,067
-direct-call targets translate**, covering 65.3% of the text's instructions,
-and the `--all` mode generates the **whole game as one module (15,068
-functions, 924,991 instructions, 146 MB) that passes an MSVC syntax check**.
-The full CTest set (53/53) and the Python suite (73 collected, 67 run,
-6 skip without the M3 reference ELF) pass locally; the boot runs as a
-native module with the translator-vs-interpreter differential green. Tutoring remains pending; see the
-[M6 lesson](docs/lessons/m6.md).
+**Sim, o executável e o código principal do jogo são nativos. Ainda existe
+emulação de subsistemas.** Trata-se de uma recompilação híbrida:
 
-[M4 native reconstruction](docs/lessons/m2-m5-foundation.md) now reads the pinned CORE into
-our own C++ executable-image model and writes an analysis ELF. All three payloads,
-entry and declared memory ranges match the M3 reference policy; alignment is
-corrected. Ghidra verified imported payloads and the declared zero-fill range.
-Tutoring remains pending. This is analysis output, not a verified bootable port.
+| Parte | Caminho atual |
+|---|---|
+| CPU principal EE/R5900 | Código do jogo traduzido antecipadamente para C++ e compilado para x86-64; despacho para funções traduzidas |
+| IOP/R3000 | Interpretador executa os módulos originais do disco; kernel e bibliotecas são implementados no runtime |
+| Unidades vetoriais VU0/VU1 | Interpretadas nesta configuração Windows; não há microprogramas AOT registrados na biblioteca atual nem JIT Windows ativo |
+| Gráficos GS | Memória e regras do GS reproduzidas por compute shaders Vulkan na GPU; apresentação Win32 |
+| Hardware e serviços PS2 | Modelos de software para memória, DMA, interrupções, kernel, disco, IPU, SPU2 e outros serviços |
+| Integração com o PC | Janela Win32, saída PCM WinMM, teclado e XInput |
 
-Use an x64 Visual Studio Developer PowerShell with MSVC, the Windows SDK,
-CMake (3.24+), and Ninja available. The first configure downloads hash-pinned
-zlib 1.3.1 into the ignored build directory. No PS2 runtime or reference builder
-is needed by our native reconstruction path.
+Não há PCSX2 embutido nem execução do EE por seu interpretador. Isso não
+significa que todo o PS2 tenha virado código de jogo nativo ou que seus
+dispositivos tenham desaparecido. Detalhes e evidência:
+[arquitetura atual](docs/ARCHITECTURE.md).
 
-```powershell
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_COMPILER=cl
-cmake --build build
-ctest --test-dir build --output-on-failure
-.\build\gt4recomp.exe
-```
+## O que já funciona
 
-For an offline configure, append
-`-DGT4_ZLIB_ARCHIVE=C:/absolute/path/to/zlib-1.3.1.tar.gz` to the configure command.
-The archive is still hash-checked. This workspace has a copy under
-`private/dependencies/`. CTest now covers image reconstruction and ELF output as
-well as instruction decoding and the original build smoke checks, plus the
-full boot, checkpoint and RPC suites; no pixel work is established yet.
+- Boot real, menus, seleção de carros e corrida em Nürburgring.
+- 16:9 nativo do jogo e apresentação16:9 por padrão;4:3 opcional.
+- 480i,480p e1080i funcionaram no teste manual do proprietário, todos16:9.
+ 480p foi subjetivamente o mais estável; isso não comprova fidelidade de campos.
+- Áudio estéreo48k gerado pelo jogo e entregue ao Windows. Há starvation com
+ a lentidão atual; continuidade acústica completa não foi qualificada.
+- Teclado e implementação XInput com botões, analógicos e vibração. O controle
+ físico ainda não foi testado; setas no teclado têm relato de acionamento duplo.
+- Cartão privado persistente, perfil/configurações salvos pelo jogo, backup
+ por sessão e trava contra duas instâncias usando o mesmo cartão.
 
-## Disassemble a selected region
+O jogo ainda apresenta desempenho baixo e frametime inconsistente. Há
+divergência conhecida entre renderização CPU/GPU e um aviso herdado CFC2(28).
+Não declaramos estabilidade geral, corrida completa,100% de velocidade ou
+fidelidade integral do PS2. [Estado e pendências](docs/STATUS.md).
 
-```powershell
-.\build\gt4disasm.exe private/fingerprint-check/CORE.GT4 0x10011c 31
-python scripts/sample_disassembly.py
-```
+## Como abrir e controlar
 
-The count is instructions. The CLI prints the listing to stdout and unsupported
-opcode counts to stderr. The script saves ten selected regions under ignored
-`private/disassembly/`; it needs only standard Python. See the
-[M6 evidence](docs/reverse-engineering/m6-disassembly.md) for Ghidra comparison commands.
+Com os inputs privados e o runtime verificado presentes, abra `Jogar-GT4.cmd`.
+O launcher verifica hashes e preserva o cartão existente.
 
-## Inspect one basic block
+| Tecla | Ação |
+|---|---|
+| Enter | Start / pausa |
+| Z | Confirmar / acelerar |
+| S | Triângulo / voltar |
+| Setas | Navegar / dirigir |
+| A | Frear |
+| X | Círculo |
+| F6 | Alternar enquadramento16:9/4:3 |
 
-```powershell
-.\build\gt4blocks.exe private/fingerprint-check/CORE.GT4 0x5a3140 40
-```
+F6 muda a apresentação. Selecione a mesma proporção em **Options → Screen →
+Aspect Ratio** no GT4 para acertar câmera/HUD. `Jogar-GT4.cmd --aspect 4:3`
+abre no enquadramento4:3. Cartões novos usam a seed correspondente; cartões
+existentes mantêm as configurações que o jogo salvou. Modos480p/1080i devem
+ser configurados e conferidos na corrida; menus podem voltar ao modo normal.
 
-The third argument is the instruction limit. The walk ends at the first control
-transfer and includes its delay slot; the stderr summary records the ending
-kind, static target, continuation address and stop reason. Unsupported words
-stop the walk with context. See the
-[M7 evidence](docs/reverse-engineering/m7-control-flow.md).
+## Build e organização
 
-## Follow static control flow
+`native/build.cmd` é o build atual, Clang/C++20 para Windows. Os requisitos,
+diretórios privados e testes estão em [BUILD.md](docs/BUILD.md). Ele reutiliza
+uma biblioteca AOT privada previamente gerada: ainda não existe uma receita
+completa pública de ISO até executável. Game data, código traduzido, bins,
+shaders compilados, imagens e saves não são distribuídos neste repositório.
 
-```powershell
-.\build\gt4cfg.exe private/fingerprint-check/CORE.GT4 0x5a3140 200
-```
+| Diretório | Conteúdo |
+|---|---|
+| `native/` | Backend Vulkan, janela, áudio/XInput e fixtures atuais |
+| `scripts/` | Verificação de inputs, derivação do adapter e launcher |
+| `tests/python/` | Contratos de inputs, launcher, persistência e fixtures nativas |
+| `tools/wgsl_spirv/` | Conversão WGSL→SPIR-V com dependências pinadas |
+| `docs/` | Estado, arquitetura, decisões e evidência da base atual |
+| `private/`, `generated/`, `build/` | Material local ignorado; não é conteúdo público |
 
-The third argument caps the visited blocks. Branches and jumps are followed;
-direct call targets are recorded but not followed; returns, indirect jumps,
-exceptions and unsupported words end a path. The tool prints one line per block
-and a stderr summary (blocks, instructions, edges, call targets, open ends,
-outside-text edges, limit flag). See the
-[M7 evidence](docs/reverse-engineering/m7-control-flow.md).
+O desenvolvimento passou pelo estudo externo, boot/menu110, Vulkan111,
+áudio/XInput/corrida112,16:9 e modos de vídeo113. A fatia114 adota essa base
+como caminho único da `main` e arquiva o motor original. O histórico completo
+anterior à limpeza está na branch
+[`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013).
+[O que foi arquivado](docs/LEGACY.md).
 
-## Translate one real function
+## Próximas prioridades
 
-```powershell
-.\build\gt4translate.exe private/fingerprint-check/CORE.GT4 0x577878 64
-```
+Registrar e posteriormente investigar input duplicado e desempenho3D;
+qualificar controle físico, áudio, saves e estabilidade. Depois, separar
+renderização e física para144FPS/refresh do monitor mantendo100% da velocidade,
+fixar saída progressiva, implementar resolução interna1080p/1440p/4K e um
+launcher de configuração. Efeitos, texturas e ultrawide com câmera/HUD corretos
+continuam no plano. Essas melhorias ainda não estão implementadas.
 
-The translator emits a C++ header for one real function and its direct call
-tree — plain instructions, conditional branches (including likely and link
-forms), in-function jumps, `jal` calls (translated recursively; forward
-declarations make cycles work) and multiple `jr ra` returns — statement by
-statement, with the original assembly as comments. Indirect calls, exceptions
-and unsupported words are rejected with context. The output is derived from
-game code: keep it in ignored directories and never commit it. The translation
-tests generate headers into the build tree and compare the translated modules
-against the interpreter on six input states each. See the
-[M13 evidence](docs/reverse-engineering/m13-first-function.md).
-
-## Observe a running PCSX2
-
-```powershell
-& 'private\tooling-venv\Scripts\python.exe' scripts/pcsx2_pine.py info
-& 'private\tooling-venv\Scripts\python.exe' scripts/pcsx2_pine.py verify-elf private/reconstructed/SCUS_973.28.elf 0x100000 0x517a14
-```
-
-Needs a local PCSX2 with PINE enabled (set `EnablePINE = true` in
-`PCSX2.ini`) and the pinned disc running. The tool reads EE memory over PINE
-and never writes it; only the explicit `save-state`/`load-state` commands
-change emulator state. See the
-[M14 evidence](docs/reverse-engineering/m14-live-observation.md).
-
-## Read a PCSX2 savestate
-
-```powershell
-& 'private\tooling-venv\Scripts\python.exe' scripts/pcsx2_savestate.py registers "$env:USERPROFILE\Documents\PCSX2\sstates\SCUS-97328 (77E61C8A).09.p2s" --with-memory
-```
-
-Savestates are ZIP containers; this reads the CPU registers (pc, all 32 GPRs,
-HI/LO, key CP0 registers) from the raw internal freeze stream and can extract
-any entry (for example `eeMemory.bin`, the full 32 MiB EE RAM) — fully offline.
-See the [M14 evidence](docs/reverse-engineering/m14-live-observation.md).
-
-## Discover an evidence-backed function map
-
-```powershell
-.\build\gt4funcs.exe private/fingerprint-check/CORE.GT4 0x5a3140 50 500
-```
-
-Seeds are the ELF entry address plus the given start; every direct `jal` target
-found inside an analyzed function becomes a new candidate. Returns, indirect
-calls and unsupported words never invent entries. Each line reports one
-function's bounded reachable set; the stderr summary aggregates counts and the
-pending queue. See the
-[M8 evidence](docs/reverse-engineering/m8-function-map.md).
-
-## Reconstruct an analysis ELF
-
-With the verified CORE copy from M2:
-
-```powershell
-New-Item -ItemType Directory -Force private/reconstructed | Out-Null
-.\build\gt4core.exe --reference-analysis private/fingerprint-check/CORE.GT4 private/reconstructed/SCUS_973.28.elf
-```
-
-The output must not already exist. The explicit flag adopts the M3 builder's
-unproven BSS/reginfo choices for analysis only. See the [M2-M5 foundation notes](docs/lessons/m2-m5-foundation.md)
-for the implementation walkthrough, comparison commands and limitations.
-
-## Verify the selected disc
-
-The [M2-M5 foundation notes](docs/lessons/m2-m5-foundation.md) include Python environment setup and the
-12 standalone synthetic tests. With that environment available:
-
-```powershell
-& '.\private\tooling-venv\Scripts\python.exe' scripts/gt4disc.py verify 'Gran Turismo 4 (USA) (v2.00).iso'
-```
-
-The [pinned manifest](docs/inputs/usa-v2.00.json) contains sizes, hashes and
-metadata only. Verification fails on changed input and never updates it.
-
-## Local data and source control
-
-- `include/`, `src/`, `tools/`, `tests/`, and `docs/`: original source and notes.
-- `build/`: ignored host compiler output.
-- `iso/`, `private/`: ignored local inputs, extracted files, BIOS, and captures.
-- `generated/`: ignored translated game code and other derivative output.
-
-Keep sensitive inputs in the ignored directories; extensions alone cannot
-identify every BIOS or extracted asset. Ignore rules do not protect files
-already tracked or force-added. Review staged content before your commits.
-
-The initial workspace was not a Git repository. Git initialization, staging,
-and commits are left to the owner. No PCSX2 or PS2Recomp execution core is
-included or required by this build.
+Licenças e limites das bases externas: [THIRD_PARTY.md](native/THIRD_PARTY.md).
+O fork de trabalho é `moesuito/gt4-staticrecomp`; não publicamos no upstream antigo.

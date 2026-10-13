@@ -56,7 +56,7 @@ std::uint64_t g_params_size = 0, g_data_size = 0;'''
     source = source.replace('    note_raster(prims, tiles, total, snapshot);\n', '')
     source = source.replace('const std::uint32_t snapshot = snapshot_batch(prims, snapshot_lo, snapshot_hi);',
                             'snapshot_batch(prims, snapshot_lo, snapshot_hi);')
-    replacements = ROOT / 'experimental/vulkan'
+    replacements = ROOT / 'native'
     source = replace_section(source, 'void on_error(', 'std::uint32_t make_setup(',
                              (replacements / 'gpu_helpers.inc').read_text())
     source = replace_section(source, 'bool init(Mode m)', 'void draw(',

@@ -27,7 +27,7 @@ def play(aspect='16:9'):
         try:
             run_directory = play_directory / datetime.now().strftime('session-%Y%m%d-%H%M%S-%f')
             card = play_directory / 'card.ps2'
-            manifest = ROOT / 'docs/inputs/slice113-native-video.json'
+            manifest = ROOT / 'docs/inputs/slice114-native-base.json'
             video = json.loads(manifest.read_text(encoding='utf-8'))
             seed_key = 'default_card_seed' if aspect == '16:9' else 'standard_card_seed'
             seed = None if card.exists() else ROOT / video[seed_key]['path']

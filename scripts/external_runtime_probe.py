@@ -61,22 +61,20 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
             raise ValueError('First manual play needs a pinned seed card')
 
     inputs = workspace / 'docs/inputs'
-    reference = json.loads((inputs / 'external-recomp-references.json').read_text(encoding='utf-8'))
     native = json.loads((inputs / 'usa-v2.00-native.json').read_text(encoding='utf-8'))
     disc_manifest = json.loads((inputs / 'usa-v2.00.json').read_text(encoding='utf-8'))
-    executable_pin = next(item for item in reference['artifacts'] if item['path'].endswith('/ps2run.exe'))
-    runtime_evidence = {}
-    if runtime_manifest is not None:
-        runtime_manifest = runtime_manifest.resolve()
-        if not runtime_manifest.is_relative_to(inputs):
-            raise ValueError('Runtime manifest must be inside docs/inputs')
-        runtime_evidence = json.loads(runtime_manifest.read_text(encoding='utf-8'))
-        executable_pin = runtime_evidence['runtime']
-        for dependency in runtime_evidence.get('runtime_dependencies', []):
-            dependency_path = (workspace / dependency['path']).resolve()
-            if not dependency_path.is_relative_to(private_root):
-                raise ValueError('Runtime dependency must be inside private/')
-            verify_file(dependency_path, {key: dependency[key] for key in ('size_bytes', 'sha256')})
+    if runtime_manifest is None:
+        runtime_manifest = inputs / 'slice114-native-base.json'
+    runtime_manifest = runtime_manifest.resolve()
+    if not runtime_manifest.is_relative_to(inputs):
+        raise ValueError('Runtime manifest must be inside docs/inputs')
+    runtime_evidence = json.loads(runtime_manifest.read_text(encoding='utf-8'))
+    executable_pin = runtime_evidence['runtime']
+    for dependency in runtime_evidence.get('runtime_dependencies', []):
+        dependency_path = (workspace / dependency['path']).resolve()
+        if not dependency_path.is_relative_to(private_root):
+            raise ValueError('Runtime dependency must be inside private/')
+        verify_file(dependency_path, {key: dependency[key] for key in ('size_bytes', 'sha256')})
     executable = workspace / executable_pin['path']
     if not executable.resolve().is_relative_to(private_root):
         raise ValueError('Runtime executable must be inside private/')
