@@ -8,7 +8,6 @@
 #include "perf_probe.hpp"
 
 #include <cstdio>
-#include <fstream>
 #include <stdexcept>
 #include <string>
 
@@ -84,17 +83,18 @@ void check_accounting() {
 
 void check_report_prints_every_attribution() {
   auto &probe = gt4::perf::Probe::shared();
-  const std::string path = "probe-report.txt";
+  // Anonymous temporary file: the fixture must never write into the
+  // repository or into a pinned evidence directory.
   std::FILE *stream = nullptr;
-  if (fopen_s(&stream, path.c_str(), "w") != 0 || !stream)
-    throw std::runtime_error("cannot write the probe report fixture output");
+  if (tmpfile_s(&stream) != 0 || !stream)
+    throw std::runtime_error("cannot open a temporary probe report output");
   probe.print_interval(stream, "fixture interval");
+  std::rewind(stream);
+  std::string text;
+  char line[512];
+  while (std::fgets(line, sizeof line, stream))
+    text += line;
   std::fclose(stream);
-  std::ifstream report(path, std::ios::binary);
-  if (!report)
-    throw std::runtime_error("probe report fixture output is missing");
-  const std::string text((std::istreambuf_iterator<char>(report)),
-                         std::istreambuf_iterator<char>());
   for (const char *needle : {"frames/s", "frame period ms", "median",
                              "guest_between", "host_vblank", "gs_submit",
                              "acquire", "present_wait", "audio", "gs_execute",

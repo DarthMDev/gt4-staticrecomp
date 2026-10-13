@@ -17,7 +17,7 @@
   "runtime": {
     "path": "private/slice115-perf-investigation/baseline/build/gt4vulkan.exe",
     "size_bytes": 54468096,
-    "sha256": "4f31c723a5cf8093beabc12148039ee54d94d6685311212a5a25628a997743c2"
+    "sha256": "5c571014348ef944a2ecff04881f5604646479c630895009bd6d0b9b7e14c776"
   },
   "runtime_dependencies": [
     {
