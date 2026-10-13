@@ -188,3 +188,50 @@ Start-Process cmd.exe -ArgumentList '/c',
 `launch-baseline.cmd` runs `scripts\play_external_runtime.py --runtime
 slice115-perf-baseline.json`. Replace the manifest name to launch another
 candidate; the default (no `--runtime`) remains the qualified slice114 baseline.
+
+## Iteration 2 — first session analysis and subsystem attribution experiment
+
+Analysis of the first manual session (494 interval reports, owner-driven El
+Capitan/Nordschleife racing, menus and garage):
+
+- FPS distribution: median 16, minimum 7.3, maximum 60.1. Most intervals fall
+  in 15-19 FPS. Track sections moved between roughly 7 and 30 FPS, matching the
+  owner's report.
+- Menu and low-work scenes reached a fixed 60 FPS with a 16.7 ms frame period,
+  but the composition was `audio_wait` 5-12 ms plus 2-6 ms of other work, not
+  idle. The guest produces roughly 800 audio frames per guest frame, which at
+  48 kHz is 16.67 ms, so a full WinMM queue paces the emulation to exactly the
+  60 Hz guest VBlank rate. The 4 x 512-frame buffers make that pacing quantized
+  in 10.67 ms steps, which is a plausible source of the owner's "weird
+  frametime" in the menu.
+- Every 3D interval had `acquire_wait` and `present_wait` at 0.01-0.07 ms per
+  frame, so the presentation wait is not a factor in what was measured.
+- `gs_submit_wait` (host blocked on the GS batch fence, which also measures GPU
+  execution of that batch) was 9.5-10.5 ms per frame in most 3D intervals and
+  rose to 17.4 ms in the heaviest ones.
+- The rest of the frame was thread work outside the measured waits, i.e. guest
+  CPU work: about 54 ms per frame at 15.5 FPS and about 126 ms per frame in the
+  slowest interval. That is the leading hypothesis, ahead of VU, Vulkan and
+  presentation.
+
+Experiment built for it: `scripts/prepare_perf_runtime.py` derives three frozen
+donor translation units into a private directory after verifying their donor
+hashes, and applies four one-line patches that open a probe Scope around EE
+translated dispatch, interpreted VU microprogram execution, IOP execution and
+VIF/GIF packet processing. `GT4_RUNTIME_DIR` (default empty) selects the derived
+unit per file, so the frozen donor stays the source of everything else;
+`native/build_experiment.cmd` derives it when `GT4_PERF_RUNTIME=1`. The report
+gains an `attribution` line and a nested `vu_interpret`/`vif_gif` line.
+
+Candidate: `private/slice115-perf-investigation/subsystem-attribution/build/gt4vulkan.exe`,
+SHA256 `69eb3cc98249eb125a9e6ae8f1942442c8f4696ff8944b1da9c128d3f923a726`,
+manifest `docs/inputs/slice115-perf-subsystem.json`. Controls: zero-warning
+build, 4/4 CTest, 34/34 Python, 120-frame headless smoke with identical guest
+budget and frame 100 byte-identical to the preserved slice113 capture, and a
+3-run headless A/B with 2.872 s (qualified) against 2.871 s (derived runtime).
+
+Overhead limit: the `vu_interpret` scope is entered on every interpreted VU1
+microprogram, so its cost scales with the VU1 call rate that the same build
+reports per frame. The headless A/B scene has little VU work and therefore
+understates that cost; treat the attribution percentages as an upper bound on
+the subsystem they measure until the per-frame VU1 call count is known.
