@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 123, conditional bounded VIF command framing.
+2026-10-13 — Slice 124, static submission/state contracts and geometry boundaries.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-vif-framing-123`, based on commit 966297b.
+`codex/gt4-vif-state-contract-124`, based on commit 2fad755.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -84,6 +84,16 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Confirmed (slice 123):** 11 public framing controls, CTest 3/3, Python
   120/120, zero skips. Fill cycles reduce source consumption; NUM0 expansion
   is explicit. Packed/reserved UNPACK and zero-cycle fields reject as unqualified.
+- **Confirmed (slice 124, static only):** pinned ELF corroborates shape argument+4
+  loaded to F12 and helper `0x0049E548`'s conditional matrix/VU and 144-byte buffer
+  effects. Submission reads descriptor addresses directly; serialized relocation
+  and selected live object identity remain unqualified.
+- **Confirmed (slice 124, static only):** three local packet builders emit (0,4)
+  then (4,4) cycle words. Channel submission, previous/live cycle and selected
+  Ford Ka relation remain Unknown. Channel-role formulas remain reference leads.
+- **Confirmed:** documentation-only slice, source/ELF pins and bounded independent
+  review pass. Existing CTest 3/3 and Python 120/120 are inherited from slice 123;
+  no new build/test or runtime change claimed.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
@@ -104,6 +114,9 @@ offline file mapping and exact header-only parsing boundary. P1 remains open.
 record and declared packet-span inventory; renderable geometry remains pending.
 [VIF Framing](VIF-FRAMING.md) and [slice 123 metadata](inputs/slice123-vif-framing.json)
 record conditional framing, corrected source assumptions and remaining live-state gates.
+[Static VIF State Contract](VIF-STATE-CONTRACT.md) and
+[slice 124 metadata](inputs/slice124-vif-state-contract.json) record submission
+effects, buffered cycle words and the boundary before raw lane/geometry decoding.
 The owner's active OpenCode baseline session was preserved during build qualification.
 On the owner's subsequent explicit request, it closed normally and the slice 118
 baseline candidate launched at 13:16 local time. Its window responded and module

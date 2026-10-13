@@ -1,0 +1,169 @@
+{
+  "classification": "Confirmed static source/ELF submission and local buffer construction; live ownership/state and geometry Unknown",
+  "baseline_commit": "2fad755",
+  "branch": "codex/gt4-vif-state-contract-124",
+  "elf_pin": {
+    "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c",
+    "size_bytes": 6123004
+  },
+  "generated_source_pins": [
+    {
+      "path": "unit_00D5.cpp",
+      "sha256": "5a0389a55b2e31fb531794e7ce9ed413fbb00a376d401588190b2bc3df1e9077",
+      "size_bytes": 264410
+    },
+    {
+      "path": "unit_00E7.cpp",
+      "sha256": "76c1f62d14f5782072d842b87df8fdb6fb5efd21c2f1ca4dd4467c1c5dceae06",
+      "size_bytes": 217381
+    },
+    {
+      "path": "unit_0090.cpp",
+      "sha256": "16042394ebb50c9e64e9f138a33319c14a60fa765a0fc58c03d30819779ee7a4",
+      "size_bytes": 280274
+    },
+    {
+      "path": "unit_0035.cpp",
+      "sha256": "169d07755653e0c45a64fd5fc4552212349de18e31396eb1b0f1dd016937c061",
+      "size_bytes": 307243
+    }
+  ],
+  "source_pin_method": "Exact private generated source/ELF bytes compared to frozen116pins; original program header mapping and selected MIPS operands checked",
+  "private_detailed_code_windows": [
+    {
+      "start_va": "0x0049C2A8",
+      "end_va_exclusive": "0x0049C4D0",
+      "bytes": 552,
+      "sha256": "e85c95186dc591f154f473f4637c172664c39ef0b264555b4fd04dec657bb6dd"
+    },
+    {
+      "start_va": "0x0049C788",
+      "end_va_exclusive": "0x0049C9A8",
+      "bytes": 544,
+      "sha256": "2559fb97680975bfd0f36f79ed82d1165e48b17c09cf2ee0aeb05145b13dc594"
+    },
+    {
+      "start_va": "0x0049F938",
+      "end_va_exclusive": "0x0049F9B0",
+      "bytes": 120,
+      "sha256": "621e2b4ef604bc246c26efcc2bef72fd62fbda90036ab03fad8bffd7d540ad82"
+    },
+    {
+      "start_va": "0x0049D328",
+      "end_va_exclusive": "0x0049D550",
+      "bytes": 552,
+      "sha256": "adf34fc447dbb6c15b73c778eb2f1ba1ad4bf027aa6308b1448e9115c2dc7bf8"
+    },
+    {
+      "start_va": "0x0049E548",
+      "end_va_exclusive": "0x0049E5F8",
+      "bytes": 176,
+      "sha256": "3a5bb1d10c7cab0d9133c40a734a5ebecb5fc204263ef4fe2983d031e85a1bce"
+    }
+  ],
+  "limits": {
+    "primary_elf_bytes": 6123004,
+    "generated_unit_bytes": 1069308,
+    "worker_detailed_window_bytes": 1944,
+    "parent_detailed_window_bytes": 1568,
+    "independent_detailed_window_bytes": 2208,
+    "detailed_window_cap": 65536,
+    "assets_or_packets_read": false
+  },
+  "static_submission": {
+    "wrapper_va": "0x0049D308",
+    "body_va": "0x0049D328",
+    "wrapper_state_va": "0x70002000",
+    "descriptor_stride": 8,
+    "shape_descriptor_count_offset": 10,
+    "descriptor_table_offset": 16,
+    "runtime_descriptor_address": "Direct u32 load/mask, no shape-base addition in this path",
+    "serialized_relocation_contract": "Unknown",
+    "shape_argument_f32_offset": 4,
+    "original_f12_load_witness_va": "0x0049D3C8",
+    "helper_va": "0x0049E548",
+    "helper_destination_parameter": 193,
+    "cached_f12_state_offset": 32,
+    "packet_cursor_state_offset": 504,
+    "appended_bytes": 144,
+    "nonzero_f12_operands": "Read VF24/25/26, multiply into VF1/2/3; both branches copy VF27",
+    "universal_scalar_unit_or_camera_convention": "Unknown"
+  },
+  "local_cycle_command_construction": {
+    "words": [
+      "0x01000400",
+      "0x01000404"
+    ],
+    "decoded_cl_wl": [
+      [
+        0,
+        4
+      ],
+      [
+        4,
+        4
+      ]
+    ],
+    "main_emitter_vas": [
+      "0x0049C2A8",
+      "0x0049C788",
+      "0x0049F938"
+    ],
+    "buffer_offsets": [
+      8,
+      44
+    ],
+    "zero_cl_contract": "Unqualified",
+    "live_submission_channel_prior_state_and_shape_relation": "Unknown"
+  },
+  "controls": {
+    "elf_and_four_generated_unit_pins_verified": true,
+    "worker_elf_window_hashes_independently_match": 5,
+    "original_f12_instruction_operand_witness": true,
+    "independent_cycle_pair_emitters_confirmed": 3,
+    "new_public_software_behavior": false,
+    "native_rebuild_needed": false,
+    "ctest_not_run_this_documentation_slice": true,
+    "inherited_checks": {
+      "from_slice": 123,
+      "ctest_passed": 3,
+      "ctest_total": 3,
+      "python_passed": 120,
+      "python_skipped": 0
+    }
+  },
+  "private_artifact_sha256": {
+    "cycle-source-research/inventory.md": "3f5d0d3aed8f73061e7576c09743343fe283aec9a1ac3e8514ce816ab2885bca",
+    "cycle-source-research/submission-evidence.md": "df92a0deb55c2285e8352fc226896db1a42617bd6e023fd1f704f757a54af6f8",
+    "cycle-source-research/metadata.json": "ee0cf96160b9b626d22f6117b0c6c27f9d559677b0d239c4fa2f4eaa89461856",
+    "channel-source-research/channel-contract.md": "5c80af3f590c9c40b09eee25129bbf05aedb0955f18ca6b9db69cbe64ff94eb6",
+    "channel-source-research/metadata.json": "7ac9d4a136908edeaef0f64efc5fed3387e9cf36c08680741353dea1c24d573e",
+    "channel-source-research/parent-review.md": "b25a5a35a355796d5cbda37bd6532f64676a4f49a2b5ef14f02618caa0d3ef26",
+    "independent-review/verify_generated_pins.py": "0a275644bd6e222f91d42fe54e4709bd8b78e7359dbe08a4c9c2c7136b5a313d",
+    "independent-review/source-pins.json": "94b893345f2da3cd66ac8388c0b82648f0cf3cf8f840fc56412560ed01102e8f",
+    "independent-review/inspect_elf_windows.py": "ab00527f3d159cdebaba2aba5a2e782713fc4791793cad85e08e82ffce35938c",
+    "independent-review/elf-window-disassembly.txt": "666486bcfacf584e69b1096a61f9436fcc6416bf87410ff5b8a22a48b5af8946",
+    "independent-review/research-report.md": "57e80590ada3dd511e89d53ade618179c2c2b6d2830612c6ce47234d9ad7fb76",
+    "independent-review/findings.json": "a1343d3e6e2f91d1491111a05005fda5698b3479a2c255b2c2820f60c7b21b44",
+    "independent-review/parent-review.md": "f2a53ac52cf86b66917a2c0be7745e110e5c4b9718ea4c937ff9387844d0858c",
+    "parent_elf_witness.py": "36ca867d3d839877f8c0f982b253d71460ca725ee0479f08215cc0b6b4c2161a",
+    "parent-elf-witness.json": "261156cb7d049ba27194f17f467a34a2069243fed216a1ac1044a877c4afc46a"
+  },
+  "review_corrections": [
+    "Worker stalehead label not adopted; actual baseline2fad755 recorded",
+    "Helper multiplies intoVF1-3, notVF24-26",
+    "Current conditionalframer supports explicitnonzero cycles; zero fields andVL3 unqualified",
+    "Buffered cycle word order is not live restoration proof"
+  ],
+  "limitations": [
+    "Static path is not live FordKa identity, relocation or call-frequency proof",
+    "Channel roles, /4096, UVflip and strip formulas remain reference-tool heuristics",
+    "Raw immediates contain TOPS/USN flags, not resolved absolute VU addresses",
+    "No vertices/pixels/topology/geometry or native scene qualified"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Raw integer lane extraction with explicit width/count/signedness; concrete relocated object, buffer and pre-transfer state contracts"
+}

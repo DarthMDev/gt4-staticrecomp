@@ -98,6 +98,13 @@ and packed/reserved UNPACK reject. All 466 packet spans close under (1,1), but n
 STCYCL appears and live incoming state is Unknown. Fill mode reduces input;
 do not adopt the superseded worker report's destination-only/V4-5 formulas.
 No VU/GIF/channel/topology/vertex semantics or renderer substitution qualified.
+Slice124 static source/ELF contracts: docs/VIF-STATE-CONTRACT.md and
+docs/inputs/slice124-vif-state-contract.json. Shape argument+4 flows to F12;
+helper 49E548 conditionally writes transformed VF1-3 values and 144 buffer bytes.
+Runtime descriptors use direct masked addresses; disk relocation remains open.
+Buffered 0/4 then 4/4 commands do not prove live cycle/channel ownership. Do not
+adopt PDTools channel/4096/UV flip/strip heuristics as game geometry contracts.
+Next scope is controlled raw integer lanes plus concrete submission ownership.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

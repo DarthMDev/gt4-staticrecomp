@@ -165,3 +165,9 @@ geometry, texture pixels, relocation or camera convention is qualified.
 
 There is no supported conclusion that VU/GS is the current performance bottleneck,
 and no claim of progressive/internal HD/high-refresh/ultrawide support from this work.
+
+[Slice124 static VIF state contract](VIF-STATE-CONTRACT.md) extends shape
+submission evidence with original ELF operand checks, direct runtime descriptor
+addresses, argument+4 f32 flow and conditional matrix/buffer effects. Locally
+constructed cycle words are not live channel-state proof. Disk relocation,
+concrete buffer ownership and channel/topology/matrix conventions remain open.

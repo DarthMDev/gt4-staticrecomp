@@ -79,3 +79,7 @@ format maps payloads to channels. Then decode a bounded channel/topology subset
 with independent fixtures and reference comparisons. Framing alone cannot justify
 native car substitution, high-refresh rendering or any performance claim. Owner
 session, OpenCode, runtime, input, saves and timing remain unchanged.
+
+[Slice124 static state research](VIF-STATE-CONTRACT.md) finds locally buffered
+0/4 then 4/4 cycle commands and the shape helper's conditional matrix/state
+effects. It does not qualify their live channel or the initial-cycle assumption.
