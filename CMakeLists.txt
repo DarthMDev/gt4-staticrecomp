@@ -23,8 +23,11 @@ if(NOT EXISTS "${GT4_PYTHON}")
 endif()
 add_test(NAME native_vulkan_pixels COMMAND $<TARGET_FILE:vulkan_fixture>)
 add_test(NAME native_audio_input COMMAND $<TARGET_FILE:host_io_fixture>)
+add_test(NAME native_performance_probe COMMAND $<TARGET_FILE:perf_probe_fixture>)
 add_test(NAME python_native_contracts
     COMMAND "${GT4_PYTHON}" -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/python")
 set_tests_properties(native_vulkan_pixels native_audio_input python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_ASPECT=16:9")
+set_tests_properties(native_performance_probe PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")

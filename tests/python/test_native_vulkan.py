@@ -169,6 +169,42 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('completed=2592 canceled=0', result.stderr)
         self.assertIn('PASS: real Windows audio completion', result.stderr)
 
+    def test_optional_runtime_manifest_selection_keeps_qualified_default(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            inputs = root / 'docs/inputs'
+            inputs.mkdir(parents=True)
+            default = inputs / 'slice114-native-base.json'
+            default.write_text(json.dumps({
+                'default_card_seed': {'path': 'private/wide.ps2'}}))
+            experiment = inputs / 'slice115-perf-baseline.json'
+            experiment.write_text(json.dumps({
+                'default_card_seed': {'path': 'private/wide.ps2'}}))
+            with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
+                 return_value={'manual_session_closed': True}) as launch:
+                play.play('16:9')
+            self.assertEqual(launch.call_args.args[5], root / 'private/wide.ps2')
+            self.assertEqual(launch.call_args.args[6], default)
+            with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
+                 return_value={'manual_session_closed': True}) as launch:
+                play.play('16:9', 'slice115-perf-baseline.json')
+            self.assertEqual(launch.call_args.args[6], experiment)
+            for name in ('missing.json', '../slice114-native-base.json'):
+                with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
+                     return_value={'manual_session_closed': True}), \
+                     self.assertRaisesRegex(ValueError, 'docs/inputs|not available'):
+                    play.play('16:9', name)
+
+    def test_real_performance_probe_fixture_if_built(self):
+        executable = prepare.ROOT / 'private/slice115-perf-investigation/baseline/build/perf_probe_fixture.exe'
+        if not executable.is_file():
+            self.skipTest('Private performance investigation build not present')
+        result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('probe accounting:', result.stderr)
+        self.assertIn('probe report: attribution lines complete', result.stderr)
+        self.assertIn('PASS: host performance probe accounting', result.stderr)
+
     def test_native_card_lock_refuses_overlapping_game_process(self):
         executable = prepare.ROOT / 'private/slice114-native-base/build/gt4vulkan.exe'
         if not executable.is_file():

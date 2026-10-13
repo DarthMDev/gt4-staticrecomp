@@ -5,8 +5,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 get_filename_component(GT4_ROOT ".." ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(DONOR "${GT4_ROOT}/private/references/ps2-web-recomp")
-set(PORT "${GT4_ROOT}/private/slice114-native-base/port")
-set(SHADERS "${GT4_ROOT}/private/slice114-native-base/shaders")
+# Experiment producers use their own derived adapter and shader directories so
+# a candidate never overwrites the frozen slice114 output. The defaults keep
+# the qualified baseline selection when the caller overrides nothing.
+set(GT4_PORT_DIR "${GT4_ROOT}/private/slice114-native-base/port" CACHE PATH
+    "Directory with the derived donor GPU adapter sources")
+set(GT4_SHADER_DIR "${GT4_ROOT}/private/slice114-native-base/shaders" CACHE PATH
+    "Directory with the qualified SPIR-V modules")
+set(PORT "${GT4_PORT_DIR}")
+set(SHADERS "${GT4_SHADER_DIR}")
 set(VULKAN_HEADERS "${GT4_ROOT}/private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include")
 set(GAME_LIBRARY "${GT4_ROOT}/private/reference-acceleration-study/runtime-build/ps2game.lib")
 if(NOT EXISTS "${GAME_LIBRARY}")
@@ -49,3 +56,6 @@ target_compile_options(vulkan_fixture PRIVATE /W4)
 add_executable(host_io_fixture host_io_fixture.cpp)
 target_link_libraries(host_io_fixture PRIVATE native_host_io)
 target_compile_options(host_io_fixture PRIVATE /W4)
+# Host-only diagnostics: no Vulkan device, no guest code.
+add_executable(perf_probe_fixture perf_probe_fixture.cpp)
+target_compile_options(perf_probe_fixture PRIVATE /W4)

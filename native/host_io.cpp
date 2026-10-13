@@ -1,5 +1,7 @@
 #include "host_io.hpp"
 
+#include "perf_probe.hpp"
+
 #include <algorithm>
 #include <cstdio>
 #include <exception>
@@ -213,7 +215,9 @@ std::size_t AudioOutput::reap() {
   std::size_t queued = 0;
   for (auto &buffer : buffers_) {
     if (buffer.queued && (buffer.header.dwFlags & WHDR_DONE)) {
-      completed_ += buffer.header.dwBufferLength / 4;
+      const std::size_t frames = buffer.header.dwBufferLength / 4;
+      completed_ += frames;
+      gt4::perf::Probe::shared().add_audio(0, frames);
       buffer.queued = false;
     }
     queued += buffer.queued;
@@ -236,8 +240,11 @@ bool AudioOutput::wait_for(Buffer *buffer) {
     if (GetTickCount64() >= deadline)
       throw std::runtime_error("Windows audio device stalled for five seconds");
     ++waits_;
+    const auto wait_begin = gt4::perf::now_us();
     const DWORD result =
         MsgWaitForMultipleObjects(1, &event_, FALSE, 50, QS_ALLINPUT);
+    gt4::perf::Probe::shared().note_wait(gt4::perf::Stage::audio_wait,
+                                         gt4::perf::now_us() - wait_begin);
     if (result == WAIT_FAILED)
       throw std::runtime_error("Waiting for audio completion failed");
   }
@@ -267,7 +274,9 @@ bool AudioOutput::submit() {
 bool AudioOutput::push(const std::int16_t *samples, std::size_t frames) {
   if (!device_ || (frames && !samples))
     throw std::runtime_error("Invalid audio sink input/lifetime");
+  gt4::perf::Scope production(gt4::perf::Stage::audio_push);
   received_ += frames;
+  gt4::perf::Probe::shared().add_audio(frames, 0);
   while (frames) {
     const auto count = std::min(frames, frames_per_buffer - pending_frames_);
     std::copy_n(samples, count * 2, pending_.data() + pending_frames_ * 2);

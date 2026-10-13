@@ -1,5 +1,7 @@
 #include "native_vulkan.hpp"
 
+#include "perf_probe.hpp"
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -449,9 +451,11 @@ void Context::write(Buffer *buffer, std::uint64_t offset, const void *source,
                     std::uint64_t bytes) {
   if (!buffer || offset > buffer->size || bytes > buffer->size - offset)
     throw std::runtime_error("Vulkan buffer write outside allocation");
-  if (bytes)
+  if (bytes) {
+    gt4::perf::Scope upload(gt4::perf::Stage::gs_upload);
     std::memcpy(static_cast<std::uint8_t *>(buffer->mapped) + offset, source,
                 static_cast<std::size_t>(bytes));
+  }
 }
 
 void Context::read(Buffer *buffer, std::uint64_t offset, void *destination,
@@ -513,8 +517,13 @@ void Context::finish_commands(VkSemaphore wait, VkSemaphore signal) {
     submit.pSignalSemaphores = &signal;
   }
   check(vkQueueSubmit(queue_, 1, &submit, fence_), "queue submit");
+  const auto wait_begin = gt4::perf::now_us();
   check(vkWaitForFences(device_, 1, &fence_, VK_TRUE, UINT64_MAX),
         "wait submission fence");
+  // The batch fence signals when the GPU finished this submission, so this is
+  // the host blocked time that also measures GPU execution of the batch.
+  gt4::perf::Probe::shared().note_wait(gt4::perf::Stage::gs_submit_wait,
+                                       gt4::perf::now_us() - wait_begin);
 }
 
 void Context::memory_barrier(VkPipelineStageFlags source,
@@ -531,6 +540,7 @@ void Context::memory_barrier(VkPipelineStageFlags source,
 void Context::execute(const Dispatch *commands, std::size_t count) {
   if (!count)
     return;
+  gt4::perf::Scope execute(gt4::perf::Stage::gs_execute);
   begin_commands();
   memory_barrier(VK_PIPELINE_STAGE_HOST_BIT |
                      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -566,6 +576,8 @@ void Context::execute(const Dispatch *commands, std::size_t count) {
                             pipeline_layout_, 0, 1, &descriptor_set_, 1,
                             &offset);
     vkCmdDispatch(command_, dispatch.x, dispatch.y, 1);
+    gt4::perf::Probe::shared().add_dispatch(
+        static_cast<std::uint64_t>(dispatch.x) * dispatch.y);
     memory_barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                    VK_ACCESS_SHADER_WRITE_BIT,
@@ -737,6 +749,7 @@ void Context::image_barrier(VkImage image, VkImageLayout old_layout,
 bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
   if (!window_ || !window_width_ || !window_height_)
     return false;
+  gt4::perf::Scope presenting(gt4::perf::Stage::present);
   if (resized_ || !swapchain_)
     rebuild_swapchain();
   if (!extent_.width || !extent_.height)
@@ -776,8 +789,13 @@ bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
     image_height_ = height;
   }
   std::uint32_t selected = 0;
+  const auto acquire_begin = gt4::perf::now_us();
   auto acquired = vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX,
                                         acquired_, VK_NULL_HANDLE, &selected);
+  // With FIFO presentation this waits for a swapchain image, i.e. for the
+  // previous frame to reach the display.
+  gt4::perf::Probe::shared().note_wait(gt4::perf::Stage::acquire_wait,
+                                       gt4::perf::now_us() - acquire_begin);
   if (acquired == VK_ERROR_OUT_OF_DATE_KHR) {
     resized_ = true;
     return false;
@@ -861,14 +879,21 @@ bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
       result != VK_ERROR_OUT_OF_DATE_KHR && result != VK_ERROR_SURFACE_LOST_KHR)
     check(result, "present submission");
   // shortcut: wait for actual presentation lifetime, qualify overlap later.
+  const auto present_begin = gt4::perf::now_us();
   check(vkWaitForFences(device_, 1, &present_fence_, VK_TRUE, UINT64_MAX),
         "wait presentation completion");
+  // The present fence signals when the image actually reached the display, so
+  // this wait is the vblank/refresh quantization of one presentation.
+  gt4::perf::Probe::shared().note_wait(gt4::perf::Stage::present_wait,
+                                       gt4::perf::now_us() - present_begin);
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
       acquired == VK_SUBOPTIMAL_KHR)
     resized_ = true;
   else
     check(result, "present frame");
   ++presentations_;
+  gt4::perf::Probe::shared().add_presentation(static_cast<std::uint64_t>(width) *
+                                               height * 4ull);
   return true;
 }
 

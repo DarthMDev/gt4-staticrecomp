@@ -3,6 +3,7 @@
 #include "gs/gs.hpp"
 #include "host_io.hpp"
 #include "native_vulkan.hpp"
+#include "perf_probe.hpp"
 #include "ps2/system.hpp"
 
 #include <cstdio>
@@ -46,6 +47,26 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     update_title();
     return 0;
   }
+  // Measurement keys. They never reach the guest: the pad bindings in
+  // on_vblank() do not include them.
+  if (message == WM_KEYDOWN && !(second & (1ll << 30))) {
+    if (first == VK_F7) {
+      gt4::perf::Probe::shared().restart();
+      std::fprintf(stderr, "[perf] interval restarted (F7)\n");
+      return 0;
+    }
+    if (first == VK_F8) {
+      gt4::perf::Probe::shared().report("manual (F8)");
+      return 0;
+    }
+    if (first == VK_F9) {
+      auto &probe = gt4::perf::Probe::shared();
+      probe.set_enabled(!probe.enabled());
+      std::fprintf(stderr, "[perf] diagnostics %s (F9)\n",
+                   probe.enabled() ? "enabled" : "disabled");
+      return 0;
+    }
+  }
   if (message == WM_DESTROY) {
     closing = true;
     PostQuitMessage(0);
@@ -78,6 +99,12 @@ bool pump_messages() {
 }
 
 void on_vblank() {
+  // Close the previous guest cycle and open the next one before measuring the
+  // host callback, so the interval between callbacks excludes this callback.
+  gt4::perf::Probe::shared().frame_boundary(
+      {ps2::now(), ps2::frames_run(), ps2::primitives_drawn(),
+       ps2::vu1_interpreted_calls()});
+  gt4::perf::Scope host_callback(gt4::perf::Stage::host_vblank);
   if (!pump_messages())
     return;
   std::uint16_t buttons = 0;
@@ -170,6 +197,9 @@ int run_window(const std::function<int()> &emulate) {
     ps2::gs::gpu::set_widescreen(widescreen);
     std::fprintf(stderr,
                  "[window] real guest GPU output through native Vulkan\n");
+    std::fprintf(stderr,
+                 "[perf] host diagnostics enabled; F7 restarts the measured "
+                 "interval, F8 prints it, F9 toggles diagnostics\n");
     // shortcut: one thread and FIFO presentation, qualify pipelining later.
     ps2::g_options.on_vblank = on_vblank;
     AudioOutput audio(pump_messages);
@@ -187,6 +217,10 @@ int run_window(const std::function<int()> &emulate) {
     }
     ps2::set_audio_sink({});
     audio.close(!closing && result == 0);
+    if (result == 0 || closing) {
+      // Whole-session attribution, including the closing frame.
+      gt4::perf::Probe::shared().report("session end");
+    }
     cleanup();
     return result;
   } catch (const std::exception &error) {

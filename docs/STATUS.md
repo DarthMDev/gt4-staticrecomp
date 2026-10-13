@@ -79,3 +79,31 @@ launcher constraints, hypotheses to test, fresh producer/manifest requirements,
 manual feedback iterations and save protection. Initial source baseline is
 cbccf80; executing agent must recheck HEAD. No profiling, build or game run occurred
 while preparing this handoff. Maintain documentation and new comments in en-US.
+
+## OpenCode Performance Investigation — Instrumented Baseline (2026-10-13)
+
+OpenCode executed the handoff under owner delegation on branch
+`codex/perf-investigation-115` (baseline `88c0e96`), as a measurement-only step:
+one instrumented candidate was built, tested and launched for the owner to drive.
+Host diagnostics in `native/perf_probe.hpp` account every guest VBlank cycle
+(frame period, guest work outside the host callback, host presentation stages,
+GS submission/acquire/present/audio blocked waits, dispatch and workgroup counts,
+guest cycles per wall second, primitives, interpreted VU1 calls, audio produced
+versus device-completed). New build path `native/build_experiment.cmd` with
+`GT4_PORT_DIR`/`GT4_SHADER_DIR`, launcher `--runtime` option with slice114 still
+the default, and experimental manifest `docs/inputs/slice115-perf-baseline.json`
+pinning candidate `4f31c723a5cf8093beabc12148039ee54d94d6685311212a5a25628a997743c2`.
+
+Verified: zero-warning build, 4/4 CTest (adds `native_performance_probe`),
+34/34 Python, nine SPIR-V modules byte-identical to slice114, 120-frame headless
+smoke with identical guest budget and a pixel-identical frame against the
+preserved slice113 capture, and a 3-run headless A/B with 1 ms median difference.
+Confirmed GPU: RTX 3060 Laptop, Vulkan 1.4.351. Confirmed build property: the
+producer differs between identical rebuilds only in the PE COFF timestamp byte.
+
+Not established: any bottleneck attribution, FPS improvement or fix. No guest
+clock, VBlank, physics, resolution, input or save behavior changed. Owner
+feedback on the measured baseline is the next input before any single-variable
+experiment. Details:
+[Slice 115 report](reverse-engineering/slice115-perf-investigation-baseline.md).
+

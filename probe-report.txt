@@ -1,0 +1,7 @@
+[perf] fixture interval: 3 guest frames in 6.00s wall = 0.5 frames/s; guest 29491200 cycles = 0.10s at 294.912 MHz (1.7% of real time)
+[perf]   frame period ms: median 0.00 p95 0.00 p99 0.00 max 0.00 (16.7 ms budget at 60 Hz)
+[perf]   per frame ms: guest_between 1999.77 host_vblank 0.50; thread work 1997.37 blocked 2.90 (0.1% of wall)
+[perf]   waits ms/frame: gs_submit_wait 2.50 acquire_wait 0.00 present_wait 0.40 audio_wait 0.00
+[perf]   stages ms: gs_upload 0.40 gs_execute 3.00 present 1.50 audio_push 0.00
+[perf]   counts per frame: executes 1.00 dispatches 1 workgroups 512 presents 1.00 upload bytes 1146880
+[perf]   guest per frame: primitives 10 vu1_interpreted 20 audio frames 800 (device completed 800)
