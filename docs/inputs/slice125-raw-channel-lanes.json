@@ -1,0 +1,109 @@
+{
+  "classification": "Confirmed raw integer inputs under explicit cycle/signedness assumptions; VU results and game geometry Unknown",
+  "baseline_commit": "bf1b267",
+  "branch": "codex/gt4-raw-channel-lanes-125",
+  "selected_car_files": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "output_file": "asset-00.bin",
+      "kind": 2,
+      "volume_offset": 118628352,
+      "stored_bytes": 172219,
+      "decoded_bytes": 561864,
+      "stored_sha256": "eee0e035a5cac374a2f2255c398ca54d987f650585f1652b75ef15ed62757e4d",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a"
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "output_file": "asset-01.bin",
+      "kind": 2,
+      "volume_offset": 276217856,
+      "stored_bytes": 179236,
+      "decoded_bytes": 487112,
+      "stored_sha256": "5437cb0d7fa854a3b1c56673927966557f75745bbe36c884c3492fb91ada4fd0",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867"
+    }
+  ],
+  "input_verification": "Decoded car size/SHA pins before reading; fresh framing matches all frozen123packet hashes and command spans",
+  "initial_cycle_assumption": [
+    1,
+    1
+  ],
+  "narrow_signedness_assumption": "Signed if immediate.USN bit14 clear; no live state/channel interpretation",
+  "u32_policy": "Preserve unsigned32bit patterns under either signedness; no float conversion",
+  "caps": {
+    "source_vectors": 256,
+    "components": 4,
+    "lanes": 1024,
+    "data_bytes": 4096
+  },
+  "observations": [
+    {
+      "path": "car/menu/fdeu0006",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a",
+      "unpack_commands": 752,
+      "lane_counts_by_bits": {
+        "32": 47047,
+        "8": 11348
+      }
+    },
+    {
+      "path": "car/lod/fdeu0006",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867",
+      "unpack_commands": 1568,
+      "lane_counts_by_bits": {
+        "16": 47763,
+        "32": 1208,
+        "8": 50075
+      }
+    }
+  ],
+  "ordered_lane_hash_method": "SHA256 of ASCII compact JSON nested integer arrays with comma/colon separators and no newline",
+  "controls": {
+    "public_literal_tests": 11,
+    "independent_packet_hash_and_spans_checked": 466,
+    "independent_frame_command_records_checked": 4916,
+    "independent_complete_lane_arrays_match": 2320,
+    "independent_scalar_values_match": 157441,
+    "opaque_alignment_bytes_checked": 1111,
+    "ctest_passed": 3,
+    "ctest_total": 3,
+    "python_passed": 131,
+    "python_skipped": 0,
+    "ctest_seconds": 12.24,
+    "native_rebuild_needed": false,
+    "ctest_build": "private/slice118-ee-candidates/baseline/build"
+  },
+  "public_tool_hash_method": "SHA256 of canonical Git blob bytes (LF); all private/input/artifact hashes are exact bytes",
+  "public_tool_sha256": {
+    "scripts/gt4_raw_lanes.py": "b9a53eb851f93bf89ff2e10b478e9b203c7b6eecbfa4aef1f0c1a74ce4f95740",
+    "tests/python/test_gt4_raw_lanes.py": "1ac4cfb587ee208e5583895686ae06b37e8d176b6b949c15142b7e0a907d5db8"
+  },
+  "private_artifact_sha256": {
+    "source-research/raw-lane-contract.md": "86968bf2ca6fa9e42ce45ec8230f1330fe79c45277868f4c54b490001d634962",
+    "source-research/metadata.json": "92559d50dc8f45b1f98da255f8555a5b798985c4a25187a2f1435a50f38a668c",
+    "independent-review/verify_inputs.py": "17dcd3cb1c3282839fe7c0925d109c65dd097b86b1ee054410f179e28191a17a",
+    "independent-review/input-pins.json": "0ff2646031104ee4c9ec0e1a6fdcdf4d3eeafcdeb0daa79351f1c4398023df9b",
+    "independent-review/independent_lane_replay.py": "0e01776c651b8f2de5f8dbf5af56904e0c83b6ad28ef9a12847c4c8ac5a8a631",
+    "independent-review/independent-lane-replay.json": "7dc4b195fabb7045fc5c51282df3025bf09d03c5ee8147477b35ecb596e145f6",
+    "independent-review/review-report.md": "1c168c4ba9733737910fe4372cd76c02fd9bdf352f2464a65564877e7e09704e",
+    "probe_selected_lanes.py": "572613486e0cdb24ec9ae8061cf8cab3cdd4ede32ef1c52b1738fab6a4a91d74",
+    "selected-raw-lanes.json": "295c0f9919aacd5de7066eb78258b8a0f9b7b2411c3831ad1de66710f8e0095f",
+    "ctest-baseline.log": "e366a3868ef89cdfee909b4827e703925dcb3d3c1bb7a06209142c8c1597cc0a"
+  },
+  "tools": {
+    "python": "3.14.5"
+  },
+  "limitations": [
+    "Input integer decoding is not VIF execution or output VU memory",
+    "No channel, float units, normal/UV/position, mask/mode or topology semantics established",
+    "Initial cycle and narrow signedness remain explicit assumptions",
+    "PackedVL3 is unsupported; caller must supply ordinary framed inputs",
+    "No live ownership/camera/relocation or renderer substitution qualified"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Audit candidate channel-selection/type coverage before semantic conversion; preserve missing/multiple roles and concrete state/ownership gates"
+}

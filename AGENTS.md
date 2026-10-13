@@ -105,6 +105,12 @@ Runtime descriptors use direct masked addresses; disk relocation remains open.
 Buffered 0/4 then 4/4 commands do not prove live cycle/channel ownership. Do not
 adopt PDTools channel/4096/UV flip/strip heuristics as game geometry contracts.
 Next scope is controlled raw integer lanes plus concrete submission ownership.
+Slice125 adds scripts/gt4_raw_lanes.py and literal public controls:
+docs/RAW-CHANNEL-LANES.md, docs/inputs/slice125-raw-channel-lanes.json.
+Explicit width/components/post-fill source count/signedness/alignment required;
+32-bit patterns stay u32, padding is opaque, no float/channel/VU interpretation.
+Selected raw counts remain conditional on initial (1,1) and USN assumptions.
+Do not label raw values vertices or adopt channel/topology heuristics silently.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

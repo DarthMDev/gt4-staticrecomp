@@ -49,3 +49,7 @@ documents sources and the boundary before VIF, material or pixel semantics.
 Slice123 uses pinned MIT donor and Nenkai format facts for an original conditional
 VIF framing scanner. No source implementation copied or newly linked. Its source
 corrections and unsupported forms are documented in [VIF Framing](../docs/VIF-FRAMING.md).
+Slice125's original raw-lane extraction uses ordinary endian/width facts from
+the same pinned MIT sources, with literal independent controls. No dependency
+or implementation is copied or newly linked. [Raw Lanes](../docs/RAW-CHANNEL-LANES.md)
+keeps numerical inputs separate from game geometry or VU semantics.

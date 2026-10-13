@@ -95,3 +95,6 @@ or native build is involved. See [Model Records](MODEL-RECORDS.md).
 Slice123's `gt4_vif_framing.frame_packet(bytes, initial_cycle=(CL, WL))` is a
 conditional offline scanner, included in existing controls. No live incoming
 cycle or VU/channel semantics are qualified. See [VIF Framing](VIF-FRAMING.md).
+Slice125's `gt4_raw_lanes.decode_integer_lanes` consumes explicitly framed
+ordinary input integers with exact data/alignment spans. Public controls use
+the same discovery; it adds no runtime decoder. See [Raw Lanes](RAW-CHANNEL-LANES.md).

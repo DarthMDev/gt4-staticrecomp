@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 124, static submission/state contracts and geometry boundaries.
+2026-10-13 — Slice 125, controlled ordinary UNPACK raw integer lane extraction.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-vif-state-contract-124`, based on commit 2fad755.
+`codex/gt4-raw-channel-lanes-125`, based on commit bf1b267.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -94,6 +94,12 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Confirmed:** documentation-only slice, source/ELF pins and bounded independent
   review pass. Existing CTest 3/3 and Python 120/120 are inherited from slice 123;
   no new build/test or runtime change claimed.
+- **Confirmed, conditional (slice 125):** 2,320 ordinary UNPACK commands supply
+  157,441 raw scalar lanes under explicit cycle/signedness assumptions. Integer
+  decoding preserves 32-bit patterns and opaque alignment; no channels, floats,
+  geometry, VU results or live behavior inferred.
+- **Confirmed (slice 125):** 11 new literal controls; CTest 3/3, Python 131/131,
+  zero skips. Exact selected pins and frozen framing reproduced; no native rebuild.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
@@ -117,6 +123,9 @@ record conditional framing, corrected source assumptions and remaining live-stat
 [Static VIF State Contract](VIF-STATE-CONTRACT.md) and
 [slice 124 metadata](inputs/slice124-vif-state-contract.json) record submission
 effects, buffered cycle words and the boundary before raw lane/geometry decoding.
+[Raw Channel Lanes](RAW-CHANNEL-LANES.md) and
+[slice 125 metadata](inputs/slice125-raw-channel-lanes.json) extend this to
+controlled raw integer inputs, with channel/topology/geometry gates still open.
 The owner's active OpenCode baseline session was preserved during build qualification.
 On the owner's subsequent explicit request, it closed normally and the slice 118
 baseline candidate launched at 13:16 local time. Its window responded and module

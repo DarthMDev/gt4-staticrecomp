@@ -246,3 +246,16 @@ there is no STCYCL inside these spans. Eleven new controls; CTest 3/3 in 10.75 s
 Python 120/120, zero skips. Worker cycle/V4-5 mistakes corrected against pinned
 donor source before integration. Packed/zero-cycle/unknown forms reject.
 No VU/GIF execution, geometry/pixel decoder, live hook or runtime change.
+
+## Slices 124–125 — Static state and controlled raw inputs
+
+[Static state research](VIF-STATE-CONTRACT.md) confirms buffered cycle words,
+shape argument-to-F12 flow and conditional matrix/buffer effects. Channel,
+live cycle, relocation and selected ownership remain Unknown.
+
+[Raw Lane Extraction](RAW-CHANNEL-LANES.md) now reads 157,441 scalar integer
+inputs from 2,320 ordinary commands under explicit framing/signedness assumptions.
+Literal controls protect signed narrow inputs, u32 bit preservation, grouping,
+opaque padding and strict extents. No vertices/topology or VU results inferred.
+CTest 3/3 in 12.24 s; Python 131/131 with zero skips. No native rebuild needed.
+Next qualify candidate channel-selection coverage before semantic conversion.
