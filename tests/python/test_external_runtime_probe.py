@@ -19,6 +19,70 @@ def file_pin(path):
 
 
 class ProbeTests(unittest.TestCase):
+    def test_interactive_mode_preserves_completion_gate_and_sets_capture_environment(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            def execute(arguments, **options):
+                self.assertIn('--window', arguments)
+                self.assertNotIn('--trace-syscalls', arguments)
+                self.assertNotIn('--frames-dir', arguments)
+                self.assertEqual(options['env']['PS2_DUMP_AUDIO'], str(root / 'private/play/audio.wav'))
+                options['stdout'].write(b'[ee] stopped after 77 frames, 99 cycles: window closed\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/play', 0, 1, [],
+                                         window=True, capture_audio=True, interactive=True)
+            self.assertTrue(result['manual_session_closed'])
+            self.assertFalse(result['completed_requested_frames'])
+            for options in ({'window': False}, {'window': True, 'presses': ['1:start']}):
+                with self.assertRaisesRegex(ValueError, 'Interactive play requires'):
+                    probe.run_probe(root, root / 'private/reject', 0, 1,
+                                    options.get('presses', []), window=options['window'], interactive=True)
+
+    def test_inherited_audio_capture_cannot_overwrite_external_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            def execute(arguments, **options):
+                self.assertNotIn('PS2_DUMP_AUDIO', options['env'])
+                options['stdout'].write(b'[ee] stopped after 100 frames, 9 cycles: frame limit reached\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.dict(probe.os.environ, {'PS2_DUMP_AUDIO': 'protected.wav'}), \
+                 patch.object(probe.subprocess, 'run', side_effect=execute):
+                probe.run_probe(root, root / 'private/audio', 100, 1, [])
+
+    def test_persistent_manual_card_is_backed_up_and_never_reseeded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            (root / 'docs/inputs/slice110-external-menu-pilot.json').write_text(json.dumps({'artifacts': []}))
+            card = root / 'private/manual/card.ps2'
+            card.parent.mkdir()
+            original = b'a' * 8650752
+            card.write_bytes(original)
+            def execute(arguments, **options):
+                self.assertEqual(arguments[arguments.index('--memcard') + 1], str(card))
+                card.write_bytes(b'b' * 8650752)
+                options['stdout'].write(b'[ee] stopped after 77 frames, 99 cycles: window closed\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/play', 0, 1, [],
+                                         window=True, interactive=True, play_card=card)
+            self.assertEqual((root / 'private/play/card-before.ps2').read_bytes(), original)
+            self.assertNotEqual(result['play_card_before'], result['play_card_after'])
+            self.assertEqual(card.read_bytes(), b'b' * 8650752)
+            evidence = root / 'docs/inputs/slice110-external-menu-pilot.json'
+            evidence.write_text(json.dumps({'artifacts': [{'path': card.relative_to(root).as_posix()}]}))
+            with self.assertRaisesRegex(ValueError, 'pinned evidence artifact'):
+                probe.run_probe(root, root / 'private/protected', 0, 1, [], window=True,
+                                interactive=True, play_card=card)
+            self.assertFalse((root / 'private/protected').exists())
+            self.assertEqual(card.read_bytes(), b'b' * 8650752)
+            card.write_bytes(b'bad size')
+            with self.assertRaisesRegex(ValueError, 'unexpected size'):
+                probe.run_probe(root, root / 'private/reject', 0, 1, [], window=True, interactive=True, play_card=card)
+
     def make_workspace(self, root):
         inputs = root / 'docs/inputs'
         inputs.mkdir(parents=True)

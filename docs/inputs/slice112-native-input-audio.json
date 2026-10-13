@@ -1,0 +1,3088 @@
+{
+  "status": "accepted_native_host_and_bounded_race_execution",
+  "baseline": "d7f25fe",
+  "runtime": {
+    "path": "private/slice112-input-audio/build/gt4vulkan.exe",
+    "size_bytes": 54449664,
+    "sha256": "07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7"
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice112-input-audio/shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ],
+  "schema_version": 1,
+  "date": "2026-10-13",
+  "baseline_commit": "d7f25fe",
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "parent_manifests": [
+    "external-recomp-references.json",
+    "slice110-external-menu-pilot.json",
+    "slice111-native-vulkan.json"
+  ],
+  "execution_model": "Isolated native Clang/AOT EE game, donor IOP/VU runtime; production MSVC unchanged",
+  "production_executable": {
+    "path": "build/gt4boot.exe",
+    "size_bytes": 110391296,
+    "sha256": "839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab"
+  },
+  "preserved_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "previous_vulkan_executable": {
+    "path": "private/slice111-vulkan/build/gt4vulkan.exe",
+    "size_bytes": 54431232,
+    "sha256": "cc6635e4141de1a97fa6067363056acca2327682b8507af75cf55dfb39c01f96"
+  },
+  "gates": {
+    "ctest": {
+      "passed": 54,
+      "total": 54,
+      "elapsed_seconds": 61.7
+    },
+    "python": {
+      "collected": 114,
+      "run": 108,
+      "skipped": 6,
+      "elapsed_seconds": 90.437
+    },
+    "final_launcher_controls": {
+      "passed": 10,
+      "elapsed_seconds": 0.395
+    },
+    "native_build_warnings": 0
+  },
+  "producer_source_pins": [
+    {
+      "source": "experimental/vulkan/build.cmd",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/build.cmd",
+        "size_bytes": 1161,
+        "sha256": "366c8a03e62f89122aa00aaf0d290706900f4a9b85fa18decda049ce266a40d0"
+      }
+    },
+    {
+      "source": "experimental/vulkan/CMakeLists.txt",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/CMakeLists.txt",
+        "size_bytes": 2423,
+        "sha256": "5eac989b2827ea2683c53989f15bed80d7e83250231f69abc36767cfe66ea923"
+      }
+    },
+    {
+      "source": "experimental/vulkan/fixture.cpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/fixture.cpp",
+        "size_bytes": 7711,
+        "sha256": "fe3d2d57b944786447fbabaa3d267430741094ce27887b659d022528a8677a50"
+      }
+    },
+    {
+      "source": "experimental/vulkan/gpu_helpers.inc",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/gpu_helpers.inc",
+        "size_bytes": 1879,
+        "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+      }
+    },
+    {
+      "source": "experimental/vulkan/gpu_init.inc",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/gpu_init.inc",
+        "size_bytes": 1720,
+        "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+      }
+    },
+    {
+      "source": "experimental/vulkan/gpu_tail.inc",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/gpu_tail.inc",
+        "size_bytes": 4523,
+        "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626"
+      }
+    },
+    {
+      "source": "experimental/vulkan/host_io.cpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/host_io.cpp",
+        "size_bytes": 10814,
+        "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2"
+      }
+    },
+    {
+      "source": "experimental/vulkan/host_io.hpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/host_io.hpp",
+        "size_bytes": 2004,
+        "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3"
+      }
+    },
+    {
+      "source": "experimental/vulkan/host_io_fixture.cpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/host_io_fixture.cpp",
+        "size_bytes": 5385,
+        "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b"
+      }
+    },
+    {
+      "source": "experimental/vulkan/native_vulkan.cpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/native_vulkan.cpp",
+        "size_bytes": 37425,
+        "sha256": "9dbca0a86bca59193cc5dd48e98cbd9ce228b0b339b26d242537a17c16979952"
+      }
+    },
+    {
+      "source": "experimental/vulkan/native_vulkan.hpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/native_vulkan.hpp",
+        "size_bytes": 3436,
+        "sha256": "3c6273a603f763bbd0a3d75637698e6bc05d87014364943f7b361e77b8360659"
+      }
+    },
+    {
+      "source": "experimental/vulkan/THIRD_PARTY.md",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/THIRD_PARTY.md",
+        "size_bytes": 1312,
+        "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4"
+      }
+    },
+    {
+      "source": "experimental/vulkan/window.cpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/window.cpp",
+        "size_bytes": 5625,
+        "sha256": "3c87d188f246b3cd4669de4ad7143cd42d2d142d4622932bda576702a76b2cd8"
+      }
+    },
+    {
+      "source": "experimental/vulkan/window.hpp",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/window.hpp",
+        "size_bytes": 124,
+        "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+      }
+    },
+    {
+      "source": "scripts/external_runtime_probe.py",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/external_runtime_probe.py",
+        "size_bytes": 10310,
+        "sha256": "560b4e674ce1f4baf3474b7252cd4c94f9e92c4052dccb1e00943d7408a1536f"
+      }
+    },
+    {
+      "source": "scripts/play_external_runtime.py",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/play_external_runtime.py",
+        "size_bytes": 2175,
+        "sha256": "e2f3541bb7b60f0862efcd600df4298cee91660ce22e6a2549c743ca7b72e68f"
+      }
+    },
+    {
+      "source": "scripts/prepare_external_vulkan.py",
+      "frozen": {
+        "path": "private/slice112-input-audio/source-race-fix/prepare_external_vulkan.py",
+        "size_bytes": 5400,
+        "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee"
+      }
+    }
+  ],
+  "tracked_source_pins": [
+    {
+      "path": "experimental/vulkan/build.cmd",
+      "sha256": "8cb25c72308499ff2bf7a6fc0a04b300114e77f7e35e9942a785ba9c9b1fe431",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/build.cmd",
+        "size_bytes": 1159,
+        "sha256": "8cb25c72308499ff2bf7a6fc0a04b300114e77f7e35e9942a785ba9c9b1fe431"
+      }
+    },
+    {
+      "path": "experimental/vulkan/CMakeLists.txt",
+      "sha256": "5eac989b2827ea2683c53989f15bed80d7e83250231f69abc36767cfe66ea923",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/CMakeLists.txt",
+        "size_bytes": 2423,
+        "sha256": "5eac989b2827ea2683c53989f15bed80d7e83250231f69abc36767cfe66ea923"
+      }
+    },
+    {
+      "path": "experimental/vulkan/fixture.cpp",
+      "sha256": "fe3d2d57b944786447fbabaa3d267430741094ce27887b659d022528a8677a50",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/fixture.cpp",
+        "size_bytes": 7711,
+        "sha256": "fe3d2d57b944786447fbabaa3d267430741094ce27887b659d022528a8677a50"
+      }
+    },
+    {
+      "path": "experimental/vulkan/gpu_helpers.inc",
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/gpu_helpers.inc",
+        "size_bytes": 1879,
+        "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+      }
+    },
+    {
+      "path": "experimental/vulkan/gpu_init.inc",
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/gpu_init.inc",
+        "size_bytes": 1720,
+        "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+      }
+    },
+    {
+      "path": "experimental/vulkan/gpu_tail.inc",
+      "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/gpu_tail.inc",
+        "size_bytes": 4523,
+        "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626"
+      }
+    },
+    {
+      "path": "experimental/vulkan/host_io.cpp",
+      "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/host_io.cpp",
+        "size_bytes": 10814,
+        "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2"
+      }
+    },
+    {
+      "path": "experimental/vulkan/host_io.hpp",
+      "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/host_io.hpp",
+        "size_bytes": 2004,
+        "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3"
+      }
+    },
+    {
+      "path": "experimental/vulkan/host_io_fixture.cpp",
+      "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/host_io_fixture.cpp",
+        "size_bytes": 5385,
+        "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b"
+      }
+    },
+    {
+      "path": "experimental/vulkan/native_vulkan.cpp",
+      "sha256": "9dbca0a86bca59193cc5dd48e98cbd9ce228b0b339b26d242537a17c16979952",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/native_vulkan.cpp",
+        "size_bytes": 37425,
+        "sha256": "9dbca0a86bca59193cc5dd48e98cbd9ce228b0b339b26d242537a17c16979952"
+      }
+    },
+    {
+      "path": "experimental/vulkan/native_vulkan.hpp",
+      "sha256": "3c6273a603f763bbd0a3d75637698e6bc05d87014364943f7b361e77b8360659",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/native_vulkan.hpp",
+        "size_bytes": 3436,
+        "sha256": "3c6273a603f763bbd0a3d75637698e6bc05d87014364943f7b361e77b8360659"
+      }
+    },
+    {
+      "path": "experimental/vulkan/THIRD_PARTY.md",
+      "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/THIRD_PARTY.md",
+        "size_bytes": 1312,
+        "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4"
+      }
+    },
+    {
+      "path": "experimental/vulkan/window.cpp",
+      "sha256": "3c87d188f246b3cd4669de4ad7143cd42d2d142d4622932bda576702a76b2cd8",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/window.cpp",
+        "size_bytes": 5625,
+        "sha256": "3c87d188f246b3cd4669de4ad7143cd42d2d142d4622932bda576702a76b2cd8"
+      }
+    },
+    {
+      "path": "experimental/vulkan/window.hpp",
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/experimental/vulkan/window.hpp",
+        "size_bytes": 124,
+        "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+      }
+    },
+    {
+      "path": "Jogar-GT4.cmd",
+      "sha256": "faf90902940b601f559af0588285da96ac8e4df4dff875898133ad72212c99c9",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/Jogar-GT4.cmd",
+        "size_bytes": 193,
+        "sha256": "faf90902940b601f559af0588285da96ac8e4df4dff875898133ad72212c99c9"
+      }
+    },
+    {
+      "path": "scripts/external_runtime_probe.py",
+      "sha256": "560b4e674ce1f4baf3474b7252cd4c94f9e92c4052dccb1e00943d7408a1536f",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/scripts/external_runtime_probe.py",
+        "size_bytes": 10310,
+        "sha256": "560b4e674ce1f4baf3474b7252cd4c94f9e92c4052dccb1e00943d7408a1536f"
+      }
+    },
+    {
+      "path": "scripts/play_external_runtime.py",
+      "sha256": "e2f3541bb7b60f0862efcd600df4298cee91660ce22e6a2549c743ca7b72e68f",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/scripts/play_external_runtime.py",
+        "size_bytes": 2175,
+        "sha256": "e2f3541bb7b60f0862efcd600df4298cee91660ce22e6a2549c743ca7b72e68f"
+      }
+    },
+    {
+      "path": "scripts/prepare_external_vulkan.py",
+      "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/scripts/prepare_external_vulkan.py",
+        "size_bytes": 5400,
+        "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee"
+      }
+    },
+    {
+      "path": "tests/python/test_external_runtime_probe.py",
+      "sha256": "1534973f914f8acae468fa943edd332592b49fa33b80c58b0b278e3e787c914b",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/tests/python/test_external_runtime_probe.py",
+        "size_bytes": 13224,
+        "sha256": "1534973f914f8acae468fa943edd332592b49fa33b80c58b0b278e3e787c914b"
+      }
+    },
+    {
+      "path": "tests/python/test_native_vulkan.py",
+      "sha256": "d260265312e198c3633b9e2f2c37d4b23a7e03c839954e4f416b1a7f041a8889",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/tests/python/test_native_vulkan.py",
+        "size_bytes": 6627,
+        "sha256": "d260265312e198c3633b9e2f2c37d4b23a7e03c839954e4f416b1a7f041a8889"
+      }
+    },
+    {
+      "path": "tools/wgsl_spirv/Cargo.lock",
+      "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/tools/wgsl_spirv/Cargo.lock",
+        "size_bytes": 7397,
+        "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561"
+      }
+    },
+    {
+      "path": "tools/wgsl_spirv/Cargo.toml",
+      "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/tools/wgsl_spirv/Cargo.toml",
+        "size_bytes": 151,
+        "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8"
+      }
+    },
+    {
+      "path": "tools/wgsl_spirv/src/main.rs",
+      "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae",
+      "frozen_copy": {
+        "path": "private/slice112-input-audio/source-publication/tools/wgsl_spirv/src/main.rs",
+        "size_bytes": 2229,
+        "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae"
+      }
+    }
+  ],
+  "tools": {
+    "clang": "23.1.2",
+    "windows_sdk": "10.0.26100.0",
+    "winmm_xinput_file_version": "10.0.26100.8875",
+    "naga": "30.0.0",
+    "python": "3.14.5",
+    "gpu": "NVIDIA GeForce RTX 3060 Laptop GPU"
+  },
+  "system_audio_input_libraries": [
+    {
+      "path": "C:/Windows/System32/winmm.dll",
+      "size_bytes": 240912,
+      "sha256": "b9035da2ee058fe565ecb3c0064f46f2d09bde01f29e423ffe6b33e15c773f04"
+    },
+    {
+      "path": "C:/Windows/System32/XInput1_4.dll",
+      "size_bytes": 110592,
+      "sha256": "5f41070a6f2afd762caece55c932355210719de07d3361077701d85b9fc8542f"
+    }
+  ],
+  "runs": [
+    {
+      "name": "race-prefix1",
+      "classification": "preliminary_unfrozen_producer",
+      "result": {
+        "arguments": [
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\build\\gt4vulkan.exe",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-prefix1\\SCUS_973.28",
+          "--ntsc",
+          "--disc",
+          "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+          "--frames",
+          "3200",
+          "--memcard",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-prefix1\\card.ps2",
+          "--misses",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-prefix1\\misses.txt",
+          "--frames-dir",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-prefix1\\frames",
+          "--frame-every",
+          "100",
+          "--trace-syscalls",
+          "--press",
+          "300:start",
+          "--press",
+          "600:cross",
+          "--press",
+          "900:cross",
+          "--press",
+          "1200:cross",
+          "--press",
+          "1600:cross",
+          "--press",
+          "1800:cross",
+          "--press",
+          "2100:cross",
+          "--press",
+          "2600:cross",
+          "--window"
+        ],
+        "timeout_seconds": 420,
+        "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+        "runtime_sha256": "2c158c8f090eeb4442f5511aa18cd942c8065214fcec8ac2d1256d4d58edc393",
+        "card_seed": {
+          "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+          "size_bytes": 8650752,
+          "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+        },
+        "exit_code": 0,
+        "timed_out": false,
+        "completed_requested_frames": true,
+        "reported_frames": 3200,
+        "reported_budget": 15728862222,
+        "reason": "frame limit reached",
+        "elapsed_seconds": 150.95945250010118,
+        "frames": [
+          "frame_00100.ppm",
+          "frame_00200.ppm",
+          "frame_00300.ppm",
+          "frame_00400.ppm",
+          "frame_00500.ppm",
+          "frame_00600.ppm",
+          "frame_00700.ppm",
+          "frame_00800.ppm",
+          "frame_00900.ppm",
+          "frame_01000.ppm",
+          "frame_01100.ppm",
+          "frame_01200.ppm",
+          "frame_01300.ppm",
+          "frame_01400.ppm",
+          "frame_01500.ppm",
+          "frame_01600.ppm",
+          "frame_01700.ppm",
+          "frame_01800.ppm",
+          "frame_01900.ppm",
+          "frame_02000.ppm",
+          "frame_02100.ppm",
+          "frame_02200.ppm",
+          "frame_02300.ppm",
+          "frame_02400.ppm",
+          "frame_02500.ppm",
+          "frame_02600.ppm",
+          "frame_02700.ppm",
+          "frame_02800.ppm",
+          "frame_02900.ppm",
+          "frame_03000.ppm",
+          "frame_03100.ppm",
+          "frame_03200.ppm"
+        ]
+      }
+    },
+    {
+      "name": "race-final1",
+      "classification": "rejected_incomplete_vulkan_guard",
+      "result": {
+        "arguments": [
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\build\\gt4vulkan.exe",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-final1\\SCUS_973.28",
+          "--ntsc",
+          "--disc",
+          "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+          "--frames",
+          "6000",
+          "--memcard",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-final1\\card.ps2",
+          "--misses",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-final1\\misses.txt",
+          "--frames-dir",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-final1\\frames",
+          "--frame-every",
+          "100",
+          "--trace-syscalls",
+          "--press",
+          "300:start",
+          "--press",
+          "600:cross",
+          "--press",
+          "900:cross",
+          "--press",
+          "1200:cross",
+          "--press",
+          "1600:cross",
+          "--press",
+          "1800:cross",
+          "--press",
+          "2100:cross",
+          "--press",
+          "2600:cross",
+          "--press",
+          "3100:cross",
+          "--press",
+          "3600:cross",
+          "--press",
+          "4100:cross",
+          "--press",
+          "4600:cross",
+          "--press",
+          "5100:cross",
+          "--press",
+          "5400:cross",
+          "--press",
+          "5500:cross:450",
+          "--window"
+        ],
+        "timeout_seconds": 600,
+        "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+        "runtime_sha256": "96fc90ef77edf72b088f011eec0d7a6a48b9273e2d964c97198e4c2e70c9bc67",
+        "card_seed": {
+          "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+          "size_bytes": 8650752,
+          "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+        },
+        "exit_code": 1,
+        "timed_out": false,
+        "completed_requested_frames": false,
+        "elapsed_seconds": 218.3549516000785,
+        "frames": [
+          "frame_00100.ppm",
+          "frame_00200.ppm",
+          "frame_00300.ppm",
+          "frame_00400.ppm",
+          "frame_00500.ppm",
+          "frame_00600.ppm",
+          "frame_00700.ppm",
+          "frame_00800.ppm",
+          "frame_00900.ppm",
+          "frame_01000.ppm",
+          "frame_01100.ppm",
+          "frame_01200.ppm",
+          "frame_01300.ppm",
+          "frame_01400.ppm",
+          "frame_01500.ppm",
+          "frame_01600.ppm",
+          "frame_01700.ppm",
+          "frame_01800.ppm",
+          "frame_01900.ppm",
+          "frame_02000.ppm",
+          "frame_02100.ppm",
+          "frame_02200.ppm",
+          "frame_02300.ppm",
+          "frame_02400.ppm",
+          "frame_02500.ppm",
+          "frame_02600.ppm",
+          "frame_02700.ppm",
+          "frame_02800.ppm",
+          "frame_02900.ppm",
+          "frame_03000.ppm",
+          "frame_03100.ppm",
+          "frame_03200.ppm",
+          "frame_03300.ppm",
+          "frame_03400.ppm",
+          "frame_03500.ppm",
+          "frame_03600.ppm",
+          "frame_03700.ppm",
+          "frame_03800.ppm",
+          "frame_03900.ppm",
+          "frame_04000.ppm",
+          "frame_04100.ppm",
+          "frame_04200.ppm",
+          "frame_04300.ppm",
+          "frame_04400.ppm",
+          "frame_04500.ppm",
+          "frame_04600.ppm",
+          "frame_04700.ppm",
+          "frame_04800.ppm"
+        ]
+      }
+    },
+    {
+      "name": "race-fixed1",
+      "classification": "accepted_bounded_6000",
+      "result": {
+        "arguments": [
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\build\\gt4vulkan.exe",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-fixed1\\SCUS_973.28",
+          "--ntsc",
+          "--disc",
+          "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+          "--frames",
+          "6000",
+          "--memcard",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-fixed1\\card.ps2",
+          "--misses",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-fixed1\\misses.txt",
+          "--frames-dir",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-fixed1\\frames",
+          "--frame-every",
+          "100",
+          "--trace-syscalls",
+          "--press",
+          "300:start",
+          "--press",
+          "600:cross",
+          "--press",
+          "900:cross",
+          "--press",
+          "1200:cross",
+          "--press",
+          "1600:cross",
+          "--press",
+          "1800:cross",
+          "--press",
+          "2100:cross",
+          "--press",
+          "2600:cross",
+          "--press",
+          "3100:cross",
+          "--press",
+          "3600:cross",
+          "--press",
+          "4100:cross",
+          "--press",
+          "4600:cross",
+          "--press",
+          "5100:cross",
+          "--press",
+          "5400:cross",
+          "--press",
+          "5500:cross:450",
+          "--window"
+        ],
+        "timeout_seconds": 600,
+        "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+        "runtime_sha256": "07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7",
+        "card_seed": {
+          "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+          "size_bytes": 8650752,
+          "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+        },
+        "exit_code": 0,
+        "timed_out": false,
+        "completed_requested_frames": true,
+        "reported_frames": 6000,
+        "reported_budget": 29491440110,
+        "reason": "frame limit reached",
+        "elapsed_seconds": 297.81146300002,
+        "frames": [
+          "frame_00100.ppm",
+          "frame_00200.ppm",
+          "frame_00300.ppm",
+          "frame_00400.ppm",
+          "frame_00500.ppm",
+          "frame_00600.ppm",
+          "frame_00700.ppm",
+          "frame_00800.ppm",
+          "frame_00900.ppm",
+          "frame_01000.ppm",
+          "frame_01100.ppm",
+          "frame_01200.ppm",
+          "frame_01300.ppm",
+          "frame_01400.ppm",
+          "frame_01500.ppm",
+          "frame_01600.ppm",
+          "frame_01700.ppm",
+          "frame_01800.ppm",
+          "frame_01900.ppm",
+          "frame_02000.ppm",
+          "frame_02100.ppm",
+          "frame_02200.ppm",
+          "frame_02300.ppm",
+          "frame_02400.ppm",
+          "frame_02500.ppm",
+          "frame_02600.ppm",
+          "frame_02700.ppm",
+          "frame_02800.ppm",
+          "frame_02900.ppm",
+          "frame_03000.ppm",
+          "frame_03100.ppm",
+          "frame_03200.ppm",
+          "frame_03300.ppm",
+          "frame_03400.ppm",
+          "frame_03500.ppm",
+          "frame_03600.ppm",
+          "frame_03700.ppm",
+          "frame_03800.ppm",
+          "frame_03900.ppm",
+          "frame_04000.ppm",
+          "frame_04100.ppm",
+          "frame_04200.ppm",
+          "frame_04300.ppm",
+          "frame_04400.ppm",
+          "frame_04500.ppm",
+          "frame_04600.ppm",
+          "frame_04700.ppm",
+          "frame_04800.ppm",
+          "frame_04900.ppm",
+          "frame_05000.ppm",
+          "frame_05100.ppm",
+          "frame_05200.ppm",
+          "frame_05300.ppm",
+          "frame_05400.ppm",
+          "frame_05500.ppm",
+          "frame_05600.ppm",
+          "frame_05700.ppm",
+          "frame_05800.ppm",
+          "frame_05900.ppm",
+          "frame_06000.ppm"
+        ]
+      }
+    },
+    {
+      "name": "race-controls1",
+      "classification": "accepted_bounded_9000",
+      "result": {
+        "arguments": [
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\build\\gt4vulkan.exe",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-controls1\\SCUS_973.28",
+          "--ntsc",
+          "--disc",
+          "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+          "--frames",
+          "9000",
+          "--memcard",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-controls1\\card.ps2",
+          "--misses",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-controls1\\misses.txt",
+          "--frames-dir",
+          "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\race-controls1\\frames",
+          "--frame-every",
+          "100",
+          "--trace-syscalls",
+          "--press",
+          "300:start",
+          "--press",
+          "600:cross",
+          "--press",
+          "900:cross",
+          "--press",
+          "1200:cross",
+          "--press",
+          "1600:cross",
+          "--press",
+          "1800:cross",
+          "--press",
+          "2100:cross",
+          "--press",
+          "2600:cross",
+          "--press",
+          "3100:cross",
+          "--press",
+          "3600:cross",
+          "--press",
+          "4100:cross",
+          "--press",
+          "4600:cross",
+          "--press",
+          "5100:cross",
+          "--press",
+          "5400:cross",
+          "--press",
+          "5500:cross:450",
+          "--press",
+          "6100:cross:600",
+          "--press",
+          "6750:cross+left:180",
+          "--press",
+          "7000:square:600",
+          "--window"
+        ],
+        "timeout_seconds": 720,
+        "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+        "runtime_sha256": "07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7",
+        "card_seed": {
+          "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+          "size_bytes": 8650752,
+          "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+        },
+        "exit_code": 0,
+        "timed_out": false,
+        "completed_requested_frames": true,
+        "reported_frames": 9000,
+        "reported_budget": 44237040110,
+        "reason": "frame limit reached",
+        "elapsed_seconds": 370.4111498000566,
+        "frames": [
+          "frame_00100.ppm",
+          "frame_00200.ppm",
+          "frame_00300.ppm",
+          "frame_00400.ppm",
+          "frame_00500.ppm",
+          "frame_00600.ppm",
+          "frame_00700.ppm",
+          "frame_00800.ppm",
+          "frame_00900.ppm",
+          "frame_01000.ppm",
+          "frame_01100.ppm",
+          "frame_01200.ppm",
+          "frame_01300.ppm",
+          "frame_01400.ppm",
+          "frame_01500.ppm",
+          "frame_01600.ppm",
+          "frame_01700.ppm",
+          "frame_01800.ppm",
+          "frame_01900.ppm",
+          "frame_02000.ppm",
+          "frame_02100.ppm",
+          "frame_02200.ppm",
+          "frame_02300.ppm",
+          "frame_02400.ppm",
+          "frame_02500.ppm",
+          "frame_02600.ppm",
+          "frame_02700.ppm",
+          "frame_02800.ppm",
+          "frame_02900.ppm",
+          "frame_03000.ppm",
+          "frame_03100.ppm",
+          "frame_03200.ppm",
+          "frame_03300.ppm",
+          "frame_03400.ppm",
+          "frame_03500.ppm",
+          "frame_03600.ppm",
+          "frame_03700.ppm",
+          "frame_03800.ppm",
+          "frame_03900.ppm",
+          "frame_04000.ppm",
+          "frame_04100.ppm",
+          "frame_04200.ppm",
+          "frame_04300.ppm",
+          "frame_04400.ppm",
+          "frame_04500.ppm",
+          "frame_04600.ppm",
+          "frame_04700.ppm",
+          "frame_04800.ppm",
+          "frame_04900.ppm",
+          "frame_05000.ppm",
+          "frame_05100.ppm",
+          "frame_05200.ppm",
+          "frame_05300.ppm",
+          "frame_05400.ppm",
+          "frame_05500.ppm",
+          "frame_05600.ppm",
+          "frame_05700.ppm",
+          "frame_05800.ppm",
+          "frame_05900.ppm",
+          "frame_06000.ppm",
+          "frame_06100.ppm",
+          "frame_06200.ppm",
+          "frame_06300.ppm",
+          "frame_06400.ppm",
+          "frame_06500.ppm",
+          "frame_06600.ppm",
+          "frame_06700.ppm",
+          "frame_06800.ppm",
+          "frame_06900.ppm",
+          "frame_07000.ppm",
+          "frame_07100.ppm",
+          "frame_07200.ppm",
+          "frame_07300.ppm",
+          "frame_07400.ppm",
+          "frame_07500.ppm",
+          "frame_07600.ppm",
+          "frame_07700.ppm",
+          "frame_07800.ppm",
+          "frame_07900.ppm",
+          "frame_08000.ppm",
+          "frame_08100.ppm",
+          "frame_08200.ppm",
+          "frame_08300.ppm",
+          "frame_08400.ppm",
+          "frame_08500.ppm",
+          "frame_08600.ppm",
+          "frame_08700.ppm",
+          "frame_08800.ppm",
+          "frame_08900.ppm",
+          "frame_09000.ppm"
+        ]
+      }
+    }
+  ],
+  "manual_session_results": [
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261013-003213-634635\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "0",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261013-003213-634635\\misses.txt",
+        "--window"
+      ],
+      "timeout_seconds": 43200,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7",
+      "card_seed": {
+        "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "play_card_before": {
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "play_card_path": "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\card.ps2",
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": false,
+      "reported_frames": 161,
+      "reported_budget": 795900284,
+      "reason": "window closed",
+      "elapsed_seconds": 5.799514199839905,
+      "manual_session_closed": true,
+      "play_card_after": {
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "frames": []
+    },
+    {
+      "arguments": [
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\slice112-input-audio\\build\\gt4vulkan.exe",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261013-003227-807514\\SCUS_973.28",
+        "--ntsc",
+        "--disc",
+        "C:\\Antigravity\\gt4-staticrecomp\\Gran Turismo 4 (USA) (v2.00).iso",
+        "--frames",
+        "0",
+        "--memcard",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\card.ps2",
+        "--misses",
+        "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261013-003227-807514\\misses.txt",
+        "--window"
+      ],
+      "timeout_seconds": 43200,
+      "disc_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+      "runtime_sha256": "07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7",
+      "play_card_before": {
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "play_card_path": "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\card.ps2",
+      "exit_code": 0,
+      "timed_out": false,
+      "completed_requested_frames": false,
+      "reported_frames": 182,
+      "reported_budget": 896465276,
+      "reason": "window closed",
+      "elapsed_seconds": 5.523600399959832,
+      "manual_session_closed": true,
+      "play_card_after": {
+        "size_bytes": 8650752,
+        "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+      },
+      "frames": []
+    }
+  ],
+  "manual_controls": [
+    {
+      "duplicate_launcher_refused": true,
+      "stderr": "FAIL: Another manual game session is already running"
+    },
+    {
+      "repeat": 1,
+      "normal_manual_exit": true
+    },
+    {
+      "repeat": 2,
+      "normal_manual_exit": true
+    },
+    {
+      "card_size": 8650752,
+      "card_sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    }
+  ],
+  "driving_analysis": {
+    "common_captures_equal": [
+      "frame_00100.ppm",
+      "frame_00200.ppm",
+      "frame_00300.ppm",
+      "frame_00400.ppm",
+      "frame_00500.ppm",
+      "frame_00600.ppm",
+      "frame_00700.ppm",
+      "frame_00800.ppm",
+      "frame_00900.ppm",
+      "frame_01000.ppm",
+      "frame_01100.ppm",
+      "frame_01200.ppm",
+      "frame_01300.ppm",
+      "frame_01400.ppm",
+      "frame_01500.ppm",
+      "frame_01600.ppm",
+      "frame_01700.ppm",
+      "frame_01800.ppm",
+      "frame_01900.ppm",
+      "frame_02000.ppm",
+      "frame_02100.ppm",
+      "frame_02200.ppm",
+      "frame_02300.ppm",
+      "frame_02400.ppm",
+      "frame_02500.ppm",
+      "frame_02600.ppm",
+      "frame_02700.ppm",
+      "frame_02800.ppm",
+      "frame_02900.ppm",
+      "frame_03000.ppm",
+      "frame_03100.ppm",
+      "frame_03200.ppm",
+      "frame_03300.ppm",
+      "frame_03400.ppm",
+      "frame_03500.ppm",
+      "frame_03600.ppm",
+      "frame_03700.ppm",
+      "frame_03800.ppm",
+      "frame_03900.ppm",
+      "frame_04000.ppm",
+      "frame_04100.ppm",
+      "frame_04200.ppm",
+      "frame_04300.ppm",
+      "frame_04400.ppm",
+      "frame_04500.ppm",
+      "frame_04600.ppm",
+      "frame_04700.ppm",
+      "frame_04800.ppm",
+      "frame_04900.ppm",
+      "frame_05000.ppm",
+      "frame_05100.ppm",
+      "frame_05200.ppm",
+      "frame_05300.ppm",
+      "frame_05400.ppm",
+      "frame_05500.ppm",
+      "frame_05600.ppm",
+      "frame_05700.ppm",
+      "frame_05800.ppm",
+      "frame_05900.ppm",
+      "frame_06000.ppm"
+    ],
+    "guest_pcm_prefix_equal": true,
+    "guest_pcm": {
+      "sample_rate": 48000,
+      "channels": 2,
+      "sample_bytes": 2,
+      "frames": 7193888,
+      "pcm_sha256": "b66225d7d0cd3186c2a07e3e50b198e2509261121ba485916f897c079d4c4531",
+      "channel_rms": [
+        3827.1243534114724,
+        4024.376439897445
+      ]
+    },
+    "selected_log": [
+      "[vu0] cfc2 28",
+      "[vulkan] first zero-work dispatch pipeline=5 x=0 y=0 parameter=91",
+      "[ee] stopped after 9000 frames, 44237040110 cycles: frame limit reached",
+      "[audio] received=7193888 submitted=7193888 completed=7193888 canceled=0 pending=0 peak=4 waits=2042 empty_queue=3810"
+    ],
+    "warning_counts": {
+      "[vu0] cfc2 28": 1
+    }
+  },
+  "causal_repeat": {
+    "log_selected": [
+      "[vu0] cfc2 28",
+      "[vulkan] first zero-work dispatch pipeline=5 x=0 y=0 parameter=91",
+      "[ee] stopped after 6000 frames, 29491440110 cycles: frame limit reached",
+      "[audio] received=4793888 submitted=4793888 completed=4793888 canceled=0 pending=0 peak=4 waits=1320 empty_queue=3733"
+    ],
+    "warning_counts": {
+      "[vu0] cfc2 28": 1
+    },
+    "common_frames_equal": [
+      "frame_00100.ppm",
+      "frame_00200.ppm",
+      "frame_00300.ppm",
+      "frame_00400.ppm",
+      "frame_00500.ppm",
+      "frame_00600.ppm",
+      "frame_00700.ppm",
+      "frame_00800.ppm",
+      "frame_00900.ppm",
+      "frame_01000.ppm",
+      "frame_01100.ppm",
+      "frame_01200.ppm",
+      "frame_01300.ppm",
+      "frame_01400.ppm",
+      "frame_01500.ppm",
+      "frame_01600.ppm",
+      "frame_01700.ppm",
+      "frame_01800.ppm",
+      "frame_01900.ppm",
+      "frame_02000.ppm",
+      "frame_02100.ppm",
+      "frame_02200.ppm",
+      "frame_02300.ppm",
+      "frame_02400.ppm",
+      "frame_02500.ppm",
+      "frame_02600.ppm",
+      "frame_02700.ppm",
+      "frame_02800.ppm",
+      "frame_02900.ppm",
+      "frame_03000.ppm",
+      "frame_03100.ppm",
+      "frame_03200.ppm",
+      "frame_03300.ppm",
+      "frame_03400.ppm",
+      "frame_03500.ppm",
+      "frame_03600.ppm",
+      "frame_03700.ppm",
+      "frame_03800.ppm",
+      "frame_03900.ppm",
+      "frame_04000.ppm",
+      "frame_04100.ppm",
+      "frame_04200.ppm",
+      "frame_04300.ppm",
+      "frame_04400.ppm",
+      "frame_04500.ppm",
+      "frame_04600.ppm",
+      "frame_04700.ppm",
+      "frame_04800.ppm"
+    ],
+    "common_frames_differ": []
+  },
+  "claims": {
+    "confirmed": [
+      "Real guest stereo PCM generated and naturally completed by Windows waveOut",
+      "Synthetic XInput/DS2 mapping, pressure, axes, focus and rumble controls pass",
+      "Real track/HUD/AI/running timer; 6000 and 9000 frame execution completes",
+      "Zero-work raster guard causal blocker: 48 previous frames exact after repair",
+      "60 repeated captures and full 6000-frame PCM prefix exact",
+      "Actual manual close/reopen and duplicate-launch protection, card preserved"
+    ],
+    "high_confidence": [
+      "Driving direction/brake/reverse observations consistent with scripted inputs"
+    ],
+    "unknown": [
+      "Physical XInput connection/reconnect/rumble, actual driving feel",
+      "Acoustic continuity and independent SPU2/PS2 fidelity",
+      "Completed laps/races, long-term stability and broader game saves",
+      "Isolated causal acceleration/steering/brake measurements"
+    ]
+  },
+  "open_limits": [
+    "Runtime slowness and empty audio queue observations",
+    "Inherited CFC2(28) warning and existing CPU/GPU pixel divergence",
+    "Only this GPU/audio device; no Khronos validation-layer evidence",
+    "Fixed scale1/nearest4:3; customization deferred by owner"
+  ],
+  "artifacts": [
+    {
+      "path": "private/slice112-input-audio/audio-analysis.json",
+      "size_bytes": 500,
+      "sha256": "c15d93bdf7a2022451058d5b8884e49ea2c8e302c48eb272c716820f0f52a382"
+    },
+    {
+      "path": "private/slice112-input-audio/build/CMakeFiles/4.3.3/CompilerIdCXX/CMakeCXXCompilerId.exe",
+      "size_bytes": 111616,
+      "sha256": "01db5294d4b7dda744eb7c2c19a25014df61e3b09d496dfb3721f296d02bd823"
+    },
+    {
+      "path": "private/slice112-input-audio/build/gt4vulkan.exe",
+      "size_bytes": 54449664,
+      "sha256": "07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7"
+    },
+    {
+      "path": "private/slice112-input-audio/build/host_io_fixture.exe",
+      "size_bytes": 30720,
+      "sha256": "ae2865bb2a5c65075a3ca0dde648d8ff416cd36ee42f33ebdaddaa2880f0dc89"
+    },
+    {
+      "path": "private/slice112-input-audio/build/native_host_io.lib",
+      "size_bytes": 55288,
+      "sha256": "de20528df57aaca39502c5f5d97374943e5689d0362dda544e2b39908cc5d1ed"
+    },
+    {
+      "path": "private/slice112-input-audio/build/ps2runtime_vulkan.lib",
+      "size_bytes": 3585066,
+      "sha256": "cfd798966ffb1b325dba2bee7d6055c66adcb1ba5c3cdc6ba6bb60eb696d687a"
+    },
+    {
+      "path": "private/slice112-input-audio/build/vulkan_fixture.exe",
+      "size_bytes": 488960,
+      "sha256": "6e1b98ef448b91c1f821e97c7f98e96323f256315b795bc533e4b054a7d23e9d"
+    },
+    {
+      "path": "private/slice112-input-audio/build-final.log",
+      "size_bytes": 1447,
+      "sha256": "a780fa89cbf974f37a328c338fa3a128b25ddd03b84d03015abc34c39610bf29"
+    },
+    {
+      "path": "private/slice112-input-audio/build-race-fix.log",
+      "size_bytes": 1256,
+      "sha256": "28c7681c1aed4cfa5bdb256f8b66bd242d7731b40d5833e3444429825cfbeba5"
+    },
+    {
+      "path": "private/slice112-input-audio/build.log",
+      "size_bytes": 1447,
+      "sha256": "f302311e9834d4a67db9db11ed1eec85c43b07cf5a970098f1f8cf5473fa7954"
+    },
+    {
+      "path": "private/slice112-input-audio/causal-repeat.json",
+      "size_bytes": 1601,
+      "sha256": "977e643313cd4b2c6875b739ec5ba6d6743285165d629eeffe4945ffd6121cfe"
+    },
+    {
+      "path": "private/slice112-input-audio/check-manual.py",
+      "size_bytes": 2886,
+      "sha256": "66569de60119f77d4a50ee629dd28a10187b8b042e74614e52df4303af08d812"
+    },
+    {
+      "path": "private/slice112-input-audio/check-production.cmd",
+      "size_bytes": 362,
+      "sha256": "6d49c3c916c16849ed1e23e17bdc92944257a5246a471d812f51dd6b0ba3e0d7"
+    },
+    {
+      "path": "private/slice112-input-audio/controls-progress.png",
+      "size_bytes": 1344438,
+      "sha256": "bc958bd081c5dceb19451d78d241ef011fcb8858cfbcc15c410cba6740a3aa80"
+    },
+    {
+      "path": "private/slice112-input-audio/driving-controls-analysis.json",
+      "size_bytes": 2182,
+      "sha256": "62324ae96a4289c879ff0340626146959fd5979d4900531d067d629c79a15c91"
+    },
+    {
+      "path": "private/slice112-input-audio/finalize-metadata.py",
+      "size_bytes": 6827,
+      "sha256": "415da0e7eb375459ece1e456755f3110089565f2d54dd93ab33371adf1d26804"
+    },
+    {
+      "path": "private/slice112-input-audio/gpu-race-fix-fixture.log",
+      "size_bytes": 1583,
+      "sha256": "49aebb563893f60a58055f5bcc6c4bee55b399dcdf0e3236b62b30e1146aba4d"
+    },
+    {
+      "path": "private/slice112-input-audio/host-fixture.log",
+      "size_bytes": 454,
+      "sha256": "d6e41a7c07d4bd83892bcd4efbfb19c5639044960436ff0f9faf45f3934d6016"
+    },
+    {
+      "path": "private/slice112-input-audio/host-gpu-tests.log",
+      "size_bytes": 109,
+      "sha256": "ca50f7adfc0d7e43734e047d7e4b2255504201ec8997b5ef1a9c7adf985246a9"
+    },
+    {
+      "path": "private/slice112-input-audio/latest-prefix.png",
+      "size_bytes": 82770,
+      "sha256": "4fc80b7fbc281e7c621040063a57056f5ce8c7a326fda30f7d55d4cf331b9c5f"
+    },
+    {
+      "path": "private/slice112-input-audio/manual-checks.log",
+      "size_bytes": 374,
+      "sha256": "0a6ec1dfff52179c36f537894c12c9f91f6d5624a73a6831a2723826f2990521"
+    },
+    {
+      "path": "private/slice112-input-audio/manual-control1.log",
+      "size_bytes": 297,
+      "sha256": "6bcb7d1943f362b272dfa0300906d36924bfa37bd1e81e1d216f571d38f82734"
+    },
+    {
+      "path": "private/slice112-input-audio/manual-control2.log",
+      "size_bytes": 297,
+      "sha256": "944bfa6dc5a40c3dc3f5d20814942c32f85778fffc1417cf72f9728475616b18"
+    },
+    {
+      "path": "private/slice112-input-audio/manual-controls.json",
+      "size_bytes": 374,
+      "sha256": "0a6ec1dfff52179c36f537894c12c9f91f6d5624a73a6831a2723826f2990521"
+    },
+    {
+      "path": "private/slice112-input-audio/port/gpu.cpp",
+      "size_bytes": 56890,
+      "sha256": "48b0954b711a75e402e8699f93bba739a452d6905ed920b772a4a462d5cacdc4"
+    },
+    {
+      "path": "private/slice112-input-audio/port/gpu.hpp",
+      "size_bytes": 1747,
+      "sha256": "7b4227a1c0fbe685bd097bbeb1c6a1db8c0391c13522d557d37dc3cba9b3bb1b"
+    },
+    {
+      "path": "private/slice112-input-audio/port/gs.cpp",
+      "size_bytes": 50577,
+      "sha256": "16caf05ea21bd16c415f6d07f8af67a7a5bb9166d44b6324217037139e01db93"
+    },
+    {
+      "path": "private/slice112-input-audio/port/main.cpp",
+      "size_bytes": 4336,
+      "sha256": "99564a06d2006cb22c9479682d764e975683c36c2f55a6c25c5d122330785f8e"
+    },
+    {
+      "path": "private/slice112-input-audio/producer-final.exe",
+      "size_bytes": 54446080,
+      "sha256": "96fc90ef77edf72b088f011eec0d7a6a48b9273e2d964c97198e4c2e70c9bc67"
+    },
+    {
+      "path": "private/slice112-input-audio/producer-race-fix.exe",
+      "size_bytes": 54449664,
+      "sha256": "07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7"
+    },
+    {
+      "path": "private/slice112-input-audio/production-checks.log",
+      "size_bytes": 6030,
+      "sha256": "ec38a572a723a9bf96ba9e104c7a5a08d906e4c1becca8948577d501d753ce39"
+    },
+    {
+      "path": "private/slice112-input-audio/progression.png",
+      "size_bytes": 175533,
+      "sha256": "695901237d472dc87872048be77235fd84775a94f5a42a36150d0a4a62a8befc"
+    },
+    {
+      "path": "private/slice112-input-audio/python-checks.log",
+      "size_bytes": 1594,
+      "sha256": "6e8536586dfc907881c511f121c7d380ea9a021f875f6c344a51d6c7efeffcfb"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/audio.wav",
+      "size_bytes": 28775596,
+      "sha256": "04a52dd2326dbeb872d9371c286910dd627eb9b76ca76ad1406e611801bb99a2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/card.ps2.lock",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "21785a921c1ab200787131e6c195a1f67c7d918c0271089cbc22fd6aa5a7afa0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "11e0568ad2c9726e10024b8035aaa58c84fcc1326c1c995a16861f63cdbc4688"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b322eddb4d9d27a6b13882983b4040f082eae1b08653553dd43563c6eb5dbba"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "dc0dd985ffa18cbe3669d62f73c18f52e837960c8928f26517920b69468da70d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b51a8694b62c7e3bb921180a85025d15c5fe1c9dc85158255d9120114a80eb3d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "d84b18dfbff707f7eefe7802b72079390e76bfb8d05b5423faef5411dde6a021"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e12ef8464e12062ffee7fc967b87cc894606794f070beaa054ca29bb3ac1b462"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02800.ppm",
+      "size_bytes": 860175,
+      "sha256": "4e13e3f7d5740fd48df5d05df137e14c09aa2f6dd610112cf4bad2898e77ae5f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_02900.ppm",
+      "size_bytes": 860175,
+      "sha256": "6a51a20d60361e2f7d57b087385533c6d7c356c55fba5459d2927bd38b5d97c2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03000.ppm",
+      "size_bytes": 860175,
+      "sha256": "422efd6da0a78f8e714a92809772b647832693f9fd83c2802e13e9c9579e794e"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0ca8ad74f1168f8249794cc0d57dcfa0989c6c0aec5fa001f95c02e723104582"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03200.ppm",
+      "size_bytes": 860175,
+      "sha256": "811b7bad96d72ed30eb0bd9f0e5a3d6ffa8141ae3808a4eeeb0ef2e737c6f049"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03300.ppm",
+      "size_bytes": 860175,
+      "sha256": "15d86c1f22a194546d473cc2c63e95465fa3470a67117c1c175f7ff9d6a7b2c8"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03400.ppm",
+      "size_bytes": 860175,
+      "sha256": "33bc451f0f9c9340db14914de6ae4446ded321e5e7562890d2c02ac8185d9a6a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03500.ppm",
+      "size_bytes": 860175,
+      "sha256": "a0a715545f924153c966c1b226a3dc04a6e03122d61cd734f07300195069b78f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03600.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b46448f187e8498a19eca39a4ccf372faba1e1ab77b2a12dd3b31604f3e6c77"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03700.ppm",
+      "size_bytes": 860175,
+      "sha256": "96273f2670a0f2797a1f90fe75d7160d6bcb31e90e69a3b89c8d97277ee7ca27"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03800.ppm",
+      "size_bytes": 860175,
+      "sha256": "9bcc1b2e29ddf9502b616f56e90572187740a8afb140628c3fb5dcf280bb56a6"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_03900.ppm",
+      "size_bytes": 860175,
+      "sha256": "5db8c31bb93e3b4875bec6eb61572ec5637d17d301fe732d0773b0e1d941ade3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04000.ppm",
+      "size_bytes": 860175,
+      "sha256": "4ce07946b94417db2fa87777d7e10b6368fc8b739877be2dd067241bb17bdc93"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04100.ppm",
+      "size_bytes": 860175,
+      "sha256": "e8e5996f43458a220c71186d5b1d856d8de761ef68da0b63d65b2279edbf0874"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04200.ppm",
+      "size_bytes": 860175,
+      "sha256": "f442fbd5760061ea1a6a3913cca16e1a33b63c9c71eead6d1667b618dae1b481"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04300.ppm",
+      "size_bytes": 860175,
+      "sha256": "e963f23c7ced23849e7ec5ff8d2ab8a57de379817da3cc7b87ff4726502adddc"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04400.ppm",
+      "size_bytes": 860175,
+      "sha256": "2f73d39510e5fc343d568d00ead7c1b5d917d8554c087102488f9328faba9342"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b4823dc786d805fa57edd495e0f7874756e1edc66fcc77a097b5ab2d638b8d56"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04600.ppm",
+      "size_bytes": 860175,
+      "sha256": "6c281c69f7f0b82b9f2c3beb1b76f6553dda59b728af847b3f14e4bc8a2cdcc5"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04700.ppm",
+      "size_bytes": 860175,
+      "sha256": "dee056c6065a02c315e8db1dacc0a57272611507e9afc8f706c602aeae99efda"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04800.ppm",
+      "size_bytes": 860175,
+      "sha256": "a6d63ca3d98160aba2cac64530c0d1a6c16cc07b92e0982694e8fbb6e0bf072f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_04900.ppm",
+      "size_bytes": 860175,
+      "sha256": "3180e87e6297460c481d33a3fb6986bd0bf12823cebd80af9a09ff138f1705f3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05000.ppm",
+      "size_bytes": 860175,
+      "sha256": "bff18e18cc8fdf5b645d914a5c9e469a00ae75ea6c3c79a803615261a41a3849"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05100.ppm",
+      "size_bytes": 860175,
+      "sha256": "b801f9a9bea99c24f1f5ec69ed24e2d8235ff7504f23c12e2893a28b6e283f44"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05200.ppm",
+      "size_bytes": 860175,
+      "sha256": "5feb6223e85f5fb1d10b4b59b3fd495a7c6a1837739dd7580349a293a266551a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05300.ppm",
+      "size_bytes": 860175,
+      "sha256": "a6a6bd6484f3163ca5b82ab5740fdc93a48ffd1b5977d27ea1c25f1048702bb0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05400.ppm",
+      "size_bytes": 860175,
+      "sha256": "829d8251744c769b712463de039c13cca80a9665fd95684b8ec16c9f9ae66739"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05500.ppm",
+      "size_bytes": 860175,
+      "sha256": "335b085c4f4ee6b3ce5b2756ba51a9741b2a2ca24f43807770c50470f00ae001"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05600.ppm",
+      "size_bytes": 860175,
+      "sha256": "8893b7ff592586b2c578af90db7109c34a711c4fec59f690cf0f52d4e17ff189"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e7df7727cea1571b3def24697a9e446cd93d803687521b5bdaa07fd88eae1269"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05800.ppm",
+      "size_bytes": 860175,
+      "sha256": "75138e278b4ded65fbb319d60dd7ebfb44b0834d2dc23bd720dadf999e864989"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_05900.ppm",
+      "size_bytes": 860175,
+      "sha256": "13c9b3cc0de8b8b5eb80ed316fa0ca2a7006574ac35a9eb6fac7a5d9a527e279"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06000.ppm",
+      "size_bytes": 860175,
+      "sha256": "d9556c9b7b9a241e8efed49da50f8e82408bb71f34fe95f234340cd3f8635b21"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06100.ppm",
+      "size_bytes": 860175,
+      "sha256": "01ba74e8fb12d6a7ad2b960fa1b2d2cf812ec065ca3bb0bdafa8bddbf2a33dad"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06200.ppm",
+      "size_bytes": 860175,
+      "sha256": "80653eb7033029784227211ad07efe8935645ec07776a28321aba9a44ba823ea"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06300.ppm",
+      "size_bytes": 860175,
+      "sha256": "834c18d319d517be56b0e7288df9210b5e3f7c21b6e2441febc2ca15b211b2ac"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06400.ppm",
+      "size_bytes": 860175,
+      "sha256": "98ed7925f35f25cdc9deeca5fcd5dbccdd30b18c0f9ab78c4aad48df46e93736"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06500.ppm",
+      "size_bytes": 860175,
+      "sha256": "2e1dcafd061a63c6f1741a27ccf0bf615764adba2ee7b7e4aba561409b00ee8d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06600.ppm",
+      "size_bytes": 860175,
+      "sha256": "a76555afa28e041c849e3e6426fdb099b42986ceeca6f43498210d7b3fb37c7f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06700.ppm",
+      "size_bytes": 860175,
+      "sha256": "82607580f0ff1118d74fe6c32b786838b58368946eccfbf1ed3d9a2e255614fd"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06800.ppm",
+      "size_bytes": 860175,
+      "sha256": "06828794b88a79c123734ef2f422577dc52dfa241cb1c50c2b1185dcde0d396c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_06900.ppm",
+      "size_bytes": 860175,
+      "sha256": "ea54667b4a40602ca1b47407ab04d242b153e7e2825c7fbbddec01c656acc95a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07000.ppm",
+      "size_bytes": 860175,
+      "sha256": "7c906fb6e69cad2cc0df23dd7aed76fd341ea7e993e81ffa8e5acd6d72e659b6"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07100.ppm",
+      "size_bytes": 860175,
+      "sha256": "48e047426a28a87cd48542d68a0aac9d3e307ff857e9dde0d5983ce2e351b825"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07200.ppm",
+      "size_bytes": 860175,
+      "sha256": "a27721d24e951e879de041ce57ff3da487c156f93a159041d7b93fadffc7f627"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07300.ppm",
+      "size_bytes": 860175,
+      "sha256": "2ee256963f839c742def91334ab7a203d9ed76e25abaea7832e491459a53583c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07400.ppm",
+      "size_bytes": 860175,
+      "sha256": "b6b9880a8523fedeb32744eda17fa155df4e4da90051097f22d5e56e2266d7b6"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b6bf3a3287844f2c57082d05a94d548e4199c7709a7bf1d220713c8e75ca3624"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07600.ppm",
+      "size_bytes": 860175,
+      "sha256": "81112550d1f76f9611935ca0424df5f5a5086c127c089bc57d223e7c095577ac"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07700.ppm",
+      "size_bytes": 860175,
+      "sha256": "6e99d613cb9c23935d68a066ba34e2d8ea21640ded8fa5116419a52567484db0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07800.ppm",
+      "size_bytes": 860175,
+      "sha256": "af05d17e10b52e37cbb039e355d022f7f722dfc4bbb4cff8dae2a2dee1c9d73e"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_07900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e0e73b0bce54185e52d5796bf037a5aad48cc0758333e639f403df1d3b27e45d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08000.ppm",
+      "size_bytes": 860175,
+      "sha256": "4edb9ecc292886f6f1359ef61593e69589e120371e83110b84106bf9b504e3cc"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08100.ppm",
+      "size_bytes": 860175,
+      "sha256": "108f85fa804bb44ea6dc57939d4c92dd938fe007816ca455276a77ff226a1ba0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08200.ppm",
+      "size_bytes": 860175,
+      "sha256": "05d09a2379e5e5d75cb7f7c221cf50ce0da1fe26d0aea7dd7dec95fdadeb8c94"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08300.ppm",
+      "size_bytes": 860175,
+      "sha256": "2ba9cf3c4ce03119bc9a2af46a3b3043efb1b6540c42d1cd04e15fe009780577"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08400.ppm",
+      "size_bytes": 860175,
+      "sha256": "42b16eed07bb976131306bfd319fa87c4b8b89deb2545ce8f70fd1e387d153d7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08500.ppm",
+      "size_bytes": 860175,
+      "sha256": "67d7ef50234a02696b9d975958f164df003be3da08716d24e4b1d1db8804bfbc"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08600.ppm",
+      "size_bytes": 860175,
+      "sha256": "364998abc1fa12d5e277f14922710e90b613d4d1a4f1e645897cf5d7f4b46af2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08700.ppm",
+      "size_bytes": 860175,
+      "sha256": "4d03cf74bb0fe147ac47ced210cab29d210ab9b1da68327c03bb1753d8fd691b"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08800.ppm",
+      "size_bytes": 860175,
+      "sha256": "fe493baa7a9022408f35029a4880b1a50f69fcbac265b277a802943574b6f7fe"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_08900.ppm",
+      "size_bytes": 860175,
+      "sha256": "ea8ad550be321f4aaa3654b8f79dbc06ba1d9a3e6780e481f4ba86c25c05f0f4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/frames/frame_09000.ppm",
+      "size_bytes": 860175,
+      "sha256": "5c30fe887b2e420472ae75adbf009762fd05a57c4e5623b799cd8cf4311607a5"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/probe.log",
+      "size_bytes": 520254776,
+      "sha256": "ec1d09cda136d43e71e28b3c2c275ddffd89a0a8cf7bfd677d71f4c7279beca6"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/result.json",
+      "size_bytes": 4243,
+      "sha256": "7e7796ee0531328190b7e98ce1471f9405a06cf7dbe8b0c206123fbe4f0f648a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-controls1-launch.log",
+      "size_bytes": 4243,
+      "sha256": "7e7796ee0531328190b7e98ce1471f9405a06cf7dbe8b0c206123fbe4f0f648a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final.png",
+      "size_bytes": 246571,
+      "sha256": "86992887696feb213e3c58855f98216658805b54e725c01d74f075c7217051a8"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "21785a921c1ab200787131e6c195a1f67c7d918c0271089cbc22fd6aa5a7afa0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "11e0568ad2c9726e10024b8035aaa58c84fcc1326c1c995a16861f63cdbc4688"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b322eddb4d9d27a6b13882983b4040f082eae1b08653553dd43563c6eb5dbba"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "dc0dd985ffa18cbe3669d62f73c18f52e837960c8928f26517920b69468da70d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b51a8694b62c7e3bb921180a85025d15c5fe1c9dc85158255d9120114a80eb3d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "d84b18dfbff707f7eefe7802b72079390e76bfb8d05b5423faef5411dde6a021"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e12ef8464e12062ffee7fc967b87cc894606794f070beaa054ca29bb3ac1b462"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02800.ppm",
+      "size_bytes": 860175,
+      "sha256": "4e13e3f7d5740fd48df5d05df137e14c09aa2f6dd610112cf4bad2898e77ae5f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_02900.ppm",
+      "size_bytes": 860175,
+      "sha256": "6a51a20d60361e2f7d57b087385533c6d7c356c55fba5459d2927bd38b5d97c2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03000.ppm",
+      "size_bytes": 860175,
+      "sha256": "422efd6da0a78f8e714a92809772b647832693f9fd83c2802e13e9c9579e794e"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0ca8ad74f1168f8249794cc0d57dcfa0989c6c0aec5fa001f95c02e723104582"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03200.ppm",
+      "size_bytes": 860175,
+      "sha256": "811b7bad96d72ed30eb0bd9f0e5a3d6ffa8141ae3808a4eeeb0ef2e737c6f049"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03300.ppm",
+      "size_bytes": 860175,
+      "sha256": "15d86c1f22a194546d473cc2c63e95465fa3470a67117c1c175f7ff9d6a7b2c8"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03400.ppm",
+      "size_bytes": 860175,
+      "sha256": "33bc451f0f9c9340db14914de6ae4446ded321e5e7562890d2c02ac8185d9a6a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03500.ppm",
+      "size_bytes": 860175,
+      "sha256": "a0a715545f924153c966c1b226a3dc04a6e03122d61cd734f07300195069b78f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03600.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b46448f187e8498a19eca39a4ccf372faba1e1ab77b2a12dd3b31604f3e6c77"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03700.ppm",
+      "size_bytes": 860175,
+      "sha256": "96273f2670a0f2797a1f90fe75d7160d6bcb31e90e69a3b89c8d97277ee7ca27"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03800.ppm",
+      "size_bytes": 860175,
+      "sha256": "9bcc1b2e29ddf9502b616f56e90572187740a8afb140628c3fb5dcf280bb56a6"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_03900.ppm",
+      "size_bytes": 860175,
+      "sha256": "5db8c31bb93e3b4875bec6eb61572ec5637d17d301fe732d0773b0e1d941ade3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04000.ppm",
+      "size_bytes": 860175,
+      "sha256": "4ce07946b94417db2fa87777d7e10b6368fc8b739877be2dd067241bb17bdc93"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04100.ppm",
+      "size_bytes": 860175,
+      "sha256": "e8e5996f43458a220c71186d5b1d856d8de761ef68da0b63d65b2279edbf0874"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04200.ppm",
+      "size_bytes": 860175,
+      "sha256": "f442fbd5760061ea1a6a3913cca16e1a33b63c9c71eead6d1667b618dae1b481"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04300.ppm",
+      "size_bytes": 860175,
+      "sha256": "e963f23c7ced23849e7ec5ff8d2ab8a57de379817da3cc7b87ff4726502adddc"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04400.ppm",
+      "size_bytes": 860175,
+      "sha256": "2f73d39510e5fc343d568d00ead7c1b5d917d8554c087102488f9328faba9342"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b4823dc786d805fa57edd495e0f7874756e1edc66fcc77a097b5ab2d638b8d56"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04600.ppm",
+      "size_bytes": 860175,
+      "sha256": "6c281c69f7f0b82b9f2c3beb1b76f6553dda59b728af847b3f14e4bc8a2cdcc5"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04700.ppm",
+      "size_bytes": 860175,
+      "sha256": "dee056c6065a02c315e8db1dacc0a57272611507e9afc8f706c602aeae99efda"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/frames/frame_04800.ppm",
+      "size_bytes": 860175,
+      "sha256": "a6d63ca3d98160aba2cac64530c0d1a6c16cc07b92e0982694e8fbb6e0bf072f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/probe.log",
+      "size_bytes": 473469759,
+      "sha256": "22437bb62f641b72c13f40dc213d87fcf9d3fbbed33452e46012453fcda41cd7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/result.json",
+      "size_bytes": 3002,
+      "sha256": "3cffbf81fcc9d4b517ab944abb2af655afc880c2bdf66ea35e75991747e24af7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1-last.png",
+      "size_bytes": 1367200,
+      "sha256": "9977675f31913119c1f400409643e37810d1ef7aac5a23fca5e95a765e76c361"
+    },
+    {
+      "path": "private/slice112-input-audio/race-final1-launch.log",
+      "size_bytes": 3002,
+      "sha256": "3cffbf81fcc9d4b517ab944abb2af655afc880c2bdf66ea35e75991747e24af7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/audio.wav",
+      "size_bytes": 19175596,
+      "sha256": "5f8d885cb54a445272ca21ad4cf3396b45cfcfbf8b236acff46b85ed44691f34"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/card.ps2.lock",
+      "size_bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "21785a921c1ab200787131e6c195a1f67c7d918c0271089cbc22fd6aa5a7afa0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "11e0568ad2c9726e10024b8035aaa58c84fcc1326c1c995a16861f63cdbc4688"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b322eddb4d9d27a6b13882983b4040f082eae1b08653553dd43563c6eb5dbba"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "dc0dd985ffa18cbe3669d62f73c18f52e837960c8928f26517920b69468da70d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b51a8694b62c7e3bb921180a85025d15c5fe1c9dc85158255d9120114a80eb3d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "d84b18dfbff707f7eefe7802b72079390e76bfb8d05b5423faef5411dde6a021"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e12ef8464e12062ffee7fc967b87cc894606794f070beaa054ca29bb3ac1b462"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02800.ppm",
+      "size_bytes": 860175,
+      "sha256": "4e13e3f7d5740fd48df5d05df137e14c09aa2f6dd610112cf4bad2898e77ae5f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_02900.ppm",
+      "size_bytes": 860175,
+      "sha256": "6a51a20d60361e2f7d57b087385533c6d7c356c55fba5459d2927bd38b5d97c2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03000.ppm",
+      "size_bytes": 860175,
+      "sha256": "422efd6da0a78f8e714a92809772b647832693f9fd83c2802e13e9c9579e794e"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0ca8ad74f1168f8249794cc0d57dcfa0989c6c0aec5fa001f95c02e723104582"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03200.ppm",
+      "size_bytes": 860175,
+      "sha256": "811b7bad96d72ed30eb0bd9f0e5a3d6ffa8141ae3808a4eeeb0ef2e737c6f049"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03300.ppm",
+      "size_bytes": 860175,
+      "sha256": "15d86c1f22a194546d473cc2c63e95465fa3470a67117c1c175f7ff9d6a7b2c8"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03400.ppm",
+      "size_bytes": 860175,
+      "sha256": "33bc451f0f9c9340db14914de6ae4446ded321e5e7562890d2c02ac8185d9a6a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03500.ppm",
+      "size_bytes": 860175,
+      "sha256": "a0a715545f924153c966c1b226a3dc04a6e03122d61cd734f07300195069b78f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03600.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b46448f187e8498a19eca39a4ccf372faba1e1ab77b2a12dd3b31604f3e6c77"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03700.ppm",
+      "size_bytes": 860175,
+      "sha256": "96273f2670a0f2797a1f90fe75d7160d6bcb31e90e69a3b89c8d97277ee7ca27"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03800.ppm",
+      "size_bytes": 860175,
+      "sha256": "9bcc1b2e29ddf9502b616f56e90572187740a8afb140628c3fb5dcf280bb56a6"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_03900.ppm",
+      "size_bytes": 860175,
+      "sha256": "5db8c31bb93e3b4875bec6eb61572ec5637d17d301fe732d0773b0e1d941ade3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04000.ppm",
+      "size_bytes": 860175,
+      "sha256": "4ce07946b94417db2fa87777d7e10b6368fc8b739877be2dd067241bb17bdc93"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04100.ppm",
+      "size_bytes": 860175,
+      "sha256": "e8e5996f43458a220c71186d5b1d856d8de761ef68da0b63d65b2279edbf0874"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04200.ppm",
+      "size_bytes": 860175,
+      "sha256": "f442fbd5760061ea1a6a3913cca16e1a33b63c9c71eead6d1667b618dae1b481"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04300.ppm",
+      "size_bytes": 860175,
+      "sha256": "e963f23c7ced23849e7ec5ff8d2ab8a57de379817da3cc7b87ff4726502adddc"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04400.ppm",
+      "size_bytes": 860175,
+      "sha256": "2f73d39510e5fc343d568d00ead7c1b5d917d8554c087102488f9328faba9342"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b4823dc786d805fa57edd495e0f7874756e1edc66fcc77a097b5ab2d638b8d56"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04600.ppm",
+      "size_bytes": 860175,
+      "sha256": "6c281c69f7f0b82b9f2c3beb1b76f6553dda59b728af847b3f14e4bc8a2cdcc5"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04700.ppm",
+      "size_bytes": 860175,
+      "sha256": "dee056c6065a02c315e8db1dacc0a57272611507e9afc8f706c602aeae99efda"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04800.ppm",
+      "size_bytes": 860175,
+      "sha256": "a6d63ca3d98160aba2cac64530c0d1a6c16cc07b92e0982694e8fbb6e0bf072f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_04900.ppm",
+      "size_bytes": 860175,
+      "sha256": "3180e87e6297460c481d33a3fb6986bd0bf12823cebd80af9a09ff138f1705f3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05000.ppm",
+      "size_bytes": 860175,
+      "sha256": "bff18e18cc8fdf5b645d914a5c9e469a00ae75ea6c3c79a803615261a41a3849"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05100.ppm",
+      "size_bytes": 860175,
+      "sha256": "b801f9a9bea99c24f1f5ec69ed24e2d8235ff7504f23c12e2893a28b6e283f44"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05200.ppm",
+      "size_bytes": 860175,
+      "sha256": "5feb6223e85f5fb1d10b4b59b3fd495a7c6a1837739dd7580349a293a266551a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05300.ppm",
+      "size_bytes": 860175,
+      "sha256": "a6a6bd6484f3163ca5b82ab5740fdc93a48ffd1b5977d27ea1c25f1048702bb0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05400.ppm",
+      "size_bytes": 860175,
+      "sha256": "829d8251744c769b712463de039c13cca80a9665fd95684b8ec16c9f9ae66739"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05500.ppm",
+      "size_bytes": 860175,
+      "sha256": "335b085c4f4ee6b3ce5b2756ba51a9741b2a2ca24f43807770c50470f00ae001"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05600.ppm",
+      "size_bytes": 860175,
+      "sha256": "8893b7ff592586b2c578af90db7109c34a711c4fec59f690cf0f52d4e17ff189"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e7df7727cea1571b3def24697a9e446cd93d803687521b5bdaa07fd88eae1269"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05800.ppm",
+      "size_bytes": 860175,
+      "sha256": "75138e278b4ded65fbb319d60dd7ebfb44b0834d2dc23bd720dadf999e864989"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_05900.ppm",
+      "size_bytes": 860175,
+      "sha256": "13c9b3cc0de8b8b5eb80ed316fa0ca2a7006574ac35a9eb6fac7a5d9a527e279"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/frames/frame_06000.ppm",
+      "size_bytes": 860175,
+      "sha256": "d9556c9b7b9a241e8efed49da50f8e82408bb71f34fe95f234340cd3f8635b21"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/probe.log",
+      "size_bytes": 486891755,
+      "sha256": "cac68a70b534b5f0c7abd9edee6edcdf8fbffc3cf45887e2e7a73988f959ca40"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/result.json",
+      "size_bytes": 3386,
+      "sha256": "00ce70aa690f747430988a3b00cee89660ad605dba504ff632beae1c78973088"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1-launch.log",
+      "size_bytes": 3386,
+      "sha256": "00ce70aa690f747430988a3b00cee89660ad605dba504ff632beae1c78973088"
+    },
+    {
+      "path": "private/slice112-input-audio/race-fixed1-play.png",
+      "size_bytes": 1385730,
+      "sha256": "aa5a235b132b416e7a7f0ce7debfca9c9e4652e0165790fe81a2f77aa6f13fd0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-play.png",
+      "size_bytes": 245223,
+      "sha256": "8c889a06898f5eb1b9b651bc1a11073fe8245a04835ff5af631427fcdb4abfc7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/audio.wav",
+      "size_bytes": 10215596,
+      "sha256": "bf3ad64b92bda638fef4e8a213fd1aa68e9b4a5a803e4667bada73c7bf6ed7fb"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00200.ppm",
+      "size_bytes": 860175,
+      "sha256": "0bb0b9d65987fdbbeb0d49f809325b1eb8c632b61348a43ddc7bc806af038bc4"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00300.ppm",
+      "size_bytes": 860175,
+      "sha256": "00c470b9619bb218650748690cd9de4a6d885656deaf8d573a1468b394f3db4a"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00400.ppm",
+      "size_bytes": 860175,
+      "sha256": "36f5fa2a64bb44ae652a7cf4157bf6a77e8bda1bb560421cc339594708fbf315"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00500.ppm",
+      "size_bytes": 860175,
+      "sha256": "442dc2071a41fe52c62fd60567eef04c7395d37466133995178449b5d33adbaa"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00600.ppm",
+      "size_bytes": 860175,
+      "sha256": "2a6a047964eb921f2a684b9e8418bc0c80b26b798dee4ff9c928f2fc3c13d0e2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e312f2e9f382e3524b8f68c9fdf4326b7a6ec3e9168d297a43ce01bb1042bb19"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00800.ppm",
+      "size_bytes": 860175,
+      "sha256": "97bf8477c508180936c2e5469b8f29016e63463a322734d4919e927101161b5c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_00900.ppm",
+      "size_bytes": 860175,
+      "sha256": "e24649696885273f076c2db33d2005edb065d7658a64569266888a0daa450da3"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a04a36cd7c678920b29b0665d9b51e8521e2c357b4e56f157e70350172165a4d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01100.ppm",
+      "size_bytes": 860175,
+      "sha256": "af5762e05f57d58e0ee53972e5de3c2e575648db055794a4b2caa588f59094fe"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01200.ppm",
+      "size_bytes": 860175,
+      "sha256": "9833d05db5a665a97d4f918c8ba6d1c26aef83673e188b77bd3d6fb61f832f47"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01300.ppm",
+      "size_bytes": 860175,
+      "sha256": "10f596641d17189d7906fc0eeab8f60398a9f1f058dfbffb016d1942041ce273"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01400.ppm",
+      "size_bytes": 860175,
+      "sha256": "8db56ae56215cafd0fe2f17f9e9b7cba47b40b510a6db3baa62c0aca63689dde"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b14d8db36619d94af1414cdddd1bfe3ea431f12401861aba6a81d11bf9d3090b"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01600.ppm",
+      "size_bytes": 860175,
+      "sha256": "21785a921c1ab200787131e6c195a1f67c7d918c0271089cbc22fd6aa5a7afa0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01700.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01800.ppm",
+      "size_bytes": 860175,
+      "sha256": "733bbb4797aa514ca18c8eaf5f23460a1fba9359653c5c894e80f5d8930374a7"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_01900.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02000.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02100.ppm",
+      "size_bytes": 860175,
+      "sha256": "a317e5af68d4437e96371a0facad5223bae129120d6a24717777ed3baf2826d2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02200.ppm",
+      "size_bytes": 860175,
+      "sha256": "11e0568ad2c9726e10024b8035aaa58c84fcc1326c1c995a16861f63cdbc4688"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02300.ppm",
+      "size_bytes": 860175,
+      "sha256": "3b322eddb4d9d27a6b13882983b4040f082eae1b08653553dd43563c6eb5dbba"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02400.ppm",
+      "size_bytes": 860175,
+      "sha256": "dc0dd985ffa18cbe3669d62f73c18f52e837960c8928f26517920b69468da70d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02500.ppm",
+      "size_bytes": 860175,
+      "sha256": "b51a8694b62c7e3bb921180a85025d15c5fe1c9dc85158255d9120114a80eb3d"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02600.ppm",
+      "size_bytes": 860175,
+      "sha256": "d84b18dfbff707f7eefe7802b72079390e76bfb8d05b5423faef5411dde6a021"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02700.ppm",
+      "size_bytes": 860175,
+      "sha256": "e12ef8464e12062ffee7fc967b87cc894606794f070beaa054ca29bb3ac1b462"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02800.ppm",
+      "size_bytes": 860175,
+      "sha256": "4e13e3f7d5740fd48df5d05df137e14c09aa2f6dd610112cf4bad2898e77ae5f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_02900.ppm",
+      "size_bytes": 860175,
+      "sha256": "6a51a20d60361e2f7d57b087385533c6d7c356c55fba5459d2927bd38b5d97c2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_03000.ppm",
+      "size_bytes": 860175,
+      "sha256": "422efd6da0a78f8e714a92809772b647832693f9fd83c2802e13e9c9579e794e"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_03100.ppm",
+      "size_bytes": 860175,
+      "sha256": "0ca8ad74f1168f8249794cc0d57dcfa0989c6c0aec5fa001f95c02e723104582"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/frames/frame_03200.ppm",
+      "size_bytes": 860175,
+      "sha256": "de0d19f4ad5d99b76377364f663da17df1c5828f3c1210f4c64c46dd80fcaff2"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/probe.log",
+      "size_bytes": 343614327,
+      "sha256": "b05e65eab549e58cb4e1a1703f79233f4fb51defc3e6b139fd7a4b599ce076c0"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/result.json",
+      "size_bytes": 2472,
+      "sha256": "c9ace41789824c6ab9fd45a9daa3523c8fc759f6b77257d16ac74d88a7d74a9f"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/slice112-input-audio/race-prefix1-launch.log",
+      "size_bytes": 2472,
+      "sha256": "c9ace41789824c6ab9fd45a9daa3523c8fc759f6b77257d16ac74d88a7d74a9f"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice112-input-audio/shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/build.cmd",
+      "size_bytes": 1161,
+      "sha256": "366c8a03e62f89122aa00aaf0d290706900f4a9b85fa18decda049ce266a40d0"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/CMakeLists.txt",
+      "size_bytes": 2423,
+      "sha256": "5eac989b2827ea2683c53989f15bed80d7e83250231f69abc36767cfe66ea923"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/external_runtime_probe.py",
+      "size_bytes": 10266,
+      "sha256": "a19f5c4b25a8fd5df4c577cbe48eb1224eac7d4d8352d305ccc42e3da1f4fe46"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/fixture.cpp",
+      "size_bytes": 6441,
+      "sha256": "ff03f8c5434af03e5e6aea6e101249158e7a248c9f2d5ad3b0c283be1e48fb85"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/gpu_helpers.inc",
+      "size_bytes": 1879,
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/gpu_init.inc",
+      "size_bytes": 1720,
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/gpu_tail.inc",
+      "size_bytes": 4523,
+      "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/host_io.cpp",
+      "size_bytes": 10814,
+      "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/host_io.hpp",
+      "size_bytes": 2004,
+      "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/host_io_fixture.cpp",
+      "size_bytes": 5385,
+      "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/native_vulkan.cpp",
+      "size_bytes": 36772,
+      "sha256": "91b792d59d5d9753938c1c62ba5c474e869673bb7d81821e5da70da8809dadd2"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/native_vulkan.hpp",
+      "size_bytes": 3398,
+      "sha256": "465e177a3abd84b617c9eb25943e872ddf2cb909498179ed9843e7a221c54129"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/play_external_runtime.py",
+      "size_bytes": 2175,
+      "sha256": "e2f3541bb7b60f0862efcd600df4298cee91660ce22e6a2549c743ca7b72e68f"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/prepare_external_vulkan.py",
+      "size_bytes": 5400,
+      "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/THIRD_PARTY.md",
+      "size_bytes": 1312,
+      "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/window.cpp",
+      "size_bytes": 5022,
+      "sha256": "a3f709cf570458dbbeb989dbc331c180ca6ffbef52493ddd8f491a20ace651dd"
+    },
+    {
+      "path": "private/slice112-input-audio/source-final/window.hpp",
+      "size_bytes": 124,
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/build.cmd",
+      "size_bytes": 1159,
+      "sha256": "8cb25c72308499ff2bf7a6fc0a04b300114e77f7e35e9942a785ba9c9b1fe431"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/CMakeLists.txt",
+      "size_bytes": 2423,
+      "sha256": "5eac989b2827ea2683c53989f15bed80d7e83250231f69abc36767cfe66ea923"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/fixture.cpp",
+      "size_bytes": 7711,
+      "sha256": "fe3d2d57b944786447fbabaa3d267430741094ce27887b659d022528a8677a50"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/gpu_helpers.inc",
+      "size_bytes": 1879,
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/gpu_init.inc",
+      "size_bytes": 1720,
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/gpu_tail.inc",
+      "size_bytes": 4523,
+      "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/host_io.cpp",
+      "size_bytes": 10814,
+      "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/host_io.hpp",
+      "size_bytes": 2004,
+      "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/host_io_fixture.cpp",
+      "size_bytes": 5385,
+      "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/native_vulkan.cpp",
+      "size_bytes": 37425,
+      "sha256": "9dbca0a86bca59193cc5dd48e98cbd9ce228b0b339b26d242537a17c16979952"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/native_vulkan.hpp",
+      "size_bytes": 3436,
+      "sha256": "3c6273a603f763bbd0a3d75637698e6bc05d87014364943f7b361e77b8360659"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/THIRD_PARTY.md",
+      "size_bytes": 1312,
+      "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/window.cpp",
+      "size_bytes": 5625,
+      "sha256": "3c87d188f246b3cd4669de4ad7143cd42d2d142d4622932bda576702a76b2cd8"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/experimental/vulkan/window.hpp",
+      "size_bytes": 124,
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/Jogar-GT4.cmd",
+      "size_bytes": 193,
+      "sha256": "faf90902940b601f559af0588285da96ac8e4df4dff875898133ad72212c99c9"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/scripts/external_runtime_probe.py",
+      "size_bytes": 10310,
+      "sha256": "560b4e674ce1f4baf3474b7252cd4c94f9e92c4052dccb1e00943d7408a1536f"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/scripts/play_external_runtime.py",
+      "size_bytes": 2175,
+      "sha256": "e2f3541bb7b60f0862efcd600df4298cee91660ce22e6a2549c743ca7b72e68f"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/scripts/prepare_external_vulkan.py",
+      "size_bytes": 5400,
+      "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/tests/python/test_external_runtime_probe.py",
+      "size_bytes": 13224,
+      "sha256": "1534973f914f8acae468fa943edd332592b49fa33b80c58b0b278e3e787c914b"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/tests/python/test_native_vulkan.py",
+      "size_bytes": 6627,
+      "sha256": "d260265312e198c3633b9e2f2c37d4b23a7e03c839954e4f416b1a7f041a8889"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/tools/wgsl_spirv/Cargo.lock",
+      "size_bytes": 7397,
+      "sha256": "80362455e8047c2ce53a3d94b750a62349df4ba1b4930acca86e6a73d60ec561"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/tools/wgsl_spirv/Cargo.toml",
+      "size_bytes": 151,
+      "sha256": "d640eb42e3094905ab9eb2c4242aee149c548a390fc191d8d512eaab393a66c8"
+    },
+    {
+      "path": "private/slice112-input-audio/source-publication/tools/wgsl_spirv/src/main.rs",
+      "size_bytes": 2229,
+      "sha256": "006c330a853b3d230c482e37937ee65c7e2a2d43b0fba074bbb02eda9516bdae"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/build.cmd",
+      "size_bytes": 1161,
+      "sha256": "366c8a03e62f89122aa00aaf0d290706900f4a9b85fa18decda049ce266a40d0"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/CMakeLists.txt",
+      "size_bytes": 2423,
+      "sha256": "5eac989b2827ea2683c53989f15bed80d7e83250231f69abc36767cfe66ea923"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/external_runtime_probe.py",
+      "size_bytes": 10310,
+      "sha256": "560b4e674ce1f4baf3474b7252cd4c94f9e92c4052dccb1e00943d7408a1536f"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/fixture.cpp",
+      "size_bytes": 7711,
+      "sha256": "fe3d2d57b944786447fbabaa3d267430741094ce27887b659d022528a8677a50"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/gpu_helpers.inc",
+      "size_bytes": 1879,
+      "sha256": "61afe4e7ec4a45041675833f34fccb4f7c22c613e341a2ec3782aa5e41376799"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/gpu_init.inc",
+      "size_bytes": 1720,
+      "sha256": "bf2fa89121c7ee5fbca2cf46a692f7a13ca3c8b9899269231ce879068f03f15d"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/gpu_tail.inc",
+      "size_bytes": 4523,
+      "sha256": "3e7644e37f4859eecbb56a38eedaa774348d7d647043909b53ed8d82ae920626"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/host_io.cpp",
+      "size_bytes": 10814,
+      "sha256": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/host_io.hpp",
+      "size_bytes": 2004,
+      "sha256": "b07f9280dadceb02a56a1a78071f978de4c3cdd2a31b90c508f670384958a2f3"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/host_io_fixture.cpp",
+      "size_bytes": 5385,
+      "sha256": "29e5f3efdc8bd664b9652875b7a9a72a94191e8bf6400fd6007326db9f5e918b"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/native_vulkan.cpp",
+      "size_bytes": 37425,
+      "sha256": "9dbca0a86bca59193cc5dd48e98cbd9ce228b0b339b26d242537a17c16979952"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/native_vulkan.hpp",
+      "size_bytes": 3436,
+      "sha256": "3c6273a603f763bbd0a3d75637698e6bc05d87014364943f7b361e77b8360659"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/play_external_runtime.py",
+      "size_bytes": 2175,
+      "sha256": "e2f3541bb7b60f0862efcd600df4298cee91660ce22e6a2549c743ca7b72e68f"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/prepare_external_vulkan.py",
+      "size_bytes": 5400,
+      "sha256": "2b87fce6dafedcc2b8ca62fd544f67b5b3b32e2165aabaafcedf102599364dee"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/THIRD_PARTY.md",
+      "size_bytes": 1312,
+      "sha256": "6ab77c66757abd31a0b22a1df5e341e674f0c868f4092097e099978e0f93f3c4"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/window.cpp",
+      "size_bytes": 5625,
+      "sha256": "3c87d188f246b3cd4669de4ad7143cd42d2d142d4622932bda576702a76b2cd8"
+    },
+    {
+      "path": "private/slice112-input-audio/source-race-fix/window.hpp",
+      "size_bytes": 124,
+      "sha256": "3617cfdaa12256e824d55aa5bb61ece8638418949f7e9e18e0b5da4d5854db5c"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003213-634635/card-before.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003213-634635/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003213-634635/probe.log",
+      "size_bytes": 11512,
+      "sha256": "23be88f5a5334d0db8e61e3c1a6e93b85bc6a699da5f9faa60f50d1c934c628b"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003213-634635/result.json",
+      "size_bytes": 1639,
+      "sha256": "21202313f367f74f040af5e9563fdb2a857f9a189cdd7f635aeeacc5777f0de5"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003213-634635/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003227-807514/card-before.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003227-807514/probe.log",
+      "size_bytes": 11513,
+      "sha256": "816c824a910402ddf6f873cf6706c27e8395078adab7595c72a34954586df1d7"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003227-807514/result.json",
+      "size_bytes": 1438,
+      "sha256": "cbf5075c7fa9cf3adab581f8f917f645ecc6f09c19c4eb464e4cd682f2e66147"
+    },
+    {
+      "path": "private/manual-play/session-20261013-003227-807514/SCUS_973.28",
+      "size_bytes": 6123004,
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c"
+    }
+  ]
+}

@@ -4,13 +4,13 @@ cd /d "%~dp0\..\.."
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat" -arch=amd64 -host_arch=amd64 >nul
 if errorlevel 1 exit /b %errorlevel%
 chcp 65001 >nul
-private\tooling-venv\Scripts\python.exe scripts\prepare_external_vulkan.py private\slice111-vulkan\port
+private\tooling-venv\Scripts\python.exe scripts\prepare_external_vulkan.py private\slice112-input-audio\port
 if errorlevel 1 exit /b %errorlevel%
-"%USERPROFILE%\.cargo\bin\cargo.exe" build --locked --release --manifest-path tools\wgsl_spirv\Cargo.toml --target-dir private\slice111-vulkan\shader-compiler
+"%USERPROFILE%\.cargo\bin\cargo.exe" build --locked --release --manifest-path tools\wgsl_spirv\Cargo.toml --target-dir private\slice112-input-audio\shader-compiler
 if errorlevel 1 exit /b %errorlevel%
-private\slice111-vulkan\shader-compiler\release\gt4-wgsl-spirv.exe private\references\ps2-web-recomp\runtime\src\gs\gpu\gs.wgsl private\slice111-vulkan\shaders
+private\slice112-input-audio\shader-compiler\release\gt4-wgsl-spirv.exe private\references\ps2-web-recomp\runtime\src\gs\gpu\gs.wgsl private\slice112-input-audio\shaders
 if errorlevel 1 exit /b %errorlevel%
-cmake -S experimental\vulkan -B private\slice111-vulkan\build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_MAKE_PROGRAM="C:/PROGRA~2/MICROS~2/2022/BUILDT~1/Common7/IDE/COMMON~1/MICROS~1/CMake/Ninja/ninja.exe"
+cmake -S experimental\vulkan -B private\slice112-input-audio\build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_MAKE_PROGRAM="C:/PROGRA~2/MICROS~2/2022/BUILDT~1/Common7/IDE/COMMON~1/MICROS~1/CMake/Ninja/ninja.exe"
 if errorlevel 1 exit /b %errorlevel%
-cmake --build private\slice111-vulkan\build
+cmake --build private\slice112-input-audio\build
 exit /b %errorlevel%

@@ -1,5 +1,6 @@
 """Native pilot trust boundaries and optional real GPU fixture."""
 import json
+import ctypes
 from pathlib import Path
 import subprocess
 import sys
@@ -73,13 +74,46 @@ class NativeVulkanTests(unittest.TestCase):
             self.assertFalse((root / 'private/reject').exists())
 
     def test_real_vulkan_fixture_if_qualified_build_exists(self):
-        executable = prepare.ROOT / 'private/slice111-vulkan/build/vulkan_fixture.exe'
+        executable = prepare.ROOT / 'private/slice112-input-audio/build/vulkan_fixture.exe'
         if not executable.is_file():
             self.skipTest('Private native Vulkan pilot not built on this machine')
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('fragmented upload PSM 44', result.stderr)
         self.assertIn('PASS: real Vulkan', result.stderr)
+        self.assertIn('zero-work dispatch preserves VRAM', result.stderr)
+
+    def test_real_windows_audio_and_input_fixture_if_built(self):
+        executable = prepare.ROOT / 'private/slice112-input-audio/build/host_io_fixture.exe'
+        if not executable.is_file():
+            self.skipTest('Private native audio/input pilot not built on this machine')
+        result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('PASS: XInput mapping', result.stderr)
+        self.assertIn('completed=2592 canceled=0', result.stderr)
+        self.assertIn('PASS: real Windows audio completion', result.stderr)
+
+    def test_native_card_lock_refuses_overlapping_game_process(self):
+        executable = prepare.ROOT / 'private/slice112-input-audio/build/gt4vulkan.exe'
+        if not executable.is_file():
+            self.skipTest('Private native audio/input pilot not built on this machine')
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        kernel.CreateFileW.argtypes = [ctypes.c_wchar_p, ctypes.c_ulong, ctypes.c_ulong,
+                                      ctypes.c_void_p, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_void_p]
+        kernel.CreateFileW.restype = ctypes.c_void_p
+        kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+        with tempfile.TemporaryDirectory() as folder:
+            card = Path(folder) / 'card.ps2'
+            handle = kernel.CreateFileW(str(card) + '.lock', 0xc0000000, 0, None, 4, 128, None)
+            self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
+            try:
+                result = subprocess.run([str(executable), 'missing.elf', '--window', '--memcard', str(card)],
+                                        capture_output=True, text=True, timeout=15)
+                self.assertEqual(result.returncode, 1)
+                self.assertIn('exclusively lock game memory card: 32', result.stderr)
+                self.assertFalse(card.exists())
+            finally:
+                kernel.CloseHandle(handle)
 
 
 if __name__ == '__main__':

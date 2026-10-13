@@ -515,13 +515,25 @@ void Context::execute(const Dispatch *commands, std::size_t count) {
                      VK_ACCESS_SHADER_WRITE_BIT);
   for (std::size_t index = 0; index < count; ++index) {
     const auto &dispatch = commands[index];
-    if (dispatch.pipeline >= pipelines_.size() || !dispatch.x || !dispatch.y ||
+    if (dispatch.pipeline >= pipelines_.size() ||
         dispatch.x > limits_.maxComputeWorkGroupCount[0] ||
         dispatch.y > limits_.maxComputeWorkGroupCount[1] ||
         static_cast<std::uint64_t>(dispatch.parameter) * 256 > UINT32_MAX ||
         static_cast<std::uint64_t>(dispatch.parameter) * 256 + 256 >
             parameter_bytes_)
-      throw std::runtime_error("Invalid GS Vulkan dispatch");
+      throw std::runtime_error(
+          "Invalid GS Vulkan dispatch: pipeline=" +
+          std::to_string(dispatch.pipeline) + " x=" +
+          std::to_string(dispatch.x) + " y=" + std::to_string(dispatch.y) +
+          " parameter=" + std::to_string(dispatch.parameter) +
+          " parameter_bytes=" + std::to_string(parameter_bytes_));
+    // Vulkan permits zero workgroups; fully clipped batches do no shader work.
+    if ((!dispatch.x || !dispatch.y) && zero_dispatches_++ == 0)
+      std::fprintf(stderr,
+                   "[vulkan] first zero-work dispatch pipeline=%u x=%u y=%u "
+                   "parameter=%u\n",
+                   dispatch.pipeline, dispatch.x, dispatch.y,
+                   dispatch.parameter);
     const std::uint32_t offset = dispatch.parameter * 256;
     vkCmdBindPipeline(command_, VK_PIPELINE_BIND_POINT_COMPUTE,
                       pipelines_[dispatch.pipeline]);

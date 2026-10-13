@@ -70,6 +70,37 @@ void fragmented_upload(std::uint32_t format, unsigned bits,
 
 int main() {
   try {
+    {
+      gt4::vulkan::Context context;
+      context.initialize(GT4_VULKAN_SHADER_DIR);
+      std::array<gt4::vulkan::Buffer *, 8> buffers{};
+      for (auto &buffer : buffers)
+        buffer = context.create_buffer(256);
+      context.bind_buffers(buffers);
+      const std::uint32_t sentinel = 0x12345678;
+      context.write(buffers[0], 0, &sentinel, sizeof(sentinel));
+      const gt4::vulkan::Dispatch empty[] = {
+          {5, 0, 0, 0}, {5, 0, 1, 0}, {5, 1, 0, 0}};
+      context.execute(empty, 3);
+      std::uint32_t result = 0;
+      context.read(buffers[0], 0, &result, sizeof(result));
+      if (result != sentinel)
+        throw std::runtime_error("Zero-work dispatch changed VRAM");
+      const gt4::vulkan::Dispatch invalid[] = {
+          {9, 0, 0, 0}, {5, 0, 0, 1}, {5, UINT32_MAX, 0, 0}};
+      for (const auto &dispatch : invalid) {
+        bool rejected = false;
+        try {
+          context.execute(&dispatch, 1);
+        } catch (const std::runtime_error &) {
+          rejected = true;
+        }
+        if (!rejected)
+          throw std::runtime_error("Invalid dispatch escaped bounds checks");
+      }
+      std::fprintf(stderr, "[fixture] zero-work dispatch preserves VRAM; "
+                           "invalid bounds refused\n");
+    }
     ps2::gs::reset();
     if (gpu::mode() != gpu::Mode::primary)
       throw std::runtime_error("Fixture requires primary GPU rasterization");

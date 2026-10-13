@@ -4,6 +4,12 @@ A learning-first, GT4-specific static recompilation project targeting C++20
 and Windows x86-64. The intended result translates the selected game's R5900
 code ahead of time and supplies the PS2 services that execution requires.
 
+Local experimental play: [Jogar-GT4.cmd](Jogar-GT4.cmd) opens the separately
+qualified native Vulkan/audio/XInput pilot when its private pinned inputs and
+build are present. [Slice112 evidence and controls](docs/reverse-engineering/slice112-native-input-audio.md)
+describe saves, validation and remaining performance/fidelity limits. Game data
+and generated code are not distributed. Production MSVC remains separate.
+
 ## Build
 
 [M6 disassembly](docs/reverse-engineering/m6-disassembly.md) adds `gt4disasm` for

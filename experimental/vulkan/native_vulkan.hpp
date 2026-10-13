@@ -90,6 +90,7 @@ private:
   VkExtent2D extent_{};
   bool resized_ = false;
   std::uint64_t presentations_ = 0;
+  std::uint64_t zero_dispatches_ = 0;
 };
 
 } // namespace gt4::vulkan

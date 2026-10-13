@@ -1,5 +1,36 @@
 # Project status
 
+2026-10-13 — slice112 native audio/XInput and bounded race pilot closed,
+on codex/audio-xinput-pilot-112,
+baseline d7f25fe. Owner prioritizes Windows audio and XInput now, postpones
+Vulkan customization, and requests a manual race test. Preserve frozen111
+binary/shaders and production. Plan: native PCM output, mapped DualShock2
+input/rumble, safe focus/disconnect/close, guarded manual launcher, controlled
+Arcade race progression. Owner is away: physical controller validation deferred;
+four XInput slots returned ERROR_DEVICE_NOT_CONNECTED. Real Windows PCM48k
+stereo16 completion and DS2/XInput mapping fixtures pass. Native exclusive card
+lock survives launcher lifetime; persistent manual launcher Jogar-GT4.cmd closes
+and reopens normally with seed/save preserved. A valid zero-work Vulkan dispatch
+guard stopped the first track intro; corrected per API contract, bounds retained.
+6000-frame repeat reaches Nürburgring/running HUD timer normally297.811s;
+48 pre-failure captures identical, first zero raster x0/y0/parameter91 logged.
+All4793888 audio frames naturally completed;3733 empty-queue observations show
+runtime starvation/performance remains. No physical controller/acoustic proof.
+9000-frame driving control also completes370.411s/44237040110 budgetcycles;
+60 common captures and entire6000-frame PCM prefix exact. Scripted driving
+responds consistently with direction/brake/reverse; collision prevents isolated
+acceleration measurement. All7193888 audio frames complete;3810 empty-queue
+observations. Actual racing through timer57.333s observed, no finished-race,
+stability or independent PS2 fidelity claim. Manual launcher ready for owner test.
+54CTest61.70s, Python114(108/6)90.437s green, warning-free new-target build.
+Pixel divergence
+and CFC2(28) remain explicit fidelity limits, not acceptance exceptions.
+Final runtime07404c3879a79c62354915cba2b11af1d291184ca82f2263d7d46b3737aea7a7;
+frozen producer/source capsules and RE112/manifest112/lesson112/0054 preserve
+all gates. Next113: owner keyboard/physical controller test when available,
+then measure runtime/GPU/audio starvation and qualify longer driving/saves.
+Custom resolutions/effects/textures/ultrawide remain deferred owner goals.
+
 2026-10-12 — slice111 native Vulkan pilot closed, baselinebd9ae77,
 branch codex/vulkan-renderer-pilot-111, decision0053.
 Evidence/code commit7a8e0a2 pushed to origin/main and pilot branch;

@@ -1,5 +1,20 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização — 2026-10-13, fatia112/áudio e XInput.** A pedido do dono,
+customização Vulkan ficou para depois. Piloto Clang tem áudio real estéreo48k,
+controle XInput com botões/analógicos/pressão/vibração e teclado. Controle físico
+não está conectado; o dono autorizou prosseguir sem ele. Fixtures passam,
+54CTest e114Python(108/6) verdes. Jogar-GT4.cmd abre janela, verifica hashes,
+mantém cartão privado persistente e backup por sessão; fechar/reabrir normal
+confirmado. Guarda Vulkan rejeitava lote vazio válido: correção permitiu6000
+quadros normais em Nürburgring,48capturas anteriores idênticas, cronômetro real
+contando. Teste9000 também termina normal,60capturas comuns e prefixo PCM exatos;
+direção/freio/reversa compatíveis com comandos observados, sem isolamento causal
+completo e com colisão. Áudio gerado/consumido pelo Windows, mas filas esvaziam
+com a lentidão atual. Próxima113: teste manual e medir esses gargalos; estabilidade, áudio acústico,
+controle físico e saves completos permanecem abertos. Relatório112/0054/manifest
+e STATUS são atuais; os próximos passos escritos nos blocos abaixo são históricos.
+
 **Atualização — 2026-10-12, fatia111/Vulkan nativo.** Desenho real por compute
 na GPU e apresentação Win32 confirmados no piloto Clang separado. Menus,
 Nürburgring e FordKa3D na janela;3000quadros terminam normalmente.

@@ -41,6 +41,21 @@ validation evidence, then controlled race/loading qualification. Do not call
 menu/car3D stable racing or adopt external semantics without contract gates.
 See docs/reverse-engineering/slice111-native-vulkan.md and its input manifest.
 
+Owner priority2026-10-12/13 supersedes that historical next112: Windows audio
+and XInput now, Vulkan customization later, prepare manual racing. Slice112/
+decision0054 adds native WinMM stereo16/48kHz owned-buffer output and XInput
+DS2 mapping/pressure/axes/rumble, keyboard, focus/disconnect/close safeguards.
+Jogar-GT4.cmd verifies inputs and preserves a private persistent card with
+per-session backups and native exclusive lock. Physical controller deferred by
+owner (away; initial four slots disconnected). Correct API-permitted zero-work
+Vulkan dispatch to pass the first race-intro blocker; invalid bounds still stop.
+6000-frame Nürburgring repeat completes normally,48 common captures exact,
+all4793888 audio frames completed, but output starvation/fidelity remains open.
+9000-frame driving control also completes,60 common captures/PCM prefix exact;
+direction/brake/reverse observations are consistent but not causally isolated.
+Manual owner test and measured audio/runtime starvation are next113. Do not equate this with stable
+full races or broad saves. Frozen111 and production remain unchanged.
+
 ## Roles and autonomy
 
 - The agent is the engineer and decision maker for technical work: it plans,
