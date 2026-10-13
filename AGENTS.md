@@ -131,6 +131,10 @@ global stop+abort on ambiguity/capacity, bounded raw RAM samples, no live linkag
 Fresh native128 build CTest4/4/Python132/132; old118 caches omit observer fixture.
 Next is exact two-probe generation and lifecycle adapter, preserving baseline
 gates. Core IDs opaque; adapter must reject idle/unknown kernel owners.
+Slice129 scripts/ee_observation.py produces only the exact two-probe source
+profile in fresh private output. All328 files compared, only54 inserted D5bytes;
+baseline ee_producer.py remains strict. D5 compiles, producerCTest1/1/Python141/141
+using128 native fixtures. Full library/probe/lifecycle linkage remains pending.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.
 144 distinct scenes require game render/update hooks, not repeated scanout.

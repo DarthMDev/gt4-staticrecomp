@@ -76,6 +76,9 @@ new entries or game modifications. Future deliberate changes require a separatel
 reviewed producer contract, input/options manifest and semantic qualification.
 Fresh compilation does not make a changed library eligible for production: the
 existing CMake and launcher hash gates remain unchanged.
+Slice129 adds a separate [observation recipe](SCENE-OBSERVATION.md) that permits
+only two exact probe insertions and compares every other byte against the verified
+baseline. It does not relax this producer or qualify a new game library/runtime.
 The library receipt also validates AMD64 archive membership and a pinned inventory
 of complete COFF object payloads after normalizing only their four-byte timestamps.
 Slice 116's 327 objects match that baseline inventory. Archive member paths and

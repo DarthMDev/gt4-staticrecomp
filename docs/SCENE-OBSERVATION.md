@@ -107,3 +107,34 @@ actual scheduler noninterference and capture overhead. Correct core tests do not
 qualify a runtime adapter. No game instance was launched or rendered by this new
 component; existing playable behavior and launcher are unchanged.
 See [slice128 evidence](inputs/slice128-shape-observer.json).
+
+## Exact generated profile (slice129)
+
+**Confirmed:** `scripts/ee_observation.py` supplies a separate, strict two-probe
+recipe. It verifies the existing baseline producer, full source inventory,
+translator/toolchain and ELF, then uses a fresh private directory. Exact canonical
+probe bytes avoid the donor parser's permissive missing/partial/duplicate/module
+tokens. It checks extents before reading candidate sources and rejects every
+change beyond the two intended pre-instruction statements. Ordinary
+`ee_producer.py` still requires null options and frozen inventory.
+
+```powershell
+private/tooling-venv/Scripts/python.exe scripts/ee_observation.py --baseline private/slice116-ee-producer --output private/<fresh-observation-capsule>
+```
+
+The qualified129 output is already frozen; do not reuse it. Private receipt:
+`observation-generation.json`, exact arguments/pins and328-file source inventory.
+Confirmed independent replay: only D5 changes, by54 bytes; removing its two probe
+lines restores the original bytes. Registry/header and327 other files are exact.
+Probe offsets123724/123984 precede pre-call budget/JAL and return-counter work.
+
+Nine new literal controls reject malformed probes, missing/duplicate labels,
+misplaced calls, guest edits, unexpected/missing files, baseline duplicates and
+oversized extents. The actual modified D5 compiles with Clang23.1.2/C++20/VS ABI
+in a fresh unit-only build. That producer's CTest1/1 runs Python141/141, no skips,
+using frozen128 native fixtures. This does not repeat the full128 native build.
+
+**Unknown/unimplemented:** full probed library linkage, runtime probe replacement,
+kernel/boot/load notifications, owner-controlled live capture and any overhead.
+Source insertion and object compilation are not a playable observation profile.
+See [slice129 evidence](inputs/slice129-observation-profile.json).

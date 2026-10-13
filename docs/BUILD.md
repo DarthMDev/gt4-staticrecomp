@@ -105,3 +105,6 @@ include the new fourth CTest entry; frozen118 caches do not contain this target.
 The fresh128 build uses the existing qualified baseline library and private118
 port/shaders. No observer is linked into gt4vulkan. CTest4/4 and Python132/132
 pass with no skips. See [Shape Observation](SCENE-OBSERVATION.md) for scope.
+Slice129 separately regenerates the exact two-probe source profile and compiles
+only changed D5 in a fresh unit-control cache. Producer CTest1/1 runs Python141/141
+using128 native fixtures; no full probed-library/runtime build is claimed.

@@ -1,0 +1,91 @@
+{
+  "classification": "Confirmed exact probe source insertion and changed-unit compilation; runtime linkage Unknown",
+  "baseline_commit": "7b69e3c",
+  "branch": "codex/gt4-observation-profile-129",
+  "source_canonical_lf_sha256": {
+    "scripts/ee_observation.py": "46ceeccc222ee87656b451e046d61cfcf3260ea58f4c7b486ac69dc375720960",
+    "tests/python/test_ee_observation.py": "8be3b0210f3b7d901093a3630ebc962ceb2750c009f48dd3038f492eeb71e368"
+  },
+  "generation": {
+    "path": "private/slice129-observation-generation",
+    "translator": {
+      "sha256": "25dc24399e97c7e9d139b47fec89a9880756abc3534aba9ebee37d09c2466643",
+      "size_bytes": 608768
+    },
+    "elf": {
+      "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c",
+      "size_bytes": 6123004
+    },
+    "probe_file": {
+      "sha256": "01223e94836a684c555da7356409da6771e3d142d3656f5ef882429205ae64e5",
+      "size_bytes": 22
+    },
+    "inventory": {
+      "file_count": 328,
+      "inventory_sha256": "af8cfeb13f6ca3cad108419106dd72704ecf1e1205861f5050f8c17e90038e3f",
+      "size_bytes": 86375092
+    },
+    "changed_files": [
+      "unit_00D5.cpp"
+    ],
+    "unchanged_files": 327,
+    "inserted_bytes": 54,
+    "d5_sha256": "99d14048f0406078737fb05e0e93af459751072386381b8a5950fbbddbac2e57",
+    "probe_offsets": [
+      123724,
+      123984
+    ],
+    "baseline_restored_after_exact_two_line_removal": true,
+    "registry_and_header_unchanged": true
+  },
+  "unit_compile": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "abi": "VS2022x64",
+    "toolchain": {
+      "size_bytes": 402,
+      "sha256": "dc5dde02f3a3a0c67b5c5c73d7360da96a71d61a7008286cf103feca38462acd"
+    },
+    "coff_machine": "AMD64",
+    "object": {
+      "size_bytes": 271662,
+      "sha256": "320f19df7afe32607ff79f1375c7927a3bea63caff7755fc2ab3717a57d820f6"
+    },
+    "object_sha256_without_timestamp": "8b4cfa818a37aeb2df70c499a8121eda7128e796f9fc484278f4e2716a053828",
+    "full_library_or_game_link": false
+  },
+  "controls": {
+    "new_literal_python_tests": 9,
+    "producer_ctest_passed": 1,
+    "producer_ctest_total": 1,
+    "producer_ctest_seconds": 6.59,
+    "python_passed": 141,
+    "python_skipped": 0,
+    "native_fixture_source_slice": 128,
+    "native_runtime_rebuilt_this_slice": false
+  },
+  "private_artifact_sha256": {
+    "private/slice129-observation-profile/research/producer-profile-review.md": "689bda42d6b1387a59882a65ebc33a0d34b2b7f92c2294837604286705ffe36c",
+    "private/slice129-observation-profile/research/review-metadata.json": "400605215e1c6a542fdab3849766a4dcabe4ed10c5a88c2fe496644c597b0f3d",
+    "private/slice129-observation-profile/independent-review/implementation-review.md": "852d063be22c15b89dcebd2d77d6772d982f7748bbe2e96167bea31739d51cd1",
+    "private/slice129-observation-profile/independent-review/review-metadata.json": "b387a7a82c80ef613a08f1c501822e1269b53a990c210c8e9ef31a2e0070af39",
+    "private/slice129-observation-profile/independent-review/replay_compare.py": "efdba443e76779aeba3d31049e6384193a393ff38bba4a07ef335ebbdd4bb93b",
+    "private/slice129-observation-profile/independent-review/generated-byte-replay.json": "b48a2e12df7292a25a180d3d95b22c553582fbf9e8031c97d6e22f6e807ca814",
+    "private/slice129-observation-profile/unit-build-test.log": "fd603bed2c637d85045bcf23e880ef46bc580407bea80e8f570e705390c14907",
+    "private/slice129-observation-profile/unit-build/Testing/Temporary/LastTest.log": "5fd97a4bf08f33e44c01b7c12aabc160107e57dab0c2e6cf5f10030f8eb5a601",
+    "private/slice129-observation-profile/unit-build/toolchain.txt": "dc5dde02f3a3a0c67b5c5c73d7360da96a71d61a7008286cf103feca38462acd",
+    "private/slice129-observation-generation/observation-generation.json": "b8b0eb99b6781d34ce9a1465319fffba3c4617c1531ec7a384f8dbfdca6c5f05",
+    "private/slice129-observation-generation/shape-probes.txt": "01223e94836a684c555da7356409da6771e3d142d3656f5ef882429205ae64e5",
+    "private/slice129-observation-profile/unit-build/CMakeFiles/observed_shape_unit.dir/3cb20b48e53e5b6ceafd7f56e82b6258/slice129-observation-generation/generated/unit_00D5.cpp.obj": "320f19df7afe32607ff79f1375c7927a3bea63caff7755fc2ab3717a57d820f6"
+  },
+  "limitations": [
+    "source insertion and one object are not a playable observation profile",
+    "runtime probe/lifecycle adapter and full probed library linkage still absent",
+    "no live reachability, scene/car identity or performance neutrality proof"
+  ],
+  "baseline_producer_gates_changed": false,
+  "playable_runtime_observer_installed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false
+}

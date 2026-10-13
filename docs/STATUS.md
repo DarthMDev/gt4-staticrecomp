@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 128, bounded host-only shape observation core.
+2026-10-13 — Slice 129, exact two-probe EE observation generation.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-shape-observer-128`, based on commit 02039c8.
+`codex/gt4-observation-profile-129`, based on commit 7b69e3c.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -124,6 +124,14 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Confirmed:** fresh baseline-profile Windows/Clang build, CTest4/4 and
   Python132/132 with zero skips. Core is fixture-only, not linked into playable
   runtime. Generated probes, lifecycle adapter and live evidence remain pending.
+
+- **Confirmed (slice129):** separate fresh --probes generation changes only D5:
+  exactly two27-byte statements at intended pre/return frontiers. All327 other
+  files, including registry/header, match frozen116 byte-for-byte. Independent
+  removal of the two lines restores D5 exactly; baseline producer gates unchanged.
+- **Confirmed:** changed D5 compiles with qualified Clang/VS ABI. Producer CTest1/1
+  and Python141/141, zero skips, reuse128 native fixtures. No full probed library,
+  lifecycle/runtime adapter, new game executable or live capture yet.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
