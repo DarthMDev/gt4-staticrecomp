@@ -23,3 +23,11 @@ MSVC EE engine is archived, while this Clang/native path is now main's active
 implementation. Game, BIOS, translated game code, captures, cards, SPIR-V and
 native binaries remain private and ignored. The pinned game's generated static
 library is linked locally; it is not redistributed.
+
+Slice 119 adds six ignored, unmodified reference clones for offline format
+research only. [Nenkai References](../docs/NENKAI-REFERENCES.md) records exact
+revisions, root license observations and dependency limits. No reference tool,
+package or implementation was built, copied into this runtime or linked. GT4FS
+and the Modding Hub have no root license in the inspected checkouts; their
+format facts are research references, not adopted dependencies. MIT tool/template
+licenses and the separate SharpTriStrip BSD terms remain with their local sources.

@@ -1,0 +1,298 @@
+{
+  "active_runtime_changed": false,
+  "assigned_models": {
+    "catalogue": "gpt-6-luna, high",
+    "source_inventory": "gpt-6-luna, medium"
+  },
+  "baseline_commit": "dc46c0bd89f3402f3bc1e0b13a5116a8fdc82890",
+  "catalogue": {
+    "absent_page_link_fields": 14,
+    "all_file_paths_emitted": false,
+    "asset_payloads_extracted": false,
+    "b_tree_search_semantics": "Unknown; catalogue leaves enumerated linearly; index child ranges only checked",
+    "catalogue_file_count": 18352,
+    "catalogue_input_window_sha256": "c308312caf6cb2e0fed42158c5463bdb353d35ac8e773ef55fa4f8634f397d9b",
+    "catalogue_record_count": 18562,
+    "classification": "Private bounded catalogue decode; no payload extraction",
+    "compressed_catalogue_bytes": 363926,
+    "decoded_catalogue_sha256": "04368b3d5bd5b6a355e532375e03873051235d2445c5abfaa189918c48862afb",
+    "decoded_offset_table_sha256": "23a4a8c0d4d9ac9d47b12c78f82f9b1d51639f4830d1a8bc7592c85046d52d02",
+    "decompressed_catalogue_bytes": 833536,
+    "direct_directory_counts_under_selected_dirs": {
+      ".": 1,
+      "./car": 4,
+      "./car/lod": 0,
+      "./car/menu": 0,
+      "./piece/car_mini": 0,
+      "./piece/car_pict": 0,
+      "./specdb/GT4_US2560": 2
+    },
+    "direct_file_counts_under_selected_dirs": {
+      ".": 0,
+      "./car": 0,
+      "./car/lod": 1614,
+      "./car/menu": 807,
+      "./piece/car_mini": 934,
+      "./piece/car_pict": 786,
+      "./specdb/GT4_US2560": 169
+    },
+    "directory_count": 210,
+    "encrypted_offset_table_sha256": "d85a0b2dabee8c9deb0b28c67cb11525a9844e4907a0b8822cafbb981c78ae35",
+    "file_payload_bytes_read": 0,
+    "file_payload_metadata_extents_bounds_checked": 18352,
+    "final_deflate_end_marker_pages": 1,
+    "header_version_words_at_0x4_0x6": [
+      1,
+      3
+    ],
+    "index_child_reference_count_bounds_checked": 400,
+    "index_page_count": 6,
+    "iso_sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+    "max_directory_depth": 3,
+    "metadata_extent_end_max": 2459033640,
+    "metadata_extent_largest_packed_size": 44355624,
+    "metadata_extent_start_min": 17850368,
+    "missing_parent_count": 0,
+    "observed_catalogue_leads": [
+      ".",
+      "./car",
+      "./car/menu",
+      "./car/lod",
+      "./specdb/GT4_US2560",
+      "./piece/car_pict",
+      "./piece/car_mini"
+    ],
+    "observed_lead_directories": [
+      ".",
+      "./car",
+      "./car/menu",
+      "./car/lod",
+      "./specdb/GT4_US2560",
+      "./piece/car_pict",
+      "./piece/car_mini"
+    ],
+    "page_count": 407,
+    "page_link_fields_bounds_checked": 814,
+    "raw_deflate_sync_flush_pages": 406,
+    "raw_page_bytes_saved": false,
+    "reachable_record_count": 18562,
+    "real_header_sha256": "7479ce96a0e619b880e225e4849c043a7921f32334c691d1798531e1471455ce",
+    "record_page_count": 401,
+    "root_directory_node_id": 1,
+    "selected_metadata_paths": [
+      "specdb/GT4_US2560/CAR_NAME_american.dbt",
+      "specdb/GT4_US2560/CAR_NAME_american.idi"
+    ],
+    "synthetic_controls": {
+      "synthetic_child_page_link_bounds_rejected": true,
+      "synthetic_decompression_output_cap_rejected": true,
+      "synthetic_file_extent_bounds_rejected": true,
+      "synthetic_midstream_truncation_rejected": true,
+      "synthetic_missing_sync_flush_suffix_rejected": true,
+      "synthetic_page_offset_bounds_rejected": true,
+      "synthetic_record_extent_bounds_rejected": true,
+      "synthetic_valid_final_marker_inflate_then_xor_page": true,
+      "synthetic_valid_sync_flush_inflate_then_xor_page": true,
+      "synthetic_xor_before_inflate_order_rejected": true
+    },
+    "toc_offset": 17483776,
+    "unique_input_bytes": 365622,
+    "unreachable_record_count": 0,
+    "version_word_hex": "0x00030001",
+    "volume_offset": 216840192,
+    "volume_relative_read_span": [
+      17483776,
+      17849398
+    ]
+  },
+  "classification": "Bounded P1 reference/catalogue research; no named car or native scene renderer qualified",
+  "game_session_controlled": false,
+  "independent_parent": {
+    "bounded_file_extent_count": 18352,
+    "decoded_bytes": 833536,
+    "decoded_catalogue_sha256": "04368b3d5bd5b6a355e532375e03873051235d2445c5abfaa189918c48862afb",
+    "directory_count": 210,
+    "final_stream_count": 1,
+    "limits": "No asset reads/extraction or B-tree search validation; flush suffix characterization is not a complete DEFLATE bitstream grammar validator",
+    "link_range_valid_pages": 407,
+    "method": "Independent contiguous ToC read; bounded raw DEFLATE then XOR0x55; leaf framing/directory traversal/file extents",
+    "page_types": {
+      "0": 401,
+      "1": 6
+    },
+    "reachable_record_count": 18562,
+    "record_count_header_sum": 18562,
+    "selected_file_counts": {
+      "./car/lod": 1614,
+      "./car/menu": 807,
+      "./specdb/GT4_US2560": 169
+    },
+    "stored_catalogue_sha256": "c308312caf6cb2e0fed42158c5463bdb353d35ac8e773ef55fa4f8634f397d9b",
+    "sync_flush_suffix_count": 406,
+    "synthetic_sync_flush_control_passed": true,
+    "unique_input_bytes": 365622
+  },
+  "input_verification": "Worker streamed whole ISO SHA-256 against existing pin before catalogue reads; parent verifies size/header/table and independently replays same bounded ToC interval. Hash streaming excluded from catalogue-read budget.",
+  "limitations": [
+    "Leaf catalogue enumeration, not qualified B-tree index-key lookup or full malformed-input grammar",
+    "Host zlib and primary format references shared; no independent PS2 fidelity oracle",
+    "Flush suffix is characterized, exact producer flush policy and full DEFLATE grammar unknown",
+    "No asset payload extraction, named-car/model-code mapping or live instance/camera qualification",
+    "Research references are not adopted dependencies; package licenses not comprehensively audited",
+    "No renderer, framerate, input or performance implementation/test in this slice"
+  ],
+  "parent_worker_replay_equal": true,
+  "private_artifact_sha256": {
+    "luna/catalogue-summary.json": "1ff678dc501d11054d3eec4fa6c5d513c295861340d78ba433c1c2f0039aea79",
+    "luna/decode_catalogue.py": "312b413a1e346e8265525f47117bace869f7ef7c7ed05d3d897167a99248fb7d",
+    "luna/research-report.md": "c52f5f9f706b62137093b92af99b62b6bb2bf407945761d160915eff4b49603f",
+    "model-inventory/metadata.json": "caa22ae322032d76dec0076eb7faa320a594e5834ef702397c3bf179209983c6",
+    "model-inventory/source-map.md": "897428ae9f094cc8b78eb3b0c9ccc337d95c1dbe16df6f24c3b64871a35cb675",
+    "parent-page-check.json": "08362ef852219d00ba09344f21661002b331f30fb63bf653e69719dc8e237950",
+    "parent-page-check.py": "0bf7958ba607b2ea6252680550d65b2da593c63f39553298f352e0c8ca973a1f",
+    "parent-worker-replay.json": "1ff678dc501d11054d3eec4fa6c5d513c295861340d78ba433c1c2f0039aea79"
+  },
+  "private_experiments_only": true,
+  "reference_libraries_linked": false,
+  "reference_packages_or_submodules_downloaded": false,
+  "reference_tools_built": false,
+  "references": [
+    {
+      "clean": true,
+      "key_areas": [
+        "Formats/PS2/GT4/GT4_MDLS_ModelSet.bt",
+        "Formats/PS2/GT4/GT4_CAR4_CarInfo.bt",
+        "Formats/PS2/PS2ModelCommon.bt",
+        "Formats/Shared/ModelSetupCommands.bt",
+        "Formats/Shared/ModelVM.bt",
+        "Formats/PS2/Tex1_TextureSet1.bt"
+      ],
+      "license_observation": "Root LICENSE is MIT. Descriptive templates only; none copied.",
+      "name": "GT-File-Specifications-Documentation",
+      "private_path": "private/slice119-nenkai-asset-research/references/GT-File-Specifications-Documentation",
+      "revision": "05e52347890541758222d173dbb62d2b40581b19",
+      "root_license_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "bf67b0d6b448326823ebda82c837cc3536f88ddbe685a5183504a2b283b2db45"
+        }
+      ],
+      "url": "https://github.com/Nenkai/GT-File-Specifications-Documentation.git",
+      "use": "Read-only reference; not linked or imported"
+    },
+    {
+      "clean": true,
+      "key_areas": [
+        "docs/ps2/models.md",
+        "docs/ps2/model_render_commands.md",
+        "docs/ps2/gt4/specdb.md",
+        "docs/formats/database/dbt_database_table.md"
+      ],
+      "license_observation": "No root LICENSE file found. Documentation references only; linked tools have their own licenses.",
+      "name": "gt-modding-hub",
+      "private_path": "private/slice119-nenkai-asset-research/references/gt-modding-hub",
+      "revision": "b312010b54c89e774a6c23f5d37a9f6de8606812",
+      "root_license_files": [],
+      "url": "https://github.com/Nenkai/gt-modding-hub.git",
+      "use": "Read-only reference; not linked or imported"
+    },
+    {
+      "clean": true,
+      "key_areas": [
+        "GT4FS.Core/Volume.cs",
+        "GT4FS.Core/TocHeader.cs",
+        "GT4FS.Core/BTree.cs",
+        "GT4FS.Core/Entries",
+        "GT.Shared/Polyphony/PS2Zip.cs"
+      ],
+      "license_observation": "No root LICENSE found; private research reference only.",
+      "name": "GT4FS",
+      "private_path": "private/slice119-nenkai-asset-research/references/GT4FS",
+      "revision": "b938f71fd939e0ea44c38839a50ffb66cfd2067a",
+      "root_license_files": [],
+      "url": "https://github.com/Razer2015/GT4FS.git",
+      "use": "Read-only reference; not linked or imported"
+    },
+    {
+      "clean": true,
+      "dependency_observation": "PDTools submodule pinned 23afb2cea05ab83b097feaeadd2ff63460a41c6e, SharpTriStrip project (BSD 3-Clause), NLog, YamlDotNet, CommandLineParser, Microsoft logging packages. No package restore or binary-license audit.",
+      "key_areas": [
+        "GTPS2ModelTool.Core/PGLUShapeBuilder.cs",
+        "GTPS2ModelTool.Core/RenderCommandParser.cs",
+        "GTPS2ModelTool.Core/ModelSetBuilder.cs",
+        "GTPS2ModelTool.Core/GTPS2ModelTool.Core.csproj",
+        "GTPS2ModelTool/GTPS2ModelTool.csproj"
+      ],
+      "license_observation": "Root LICENSE.txt is MIT, retaining placeholder copyright text [year] [fullname]. SharpTriStrip/ LICENSE.md is BSD 3-Clause.",
+      "name": "GTPS2ModelTool",
+      "private_path": "private/slice119-nenkai-asset-research/references/GTPS2ModelTool",
+      "revision": "ef9aadbaa946b68f4ea7ba7cbb3437156f937714",
+      "root_license_files": [
+        {
+          "path": "LICENSE.txt",
+          "sha256": "19200a6a9407e592065a5a504c0eefe58adf102c9ac5aa2151bd6f257faa7a9c"
+        }
+      ],
+      "url": "https://github.com/Nenkai/GTPS2ModelTool.git",
+      "use": "Read-only reference; not linked or imported"
+    },
+    {
+      "clean": true,
+      "dependency_observation": "PDTools submodule pinned 4eb68cde09c4f694e1d4f5dc86dd7fad6f646208, CommandLineParser and System.Data.SQLite.Core in SQLite project. No packages restored or binary-license audit.",
+      "key_areas": [
+        "GTSpecDB.Sqlite/SQLiteImporter.cs",
+        "GTSpecDB.Sqlite/SQLiteExporter.cs",
+        "GTSpecDB.Sqlite/SQLiteTableMetadata.cs",
+        "GTSpecDB.Editor/MainWindow.xaml.cs",
+        "GTSpecDB.Sqlite/GTSpecDB.Sqlite.csproj"
+      ],
+      "license_observation": "Root MIT.",
+      "name": "GTSpecDB",
+      "private_path": "private/slice119-nenkai-asset-research/references/GTSpecDB",
+      "revision": "691e49fa6b85773bd4e8bc47e361c0a1cd6716a0",
+      "root_license_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "bf67b0d6b448326823ebda82c837cc3536f88ddbe685a5183504a2b283b2db45"
+        }
+      ],
+      "url": "https://github.com/Nenkai/GTSpecDB.git",
+      "use": "Read-only reference; not linked or imported"
+    },
+    {
+      "clean": true,
+      "key_areas": [
+        "PDTools.Files/Models/PS2/ModelSet/ModelSet2.cs",
+        "PDTools.Files/Models/PS2/ModelSet/ModelSet2Model.cs",
+        "PDTools.Files/Models/PS2/PGLUshape.cs",
+        "PDTools.Files/Models/PS2/VIFPacket.cs",
+        "PDTools.Files/Models/PS2/VIFCommand.cs",
+        "PDTools.Files/Textures/PS2/TextureSet1.cs",
+        "PDTools.SpecDB/Core/SpecDB.cs",
+        "PDTools.SpecDB/Core/Mapping/Tables/CarName.cs",
+        "PDTools.SpecDB/Core/Mapping/Tables/GenericCar.cs",
+        "PDTools.SpecDB/Core/Mapping/Tables/CarVariation.cs",
+        "PDTools.SpecDB/Core/Mapping/Tables/ModelInfo.cs"
+      ],
+      "license_observation": "Root LICENSE is MIT. PDTools.Files has NuGet dependencies and project refs described in source-map.md. No packages restored.",
+      "name": "PDTools",
+      "private_path": "private/slice119-nenkai-asset-research/references/PDTools",
+      "revision": "ffe0bb26377ac9ff62f40951c1c0b16c5d9a380f",
+      "root_license_files": [
+        {
+          "path": "LICENSE",
+          "sha256": "bf67b0d6b448326823ebda82c837cc3536f88ddbe685a5183504a2b283b2db45"
+        }
+      ],
+      "url": "https://github.com/Nenkai/PDTools.git",
+      "use": "Read-only reference; not linked or imported"
+    }
+  ],
+  "schema_version": 1,
+  "slice": 119,
+  "tools": {
+    "python": "3.14.5",
+    "zlib_compile": "1.3.1.zlib-ng",
+    "zlib_runtime": "1.3.1.zlib-ng"
+  }
+}

@@ -5,6 +5,13 @@ the parent built EE candidates. The parent independently checked ISO directory,
 real header and offset-table metadata. No game navigation, asset extraction or
 live car observation was performed. **No named car is qualified yet.**
 
+**Slice 119 update:** catalogue decoding and directory/extent validation now
+succeed in a bounded private Luna experiment, independently replayed by the parent.
+The slice 118 findings below retain their checkpoint context. Subsequent evidence
+resolves the codec and packed-version interpretation; named-car identity, payloads
+and live instances remain unqualified. See [references](NENKAI-REFERENCES.md) and
+[slice 119 metadata](inputs/slice119-nenkai-assets.json).
+
 ## Confirmed local observations
 
 The current ISO size matches the pinned 5,314,478,080 bytes. Its full SHA-256
@@ -45,7 +52,7 @@ and a compressed/encrypted B-tree. **High confidence:** the observed signature,
 page dimensions and table boundaries correspond to that structure. This primary
 research document is not an independent correctness oracle.
 
-**Unknown:** the version discrepancy (observed 1.3, documented 3.1) and the exact
+**Unknown at the slice 118 checkpoint:** the version discrepancy (observed 1.3, documented 3.1) and the exact
 page codec/layout. Luna's bounded XOR and common zlib-mode attempts did not decode
 a valid page. No directory node/path was recovered; monotonic offsets alone do
 not validate a complete reader. The offset-table extent end above follows the
@@ -56,6 +63,9 @@ provides candidate menu/LOD/open model directories and SpecDB data leads.
 These paths have **not** been observed in this particular volume. A public
 GT6-derived master car list must not be used as a GT4 vehicle/model-code crosswalk.
 No GT4FS implementation was imported or bulk extraction performed.
+
+The lack of observed paths above describes slice 118. Slice 119 observes selected
+car and SpecDB directory leads below; their payloads remain unread.
 
 Local decomp research identifies a `ShowRoomCar` class and generic model/camera
 functions, but does not link Ford Ka '01 or any other named car to an asset/live
@@ -80,3 +90,58 @@ Ford Ka '01 is a useful owner-observed candidate, **not an identified asset**.
 P1 remains in progress; the concrete model, material, camera, live instance and
 complete state/VM/effect contracts remain unqualified. A decoded offline asset
 alone would still not establish live rendering replacement.
+
+## Slice 119 — Reviewed catalogue experiment
+
+**Confirmed:** Luna reverified the full ISO hash against its existing pin before
+catalogue research. Six reference checkouts were cloned and pinned. No reference
+code was linked, no extractor CLI was invoked and no asset payload was read.
+Worker and parent inspected the same ToC interval: **365,622 unique bytes** in
+union, excluding full-ISO hash streaming. Decoded pages occupy **833,536 bytes**,
+below the 2 MiB output cap.
+
+The codec is raw DEFLATE inflation **before** XOR `0x55` of decoded bytes.
+Each stored span produces exactly 2,048 bytes with no unused/unconsumed input.
+Of 407 pages, 406 lack a final-stream marker and end in the observed empty
+stored-block flush suffix `00 00 FF FF`; one has a final marker. An independently
+specified synthetic `Z_SYNC_FLUSH` segment reproduces this non-final framing.
+The exact producer flush mode and complete DEFLATE bitstream grammar remain
+unqualified. Requiring `eof` for every page rejects this input; accepting arbitrary
+truncation would also be incorrect.
+
+The packed little-endian u32 version at header `0x04` is `0x00030001`, matching
+GT4FS's `Version3_1` constant. The little-endian u16 values at `0x04/0x06` are
+1/3; the published specification labels those fields in the opposite major/minor
+order. Earlier wording is not evidence of a distinct format version. Frozen
+slice 118 raw observations remain unchanged.
+
+| Observation | Reviewed result |
+|---|---|
+| Stored ToC SHA-256 | `c308312caf6cb2e0fed42158c5463bdb353d35ac8e773ef55fa4f8634f397d9b` |
+| Decoded pages SHA-256 | `04368b3d5bd5b6a355e532375e03873051235d2445c5abfaa189918c48862afb` |
+| Page types | 6 index pages, 401 record pages |
+| Records / directories / files | 18,562 / 210 / 18,352 |
+| Directory traversal | All records reached from sole `.` root; no missing parents, duplicate directory IDs or cycles observed |
+| Packed file extents | All 18,352 fit within VOL; payload bytes read: zero |
+| Selected paths | `./car/menu` (807 direct files), `./car/lod` (1,614), `./specdb/GT4_US2560` (169) |
+| Identity leads | `CAR_NAME_american.dbt` and `.idi` are present; contents unread |
+
+The parent separately implemented contiguous-window decompression, leaf framing,
+directory traversal and file-bound checks; its hash/counts and selected paths
+agree with Luna. Both use host zlib and published format facts, not an independent
+PS2 execution/fidelity oracle. Ten worker synthetic controls cover final/non-final
+framing, incorrect XOR order, middle/tail truncation, output cap, page/file extents,
+child-page range and record bounds. The parent reruns the private experiment and
+these controls before recording qualification.
+
+**Unknown:** index-key search/routing semantics, reciprocal page-link ordering,
+all malformed-input cases, selected payload correctness, named-car/model-code
+mapping and live model/camera state. This experiment enumerates record pages,
+not a production B-tree lookup implementation. Only metadata and selected research
+leads are published; complete filenames, private scripts and game bytes are not.
+
+Next: review a maintainable read-only reader with public synthetic controls, then
+extract only USA v2.00 identity resources needed for one-car mapping under a fresh
+capped extraction contract. MDLS/texture parsing and live-hook qualification follow
+that mapping. P1 remains in progress; no native car drawing or P2/P3 renderer was
+implemented.

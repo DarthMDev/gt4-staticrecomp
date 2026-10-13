@@ -170,6 +170,10 @@ candidates and their local effects. Concrete car data, ownership, conventions,
 complete callback dependencies and observation-hook qualification remain open.
 **Slice 118:** [Car Asset Research](CAR-ASSET-RESEARCH.md) verifies volume-index
 metadata but leaves page decoding and the named-car/live-instance mapping open.
+**Slice 119:** [Nenkai References](NENKAI-REFERENCES.md) pins six research checkouts.
+Bounded private catalogue decoding and independent directory/file-bound checks
+now pass; car/SpecDB directory leads are observed. A production reader, named-car
+crosswalk, payload parsing and live-instance mapping remain open.
 
 **Dependencies:** P0 for executable hooks; static research may start earlier.
 **Work:** map one model boundary to actual generated EE functions and callers.

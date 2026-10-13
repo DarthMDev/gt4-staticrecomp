@@ -63,6 +63,15 @@ assets checkout locks/backups, never a frozen seed as a mutable card.
 P0/P1 remain open until coverage, candidate integration and real-car contracts pass.
 Missing callback entries44EA58/44EAC8 are recorded; live reachability is Unknown.
 Luna is preferred for bounded inventory/research; semantic contracts need independent review.
+Slice119 delegates Nenkai-reference research to Luna instead of Antigravity:
+docs/NENKAI-REFERENCES.md and docs/tasks/P1-NENKAI-ASSET-RESEARCH.md. Six source
+clones stay ignored; none is linked. A bounded private RoFS catalogue experiment
+and independent replay pass, but production reader/B-tree lookup, named-car
+identity, payload parsing and live hooks remain unqualified. Preserve slice119
+results; new extraction uses a fresh capsule and reviewed caps/fixtures. The
+packed RoFS version matches 0x00030001; qualified pages inflate before XOR 0x55,
+including non-final flush segments. Do not adopt private experiments as production
+tooling or assume GTPS2ModelTool has complete GT4 support.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

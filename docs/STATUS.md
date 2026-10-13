@@ -1,8 +1,9 @@
 # Current Status
 
-2026-10-13 — Slice 118, isolated EE runtime candidates and bounded car-asset research.
+2026-10-13 — Slice 119, pinned Nenkai references and bounded RoFS catalogue decoding.
 Playable base remains slice 114. Implementation branch:
-`codex/ee-candidate-integration-118`, based on callback recovery commit 5452812.
+`codex/nenkai-asset-research-119`, based on renderer-scope clarification dc46c0b.
+Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
 
@@ -37,14 +38,24 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   by native integration fixtures; no manual game session was launched during build qualification.
 - **Confirmed (slice 118):** bounded research located the actual GT4.VOL header/
   offset table; parent independently verified its metadata. Page decoding, named
-  car/asset/live-instance identification remain Unknown. No car payload was extracted.
+  car/asset/live-instance identification were Unknown at that checkpoint. No car payload was extracted.
+- **Confirmed (slice 119):** six pinned research repositories cloned; Luna decoded
+  all 407 ToC pages with bounded raw-DEFLATE-before-XOR processing. Parent replay
+  independently matches decoded hash, 18,562 records, 210 directories, directory
+  reachability and 18,352 file extent bounds. Car/SpecDB paths are now observed.
+  Packed version matches GT4FS's 0x00030001 constant.
+- **Unknown:** production reader/lookup qualification, named-car crosswalk,
+  model/texture payloads and live instance/camera effects. No asset payload was
+  read and no renderer or performance change was made in slice 119.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
 and [slice 117 evidence](inputs/slice117-ee-entry-coverage.json), for build/test
 results and remaining gates. [EE Candidates](EE-CANDIDATES.md) and
 [Car Asset Research](CAR-ASSET-RESEARCH.md) cover slice 118. P0/P1 remain **in
-progress**: candidate gameplay, remaining entry coverage and one real car's
+progress**: [Nenkai References](NENKAI-REFERENCES.md) and
+[slice 119 metadata](inputs/slice119-nenkai-assets.json) record subsequent catalogue
+progress; candidate gameplay, remaining entry coverage and one real car's
 data/conventions are pending. Production library, default launcher and runtime
 have not been replaced. Candidate checks do not qualify game boot or racing.
 The owner's active OpenCode baseline session was preserved during build qualification.
