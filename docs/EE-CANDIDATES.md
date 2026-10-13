@@ -92,9 +92,19 @@ See [baseline metadata](inputs/slice118-ee-baseline.json),
 [recovered metadata](inputs/slice118-ee-recovered.json) and
 [library metadata](inputs/slice118-ee-libraries.json).
 
-No manual game session was launched. The owner had an active OpenCode baseline
-session, which remains untouched. Ready local `launch-baseline.cmd` and
+No manual game session was launched during build qualification. The owner had an active OpenCode baseline
+session, which was preserved at that checkpoint. Ready local `launch-baseline.cmd` and
 `launch-recovered.cmd` files are inside the ignored slice 118 capsule.
+
+**Confirmed subsequent startup observation (2026-10-13, 13:16 America/Sao_Paulo):**
+at the owner's explicit request, the previous game closed through its normal window
+close handler. The baseline candidate then opened a responding 16:9 window and its
+log progressed through game module loading. The standard launcher used the existing
+owner card and created `card-before.ps2` (8,650,752 bytes) in private session
+`session-20261013-131623-817539`. No navigation or simulated input was performed.
+The window was left open for the owner; menus, racing, audio continuity and
+performance remain unqualified. Recovered has not been launched. Frozen build
+manifests retain their original no-manual-launch checkpoint observations.
 
 Close the existing game through its window before launching a candidate. Start
 with **baseline** to qualify the rebuilt producer/runtime integration, then use

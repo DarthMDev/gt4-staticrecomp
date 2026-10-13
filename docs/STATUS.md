@@ -34,7 +34,7 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Confirmed (slice 118):** both isolated native runtime profiles link and pass
   CTest 3/3 and Python 59/59 with zero skips and zero observed compile warnings.
   All nine shaders match production. The actual candidate executables are used
-  by native integration fixtures; no manual game session was launched.
+  by native integration fixtures; no manual game session was launched during build qualification.
 - **Confirmed (slice 118):** bounded research located the actual GT4.VOL header/
   offset table; parent independently verified its metadata. Page decoding, named
   car/asset/live-instance identification remain Unknown. No car payload was extracted.
@@ -47,8 +47,12 @@ results and remaining gates. [EE Candidates](EE-CANDIDATES.md) and
 progress**: candidate gameplay, remaining entry coverage and one real car's
 data/conventions are pending. Production library, default launcher and runtime
 have not been replaced. Candidate checks do not qualify game boot or racing.
-The owner's active OpenCode baseline session was preserved. Ready candidate
-launchers share the existing owner card, locks and per-session backups.
+The owner's active OpenCode baseline session was preserved during build qualification.
+On the owner's subsequent explicit request, it closed normally and the slice 118
+baseline candidate launched at 13:16 local time. Its window responded and module
+loading progressed; owner gameplay confirmation remains pending. The existing
+card, normal session locks and per-session backup were used. This startup
+observation does not qualify racing or performance. Recovered remains unlaunched.
 
 ## Active Path
 
