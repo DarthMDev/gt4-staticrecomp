@@ -43,3 +43,6 @@ Slice 121 adds an original offline CAR4/MDLS/Tex1 header probe grounded in the
 same pinned MIT templates and PDTools format facts. No reference implementation
 or dependency is copied or linked. [Model Asset Probe](../docs/MODEL-ASSET-PROBE.md)
 records actual-byte discrepancies, independent review and the header-only boundary.
+Slice122's original fixed-record inventory uses the same pinned MIT format facts.
+No implementation copied or linked; [Model Records](../docs/MODEL-RECORDS.md)
+documents sources and the boundary before VIF, material or pixel semantics.

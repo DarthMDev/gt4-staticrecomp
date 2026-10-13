@@ -69,9 +69,12 @@ qualified. Separate baseline/recovered runtime candidates are prepared for owner
 validation. Tested offline tooling now reads the volume catalogue and extracts
 selected resources. The Ford Ka '01 is identified in the correct version's
 database and mapped to its exact garage and racing model files. Their serialized
-headers are verified; geometry, textures and live integration remain pending.
+headers and fixed record boundaries are verified; geometry, texture decoding and
+live integration remain pending.
 See the [one-car research ledger](docs/CAR-ASSET-RESEARCH.md) and
 [model asset probe](docs/MODEL-ASSET-PROBE.md).
+The [fixed record inventory](docs/MODEL-RECORDS.md) supplies the next boundary
+before interpreting shape packets and reconstructing renderable geometry.
 The dedicated game-scene renderer has not started replacing live graphics.
 
 ## Testing and Development

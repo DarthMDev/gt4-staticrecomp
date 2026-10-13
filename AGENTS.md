@@ -87,6 +87,11 @@ Two exact car files extracted; bounded public header probe only. Preserve
 repeated physical row IDs, signed opaque VM fields and zero-size Tex1 header
 semantics as Unknown. Geometry/material/texture bodies and live getter argument
 chain remain unqualified. Preserve frozen121 capsule; next scope is fixed records.
+Slice122 bounds fixed shape/descriptors/material/PGLU/transfer arrays:
+docs/MODEL-RECORDS.md, docs/inputs/slice122-shape-records.json. Shape+4 is
+opaque, packet offsets are shape-relative and QWC*16 spans are MDLS-bounded.
+Transfer starts are Tex1-relative; pixel extent remains Unknown. No VIF/vertex/
+pixel decoding or live hook. Preserve frozen122; next scope is VIF framing.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

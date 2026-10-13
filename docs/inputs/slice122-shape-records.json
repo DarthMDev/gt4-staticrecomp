@@ -1,0 +1,159 @@
+{
+  "classification": "Confirmed bounded fixed records and declared packet spans; VIF, geometry, pixels and live use Unknown",
+  "baseline_commit": "1bb752f280334278e5afb55baad2be05908ccbc2",
+  "branch": "codex/gt4-shape-records-122",
+  "input_contract": "Exact immutable decoded car files from slice121 matched against public size/SHA pins before reading; no extra extraction",
+  "selected_car_files": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "output_file": "asset-00.bin",
+      "kind": 2,
+      "volume_offset": 118628352,
+      "stored_bytes": 172219,
+      "decoded_bytes": 561864,
+      "stored_sha256": "eee0e035a5cac374a2f2255c398ca54d987f650585f1652b75ef15ed62757e4d",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a"
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "output_file": "asset-01.bin",
+      "kind": 2,
+      "volume_offset": 276217856,
+      "stored_bytes": 179236,
+      "decoded_bytes": 487112,
+      "stored_sha256": "5437cb0d7fa854a3b1c56673927966557f75745bbe36c884c3492fb91ada4fd0",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867"
+    }
+  ],
+  "sources": [
+    {
+      "name": "PDTools",
+      "revision": "ffe0bb26377ac9ff62f40951c1c0b16c5d9a380f",
+      "license": "MIT",
+      "license_file": "private/slice119-nenkai-asset-research/references/PDTools/LICENSE"
+    },
+    {
+      "name": "GT-File-Specifications-Documentation",
+      "revision": "05e52347890541758222d173dbb62d2b40581b19",
+      "license": "MIT",
+      "license_file": "private/slice119-nenkai-asset-research/references/GT-File-Specifications-Documentation/LICENSE"
+    }
+  ],
+  "record_sizes": {
+    "shape_prefix": 16,
+    "vif_descriptor": 8,
+    "material": 80,
+    "pglu_texture": 40,
+    "transfer": 12
+  },
+  "caps": {
+    "input_bytes": 16777216,
+    "descriptors_per_shape": 4096,
+    "total_descriptors": 65536,
+    "total_texture_and_transfer_records": 16384
+  },
+  "observations": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a",
+      "shape_count": 22,
+      "descriptor_count": 154,
+      "packet_bytes_sum": 205728,
+      "zero_qwc": 0,
+      "unaligned_packets": 0,
+      "external_texture_descriptors": 0,
+      "material_records": 14,
+      "texture_records": 49,
+      "transfer_records": 5,
+      "transfer_formats": [
+        0
+      ],
+      "shape_word04_values": [
+        0
+      ],
+      "independent_packet_inventory": {
+        "duplicate_packet_span_count": 0,
+        "packet_span_overlap_pairs": {
+          "count": 154,
+          "overlap_pair_count": 0,
+          "overlap_pairs_first_64": []
+        },
+        "descriptor_table_packet_overlap_pairs": 0
+      }
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867",
+      "shape_count": 113,
+      "descriptor_count": 312,
+      "packet_bytes_sum": 167104,
+      "zero_qwc": 0,
+      "unaligned_packets": 0,
+      "external_texture_descriptors": 0,
+      "material_records": 18,
+      "texture_records": 123,
+      "transfer_records": 15,
+      "transfer_formats": [
+        0
+      ],
+      "shape_word04_values": [
+        0,
+        963912704
+      ],
+      "independent_packet_inventory": {
+        "duplicate_packet_span_count": 0,
+        "packet_span_overlap_pairs": {
+          "count": 312,
+          "overlap_pair_count": 0,
+          "overlap_pairs_first_64": []
+        },
+        "descriptor_table_packet_overlap_pairs": 0
+      }
+    }
+  ],
+  "controls": {
+    "public_model_record_tests": 11,
+    "independent_descriptor_fields_match": 466,
+    "independent_material_record_hashes_match": 32,
+    "independent_pglu_record_hashes_match": 172,
+    "independent_transfer_records_match": 20,
+    "ctest_passed": 3,
+    "ctest_total": 3,
+    "python_passed": 109,
+    "python_skipped": 0,
+    "ctest_seconds": 11.02,
+    "native_rebuild_needed": false,
+    "ctest_build": "private/slice118-ee-candidates/baseline/build"
+  },
+  "public_tool_hash_method": "SHA-256 of canonical Git blob bytes (LF); all private input/artifact hashes are exact bytes",
+  "public_tool_sha256": {
+    "scripts/gt4_model_records.py": "1dd7d13eb6e7240d80d071d9c8ee3945ec64567646638117e1f81f7b274e69d5",
+    "tests/python/test_gt4_model_records.py": "1519df277678f1524a1b26d82371ac1d4f8a9b007f885b814b86dad6390fc071"
+  },
+  "private_artifact_sha256": {
+    "source-research/shape-texture-contract.md": "f305bf93fb8a6c3383390edd72effe292f918ce339a91e2981ef3ef305fbadd5",
+    "source-research/metadata.json": "eb14270654fa1c1124f3f069b00231620d79d4f1a34b67604b21537284535696",
+    "independent-review/inventory_records.py": "9be1de8d4e790b177ea721428bff5a0ba9dc7a8b60aec8615a07e859c3460148",
+    "independent-review/inventory.json": "351e9aca4258ee9b1e341c1d892a32696ff00f59966de3af294bb418d14e1352",
+    "independent-review/review-report.md": "1f01419507202880b20dd5f96f6286b11f7f3c8a238bb27feae08708d047361d",
+    "probe_selected_records.py": "d760a209f009265b0bf94f63a2d4e234e94875e841ff5b649b8f2a49f32ee033",
+    "selected-records.json": "f15af5179bfcd24d217b0f1ef1344d76a376869345f711558a3229b81a08a9b2",
+    "ctest-baseline.log": "7364bfebc3aa6aa7eeb6e19a94183203e5e31cde9e66b8daa5930f115ab94dee"
+  },
+  "tools": {
+    "python": "3.14.5"
+  },
+  "limitations": [
+    "Fixed record framing is not VIF/geometry/pixel or material correctness",
+    "Shape+4 is opaque, not an extent",
+    "Transfer data starts only; no bpp-derived span/pixel reads",
+    "Zero-QWC metadata has no packet access; behavior Unknown",
+    "Packet aliases accepted; aggregate overlap counts come from independent selected-file review only",
+    "No live ownership/camera/argument chain or independent PS2 fidelity qualified"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Bounded VIF command framing and controlled channel/topology/coordinate contracts; no early renderer substitution"
+}

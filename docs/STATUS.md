@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 121, exact offline Ford Ka model files and bounded header probe.
+2026-10-13 — Slice 122, bounded fixed shape/material/texture record inventory.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-model-file-map-121`, based on commit c81560e.
+`codex/gt4-shape-records-122`, based on commit 1bb752f.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -70,6 +70,13 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   Geometry, texture records/pixels, relocation and live argument chain remain Unknown.
 - **Confirmed (slice 121):** 17 public header controls; CTest 3/3, Python 98/98
   with zero skips. No native rebuild, live hook or runtime behavior change.
+- **Confirmed (slice 122):** selected garage/racing main models contain 154/312
+  bounded shape descriptors, 14/18 material records and 49/123 PGLU texture
+  records plus 5/15 transfer records. Packet spans and fixed arrays are bounded;
+  shape +4 is opaque, transfer storage extent and material semantics Unknown.
+- **Confirmed (slice 122):** 11 new public controls; CTest 3/3, Python 109/109,
+  zero skips. No VIF/vertex/pixel decoding or runtime change. Independent record
+  review is recorded in [Model Records](MODEL-RECORDS.md).
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
@@ -85,6 +92,9 @@ have not been replaced. Candidate checks do not qualify game boot or racing.
 See [Model Asset Probe](MODEL-ASSET-PROBE.md) and
 [slice 121 metadata](inputs/slice121-model-file-map.json) for the now-confirmed
 offline file mapping and exact header-only parsing boundary. P1 remains open.
+[Model Records](MODEL-RECORDS.md) and
+[slice 122 metadata](inputs/slice122-shape-records.json) extend this to fixed
+record and declared packet-span inventory; renderable geometry remains pending.
 The owner's active OpenCode baseline session was preserved during build qualification.
 On the owner's subsequent explicit request, it closed normally and the slice 118
 baseline candidate launched at 13:16 local time. Its window responded and module

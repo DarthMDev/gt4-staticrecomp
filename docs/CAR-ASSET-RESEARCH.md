@@ -224,3 +224,16 @@ getter → index argument link remains Unknown. Geometry, material/texture recor
 bodies, pixels, relocation, camera and live ownership remain open. No runtime,
 game session, OpenCode, performance or input behavior changed. Next bounded
 package inventories fixed shape/material/texture records on this exact pair.
+
+## Slice 122 — Fixed records before packet semantics
+
+[Model Records](MODEL-RECORDS.md) bounds and hashes the selected pair's fixed
+shape/descriptors, materials and PGLU/transfer records. Garage/race: 22/113 shapes,
+154/312 descriptors, 14/18 materials, 49/123 textures and 5/15 transfers. All
+selected packets have nonzero QWC and aligned starts; raw shape+4 differs in
+the racing file and is not treated as a size. No transfer pixels or VIF command
+bytes are decoded. Field-level independent review is in the fresh capsule.
+
+Eleven new public controls; CTest3/3 in11.02s, Python109/109, zero skips. No
+native rebuild, owner session or runtime change. Next is bounded VIF command
+framing, followed by separately qualified geometry and texture conventions.

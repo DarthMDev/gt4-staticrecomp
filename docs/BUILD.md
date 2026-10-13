@@ -89,3 +89,6 @@ slice 120 remains a private experiment, not a general supported decoder.
 inventory in slice 121. It consumes separately verified, explicitly extracted
 CAR4/MDLS input; no native rebuild or runtime integration. Its public controls
 also run in Python discovery/CTest. Model and texture bodies remain unqualified.
+Slice122 adds `gt4_model_records.inventory_asset(bytes)` for fixed-record and
+packet-span metadata. Its controls use the same discovery; no VIF/pixel decoder
+or native build is involved. See [Model Records](MODEL-RECORDS.md).
