@@ -4,7 +4,8 @@
 no implementation, performance profiling, or new race run in this revision.
 
 **2026-10-13 planning update:** [Native Port Plan](NATIVE-PORT-PLAN.md) supersedes
-the phase ordering below for the owner's game-scene renderer/remaster direction.
+the phase ordering below for the owner's game-scene renderer direction. Deferred
+rendering and a graphical remaster are outside the current roadmap.
 This document retains the earlier timing mechanisms and contracts as context.
 The owner selected entry-level dedicated Windows graphics at 1080p/60 as the first
 target, and a no-JIT final architecture. [Agent Workflow](AGENT-WORKFLOW.md)

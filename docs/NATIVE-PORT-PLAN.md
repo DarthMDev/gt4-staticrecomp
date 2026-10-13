@@ -10,8 +10,10 @@ are linked under those phases. Later phases remain proposed.
 The owner selected **Windows with an entry-level dedicated GPU, 1920x1080 at
 60 FPS** as the initial hardware/performance target. Exact CPU/GPU, RAM, VRAM,
 driver, and quality preset remain to be selected before benchmark acceptance.
-High-refresh rendering, ultrawide, texture upgrades, and a richer lighting
-pipeline are subsequent goals. They are not available features today.
+High-refresh rendering, progressive internal resolution and ultrawide are
+subsequent goals. They are not available features today. The owner clarified
+that a deferred-rendering remaster is outside the current roadmap. Texture,
+material and lighting upgrades require a separately scoped future proposal.
 
 ## 1. Direction and success claims
 
@@ -341,23 +343,22 @@ decomp remain useful intermediate releases; no need to delay P3-P7 until the ent
 engine is readable. State hashes are compared only where representations/semantics
 make equivalence meaningful; independent behavior controls remain necessary.
 
-### P10 — Scalable remaster and low-hardware release qualification
+### P10 — Low-hardware release qualification
 
-**Dependencies:** P4/P5 for early enhancements, P7 for comprehensive graphics;
-P9 is required for the strict full-port claim, not for starting visual upgrades.
-**Work:** content-keyed high-resolution texture replacement, upgraded materials,
-normals/lighting data, then optional deferred rendering and modern effects.
-Keep the lightweight forward preset. Original baked lighting does not become
-physical lighting merely by writing a G-buffer. Add expensive effects only with
-measured budgets and a lower-cost option.
+**Dependencies:** P4/P5 for initial race/resolution qualification, P7 for
+comprehensive graphics; P9 is required for the strict full-port claim.
+**Work:** qualify the lightweight forward renderer with original content,
+bounded resource use, progressive resolution, supported aspect ratios and
+independent simulation/presentation timing. Deferred rendering and remaster
+content/effects are outside this roadmap and require a separate future proposal.
 
 **Exit:** owner-selected entry-level PC sustains the agreed 1080p/60 profile at
 correct game speed with qualified frametime, memory and long-session behavior.
-Separate baseline and remaster benchmarks; publish exact hardware/settings and
+Publish exact hardware/settings, supported refresh rates and
 limitations. Minimum requirements follow measurements, not a promise based on AOT.
 
-**Risk:** deferred bandwidth, texture memory, shader compilation and extra visibility
-at ultrawide can consume the savings from migration. Higher-quality presets must
+**Risk:** render-target memory, shader compilation and extra visibility
+at ultrawide can consume the savings from migration. Higher-resolution presets must
 not become mandatory for the original-experience preset.
 
 ## 5. Dependencies and parallel work

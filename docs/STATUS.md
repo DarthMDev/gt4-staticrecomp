@@ -103,6 +103,9 @@ The owner requested a comprehensive native-renderer/native-port and multi-model 
 [Native Port Plan](NATIVE-PORT-PLAN.md), [Agent Workflow](AGENT-WORKFLOW.md).
 Initial target selected by owner: Windows, entry-level dedicated GPU, internal
 1920x1080 at 60 FPS. Exact hardware/preset and achieved throughput remain Unknown.
+Owner clarified that deferred rendering and a graphical remaster are outside the
+current roadmap. Native graphics, progressive output, configurable internal
+resolution, ultrawide and independent simulation/presentation timing remain goals.
 
 The owner authorized reproducible EE generation and bounded model/camera research
 in slice 116; slice 117 qualifies one callback recovery mechanism offline. The

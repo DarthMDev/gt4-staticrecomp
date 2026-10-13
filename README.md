@@ -32,7 +32,7 @@ The primary objective is **playing GT4 stably and at correct game speed on PC**.
 - **FPS independent of game speed:** Rendering at 144 FPS or monitor refresh rate while preserving original physics, timers, and game pace.
 - **Configurable internal resolution:** 1920×1080, 2560×1440, 3840×2160, and beyond, with progressive-scan output.
 - **Ultrawide gameplay:** Adapted camera projection and repositioned HUD, maintaining proportions and legibility.
-- **Graphical enhancements:** Room to upgrade visual effects, textures, and Vulkan renderer features.
+- **Extensible graphics:** A game-level rendering interface that can support separately scoped future upgrades.
 - **Simple configuration:** A launcher to configure video and input settings before launching the game.
 - **Readable and modifiable code:** Ongoing decompilation to facilitate research, bug fixes, and future mods.
 
@@ -52,7 +52,11 @@ For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 2. Draw one live showroom car with a dedicated native Vulkan renderer, then expand to real racing.
 3. Add progressive internal resolution, ultrawide and independent simulation/presentation timing.
 4. Expand native graphics coverage and replace remaining PS2 execution/device dependencies through verified contracts.
-5. Qualify a lightweight 1080p/60 FPS preset on Windows with an entry-level dedicated GPU; add optional remaster effects and textures.
+5. Qualify a lightweight 1080p/60 FPS preset on Windows with an entry-level dedicated GPU.
+
+Deferred rendering and a graphical remaster are outside the current roadmap.
+The current focus is native graphics, progressive output, configurable internal
+resolution, ultrawide and rendering independent of game speed.
 
 These are proposed phases, not completed features or published minimum requirements. The exact entry-level machine remains to be selected. Controls, audio, saves and stability must be qualified throughout; the delegated performance investigation supplies evidence rather than assumptions about bottlenecks.
 
