@@ -1,0 +1,111 @@
+{
+  "classification": "Confirmed conditional reference predicate coverage; game channel/topology/geometry semantics Unknown",
+  "baseline_commit": "949d9c8",
+  "branch": "codex/gt4-channel-selection-126",
+  "derived_inputs": {
+    "raw_lane_capsule_file": "private/slice125-raw-channel-lanes/selected-raw-lanes.json",
+    "raw_lane_bytes": 5635668,
+    "raw_lane_sha256": "295c0f9919aacd5de7066eb78258b8a0f9b7b2411c3831ad1de66710f8e0095f",
+    "complete_frame_capsule_file": "private/slice123-vif-framing/selected-packet-frames.json",
+    "complete_frame_sha256": "1b3757e78737ffa7d84de8a6b715ce522b867801439d40ed95257e70beafac1d",
+    "pre_read_cap_bytes": 8388608,
+    "original_assets_or_packets_read": false
+  },
+  "initial_cycle_assumption": [
+    1,
+    1
+  ],
+  "predicate_source": {
+    "repository": "Nenkai/PDTools",
+    "revision": "ffe0bb26377ac9ff62f40951c1c0b16c5d9a380f",
+    "path": "PDTools.Files/Models/PS2/PGLUshape.cs",
+    "lines": "117-198",
+    "root_license": "MIT",
+    "implementation_adopted": false
+  },
+  "observations": [
+    {
+      "path": "car/menu/fdeu0006",
+      "packets": 154,
+      "predicate_counts": {
+        "color": 51,
+        "color_four_component": 51,
+        "color_multiple": 0,
+        "normal": 126,
+        "normal_multiple": 0,
+        "position": 154,
+        "position_multiple": 0,
+        "reset": 154,
+        "reset_multiple": 0,
+        "uv": 136,
+        "uv_multiple": 0,
+        "uv_selected_then_skipped": 23,
+        "uv_two_component": 113
+      },
+      "raw_num_zero_commands": 0,
+      "c0c0_marker_commands": 154,
+      "non_unpack_position_collisions": 0
+    },
+    {
+      "path": "car/lod/fdeu0006",
+      "packets": 312,
+      "predicate_counts": {
+        "color": 101,
+        "color_four_component": 101,
+        "color_multiple": 0,
+        "normal": 6,
+        "normal_multiple": 0,
+        "position": 312,
+        "position_multiple": 0,
+        "reset": 312,
+        "reset_multiple": 0,
+        "uv": 219,
+        "uv_multiple": 0,
+        "uv_selected_then_skipped": 0,
+        "uv_two_component": 219
+      },
+      "raw_num_zero_commands": 0,
+      "c0c0_marker_commands": 312,
+      "non_unpack_position_collisions": 0
+    }
+  ],
+  "controls": {
+    "derived_input_pins_and_pre_post_hashes_match": true,
+    "record_count_and_lane_digests_match": 2320,
+    "complete_command_headers_crosschecked": 4916,
+    "worker_independent_and_parent_role_counts_equal": true,
+    "private_literal_metadata_controls": 8,
+    "new_public_software_behavior": false,
+    "native_rebuild_needed": false,
+    "ctest_not_run_this_research_slice": true,
+    "inherited_checks": {
+      "from_slice": 125,
+      "ctest_passed": 3,
+      "ctest_total": 3,
+      "python_passed": 131,
+      "python_skipped": 0
+    }
+  },
+  "private_artifact_sha256": {
+    "research/channel-pattern-audit.md": "208d3523f42c2a6d0de3a3f7ac28d9a7be8e5277b2e180b60027f0c3dc14f950",
+    "research/metadata.json": "70297bf4fc33ecfe994e388995f560d8df21939130f901817013d5dbfc21244b",
+    "independent-review/replay_predicates.py": "66e6c9f0a908db673a1c45d00c53e8ac681b853dac50d8e62a901f33c181e940",
+    "independent-review/independent-predicate-counts.json": "e7b4693262b46e66726b6a48daae8b723241143aaa8f1bd852feaeda430fcc8e",
+    "independent-review/review-report.md": "9f535e5e24478f20fac36193af5fce8941aa8eb82baf14e96bc6dde3d9fe7ac4",
+    "independent-review/parent-header-review.md": "1386c4fa21b2324498c9665efe54886812e4a0feed37842c32554d30a54a0903",
+    "parent_complete_header_check.py": "67a364afe195b1bc9734c60dec2ff9ae79321fda4f9b925779814ebba10f7a29",
+    "parent-complete-header-check.json": "5002cbf4529ff7a84f3437e980a0a3e2b0cf9c8bcb4b446f8ebb94a679e37055"
+  },
+  "limitations": [
+    "Reference matches are not game channel roles or geometry validation",
+    "Complete header audit uses qualified conditional framing, not actual PDTools parser execution",
+    "C0C0 is excluded from reference typed-array view; no GIF semantics inferred",
+    "USN/TOPS/cycle/mode/mask, relocation, matrices and live ownership remain open",
+    "Missing or multiple candidates cannot be silently filled or dropped"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Authoritative observation after existing game preparation exactly once, with state/ownership/completion contracts; separate channel/topology proof"
+}

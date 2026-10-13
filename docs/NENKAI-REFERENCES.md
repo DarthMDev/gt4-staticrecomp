@@ -97,3 +97,12 @@ source-to-payload disagreements: signed -1 VM metadata and zero-size Tex1 slots.
 Do not inherit unsigned-pointer or nonzero-size assumptions from generic header
 descriptions. No reference implementation was imported or linked; geometry,
 pixels and live use remain unqualified.
+
+## Slice 126 — Concrete converter coverage limits
+
+[Channel Selection Audit](CHANNEL-SELECTION-AUDIT.md) independently matches
+PDTools' source predicates to the selected raw inputs. The float-normal rule
+matches only 6/312 race packets; 23 garage UV matches are selected then skipped
+for three components. These are reference coverage limits, not missing game
+attributes. Full qualified-header counts agree, but the legacy parser/converter
+is not adopted, and no game channel/coordinate/topology semantics are established.

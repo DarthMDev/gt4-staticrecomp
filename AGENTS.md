@@ -111,6 +111,13 @@ Explicit width/components/post-fill source count/signedness/alignment required;
 32-bit patterns stay u32, padding is opaque, no float/channel/VU interpretation.
 Selected raw counts remain conditional on initial (1,1) and USN assumptions.
 Do not label raw values vertices or adopt channel/topology heuristics silently.
+Slice126 research: docs/CHANNEL-SELECTION-AUDIT.md and
+docs/inputs/slice126-channel-selection.json. Reference position predicates match
+466 packets; float-normal predicate only 6/312 race, 23 garage UV candidates skipped
+for 3 components. These are conditional matches, not proved game roles. Full
+qualified-header audit matches derived counts; no legacy parser or converter
+adopted. Preserve missing/multiple roles; next is authoritative observation/
+ownership and bounded channel/topology contracts, not guessed conversion.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

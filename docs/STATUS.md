@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 125, controlled ordinary UNPACK raw integer lane extraction.
+2026-10-13 — Slice 126, conditional reference channel predicate coverage audit.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-raw-channel-lanes-125`, based on commit bf1b267.
+`codex/gt4-channel-selection-126`, based on commit 949d9c8.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -100,6 +100,13 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   geometry, VU results or live behavior inferred.
 - **Confirmed (slice 125):** 11 new literal controls; CTest 3/3, Python 131/131,
   zero skips. Exact selected pins and frozen framing reproduced; no native rebuild.
+- **Confirmed, conditional (slice 126):** source predicates match a position
+  candidate in 466/466 packets but float-normal candidates in only 6/312 racing
+  packets; 23 garage UV candidates have three components and would be skipped.
+  Independent derived-data audits and complete qualified-header check agree.
+- **Unknown:** actual channel/normal/UV/topology semantics. No converter adopted;
+  predicate coverage is not game geometry proof. Research-only slice inherits
+  CTest 3/3 and Python 131/131 from125; no new runtime/build/test claim.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
@@ -126,6 +133,9 @@ effects, buffered cycle words and the boundary before raw lane/geometry decoding
 [Raw Channel Lanes](RAW-CHANNEL-LANES.md) and
 [slice 125 metadata](inputs/slice125-raw-channel-lanes.json) extend this to
 controlled raw integer inputs, with channel/topology/geometry gates still open.
+[Channel Selection Audit](CHANNEL-SELECTION-AUDIT.md) and
+[slice 126 metadata](inputs/slice126-channel-selection.json) record reference
+coverage gaps before any semantic converter or native car renderer is adopted.
 The owner's active OpenCode baseline session was preserved during build qualification.
 On the owner's subsequent explicit request, it closed normally and the slice 118
 baseline candidate launched at 13:16 local time. Its window responded and module

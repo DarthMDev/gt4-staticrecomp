@@ -73,3 +73,7 @@ Next compare candidate channel-selection rules against actual raw header/type
 patterns, preserving missing/multiple roles. Establish the selected relocation,
 buffer ownership and matrix/mode context before adopting channel or topology
 conversion. No owner session, OpenCode, performance, input, saves or timing change.
+
+[Slice126 predicate coverage](CHANNEL-SELECTION-AUDIT.md) now compares the
+reference's selectors against these frozen inputs and full framing headers.
+Racing normal and garage UV gaps prevent adopting that converter wholesale.
