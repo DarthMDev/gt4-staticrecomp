@@ -1,50 +1,50 @@
-# 0051 — Priorizar um piloto de execução com runtime externo
+# 0051 — Prioritize an execution pilot with an external runtime
 
-Data: 2026-10-12. Status: aceita para estudo e piloto isolado;
-substituição do runtime de produção ainda não decidida.
+Date: 2026-10-12. Status: accepted for study and isolated pilot;
+replacement of the production runtime not yet decided.
 
-## Contexto
+## Context
 
-O proprietário pediu estudar gt4-decomp, ps2-web-recomp e PS2Recomp antes
-da próxima fatia, para acelerar muito o caminho até jogo funcional. A
-produção segue na fronteira de tempo/interrupções das slices 96–109.
-O objetivo é funcionamento estável antes de decompilação manual ampla.
+The owner requested studying gt4-decomp, ps2-web-recomp, and PS2Recomp prior
+to the next slice to significantly accelerate the path to a functional game.
+Production remains at the timing/interrupt frontier of slices 96–109.
+The objective is stable gameplay before broad manual decompilation.
 
-## Decisão
+## Decision
 
-Priorizar o runtime completo MIT de ps2-web-recomp em um experimento com
-nosso CORE/disco hash-pinado, com identidade e arquivos privados separados.
-Usar gt4-decomp como mapa semântico: seu hash publicado do CORE coincide
-com nosso input, e seu inventário ampliado explica os mais de 30 mil alvos.
-Usar PS2Recomp como referência de interfaces/tests/Windows, observando
-GPLv3 e divergências de contrato já encontradas. EE Reloaded é auxiliar de
-análise; não é pré-requisito nem substituto do ambiente de execução.
+Prioritize the complete MIT ps2-web-recomp runtime in an experiment with
+our hash-pinned CORE/disc, using separate private identity and files.
+Use gt4-decomp as a semantic map: its published CORE hash matches
+our input, and its expanded inventory explains the more than 30,000 targets.
+Use PS2Recomp as a reference for interfaces/tests/Windows, observing
+GPLv3 and previously identified contract divergences. EE Reloaded is an
+analysis aid; it is neither a prerequisite nor a replacement for the execution environment.
 
-Não alterar política de tempo/IRQ/checkpoints do runtime atual para imitar
-o externo. Não adotar respostas genéricas de sucesso como correção de
-serviços desconhecidos. O piloto deve revelar e registrar esses casos.
+Do not alter the timing/IRQ/checkpoint policy of the current runtime to mimic
+the external runtime. Do not adopt generic success responses as a fix for
+unknown services. The pilot must reveal and record these cases.
 
-## Alternativas e consequência
+## Alternatives and consequences
 
-Continuar todas as fatias pequenas na base atual mantém máxima continuidade
-dos contratos, mas exige implementar muitos subsistemas que já existem no
-outro projeto. Migrar imediatamente perde a referência independente e
-presume boot NTSC/Windows ainda não observado. O piloto limitado preserva
-a evidência existente e testa o ganho mais amplo com pouco código novo.
+Continuing all small slices on the current base preserves maximum contract
+continuity, but requires implementing many subsystems that already exist in
+the other project. Migrating immediately loses the independent reference and
+assumes an NTSC/Windows boot not yet observed. The limited pilot preserves
+existing evidence and tests broader gains with minimal new code.
 
-Uma eventual integração deve reaproveitar subsistemas coerentes, incluindo
-tempo/IOP/transporte, em vez de combinar modelos incompatíveis por handlers.
-Vulkan direto, XInput, áudio e saves reais continuam metas do produto; o
-caminho wgpu-native é uma base de teste/aproveitamento, não certificação de
-que essas metas já estejam cumpridas no Windows.
+Any eventual integration must reuse coherent subsystems, including
+timing/IOP/transport, rather than combining incompatible models via handlers.
+Direct Vulkan, XInput, audio, and real saves remain product goals; the
+wgpu-native path is a test/reuse foundation, not certification that
+these goals are already met on Windows.
 
-## Aceitação e revisão
+## Acceptance and review
 
-O estudo fecha com clones/pins, explicação de contagens, fontes auditadas e
-experimentos reproduzíveis. A escolha da base final exige cold boot,
-primeira imagem guest, menu navegável e identificação de serviços realmente
-usados. Corrida, saves e fidelidade têm gates separados. Rever esta decisão
-quando o primeiro piloto publicar seu bloqueio ou progresso concreto.
+The study concludes with clones/pins, count explanations, audited sources, and
+reproducible experiments. Choosing the final base requires a cold boot,
+first guest screen, navigable menu, and identification of services actually
+used. Racing, saves, and fidelity have separate gates. Review this decision
+once the initial pilot reports either a blocker or concrete progress.
 
-Evidência: `docs/reverse-engineering/external-recomp-acceleration-2026-10-12.md`
-e `docs/inputs/external-recomp-references.json`.
+Evidence: `docs/reverse-engineering/external-recomp-acceleration-2026-10-12.md`
+and `docs/inputs/external-recomp-references.json`.

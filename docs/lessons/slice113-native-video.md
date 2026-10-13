@@ -1,26 +1,9 @@
-# Slice113 — proporção, resolução e ritmo são coisas diferentes
+# Slice113 — Aspect Ratio, Resolution, and Cadence Are Distinct Concerns
 
-Uma janela16:9 precisa de duas configurações coerentes. O Vulkan enquadra a
-imagem no retângulo certo; o GT4 precisa selecionar sua própria opção16:9,
-que atualiza a projeção e a posição do HUD. Esticar uma imagem4:3 não aumenta
-o campo de visão. Por isso usamos a interface original do jogo e seu save,
-além de conferir a flag aplicada à corrida no código original.
+A 16:9 window requires two aligned configurations. Vulkan frames the image into the proper display rectangle; GT4 must select its internal 16:9 setting, which updates camera projection and HUD positioning. Stretching a 4:3 image does not expand the field of view. For this reason, we use the original in-game interface and its save data, in addition to verifying the race-applied flag in the original code.
 
-480p e1080i são modos de saída. Não significam necessariamente que o jogo
-desenha640x480 ou1920x1080 pixels. DISPLAY/MAGH/MAGV definem a imagem ativa;
-SMODE2 controla a leitura de linhas. A prévia de480p produziu640x448, e a de
-1080i produziu576x960. O menu voltou ao modo normal após aceitar a prévia.
-Uma corrida precisa ser observada separadamente: o nome do arquivo de teste
-e uma conclusão normal do processo não comprovam seu modo de vídeo.
+480p and 1080i are output modes. They do not necessarily mean the game rasterizes 640x480 or 1920x1080 pixels. DISPLAY, MAGH, and MAGV define the active display area; SMODE2 controls line scanning. The 480p preview produced 640x448, and 1080i produced 576x960. The menu reverted to standard mode after accepting the preview. In-race rendering must be observed separately: test script filenames and clean process exit codes do not validate the active video mode.
 
-Os testes sintéticos verificam pixels, limites de memória e apresentação em
-vários tamanhos. Não demonstram fidelidade temporal de campos entrelaçados
-nem que o jogo já renderiza internamente emHD/4K. Essas melhorias precisarão
-qualificar a escala, os efeitos e a composição de interface.
+Synthetic tests verify pixel values, memory boundaries, and swapchain presentation across multiple display resolutions. They do not demonstrate temporal fidelity of interlaced fields, nor do they prove the game internally renders at HD or 4K. Those enhancements will require qualifying internal scaling factors, post-processing effects, and UI compositing.
 
-144FPS também exige trabalho diferente: a apresentação poderá ter cadência
-própria enquanto a simulação mantém100% da velocidade. Repetir a mesma imagem
-em144Hz não cria144 imagens novas; acelerar o relógio do jogo pode acelerar
-física e outros sistemas. O plano futuro deve identificar essas dependências
-e testar a velocidade efetiva. O dono pediu registrar a lentidão3D e o frametime
-por enquanto; esta fatia não altera sincronização nem inicia otimização.
+Achieving 144 FPS also requires separate architectural work: presentation may run at its own independent cadence while the simulation maintains 100% game speed. Repeating the identical frame at 144 Hz does not generate 144 unique images; accelerating the guest clock can speed up physics and other subsystems. Future roadmap planning must isolate these timing dependencies and measure effective simulation velocity. The owner requested recording 3D performance drops and frametimes for now; this slice alters neither synchronization nor initiates optimization.

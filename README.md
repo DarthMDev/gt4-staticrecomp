@@ -1,140 +1,89 @@
 # GT4Recomp
 
-**Gran Turismo 4 no PC. Preservar a experiência original e abrir caminho para o que vem depois.**
+**Gran Turismo 4 on PC. Preserving the original experience and paving the way for what comes next.**
 
-GT4Recomp é um projeto de recompilação de **Gran Turismo 4 USA v2.00 para
-Windows x86-64**. Queremos transformar o clássico do PlayStation 2 em uma
-experiência para PC com desempenho estável, gráficos configuráveis e uma base
-de código que permita estudar, modificar e expandir o jogo.
+GT4Recomp is a static recompilation project targeting **Gran Turismo 4 USA v2.00 for Windows x86-64**. Our goal is to bring the PlayStation 2 classic to PC with stable performance, configurable graphics, and a codebase structured for research, modding, and future expansion.
 
-**O jogo já inicia, navega pelos menus e entra em corrida real.** A base atual
-tem Vulkan, áudio no Windows, teclado, implementação de controles XInput e
-cartão de memória persistente. Estamos na fase de desenvolvimento experimental:
-o próximo desafio é transformar esse progresso em uma experiência confiável
-para jogar.
+**The game already boots, navigates menus, and enters real racing gameplay.** The current base features Vulkan rendering, Windows audio, keyboard support, an XInput controller implementation, and persistent memory card storage. We are in an experimental development phase: the immediate challenge is turning this milestone into a reliable gameplay experience.
 
-[Estado detalhado](docs/STATUS.md) · [Plano de desenvolvimento](docs/ROADMAP.md) · [Guia de build](docs/BUILD.md)
+[Detailed Status](docs/STATUS.md) · [Development Roadmap](docs/ROADMAP.md) · [Build Guide](docs/BUILD.md)
 
-## Onde estamos hoje
+## Current Status
 
-| Recurso | Estado atual |
+| Feature | Current State |
 |---|---|
-| **Boot e menus** | Inicialização real, menus navegáveis e seleção de carros e circuitos |
-| **Gameplay** | Corrida em Nürburgring já acessada e controles exercitados; estabilidade de corridas completas ainda em validação |
-| **Vulkan** | Backend nativo para Windows renderizando a saída real do jogo na GPU |
-| **Tela 16:9** | Padrão do projeto, usando a opção original do GT4 para câmera e HUD; 4:3 também disponível |
-| **Modos de vídeo** | 480i, 480p e 1080i testados manualmente em gameplay, todos em 16:9 |
-| **Áudio** | Saída estéreo de 48 kHz no Windows; continuidade ainda precisa melhorar |
-| **Controles** | Teclado funcional e XInput implementado com analógicos e vibração; controle físico ainda não testado |
-| **Persistência** | Perfil e configurações salvos pelo jogo, cartão persistente com backup por sessão e proteção contra uso simultâneo |
+| **Boot and menus** | Real boot, navigable menus, and car/track selection |
+| **Gameplay** | In-game racing on Nürburgring accessed and controls exercised; full-race stability still undergoing validation |
+| **Vulkan** | Native Windows backend rendering genuine game output on the GPU |
+| **16:9 Display** | Project default, using GT4's native option for camera and HUD; 4:3 also available |
+| **Video Modes** | 480i, 480p, and 1080i manually tested during gameplay, all in 16:9 |
+| **Audio** | 48 kHz stereo output on Windows; continuity improvements still required |
+| **Controls** | Functional keyboard and implemented XInput with analog sticks and rumble; physical gamepad hardware untested |
+| **Persistence** | Profile and settings saved by the game; persistent memory card with per-session backup and mutual exclusion lock |
 
-**Ainda há trabalho importante antes de uma experiência estável:** desempenho
-baixo em cenas 3D, tempo entre quadros inconsistente, interrupções de áudio e
-relatos de acionamento duplo no teclado. Compatibilidade gráfica, saves além
-dos cenários já testados e estabilidade prolongada continuam em validação.
+**Critical work remains before a stable experience is reached:** low performance in 3D scenes, inconsistent frametimes, audio dropouts, and reports of keyboard double-triggering. Graphical compatibility, saves beyond tested scenarios, and extended stability remain under active qualification.
 
-O teste manual mostrou 480p como o modo mais estável até agora. Os modos
-entrelaçados funcionaram, mas sua fidelidade visual e temporal ainda não está
-completamente qualificada.
+Manual testing has shown 480p to be the most stable mode so far. Interlaced modes function, but their visual and temporal fidelity are not yet fully qualified.
 
-## A experiência que queremos construir
+## The Experience We Want to Build
 
-O primeiro objetivo é **jogar GT4 com estabilidade e velocidade correta no PC**.
-A partir dessa base, queremos desenvolver:
+The primary objective is **playing GT4 stably and at correct game speed on PC**. Building on that foundation, we plan to develop:
 
-- **FPS independente da velocidade do jogo:** renderização em 144 FPS ou na
-  frequência do monitor, preservando física, cronômetros e velocidade original.
-- **Resolução interna configurável:** 1920×1080, 2560×1440, 3840×2160 e outras
-  resoluções, com saída progressiva.
-- **Ultrawide na gameplay:** câmera adaptada e HUD reposicionado, preservando
-  proporções e legibilidade.
-- **Melhorias gráficas:** espaço para aprimorar efeitos, texturas e opções do
-  renderizador Vulkan.
-- **Configuração simples:** launcher para ajustar vídeo e controles antes de
-  iniciar o jogo.
-- **Código legível e modificável:** avançar na decompilação para facilitar
-  pesquisa, correções e futuras modificações.
+- **FPS independent of game speed:** Rendering at 144 FPS or monitor refresh rate while preserving original physics, timers, and game pace.
+- **Configurable internal resolution:** 1920×1080, 2560×1440, 3840×2160, and beyond, with progressive-scan output.
+- **Ultrawide gameplay:** Adapted camera projection and repositioned HUD, maintaining proportions and legibility.
+- **Graphical enhancements:** Room to upgrade visual effects, textures, and Vulkan renderer features.
+- **Simple configuration:** A launcher to configure video and input settings before launching the game.
+- **Readable and modifiable code:** Ongoing decompilation to facilitate research, bug fixes, and future mods.
 
-Esses são **objetivos de desenvolvimento**, não recursos já disponíveis.
-Atualmente a escala interna continua original; aumentar a janela não aumenta
-a resolução interna. Da mesma forma, ainda não temos renderização a 144 FPS
-independente da simulação.
+These are **development goals**, not currently available features. The internal rendering scale remains 1x; resizing the window does not increase the internal resolution. Likewise, decoupled 144 FPS rendering independent of physics is not yet implemented.
 
-## Como funciona
+## How It Works
 
-O código principal do jogo é traduzido antecipadamente para C++ e compilado
-para executar em **x86-64**. A integração com o PC usa janela Windows,
-**Vulkan**, áudio e controles nativos.
+The main game code is translated ahead-of-time (AOT) into C++ and compiled to run natively on **x86-64**. Host PC integration provides a native Windows window, **Vulkan**, audio, and input.
 
-A arquitetura atual é uma **recompilação híbrida**: IOP e unidades vetoriais
-ainda são interpretados, e serviços e hardware do PS2 são reproduzidos em
-software. O Vulkan atual também preserva regras do sistema gráfico original.
-Isso não impede evoluir a apresentação, o controle de tempo e o renderizador;
-a migração de subsistemas será feita conforme a necessidade demonstrada.
+The current architecture is a **hybrid recompilation**: IOP and Vector Units (VU) remain interpreted, and PS2 hardware services are software models. The current Vulkan backend also preserves the constraints of the original graphics subsystem. This does not prevent evolving the presentation, timing model, or renderer; subsystem migrations will be undertaken as proven necessary.
 
-Detalhes para quem quer conhecer a implementação: [arquitetura](docs/ARCHITECTURE.md).
+For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
-## Próximos passos
+## Next Steps
 
-1. Tornar a geração do código recompilado e o build completos e reproduzíveis.
-2. Qualificar controles, áudio, saves e estabilidade em mais situações reais.
-3. Medir os custos de execução e melhorar desempenho e regularidade dos quadros.
-4. Separar tempo do jogo e apresentação; depois, gerar novas cenas entre os
-   passos da simulação para oferecer taxas de renderização maiores.
-5. Evoluir saída progressiva, resolução interna e opções gráficas.
+1. Establish fully reproducible ahead-of-time recompilation and clean build generation.
+2. Qualify controls, audio, saves, and stability across more real-world gameplay scenarios.
+3. Profile execution bottlenecks, improving performance and frametime consistency.
+4. Decouple game logic timing from presentation; generate intermediate frames between simulation steps to deliver high-refresh rendering.
+5. Advance progressive output, internal resolution scaling, and graphical features.
 
-Trabalhamos em etapas pequenas, com resultados registrados e verificações antes
-de adotar mudanças. O [plano técnico](docs/ROADMAP.md) explica a sequência,
-as dependências e os critérios de validação. Não há prazo anunciado para
-concluir essas funcionalidades.
+We work in small, incremental steps with recorded evidence and verification before merging changes. The [Roadmap](docs/ROADMAP.md) outlines the planned sequence, dependencies, and validation criteria. There is no announced timeline for completing these milestones.
 
-## Experimentar e desenvolver
+## Testing and Development
 
-O projeto ainda exige um **ambiente de desenvolvimento com arquivos privados
-preparados**. Este repositório não distribui o jogo, ISO, BIOS, código traduzido,
-executáveis ou saves. O build atual também depende de uma biblioteca recompilada
-privada já gerada; a receita completa desde a ISO ainda é trabalho pendente.
+The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. The current build also relies on a pre-generated private recompiled library; a clean end-to-end extraction pipeline from ISO remains future work.
 
-Com esse ambiente preparado, `Jogar-GT4.cmd` abre o jogo, verifica os arquivos
-necessários e preserva o cartão existente. Requisitos e instruções estão no
-[guia de build](docs/BUILD.md).
+Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates required files, and preserves the existing memory card. Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
 
-| Tecla | Ação |
+| Key | Action |
 |---|---|
-| Enter | Start / pausa |
-| Z | Confirmar / acelerar |
-| A | Frear |
-| S | Triângulo / voltar |
-| X | Círculo |
-| Setas | Navegar / dirigir |
-| F6 | Alternar enquadramento 16:9 / 4:3 |
+| Enter | Start / Pause |
+| Z | Confirm / Accelerate |
+| A | Brake |
+| S | Triangle / Back |
+| X | Circle |
+| Arrow Keys | Navigate / Steer |
+| F6 | Toggle 16:9 / 4:3 Window Framing |
 
-F6 altera o enquadramento da janela. Use a mesma proporção em **Options →
-Screen → Aspect Ratio** no jogo para acertar câmera e HUD.
-`Jogar-GT4.cmd --aspect 4:3` inicia com enquadramento 4:3. Cartões existentes
-mantêm as configurações salvas. Os modos 480p e 1080i devem ser conferidos em
-corrida; os menus podem usar o modo normal.
+F6 toggles the window framing. Match this setting under in-game **Options → Screen → Aspect Ratio** to correct the camera aspect ratio and HUD positioning. `Jogar-GT4.cmd --aspect 4:3` boots using 4:3 framing. Existing memory cards retain saved settings. 480p and 1080i modes must be verified during races; menus can use the standard display mode.
 
-## Bases, histórico e documentação
+## Foundations, History, and Documentation
 
-A base de execução atual vem do projeto MIT
-[ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp), adaptado para
-Windows e Vulkan. O nosso executável roda diretamente no Windows, sem navegador
-ou WebAssembly e sem PCSX2 embutido. Créditos, versões e limites de uso estão em
-[THIRD_PARTY.md](native/THIRD_PARTY.md).
+The active runtime foundation comes from the MIT-licensed [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) donor, adapted to native Windows and Vulkan. Our binary runs directly on Windows without a browser, WebAssembly, or embedded PCSX2. Credits, revisions, and licensing terms are documented in [THIRD_PARTY.md](native/THIRD_PARTY.md).
 
-O desenvolvimento já passou por boot e menus, integração Vulkan, áudio e
-controles, corrida real e modos de vídeo. O motor original de recompilação
-foi preservado na branch
-[`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013).
-A `main` concentra a base atual.
+Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The original recompiler engine has been archived on the [`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013) branch. The `main` branch is dedicated exclusively to the current native base.
 
-- [STATUS](docs/STATUS.md): progresso confirmado e pendências.
-- [ROADMAP](docs/ROADMAP.md): plano para velocidade, renderização e evolução nativa.
-- [ARCHITECTURE](docs/ARCHITECTURE.md): funcionamento da base atual.
-- [BUILD](docs/BUILD.md): ambiente e verificações.
-- [LEGACY](docs/LEGACY.md): preservação e recuperação do trabalho anterior.
+- [STATUS](docs/STATUS.md): Confirmed milestones and pending tasks.
+- [ROADMAP](docs/ROADMAP.md): Roadmap for framerate decoupling, rendering upgrades, and native subsystem evolution.
+- [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
+- [BUILD](docs/BUILD.md): Build environment setup and verification procedures.
+- [LEGACY](docs/LEGACY.md): Preservation and retrieval of archived work.
 
-O código ativo está em `native/`, com ferramentas em `scripts/`, testes em
-`tests/` e registros técnicos em `docs/`. O fork de desenvolvimento é
-[`moesuito/gt4-staticrecomp`](https://github.com/moesuito/gt4-staticrecomp).
+Active source code resides in `native/`, with tooling in `scripts/`, automated tests in `tests/`, and technical records in `docs/`. The active development fork is [`moesuito/gt4-staticrecomp`](https://github.com/moesuito/gt4-staticrecomp).

@@ -1,169 +1,168 @@
-# Slice110 — piloto nativo externo: perfil e menu
+# Slice110 — external native pilot: profile and menu
 
-Data: 2026-10-12. Baseline do fork: `95dd453`.
-Ramo: `codex/runtime-menu-pilot-110`. Experimento autorizado pelo proprietário
-após o estudo externo/decisão0051; não altera o runtime de produção.
+Date: 2026-10-12. Fork baseline: `95dd453`.
+Branch: `codex/runtime-menu-pilot-110`. Experiment authorized by owner
+following external study/decision0051; does not modify the production runtime.
 
-## Pergunta e critério
+## Question and criteria
 
-O runtime MIT completo de ps2-web-recomp já desenha telas iniciais com nossos
-inputs. Esta fatia verifica se comandos controlados permitem criar um perfil
-e alcançar um menu que responde, antes de decidir uma integração maior.
-Encerrar milhares de frames sem falha não basta para aceitar boot funcional.
+The full MIT runtime of ps2-web-recomp already renders initial screens with our
+inputs. This slice verifies whether controlled commands allow creating a profile
+and reaching a responsive menu, prior to deciding on a broader integration.
+Completing thousands of frames without failure is not sufficient to accept a functional boot.
 
-**Confirmado:** o mesmo executável nativo Windows x64/Clang23.1.2 do estudo
-é utilizado, sem patch de serviços, tradutor ou código guest. SHA256:
+**Confirmed:** the same native Windows x64/Clang23.1.2 executable from the study
+is used, without service patches, translator changes, or guest code modifications. SHA256:
 `4a4f36899738032f44f879de422984951bd3a2e6824552ca344a06d1d1dd0ade`.
-Sua fonte está fixada em ps2-web-recomp
-`1b4808793a12c45125262fd2d5f50a9ec9f7c020`. Identidade completa de fontes e
-build: `docs/inputs/external-recomp-references.json` e relatório externo.
+Its source is pinned to ps2-web-recomp
+`1b4808793a12c45125262fd2d5f50a9ec9f7c020`. Full source and build identity:
+`docs/inputs/external-recomp-references.json` and external report.
 
-O launcher dos controles2–4 verifica novamente executável, CORE, ELF e ISO
-inteiro contra os manifests existentes. O helper anterior do controle1
-verifica executável, ELF e ISO; não verifica CORE separadamente. A verificação
-nunca atualiza os manifests.
+The launcher for controls 2–4 reverifies executable, CORE, ELF, and full ISO
+against existing manifests. The earlier control 1 helper verifies executable, ELF,
+and ISO; it does not verify CORE separately. Verification never updates manifests.
 
 | Input | SHA256 |
 | --- | --- |
 | ISO USA v2.00 | `67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f` |
-| ELF reconstruído | `10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c` |
+| Reconstructed ELF | `10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c` |
 | CORE | `85d26aa8430154967b2633eede929286694ac39e99762527edcec365fd642ff9` |
 
-## Instrumento e limites
+## Instrumentation and limits
 
-`scripts/external_runtime_probe.py` utiliza o fingerprint existente, argumentos
-literais e subprocesso limitado no tempo. Saídas e cartão ficam em um novo
-diretório dentro de `private/`; diretórios existentes são recusados. Copia o
-ELF com nome `SCUS_973.28` exigido pelo argv0 do jogo e verifica também a cópia.
-Captura PPM a cada100 VBlanks do modelo externo, trace de syscalls e motivo
-de parada. Os botões são injetados pelo mecanismo original `--press` do doador.
-PNG é conversão sem perda de PPM para inspeção, não uma tela fabricada.
+`scripts/external_runtime_probe.py` utilizes the existing fingerprint, literal
+arguments, and a time-bounded subprocess. Outputs and memory card reside in a
+new directory under `private/`; existing directories are rejected. Copies the ELF
+with the name `SCUS_973.28` required by the game's argv0 and also verifies the copy.
+Captures PPM every 100 VBlanks of the external model, syscall trace, and stop
+reason. Buttons are injected via the donor's original `--press` mechanism.
+PNG is a lossless conversion from PPM for inspection, not a fabricated screen.
 
-O doador retorna exit0 inclusive em certas paradas guest. O launcher só
-aceita conclusão de execução se o log diz `frame limit reached`, no número
-solicitado, exit0 e sem timeout. Esse resultado **não certifica menu ou boot**:
-as capturas e seus efeitos precisam ser examinados separadamente.
+The donor returns exit 0 even on certain guest halts. The launcher only accepts
+execution completion if the log states `frame limit reached`, matching the
+requested count, with exit 0 and no timeout. This outcome **does not certify menu or boot**:
+captures and their effects must be examined separately.
 
-Para reler dados, `--card-seed` aceita apenas uma imagem privada fixada no
-manifest desta fatia, verifica hash/tamanho antes da cópia e verifica a cópia.
-O processo recebe exclusivamente o novo cartão e o resultado identifica
-a origem. Isso mantém o cartão original e sua evidência congelados.
+To reread data, `--card-seed` accepts only a private image pinned in this slice's
+manifest, verifies hash/size before copying, and verifies the copy. The process
+receives exclusively the new card, and the result identifies the origin. This keeps
+the original card and its evidence frozen.
 
-Sete controles sintéticos na suíte Python existente cobrem inputs alterados,
-destinos privados novos, argv literal, cópia corrompida, timeout com log e
-exit0 após parada precoce, seed alterada e preservação do cartão original.
-Não contêm bytes do jogo nem executam o doador.
+Seven synthetic controls in the existing Python suite cover altered inputs,
+new private destinations, literal argv, corrupted copy, timeout with log and
+exit 0 after early halt, altered seed, and preservation of the original card.
+They contain no game bytes and do not execute the donor.
 
-## Experimentos preservados
+## Preserved experiments
 
-Todos partem do ELF/disco e de cartão privado inexistente, NTSC, CPU/software
-GS, sem GPU/SDL, sem checkpoints de produção. Resultados e helpers congelados
-estão em `private/slice110-menu-pilot/`; metadados distributáveis serão fixados
-em `docs/inputs/slice110-external-menu-pilot.json`.
+All runs start from ELF/disc and a non-existent private card, NTSC, CPU/software
+GS, no GPU/SDL, no production checkpoints. Frozen results and helpers reside in
+`private/slice110-menu-pilot/`; distributable metadata is pinned in
+`docs/inputs/slice110-external-menu-pilot.json`.
 
-1. `name-control1`:2000frames, limite110s, encerra normal em52.842666s.
-   Cross300 antecede a tela interativa; Left600/Cross630 cancela a criação.
-   Frame700 mostra que GT mode não é jogável sem criar dados. Controle
-   negativo preservado, não atribuído a falha do runtime.
-2. `name-control2`:2000frames, limite110s, encerra normal em65.379512s.
-   Start300/Cross600 aceita início; Left950/Cross980 escreve **L**;
-   Right1010/Cross1040 seleciona Enter. Frame1000 mostra L,1100 pede confirmar
-   o nome; Cross1300 aceita. Frame1600 pede criar os dados. Start1500 não
-   aceita esse diálogo. Não é menu principal.
-3. `name-control3`:3000frames, limite180s, encerra normal em125.166590s.
-   Mesmo prefixo sem Start1500, Cross1700 e2000:frame1800 informa espaço de
-   1488KB, frame2200 pede formatar cartão novo, com Cancel selecionado.
-   Sem nova confirmação, não cria cartão persistido nem chega ao menu.
-4. `name-control4`:4500frames, limite300s, normal160.715291s.
-   Right2300/Cross2330 aceita formatação;frame2400 mostra progresso real.
-   Cross2700/3000/3300 avança instruções de autosave, verificação e proteção
-   do cartão. Frame4500 ainda aguarda a última confirmação. Card8650752bytes
-   persistido, SHA256`bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072`.
-5. `card-reread5`: nova inicialização do ELF com cópia hash-verificada do
-   cartão4. Frame600 mostra menu principal Arcade Mode/Gran Turismo Mode;
-   frame1000 mostra categorias de circuitos,1400 seleção Nürburgring.
-   Cross600/900/1200 avança telas. Não repete criação/formatação/nome.
-   Frame1900 mostra fabricantes de carros,2500 mostra Ford Ka3D com dados
-   e modelo renderizado. A execução pede3000frames mas atinge limite host180s
-   após última captura2700 (180.923369s). Launcher retorna1 corretamente,
-   preservando log/capturas; não é parada guest diagnosticada nem prova de
-   estabilidade. Sem corrida observada.
-6. `menu-repeat6`: repetição reduzida1500frames do prefixo5, mesmo seed4 e
-   novo destino; normal56.565667s, frame-limit/exit0. As14 PPM de100 até1400
-   são byte a byte idênticas às do controle5 (SHA256), incluindo menu e seleção
-   de circuitos. Não é comparação de todo o estado ou referência PS2.
-7. `gt-mode7`: inicialização com o mesmo cartão, Down600/Cross630 para GT Mode;
-   frame1000 mostra mapa de Home/License Center/eventos, Cr10000 e dia1.
-   Cross1100 entra em Home;frame1200 diz **L's Home**, com0.0%/0points/day1
-   e menus Garage/Status/Options/Photo Lab/Trade/Diary/Save. Confirma releitura
-   do nome L criado no controle4.1500frames normal113.342559s, frame-limit/exit0;
-   não substitui o controle repetido Arcade.
+1. `name-control1`: 2000 frames, 110s ceiling, normal termination in 52.842666s.
+   Cross300 precedes the interactive screen; Left600/Cross630 cancels creation.
+   Frame 700 shows that GT Mode is not playable without creating data. Negative
+   control preserved, not attributed to runtime failure.
+2. `name-control2`: 2000 frames, 110s ceiling, normal termination in 65.379512s.
+   Start300/Cross600 accepts initial prompt; Left950/Cross980 types **L**;
+   Right1010/Cross1040 selects Enter. Frame 1000 shows L, 1100 requests name
+   confirmation; Cross1300 confirms. Frame 1600 prompts to create save data.
+   Start1500 does not dismiss this dialog. Not the main menu.
+3. `name-control3`: 3000 frames, 180s ceiling, normal termination in 125.166590s.
+   Same prefix without Start1500, Cross1700 and 2000: frame 1800 reports 1488KB
+   space, frame 2200 prompts to format the new card, with Cancel selected by default.
+   Without further confirmation, no persistent card is created, and the menu is not reached.
+4. `name-control4`: 4500 frames, 300s ceiling, normal termination in 160.715291s.
+   Right2300/Cross2330 accepts formatting; frame 2400 displays actual progress.
+   Cross2700/3000/3300 advances through autosave, verification, and card protection instructions.
+   Frame 4500 still awaits final confirmation. Persistent 8650752-byte card produced,
+   SHA256 `bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072`.
+5. `card-reread5`: fresh ELF initialization using a hash-verified copy of card 4.
+   Frame 600 displays the main menu (Arcade Mode / Gran Turismo Mode);
+   frame 1000 displays course categories, 1400 displays Nürburgring selection.
+   Cross600/900/1200 advances screens. Does not repeat creation/formatting/naming.
+   Frame 1900 displays car manufacturers, 2500 displays 3D Ford Ka with specs
+   and rendered model. Execution requests 3000 frames but reaches the 180s host ceiling
+   after the last capture at 2700 (180.923369s). Launcher correctly returns 1,
+   preserving log/captures; not a diagnosed guest halt or proof of stability.
+   No race observed.
+6. `menu-repeat6`: reduced 1500-frame repetition of prefix 5, same seed 4 and
+   fresh destination; normal termination in 56.565667s, frame-limit/exit 0.
+   The 14 PPM captures from 100 to 1400 are byte-identical to control 5 (SHA256),
+   including menu and course selection. Not a full guest-state or PS2 reference comparison.
+7. `gt-mode7`: initialization with the same card, Down600/Cross630 for GT Mode;
+   frame 1000 shows Home / License Center / event map, Cr 10,000, and Day 1.
+   Cross1100 enters Home; frame 1200 displays **L's Home**, with 0.0% / 0 points / Day 1
+   and Garage / Status / Options / Photo Lab / Trade / Diary / Save menus.
+   Confirms reread of name L created in control 4. 1500 frames, normal termination
+   in 113.342559s, frame-limit/exit 0; does not replace the repeated Arcade control.
 
-Tempos são medidas host do piloto com trace e software rendering, sob cargas
-variáveis; não são benchmark nem conversão de instrução para ciclo PS2.
+Timings are host measurements of the pilot under tracing and software rendering,
+under variable loads; they are not benchmarks or instruction-to-PS2-cycle conversions.
 
-## Fronteiras de evidência
+## Evidence boundaries
 
-**Confirmado:** os controles1–3 respondem aos botões e desenham as telas reais
-descritas. O launcher não modifica o runtime externo ou o estado de produção.
-O antigo `build/gt4boot.exe` permanece com SHA256
+**Confirmed:** controls 1–3 respond to buttons and draw the actual screens described.
+The launcher does not modify the external runtime or production state.
+The legacy `build/gt4boot.exe` remains with SHA256
 `839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab`.
 
-**Confirmado no controle5:** menu principal e navegação Arcade até seleção de
-circuitos, partindo de nova inicialização e relendo cartão privado criado pelo
-jogo. Controle7 confirma mapa GT Mode e identidade **L's Home**: não apenas
-existência de um arquivo de cartão. Não foram feitos saves de corrida/progresso.
+**Confirmed in control 5:** main menu and Arcade navigation up to course selection,
+starting from a clean boot and rereading a private card created by the game.
+Control 7 confirms GT Mode map and **L's Home** identity—not merely the existence
+of a card file. No race or progress saves were performed.
 
-**Desconhecido nesta etapa:** corrida, cobertura ampla de saves, fidelidade
-temporal/hardware e adoção de runtime. Os fallbacks e limites
-do doador continuam os do estudo0051; não se tornam contratos corretos porque
-aparece uma imagem. CFC2(28) com retorno0 já observado exige tratamento próprio
-antes de produção. Vulkan direto, áudio e XInput permanecem metas posteriores.
+**Unknown at this stage:** racing, broad save coverage, temporal/hardware fidelity,
+and runtime adoption. Donor fallbacks and limits remain those identified in
+study 0051; they do not become correct contracts simply because an image appears.
+The observed `cfc2 28` returning 0 requires dedicated handling prior to production.
+Direct Vulkan, audio, and XInput remain subsequent goals.
 
-## Verificação
+## Verification
 
-Python final:104 testes,98 executados/seis dispensados,73.546s, todos passam.
-Após tornar a recusa de seed não fixada descritiva, os sete controles do
-launcher passam novamente em0.183s, incluindo seed externa/não fixada.
-ResourceWarnings de sockets da suíte foram preservados; não são falhas novas
-do launcher. CTest nativo:54/54 passam,60.11s. Hash do executável de produção
-novamente conferido após as suítes; idêntico ao107. Controle4 encerrado;
-controles de releitura/repetição encerrados. Produção e cartão seed mantêm
-seus hashes. Os fallbacks do doador continuam dívida de qualificação.
+Final Python suite: 104 tests, 98 run / 6 skipped, 73.546s, all passing.
+After making unpinned seed rejection descriptive, the seven launcher controls
+pass again in 0.183s, including external/unpinned seed rejection.
+Suite socket ResourceWarnings were preserved; they are not new launcher failures.
+Native CTest: 54/54 pass, 60.11s. Production executable hash rechecked after
+suites; identical to 107. Control 4 terminated; reread/repetition controls terminated.
+Production binary and seed card retain their hashes. Donor fallbacks remain
+qualification debt.
 
-## Reprodução e próximo passo
+## Reproduction and next steps
 
-Exemplo de repetição curta (usar sempre novo diretório de saída):
+Example of short repetition (always use a new output directory):
 
 ```powershell
 private/tooling-venv/Scripts/python.exe scripts/external_runtime_probe.py private/slice110-menu-pilot/new-menu-repeat --frames 1500 --timeout 120 --card-seed private/slice110-menu-pilot/name-control4/card.ps2 --press 300:start --press 600:cross --press 900:cross --press 1200:cross
 ```
 
-O seed precisa existir e ter exatamente o hash fixado; se ausente, refazer
-controle4 pela lista de argumentos no manifest, nunca fabricar o cartão.
-Para GT Mode: Down600/Cross630/Cross1100 após Start300, mesmo seed.
-Todos os comandos originais, motivos, tempos, versões de helpers e hashes
-de logs/cards/capturas estão no manifest110. Nenhum payload é publicado.
+The seed must exist and match the pinned hash exactly; if absent, recreate
+control 4 using the argument list in the manifest; never fabricate the card.
+For GT Mode: Down600/Cross630/Cross1100 after Start300, same seed.
+All original commands, reasons, timings, helper versions, and hashes of
+logs/cards/captures are in the 110 manifest. No payload is published.
 
-O manifest registra sete execuções e239artefatos privados/controles. Census
-dos sete logs:zero `unhandled syscall`, import ausente **realmente chamado**,
-instrução IOP desconhecida, servidor RPC desconhecido e erro de escrita do
-cartão. Cada execução registra uma advertência `cfc2 28`. Isso não cobre
-contratos de serviços implementados com respostas simplificadas. O trace
-deste launcher não ativa `--trace-iop-modules`: não usar ausência de advertência
-de resolução como prova de que toda importação tem implementação própria.
+The manifest records seven runs and 239 private artifacts/controls. Census across the
+seven logs: zero `unhandled syscall`, missing imports **actually called**,
+unknown IOP instructions, unknown RPC servers, or card write errors.
+Each run records one `cfc2 28` warning. This does not validate service contracts
+implemented with stubbed or simplified responses. Tracing in this launcher does
+not enable `--trace-iop-modules`: do not interpret the absence of resolution
+warnings as proof that every import has a dedicated implementation.
 
-Helpers foram congelados por execução:controle2 precede verificação da cópia
-ELF;3/4 acrescentam essa verificação;5/6 acrescentam seed fixada;7 usa a recusa
-descritiva de seed não fixada. O código final é fixado separadamente no manifest.
+Helpers were frozen per run: control 2 predates ELF copy verification; 3/4 add
+this verification; 5/6 add pinned seed; 7 uses descriptive unpinned seed rejection.
+Final code is pinned separately in the manifest.
 
-**Alta confiança:** o reaproveitamento do runtime completo reduziu a fronteira
-de boot para integração prática no Windows: o piloto abre e navega menu,
-Arcade e GT Mode. Esse resultado justifica continuar0051/0052, preservando
-contratos antigos para avaliar diferenças. Não estabelece equivalência PS2.
+**High confidence:** leveraging the full runtime reduced the boot frontier to
+practical Windows integration: the pilot launches and navigates the menu, Arcade,
+and GT Mode. This outcome justifies proceeding with 0051/0052, retaining legacy
+contracts to evaluate differences. It does not establish PS2 equivalence.
 
-Próxima fatia: tornar a construção/host MIT reproduzíveis em um alvo separado
-do `gt4boot` MSVC, abrir saída guest viva em Win32 e qualificar caminho GPU
-rumo ao renderizador Vulkan nativo. Auditar serviços realmente executados e
-comparar contratos antes de qualquer adoção. Sem corrida ou desempenho
-qualificados, nenhuma alteração automática de clock/IRQ/produção.
+Next slice: make MIT build/host reproducible in a target separate from MSVC
+`gt4boot`, expose live guest output in Win32, and qualify the GPU path toward
+a native Vulkan renderer. Audit actually executed services and compare contracts
+before any adoption. Without qualified racing or performance, no automatic
+clock/IRQ/production alterations.

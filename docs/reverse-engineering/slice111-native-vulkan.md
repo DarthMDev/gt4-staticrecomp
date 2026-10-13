@@ -1,128 +1,123 @@
-# Slice111 — Vulkan nativo com saída real do GT4
+# Slice111 — native Vulkan with real GT4 output
 
-2026-10-12, base `bd9ae77`, branch `codex/vulkan-renderer-pilot-111`.
-Decisão0053; prioridade do proprietário após o piloto de menus110.
+2026-10-12, baseline `bd9ae77`, branch `codex/vulkan-renderer-pilot-111`.
+Decision0053; owner priority following menu pilot 110.
 
-## Resultado e alcance
+## Results and scope
 
-**Confirmed:** o novo backend executa rasterização, texturas, transferências
-e extração do framebuffer por compute Vulkan. Não apresenta uma imagem
-desenhada pela CPU. O host liga `PS2_GS=gpu`; o log confirma CPU raster
-desabilitado e contadores reais dos nove kernels. Win32 copia o buffer RGBA
-produzido na GPU para uma imagem e faz blit para o swapchain, sem download
-da imagem para a CPU no caminho de apresentação. Capturas PPM separadas
-usam leitura explícita do framebuffer da GPU.
+**Confirmed:** the new backend executes rasterization, texturing, transfers,
+and framebuffer readback via Vulkan compute. It does not present an image
+drawn by the CPU. The host enables `PS2_GS=gpu`; log confirms CPU rasterizer
+disabled and real counters across the nine compute kernels. Win32 copies the
+GPU-produced RGBA buffer into an image and blits to the swapchain, with no
+image download to CPU on the presentation path. Separate PPM captures use
+explicit GPU framebuffer readback.
 
-O coldboot com cópia do cartão L alcança menu, seleção de circuito e FordKa01
-em3D. Capturas da própria janela mostram Nürburgring e o carro. A execução
-de3000quadros termina pelo limite pedido, sem timeout. Não qualificamos
-corrida, estabilidade prolongada, todo o GS ou fidelidade do modelo PS2.
+Coldboot using a copy of card L reaches menu, course selection, and FordKa01
+in 3D. Window screenshots show Nürburgring and the car. Execution of 3000 frames
+terminates normally at the requested limit, without timeout. We do not qualify
+racing, prolonged stability, complete GS coverage, or PS2 hardware fidelity.
 
-## Construção e limites
+## Build and constraints
 
-Donor MIT `snuri00/ps2-web-recomp` congelado em
-`1b4808793a12c45125262fd2d5f50a9ec9f7c020`. O gerador verifica cinco fontes
-antes de derivar GPU/GS/host em `private/slice111-vulkan/port`. Checkout original
-preservado. `ps2game.lib` AOT existente é reutilizada; nenhum interpretador
-EE ou JIT EE novo foi acrescentado. As limitações herdadas do runtime e VU
-continuam separadas da produção.
+MIT donor `snuri00/ps2-web-recomp` pinned at
+`1b4808793a12c45125262fd2d5f50a9ec9f7c020`. Generator verifies five sources
+before deriving GPU/GS/host under `private/slice111-vulkan/port`. Original checkout
+preserved. Existing AOT `ps2game.lib` is reused; no new EE interpreter or EE JIT
+was added. Inherited runtime and VU limitations remain isolated from production.
 
-Clang23.1.2, C++20/Release, VS2022x64/WindowsSDK, Ninja. Naga30.0.0 com
-Cargo.lock de32pacotes transforma SCALE1 e bindings explícitos nos kernels
-upload/copy_read/copy_write/load_clut/display/raster/resolve/snapshot/decode.
-SPIR-V permanece privado. Headers Khronos1.4.362 têm licença própria
-MIT/Apache2; nenhum código de implementação PCSX2/PS2Recomp GPL é ligado.
+Clang 23.1.2, C++20/Release, VS2022 x64/Windows SDK, Ninja. Naga 30.0.0 with
+a 32-package Cargo.lock transforms SCALE1 and explicit bindings across the kernels:
+upload, copy_read, copy_write, load_clut, display, raster, resolve, snapshot, decode.
+SPIR-V binaries remain private. Khronos 1.4.362 headers have their own
+MIT/Apache2 license; no GPL implementation code from PCSX2 or PS2Recomp is linked.
 
-GPU observada: NVIDIA GeForce RTX3060Laptop, API1.4.351; loader1.4.341.
-O backend exige Vulkan1.2, limites auditados e KHRswapchain_maintenance1.
-Buffers mapeados coerentes preferem memória também local à GPU. Uma fila,
-fences síncronos, barreiras compute→compute/host/transfer; alocações zeradas.
-Destrutor libera buffers, pipelines, descriptors, imagem, swapchain, semáforos,
-fences, surface/device/instance/loader. A revisão independente encontrou o
-uso indevido de queue-idle como prova de consumo do semáforo de apresentação:
-corrigimos com fence maintenance1 aguardado por apresentação. A fence prova
-segurança dos recursos, não o instante da exibição física no monitor.
+Observed GPU: NVIDIA GeForce RTX 3060 Laptop, API 1.4.351; loader 1.4.341.
+Backend requires Vulkan 1.2, audited limits, and KHR_swapchain_maintenance1.
+Coherent mapped buffers prefer memory that is also GPU-local. Single queue,
+synchronous fences, compute→compute/host/transfer barriers; zero-initialized allocations.
+Destructor frees buffers, pipelines, descriptors, image, swapchain, semaphores,
+fences, surface, device, instance, loader. Independent review identified improper
+reliance on queue-idle as proof of present semaphore consumption: corrected via
+maintenance1 fence waited on per present. The fence proves resource safety,
+not the moment of physical monitor scanout.
 
-Win32 tem fila de mensagens na mesma thread, teclado básico e entrada
-programada preservada. Resize/tamanhozero/restore são tratados. Escala1,
-blit nearest com proporção4:3, sem composição temporal dos campos. Não há
-medição de GPU busy, fullscreen qualificado, áudio ou XInput. Não há camada
-Khronos instalada; não declarar execução sem mensagens de validação como
-prova de validação Vulkan. OBS/RTSS antigos aparecem no vulkaninfo, sem
-diagnóstico causal contra o piloto.
+Win32 has message pump on the same thread, basic keyboard input, and preserved
+scripted input. Resize/zero-extent/restore are handled. Scale 1, nearest blit with
+4:3 aspect ratio, no temporal field compositing. No GPU busy profiling,
+qualified fullscreen, audio, or XInput. No Khronos validation layer installed;
+absence of validation messages must not be claimed as proof of Vulkan validation.
+Legacy OBS/RTSS layers appear in vulkaninfo, without causal diagnostic against the pilot.
 
-## Controles
+## Controls
 
-Fixture integrada ao unittest existente quando o build privado existe:
-sprites sobrepostos em vários tiles, máscara de canal, pixels de display
-conhecidos, snapshot/restore e serial de readback consumido uma só vez.
-Compara os4MiB completos da VRAM com o raster CPU separado. Transferências
-fragmentadas byte a byte passam nos formatos PSMCT32/24/16/16S,
-PSMT8/4/8H/4HL/4HH, incluindo preservação de bits vizinhos. O oráculo CPU
-compartilha conceitos de endereço do donor; acordo não prova hardware PS2.
-Treze apresentações repetidas, tamanhozero recusado e restore/redimensionamento
-passam. Builds finais sem warnings.
+Integrated fixture within existing unittests when private build exists:
+overlapping sprites across multiple tiles, channel masking, known display
+pixels, snapshot/restore, and single-use readback serial. Compares the full 4MiB
+VRAM against the separate CPU rasterizer. Byte-by-byte fragmented transfers pass
+for formats PSMCT32/24/16/16S, PSMT8/4/8H/4HL/4HH, including neighbor bit
+preservation. The CPU oracle shares addressing concepts with the donor; agreement
+does not prove PS2 hardware fidelity. Thirteen repeated presents, zero-extent
+rejection, and restore/resize pass. Final builds clean with no warnings.
 
-Launcher existente estendido para runtime separado com executable+shaders
-hash-pinned. Continua verificando ISO completo, CORE, ELF e seed; cópias e
-saídas privadas novas, argv literal, motivo/quadros/timeout no gate. Controles
-negativos recusam runtime/shader/donor alterados e saída pública/checkout
-congelado. Nenhum manifesto de jogo é atualizado durante verificação.
+Existing launcher extended for separate runtime with hash-pinned executable + shaders.
+Continues verifying full ISO, CORE, ELF, and seed; fresh private copies and outputs,
+literal argv, reason/frames/timeout at the gate. Negative controls reject altered
+runtime/shader/donor and public output / frozen checkout targets. Game manifests
+are never updated during verification.
 
-## Execuções preservadas
+## Preserved runs
 
-- headless1:1500quadros normais,27.320833s, kernelsGPU ativos. Menu600,
-  Arcade1000, Nürburgring1400. Producer inicial congelado na pasta do run.
-- window2: primeiro controle de janela; teclado neutralizava a entrada
-  programada porque o donor aplica presses antes do callback.1500normais
-  mas trajetória diferente; rejeitado como equivalência. Producer exato
-  não foi congelado antes de rebuild; log/capturas/result mantidos, sem
-  tratá-lo como evidência final reproduzível do renderer.
-- window3: correção da precedência;1500normais32.221853s.15/15PPM
-  byte-idênticos a headless1, orçamento7372994805 em ambos.
-- window4:3000normais121.951303s, navegação estendida até FordKa3D,
-  screenshots reais da janela e PPM privados. Não entrou em corrida.
-- headless5: confirmação final após guardas de offset64→32 e buffer nulo;
-  1500normais24.919064s,15/15PPM idênticos ao inicial.
-- window6: build final reproduzido comW4 em todos os targets;1500normais
-  30.679208s,15/15PPM idênticos ao inicial. Producer final congelado e
-  runtime+shaders fixados para o launcher. Compilador SPIR-V final também
-  reproduz9/9binários exatamente em uma pasta separada.
+- headless1: 1500 normal frames, 27.320833s, active GPU kernels. Menu at 600,
+  Arcade at 1000, Nürburgring at 1400. Initial producer frozen in run directory.
+- window2: first window control; keyboard neutralized scripted input because
+  the donor applies presses before the callback. 1500 normal frames but divergent
+  trajectory; rejected as equivalent. Exact producer was not frozen prior to rebuild;
+  log/captures/result retained without treating run as final reproducible renderer evidence.
+- window3: precedence corrected; 1500 normal frames in 32.221853s. 15/15 PPM captures
+  byte-identical to headless1, budget cycles 7372994805 in both.
+- window4: 3000 normal frames in 121.951303s, extended navigation through 3D Ford Ka,
+  real window screenshots and private PPMs. Did not enter race.
+- headless5: final confirmation after 64→32 offset guards and null buffer checks;
+  1500 normal frames in 24.919064s, 15/15 PPMs identical to baseline.
+- window6: final build reproduced with /W4 across all targets; 1500 normal frames
+  in 30.679208s, 15/15 PPMs identical to baseline. Final producer frozen and
+  runtime + shaders pinned for the launcher. Final SPIR-V compiler also reproduces
+  9/9 binaries exactly in a separate directory.
 
-Seisruns/248artefatos e17fontes próprias fixados no manifesto; window2 é
-explicitamente rejeitado. Cinco probes aceitos têm0serviços desconhecidos
-nos padrões auditados e1warning CFC2(28) cada, herdado, ainda não qualificado.
-Nenhuma política temporal foi modificada.
+Six runs / 248 artifacts and 17 proprietary source files pinned in manifest; window2
+is explicitly rejected. Five accepted probes have 0 unknown services under audited
+patterns and 1 inherited `cfc2 28` warning each, not yet qualified.
+No timing policy was modified.
 
-Full CTest54/54 em52.21s e Python108(102run/6skip) em73.505s verdes.
-Após as guardas finais, os5controles Vulkan e7do launcher passam novamente.
-Produção SHA839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab
-e seed SHA bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072
-permanecem iguais. Copy_read/copy_write/resolve foram compilados em pipeline
-mas não tiveram dispatch nos probes reais; não lhes atribuir cobertura de
-execução. Snapshot/decode/CLUT são exercidos pelo jogo, sem oráculo separado
-para cada contrato gráfico.
+Full CTest 54/54 in 52.21s and Python 108 (102 run / 6 skipped) in 73.505s green.
+Following final guards, the 5 Vulkan controls and 7 launcher controls pass again.
+Production SHA `839adaa22f48ba674fc8f5f6c498299a9329598dedf23ca3ee507f1f1c76dfab`
+and seed SHA `bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072`
+remain unchanged. Copy_read, copy_write, and resolve compiled into pipelines
+but were not dispatched during real probes; no execution coverage is claimed for them.
+Snapshot, decode, and CLUT are exercised by the game, without a separate oracle
+for each graphic contract.
 
-Comparação inicial CPU110 versusGPU111:100/200/300 idênticos; frame400 tem
-142bytes RGB diferentes, depois até81972/860160bytes nos quadros comuns.
-Não atribuimos isso automaticamente a arredondamento ou tolerância. Causa
-primeira ainda **Unknown**. O arquivo de comparação conserva números por
-quadro. A aparência do menu e navegação estão confirmadas, precisão pixel a
-pixel do renderer completo não. O tempo27.32s versus56.57s do controle CPU
-é duração desses probes com logs/capturas, não FPS sustentado de corrida.
+Initial comparison between CPU110 and GPU111: frames 100/200/300 identical;
+frame 400 has 142 different RGB bytes, subsequently up to 81972/860160 bytes in common frames.
+We do not automatically attribute this to rounding or tolerance. Root cause remains
+**Unknown**. The comparison file retains per-frame figures. Menu appearance and
+navigation are confirmed; pixel-perfect accuracy of the full renderer is not.
+Timing of 27.32s versus 56.57s for CPU control represents duration of these probes
+with logging and captures, not sustained race FPS.
 
-Falhas durante desenvolvimento: resolução Cargo offline rejeitada antes
-do build locked online; recorte inicial do adapter removia helpers de
-endereçamento e foi corrigido antes de execução; fixture de máscara inicialmente
-omitira setup-generation, corrigida para reproduzir writes reais do GS.
-LoadCursorW corrigido para resource Unicode; macro de proc list refeita
-uma função por linha após um recorte mecânico incompleto. Nenhum desses
-builds falhos foi aceito como produtor. Não enfraquecemos controles.
+Failures during development: offline Cargo resolution rejected prior to locked
+online build; initial adapter trimming removed addressing helpers and was corrected
+prior to execution; mask fixture initially omitted setup generation, fixed to
+reproduce real GS writes. LoadCursorW corrected to Unicode resource; proc list macro
+rewritten one function per line following an incomplete mechanical cut. None of these
+failed builds was accepted as a producer. Acceptance controls were not weakened.
 
-## Reprodução e continuidade
+## Reproduction and continuity
 
-`experimental/vulkan/build.cmd` constrói o piloto no ambiente local já
-qualificado. Verificar manifesto111 antes de executar:
+`experimental/vulkan/build.cmd` builds the pilot in the qualified local environment.
+Verify manifest 111 prior to execution:
 
 ```powershell
 private/tooling-venv/Scripts/python.exe scripts/external_runtime_probe.py `
@@ -132,13 +127,13 @@ private/tooling-venv/Scripts/python.exe scripts/external_runtime_probe.py `
   --press 300:start --press 600:cross --press 900:cross --press 1200:cross
 ```
 
-Build não altera manifestos; binários distintos exigem nova qualificação.
-Próxima fatia: primeira divergência de pixels/validação Vulkan e extensão
-controlada até corrida. Optimizar filas ou adotar runtime em produção só com
-evidência; áudio/XInput/saves continuam objetivos posteriores.
+Build does not alter manifests; distinct binaries require requalification.
+Next slice: first pixel divergence / Vulkan validation and controlled extension
+into racing. Queue optimization or production adoption only with evidence;
+audio, XInput, and saves remain subsequent goals.
 
-Referências primárias: [semaphore reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html),
+Primary references: [semaphore reuse](https://docs.vulkan.org/guide/latest/swapchain_semaphore_reuse.html),
 [present fences](https://docs.vulkan.org/refpages/latest/refpages/source/VkSwapchainPresentFenceInfoKHR.html),
-[erros de apresentação](https://docs.vulkan.org/refpages/latest/refpages/source/vkQueuePresentKHR.html).
-Hashes/versões/gates/capturas em `docs/inputs/slice111-native-vulkan.json`;
-payloads privados, produção e seed originais preservados.
+[presentation errors](https://docs.vulkan.org/refpages/latest/refpages/source/vkQueuePresentKHR.html).
+Hashes/versions/gates/captures in `docs/inputs/slice111-native-vulkan.json`;
+private payloads, production binary, and original seed preserved.

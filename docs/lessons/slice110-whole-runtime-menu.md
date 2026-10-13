@@ -1,26 +1,9 @@
-# Slice110 — por que um runtime coerente acelera o boot
+# Slice110 — Why a Coherent Runtime Accelerates Boot
 
-Contar funções não mede quanto falta para o jogo funcionar. Traduzir o código
-da CPU principal resolve um lado; esse código ainda depende de disco, CPU IOP,
-módulos, transportes, timers, controle, cartão e caminhos gráficos coerentes.
-O estudo0051 compilou esse conjunto externo completo, mantendo uma identidade
-separada da produção. Não bastaria importar isoladamente respostas de syscalls.
+Counting functions does not measure how much remains before the game functions. Translating the primary CPU code solves one side; that code still depends on disc, IOP CPU, modules, transports, timers, controller, memory card, and coherent graphics pipelines. Study 0051 compiled this complete external environment while maintaining an identity separate from production. Merely importing syscall responses in isolation would not suffice.
 
-Nesta fatia, o jogo respondeu à entrada, escreveu um nome, formatou cartão
-privado e persistiu seus dados. Uma nova execução relendo uma cópia chegou
-ao menu Arcade e à escolha de circuitos/carros. As imagens são saída guest
-desenhada pelo software GS do doador. Isso comprova uma cadeia funcional
-mais ampla que milhares de chamadas de serviço sem erro.
+In this slice, the game responded to input, entered a name, formatted a private memory card, and persisted its data. A subsequent run re-reading a copy reached the Arcade menu and the track/car selection screens. The images are guest output rendered by the donor software GS. This proves a functional chain broader than thousands of error-free service calls.
 
-Há três verificações diferentes. Hashes identificam exatamente o que foi
-executado. Capturas antes/depois e comandos qualificam os efeitos de entrada.
-Um teste independente de contratos ainda é necessário para afirmar fidelidade
-a PS2; dois motores que compartilham serviços podem compartilhar o mesmo erro.
-Não misturamos checkpoints do piloto e de produção, nem adotamos seus retornos
-padrão de sucesso como implementação correta.
+Three distinct verifications are involved. Hashes pinpoint exactly what was executed. Before/after captures and command logs qualify the effects of input. An independent contract test is still required to confirm PS2 fidelity; two engines sharing services can share the same defect. We neither conflate pilot and production checkpoints, nor accept their default success return values as correct implementation.
 
-O exit0 do processo também não basta: o runtime externo pode devolvê-lo depois
-de faltar código guest. O launcher verifica o motivo e o horizonte efetivamente
-encerrado. Mesmo esse gate só qualifica execução; menu precisa ser observado,
-e cartão persistido precisa ser relido em outra execução. Corrida, estabilidade
-ampla, áudio e Vulkan exigem próximos testes próprios.
+A process exit code of 0 is also insufficient: the external runtime may return 0 even after encountering missing guest code. The launcher checks the termination reason and the horizon actually reached. Even this gate merely qualifies execution; menu navigation must be observed, and persisted memory card data must be re-read in a separate run. Racing, broad stability, audio, and Vulkan require their own subsequent tests.

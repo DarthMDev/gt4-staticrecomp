@@ -1,22 +1,9 @@
-# EXPLAIN — O que o Vulkan já faz
+# EXPLAIN — What Vulkan Already Does
 
-O código estático do jogo continua executando no processador. Quando ele
-envia desenhos ao GS, o novo backend agrupa os comandos e a GPU executa
-os shaders: escreve a memória gráfica, lê texturas e produz os pixels.
-A janela usa essa imagem diretamente, mantendo CPU e GPU com papéis claros.
+The game's static code continues executing on the CPU. When it sends draw commands to the GS, the new backend batches the commands and the GPU executes the shaders: it writes to graphics memory, samples textures, and outputs pixels. The window presents this image directly, maintaining clear roles for the CPU and GPU.
 
-Usar um framebuffer já desenhado pela CPU e apenas mostrá-lo com Vulkan
-não provaria um renderer Vulkan. Aqui os testes comparam a memória escrita
-pela GPU com um segundo desenho CPU e os logs confirmam raster CPU desligado
-durante o jogo. Capturamos também a janela com a seleção de pista e carro3D.
+Using a framebuffer already rendered by the CPU and merely displaying it with Vulkan would not demonstrate a Vulkan renderer. Here, the tests compare memory written by the GPU against a secondary CPU render, and logs confirm the CPU rasterizer is disabled during gameplay. We also captured the window showing track selection and the 3D car.
 
-A primeira versão espera cada trabalho terminar. Isso simplifica o controle
-de memória e permite investigar diferenças antes de otimizar. Esperar a fila
-ficar vazia não basta para reutilizar tudo relacionado à apresentação: usamos
-uma fence específica para saber quando seus recursos estão seguros.
+The initial implementation waits for each submission to complete. This simplifies memory management and allows investigating divergences before optimizing. Waiting for the queue to idle is not sufficient to safely reuse presentation-related resources: we use a dedicated fence to know when those resources are safe to reclaim.
 
-Chegar ao FordKa confirma progresso real de execução e desenho. Não confirma
-que uma corrida inteira funciona ou que os pixels reproduzem exatamente um
-PS2. A comparação com o renderer CPU mostra uma diferença já no quadro400;
-a próxima investigação deve localizar sua primeira causa, mantendo esse
-limite explícito. Produção MSVC e seus contratos continuam preservados.
+Reaching the Ford Ka confirms genuine execution and rendering progress. It does not confirm that an entire race functions, nor that the pixels accurately match a real PS2. Comparison with the CPU renderer reveals a divergence as early as frame 400; subsequent investigation must isolate its root cause while keeping this boundary explicit. MSVC production builds and their contracts remain preserved.

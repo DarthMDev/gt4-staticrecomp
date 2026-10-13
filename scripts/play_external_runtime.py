@@ -31,10 +31,10 @@ def play(aspect='16:9'):
             video = json.loads(manifest.read_text(encoding='utf-8'))
             seed_key = 'default_card_seed' if aspect == '16:9' else 'standard_card_seed'
             seed = None if card.exists() else ROOT / video[seed_key]['path']
-            print('GT4 experimental: audio + XInput. Feche a janela para sair.', flush=True)
-            print('Teclado: Enter inicia, setas dirigem, Z acelera, A freia; S volta nas opções.', flush=True)
-            print(f'Tela: {aspect}. F6 alterna 16:9/4:3; use a mesma proporção nas opções do GT4.', flush=True)
-            print(f'Save local: {card}\nRegistro: {run_directory}', flush=True)
+            print('GT4 experimental: audio + XInput. Close window to exit.', flush=True)
+            print('Keyboard: Enter starts, arrow keys steer, Z accelerates, A brakes; S returns in options.', flush=True)
+            print(f'Display: {aspect}. F6 toggles 16:9/4:3; match aspect ratio in GT4 options.', flush=True)
+            print(f'Local save: {card}\nSession log: {run_directory}', flush=True)
             result = run_probe(ROOT, run_directory, 0, 43200, [], seed,
                                manifest,
                                window=True, interactive=True, play_card=card, aspect=aspect)

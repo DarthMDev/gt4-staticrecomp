@@ -1,23 +1,9 @@
-# Slice114 — um caminho ativo e um arquivo recuperável
+# Slice114 — An Active Path and a Recoverable Archive
 
-Uma branch preserva o estado versionado sem obrigar o projeto a compilar dois
-motores diferentes em cada mudança. Por isso publicamos a branch primeiro,
-conferimos as dependências e só então removemos as ferramentas e os testes
-exclusivos do motor original. Arquivos privados não entram nessa proteção Git:
-os inputs, saves e outputs continuaram nos caminhos locais, com hashes.
+A dedicated branch preserves versioned state without forcing the project to build two distinct engines on every change. For this reason, we published the archive branch first, verified its dependencies, and only then removed the tools and tests unique to the original engine. Private files are not covered by this Git protection: inputs, saves, and outputs remained in local paths, verified by hashes.
 
-O termo nativo descreve onde o executável e o código traduzido executam.
-Não descreve automaticamente cada subsistema. Nosso EE executa código AOT;
-IOP e unidades vetoriais ainda interpretam instruções/microprogramas, e os
-dispositivos PS2 são implementações em software. Essa distinção permite
-planejar melhorias reais sem partir da premissa errada de zero emulação.
+The term "native" describes where the executable and translated code execute. It does not automatically describe every subsystem. Our EE executes AOT-compiled code; the IOP and vector units still interpret instructions and microprograms, and PS2 hardware devices are software implementations. Maintaining this distinction allows planning genuine improvements without starting from the false premise of zero emulation.
 
-Os testes acompanham a implementação que verificam. Arquivar o motor original
-arquiva seus testes; a suite atual continua verificando GPU, áudio/input,
-verificação de inputs, launcher e persistência. Um número menor de testes
-precisa ser explicado por escopo, sem mudar critérios para fazer bugs passarem.
+Tests must follow the implementation they verify. Archiving the original engine archives its corresponding tests; the active test suite continues verifying the GPU, audio/input, input verification, launcher, and persistence. A smaller test count must be justified by reduced scope, without lowering verification thresholds to let bugs pass.
 
-O build desta base reutiliza uma biblioteca privada já traduzida. Compilar o
-host/runtime novamente não é gerar o jogo inteiro desde uma ISO. A documentação
-precisa dizer isso para o próximo engenheiro saber o que consegue reproduzir
-e quais materiais pinados precisa preservar.
+Building this base reuses a private, pre-translated static library. Recompiling the host/runtime is not equivalent to regenerating the entire game from an ISO. Documentation must state this explicitly so subsequent engineers understand what can be reproduced independently and which pinned artifacts must be preserved.

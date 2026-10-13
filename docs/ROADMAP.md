@@ -1,195 +1,196 @@
-# Plano: velocidade, renderização e migração seletiva para código nativo
+# Plan: Speed, Rendering, and Selective Migration to Native Code
 
-2026-10-13, após a fatia114/commit e431fb3. Planejamento solicitado pelo dono;
-nenhuma implementação, perfil de desempenho ou nova corrida nesta revisão.
+2026-10-13, following slice 114 / commit e431fb3. Planning requested by owner;
+no implementation, performance profiling, or new race run in this revision.
 
-## Recomendação
+## Recommendation
 
-Manter a base híbrida como referência funcional e mudar por partes. Eliminar
-toda a emulação não é pré-requisito para separar velocidade e FPS. Recompilar
-VU/IOP e separar atualização/renderização resolvem problemas diferentes.
-Priorizar capacidade de reprodução do build, medidas confiáveis quando
-autorizadas, controle de tempo e separação da apresentação. Depois, investigar
-o loop do jogo necessário para gerar imagens adicionais. Migrar subsistemas
-quando existir custo demonstrado ou uma dependência concreta da nova arquitetura.
+Maintain the hybrid base as a functional baseline and modify it incrementally. Eliminating
+all emulation is not a prerequisite for decoupling game speed and FPS. Recompiling
+VU/IOP and decoupling update/render address distinct problems.
+Prioritize build reproducibility, reliable measurements when authorized,
+time management, and presentation decoupling. Next, investigate
+the game loop required to generate additional frames. Migrate subsystems
+only when there is demonstrated overhead or a concrete dependency on the new architecture.
 
-## Evidência atual: Confirmed
+## Current Evidence: Confirmed
 
-Código donor congelado em `private/references/ps2-web-recomp`, commit
-1b4808793a12c45125262fd2d5f50a9ec9f7c020; fontes locais no commit e431fb3.
-Método: leitura estática das fontes e dos manifests114, sem executar o jogo.
+Frozen donor code at `private/references/ps2-web-recomp`, commit
+1b4808793a12c45125262fd2d5f50a9ec9f7c020; local source code at commit e431fb3.
+Method: static inspection of source files and slice 114 manifests, without running the game.
 
-- `runtime/src/system.cpp:85` calcula orçamento de VBlank como relógio EE
-  dividido por60 NTSC/50 PAL. É a política atual do runtime, não uma prova da
-  cadência exata do hardware ou da física interna do GT4.
-- `system.cpp:127–141` chama o callback do host dentro do evento VBlank,
-  antes de sinalizar hardware/IOP/kernel e agendar a próxima ocorrência.
-- `native/window.cpp:80–106` coleta input e chama `gs::present()` nesse callback.
-  `window.cpp:173–174` explicita uma thread e apresentação FIFO.
-- `native/native_vulkan.cpp:693` seleciona FIFO. `:858–865` espera a conclusão
-  real da apresentação; `:509–513` também espera submissões GPU. Esses pontos
-  bloqueiam execução; não medimos sua parcela do custo em corrida.
-- `system.cpp:329–336` avança IOP a partir do tempo guest, e `:366–384` executa
-  EE/eventos. O áudio SPU2 nasce de jobs do IOP; `native/host_io.cpp:219–273`
-  pode aguardar buffers do dispositivo Windows. Áudio é outra fonte de espera.
-- VU é interpretada nesta configuração; existe despacho para microprogramas
-  compilados em `runtime/src/vu_micro.cpp:788–812`, com registro/cache por
-  conteúdo em `:817–854`. `vu_jit_web.cpp:18–30` desativa JIT fora de Emscripten.
-  O caminho compilado examinado é VU1; suporte equivalente para VU0 exige audit.
-- IOP interpreta instruções e já substitui imports por serviços HLE.
-  Ver `ARCHITECTURE.md` para limites e referências adicionais.
-- O donor já oferece fila GS e consumidor em `runtime/src/gs/gs.cpp:963–1025`,
-  usados pelo host original em `host/window.cpp:310–341`, mas não ativados no
-  adapter Win32 atual. `post_present()` limita duas apresentações pendentes;
-  reutilizar literalmente ainda pode bloquear o produtor. `start_thread()`
-  inicializa a fila; o host é quem cria a thread. Avaliar/reusar antes de criar
-  infraestrutura nova, preservando GIF/reset/download/checkpoint em ordem.
+- `runtime/src/system.cpp:85` computes VBlank budget as EE clock
+  divided by 60 NTSC / 50 PAL. This is current runtime policy, not proof of
+  exact hardware cadence or internal GT4 physics rate.
+- `system.cpp:127–141` invokes the host callback inside the VBlank event,
+  prior to signaling hardware/IOP/kernel and scheduling the next occurrence.
+- `native/window.cpp:80–106` gathers input and calls `gs::present()` inside that callback.
+  `window.cpp:173–174` explicitly uses a single thread and FIFO presentation.
+- `native/native_vulkan.cpp:693` selects FIFO. Lines 858–865 wait for actual
+  presentation completion; lines 509–513 also wait for GPU submissions. These locations
+  block execution; we have not measured their share of overhead during races.
+- `system.cpp:329–336` advances IOP based on guest time, and lines 366–384 execute
+  EE/events. SPU2 audio originates from IOP jobs; `native/host_io.cpp:219–273`
+  can wait on Windows device buffers. Audio is another source of stalls.
+- VU is interpreted in this configuration; dispatch to compiled microprograms exists
+  in `runtime/src/vu_micro.cpp:788–812`, with content-addressed registration/caching
+  at lines 817–854. `vu_jit_web.cpp:18–30` disables JIT outside Emscripten.
+  The examined compiled path is VU1; equivalent support for VU0 requires an audit.
+- IOP interprets instructions and already replaces imports with HLE services.
+  See `ARCHITECTURE.md` for limits and additional references.
+- The donor already provides a GS queue and consumer in `runtime/src/gs/gs.cpp:963–1025`,
+  used by the original host in `host/window.cpp:310–341`, but unactivated in the
+  current Win32 adapter. `post_present()` limits pending presentations to two;
+  literal reuse may still block the producer. `start_thread()`
+  initializes the queue; the host creates the thread. Evaluate/reuse before building
+  new infrastructure, preserving GIF/reset/download/checkpoint in order.
 
-## Hipóteses e desconhecidos
+## Hypotheses and Unknowns
 
-**Hypothesis:** interpretar VU pode ter custo significativo em cenas3D.
-A queda relatada quando aparecem carros/circuitos também é compatível com
-trabalho GS/compute, sincronização ou código EE. O relato não isola a causa.
-**Unknown:** custo EE/VU/IOP/GS/áudio, tempo bloqueado, cadência física real,
-rotinas que atualizam estado e constroem cena, dependências entre desenho e
-gameplay, fidelidade temporal. Não chamar VU de gargalo confirmado.
+**Hypothesis:** Interpreting VU may incur significant overhead in 3D scenes.
+The reported framerate drop when cars/tracks appear is also consistent with
+GS/compute workload, synchronization stalls, or EE code. The report does not isolate the cause.
+**Unknown:** Breakdown of EE/VU/IOP/GS/audio overhead, blocked/stall time, true physics cadence,
+routines that update state and assemble scenes, dependencies between draw calls and
+gameplay, temporal fidelity. Do not label VU as a confirmed bottleneck.
 
-Recompilar VU/IOP gera código x86-64 mantendo sua semântica PS2. Isso pode
-acelerar execução sem eliminar modelos de hardware ou alterar vínculo com FPS.
-Substituir serviços por APIs do PC exige contratos separados para DMA/IRQ/RPC,
-áudio e cartão; o fato de serem software não significa que precisem ser removidos.
+Recompiling VU/IOP generates x86-64 code while preserving PS2 semantics. This can
+accelerate execution without eliminating hardware models or changing the linkage to FPS.
+Replacing services with PC APIs requires separate contracts for DMA/IRQ/RPC,
+audio, and memory card; the fact that they are software models does not mean they need to be removed.
 
-## O resultado que queremos
+## Desired Outcome
 
-Três cadências devem ser explícitas: tempo da simulação, produção de cenas e
-apresentação no monitor. O relógio monotônico do host rege a velocidade alvo;
-os eventos guest conservam ordem/custos e a física mantém passos originais
-qualificados. A taxa do monitor não define quantos passos físicos avançam.
+Three cadences must be made explicit: simulation time, scene generation, and
+display presentation. The host monotonic clock governs target speed;
+guest events preserve order and timing costs, while physics maintains qualified
+original timesteps. The monitor refresh rate does not determine how many physics steps advance.
 
-| Situação desejada | Comportamento |
+| Target Scenario | Behavior |
 |---|---|
-| Apresentação30FPS | Simulação continua na cadência original; apresenta menos imagens |
-| Apresentação60FPS | Simulação original, apresentação correspondente |
-| Apresentação144FPS | Simulação original; imagens novas usam estados visuais interpolados |
-| Monitor144Hz com imagens repetidas | Pode preservar velocidade, mas ainda não cumpre144 imagens diferentes por segundo |
-| CPU incapaz de simular em tempo real | Não há promessa de100% velocidade; precisa otimizar ou reduzir trabalho independente da simulação |
+| 30 FPS Presentation | Simulation continues at original cadence; presents fewer frames |
+| 60 FPS Presentation | Original simulation, matched presentation |
+| 144 FPS Presentation | Original simulation; new frames use interpolated visual states |
+| 144 Hz Monitor with repeated frames | May preserve game speed, but does not satisfy 144 distinct frames per second |
+| CPU unable to simulate in real time | No guarantee of 100% speed; requires optimization or reducing simulation-independent work |
 
-Não aumentar VBlank/relógio para144 nem trocar indiscriminadamente o delta da
-física. Exemplos usam60 apenas para explicar; qualificar a cadência original
-antes de congelar um contrato. Medir100% como tempo de jogo/tempo real, além
-de contagens de passos e eventos, não como valor do overlay FPS.
+Do not raise VBlank/clock rate to 144 or indiscriminately alter the physics
+delta time. Examples use 60 solely for illustration; qualify the original cadence
+before freezing an architectural contract. Measure 100% game speed as game time / wall-clock time,
+alongside step and event counts, rather than relying on an FPS overlay readout.
 
-## Etapas propostas e critérios de conclusão
+## Proposed Phases and Completion Criteria
 
-### 1. Tornar o código do jogo recompilável de ponta a ponta
+### 1. Make Game Code End-to-End Recompilable
 
-Documentar/automatizar geração EE e registro da biblioteca a partir dos inputs
-pinados, compilação e integração em diretório novo. Hoje o build reutiliza
-`ps2game.lib` privada com hash fixo. Não basta editar adapter para modificar
-o loop do GT4. Não exige decompilar o jogo inteiro: traduzido legível e hooks
-cirúrgicos são suficientes inicialmente.
+Document and automate EE code generation and library registration from pinned
+inputs, compilation, and integration into a clean directory. Currently, the build reuses
+a private `ps2game.lib` with a fixed hash. Modifying the GT4 loop cannot be achieved merely
+by editing the adapter. This does not require decompiling the entire game: readable
+translated code and surgical hooks are sufficient initially.
 
-Concluir quando um produtor novo reproduz comportamento nos controles de boot,
-menu e corrida existentes, identifica todas as ferramentas/inputs e não depende
-de uma biblioteca sem receita de geração. Não exigir binário byte-idêntico se
-metadados de build mudarem; explicar diferença e comparar comportamento.
+Complete when a new producer reproduces behavior across existing boot,
+menu, and race controls, identifies all tools and inputs, and does not depend
+on a binary library lacking a generation recipe. Do not require byte-identical binaries if
+build metadata changes; document differences and verify behavioral equivalence.
 
-### 2. Estabelecer referência funcional e de tempo, quando autorizada
+### 2. Establish Functional and Timing Baseline, When Authorized
 
-Mesmos inputs/carro/pista/controles, cartão copiado e janelas de observação.
-Registrar velocidade guest/real, passos do jogo, input, amostras áudio e custo
-EE/VU/IOP/GS; timestamps GPU e esperas de apresentação/readback/áudio. Usar
-percentis de frametime e registros coerentes, não uso agregado da CPU/GPU.
-Controles sem apresentação/readback devem manter execução e trabalho necessário
-do GS; não desligar GPU arbitrariamente e presumir equivalência.
+Use identical inputs, car, track, controls, cloned memory card, and observation windows.
+Record guest vs. wall-clock speed, game steps, input, audio samples, and EE/VU/IOP/GS cost breakdown;
+GPU timestamps and presentation/readback/audio wait times. Use frametime percentiles
+and coherent profiling traces, not aggregate CPU/GPU utilization percentages.
+Headless/no-presentation test controls must maintain execution and required GS operations;
+do not arbitrarily disable the GPU and assume equivalence.
 
-Concluir com uma atribuição suficiente para escolher a primeira mudança,
-controles repetíveis e limites explícitos. A prioridade anterior de apenas
-registrar problemas permanece: esta etapa ainda não foi executada.
+Complete with attribution sufficient to select the first optimization target,
+repeatable controls, and explicit bounds. The prior instruction to only
+record issues remains in effect: this phase has not yet been executed.
 
-### 3. Desacoplar apresentação do avanço guest
+### 3. Decouple Presentation from Guest Timestep Progression
 
-Separar callback VBlank/input/eventos da operação de exibição, preservar a
-ordem guest atual e controlar avanço por tempo monotônico. Fazer primeiro a
-menor separação segura; adicionar thread só se necessária. Usar imagens com
-propriedade/lifetime explícitos e fila limitada; preservar trabalho GS do qual
-o jogo depende. Quando o monitor for lento, descartar apresentações antigas,
-não eventos físicos/DMA/IRQ nem amostras de áudio.
+Separate the VBlank/input/event callback from display presentation, preserve
+current guest event ordering, and pace progression using a monotonic host clock. Implement the
+minimal safe decoupling first; add a dedicated thread only if necessary. Use frame images with
+explicit ownership and lifetimes alongside a bounded queue; preserve GS work upon which
+the game depends. When the display is slow, drop outdated presentation frames—never
+physics/DMA/IRQ events or audio samples.
 
-Não basta remover fence: buffers e semáforos atuais dependem dela. Não jogar
-`gs::present()` em outra thread acessando estado global compartilhado. Tratar
-input por tempo/ordem de eventos e leitura pelo passo guest, áudio por relógio
-e fila limitada, pausa/foco/resize/fechamento sem saltos de simulação.
-Definir autoridade única para velocidade e evitar conflito entre pacing host
-e contrapressão do áudio; catch-up não pode acumular trabalho ilimitado.
+Merely removing fences is insufficient: current buffers and semaphores rely on them. Do not move
+`gs::present()` to another thread while accessing shared global state. Handle
+input by timestamp/event ordering and poll it on the guest step; pace audio by clock
+with a bounded queue; handle pause, focus loss, resize, and window close without simulation jumps.
+Designate a single authority for pacing speed to avoid conflicts between host pacing
+and audio backpressure; catch-up logic must not accumulate unbounded simulation work.
 
-Concluir com testes de agenda usando relógio controlado e limites de exibição
-30/60/120/144; mesmas entradas temporizadas devem produzir mesmo estado nos
-mesmos passos de simulação. Comparar tempos de corrida, eventos de colisão,
-áudio e saves, além das imagens. Controle de hardware real precisa ter folga
-de processamento. Isto pode manter100% velocidade sem144 imagens novas.
+Complete with scheduling tests using a controlled clock and presentation caps of
+30/60/120/144 FPS; identical timed inputs must produce identical state at the
+same simulation steps. Verify race times, collision events, audio, and save states,
+in addition to rendered frames. Real-hardware pacing requires adequate CPU/GPU
+processing headroom. This can maintain 100% game speed without yet generating 144 distinct new frames.
 
-### 4. Migrar a parte cara comprovada, sem reescrever tudo
+### 4. Migrate Confirmed Hotspots Without Full Rewrites
 
-Se VU dominar, primeiro usar infraestrutura donor para registrar microprogramas
-VU1 AOT do GT4: coletar conteúdo/variantes em cenários qualificados, traduzir,
-recompilar e comparar registradores/flags/memória/pacotes GIF com interpretador.
-Preservar mudança de código e identidade por conteúdo; não indexar só por PC.
-Programa desconhecido mantém caminho interpretado explícito/observável.
-VU0 requer contrato e suporte próprios. JIT Windows é alternativa se variações
-dinâmicas tornarem AOT pouco adequado; maior superfície de implementação.
+If VU dominates, first leverage donor infrastructure to register GT4 VU1
+microprograms AOT: collect program contents/variants across qualified scenarios, translate,
+recompile, and compare registers, flags, memory, and GIF packets against the interpreter.
+Account for self-modifying/dynamic microcode and preserve content-based identity; do not index solely by program counter (PC).
+Unrecognized microprograms retain an explicit, observable interpreted fallback path.
+VU0 requires its own interface contract and support. A Windows JIT is an alternative if dynamic
+variations make AOT impractical, but carries a larger implementation surface.
 
-Se sincronização/GS dominar, priorizar esse caminho antes de VU. Se IOP dominar,
-avaliar AOT dos módulos usados ou substituição HLE de serviços específicos,
-mantendo imports, DMA/IRQ/RPC, áudio e cartão. Se EE dominar, analisar geração
-e despachos. Cada migração conserva tempo guest e recebe comparação com a
-referência; concordância interna não prova fidelidade PS2 por si só.
+If synchronization/GS dominates, prioritize that path before VU. If IOP dominates,
+evaluate AOT for active modules or HLE replacement of targeted services,
+preserving imports, DMA/IRQ/RPC, audio, and memory card contracts. If EE dominates, analyze
+translation generation and dispatch overhead. Each migration must preserve guest timing semantics
+and be verified against baseline execution; internal consistency alone does not prove PS2 fidelity.
 
-Concluir cada mudança com ganho medido no mesmo cenário e nenhuma regressão
-nos contratos funcionais. IOP integral nativo e remoção geral dos modelos de
-hardware ficam adiados até existir justificativa concreta.
+Complete each modification with measured performance gains in the identical test scenario and zero
+regressions in functional contracts. Full native IOP migration and wholesale elimination of
+hardware models remain deferred until backed by concrete technical necessity.
 
-### 5. Gerar144 imagens novas mantendo física original
+### 5. Generate 144 Distinct Frames While Preserving Original Physics
 
-Mapear no código GT4 a atualização de física/IA/colisões/cronômetros/input,
-construção de cena/câmera/animação e esperas de vídeo. Provar quais funções
-podem ser chamadas sem avançar gameplay ou provocar efeitos duplicados.
-Não presumir que o jogo oferece um `update()`/`render()` independente.
+Map in GT4 code the functions responsible for updating physics, AI, collisions, lap timers,
+and input, as well as scene construction, camera, animation, and video sync waits. Formally determine
+which functions can be called to generate a frame without advancing gameplay state or causing side effects.
+Do not assume the game engine natively provides decoupled `update()` and `render()` entry points.
 
-Capturar estados visuais anterior/atual e interpolar câmera, poses e objetos
-para cada apresentação. Construir/renderizar uma cena nova desses estados;
-repetir framebuffer ou pacote GS com posições já calculadas não faz isso.
-Separar HUD/cronômetros, efeitos, cutscenes e mudanças de câmera. Não escrever
-posições interpoladas de volta na física. Interpolação exige definir/medir
-latência e reinicializar histórico em teleporte, pausa e troca de cena.
+Capture previous and current visual transform states and interpolate camera, vehicle/mesh poses,
+and dynamic objects for each presentation frame. Assemble and render a new scene from these interpolated states;
+repeating the framebuffer or replaying a GS packet containing baked coordinates does not achieve this.
+Decouple HUD/timers, particle effects, cutscenes, and camera transitions. Never write
+interpolated visual transforms back into authoritative physics state. Interpolation requires defining
+and measuring presentation latency, as well as resetting historical state on teleports, pauses, and scene transitions.
 
-Começar por uma corrida/câmera, expandir depois. Concluir com cenas distintas
-em144FPS, mesmos resultados físicos no mesmo tempo/input, áudio correto e
-HUD íntegro. Essa etapa exige conhecimento localizado do jogo e uma interface
-de renderização adequada; não exige previamente reescrever todo IOP/VU.
+Begin with a single race/camera configuration, then expand. Complete with distinct frames
+rendering at 144 FPS, bit-exact physics outcomes given identical inputs/timestamps, accurate audio playback,
+and uncorrupted HUD rendering. This milestone requires localized reverse-engineering of the game binary
+and a suitable rendering interface; it does not require a prior total rewrite of IOP or VU.
 
-### 6. Progressivo e resolução interna, depois expandir gráficos
+### 6. Progressive Scan and Internal Resolution, Followed by Visual Enhancements
 
-Qualificar480p como referência, modificar seleção de saída de maneira compatível
-com menus/corrida e implementar escala/resolução interna verdadeira. Cobrir
-viewport, render targets, profundidade, texturas, pós-processamento e HUD.
-Redimensionar janela não basta. Launcher/config persistente sem sobrescrever
-saves; depois ultrawide/câmera/HUD, texturas e efeitos. Pode avançar em paralelo
-com renderização independente quando suas interfaces estiverem definidas.
+Qualify 480p as the baseline, modify video mode selection compatibly across menus
+and races, and implement true internal resolution scaling. Cover viewport,
+render targets, depth buffers, textures, post-processing passes, and HUD elements.
+Resizing the window viewport is insufficient. Provide launcher configuration persistence without risking
+memory card saves; subsequently address ultrawide aspect ratios, camera adjustments, HUD scaling/repositioning,
+high-resolution textures, and modern visual effects. This work can proceed in parallel with
+decoupled rendering once interface boundaries are formalized.
 
-## Escopo e decisão de início
+## Scope and Commencement Decision
 
-Recomendação de primeiro trabalho: receita de geração EE/build reproduzível.
-Depois referência medida e primeira fatia de separação apresentação/tempo;
-escolher otimização pelo resultado. Não iniciar uma troca integral para nativo.
-O dono pediu planejamento; todas as etapas executáveis acima estão propostas,
-não implementadas nem qualificadas por esta revisão.
+Recommended first milestone: reproducible EE code generation recipe and automated build pipeline.
+Follow with a measured timing baseline and the first slice of presentation/timing decoupling;
+select optimization targets based on profiled data. Do not embark on an upfront wholesale native rewrite.
+The project owner requested architectural planning; all executable stages above are proposed roadmap phases,
+neither implemented nor qualified in this revision.
 
-## Referências externas primárias
+## Primary External References
 
 - [Glenn Fiedler, Fix Your Timestep!](https://gafferongames.com/post/fix_your_timestep/):
-  passo fixo, acumulação/interpolação e necessidade de capacidade de processamento.
+  Fixed timestep, time accumulation/interpolation, and processing headroom requirements.
 - [Khronos, Swap chain](https://docs.vulkan.org/tutorial/latest/03_Drawing_a_triangle/01_Presentation/01_Swap_chain.html):
-  apresentação/swapchain e cadência do monitor. Não identifica nosso gargalo.
+  Presentation, swapchains, and monitor refresh cadences. Does not identify our specific bottleneck.
 
-Referências explicam arquitetura geral; não demonstram hooks ou fidelidade GT4.
+External references provide general architectural context; they do not demonstrate GT4 engine hooks or game fidelity.

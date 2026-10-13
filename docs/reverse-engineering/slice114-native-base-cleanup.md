@@ -1,63 +1,65 @@
-# Slice114 — adoção da base atual e limpeza do legado
+# Slice114 — native base adoption and legacy cleanup
 
-2026-10-13, baseline95f615519b992c65505d77da35af825fc6a13a53,
-decisão0056. Pedido do proprietário: preservar estado numa branch, retornar
-ao fluxo main, limpar o motor original e atualizar visão do projeto.
+2026-10-13, baseline `95f615519b992c65505d77da35af825fc6a13a53`,
+decision0056. Owner request: preserve state on an archive branch, return to
+main workflow, clean up the original engine, and update project vision.
 
-## Confirmado: preservação e dependências
+## Confirmed: preservation and dependencies
 
-Branch origin/codex/archive-original-recomp-20261013 publicada antes de qualquer
-remoção, apontando ao baseline. Origin/main foi sincronizada por fast-forward
-(já atualizada); trabalho isolado em codex/cleanup-native-base-114.
-Plano privado lista411 arquivos removidos entre466 versionados: docs294,
-include17,src20,tests48,scripts12,tools16 e4 feedbacks/planos/handoff raiz.
-Cada target foi conferido como arquivo dentro do workspace. Nenhum private,
-generated,ISO,build antigo,card ou captura foi removido. Histórico preservado.
+Branch `origin/codex/archive-original-recomp-20261013` published prior to any
+removal, pointing to baseline. `origin/main` was synchronized via fast-forward
+(already up to date); work isolated on `codex/cleanup-native-base-114`.
+Private plan lists 411 removed files out of 466 versioned: docs 294,
+include 17, src 20, tests 48, scripts 12, tools 16, and 4 root feedback/plan/handoff files.
+Each target was verified as a file inside the workspace. No private,
+generated, ISO, legacy build, memory card, or capture files were removed. Git history preserved.
 
-Auditoria read-only separada conferiu dependências transitivas. Launcher ainda
-usa gt4disc/fingerprint, pycdlib e manifests de inputs/seeds; estes permaneceram.
-Nenhuma dependência ativa importa/compila src/include/tools-gt4/scripts-Ghidra/
-PCSX2/testes do motor original. Native14 sources movidos de experimental/vulkan
-para native; CMake raiz agora só contém runtime/host/fixtures dessa base.
+Separate read-only audit verified transitive dependencies. Launcher still
+uses gt4disc/fingerprint, pycdlib, and input/seed manifests; these were retained.
+No active dependency imports or compiles src/include/tools-gt4/Ghidra scripts/
+PCSX2/legacy engine tests. Native 14 source files moved from `experimental/vulkan`
+to `native`; root CMake now only contains runtime/host/fixtures for this active base.
 
-## Confirmado: o significado de nativo
+## Confirmed: definition of native
 
-EE AOT326 unidades C++ registradas, compiladas para x86-64; dispatcher nativo
-recusa código ausente. IOP interpreta R3000 e usa HLE. VU runtime tem suporte
-a programas compilados registrados, mas o conjunto gerado atual não registra
-VU AOT; VU JIT é desabilitado fora de Emscripten, logo VU Windows interpretado.
-Hardware e dispositivos continuam modelos de software. Vulkan/Win32/WinMM/
-XInput são integração nativa. Não há browser/WASM/PCSX2 embutido.
-ARCHITECTURE.md guarda paths/linhas da leitura; não é medição de performance.
+EE AOT: 326 registered C++ compilation units compiled to x86-64; native dispatcher
+rejects missing code. IOP interprets R3000 and uses HLE. VU runtime supports
+registered compiled programs, but the currently generated set registers no
+VU AOT; VU JIT is disabled outside Emscripten, so VU on Windows is interpreted.
+Hardware and peripheral devices remain software models. Vulkan/Win32/WinMM/
+XInput are native host integrations. No browser, WebAssembly, or embedded PCSX2.
+`ARCHITECTURE.md` documents paths and lines from code review; this is not a performance measurement.
 
-## Build e controles
+## Build and controls
 
-Novo diretório private/slice114-native-base mantém todos os produtores antigos
-intactos. Build Clang23.1.2/C++20/VS2022SDK/Ninja e Naga30.0.0 reproduz os
-9SPIR-V byte-identicamente. Biblioteca AOTc837d13d...6de1f é pré-requisito
-verificado agora pelo CMake. Geração da biblioteca continua privada/histórica,
-sem promessa de reprodução desde checkout vazio.
-Novo executávelc634a3d32c9b3c32d2b0ab9d769d0682572a2f35761e397669e044117e2dc033.
-Manifest114 seleciona a nova base; script de probe sem argumento de manifest
-também usa114, eliminando o default obsoleto de ps2run/CPU.
-Seus checks de tamper/path/seed/proteção/card/timeout/encerramento permanecem.
-Build sem warnings;3/3CTest11.13s inclui32Python (6.439s); repetição Python
-final32/32 sem skips5.812s após simplificar o default do probe. Nenhuma expressão
-de aceitação mantida foi afrouxada. Testes antigos acompanham o motor arquivado.
-Smoke120headless termina normalmente/589983844budgetcycles em2.081s com cópia
-de seed, sem input automático, sem janela e sem manipular cartão manual. Isso
-é um smoke de ligação/execução; não prova nova corrida nem100%realtime.
+New directory `private/slice114-native-base` keeps all previous producers intact.
+Build using Clang 23.1.2 / C++20 / VS2022 SDK / Ninja and Naga 30.0.0 reproduces
+the 9 SPIR-V modules byte-identically. AOT library `c837d13d...6de1f` is a
+prerequisite verified by CMake. Generation of the library remains private and historical,
+with no guarantee of reproduction from a clean checkout.
+New executable `c634a3d32c9b3c32d2b0ab9d769d0682572a2f35761e397669e044117e2dc033`.
+Manifest 114 selects the new base; probe script without manifest argument
+also defaults to 114, removing the obsolete ps2run/CPU default.
+Its tamper/path/seed/protection/card/timeout/termination checks remain intact.
+Build clean without warnings; 3/3 CTest in 11.13s includes 32 Python tests (6.439s);
+final Python repetition 32/32 without skips in 5.812s after simplifying probe default.
+No retained acceptance assertion was weakened. Old tests accompany the archived engine.
+Headless smoke 120 terminates normally / 589983844 budget cycles in 2.081s with seed copy,
+no automated input, no window, and without modifying the manual memory card.
+This is a link/execution smoke test; it does not prove a new race or 100% real-time execution.
 
-Captureframe100 é byte-idêntica à capture preservada113/options-nav1, mesmo
-input/seed. Manifest114 congela60 artifacts privados e27 sources de publicação,
-incluindo produtor imutável e portas geradas. Revisão read-only final não achou
-dependência ativa em arquivo removido nem bloqueador na arquitetura/documentação.
+Capture frame 100 is byte-identical to the preserved capture in 113/options-nav1,
+using identical input/seed. Manifest 114 freezes 60 private artifacts and 27 publication
+sources, including immutable producer and generated ports. Final read-only review
+found no active dependency on removed files and no blockers in architecture/documentation.
 
-## Unknown e exclusões pedidas
+## Unknown and requested exclusions
 
-Não investigar/corrigir desempenho ou input duplicado. Não manipular sessão
-manual/cartão do proprietário. Não testar novas corridas/modos automaticamente.
-Sem novo clock,physics144FPS,escalaHD/4K,deinterlace,serviços ou tradução.
-Os resultados humanos480i/480p/1080i continuam separados de fidelidade de campos.
-Fixtures da base antiga são recuperáveis na branch; sua remoção não é afrouxar
-uma expressão ativa, é retirar uma implementação inteira por escolha do dono.
+Do not investigate or fix performance or duplicate input. Do not manipulate
+the owner's manual session or card. Do not run automated tests for new races or modes.
+No clock adjustments, 144FPS physics, HD/4K scaling, deinterlacing, service modifications,
+or recompiler translation changes.
+Human 480i/480p/1080i results remain separate from scan-field fidelity.
+Legacy base fixtures remain recoverable on the archive branch; their removal does not
+weaken an active acceptance assertion, but retires an entire legacy implementation
+by owner directive.

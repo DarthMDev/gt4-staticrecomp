@@ -1,33 +1,11 @@
-# Slice112 — Por que conectar áudio e controle exige contratos pequenos
+# Slice112 — Why Connecting Audio and Input Requires Narrow Contracts
 
-O jogo já produz som e consulta um controle de PS2. O trabalho desta fatia é
-ligar essas duas interfaces ao Windows sem mudar o tempo ou a lógica do jogo.
+The game already generates audio and polls a PS2 controller. The task in this slice is bridging both interfaces to Windows without altering game timing or game logic.
 
-Um bloco de áudio contém32 instantes, cada um com uma amostra esquerda e outra
-direita. A memória pertence ao produtor e deixa de valer depois da chamada.
-Por isso copiamos imediatamente para buffers nossos. O Windows só devolve a
-posse quando marca o cabeçalho como concluído. Um evento avisa que algo mudou;
-ele não conta quantos buffers terminaram. Verificar todos os cabeçalhos evita
-perder notificações agrupadas. Cancelar o dispositivo devolve a posse, mas não
-prova que as amostras foram tocadas: conclusão e cancelamento têm contadores
-separados. Ao sair, desligamos primeiro a função de entrega do jogo.
+An audio block contains 32 time steps, each with one left sample and one right sample. The memory belongs to the producer and is no longer valid after the call. Therefore, we immediately copy it into our own buffers. Windows only returns ownership once it flags the header as completed. An event signals that state has changed; it does not indicate how many buffers completed. Iterating through all headers prevents dropping batched notifications. Resetting the device returns buffer ownership, but does not prove the samples were actually played: completion and cancellation maintain separate counters. On shutdown, we unregister the game's audio delivery callback first.
 
-No controle, nomes parecidos não garantem o mesmo formato. O PS2 espera os eixos
-direitos antes dos esquerdos e usa128 como centro. O eixo vertical do XInput
-tem o sinal contrário; a inversão precisa ocorrer em inteiro maior para aceitar
--32768. Pressão é indexada pelo botão PS2. Motores também são diferentes:
-o pequeno liga/desliga, enquanto o grande tem intensidade. Ao perder foco ou
-desconectar, liberamos botões e motores para não deixar uma ação presa.
+For controllers, similar naming does not guarantee the same format. The PS2 expects right analog axes before left axes and uses 128 as the center point. The XInput vertical axis has the inverted sign; negation must occur in a wider integer type to accommodate -32768 without overflow. Pressure sensitivity is indexed by the PS2 button layout. The rumble motors also differ: the small motor is binary (on/off), whereas the large motor supports variable intensity. Upon losing focus or disconnecting, we release all buttons and motors to avoid stuck actions.
 
-Os testes sem controle físico verificam essa tradução, mas não comprovam que
-um aparelho recebeu vibração. Da mesma forma, um WAV com som e buffers consumidos
-pelo Windows comprovam geração/entrega, mas não que alguém ouviu áudio contínuo.
-Se o jogo produz som mais lentamente que o dispositivo consome, aparecem
-intervalos vazios. Trocar o tempo do jogo por uma suposição esconderia o problema;
-medir e corrigir a causa preserva a qualidade da recompilação.
+Tests without a physical controller verify this mapping logic, but do not prove that a hardware device received vibration. Similarly, a generated WAV file and buffers consumed by Windows prove generation and delivery, but not that an end user heard uninterrupted audio. If the game produces audio slower than the device consumes it, buffer underruns appear. Replacing game timing with an assumption would mask the problem; measuring and addressing the root cause preserves recompilation quality.
 
-O cartão usado no teste manual é uma cópia privada independente. Guardar uma
-cópia antes de cada abertura permite inspecionar ou recuperar mudanças. A trava
-precisa permanecer no processo que escreve, pois fechar somente o lançador não
-garante que o jogo terminou. Nenhum arquivo original de evidência é um save de
-uso cotidiano.
+The memory card used in manual testing is an independent private copy. Archiving a copy before each run allows inspecting or rolling back state changes. The session lock must reside within the writing process, since closing only the launcher does not guarantee the game process has terminated. No original evidence file is a daily-use save file.

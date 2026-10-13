@@ -1,39 +1,39 @@
-# 0056 — Adotar base nativa e arquivar motor original
+# 0056 — Adopt native base and archive original engine
 
-2026-10-13; pedido explícito do proprietário, baseline95f6155.
-Status: aceita; build e gates atuais verdes, fatia114.
+2026-10-13; explicit owner request, baseline 95f6155.
+Status: accepted; current build and gates green, slice 114.
 
-## Decisão
+## Decision
 
-Preservar o estado versionado anterior em origin/codex/archive-original-recomp-20261013
-antes de remover legado da main. Usar ps2-web-recomp/MIT + nosso port nativo
-como único caminho ativo. Mover adapters para native/, substituir o CMake raiz
-pelos targets atuais e conservar apenas testes que cobrem o código mantido.
-Preservar inputs/saves/evidências privadas e produtores históricos em seus paths.
+Preserve the prior versioned state on origin/codex/archive-original-recomp-20261013
+before removing legacy code from main. Use ps2-web-recomp/MIT + our native port
+as the sole active path. Move adapters to native/, replace root CMake
+with current targets, and retain only tests that cover the maintained code.
+Preserve inputs/saves/private evidence and historical producers at their paths.
 
-O proprietário pede projeto compreensível e um caminho de desenvolvimento.
-Manter dois motores ativos e um README sobre o motor que já não roda o piloto
-confunde build, estado e evidência. A branch mantém o trabalho independente
-original para referência sem exigir sua manutenção em cada nova entrega.
+The owner requests an understandable project and a single development path.
+Maintaining two active engines and a README describing an engine that no longer runs the pilot
+confuses the build, state, and evidence. The branch preserves the original independent work
+for reference without requiring its maintenance across every new delivery.
 
-## Limites e trade-offs
+## Limits and trade-offs
 
-Adotamos as dependências de execução do donor: IOP/VU interpretados e hardware
-PS2 em software. Executável/EE/Vulkan nativos não significam zero emulação.
-Os contratos/testes do motor antigo ficam no arquivo; não validam automaticamente
-este ambiente diferente. Fidelidade/estabilidade/performance permanecem abertas.
-Build atual reutiliza ps2game.lib privada hash-pinada; geração integral desde
-ISO ainda não é uma receita pública automatizada.
+We adopt the donor's execution dependencies: interpreted IOP/VU and software
+PS2 hardware models. Native executable/EE/Vulkan does not mean zero emulation.
+Contracts/tests from the old engine remain in the archive; they do not automatically validate
+this different environment. Fidelity/stability/performance remain open.
+Current build reuses private hash-pinned ps2game.lib; full generation from
+ISO is not yet an automated public recipe.
 
-Nenhum ajuste de tempo/física/input/renderização foi autorizado nesta limpeza.
-O pedido anterior de só registrar desempenho e teclas duplicadas continua vigente.
-Trocas de caminho/manifest precisam preservar validações de inputs, shaders,
-seed/backups/travas e critérios de encerramento; novos outputs não sobrescrevem113.
+No timing/physics/input/rendering adjustments were authorized in this cleanup.
+The prior request to only record performance and duplicate keys remains in effect.
+Path/manifest updates must preserve validations for inputs, shaders,
+seeds/backups/locks, and shutdown criteria; new outputs do not overwrite 113.
 
-## Verificação exigida
+## Required verification
 
-Branch de arquivo publicada e apontando ao baseline; build novo sem warnings;
-CTest/Python atuais verdes;9SPIR-V iguais ao produtor113; runtime/game-library/
-seeds/inputs congelados preservados; imports/build sem dependências no motor
-retirado; README/AGENTS/STATUS e origem das claims atualizados. O relatório114
-registra as contagens, hashes, limites e encerramento desta decisão.
+Archive branch published and pointing to baseline; new build warning-free;
+current CTest/Python green; nine SPIR-V shaders identical to producer 113;
+frozen runtime/game-library/seeds/inputs preserved; imports/build free of dependencies on the
+removed engine; README/AGENTS/STATUS and claim provenance updated. Report 114
+records the counts, hashes, limits, and closure of this decision.

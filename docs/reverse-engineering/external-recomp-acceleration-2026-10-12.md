@@ -1,404 +1,178 @@
-# Aceleração do GT4Recomp com três projetos externos
+# GT4Recomp Acceleration via Three External Projects
 
-Data: 2026-10-12. Base local: `59c89f69d0c4a8ae305603df6ade2fd7a957b12c`.
-Pedido do proprietário: estudar e clonar os três projetos antes de retomar
-as fatias de diagnóstico; priorizar jogo funcionando, depois decompilação
-manual para legibilidade e modificações. Este estudo não fecha o objetivo
-de boot funcional nem altera o runtime de produção.
+Date: 2026-10-12. Local base: `59c89f69d0c4a8ae305603df6ade2fd7a957b12c`.
+Owner request: study and clone the three projects before resuming diagnostic slices; prioritize a functioning game, then manual decompilation for readability and modifications. This study does not close the functional boot goal nor does it alter the production runtime.
 
-## Recomendação
+## Recommendation
 
-**Alta confiança:** o maior ganho provável é testar o conjunto completo de
-`ps2-web-recomp` como uma base alternativa de execução, inicialmente isolada,
-em vez de continuar construindo sozinho cada serviço PS2. O projeto combina
-tradutor EE, kernel, IOP, transporte SIF, disco, unidades vetoriais, gráficos,
-áudio e cartão de memória. O nosso tradutor já está bastante avançado; o
-gargalo observado é o ambiente que executa o jogo, principalmente tempo,
-interrupções, escalonamento e serviços IOP. Mais funções decompiladas ou uma
-troca de Ghidra, sozinhas, não resolvem esse gargalo.
+**High confidence:** the largest likely gain is testing the complete `ps2-web-recomp` suite as an alternative execution base, initially isolated, instead of continuing to build every PS2 service alone. The project combines an EE translator, kernel, IOP, SIF transport, disc, vector units, graphics, audio, and memory card. Our translator is already quite advanced; the observed bottleneck is the environment executing the game, primarily timing, interrupts, scheduling, and IOP services. More decompiled functions or switching Ghidra, on their own, do not resolve this bottleneck.
 
-Usar os projetos com papéis distintos:
+Use the projects in distinct roles:
 
-| Projeto | Uso prioritário | Limite |
+| Project | Priority Use | Limitations |
 |---|---|---|
-| [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) | Base de execução para um piloto com nosso disco; reaproveitar subsistemas inteiros quando o piloto os qualificar | Boot PAL relatado pelo autor; Windows, NTSC e fidelidade exigem validação própria |
-| [gt4-decomp](https://github.com/gustavocanepa/gt4-decomp) | Nomes, classes, tipos, estruturas e descoberta de entradas; reduzir trabalho de investigação | Matching MIPS não é um executável Windows; o boot ainda precisa do ambiente PS2 |
-| [PS2Recomp](https://github.com/ran-j/PS2Recomp) | Referência de Windows/MSVC, interface IOP, exportação de funções e testes de contratos | GPLv3; código e contratos não podem ser importados indiscriminadamente |
+| [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) | Execution base for a pilot with our disc; reuse entire subsystems once the pilot qualifies them | PAL boot reported by author; Windows, NTSC, and fidelity require own validation |
+| [gt4-decomp](https://github.com/gustavocanepa/gt4-decomp) | Names, classes, types, structures, and entry-point discovery; reduce investigative effort | Matching MIPS is not a Windows executable; booting still requires the PS2 environment |
+| [PS2Recomp](https://github.com/ran-j/PS2Recomp) | Reference for Windows/MSVC, IOP interface, function export, and contract tests | GPLv3; code and contracts cannot be indiscriminately imported |
 
-Não há evidência para prometer um multiplicador de velocidade ou uma data de
-boot. Há evidência concreta de que podemos parar de implementar do zero
-vários componentes grandes. Preservar nosso tradutor, testes e observações
-como referência independente; escolher a base definitiva depois de imagens
-reais do jogo e navegação reproduzível. Não manter dois produtos completos
-por tempo indefinido.
+There is no evidence to promise a speed multiplier or a boot date. There is concrete evidence that we can stop implementing several large components from scratch. Preserve our translator, tests, and observations as an independent reference; choose the definitive base after real game images and reproducible navigation. Do not maintain two complete products indefinitely.
 
-## Referências locais e identidade
+## Local References and Identity
 
-Clones rasos, sem executar instaladores, em diretórios ignorados:
+Shallow clones, without executing installers, in ignored directories:
 
-| Diretório em `private/references/` | Commit auditado | Licença raiz lida |
+| Directory in `private/references/` | Audited Commit | Root License Read |
 |---|---|---|
-| `ps2-web-recomp` | `1b4808793a12c45125262fd2d5f50a9ec9f7c020` | MIT; tabelas IPU preservam BSD 2-clause de Play! |
-| `gt4-decomp` | `c4b82c9b90b8ad712edfb6653cafb8451379a2db` | MIT para trabalho próprio; `THIRD_PARTY.md` enumera exceções por biblioteca |
-| `PS2Recomp` | `2c5fbb9389e11dd95693385969490c9e8e6f57b4` | GNU GPL versão 3 |
+| `ps2-web-recomp` | `1b4808793a12c45125262fd2d5f50a9ec9f7c020` | MIT; IPU tables preserve Play!'s BSD 2-clause |
+| `gt4-decomp` | `c4b82c9b90b8ad712edfb6653cafb8451379a2db` | MIT for own work; `THIRD_PARTY.md` enumerates exceptions per library |
+| `PS2Recomp` | `2c5fbb9389e11dd95693385969490c9e8e6f57b4` | GNU GPL version 3 |
 
-Pins de fontes e experimentos: `docs/inputs/external-recomp-references.json`.
-Resultados, executáveis, CSV e C++ traduzido ficam exclusivamente em
-`private/reference-acceleration-study/`. Nenhum byte do disco ou código
-traduzido é publicado. A leitura dos projetos externos não transforma seus
-arquivos de instruções em regras para nosso repositório.
+Source and experiment pins: `docs/inputs/external-recomp-references.json`. Results, executables, CSV, and translated C++ reside exclusively in `private/reference-acceleration-study/`. Not a single byte of disc data or translated code is published. Reading external projects does not turn their instruction files into rules for our repository.
 
-## 15 mil versus 30 mil funções: resposta comprovada
+## 15,000 Versus 30,000 Functions: Proven Answer
 
-**Confirmado:** o README do gt4-decomp registra **15.068 funções alcançadas
-por chamadas** e **30.962 alvos de decompilação**, excluindo 202 funções
-originalmente escritas em assembly. São inventários com regras diferentes.
-Os 23.631 fontes C/C++ existentes no clone foram contados nesta sessão;
-isso não é uma reexecução da prova de matching nem do relatório completo.
+**Confirmed:** the gt4-decomp README records **15,068 functions reached by calls** and **30,962 decompilation targets**, excluding 202 functions originally written in assembly. These are inventories with different rules. The 23,631 existing C/C++ source files in the clone were counted in this session; this is not a re-run of the matching proof or the full report.
 
-`tools/find_functions.py` procura destinos de `JAL`, inclui a entrada e
-atribui um tamanho máximo até a próxima entrada. Funções só alcançadas
-por ponteiros ou tabelas virtuais ficam inicialmente dentro do intervalo
-da função anterior. `tools/inventory.py` substitui esse inventário pelas
-funções separadas pelo splat, preservando a contagem de chamadas para
-ordenar o trabalho. `tools/build.py::splat_functions` lê os arquivos de
-assembly produzidos pelo splat. `config/gt4.yaml` seleciona `platform: ps2`
-e `compiler: EEGCC`; `project.toml` usa Rabbitizer R5900 e m2c.
+`tools/find_functions.py` searches for `JAL` targets, includes the entry point, and assigns a maximum size up to the next entry. Functions reached only via pointers or virtual tables initially remain within the range of the preceding function. `tools/inventory.py` replaces this inventory with functions split by splat, preserving the call count to prioritize work. `tools/build.py::splat_functions` reads assembly files produced by splat. `config/gt4.yaml` selects `platform: ps2` and `compiler: EEGCC`; `project.toml` uses Rabbitizer R5900 and m2c.
 
-**Experimento independente:** executamos o `find_functions.py` externo com
-nosso CORE hash-validado, sem alterar o inventário de produção:
+**Independent experiment:** we ran the external `find_functions.py` against our hash-validated CORE, without modifying the production inventory:
 
 ```text
 15068 functions from 0x00100008 to 0x00616e88
 size median 128 bytes, <= 64 bytes: 4365, <= 256: 10602
 ```
 
-O método mais abrangente importa para callbacks, tabelas virtuais e
-continuações, mas a diferença não demonstra que nosso jogo só esteja
-"metade traduzido". Quantidade de funções, entradas de despacho,
-instruções estáticas e bytes decompilados são medidas distintas.
+The more comprehensive method matters for callbacks, virtual tables, and continuations, but the discrepancy does not demonstrate that our game is only "half translated". Function count, dispatch entries, static instructions, and decompiled bytes are distinct metrics.
 
-**Confirmado:** o próprio analisador de ps2-web-recomp encontrou, no nosso
-ELF nativo, **14.660 funções**, **135.093 entradas**, **1.240.374 instruções**
-e escreveu **326 unidades C++**. As entradas incluem continuações e
-destinos que não são contados como funções. Esse resultado também não
-prova precisão das fronteiras nem execução de todas as instruções.
+**Confirmed:** ps2-web-recomp's own analyzer found, in our native ELF, **14,660 functions**, **135,093 entries**, **1,240,374 instructions**, and wrote **326 C++ units**. Entry points include continuations and branch targets that are not counted as functions. This result also does not prove boundary accuracy or execution of all instructions.
 
-## A compatibilidade com o decomp é melhor do que o rótulo sugere
+## Decomp Compatibility Is Better Than the Label Suggests
 
-O gt4-decomp descreve seu disco como USA v1.01. O nosso disco continua
-validado como USA v2.00; não atualizamos nem substituímos os manifests.
-Porém `orig/README.md` externo publica este SHA-1 para `CORE.GT4`:
+gt4-decomp describes its disc as USA v1.01. Our disc remains validated as USA v2.00; we did not update or replace manifests. However, external `orig/README.md` publishes this SHA-1 for `CORE.GT4`:
 
 ```text
 30031137ce494323816bb707b90d3ec0d07937d2
 ```
 
-**Confirmado:** esse é exatamente o SHA-1 calculado sobre nosso CORE nesta
-sessão. Seu SHA-256 continua igual ao manifest local:
+**Confirmed:** this is exactly the SHA-1 calculated for our CORE in this session. Its SHA-256 remains identical to the local manifest:
 
 ```text
 85d26aa8430154967b2633eede929286694ac39e99762527edcec365fd642ff9
 ```
 
-Isso qualifica o mesmo conteúdo CORE em relação ao hash publicado pelo
-decomp; não qualifica igualdade entre os discos completos, bootstrap,
-arquivos IRX, dados do jogo ou ambiente de carga. Não tivemos o segundo
-disco original disponível para uma comparação direta byte a byte.
+This qualifies the identical CORE content relative to the hash published by decomp; it does not qualify equality across the full discs, bootstrap, IRX files, game data, or loading environment. We did not have the second original disc available for a direct byte-for-byte comparison.
 
-**Alta confiança:** os endereços dos símbolos CORE podem ser reaproveitados
-com verificação por região/função, sem inventar um deslocamento entre
-versões. `config/symbol_addrs.txt` contém 8.360 aliases de função para 5.596
-endereços únicos. Há ainda metadados RTTI, classes, campos, unidades,
-métodos Adhoc e bibliotecas. O número de aliases não é o total de funções.
-Nomes e tipos inferidos continuam inferidos mesmo quando os bytes são
-iguais. Não usar nomes como substituto de prova do comportamento.
+**High confidence:** CORE symbol addresses can be reused with region/function verification, without inventing an inter-version offset. `config/symbol_addrs.txt` contains 8,360 function aliases for 5,596 unique addresses. It additionally contains RTTI metadata, classes, fields, units, Adhoc methods, and libraries. The number of aliases is not the total function count. Inferred names and types remain inferred even when bytes match. Do not use names as a substitute for behavioral proof.
 
-O matching do decomp recompila fontes com o compilador MIPS original e
-completa o executável com assembly do próprio jogo. Isso verifica
-reconstrução, não fornece automaticamente um port nativo x86-64. Ponteiros,
-layout e chamadas de sistema ainda são PS2. Seu documento de arquitetura
-declara desconhecida a localização do loop nativo, escalonamento e
-handlers de sincronismo. Não esperar que a grande porcentagem de matching
-resolva imediatamente nossa divergência de VBlank.
+Decomp matching recompiles sources with the original MIPS compiler and fills the executable with assembly from the game itself. This verifies reconstruction; it does not automatically provide a native x86-64 port. Pointers, memory layout, and system calls remain PS2. Its architecture document states that the location of the native main loop, scheduling, and sync handlers is unknown. Do not expect high matching percentages to immediately solve our VBlank divergence.
 
 ## Ghidra Emotion Engine Reloaded
 
-**Confirmado:** o pipeline de matching acima usa splat/Rabbitizer/m2c e
-compilação comparada. Não encontramos fundamento para atribuir seus
-30.962 alvos ao Ghidra EE Reloaded. O ps2-web-recomp descobre código em
-`recomp/analysis.cpp` sem exigir Ghidra: fluxo de controle, constantes de
-endereço, destinos calculados, palavras nos segmentos e entradas extras.
-O PS2Recomp aceita mapas exportados de Ghidra e recomenda isso para ELFs
-retail sem símbolos; seu exportador usa a análise já presente no programa.
+**Confirmed:** the matching pipeline above uses splat/Rabbitizer/m2c and diff compilation. We found no basis for attributing its 30,962 targets to Ghidra EE Reloaded. ps2-web-recomp discovers code in `recomp/analysis.cpp` without requiring Ghidra: control flow, address constants, computed targets, words across segments, and extra entries. PS2Recomp accepts maps exported from Ghidra and recommends this for stripped retail ELFs; its exporter uses analysis already present in the program.
 
-O [EE Reloaded](https://github.com/chaoticgd/ghidra-emotionengine-reloaded)
-oferece MMI/VU0, referências R5900, STABS e importação de savestates.
-**Alta confiança:** é uma ferramenta auxiliar útil para nomes, referências
-e análise R5900. **Desconhecido:** compatibilidade exata da extensão com
-nossa instalação Ghidra 12.1.3 e qualidade em cada função deste jogo; não
-instalamos nem medimos a extensão nesta sessão. Não é pré-requisito do
-piloto de execução e não justifica recomeçar nossa análise validada.
+[EE Reloaded](https://github.com/chaoticgd/ghidra-emotionengine-reloaded) provides MMI/VU0, R5900 references, STABS, and savestate import. **High confidence:** it is a useful auxiliary tool for names, references, and R5900 analysis. **Unknown:** exact compatibility of the extension with our Ghidra 12.1.3 installation and quality across every function in this game; we did not install or measure the extension in this session. It is not a prerequisite for the execution pilot and does not justify restarting our validated analysis.
 
-## ps2-web-recomp: onde está o ganho real
+## ps2-web-recomp: Where the Real Gain Lies
 
-### Execução e recompilação
+### Execution and Recompilation
 
-`recomp/main.cpp` lê ELF32, descobre código e gera C++ dividido por unidades
-de 16 KiB. `analysis.cpp` segue chamadas/branches, considera constantes e
-ponteiros em segmentos, e aceita entradas extras. `dispatch.cpp` interrompe
-uma entrada não traduzida e registra o endereço. `scripts/port.sh` coleta
-esses endereços, gera novamente e recompila; também grava microprogramas
-VU1 para recompilação posterior. Podemos reutilizar esse ciclo de descoberta
-guiada pela execução, em vez de analisar manualmente milhares de funções
-que talvez nem sejam alcançadas no boot.
+`recomp/main.cpp` reads ELF32, discovers code, and generates C++ split into 16 KiB units. `analysis.cpp` follows calls/branches, considers constants and pointers in segments, and accepts extra entries. `dispatch.cpp` halts on an untranslated entry point and logs the address. `scripts/port.sh` collects these addresses, regenerates, and recompiles; it also writes VU1 microprograms for subsequent recompilation. We can reuse this execution-driven discovery cycle instead of manually analyzing thousands of functions that might not even be reached during boot.
 
-**Confirmado:** o EE principal é recompilado antecipadamente para C++ e
-Wasm ou executável nativo. Não é um núcleo EE de interpretação geral.
-Há, contudo, interpretação R3000 do IOP e execução/interpretação de VU
-quando não há programa traduzido adequado. Existem modelos de dispositivos
-PS2 e serviços de alto nível. Isso mantém a estratégia de recompilação
-estática do jogo, mas não elimina a necessidade de reproduzir o hardware.
+**Confirmed:** the main EE is ahead-of-time recompiled into C++ and Wasm or a native executable. It is not a general-purpose interpreted EE core. There is, however, R3000 interpretation of the IOP and VU execution/interpretation when no suitable translated microprogram exists. Models of PS2 devices and high-level services are present. This preserves the game's static recompilation strategy, but does not eliminate the need to model the hardware.
 
-### Tempo, interrupções e threads
+### Timing, Interrupts, and Threads
 
-`codegen.cpp` debita trabalho comum do orçamento de execução e contabiliza
-pares branch/slot. `system.cpp` deriva o tempo desse orçamento, agenda
-VBlank e outros eventos e avança até o próximo evento no idle. O kernel
-escolhe threads READY por prioridade e preserva continuação ao desenrolar
-a pilha nativa. Diferentemente da nossa política 1 ms por serviço, também
-contabiliza trabalho fora de serviços.
+`codegen.cpp` debits common work from the execution budget and accounts for branch/slot pairs. `system.cpp` derives time from this budget, schedules VBlank and other events, and advances to the next event during idle. The kernel selects READY threads by priority and preserves continuations when unwinding the native stack. Unlike our 1 ms per service policy, it also accounts for work outside services.
 
-**Limite confirmado:** as unidades chamadas de ciclos nesse projeto não
-são uma tabela completa de latências R5900 qualificada contra hardware.
-Não copiar esse orçamento para nosso modelo de produção como se fosse
-uma conversão comprovada. Um piloto de compatibilidade pode usar o
-modelo externo identificado separadamente; checkpoints e comparadores
-do nosso runtime não podem tratá-lo como a mesma semântica.
+**Confirmed boundary:** the units labeled "cycles" in that project are not a complete R5900 latency table qualified against real hardware. Do not copy this budget into our production model as if it were a proven conversion. A compatibility pilot may use the separately identified external model; checkpoints and comparators in our runtime must not treat it as having the same semantics.
 
-`hw.cpp` mantém INTC STAT independentemente da máscara e calcula pending
-como `STAT & MASK`. Habilitar muda a máscara; o kernel consulta pending e
-reconhece a causa antes de chamar o handler. **Hipótese útil para a antiga
-slice110:** isso preserva uma ocorrência latched enquanto mascarada,
-coerente com nossa observação de INTC2 anterior à registration. Não prova
-origem, lifetime ou reconhecimento corretos do nosso caso; não reconstruir
-cegamente uma fila a partir de STAT nem duplicar uma ocorrência entregue.
+`hw.cpp` maintains INTC STAT independently of the mask and computes pending as `STAT & MASK`. Enabling modifies the mask; the kernel queries pending and acknowledges the cause before invoking the handler. **Useful hypothesis for legacy slice110:** this preserves a latched occurrence while masked, consistent with our observation of INTC2 prior to registration. It does not prove the correct origin, lifetime, or acknowledgment for our case; do not blindly reconstruct a queue from STAT nor duplicate a delivered occurrence.
 
-`ChangeThreadPriority` devolve a prioridade anterior no código externo,
-coerente com nossa correção 104. Isso reforça sua utilidade comparativa,
-sem tornar todos os outros contratos automaticamente corretos.
+`ChangeThreadPriority` returns the previous priority in external code, consistent with our fix 104. This reinforces its comparative usefulness without making all other contracts automatically correct.
 
-### IOP, disco e transporte
+### IOP, Disc, and Transport
 
-`runtime/src/iop/cpu.cpp` executa instruções R3000; `kernel.cpp` carrega,
-reloca e inicia módulos IRX, resolve imports e mantém threads. `sif.cpp`
-transporta pacotes e completions; `cdvd.cpp`, `cdvdfsv.cpp` e `io.cpp`
-fornecem dispositivos e serviços básicos. Parte dos módulos é substituída
-por serviços nativos. O código específico dos módulos restantes vem do
-disco. O ganho é evitar reescrever cada driver particular do jogo em C++.
+`runtime/src/iop/cpu.cpp` executes R3000 instructions; `kernel.cpp` loads, relocates, and starts IRX modules, resolves imports, and maintains threads. `sif.cpp` transports packets and completions; `cdvd.cpp`, `cdvdfsv.cpp`, and `io.cpp` provide basic devices and services. A subset of modules is replaced by native services. The game-specific code of remaining modules comes from the disc. The gain is avoiding rewriting every game-specific driver in C++.
 
-Isso oferece um caminho mais completo do que nosso pequeno conjunto de
-respostas RPC qualificadas. Também adiciona uma CPU secundária e contratos
-de imports/dispositivos que precisam de testes; não é uma integração de
-somente uma função.
+This offers a more complete path than our small set of qualified RPC responses. It also adds a secondary CPU and import/device contracts that require testing; it is not a single-function integration.
 
-### Gráficos, áudio, controle e saves
+### Graphics, Audio, Input, and Saves
 
-GS possui memória nativa swizzled de 4 MiB, GIF, rasterização CPU e shaders
-compute WGSL (`runtime/src/gs/gpu/`). VIF e VU alimentam a mesma cadeia de
-desenho do jogo. Essa base pode entregar a primeira imagem real antes de
-escrevermos outro renderizador completo. Existe caminho nativo com
-wgpu-native, além da página WebGPU.
+The GS features 4 MiB of swizzled native memory, GIF, CPU rasterization, and WGSL compute shaders (`runtime/src/gs/gpu/`). VIF and VU feed the same game drawing pipeline. This base can deliver the first real frame before we write another complete renderer. A native path via wgpu-native exists in addition to the WebGPU page.
 
-**Limite importante:** WGSL/WebGPU executado por wgpu-native não é nosso
-renderizador Vulkan direto. No commit auditado o backend usa a seleção
-Primary, não força Vulkan. O pacote baixado e a integração nativa de GPU
-são Linux; a superfície aceita X11/Wayland/Canvas, sem Win32. O piloto
-Windows de CPU não valida Vulkan. Preservar a meta de Vulkan nativo,
-usando essa base para aprender/validar GS e decidir posteriormente quanto
-do frontend e dos algoritmos se reaproveita.
+**Important limitation:** WGSL/WebGPU executed via wgpu-native is not our direct Vulkan renderer. In the audited commit, the backend uses Primary selection, without forcing Vulkan. The downloaded package and native GPU integration are Linux-based; the surface supports X11/Wayland/Canvas, without Win32. The Windows CPU pilot does not validate Vulkan. Preserve the native Vulkan goal, using this base to learn/validate the GS and subsequently decide how much of the frontend and algorithms can be reused.
 
-`iop/spu2.cpp` modela vozes, envelopes e samples; `sio2.cpp` modela protocolo
-de pad, analógicos, pressão e cartão. O host SDL integra saída de áudio e
-controle. Há persistência em arquivo/browser e layout de cartão PS2.
-Isso cobre componentes úteis das metas posteriores. Não verificamos nesta
-sessão XInput no Windows, compatibilidade de saves com o jogo, qualidade
-de áudio ou replay determinístico. Usar cartão novo privado, nunca os
-saves do proprietário, em experimentos.
+`iop/spu2.cpp` models voices, envelopes, and samples; `sio2.cpp` models the pad protocol, analogs, pressure, and memory card. The SDL host integrates audio output and gamepad controls. File/browser persistence and PS2 memory card layout exist. This covers useful components for later goals. We did not verify Windows XInput, game save compatibility, audio quality, or deterministic replay in this session. Always use a fresh, private memory card—never the owner's saves—in experiments.
 
-### Atalhos que impedem adoção cega
+### Shortcuts That Prevent Blind Adoption
 
-Fontes concretas lidas:
+Concrete source files examined:
 
-- `kernel.cpp::handle_syscall`: syscall desconhecido é informado e retorna
-  zero; não para. Isso difere da disciplina de produção do nosso projeto.
-- `iop/kernel.cpp::hle_id_for`: import desconhecido registra aviso e devolve
-  zero. Relocações IOP desconhecidas também podem ser ignoradas com log.
-- `iop/cdvdfsv.cpp`: serviços HLE de CDVD têm respostas simplificadas;
-  comando S desconhecido pode responder 1. Não substituir nossa resposta
-  CDVD_INIT 105 validada por essa resposta genérica.
-- `cop.cpp`: `cpcond0` é sempre verdadeiro, VU0 busy sempre falso; CMSAR1
-  de início de VU1 é explicitamente não implementado. BC0F reconhecido no
-  decoder não significa condição DMA correta.
-- `codegen.cpp::delay`: syscall no delay slot para como não suportado.
-  Nossas caracterizações 99–101 continuam úteis; não assumir cobertura
-  integral das exceções apenas porque o GT4 PAL foi demonstrado.
-- A documentação admite aproximações de ponto flutuante VU; os controles
-  internos de tradução/interpretação compartilham partes do modelo.
+- `kernel.cpp::handle_syscall`: unknown syscalls log a warning and return zero; execution does not stop. This differs from our project's production discipline.
+- `iop/kernel.cpp::hle_id_for`: unknown imports log a warning and return zero. Unknown IOP relocations may also be ignored with a log entry.
+- `iop/cdvdfsv.cpp`: HLE CDVD services provide simplified responses; unknown S-commands can return 1. Do not replace our validated CDVD_INIT 105 response with this generic response.
+- `cop.cpp`: `cpcond0` is always true, VU0 busy is always false; CMSAR1 for VU1 start is explicitly unimplemented. Recognizing BC0F in the decoder does not mean the DMA condition is handled correctly.
+- `codegen.cpp::delay`: a syscall in a delay slot halts as unsupported. Our characterizations 99–101 remain useful; do not assume full exception coverage simply because GT4 PAL was demonstrated.
+- The documentation acknowledges VU floating-point approximations; internal translation/interpretation controls share parts of this model.
 
-**Alta confiança:** a base é promissora para compatibilidade prática.
-**Desconhecido:** quanta dessa simplificação o boot/race USA exercita.
-O primeiro piloto deve conservar logs e distinguir execução funcional de
-fidelidade. Antes de usar componentes em produção, substituir os defaults
-desconhecidos por falhas com contexto ou contratos explicitamente validados.
+**High confidence:** the base is promising for practical compatibility. **Unknown:** how much of this simplification is exercised by the USA boot/race path. The first pilot must retain logs and distinguish functional execution from fidelity. Before using components in production, replace unknown defaults with contextual failures or explicitly validated contracts.
 
-## PS2Recomp: bom conjunto auxiliar, não substituição automática
+## PS2Recomp: Good Auxiliary Suite, Not an Automatic Replacement
 
-O README o descreve como experimental. O projeto contém tradutor, analyzer,
-runtime Windows/MSVC, exportador Ghidra e uma interface separada para IOP.
-O IOP executa IRX R3000 com kernel virtual, memória própria, transporte
-SIF e serviços HLE ativados por carregamento. Sua interface
-`IopSubsystem` e snapshots de diagnóstico são referências úteis para
-introduzir execução de módulos originais no nosso projeto.
+The README describes it as experimental. The project contains a translator, analyzer, Windows/MSVC runtime, Ghidra exporter, and a separate interface for IOP. The IOP executes R3000 IRX modules with a virtual kernel, dedicated memory, SIF transport, and HLE services activated upon loading. Its `IopSubsystem` interface and diagnostic snapshots are useful references for introducing original module execution into our project.
 
-Seu renderer auditado usa backend GS CPU e apresentação via raylib; não
-encontramos prova de GT4 funcional no material auditado nem um renderer
-Vulkan pronto equivalente à nossa meta. Há testes dedicados a decoder,
-memória, kernel, interrupções, SIF/DMA/RPC, VU e IOP, que dão ideias para
-controles independentes. O recompiler oferece patches, skips e stubs
-`ret0`/`ret1`/`reta0`: recursos de triagem, não aceitação de boot.
+Its audited renderer uses a GS CPU backend and presentation via raylib; we found no proof of functional GT4 in the audited material nor an existing Vulkan renderer equivalent to our goal. There are dedicated tests for the decoder, memory, kernel, interrupts, SIF/DMA/RPC, VU, and IOP, providing ideas for independent controls. The recompiler offers patches, skips, and `ret0`/`ret1`/`reta0` stubs: triage features, not boot acceptance.
 
-**Divergência concreta:** `EeScheduler::changePriority` preenche
-`oldPriority`, mas retorna `KE_OK`; `Thread.cpp::changePriorityImpl` publica
-esse `result` no retorno guest. Isso conserva o retorno zero que nossa
-evidência de referência 103/104 mostrou errado para o caminho do GT4.
-Ter mais testes não prova esse contrato. Não substituir nosso kernel por
-esse kernel sem confrontar os casos já qualificados.
+**Concrete divergence:** `EeScheduler::changePriority` populates `oldPriority`, but returns `KE_OK`; `Thread.cpp::changePriorityImpl` publishes this `result` to the guest return value. This retains the zero return value that our reference evidence 103/104 showed to be incorrect for the GT4 path. Having more tests does not prove this contract. Do not replace our kernel with this kernel without reconciling already qualified test cases.
 
-**Licença confirmada:** a raiz é GPLv3. Não copiar código para nosso runtime
-como se fosse MIT. Neste estudo só há clones privados e observação. Um
-eventual reaproveitamento de código exige preservar a licença aplicável e
-decidir a política de distribuição antes da incorporação. Para o piloto
-priorizar ps2-web-recomp MIT; consultar algoritmos e fazer testes próprios
-sem misturar fontes inadvertidamente.
+**Confirmed license:** the root is GPLv3. Do not copy code into our runtime as if it were MIT. In this study, there are only private clones and observation. Any eventual code reuse requires preserving the applicable license and deciding distribution policy prior to incorporation. For the pilot, prioritize MIT ps2-web-recomp; consult algorithms and write proprietary/independent tests without inadvertently mixing sources.
 
-## Próximos marcos de execução
+## Next Execution Milestones
 
-1. **Piloto completo isolado (primeiro realizado):** compilar e executar nosso CORE/disco NTSC
-   com o runtime externo, registrar entradas ausentes, syscalls/imports,
-   módulos realmente executados, filas RPC e frames produzidos. O piloto
-   tem identidade própria e não consome checkpoints da produção.
-2. **Primeira imagem real (observada) e menu (aberto):** repetir cold boot com captura de GIF/GS
-   originada no guest; exigir navegação por input. Contagem de VBlank,
-   término sem crash e janela aberta não bastam. Sem success stubs para
-   serviços desconhecidos usados no caminho aceito.
-3. **Escolha da base:** se o piloto progride muito além do nosso ponto
-   atual, incorporar/reter o runtime doador em uma branch de integração
-   em vez de transplantar dezenas de handlers isoladamente. Se falhar,
-   corrigir o primeiro bloqueio concreto aproveitando nossos contratos,
-   nomes do decomp e referência PCSX2; não regressar automaticamente a
-   uma longa sequência de observações sem experimento de execução.
-4. **Windows e estabilidade:** adaptar biblioteca GPU/superfície Win32,
-   explicitar backend Vulkan, controles e saves próprios; validar menu,
-   corrida e cold boots repetidos. Depois perseguir áudio, XInput e save
-   conforme os marcos do proprietário. Não declarar corrida estável só
-   por um frame nem save funcional só por criar um arquivo.
-5. **Decomp posterior e pontual agora:** usar nomes/metadados imediatamente
-   quando ajudam o boot; reconstruir manualmente código modificável após
-   funcionamento estável. Não copiar 23 mil funções MIPS para tentar
-   resolver hardware, pointers e ABI automaticamente.
+1. **Isolated full pilot (first milestone achieved):** compile and execute our NTSC CORE/disc against the external runtime, record missing entry points, syscalls/imports, modules actually executed, RPC queues, and frames produced. The pilot has its own identity and does not consume production checkpoints.
+2. **First real frame (observed) and menu (opened):** repeat cold boot with guest-originated GIF/GS capture; require input navigation. VBlank count, crash-free termination, and an open window are not enough. No success stubs for unknown services used along the accepted path.
+3. **Base selection:** if the pilot progresses substantially further than our current state, incorporate/retain the donor runtime on an integration branch rather than transplanting dozens of isolated handlers. If it fails, fix the first concrete blocker by leveraging our contracts, decomp names, and PCSX2 reference; do not automatically revert to an extended sequence of observations without an execution experiment.
+4. **Windows and stability:** adapt GPU library/Win32 surface, make the Vulkan backend explicit, implement dedicated controls and saves; validate menu, race, and repeated cold boots. Afterward, pursue audio, XInput, and saves according to owner milestones. Do not declare a race stable merely from a single frame nor saves functional merely from file creation.
+5. **Subsequent decompilation and targeted current use:** use names/metadata immediately whenever they assist boot; manually reconstruct modifiable code after stable operation is achieved. Do not copy 23,000 MIPS functions to attempt resolving hardware, pointers, and ABI automatically.
 
-O diagnóstico histórico de INTC2 permanece como evidência para o piloto.
-A política 1 ms/serviço e o IRQ corrigido permanecem na produção enquanto
-ela existe; não enfraquecer testes para encaixar o modelo externo. O
-próximo documento deve começar com o resultado concreto do piloto e o
-primeiro bloqueio, não apenas uma nova porcentagem de cobertura.
+Historical INTC2 diagnostics remain as evidence for the pilot. The 1 ms/service policy and corrected IRQ remain in production for as long as it exists; do not weaken tests to fit the external model. The next document must begin with the concrete pilot result and the first blocker, not merely another coverage percentage.
 
-## Experimentos desta sessão
+## Experiments in This Session
 
-**Confirmado — primeiro piloto já executado nesta sessão:** não ficamos
-apenas na leitura dos READMEs. Compilamos o analisador e o conjunto
-runtime/jogo e executamos nosso disco USA v2.00 no Windows x86-64.
-Nenhuma dessas execuções altera a aceitação histórica do runtime local.
+**Confirmed — first pilot already executed in this session:** we did not stop at reading READMEs. We compiled the analyzer and the runtime/game suite and executed our USA v2.00 disc on Windows x86-64. None of these runs alters the historical acceptance of the local runtime.
 
-### Ferramentas e compilação
+### Tooling and Compilation
 
-- MSVC 14.44.35207, C++20, x64, para o analisador externo de seis fontes.
-  Sem edição do código externo. Saída `usa-v2-eerecomp-stats.txt`.
-- Clang instalado 23.1.2, target `x86_64-pc-windows-msvc`, para todo o
-  runtime CPU e 326 unidades traduzidas. VS amd64, UTF8, CMake/Ninja,
-  Release, builds exclusivamente privados. Sem instalação global nova.
-- CMake original, GPU ausente e SDL não localizado: **headless CPU**.
-  Os caminhos Linux de perfil não entram no Windows; a fila GS usa
-  `std::atomic::wait` no caminho não Linux. GNU vector types/builtins e
-  musttail compilam com Clang. Isso corrige uma suspeita inicial de que
-  todo o runtime exigiria Linux: o núcleo CPU já compila intacto no Windows.
-- Avisos do build externo foram conservados nos logs. `-Wall` com
-  clang-cl habilita muitos diagnósticos de compatibilidade C++98 etc;
-  não apresentamos este build como warning-free ou como produção aprovada.
-- Configuração de janela/GPU Windows ainda precisa de adaptação:
-  wgpu package/link, backend e superfície Win32. Não medimos Vulkan.
+- MSVC 14.44.35207, C++20, x64, for the external six-source analyzer. No modifications to external code. Output `usa-v2-eerecomp-stats.txt`.
+- Installed Clang 23.1.2, target `x86_64-pc-windows-msvc`, for the entire CPU runtime and 326 translated units. VS amd64, UTF-8, CMake/Ninja, Release, exclusively private builds. No new global installations.
+- Original CMake, missing GPU, and unfound SDL: **headless CPU**. Linux profile paths do not enter Windows; the GS queue uses `std::atomic::wait` on the non-Linux path. GNU vector types/builtins and musttail compile with Clang. This resolves an initial suspicion that the entire runtime would require Linux: the CPU core already compiles intact on Windows.
+- Warnings from the external build were preserved in logs. `-Wall` with clang-cl enables extensive compatibility diagnostics (C++98, etc.); we do not present this build as warning-free or as approved production code.
+- Windows window/GPU configuration still requires adaptation: wgpu package/link, backend, and Win32 surface. We did not measure Vulkan.
 
-Antes do run, os hashes do CORE, ELF nativo e ISO foram conferidos contra
-os manifests existentes. ISO SHA-256:
-`67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f`;
-ELF nativo:
-`10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c`.
-O ELF foi copiado byte a byte para nome privado `SCUS_973.28`, preservando
-o hash e permitindo argv0 `cdrom0:\SCUS_973.28;1`. Não usamos BIOS,
-PCSX2, checkpoint de produção ou imagem sintética nesse piloto.
+Prior to running, hashes for CORE, native ELF, and ISO were checked against existing manifests. ISO SHA-256: `67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f`; native ELF: `10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c`. The ELF was copied byte-for-byte to private filename `SCUS_973.28`, preserving the hash and enabling argv0 `cdrom0:\SCUS_973.28;1`. We did not use BIOS, PCSX2, production checkpoints, or synthetic images in this pilot.
 
-### Probe 120: primeira imagem guest
+### Probe 120: First Guest Frame
 
-`--ntsc --frames 120 --trace-iop --trace-io --frame-every 30`, disco real
-somente leitura e cartão novo privado. Quatro PPM de 640x448 foram emitidos
-pelo display GS. Término normal pelo limite de frames, exit 0, sem timeout,
-0,913 s de parede. O próprio runtime informa 589.961.381 unidades de seu
-orçamento, 1.215 primitivas GS, DMA ch0=1/ch1=117/ch2=334 e GIF paths 2/3
-com tags reais. **Esse tempo é duração do probe, não benchmark de corrida.**
+`--ntsc --frames 120 --trace-iop --trace-io --frame-every 30`, read-only physical disc image, and a fresh private memory card. Four 640x448 PPM files were output by the GS display. Normal termination via frame limit, exit 0, no timeout, 0.913 s wall-clock time. The runtime itself reports 589,961,381 units of its execution budget, 1,215 GS primitives, DMA ch0=1/ch1=117/ch2=334, and GIF paths 2/3 with real tags. **This time is probe duration, not a racing benchmark.**
 
-Os logs mostram 23 módulos IOP carregados, incluindo SIO2MAN, MCMAN,
-MCSERV, LIBSD, LIBPDI, PDICDVD, PDISPU2 e PDISTR, e 17 threads EE no dump
-final. Main está WAIT/Sleep, não eternamente READY como a produção atual.
-As capturas mostram a apresentação Sony Computer Entertainment America.
-Há avisos DEV9 e imports DEV9 desconhecidos na resolução; não afirmamos
-que todo hardware foi implementado ou que todo import foi exercitado.
+Logs show 23 IOP modules loaded, including SIO2MAN, MCMAN, MCSERV, LIBSD, LIBPDI, PDICDVD, PDISPU2, and PDISTR, with 17 EE threads in the final dump. Main is in WAIT/Sleep state, not perpetually READY as in current production. Screen captures display the Sony Computer Entertainment America presentation. There are DEV9 warnings and unknown DEV9 imports during resolution; we do not claim all hardware is implemented or that every import was exercised.
 
-### Probe 3600 solicitado: configuração inicial interativa
+### Requested Probe 3600: Interactive Initial Setup
 
-Novo cartão privado e diretório separado. Sequência automatizada já usada
-pelo workflow do autor: Start no frame300, Cross a cada300 frames a partir
-de600. Prazo host de45 s impediu execução ilimitada. **Não completou3600:**
-foi terminado por timeout após45,017 s; último registro periódico é
-frame1625,445.920primitivas. Não contar esse limite como travamento guest,
-como término normal ou como medição confiável de desempenho.
+Fresh private memory card and separate directory. Automated input sequence previously used by the author's workflow: Start at frame 300, Cross every 300 frames starting at frame 600. A host timeout of 45 s prevented unbounded execution. **Did not reach 3600:** terminated via timeout after 45.017 s; last periodic record is frame 1625, 445,920 primitives. Do not count this limit as a guest crash, normal termination, or a reliable performance benchmark.
 
-Cinco capturas em300/600/900/1200/1500 foram preservadas. Inspeção visual:
-frame300 pede criar dados GT4 no cartão; frame900 apresenta "Welcome to
-Gran Turismo 4" e entrada de nome; frame1500 continua nessa tela. Os
-frames900 e1500 têm exatamente o mesmo hash de pixels. As teclas genéricas
-não fornecem um nome; repetir Cross não prova menu principal navegável.
-Há desenho e avanço causal por input entre telas da configuração inicial,
-mas **menu principal, corrida, áudio ouvido e save/load concluído ainda
-não são aceitos**. Este é um executável alternativo de estudo, não uma
-mudança do `gt4boot.exe` de produção.
+Five captures at frames 300/600/900/1200/1500 were preserved. Visual inspection: frame 300 prompts to create GT4 data on the memory card; frame 900 presents "Welcome to Gran Turismo 4" and name entry; frame 1500 remains on that screen. Frames 900 and 1500 share the exact same pixel hash. Generic button presses do not enter a name; repeating Cross does not prove a navigable main menu. Drawing and causal input advancement between initial setup screens occur, but **main menu, race, audible sound, and completed save/load are not yet accepted**. This is an alternative study executable, not a replacement for production `gt4boot.exe`.
 
-### PS2Recomp: execução dos testes IOP
+### PS2Recomp: Execution of IOP Tests
 
-Compilamos o subprojeto IOP original com MSVC Debug, sem buscar raylib,
-ImGui ou dependências do runtime completo. **4/4 CTest passam**:
-emulator, imports, compatibility e import-version; relatório total0,28 s.
-Isso qualifica que a interface/suites do IOP são executáveis no nosso
-ambiente. Não valida GT4 nesse projeto nem desfaz a divergência de retorno
-de prioridade encontrada no runtime EE.
+We compiled the original IOP subproject using MSVC Debug, without pulling raylib, ImGui, or dependencies for the complete runtime. **4/4 CTest pass**: emulator, imports, compatibility, and import-version; total report 0.28 s. This qualifies that the IOP interface/suites are executable in our environment. It does not validate GT4 under this project, nor does it resolve the priority return value divergence found in the EE runtime.
 
-### Repetição e arquivos privados
+### Reproduction and Private Files
 
-Os scripts privados de build/probe são hash-pinados no manifest. Com os
-clones nos commits e inputs idênticos:
+Private build/probe scripts are hash-pinned in the manifest. With clones at the audited commits and identical inputs:
 
 ```powershell
-# Os .cmd inicializam VS amd64 e UTF8 antes de compilar/configurar.
+# The .cmd scripts initialize VS amd64 and UTF-8 before compiling/configuring.
 Push-Location private/reference-acceleration-study
 cmd /c build-eerecomp.cmd
 cmd /c build-runtime.cmd
@@ -413,27 +187,11 @@ private/tooling-venv/Scripts/python.exe private/reference-acceleration-study/pro
 private/tooling-venv/Scripts/python.exe private/reference-acceleration-study/probe.py 3600
 ```
 
-Não reexecutar sobre os diretórios congelados e cartões já usados: preparar
-novos diretórios para preservar os primeiros resultados e controlar o
-estado inicial. `probe-result.json` registra argv completo, limite host e
-término; o script confere ELF e recibo da validação do disco. Para outra
-cópia do disco, recomputar seu SHA-256; recibo não substitui essa conferência.
-PPM→PNG foi apenas conversão de formato sem mudança dos pixels, com Pillow
-do runtime de dependências local. Um primeiro intento com o Python do
-projeto falhou por não possuir Pillow; nenhum pacote foi instalado.
+Do not re-execute over frozen directories and previously used memory cards: prepare fresh directories to preserve the initial results and control initial state. `probe-result.json` records full argv, host limit, and termination; the script validates the ELF and disc validation receipt. For a different disc copy, recompute its SHA-256; a receipt does not replace this verification. PPM→PNG was strictly a format conversion without modifying pixels, using Pillow from the local dependencies environment. An initial attempt using the project's Python failed because Pillow was missing; no packages were installed.
 
-Produção e suas bibliotecas não foram recompiladas nesta sessão. Gates
-54 CTest/Python97 continuam herdados da107, como109. O manifest registra
-hash do executável de produção e resultados privados. Todos os processos
-de teste foram encerrados; o probe longo foi terminado explicitamente
-pelo timeout, sem tocar saves/INI/BIOS do proprietário.
+Production and its libraries were not recompiled in this session. Gates 54 CTest / 97 Python remain inherited from slice 107, as in slice 109. The manifest records the hash of the production executable and private results. All test processes were terminated; the long probe was explicitly terminated by timeout, without touching owner saves/INI/BIOS.
 
-## Limites do estudo
+## Study Limitations
 
-Não reexecutamos o matching completo do decomp nem adquirimos seu disco
-v1.01 ou o disco PAL do autor do ps2-web-recomp. O relato de 50 FPS, áudio,
-menu, corrida e save PAL é evidência do autor, não benchmark nesta máquina.
-Não auditamos cada uma das dezenas de milhares de funções ou cada shader;
-seguimos os caminhos de descoberta, execução, tempo, kernel, IOP, dispositivos
-e apresentação que determinam a decisão de arquitetura. As verificações
-realizadas e seus pins estão no manifest do estudo.
+We did not re-run the complete decomp matching, nor did we acquire its v1.01 disc or the ps2-web-recomp author's PAL disc. The report of 50 FPS, audio, menu, race, and PAL save is author evidence, not a benchmark on this machine. We did not audit each of the tens of thousands of functions or every shader; we traced the paths of discovery, execution, timing, kernel, IOP, devices, and presentation that drive the architectural decision. Completed verifications and their pins reside in the study manifest.
+```

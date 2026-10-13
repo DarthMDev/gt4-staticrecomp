@@ -1,41 +1,41 @@
-# Arquivo do motor original
+# Original Engine Archive
 
-Antes da limpeza, a branch
+Prior to cleanup, branch
 [`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013)
-foi publicada em origin no commit `95f615519b992c65505d77da35af825fc6a13a53`.
-Ela guarda o estado completo versionado: motor original, ferramentas, testes,
-planos, handoffs e todas as evidências anteriores, inclusive a base nativa113.
-O histórico Git anterior continua intacto; nenhum commit foi reescrito.
+was pushed to origin at commit `95f615519b992c65505d77da35af825fc6a13a53`.
+It preserves the complete tracked state: original recompiler engine, tools, tests,
+plans, handoffs, and all preceding evidence, including the native slice 113 base.
+Prior Git history remains intact; no commits were rewritten.
 
-## Retirado da main
+## Removed from main
 
-411 arquivos legados: motor `src/`/`include/`, ferramentas `tools/gt4*` e
-helpers exclusivos, testes C++/Python específicos desse motor, scripts de
-observação Ghidra/PCSX2 e documentação/planos/handoffs supersedidos.
-Seu trabalho continua consultável na branch, mas não é um segundo produto
-ativo nem aparece nos comandos de build/teste da main.
+411 legacy files: `src/` and `include/` engine sources, `tools/gt4*` tooling and
+dedicated helpers, C++/Python tests specific to that engine, Ghidra/PCSX2
+observation scripts, and superseded documentation, plans, and handoffs.
+This work remains accessible on the archive branch, but is not a second
+active product target and does not appear in `main` build/test commands.
 
-O código Vulkan/Win32/áudio/XInput foi movido de `experimental/vulkan/` para
-`native/`. Permaneceram scripts, testes e manifests que o caminho atual usa,
-mais relatórios/decisões/lessons110–113 que explicam a migração.
+Vulkan, Win32, audio, and XInput code was moved from `experimental/vulkan/` to
+`native/`. Scripts, tests, and manifests used by the active path were retained,
+along with reports, decisions, and lessons 110–113 documenting the migration.
 
-Links/paths e gates antigos nesses relatórios/manifests são evidências do
-produtor daquela data; fontes removidas agora estão na branch de arquivo,
-ou nas cápsulas privadas. Não editar pins históricos para refletir uma limpeza.
+Legacy links, paths, and gates in those historical reports and manifests serve as evidence
+from that point in time; removed source files now reside on the archive branch
+or within private capsules. Do not edit historical pins to reflect a cleanup.
 
-## Material ignorado
+## Ignored Material
 
-A branch preserva somente conteúdo versionado. ISO, BIOS, CORE/ELF, bibliotecas,
-código gerado, ferramentas locais, captures e cards nunca estiveram no Git.
-Todos foram preservados em seus caminhos locais, incluindo outputs do motor
-original necessários às evidências. `build/` e `generated/` antigos são locais
-inativos, não targets atuais; não foram apagados nem religados à main.
-Saves e a janela manual do dono não foram alterados por esta limpeza.
+The archive branch preserves tracked files only. The ISO, BIOS, CORE/ELF files, compiled libraries,
+generated code, local tooling, captures, and memory cards were never tracked in Git.
+All were preserved in their local filesystem paths, including original engine
+outputs required for historical evidence. Legacy `build/` and `generated/` directories are inactive
+local paths, not active build targets; they were neither deleted nor re-linked to `main`.
+Save files and the owner's manual play window were untouched by this cleanup.
 
-## Consultar/restaurar
+## Inspection and Restoration
 
-Consulte a branch no GitHub sem trocar o checkout ativo. Para recuperar um
-arquivo específico, escolha seu path na branch e faça uma alteração documentada;
-não retorne automaticamente o projeto inteiro ao estado antigo. Um checkout
-separado pode reconstruir o motor arquivado quando uma investigação o exigir.
-Inputs privados continuam exigindo suas verificações e compatibilidade originais.
+Inspect the branch on GitHub without switching the active local checkout. To restore a
+specific file, locate its path on the archive branch and submit a documented change;
+do not revert the entire repository to the legacy state without rationale. A separate
+checkout can rebuild the archived engine should an investigation require it.
+Private inputs continue to require their original verification checks and compatibility constraints.

@@ -1,72 +1,72 @@
-# Build do caminho atual
+# Current Path Build Guide
 
-## Ambiente qualificado
+## Qualified Environment
 
-Windows x86-64, VS2022 Build Tools/SDK10.0.26100.0, clang-cl23.1.2,
-CMake3.24+, Ninja, Rust/Cargo com Cargo.lock e Naga30.0.0.
-Python local em `private/tooling-venv`, com `scripts/requirements.txt`
-(pycdlib1.20.0). A GPU qualificada é RTX3060Laptop; o backend exige Vulkan1.2
-e swapchain maintenance1. Não há evidência de validação Khronos completa.
+Windows x86-64, VS2022 Build Tools / SDK 10.0.26100.0, clang-cl 23.1.2,
+CMake 3.24+, Ninja, Rust/Cargo with Cargo.lock, and Naga 30.0.0.
+Local Python in `private/tooling-venv` with `scripts/requirements.txt`
+(pycdlib 1.20.0). The qualified GPU is an RTX 3060 Laptop; the backend requires Vulkan 1.2
+and swapchain maintenance1. There is no evidence of full Khronos conformance validation.
 
-`native/build.cmd` entra no ambiente VSx64 e seleciona UTF8 antes do CMake.
-Este build Clang substitui o antigo build MSVC do motor original.
+`native/build.cmd` initializes the VS x64 environment and sets UTF-8 encoding prior to invoking CMake.
+This Clang build replaces the legacy MSVC build from the original engine.
 
-## Pré-requisitos privados
+## Private Prerequisites
 
-| Local | Papel |
+| Location | Role |
 |---|---|
-| `private/references/ps2-web-recomp` | Donor MIT no commit1b4808793a12c45125262fd2d5f50a9ec9f7c020 |
-| `private/reference-acceleration-study/runtime-build/ps2game.lib` | Biblioteca AOT do jogo, SHA256c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f |
-| `private/reference-acceleration-study/generated` |326 unidades C++ EE e registro que produziram essa biblioteca |
-| `private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include` | Headers Khronos; nenhuma implementação PCSX2 ligada |
-| `private/tooling-venv/Scripts/python.exe` | Ambiente Python |
-| ISO raiz, `private/fingerprint-check/CORE.GT4`, `private/reconstructed/SCUS_973.28.elf` | Inputs hash-pinados em docs/inputs |
-| Seeds privadas110/113 | Cartões derivados da interface original; nunca distribuídos |
+| `private/references/ps2-web-recomp` | MIT donor at commit 1b4808793a12c45125262fd2d5f50a9ec9f7c020 |
+| `private/reference-acceleration-study/runtime-build/ps2game.lib` | Ahead-of-time (AOT) game library, SHA256 `c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f` |
+| `private/reference-acceleration-study/generated` | 326 C++ EE compilation units and registry that produced this library |
+| `private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include` | Khronos headers; no PCSX2 implementation code is linked |
+| `private/tooling-venv/Scripts/python.exe` | Python virtual environment |
+| Root ISO, `private/fingerprint-check/CORE.GT4`, `private/reconstructed/SCUS_973.28.elf` | Hash-pinned inputs in `docs/inputs` |
+| Private slice 110/113 seeds | Memory cards derived from the original interface; never distributed |
 
-O build verifica fontes do adapter donor e recusa uma biblioteca AOT com hash
-diferente. Launcher verifica ISO/CORE/ELF/runtime/shaders/card seed antes de usar.
-Pins não podem ser atualizados para disfarçar uma divergência.
+The build validates the donor adapter sources and rejects an AOT library with a mismatched hash.
+The launcher verifies ISO / CORE / ELF / runtime / shaders / card seed before execution.
+Pins must not be updated to mask an underlying divergence.
 
-**Limite de reprodução:** não há ainda um comando público completo que extraia
-e gere todos os inputs a partir de uma ISO. A biblioteca foi gerada anteriormente
-com o tradutor donor e Clang; scripts privados históricos e evidence do estudo
-preservam essa origem. O build atual recompila runtime/host/adapters e reutiliza
-a biblioteca qualificada. Não confundir isso com um build independente de
-checkout vazio. O código gerador externo continua disponível no donor; o motor
-original arquivado não é usado para executar o jogo.
+**Reproduction limit:** There is currently no single public end-to-end command that extracts
+and generates all inputs directly from a fresh ISO. The library was generated previously
+using the donor translator and Clang; historical private scripts and study evidence
+preserve this provenance. The current build recompiles runtime / host / adapters and re-links
+the qualified library. Do not confuse this with an independent clean-checkout build. The external
+generator code remains available in the donor repository; the archived original engine
+is not used to run the game.
 
-## Compilar e verificar
+## Compiling and Verification
 
-Na raiz:
+From repository root:
 
 ```powershell
 cmd /c native\build.cmd
 ctest --test-dir private/slice114-native-base/build --output-on-failure
 ```
 
-CTest contém os controles GPU/Vulkan, áudio/input Windows e suite Python ativa.
-Os54 testes C++ do motor original foram arquivados junto com o código removido,
-sem alterar suas expressões. Isso muda a população de testes; não torna seus
-resultados históricos prova do runtime donor.
+CTest runs the GPU/Vulkan checks, Windows audio/input tests, and active Python test suite.
+The 54 C++ tests from the original engine were archived alongside the removed code,
+without modifying their assertions. This changes the test population; it does not make
+their historical passing results proof of donor runtime correctness.
 
-Teste Python separado, quando necessário:
+Running Python tests standalone, when needed:
 
 ```powershell
 private/tooling-venv/Scripts/python.exe -m unittest discover -s tests/python
 ```
 
-Execute builds/testes serialmente. Linkers podem bloquear outputs, e uma sessão
-manual mantém trava no cartão. Não feche o jogo do dono para testar sem necessidade.
+Execute builds and tests serially. Linkers may lock binary outputs, and an active manual play
+session holds an exclusive lock on the memory card. Do not terminate the owner's active game session unnecessarily.
 
-## Produtores e launcher
+## Producers and Launcher
 
-Esta fatia gera adapter/shaders/build em `private/slice114-native-base/`,
-sem sobrescrever os produtores111–113. O launcher usa
-`docs/inputs/slice114-native-base.json`. Sua publicação requer build/testes e
-hashes qualificados; recompilar fontes diferentes não autoriza repinar o exe.
-Futuras fatias devem escolher diretórios novos antes de compilar e preservar os
-produtores aceitos. Binaries/SPIR-V/generated code ficam fora do Git.
+This slice outputs adapter / shaders / build artifacts to `private/slice114-native-base/`,
+without overwriting producers from slices 111–113. The launcher references
+`docs/inputs/slice114-native-base.json`. Publishing a new slice requires successful builds, passing tests,
+and verified hashes; compiling modified sources does not authorize repinning the executable.
+Future slices must select fresh directories before building and preserve previously accepted
+producers. Binaries, SPIR-V files, and generated code remain untracked by Git.
 
-`Jogar-GT4.cmd` mantém `private/manual-play/card.ps2`, backup por sessão e trava
-de exclusividade. Ele nunca ressemeia um cartão existente. Para iniciar um novo
-cartão, usa a seed16:9 ou4:3 correspondente ao argumento `--aspect`.
+`Jogar-GT4.cmd` manages `private/manual-play/card.ps2`, per-session backups, and exclusive
+locking. It never reseeds an existing memory card. When initializing a new card,
+it uses the 16:9 or 4:3 seed corresponding to the `--aspect` argument.

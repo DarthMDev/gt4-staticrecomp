@@ -1,59 +1,59 @@
-# Arquitetura ativa — Windows nativo com subsistemas PS2
+# Active Architecture — Native Windows with PS2 Subsystems
 
-2026-10-13, decisão0056/fatia114. Evidência obtida no código congelado do
-donor1b4808793a12c45125262fd2d5f50a9ec9f7c020 e nos adapters locais.
+2026-10-13, decision 0056 / slice 114. Evidence obtained from frozen code of donor
+1b4808793a12c45125262fd2d5f50a9ec9f7c020 and local adapters.
 
-## Confirmado
+## Confirmed
 
-O programa é um executável PE Windows x86-64, compilado por clang-cl, ligado
-a uma biblioteca estática privada de código EE traduzido. Não carrega um
-navegador, um módulo WebAssembly ou uma implementação PCSX2. O EE não é
-executado por um interpretador genérico de instruções: `dispatch.cpp:126–159`
-despacha para código traduzido e para quando falta código. `generated/table.cpp`
-do produtor privado registra326 unidades EE.
+The program is a Windows x86-64 PE executable, compiled by clang-cl, linked
+against a private static library of translated EE code. It does not load a
+browser, a WebAssembly module, or a PCSX2 implementation. The EE is not
+executed by a generic instruction interpreter: `dispatch.cpp:126–159`
+dispatches to translated code and halts when code is missing. `generated/table.cpp`
+from the private producer registers 326 EE units.
 
-Isso não elimina a emulação de subsistemas:
+This does not eliminate subsystem emulation:
 
-| Subsistema | Implementação confirmada no donor |
+| Subsystem | Confirmed implementation in donor |
 |---|---|
-| IOP | `runtime/src/iop/cpu.cpp:61–74` busca/decodifica instruções R3000; `iop/kernel.cpp:144–167` liga imports a serviços HLE |
-| VU0/VU1 | `runtime/src/vu_micro.cpp:788–812` usa microprograma compilado quando registrado, senão interpreta |
-| JIT VU | `runtime/src/vu_jit_web.cpp:18–30` retorna modo0 fora de Emscripten; não há JIT Windows ativo |
-| Registro AOT VU | Nenhum registro gerado no conjunto atual; `vu_micro.cpp:978` oferece o registro weak vazio |
-| Kernel/hardware | Modelos de memória, timers, interrupções, DMA, VIF, disco, SIF/IOP, IPU, SPU2 e cartão |
-| GS | Algoritmos/memória PS2 preservados no batching e compute shaders; nosso adapter usa Vulkan diretamente |
+| IOP | `runtime/src/iop/cpu.cpp:61–74` fetches/decodes R3000 instructions; `iop/kernel.cpp:144–167` binds imports to HLE services |
+| VU0/VU1 | `runtime/src/vu_micro.cpp:788–812` uses compiled microprogram when registered, otherwise interprets |
+| VU JIT | `runtime/src/vu_jit_web.cpp:18–30` returns mode 0 outside Emscripten; no Windows JIT is active |
+| VU AOT Registration | No registration generated in current set; `vu_micro.cpp:978` provides an empty weak registry |
+| Kernel/hardware | Memory models, timers, interrupts, DMA, VIF, disc, SIF/IOP, IPU, SPU2, and memory card |
+| GS | PS2 algorithms/memory preserved in batching and compute shaders; our adapter uses Vulkan directly |
 
-Portanto o termo preciso é **recompilação híbrida nativa**. O fato de um
-interpretador ser compilado para x86-64 não transforma o código que ele
-interpreta em AOT. Chamar o produto de nativo não justifica afirmar ausência
-de emulação ou fidelidade perfeita dos modelos de hardware.
+Therefore, the precise term is **native hybrid recompilation**. The fact that an
+interpreter is compiled for x86-64 does not turn the code it interprets into
+AOT. Calling the product native does not justify claiming an absence of
+emulation or perfect fidelity of hardware models.
 
-## Integração que implementamos
+## Integration We Implemented
 
-`scripts/prepare_external_vulkan.py` verifica fontes donor antes de gerar
-adapter GPU/GS/host privado. `native/native_vulkan.cpp` executa Vulkan compute
-e apresenta por Win32; `window.cpp` integra teclado/XInput e eventos.
-`host_io.cpp` entrega PCM48k ao WinMM e traduz o controle para botões/analógicos
-do jogo. O launcher verifica executável/shaders/inputs e protege o cartão.
+`scripts/prepare_external_vulkan.py` verifies donor sources before generating
+the private GPU/GS/host adapter. `native/native_vulkan.cpp` executes Vulkan compute
+and presents via Win32; `window.cpp` integrates keyboard/XInput and events.
+`host_io.cpp` delivers 48kHz PCM to WinMM and translates controller input to in-game
+buttons/analogs. The launcher verifies executable/shaders/inputs and protects the memory card.
 
-O pipeline gráfico atual usa escala interna1 e leitura GS por regras originais.
-Viewport16:9 combina com opção original GT4 para câmera/HUD. Isso não implementa
-resolução interna4K,144 imagens novas por segundo ou física independente.
+The current graphics pipeline uses internal scale 1 and GS readout according to original rules.
+The 16:9 viewport matches the original GT4 option for camera/HUD. This does not implement
+4K internal resolution, 144 new frames per second, or decoupled physics.
 
-## Separação das bases
+## Separation of Bases
 
-- ps2-web-recomp MIT: runtime e tradutor usados no produtor privado atual.
-- gt4-decomp: referência estudada para metadata/decompilação; não é nosso executável.
-- PS2Recomp: referência estudada; nenhuma implementação GPL importada/ligada.
-- PCSX2: ferramenta histórica de comparação e local de headers Khronos;
-  nenhum motor de emulação PCSX2 ligado ao jogo.
-- Recompiler/runtime EE original deste projeto: agora na branch de arquivo,
-  sem target/build/test ativo na main.
+- MIT ps2-web-recomp: runtime and translator used in the current private producer.
+- gt4-decomp: reference studied for metadata/decompilation; not our executable.
+- PS2Recomp: reference studied; no GPL implementation imported or linked.
+- PCSX2: historical comparison tool and source of Khronos headers;
+  no PCSX2 emulation core is linked to the game.
+- Original EE recompiler/runtime of this project: now on the archive branch,
+  with no active target/build/test on main.
 
 ## Unknown
 
-Fidelidade integral EE/IOP/VU/GS/SPU2, estabilidade longa, causa da lentidão,
-duplicação de input, continuidade acústica e validação física de XInput.
-As observações antigas do modelo original não validam automaticamente este
-runtime diferente. O proprietário pediu registrar desempenho/input por enquanto;
-esta análise de arquitetura não é um perfil de desempenho nem uma correção.
+Full EE/IOP/VU/GS/SPU2 fidelity, long-term stability, root cause of sluggishness,
+input double-triggering, audio continuity, and physical XInput validation.
+Past observations from the original model do not automatically validate this
+different runtime. The owner requested recording performance/input issues only for now;
+this architecture analysis is neither a performance profile nor a fix.

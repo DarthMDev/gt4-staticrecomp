@@ -1,40 +1,40 @@
-# 0052 — Qualificar entrada de perfil e menu no piloto externo
+# 0052 — Qualify profile entry and menu in the external pilot
 
-Data: 2026-10-12. Status: aceita para instrumento e piloto isolado;
-menu navegável observado no piloto, adoção de runtime não decidida.
+Date: 2026-10-12. Status: accepted for instrumentation and isolated pilot;
+navigable menu observed in pilot, runtime adoption not yet decided.
 
-## Contexto
+## Context
 
-A decisão0051 comprovou primeiras telas guest no Windows, com o runtime MIT
-externo completo e nossos inputs. O proprietário autorizou continuidade.
-A entrada anterior sem nome não permitia medir progresso até o menu.
+Decision 0051 confirmed the first guest screens on Windows using the complete
+external MIT runtime and our inputs. The owner authorized continuation.
+The prior unnamed entry did not allow measuring progress to the menu.
 
-## Decisão
+## Decision
 
-Usar o mecanismo de entrada existente do doador, em coldboots controlados
-com cartões novos privados. Registrar telas, efeitos e motivos de parada.
-Adicionar apenas um launcher reprodutível ao fork, reutilizando fingerprint
-e a suíte Python existente; nenhum código do runtime doador é transplantado.
+Use the donor's existing input mechanism in controlled coldboots with
+fresh private memory cards. Record screens, effects, and stop reasons.
+Add only a reproducible launcher to the fork, reusing fingerprinting
+and the existing Python suite; no donor runtime code is transplanted.
 
-O launcher valida hashes, inclusive ISO inteiro em cada lançamento e cópia
-do ELF, recusa sobrescrever evidência e distingue frame-limit de exit0
-após parada guest. A aceitação de execução é separada da aceitação visual
-de menu e da futura comparação de serviços com referência independente.
+The launcher validates hashes, including the full ISO on each launch and the ELF
+copy, refuses to overwrite evidence, and distinguishes frame-limit from exit0
+following a guest stop. Execution acceptance is kept separate from visual
+menu acceptance and future service comparison against an independent reference.
 
-## Alternativas e consequência
+## Alternatives and consequences
 
-Modificar instruções guest para pular criação de perfil perde a prova de
-entrada/cartão; um replay perde a prova de execução. Mantemos a sequência
-real, mesmo que isso exija qualificar as confirmações do cartão novo.
-O software GS basta para esse teste; Win32/GPU/Vulkan seguem outra fatia.
+Modifying guest instructions to skip profile creation loses proof of
+input/card handling; a replay loses proof of execution. We maintain the
+real sequence, even if this requires qualifying confirmations on a fresh card.
+Software GS is sufficient for this probe; Win32/GPU/Vulkan follow in another slice.
 
-O runtime continua com simplificações auditadas em0051. Capturas reais e
-menus responsivos não qualificam automaticamente relógio, VU, serviços
-com resposta padrão, persistência relida, corrida ou estabilidade ampla.
-Produção MSVC e seus contratos/checkpoints permanecem preservados.
+The runtime retains the simplifications audited in 0051. Real captures and
+responsive menus do not automatically qualify clock timing, VU, default-response
+services, reread persistence, racing, or broad stability.
+Production MSVC and its contracts/checkpoints remain preserved.
 
-## Evidência
+## Evidence
 
-`docs/reverse-engineering/slice110-external-menu-pilot.md` e manifest
-`docs/inputs/slice110-external-menu-pilot.json` registram controles, pins
-e resultados. Menu só será marcado confirmado após telas e input observado.
+`docs/reverse-engineering/slice110-external-menu-pilot.md` and manifest
+`docs/inputs/slice110-external-menu-pilot.json` record controls, pins,
+and results. The menu will only be marked confirmed after observed screens and input.
