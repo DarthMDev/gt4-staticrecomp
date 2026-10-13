@@ -101,5 +101,8 @@ fixar saída progressiva, implementar resolução interna1080p/1440p/4K e um
 launcher de configuração. Efeitos, texturas e ultrawide com câmera/HUD corretos
 continuam no plano. Essas melhorias ainda não estão implementadas.
 
+[Plano técnico para velocidade/FPS e migração seletiva](docs/ROADMAP.md).
+Não é necessário remover toda a emulação para desacoplar esses relógios.
+
 Licenças e limites das bases externas: [THIRD_PARTY.md](native/THIRD_PARTY.md).
 O fork de trabalho é `moesuito/gt4-staticrecomp`; não publicamos no upstream antigo.

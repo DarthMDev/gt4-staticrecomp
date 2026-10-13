@@ -46,6 +46,13 @@ na branch de arquivo; a suite ativa cobre o código que permaneceu.
 
 ## Próximo trabalho, quando autorizado
 
+Planejamento solicitado após114: [ROADMAP.md](ROADMAP.md). Não é necessário
+eliminar toda a emulação para separar velocidade/FPS. Primeira recomendação:
+geração EE/build reproduzível; depois referência medida e apresentação/tempo
+independentes. VU/IOP nativos por custo comprovado;144 imagens novas exigem
+hooks de atualização/renderização do GT4 e estados visuais interpolados.
+Somente leitura de código e documentação nesta revisão, sem perfil/execução.
+
 Qualificar input/controle físico, áudio, saves e estabilidade; mapear perdas
 de desempenho sem presumir o gargalo. Depois, separar renderização/física
 para144FPS/refresh mantendo100% velocidade; saída progressiva, resolução

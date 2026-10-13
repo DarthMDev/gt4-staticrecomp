@@ -45,6 +45,13 @@ Do not raise the guest clock or repeat frames to claim these goals achieved.
 Finished races, broad saves, audio continuity, known CPU/GPU divergence,
 CFC2(28) and PS2 scan-mode fidelity remain qualification work.
 
+Owner requested architecture planning after114: see docs/ROADMAP.md. It is a
+proposal, not authorization to implement all stages or run performance probes.
+Separating presentation/game time does not require eliminating IOP/VU models.
+Prioritize reproducible EE generation, then measured attribution and temporal
+separation; native subsystem migration needs demonstrated cost/dependency.
+144 distinct scenes require game render/update hooks, not repeated scanout.
+
 ## Autonomy and communication
 
 - Engineer plans, implements, verifies, documents, commits and pushes to origin.
