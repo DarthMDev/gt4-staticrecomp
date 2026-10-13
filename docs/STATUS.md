@@ -104,6 +104,11 @@ producer differs between identical rebuilds only in the PE COFF timestamp byte.
 Not established: any bottleneck attribution, FPS improvement or fix. No guest
 clock, VBlank, physics, resolution, input or save behavior changed. Owner
 feedback on the measured baseline is the next input before any single-variable
-experiment. Details:
+experiment. The first candidate's report had defective percentiles and
+guest-side counters; the corrected candidate
+`docs/inputs/slice115-perf-fix.json`
+(`e0887e6b366a030745282b1ce5e94a9b7c3eaa94e16b73f43b742ac4002b11aa`) fixes the
+delta accounting while the first candidate, its manifest and its session log are
+preserved. Details:
 [Slice 115 report](reverse-engineering/slice115-perf-investigation-baseline.md).
 

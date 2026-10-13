@@ -82,6 +82,55 @@ times). The binary is therefore deterministic apart from the linker timestamp,
 but it is not byte-reproducible across time; each experiment manifest must pin
 the exact binary that was tested.
 
+## Instrumentation defect found in the first manual run, and correction
+
+The first candidate ran while the owner played menus and 3D content. Its report
+had four defects, all inside the probe, none in the runtime:
+
+1. `frame period ms: median/p95/p99/max` was always `0.00`. Samples were indexed
+   into a fixed 4096-entry ring while an interval only writes a few hundred
+   indices, so the percentile window read never-written zeros. The period
+   history is now a bounded vector of the most recent samples.
+2. `guest cycles`, `primitives` and `vu1_interpreted` were accumulated as
+   absolute runtime counters instead of deltas, so their per-frame values were
+   meaningless. The interval now stores differences against the previous sample
+   and tolerates a counter reset after a state load.
+3. The first line now also reports guest frames/s against the 60 Hz guest
+   VBlank rate, and a separate line reports guest progress against the
+   294.912 MHz EE clock.
+
+Corrected candidate: `private/slice115-perf-investigation/baseline-fix/build/gt4vulkan.exe`,
+SHA256 `e0887e6b366a030745282b1ce5e94a9b7c3eaa94e16b73f43b742ac4002b11aa`,
+pinned in `docs/inputs/slice115-perf-fix.json`. The first candidate
+(`docs/inputs/slice115-perf-baseline.json`,
+`5c571014348ef944a2ecff04881f5604646479c630895009bd6d0b9b7e14c776`) is preserved,
+including the binary that produced the first session log. The automated fixture
+now asserts the delta accounting and the corrected report lines.
+
+## Preliminary live observations (owner-driven scenes, not controlled runs)
+
+From the first manual session, where the owner navigated menus and 3D content.
+These are single-scene observations, not a controlled comparison:
+
+- Menu/boot phases: about 42 guest frames/s, with `audio_wait` of roughly
+  16-20 ms per guest frame and thread work of about 2 ms. The emulation thread
+  is paced by the WinMM queue, not by the guest or the GPU, in these scenes.
+  The 4 x 512-frame buffer quantum (10.67 ms) multiplied by the ~1.6 buffers
+  needed per 800-frame guest audio frame is consistent with the observed rate.
+- A heavy 3D scene reached about 15 guest frames/s (about 66 ms per frame):
+  54.7 ms outside the host callback, of which 10.8 ms is GS submission with
+  10.1 ms blocked on the batch fence, and 56.3 ms of thread work against
+  10.1 ms blocked. In that scene the emulation thread was CPU-bound and the
+  GPU fence wait was about 15% of the frame.
+- `acquire_wait` and `present_wait` stayed near 0.01-0.07 ms per frame in all
+  observed scenes so far, so the presentation wait itself is not the limit in
+  what has been measured.
+
+These numbers come from the first candidate, whose percentiles and guest-side
+counters were defective; the frame rate, the stage attribution and the wait
+attribution are valid, and the corrected candidate reproduces the same
+measurement points.
+
 ## Hypotheses, in the order the baseline data can decide them
 
 These are hypotheses to measure, not conclusions. The baseline report
@@ -120,8 +169,22 @@ allowed only as labeled comparisons, never as the player build.
   is kept as `card-before.ps2` in the same directory; the persistent card
   `private/manual-play/card.ps2` is never reseeded.
 
-## Rollback
+Rollback: launch without `--runtime` (`Jogar-GT4.cmd`) to return to the qualified
+slice114 baseline. Experiment outputs live in `private/slice115-perf-investigation/`
+and never overwrite the frozen slice114 producer.
 
-Launch without `--runtime` (`Jogar-GT4.cmd`) to return to the qualified slice114
-baseline. Experiment outputs live in `private/slice115-perf-investigation/` and
-never overwrite the frozen slice114 producer.
+## Launch commands used
+
+Both launches reuse the persistent launcher's card/lock/backup/probe protections
+in interactive mode (`--frames 0`, a window, no `--press`, 43200 s timeout):
+
+```powershell
+# Hidden console, visible game window; log inside the session directory.
+Start-Process cmd.exe -ArgumentList '/c',
+  'C:\Antigravity\gt4-staticrecomp\private\slice115-perf-investigation\launch-baseline.cmd'
+  -WorkingDirectory C:\Antigravity\gt4-staticrecomp -WindowStyle Hidden -PassThru
+```
+
+`launch-baseline.cmd` runs `scripts\play_external_runtime.py --runtime
+slice115-perf-baseline.json`. Replace the manifest name to launch another
+candidate; the default (no `--runtime`) remains the qualified slice114 baseline.
