@@ -64,3 +64,7 @@ Entrada técnica: [arquitetura](ARCHITECTURE.md), [build](BUILD.md),
 Evidência funcional anterior: relatórios110–113, manifests correspondentes e
 `inputs/slice113-owner-results.json`. A fatia114 não reclassifica esses resultados
 como fidelidade integral ou benchmark.
+
+README atualizado para apresentação pública: visão, recursos confirmados,
+limites experimentais e objetivos futuros. Mudança editorial, sem alterar
+runtime, requisitos, prioridades ou resultados de validação.
