@@ -1,0 +1,187 @@
+{
+  "classification": "Confirmed source mechanics; High confidence observer design; live execution Unknown",
+  "baseline_commit": "557dca2",
+  "branch": "codex/gt4-scene-observation-127",
+  "donor_revision": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "donor_sources": [
+    {
+      "path": "recomp/codegen.cpp",
+      "size_bytes": 46865,
+      "sha256": "f0f11552fee26f6ae377f77264ac16641787806d4ad24c1635715aa9e1b6d361",
+      "canonical_sha256": "d3228cf07979fae54873a467c1b4a9c5a7b30c70c59520dcffde2ec481c0161a",
+      "git_blob": "3ed6fe475d7ed2fea0a700015ea745f51075c976",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "recomp/codegen.hpp",
+      "size_bytes": 701,
+      "sha256": "35c76988ed5801dbe8239ce3cb6418b0b7d65442a82848424524a91d432732a1",
+      "canonical_sha256": "a247e75a0f874d70b1288c7f9ede154d2db373d47f6a618e6d7bb1df666ee1e5",
+      "git_blob": "26e71b8d2263eb643e9e09ab93712f86b6e721a4",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/include/ps2/state.hpp",
+      "size_bytes": 4856,
+      "sha256": "0f11cf339b4cafd70c562ad80912aac6618494c41321e230f4e8e96d846766c1",
+      "canonical_sha256": "fa24eedd970739774f78a79a9370dd2a90af56a5f2ad638aacbc7afdb9a836fe",
+      "git_blob": "f4e6bd49b5105cc2fdb8781a42fddb6f79aa5adb",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/include/ps2/system.hpp",
+      "size_bytes": 3858,
+      "sha256": "5031f0d6e00046cedfb601fba53578f55dba5862f31b4bfa3a41ddbd703b1c40",
+      "canonical_sha256": "dc33df0d4b6588f28917a9cdaf313586105a863e21f8cd36f48ec487b0621c2f",
+      "git_blob": "0eb555218eaf1ad3b9f3590c603cea66c9a38e4c",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/src/system.cpp",
+      "size_bytes": 19873,
+      "sha256": "f30c8dd90c40e930635375ae2a3091f052655d797744de4348a5c7261a710bb2",
+      "canonical_sha256": "8dbb63c3014fc2f95a82557629190585fb1418e43353760a872949cdc2d92ff8",
+      "git_blob": "ca8f06c11472c8436ea055017d9a3a07f5fb1520",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/src/dispatch.cpp",
+      "size_bytes": 6353,
+      "sha256": "691c1d045b928ef789338f0954ec820fc0fd4e938cd2b2940743b3ad6005f995",
+      "canonical_sha256": "ff9ecf53655ad02a76963fca70a90016bb2a53d8fe0dee8e20cbb00f27db79a3",
+      "git_blob": "654a6daf5cd42a03cb387cf6c57d72ed41998bf4",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/src/kernel.hpp",
+      "size_bytes": 577,
+      "sha256": "1e7e9c9415f63fd6113841160aca1eeaa384159c61213c4e7de461eedf4b4e8e",
+      "canonical_sha256": "57eff0043963275ab05a78330cc7366e4d7d1f1020ab32fcdce0a719629f9a3a",
+      "git_blob": "001f238bd9588d051050bf4e98f0114b03ef0243",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/src/kernel.cpp",
+      "size_bytes": 30126,
+      "sha256": "003c9e0a0e2c1cb61a6fd8ec846a4798c3027ed933b6825c6377112106f0168a",
+      "canonical_sha256": "cfd4904fa6c4628dfc0eb3f1316eb60e2fb6b3481f0c821a05c1e056027cf8ef",
+      "git_blob": "a8a6b4dec8bf8c44d6d54a8999f828fdfc8d4c49",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/include/ps2/memory.hpp",
+      "size_bytes": 4940,
+      "sha256": "c7827e352810331b48a310a12739f2f551b44f4d99c592f7c2cd8c7b26fdb30f",
+      "canonical_sha256": "1269b389869140dce7cc76c8a8fffb36db212c9b73430af42e13c46721c982f5",
+      "git_blob": "56f61d02f951fe6490dc0d5fae305e51607d0074",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/src/memory.cpp",
+      "size_bytes": 4136,
+      "sha256": "c33b9fedc5727f96bcacffad1c806406b442ce86685e3d60777990a67d11f52e",
+      "canonical_sha256": "10ede8044d4fa1e3feaac436706a8084dde20d8ebb28eccc8bd06fd819ab13b5",
+      "git_blob": "7d3e19835d6219d029833ac13d858a92ded5d8ba",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/include/ps2/cpu.hpp",
+      "size_bytes": 1746,
+      "sha256": "3c31346e6b62d33c0d20c30c467f65a3dc54d3a2f8086ba2e885a8969e202427",
+      "canonical_sha256": "396bc1878b47e0d059ac4fb86c1f809e17d75eeee6599dbf5369ccfc6b66fe63",
+      "git_blob": "bab0b9ee22281408a4be6f6cb51d4825f975c4a6",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/src/vif.hpp",
+      "size_bytes": 411,
+      "sha256": "49e3dcd77be72c0df4ae460a45dee27570ff80b8f3454109c93a3a8f8537c569",
+      "canonical_sha256": "819e4fd8ee81a8d6b9816548b1c1ae7e3de89dda94540439f2cec5e7385acc0f",
+      "git_blob": "45624ebc6b0db8edc5f4ea58eb695980b2aaf553",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/src/vif.cpp",
+      "size_bytes": 15453,
+      "sha256": "6fc9efc739daec951172bc7f97f64b05802145314bc17b049c0c3219be654e18",
+      "canonical_sha256": "fd3bd2cc81d97f616745b01e4e129dfd40cb97fff181cca1c1e0dd0dc7741233",
+      "git_blob": "c6a718ab3dd0f17fef417d3052e5a0ffc5f515bb",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "recomp/main.cpp",
+      "size_bytes": 6664,
+      "sha256": "58884ef4b66936c980981d19ffa66be44072a901f8489d122c9572af611d3ca9",
+      "canonical_sha256": "c16f31dc0d924cafe372e708230d4ea463a46f974bc9b111bf3536a0ae2ed3dd",
+      "git_blob": "a448deefbe8663704f3c2039d65e119841d8bd1c",
+      "canonical_match_after_crlf_to_lf": true
+    },
+    {
+      "path": "runtime/include/ps2/generated.hpp",
+      "size_bytes": 2985,
+      "sha256": "b222255b65123935960f5b0fab3f7462b5d9512cb7ab2d44faeca9a00e092b50",
+      "canonical_sha256": "c0c1068fb7e2635377ad2c7d6787563a256b8819e7c95d3f6d8e624b4f063c6e",
+      "git_blob": "3d473fbe8cb635db948877325b76ac25817f8bf5",
+      "canonical_match_after_crlf_to_lf": true
+    }
+  ],
+  "generated_sources": [
+    {
+      "path": "unit_00D5.cpp",
+      "size_bytes": 264410,
+      "sha256": "5a0389a55b2e31fb531794e7ce9ed413fbb00a376d401588190b2bc3df1e9077",
+      "generation_receipt_match": true
+    },
+    {
+      "path": "unit_00E7.cpp",
+      "size_bytes": 217381,
+      "sha256": "76c1f62d14f5782072d842b87df8fdb6fb5efd21c2f1ca4dd4467c1c5dceae06",
+      "generation_receipt_match": true
+    }
+  ],
+  "probe_frontiers": {
+    "pre": "0x00455A5C",
+    "target": "0x0049D308",
+    "return": "0x00455A64"
+  },
+  "controls": {
+    "canonical_source_hashes_and_local_text_match": true,
+    "independent_review_detail_files": 8,
+    "independent_review_detail_bytes": 117060,
+    "new_public_software_behavior": false,
+    "new_build_or_gameplay_qualification": false,
+    "inherited_checks": {
+      "from_slice": 125,
+      "ctest_passed": 3,
+      "ctest_total": 3,
+      "python_passed": 131,
+      "python_skipped": 0
+    }
+  },
+  "private_artifact_sha256": {
+    "research/observation-hook-feasibility.md": "da75926fd81dec2648249ad9bcac6ac5a96a12b6b86c8c44f52ac67315126724",
+    "research/metadata.json": "42bf4c7558f1873ee94d247a60d8a7755510f0b8f497e6057aaaf369b930dfff",
+    "semantic-review/observer-contract-review.md": "ea3e3ebee6340d9ea54c774ba7d62abd8fad77263a20795ec359a635af7d9490",
+    "semantic-review/verified-sources.json": "2d95a64ea8a9758860a6354290da6c5e6ca164c7176ff103fb3c430bcce85b34",
+    "semantic-review/verify_sources.py": "ad057324e7d2a76a4aa1c2fbad14ae8578ebae7f6756e8ac9c1aa5fe3a15fdb3",
+    "independent-review/observer-hook-review.md": "3bd78c47b4b7f45d4fa5bf4c7a634fc2bca33a96549bb7cd43567c71c5528728",
+    "independent-review/review-metadata.json": "34da477584844758a1ee47f5b5f7feccf7e9b32f99752d736e992a2f67a849b3",
+    "parent-review.md": "5b99da6ed4b77779350f34416281cbc644f4d02b8f793452c3a49a65d5e55e74"
+  },
+  "required_implementation": [
+    "bounded host-only core and literal synthetic controls",
+    "fresh probe profile and library without weakening baseline gates",
+    "runtime probe/lifecycle overlays and independent generated-placement controls"
+  ],
+  "limitations": [
+    "no live hook reachability or car/scene identity",
+    "shape completion is not DMA/VU/visible scene completion",
+    "no cursor delta buffer extent or D5 FPR12 actual-helper inference",
+    "CL0 unqualified; only4/4 non-fill count equivalence",
+    "no runtime/performance neutrality claim"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false
+}

@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 126, conditional reference channel predicate coverage audit.
+2026-10-13 — Slice 127, authoritative shape-call observation source contract.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-channel-selection-126`, based on commit 949d9c8.
+`codex/gt4-scene-observation-127`, based on commit 557dca2.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -107,6 +107,15 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Unknown:** actual channel/normal/UV/topology semantics. No converter adopted;
   predicate coverage is not game geometry proof. Research-only slice inherits
   CTest 3/3 and Python 131/131 from125; no new runtime/build/test claim.
+
+- **Confirmed (slice 127, source only):** existing donor probes can observe pre-call
+  0x00455A5C and registered continuation 0x00455A64 without translator changes.
+  Direct dispatch bypass, depth spill/resume, stale pre-PC and reused thread IDs
+  require original-input tokens and lifecycle invalidation, not a post-only hook.
+- **High confidence proposal:** default-off fixed metadata observer, bounded RAM
+  reads and no duplicate game evaluation. New generation/profile and lifecycle
+  adapter still required. No live hook, build or gameplay qualification this slice;
+  CTest 3/3/Python 131/131 inherited from125. See [Observation](SCENE-OBSERVATION.md).
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)

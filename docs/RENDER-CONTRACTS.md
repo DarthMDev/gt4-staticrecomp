@@ -4,6 +4,10 @@ Slice 116 is bounded P1 static research. No runtime hooks, render substitution,
 performance probes or automated gameplay were added. The original game path
 remains authoritative. P1 is **in progress**, not a completed native renderer.
 
+Slice127's [Shape Observation](SCENE-OBSERVATION.md) records the two existing
+probe frontiers and original-input/owner/resume/lifecycle contracts. It is source
+qualification and implementation scope, not an installed runtime observer.
+
 ## Evidence and method
 
 The fresh P0 producer regenerates the frozen C++ inventory exactly. The scanner

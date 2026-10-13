@@ -119,6 +119,12 @@ qualified-header audit matches derived counts; no legacy parser or converter
 adopted. Preserve missing/multiple roles; next is authoritative observation/
 ownership and bounded channel/topology contracts, not guessed conversion.
 Separating presentation/game time does not require eliminating IOP/VU models.
+Slice127 source contract: docs/SCENE-OBSERVATION.md. Two existing --probes at
+455A5C/455A64 require a fresh profile/library, original-input tokens, ordinary
+guest-owner incarnation/epoch and lifecycle invalidation across resume. Do not
+infer helper FPR12 from D5 incoming bits or cursor deltas as buffer extents.
+Next scope is bounded metadata correlation core, then separately qualified
+generation/runtime integration; no whole-scene or live qualification yet.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.
 144 distinct scenes require game render/update hooks, not repeated scanout.
