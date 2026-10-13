@@ -35,8 +35,12 @@ Owner confirms480i/480p/1080i gameplay at16:9;480p subjectively most stable.
 Physical XInput is untested. Keyboard directions reportedly double-trigger.
 Low3D performance and inconsistent frametime are recorded; cause unknown.
 Owner explicitly requested recording only: no input/performance fix or audit
-until further instruction. Do not start another automatic race/menu sequence
-when owner requests manual play; leave their window/card untouched.
+until further instruction. The owner has now authorized performance investigation
+and experimental builds delegated to OpenCode; Codex only prepares the handoff.
+See docs/OPENCODE-PERFORMANCE-HANDOFF.md. Input fixes remain outside that task.
+No Computer Use, GUI automation, simulated input or scripted game navigation:
+the owner controls gameplay. Launching a tested candidate is authorized; preserve
+their card/backups/locks and do not interfere with an existing session.
 
 Future goals:144FPS/monitor refresh independent of physics at100% game speed,
 progressive-only output, internal1080p/1440p/4K and setup launcher; later effects,
@@ -59,6 +63,8 @@ separation; native subsystem migration needs demonstrated cost/dependency.
 - Use small verified branches for multi-step work; merge by fast-forward when green.
 - Speak Portuguese plainly. Lead with behavior and evidence; ask owner only for
   decisions requiring their input, not code review or routine implementation.
+- Keep repository documentation, reports, prompts and new code comments in en-US.
+  The owner translated existing documentation; preserve that language standard.
 - Use subagents for read-only exploration/review and parallelizable work.
   Give paths/constraints explicitly, review their claims; only one repository writer.
 

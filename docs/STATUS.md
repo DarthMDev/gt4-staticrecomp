@@ -27,8 +27,10 @@ prior to cleanup. Private data, saves, and frozen producers remain local.
 Severe performance and frametime degradation recorded: 19 FPS in-race, 11 FPS in 3D car showroom,
 18 FPS / 72.5 ms in 1080i screenshot; overlay metrics are not independently calibrated.
 Keyboard arrow keys produce double-movements per keystroke per owner report; other keys
-suspect. Root causes unknown. Active instruction: record only; no profiling, auditing,
-or fixing of performance/input until authorized. Manual play window and memory card are untouched
+suspect. Root causes unknown. The prior record-only performance restriction is now
+superseded for an owner-delegated OpenCode investigation; Codex prepares context only.
+Input fixes remain deferred. Gameplay is owner-controlled: no Computer Use,
+GUI automation, simulated input or scripted navigation. Manual play window and memory card are untouched
 by this cleanup. CPU/GPU fidelity, CFC2(28), temporal deinterlacing, 100% realtime rate,
 prolonged stability, completed full races, and broad save scenarios remain open qualification items.
 
@@ -68,3 +70,12 @@ as complete fidelity proofs or official benchmarks.
 README updated for public presentation: project vision, confirmed features,
 experimental boundaries, and future goals. Editorial change only; does not alter
 runtime, requirements, priorities, or validation results.
+
+## OpenCode Performance Handoff
+
+The owner requested an investigation prompt, not debugging by Codex.
+[Task prompt](OPENCODE-PERFORMANCE-HANDOFF.md) provides verified paths, build and
+launcher constraints, hypotheses to test, fresh producer/manifest requirements,
+manual feedback iterations and save protection. Initial source baseline is
+cbccf80; executing agent must recheck HEAD. No profiling, build or game run occurred
+while preparing this handoff. Maintain documentation and new comments in en-US.
