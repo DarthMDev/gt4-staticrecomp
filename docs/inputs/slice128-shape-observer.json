@@ -1,0 +1,69 @@
+{
+  "classification": "Confirmed bounded host-only core synthetic controls; live integration Unknown",
+  "baseline_commit": "02039c8",
+  "branch": "codex/gt4-shape-observer-128",
+  "source_canonical_lf_sha256": {
+    "native/shape_observer.hpp": "6336829b467ee2029609f8fc491e60226688ebbee568cce6388dad8057e55cd0",
+    "native/shape_observer.cpp": "9844632409cc16b2c9bcfbda42aff21716bb3a07fae9becb4d03b3676ffd9a66",
+    "native/shape_observer_fixture.cpp": "a269cfc5147649a560f453d0ad7a4b1b2aa947fb41c19a3c453ff37d48dac5ea",
+    "tests/python/test_shape_observer.py": "7b4dba3249ac1415728402ec072bbd7b0412ebcd396ffc1efd33a5a1aa0eca08",
+    "CMakeLists.txt": "16308b3917fa5a210ac4c63a3b60f57965686fc03d52756bffcb69f183cbf4ce",
+    "native/CMakeLists.txt": "944c6cec960dd5f8b3f71fe76efdca080ea7f7c548cde8cae1b1564b814f7b3c"
+  },
+  "build": {
+    "path": "private/slice128-shape-observer/build",
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "abi": "VS2022x64",
+    "configuration": "Release",
+    "ee_profile": "baseline",
+    "build_steps": 42,
+    "observed_compile_warnings": 0,
+    "new_core_linked_only_to_fixture": true
+  },
+  "controls": {
+    "ctest_passed": 4,
+    "ctest_total": 4,
+    "ctest_seconds": 10.94,
+    "python_passed": 132,
+    "python_skipped": 0,
+    "synthetic_guest_outputs_equal": true,
+    "original_argument_bits_preserved": true,
+    "literal_memory_frontier_ownership_and_storage_cases_pass": true,
+    "real_translator_dispatcher_lifecycle_execution_qualified": false
+  },
+  "limits": {
+    "owner_slots": 64,
+    "pending_per_owner": 16,
+    "completed_records": 256,
+    "default_capture_enabled": false,
+    "dynamic_allocation_in_hook": false,
+    "disk_writes_in_hook": false,
+    "single_owner_off_execution_consumption": true
+  },
+  "private_artifact_sha256": {
+    "native-build.log": "d4b0790f25b59058ba9fc8319870cd209c6d058f8a99be6205f2c3d508f5fd9e",
+    "ctest.log": "ed9edeeebe3b3c4c330635b382f93708900daf0dc20ff58e11099238b30f021f",
+    "build/Testing/Temporary/LastTest.log": "7f16bb337bc62745fa33ca1b1e32dc7de49a994919887c65c37bd62d566f1d11",
+    "build/shape_observer_fixture.exe": "158b70f35d7129361e76327372beac8d85be564ec7a46e563ca44aeac34f0d6a",
+    "prototype-review/core-preimplementation-review.md": "850f78db4339b8f713ef3b85d2b1a08f551df800bd52cd8f56beaa8eb03f88e4",
+    "prototype-review/core-implementation-review.md": "a3450f44ae096616dc2381fd4b4057499f50b19935b1b13a52241ef081dc6837",
+    "prototype-review/reviewed-sources.json": "4e703c3372371bede2277a87ab96ecb7c8cf3a49f4b184a2969bc817804415a7",
+    "lifecycle-research/thread-lifecycle-hook-inventory.md": "3cfa9df4843aefe287af1b5d6ecde923167553149d2f7a70f525bdd2d57716f8",
+    "lifecycle-research/metadata.json": "8c99c232686c0a879d686e0297883c709a63df278514dbf6a417e628caa24897",
+    "parent-review.md": "d7a6d085c0480245cbb516efab291ef7ba87318e5ce4548618f4bf4a0ec95679"
+  },
+  "limitations": [
+    "opaque injected owner IDs; future adapter must reject idle/unknown kernel owners",
+    "start clears prior records; reset_epoch retains complete history",
+    "wrong-SP/equal-SP/capacity globally stop capture and abort pending",
+    "no actual generated hook placement or kernel/boot/load adapter",
+    "synthetic spill/resume does not qualify live scheduler or overhead",
+    "sequence is not independent forged-continuation detection"
+  ],
+  "playable_runtime_observer_installed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Exact separately verified two-probe generation, then lifecycle/runtime adapter"
+}

@@ -98,3 +98,10 @@ cycle or VU/channel semantics are qualified. See [VIF Framing](VIF-FRAMING.md).
 Slice125's `gt4_raw_lanes.decode_integer_lanes` consumes explicitly framed
 ordinary input integers with exact data/alignment spans. Public controls use
 the same discovery; it adds no runtime decoder. See [Raw Lanes](RAW-CHANNEL-LANES.md).
+
+Slice128 adds `shape_observer_fixture`, a host-only C++ contract control included
+in native CTest and Python discovery. Reconfigure a fresh candidate build to
+include the new fourth CTest entry; frozen118 caches do not contain this target.
+The fresh128 build uses the existing qualified baseline library and private118
+port/shaders. No observer is linked into gt4vulkan. CTest4/4 and Python132/132
+pass with no skips. See [Shape Observation](SCENE-OBSERVATION.md) for scope.

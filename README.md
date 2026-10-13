@@ -76,6 +76,10 @@ See the [one-car research ledger](docs/CAR-ASSET-RESEARCH.md) and
 The [fixed record inventory](docs/MODEL-RECORDS.md) supplies the next boundary
 before interpreting shape packets and reconstructing renderable geometry.
 The dedicated game-scene renderer has not started replacing live graphics.
+The first bounded observation core now has native automated controls for
+preserving original shape-call inputs across synthetic suspension and thread
+changes. Live probe generation and runtime integration are the next gate;
+see [Shape Observation](docs/SCENE-OBSERVATION.md).
 
 ## Testing and Development
 

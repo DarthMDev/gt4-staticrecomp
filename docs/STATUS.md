@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 127, authoritative shape-call observation source contract.
+2026-10-13 — Slice 128, bounded host-only shape observation core.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-scene-observation-127`, based on commit 557dca2.
+`codex/gt4-shape-observer-128`, based on commit 02039c8.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -116,6 +116,14 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   reads and no duplicate game evaluation. New generation/profile and lifecycle
   adapter still required. No live hook, build or gameplay qualification this slice;
   CTest 3/3/Python 131/131 inherited from125. See [Observation](SCENE-OBSERVATION.md).
+
+- **Confirmed (slice128):** default-off fixed observation core and safe direct
+  RAM/scratchpad sampler pass actual native synthetic controls. Persistent
+  original inputs, exact continuation/SP, owner isolation, incarnation/epoch,
+  handler skips and deterministic storage/ambiguity failure are exercised.
+- **Confirmed:** fresh baseline-profile Windows/Clang build, CTest4/4 and
+  Python132/132 with zero skips. Core is fixture-only, not linked into playable
+  runtime. Generated probes, lifecycle adapter and live evidence remain pending.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)

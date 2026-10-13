@@ -125,6 +125,12 @@ guest-owner incarnation/epoch and lifecycle invalidation across resume. Do not
 infer helper FPR12 from D5 incoming bits or cursor deltas as buffer extents.
 Next scope is bounded metadata correlation core, then separately qualified
 generation/runtime integration; no whole-scene or live qualification yet.
+Slice128 core/fixture: native/shape_observer.hpp/.cpp and
+docs/inputs/slice128-shape-observer.json. Default-off,64owners/16pending/256records,
+global stop+abort on ambiguity/capacity, bounded raw RAM samples, no live linkage.
+Fresh native128 build CTest4/4/Python132/132; old118 caches omit observer fixture.
+Next is exact two-probe generation and lifecycle adapter, preserving baseline
+gates. Core IDs opaque; adapter must reject idle/unknown kernel owners.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.
 144 distinct scenes require game render/update hooks, not repeated scanout.

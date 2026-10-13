@@ -79,3 +79,31 @@ OpenCode branch, active session and saves.
 Source identities and review hashes: [slice127 metadata](inputs/slice127-scene-observation.json).
 Prior constraints: [Render Contracts](RENDER-CONTRACTS.md),
 [VIF State](VIF-STATE-CONTRACT.md), [Reference Coverage](CHANNEL-SELECTION-AUDIT.md).
+
+## Implemented core (slice128)
+
+**Confirmed:** `native/shape_observer.hpp/.cpp` implements fixed host-only tokens,
+six independently valid raw fields, original128-bit argument/FPR bits, exact
+continuation/SP correlation, LIFO, epoch/incarnation invalidation and handler
+skips. No donor dependency or live runtime linkage is present. Owner IDs are
+opaque injected keys; the future adapter must reject idle/unknown kernel owners.
+
+Limits are64 owner slots,16 pending per owner and256 completed records. Overflow
+or stack ambiguity disables all capture and aborts pending tokens while preserving
+completed records. Diagnostic counters saturate; identifiers never wrap. Storage
+is single-owner: inspect/copy completed records outside guest execution. start()
+begins a fresh capture and clears earlier records/counters; reset_epoch() retains
+completed history while invalidating pending associations.
+
+The actual C++ fixture is included in native CTest and Python discovery. Fresh
+Windows/Clang build: CTest4/4, Python132/132, no skips or observed compile warnings.
+Synthetic controls compare all fixture guest results against an uninstrumented
+control; test original bits after clobber, simulated spill/suspension, owner switch,
+handlers, recursion, stale/duplicate continuation, reuse/reset/restart, unchanged
+cursor, checked RAM spans and all three storage caps.
+
+**Unknown:** live probe placement and reachability, kernel/boot/load notifications,
+actual scheduler noninterference and capture overhead. Correct core tests do not
+qualify a runtime adapter. No game instance was launched or rendered by this new
+component; existing playable behavior and launcher are unchanged.
+See [slice128 evidence](inputs/slice128-shape-observer.json).
