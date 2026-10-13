@@ -46,3 +46,6 @@ records actual-byte discrepancies, independent review and the header-only bounda
 Slice122's original fixed-record inventory uses the same pinned MIT format facts.
 No implementation copied or linked; [Model Records](../docs/MODEL-RECORDS.md)
 documents sources and the boundary before VIF, material or pixel semantics.
+Slice123 uses pinned MIT donor and Nenkai format facts for an original conditional
+VIF framing scanner. No source implementation copied or newly linked. Its source
+corrections and unsupported forms are documented in [VIF Framing](../docs/VIF-FRAMING.md).

@@ -92,3 +92,6 @@ also run in Python discovery/CTest. Model and texture bodies remain unqualified.
 Slice122 adds `gt4_model_records.inventory_asset(bytes)` for fixed-record and
 packet-span metadata. Its controls use the same discovery; no VIF/pixel decoder
 or native build is involved. See [Model Records](MODEL-RECORDS.md).
+Slice123's `gt4_vif_framing.frame_packet(bytes, initial_cycle=(CL, WL))` is a
+conditional offline scanner, included in existing controls. No live incoming
+cycle or VU/channel semantics are qualified. See [VIF Framing](VIF-FRAMING.md).

@@ -83,3 +83,7 @@ Next: qualify bounded VIF command framing on exact packet spans, then channel,
 topology and coordinate contracts with independent fixtures. Material/CLUT/pixel
 semantics and the live instance/camera/side-effect gates remain open. This slice
 does not change runtime, owner session, OpenCode, timing, input or performance.
+
+[Slice123 VIF framing](VIF-FRAMING.md) now bounds all selected packet commands
+under an explicit initial-cycle assumption. Live cycle and geometry semantics
+remain Unknown; the conditional scanner does not satisfy the next geometry gate.

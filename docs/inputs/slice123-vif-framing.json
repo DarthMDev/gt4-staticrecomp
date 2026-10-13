@@ -1,0 +1,155 @@
+{
+  "classification": "Confirmed conditional standard VIF framing under explicit CL/WL=(1,1); live state and geometry Unknown",
+  "baseline_commit": "966297b",
+  "branch": "codex/gt4-vif-framing-123",
+  "input_contract": "Exact decoded immutable car files matched against public slice122pins before packet reads; fresh123output only",
+  "selected_car_files": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "output_file": "asset-00.bin",
+      "kind": 2,
+      "volume_offset": 118628352,
+      "stored_bytes": 172219,
+      "decoded_bytes": 561864,
+      "stored_sha256": "eee0e035a5cac374a2f2255c398ca54d987f650585f1652b75ef15ed62757e4d",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a"
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "output_file": "asset-01.bin",
+      "kind": 2,
+      "volume_offset": 276217856,
+      "stored_bytes": 179236,
+      "decoded_bytes": 487112,
+      "stored_sha256": "5437cb0d7fa854a3b1c56673927966557f75745bbe36c884c3492fb91ada4fd0",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867"
+    }
+  ],
+  "donor_source_pin": {
+    "revision": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+    "source_path": "runtime/src/vif.cpp",
+    "canonical_git_blob_sha256": "fd3bd2cc81d97f616745b01e4e129dfd40cb97fff181cca1c1e0dd0dc7741233",
+    "bytes": 15048,
+    "used_line_ranges": [
+      [
+        37,
+        55
+      ],
+      [
+        206,
+        218
+      ],
+      [
+        224,
+        260
+      ]
+    ],
+    "qualification": "Source fact comparison only; no independent PS2 fidelity oracle"
+  },
+  "caps": {
+    "packet_bytes": 1048576,
+    "commands": 65536
+  },
+  "initial_cycle_assumption": [
+    1,
+    1
+  ],
+  "incoming_live_cycle": "Unknown; no STCYCL observed inside packet spans",
+  "observations": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "packet_count": 154,
+      "failures": 0,
+      "command_count": 1341,
+      "opcode_histogram": {
+        "0x00": 230,
+        "0x05": 205,
+        "0x20": 154,
+        "0x64": 113,
+        "0x68": 434,
+        "0x6E": 51,
+        "0x72": 154
+      },
+      "first_word": "0x6801C0C0",
+      "stcycl_commands": 0
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "packet_count": 312,
+      "failures": 0,
+      "command_count": 3575,
+      "opcode_histogram": {
+        "0x00": 451,
+        "0x05": 1230,
+        "0x20": 312,
+        "0x30": 14,
+        "0x64": 10,
+        "0x65": 217,
+        "0x66": 19,
+        "0x68": 328,
+        "0x69": 307,
+        "0x6A": 274,
+        "0x6E": 101,
+        "0x72": 312
+      },
+      "first_word": "0x6801C0C0",
+      "stcycl_commands": 0
+    }
+  ],
+  "controls": {
+    "public_framing_tests": 11,
+    "independent_packet_hash_and_frames_match": 466,
+    "independent_command_boundary_records_match": 4916,
+    "direct_formula_vs_row_loop_controls": 2304,
+    "ctest_passed": 3,
+    "ctest_total": 3,
+    "python_passed": 120,
+    "python_skipped": 0,
+    "ctest_seconds": 10.75,
+    "native_rebuild_needed": false,
+    "ctest_build": "private/slice118-ee-candidates/baseline/build"
+  },
+  "source_corrections": [
+    "Fill cycle changes source count",
+    "Donor V4-5 is packed16bit, not32bit",
+    "Private donor source exists although trackednative only references it"
+  ],
+  "unsupported_cases": [
+    "CL/WL zero fields",
+    "VL=3 including valid V4-5 outside this subset",
+    "Unknown/reserved opcodes"
+  ],
+  "public_tool_hash_method": "SHA-256 of canonical Git blob bytes (LF); private/input/artifact hashes are exact bytes",
+  "public_tool_sha256": {
+    "scripts/gt4_vif_framing.py": "6de8599e4fb162665eeeedd9d210b25d8a346cacded0d2c4debc55e94657dbcd",
+    "tests/python/test_gt4_vif_framing.py": "7cf78aa04b5c4f12c6ce759839c79705c86b837d67af6e7cd9e25cbf462718fe"
+  },
+  "private_artifact_sha256": {
+    "source-research/vif-framing-contract.md": "ddbb165faa543e1d5dfa8d16dbc4aa4dc90ffe45b2c4f857392fb57381d2d26b",
+    "source-research/metadata.json": "e76e31ee9e8f2c762a73772a58d7712f4ad0fdc9b3c1fb6c7b16f79b2b6e30f5",
+    "source-research/errata.md": "e01d9b5938c5515f3576c52101599609ff6dc435f019abcc6f6ebe6a14a3c266",
+    "source-research/correctedfacts.json": "432a6c74de2ab8e5ffb9eeafc78054642877d6a2a2d8e96e28e0d6cc9b221e40",
+    "source-research/parent-scope-decision.md": "c565640da687ef2335a9dc7c5c288b17776595b0bb4b06668209f685f7eb4232",
+    "independent-review/reframe_packets.py": "363b2ba37a80272848c08f909793b8e9081ed99aa4cfef109eb208d32e6705c1",
+    "independent-review/independent-frames.json": "43443764498b3b7b98220da3a6878cfab1c663a347b4ceedf7e4369ad406b34f",
+    "independent-review/review-report.md": "6e8c50546328cbccbecf7418559fae6e583eba770eef29a5850fbe9ce0504139",
+    "probe_selected_packets.py": "5df3bd9b01ec4c5e444ec24d7f41e6e30330fbaf111c4915184ec85aba9f40a6",
+    "selected-packet-frames.json": "1b3757e78737ffa7d84de8a6b715ce522b867801439d40ed95257e70beafac1d",
+    "inspect_packet_prefixes.py": "9819890684a4c94705ca7d0fba18ea1306017ac10a0af5958d636337a0a5cb33",
+    "packet-prefix-metadata.json": "ca7fa3ccd9ac44e604b54f7229013d0ddb792efd5075934b52834542e82adfbb",
+    "verify_donor_source.py": "5a52662a288b7eb863d98fd566cf8426e6ee58609bea2450e4c06cebba658c94",
+    "donor-source-pin.json": "5ee560406d8e47f50abf93bddc4260e6a659fb677af42ca03f795e458eae5ba6",
+    "ctest-baseline.log": "9523bca94aa97adf67ccce12c7a69e47c4af7bdcf9b3ee2100c5301027edf891"
+  },
+  "limitations": [
+    "Framing assumption does not prove incoming VIF state or VU results",
+    "No GIF marker interpretation, channel/topology/vertex/pixel decoding",
+    "Shared primary format sources, not an independent PS2 fidelity oracle",
+    "No native renderer substitution, live ownership or camera qualification"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Qualify game incoming cycle/mode and model channel conventions before bounded geometry extraction"
+}

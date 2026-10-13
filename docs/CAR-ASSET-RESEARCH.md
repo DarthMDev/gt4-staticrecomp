@@ -237,3 +237,12 @@ bytes are decoded. Field-level independent review is in the fresh capsule.
 Eleven new public controls; CTest3/3 in11.02s, Python109/109, zero skips. No
 native rebuild, owner session or runtime change. Next is bounded VIF command
 framing, followed by separately qualified geometry and texture conventions.
+
+## Slice 123 — Conditional VIF spans
+
+[VIF Framing](VIF-FRAMING.md) reports exact-end command spans for all 466 selected
+packets under caller-supplied CL/WL=(1,1). Incoming live cycle remains Unknown:
+there is no STCYCL inside these spans. Eleven new controls; CTest 3/3 in 10.75 s,
+Python 120/120, zero skips. Worker cycle/V4-5 mistakes corrected against pinned
+donor source before integration. Packed/zero-cycle/unknown forms reject.
+No VU/GIF execution, geometry/pixel decoder, live hook or runtime change.

@@ -92,6 +92,12 @@ docs/MODEL-RECORDS.md, docs/inputs/slice122-shape-records.json. Shape+4 is
 opaque, packet offsets are shape-relative and QWC*16 spans are MDLS-bounded.
 Transfer starts are Tex1-relative; pixel extent remains Unknown. No VIF/vertex/
 pixel decoding or live hook. Preserve frozen122; next scope is VIF framing.
+Slice123 adds conditional byte framing: docs/VIF-FRAMING.md and
+docs/inputs/slice123-vif-framing.json. Explicit initial CL/WL required; zero-cycle
+and packed/reserved UNPACK reject. All 466 packet spans close under (1,1), but no
+STCYCL appears and live incoming state is Unknown. Fill mode reduces input;
+do not adopt the superseded worker report's destination-only/V4-5 formulas.
+No VU/GIF/channel/topology/vertex semantics or renderer substitution qualified.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

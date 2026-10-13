@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 122, bounded fixed shape/material/texture record inventory.
+2026-10-13 — Slice 123, conditional bounded VIF command framing.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-shape-records-122`, based on commit 1bb752f.
+`codex/gt4-vif-framing-123`, based on commit 966297b.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -77,6 +77,13 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Confirmed (slice 122):** 11 new public controls; CTest 3/3, Python 109/109,
   zero skips. No VIF/vertex/pixel decoding or runtime change. Independent record
   review is recorded in [Model Records](MODEL-RECORDS.md).
+- **Confirmed, conditional (slice 123):** under explicit initial CL/WL=(1,1),
+  all 466 selected packet spans frame to their exact QWC end. No STCYCL appears,
+  so live incoming cycle remains Unknown. No VIF/VU execution, GIF meaning,
+  channels, topology, vertices or renderer substitution is qualified.
+- **Confirmed (slice 123):** 11 public framing controls, CTest 3/3, Python
+  120/120, zero skips. Fill cycles reduce source consumption; NUM0 expansion
+  is explicit. Packed/reserved UNPACK and zero-cycle fields reject as unqualified.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
@@ -95,6 +102,8 @@ offline file mapping and exact header-only parsing boundary. P1 remains open.
 [Model Records](MODEL-RECORDS.md) and
 [slice 122 metadata](inputs/slice122-shape-records.json) extend this to fixed
 record and declared packet-span inventory; renderable geometry remains pending.
+[VIF Framing](VIF-FRAMING.md) and [slice 123 metadata](inputs/slice123-vif-framing.json)
+record conditional framing, corrected source assumptions and remaining live-state gates.
 The owner's active OpenCode baseline session was preserved during build qualification.
 On the owner's subsequent explicit request, it closed normally and the slice 118
 baseline candidate launched at 13:16 local time. Its window responded and module
