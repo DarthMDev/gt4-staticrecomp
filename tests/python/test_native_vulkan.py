@@ -11,10 +11,83 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
 import prepare_external_vulkan as prepare
 import external_runtime_probe as probe
+import play_external_runtime as play
 import test_external_runtime_probe as probe_tests
 
 
 class NativeVulkanTests(unittest.TestCase):
+    def test_first_manual_card_uses_matching_aspect_seed_and_preserves_existing_card(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            inputs = root / 'docs/inputs'
+            inputs.mkdir(parents=True)
+            (inputs / 'slice113-native-video.json').write_text(json.dumps({
+                'default_card_seed': {'path': 'private/wide.ps2'},
+                'standard_card_seed': {'path': 'private/standard.ps2'}}))
+            for aspect, seed in (('16:9', root / 'private/wide.ps2'),
+                                 ('4:3', root / 'private/standard.ps2')):
+                with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
+                     return_value={'manual_session_closed': True}) as launch:
+                    play.play(aspect)
+                self.assertEqual(launch.call_args.args[5], seed)
+                self.assertEqual(launch.call_args.kwargs['aspect'], aspect)
+            card = root / 'private/manual-play/card.ps2'
+            card.write_bytes(b'existing owner card')
+            with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
+                 return_value={'manual_session_closed': True}) as launch:
+                play.play('16:9')
+            self.assertIsNone(launch.call_args.args[5])
+            self.assertEqual(card.read_bytes(), b'existing owner card')
+
+    def test_runtime_seed_is_verified_and_cannot_be_used_as_mutable_card(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            paths = probe_tests.ProbeTests().make_workspace(root)
+            seed = root / 'private/wide-seed.ps2'
+            seed.write_bytes(b'w' * 8650752)
+            seed_pin = dict(probe_tests.file_pin(seed), path='private/wide-seed.ps2')
+            (root / 'docs/inputs/slice110-external-menu-pilot.json').write_text(json.dumps({'artifacts': []}))
+            manifest = root / 'docs/inputs/native.json'
+            manifest.write_text(json.dumps({'runtime': dict(probe_tests.file_pin(paths['runner']),
+                                           path='private/donor/ps2run.exe'), 'card_seeds': [seed_pin]}))
+            def execute(arguments, **options):
+                copy = Path(arguments[arguments.index('--memcard') + 1])
+                self.assertNotEqual(copy, seed)
+                self.assertEqual(probe_tests.file_pin(copy), probe_tests.file_pin(seed))
+                options['stdout'].write(b'[ee] stopped after 100 frames, 1 cycles: frame limit reached\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.object(probe.subprocess, 'run', side_effect=execute):
+                probe.run_probe(root, root / 'private/wide', 100, 1, [], seed, manifest)
+            with self.assertRaisesRegex(ValueError, 'pinned evidence artifact'):
+                probe.run_probe(root, root / 'private/overwrite', 0, 1, [], seed, manifest,
+                                window=True, interactive=True, play_card=seed)
+            seed.write_bytes(b'corrupt')
+            with patch.object(probe.subprocess, 'run') as execute:
+                with self.assertRaisesRegex(ValueError, 'pinned size/hash'):
+                    probe.run_probe(root, root / 'private/corrupt', 100, 1, [], seed, manifest)
+                execute.assert_not_called()
+            self.assertFalse((root / 'private/corrupt').exists())
+
+    def test_aspect_is_explicit_and_invalid_values_stop_before_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            probe_tests.ProbeTests().make_workspace(root)
+            for aspect in ('16:9', '4:3'):
+                def execute(arguments, **options):
+                    self.assertEqual(options['env']['GT4_ASPECT'], aspect)
+                    options['stdout'].write(b'[ee] stopped after 100 frames, 1 cycles: frame limit reached\n')
+                    return subprocess.CompletedProcess(arguments, 0)
+                with patch.dict(probe.os.environ, {'GT4_ASPECT': 'inherited invalid value'}), \
+                     patch.object(probe.subprocess, 'run', side_effect=execute):
+                    result = probe.run_probe(root, root / f'private/{aspect.replace(":", "-")}',
+                                             100, 1, [], aspect=aspect)
+                self.assertEqual(result['presentation_aspect'], aspect)
+            with patch.object(probe.subprocess, 'run') as execute:
+                with self.assertRaisesRegex(ValueError, 'aspect'):
+                    probe.run_probe(root, root / 'private/rejected', 100, 1, [], aspect='21:9')
+                execute.assert_not_called()
+            self.assertFalse((root / 'private/rejected').exists())
+
     def test_changed_donor_is_rejected_without_output(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -74,7 +147,7 @@ class NativeVulkanTests(unittest.TestCase):
             self.assertFalse((root / 'private/reject').exists())
 
     def test_real_vulkan_fixture_if_qualified_build_exists(self):
-        executable = prepare.ROOT / 'private/slice112-input-audio/build/vulkan_fixture.exe'
+        executable = prepare.ROOT / 'private/slice113-video/build/vulkan_fixture.exe'
         if not executable.is_file():
             self.skipTest('Private native Vulkan pilot not built on this machine')
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=30)
@@ -82,9 +155,12 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('fragmented upload PSM 44', result.stderr)
         self.assertIn('PASS: real Vulkan', result.stderr)
         self.assertIn('zero-work dispatch preserves VRAM', result.stderr)
+        self.assertIn('default16:9/optional4:3', result.stderr)
+        self.assertIn('display 1920x1080 halved=0: all pixels match CPU', result.stderr)
+        self.assertIn('display 2048x2048 halved=0: all pixels match CPU', result.stderr)
 
     def test_real_windows_audio_and_input_fixture_if_built(self):
-        executable = prepare.ROOT / 'private/slice112-input-audio/build/host_io_fixture.exe'
+        executable = prepare.ROOT / 'private/slice113-video/build/host_io_fixture.exe'
         if not executable.is_file():
             self.skipTest('Private native audio/input pilot not built on this machine')
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
@@ -94,7 +170,7 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('PASS: real Windows audio completion', result.stderr)
 
     def test_native_card_lock_refuses_overlapping_game_process(self):
-        executable = prepare.ROOT / 'private/slice112-input-audio/build/gt4vulkan.exe'
+        executable = prepare.ROOT / 'private/slice113-video/build/gt4vulkan.exe'
         if not executable.is_file():
             self.skipTest('Private native audio/input pilot not built on this machine')
         kernel = ctypes.WinDLL('kernel32', use_last_error=True)

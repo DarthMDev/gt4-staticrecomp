@@ -81,12 +81,24 @@ bool attach_surface(const SurfaceTarget& target) {
 
 void resize_surface(std::uint32_t width, std::uint32_t height) { g_vulkan.resize(width, height); }
 bool has_surface() { return g_vulkan.has_window(); }
+void set_widescreen(bool enabled) {
+    g_vulkan.set_aspect(enabled ? gt4::vulkan::Aspect::widescreen : gt4::vulkan::Aspect::standard);
+    std::fprintf(stderr, "[vulkan] presentation aspect %s (match GT4 Screen Ratio option)\n", enabled ? "16:9" : "4:3");
+}
 
 bool present(const DisplaySource& source) {
     if (!has_surface()) return false;
     flush_all();
     if (!source.width || !source.height || static_cast<std::uint64_t>(source.width) * source.height > g_copy_words)
         throw std::runtime_error("GS present exceeds scratch capacity");
+    static std::uint32_t previous_width = 0, previous_height = 0;
+    static bool previous_halved = false;
+    if (source.width != previous_width || source.height != previous_height || source.halved != previous_halved) {
+        std::fprintf(stderr, "[vulkan] guest display %ux%u, half-height source=%u\n", source.width, source.height, source.halved ? 1u : 0u);
+        previous_width = source.width;
+        previous_height = source.height;
+        previous_halved = source.halved;
+    }
     const auto parameters = push_params({source.fbp, source.fbw, source.psm, source.dbx, source.dby,
                                         source.width, source.height, source.halved ? 1u : 0u});
     g_commands.push_back({kDisplay, (source.width + 7) / 8, (source.height + 7) / 8, parameters});

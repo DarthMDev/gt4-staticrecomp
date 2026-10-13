@@ -6,7 +6,11 @@ code ahead of time and supplies the PS2 services that execution requires.
 
 Local experimental play: [Jogar-GT4.cmd](Jogar-GT4.cmd) opens the separately
 qualified native Vulkan/audio/XInput pilot when its private pinned inputs and
-build are present. [Slice112 evidence and controls](docs/reverse-engineering/slice112-native-input-audio.md)
+build are present. Presentation defaults to16:9; `Jogar-GT4.cmd --aspect 4:3`
+selects4:3. F6 toggles presentation; match the original GT4 Screen Ratio setting
+so camera/HUD use the intended aspect. New cards use an aspect-matching seed;
+existing saves are preserved. [Video controls](docs/reverse-engineering/slice113-native-video.md)
+and [audio/input evidence](docs/reverse-engineering/slice112-native-input-audio.md)
 describe saves, validation and remaining performance/fidelity limits. Game data
 and generated code are not distributed. Production MSVC remains separate.
 

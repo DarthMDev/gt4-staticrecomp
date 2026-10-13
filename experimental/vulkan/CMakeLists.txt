@@ -5,8 +5,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 get_filename_component(GT4_ROOT "../.." ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(DONOR "${GT4_ROOT}/private/references/ps2-web-recomp")
-set(PORT "${GT4_ROOT}/private/slice112-input-audio/port")
-set(SHADERS "${GT4_ROOT}/private/slice112-input-audio/shaders")
+set(PORT "${GT4_ROOT}/private/slice113-video/port")
+set(SHADERS "${GT4_ROOT}/private/slice113-video/shaders")
 set(VULKAN_HEADERS "${GT4_ROOT}/private/tooling/pcsx2-slice101-source/3rdparty/vulkan/include")
 set(RUNTIME_SOURCES memory dispatch system kernel hw cop disc dmac vif vu_micro vu_jit vu_jit_web)
 set(RUNTIME_FILES)
@@ -28,6 +28,7 @@ add_library(native_host_io STATIC host_io.cpp)
 target_link_libraries(native_host_io PUBLIC winmm xinput user32)
 target_compile_options(native_host_io PRIVATE /W4)
 add_executable(gt4vulkan "${PORT}/main.cpp" window.cpp)
+target_include_directories(gt4vulkan PRIVATE "${PORT}")
 target_compile_definitions(gt4vulkan PRIVATE PS2_WINDOW)
 target_link_libraries(gt4vulkan PRIVATE
     "${GT4_ROOT}/private/reference-acceleration-study/runtime-build/ps2game.lib"

@@ -1,10 +1,12 @@
 #include "window.hpp"
+#include "gpu.hpp"
 #include "gs/gs.hpp"
 #include "host_io.hpp"
 #include "native_vulkan.hpp"
 #include "ps2/system.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <stdexcept>
 
@@ -13,6 +15,15 @@ HWND game_window = nullptr;
 bool surface_attached = false;
 bool closing = false;
 ControllerInput *controller = nullptr;
+bool widescreen = true;
+
+void update_title() {
+  SetWindowTextW(game_window, widescreen
+                                  ? L"GT4Recomp — 16:9 — F6: proporção — "
+                                    L"Enter: Start, Z: acelerar, A: frear"
+                                  : L"GT4Recomp — 4:3 — F6: proporção — Enter: "
+                                    L"Start, Z: acelerar, A: frear");
+}
 
 void apply_pad(const PadState &pad) {
   ps2::set_pad_buttons(pad.buttons);
@@ -26,6 +37,13 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
                                   LPARAM second) {
   if (message == WM_CLOSE) {
     DestroyWindow(window);
+    return 0;
+  }
+  if (message == WM_KEYDOWN && first == VK_F6 && !(second & (1ll << 30))) {
+    widescreen = !widescreen;
+    if (surface_attached)
+      ps2::gs::gpu::set_widescreen(widescreen);
+    update_title();
     return 0;
   }
   if (message == WM_DESTROY) {
@@ -99,13 +117,21 @@ bool open_window(bool fullscreen) {
   window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
+  widescreen = gt4::vulkan::parse_aspect(std::getenv("GT4_ASPECT")) ==
+               gt4::vulkan::Aspect::widescreen;
+  RECT window_bounds{0, 0, 960, widescreen ? 540 : 720};
+  if (!AdjustWindowRectEx(&window_bounds, WS_OVERLAPPEDWINDOW, FALSE, 0))
+    throw std::runtime_error("Cannot size native game window");
   game_window = CreateWindowExW(
       0, window_class.lpszClassName,
       L"GT4Recomp — Audio + XInput — Enter: Start, Z: acelerar, A: frear",
-      WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT, 960, 720,
-      nullptr, nullptr, window_class.hInstance, nullptr);
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
+      window_bounds.right - window_bounds.left,
+      window_bounds.bottom - window_bounds.top, nullptr, nullptr,
+      window_class.hInstance, nullptr);
   if (!game_window)
     throw std::runtime_error("Cannot create native game window");
+  update_title();
   return true;
 }
 
@@ -141,6 +167,7 @@ int run_window(const std::function<int()> &emulate) {
                                 nullptr, nullptr, bounds.right, bounds.bottom))
       throw std::runtime_error("Native Vulkan presentation refused window");
     surface_attached = true;
+    ps2::gs::gpu::set_widescreen(widescreen);
     std::fprintf(stderr,
                  "[window] real guest GPU output through native Vulkan\n");
     // shortcut: one thread and FIFO presentation, qualify pipelining later.

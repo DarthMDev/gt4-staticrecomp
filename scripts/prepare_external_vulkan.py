@@ -42,7 +42,7 @@ def prepare(output):
     globals_text = '''gt4::vulkan::Context g_vulkan;
 gt4::vulkan::Buffer *g_vram = nullptr, *g_tables = nullptr, *g_params = nullptr;
 gt4::vulkan::Buffer *g_data = nullptr, *g_clut = nullptr, *g_scratch = nullptr, *g_decoded = nullptr;
-std::uint32_t g_scale = 1, g_copy_words = 1u << 20, g_field_words = 1u << 19;
+std::uint32_t g_scale = 1, g_copy_words = 2048u * 2048u, g_field_words = 1u << 19;
 bool g_rendered[512] = {};
 bool g_decode = true;
 std::uint32_t g_decoded_used = 0;
@@ -67,6 +67,7 @@ std::uint64_t g_params_size = 0, g_data_size = 0;'''
     source = '// MIT donor batching, derived from pinned ps2-web-recomp gpu.cpp; see THIRD_PARTY.md.\n' + source
     header = (donor / 'gpu.hpp').read_text().replace('../gs.hpp', 'gs.hpp')
     header = header.replace('enum Kind { X11, Wayland, Canvas }', 'enum Kind { X11, Wayland, Canvas, Win32 }')
+    header = header.replace('bool has_surface();', 'bool has_surface();\nvoid set_widescreen(bool enabled);')
     output.mkdir(parents=True, exist_ok=True)
     (output / 'gpu.cpp').write_text(source, encoding='utf-8')
     (output / 'gpu.hpp').write_text(header, encoding='utf-8')

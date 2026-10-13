@@ -1,5 +1,30 @@
 # Project status
 
+Owner clarification2026-10-13: record severe3D performance only, investigate
+later. Screenshots report19FPS/57.3ms in race and11FPS/93.3ms on FordKa selection;
+unstable menu frametime also retained privately and pinned in RE113. No current
+performance optimization/benchmark mandate. Future priorities: rendering/physics
+separation for144FPS or monitor refresh at100% game speed, progressive-only
+output, internal1080p/1440p/4K and preboot setup launcher. Current slice stays
+native16:9/default, optional4:3 and actual race video-mode qualification.
+
+2026-10-13 — slice113 widescreen implementation closed; race video-mode
+qualification handed to owner at explicit request. Baseline f9346c8, branch
+codex/widescreen-video-113. Owner now prioritizes native16:9 as default,
+optional4:3, and real race qualification of480p/1080i; then open for owner
+manual play. Presentation aspect and GT4 Screen Ratio must agree: a wider
+viewport alone does not change the game's camera/HUD. Frozen112/111 and
+production preserved; new build private/slice113-video. Implement centered
+16:9/default and4:3 option/F6, enlarge display scratch within GS2048 bounds,
+actualGPU resolution/readback/presentation controls passed. Original UI wide
+seed saved, actual race applies native wide flag1 and running timer; race21
+still normal640x448/half-height1, not480p. Preview480p/1080i works; full pre-race
+Options reached. Owner requests no further automated navigation: manual launcher
+PID21412/session-20261013-020026-017182 opened for owner. Existing card preserved
+at original4:3 seed; select16:9 in GT4 to match window. New-card default wide.
+54/54CTest51.37s and117Python(111run/6skip)76.760s pass; warning-free target.
+Next: owner confirms actual480p/1080i race modes, preserving scan/fidelity limits.
+
 2026-10-13 — slice112 native audio/XInput and bounded race pilot closed,
 on codex/audio-xinput-pilot-112,
 baseline d7f25fe. Owner prioritizes Windows audio and XInput now, postpones

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
@@ -9,6 +10,29 @@
 #include <vector>
 
 namespace gt4::vulkan {
+
+Aspect parse_aspect(const char *value) {
+  if (!value || std::strcmp(value, "16:9") == 0)
+    return Aspect::widescreen;
+  if (std::strcmp(value, "4:3") == 0)
+    return Aspect::standard;
+  throw std::runtime_error("GT4_ASPECT must be 16:9 or 4:3");
+}
+
+PresentationRect presentation_rect(std::uint32_t width, std::uint32_t height,
+                                   Aspect aspect) {
+  if (!width || !height)
+    return {0, 0, 0, 0};
+  const std::uint64_t numerator = aspect == Aspect::widescreen ? 16 : 4;
+  const std::uint64_t denominator = aspect == Aspect::widescreen ? 9 : 3;
+  const auto fitted_width = static_cast<std::uint32_t>(std::max<std::uint64_t>(
+      1, std::min<std::uint64_t>(width, height * numerator / denominator)));
+  const auto fitted_height = static_cast<std::uint32_t>(std::max<std::uint64_t>(
+      1, std::min<std::uint64_t>(height, width * denominator / numerator)));
+  return {(width - fitted_width) / 2, (height - fitted_height) / 2,
+          fitted_width, fitted_height};
+}
+
 namespace {
 
 // Only the Vulkan entry points used by this backend are resolved from the
@@ -154,6 +178,7 @@ Context::~Context() {
 }
 
 void Context::initialize(const std::filesystem::path &shaders) {
+  aspect_ = parse_aspect(std::getenv("GT4_ASPECT"));
   loader_ =
       LoadLibraryExW(L"vulkan-1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
   if (!loader_)
@@ -799,21 +824,17 @@ bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
                        &black, 1, &range);
   memory_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                  VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
-  const auto destination_width =
-      std::min(extent_.width, extent_.height * 4 / 3);
-  const auto destination_height =
-      std::min(extent_.height, extent_.width * 3 / 4);
-  const auto left =
-      static_cast<std::int32_t>((extent_.width - destination_width) / 2);
-  const auto top =
-      static_cast<std::int32_t>((extent_.height - destination_height) / 2);
+  const auto destination =
+      presentation_rect(extent_.width, extent_.height, aspect_);
   VkImageBlit blit{};
   blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
   blit.srcOffsets[1] = {static_cast<int>(width), static_cast<int>(height), 1};
   blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-  blit.dstOffsets[0] = {left, top, 0};
-  blit.dstOffsets[1] = {left + static_cast<int>(destination_width),
-                        top + static_cast<int>(destination_height), 1};
+  blit.dstOffsets[0] = {static_cast<int>(destination.left),
+                        static_cast<int>(destination.top), 0};
+  blit.dstOffsets[1] = {static_cast<int>(destination.left + destination.width),
+                        static_cast<int>(destination.top + destination.height),
+                        1};
   vkCmdBlitImage(command_, display_image_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
                  VK_FILTER_NEAREST);

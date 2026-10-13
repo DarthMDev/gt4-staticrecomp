@@ -1,5 +1,21 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Atualização — 2026-10-13, fatia113/16:9 entregue; modos em teste manual.** Prioridade do dono:
+16:9 nativo por padrão e4:3 opcional; testar480p/1080i em corrida real.
+Janela/viewport16:9 e opção original do jogo foram implementados e testes
+verdes:54CTest e117Python(111/6). Corrida realmente aplica flag de câmera/HUD
+wide em006184F0; a prévia480p/1080i funciona, mas configuração prévia/salva
+voltou ao normal na corrida de controle. Qualificação pelo menu pré-corrida
+foi entregue ao dono a pedido explícito: encerrar navegação automática e deixar
+janela manual aberta. Cartão existente preservado, ainda seed4:3; selecionar
+16:9 no jogo. Não afirmar resolução apenas pelo nome do teste ou pela prévia.
+O dono registrou frametime instável,19FPS na corrida e11FPS ao mostrar carro3D,
+e explicitamente pediu apenas registrar, sem auditar/otimizar agora.
+Prioridades futuras:144FPS/refresh do monitor com velocidade100% independente
+da física; saída progressiva sem entrelaçado; resolução interna1080p/1440p/4K;
+base inicial480p e launcher de configuração. Nada disso está concluído por
+redimensionar a janela. Ver STATUS/RE113/0055 antes de continuar.
+
 **Atualização — 2026-10-13, fatia112/áudio e XInput.** A pedido do dono,
 customização Vulkan ficou para depois. Piloto Clang tem áudio real estéreo48k,
 controle XInput com botões/analógicos/pressão/vibração e teclado. Controle físico

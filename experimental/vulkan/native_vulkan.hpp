@@ -14,6 +14,16 @@
 
 namespace gt4::vulkan {
 
+enum class Aspect { widescreen, standard };
+
+struct PresentationRect {
+  std::uint32_t left, top, width, height;
+};
+
+Aspect parse_aspect(const char *value);
+PresentationRect presentation_rect(std::uint32_t width, std::uint32_t height,
+                                   Aspect aspect);
+
 struct Buffer {
   VkBuffer handle = VK_NULL_HANDLE;
   VkDeviceMemory memory = VK_NULL_HANDLE;
@@ -42,6 +52,7 @@ public:
   void wait_idle();
   void attach_window(HWND window, std::uint32_t width, std::uint32_t height);
   void resize(std::uint32_t width, std::uint32_t height);
+  void set_aspect(Aspect aspect) { aspect_ = aspect; }
   bool present(Buffer *rgba, std::uint32_t width, std::uint32_t height);
   bool has_window() const { return window_ != nullptr; }
   std::uint64_t presentations() const { return presentations_; }
@@ -88,6 +99,7 @@ private:
   std::uint32_t image_width_ = 0, image_height_ = 0;
   std::uint32_t window_width_ = 0, window_height_ = 0;
   VkExtent2D extent_{};
+  Aspect aspect_ = Aspect::widescreen;
   bool resized_ = false;
   std::uint64_t presentations_ = 0;
   std::uint64_t zero_dispatches_ = 0;

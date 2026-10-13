@@ -70,6 +70,40 @@ void fragmented_upload(std::uint32_t format, unsigned bits,
 
 int main() {
   try {
+    using gt4::vulkan::Aspect;
+    using gt4::vulkan::presentation_rect;
+    const auto wide = presentation_rect(1920, 1080, Aspect::widescreen);
+    const auto standard = presentation_rect(1920, 1080, Aspect::standard);
+    const auto wide_in_standard =
+        presentation_rect(960, 720, Aspect::widescreen);
+    const auto wide_in_ultrawide =
+        presentation_rect(2560, 1080, Aspect::widescreen);
+    const auto empty = presentation_rect(0, 0, Aspect::widescreen);
+    const auto tiny = presentation_rect(1, 1, Aspect::widescreen);
+    const auto huge =
+        presentation_rect(UINT32_MAX, UINT32_MAX, Aspect::widescreen);
+    if (wide.left != 0 || wide.top != 0 || wide.width != 1920 ||
+        wide.height != 1080 || standard.left != 240 || standard.top != 0 ||
+        standard.width != 1440 || standard.height != 1080 ||
+        wide_in_standard.top != 90 || wide_in_standard.width != 960 ||
+        wide_in_standard.height != 540 || wide_in_ultrawide.left != 320 ||
+        wide_in_ultrawide.width != 1920 || empty.width != 0 ||
+        empty.height != 0 || tiny.width != 1 || tiny.height != 1 ||
+        huge.width != UINT32_MAX || huge.height != 2415919103u ||
+        gt4::vulkan::parse_aspect(nullptr) != Aspect::widescreen ||
+        gt4::vulkan::parse_aspect("4:3") != Aspect::standard)
+      throw std::runtime_error(
+          "Aspect rectangle or default differs from expected values");
+    bool invalid_aspect_refused = false;
+    try {
+      gt4::vulkan::parse_aspect("21:9");
+    } catch (const std::runtime_error &) {
+      invalid_aspect_refused = true;
+    }
+    if (!invalid_aspect_refused)
+      throw std::runtime_error("Unsupported aspect was accepted");
+    std::fprintf(stderr, "[fixture] default16:9/optional4:3 centered "
+                         "rectangles and overflow controls passed\n");
     {
       gt4::vulkan::Context context;
       context.initialize(GT4_VULKAN_SHADER_DIR);
@@ -149,6 +183,45 @@ int main() {
                    {PSMT8H, 8},    {PSMT4HL, 4},  {PSMT4HH, 4}};
     for (const auto &format : formats)
       fragmented_upload(format.format, format.bits, downloaded);
+    for (std::size_t index = 0; index < vram.size(); ++index)
+      vram[index] = static_cast<std::uint32_t>(index * 137u) ^ 0x0055AA33u;
+    std::memcpy(memory(), vram.data(), kMemorySize);
+    gpu::write_state(vram, 1, clut);
+    const gpu::DisplaySource resolutions[] = {
+        {0, 10, PSMCT32, 0, 0, 640, 448, true},
+        {0, 10, PSMCT32, 0, 0, 640, 480, false},
+        {0, 10, PSMCT32, 0, 0, 640, 1080, true},
+        {0, 30, PSMCT32, 0, 0, 1920, 1080, false},
+        {0, 32, PSMCT32, 0, 0, 2048, 2048, false}};
+    for (const auto &source : resolutions) {
+      gpu::display(source, pixels, width, height);
+      if (width != source.width || height != source.height ||
+          pixels.size() != static_cast<std::size_t>(width) * height)
+        throw std::runtime_error("Resolution readback shape differs");
+      for (std::uint32_t y = 0; y < height; ++y)
+        for (std::uint32_t x = 0; x < width; ++x) {
+          const auto expected =
+              read_pixel(PSMCT32, 0, source.fbw, x, source.halved ? y / 2 : y) |
+              0xFF000000u;
+          if (pixels[static_cast<std::size_t>(y) * width + x] != expected)
+            throw std::runtime_error(
+                "Resolution pixels differ from independent CPU swizzle read");
+        }
+      std::fprintf(
+          stderr,
+          "[fixture] display %ux%u halved=%u: all pixels match CPU VRAM read\n",
+          width, height, source.halved ? 1u : 0u);
+    }
+    bool oversize_refused = false;
+    try {
+      gpu::display({0, 32, PSMCT32, 0, 0, 2048, 2049, false}, pixels, width,
+                   height);
+    } catch (const std::runtime_error &) {
+      oversize_refused = true;
+    }
+    if (!oversize_refused)
+      throw std::runtime_error(
+          "Oversized display escaped scratch capacity check");
     HWND window = CreateWindowExW(0, L"STATIC", L"Vulkan presentation fixture",
                                   WS_OVERLAPPEDWINDOW, 0, 0, 160, 120, nullptr,
                                   nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -168,6 +241,14 @@ int main() {
     gpu::resize_surface(240, 180);
     if (!gpu::present(display_source))
       throw std::runtime_error("Restored resized surface refused presentation");
+    for (const auto &source : resolutions) {
+      gpu::set_widescreen(true);
+      if (!gpu::present(source))
+        throw std::runtime_error("Widescreen resolution presentation refused");
+      gpu::set_widescreen(false);
+      if (!gpu::present(source))
+        throw std::runtime_error("Standard resolution presentation refused");
+    }
     DestroyWindow(window);
     std::fprintf(stderr,
                  "[fixture] Win32 repeat/zero-size/resize restore passed\n");

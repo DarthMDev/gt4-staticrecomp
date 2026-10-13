@@ -58,6 +58,14 @@ full races or broad saves. Frozen111 and production remain unchanged.
 
 ## Roles and autonomy
 
+Owner priority2026-10-13: native16:9 default with4:3 optional, then real race
+480p/1080i qualification. Record unstable frametime and severe3D performance
+(19FPS race,11FPS car selection), but do not investigate/optimize performance
+yet; owner explicitly deferred it. Preserve later144FPS/monitor-refresh rendering
+with100% game speed independent of physics, progressive-only output and native
+internal1080p/1440p/4K plus preboot launcher configuration. Window enlargement
+does not establish internal resolution, new rendered frames or correct simulation.
+
 - The agent is the engineer and decision maker for technical work: it plans,
   implements, verifies, documents, commits, branches and pushes to `origin`.
 - The human owner sets goals and priorities and reviews plain-language

@@ -37,10 +37,12 @@ def summarize_exit(log_text, frame_count, exit_code, timed_out):
 
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
-              play_card=None):
+              play_card=None, aspect='16:9'):
     workspace = workspace.resolve()
     run_directory = run_directory.resolve()
     private_root = workspace / 'private'
+    if aspect not in ('16:9', '4:3'):
+        raise ValueError('Presentation aspect must be 16:9 or 4:3')
     if not run_directory.is_relative_to(private_root) or run_directory == private_root:
         raise ValueError('Probe output must be a new directory inside private/')
     if run_directory.exists():
@@ -63,6 +65,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     native = json.loads((inputs / 'usa-v2.00-native.json').read_text(encoding='utf-8'))
     disc_manifest = json.loads((inputs / 'usa-v2.00.json').read_text(encoding='utf-8'))
     executable_pin = next(item for item in reference['artifacts'] if item['path'].endswith('/ps2run.exe'))
+    runtime_evidence = {}
     if runtime_manifest is not None:
         runtime_manifest = runtime_manifest.resolve()
         if not runtime_manifest.is_relative_to(inputs):
@@ -92,13 +95,14 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
             raise ValueError('Card seed must be inside private/')
         evidence = json.loads((inputs / 'slice110-external-menu-pilot.json').read_text(encoding='utf-8'))
         relative_seed = card_seed.relative_to(workspace).as_posix()
-        seed_pin = next((item for item in evidence['artifacts'] if item['path'] == relative_seed), None)
+        qualified_seeds = evidence['artifacts'] + runtime_evidence.get('card_seeds', [])
+        seed_pin = next((item for item in qualified_seeds if item['path'] == relative_seed), None)
         if seed_pin is None:
             raise ValueError(f'Card seed has no pinned artifact: {card_seed}')
         verify_file(card_seed, {key: seed_pin[key] for key in ('size_bytes', 'sha256')})
     if play_card is not None:
         evidence = json.loads((inputs / 'slice110-external-menu-pilot.json').read_text(encoding='utf-8'))
-        protected = {item['path'] for item in evidence['artifacts']}
+        protected = {item['path'] for item in evidence['artifacts'] + runtime_evidence.get('card_seeds', [])}
         if play_card.relative_to(workspace).as_posix() in protected:
             raise ValueError('Persistent play must never overwrite a pinned evidence artifact')
 
@@ -130,6 +134,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if window:
         arguments.append('--window')
     result = {'arguments': arguments, 'timeout_seconds': timeout_seconds,
+              'presentation_aspect': aspect,
               'disc_sha256': disc_manifest['disc']['sha256'],
               'runtime_sha256': executable_pin['sha256']}
     if seed_pin is not None:
@@ -141,6 +146,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     start = time.monotonic()
     log_path = run_directory / 'probe.log'
     environment = os.environ.copy()
+    environment['GT4_ASPECT'] = aspect
     environment.pop('PS2_DUMP_AUDIO', None)
     if capture_audio:
         environment['PS2_DUMP_AUDIO'] = str(run_directory / 'audio.wav')
@@ -176,11 +182,12 @@ def main():
     parser.add_argument('--window', action='store_true', help='Present real guest output in a native window')
     parser.add_argument('--capture-audio', action='store_true', help='Record guest PCM in private audio.wav')
     parser.add_argument('--interactive', action='store_true', help='Manual window play without scripted input or captures')
+    parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9', help='Presentation ratio; match the game Screen Ratio option')
     options = parser.parse_args()
     try:
         result = run_probe(ROOT, options.run_directory, options.frames, options.timeout,
                            options.press, options.card_seed, options.runtime_manifest, options.window,
-                           options.capture_audio, options.interactive)
+                           options.capture_audio, options.interactive, aspect=options.aspect)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')
     print(json.dumps(result, indent=2))
