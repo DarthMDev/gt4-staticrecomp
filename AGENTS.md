@@ -80,6 +80,13 @@ Ford Ka '01 is confirmed as SpecDB ka_01/code59, but menu/LOD mapping is Unknown
 Do not guess from11 Ford-prefixed files or assume GT5 MODEL_INFO exists in GT4.
 SpecDB Huffman decoding remains private research, not an adopted production
 decoder. No model/texture payload or live hook qualified; P1 remains open.
+Slice121 now resolves the offline model map via CAR_VARIATION/VARIATION:
+ka_01/code59 -> key444/table42 ->11 physical rows ->SDB1598/fdeu0006.
+See docs/MODEL-ASSET-PROBE.md and docs/inputs/slice121-model-file-map.json.
+Two exact car files extracted; bounded public header probe only. Preserve
+repeated physical row IDs, signed opaque VM fields and zero-size Tex1 header
+semantics as Unknown. Geometry/material/texture bodies and live getter argument
+chain remain unqualified. Preserve frozen121 capsule; next scope is fixed records.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

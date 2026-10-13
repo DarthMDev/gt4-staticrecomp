@@ -38,3 +38,8 @@ was copied. The private SpecDB probe references MIT PDTools and remains ignored;
 it is not imported into the runtime or distributed as a supported decoder.
 [Volume Reader](../docs/VOLUME-READER.md) and the pinned Nenkai source map record
 the supported subset, attribution and qualification limits.
+
+Slice 121 adds an original offline CAR4/MDLS/Tex1 header probe grounded in the
+same pinned MIT templates and PDTools format facts. No reference implementation
+or dependency is copied or linked. [Model Asset Probe](../docs/MODEL-ASSET-PROBE.md)
+records actual-byte discrepancies, independent review and the header-only boundary.

@@ -84,3 +84,8 @@ ISO, not a native rebuild. It writes only explicit selections to a fresh
 ignored capsule and preserves all inputs/pins. Its public synthetic tests are
 included automatically in existing Python discovery/CTest. SpecDB parsing in
 slice 120 remains a private experiment, not a general supported decoder.
+
+[Model Asset Probe](MODEL-ASSET-PROBE.md) adds a pure `probe_asset(bytes)` header
+inventory in slice 121. It consumes separately verified, explicitly extracted
+CAR4/MDLS input; no native rebuild or runtime integration. Its public controls
+also run in Python discovery/CTest. Model and texture bodies remain unqualified.

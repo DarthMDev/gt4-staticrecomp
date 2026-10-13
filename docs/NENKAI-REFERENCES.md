@@ -86,3 +86,14 @@ GT4FS probes the marker independently of record kind; the new reader documents
 a stricter supported subset and rejects unqualified combinations. GT4FS has
 no inspected root license: only format facts were used; no implementation was
 copied or linked. PDTools was not built or linked.
+
+## Slice 121 — GT4-specific variation map and actual headers
+
+The pinned Hub GT4 model guidance and PDTools CarVariation/Variation schema
+identify the correct ModelCode route. The bounded offline join resolves the
+Ford Ka to `fdeu0006`, independently reproduced on pinned selected records.
+[Model Asset Probe](MODEL-ASSET-PROBE.md) records sources, exact fields and the
+source-to-payload disagreements: signed -1 VM metadata and zero-size Tex1 slots.
+Do not inherit unsigned-pointer or nonzero-size assumptions from generic header
+descriptions. No reference implementation was imported or linked; geometry,
+pixels and live use remain unqualified.

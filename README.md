@@ -68,8 +68,10 @@ omitted callback pair with compilation checks. These foundations are still being
 qualified. Separate baseline/recovered runtime candidates are prepared for owner
 validation. Tested offline tooling now reads the volume catalogue and extracts
 selected resources. The Ford Ka '01 is identified in the correct version's
-database; its model-file mapping, geometry/textures and live integration remain
-pending. See the [one-car research ledger](docs/CAR-ASSET-RESEARCH.md).
+database and mapped to its exact garage and racing model files. Their serialized
+headers are verified; geometry, textures and live integration remain pending.
+See the [one-car research ledger](docs/CAR-ASSET-RESEARCH.md) and
+[model asset probe](docs/MODEL-ASSET-PROBE.md).
 The dedicated game-scene renderer has not started replacing live graphics.
 
 ## Testing and Development

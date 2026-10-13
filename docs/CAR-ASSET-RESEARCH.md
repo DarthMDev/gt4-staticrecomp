@@ -203,3 +203,24 @@ Public reader controls pass 22/22. Baseline candidate CTest passes 3/3 in 11.79 
 Python discovery 81/81 with zero skips. No new native build was needed. P1 stays
 open; runtime, game session, saves/locks, OpenCode branch, input, timing and
 performance are unchanged.
+
+## Slice 121 — Exact file map and serialized main headers
+
+[Model Asset Probe](MODEL-ASSET-PROBE.md) and
+[safe metadata](inputs/slice121-model-file-map.json) document the completed
+offline CAR_VARIATION → VARIATION → ModelCode join. All 11 matching physical
+variations identify `fdeu0006`; independent replay matches 12 selected row hashes.
+Five selected database resources and two exact menu/LOD assets are extracted
+into a fresh capsule, with whole-ISO and strict PS2ZIP verification.
+
+Public original header tooling and independent byte-level review agree on both
+CAR4/MDLS layouts, nested texture slots and their bounded headers. Actual files
+contain signed -1 VM words and five zero-size texture slots: record them without
+inventing runtime semantics. Seventeen public controls pass; CTest 3/3 and
+Python 98/98, zero skips. No native rebuild needed.
+
+The executable path builder and runtime SDB route are mapped, but the live car
+getter → index argument link remains Unknown. Geometry, material/texture record
+bodies, pixels, relocation, camera and live ownership remain open. No runtime,
+game session, OpenCode, performance or input behavior changed. Next bounded
+package inventories fixed shape/material/texture records on this exact pair.

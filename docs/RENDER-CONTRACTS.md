@@ -147,6 +147,10 @@ named-car mapping, model/texture payloads and live-instance qualification remain
 Ka '01 SpecDB identity with independent selected-row decoding. Bounded public
 volume tooling is tested; the car's menu/LOD basename remains Unknown. This
 does not identify a live instance or qualify any geometry/camera convention.
+**Slice 121:** [Model Asset Probe](MODEL-ASSET-PROBE.md) resolves the exact
+offline garage/racing file pair and bounds their serialized main headers.
+Signed VM words and zero-size texture slots remain opaque; no live model,
+geometry, texture pixels, relocation or camera convention is qualified.
 
 1. Continue the omitted-entry/callback ledger using explicit seed provenance and
    error behavior; preserve the baseline producer. [Slice 117](EE-CALLBACK-COVERAGE.md)

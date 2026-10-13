@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 120, bounded volume tooling and offline Ford Ka SpecDB identity.
+2026-10-13 — Slice 121, exact offline Ford Ka model files and bounded header probe.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-car-identity-120`, based on slice 119 commit 310f1fc.
+`codex/gt4-model-file-map-121`, based on commit c81560e.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -60,6 +60,16 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   basenames and MODEL_INFO pair are absent. Eleven Ford-prefixed leaves remain
   candidates, not identified assets. No model/texture payload read or live hook added.
   B-tree key routing and comprehensive format/fidelity qualification remain open.
+- **Confirmed (slice 121):** CAR_VARIATION row 59 selects VARIATION row 444/table
+  42; all 11 physical variations use SDB model index 1598, `fdeu0006`. Independent
+  Huffman replay matches all 12 selected row hashes. Exact garage/LOD leaves,
+  not guessed Ford prefixes, are identified and extracted with verified pins.
+- **Confirmed (slice 121):** both CAR4 main MDLS bases are 0xC00; garage/race
+  have 4 models each and 22/113 shapes. Independent header checks match. Signed
+  -1 VM words are opaque; five zero-size Tex1 slots are reported header-only.
+  Geometry, texture records/pixels, relocation and live argument chain remain Unknown.
+- **Confirmed (slice 121):** 17 public header controls; CTest 3/3, Python 98/98
+  with zero skips. No native rebuild, live hook or runtime behavior change.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
@@ -72,6 +82,9 @@ progress. [Volume Reader](VOLUME-READER.md) and [slice 120 metadata](inputs/slic
 record the selected extraction and offline identity; candidate gameplay, remaining entry coverage and one real car's
 data/conventions are pending. Production library, default launcher and runtime
 have not been replaced. Candidate checks do not qualify game boot or racing.
+See [Model Asset Probe](MODEL-ASSET-PROBE.md) and
+[slice 121 metadata](inputs/slice121-model-file-map.json) for the now-confirmed
+offline file mapping and exact header-only parsing boundary. P1 remains open.
 The owner's active OpenCode baseline session was preserved during build qualification.
 On the owner's subsequent explicit request, it closed normally and the slice 118
 baseline candidate launched at 13:16 local time. Its window responded and module

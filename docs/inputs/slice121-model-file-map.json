@@ -1,0 +1,374 @@
+{
+  "classification": "Confirmed offline exact named-car mapping and bounded serialized headers; geometry/live use Unknown",
+  "baseline_commit": "c81560e",
+  "branch": "codex/gt4-model-file-map-121",
+  "iso_pin": {
+    "sha256": "67b6c0075837f3ae1132d608acf2858bf13b2dd62d6eae83dff76df02e4e824f",
+    "size_bytes": 5314478080
+  },
+  "input_verification": "Whole unchanged ISO hash/size on same handle before each selection; exact decoded hashes verified before probing",
+  "selected_variation_files": [
+    {
+      "catalogue_path": "specdb/GT4_US2560/CAR_VARIATION_american.idi",
+      "output_file": "asset-00.bin",
+      "kind": 2,
+      "volume_offset": 26460160,
+      "stored_bytes": 8886,
+      "decoded_bytes": 19074,
+      "stored_sha256": "56a779d68dee588d9538ac6f19eed18494a8d1fd632d99adfdb45d24113015c9",
+      "decoded_sha256": "71ff22f65f0a06093968888809e50ef82dc96d9f973b64d78298031bd3baee3d"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/CAR_VARIATION_american.dbt",
+      "output_file": "asset-01.bin",
+      "kind": 2,
+      "volume_offset": 29448192,
+      "stored_bytes": 5877,
+      "decoded_bytes": 11239,
+      "stored_sha256": "df2b55d138a9c396696d32024b35ef8f5e2a815ba71ae788c111b8b6bd86e2bb",
+      "decoded_sha256": "90ca45452c0e59483a092ad01c6f17b6049259e237ff82d9e62177063d0689b3"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/VARIATIONamerican.idi",
+      "output_file": "asset-02.bin",
+      "kind": 2,
+      "volume_offset": 28721152,
+      "stored_bytes": 4926,
+      "decoded_bytes": 15900,
+      "stored_sha256": "adb765d253206480eda3160f93b5efdf58a548952927763a9abc13ee1e0b50e7",
+      "decoded_sha256": "e613e3ded93147c789f6c62151feb89b2a445978cc3b07036866810bb8b09972"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/VARIATIONamerican.dbt",
+      "output_file": "asset-03.bin",
+      "kind": 2,
+      "volume_offset": 29585408,
+      "stored_bytes": 87912,
+      "decoded_bytes": 156154,
+      "stored_sha256": "cef74e18e88e5be23251bc731c17591ca9dbd74d00e53e7e969ea3929929ef56",
+      "decoded_sha256": "be2e3d0be6dfd51de9290de99384b44f3fb7992561338fb7f0687d7acd347773"
+    },
+    {
+      "catalogue_path": "specdb/GT4_US2560/american_StrDB.sdb",
+      "output_file": "asset-04.bin",
+      "kind": 2,
+      "volume_offset": 30390272,
+      "stored_bytes": 30427,
+      "decoded_bytes": 85130,
+      "stored_sha256": "e708dd97c1e3d56f7cc9239d7a5c76db35b765c4e779b3f393735278136b9ac6",
+      "decoded_sha256": "4ec24e465a2c0262781a5bffae4ecf38f5a890e8ef166624e97c71cf1fce03ef"
+    }
+  ],
+  "selected_car_files": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "output_file": "asset-00.bin",
+      "kind": 2,
+      "volume_offset": 118628352,
+      "stored_bytes": 172219,
+      "decoded_bytes": 561864,
+      "stored_sha256": "eee0e035a5cac374a2f2255c398ca54d987f650585f1652b75ef15ed62757e4d",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a"
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "output_file": "asset-01.bin",
+      "kind": 2,
+      "volume_offset": 276217856,
+      "stored_bytes": 179236,
+      "decoded_bytes": 487112,
+      "stored_sha256": "5437cb0d7fa854a3b1c56673927966557f75745bbe36c884c3492fb91ada4fd0",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867"
+    }
+  ],
+  "offline_map": {
+    "label": "ka_01",
+    "car_id": 59,
+    "car_variation_table_id": 41,
+    "car_variation_row_sha256": "00544cc15426195946bdda88d8ae1604c9da7bf41dd49d32ec8607698a62558e",
+    "variation_row_id": 444,
+    "variation_table_id": 42,
+    "variation_label": "fdeu0006_0",
+    "physical_row_count": 11,
+    "model_sdb_index": 1598,
+    "model_basename": "fdeu0006",
+    "rows": [
+      {
+        "physical_index": 1708,
+        "row_sha256": "571a69dd14b81e06cddba42f43d2ef71eec3ae5a7a5a3a7701202bd089dd2a11",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 8
+      },
+      {
+        "physical_index": 1709,
+        "row_sha256": "c05ff3a7fa00519b6ef62c7421641165f027f9fb67dbab411bb371360598527e",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 7
+      },
+      {
+        "physical_index": 1710,
+        "row_sha256": "5a66307834a2624159333a07ed0358e95617554b2eaf37f40fd6365e411c3377",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 6
+      },
+      {
+        "physical_index": 1711,
+        "row_sha256": "8b207777e87f5bc60ce04956e847072b758464f3042cdbfb711306ce239ba5ed",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 11
+      },
+      {
+        "physical_index": 1712,
+        "row_sha256": "a766e349f607085f64005ffba106cc733c4e66ba8c50534c989cc4e13fc289e1",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 10
+      },
+      {
+        "physical_index": 1713,
+        "row_sha256": "12176a10d2a94dc97873f372cd4eba8b64f952fd031cdb4602a72d5e21f20dee",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 9
+      },
+      {
+        "physical_index": 1714,
+        "row_sha256": "0c6fc52320d4828b7c84b80c9d904be3e17afa00d6b83728f003c3343a7aeed5",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 5
+      },
+      {
+        "physical_index": 1715,
+        "row_sha256": "16f2ca295b01ed70dbad066d0254d49bc2795e3b783e00659cb5d5b5ce583364",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 2
+      },
+      {
+        "physical_index": 1716,
+        "row_sha256": "450720f1985da7c3575aeb73ae4b35161917584ca6aba91ecc12e8576bb7c67f",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 1
+      },
+      {
+        "physical_index": 1717,
+        "row_sha256": "1edc0d287203ddfbb5f51cdc23cb64ef84e6017cbadf67b1865b25a874744541",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 4
+      },
+      {
+        "physical_index": 1718,
+        "row_sha256": "2364bf6526e9bc35e838b5cd18ab16a083abfb0e86165e44e748a8e8eab482d0",
+        "model_sdb_index": 1598,
+        "basename": "fdeu0006",
+        "var_order": 3
+      }
+    ]
+  },
+  "main_headers": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a",
+      "main_model_offset": 3072,
+      "declared_size": 416657,
+      "model_count": 4,
+      "shape_count": 22,
+      "material_count": 14,
+      "color_count": 1,
+      "texture_lods_per_color": 6,
+      "vm_words_all_signed_minus_one": true,
+      "texture_slots": [
+        {
+          "lod": 0,
+          "declared_size": 203264,
+          "texture_count": 48,
+          "transfer_count": 3
+        },
+        {
+          "lod": 1,
+          "declared_size": 0,
+          "texture_count": 0,
+          "transfer_count": 0
+        },
+        {
+          "lod": 2,
+          "declared_size": 0,
+          "texture_count": 0,
+          "transfer_count": 0
+        },
+        {
+          "lod": 3,
+          "declared_size": 0,
+          "texture_count": 0,
+          "transfer_count": 0
+        },
+        {
+          "lod": 4,
+          "declared_size": 0,
+          "texture_count": 0,
+          "transfer_count": 0
+        },
+        {
+          "lod": 5,
+          "declared_size": 2880,
+          "texture_count": 1,
+          "transfer_count": 2
+        }
+      ]
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867",
+      "main_model_offset": 3072,
+      "declared_size": 402240,
+      "model_count": 4,
+      "shape_count": 113,
+      "material_count": 18,
+      "color_count": 1,
+      "texture_lods_per_color": 6,
+      "vm_words_all_signed_minus_one": true,
+      "texture_slots": [
+        {
+          "lod": 0,
+          "declared_size": 142720,
+          "texture_count": 51,
+          "transfer_count": 3
+        },
+        {
+          "lod": 1,
+          "declared_size": 50304,
+          "texture_count": 44,
+          "transfer_count": 5
+        },
+        {
+          "lod": 2,
+          "declared_size": 28288,
+          "texture_count": 26,
+          "transfer_count": 3
+        },
+        {
+          "lod": 3,
+          "declared_size": 896,
+          "texture_count": 1,
+          "transfer_count": 2
+        },
+        {
+          "lod": 4,
+          "declared_size": 0,
+          "texture_count": 0,
+          "transfer_count": 0
+        },
+        {
+          "lod": 5,
+          "declared_size": 2880,
+          "texture_count": 1,
+          "transfer_count": 2
+        }
+      ]
+    }
+  ],
+  "generated_source_pins": [
+    {
+      "path": "unit_00D1.cpp",
+      "sha256": "dae119678eda94b09c5c670aba9278104abc387fb7423527dd6980c113d34c4a",
+      "size_bytes": 260803
+    },
+    {
+      "path": "unit_00D5.cpp",
+      "sha256": "5a0389a55b2e31fb531794e7ce9ed413fbb00a376d401588190b2bc3df1e9077",
+      "size_bytes": 264410
+    },
+    {
+      "path": "unit_00AD.cpp",
+      "sha256": "3e79d02b73a25797dbff7c243f5e8903cb75898040fd645088cb4b5b0f5925a7",
+      "size_bytes": 254926
+    }
+  ],
+  "executable_route": {
+    "path_builder_va": "0x004541E0",
+    "sdb_selector_va": "0x00447D18",
+    "sdb_lookup_va": "0x00449CD8",
+    "global_object_va": "0x006235A8",
+    "locale_sdb_offsets_decimal": [
+      480,
+      484
+    ],
+    "argument_chain_to_model_index": "Unknown; no live observation"
+  },
+  "controls": {
+    "public_model_probe": 17,
+    "private_controls": {
+      "type1_literal_row": true,
+      "type0_template_copy": true,
+      "type2_template_patch": true,
+      "missing_row_rejected": true,
+      "truncated_huffman_rejected": true,
+      "handpacked_dbkey_key_then_table": true,
+      "dbkey_truncated_rejected": true,
+      "dbkey_wrong_table_rejected": true,
+      "synthetic_repeated_sorted_key_rows_accepted": true,
+      "synthetic_descending_key_rejected": true,
+      "synthetic_duplicate_offset_rejected": true
+    },
+    "independent_selected_row_hashes_match": 12,
+    "worker_replay_matches": true,
+    "independent_header_counts_match": true,
+    "ctest_passed": 3,
+    "ctest_total": 3,
+    "python_passed": 98,
+    "python_skipped": 0,
+    "ctest_seconds": 10.46,
+    "native_rebuild_needed": false,
+    "ctest_build": "private/slice118-ee-candidates/baseline/build"
+  },
+  "public_tool_hash_method": "SHA-256 of canonical Git blob bytes (LF); private/input/artifact hashes are exact bytes",
+  "public_tool_sha256": {
+    "scripts/gt4_model_probe.py": "b24d66a8ae4fb17195309e303171ea82a23a05bca48f590dd4265f09a91a62ad",
+    "tests/python/test_gt4_model_probe.py": "a84ff328e7d829ff1801300d4a66693c44f51630af2d9fa1a8955b50aa171588"
+  },
+  "private_artifact_sha256": {
+    "variation-files/manifest.json": "5026a597ebee1c07873670968971cb08287701f61c48543f0f1839a81e53b3cb",
+    "car-files/manifest.json": "12d798b460d255ae165d732c25242844d2dc805afe7f431a14a7592c89bf0c3f",
+    "source-research/source-map.md": "08989adcdd79e4a0b4dbfcc82b48d494d3e1ef2194c1020e47521200cb78c0c2",
+    "source-research/results.json": "81951471db514d293a471d704fc6a3bceb7f63c9c1d2248fba94d5b6600d1243",
+    "source-research/inspect_variation.py": "9b94e6feaeeb869fe14b008aa3aa74f3ab3e735670188690039886a5582a330f",
+    "source-research/probe120_frozen_copy.py": "146e378727e310fa3587b9fcb5275f03fabbd19bfb28bcce3b2dcad61de37fa3",
+    "elf-research/research-report.md": "f8ea8ae3137c86d4b2bd74fde51cce1012005506cd69e181554bb061f1131be4",
+    "elf-research/evidence.json": "861ea59b36454abf6a6b1110e02c45eb6ca4dd09e28549f96a36d8a59a3bc85a",
+    "header-review/research-report.md": "eede06733472f6a982bed64c6e2e6f5db67484aa95835078a34643abdc3bd0a4",
+    "header-review/evidence.json": "baa93111aa7d8928ce988e19d85fdccad310259eba868cf4b28cd0e00d4366f0",
+    "parent_variation_check.py": "c7738898dbf89119427bff15b713513b3787fda99cd0321e7a08a9182cbb83c1",
+    "parent-variation-check.json": "619d0cd86c835cc842b4e3e865619e4368c9746de1ec827a3e5d86db21bb5966",
+    "verify_evidence.py": "90d2bd4ebdaf7d9664786df85a4ba5bd80da64786f96a6d1c46180328979110a",
+    "parent-evidence-check.json": "13edd6cc38528139ed391741c4f8fc88ce0ac789694caa321e5b0fdba4c20726",
+    "probe_selected_headers.py": "0e7483c4eba8c9d415e2bd6e0c109b731826bdc8029ca50aa22b300664c681ac",
+    "selected-model-headers.json": "2c8d64dba9227c71e74d2b81786ff3c846cae3709ec5c46d961e80b823e35fa3",
+    "inspect_header_failure.py": "c705b8503d36f66c21cc766eaaa3212f54315e85ddd25bb1ca0593b41160b0df",
+    "header-discrepancies.json": "675277c9156e20a4d0fc99e28829440f12872244874e82ec0e49d95c9e670fb9",
+    "ctest-baseline.log": "e33400246a40eee446666f743b0a1843b7546d853f0579a4daacd7af5dfb6fb2"
+  },
+  "tools": {
+    "python": "3.14.5",
+    "pycdlib": "1.20.0"
+  },
+  "limitations": [
+    "Offline identity is not live instance/argument proof",
+    "SpecDB decoder is private bounded research, not general production tooling",
+    "Header-only probe; geometry, materials, VM, pixels, relocation remain Unknown",
+    "Zero-size Tex1 slots bounded as headers only; runtime/body semantics Unknown",
+    "Independent implementations share pinned format sources, not an independent PS2 fidelity oracle",
+    "Whole volume B-tree routing and hostile filesystem races remain unqualified"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Fixed shape/material/texture record inventory on the exact pair, then geometry conventions and live ownership contracts"
+}
