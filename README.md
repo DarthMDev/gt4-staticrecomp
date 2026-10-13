@@ -60,7 +60,7 @@ We work in small steps with recorded evidence and verification before merging ch
 
 ## Testing and Development
 
-The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. The current build also relies on a pre-generated private recompiled library; a clean end-to-end extraction pipeline from ISO remains future work.
+The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. A separate [EE producer](docs/EE-PRODUCER.md) now rebuilds the translator and game library from verified inputs; production still uses its qualified private library while candidate integration and gameplay checks remain pending. A clean end-to-end playable build remains future work.
 
 Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates required files, and preserves the existing memory card. Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
 
@@ -85,6 +85,8 @@ Development has progressed through boot and menus, Vulkan integration, audio and
 - [STATUS](docs/STATUS.md): Confirmed milestones and pending tasks.
 - [NATIVE-PORT-PLAN](docs/NATIVE-PORT-PLAN.md): Phased game-scene renderer, eventual native service/core migration, and 1080p/60 target.
 - [AGENT-WORKFLOW](docs/AGENT-WORKFLOW.md): Model routing, task contracts, review and future unattended queue policy.
+- [EE-PRODUCER](docs/EE-PRODUCER.md): Verified CORE/ISO preparation, fresh EE generation and separate library build.
+- [RENDER-CONTRACTS](docs/RENDER-CONTRACTS.md): Initial model/camera mapping, state effects and open coverage gates.
 - [ROADMAP](docs/ROADMAP.md): Earlier timing analysis and selective migration proposal, retained as technical context.
 - [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
 - [BUILD](docs/BUILD.md): Build environment setup and verification procedures.

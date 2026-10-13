@@ -144,8 +144,11 @@ Do not claim completion solely because code compiles or a model agrees.
 
 ## 5. Initial ready-to-specify backlog
 
-All tasks below are **proposed / not started**. They need assigned contracts;
-the table is not an instruction to execute them unattended now.
+The owner authorized bounded P0/P1 work in slice 116. R00's initial inventory is
+reviewed; R01's producer is built but full P0 runtime/coverage gates remain open.
+R02/R03 have initial static evidence, and R04 has a local side-effect ledger with
+real-car dependencies still open. R05-R09 remain proposed. The table is not an
+instruction to execute the entire backlog unattended.
 
 | ID | Deliverable | Dependencies | Suggested role | Completion evidence |
 |---|---|---|---|---|
@@ -160,8 +163,9 @@ the table is not an instruction to execute them unattended now.
 | R08 | License/provenance adoption review | None | Economical researcher | Revision/license per candidate; no incompatible implementation copied |
 | R09 | PS2 dependency retirement ledger | R02 plus service inventory | Worker + coordinator | Each dependency has caller, behavior, native replacement and removal test |
 
-First implementation package after approval: implement R01/P0's generation
-recipe, verify it, then begin the reviewed P1/P2 work. Do not give an overnight
+The [EE producer](EE-PRODUCER.md) and [render contracts](RENDER-CONTRACTS.md)
+record this first package's evidence and remaining gates. Continue bounded P1
+qualification before P2/P3 runtime replacement. Do not give an overnight
 worker the prompt “make the whole renderer native.” Give one measurable contract.
 
 ## 6. Unattended queue policy for a future configured run

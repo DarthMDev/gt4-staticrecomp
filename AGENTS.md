@@ -51,6 +51,11 @@ CFC2(28) and PS2 scan-mode fidelity remain qualification work.
 
 Owner requested architecture planning after114: see docs/ROADMAP.md. It is a
 proposal, not authorization to implement all stages or run performance probes.
+Owner now authorized P0/P1: see docs/EE-PRODUCER.md and docs/RENDER-CONTRACTS.md.
+The slice116 producer is separate from production and does not relax library pins.
+P0/P1 remain open until coverage, candidate integration and real-car contracts pass.
+Missing callback entries44EA58/44EAC8 are recorded; live reachability is Unknown.
+Luna is preferred for bounded inventory/research; semantic contracts need independent review.
 Separating presentation/game time does not require eliminating IOP/VU models.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.

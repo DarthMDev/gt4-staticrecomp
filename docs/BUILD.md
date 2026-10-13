@@ -27,13 +27,13 @@ The build validates the donor adapter sources and rejects an AOT library with a 
 The launcher verifies ISO / CORE / ELF / runtime / shaders / card seed before execution.
 Pins must not be updated to mask an underlying divergence.
 
-**Reproduction limit:** There is currently no single public end-to-end command that extracts
-and generates all inputs directly from a fresh ISO. The library was generated previously
-using the donor translator and Clang; historical private scripts and study evidence
-preserve this provenance. The current build recompiles runtime / host / adapters and re-links
-the qualified library. Do not confuse this with an independent clean-checkout build. The external
-generator code remains available in the donor repository; the archived original engine
-is not used to run the game.
+**Reproduction limit:** The [P0 EE producer](EE-PRODUCER.md) now reconstructs the
+pinned ELF from verified CORE/ISO input, rebuilds the donor translator and creates
+a separate AOT library with fresh CMake caches. It does not yet replace the
+production library or automate a clean-checkout playable game build. The ordinary
+native build still recompiles runtime/host/adapters and links the existing qualified
+library. Keep candidate and production qualification distinct; the archived
+original engine is not used to run the game.
 
 ## Compiling and Verification
 

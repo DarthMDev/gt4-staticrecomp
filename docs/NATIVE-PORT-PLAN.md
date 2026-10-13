@@ -4,6 +4,8 @@
 `88c0e96f50a3dd9a3215a5f64163febd628c843c` (slice 114 lineage).
 Status: proposed implementation sequence; no port, build, performance probe,
 game launch, or gameplay automation performed while preparing this document.
+Subsequent owner authorization started P0/P1 in slice 116; progress and limits
+are linked under those phases. Later phases remain proposed.
 
 The owner selected **Windows with an entry-level dedicated GPU, 1920x1080 at
 60 FPS** as the initial hardware/performance target. Exact CPU/GPU, RAM, VRAM,
@@ -135,6 +137,10 @@ implementation cannot advance past an unresolved semantic gate.
 
 ### P0 — Reproducible EE producer and migration contracts
 
+**Progress (slice 116):** [EE Producer](EE-PRODUCER.md) establishes independent
+input reconstruction, fresh translator/source/library production. Coverage omissions,
+candidate runtime integration, native checks and owner gameplay keep this phase open.
+
 **Dependencies:** current build/inputs and read-only reference inventory.
 **Work:** recover generator options, entrypoints, indirect targets, registration,
 compiler flags and necessary private preparation. Generate and compile the EE
@@ -152,6 +158,10 @@ must be explained. Missing private prerequisites cause a clear failure.
 or adding permissive fallback to make boot pass is prohibited.
 
 ### P1 — One-car render contract and asset understanding
+
+**Progress (slice 116):** [Render Contracts](RENDER-CONTRACTS.md) maps seven static
+candidates and their local effects. Concrete car data, ownership, conventions,
+complete callback dependencies and observation-hook qualification remain open.
 
 **Dependencies:** P0 for executable hooks; static research may start earlier.
 **Work:** map one model boundary to actual generated EE functions and callers.
