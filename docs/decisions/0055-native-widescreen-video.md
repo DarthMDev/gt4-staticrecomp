@@ -1,7 +1,8 @@
 # 0055 — Native widescreen defaults and guest video modes
 
 Status: accepted widescreen implementation and synthetic video bounds; real
-480p/1080i racing remains owner-assisted qualification, 2026-10-13. Baseline f9346c8;
+480i/480p/1080i racing now owner-confirmed functionally, 2026-10-13.
+Independent scan-mode fidelity remains open. Baseline f9346c8;
 branch codex/widescreen-video-113. Owner prioritizes16:9/default and keeps4:3
 as an option. Qualify480p/1080i after entering a real race, then open manual play.
 

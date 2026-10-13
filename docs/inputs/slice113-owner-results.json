@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "date": "2026-10-13",
+  "baseline_commit": "86b9df69ad02bc1bc62c54fb327546c4aad9e120",
+  "producer_manifest": "slice113-native-video.json",
+  "evidence_kind": "owner_manual_report_and_screenshot",
+  "scope": "record_only_no_profiling_no_input_fix_no_runtime_change",
+  "screenshot": {
+    "path": "private/slice113-owner-results/owner-1080i-race-2026-10-13.png",
+    "size_bytes": 418360,
+    "sha256": "0d9da76c6a3f3df83c4eaaba4e3ccb7be07e15c3a7a6f4c9a286feebd0c33623",
+    "owner_selected_mode": "1080i",
+    "overlay_fps": 18,
+    "overlay_milliseconds": 72.5,
+    "overlay_independently_calibrated": false
+  },
+  "owner_confirmed": {
+    "functional_gameplay_modes": ["480i", "480p", "1080i"],
+    "aspect_all_modes": "16:9",
+    "subjectively_most_stable": "480p",
+    "frametime": "inconsistent",
+    "keyboard_directions": "two menu movements per press reported"
+  },
+  "hypotheses": ["Other keyboard buttons may also trigger twice"],
+  "unknown": [
+    "Independent CRT/buffer/field verification of manual selections",
+    "Cause of duplicated keyboard navigation",
+    "Physical XInput behavior",
+    "Cause of performance loss and frametime variation"
+  ],
+  "future_direction": "Progressive-only guest changes later; interlace work deferred"
+}

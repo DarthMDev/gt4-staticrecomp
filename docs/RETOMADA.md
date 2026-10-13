@@ -1,5 +1,13 @@
 # Retomada do GT4Recomp — troca de modelo
 
+**Resultado manual do dono — 2026-10-13, após86b9df6.**480i,480p e1080i
+funcionaram em corrida, todos16:9;480p foi o mais estável na percepção do dono.
+Print1080i mostra18FPS/72.5ms e frametime variável. Setas no teclado deram
+dois movimentos por toque; outros botões possivelmente também, ainda não
+testados. XInput físico não testado. Pedido explícito: somente registrar,
+sem mapear/otimizar desempenho nem corrigir input agora. Modos têm confirmação
+funcional do dono; fidelidade temporal/estabilidade continuam abertas.
+
 **Atualização — 2026-10-13, fatia113/16:9 entregue; modos em teste manual.** Prioridade do dono:
 16:9 nativo por padrão e4:3 opcional; testar480p/1080i em corrida real.
 Janela/viewport16:9 e opção original do jogo foram implementados e testes

@@ -58,6 +58,29 @@ reads006184F0. Input states and copied cards retain hashes in each probe result.
 
 ## Automated gates
 
+### Owner manual outcome after publication86b9df6
+
+Confirmed owner report2026-10-13:480i,480p and1080i all worked in gameplay,
+each selected16:9.480p was subjectively the most stable. Screenshot supplied
+as1080i shows actual track/HUD and overlay18FPS/72.5ms with variable frametime.
+Private418360B image owner-1080i-race-2026-10-13.png
+SHA2560d9da76c6a3f3df83c4eaaba4e3ccb7be07e15c3a7a6f4c9a286feebd0c33623,
+under private/slice113-owner-results; metadata in slice113-owner-results.json.
+This supplies the requested owner functional confirmation, separately from
+the preceding automated controls and immutable113 evidence. No independent
+CRT/buffer/field trace was collected for these three manual selections.
+
+Owner reports directional keyboard presses cause two menu movements. Other
+buttons may be affected (Hypothesis); they were not tested. XInput physical
+use remains Unknown. Duplicate delivery, key repeat and guest/host timing are
+unqualified causes; no investigation or fix performed. Owner explicitly asks
+only to register results; performance mapping remains future work.
+
+Progressive-only game changes remain the intended later route, so additional
+interlace work is deferred. Temporal deinterlacing and dithering are different
+operations; neither the screenshot nor this report establishes a required fix.
+Existing pending-mode paragraphs below record the earlier handoff checkpoint.
+
 Race480p21 actually reaches Nürburgring with AI, car and running HUD timer
 (capture13900:8.983s); normal14000 stop251.411s. Native race-wide flag is1 at
 006184F0, independently anchored to the original ELF in the saved RAM.

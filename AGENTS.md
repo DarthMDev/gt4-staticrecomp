@@ -58,6 +58,12 @@ full races or broad saves. Frozen111 and production remain unchanged.
 
 ## Roles and autonomy
 
+Owner manual report2026-10-13 afterslice113:480i/480p/1080i all worked in
+gameplay at16:9;480p subjectively most stable. Keyboard arrows reportedly
+double-trigger; other buttons suspected, physical XInput untested. Record
+these results only for now, with no performance audit/optimization/input fix.
+Functional owner confirmation does not establish independent scan fidelity.
+
 Owner priority2026-10-13: native16:9 default with4:3 optional, then real race
 480p/1080i qualification. Record unstable frametime and severe3D performance
 (19FPS race,11FPS car selection), but do not investigate/optimize performance

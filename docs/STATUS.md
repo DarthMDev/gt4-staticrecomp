@@ -1,5 +1,19 @@
 # Project status
 
+2026-10-13 — owner manual results after published slice113/86b9df6.
+Confirmed owner report:480i,480p and1080i all functioned in real gameplay,
+all selected16:9;480p appeared most stable. Attached1080i race screenshot
+shows18FPS/72.5ms and variable frametime. This closes the requested owner
+functional mode check, not independent scan-mode/fidelity or stability proof.
+Keyboard directions reportedly produce two menu moves per press; other buttons
+possibly affected, untested. Physical XInput still untested. Record only per
+explicit owner instruction: no profiling, input fix, interlace work or game
+patch now. Future performance mapping and keyboard-repeat diagnosis remain open;
+progressive-only guest changes remain the intended later direction.
+Evidence: RE113 and docs/inputs/slice113-owner-results.json; private screenshot
+preserved separately from immutable113 producer/artifacts. Earlier pending
+manual-mode statements below describe the pre-owner-test checkpoint.
+
 Owner clarification2026-10-13: record severe3D performance only, investigate
 later. Screenshots report19FPS/57.3ms in race and11FPS/93.3ms on FordKa selection;
 unstable menu frametime also retained privately and pinned in RE113. No current
