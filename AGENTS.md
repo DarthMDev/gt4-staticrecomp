@@ -53,6 +53,8 @@ Owner requested architecture planning after114: see docs/ROADMAP.md. It is a
 proposal, not authorization to implement all stages or run performance probes.
 Owner now authorized P0/P1: see docs/EE-PRODUCER.md and docs/RENDER-CONTRACTS.md.
 The slice116 producer is separate from production and does not relax library pins.
+Slice117 qualifies one explicit-seed callback recovery offline; see
+docs/EE-CALLBACK-COVERAGE.md. Diagnostic source/objects do not replace production.
 P0/P1 remain open until coverage, candidate integration and real-car contracts pass.
 Missing callback entries44EA58/44EAC8 are recorded; live reachability is Unknown.
 Luna is preferred for bounded inventory/research; semantic contracts need independent review.

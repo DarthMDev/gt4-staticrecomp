@@ -137,8 +137,10 @@ lead, not an independent correctness oracle or a licensing decision for reuse.
 
 ## Before the first native car
 
-1. Close the omitted-entry/callback ledger described in slice 116 evidence, using
-   explicit seed provenance and error behavior; preserve the baseline producer.
+1. Continue the omitted-entry/callback ledger using explicit seed provenance and
+   error behavior; preserve the baseline producer. [Slice 117](EE-CALLBACK-COVERAGE.md)
+   recovers one pair offline but does not qualify its live usage. Its supplier's
+   r8/r9/r10 dependencies invalidate a four-argument-only host bridge.
 2. Identify one real car/instance, concrete virtual methods, stream/pass selection
    and all state/VM/completion effects on the owner-controlled scene.
 3. Establish bounds-checked relocation and geometry/texture/LOD extraction,

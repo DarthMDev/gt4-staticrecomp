@@ -140,6 +140,8 @@ implementation cannot advance past an unresolved semantic gate.
 **Progress (slice 116):** [EE Producer](EE-PRODUCER.md) establishes independent
 input reconstruction, fresh translator/source/library production. Coverage omissions,
 candidate runtime integration, native checks and owner gameplay keep this phase open.
+**Slice 117:** [Callback Coverage](EE-CALLBACK-COVERAGE.md) recovers one omitted
+pair in four offline profiles and compiles the changed units, without production integration.
 
 **Dependencies:** current build/inputs and read-only reference inventory.
 **Work:** recover generator options, entrypoints, indirect targets, registration,

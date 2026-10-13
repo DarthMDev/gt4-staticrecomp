@@ -1,0 +1,529 @@
+{
+  "analysis_tool": {
+    "sha256": "af7d6a6ed7692a9809e9dd98464adf90bac5a8f5d29e3153afeaecc04f21893b",
+    "size_bytes": 73216
+  },
+  "compile_controls": {
+    "compiler": {
+      "build_type": "Release",
+      "compiler": "C:/Program Files/LLVM/bin/clang-cl.exe",
+      "compiler_id": "Clang",
+      "compiler_version": "23.1.2",
+      "cxx_standard": "20",
+      "flags": "/DWIN32 /D_WINDOWS /EHsc",
+      "release_flags": "/O2 /Ob2 /DNDEBUG"
+    },
+    "generated": {
+      "file_count": 328,
+      "inventory_sha256": "3c140795c020b46a0a24ef2c06a8010a90e59f3df628213b4b9c4838b5c4fd7b",
+      "size_bytes": 86378653
+    },
+    "objects": [
+      {
+        "sha256": "c9d25978599896a6400035a1e6e2be73730f83800f7944db13ce370e99e19da3",
+        "size_bytes": 246766,
+        "source": "unit_0035.cpp"
+      },
+      {
+        "sha256": "66e987b9757a8a97665fa7437a1d09767899c8247ddf12ea944770db800982b4",
+        "size_bytes": 234709,
+        "source": "unit_008F.cpp"
+      },
+      {
+        "sha256": "d63f09f069a1a7188c8f9074da876327085f99f3f5a5a5f6d66a44490618b6f4",
+        "size_bytes": 232341,
+        "source": "unit_0090.cpp"
+      },
+      {
+        "sha256": "bb0d3ac6e11f7db8982eaa01415ee45f38408eb5eeb3957e2bcd0ed4bb32a685",
+        "size_bytes": 272951,
+        "source": "unit_009C.cpp"
+      },
+      {
+        "sha256": "45cad9a20bf64f051dd81a6bd1937258e9eb218f335276b34e919a876bbc3486",
+        "size_bytes": 242528,
+        "source": "unit_009E.cpp"
+      },
+      {
+        "sha256": "f817c6bca824a06ce789928f130cb713518da90adf3ce8649ddea3a871a8a0d5",
+        "size_bytes": 193907,
+        "source": "unit_00A1.cpp"
+      },
+      {
+        "sha256": "3ca99057ac3fac0c5c14f08beed4dd28f088bfa535506d18ab3b488d47ad7c62",
+        "size_bytes": 228766,
+        "source": "unit_00A3.cpp"
+      },
+      {
+        "sha256": "1b98ab3886137617b6c0fcdf57fc6ba4bf50e075dbfe405a3d50bc6e220cd8c9",
+        "size_bytes": 259537,
+        "source": "unit_00AC.cpp"
+      },
+      {
+        "sha256": "d886abe3ba4a44c00f65306c4f5d42682a00faa6017a6687e8227e120581811a",
+        "size_bytes": 356783,
+        "source": "unit_00B2.cpp"
+      },
+      {
+        "sha256": "e9ea1b50e06abb3a8b4214c79aa22abecbf3d1b13fa40cb527376bf6ceaa3d45",
+        "size_bytes": 236823,
+        "source": "unit_00C0.cpp"
+      },
+      {
+        "sha256": "be383134af72c68d24ce2461293ce7f2718b3f2c8b2af5055f22c1758040319b",
+        "size_bytes": 274134,
+        "source": "unit_00C1.cpp"
+      },
+      {
+        "sha256": "658566ac405d0f77f763ce0ade42163a92842e629ca44c511579e55db39fb766",
+        "size_bytes": 274657,
+        "source": "unit_00C3.cpp"
+      },
+      {
+        "sha256": "433834dad74f37a556afdceadc92d63d188cf2c25757d6703a9bb9917383972c",
+        "size_bytes": 332170,
+        "source": "unit_00C4.cpp"
+      },
+      {
+        "sha256": "69d6d487bcce2b38ccef68cd1a4be612f1ca1f612e430a9e7ab0d8632207df55",
+        "size_bytes": 209386,
+        "source": "unit_00CD.cpp"
+      },
+      {
+        "sha256": "9142aba8dee8c120568d165df3b293cbf27857441dab1f09406510a698d0ff58",
+        "size_bytes": 202484,
+        "source": "unit_00D3.cpp"
+      },
+      {
+        "sha256": "4d5a4498c98c8ed1ca6db4623fcc102760d995eed42cf23c70982d58ba9147d1",
+        "size_bytes": 208834,
+        "source": "unit_00D8.cpp"
+      },
+      {
+        "sha256": "705b1230fc9932a2adb99013cca1c1ee56dcf830e0410453a8d723b5ef0a2a1a",
+        "size_bytes": 156241,
+        "source": "unit_013C.cpp"
+      },
+      {
+        "sha256": "8d7f7fbef8a11ecb70736dcc9ffffff19e2d1432944cefe3f32ea0866d7896e8",
+        "size_bytes": 83182,
+        "source": "unit_0140.cpp"
+      }
+    ],
+    "qualification": "Changed-unit object compilation only; no candidate archive/runtime link",
+    "zero_warnings_observed": true
+  },
+  "control_sources": {
+    "scripts/ee_entry_coverage.py": {
+      "sha256": "638e7af3c53f4fb0ee73bf72795d62135b0b1bae33018784456cc8e31a3a2f49",
+      "size_bytes": 9607
+    },
+    "tests/python/test_ee_entry_coverage.py": {
+      "sha256": "11cf17f712cb4f708addc16d906e65ab541ea1b9fa238fc7bc66baf76e0e8176",
+      "size_bytes": 4592
+    },
+    "tools/ee_producer/CMakeLists.txt": {
+      "sha256": "8b2c1dc86efc07269d183bb993d66c78abee79f52e9ab2b3904a25bd2e32d530",
+      "size_bytes": 4412
+    },
+    "tools/ee_producer/analysis_controls.cpp": {
+      "sha256": "8c07b0195ee6b60a1cbe6715563cb6c6eb8d1a159e11aa1e6501bb65363704ee",
+      "size_bytes": 4533
+    }
+  },
+  "core": {
+    "sha256": "85d26aa8430154967b2633eede929286694ac39e99762527edcec365fd642ff9",
+    "size_bytes": 2020861
+  },
+  "date": "2026-10-13",
+  "donor_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "elf": {
+    "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c",
+    "size_bytes": 6123004
+  },
+  "independent_static_review": {
+    "added_guest_dispatch_labels": [
+      "0x0044EA58",
+      "0x0044EA7C",
+      "0x0044EA84",
+      "0x0044EA90",
+      "0x0044EA98",
+      "0x0044EAA0",
+      "0x0044EAB8",
+      "0x0044EAC8",
+      "0x0044EB00"
+    ],
+    "changed_caller_units": 17,
+    "existing_dispatch_labels_removed": 0,
+    "method": "Resolve old/new numeric dispatch IDs through guest-label switches; compare existing bodies after removing the two new spans and registry renumbering",
+    "result": "Existing bodies and callers identical under normalization; no guest execution"
+  },
+  "limitations": [
+    "Live reachability and performance relevance unknown",
+    "Analyzer controls share donor recovery implementation; not an independent R5900 oracle",
+    "Zero emitted stops does not exclude dispatch misses or unknown dependencies",
+    "No full candidate archive, runtime link or gameplay qualification",
+    "Caller ABI includes live r8/r9/r10 consumed by dispatcher; four-argument prototype is incomplete",
+    "P0/P1 remain in progress; no renderer, timing, input or performance changes"
+  ],
+  "live_game_tested": false,
+  "production_pins_modified": false,
+  "profiles": {
+    "baseline": {
+      "analysis": {
+        "candidates": [
+          {
+            "address": "0x0044EA58",
+            "code": false,
+            "entry": false,
+            "function": false,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EAC8",
+            "code": false,
+            "entry": false,
+            "function": false,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EB10",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          }
+        ],
+        "entries": 135093,
+        "functions": 14660,
+        "instructions": 1240374,
+        "profile": "baseline",
+        "rejected": 0
+      },
+      "changed_files": [],
+      "generated": {
+        "file_count": 328,
+        "inventory_sha256": "7a1a0909aa7197657ccb09a485d5bbb362d29afd3c08f28ffe7e134c0bf7d087",
+        "size_bytes": 86375038
+      },
+      "registry_controls": {
+        "callbacks": {
+          "0x0044EA58": {
+            "body_label": false,
+            "entry_id": 0,
+            "unit": "unit_00D3"
+          },
+          "0x0044EAC8": {
+            "body_label": false,
+            "entry_id": 0,
+            "unit": "unit_00D3"
+          }
+        },
+        "continuation_labels": {
+          "0x0044EA90": false,
+          "0x0044EAB8": false,
+          "0x0044EB00": false
+        },
+        "emitted_stop_sites": 0,
+        "literal_wrapper_call_sites": 10
+      },
+      "seed_file": null,
+      "seeds": []
+    },
+    "both_seeds": {
+      "analysis": {
+        "candidates": [
+          {
+            "address": "0x0044EA58",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EAC8",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EB10",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          }
+        ],
+        "entries": 135102,
+        "functions": 14662,
+        "instructions": 1240419,
+        "profile": "both_seeds",
+        "rejected": 0
+      },
+      "changed_files": [
+        "unit_0035.cpp",
+        "unit_008F.cpp",
+        "unit_0090.cpp",
+        "unit_009C.cpp",
+        "unit_009E.cpp",
+        "unit_00A1.cpp",
+        "unit_00A3.cpp",
+        "unit_00AC.cpp",
+        "unit_00B2.cpp",
+        "unit_00C0.cpp",
+        "unit_00C1.cpp",
+        "unit_00C3.cpp",
+        "unit_00C4.cpp",
+        "unit_00CD.cpp",
+        "unit_00D3.cpp",
+        "unit_00D8.cpp",
+        "unit_013C.cpp",
+        "unit_0140.cpp"
+      ],
+      "generated": {
+        "file_count": 328,
+        "inventory_sha256": "3c140795c020b46a0a24ef2c06a8010a90e59f3df628213b4b9c4838b5c4fd7b",
+        "size_bytes": 86378653
+      },
+      "registry_controls": {
+        "callbacks": {
+          "0x0044EA58": {
+            "body_label": true,
+            "entry_id": 318,
+            "unit": "unit_00D3"
+          },
+          "0x0044EAC8": {
+            "body_label": true,
+            "entry_id": 325,
+            "unit": "unit_00D3"
+          }
+        },
+        "continuation_labels": {
+          "0x0044EA90": true,
+          "0x0044EAB8": true,
+          "0x0044EB00": true
+        },
+        "emitted_stop_sites": 0,
+        "literal_wrapper_call_sites": 12
+      },
+      "seed_file": {
+        "sha256": "d89bfe34ea696e8126994fb360922d3cddaa6c6d868e25ea33d81a6b18d02b13",
+        "size_bytes": 24
+      },
+      "seeds": [
+        "0x0044EA58",
+        "0x0044EAC8"
+      ]
+    },
+    "callback_seed": {
+      "analysis": {
+        "candidates": [
+          {
+            "address": "0x0044EA58",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EAC8",
+            "code": false,
+            "entry": false,
+            "function": false,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EB10",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          }
+        ],
+        "entries": 135100,
+        "functions": 14661,
+        "instructions": 1240402,
+        "profile": "callback_seed",
+        "rejected": 0
+      },
+      "changed_files": [
+        "unit_0035.cpp",
+        "unit_008F.cpp",
+        "unit_0090.cpp",
+        "unit_009C.cpp",
+        "unit_009E.cpp",
+        "unit_00A1.cpp",
+        "unit_00A3.cpp",
+        "unit_00AC.cpp",
+        "unit_00B2.cpp",
+        "unit_00C0.cpp",
+        "unit_00C1.cpp",
+        "unit_00C3.cpp",
+        "unit_00C4.cpp",
+        "unit_00CD.cpp",
+        "unit_00D3.cpp",
+        "unit_00D8.cpp",
+        "unit_013C.cpp",
+        "unit_0140.cpp"
+      ],
+      "generated": {
+        "file_count": 328,
+        "inventory_sha256": "c771cf16660a5465a1bd0e09dc113592ce03b6a8fd4b5806d24d3f9a6fd4454e",
+        "size_bytes": 86377489
+      },
+      "registry_controls": {
+        "callbacks": {
+          "0x0044EA58": {
+            "body_label": true,
+            "entry_id": 318,
+            "unit": "unit_00D3"
+          },
+          "0x0044EAC8": {
+            "body_label": false,
+            "entry_id": 0,
+            "unit": "unit_00D3"
+          }
+        },
+        "continuation_labels": {
+          "0x0044EA90": true,
+          "0x0044EAB8": true,
+          "0x0044EB00": false
+        },
+        "emitted_stop_sites": 0,
+        "literal_wrapper_call_sites": 12
+      },
+      "seed_file": {
+        "sha256": "99de708696972f25a45ef0d8a3ec88c43cbc2234bf087d800bf6759397ce0c61",
+        "size_bytes": 12
+      },
+      "seeds": [
+        "0x0044EA58"
+      ]
+    },
+    "supplier_seed": {
+      "analysis": {
+        "candidates": [
+          {
+            "address": "0x0044EA58",
+            "code": true,
+            "entry": true,
+            "function": false,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EAC8",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          },
+          {
+            "address": "0x0044EB10",
+            "code": true,
+            "entry": true,
+            "function": true,
+            "rejected": false
+          }
+        ],
+        "entries": 135102,
+        "functions": 14661,
+        "instructions": 1240419,
+        "profile": "supplier_seed",
+        "rejected": 0
+      },
+      "changed_files": [
+        "unit_0035.cpp",
+        "unit_008F.cpp",
+        "unit_0090.cpp",
+        "unit_009C.cpp",
+        "unit_009E.cpp",
+        "unit_00A1.cpp",
+        "unit_00A3.cpp",
+        "unit_00AC.cpp",
+        "unit_00B2.cpp",
+        "unit_00C0.cpp",
+        "unit_00C1.cpp",
+        "unit_00C3.cpp",
+        "unit_00C4.cpp",
+        "unit_00CD.cpp",
+        "unit_00D3.cpp",
+        "unit_00D8.cpp",
+        "unit_013C.cpp",
+        "unit_0140.cpp"
+      ],
+      "generated": {
+        "file_count": 328,
+        "inventory_sha256": "3c140795c020b46a0a24ef2c06a8010a90e59f3df628213b4b9c4838b5c4fd7b",
+        "size_bytes": 86378653
+      },
+      "registry_controls": {
+        "callbacks": {
+          "0x0044EA58": {
+            "body_label": true,
+            "entry_id": 318,
+            "unit": "unit_00D3"
+          },
+          "0x0044EAC8": {
+            "body_label": true,
+            "entry_id": 325,
+            "unit": "unit_00D3"
+          }
+        },
+        "continuation_labels": {
+          "0x0044EA90": true,
+          "0x0044EAB8": true,
+          "0x0044EB00": true
+        },
+        "emitted_stop_sites": 0,
+        "literal_wrapper_call_sites": 12
+      },
+      "seed_file": {
+        "sha256": "6e6f31056b6bac1d22468cd17201ceff4cbddb4f562ff75cf4689aca11d7314e",
+        "size_bytes": 12
+      },
+      "seeds": [
+        "0x0044EAC8"
+      ]
+    }
+  },
+  "qualification": "Offline bounded recovery/source/changed-object compilation only",
+  "runtime_linked": false,
+  "schema_version": 1,
+  "slice": 117,
+  "source_baseline_commit": "a900038958c886c168006128b9e67e39abb6c5c5",
+  "spans": [
+    {
+      "address": "0x0044EA58",
+      "file_offset": 3471960,
+      "scope": "Through return delay slot; excludes following padding",
+      "sha256": "7aaa37ba67140d0364263591c3dca897baba6d8405611b12907d1d60ab1ad284",
+      "size_bytes": 112
+    },
+    {
+      "address": "0x0044EAC8",
+      "file_offset": 3472072,
+      "scope": "Through return delay slot; excludes following padding",
+      "sha256": "e82cfc898f1123db93397537cbe27ebf7edab55e8f35279a509fd52e94d9cd05",
+      "size_bytes": 68
+    }
+  ],
+  "supplier_and_both_source_identical": true,
+  "tests": {
+    "ctest": {
+      "passed": 2,
+      "seconds": 3.24,
+      "total": 2
+    },
+    "python": {
+      "passed": 52,
+      "skip_reason": "Existing native Vulkan/audio/card-lock binaries absent in isolated checkout",
+      "skipped": 3,
+      "total": 55
+    }
+  },
+  "translator": {
+    "sha256": "b6e76a7ca654cd7cf8ff13b82284622c42d712ad028485e9086257ecbe697f80",
+    "size_bytes": 608768
+  }
+}

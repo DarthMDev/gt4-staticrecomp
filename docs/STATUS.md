@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 116, P0 producer and bounded P1 contract research.
+2026-10-13 — Slice 117, bounded offline EE callback recovery.
 Playable base remains slice 114. Implementation branch:
-`codex/ee-producer-render-contract-116`, based on planning commit 155dcf9.
+`codex/ee-callback-coverage-117`, based on producer commit a900038.
 
 ## Authorized P0/P1 Progress
 
@@ -15,19 +15,23 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   328 source files identically to the frozen producer. No old CMake cache is used.
 - **Confirmed:** the fresh library's 327 AMD64 object payloads match the baseline
   after normalizing only their COFF timestamps; archive paths explain the size delta.
-- **Confirmed:** producer CTest 1/1 passes; Python discovery 51 tests, 48 passing
-  and 3 native integration skips in the isolated checkout. These are not candidate
-  runtime or gameplay qualification.
+- **Confirmed (slice 117):** producer CTest 2/2 passes; Python discovery 55 tests,
+  52 passing and 3 native integration skips in the isolated checkout. These are
+  not candidate runtime or gameplay qualification.
 - **Confirmed:** seven model/camera candidates map to real generated registry
   entries and prefix hashes; camera helpers and model VM/callbacks have state effects.
-- **Confirmed:** callback function starts `0x0044EA58`/`0x0044EAC8` lack generated
-  bodies/entries. The donor EE dispatcher halts on missing code without a module
+- **Confirmed:** baseline callback starts `0x0044EA58`/`0x0044EAC8` lack generated
+  bodies/entries. An offline supplier-only seed recovers both, adding 45 instructions
+  and nine entries. Supplier-only/both source matches; all 18 changed units compile.
+  Existing bodies/callers match under independently reviewed dispatch-ID normalization.
+  Production seeds/library are unchanged. The donor EE dispatcher halts on missing code without a module
   replacement; it has no EE interpreter fallback.
 - **Unknown:** live reachability of these omissions and any performance relationship.
   Generation equality is not complete-code coverage or PS2 fidelity proof.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
-[slice 116 evidence](inputs/slice116-ee-producer-contracts.json) for build/test
+[Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
+and [slice 117 evidence](inputs/slice117-ee-entry-coverage.json), for build/test
 results and remaining gates. P0/P1 remain **in progress**. Candidate runtime
 integration/manual qualification and one real car's data/conventions are pending.
 The production library, launcher and runtime have not been replaced.
@@ -82,8 +86,9 @@ The owner requested a comprehensive native-renderer/native-port and multi-model 
 Initial target selected by owner: Windows, entry-level dedicated GPU, internal
 1920x1080 at 60 FPS. Exact hardware/preset and achieved throughput remain Unknown.
 
-The owner authorized and started reproducible EE generation and bounded model/camera
-contract research in slice 116. The planned following stage is one live showroom car drawn through a game-level
+The owner authorized reproducible EE generation and bounded model/camera research
+in slice 116; slice 117 qualifies one callback recovery mechanism offline. The
+planned following stage is one live showroom car drawn through a game-level
 Vulkan renderer. Expand to racing, progressive/internal resolution and temporal
 separation; retire all graphics paths, then remaining execution/device dependencies
 through separate qualified service/core migrations. AOT alone does not mean zero

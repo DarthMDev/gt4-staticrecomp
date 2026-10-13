@@ -58,6 +58,11 @@ These are proposed phases, not completed features or published minimum requireme
 
 We work in small steps with recorded evidence and verification before merging changes. The [Native Port Plan](docs/NATIVE-PORT-PLAN.md) defines dependencies, claim boundaries and completion gates; the [Agent Workflow](docs/AGENT-WORKFLOW.md) describes economical workers and independent review. There is no announced completion timeline.
 
+The EE translator/library can now be rebuilt from verified inputs. Initial model
+and camera mapping is documented, and an isolated experiment has recovered one
+omitted callback pair with compilation checks. These foundations are still being
+qualified; the dedicated game-scene renderer has not started replacing live graphics.
+
 ## Testing and Development
 
 The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. A separate [EE producer](docs/EE-PRODUCER.md) now rebuilds the translator and game library from verified inputs; production still uses its qualified private library while candidate integration and gameplay checks remain pending. A clean end-to-end playable build remains future work.
@@ -87,6 +92,7 @@ Development has progressed through boot and menus, Vulkan integration, audio and
 - [AGENT-WORKFLOW](docs/AGENT-WORKFLOW.md): Model routing, task contracts, review and future unattended queue policy.
 - [EE-PRODUCER](docs/EE-PRODUCER.md): Verified CORE/ISO preparation, fresh EE generation and separate library build.
 - [RENDER-CONTRACTS](docs/RENDER-CONTRACTS.md): Initial model/camera mapping, state effects and open coverage gates.
+- [EE-CALLBACK-COVERAGE](docs/EE-CALLBACK-COVERAGE.md): Bounded offline recovery experiment and remaining integration gates.
 - [ROADMAP](docs/ROADMAP.md): Earlier timing analysis and selective migration proposal, retained as technical context.
 - [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
 - [BUILD](docs/BUILD.md): Build environment setup and verification procedures.

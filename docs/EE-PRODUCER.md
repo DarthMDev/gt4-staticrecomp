@@ -94,6 +94,12 @@ active native tests against that candidate, and owner menus/showroom/race checks
 are not complete. Source equality reproduces the current implementation's limits.
 It proves neither complete function recovery nor PS2 fidelity.
 
+[Slice 117 callback recovery](EE-CALLBACK-COVERAGE.md) diagnoses one cold supplier/
+callback pair and compares four explicit-seed profiles in a fresh diagnostic capsule.
+The supplier-only seed recovers both bodies, with 18 changed units compiled offline.
+This experiment has separate controls/receipts and does not relax this baseline
+producer's source equality or the production library gates.
+
 The ordinary native build still requires the original pinned private library and
 private adapters/shaders. This producer does not yet provide an end-to-end
 clean-checkout game build or publish a replacement playable executable.

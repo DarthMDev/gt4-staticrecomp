@@ -15,9 +15,22 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 set(GT4_DONOR "" CACHE PATH "Verified frozen ps2-web-recomp source directory")
 set(GT4_GENERATED "" CACHE PATH "Verified fresh EE generated source directory")
+set(GT4_CHANGED_UNITS "" CACHE FILEPATH "Diagnostic-only list of changed generated compilation units")
 option(GT4_BUILD_TRANSLATOR "Build the frozen donor's offline translator" ON)
+option(GT4_ANALYSIS_CONTROLS "Build bounded offline recovery controls" OFF)
 if(NOT EXISTS "${GT4_DONOR}/runtime/include/ps2/generated.hpp")
     message(FATAL_ERROR "Missing verified donor; run ee_producer.py prepare first")
+endif()
+
+if(GT4_ANALYSIS_CONTROLS)
+    add_executable(ee_analysis_controls analysis_controls.cpp
+        "${GT4_DONOR}/recomp/analysis.cpp" "${GT4_DONOR}/recomp/elf.cpp"
+        "${GT4_DONOR}/recomp/r5900.cpp")
+    target_include_directories(ee_analysis_controls PRIVATE "${GT4_DONOR}/recomp")
+    target_compile_options(ee_analysis_controls PRIVATE /W4)
+    enable_testing()
+    add_test(NAME ee_recovery_controls COMMAND ee_analysis_controls)
+    set_tests_properties(ee_recovery_controls PROPERTIES RUN_SERIAL TRUE TIMEOUT 30)
 endif()
 
 if(GT4_BUILD_TRANSLATOR)
@@ -39,6 +52,20 @@ if(GT4_GENERATED)
     add_library(ps2game STATIC ${generated_sources})
     target_include_directories(ps2game PRIVATE "${GT4_GENERATED}" "${GT4_DONOR}/runtime/include")
     target_compile_options(ps2game PRIVATE -Wno-unused-label -Wno-unused-variable)
+    if(GT4_CHANGED_UNITS)
+        file(STRINGS "${GT4_CHANGED_UNITS}" changed_unit_names)
+        set(changed_sources)
+        foreach(name IN LISTS changed_unit_names)
+            if(NOT name MATCHES "^(unit_[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]|table)\\.cpp$"
+               OR NOT EXISTS "${GT4_GENERATED}/${name}")
+                message(FATAL_ERROR "Invalid diagnostic compilation-unit name")
+            endif()
+            list(APPEND changed_sources "${GT4_GENERATED}/${name}")
+        endforeach()
+        add_library(ee_changed_unit_controls OBJECT ${changed_sources})
+        target_include_directories(ee_changed_unit_controls PRIVATE "${GT4_GENERATED}" "${GT4_DONOR}/runtime/include")
+        target_compile_options(ee_changed_unit_controls PRIVATE -Wno-unused-label -Wno-unused-variable)
+    endif()
 endif()
 
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/toolchain.txt" CONTENT

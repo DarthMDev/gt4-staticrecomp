@@ -147,7 +147,9 @@ Do not claim completion solely because code compiles or a model agrees.
 The owner authorized bounded P0/P1 work in slice 116. R00's initial inventory is
 reviewed; R01's producer is built but full P0 runtime/coverage gates remain open.
 R02/R03 have initial static evidence, and R04 has a local side-effect ledger with
-real-car dependencies still open. R05-R09 remain proposed. The table is not an
+real-car dependencies still open. Slice 117 adds offline callback recovery and
+changed-unit compilation; candidate integration and live coverage remain open.
+R05-R09 remain proposed. The table is not an
 instruction to execute the entire backlog unattended.
 
 | ID | Deliverable | Dependencies | Suggested role | Completion evidence |
