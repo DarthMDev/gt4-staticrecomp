@@ -63,3 +63,7 @@ truncation/trailing input, caps, graphs, pins, selection and private output.
 No runtime/shader/C++ change or new native build was needed. Offline extraction
 does not qualify live car ownership, geometry/textures or drawing replacement.
 P1 remains open; game sessions, cards, rendering, timing and input are unchanged.
+
+Public source/test hashes identify canonical Git blob bytes with LF endings;
+Windows CRLF checkout conversion is not a source change. Asset, ISO and private
+artifact hashes remain exact byte hashes, without normalization.

@@ -138,6 +138,7 @@
     "python": "3.14.5",
     "pycdlib": "1.20.0"
   },
+  "public_tool_hash_method": "SHA-256 of canonical Git blob bytes (LF); Windows working-tree CRLF conversion does not change source identity. Private input/output hashes remain exact byte hashes.",
   "public_tool_sha256": {
     "scripts/gt4_volume.py": "eb863c9a604d3b0fe36bb455f54699f50d6a17d8dc1cb8e73461c86b35bba460",
     "tests/python/test_gt4_volume.py": "5f716620fc83f044a49d4d7cd192ccdba943f1c7f1c48abfea2c1c7ef89de70e"
