@@ -142,6 +142,8 @@ input reconstruction, fresh translator/source/library production. Coverage omiss
 candidate runtime integration, native checks and owner gameplay keep this phase open.
 **Slice 117:** [Callback Coverage](EE-CALLBACK-COVERAGE.md) recovers one omitted
 pair in four offline profiles and compiles the changed units, without production integration.
+**Slice 118:** [EE Candidates](EE-CANDIDATES.md) integrates separate baseline/
+recovered runtime profiles; gameplay and remaining coverage still gate completion.
 
 **Dependencies:** current build/inputs and read-only reference inventory.
 **Work:** recover generator options, entrypoints, indirect targets, registration,
@@ -164,6 +166,8 @@ or adding permissive fallback to make boot pass is prohibited.
 **Progress (slice 116):** [Render Contracts](RENDER-CONTRACTS.md) maps seven static
 candidates and their local effects. Concrete car data, ownership, conventions,
 complete callback dependencies and observation-hook qualification remain open.
+**Slice 118:** [Car Asset Research](CAR-ASSET-RESEARCH.md) verifies volume-index
+metadata but leaves page decoding and the named-car/live-instance mapping open.
 
 **Dependencies:** P0 for executable hooks; static research may start earlier.
 **Work:** map one model boundary to actual generated EE functions and callers.

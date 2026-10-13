@@ -21,11 +21,12 @@ def replace_section(source, start, end, replacement):
     return source[:first] + replacement + '\n\n' + source[last:]
 
 
-def prepare(output):
+def prepare(output, assets_root=None):
     output = output.resolve()
     if not output.is_relative_to(ROOT / 'private') or output == ROOT / 'private':
         raise ValueError('Derived donor code must stay inside private/')
-    donor = ROOT / 'private/references/ps2-web-recomp/runtime/src/gs/gpu'
+    assets_root = Path(assets_root or ROOT).resolve()
+    donor = assets_root / 'private/references/ps2-web-recomp/runtime/src/gs/gpu'
     donor_root = donor.parents[3]
     if output.is_relative_to(donor_root) or donor_root.is_relative_to(output):
         raise ValueError('Derived output cannot replace the frozen donor checkout')
@@ -87,4 +88,6 @@ std::uint64_t g_params_size = 0, g_data_size = 0;'''
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
-    prepare(parser.parse_args().output)
+    parser.add_argument('--assets-root', type=Path)
+    options = parser.parse_args()
+    prepare(options.output, options.assets_root)

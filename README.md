@@ -61,7 +61,9 @@ We work in small steps with recorded evidence and verification before merging ch
 The EE translator/library can now be rebuilt from verified inputs. Initial model
 and camera mapping is documented, and an isolated experiment has recovered one
 omitted callback pair with compilation checks. These foundations are still being
-qualified; the dedicated game-scene renderer has not started replacing live graphics.
+qualified. Separate baseline/recovered runtime candidates are prepared for owner
+validation; one-car research has located volume-index metadata, with asset identity
+still pending. The dedicated game-scene renderer has not started replacing live graphics.
 
 ## Testing and Development
 
@@ -93,6 +95,8 @@ Development has progressed through boot and menus, Vulkan integration, audio and
 - [EE-PRODUCER](docs/EE-PRODUCER.md): Verified CORE/ISO preparation, fresh EE generation and separate library build.
 - [RENDER-CONTRACTS](docs/RENDER-CONTRACTS.md): Initial model/camera mapping, state effects and open coverage gates.
 - [EE-CALLBACK-COVERAGE](docs/EE-CALLBACK-COVERAGE.md): Bounded offline recovery experiment and remaining integration gates.
+- [EE-CANDIDATES](docs/EE-CANDIDATES.md): Separate runtime builds and owner-controlled qualification.
+- [CAR-ASSET-RESEARCH](docs/CAR-ASSET-RESEARCH.md): Bounded volume-index evidence and the one-car extraction contract.
 - [ROADMAP](docs/ROADMAP.md): Earlier timing analysis and selective migration proposal, retained as technical context.
 - [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
 - [BUILD](docs/BUILD.md): Build environment setup and verification procedures.

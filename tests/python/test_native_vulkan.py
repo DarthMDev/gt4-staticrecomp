@@ -1,6 +1,7 @@
 """Native pilot trust boundaries and optional real GPU fixture."""
 import json
 import ctypes
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -13,6 +14,11 @@ import prepare_external_vulkan as prepare
 import external_runtime_probe as probe
 import play_external_runtime as play
 import test_external_runtime_probe as probe_tests
+
+
+def native_executable(name):
+    build = Path(os.environ.get('GT4_NATIVE_BUILD', prepare.ROOT / 'private/slice114-native-base/build'))
+    return build / name
 
 
 class NativeVulkanTests(unittest.TestCase):
@@ -147,7 +153,7 @@ class NativeVulkanTests(unittest.TestCase):
             self.assertFalse((root / 'private/reject').exists())
 
     def test_real_vulkan_fixture_if_qualified_build_exists(self):
-        executable = prepare.ROOT / 'private/slice114-native-base/build/vulkan_fixture.exe'
+        executable = native_executable('vulkan_fixture.exe')
         if not executable.is_file():
             self.skipTest('Private native Vulkan pilot not built on this machine')
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=30)
@@ -160,7 +166,7 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('display 2048x2048 halved=0: all pixels match CPU', result.stderr)
 
     def test_real_windows_audio_and_input_fixture_if_built(self):
-        executable = prepare.ROOT / 'private/slice114-native-base/build/host_io_fixture.exe'
+        executable = native_executable('host_io_fixture.exe')
         if not executable.is_file():
             self.skipTest('Private native audio/input pilot not built on this machine')
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
@@ -170,7 +176,7 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('PASS: real Windows audio completion', result.stderr)
 
     def test_native_card_lock_refuses_overlapping_game_process(self):
-        executable = prepare.ROOT / 'private/slice114-native-base/build/gt4vulkan.exe'
+        executable = native_executable('gt4vulkan.exe')
         if not executable.is_file():
             self.skipTest('Private native audio/input pilot not built on this machine')
         kernel = ctypes.WinDLL('kernel32', use_last_error=True)

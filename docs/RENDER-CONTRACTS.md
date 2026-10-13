@@ -137,6 +137,10 @@ lead, not an independent correctness oracle or a licensing decision for reuse.
 
 ## Before the first native car
 
+[Slice 118 asset research](CAR-ASSET-RESEARCH.md) locates a bounded volume-index
+candidate and verifies its header/table metadata. Page decoding and a named-car
+mapping are still open; no selected asset or live instance is qualified.
+
 1. Continue the omitted-entry/callback ledger using explicit seed provenance and
    error behavior; preserve the baseline producer. [Slice 117](EE-CALLBACK-COVERAGE.md)
    recovers one pair offline but does not qualify its live usage. Its supplier's

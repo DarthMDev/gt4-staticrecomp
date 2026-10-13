@@ -35,6 +35,11 @@ native build still recompiles runtime/host/adapters and links the existing quali
 library. Keep candidate and production qualification distinct; the archived
 original engine is not used to run the game.
 
+Slice 118 adds [isolated baseline/recovered EE builds](EE-CANDIDATES.md) with
+separate library/executable manifests and a candidate launcher. The default build
+still uses the production pin. Both paths require prepared private assets;
+candidate native checks are distinct from owner gameplay qualification.
+
 ## Compiling and Verification
 
 From repository root:

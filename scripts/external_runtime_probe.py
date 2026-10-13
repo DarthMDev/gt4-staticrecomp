@@ -37,8 +37,10 @@ def summarize_exit(log_text, frame_count, exit_code, timed_out):
 
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
-              play_card=None, aspect='16:9'):
+              play_card=None, aspect='16:9', runtime_workspace=None):
     workspace = workspace.resolve()
+    runtime_workspace = Path(runtime_workspace or workspace).resolve()
+    runtime_private = runtime_workspace / 'private'
     run_directory = run_directory.resolve()
     private_root = workspace / 'private'
     if aspect not in ('16:9', '4:3'):
@@ -64,19 +66,19 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     native = json.loads((inputs / 'usa-v2.00-native.json').read_text(encoding='utf-8'))
     disc_manifest = json.loads((inputs / 'usa-v2.00.json').read_text(encoding='utf-8'))
     if runtime_manifest is None:
-        runtime_manifest = inputs / 'slice114-native-base.json'
+        runtime_manifest = runtime_workspace / 'docs/inputs/slice114-native-base.json'
     runtime_manifest = runtime_manifest.resolve()
-    if not runtime_manifest.is_relative_to(inputs):
+    if not runtime_manifest.is_relative_to(runtime_workspace / 'docs/inputs'):
         raise ValueError('Runtime manifest must be inside docs/inputs')
     runtime_evidence = json.loads(runtime_manifest.read_text(encoding='utf-8'))
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
-        dependency_path = (workspace / dependency['path']).resolve()
-        if not dependency_path.is_relative_to(private_root):
+        dependency_path = (runtime_workspace / dependency['path']).resolve()
+        if not dependency_path.is_relative_to(runtime_private):
             raise ValueError('Runtime dependency must be inside private/')
         verify_file(dependency_path, {key: dependency[key] for key in ('size_bytes', 'sha256')})
-    executable = workspace / executable_pin['path']
-    if not executable.resolve().is_relative_to(private_root):
+    executable = runtime_workspace / executable_pin['path']
+    if not executable.resolve().is_relative_to(runtime_private):
         raise ValueError('Runtime executable must be inside private/')
     verify_file(executable, {key: executable_pin[key] for key in ('size_bytes', 'sha256')})
     core = workspace / 'private/fingerprint-check/CORE.GT4'

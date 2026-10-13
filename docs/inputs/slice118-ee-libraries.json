@@ -1,0 +1,58 @@
+{
+  "changed_objects": [
+    "unit_0035.cpp.obj",
+    "unit_008F.cpp.obj",
+    "unit_0090.cpp.obj",
+    "unit_009C.cpp.obj",
+    "unit_009E.cpp.obj",
+    "unit_00A1.cpp.obj",
+    "unit_00A3.cpp.obj",
+    "unit_00AC.cpp.obj",
+    "unit_00B2.cpp.obj",
+    "unit_00C0.cpp.obj",
+    "unit_00C1.cpp.obj",
+    "unit_00C3.cpp.obj",
+    "unit_00C4.cpp.obj",
+    "unit_00CD.cpp.obj",
+    "unit_00D3.cpp.obj",
+    "unit_00D8.cpp.obj",
+    "unit_013C.cpp.obj",
+    "unit_0140.cpp.obj"
+  ],
+  "donor_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "object_count": 327,
+  "port_directory": "private/slice118-ee-candidates/port",
+  "production_pins_modified": false,
+  "profiles": {
+    "baseline": {
+      "object_inventory_without_timestamps": "8800e261b025f160c56604f06b063573447cd949a3491db58d99942d6b4254aa",
+      "path": "private/slice118-ee-candidates/baseline/ps2game.lib",
+      "sha256": "adca5451a5083f0b27a500dbb3db5f5ecabadab0e650c1c1eb7d7d76e890df36",
+      "size_bytes": 68859166,
+      "source_inventory": {
+        "file_count": 328,
+        "inventory_sha256": "7a1a0909aa7197657ccb09a485d5bbb362d29afd3c08f28ffe7e134c0bf7d087",
+        "size_bytes": 86375038
+      }
+    },
+    "recovered": {
+      "object_inventory_without_timestamps": "dd998b6c273771879594c4f079923ec078006dafa23d510bf9c1184343cdc8ef",
+      "path": "private/slice118-ee-candidates/recovered/game-build/ps2game.lib",
+      "sha256": "03cba90e371e6297a26cd83022940933b2b7e5e1215962febd6e9951546d500d",
+      "size_bytes": 68857380,
+      "source_inventory": {
+        "file_count": 328,
+        "inventory_sha256": "3c140795c020b46a0a24ef2c06a8010a90e59f3df628213b4b9c4838b5c4fd7b",
+        "size_bytes": 86378653
+      }
+    }
+  },
+  "qualification": "Library/source/object delta qualified; runtime and owner gameplay pending",
+  "recovered_seeds": [
+    "0x0044EAC8"
+  ],
+  "schema_version": 1,
+  "shader_directory": "private/slice118-ee-candidates/shaders",
+  "slice": 118,
+  "unchanged_objects": 309
+}

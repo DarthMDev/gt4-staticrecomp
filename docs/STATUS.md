@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 117, bounded offline EE callback recovery.
+2026-10-13 — Slice 118, isolated EE runtime candidates and bounded car-asset research.
 Playable base remains slice 114. Implementation branch:
-`codex/ee-callback-coverage-117`, based on producer commit a900038.
+`codex/ee-candidate-integration-118`, based on callback recovery commit 5452812.
 
 ## Authorized P0/P1 Progress
 
@@ -28,13 +28,27 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   replacement; it has no EE interpreter fallback.
 - **Unknown:** live reachability of these omissions and any performance relationship.
   Generation equality is not complete-code coverage or PS2 fidelity proof.
+- **Confirmed (slice 118):** complete recovered library compiled in a fresh cache;
+  all 327 normalized AMD64 object members checked: exactly 18 reviewed differences,
+  309 unchanged. Baseline remains the qualified rebuilt slice 116 library.
+- **Confirmed (slice 118):** both isolated native runtime profiles link and pass
+  CTest 3/3 and Python 59/59 with zero skips and zero observed compile warnings.
+  All nine shaders match production. The actual candidate executables are used
+  by native integration fixtures; no manual game session was launched.
+- **Confirmed (slice 118):** bounded research located the actual GT4.VOL header/
+  offset table; parent independently verified its metadata. Page decoding, named
+  car/asset/live-instance identification remain Unknown. No car payload was extracted.
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)
 and [slice 117 evidence](inputs/slice117-ee-entry-coverage.json), for build/test
-results and remaining gates. P0/P1 remain **in progress**. Candidate runtime
-integration/manual qualification and one real car's data/conventions are pending.
-The production library, launcher and runtime have not been replaced.
+results and remaining gates. [EE Candidates](EE-CANDIDATES.md) and
+[Car Asset Research](CAR-ASSET-RESEARCH.md) cover slice 118. P0/P1 remain **in
+progress**: candidate gameplay, remaining entry coverage and one real car's
+data/conventions are pending. Production library, default launcher and runtime
+have not been replaced. Candidate checks do not qualify game boot or racing.
+The owner's active OpenCode baseline session was preserved. Ready candidate
+launchers share the existing owner card, locks and per-session backups.
 
 ## Active Path
 

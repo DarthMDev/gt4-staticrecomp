@@ -9,9 +9,10 @@ import sys
 from external_runtime_probe import ROOT, run_probe
 
 
-def play(aspect='16:9'):
-    play_directory = ROOT / 'private/manual-play'
-    if not play_directory.resolve().is_relative_to((ROOT / 'private').resolve()):
+def play(aspect='16:9', assets_root=None, runtime_manifest=None):
+    workspace = Path(assets_root or ROOT).resolve()
+    play_directory = workspace / 'private/manual-play'
+    if not play_directory.resolve().is_relative_to((workspace / 'private').resolve()):
         raise ValueError('Manual play directory must remain inside private/')
     play_directory.mkdir(parents=True, exist_ok=True)
     # Windows releases this byte lock even when the launcher process crashes.
@@ -27,17 +28,20 @@ def play(aspect='16:9'):
         try:
             run_directory = play_directory / datetime.now().strftime('session-%Y%m%d-%H%M%S-%f')
             card = play_directory / 'card.ps2'
-            manifest = ROOT / 'docs/inputs/slice114-native-base.json'
+            manifest = Path(runtime_manifest or ROOT / 'docs/inputs/slice114-native-base.json').resolve()
+            if not manifest.is_relative_to(ROOT / 'docs/inputs'):
+                raise ValueError('Manual runtime manifest must stay inside repository docs/inputs')
             video = json.loads(manifest.read_text(encoding='utf-8'))
             seed_key = 'default_card_seed' if aspect == '16:9' else 'standard_card_seed'
-            seed = None if card.exists() else ROOT / video[seed_key]['path']
+            seed = None if card.exists() else workspace / video[seed_key]['path']
             print('GT4 experimental: audio + XInput. Close window to exit.', flush=True)
             print('Keyboard: Enter starts, arrow keys steer, Z accelerates, A brakes; S returns in options.', flush=True)
             print(f'Display: {aspect}. F6 toggles 16:9/4:3; match aspect ratio in GT4 options.', flush=True)
             print(f'Local save: {card}\nSession log: {run_directory}', flush=True)
-            result = run_probe(ROOT, run_directory, 0, 43200, [], seed,
+            result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
-                               window=True, interactive=True, play_card=card, aspect=aspect)
+                               window=True, interactive=True, play_card=card, aspect=aspect,
+                               runtime_workspace=ROOT)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:

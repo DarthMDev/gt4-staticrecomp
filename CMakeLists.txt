@@ -27,4 +27,4 @@ add_test(NAME python_native_contracts
     COMMAND "${GT4_PYTHON}" -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/python")
 set_tests_properties(native_vulkan_pixels native_audio_input python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_ASPECT=16:9")
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_ASPECT=16:9;GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")

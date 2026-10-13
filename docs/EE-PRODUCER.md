@@ -89,9 +89,9 @@ They run through the existing Python discovery and root CTest Python entry.
 ## Qualification still open
 
 P0's generation/build portion is established by slice 116. P0 remains **in
-progress**: registry coverage includes known omissions; candidate runtime linking,
-active native tests against that candidate, and owner menus/showroom/race checks
-are not complete. Source equality reproduces the current implementation's limits.
+progress**: registry coverage includes known omissions and owner menus/showroom/
+race checks are pending. Slice 118 now links separate candidates and passes their
+active native checks. Source equality reproduces the current implementation's limits.
 It proves neither complete function recovery nor PS2 fidelity.
 
 [Slice 117 callback recovery](EE-CALLBACK-COVERAGE.md) diagnoses one cold supplier/
@@ -101,5 +101,7 @@ This experiment has separate controls/receipts and does not relax this baseline
 producer's source equality or the production library gates.
 
 The ordinary native build still requires the original pinned private library and
-private adapters/shaders. This producer does not yet provide an end-to-end
-clean-checkout game build or publish a replacement playable executable.
+private adapters/shaders. [Slice 118 candidates](EE-CANDIDATES.md) integrate the
+rebuilt baseline and recovered source in isolated runtime builds with separate pins;
+owner gameplay and remaining coverage are pending. This producer does not yet
+provide an end-to-end clean-checkout game build or replace production.

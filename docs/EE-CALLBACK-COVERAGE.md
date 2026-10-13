@@ -143,3 +143,7 @@ then owner-controlled menus/showroom/race qualification. P1 still needs a concre
 car/instance, complete state/VM dependencies, matrix/asset conventions and safe
 observation lifetimes. This experiment does not authorize or implement a renderer
 replacement, performance fix, progressive HD, ultrawide or independent game timing.
+
+Subsequent [slice 118](EE-CANDIDATES.md) qualifies a complete candidate library
+and native runtime linking/checks. Owner gameplay and broader coverage remain open;
+the slice 117 offline receipts are preserved.
