@@ -173,6 +173,14 @@ Game script/content VMs are distinct from PS2 instruction interpretation.
 
 ## Code and evidence
 
+Slices131/132 qualify the full two-probe library and an isolated default-off
+`GT4_EE_PROFILE=observation` game build. It requires the strict runtime overlay
+capsule and pins in docs/inputs/slice131-observation-library.json. Production
+launcher/profile remains unchanged. CTest5/5/Python155/155, zero skips; synthetic
+controls and actual game link-map provenance only. No retail execution, manual
+capture/export, live car identity or performance-neutrality qualification yet.
+See docs/SCENE-OBSERVATION.md; preserve every frozen private slice producer.
+
 All project code and general tooling must be human readable: descriptive names,
 straightforward flow and formatting, explicit guest addresses/fixed-width state,
 defined wrapping and no host undefined behavior standing in for guest semantics.

@@ -127,3 +127,14 @@ the unchanged compiler recipe and D5's independent129 normalized object hash.
 Do not reuse frozen131 output or feed this profile to the ordinary null-option
 producer recorder. CTest1/1 runs Python155/155 with frozen130 native fixtures;
 runtime linkage and owner gameplay remain separate qualification boundaries.
+
+Slice132 adds the opt-in `-DGT4_EE_PROFILE=observation` native profile, together
+with `-DGT4_SHAPE_RUNTIME_SOURCE=<fresh-reviewed-overlay-capsule>`. It selects
+only the pinned131 library and qualified118 port/shaders. Configure into a fresh
+private build directory and build/test serially as usual. The game links the three
+overlays and observer directly, preserving the original runtime archive and paired
+unoverlaid synthetic control. CMake revalidates library/source changes. A separate
+`observation-game.map` records actual application linkage; Python CTest verifies
+selected bindings and source/library graph. Fresh132 CTest5/5/Python155/155 passes.
+Capture is disabled; there is no activation/export interface or gameplay validation
+yet. The normal build command and production launcher still select production.

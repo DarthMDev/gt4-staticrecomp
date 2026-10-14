@@ -1,5 +1,7 @@
 """Run the actual bounded C++ observer controls through native test discovery."""
 import os
+import hashlib
+import json
 from pathlib import Path
 import subprocess
 import unittest
@@ -25,6 +27,38 @@ class ShapeObserverTests(unittest.TestCase):
         self.assertEqual(results[0].stdout, results[1].stdout)
         self.assertIn(b'PASS: synthetic runtime adapter/lifecycle controls', results[1].stderr)
         self.assertIn(b'[probe] 0x00707070', results[1].stderr)
+        cache = (build / 'CMakeCache.txt').read_text()
+        if 'GT4_EE_PROFILE:STRING=observation' not in cache:
+            return
+        root = Path(__file__).resolve().parents[2]
+        profile = json.loads((root / 'docs/inputs/slice131-observation-library.json').read_text())['profile']
+        self.assertEqual((root / profile['path']).stat().st_size, profile['size_bytes'])
+        self.assertEqual(hashlib.sha256((root / profile['path']).read_bytes()).hexdigest(), profile['sha256'])
+        graph = (build / 'build.ninja').read_text().splitlines()
+        game = next(line for line in graph if line.startswith('build gt4vulkan.exe:'))
+        control = next(line for line in graph if line.startswith('build shape_runtime_control.exe:'))
+        for name in ('dispatch.cpp.obj', 'kernel.cpp.obj', 'system.cpp.obj',
+                     'shape_observer.cpp.obj', 'shape_observer_adapter.cpp.obj'):
+            self.assertIn(name, game)
+        for name in ('dispatch.cpp.obj', 'kernel.cpp.obj', 'system.cpp.obj'):
+            self.assertNotIn(name, control)
+        self.assertIn('slice131-observation-library', game)
+        bindings = (build / 'observation-game.map').read_text().splitlines()
+        symbols = {'?register_units@ps2@@': 'dispatch.cpp.obj', '?dispatch@ps2@@': 'dispatch.cpp.obj',
+                   '?probe@ps2@@': 'dispatch.cpp.obj', '?reset@kernel@ps2@@': 'kernel.cpp.obj',
+                   '?start_main_thread@kernel@ps2@@': 'kernel.cpp.obj',
+                   '?in_handler@kernel@ps2@@': 'kernel.cpp.obj', '?current_thread@kernel@ps2@@': 'kernel.cpp.obj',
+                   '?handle_syscall@kernel@ps2@@': 'kernel.cpp.obj', '?state@kernel@ps2@@': 'kernel.cpp.obj',
+                   '?boot@ps2@@': 'system.cpp.obj', '?load_state@ps2@@': 'system.cpp.obj',
+                   '?g_cpu@ps2@@': 'system.cpp.obj', '?g_options@ps2@@': 'system.cpp.obj',
+                   '?observe_probe@observation@gt4@@': 'shape_observer_adapter.cpp.obj'}
+        for prefix, expected_object in symbols.items():
+            selected = [line.split() for line in bindings
+                        if len(line.split()) >= 4 and line.split()[1].startswith(prefix)]
+            self.assertEqual(len(selected), 2 if prefix == '?load_state@ps2@@' else 1, prefix)
+            for row in selected:
+                self.assertEqual(row[-1], expected_object, row)
+        self.assertTrue(any('ps2game:unit_00D5.cpp.obj' in line for line in bindings))
 
 
 if __name__ == '__main__':

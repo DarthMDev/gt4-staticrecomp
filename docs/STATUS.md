@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-14 — Slice 131, full two-probe AOT library qualification.
+2026-10-14 — Slice 132, isolated default-off observation game linkage.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-observation-library-131`, based on commit e798ccb.
+`codex/gt4-observation-runtime-132`, based on commit f0194ca.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -19,6 +19,16 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Unknown:** retail runtime linkage, live shape identity/reachability and capture
   overhead. The ordinary playable target and launcher remain unchanged.
   See [full library evidence](inputs/slice131-observation-library.json).
+- **Confirmed (slice 132):** fresh `observation` native profile links the pinned
+  full probe library and reviewed runtime overlays directly into its game target.
+  Ordinary production selection is unchanged; the runtime archive stays original.
+  Capture starts disabled and empty; activation/export remain unimplemented.
+- **Confirmed (slice 132):** CTest 5/5 and Python 155/155, zero skips. Actual game
+  map/graph checks cover retained EE hooks, boot, adapter and D5. Synthetic guest
+  outputs still match their unoverlaid control. Invalid profile/missing overlay,
+  extra header and post-configure source edit are rejected before compilation.
+- **Unknown:** this candidate's boot/gameplay, live shape association and overhead.
+  No game session launched. See [runtime evidence](inputs/slice132-observation-runtime.json).
 
 - **Confirmed:** fresh CORE-to-ELF reconstruction matches the pinned native ELF;
   independent verified ISO extraction produces the same CORE/ELF.

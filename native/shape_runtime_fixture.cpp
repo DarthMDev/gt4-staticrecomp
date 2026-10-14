@@ -295,6 +295,8 @@ void handler_controls() {
 
 int main() {
   try {
+    require(!runtime_observer().enabled() && runtime_observer().records().empty(),
+            "runtime observation must start disabled and empty");
     adapter_controls();
     lifecycle_controls();
     handler_controls();

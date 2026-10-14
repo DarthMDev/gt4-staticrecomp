@@ -213,3 +213,33 @@ capture, real shape/car association and overhead. The next slice integrates the
 qualified library and runtime overlays into an isolated default-off executable;
 activation/export and owner-controlled gameplay are later boundaries.
 See [slice131 evidence](inputs/slice131-observation-library.json).
+
+## Isolated game linkage (slice132)
+
+**Confirmed:** the explicit `observation` native profile selects the131 archive
+and118 port/shaders, requiring the reviewed three-source runtime capsule. The
+three overlays and observer compile directly into `gt4vulkan`, following the
+qualified130 fixture linkage pattern. `ps2runtime_vulkan` remains original and
+the default production profile/launcher remains unchanged. Both synthetic fixture
+and unoverlaid control link the same131 library, but execute only synthetic EE.
+
+The new fresh-build game map retains D5, EE dispatch/kernel/system replacements,
+boot and the adapter. Automated checks bind selected decorated public symbols to
+direct objects and check the Ninja library/source graph. Source hashes and library
+configure dependencies reject changed inputs before rebuilding. Independent map/
+COFF/link review records actual artifact identities and separates the IOP kernel
+archive member from the direct EE kernel object. A map is linkage evidence only.
+
+Fresh Release build passes CTest5/5 in11.04s and Python155/155 without skips or
+observed compile warnings. The runtime fixture also requires initial observation
+to be disabled/empty; paired defined-field guest transcripts remain exact. Negative
+controls reject missing overlays, unknown profile, extra shadow header and edited
+source after configure. A separately configured baseline graph stays unoverlaid;
+its production target was not rebuilt in this slice.
+
+**Unknown/unimplemented:** owner activation/export, candidate boot/gameplay,
+real car/shape identity and observer cost. Disabled probes still call the adapter
+and suppress known-probe diagnostics; no performance-neutrality claim. No game
+session is launched or controlled. Next boundary: a bounded owner-controlled
+capture interface and metadata export, followed by owner-led scene evidence.
+See [slice132 evidence](inputs/slice132-observation-runtime.json).

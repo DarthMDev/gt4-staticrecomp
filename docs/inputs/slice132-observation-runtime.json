@@ -1,0 +1,314 @@
+{
+  "classification": "Confirmed isolated default-off observation game linkage; retail execution Unknown",
+  "baseline_commit": "f0194ca",
+  "branch": "codex/gt4-observation-runtime-132",
+  "client_completion_date": "2026-10-14",
+  "profile": "observation",
+  "runtime": {
+    "path": "private/slice132-runtime-study/build/gt4vulkan.exe",
+    "sha256": "db2c8715c1d15b9cba95e33c9be66457e61279ae9a9bcdd5f0d36f76c2d1632f",
+    "size_bytes": 54458368
+  },
+  "game_library": {
+    "path": "private/slice131-observation-library/game-build/ps2game.lib",
+    "sha256": "ee530c1f4a1288cc7c57dde6674004a56cfd348d13387fb42f5672d726e9f3c8",
+    "size_bytes": 68857944
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice118-ee-candidates/shaders/copy_read.spv",
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6",
+      "size_bytes": 7872
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/copy_write.spv",
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c",
+      "size_bytes": 8892
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/decode.spv",
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856",
+      "size_bytes": 13780
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/display.spv",
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2",
+      "size_bytes": 9028
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/load_clut.spv",
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9",
+      "size_bytes": 10416
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/raster.spv",
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20",
+      "size_bytes": 50520
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/resolve.spv",
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3",
+      "size_bytes": 2320
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/snapshot.spv",
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7",
+      "size_bytes": 2328
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/upload.spv",
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c",
+      "size_bytes": 12336
+    }
+  ],
+  "overlay_source_sha256": {
+    "dispatch.cpp": "25840053c8f4ec9b9f1ae89bcda49abec0a02a66b26d9e5ce363e0a31f37c64e",
+    "kernel.cpp": "9f39ae97db3c0020d0b70204fd614c6bd5ee9198f6627f61890c6eb5694378bc",
+    "system.cpp": "8d0d2388c03fa803e17f28b8429254e537fb45947e8bca86603d4b1418e8f3a8"
+  },
+  "link_review": {
+    "build_log": {
+      "sha256": "43e28e727cd07231912fb6d5e5cf8f2eb64e00869e6ae53a56c38197c4bc9830",
+      "size_bytes": 7695,
+      "unique_gt4vulkan_link_step": true
+    },
+    "configuration": {
+      "assets_root": "C:/Antigravity/gt4-staticrecomp",
+      "fresh_build_directory": true,
+      "overlay_sources": {
+        "dispatch.cpp": "25840053c8f4ec9b9f1ae89bcda49abec0a02a66b26d9e5ce363e0a31f37c64e",
+        "kernel.cpp": "9f39ae97db3c0020d0b70204fd614c6bd5ee9198f6627f61890c6eb5694378bc",
+        "system.cpp": "8d0d2388c03fa803e17f28b8429254e537fb45947e8bca86603d4b1418e8f3a8"
+      },
+      "profile": "observation",
+      "qualified_game_library_path": "private/slice131-observation-library/game-build/ps2game.lib",
+      "qualified_game_library_sha256": "ee530c1f4a1288cc7c57dde6674004a56cfd348d13387fb42f5672d726e9f3c8"
+    },
+    "game_executable": {
+      "characteristics": "0x0022",
+      "machine": "0x8664",
+      "mtime_ns": 1791952760362631600,
+      "optional_header_size": 240,
+      "pe_timestamp": 1791952760,
+      "pe_timestamp_utc": "2026-10-14T04:39:20+00:00",
+      "section_count": 7,
+      "sha256": "db2c8715c1d15b9cba95e33c9be66457e61279ae9a9bcdd5f0d36f76c2d1632f",
+      "size_bytes": 54458368
+    },
+    "limits": [
+      "Linkage/source provenance only; executable was not launched.",
+      "Retail runtime behavior, capture completeness and overhead remain Unknown."
+    ],
+    "map": {
+      "map_mtime_not_before_executable": true,
+      "mtime_ns": 1791952760378844400,
+      "sha256": "edc6095e67c83b8ebab59970823f375ec4e9e3570c1e3bd57551fc31890cc9a5",
+      "size_bytes": 1358169
+    },
+    "map_retention": {
+      "direct_public_symbols_by_object": {
+        "dispatch.cpp.obj": 154,
+        "kernel.cpp.obj": 215,
+        "shape_observer.cpp.obj": 6,
+        "shape_observer_adapter.cpp.obj": 6,
+        "system.cpp.obj": 229
+      },
+      "direct_symbol_inventory_sha256": "9144a0277640d57465ad08c2f07c8fb6d34c971ce44bb0cd1c2e58555cbb618f",
+      "iop_kernel_archive_origin_counts": {
+        "ps2runtime_vulkan:cdvd.cpp.obj": 3,
+        "ps2runtime_vulkan:cdvdfsv.cpp.obj": 2,
+        "ps2runtime_vulkan:io.cpp.obj": 1,
+        "ps2runtime_vulkan:kernel.cpp.obj": 40,
+        "ps2runtime_vulkan:libs.cpp.obj": 3,
+        "ps2runtime_vulkan:sif.cpp.obj": 1
+      },
+      "required_ee_symbol_prefix_counts": {
+        "?boot@ps2@@": 1,
+        "?current_thread@kernel@ps2@@": 1,
+        "?dispatch@ps2@@": 1,
+        "?g_cpu@ps2@@": 1,
+        "?g_options@ps2@@": 1,
+        "?handle_syscall@kernel@ps2@@": 1,
+        "?in_handler@kernel@ps2@@": 1,
+        "?load_state@ps2@@": 2,
+        "?observe_probe@observation@gt4@@": 1,
+        "?probe@ps2@@": 1,
+        "?register_units@ps2@@": 1,
+        "?reset@kernel@ps2@@": 1,
+        "?start_main_thread@kernel@ps2@@": 1,
+        "?state@kernel@ps2@@": 1
+      },
+      "retained_d5_archive_member": true,
+      "retained_ee_dispatch_symbol_count": 7,
+      "retained_ee_kernel_namespace_symbol_count": 14,
+      "retained_ee_kernel_symbol_count": 19,
+      "retained_ee_system_symbol_count": 28,
+      "retained_iop_kernel_archive_symbol_count": 50
+    },
+    "ninja": {
+      "control_edge_sha256": "8326c9ef045af15061c056e586f54e8cbe8a10acfff5390fd6d8d1c2feb6ffed",
+      "direct_overlay_objects_in_game": [
+        "slice132-runtime-overlay/dispatch.cpp.obj",
+        "slice132-runtime-overlay/kernel.cpp.obj",
+        "slice132-runtime-overlay/system.cpp.obj"
+      ],
+      "direct_overlays_in_control": false,
+      "fixture_edge_sha256": "2b48ac1b85caa2f8f77bae1174df7f5d244159993a2b5c1f06e95e3c559e07e6",
+      "game_edge_sha256": "ed6b8b65e6f87934938c4218ebdf6e7008d97c5c0f0ff0bf75b093fb69fd511c",
+      "map_option": "LINK_FLAGS = /machine:x64 /INCREMENTAL:NO /subsystem:console /MAP:C:/Users/Alano/.codex/worktrees/native-renderer-roadmap/gt4-staticrecomp/private/slice132-runtime-study/build/observation-game.map /VERBOSE:LIB",
+      "observer_objects_in_game": [
+        "shape_observer.cpp.obj",
+        "shape_observer_adapter.cpp.obj"
+      ],
+      "runtime_archive_sources_from_pinned_donor_path": true,
+      "sha256": "0b05f89c2330d3c82bc2f2fdc07e1e70875fc00fe05e7ffd78e4c236c098c9b4"
+    },
+    "runtime_archive": {
+      "mtime_ns": 1791952738876558300,
+      "sha256": "a6dc3a869723317e41d676b7b5c7612e27655e4d937ed87d3128b5396be9da4d",
+      "size_bytes": 3589864
+    },
+    "schema_version": 1
+  },
+  "original_coff_review": {
+    "llvm_readobj_version": "LLVM version 23.1.2",
+    "archive_member_count": 29,
+    "distinct_kernel_member_paths": [
+      "native\\CMakeFiles\\ps2runtime_vulkan.dir\\C_\\Antigravity\\gt4-staticrecomp\\private\\references\\ps2-web-recomp\\runtime\\src\\iop\\kernel.cpp.obj",
+      "native\\CMakeFiles\\ps2runtime_vulkan.dir\\C_\\Antigravity\\gt4-staticrecomp\\private\\references\\ps2-web-recomp\\runtime\\src\\kernel.cpp.obj"
+    ],
+    "critical_original_ee_definitions": [
+      {
+        "object": "dispatch.cpp.obj",
+        "symbol_prefix": "?dispatch@ps2@@",
+        "section": 15,
+        "storage": "External",
+        "comdat_selection": "NoDuplicates",
+        "object_sha256": "96a2246a81818df1fd4f20e99874e252d1e9445de93bb60aa27cd49485ced351"
+      },
+      {
+        "object": "dispatch.cpp.obj",
+        "symbol_prefix": "?probe@ps2@@",
+        "section": 22,
+        "storage": "External",
+        "comdat_selection": "NoDuplicates",
+        "object_sha256": "96a2246a81818df1fd4f20e99874e252d1e9445de93bb60aa27cd49485ced351"
+      },
+      {
+        "object": "kernel.cpp.obj",
+        "symbol_prefix": "?reset@kernel@ps2@@",
+        "section": 12,
+        "storage": "External",
+        "comdat_selection": "NoDuplicates",
+        "object_sha256": "11a6c0450becd943364583980dbe43f535ad62c6950858fd0acaee49992cd205"
+      },
+      {
+        "object": "kernel.cpp.obj",
+        "symbol_prefix": "?current_thread@kernel@ps2@@",
+        "section": 17,
+        "storage": "External",
+        "comdat_selection": "NoDuplicates",
+        "object_sha256": "11a6c0450becd943364583980dbe43f535ad62c6950858fd0acaee49992cd205"
+      }
+    ],
+    "system_strong_bss_globals": [
+      "00000000 B ?g_cpu@ps2@@3UCpu@1@A",
+      "000005a0 B ?g_options@ps2@@3UOptions@1@A"
+    ],
+    "system_object_sha256": "0c63f9bda0732b168806001233b6a49da864c33d4261f14eb4367e3c2eb13da8",
+    "method": "LLVM archive names and COFF symbol/section metadata only; selected executable bindings independently checked in map receipt",
+    "inference": "Successful non-forced link with direct overlay bindings and original NoDuplicates/strong definitions supports exclusion of original EE implementations; IOP kernel basename alone is not an EE hit"
+  },
+  "controls": {
+    "ctest_passed": 5,
+    "ctest_total": 5,
+    "ctest_seconds": 11.04,
+    "python_passed": 155,
+    "python_skipped": 0,
+    "initial_build_steps": 59,
+    "observed_compile_warnings": 0,
+    "initial_capture_disabled_empty": true,
+    "paired_synthetic_guest_outputs_equal": true,
+    "baseline_graph_unoverlaid": true,
+    "qualified_shaders_equal": "9/9",
+    "negative_gates": [
+      {
+        "case": "missing-overlay",
+        "configure_rejected": true
+      },
+      {
+        "case": "unknown-profile",
+        "configure_rejected": true
+      },
+      {
+        "case": "baseline remains unoverlaid",
+        "graph_checked": true,
+        "compiled": false
+      },
+      {
+        "case": "extra shadow header",
+        "configure_rejected": true
+      },
+      {
+        "case": "post-configure source edit",
+        "reconfigure_rejected": true,
+        "modified_source_compiled": false
+      }
+    ]
+  },
+  "source_canonical_lf_sha256": {
+    "native/CMakeLists.txt": "c74497102c592af1ff90941d9c44e5ab3153b71059f457f11b54c2d844859ac8",
+    "native/shape_runtime_fixture.cpp": "6cb2de3df0b5f4623c606a8aef8db13de27dbfc20c387369e7ad499fab234fc6",
+    "tests/python/test_shape_observer.py": "988b2bbd086b424a386e6cd84c9deeea7b9fee3afd0cb0fec767160dab80cbca"
+  },
+  "private_artifact_sha256": {
+    "private/slice132-runtime-overlay/dispatch.cpp": "25840053c8f4ec9b9f1ae89bcda49abec0a02a66b26d9e5ce363e0a31f37c64e",
+    "private/slice132-runtime-overlay/kernel.cpp": "9f39ae97db3c0020d0b70204fd614c6bd5ee9198f6627f61890c6eb5694378bc",
+    "private/slice132-runtime-overlay/runtime-overlay.json": "f00db2f569765e5f9a52dcca7c5b7b8db2d9a44cc6662ccf3cf92075081e0ba7",
+    "private/slice132-runtime-overlay/system.cpp": "8d0d2388c03fa803e17f28b8429254e537fb45947e8bca86603d4b1418e8f3a8",
+    "private/slice132-runtime-study/baseline-graph.log": "fd5571d49fa3283eab679f7d2bcadde2d183b4b58eb9af651562ee36b4a71466",
+    "private/slice132-runtime-study/build/build.ninja": "0b05f89c2330d3c82bc2f2fdc07e1e70875fc00fe05e7ffd78e4c236c098c9b4",
+    "private/slice132-runtime-study/build/CMakeCache.txt": "24c02309498d226cada025f567cf5abbb4b5545232786b42f06425f42269c877",
+    "private/slice132-runtime-study/build/observation-game.map": "edc6095e67c83b8ebab59970823f375ec4e9e3570c1e3bd57551fc31890cc9a5",
+    "private/slice132-runtime-study/build/shape-runtime.map": "9e987241783d81df9314d2cd36c2da4db567b86327bc6814f7e37f772a6aa16e",
+    "private/slice132-runtime-study/build/Testing/Temporary/LastTest.log": "231c1d76d39a254e6268cb8f77514a7b1adfd97a7a911efd1970e8b2447e39b9",
+    "private/slice132-runtime-study/build_native.cmd": "a683d9bdf0877f476328cb3fb63e725c3b76fbbe20acce5e09c2aefc7b8de432",
+    "private/slice132-runtime-study/ctest-final.log": "765846cd1fba517596bab2a2527fe502b407fccafe1ba18f71de394547eb81d2",
+    "private/slice132-runtime-study/ctest.log": "63db1b6a14a7e6739e1bbcc26c2e9e961ec82124bc3b2317d1f0d707f58c76c5",
+    "private/slice132-runtime-study/extra-header.log": "ad546442d564cd336d08f1f717443c46b00831d884c79a357affdc695d2975c8",
+    "private/slice132-runtime-study/gates.log": "e354cb7579fb313f08a53d3ba3c7fa19abed53583c03cfafc03efc80e841149d",
+    "private/slice132-runtime-study/link-review/independent-link-review.md": "d1a56a53144db84c27ee0383468c62c036eef166c03d3d5033866e056812ac2e",
+    "private/slice132-runtime-study/link-review/link-review.json": "c778b78e4af8c0a24c2cd62c0b7b7cc81f73dcbb4f0938e8d757eac58ec73b1b",
+    "private/slice132-runtime-study/link-review/link-review.md": "bcdbedba87beef759424b2104e1ebec8972ef325f9dccbf0ca87545f8aa1b6ef",
+    "private/slice132-runtime-study/link-review/replay.py": "1dd4506a84e7952f9777c9d9217aeb5ae7ee508be851615a8ac5395b2d9c2ba7",
+    "private/slice132-runtime-study/missing-overlay.log": "e30db31de5a4d28450d2d15ee91cc76e568ffa1bf95e414ff12911e39ec38745",
+    "private/slice132-runtime-study/native-build.log": "43e28e727cd07231912fb6d5e5cf8f2eb64e00869e6ae53a56c38197c4bc9830",
+    "private/slice132-runtime-study/negative_gates.cmd": "d03b7515be57d8084fd35aee2152b51b106889e0dcf259a5ea67f1ad48b6044f",
+    "private/slice132-runtime-study/negative_gates.py": "c2ead2bebcfc683151e62581e77be153c6ea742109d0e65fca9e0a0f19be0f49",
+    "private/slice132-runtime-study/parent-final/object-check.log": "b90cfc06630532117d846a54565b94f06cd39883d671b6a8753512e040482cdf",
+    "private/slice132-runtime-study/parent-final/verified-object-identities.json": "b90cfc06630532117d846a54565b94f06cd39883d671b6a8753512e040482cdf",
+    "private/slice132-runtime-study/parent-final/verify_object_identities.py": "43ba4d60a50a38eb0188494286cdd8f714eadd4a1f1a7dfe2da0f6a311f4be1f",
+    "private/slice132-runtime-study/publish_metadata.py": "db61c2c61badfe1d61e1c9f388e33559c58d4f52a0c5b253b53ff0dc8e3c2589",
+    "private/slice132-runtime-study/research/integration-review.md": "fad3d97b03ec562aca079cada91968d62fb583ceaf76a9a11838332748aef999",
+    "private/slice132-runtime-study/research/metadata.json": "e6506a486f8db9a35c67899c1bd2faaf015ecf7d7e3550970eb56de4b771972c",
+    "private/slice132-runtime-study/source-review/review-metadata.json": "65746fe4b5f41ffdfea143c258e0e4d05e735f6d94f2231f2c761862aeb48d14",
+    "private/slice132-runtime-study/source-review/review.md": "4ce43f8c5011a6bd32d0ef28cc9c7d421d26b1c2049ecdff7fdd726e6540e056",
+    "private/slice132-runtime-study/tamper-build.log": "beb0c60900d6e3959b5e0865b31ec64f0e5137cda3986e2e8017d907e1458b0f",
+    "private/slice132-runtime-study/tamper-configure.log": "4394d6e32deff5e08c9ce5667d4dfccb22792f6b44f10630d7b24d024e7b4fbd",
+    "private/slice132-runtime-study/unknown-profile.log": "2305985d75397306d2df0f481af296c6dd6e80353e7d086d897794d3561f695b"
+  },
+  "capture_activation_implemented": false,
+  "capture_export_implemented": false,
+  "retail_game_executed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "production_launcher_changed": false,
+  "limitations": [
+    "No boot/gameplay/live shape identity or overhead qualification",
+    "Disabled known probes still traverse adapter and suppress diagnostics",
+    "Native fixture executes synthetic EE, not retail D5",
+    "Baseline graph verified only; default production not rebuilt"
+  ],
+  "next_boundary": "Bounded metadata export and owner-controlled capture interface"
+}

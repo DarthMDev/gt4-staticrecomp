@@ -78,10 +78,11 @@ before interpreting shape packets and reconstructing renderable geometry.
 The dedicated game-scene renderer has not started replacing live graphics.
 The first bounded observation core now has native automated controls for
 preserving original shape-call inputs across synthetic suspension and thread
-changes. A separately verified generation inserts only the two planned probes;
-Runtime observation and lifecycle checks now pass in an isolated synthetic
-fixture; a playable capture profile and real scene evidence remain the next gate.
-see [Shape Observation](docs/SCENE-OBSERVATION.md).
+changes. A separately verified full library inserts only the two planned probes.
+An isolated observation executable now links those probes and the runtime hooks;
+capture starts disabled. Synthetic lifecycle checks pass. Manual capture controls
+and real scene evidence remain the next gate; this candidate has not been played.
+See [Shape Observation](docs/SCENE-OBSERVATION.md).
 
 ## Testing and Development
 
