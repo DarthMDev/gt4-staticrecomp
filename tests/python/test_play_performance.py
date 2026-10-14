@@ -8,17 +8,20 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
 import play_performance as performance
 import play_external_runtime as launcher
-from external_runtime_probe import PERF_MANIFEST, PERF_RUNTIME
+from external_runtime_probe import PERF_MANIFEST, PERF_RUNTIME, PERF_PROFILES
 
 
 class PerformanceLauncherTests(unittest.TestCase):
     def test_wrapper_selects_qualified_profile(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
-                 patch.object(sys, 'argv', ['perf', '--assets-root', str(root)]):
-                self.assertEqual(performance.main(), 0)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / PERF_MANIFEST, performance=True)
+            for mode in PERF_PROFILES:
+                arguments = ['perf', '--assets-root', str(root)]
+                if mode == 'frame-only': arguments.extend(['--mode', mode])
+                with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
+                     patch.object(sys, 'argv', arguments):
+                    self.assertEqual(performance.main(), 0)
+                play.assert_called_once_with('16:9', root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True)
 
     def test_lock_failure_and_profile_rejection_preserve_card(self):
         with tempfile.TemporaryDirectory() as folder:

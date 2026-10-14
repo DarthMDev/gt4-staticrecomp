@@ -120,6 +120,9 @@ remain completion latency, not GPU timestamp duration.
 
 Use tooling Python from the assets checkout, from this candidate checkout:
 
+This was the slice143 launcher entry point. The current wrapper selects the
+qualified145 pair below; the143 executable/manifest remain frozen and valid.
+
 ```powershell
 C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe scripts/play_performance.py --assets-root C:/Antigravity/gt4-staticrecomp
 ```
@@ -199,3 +202,61 @@ composition, separate subsystem CPU execution and GPU timestamp time. The24.06
 figure measures VBlank cadence; it does not establish distinct rendered scene FPS.
 No optimization, rebuild, process restart, scripted input or new gameplay probe
 was performed by the agent for this verification.
+
+## Matched overhead pair (slice145)
+
+Owner identified the144 interval as Toyota Prius, external camera, Nordschleife.
+Vehicle year/trim, start/end positions, warm-up and video mode remain unspecified.
+The VU scope measures **VU0 micro and VU1 together**; VU0 macro operations execute
+in EE code. A VU1 call count does not separate per-unit elapsed time. After VU,
+the next largest exclusive category was GS fence completion wait9.392ms, followed
+by EE dispatch2.261ms and VIF/GIF1.120ms. None is subsystem CPU/GPU timestamp time.
+
+Two fresh Release candidates differ by `GT4_PERF_FRAME_ONLY=OFF/ON`. Both use the
+same pinned production EE library, immutable143 three-source capsule,143 port,
+nine114 shaders, compiler/flags, guest settings and current native host code.
+The frame-only definition makes direct donor Scope objects empty/trivially
+destructible, replaces native scope macros with no-ops, and excludes mapped-byte,
+dispatch, presentation and audio operation hooks. It retains common F7/F8/F9
+boundaries, wall/thread-CPU clocks and cumulative guest progress/workload samples.
+The report labels mode and makes missing subsystem/host-traffic data explicit.
+**It is not a zero-instrumentation baseline.** This measures incremental detailed
+scope/counter cost relative to the common boundary telemetry, not total overhead.
+
+Public [detailed pins](inputs/slice145-performance-detailed.json) and
+[frame-only pins](inputs/slice145-performance-frame-only.json) bind mode, exe and
+dependencies. Launcher preserves card/backups/byte locks, rejects crossed modes/
+paths and keeps the existing143 profile accepted. It defaults to the145 detailed
+candidate; use tooling Python from this checkout, with the owner's assets root:
+
+```powershell
+C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe scripts/play_performance.py --assets-root C:/Antigravity/gt4-staticrecomp --mode detailed
+C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe scripts/play_performance.py --assets-root C:/Antigravity/gt4-staticrecomp --mode frame-only
+```
+
+Run one session at a time; owner closes the previous game normally. Owner retains
+all navigation. Prefer detailed/control/detailed order, same car/camera/video
+setting and a repeatable scene. A stationary car at the same location provides
+a simpler first comparison; moving race segments must also match scene/workload.
+Warm up each run, then F7,30–60s,F8, and close normally to finalize result.json.
+Record scene, power/display/overlay state and any loading/mode changes. Obtain
+three comparable intervals per mode before treating a small difference as real;
+thermal/scheduler variation may dominate. Do not mix143 and145 as the matched pair.
+
+Compare median/p95/p99 and thread CPU alongside common workload counters and guest
+clock-model speed. A larger frame-only pace alone does not prove correct gameplay
+speed, an optimization or PS2 fidelity. CPU per sample and frame timing changes
+only estimate instrumentation impact when scene and machine conditions match.
+GPU timestamps/distinct scene counts and absolute common-boundary cost are Unknown.
+
+**Confirmed host controls:** detailed native7/7 in5.26s, frame-only native7/7
+in5.03s, separate macro-off observation9/9 in14.22s, Python173/173 zero skips,
+warning-free builds. New fixture verifies mode, shared guest/CPU data and absence
+of invented subsystem/host-traffic data. LLVM COFF symbol control finds zero
+undefined Probe references in frame-only system/vif/vu_micro/native_vulkan/host_io
+objects, versus expected references in detailed. Independent source review finds
+no pair blocker. These controls do not replace owner gameplay/overhead intervals.
+No current session restart or new gameplay probe was performed by the agent.
+
+VU0/VU1 separation is a following pinned derivation; it is not silently added to
+this single-variable overhead pair. See [offline AOT feasibility](VU-AOT-FEASIBILITY.md).

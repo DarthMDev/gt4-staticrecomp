@@ -3,6 +3,12 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <type_traits>
+
+#ifdef GT4_PERF_FRAME_ONLY
+static_assert(std::is_empty_v<gt4::perf::Scope>, "control must have no subsystem probe state");
+static_assert(std::is_trivially_destructible_v<gt4::perf::Scope>, "control must have no timed returns");
+#endif
 
 namespace {
 std::uint64_t tick = 0, cpu_tick = 0, clock_calls = 0;
@@ -133,6 +139,30 @@ void check_report_and_pause_coalescing(std::FILE *stream) {
   require(contents(stream).substr(before_pause).find("diagnostics paused (F9): 2 VBlank samples") != std::string::npos,
           "F9 pause preserves unreported complete interval");
 }
+
+void check_frame_only_report(std::FILE *stream) {
+  using namespace gt4::perf;
+  tick = cpu_tick = 0;
+  Probe probe({clock, cpu}, true, stream, false);
+  const auto beginning = contents(stream).size();
+  probe.request(Request::start); probe.frame_boundary({});
+  tick = 1000; cpu_tick = 500; probe.frame_boundary({4915200, 10, 2});
+  probe.request(Request::report);
+  tick = 2000; cpu_tick = 1000; probe.frame_boundary({9830400, 20, 4});
+  const auto report = contents(stream).substr(beginning);
+  require(report.find("2 VBlank samples in 0.002s") != std::string::npos,
+          "control retains completed frame intervals");
+  require(report.find("measurement_mode=frame-only") != std::string::npos &&
+          report.find("measured_thread_cpu_ms/frame=0.500") != std::string::npos,
+          "control labels mode and retains actual thread CPU");
+  require(report.find("guest_clock_model_speed=") != std::string::npos &&
+          report.find("primitives/frame=10.0 vu1_interpreted/frame=2.0") != std::string::npos,
+          "both modes retain the same boundary guest progress/workload counters");
+  require(report.find("exclusive wall") == std::string::npos &&
+          report.find("mapped_write_bytes") == std::string::npos &&
+          report.find("Unavailable (compiled out)") != std::string::npos,
+          "control must not invent absent subsystem attribution/counters");
+}
 }
 
 int main() {
@@ -143,6 +173,7 @@ int main() {
     check_disable_and_fault(stream);
     check_percentiles_and_tail(stream);
     check_report_and_pause_coalescing(stream);
+    check_frame_only_report(stream);
     std::fclose(stream);
     std::fputs("PASS: controlled-clock performance adapter\n", stderr);
     return 0;

@@ -41,6 +41,11 @@ or resumes measurement. It separates overlapping subsystem timings and measures
 host-thread CPU time. This prepares owner-driven testing; it does not yet improve
 FPS. See [testing instructions](docs/PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143).
 
+Matched detailed and lighter diagnostic builds are now ready to measure the
+instrumentation's own cost before selecting an optimization. One owner interval
+shows VU interpretation as the largest recorded wall-time category; VU0/VU1
+separation and offline AOT qualification remain next work, with no speedup claim.
+
 ## The Experience We Want to Build
 
 The primary objective is **playing GT4 stably and at correct game speed on PC**. Building on that foundation, we plan to develop:

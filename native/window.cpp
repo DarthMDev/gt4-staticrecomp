@@ -35,6 +35,9 @@ void update_title() {
                                     L"Start, Z: acelerar, A: frear";
 #ifdef GT4_PERF_PROBE
   title += L" — F7: start test, F8: report, F9: diagnostics";
+#ifdef GT4_PERF_FRAME_ONLY
+  title += L" — frame-only control";
+#endif
 #endif
 #ifdef GT4_SHAPE_CAPTURE
   if (capture) {

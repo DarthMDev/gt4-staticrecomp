@@ -47,6 +47,7 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=
                 print('Capture starts OFF. Select the scene yourself, then press F8 to start/stop.', flush=True)
                 print(f'One capture per launch, up to 256 records: {run_directory / "shape-capture.json"}', flush=True)
             if performance:
+                print(f"Measurement mode: {video.get('measurement_mode', 'detailed')}", flush=True)
                 print('Performance test: F7 starts, F8 reports, F9 toggles diagnostics. Owner controls gameplay.', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,

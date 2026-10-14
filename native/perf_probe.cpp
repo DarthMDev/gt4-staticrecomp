@@ -29,8 +29,8 @@ constexpr const char *names[] = {
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
 }
 
-Probe::Probe(Clocks clocks, bool enabled, std::FILE *output)
-    : clocks_(clocks), output_(output), owner_thread_(std::this_thread::get_id()),
+Probe::Probe(Clocks clocks, bool enabled, std::FILE *output, bool detailed)
+    : clocks_(clocks), output_(output), detailed_(detailed), owner_thread_(std::this_thread::get_id()),
       accounting_(enabled) {
   last_us_ = clocks_.wall_us();
   accounting_.restart(last_us_);
@@ -40,7 +40,13 @@ Probe &Probe::shared() {
   static Probe probe({wall_us, cpu_us}, [] {
     char value[8]{};
     return GetEnvironmentVariableA("GT4_PERF", value, sizeof value) == 1 && value[0] == '1';
-  }());
+  }(), stderr,
+#ifdef GT4_PERF_FRAME_ONLY
+  false
+#else
+  true
+#endif
+  );
   return probe;
 }
 
@@ -185,8 +191,9 @@ void Probe::print(const char *reason) noexcept {
       sorted[period_count_ / 2 - 1] / 2000.0 + sorted[period_count_ / 2] / 2000.0;
   const double frames = static_cast<double>(frames_);
   const double seconds = elapsed / 1000000.0;
-  std::fprintf(output_, "[perf] %s: %llu VBlank samples in %.3fs = %.2f VBlanks/s; fresh_scene_frames=Unknown\n",
-               reason, static_cast<unsigned long long>(frames_), seconds, frames / seconds);
+  std::fprintf(output_, "[perf] %s: %llu VBlank samples in %.3fs = %.2f VBlanks/s; fresh_scene_frames=Unknown; measurement_mode=%s\n",
+               reason, static_cast<unsigned long long>(frames_), seconds, frames / seconds,
+               detailed_ ? "detailed" : "frame-only");
   std::fprintf(output_, "[perf] frame ms: median %.3f p95 %.3f p99 %.3f max %.3f; samples=%zu/%llu (tail cap4096)\n",
                median, percentile(95), percentile(99), sorted[period_count_ - 1] / 1000.0,
                period_count_, static_cast<unsigned long long>(frames_));
@@ -199,6 +206,11 @@ void Probe::print(const char *reason) noexcept {
     std::fprintf(output_, "[perf] measured_thread_cpu_ms/frame=%.3f; occupancy=%.1f%%\n",
         (cpu_now - cpu_start_) / 1000.0 / frames, double(cpu_now - cpu_start_) / elapsed * 100);
   else std::fputs("[perf] measured_thread_cpu=Unknown\n", output_);
+  if (!detailed_) {
+    std::fputs("[perf] subsystem timers/host traffic counters=Unavailable (compiled out); boundary clocks/guest counters remain\n", output_);
+    std::fflush(output_);
+    return;
+  }
   std::fputs("[perf] exclusive wall ms/frame (additive, includes instrumentation/scheduler time):", output_);
   for (std::size_t index = 0; index < std::size(names); ++index)
     std::fprintf(output_, " %s=%.3f", names[index],

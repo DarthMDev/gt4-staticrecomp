@@ -207,7 +207,7 @@ std::size_t AudioOutput::reap() {
   for (auto &buffer : buffers_) {
     if (buffer.queued && (buffer.header.dwFlags & WHDR_DONE)) {
       completed_ += buffer.header.dwBufferLength / 4;
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
       gt4::perf::Probe::shared().audio(0, buffer.header.dwBufferLength / 4);
 #endif
       buffer.queued = false;
@@ -251,7 +251,7 @@ bool AudioOutput::submit() {
   const auto queued = reap();
   if (!queued && submitted_) {
     ++empty_queue_;
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
     gt4::perf::Probe::shared().audio(0, 0, 1);
 #endif
   }
@@ -272,7 +272,7 @@ bool AudioOutput::push(const std::int16_t *samples, std::size_t frames) {
   if (!device_ || (frames && !samples))
     throw std::runtime_error("Invalid audio sink input/lifetime");
   received_ += frames;
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
   gt4::perf::Probe::shared().audio(frames, 0);
 #endif
   while (frames) {

@@ -23,7 +23,7 @@ struct Clocks {
 
 class Probe {
 public:
-  Probe(Clocks clocks, bool enabled, std::FILE *output = stderr);
+  Probe(Clocks clocks, bool enabled, std::FILE *output = stderr, bool detailed = true);
   static Probe &shared();
   Accounting::Token enter(Category category) noexcept;
   void leave(Accounting::Token token) noexcept;
@@ -48,6 +48,7 @@ private:
   void add(std::uint64_t &value, std::uint64_t amount) noexcept;
   Clocks clocks_;
   std::FILE *output_;
+  const bool detailed_;
   const std::thread::id owner_thread_;
   std::atomic<bool> wrong_thread_{false};
   Accounting accounting_;
@@ -66,6 +67,12 @@ private:
   std::size_t period_count_ = 0, next_period_ = 0;
 };
 
+#ifdef GT4_PERF_FRAME_ONLY
+class Scope {
+public:
+  explicit Scope(Category) noexcept {}
+};
+#else
 class Scope {
 public:
   explicit Scope(Category category) noexcept : probe_(Probe::shared()),
@@ -77,9 +84,10 @@ private:
   Probe &probe_;
   Accounting::Token token_;
 };
+#endif
 } // namespace gt4::perf
 
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
 #define GT4_PERF_SCOPE(category) gt4::perf::Scope gt4_perf_scope(category)
 #else
 #define GT4_PERF_SCOPE(category) ((void)0)

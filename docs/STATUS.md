@@ -1,6 +1,6 @@
 # Current Status
 
-2026-10-14 — Slice 144, owner manual performance report verified and preserved.
+2026-10-14 — Slice 145, matched detailed/frame-only diagnostic pair qualified.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
 `main` retains slice140/native-scene work; this candidate stays on the hybrid track.
@@ -19,10 +19,22 @@ Python171/171 zero skips, warning-free builds. Launcher retains card/backup/lock
 40.323s,24.06 VBlanks/s; no invalid/reset marker. Exclusive wall sum reconciles
 within printed rounding. VU interpretation25.646ms/sample is61.69% of the interval;
 GS fence wait9.392ms/sample is completion latency, not GPU execution time.
-**Unknown:** diagnostic overhead, exact car/track/camera/scene composition,
+Owner identifies that interval as Toyota Prius, external camera, Nordschleife;
+year/trim, exact position and GT4 video setting are not supplied.
+**Unknown:** diagnostic overhead and exact interval scene composition,
 distinct scene frame rate and GPU timestamp time. No performance improvement
 claim. VU is the leading observed wall category; qualify overhead and the matching
 scene before choosing an optimization. No runtime changes in this verification.
+**Confirmed (slice145):** fresh detailed and frame-only profiles share production
+EE/runtime/port/shaders and all guest settings. Frame-only compiles subsystem
+scopes and host operation counter hooks out; common boundary CPU/wall clocks and
+guest progress counters remain. Native CTest7/7 each, separate full9/9 with
+Python173/173 zero skips. Object-symbol controls confirm no Probe references in
+five frame-only hot-path objects. Current143 owner session is preserved.
+Next: owner matched detailed/control/detailed intervals, then VU0-micro/VU1 timing
+separation and one content-identified offline AOT experiment. No speedup claim.
+See [pair protocol](PERFORMANCE-ATTRIBUTION.md#matched-overhead-pair-slice145)
+and [VU AOT feasibility](VU-AOT-FEASIBILITY.md).
 See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)
 and [candidate pins](inputs/slice143-performance-candidate.json).
 Protected candidate launch confirmed native Vulkan/16:9/48kHz initialization and

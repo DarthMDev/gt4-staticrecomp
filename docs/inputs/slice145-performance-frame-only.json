@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice143-performance-candidate/shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice143-performance-candidate/shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ],
+  "profile": "performance",
+  "perf_schema_version": 1,
+  "keyboard_input_fix": "digital_only_slice136",
+  "capture_activation_implemented": false,
+  "timing_contract": {
+    "boundary": "next VBlank before host pump; clip active scopes and guest baselines",
+    "F7": "fresh continuous manual interval; suppress periodic resets until F8",
+    "F8": "report completed interval; starts fresh periodic interval",
+    "F9": "report before pause; resume with fresh interval; disabled gaps excluded",
+    "same_boundary": "report before toggle before start; repeat keydown ignored",
+    "exclusive": "Unavailable: subsystem scopes compiled out",
+    "inclusive": "Unavailable: subsystem scopes compiled out",
+    "cpu": "GetThreadTimes kernel plus user for owner thread; not subsystem CPU allocation",
+    "percentiles": "nearest-rank p95/p99; even median average; last4096 samples disclosed",
+    "guest_speed": "cycle-model ratio at294.912MHz; not independent game-clock fidelity",
+    "counters": "Common cumulative guest counters retained; host traffic/audio operation counters unavailable"
+  },
+  "environment": {
+    "guest_settings": "scrub inherited PS2_/GT4_PERF_ options; set GT4_PERF=1 PS2_SCALE=1 PS2_GS=gpu",
+    "vulkan": "preserve and record VK_ overrides in session result; other driver/overlay state not controlled"
+  },
+  "toolchain": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "build": "CMake/Ninja VS2022 x64 ABI Windows SDK10.0.26100.0",
+    "cmake": "4.3.3",
+    "ninja": "1.12.1"
+  },
+  "slice": 145,
+  "date": "2026-10-14",
+  "baseline_commit": "50f081f",
+  "branch": "codex/performance-overhead-pair-145",
+  "measurement_mode": "frame-only",
+  "runtime": {
+    "path": "private/slice145-performance-pair/frame-only/build/gt4vulkan.exe",
+    "size_bytes": 54464512,
+    "sha256": "24eafce2a73cbb600c244b8a733d839f7cd664edca7ef5a0a7d966c2c860dff2"
+  },
+  "classification": "Confirmed matched source/host controls; owner paired intervals pending",
+  "source_capsule": "private/slice143-perf-runtime (immutable shared input)",
+  "source_manifest": "slice143-performance-runtime.json",
+  "compile_control": {
+    "GT4_PERF_FRAME_ONLY": "ON",
+    "common": "Same production EE library, runtime sources, port/shaders, host code, compiler and guest settings",
+    "removed": "Frame-only removes subsystem Scope calls and host operation counter hooks at compile time",
+    "retained": "Both modes keep F7/F8/F9, boundary wall/thread-CPU clocks and common cumulative guest progress counters"
+  },
+  "controls": {
+    "detailed_native": "7/7 in5.26s",
+    "frame_only_native": "7/7 in5.03s",
+    "separate_macro_off_observation": "9/9 in14.22s; Python173/173 zero skips",
+    "build_warnings": 0,
+    "evidence": [
+      {
+        "path": "private/slice145-performance-pair/detailed/build-qualified.log",
+        "size_bytes": 1667,
+        "sha256": "81efbc65272a3ccd03766d8445ee40c8a186bf4a45f44f003b3e3100907eb4e8"
+      },
+      {
+        "path": "private/slice145-performance-pair/frame-only/build-qualified.log",
+        "size_bytes": 1671,
+        "sha256": "7d563d35799a2d88be710daf62c1b7627b2db3735d028078db20faa1bb33f0dc"
+      },
+      {
+        "path": "private/slice145-performance-controls/build.log",
+        "size_bytes": 10290,
+        "sha256": "5aac272c71d6ef6366baf4e100e2d0421e9b7565b521cb00e4379316a5c09228"
+      },
+      {
+        "path": "private/slice145-performance-pair/hook-symbol-controls.json",
+        "size_bytes": 2188,
+        "sha256": "35c7feac1bfb257f9a059cc875f88ba070e8ec64e63ce5269ab422a46c9248bc"
+      },
+      {
+        "path": "private/slice145-performance-controls/build/Testing/Temporary/LastTest.log",
+        "size_bytes": 429606,
+        "sha256": "50e75c5ba536a328619530dc174768e36717158bf6f447c05ec7ab759041350b"
+      }
+    ]
+  },
+  "review": [
+    {
+      "path": "private/slice145-luna-review/research-review.md",
+      "size_bytes": 6854,
+      "sha256": "bce2f593a413eacbc0ed99e04edd7f2f08a3fca4a19804b48b88e64b31c26b8d"
+    },
+    {
+      "path": "private/slice145-luna-review/research-review-errata.md",
+      "size_bytes": 1021,
+      "sha256": "76493e31543ebf23fa5cf2cf190245e9370ebb4a47aa3cdc894f15698e9e5d64"
+    },
+    {
+      "path": "private/slice145-luna-review/pair-review.md",
+      "size_bytes": 3393,
+      "sha256": "5a9bd922135c887c279fea5022ad0259de10c428db582a57b01756a88ce5aa75"
+    },
+    {
+      "path": "private/slice145-luna-review/final-artifacts.md",
+      "size_bytes": 4783,
+      "sha256": "77a6f2b9c0e21ae69346c1acbe4f1445a979e1bc25f2365e9c9439cbc2e4b347"
+    }
+  ],
+  "owner_scenario": {
+    "car": "Toyota Prius (year/trim not supplied)",
+    "camera": "external",
+    "track": "Nordschleife",
+    "context": "Owner supplied scenario for slice144 manual interval",
+    "video_mode": "Unknown; preserve the same GT4 setting for both profiles"
+  },
+  "vu_timing_scope": "Aggregate VU0 micro and VU1 interpreter timing; VU0 macro operations are in EE",
+  "next": "Owner matched detailed/control/detailed intervals; separate VU0/VU1 in a later pinned scope slice",
+  "limits": [
+    "No game optimization or speedup qualification",
+    "Frame-only is not a completely uninstrumented baseline; shared boundary overhead remains",
+    "Distinct scene frame count and GPU timestamp time remain Unknown",
+    "Subsystem CPU allocation is not measured by exclusive wall categories",
+    "No process restart or owner gameplay by agent; current143 session preserved",
+    "No GT4 VU corpus captured or linked; offline emitter has input/output/budget safety gaps"
+  ],
+  "review_resolutions": [
+    "Final review packaging note resolved: Python LastTest.log is now explicitly hash-pinned"
+  ]
+}

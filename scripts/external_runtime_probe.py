@@ -17,14 +17,26 @@ CAPTURE_MANIFEST = 'slice136-keyboard-input.json'
 CAPTURE_RUNTIME = 'private/slice136-keyboard-input/build/gt4vulkan.exe'
 PERF_MANIFEST = 'slice143-performance-candidate.json'
 PERF_RUNTIME = 'private/slice143-performance-candidate/build/gt4vulkan.exe'
+PERF_PROFILES = {
+    'detailed': ('slice145-performance-detailed.json',
+                 'private/slice145-performance-pair/detailed/build/gt4vulkan.exe'),
+    'frame-only': ('slice145-performance-frame-only.json',
+                   'private/slice145-performance-pair/frame-only/build/gt4vulkan.exe'),
+}
 
 
 def verify_performance_profile(manifest, evidence, runtime_workspace):
-    if (manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve() or
+    expected_runtime, expected_mode = PERF_RUNTIME, None
+    for mode, (name, runtime) in PERF_PROFILES.items():
+        if manifest == (runtime_workspace / 'docs/inputs' / name).resolve():
+            expected_runtime, expected_mode = runtime, mode
+            break
+    if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
+            (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
-            evidence.get('runtime', {}).get('path') != PERF_RUNTIME or
+            evidence.get('runtime', {}).get('path') != expected_runtime or
             evidence.get('capture_activation_implemented') is not False):
         raise ValueError('Performance test requires the qualified corrected candidate')
 
@@ -190,6 +202,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment.update(GT4_PERF='1', PS2_SCALE='1', PS2_GS='gpu')
         result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu',
                                              'GT4_ASPECT': aspect}
+        result['measurement_mode'] = runtime_evidence.get('measurement_mode', 'detailed')
         result['vulkan_loader_environment'] = {
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
     if capture_shapes:

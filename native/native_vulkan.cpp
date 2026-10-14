@@ -454,7 +454,7 @@ void Context::write(Buffer *buffer, std::uint64_t offset, const void *source,
   if (bytes)
     std::memcpy(static_cast<std::uint8_t *>(buffer->mapped) + offset, source,
                 static_cast<std::size_t>(bytes));
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
   gt4::perf::Probe::shared().bytes(false, bytes);
 #endif
 }
@@ -468,7 +468,7 @@ void Context::read(Buffer *buffer, std::uint64_t offset, void *destination,
     std::memcpy(destination,
                 static_cast<std::uint8_t *>(buffer->mapped) + offset,
                 static_cast<std::size_t>(bytes));
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
   gt4::perf::Probe::shared().bytes(true, bytes);
 #endif
 }
@@ -579,7 +579,7 @@ void Context::execute(const Dispatch *commands, std::size_t count) {
                             pipeline_layout_, 0, 1, &descriptor_set_, 1,
                             &offset);
     vkCmdDispatch(command_, dispatch.x, dispatch.y, 1);
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
     gt4::perf::Probe::shared().dispatch(std::uint64_t(dispatch.x) * dispatch.y);
 #endif
     memory_barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -896,7 +896,7 @@ bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
   else
     check(result, "present frame");
   ++presentations_;
-#ifdef GT4_PERF_PROBE
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
   gt4::perf::Probe::shared().presentation(std::uint64_t(width) * height * 4);
 #endif
   return true;

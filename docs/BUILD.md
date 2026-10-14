@@ -187,3 +187,14 @@ with Python171/171 pass. This still depends on the private production library,
 not an end-to-end clean checkout build. Launch with `scripts/play_performance.py`
 and the owner-assets root, using the existing protected manual card flow.
 See [measurement instructions](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143).
+
+Slice145 reuses the frozen143 sources/port/shaders strictly as shared pinned inputs
+and builds into separate fresh145 detailed/control caches. `GT4_PERF_FRAME_ONLY`
+defaults OFF; ON requires the performance runtime profile, propagates consistently
+to all linked TUs and compiles subsystem scopes/host-operation counters out. Common
+frame-boundary telemetry remains, so this is not an entirely uninstrumented build.
+The matched native profiles pass7/7 each; separate macro-off observation controls
+pass9/9 with Python173/173 zero skips. `scripts/play_performance.py --mode detailed`
+(default) or `--mode frame-only`, plus `--assets-root`, selects the corresponding
+strictly pinned145 runtime. Existing143 profile validation remains available;
+frozen143 caches/binaries/cards are not overwritten. Close sessions normally.

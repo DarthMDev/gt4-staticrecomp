@@ -19,17 +19,50 @@ def file_pin(path):
 
 
 class ProbeTests(unittest.TestCase):
-    def performance_manifest(self, root):
+    def performance_manifest(self, root, mode=None):
         evidence = json.loads((root / 'docs/inputs/slice114-native-base.json').read_text())
-        runtime = root / probe.PERF_RUNTIME
+        name, runtime_path = probe.PERF_PROFILES[mode] if mode else (probe.PERF_MANIFEST, probe.PERF_RUNTIME)
+        runtime = root / runtime_path
         runtime.parent.mkdir(parents=True)
         runtime.write_bytes((root / evidence['runtime']['path']).read_bytes())
-        evidence['runtime']['path'] = probe.PERF_RUNTIME
+        evidence['runtime']['path'] = runtime_path
         evidence.update(profile='performance', perf_schema_version=1,
                         keyboard_input_fix='digital_only_slice136', capture_activation_implemented=False)
-        manifest = root / 'docs/inputs' / probe.PERF_MANIFEST
+        if mode: evidence['measurement_mode'] = mode
+        manifest = root / 'docs/inputs' / name
         manifest.write_text(json.dumps(evidence))
         return manifest, evidence
+
+    def test_matched_modes_select_exact_pins_and_record_mode(self):
+        for mode in probe.PERF_PROFILES:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                self.make_workspace(root)
+                manifest, evidence = self.performance_manifest(root, mode)
+                def execute(arguments, **options):
+                    self.assertEqual(Path(arguments[0]), root / evidence['runtime']['path'])
+                    self.assertNotIn('--press', arguments)
+                    options['stdout'].write(b'[ee] stopped after 5 frames, 2 cycles: window closed\n')
+                    return subprocess.CompletedProcess(arguments, 0)
+                with patch.object(probe.subprocess, 'run', side_effect=execute):
+                    result = probe.run_probe(root, root / 'private/pair', 0, 1, [],
+                        runtime_manifest=manifest, window=True, interactive=True, performance=True)
+                self.assertEqual(result['measurement_mode'], mode)
+
+    def test_matched_profile_rejects_crossed_mode_or_binary(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            manifest, evidence = self.performance_manifest(root, 'frame-only')
+            for bad in (dict(evidence, measurement_mode='detailed'),
+                        dict(evidence, runtime=dict(evidence['runtime'], path=probe.PERF_RUNTIME))):
+                with self.subTest(bad=bad), patch.object(probe.subprocess, 'run') as execute:
+                    manifest.write_text(json.dumps(bad))
+                    with self.assertRaisesRegex(ValueError, 'qualified'):
+                        probe.run_probe(root, root / 'private/pair', 0, 1, [],
+                            runtime_manifest=manifest, window=True, interactive=True, performance=True)
+                    execute.assert_not_called()
+                    self.assertFalse((root / 'private/pair').exists())
 
     def test_performance_profile_and_environment_are_isolated(self):
         with tempfile.TemporaryDirectory() as folder:
