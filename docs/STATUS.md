@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-13 — Slice 129, exact two-probe EE observation generation.
+2026-10-14 — Slice 130, synthetic runtime observation and lifecycle controls.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-observation-profile-129`, based on commit 7b69e3c.
+`codex/gt4-shape-runtime-130`, based on commit 1475ba2.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -132,6 +132,18 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
 - **Confirmed:** changed D5 compiles with qualified Clang/VS ABI. Producer CTest1/1
   and Python141/141, zero skips, reuse128 native fixtures. No full probed library,
   lifecycle/runtime adapter, new game executable or live capture yet.
+
+- **Confirmed (slice130):** optional fixture-only adapter observes actual runtime
+  probes, preserves original shape inputs across a synthetic handler dispatched
+  exactly once, and invalidates tokens through real kernel lifecycle/load paths.
+  Three pinned source overlays invert exactly to donor bytes after removing hooks.
+- **Confirmed:** fresh Clang build, CTest5/5 and Python147/147, zero skips.
+  Unoverlaid/observed controls emit identical46,036-byte defined-field transcripts.
+  Link-map/COFF gates select reviewed direct EE bindings; game link excludes hooks.
+  Extra headers and post-configure source edits reject before altered compilation.
+- **Unknown:** retail call reachability, full probed-library/game linkage, geometry
+  and live scheduling/overhead. Owner session unchanged; no performance probe or
+  drawing replacement. See [Observation](SCENE-OBSERVATION.md).
 
 See [EE Producer](EE-PRODUCER.md), [Render Contracts](RENDER-CONTRACTS.md) and
 [Callback Coverage](EE-CALLBACK-COVERAGE.md), with [slice 116](inputs/slice116-ee-producer-contracts.json)

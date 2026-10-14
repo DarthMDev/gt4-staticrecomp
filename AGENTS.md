@@ -135,6 +135,14 @@ Slice129 scripts/ee_observation.py produces only the exact two-probe source
 profile in fresh private output. All328 files compared, only54 inserted D5bytes;
 baseline ee_producer.py remains strict. D5 compiles, producerCTest1/1/Python141/141
 using128 native fixtures. Full library/probe/lifecycle linkage remains pending.
+Slice130 adds opt-in synthetic runtime adapter/lifecycle fixtures:
+docs/inputs/slice130-shape-runtime.json, native/shape_observer_adapter and
+scripts/prepare_shape_observation.py. CTest5/5/Python147/147 with zero skips.
+Exact overlays only fixture, game target remains untouched. Epochs monotonic,
+not event counts; defined-Cpu/public-status equivalence is not full kernel state.
+Actual synthetic handler tested; owner2 lifecycle tokens injected, no retail EE.
+Next is full separately qualified probed-library/game profile and owner-led
+capture; no live ownership, geometry, rendering or timing claim yet.
 Prioritize reproducible EE generation, then measured attribution and temporal
 separation; native subsystem migration needs demonstrated cost/dependency.
 144 distinct scenes require game render/update hooks, not repeated scanout.

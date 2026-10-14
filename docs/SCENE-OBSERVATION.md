@@ -138,3 +138,47 @@ using frozen128 native fixtures. This does not repeat the full128 native build.
 kernel/boot/load notifications, owner-controlled live capture and any overhead.
 Source insertion and object compilation are not a playable observation profile.
 See [slice129 evidence](inputs/slice129-observation-profile.json).
+
+## Synthetic runtime integration (slice130)
+
+**Confirmed:** `shape_observer_adapter` reads actual Cpu argument lanes/raw FPR12
+and safe RAM/scratchpad views. It uses explicit pre-PC and actual return-PC,
+rejects idle owners, skips handlers before sampling and samples the saved original
+shape after volatile r4 changes. Unknown probes retain donor diagnostics; known
+probes suppress diagnostics even when capture is off.
+
+`prepare_shape_observation.py` verifies the clean pinned donor and canonical hashes,
+then creates three source copies with exact-once hooks. Removing those hooks/include
+restores every canonical byte. Lifecycle sites cover create/start/exit/delete/
+terminate/main restart, reset/boot and both load overloads before mutation.
+Epochs are monotonic identities: nested boot/reset or path/bytes load may advance
+more than once. Historical preparation receipts remain preparation-only; the
+separate [130 qualification](inputs/slice130-shape-runtime.json) records later checks.
+
+The optional `GT4_SHAPE_RUNTIME_SOURCE` points to one fresh private capsule with
+exactly three sources and a receipt. Pinned source hashes, configure dependencies
+and header inventory reject edits after configure and extra shadow headers.
+Only the synthetic fixture receives overlays; the ordinary game target and
+unoverlaid control do not. Selected14 link-map bindings and original COFF strong/
+NoDuplicates symbols verify the intended EE replacements. IOP kernel basename
+collision is disambiguated by namespace and archive member paths.
+
+**Confirmed controls:** original input/clobber and unwound return, real synthetic
+callback dispatch through alarm/run_guest exactly once, ordinary token preservation
+through handler save/restore, actual lifecycle invalidation for injected owner2
+tokens, direct main restart/reset and failed path/short/partially mutating loads.
+No retail generated function or gameplay executes. Core owner2 injection is not
+proof of real game thread2 reaching these hooks; boot is source/compile evidence.
+
+Fresh CTest5/5 in14.43s; Python147/147, no skips. Unoverlaid/observed transcripts
+match46,036 bytes across15 scenarios, serializing all defined Cpu fields and
+selected public ThreadStatus/owner/handler outputs. Host padding is excluded by
+fieldwise serialization, not arbitrary byte masking. This does not compare all
+private kernel queues, scheduler order/heap/stored contexts or system events.
+The pinned ExitDelete path retains previous PC when current/best both become
+null; ordinary ExitThread produces idle|unwind. This existing donor distinction
+is preserved and recorded, not upgraded to PS2 fidelity or fixed here.
+
+**Unknown/unimplemented:** full probed library/runtime game profile, real car
+identity/reachability, owner-led capture, queued graphics ownership and overhead.
+No native drawing, scan-mode, timing, input or performance change is installed.

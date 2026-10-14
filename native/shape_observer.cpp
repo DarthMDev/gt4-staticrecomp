@@ -194,4 +194,17 @@ void ShapeObserver::complete(std::uint32_t owner_id, bool in_handler,
   records_[record_count_++] = pending;
 }
 
+void ShapeObserver::complete_from_memory(std::uint32_t owner_id, bool in_handler,
+                                         std::uint32_t return_pc, std::uint32_t guest_sp,
+                                         MemoryView memory) noexcept {
+  const auto *owner = find_owner(owner_id);
+  if (!enabled_ || in_handler || return_pc != shape_return_pc || !owner ||
+      owner->count == 0 || owner->pending[owner->count - 1].before.guest_sp != guest_sp) {
+    complete(owner_id, in_handler, return_pc, guest_sp, {});
+    return;
+  }
+  const auto shape_address = owner->pending[owner->count - 1].before.argument_bits[0][0];
+  complete(owner_id, false, return_pc, guest_sp, sample_metadata(memory, shape_address));
+}
+
 } // namespace gt4::observation

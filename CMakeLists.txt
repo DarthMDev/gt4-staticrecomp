@@ -29,3 +29,9 @@ add_test(NAME python_native_contracts
 set_tests_properties(native_vulkan_pixels native_audio_input native_shape_observer python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_ASPECT=16:9;GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
+if(TARGET shape_runtime_fixture)
+    add_test(NAME native_shape_runtime COMMAND $<TARGET_FILE:shape_runtime_fixture>)
+    set_tests_properties(native_shape_runtime PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+    set_property(TEST python_native_contracts APPEND PROPERTY ENVIRONMENT "GT4_SHAPE_RUNTIME_TESTS=1")
+endif()

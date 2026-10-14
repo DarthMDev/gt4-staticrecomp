@@ -16,6 +16,16 @@ class ShapeObserverTests(unittest.TestCase):
                                 check=True, timeout=30)
         self.assertIn('PASS: shape observer memory, frontier, ownership and bounds controls', result.stdout)
 
+    def test_actual_runtime_adapter_matches_unoverlaid_guest_control(self):
+        if os.environ.get('GT4_SHAPE_RUNTIME_TESTS') != '1':
+            self.skipTest('Experimental runtime overlay fixture is not configured')
+        build = Path(os.environ['GT4_NATIVE_BUILD'])
+        results = [subprocess.run([str(build / name)], capture_output=True, check=True, timeout=30)
+                   for name in ('shape_runtime_control.exe', 'shape_runtime_fixture.exe')]
+        self.assertEqual(results[0].stdout, results[1].stdout)
+        self.assertIn(b'PASS: synthetic runtime adapter/lifecycle controls', results[1].stderr)
+        self.assertIn(b'[probe] 0x00707070', results[1].stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

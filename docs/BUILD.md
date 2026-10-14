@@ -108,3 +108,10 @@ pass with no skips. See [Shape Observation](SCENE-OBSERVATION.md) for scope.
 Slice129 separately regenerates the exact two-probe source profile and compiles
 only changed D5 in a fresh unit-control cache. Producer CTest1/1 runs Python141/141
 using128 native fixtures; no full probed-library/runtime build is claimed.
+Slice130's optional runtime fixture is enabled with `GT4_SHAPE_RUNTIME_SOURCE`
+pointing to a fresh capsule made by `scripts/prepare_shape_observation.py`.
+Default is empty. CMake accepts only the reviewed three-source hashes, prevents
+shadow headers and rechecks changed private sources before rebuilding. The game
+target stays unoverlaid; synthetic observed/reference fixtures exercise runtime
+lifecycle and selected guest outputs. Fresh130 CTest5/5/Python147/147, no skips.
+This is not a playable probed-library profile. See [Observation](SCENE-OBSERVATION.md).

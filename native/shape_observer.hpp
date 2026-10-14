@@ -78,6 +78,9 @@ public:
   void begin(std::uint32_t owner_id, bool in_handler, const Inputs &inputs) noexcept;
   void complete(std::uint32_t owner_id, bool in_handler, std::uint32_t return_pc,
                 std::uint32_t guest_sp, const Metadata &after) noexcept;
+  void complete_from_memory(std::uint32_t owner_id, bool in_handler,
+                            std::uint32_t return_pc, std::uint32_t guest_sp,
+                            MemoryView memory) noexcept;
   bool enabled() const noexcept { return enabled_; }
   const Counters &counters() const noexcept { return counters_; }
   std::span<const CompletedCall> records() const noexcept {

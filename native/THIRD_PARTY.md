@@ -53,3 +53,10 @@ Slice125's original raw-lane extraction uses ordinary endian/width facts from
 the same pinned MIT sources, with literal independent controls. No dependency
 or implementation is copied or newly linked. [Raw Lanes](../docs/RAW-CHANNEL-LANES.md)
 keeps numerical inputs separate from game geometry or VU semantics.
+
+Slice130 prepares private copies of MIT donor dispatch/kernel/system sources at
+the same pinned revision, adding observer-only calls for an optional synthetic
+fixture. Root donor license/attribution remains with the local source checkout;
+no new dependency or GPL implementation is introduced. The default game target
+uses the existing donor sources. [Shape Observation](../docs/SCENE-OBSERVATION.md)
+records exact inverse checks and synthetic qualification limits.
