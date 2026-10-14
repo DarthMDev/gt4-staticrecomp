@@ -138,3 +138,11 @@ unoverlaid synthetic control. CMake revalidates library/source changes. A separa
 selected bindings and source/library graph. Fresh132 CTest5/5/Python155/155 passes.
 Capture is disabled; there is no activation/export interface or gameplay validation
 yet. The normal build command and production launcher still select production.
+
+Slice133 adds `shape_capture_export_fixture` and a serial native CTest entry.
+The fixture uses a uniquely created temporary directory with synthetic metadata,
+removing its files on success. Python parses the actual three JSON reports.
+Reconfigure a fresh native build to include this sixth test; frozen132 caches stay
+unchanged. Fresh133 CTest6/6/Python156/156, zero skips. The export component is not
+linked into the game and requires no new dependency. Activation/output path
+selection and a separate owner-facing capture launcher remain future work.

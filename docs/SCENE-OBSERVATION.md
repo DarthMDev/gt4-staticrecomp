@@ -243,3 +243,42 @@ and suppress known-probe diagnostics; no performance-neutrality claim. No game
 session is launched or controlled. Next boundary: a bounded owner-controlled
 capture interface and metadata export, followed by owner-led scene evidence.
 See [slice132 evidence](inputs/slice132-observation-runtime.json).
+
+## Bounded export foundation (slice133)
+
+**Confirmed:** `shape_capture_export` serializes a stopped observer on its EE
+owner, outside guest execution. Fixed schema1 includes call/target/return PCs,
+explicit host-supplied stop reason, counters and completed calls only. All raw
+bits and identities are lowercase fixed-width hexadecimal strings (64/32/16/8
+bits use16/8/4/2 digits). Record count and schema version are small JSON integers.
+Original4x4 argument lanes and FPR12 NaN-like bits are preserved without floats.
+Before/after validity masks remain explicit; invalid fields are not guessed.
+There are no host pointers, variable guest buffers, geometry, texture or card data.
+
+The core limits records to256; encoded JSON is separately bounded to256KiB.
+Serialization rejects an enabled observer or invalid reason before creating a
+file. Export uses Windows `CREATE_NEW`, no sharing, a progress-checked write loop
+and flush. Existing files remain untouched; parent directories are never created.
+Write/flush errors attempt to delete only the new file by its exclusive handle.
+Cleanup failure is reported; in-memory records are not consumed by serialization
+or successful/failed export. Caller selects `manual`, `observer_stopped` or
+`shutdown`; disabled state alone does not imply record-capacity exhaustion.
+
+Fresh CTest6/6 in11.59s and Python156/156, no skips or observed compile warnings.
+Actual native controls cover0/1/256 reports, full file-byte equality, state
+preservation, pending abort on stop, the257th completion retaining256 records,
+existing-file refusal, missing parent and invalid reason. Python parses emitted
+JSON and checks exact schema keys, widths, all raw values and unique sequences.
+
+**Unknown/limits:** write/flush/cleanup/close faults are source-reviewed, not
+injected; abrupt termination may leave a partial file. The path is a trusted
+caller input; parent aliases are not constrained by this low-level exporter.
+Fixture failure may retain its unique temporary directory for investigation.
+There is no game linkage, capture hotkey, public output-path UI or live export.
+
+The next adapter should latch a manual host command in the window handler and
+consume it after message pumping at `on_vblank`, on the EE thread. Audio waits
+also pump messages while nested in synchronous IOP work, so the window handler
+must not mutate/export observation there. Shutdown needs an off-execution final
+boundary. This bounded source finding is a design input, not an implemented or
+tested manual control. See [slice133 evidence](inputs/slice133-capture-export.json).

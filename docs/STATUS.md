@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-14 — Slice 132, isolated default-off observation game linkage.
+2026-10-14 — Slice 133, bounded host-only capture export controls.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-observation-runtime-132`, based on commit f0194ca.
+`codex/gt4-observation-export-133`, based on commit ce1579a.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -29,6 +29,16 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   extra header and post-configure source edit are rejected before compilation.
 - **Unknown:** this candidate's boot/gameplay, live shape association and overhead.
   No game session launched. See [runtime evidence](inputs/slice132-observation-runtime.json).
+- **Confirmed (slice 133):** fixed metadata-only JSON preserves every raw argument
+  lane, FPR/SP bits, original owner identities, counters and before/after validity.
+  It requires a stopped observer and exclusively creates a new file. Actual native
+  controls cover 0/1/256 records, no overwrite, invalid reason and missing parent.
+- **Confirmed (slice 133):** fresh CTest 6/6, Python 156/156, zero skips. Exporter
+  remains fixture-only; no window hook, game activation or owner capture added.
+- **Unknown:** injected write/flush/cleanup/close failures and crash atomicity;
+  partial cleanup may fail. The host path is caller-trusted; no public path UI.
+  Next: owner capture latch at the EE vblank boundary and fresh private launcher
+  output, then owner-led scene evidence. See [export evidence](inputs/slice133-capture-export.json).
 
 - **Confirmed:** fresh CORE-to-ELF reconstruction matches the pinned native ELF;
   independent verified ISO extraction produces the same CORE/ELF.

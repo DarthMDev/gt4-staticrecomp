@@ -180,6 +180,12 @@ launcher/profile remains unchanged. CTest5/5/Python155/155, zero skips; syntheti
 controls and actual game link-map provenance only. No retail execution, manual
 capture/export, live car identity or performance-neutrality qualification yet.
 See docs/SCENE-OBSERVATION.md; preserve every frozen private slice producer.
+Slice133 adds stopped-observer metadata JSON/export controls only, no game caller.
+CTest6/6/Python156/156, zero skips; CREATE_NEW no-overwrite behavior verified.
+Fault injection/crash atomicity and caller path policy remain unqualified.
+For future manual capture, WndProc must latch only: audio waits pump messages
+inside synchronous IOP work. Consume commands/export at the EE-owned vblank host
+boundary or after run exits. No Computer Use/game navigation or automatic capture.
 
 All project code and general tooling must be human readable: descriptive names,
 straightforward flow and formatting, explicit guest addresses/fixed-width state,

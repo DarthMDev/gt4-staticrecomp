@@ -1,0 +1,100 @@
+{
+  "classification": "Confirmed host-only bounded metadata export and normal exclusive-file controls; live capture Unknown",
+  "baseline_commit": "ce1579a",
+  "branch": "codex/gt4-observation-export-133",
+  "client_completion_date": "2026-10-14",
+  "export_schema_version": 1,
+  "record_limit": 256,
+  "encoded_byte_limit": 262144,
+  "raw_value_format": "Fixed lowercase hex strings, u64=16/u32=8/u16=4/u8=2 digits",
+  "controls": {
+    "ctest_passed": 6,
+    "ctest_total": 6,
+    "ctest_seconds": 11.59,
+    "python_passed": 156,
+    "python_skipped": 0,
+    "initial_build_steps": 63,
+    "observed_compile_warnings": 0,
+    "native_reports": [
+      {
+        "records": 0,
+        "encoded_bytes": 534,
+        "sha256": "59f4bc866b54cc3de249c1de10be0b259a89cc68ba2d52fc4436106a3725414a"
+      },
+      {
+        "records": 1,
+        "encoded_bytes": 1235,
+        "sha256": "03e07221ee48d4f1e83907263148130bf701bcc68dea261119c382cdf5da5aa8"
+      },
+      {
+        "records": 256,
+        "encoded_bytes": 180767,
+        "sha256": "f80beb4edbda1f7e79444fa8cf468e66a11f31173ed088d511fa7c036ad98063"
+      }
+    ],
+    "checks": [
+      "Active/invalid reason export creates no file",
+      "All raw lanes/FPR/SP/metadata bits preserved",
+      "Successful file bytes equal deterministic JSON",
+      "Existing destination remains unchanged",
+      "Missing parent is not created",
+      "Export does not consume or mutate records",
+      "Stop counts pending abort",
+      "257th completion retains256 and increments dropped",
+      "Python exact JSON schema and sequence controls",
+      "Game graph excludes exporter"
+    ]
+  },
+  "fixture_runtime": {
+    "path": "private/slice133-capture-study/build/shape_capture_export_fixture.exe",
+    "sha256": "92232333031d3c050cd43ccbbf0b7cc2b22f7ebb62cb969863a430a18d3c6533",
+    "size_bytes": 86528
+  },
+  "source_canonical_lf_sha256": {
+    "native/shape_capture_export.hpp": "921ee69dc5371c12e3b808219401cc1f7a2de480568dcd826e52cf33740750cd",
+    "native/shape_capture_export.cpp": "afaf29c5ca86aa610eec3465a9e949ff1893b33e0a25edf0f44b2498ec897465",
+    "native/shape_capture_export_fixture.cpp": "fc44803798726cbefc618666e2103b90958a3619276d430265ec700ffdfa0b9e",
+    "tests/python/test_shape_capture_export.py": "996f0cf497adf7e8f8ef4a242bc72168af010ba8e3e57819c1ce13588404652e",
+    "native/CMakeLists.txt": "deb1f56c80ebe120aa7648844ef4104d90a1d10fa15ead3864be61c7a6b73c00",
+    "CMakeLists.txt": "1dc34ddaec9f133422ca079b33795a2c5abeec6d76307df173c9449f2b852916"
+  },
+  "private_artifact_sha256": {
+    "private/slice133-capture-study/build/build.ninja": "7460e6095b0e3aafbcec3e0dfce11b910ad42b73994dc08cbaa3a5be400ad26b",
+    "private/slice133-capture-study/build/CMakeCache.txt": "b6cdf828e9e6cb57bbbd65d36c6684dffdebe56b5dc54b064a578cd0e7ec9a17",
+    "private/slice133-capture-study/build/observation-game.map": "60c468054011a739df4a72b190f7cfa7a1b51f00317197f07313dc576f8cadea",
+    "private/slice133-capture-study/build/shape_capture_export_fixture.exe": "92232333031d3c050cd43ccbbf0b7cc2b22f7ebb62cb969863a430a18d3c6533",
+    "private/slice133-capture-study/build/Testing/Temporary/LastTest.log": "36d1e56624fd487510aa935537f8cf9422fa8b973fd2ae3a88ea6c9f7212d475",
+    "private/slice133-capture-study/build_native.cmd": "9f265999e70fb0a6c69a6c9e5a7388893efb4866d936482be6ed2722039ef75f",
+    "private/slice133-capture-study/ctest-final.log": "ef32d8d0e66d82ff27e523cb5e86a1be22e1715e50ed804ec0f10b309950a9e7",
+    "private/slice133-capture-study/ctest.log": "cd555293063e7f215100e26558be1dc6aa8e2aed0f36ee4467199af42a0a7a22",
+    "private/slice133-capture-study/export-fixture.stderr": "c75293c1b427864669bd1d008249559ab9ba71c0f057e90ed3f14df9f3e4de57",
+    "private/slice133-capture-study/export-fixture.stdout": "6397cc09b86d811770a59d6518f09f4dbd87e52da8d3ef211203014ec21721e6",
+    "private/slice133-capture-study/implementation-review/review-metadata.json": "9bafb72f2ad0a5d166e7ea71e4413514abe227ced2c129c09f696c9dd00bc6c5",
+    "private/slice133-capture-study/implementation-review/review-report.md": "d4069ec0a516dea33a94998b94c491b1387c512f6aaef7233eefa59a3fdfe09d",
+    "private/slice133-capture-study/native-build.log": "9bb7beeebb24e48fdd993dc04b20e0c8d7c0a21f0810af83248ce86ef9a0c449",
+    "private/slice133-capture-study/overlay-preparation.log": "d0d5e224af20bd9ac03ab17c432e96de6d8eec18d178978954b46b40b69dffef",
+    "private/slice133-capture-study/publish_metadata.py": "2d6bf3eeab24b4580a3621ec824e736af400c7e20e6f916be02d98e982da967e",
+    "private/slice133-capture-study/research/capture-control-proposal.md": "91b7af361d5d5d6990c4c9b22b05ba7311b3257c81e3a4786d28c2a443dd54dc",
+    "private/slice133-capture-study/research/metadata.json": "62bd1812d007de906bd65ed97db31b0a5cabd9ec53bbcbf620489c8fc65deed6",
+    "private/slice133-capture-study/schema-review/export-schema-review.md": "2e429697739bb7f0dc47956a24274839464e5ff5d667a4c17e6331a40e1f5c36",
+    "private/slice133-capture-study/schema-review/metadata.json": "623bbb5ddc51a267a9a0f26001613cd6446f7d39f0df64c660db59ce5e701f6c",
+    "private/slice133-runtime-overlay/dispatch.cpp": "25840053c8f4ec9b9f1ae89bcda49abec0a02a66b26d9e5ce363e0a31f37c64e",
+    "private/slice133-runtime-overlay/kernel.cpp": "9f39ae97db3c0020d0b70204fd614c6bd5ee9198f6627f61890c6eb5694378bc",
+    "private/slice133-runtime-overlay/runtime-overlay.json": "f00db2f569765e5f9a52dcca7c5b7b8db2d9a44cc6662ccf3cf92075081e0ba7",
+    "private/slice133-runtime-overlay/system.cpp": "8d0d2388c03fa803e17f28b8429254e537fb45947e8bca86603d4b1418e8f3a8"
+  },
+  "capture_activation_implemented": false,
+  "game_exporter_linked": false,
+  "retail_game_executed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "limitations": [
+    "Write/flush/cleanup/close failures source-reviewed only; no fault injection",
+    "Cleanup can fail; abrupt termination may leave partial file",
+    "Caller-trusted parent path; public path policy unimplemented",
+    "Unique fixture temporary directory may remain after assertion failure",
+    "No manual control, live export or real shape association"
+  ],
+  "next_boundary": "EE-owned manual capture latch at vblank and fresh private output launcher"
+}
