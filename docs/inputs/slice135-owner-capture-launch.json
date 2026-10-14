@@ -1,0 +1,37 @@
+{
+  "classification": "Confirmed launch/startup only; owner scene/key/capture qualification pending",
+  "source_commit": "5890192",
+  "slice": 135,
+  "client_date": "2026-10-14",
+  "runtime": {
+    "path": "private/slice134-manual-capture/build/gt4vulkan.exe",
+    "sha256": "5690d3ef82b013970403cdd51f17f0af708479059891a06f95f5f7f17924d272",
+    "size_bytes": 54479360
+  },
+  "launcher_pid": 27120,
+  "runtime_pid_observed": 37432,
+  "session_path": "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261014-023642-198356",
+  "capture_path": "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261014-023642-198356\\shape-capture.json",
+  "startup_snapshot": {
+    "path": "private/slice135-owner-launch/startup-prefix.log",
+    "size_bytes": 3205,
+    "sha256": "ed4da2ddaedf50923c3a065ea705266ae860749e0b56239374a936b53c9df7dd"
+  },
+  "initialization_markers": {
+    "native_window": true,
+    "windows_audio": true,
+    "guest_iop_boot_services": true
+  },
+  "existing_save_selected": true,
+  "backup_size_bytes": 8650752,
+  "capture_file_present_at_snapshot": false,
+  "retail_scene_identity_qualified": false,
+  "physical_f8_tested_by_agent": false,
+  "game_input_sent_by_agent": false,
+  "performance_measured": false,
+  "limits": [
+    "Log/process startup evidence only; no menu/race visual verification",
+    "Card contents not read by this recorder; existing launcher owns backup/locks",
+    "Live session logs/results may continue changing; startup prefix is frozen separately"
+  ]
+}

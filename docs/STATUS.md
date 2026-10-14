@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-14 — Slice 134, owner-controlled F8 capture candidate.
+2026-10-14 — Slice 135, manual capture candidate launched for owner control.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-manual-capture-134`, based on commit adba795.
+`codex/gt4-owner-capture-launch-135`, based on commit 5890192.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -51,6 +51,14 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   Synchronous bounded export may pause a frame; no gameplay/performance probe was
   used for build qualification. Owner-led capture is next. See
   [manual capture evidence](inputs/slice134-manual-capture.json).
+- **Confirmed (slice 135):** qualified134 candidate launched after checking no
+  existing game process. Native window/Vulkan, Windows audio and guest IOP boot
+  services are present in the startup log. Existing owner save selected; session
+  backup8650752 bytes created. Capture starts off; no capture file at snapshot.
+- **Unknown:** menu/race scene, physical F8 and real shape identity. No agent GUI
+  navigation/input or performance measurement. The owner controls the open game.
+  Startup proof is frozen separately from changing live session logs:
+  [launch evidence](inputs/slice135-owner-capture-launch.json).
 
 - **Confirmed:** fresh CORE-to-ELF reconstruction matches the pinned native ELF;
   independent verified ISO extraction produces the same CORE/ELF.
