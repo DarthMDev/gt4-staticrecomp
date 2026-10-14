@@ -1,11 +1,22 @@
 # Current Status
 
-2026-10-14 — Slice 139, owner live capture structurally verified.
+2026-10-14 — Slice 140, partial live/menu shape layout correspondence.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-live-capture-check-139`, based on commit 4d24646.
+`codex/gt4-shape-crosswalk-140`, based on commit 449c450.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
+
+- **Confirmed (slice 140):** exact pinned offline/capture comparison and independent
+  Luna parsing align18 of22 menu Ford Ka shapes at candidate MDLS base0x01748740,
+  accounting for97 calls. Other53 menu and all60 race-LOD candidate bases match
+  one distinct address each. Four menu shapes are unobserved;12 other live addresses
+  are outside the candidate menu extent. Ten authored matching controls pass.
+- **High confidence:** partial loaded menu-asset layout correspondence.
+  **Unknown:** resource identity/lifetime, descriptor relocation/payloads, car-part
+  roles, camera/transforms and geometry. No runtime/build/session/performance change.
+  Next: bounded prefix/descriptor observation; see [crosswalk](LIVE-SHAPE-CROSSWALK.md)
+  and [evidence](inputs/slice140-shape-crosswalk.json).
 
 - **Confirmed (slice 139):** owner capture exports valid schema1,180767 bytes,
   256 completed records, all before/after validity masks0x3f. Started/completed257,

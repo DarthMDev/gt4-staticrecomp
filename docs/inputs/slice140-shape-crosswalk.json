@@ -1,0 +1,201 @@
+{
+  "classification": "Confirmed partial structural correspondence; High confidence menu asset candidate; live resource ownership/relocation/geometry Unknown",
+  "source_commit": "449c450",
+  "branch": "codex/gt4-shape-crosswalk-140",
+  "capture": {
+    "path": "private/slice139-live-capture/frozen/shape-capture.json",
+    "size_bytes": 180767,
+    "sha256": "9e384b6b19bf2740f236621ad88184455503ebc501452065e400318e8e314fbb"
+  },
+  "assets": [
+    {
+      "catalogue_path": "car/menu/fdeu0006",
+      "output_file": "asset-00.bin",
+      "kind": 2,
+      "volume_offset": 118628352,
+      "stored_bytes": 172219,
+      "decoded_bytes": 561864,
+      "stored_sha256": "eee0e035a5cac374a2f2255c398ca54d987f650585f1652b75ef15ed62757e4d",
+      "decoded_sha256": "4f95cedcb9838e412724d6dd329a1327d5fc887a16e232f11f84247543bdb06a"
+    },
+    {
+      "catalogue_path": "car/lod/fdeu0006",
+      "output_file": "asset-01.bin",
+      "kind": 2,
+      "volume_offset": 276217856,
+      "stored_bytes": 179236,
+      "decoded_bytes": 487112,
+      "stored_sha256": "5437cb0d7fa854a3b1c56673927966557f75745bbe36c884c3492fb91ada4fd0",
+      "decoded_sha256": "3b2299d75e8427192521c7854ac39f150c310a83e387f4d567f70b65b7b91867"
+    }
+  ],
+  "method": "Group every compatible (opaque shape+4, descriptor count) disk/live pair by non-wrapping guest argument0 minus serialized MDLS-relative shape offset. Require full hypothetical model extent inside32MiB RAM. Rank distinct addresses, preserving ties/aliases.",
+  "observations": {
+    "captured_addresses": 30,
+    "captured_calls": 256,
+    "before_after_and_repeated_signatures_stable": true,
+    "winning_menu_mdls_base_hypothesis": "01748740",
+    "menu_mdls_bytes": 416657,
+    "menu_shapes_total": 22,
+    "menu_distinct_addresses_matched": 18,
+    "menu_calls_matched": 97,
+    "other_addresses": 12,
+    "other_calls": 159,
+    "unmatched_addresses_inside_winning_candidate_extent": 0,
+    "unobserved_menu_indices": [
+      0,
+      2,
+      4,
+      21
+    ],
+    "menu_candidate_bases": 54,
+    "other_menu_candidates_max_distinct_addresses": 1,
+    "race_lod_candidate_bases": 60,
+    "race_lod_max_distinct_addresses": 1,
+    "matches": [
+      {
+        "address": "0174c570",
+        "shape_index": 1,
+        "mdls_offset": 15920,
+        "calls": 4
+      },
+      {
+        "address": "01750ed0",
+        "shape_index": 3,
+        "mdls_offset": 34704,
+        "calls": 4
+      },
+      {
+        "address": "01752730",
+        "shape_index": 5,
+        "mdls_offset": 40944,
+        "calls": 4
+      },
+      {
+        "address": "01754850",
+        "shape_index": 6,
+        "mdls_offset": 49424,
+        "calls": 4
+      },
+      {
+        "address": "017562b0",
+        "shape_index": 7,
+        "mdls_offset": 56176,
+        "calls": 4
+      },
+      {
+        "address": "01756370",
+        "shape_index": 8,
+        "mdls_offset": 56368,
+        "calls": 4
+      },
+      {
+        "address": "01757560",
+        "shape_index": 9,
+        "mdls_offset": 60960,
+        "calls": 4
+      },
+      {
+        "address": "017577b0",
+        "shape_index": 10,
+        "mdls_offset": 61552,
+        "calls": 4
+      },
+      {
+        "address": "01765830",
+        "shape_index": 11,
+        "mdls_offset": 119024,
+        "calls": 4
+      },
+      {
+        "address": "0176b090",
+        "shape_index": 12,
+        "mdls_offset": 141648,
+        "calls": 4
+      },
+      {
+        "address": "0176f300",
+        "shape_index": 13,
+        "mdls_offset": 158656,
+        "calls": 4
+      },
+      {
+        "address": "01772880",
+        "shape_index": 14,
+        "mdls_offset": 172352,
+        "calls": 4
+      },
+      {
+        "address": "01774ec0",
+        "shape_index": 15,
+        "mdls_offset": 182144,
+        "calls": 4
+      },
+      {
+        "address": "01776fc0",
+        "shape_index": 16,
+        "mdls_offset": 190592,
+        "calls": 4
+      },
+      {
+        "address": "01777340",
+        "shape_index": 17,
+        "mdls_offset": 191488,
+        "calls": 4
+      },
+      {
+        "address": "01777430",
+        "shape_index": 18,
+        "mdls_offset": 191728,
+        "calls": 4
+      },
+      {
+        "address": "01777540",
+        "shape_index": 19,
+        "mdls_offset": 192000,
+        "calls": 29
+      },
+      {
+        "address": "0177b900",
+        "shape_index": 20,
+        "mdls_offset": 209344,
+        "calls": 4
+      }
+    ]
+  },
+  "controls": {
+    "authored_matching_assertions": 10,
+    "authored_matching_assertions_passed": 10,
+    "independent_raw_asset_parse_agrees": true,
+    "input_size_sha_pins_matched": true,
+    "existing_runtime_qualification": "slice136 CTest7/7 Python164/164; unchanged, not rerun",
+    "native_rebuild_needed": false
+  },
+  "tools": {
+    "python": "3.14.5"
+  },
+  "private_artifact_sha256": {
+    "private/slice140-shape-crosswalk/analyze.py": "b9e2426478000415e687a40486c3d19e3d6a5eca0d72b563b13e9134523bc1de",
+    "private/slice140-shape-crosswalk/publish.py": "8c17f3d05779199faaae7caa0a7ccb57a8a96ce663a3072730da5fab9f846399",
+    "private/slice140-shape-crosswalk/crosswalk.json": "0c2be4158ec9630fb6ed5ea601053510212af818733dd43fb9f5efcac9f09070",
+    "private/slice140-shape-crosswalk/control.log": "9de989ac1f040293c07eced643eff87a6c5796d48600fa844c90af064ada7b54",
+    "private/slice140-shape-crosswalk/luna-review/crosswalk.py": "0f0d75fd422cadad80d5cb981e8eed05de0b10072f972cc3b64cb029f0b05f7e",
+    "private/slice140-shape-crosswalk/luna-review/crosswalk.json": "0fe3be1c19a99bca075918e64b301467245c5847e7810bcd601e521b6f5bcc14",
+    "private/slice140-shape-crosswalk/luna-review/research-report.md": "fcb7f0441776b4ff6d26146583cbc0c81056429d57f0739e48c10d169a4842aa",
+    "private/slice140-shape-crosswalk/luna-review/metadata.json": "7b16ffd4bb6f31afd5d123b18afb102a1646bdf28d103c1af1a8470f686e9ecd"
+  },
+  "limitations": [
+    "A candidate translation is not sampled MDLS/resource identity or lifetime",
+    "Opaque all-zero shape+4 is a weak discriminator; one-address signature matches are ambiguous",
+    "Missing shapes/capture cap do not prove culling/pass roles or complete scene coverage",
+    "Runtime descriptor first words are masked direct addresses; disk packet offsets are shape-relative",
+    "No descriptor/packet payload, geometry, camera or car-part semantics qualified",
+    "Race negative control only tests the same-layout hypothesis, not asset absence",
+    "Calls are not frames; no duration/performance conclusions"
+  ],
+  "active_runtime_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "next_boundary": "Separately qualified bounded shape-prefix/descriptor capture; preserve schema1 and original authoritative path"
+}

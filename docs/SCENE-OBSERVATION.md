@@ -390,3 +390,9 @@ recursive observations do not generally require globally ordered completion.
 Real asset/shape crosswalk, channel/geometry/submission ownership and capture
 duration remain Unknown. The agent did not navigate, send input or measure FPS.
 See [slice139 evidence](inputs/slice139-live-capture.json).
+
+[Slice140 crosswalk](LIVE-SHAPE-CROSSWALK.md) now establishes a strong partial
+layout candidate:18 menu Ford Ka shape offsets/signatures share one translation,
+covering97 records. It does not qualify live descriptor relocation, packet
+content, resource ownership, geometry or camera state. Capture schema1 remains
+unchanged; a separately qualified richer observation is the next boundary.

@@ -179,6 +179,13 @@ pass; selected USA SpecDB extraction and independent offline Ford Ka '01
 identity replay succeed. The actual menu/LOD basename is still Unknown;
 model/texture decoding, live ownership and all P1 exit gates remain open.
 
+**Slice140:** the [owner-capture crosswalk](LIVE-SHAPE-CROSSWALK.md) independently
+matches18 serialized menu Ford Ka shape positions/signatures under one candidate
+guest MDLS translation. This is strong partial layout correspondence, not a P1
+exit: descriptor relocation/payloads, live resource/instance ownership, channel
+and transform semantics remain open. Next bounded observation captures shape
+prefixes/descriptors without replacing the original rendering path.
+
 **Dependencies:** P0 for executable hooks; static research may start earlier.
 **Work:** map one model boundary to actual generated EE functions and callers.
 Establish coordinate spaces, transforms, bounds, vertex packing, strip breaks,
