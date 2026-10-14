@@ -1,0 +1,22 @@
+{
+  "classification": "Confirmed owner-requested normal restart with fresh capture; target scene remains unqualified",
+  "runtime": {
+    "path": "private/slice136-keyboard-input/build/gt4vulkan.exe",
+    "size_bytes": 54479360,
+    "sha256": "87214eaebe6e11ff7dfb08dafdd3c701f44e8f4a66e14e112c566306c5959857"
+  },
+  "previous_session": "session-20261014-030057-738675",
+  "previous_capture_preserved": true,
+  "previous_scene_rejected_by_owner": "Capture started before car appeared in showroom",
+  "shutdown": "Owner explicitly requested close/reopen; CloseMainWindow normal exit0, no forced termination",
+  "session_path": "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261014-030636-705690",
+  "launcher_pid": 30024,
+  "game_pid_observed": 41236,
+  "capture_file_present_at_snapshot": true,
+  "startup_snapshot": {
+    "path": "private/slice138-owner-capture-retry/startup-prefix.log",
+    "sha256": "c99d0856cfaf0fd32c05a3f27a3b8dd45bca52f56679c1eec62afc7eb791fc09"
+  },
+  "scene_navigation_or_keyboard_input_sent_by_agent": false,
+  "performance_measured": false
+}

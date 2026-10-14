@@ -1,11 +1,18 @@
 # Current Status
 
-2026-10-14 — Slice 137, corrected keyboard capture candidate open for owner retest.
+2026-10-14 — Slice 138, owner-requested fresh capture retry open.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-corrected-capture-launch-137`, based on commit 4575d98.
+`codex/gt4-owner-capture-retry-138`, based on commit dcb7e32.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
+
+- **Confirmed (slice 138):** owner reported capture began before the car appeared
+  and explicitly requested close/reopen. Delivered normal close; exit0/session
+  completion confirmed, previous capture preserved. Qualified136 reopened with
+  the same save, fresh backup/session and capture off. This authorization covers
+  this restart only; owner still controls scene navigation and F8. Target scene
+  remains unqualified. See [retry evidence](inputs/slice138-owner-capture-retry.json).
 
 - **Confirmed (slice 137):** owner requested opening the corrected build. Old134
   session closed normally with exit0; qualified136 runtime launched with existing
