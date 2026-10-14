@@ -4,6 +4,7 @@
 #include "host_io.hpp"
 #include "native_vulkan.hpp"
 #include "ps2/system.hpp"
+#include "perf_probe.hpp"
 #ifdef GT4_SHAPE_CAPTURE
 #include "shape_capture_control.hpp"
 #include "shape_observer_adapter.hpp"
@@ -32,6 +33,9 @@ void update_title() {
                                     L"Enter: Start, Z: acelerar, A: frear"
                                   : L"GT4Recomp — 4:3 — F6: proporção — Enter: "
                                     L"Start, Z: acelerar, A: frear";
+#ifdef GT4_PERF_PROBE
+  title += L" — F7: start test, F8: report, F9: diagnostics";
+#endif
 #ifdef GT4_SHAPE_CAPTURE
   if (capture) {
     using gt4::observation::CapturePhase;
@@ -56,6 +60,14 @@ void apply_pad(const PadState &pad) {
 
 LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
                                   LPARAM second) {
+#ifdef GT4_PERF_PROBE
+  if (message == WM_KEYDOWN && (first == VK_F7 || first == VK_F8 || first == VK_F9)) {
+    const auto request = first == VK_F7 ? gt4::perf::Request::start :
+        first == VK_F8 ? gt4::perf::Request::report : gt4::perf::Request::toggle;
+    gt4::perf::Probe::shared().request(request, (second & (1ll << 30)) != 0);
+    return 0;
+  }
+#endif
 #ifdef GT4_SHAPE_CAPTURE
   if (message == WM_KEYDOWN && first == VK_F8) {
     if (capture) capture->request_toggle((second & (1ll << 30)) != 0);
@@ -105,6 +117,11 @@ bool pump_messages() {
 }
 
 void on_vblank() {
+#ifdef GT4_PERF_PROBE
+  gt4::perf::Probe::shared().frame_boundary(
+      {ps2::now(), ps2::primitives_drawn(), ps2::vu1_interpreted_calls()});
+#endif
+  GT4_PERF_SCOPE(gt4::perf::Category::host_vblank);
   if (!pump_messages())
     return;
 #ifdef GT4_SHAPE_CAPTURE
@@ -173,6 +190,9 @@ int run_window(const std::function<int()> &emulate) {
   ControllerInput input;
   controller = &input;
   const auto cleanup = [&]() {
+#ifdef GT4_PERF_PROBE
+    gt4::perf::Probe::shared().finish();
+#endif
 #ifdef GT4_SHAPE_CAPTURE
     if (capture) {
       capture->finish();

@@ -1,4 +1,5 @@
 #include "host_io.hpp"
+#include "perf_probe.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -206,6 +207,9 @@ std::size_t AudioOutput::reap() {
   for (auto &buffer : buffers_) {
     if (buffer.queued && (buffer.header.dwFlags & WHDR_DONE)) {
       completed_ += buffer.header.dwBufferLength / 4;
+#ifdef GT4_PERF_PROBE
+      gt4::perf::Probe::shared().audio(0, buffer.header.dwBufferLength / 4);
+#endif
       buffer.queued = false;
     }
     queued += buffer.queued;
@@ -228,8 +232,11 @@ bool AudioOutput::wait_for(Buffer *buffer) {
     if (GetTickCount64() >= deadline)
       throw std::runtime_error("Windows audio device stalled for five seconds");
     ++waits_;
-    const DWORD result =
-        MsgWaitForMultipleObjects(1, &event_, FALSE, 50, QS_ALLINPUT);
+    DWORD result;
+    {
+      GT4_PERF_SCOPE(gt4::perf::Category::audio_wait);
+      result = MsgWaitForMultipleObjects(1, &event_, FALSE, 50, QS_ALLINPUT);
+    }
     if (result == WAIT_FAILED)
       throw std::runtime_error("Waiting for audio completion failed");
   }
@@ -242,8 +249,12 @@ bool AudioOutput::submit() {
   if (!wait_for(&buffer))
     return false;
   const auto queued = reap();
-  if (!queued && submitted_)
+  if (!queued && submitted_) {
     ++empty_queue_;
+#ifdef GT4_PERF_PROBE
+    gt4::perf::Probe::shared().audio(0, 0, 1);
+#endif
+  }
   std::copy_n(pending_.data(), pending_frames_ * 2, buffer.samples.data());
   buffer.header.dwBufferLength = static_cast<DWORD>(pending_frames_ * 4);
   check_audio(waveOutWrite(device_, &buffer.header, sizeof(WAVEHDR)),
@@ -257,9 +268,13 @@ bool AudioOutput::submit() {
 }
 
 bool AudioOutput::push(const std::int16_t *samples, std::size_t frames) {
+  GT4_PERF_SCOPE(gt4::perf::Category::audio_push);
   if (!device_ || (frames && !samples))
     throw std::runtime_error("Invalid audio sink input/lifetime");
   received_ += frames;
+#ifdef GT4_PERF_PROBE
+  gt4::perf::Probe::shared().audio(frames, 0);
+#endif
   while (frames) {
     const auto count = std::min(frames, frames_per_buffer - pending_frames_);
     std::copy_n(samples, count * 2, pending_.data() + pending_frames_ * 2);

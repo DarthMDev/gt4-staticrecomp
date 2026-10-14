@@ -1,4 +1,5 @@
 #include "native_vulkan.hpp"
+#include "perf_probe.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -447,21 +448,29 @@ void Context::destroy_buffer(Buffer *buffer) {
 
 void Context::write(Buffer *buffer, std::uint64_t offset, const void *source,
                     std::uint64_t bytes) {
+  GT4_PERF_SCOPE(gt4::perf::Category::gs_upload);
   if (!buffer || offset > buffer->size || bytes > buffer->size - offset)
     throw std::runtime_error("Vulkan buffer write outside allocation");
   if (bytes)
     std::memcpy(static_cast<std::uint8_t *>(buffer->mapped) + offset, source,
                 static_cast<std::size_t>(bytes));
+#ifdef GT4_PERF_PROBE
+  gt4::perf::Probe::shared().bytes(false, bytes);
+#endif
 }
 
 void Context::read(Buffer *buffer, std::uint64_t offset, void *destination,
                    std::uint64_t bytes) {
+  GT4_PERF_SCOPE(gt4::perf::Category::gs_upload);
   if (!buffer || offset > buffer->size || bytes > buffer->size - offset)
     throw std::runtime_error("Vulkan buffer read outside allocation");
   if (bytes)
     std::memcpy(destination,
                 static_cast<std::uint8_t *>(buffer->mapped) + offset,
                 static_cast<std::size_t>(bytes));
+#ifdef GT4_PERF_PROBE
+  gt4::perf::Probe::shared().bytes(true, bytes);
+#endif
 }
 
 void Context::bind_buffers(const std::array<Buffer *, 8> &buffers) {
@@ -513,8 +522,11 @@ void Context::finish_commands(VkSemaphore wait, VkSemaphore signal) {
     submit.pSignalSemaphores = &signal;
   }
   check(vkQueueSubmit(queue_, 1, &submit, fence_), "queue submit");
-  check(vkWaitForFences(device_, 1, &fence_, VK_TRUE, UINT64_MAX),
-        "wait submission fence");
+  {
+    GT4_PERF_SCOPE(gt4::perf::Category::gs_wait);
+    check(vkWaitForFences(device_, 1, &fence_, VK_TRUE, UINT64_MAX),
+          "wait submission fence");
+  }
 }
 
 void Context::memory_barrier(VkPipelineStageFlags source,
@@ -529,6 +541,7 @@ void Context::memory_barrier(VkPipelineStageFlags source,
 }
 
 void Context::execute(const Dispatch *commands, std::size_t count) {
+  GT4_PERF_SCOPE(gt4::perf::Category::gs_execute);
   if (!count)
     return;
   begin_commands();
@@ -566,6 +579,9 @@ void Context::execute(const Dispatch *commands, std::size_t count) {
                             pipeline_layout_, 0, 1, &descriptor_set_, 1,
                             &offset);
     vkCmdDispatch(command_, dispatch.x, dispatch.y, 1);
+#ifdef GT4_PERF_PROBE
+    gt4::perf::Probe::shared().dispatch(std::uint64_t(dispatch.x) * dispatch.y);
+#endif
     memory_barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                    VK_ACCESS_SHADER_WRITE_BIT,
@@ -577,7 +593,10 @@ void Context::execute(const Dispatch *commands, std::size_t count) {
   finish_commands();
 }
 
-void Context::wait_idle() { check(vkQueueWaitIdle(queue_), "queue idle"); }
+void Context::wait_idle() {
+  GT4_PERF_SCOPE(gt4::perf::Category::gs_wait);
+  check(vkQueueWaitIdle(queue_), "queue idle");
+}
 
 void Context::attach_window(HWND window, std::uint32_t width,
                             std::uint32_t height) {
@@ -735,6 +754,7 @@ void Context::image_barrier(VkImage image, VkImageLayout old_layout,
 }
 
 bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
+  GT4_PERF_SCOPE(gt4::perf::Category::presentation);
   if (!window_ || !window_width_ || !window_height_)
     return false;
   if (resized_ || !swapchain_)
@@ -776,8 +796,12 @@ bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
     image_height_ = height;
   }
   std::uint32_t selected = 0;
-  auto acquired = vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX,
-                                        acquired_, VK_NULL_HANDLE, &selected);
+  VkResult acquired;
+  {
+    GT4_PERF_SCOPE(gt4::perf::Category::acquire_wait);
+    acquired = vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX,
+                                     acquired_, VK_NULL_HANDLE, &selected);
+  }
   if (acquired == VK_ERROR_OUT_OF_DATE_KHR) {
     resized_ = true;
     return false;
@@ -861,14 +885,20 @@ bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
       result != VK_ERROR_OUT_OF_DATE_KHR && result != VK_ERROR_SURFACE_LOST_KHR)
     check(result, "present submission");
   // shortcut: wait for actual presentation lifetime, qualify overlap later.
-  check(vkWaitForFences(device_, 1, &present_fence_, VK_TRUE, UINT64_MAX),
-        "wait presentation completion");
+  {
+    GT4_PERF_SCOPE(gt4::perf::Category::presentation_wait);
+    check(vkWaitForFences(device_, 1, &present_fence_, VK_TRUE, UINT64_MAX),
+          "wait presentation completion");
+  }
   if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
       acquired == VK_SUBOPTIMAL_KHR)
     resized_ = true;
   else
     check(result, "present frame");
   ++presentations_;
+#ifdef GT4_PERF_PROBE
+  gt4::perf::Probe::shared().presentation(std::uint64_t(width) * height * 4);
+#endif
   return true;
 }
 

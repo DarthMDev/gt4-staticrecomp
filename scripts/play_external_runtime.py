@@ -6,11 +6,14 @@ import msvcrt
 from pathlib import Path
 import sys
 
-from external_runtime_probe import ROOT, run_probe, verify_manual_capture_profile
+from external_runtime_probe import ROOT, run_probe, verify_manual_capture_profile, verify_performance_profile
 
 
-def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False):
+def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False):
     workspace = Path(assets_root or ROOT).resolve()
+    if performance:
+        manifest = Path(runtime_manifest).resolve()
+        verify_performance_profile(manifest, json.loads(manifest.read_text(encoding='utf-8')), ROOT)
     play_directory = workspace / 'private/manual-play'
     if not play_directory.resolve().is_relative_to((workspace / 'private').resolve()):
         raise ValueError('Manual play directory must remain inside private/')
@@ -43,10 +46,12 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=
             if capture_shapes:
                 print('Capture starts OFF. Select the scene yourself, then press F8 to start/stop.', flush=True)
                 print(f'One capture per launch, up to 256 records: {run_directory / "shape-capture.json"}', flush=True)
+            if performance:
+                print('Performance test: F7 starts, F8 reports, F9 toggles diagnostics. Owner controls gameplay.', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
                                window=True, interactive=True, play_card=card, aspect=aspect,
-                               runtime_workspace=ROOT, capture_shapes=capture_shapes)
+                               runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:

@@ -19,6 +19,61 @@ def file_pin(path):
 
 
 class ProbeTests(unittest.TestCase):
+    def performance_manifest(self, root):
+        evidence = json.loads((root / 'docs/inputs/slice114-native-base.json').read_text())
+        runtime = root / probe.PERF_RUNTIME
+        runtime.parent.mkdir(parents=True)
+        runtime.write_bytes((root / evidence['runtime']['path']).read_bytes())
+        evidence['runtime']['path'] = probe.PERF_RUNTIME
+        evidence.update(profile='performance', perf_schema_version=1,
+                        keyboard_input_fix='digital_only_slice136', capture_activation_implemented=False)
+        manifest = root / 'docs/inputs' / probe.PERF_MANIFEST
+        manifest.write_text(json.dumps(evidence))
+        return manifest, evidence
+
+    def test_performance_profile_and_environment_are_isolated(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            manifest, evidence = self.performance_manifest(root)
+            contaminated = {'PS2_TIME': '1,100', 'PS2_DUMP_AUDIO': 'old.wav', 'PS2_ONE_THREAD': '1',
+                            'GT4_PERF': '0', 'GT4_PERF_PERIOD': '1', 'GT4_OBSERVATION_OUTPUT': 'old.json'}
+            def execute(arguments, **options):
+                environment = options['env']
+                self.assertEqual(environment['GT4_PERF'], '1')
+                self.assertEqual(environment['PS2_SCALE'], '1')
+                for name in contaminated:
+                    if name != 'GT4_PERF': self.assertNotIn(name, environment)
+                options['stdout'].write(b'[ee] stopped after 5 frames, 2 cycles: window closed\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.dict(probe.os.environ, dict(contaminated, VK_ICD_FILENAMES='test-icd.json')), patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/perf', 0, 1, [],
+                    runtime_manifest=manifest, window=True, interactive=True, performance=True)
+            self.assertTrue(result['manual_session_closed'])
+            self.assertEqual(result['performance_environment']['GT4_PERF'], '1')
+            self.assertEqual(result['vulkan_loader_environment']['VK_ICD_FILENAMES'], 'test-icd.json')
+
+    def test_performance_rejects_invalid_identity_before_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            manifest, evidence = self.performance_manifest(root)
+            for key, value in [('profile', 'observation'), ('perf_schema_version', True),
+                               ('keyboard_input_fix', 'old'), ('capture_activation_implemented', True)]:
+                bad = dict(evidence, **{key: value})
+                manifest.write_text(json.dumps(bad))
+                with self.assertRaises(ValueError), patch.object(probe.subprocess, 'run') as execute:
+                    probe.run_probe(root, root / 'private/perf', 0, 1, [], runtime_manifest=manifest,
+                                    window=True, interactive=True, performance=True)
+                execute.assert_not_called()
+                self.assertFalse((root / 'private/perf').exists())
+            manifest.write_text(json.dumps(evidence))
+            (root / probe.PERF_RUNTIME).write_bytes(b'changed')
+            with self.assertRaisesRegex(ValueError, 'pinned'):
+                probe.run_probe(root, root / 'private/perf', 0, 1, [], runtime_manifest=manifest,
+                                window=True, interactive=True, performance=True)
+            self.assertFalse((root / 'private/perf').exists())
+
     def capture_manifest(self, root):
         evidence = json.loads((root / 'docs/inputs/slice114-native-base.json').read_text())
         qualified = root / probe.CAPTURE_RUNTIME

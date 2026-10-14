@@ -99,3 +99,72 @@ F7/F8 test build and rank exclusive wall costs alongside available CPU/GPU evide
 Do not select VU AOT, rewrite GS or remove fences from the current summary alone.
 See [Hybrid Port Plan](HYBRID-PORT-PLAN.md) and
 [slice142 evidence](inputs/slice142-performance-accounting.json).
+
+## Playable diagnostic candidate (slice143)
+
+**Confirmed:** `native/perf_probe.*` connects the controlled accounting core to
+four derived donor scope sites (EE dispatch, IOP run, VIF transfer, VU interpreter),
+native GS host copies/dispatch/presentation/waits, audio push/waits and host VBlank.
+The clean pinned donor is unchanged. Production AOT game library and nine SPIR-V
+shaders match slice114. Internal scale remains1; no game clock, graphics semantics,
+fences, generated game code or input merge behavior is changed.
+
+Read-only Luna traced current native single-thread ownership: donor browser/VU
+worker hosts are not compiled or started here. Probe records wrong-thread use as
+an invalid measurement rather than sharing mutable accounting. Its only platform
+CPU measurement is owner-thread GetThreadTimes kernel+user, sampled at boundaries;
+wall clock uses steady_clock with safe microsecond conversion. Exclusive wall
+categories partition the interval; inclusive active-category unions overlap.
+Neither table allocates actual CPU execution time among subsystems. Fence waits
+remain completion latency, not GPU timestamp duration.
+
+Use tooling Python from the assets checkout, from this candidate checkout:
+
+```powershell
+C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe scripts/play_performance.py --assets-root C:/Antigravity/gt4-staticrecomp
+```
+
+The launcher selects only the pinned143 manifest/executable, preserves the existing
+manual card and byte locks, and creates the usual per-session card backup. No
+shape-capture mode is linked into this player. Inherited PS2_ and GT4_PERF_ tuning
+settings are removed; GT4_PERF=1, PS2_SCALE=1 and PS2_GS=gpu are explicit. Vulkan
+loader overrides are preserved and recorded in result.json after the session;
+other driver/overlay state is not controlled. No scripted presses/navigation.
+
+1. Owner opens the race and lets its initial loading settle.
+2. Press F7 once, drive the same section for30–60s, then press F8 once.
+3. Tell Codex the car/track/camera and approximate start/end points; the report is
+   in `private/manual-play/session-.../probe.log` in the assets checkout.
+4. Optional F9 reports before pausing and resumes with a fresh interval. F7 also
+   resumes if paused. Close normally after F8; shutdown omits the partial interval.
+
+Keys are latched until the next VBlank, before host message pumping. Repeated
+keydown is ignored. F7 suppresses automatic5s reports/reset until F8. Same-boundary
+F8 is handled before F9/F7 so a pause/restart cannot erase the requested interval.
+All still-active scopes are clipped at each cut; disabled gaps and cumulative
+guest-counter baselines cannot leak into the next interval. Disabled scopes keep
+ownership but do not read clocks; this is **not** a zero-instrumentation reference.
+
+Reports label VBlanks/s separately from Unknown fresh scene frames, and guest
+cycle-model speed separately from independently proven game speed. Percentiles
+use nearest-rank p95/p99 and even-sample average median; a4096-tail sample cap is
+disclosed. Mapped write/read bytes and presented RGBA bytes are separate counters.
+Audio empty refills identify an empty queue at refill, not proven audible underruns.
+
+**Controls:** warning-free Release candidate CTest7/7 in4.36s; separate macro-off
+observation control CTest9/9 in14.23s, Python171/171 zero skips. Final launcher
+Vulkan-environment metadata change passes the Python CTest again in8.64s. Fixtures
+cover nested cuts, long manual intervals, disabled/no-clock spans, resume, counter
+reset, wrong-thread invalidation, percentiles/tail limits and F8/F9 ordering.
+Preparation controls prove exact inverse derivation, source pins and fresh-output
+rejection. Launcher controls cover profile/schema rejection, inherited tuning
+settings and card/session locks. Strict CMake gates recheck clean donor, game
+library, source receipt, adapters/shaders and exact capsule inventories.
+
+**Unknown / next evidence:** overhead under high-VU gameplay, GPU timestamp time,
+distinct rendered scene counts and the dominant subsystem. This slice adds
+diagnostics, not a performance optimization. The separate macro-off build is a
+source/fixture control with an observation EE profile, not a matched live overhead
+benchmark. Owner should collect the corrected interval before selecting any VU/GS
+rewrite or claiming a bottleneck. Public metadata: [candidate](inputs/slice143-performance-candidate.json),
+[derivation](inputs/slice143-performance-runtime.json); raw artifacts stay private.

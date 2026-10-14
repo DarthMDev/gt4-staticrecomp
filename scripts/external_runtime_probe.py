@@ -15,6 +15,18 @@ from gt4disc import fingerprint
 ROOT = Path(__file__).resolve().parents[1]
 CAPTURE_MANIFEST = 'slice136-keyboard-input.json'
 CAPTURE_RUNTIME = 'private/slice136-keyboard-input/build/gt4vulkan.exe'
+PERF_MANIFEST = 'slice143-performance-candidate.json'
+PERF_RUNTIME = 'private/slice143-performance-candidate/build/gt4vulkan.exe'
+
+
+def verify_performance_profile(manifest, evidence, runtime_workspace):
+    if (manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve() or
+            evidence.get('profile') != 'performance' or
+            type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
+            evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
+            evidence.get('runtime', {}).get('path') != PERF_RUNTIME or
+            evidence.get('capture_activation_implemented') is not False):
+        raise ValueError('Performance test requires the qualified corrected candidate')
 
 
 def verify_manual_capture_profile(manifest, evidence, runtime_workspace):
@@ -47,8 +59,11 @@ def summarize_exit(log_text, frame_count, exit_code, timed_out):
 
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
-              play_card=None, aspect='16:9', runtime_workspace=None, capture_shapes=False):
+              play_card=None, aspect='16:9', runtime_workspace=None, capture_shapes=False,
+              performance=False):
     workspace = workspace.resolve()
+    if performance and (not interactive or capture_shapes):
+        raise ValueError('Performance play must be owner-controlled without shape capture')
     runtime_workspace = Path(runtime_workspace or workspace).resolve()
     runtime_private = runtime_workspace / 'private'
     if capture_shapes and run_directory.absolute() != run_directory.resolve():
@@ -87,6 +102,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     runtime_evidence = json.loads(runtime_manifest.read_text(encoding='utf-8'))
     if capture_shapes:
         verify_manual_capture_profile(runtime_manifest, runtime_evidence, runtime_workspace)
+    if performance:
+        verify_performance_profile(runtime_manifest, runtime_evidence, runtime_workspace)
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
         dependency_path = (runtime_workspace / dependency['path']).resolve()
@@ -165,6 +182,16 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     environment['GT4_ASPECT'] = aspect
     environment.pop('PS2_DUMP_AUDIO', None)
     environment.pop('GT4_OBSERVATION_OUTPUT', None)
+    environment.pop('GT4_PERF', None)
+    if performance:
+        for name in list(environment):
+            if name.upper().startswith(('PS2_', 'GT4_PERF_')):
+                environment.pop(name)
+        environment.update(GT4_PERF='1', PS2_SCALE='1', PS2_GS='gpu')
+        result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu',
+                                             'GT4_ASPECT': aspect}
+        result['vulkan_loader_environment'] = {
+            name: value for name, value in environment.items() if name.upper().startswith('VK_')}
     if capture_shapes:
         environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']

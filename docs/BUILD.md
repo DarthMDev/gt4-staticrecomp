@@ -171,3 +171,19 @@ arrows emit digital D-pad only; keyboard never forces analog axes. Fresh136 nati
 CTest7/7/Python164/164 passes; the unchanged fixture rejects the old merge code.
 All seeds/shaders/library pins and save/backup/lock behavior are preserved.
 Owner must close the current window normally before launching the corrected build.
+
+Slice143 is a separate performance-only production-EE profile. Prepare fresh
+three-source runtime overlays with `scripts/prepare_perf_runtime.py` (see its
+`--help`); source hashes must match the clean pinned donor. Configure a fresh
+cache with `GT4_PERF_RUNTIME_SOURCE` pointing to that immediate private capsule,
+`GT4_EE_PROFILE=production`, empty `GT4_SHAPE_RUNTIME_SOURCE`, and
+`GT4_PORT_DIR`/`GT4_SHADER_DIR` pointing to the qualified143 port/shaders. The
+strict recipe uses `docs/inputs/slice143-performance-runtime.json`; fresh outputs
+must be independently pinned before changing that metadata. Do not overwrite143.
+Default profile still has no linked probe/hooks. Macro-off observation controls
+can separately include shape runtime fixtures; performance and shape profiles
+cannot be combined. Candidate native controls7/7 and separate full controls9/9
+with Python171/171 pass. This still depends on the private production library,
+not an end-to-end clean checkout build. Launch with `scripts/play_performance.py`
+and the owner-assets root, using the existing protected manual card flow.
+See [measurement instructions](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143).

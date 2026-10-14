@@ -1,21 +1,29 @@
 # Current Status
 
-2026-10-14 — Slice 142, OpenCode evidence review and controlled-clock accounting.
-Playable base remains slice 114, corrected owner capture candidate slice136.
-Active track: `codex/hybrid-no-jit-port-plan-141`; slice142 based on432252a.
-`main` retains slice140/native-scene work; no implementation is changed here.
+2026-10-14 — Slice 143, corrected playable performance diagnostic candidate.
+Playable base remains slice114; slice143 includes slice136's keyboard correction.
+Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
+`main` retains slice140/native-scene work; this candidate stays on the hybrid track.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Active priority on this branch
 
-**Slice142:** OpenCode executable/hash and4/4/34-test receipt reconciled, but its
-inclusive subsystem timers/report boundaries/F9 semantics are not suitable for
-exclusive ranking. Controlled old-header repro confirms defects. Added portable
-host-only accounting core with independent nested/cut/toggle controls, CTest8/8,
-Python164/164 zero skips. Core is not yet connected to the player build; no
-performance improvement or bottleneck claim. The494-report dataset selection
-remains unreproduced. See [attribution](PERFORMANCE-ATTRIBUTION.md). Next: integrate
-and qualify a corrected instrumented candidate before the owner's next interval.
+**Confirmed (slice143):** portable timing core is connected to a separately pinned
+production-EE player. Measures exclusive/inclusive wall categories and owner-thread
+CPU time, clips active scopes and guest counters at VBlank boundaries, preserves
+keyboard correction, excludes shape capture and inherited guest tuning settings.
+F7 starts a continuous manual interval, F8 reports, F9 pauses/resumes diagnostics.
+Candidate native CTest7/7; separate macro-off observation controls9/9,
+Python171/171 zero skips, warning-free builds. Launcher retains card/backup/lock flow.
+**Unknown:** dominant subsystem, diagnostic overhead in gameplay, distinct scene
+frame rate and GPU timestamp time. No performance improvement claim. Next: owner
+drives30–60s afterF7 and pressesF8; rank the resulting evidence before optimization.
+See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)
+and [candidate pins](inputs/slice143-performance-candidate.json).
+Protected candidate launch confirmed native Vulkan/16:9/48kHz initialization and
+per-session card backup; owner controls the open game. No race interval measured.
+Slice142 reconciled OpenCode's old executable/receipts and reproduced accounting
+defects; its reported494-interval selection remains unreproduced.
 
 Owner changed direction: optimize the hybrid base for correct game speed and
 stable60FPS on Windows, then add GS internal scaling/dithering and portability.

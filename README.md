@@ -30,10 +30,16 @@ on `main` at slice 140; this branch explores the optimized hybrid route.
 **Critical work remains before a stable experience is reached:** low performance in 3D scenes, inconsistent frametimes, audio dropouts, and reports of keyboard double-triggering. Graphical compatibility, saves beyond tested scenarios, and extended stability remain under active qualification.
 
 A keyboard correction now removes duplicate D-pad/analog signals from arrow
-keys in the latest capture candidate. Automated controls pass; menu navigation
+keys in the latest capture and performance candidates. Automated controls pass; menu navigation
 and digital steering still need owner confirmation. XInput analog sticks remain unchanged.
 
 Manual testing has shown 480p to be the most stable mode so far. Interlaced modes function, but their visual and temporal fidelity are not yet fully qualified.
+
+The latest experimental build adds corrected performance diagnostics: F7 starts
+a continuous test interval, F8 saves its report in the session log, and F9 pauses
+or resumes measurement. It separates overlapping subsystem timings and measures
+host-thread CPU time. This prepares owner-driven testing; it does not yet improve
+FPS. See [testing instructions](docs/PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143).
 
 ## The Experience We Want to Build
 
