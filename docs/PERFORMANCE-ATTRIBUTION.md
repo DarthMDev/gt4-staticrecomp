@@ -294,3 +294,41 @@ PID43684. Executable selection, Vulkan1x/16:9/48kHz startup and8650752B backup
 confirmed; all gameplay remains manual. No live probe, build, input injection,
 runtime change or performance optimization by the agent. Matched control data
 is still needed before quantifying detailed instrumentation overhead.
+
+## Frame-only owner run and detailed repeat (slice147)
+
+Session `session-20261014-182103-412804` records F7 at134, complete five-line F8
+at135–139:1175/1175 samples/56.199s,20.91VBlanks/s. Mean47.828936ms,
+median46.311,p9560.676,p9983.614,max112.004ms. Owner-thread CPU37.274ms/sample,
+77.9% occupancy; guest clock-model speed34.85%. No invalid/counter reset/periodic
+reset within interval. Mode/runtime match145 frame-only pins; exit0/windowclosed,
+no timeout, card before/after equal. Closed log/result/report frozen privately;
+extraction assertions and independent Luna review agree.
+
+| Measurement | Detailed146 | Frame-only147 |
+|---|---:|---:|
+| Duration |40.732s|56.199s|
+| Median wall/sample |42.065ms|46.311ms|
+| p99 wall/sample |50.736ms|83.614ms|
+| Measured thread CPU/sample |32.533ms|37.274ms|
+| Primitive mean/sample |18125.4|18061.8|
+| Interpreted VU1 calls/sample |790.3|788.6|
+
+Control median is10.09% higher and CPU/sample14.57% higher **in these observations**.
+That does not establish negative instrumentation cost, an optimization, thermal
+limiting or any other cause. Workload means are close, not proof of identical
+scene content. Durations differ, exact position and heat/power/clock/scheduler/
+overlay/driver state were not controlled. One interval per mode is insufficient
+to quantify the detailed-probe cost. Both retain common boundary instrumentation.
+
+After confirmed owner closure and no existing process, protected145 detailed
+repeat opened `session-20261014-182403-457646`,PID37664. Startup/backup verified;
+owner repeats the same scene, targeting40s to better match the first detailed
+interval. This completes the planned detailed/control/detailed order once F8
+is collected, but may still leave overhead statistically unresolved. No builds,
+runtime/code/clock changes or navigation by agent. [Evidence](inputs/slice147-owner-control-results.json).
+
+Following scope change: replace the existing aggregate `run_fast(unit,pc)` timing
+with mutually exclusive VU0-micro and VU1-interpreter-fallback categories in a fresh
+pinned derivation; prove their sum preserves the old exclusive partition. That
+site excludes generated VU1 AOT work; keep the label narrow and preserve143/145.

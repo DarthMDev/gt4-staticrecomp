@@ -1,6 +1,6 @@
 # Current Status
 
-2026-10-14 — Slice 146, new detailed owner interval verified; frame-only opened.
+2026-10-14 — Slice 147, frame-only interval verified; repeated detailed opened.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
 `main` retains slice140/native-scene work; this candidate stays on the hybrid track.
@@ -43,6 +43,13 @@ protected launcher. Its manual interval/overhead result remain pending.
 Owner screenshot is a single logical-CPU/overlay snapshot: no fixed CPU at100%
 does not rule out serial work with waits/migration; neither migration nor thermal
 limiting is measured. See [detailed evidence](inputs/slice146-owner-detailed-results.json).
+**Confirmed (slice147):**145 frame-only report covers1175 samples/56.199s,
+20.91VBlanks/s, median46.311ms,p9983.614ms, threadCPU37.274ms/77.9%.
+Complete five-line report, normal closure, unchanged card and independent review
+pass. It is slower than detailed in this one sample; different durations/scenes/
+machine state prevent causal overhead attribution. Protected145 detailed repeat
+now open, owner controls F7/F8. No optimization or thermal-cause conclusion.
+See [control evidence](inputs/slice147-owner-control-results.json).
 See [pair protocol](PERFORMANCE-ATTRIBUTION.md#matched-overhead-pair-slice145)
 and [VU AOT feasibility](VU-AOT-FEASIBILITY.md).
 See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)

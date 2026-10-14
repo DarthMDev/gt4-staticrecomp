@@ -1,0 +1,112 @@
+{
+  "slice": 147,
+  "date": "2026-10-14",
+  "baseline_commit": "4208dc6",
+  "classification": "Confirmed frame-only owner report; single unpaired scene mixture cannot quantify diagnostic overhead",
+  "source_session": "session-20261014-182103-412804",
+  "runtime": {
+    "path": "private/slice145-performance-pair/frame-only/build/gt4vulkan.exe",
+    "size_bytes": 54464512,
+    "sha256": "24eafce2a73cbb600c244b8a733d839f7cd664edca7ef5a0a7d966c2c860dff2"
+  },
+  "owner_scenario": {
+    "car": "Toyota Prius (year/trim not supplied)",
+    "camera": "external",
+    "track": "Nordschleife",
+    "context": "Owner supplied scenario for slice144 manual interval",
+    "video_mode": "Unknown; preserve the same GT4 setting for both profiles"
+  },
+  "artifacts": [
+    {
+      "path": "private/slice147-owner-control-results/probe.log",
+      "size_bytes": 21305,
+      "sha256": "12dc5ab39f3b91630abba97dd32b725d8e28bbc177a602080ced973837cc6431"
+    },
+    {
+      "path": "private/slice147-owner-control-results/result.json",
+      "size_bytes": 1741,
+      "sha256": "51ffd830acdfca5befbad4b329afe66a7b9716f1f74f0d486d6a3c2baf958066"
+    },
+    {
+      "path": "private/slice147-owner-control-results/manual-report.log",
+      "size_bytes": 507,
+      "sha256": "0ad565b24cb6788fe74efa4175e97c8592f5f1c5b8c516a18190cce482301ebd"
+    }
+  ],
+  "controls": {
+    "complete_report_lines": 5,
+    "invalid_reports": 0,
+    "counter_resets": 0,
+    "periodic_resets_in_manual_interval": 0,
+    "all_samples_retained": true,
+    "normal_session_closure": true,
+    "unchanged_card_hash": {
+      "size_bytes": 8650752,
+      "sha256": "2489efcbf8c3022c030875ea98c005bdcf7a4de4b0016a5846f28a6110fcce1c"
+    },
+    "performance_environment": {
+      "GT4_PERF": "1",
+      "PS2_SCALE": "1",
+      "PS2_GS": "gpu",
+      "GT4_ASPECT": "16:9"
+    },
+    "vulkan_loader_environment": {}
+  },
+  "observations": {
+    "source_lines": [
+      135,
+      139
+    ],
+    "vblank_samples": 1175,
+    "seconds": 56.199,
+    "vblanks_per_second": 20.91,
+    "mean_ms": 47.828936170212764,
+    "median_ms": 46.311,
+    "p95_ms": 60.676,
+    "p99_ms": 83.614,
+    "max_ms": 112.004,
+    "thread_cpu_ms": 37.274,
+    "thread_cpu_occupancy_percent": 77.9,
+    "guest_clock_model_speed_percent": 34.85,
+    "primitives_per_sample": 18061.8,
+    "vu1_interpreted_per_sample": 788.6
+  },
+  "comparison": {
+    "reference": "slice146-owner-detailed-results.json primary report",
+    "detailed_median_ms": 42.065,
+    "control_median_ms": 46.311,
+    "median_delta_percent": 10.093902294068702,
+    "detailed_cpu_ms": 32.533,
+    "control_cpu_ms": 37.274,
+    "cpu_delta_percent": 14.572895214090309,
+    "detailed_primitive_mean": 18125.4,
+    "control_primitive_mean": 18061.8,
+    "detailed_vu_call_mean": 790.3,
+    "control_vu_call_mean": 788.6,
+    "interpretation": "Control is slower in this sample; not evidence of negative instrumentation cost or a cause. Complete detailed/control/detailed sequence."
+  },
+  "limits": [
+    "One interval per145mode so far; different durations40.732s versus56.199s",
+    "Scene/position, heat/power/clock/scheduler/driver state not controlled; mean workload counts do not prove scene identity",
+    "Frame-only retains common boundary telemetry, not a zero-instrumentation reference",
+    "Cannot quantify detailed overhead, identify thermal cause or select a performance optimization from this pair",
+    "VU0micro/VU1 split, actual GPU execution time and distinct scene frame rate remain Unknown"
+  ],
+  "independent_review": "GPT6 Luna read-only confirms completed reports, pins/normal closure/card equality, arithmetic and no causal overhead inference",
+  "detailed_repeat_launch": {
+    "session": "session-20261014-182403-457646",
+    "pid": 37664,
+    "measurement_mode": "detailed",
+    "runtime_manifest": "slice145-performance-detailed.json",
+    "startup": {
+      "path": "private/slice147-owner-control-results/detailed-repeat-startup.log",
+      "size_bytes": 609,
+      "sha256": "fb97c94e2b47bae265e02d5bb9cca8f58537b95dd539c2f500c6ddfff7b76a69"
+    },
+    "card_backup": {
+      "size_bytes": 8650752,
+      "sha256": "2489efcbf8c3022c030875ea98c005bdcf7a4de4b0016a5846f28a6110fcce1c"
+    },
+    "qualification": "Protected launcher after owner normal closure/no prior game process; startup only, no owner interval yet"
+  }
+}
