@@ -1,6 +1,6 @@
 # Current Status
 
-2026-10-14 — Slice 143, corrected playable performance diagnostic candidate.
+2026-10-14 — Slice 144, owner manual performance report verified and preserved.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
 `main` retains slice140/native-scene work; this candidate stays on the hybrid track.
@@ -15,13 +15,19 @@ keyboard correction, excludes shape capture and inherited guest tuning settings.
 F7 starts a continuous manual interval, F8 reports, F9 pauses/resumes diagnostics.
 Candidate native CTest7/7; separate macro-off observation controls9/9,
 Python171/171 zero skips, warning-free builds. Launcher retains card/backup/lock flow.
-**Unknown:** dominant subsystem, diagnostic overhead in gameplay, distinct scene
-frame rate and GPU timestamp time. No performance improvement claim. Next: owner
-drives30–60s afterF7 and pressesF8; rank the resulting evidence before optimization.
+**Confirmed (slice144):** owner F8 report saved completely:970/970 samples across
+40.323s,24.06 VBlanks/s; no invalid/reset marker. Exclusive wall sum reconciles
+within printed rounding. VU interpretation25.646ms/sample is61.69% of the interval;
+GS fence wait9.392ms/sample is completion latency, not GPU execution time.
+**Unknown:** diagnostic overhead, exact car/track/camera/scene composition,
+distinct scene frame rate and GPU timestamp time. No performance improvement
+claim. VU is the leading observed wall category; qualify overhead and the matching
+scene before choosing an optimization. No runtime changes in this verification.
 See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)
 and [candidate pins](inputs/slice143-performance-candidate.json).
 Protected candidate launch confirmed native Vulkan/16:9/48kHz initialization and
-per-session card backup; owner controls the open game. No race interval measured.
+per-session card backup; owner controls the open game. Manual report and immutable
+observed prefix preserved privately; see [report evidence](inputs/slice144-owner-performance-report.json).
 Slice142 reconciled OpenCode's old executable/receipts and reproduced accounting
 defects; its reported494-interval selection remains unreproduced.
 

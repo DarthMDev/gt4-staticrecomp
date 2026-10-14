@@ -1,0 +1,80 @@
+{
+  "slice": 144,
+  "date": "2026-10-14",
+  "baseline_commit": "37043db",
+  "classification": "Confirmed completed owner manual interval; no optimization or overhead qualification",
+  "source_session": "private/manual-play/session-20261014-175413-544001 (owner assets checkout)",
+  "source_line_range": [
+    601,
+    608
+  ],
+  "runtime": {
+    "path": "private/slice143-performance-candidate/build/gt4vulkan.exe",
+    "size_bytes": 54471168,
+    "sha256": "d23b079b370be982fa8d6673743aaaf11c7fa3a72e5b36f7141cd9d309692528"
+  },
+  "preserved_prefix": {
+    "path": "private/slice144-owner-performance-report/session-prefix.log",
+    "size_bytes": 87803,
+    "sha256": "eb28ac493de52f4ebb566de02e9686c10ed91eef76d3dcd08d3367be4b371449"
+  },
+  "manual_report": {
+    "path": "private/slice144-owner-performance-report/manual-report.log",
+    "size_bytes": 1285,
+    "sha256": "778e740d054f1ccbd66dce0279816d6b9de0689b27c082ddf9564322cdb19064"
+  },
+  "controls": {
+    "manual_report_count_in_observed_prefix": 1,
+    "complete_report_lines": 8,
+    "invalid_reports_in_prefix": 0,
+    "guest_counter_reset_in_manual_report": false,
+    "nearest_preceding_events": [
+      "F7 start at line599",
+      "F7 restart at line600"
+    ],
+    "exclusive_category_count": 14,
+    "exclusive_sum_ms": 41.572,
+    "elapsed_per_sample_ms": 41.570103092783505,
+    "rounded_sum_error_ms": 0.001896907216497823
+  },
+  "observations": {
+    "interval_seconds": 40.323,
+    "vblank_samples": 970,
+    "vblanks_per_second": 24.06,
+    "median_ms": 41.341,
+    "p95_ms": 47.108,
+    "p99_ms": 49.685,
+    "max_ms": 60.476,
+    "retained_samples": 970,
+    "owner_thread_cpu_ms_per_sample": 31.62,
+    "owner_thread_occupancy_percent": 76.1,
+    "guest_clock_model_speed_percent": 40.09,
+    "exclusive_wall_ms_per_sample": {
+      "ee_dispatch": 2.261,
+      "vu_interpret": 25.646,
+      "iop_run": 0.532,
+      "vif_gif": 1.12,
+      "gs_host_copy": 0.5,
+      "gs_execute": 0.853,
+      "presentation": 0.312,
+      "audio_push": 0.124,
+      "host_vblank": 0.112,
+      "gs_fence_wait": 9.392,
+      "acquire_wait": 0.01,
+      "present_wait": 0.005,
+      "audio_wait": 0.0,
+      "unattributed": 0.705
+    },
+    "vu_interpret_share_percent": 61.69337598888972,
+    "gs_fence_wait_share_percent": 22.593160231133595
+  },
+  "limits": [
+    "Car/track/camera and exact interval scene composition not yet supplied",
+    "VBlank rate is not a separately measured distinct scene frame rate",
+    "Exclusive categories include scheduling and instrumentation; not subsystem CPU allocation",
+    "Fence latency is not GPU timestamp duration",
+    "High-VU diagnostic overhead remains unmeasured",
+    "Live log remains mutable; preserved prefix/report only have fixed hashes",
+    "Session remains open; result.json is written on normal exit"
+  ]
+}

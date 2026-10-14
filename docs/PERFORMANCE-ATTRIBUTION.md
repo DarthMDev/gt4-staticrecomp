@@ -168,3 +168,34 @@ source/fixture control with an observation EE profile, not a matched live overhe
 benchmark. Owner should collect the corrected interval before selecting any VU/GS
 rewrite or claiming a bottleneck. Public metadata: [candidate](inputs/slice143-performance-candidate.json),
 [derivation](inputs/slice143-performance-runtime.json); raw artifacts stay private.
+
+## Owner report verification (slice144)
+
+**Confirmed:** owner session `session-20261014-175413-544001` contains one complete
+manual F8 block at lines601–608 in the observed prefix. Two adjacent F7 starts
+occur at599/600; the second restarts the interval. No automatic report, invalid
+accounting or guest-counter reset appears between that start and the F8 report.
+All970 samples fit the4096 cap. Live session remains open; result.json is produced
+on normal exit, while F8 has already flushed the full report to probe.log.
+
+| Measurement | Observed value |
+|---|---:|
+| Duration / VBlank samples / pace |40.323s /970 /24.06 VBlanks/s|
+| Interval mean / median |41.570ms /41.341ms|
+| p95 / p99 / maximum |47.108ms /49.685ms /60.476ms|
+| Measured owner-thread CPU / occupancy |31.620ms per sample /76.1%|
+| Exclusive VU interpreter wall / interval share |25.646ms /61.69%|
+| Exclusive GS fence completion wait |9.392ms|
+
+The14 exclusive categories sum to41.572ms per sample, within their0.001ms printed
+rounding of40.323s/970. Independent Luna read-only log validation agrees on block
+completeness, boundaries and arithmetic. Runtime hash matches the143 pin. Frozen
+prefix and extracted report have separate private hashes; mutable source log and
+owner card are untouched. See [metadata](inputs/slice144-owner-performance-report.json).
+
+VU interpretation is the leading observed wall category in this instrumented
+interval. **Unknown:** diagnostic overhead, exact car/track/camera and scene
+composition, separate subsystem CPU execution and GPU timestamp time. The24.06
+figure measures VBlank cadence; it does not establish distinct rendered scene FPS.
+No optimization, rebuild, process restart, scripted input or new gameplay probe
+was performed by the agent for this verification.
