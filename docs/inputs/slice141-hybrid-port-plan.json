@@ -1,0 +1,158 @@
+{
+  "classification": "Owner-requested planning and read-only source research; no optimization/port implementation or measured speedup",
+  "source_commit": "25fd40e5e6c62c6ee2695d633ba1040aab1a5847",
+  "branch": "codex/hybrid-no-jit-port-plan-141",
+  "main_preserved_at_slice": 140,
+  "active_plan": "docs/HYBRID-PORT-PLAN.md",
+  "decision": "docs/decisions/0064-hybrid-no-jit-windows-first.md",
+  "next_package": "docs/tasks/HYBRID-H0-H1.md",
+  "owner_targets": {
+    "first": "Windows x86-64; stable60FPS/correct game speed before graphics scaling and mobile",
+    "later_android": "Samsung Galaxy S23 Ultra / Snapdragon8 Gen2",
+    "later_ios": "iPhone15 Pro Max",
+    "mobile_performance_qualified": false
+  },
+  "no_jit_contract": "No runtime machine-code compilation of PS2 EE/IOP/VU instructions. Target-specific AOT and explicit instruction interpretation may remain. GPU shader compilation is distinct.",
+  "native_scene_work": "Preserved at slice140/main; further capture/geometry deferred on this branch",
+  "existing_opencode_task": "Separate checkout/branch retained; findings must be reviewed and pinned before integration",
+  "references": {
+    "ps2_web_recomp": {
+      "revision": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+      "clean": true,
+      "license": "MIT"
+    },
+    "pcsx2": {
+      "revision": "aa7ab4306e269075784c7ac3eb4b45e6e6c53445",
+      "clean": true,
+      "inspected_gs_license": "GPL-3.0-or-later",
+      "implementation_imported": false
+    }
+  },
+  "confirmed_source_facts": [
+    "Windows-only host/WSI/loader and COFF producer/library profiles",
+    "VK_KHR_swapchain_maintenance1 present-fence support currently required",
+    "Current Vulkan scale1 guard/allocator/state contracts",
+    "Pinned donor has offline VU-to-C++ generation and explicit interpreter exits, not current GT4 compiled-VU coverage",
+    "Pinned donor GS shader/allocator already supports scale1..3; native port qualification pending",
+    "PCSX2 GS renderer has scale/cache/dithering implementation with GS/common dependencies"
+  ],
+  "unknowns": [
+    "Actual performance attribution and speedup",
+    "Stable60FPS on target hardware",
+    "ARM64 numerical/ABI correctness",
+    "Active GS dithering fidelity",
+    "Mobile OS/capabilities/sustained thermal performance",
+    "iOS signing/build host and any future store/distribution eligibility"
+  ],
+  "independent_review": {
+    "source_inventory": "Luna read-only local source review",
+    "plan_review": "No source/phase blocker; H1 p99<=20ms screening must not establish stable60FPS",
+    "resolution": "Explicit H1 screening distinction and separate sustained fresh-frame/presentation/work-budget gate added"
+  },
+  "local_source_snapshot": {
+    "native/CMakeLists.txt": {
+      "size_bytes": 8951,
+      "sha256": "002a077642b0a3a3df96d2abcfe20dd2d4d8de0f4d91849c2b6cfcd401276830"
+    },
+    "native/native_vulkan.cpp": {
+      "size_bytes": 38383,
+      "sha256": "cc7168a43e8612d2275d3a8ec1378946eb5efd5d1f7c43ffbdc86620d89a6c24"
+    },
+    "native/native_vulkan.hpp": {
+      "size_bytes": 3925,
+      "sha256": "04a23bbf542c0133f41a3c4332545b4ec06f74d4dc2afde0c8c95fbbdbfa704b"
+    },
+    "native/window.cpp": {
+      "size_bytes": 8806,
+      "sha256": "232ef3f7c99515c5971e796af1afa882b7c1c064ed421e9fa82ff0602e5dd1b0"
+    },
+    "native/host_io.cpp": {
+      "size_bytes": 10928,
+      "sha256": "f36c0b9f1952e44cec7d63e718f8c72dadf541f5d23179f3ff4d024c34448006"
+    },
+    "native/gpu_init.inc": {
+      "size_bytes": 1748,
+      "sha256": "8d3eab135b4aee8f04aad2bbe6d68b5efc98800bdb0b748bce84cc58bae9e275"
+    },
+    "native/gpu_tail.inc": {
+      "size_bytes": 5380,
+      "sha256": "d78b56b23f52df06264c53b6040caed51551419a8f2792ded0654dd6d98ad3a2"
+    },
+    "scripts/prepare_external_vulkan.py": {
+      "size_bytes": 5769,
+      "sha256": "cad3c9ac83ef6661d366a4687d6b0461f91a926dc019e7c74714e860df5cd8f6"
+    },
+    "scripts/ee_producer.py": {
+      "size_bytes": 20998,
+      "sha256": "f49fb02890e3390ef466d9b48d8029452a12ed1d4a4921bcc70b95127a8d8230"
+    }
+  },
+  "reference_source_snapshot": {
+    "donor/recomp/vurecomp.cpp": {
+      "size_bytes": 33447,
+      "sha256": "07aefe0130e4866973c43467853181edfc31b67b97e71fc9b572ece389381323"
+    },
+    "donor/runtime/src/vu_micro.cpp": {
+      "size_bytes": 43406,
+      "sha256": "5fc349d96364f72818da96cd2376637421d3d4d9150547c22034863c15d22a1d"
+    },
+    "donor/runtime/src/vu_jit_web.cpp": {
+      "size_bytes": 4665,
+      "sha256": "fc1e50011feda707c1621eaa0f36a135eb8f4b4bed309ea4c2e27ebf11627781"
+    },
+    "donor/runtime/src/gs/gpu/gs.wgsl": {
+      "size_bytes": 34405,
+      "sha256": "a6ed68e9ca53ea9b6c90307d3ffeb2b74b15c5f0a20dd776f51bc243ef80d4a5"
+    },
+    "donor/runtime/src/gs/gpu/gpu.cpp": {
+      "size_bytes": 86599,
+      "sha256": "bfd1b54921d3f4d6c8496433739ea97be6d675d3d7941e5ccb2f35e99e833465"
+    },
+    "pcsx2/COPYING.GPLv3": {
+      "size_bytes": 35821,
+      "sha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b"
+    },
+    "pcsx2/pcsx2/GS/Renderers/HW/GSRendererHW.cpp": {
+      "size_bytes": 461307,
+      "sha256": "81a2c7af6e958cbf5f7f5b21f2395e42f68166bbfddb219738254c85199d2e6d"
+    },
+    "pcsx2/pcsx2/GS/Renderers/Vulkan/GSDeviceVK.cpp": {
+      "size_bytes": 252232,
+      "sha256": "3af80be9a81dc6114d5a0fa8fcc114c3ef13a45af8616739227e9ae39cf25b07"
+    }
+  },
+  "private_artifact_snapshot": {
+    "private/slice141-hybrid-port-plan/luna-review/research-report.md": {
+      "size_bytes": 11954,
+      "sha256": "7866c04bb3d27ffd9ec659c0cd55b0e13c2696fa8d43e9ca4070d7437566ce25"
+    },
+    "private/slice141-hybrid-port-plan/luna-review/metadata.json": {
+      "size_bytes": 8685,
+      "sha256": "aa9b0bcebc64b62b03cf54b3e86346c2719ab837612fd27cf78a28e02e6647af"
+    },
+    "private/slice141-hybrid-port-plan/luna-review/plan-review.md": {
+      "size_bytes": 3443,
+      "sha256": "299dd2e2ba01be5cd2d1ddfa44777e620c4087265403cb5b5fa7a150a40179ad"
+    }
+  },
+  "online_primary_sources_checked": [
+    "https://github.com/PCSX2/pcsx2/blob/aa7ab4306e269075784c7ac3eb4b45e6e6c53445/COPYING.GPLv3",
+    "https://developer.android.com/ndk/guides/abis",
+    "https://github.com/KhronosGroup/MoltenVK/blob/main/Docs/MoltenVK_Runtime_UserGuide.md",
+    "https://developer.apple.com/documentation/xcode/distributing-your-app-to-registered-devices",
+    "https://developer.apple.com/app-store/review/guidelines/"
+  ],
+  "controls": {
+    "runtime_tests_needed": false,
+    "reason": "Documentation-only planning; runtime code and pins unchanged",
+    "existing_runtime_gate": "slice136 CTest7/7 Python164/164 unchanged; not rerun",
+    "documentation_links_and_source_hashes_checked": true
+  },
+  "runtime_changed": false,
+  "source_license_changed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "native_build_run": false,
+  "mobile_build_run": false,
+  "private_game_data_published": false
+}

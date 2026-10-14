@@ -1,5 +1,11 @@
 # Native Renderer and Game Port Plan
 
+**2026-10-14 direction update:** the owner now prioritizes the
+[Windows-first hybrid no-JIT plan](HYBRID-PORT-PLAN.md) on
+`codex/hybrid-no-jit-port-plan-141`. This scene-renderer track is preserved at
+slice140/main and deferred on that branch. It is not required for the new
+optimization, GS scaling or mobile-port sequence.
+
 2026-10-13. Owner-requested planning, source baseline
 `88c0e96f50a3dd9a3215a5f64163febd628c843c` (slice 114 lineage).
 Status: proposed implementation sequence; no port, build, performance probe,

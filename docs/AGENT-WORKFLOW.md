@@ -4,6 +4,13 @@
 No external agent dispatch, provider purchase/configuration, scheduler or
 unattended execution is started by publishing this workflow.
 
+**Current branch routing2026-10-14:** [Hybrid Port Plan](HYBRID-PORT-PLAN.md)
+supersedes the scene-renderer task order here. Preserve the R00-R12 historical
+backlog; prioritize the [H0/H1 package](tasks/HYBRID-H0-H1.md). Economical workers
+inventory dependencies/portability and prepare bounded fixtures; strong review
+covers GPU synchronization, GS coherence and VU semantics. No automatic24/7
+execution or new external-agent messaging is configured by this change.
+
 ## 1. Use inexpensive workers behind explicit contracts
 
 An economical model can do substantial research and implementation when its

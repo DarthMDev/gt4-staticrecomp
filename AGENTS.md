@@ -1,5 +1,23 @@
 # Persistent project instructions
 
+## Current branch direction (owner update2026-10-14)
+
+On `codex/hybrid-no-jit-port-plan-141`, prioritize docs/HYBRID-PORT-PLAN.md:
+Windows stable60FPS/correct speed, measured hybrid optimization, GS internal
+scaling/dithering, then ARM64 Android(S23 Ultra/Snapdragon8 Gen2) and iOS
+(iPhone15 Pro Max). Windows comes first. The scene-renderer track at slice140/main
+is preserved; do not resume its capture/geometry work by default on this branch.
+No PS2 CPU/VU JIT; target-specific AOT and explicit interpreted paths are allowed.
+Selective PCSX2 GS implementation reuse is authorized, with GPL-compatible
+derivative licensing/attribution and dependency review before imports. No GPL
+code is linked by the planning change. Do not change source licenses without
+actual implementation/provenance review or distribute private game code/assets.
+Existing OpenCode performance work stays isolated; consume verified evidence
+before reuse. Slice141 is planning only, with no profiling/build/launch. The
+next bounded package is docs/tasks/HYBRID-H0-H1.md; preserve all old gates, owner
+control and session/card protections. Keep this branch separate from main until
+a qualified slice is integrated; do not rewrite either track.
+
 ## Read first
 
 Read `docs/STATUS.md` first. Then `README.md`, `docs/ARCHITECTURE.md` and
@@ -37,10 +55,11 @@ fix in slice136: arrows now emit D-pad buttons only, no duplicate analog axes.
 Native controls pass; owner menu/steering confirmation remains pending.
 Low3D performance and inconsistent frametime are recorded; cause unknown.
 Owner explicitly requested recording only: no input/performance fix or audit
-until further instruction. The owner has now authorized performance investigation
-and experimental builds delegated to OpenCode; Codex only prepares the handoff.
-See docs/OPENCODE-PERFORMANCE-HANDOFF.md. Input correction is separately authorized
-for Codex/Luna; performance work remains delegated to OpenCode.
+until further instruction. The previous performance investigation/builds were
+delegated to OpenCode; Codex prepared docs/OPENCODE-PERFORMANCE-HANDOFF.md.
+Preserve that task's scope/checkout. The owner now requests the separate hybrid
+optimization plan above; later tasks use its bounded measurement/verification
+contracts. Input correction is separately authorized for Codex/Luna.
 No Computer Use, GUI automation, simulated input or scripted game navigation:
 the owner controls gameplay. Launching a tested candidate is authorized; preserve
 their card/backups/locks and do not interfere with an existing session.

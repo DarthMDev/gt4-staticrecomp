@@ -1,5 +1,10 @@
 # Plan: Speed, Rendering, and Selective Migration to Native Code
 
+**2026-10-14 active branch:** [Hybrid Port Plan](HYBRID-PORT-PLAN.md) defines the
+owner's new Windows-first optimization, GS improvements and no-JIT mobile
+direction. This document and the scene-renderer plan remain technical context;
+their old phase ordering is not the next task on the hybrid branch.
+
 2026-10-13, following slice 114 / commit e431fb3. Planning requested by owner;
 no implementation, performance profiling, or new race run in this revision.
 

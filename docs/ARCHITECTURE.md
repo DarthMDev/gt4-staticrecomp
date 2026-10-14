@@ -1,5 +1,10 @@
 # Active Architecture — Native Windows with PS2 Subsystems
 
+**Planning update2026-10-14:** the [Hybrid Port Plan](HYBRID-PORT-PLAN.md) prioritizes
+optimization of this architecture, GS graphics options and future ARM64 ports.
+The scene-renderer replacement remains a deferred alternative. No PCSX2 code,
+ARM64 backend, upscaling or new optimization is implemented by that plan.
+
 2026-10-13, decision 0056 / slice 114. Evidence obtained from frozen code of donor
 1b4808793a12c45125262fd2d5f50a9ec9f7c020 and local adapters.
 

@@ -1,9 +1,33 @@
 # Current Status
 
-2026-10-14 — Slice 140, partial live/menu shape layout correspondence.
-Playable base remains slice 114. Implementation branch:
-`codex/gt4-shape-crosswalk-140`, based on commit 449c450.
+2026-10-14 — Slice 141, Windows-first hybrid no-JIT optimization/port plan.
+Playable base remains slice 114, corrected owner capture candidate slice136.
+Planning branch: `codex/hybrid-no-jit-port-plan-141`, based on commit25fd40e.
+`main` retains slice140/native-scene work; no implementation is changed here.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
+
+## Active priority on this branch
+
+Owner changed direction: optimize the hybrid base for correct game speed and
+stable60FPS on Windows, then add GS internal scaling/dithering and portability.
+Mobile targets: S23 Ultra/Snapdragon8 Gen2 and iPhone15 Pro Max; Windows first.
+Guest JIT is excluded. AOT EE and selectively compiled VU may coexist with
+qualified instruction interpreters/device models. No zero-emulation claim.
+Selective PCSX2 GS implementation reuse is authorized; GPL-compatible derivative
+planning and attribution are required before imports. No code/license change yet.
+
+Independent Luna source review confirms Windows host/COFF pins, Win32 WSI and
+mandatory presentation-extension dependencies. Donor has offline VU compilation
+and scale-aware1..3 GS code, not qualified in our current1x adapter. Costs and
+ARM64/mobile60FPS remain Unknown. No profiling/build/game action in this slice.
+See [Hybrid Port Plan](HYBRID-PORT-PLAN.md), [decision0064](decisions/0064-hybrid-no-jit-windows-first.md)
+and [next H0/H1 package](tasks/HYBRID-H0-H1.md).
+Read-only source hashes/review limits are published in
+[slice141 evidence](inputs/slice141-hybrid-port-plan.json).
+
+The game-scene replacement research below is preserved and deferred on this
+track. Its next richer shape capture is not the default next task here. Existing
+OpenCode experiments stay separate; review their measured evidence before reuse.
 
 ## Authorized P0/P1 Progress
 
@@ -325,6 +349,9 @@ The original 54 CTest / 117 Python tests are historical: tests for the removed e
 on the archive branch; the active test suite covers the surviving codebase.
 
 ## Native Port Direction
+
+Historical scene-renderer direction below is deferred on the slice 141 hybrid
+branch. Use [Hybrid Port Plan](HYBRID-PORT-PLAN.md) for the active next task.
 
 The owner requested a comprehensive native-renderer/native-port and multi-model plan:
 [Native Port Plan](NATIVE-PORT-PLAN.md), [Agent Workflow](AGENT-WORKFLOW.md).

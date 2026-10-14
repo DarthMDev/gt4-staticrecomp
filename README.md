@@ -6,7 +6,13 @@ GT4Recomp is a static recompilation project targeting **Gran Turismo 4 USA v2.00
 
 **The game already boots, navigates menus, and enters real racing gameplay.** The current base features Vulkan rendering, Windows audio, keyboard support, an XInput controller implementation, and persistent memory card storage. We are in an experimental development phase: the immediate challenge is turning this milestone into a reliable gameplay experience.
 
-[Detailed Status](docs/STATUS.md) · [Native Port Plan](docs/NATIVE-PORT-PLAN.md) · [Build Guide](docs/BUILD.md)
+[Detailed Status](docs/STATUS.md) · [Hybrid Optimization and Port Plan](docs/HYBRID-PORT-PLAN.md) · [Build Guide](docs/BUILD.md)
+
+**Development direction on this branch:** Windows first, stable 60 FPS at correct
+game speed, no guest JIT, and improved GS graphics. Android on Galaxy S23 Ultra
+and iOS on iPhone 15 Pro Max are planned targets. Neither mobile port nor stable
+60 FPS is qualified today. The earlier native-scene renderer work is preserved
+on `main` at slice 140; this branch explores the optimized hybrid route.
 
 ## Current Status
 
@@ -46,25 +52,42 @@ These are **development goals**, not currently available features. The internal 
 
 The main game code is translated ahead-of-time (AOT) into C++ and compiled to run natively on **x86-64**. Host PC integration provides a native Windows window, **Vulkan**, audio, and input.
 
-The current architecture is a **hybrid recompilation**: IOP and VU microprograms remain interpreted, and PS2 hardware services are software models. VU0 macro operations are translated with the EE. The current Vulkan backend reproduces the original graphics subsystem's behavior. The planned renderer will instead receive game geometry, materials, camera and visual state directly, with remaining services migrated in separate phases.
+The current architecture is a **hybrid recompilation**: IOP and VU microprograms
+remain interpreted, and PS2 hardware services are software models. VU0 macro
+operations are translated with the EE. Vulkan reproduces the original GS behavior.
+The current plan keeps that architecture while optimizing measured costs and
+adding graphics controls. Selective offline VU compilation and PCSX2 GS reuse
+are candidates, not implemented improvements. The scene-level renderer remains
+a preserved later alternative. No guest JIT is required by this direction.
 
 For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
 ## Next Steps
 
-1. Establish reproducible EE generation and qualify a game-level model/camera interface.
-2. Draw one live showroom car with a dedicated native Vulkan renderer, then expand to real racing.
-3. Add progressive internal resolution, ultrawide and independent simulation/presentation timing.
-4. Expand native graphics coverage and replace remaining PS2 execution/device dependencies through verified contracts.
-5. Qualify a lightweight 1080p/60 FPS preset on Windows with an entry-level dedicated GPU.
+1. Establish an owner-tested Windows performance baseline and identify CPU/GPU work and waits.
+2. Optimize demonstrated costs without guest JIT, preserving gameplay, audio and saves.
+3. Qualify GS internal scaling, dithering and scan-mode presentation; reuse existing donor mechanisms before larger renderer changes where practical.
+4. Build a portable ARM64 core and qualify an Android APK, then an iOS signed build.
+5. Expand tested hardware and graphics presets, including the longer-term Windows 1080p/60 target.
 
 Deferred rendering and a graphical remaster are outside the current roadmap.
-The current focus is native graphics, progressive output, configurable internal
-resolution, ultrawide and rendering independent of game speed.
+The current focus is stable Windows gameplay and efficient hybrid rendering.
+Internal upscaling is different from enlarging the final image. Dithering and
+deinterlacing are separate features. Native ultrawide and 144 distinct frames
+independent of physics remain later game-level work.
 
-These are proposed phases, not completed features or published minimum requirements. The exact entry-level machine remains to be selected. Controls, audio, saves and stability must be qualified throughout; the delegated performance investigation supplies evidence rather than assumptions about bottlenecks.
+These are proposed phases, not completed features or published minimum requirements.
+The exact entry-level Windows machine remains to be selected. The named phones
+are future test targets, with OS/GPU capabilities and sustained performance still
+to be qualified. Controls, audio and saves remain part of every acceptance gate;
+the delegated performance investigation supplies evidence about costs.
 
-We work in small steps with recorded evidence and verification before merging changes. The [Native Port Plan](docs/NATIVE-PORT-PLAN.md) defines dependencies, claim boundaries and completion gates; the [Agent Workflow](docs/AGENT-WORKFLOW.md) describes economical workers and independent review. There is no announced completion timeline.
+We work in small verified steps. The [Hybrid Port Plan](docs/HYBRID-PORT-PLAN.md)
+defines the active branch's phases, licensing boundaries and completion gates;
+the [Agent Workflow](docs/AGENT-WORKFLOW.md) describes economical workers and
+independent review. There is no announced completion timeline. PCSX2 source
+reuse is permitted by the owner under compatible license obligations; no PCSX2
+implementation has been imported or linked by this planning change.
 
 The EE translator/library can now be rebuilt from verified inputs. Initial model
 and camera mapping is documented, and an isolated experiment has recovered one
@@ -86,7 +109,9 @@ changes. A separately verified full library inserts only the two planned probes.
 An isolated observation executable now links those probes and the runtime hooks;
 capture starts disabled. A separate manual candidate now supports F8 start/stop
 and bounded private metadata export, with synthetic controls and save protection.
-Real scene evidence and this candidate's gameplay qualification remain the next gate.
+The first owner capture has a strong partial layout association with 18 of the
+menu Ford Ka's 22 serialized shapes. Live geometry/ownership remain unqualified;
+further scene-replacement research is deferred on this optimization branch.
 See [Shape Observation](docs/SCENE-OBSERVATION.md).
 
 ## Testing and Development
@@ -114,7 +139,8 @@ The active runtime foundation comes from the MIT-licensed [ps2-web-recomp](https
 Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The original recompiler engine has been archived on the [`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013) branch. The `main` branch is dedicated exclusively to the current native base.
 
 - [STATUS](docs/STATUS.md): Confirmed milestones and pending tasks.
-- [NATIVE-PORT-PLAN](docs/NATIVE-PORT-PLAN.md): Phased game-scene renderer, eventual native service/core migration, and 1080p/60 target.
+- [HYBRID-PORT-PLAN](docs/HYBRID-PORT-PLAN.md): Active Windows-first no-JIT optimization, GS graphics and future Android/iOS phases.
+- [NATIVE-PORT-PLAN](docs/NATIVE-PORT-PLAN.md): Preserved game-scene renderer and eventual native migration alternative.
 - [AGENT-WORKFLOW](docs/AGENT-WORKFLOW.md): Model routing, task contracts, review and future unattended queue policy.
 - [EE-PRODUCER](docs/EE-PRODUCER.md): Verified CORE/ISO preparation, fresh EE generation and separate library build.
 - [RENDER-CONTRACTS](docs/RENDER-CONTRACTS.md): Initial model/camera mapping, state effects and open coverage gates.

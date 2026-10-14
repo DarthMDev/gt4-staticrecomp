@@ -1,5 +1,18 @@
 # Active native runtime: third-party boundaries
 
+## Planned PCSX2 GS reuse on the hybrid track
+
+Slice141 records owner authorization to reuse selected PCSX2 implementations
+for future GS optimization/features. Research checkout is pinned at
+`aa7ab4306e269075784c7ac3eb4b45e6e6c53445`; inspected GS files specifyGPL3-or-later.
+No implementation is imported/linked and no license changes in this planning
+slice. Any derived integration needs per-file/dependency attribution, compatible
+licenses and corresponding-source/build delivery when required. Personal builds
+and distribution have distinct obligations; game assets/translated game code
+remain private. See [Hybrid Port Plan](../docs/HYBRID-PORT-PLAN.md).
+
+## Current linked base
+
 The frozen ps2-web-recomp checkout is MIT licensed, commit
 `1b4808793a12c45125262fd2d5f50a9ec9f7c020`. Its existing CPU runtime,
 batching and WGSL GS algorithms are reused in a separate private build.
