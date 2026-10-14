@@ -80,8 +80,9 @@ The first bounded observation core now has native automated controls for
 preserving original shape-call inputs across synthetic suspension and thread
 changes. A separately verified full library inserts only the two planned probes.
 An isolated observation executable now links those probes and the runtime hooks;
-capture starts disabled. Synthetic lifecycle checks pass. Manual capture controls
-and real scene evidence remain the next gate; this candidate has not been played.
+capture starts disabled. A separate manual candidate now supports F8 start/stop
+and bounded private metadata export, with synthetic controls and save protection.
+Real scene evidence and this candidate's gameplay qualification remain the next gate.
 See [Shape Observation](docs/SCENE-OBSERVATION.md).
 
 ## Testing and Development

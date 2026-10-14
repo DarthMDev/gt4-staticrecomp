@@ -6,10 +6,10 @@ import msvcrt
 from pathlib import Path
 import sys
 
-from external_runtime_probe import ROOT, run_probe
+from external_runtime_probe import ROOT, run_probe, verify_manual_capture_profile
 
 
-def play(aspect='16:9', assets_root=None, runtime_manifest=None):
+def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False):
     workspace = Path(assets_root or ROOT).resolve()
     play_directory = workspace / 'private/manual-play'
     if not play_directory.resolve().is_relative_to((workspace / 'private').resolve()):
@@ -32,16 +32,21 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None):
             if not manifest.is_relative_to(ROOT / 'docs/inputs'):
                 raise ValueError('Manual runtime manifest must stay inside repository docs/inputs')
             video = json.loads(manifest.read_text(encoding='utf-8'))
+            if capture_shapes:
+                verify_manual_capture_profile(manifest, video, ROOT)
             seed_key = 'default_card_seed' if aspect == '16:9' else 'standard_card_seed'
             seed = None if card.exists() else workspace / video[seed_key]['path']
             print('GT4 experimental: audio + XInput. Close window to exit.', flush=True)
             print('Keyboard: Enter starts, arrow keys steer, Z accelerates, A brakes; S returns in options.', flush=True)
             print(f'Display: {aspect}. F6 toggles 16:9/4:3; match aspect ratio in GT4 options.', flush=True)
             print(f'Local save: {card}\nSession log: {run_directory}', flush=True)
+            if capture_shapes:
+                print('Capture starts OFF. Select the scene yourself, then press F8 to start/stop.', flush=True)
+                print(f'One capture per launch, up to 256 records: {run_directory / "shape-capture.json"}', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
                                window=True, interactive=True, play_card=card, aspect=aspect,
-                               runtime_workspace=ROOT)
+                               runtime_workspace=ROOT, capture_shapes=capture_shapes)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:

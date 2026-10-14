@@ -146,3 +146,16 @@ Reconfigure a fresh native build to include this sixth test; frozen132 caches st
 unchanged. Fresh133 CTest6/6/Python156/156, zero skips. The export component is not
 linked into the game and requires no new dependency. Activation/output path
 selection and a separate owner-facing capture launcher remain future work.
+
+Slice134 links capture control/export only into the explicit observation profile.
+Fresh134 build adds a seventh CTest entry and passes Python164/164 with zero skips.
+Baseline graph checks exclude those game objects/macros; production was not rebuilt.
+`scripts/play_shape_capture.py --assets-root <owner-assets-checkout>` selects the
+qualified134 manifest and reuses the existing manual card/backup/lock flow.
+Use the tooling Python and run from the launcher checkout containing the frozen
+private134 runtime and118 shaders. Output belongs to the owner-assets checkout's
+fresh `private/manual-play/session-.../shape-capture.json`, never a producer capsule.
+The native window consumes the explicit `GT4_OBSERVATION_OUTPUT` provided by that
+launcher; generic launches clear any inherited value. Invalid/existing native output
+fails closed before emulation. Default production launch remains unchanged.
+See [manual instructions](SCENE-OBSERVATION.md#owner-controlled-capture-slice134).

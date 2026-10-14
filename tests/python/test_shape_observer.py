@@ -38,7 +38,8 @@ class ShapeObserverTests(unittest.TestCase):
         game = next(line for line in graph if line.startswith('build gt4vulkan.exe:'))
         control = next(line for line in graph if line.startswith('build shape_runtime_control.exe:'))
         for name in ('dispatch.cpp.obj', 'kernel.cpp.obj', 'system.cpp.obj',
-                     'shape_observer.cpp.obj', 'shape_observer_adapter.cpp.obj'):
+                     'shape_observer.cpp.obj', 'shape_observer_adapter.cpp.obj',
+                     'shape_capture_control.cpp.obj', 'shape_capture_export.cpp.obj'):
             self.assertIn(name, game)
         for name in ('dispatch.cpp.obj', 'kernel.cpp.obj', 'system.cpp.obj'):
             self.assertNotIn(name, control)
@@ -51,7 +52,12 @@ class ShapeObserverTests(unittest.TestCase):
                    '?handle_syscall@kernel@ps2@@': 'kernel.cpp.obj', '?state@kernel@ps2@@': 'kernel.cpp.obj',
                    '?boot@ps2@@': 'system.cpp.obj', '?load_state@ps2@@': 'system.cpp.obj',
                    '?g_cpu@ps2@@': 'system.cpp.obj', '?g_options@ps2@@': 'system.cpp.obj',
-                   '?observe_probe@observation@gt4@@': 'shape_observer_adapter.cpp.obj'}
+                   '?observe_probe@observation@gt4@@': 'shape_observer_adapter.cpp.obj',
+                   '?request_toggle@CaptureControl@observation@gt4@@': 'shape_capture_control.cpp.obj',
+                   '?service@CaptureControl@observation@gt4@@': 'shape_capture_control.cpp.obj',
+                   '?finish@CaptureControl@observation@gt4@@': 'shape_capture_control.cpp.obj',
+                   '?serialize_capture@observation@gt4@@': 'shape_capture_export.cpp.obj',
+                   '?export_capture@observation@gt4@@': 'shape_capture_export.cpp.obj'}
         for prefix, expected_object in symbols.items():
             selected = [line.split() for line in bindings
                         if len(line.split()) >= 4 and line.split()[1].startswith(prefix)]

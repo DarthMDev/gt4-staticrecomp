@@ -13,6 +13,16 @@ from gt4disc import fingerprint
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CAPTURE_MANIFEST = 'slice134-manual-capture.json'
+CAPTURE_RUNTIME = 'private/slice134-manual-capture/build/gt4vulkan.exe'
+
+
+def verify_manual_capture_profile(manifest, evidence, runtime_workspace):
+    schema = evidence.get('capture_schema_version')
+    if (manifest != (runtime_workspace / 'docs/inputs' / CAPTURE_MANIFEST).resolve() or evidence.get('profile') != 'observation' or
+            evidence.get('capture_activation_implemented') is not True or type(schema) is not int or schema != 1 or
+            evidence.get('runtime', {}).get('path') != CAPTURE_RUNTIME):
+        raise ValueError('Shape capture requires the qualified manual observation runtime')
 
 
 def verify_file(path, expected):
@@ -37,10 +47,12 @@ def summarize_exit(log_text, frame_count, exit_code, timed_out):
 
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
-              play_card=None, aspect='16:9', runtime_workspace=None):
+              play_card=None, aspect='16:9', runtime_workspace=None, capture_shapes=False):
     workspace = workspace.resolve()
     runtime_workspace = Path(runtime_workspace or workspace).resolve()
     runtime_private = runtime_workspace / 'private'
+    if capture_shapes and run_directory.absolute() != run_directory.resolve():
+        raise ValueError('Shape capture session must use an ordinary canonical private path')
     run_directory = run_directory.resolve()
     private_root = workspace / 'private'
     if aspect not in ('16:9', '4:3'):
@@ -53,6 +65,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('Frames and timeout must be positive')
     if interactive and (not window or presses or frame_count != 0):
         raise ValueError('Interactive play requires a window, zero frame limit and no scripted presses')
+    if capture_shapes and not interactive:
+        raise ValueError('Shape capture requires owner-controlled interactive play')
     if play_card is not None:
         play_card = play_card.resolve()
         if not interactive or not play_card.is_relative_to(private_root):
@@ -71,6 +85,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if not runtime_manifest.is_relative_to(runtime_workspace / 'docs/inputs'):
         raise ValueError('Runtime manifest must be inside docs/inputs')
     runtime_evidence = json.loads(runtime_manifest.read_text(encoding='utf-8'))
+    if capture_shapes:
+        verify_manual_capture_profile(runtime_manifest, runtime_evidence, runtime_workspace)
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
         dependency_path = (runtime_workspace / dependency['path']).resolve()
@@ -148,6 +164,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     environment = os.environ.copy()
     environment['GT4_ASPECT'] = aspect
     environment.pop('PS2_DUMP_AUDIO', None)
+    environment.pop('GT4_OBSERVATION_OUTPUT', None)
+    if capture_shapes:
+        environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
+        result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']
     if capture_audio:
         environment['PS2_DUMP_AUDIO'] = str(run_directory / 'audio.wav')
     with log_path.open('wb') as output:
@@ -166,6 +186,14 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if play_card is not None:
         with play_card.open('rb') as source:
             result['play_card_after'] = fingerprint(source)
+    if capture_shapes:
+        capture = run_directory / 'shape-capture.json'
+        result['shape_capture_created'] = capture.exists()
+        if capture.exists():
+            if capture.is_symlink() or capture.is_junction() or capture.stat().st_size > 256 * 1024:
+                raise ValueError('Shape capture output exceeds the ordinary bounded-file contract')
+            with capture.open('rb') as source:
+                result['shape_capture_file'] = fingerprint(source)
     result['frames'] = sorted(path.name for path in frames.glob('*.ppm'))
     (run_directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')
     return result

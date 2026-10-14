@@ -282,3 +282,62 @@ also pump messages while nested in synchronous IOP work, so the window handler
 must not mutate/export observation there. Shutdown needs an off-execution final
 boundary. This bounded source finding is a design input, not an implemented or
 tested manual control. See [slice133 evidence](inputs/slice133-capture-export.json).
+
+## Owner-controlled capture (slice134)
+
+**Confirmed:** the observation build alone gets `GT4_SHAPE_CAPTURE`, control/
+export sources and the F8 window branch. F8 passes the key-repeat bit to a parity
+latch and touches no observer or file there. The same message pump can run during
+synchronous audio/IOP waits; pending commands are serviced after pumping at the
+next EE-owned vblank callback. Pinned donor source confirms the single run/event
+loop invokes this callback synchronously. Ordinary pad bindings are unchanged.
+
+Control phases are idle, capturing, ready and exported. Initial observation is
+off; a serviced request starts collection. Another serviced request stops it and
+exports. Any fail-closed observer stop exports with `observer_stopped`; counters
+distinguish record overflow from ambiguity instead of guessing from record count.
+Ready-state failure retains records and does not retry every frame. F8 retries;
+off-execution cleanup also makes one best-effort attempt. Cleanup never starts an
+idle pending request. Successful export is terminal for this process, preserving
+its records/file. Initialization rejects a used observer, relative/ADS/existing
+leaf or missing parent. Low-level parent paths remain caller-trusted.
+
+**Confirmed controls:** default-off, repeat/parity, deferred start/stop, manual
+export, capacity/ambiguity stop, idle/active shutdown, failed export and explicit/
+shutdown retry, terminal preservation and initialization failure. These invoke
+the actual controller with synthetic metadata; no Windows key is injected.
+Python parses six native JSON reports. Fresh CTest7/7 in11.72s, Python164/164,
+zero skips or observed compile warnings. Application map/graph retains the new
+control/export and reviewed EE hooks. Separately configured baseline graph has
+neither capture objects nor activation macro; no full production rebuild claimed.
+
+The launcher uses the exact root-level134 manifest and runtime path, checks
+profile/activation/schema type and verifies executable/shader/input pins before
+session/card creation. Both shared entry points enforce that contract. Inherited
+capture environment is always cleared; manual mode provides only a new session
+file. Synthetic launch controls cover changed binary, other/nested manifest,
+wrong runtime path/schema, environment isolation, separate runtime/assets
+checkouts, active lock rejection and release/card preservation on preflight error.
+`shape_capture_created=false` after a session means no file was captured; launch
+alone is not evidence of a scene capture. File fingerprints are not schema/identity
+qualification; analyze any real report separately.
+
+From the prepared launcher checkout, using its tooling Python:
+
+```powershell
+python scripts/play_shape_capture.py --assets-root C:/Antigravity/gt4-staticrecomp
+```
+
+Select the desired car/scene yourself. Press **F8 once** to begin, then **F8 again**
+to stop, unless the256-record cap stops it first. The title indicates start/stop,
+retry or saved. The launcher prints the private destination; messages go to the
+session's `probe.log`. Relaunch for another capture. Note the selected car, scene
+and display mode alongside the file for later analysis. Do not change in-game
+state by scripted navigation. Closing exports only an already-started capture.
+
+**Unknown:** physical key handling, real probe reachability, shape/car identity
+and capture overhead. The write/flush runs synchronously at the host boundary
+and may pause a frame; capture is an explicit evidence operation, not a performance
+measurement. Driver/file fault and abrupt termination limits from133 still apply.
+No geometry extraction or renderer substitution is implemented by this control.
+See [slice134 evidence](inputs/slice134-manual-capture.json).

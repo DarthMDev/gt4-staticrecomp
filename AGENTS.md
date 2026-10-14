@@ -186,6 +186,15 @@ Fault injection/crash atomicity and caller path policy remain unqualified.
 For future manual capture, WndProc must latch only: audio waits pump messages
 inside synchronous IOP work. Consume commands/export at the EE-owned vblank host
 boundary or after run exits. No Computer Use/game navigation or automatic capture.
+Slice134 implements that observation-only F8 latch/EE-boundary control and
+scripts/play_shape_capture.py with exact docs/inputs/slice134-manual-capture.json
+and runtime capsule selection. One capture per process, initially off; repeat
+ignored, parity-coalesced requests, record-preserving retry/shutdown. Automatic
+export after observer fail-closed stop is allowed only after owner starts capture.
+CTest7/7/Python164/164, zero skips; physical F8/real scene identity still Unknown.
+Bounded synchronous export may pause one frame; no performance-neutral claim.
+Launcher clears inherited capture env, uses fresh private session output, preserves
+card/backups/locks. Never script owner navigation or enable capture automatically.
 
 All project code and general tooling must be human readable: descriptive names,
 straightforward flow and formatting, explicit guest addresses/fixed-width state,

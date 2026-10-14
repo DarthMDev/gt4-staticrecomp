@@ -4,11 +4,17 @@
 #include "host_io.hpp"
 #include "native_vulkan.hpp"
 #include "ps2/system.hpp"
+#ifdef GT4_SHAPE_CAPTURE
+#include "shape_capture_control.hpp"
+#include "shape_observer_adapter.hpp"
+#include <array>
+#endif
 
 #include <cstdio>
 #include <cstdlib>
 #include <memory>
 #include <stdexcept>
+#include <string>
 
 namespace {
 HWND game_window = nullptr;
@@ -16,13 +22,28 @@ bool surface_attached = false;
 bool closing = false;
 ControllerInput *controller = nullptr;
 bool widescreen = true;
+#ifdef GT4_SHAPE_CAPTURE
+std::unique_ptr<gt4::observation::CaptureControl> capture;
+#endif
 
 void update_title() {
-  SetWindowTextW(game_window, widescreen
+  std::wstring title = widescreen
                                   ? L"GT4Recomp — 16:9 — F6: proporção — "
                                     L"Enter: Start, Z: acelerar, A: frear"
                                   : L"GT4Recomp — 4:3 — F6: proporção — Enter: "
-                                    L"Start, Z: acelerar, A: frear");
+                                    L"Start, Z: acelerar, A: frear";
+#ifdef GT4_SHAPE_CAPTURE
+  if (capture) {
+    using gt4::observation::CapturePhase;
+    switch (capture->phase()) {
+    case CapturePhase::idle: title += L" — F8: start capture"; break;
+    case CapturePhase::capturing: title += L" — F8: stop capture"; break;
+    case CapturePhase::ready: title += L" — F8: retry export"; break;
+    case CapturePhase::exported: title += L" — capture saved"; break;
+    }
+  }
+#endif
+  SetWindowTextW(game_window, title.c_str());
 }
 
 void apply_pad(const PadState &pad) {
@@ -35,6 +56,12 @@ void apply_pad(const PadState &pad) {
 
 LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
                                   LPARAM second) {
+#ifdef GT4_SHAPE_CAPTURE
+  if (message == WM_KEYDOWN && first == VK_F8) {
+    if (capture) capture->request_toggle((second & (1ll << 30)) != 0);
+    return 0;
+  }
+#endif
   if (message == WM_CLOSE) {
     DestroyWindow(window);
     return 0;
@@ -80,6 +107,13 @@ bool pump_messages() {
 void on_vblank() {
   if (!pump_messages())
     return;
+#ifdef GT4_SHAPE_CAPTURE
+  if (capture) {
+    const auto previous = capture->phase();
+    capture->service();
+    if (capture->phase() != previous) update_title();
+  }
+#endif
   std::uint16_t buttons = 0;
   const bool focused = GetForegroundWindow() == game_window;
   if (focused) {
@@ -139,6 +173,12 @@ int run_window(const std::function<int()> &emulate) {
   ControllerInput input;
   controller = &input;
   const auto cleanup = [&]() {
+#ifdef GT4_SHAPE_CAPTURE
+    if (capture) {
+      capture->finish();
+      capture.reset();
+    }
+#endif
     ps2::set_audio_sink({});
     ps2::g_options.on_vblank = {};
     input.stop();
@@ -149,6 +189,19 @@ int run_window(const std::function<int()> &emulate) {
     game_window = nullptr;
   };
   try {
+#ifdef GT4_SHAPE_CAPTURE
+    std::array<wchar_t, 32768> output{};
+    const auto length = GetEnvironmentVariableW(L"GT4_OBSERVATION_OUTPUT", output.data(),
+                                               static_cast<DWORD>(output.size()));
+    if (length >= output.size()) throw std::runtime_error("Capture output path exceeds the host limit");
+    if (length) {
+      capture = std::make_unique<gt4::observation::CaptureControl>(
+          gt4::observation::runtime_observer(), std::filesystem::path(output.data()));
+      update_title();
+    } else {
+      std::fputs("[shape-capture] disabled: no explicit GT4_OBSERVATION_OUTPUT\n", stderr);
+    }
+#endif
     const auto lock_path = ps2::g_options.memcard_path + ".lock";
     HANDLE lock_handle =
         CreateFileA(lock_path.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,

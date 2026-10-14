@@ -1,8 +1,8 @@
 # Current Status
 
-2026-10-14 — Slice 133, bounded host-only capture export controls.
+2026-10-14 — Slice 134, owner-controlled F8 capture candidate.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-observation-export-133`, based on commit ce1579a.
+`codex/gt4-manual-capture-134`, based on commit adba795.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
@@ -39,6 +39,18 @@ branch. Work uses an isolated checkout; no OpenCode edits, session or saves chan
   partial cleanup may fail. The host path is caller-trusted; no public path UI.
   Next: owner capture latch at the EE vblank boundary and fresh private launcher
   output, then owner-led scene evidence. See [export evidence](inputs/slice133-capture-export.json).
+- **Confirmed (slice 134):** observation-only F8 latches a start/stop request;
+  the EE-owned vblank host boundary services it. One capture per launch, default
+  off; manual, capacity/ambiguity stop and shutdown preserve/export fixed records.
+  Failed export retains records for F8 retry or one best-effort shutdown attempt.
+- **Confirmed (slice 134):** launcher pins the exact manual manifest/runtime,
+  clears inherited capture output, uses a new private session path and preserves
+  the existing card/backup/locks. CTest 7/7 in11.72s, Python164/164, zero skips.
+  Link evidence retains the control/export code; baseline graph excludes it.
+- **Unknown:** physical F8, actual scene reachability/identity and runtime cost.
+  Synchronous bounded export may pause a frame; no gameplay/performance probe was
+  used for build qualification. Owner-led capture is next. See
+  [manual capture evidence](inputs/slice134-manual-capture.json).
 
 - **Confirmed:** fresh CORE-to-ELF reconstruction matches the pinned native ELF;
   independent verified ISO extraction produces the same CORE/ELF.

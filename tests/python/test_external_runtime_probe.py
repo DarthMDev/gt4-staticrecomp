@@ -19,6 +19,17 @@ def file_pin(path):
 
 
 class ProbeTests(unittest.TestCase):
+    def capture_manifest(self, root):
+        evidence = json.loads((root / 'docs/inputs/slice114-native-base.json').read_text())
+        qualified = root / probe.CAPTURE_RUNTIME
+        qualified.parent.mkdir(parents=True)
+        qualified.write_bytes((root / evidence['runtime']['path']).read_bytes())
+        evidence['runtime']['path'] = probe.CAPTURE_RUNTIME
+        evidence.update(profile='observation', capture_activation_implemented=True, capture_schema_version=1)
+        manifest = root / 'docs/inputs' / probe.CAPTURE_MANIFEST
+        manifest.write_text(json.dumps(evidence))
+        return manifest
+
     def test_interactive_mode_preserves_completion_gate_and_sets_capture_environment(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
@@ -46,11 +57,104 @@ class ProbeTests(unittest.TestCase):
             self.make_workspace(root)
             def execute(arguments, **options):
                 self.assertNotIn('PS2_DUMP_AUDIO', options['env'])
+                self.assertNotIn('GT4_OBSERVATION_OUTPUT', options['env'])
                 options['stdout'].write(b'[ee] stopped after 100 frames, 9 cycles: frame limit reached\n')
                 return subprocess.CompletedProcess(arguments, 0)
-            with patch.dict(probe.os.environ, {'PS2_DUMP_AUDIO': 'protected.wav'}), \
+            with patch.dict(probe.os.environ, {'PS2_DUMP_AUDIO': 'protected.wav', 'GT4_OBSERVATION_OUTPUT': 'protected.json'}), \
                  patch.object(probe.subprocess, 'run', side_effect=execute):
                 probe.run_probe(root, root / 'private/audio', 100, 1, [])
+
+    def test_manual_shape_capture_uses_only_fresh_session_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            manifest = self.capture_manifest(root)
+            output = root / 'private/manual-shapes'
+            def execute(arguments, **options):
+                capture = Path(options['env']['GT4_OBSERVATION_OUTPUT'])
+                self.assertEqual(capture, output / 'shape-capture.json')
+                self.assertFalse(capture.exists())
+                self.assertNotIn('--press', arguments)
+                capture.write_bytes(b'{"synthetic":true}\n')
+                options['stdout'].write(b'[ee] stopped after 77 frames, 99 cycles: window closed\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.dict(probe.os.environ, {'GT4_OBSERVATION_OUTPUT': 'protected.json'}), \
+                    patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, output, 0, 1, [], runtime_manifest=manifest,
+                                         window=True, interactive=True, capture_shapes=True)
+            self.assertTrue(result['manual_session_closed'])
+            self.assertTrue(result['shape_capture_created'])
+            self.assertEqual(result['shape_capture_file'], file_pin(output / 'shape-capture.json'))
+
+    def test_shape_capture_requires_qualified_manual_profile_before_outputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            manifest = self.capture_manifest(root)
+            evidence = json.loads(manifest.read_text())
+            for field in ('profile', 'capture_activation_implemented', 'capture_schema_version'):
+                evidence.pop(field)
+            bad_modes = ({}, {'profile': 'baseline', 'capture_activation_implemented': True, 'capture_schema_version': 1},
+                         {'profile': 'observation', 'capture_activation_implemented': False, 'capture_schema_version': 1},
+                         {'profile': 'observation', 'capture_activation_implemented': True, 'capture_schema_version': 2},
+                         {'profile': 'observation', 'capture_activation_implemented': True, 'capture_schema_version': True})
+            for mode in bad_modes:
+                manifest.write_text(json.dumps({**evidence, **mode}))
+                with patch.object(probe.subprocess, 'run') as execute:
+                    with self.assertRaisesRegex(ValueError, 'qualified manual observation runtime'):
+                        probe.run_probe(root, root / 'private/reject-shapes', 0, 1, [], runtime_manifest=manifest,
+                                        window=True, interactive=True, capture_shapes=True)
+                    execute.assert_not_called()
+                self.assertFalse((root / 'private/reject-shapes').exists())
+            with self.assertRaisesRegex(ValueError, 'owner-controlled'):
+                probe.run_probe(root, root / 'private/reject-headless', 1, 1, [], capture_shapes=True)
+
+    def test_capture_separates_runtime_checkout_from_owner_assets_and_outputs(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root, runtime = Path(folder) / 'assets', Path(folder) / 'runtime'
+            self.make_workspace(root)
+            self.make_workspace(runtime)
+            manifest = self.capture_manifest(runtime)
+            def execute(arguments, **options):
+                self.assertEqual(Path(arguments[0]), runtime / probe.CAPTURE_RUNTIME)
+                self.assertEqual(options['env']['GT4_OBSERVATION_OUTPUT'], str(root / 'private/play/shape-capture.json'))
+                options['stdout'].write(b'[ee] stopped after 77 frames, 99 cycles: window closed\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/play', 0, 1, [], runtime_manifest=manifest,
+                                         window=True, interactive=True, runtime_workspace=runtime, capture_shapes=True)
+            self.assertTrue(result['manual_session_closed'])
+            self.assertFalse(result['shape_capture_created'])
+
+    def test_capture_rejects_other_manifest_runtime_path_and_changed_executable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            manifest = self.capture_manifest(root)
+            original = json.loads(manifest.read_text())
+            other = manifest.with_name('other.json')
+            other.write_text(json.dumps(original))
+            nested = manifest.parent / 'nested' / probe.CAPTURE_MANIFEST
+            nested.parent.mkdir()
+            nested.write_text(json.dumps(original))
+            output = root / 'private/rejected-contract'
+            wrong_path = {**original, 'runtime': {**original['runtime'], 'path': 'private/donor/ps2run.exe'}}
+            for selected, evidence in ((other, original), (nested, original), (manifest, wrong_path)):
+                selected.write_text(json.dumps(evidence))
+                with patch.object(probe.subprocess, 'run') as execute:
+                    with self.assertRaisesRegex(ValueError, 'qualified manual observation'):
+                        probe.run_probe(root, output, 0, 1, [], runtime_manifest=selected,
+                                        window=True, interactive=True, capture_shapes=True)
+                    execute.assert_not_called()
+                self.assertFalse(output.exists())
+            manifest.write_text(json.dumps(original))
+            (root / probe.CAPTURE_RUNTIME).write_bytes(b'changed candidate')
+            with patch.object(probe.subprocess, 'run') as execute:
+                with self.assertRaisesRegex(ValueError, 'pinned size/hash'):
+                    probe.run_probe(root, output, 0, 1, [], runtime_manifest=manifest,
+                                    window=True, interactive=True, capture_shapes=True)
+                execute.assert_not_called()
+            self.assertFalse(output.exists())
 
     def test_persistent_manual_card_is_backed_up_and_never_reseeded(self):
         with tempfile.TemporaryDirectory() as folder:
