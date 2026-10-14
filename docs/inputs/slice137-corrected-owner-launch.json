@@ -1,0 +1,23 @@
+{
+  "classification": "Confirmed corrected candidate launch/startup; owner keyboard/scene test pending",
+  "source_commit": "4575d98",
+  "runtime": {
+    "path": "private/slice136-keyboard-input/build/gt4vulkan.exe",
+    "size_bytes": 54479360,
+    "sha256": "87214eaebe6e11ff7dfb08dafdd3c701f44e8f4a66e14e112c566306c5959857"
+  },
+  "launcher_pid": 21324,
+  "runtime_pid_observed": 27924,
+  "session_path": "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261014-030057-738675",
+  "capture_path": "C:\\Antigravity\\gt4-staticrecomp\\private\\manual-play\\session-20261014-030057-738675\\shape-capture.json",
+  "previous_session_closed_normally": true,
+  "backup_size_bytes": 8650752,
+  "startup_snapshot": {
+    "path": "private/slice137-corrected-owner-launch/startup-prefix.log",
+    "sha256": "ed4da2ddaedf50923c3a065ea705266ae860749e0b56239374a936b53c9df7dd",
+    "size_bytes": 3205
+  },
+  "game_input_sent_by_agent": false,
+  "performance_measured": false,
+  "live_keyboard_or_scene_qualified": false
+}

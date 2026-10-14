@@ -1,11 +1,18 @@
 # Current Status
 
-2026-10-14 — Slice 136, keyboard direction duplication removed; owner retest pending.
+2026-10-14 — Slice 137, corrected keyboard capture candidate open for owner retest.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-keyboard-input-136`, based on commit 57e6f5f.
+`codex/gt4-corrected-capture-launch-137`, based on commit 4575d98.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
+
+- **Confirmed (slice 137):** owner requested opening the corrected build. Old134
+  session closed normally with exit0; qualified136 runtime launched with existing
+  save and a fresh8650752-byte backup. Native window/audio initialization logged.
+  Owner controls keyboard and F8; no agent scene navigation or performance probe.
+  Menu/steering/capture identity confirmation remains pending. See
+  [corrected launch evidence](inputs/slice137-corrected-owner-launch.json).
 
 - **Confirmed (slice 136):** owner separately authorized the input fix blocking
   car selection. Arrows previously emitted both a digital D-pad bit and a full
