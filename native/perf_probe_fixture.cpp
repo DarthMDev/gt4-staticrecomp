@@ -163,6 +163,26 @@ void check_frame_only_report(std::FILE *stream) {
           report.find("Unavailable (compiled out)") != std::string::npos,
           "control must not invent absent subsystem attribution/counters");
 }
+void check_split_vu_report(std::FILE *stream) {
+  using namespace gt4::perf;
+  tick = cpu_tick = 0;
+  Probe probe({clock, cpu}, true, stream, true, true);
+  const auto beginning = contents(stream).size();
+  probe.request(Request::start); probe.frame_boundary({});
+  const auto vu0 = probe.enter(vu_interpreter_category(0));
+  tick = 1000; probe.leave(vu0);
+  const auto vu1 = probe.enter(vu_interpreter_category(1));
+  tick = 3000; probe.leave(vu1);
+  probe.request(Request::report); probe.frame_boundary({});
+  const auto report = contents(stream).substr(beginning);
+  require(report.find("vu0_micro_interpret=1.000 vu1_interpret=2.000") != std::string::npos &&
+          report.find("vu_interpreter_total_exclusive_ms/frame=3.000") != std::string::npos,
+          "separate unit times and derived total");
+  require(report.find("vu_scope=unit-split run_fast only") != std::string::npos &&
+          report.find("measurement_mode=vu-split") != std::string::npos &&
+          report.find("VU0_macro_in_EE; generated_VU1_AOT_excluded") != std::string::npos,
+          "unit scope excludes macro/AOT paths explicitly");
+}
 }
 
 int main() {
@@ -174,6 +194,7 @@ int main() {
     check_percentiles_and_tail(stream);
     check_report_and_pause_coalescing(stream);
     check_frame_only_report(stream);
+    check_split_vu_report(stream);
     std::fclose(stream);
     std::fputs("PASS: controlled-clock performance adapter\n", stderr);
     return 0;

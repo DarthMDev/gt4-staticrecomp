@@ -23,7 +23,8 @@ struct Clocks {
 
 class Probe {
 public:
-  Probe(Clocks clocks, bool enabled, std::FILE *output = stderr, bool detailed = true);
+  Probe(Clocks clocks, bool enabled, std::FILE *output = stderr, bool detailed = true,
+        bool split_vu = false);
   static Probe &shared();
   Accounting::Token enter(Category category) noexcept;
   void leave(Accounting::Token token) noexcept;
@@ -49,6 +50,7 @@ private:
   Clocks clocks_;
   std::FILE *output_;
   const bool detailed_;
+  const bool split_vu_;
   const std::thread::id owner_thread_;
   std::atomic<bool> wrong_thread_{false};
   Accounting accounting_;

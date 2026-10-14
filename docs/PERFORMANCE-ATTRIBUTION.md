@@ -357,3 +357,48 @@ repeats of this initial sequence before making the bounded per-unit attribution
 available. Next fresh candidate splits mutually exclusive interpreter timings,
 with synthetic partition/routing controls; frozen145 pair remains available for
 later matched experiments. No runtime or build changes in this evidence slice.
+
+## Per-unit interpreter timing (slice149)
+
+Fresh `private/slice149-vu-split-runtime` derives from the same clean donor.
+Compared with143, only the VU timing category changes to
+`vu_interpreter_category(unit)`; system/VIF source bytes are identical. Game code,
+run_fast algorithm, native graphics, input/audio logic, clock and production EE/
+port/shader pins are unchanged.143/145 capsules/binaries remain frozen.
+
+The selector maps unit0 to `vu0_micro_interpret`, unit1 to `vu1_interpret`, and
+other values to invalid diagnostics. Each invocation has one scope, not an extra
+aggregate parent. Two categories are appended; old `vu_interpret` is unused/zero.
+All16 exclusive category fields partition wall time. The displayed
+`vu_interpreter_total_exclusive_ms/frame` is a derived sum of the two unit fields,
+**not another category to add**. Inclusive fields retain overlap semantics.
+
+The new nine-line F8 report says `measurement_mode=vu-split` and
+`vu_scope=unit-split run_fast only`. VU0 macro operations execute through EE;
+generated VU1 AOT executions return before this site. These are interpreter-
+fallback timings, not all costs of either VU. CPU/GPU limitations remain unchanged.
+
+```powershell
+C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe scripts/play_performance.py --assets-root C:/Antigravity/gt4-staticrecomp --mode vu-split
+```
+
+Default detailed still selects145; explicit vu-split selects149. Launcher requires
+exact149 manifest/executable and narrow scope marker; CMake enables this flag only
+with the dedicated source capsule/manifest, production EE and detailed timing.
+Source/receipt/adapter/shader/donor gates remain. Card/backups/locks, hotkey clipping
+and manual navigation are reused. Owner opens Prius/external/Nordschleife, settles
+loading, F7,30–60s,F8 once. No more initial A/B/A repeats requested before this run.
+
+Controls: native7/7 in4.75s; separate full9/9 in13.97s, Python175/175 zero skips,
+warning-free final builds. Initial tests found the legacy index guard rejecting
+appended categories (5/7); fixed to reject explicit unattributed and indexes at/
+above count. Core fixture checks valid/invalid routing, old aggregate zero, active
+cut, nested wait exclusion,70us aggregate versus20+50us split and unchanged150us
+partition. Report fixture checks1+2ms values,3ms rollup and coverage/mode. Python
+proves default derivation unchanged, selector-only difference and rejection of
+missing/crossed scope metadata before output. No acceptance check was weakened.
+
+Unknown: real unit split until owner data, exact probe overhead, actual GPU time,
+distinct scenes and PS2 fidelity. No VU AOT generation, game optimization or FPS
+improvement claim. [Source pins](inputs/slice149-vu-split-runtime.json),
+[candidate pins](inputs/slice149-vu-unit-attribution.json).

@@ -63,3 +63,8 @@ Read-only Luna review/source hashes, corrected registrar evidence and pair revie
 are pinned in145 candidate metadata. Its initial registrar wording was corrected
 before adoption. Private reports/corpora remain ignored. No VU tool build/run,
 microcode capture, generated-table integration or VU performance change occurred.
+
+Slice149 qualifies run_fast per-unit timing without compiling microcode. New unit
+categories are disjoint and their derived exclusive sum preserves the previous
+aggregate partition in controls. Owner data remains pending; diagnostic overhead
+is unresolved after initial A/B/A. Use this attribution before choosing a program.

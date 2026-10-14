@@ -1,6 +1,6 @@
 # Current Status
 
-2026-10-14 — Slice 148, initial detailed/control/detailed sequence complete.
+2026-10-14 — Slice 149, separate VU0-micro/VU1-interpreter timing candidate.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
 `main` retains slice140/native-scene work; this candidate stays on the hybrid track.
@@ -58,6 +58,16 @@ remains Unknown under varying scenes/durations/machine state; no more repeats of
 this initial sequence requested now. Next is a fresh VU0-micro/VU1-interpreter
 scope split, keeping149+ candidate separate from frozen143/145. No optimization.
 See [sequence evidence](inputs/slice148-owner-aba-results.json).
+**Confirmed (slice149):** fresh pinned source capsule replaces aggregate run_fast
+timing with disjoint VU0-micro/VU1-interpreter categories. Old aggregate stays zero;
+derived rollup is separate from the16-category partition. Core controls prove70us
+aggregate equals20+50us split after active cut/nested waits. Native7/7, separate
+full9/9 with Python175 zero skips. Initial category rejection was caught/corrected
+by fixtures/review. Frozen143/145 unchanged; no algorithm/clock optimization.
+Next owner F7/F8 interval identifies the slower interpreter unit. VU0 macro in EE
+and generated VU1 AOT are outside this scope. [Candidate](inputs/slice149-vu-unit-attribution.json).
+Independent final artifact gate passed; protected149 player now open with VU0/VU1
+timer title, native Vulkan/audio initialized and per-session card backup verified.
 See [pair protocol](PERFORMANCE-ATTRIBUTION.md#matched-overhead-pair-slice145)
 and [VU AOT feasibility](VU-AOT-FEASIBILITY.md).
 See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)

@@ -18,6 +18,8 @@ CAPTURE_RUNTIME = 'private/slice136-keyboard-input/build/gt4vulkan.exe'
 PERF_MANIFEST = 'slice143-performance-candidate.json'
 PERF_RUNTIME = 'private/slice143-performance-candidate/build/gt4vulkan.exe'
 PERF_PROFILES = {
+    'vu-split': ('slice149-vu-unit-attribution.json',
+                 'private/slice149-vu-unit-attribution/build/gt4vulkan.exe'),
     'detailed': ('slice145-performance-detailed.json',
                  'private/slice145-performance-pair/detailed/build/gt4vulkan.exe'),
     'frame-only': ('slice145-performance-frame-only.json',
@@ -33,6 +35,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
             break
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
+            (expected_mode == 'vu-split' and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or

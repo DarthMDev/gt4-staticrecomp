@@ -25,23 +25,26 @@ PATCHES = {
 }
 
 
-def derive(name, source):
+def derive(name, source, *, split_vu=False):
     original = source
-    for before, after in PATCHES[name]:
+    patches = [(before, after.replace('gt4::perf::Category::vu_interpret',
+                'gt4::perf::vu_interpreter_category(unit)') if split_vu else after)
+               for before, after in PATCHES[name]]
+    for before, after in patches:
         if source.count(before) != 1:
             raise ValueError(f'Expected one qualified patch site in {name}')
         source = source.replace(before, after)
     prefix = '// Measurement-only MIT donor derivation; see native/THIRD_PARTY.md.\n#include "perf_probe.hpp"\n'
     result = prefix + source
     inverse = result.removeprefix(prefix)
-    for before, after in reversed(PATCHES[name]):
+    for before, after in reversed(patches):
         inverse = inverse.replace(after, before)
     if inverse != original:
         raise ValueError('Unexpected patch reversal')
     return result
 
 
-def prepare(output, assets_root=None):
+def prepare(output, assets_root=None, *, split_vu=False):
     output = Path(output).absolute()
     if output != output.resolve() or output.parent != (ROOT / 'private').resolve():
         raise ValueError('Runtime capsule must be an ordinary immediate private child')
@@ -54,11 +57,13 @@ def prepare(output, assets_root=None):
         if hashlib.sha256(data).hexdigest() != expected:
             raise ValueError(f'Qualified donor source differs: {name}')
         text = data.decode('utf-8').replace('\r\n', '\n')
-        derived = derive(name, text)
+        derived = derive(name, text, split_vu=split_vu)
         sources[name] = derived
     output.mkdir()
     receipt = {'donor_revision': '1b4808793a12c45125262fd2d5f50a9ec9f7c020',
                'donor_sha256': PINS, 'source_sha256': {}}
+    if split_vu:
+        receipt['vu_scope_profile'] = 'unit_split_run_fast_only'
     for name, text in sources.items():
         path = output / name
         path.write_text(text, encoding='utf-8', newline='\n')
@@ -71,5 +76,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
     parser.add_argument('--assets-root', type=Path)
+    parser.add_argument('--split-vu', action='store_true')
     args = parser.parse_args()
-    prepare(args.output, args.assets_root)
+    prepare(args.output, args.assets_root, split_vu=args.split_vu)

@@ -144,6 +144,45 @@ void recursion_and_faults() {
   require(long_clock.interval().elapsed_us == 30, "large timestamps preserve delta");
   require_partition(long_clock);
 }
+void split_vu_partition() {
+  using gt4::perf::vu_interpreter_category;
+  require(vu_interpreter_category(0) == Category::vu0_micro_interpret &&
+          vu_interpreter_category(1) == Category::vu1_interpret &&
+          vu_interpreter_category(-1) == Category::count &&
+          vu_interpreter_category(2) == Category::count, "explicit unit routing");
+  const auto timeline = [](bool split) {
+    Accounting accounting(true);
+    const auto ee = accounting.enter(Category::ee_dispatch, 0);
+    const auto vu0 = accounting.enter(split ? vu_interpreter_category(0) : Category::vu_interpret, 10);
+    const auto wait0 = accounting.enter(Category::gs_wait, 30);
+    accounting.leave(wait0, 40);
+    accounting.checkpoint(50);
+    accounting.restart(60);
+    accounting.leave(vu0, 80);
+    const auto vu1 = accounting.enter(split ? vu_interpreter_category(1) : Category::vu_interpret, 100);
+    const auto wait1 = accounting.enter(Category::gs_wait, 120);
+    accounting.leave(wait1, 150);
+    accounting.leave(vu1, 180);
+    accounting.leave(ee, 200);
+    accounting.checkpoint(210);
+    require_partition(accounting);
+    return accounting;
+  };
+  const auto aggregate = timeline(false), split = timeline(true);
+  require(time(split, Category::vu0_micro_interpret).exclusive_us == 20 &&
+          time(split, Category::vu1_interpret).exclusive_us == 50,
+          "disjoint unit scopes exclude nested waits and clip the active cut");
+  require(time(split, Category::vu_interpret).exclusive_us == 0,
+          "split must replace aggregate, not nest inside it");
+  require(time(aggregate, Category::vu_interpret).exclusive_us == 70 &&
+          time(split, Category::vu0_micro_interpret).exclusive_us +
+              time(split, Category::vu1_interpret).exclusive_us == 70,
+          "split total equals former aggregate exclusive cost");
+  require(split.interval().elapsed_us == 150 && aggregate.interval().elapsed_us == 150 &&
+          time(split, Category::gs_wait).exclusive_us == 30 &&
+          time(split, Category::ee_dispatch).exclusive_us == 40,
+          "non-VU partition remains unchanged");
+}
 } // namespace
 
 int main() {
@@ -152,6 +191,7 @@ int main() {
     active_scope_crosses_boundaries();
     disable_and_reenable();
     recursion_and_faults();
+    split_vu_partition();
     std::fprintf(stderr, "PASS: controlled-clock performance accounting\n");
     return 0;
   } catch (const std::exception &error) {

@@ -198,3 +198,11 @@ pass9/9 with Python173/173 zero skips. `scripts/play_performance.py --mode detai
 (default) or `--mode frame-only`, plus `--assets-root`, selects the corresponding
 strictly pinned145 runtime. Existing143 profile validation remains available;
 frozen143 caches/binaries/cards are not overwritten. Close sessions normally.
+
+Slice149 adds `prepare_perf_runtime.py <fresh-capsule> --assets-root <assets>
+--split-vu` for the dedicated immediate source capsule. Default derivation remains
+byte-identical to143. CMake selects149 pins and GT4_PERF_VU_SPLIT only at
+private/slice149-vu-split-runtime; frame-only rejected. Fresh149 build reuses frozen
+143port/shaders as immutable inputs with production EE. Native7/7 and separate
+full9/9 with Python175/175 pass. Explicit `play_performance.py --mode vu-split`
+selects149; default detailed/frame-only still select145. See attribution guide.

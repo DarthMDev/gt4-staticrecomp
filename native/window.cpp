@@ -38,6 +38,9 @@ void update_title() {
 #ifdef GT4_PERF_FRAME_ONLY
   title += L" — frame-only control";
 #endif
+#ifdef GT4_PERF_VU_SPLIT
+  title += L" — VU0/VU1 timers";
+#endif
 #endif
 #ifdef GT4_SHAPE_CAPTURE
   if (capture) {

@@ -17,7 +17,7 @@ class PerformanceLauncherTests(unittest.TestCase):
             root = Path(folder)
             for mode in PERF_PROFILES:
                 arguments = ['perf', '--assets-root', str(root)]
-                if mode == 'frame-only': arguments.extend(['--mode', mode])
+                if mode != 'detailed': arguments.extend(['--mode', mode])
                 with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
                      patch.object(sys, 'argv', arguments):
                     self.assertEqual(performance.main(), 0)

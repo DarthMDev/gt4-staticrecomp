@@ -29,6 +29,7 @@ class ProbeTests(unittest.TestCase):
         evidence.update(profile='performance', perf_schema_version=1,
                         keyboard_input_fix='digital_only_slice136', capture_activation_implemented=False)
         if mode: evidence['measurement_mode'] = mode
+        if mode == 'vu-split': evidence['vu_scope_profile'] = 'unit_split_run_fast_only'
         manifest = root / 'docs/inputs' / name
         manifest.write_text(json.dumps(evidence))
         return manifest, evidence
@@ -63,6 +64,20 @@ class ProbeTests(unittest.TestCase):
                             runtime_manifest=manifest, window=True, interactive=True, performance=True)
                     execute.assert_not_called()
                     self.assertFalse((root / 'private/pair').exists())
+
+    def test_vu_split_requires_explicit_narrow_scope_before_output(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            self.make_workspace(root)
+            manifest, evidence = self.performance_manifest(root, 'vu-split')
+            for scope in (None, 'all_vu', True):
+                manifest.write_text(json.dumps(dict(evidence, vu_scope_profile=scope)))
+                with self.subTest(scope=scope), patch.object(probe.subprocess, 'run') as execute:
+                    with self.assertRaisesRegex(ValueError, 'qualified'):
+                        probe.run_probe(root, root / 'private/split', 0, 1, [],
+                            runtime_manifest=manifest, window=True, interactive=True, performance=True)
+                    execute.assert_not_called()
+                    self.assertFalse((root / 'private/split').exists())
 
     def test_performance_profile_and_environment_are_isolated(self):
         with tempfile.TemporaryDirectory() as folder:

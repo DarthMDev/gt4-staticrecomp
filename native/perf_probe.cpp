@@ -25,28 +25,34 @@ std::uint64_t cpu_us() {
 constexpr const char *names[] = {
     "ee_dispatch", "vu_interpret", "iop_run", "vif_gif", "gs_host_copy",
     "gs_execute", "presentation", "audio_push", "host_vblank",
-    "gs_fence_wait", "acquire_wait", "present_wait", "audio_wait", "unattributed"};
+    "gs_fence_wait", "acquire_wait", "present_wait", "audio_wait", "unattributed",
+    "vu0_micro_interpret", "vu1_interpret"};
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
 }
 
-Probe::Probe(Clocks clocks, bool enabled, std::FILE *output, bool detailed)
-    : clocks_(clocks), output_(output), detailed_(detailed), owner_thread_(std::this_thread::get_id()),
+Probe::Probe(Clocks clocks, bool enabled, std::FILE *output, bool detailed, bool split_vu)
+    : clocks_(clocks), output_(output), detailed_(detailed), split_vu_(split_vu),
+      owner_thread_(std::this_thread::get_id()),
       accounting_(enabled) {
   last_us_ = clocks_.wall_us();
   accounting_.restart(last_us_);
 }
 
 Probe &Probe::shared() {
+#ifdef GT4_PERF_FRAME_ONLY
+  constexpr bool detailed = false;
+#else
+  constexpr bool detailed = true;
+#endif
+#ifdef GT4_PERF_VU_SPLIT
+  constexpr bool split_vu = true;
+#else
+  constexpr bool split_vu = false;
+#endif
   static Probe probe({wall_us, cpu_us}, [] {
     char value[8]{};
     return GetEnvironmentVariableA("GT4_PERF", value, sizeof value) == 1 && value[0] == '1';
-  }(), stderr,
-#ifdef GT4_PERF_FRAME_ONLY
-  false
-#else
-  true
-#endif
-  );
+  }(), stderr, detailed, split_vu);
   return probe;
 }
 
@@ -193,7 +199,7 @@ void Probe::print(const char *reason) noexcept {
   const double seconds = elapsed / 1000000.0;
   std::fprintf(output_, "[perf] %s: %llu VBlank samples in %.3fs = %.2f VBlanks/s; fresh_scene_frames=Unknown; measurement_mode=%s\n",
                reason, static_cast<unsigned long long>(frames_), seconds, frames / seconds,
-               detailed_ ? "detailed" : "frame-only");
+               split_vu_ ? "vu-split" : detailed_ ? "detailed" : "frame-only");
   std::fprintf(output_, "[perf] frame ms: median %.3f p95 %.3f p99 %.3f max %.3f; samples=%zu/%llu (tail cap4096)\n",
                median, percentile(95), percentile(99), sorted[period_count_ - 1] / 1000.0,
                period_count_, static_cast<unsigned long long>(frames_));
@@ -225,6 +231,13 @@ void Probe::print(const char *reason) noexcept {
       presentations_ / frames, dispatches_ / frames, workgroups_ / frames);
   std::fprintf(output_, "[perf] audio frames/frame: produced=%.1f completed=%.1f empty_refills=%.2f; gpu_timestamp_time=Unknown\n",
       audio_produced_ / frames, audio_completed_ / frames, empty_refills_ / frames);
+  if (split_vu_) {
+    const auto &categories = accounting_.interval().categories;
+    const double total_us = static_cast<double>(categories[static_cast<std::size_t>(Category::vu0_micro_interpret)].exclusive_us) +
+        categories[static_cast<std::size_t>(Category::vu1_interpret)].exclusive_us;
+    std::fprintf(output_, "[perf] vu_scope=unit-split run_fast only; vu_interpreter_total_exclusive_ms/frame=%.3f; VU0_macro_in_EE; generated_VU1_AOT_excluded\n",
+                 total_us / 1000.0 / frames);
+  }
   std::fflush(output_);
 }
 

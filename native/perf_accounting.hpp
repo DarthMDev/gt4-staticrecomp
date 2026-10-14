@@ -10,8 +10,13 @@ namespace gt4::perf {
 enum class Category : std::size_t {
   ee_dispatch, vu_interpret, iop_run, vif_gif, gs_upload, gs_execute,
   presentation, audio_push, host_vblank, gs_wait, acquire_wait,
-  presentation_wait, audio_wait, unattributed, count
+  presentation_wait, audio_wait, unattributed, vu0_micro_interpret, vu1_interpret, count
 };
+
+constexpr Category vu_interpreter_category(int unit) noexcept {
+  return unit == 0 ? Category::vu0_micro_interpret :
+         unit == 1 ? Category::vu1_interpret : Category::count;
+}
 
 enum class AccountingFault {
   none, backward_clock, invalid_category, scope_capacity,
@@ -40,7 +45,7 @@ public:
 
   Token enter(Category category, std::uint64_t now_us) noexcept {
     const auto index = static_cast<std::size_t>(category);
-    if (index >= static_cast<std::size_t>(Category::unattributed)) {
+    if (index >= static_cast<std::size_t>(Category::count) || category == Category::unattributed) {
       fail(AccountingFault::invalid_category);
       return 0;
     }

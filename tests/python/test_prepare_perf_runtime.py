@@ -50,6 +50,25 @@ class PerformanceDerivationTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'differs'): producer.prepare(root / 'private/perf')
                 self.assertFalse((root / 'private/perf').exists())
 
+    def test_unit_split_is_explicit_and_only_replaces_the_vu_timer(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            donor, pins = self.fixture(root)
+            with patch.object(producer, 'ROOT', root), patch.object(producer, 'PINS', pins):
+                legacy = root / 'private/legacy'
+                split = root / 'private/split'
+                old_receipt = producer.prepare(legacy)
+                new_receipt = producer.prepare(split, split_vu=True)
+            self.assertNotIn('vu_scope_profile', old_receipt)
+            self.assertEqual(new_receipt['vu_scope_profile'], 'unit_split_run_fast_only')
+            for name in ('system.cpp', 'vif.cpp'):
+                self.assertEqual((legacy/name).read_bytes(), (split/name).read_bytes())
+            old = (legacy/'vu_micro.cpp').read_text()
+            new = (split/'vu_micro.cpp').read_text()
+            self.assertEqual(new.count('gt4::perf::vu_interpreter_category(unit)'), 1)
+            self.assertEqual(new.replace('gt4::perf::vu_interpreter_category(unit)',
+                                         'gt4::perf::Category::vu_interpret'), old)
+
     def test_missing_or_duplicate_site_rejected(self):
         for source in ('no match', '    run_fast(unit, pc);\n    run_fast(unit, pc);'):
             with self.assertRaisesRegex(ValueError, 'one qualified'):
