@@ -182,3 +182,34 @@ is preserved and recorded, not upgraded to PS2 fidelity or fixed here.
 **Unknown/unimplemented:** full probed library/runtime game profile, real car
 identity/reachability, owner-led capture, queued graphics ownership and overhead.
 No native drawing, scan-mode, timing, input or performance change is installed.
+
+## Full observation library (slice131)
+
+**Confirmed:** `ee_observation_library.py` prepares a fresh source copy after
+verifying the frozen baseline and slice129 profile. It preserves the original
+producer's strict null-option gates. All328 files match129 exactly; only D5 has
+the two54-byte probe statements at `0x00455A5C` and `0x00455A64`.
+
+The full327-unit Release library rebuilt using Clang23.1.2/C++20/VS2022 ABI.
+Compiler receipts and every unit's flags/include order match the baseline after
+normalizing only the generated-source directory. Current tool executable hashes
+are recorded; historical baseline compiler executable identity remains Unknown.
+
+All327 unique AMD64 COFF members are checked. Normalizing only the four-byte
+COFF timestamp yields326 exact baseline objects and one D5 difference. D5's
+normalized hash also matches its independent129 unit compilation. Archive byte
+identity is a separate pin; member path/offset layout may differ. This validates
+the intended code delta, not PS2 fidelity or runtime noninterference.
+
+Eight new controls cover exact object delta and independent D5 pin, recipe changes,
+missing/duplicate path fields, source copying/tampering, forged baseline pins and
+the128MiB archive read bound. Producer CTest1/1 runs Python155/155 with no skips,
+using frozen130 native fixture binaries. No native runtime rebuild or retail game
+execution occurs in this slice. An independent bounded archive parser/source
+replay verifies the completed artifact separately from the production checker.
+
+**Unknown/unimplemented:** a linked retail observation game profile, owner-led
+capture, real shape/car association and overhead. The next slice integrates the
+qualified library and runtime overlays into an isolated default-off executable;
+activation/export and owner-controlled gameplay are later boundaries.
+See [slice131 evidence](inputs/slice131-observation-library.json).

@@ -1,14 +1,24 @@
 # Current Status
 
-2026-10-14 — Slice 130, synthetic runtime observation and lifecycle controls.
+2026-10-14 — Slice 131, full two-probe AOT library qualification.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-shape-runtime-130`, based on commit 1475ba2.
+`codex/gt4-observation-library-131`, based on commit e798ccb.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
 
 The owner authorized P0/P1 while OpenCode continues its separate performance
 branch. Work uses an isolated checkout; no OpenCode edits, session or saves changed.
+
+- **Confirmed (slice 131):** all 328 reviewed two-probe sources copied into a
+  fresh producer and all 327 AMD64 objects rebuilt. Exactly 326 normalized object
+  payloads match baseline; only D5 changes and matches its independent slice 129
+  unit compilation. Compiler recipe differs only in generated-source directory.
+- **Confirmed (slice 131):** producer CTest 1/1, Python 155/155 with zero skips,
+  using frozen slice 130 native fixtures. This does not repeat their native build.
+- **Unknown:** retail runtime linkage, live shape identity/reachability and capture
+  overhead. The ordinary playable target and launcher remain unchanged.
+  See [full library evidence](inputs/slice131-observation-library.json).
 
 - **Confirmed:** fresh CORE-to-ELF reconstruction matches the pinned native ELF;
   independent verified ISO extraction produces the same CORE/ELF.

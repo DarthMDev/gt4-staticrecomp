@@ -115,3 +115,15 @@ shadow headers and rechecks changed private sources before rebuilding. The game
 target stays unoverlaid; synthetic observed/reference fixtures exercise runtime
 lifecycle and selected guest outputs. Fresh130 CTest5/5/Python147/147, no skips.
 This is not a playable probed-library profile. See [Observation](SCENE-OBSERVATION.md).
+
+Slice131 builds the complete two-probe library with the same `tools/ee_producer`
+project and translator disabled, in a fresh producer cache. Use
+`scripts/ee_observation_library.py prepare --baseline <qualified-baseline>
+--profile <qualified129-profile> --output private/<fresh-library-capsule>` first,
+then configure/build `ps2game` with the copied generated directory and run
+`record-library --output <that-capsule>`. Both commands validate the pinned
+baseline and exact probe-only sources; recording also checks all archive members,
+the unchanged compiler recipe and D5's independent129 normalized object hash.
+Do not reuse frozen131 output or feed this profile to the ordinary null-option
+producer recorder. CTest1/1 runs Python155/155 with frozen130 native fixtures;
+runtime linkage and owner gameplay remain separate qualification boundaries.

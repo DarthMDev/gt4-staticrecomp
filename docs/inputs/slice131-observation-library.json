@@ -1,0 +1,118 @@
+{
+  "classification": "Confirmed full two-probe library/source/object delta; retail runtime and gameplay Unknown",
+  "baseline_commit": "e798ccb",
+  "branch": "codex/gt4-observation-library-131",
+  "client_completion_date": "2026-10-14",
+  "profile": {
+    "path": "private/slice131-observation-library/game-build/ps2game.lib",
+    "sha256": "ee530c1f4a1288cc7c57dde6674004a56cfd348d13387fb42f5672d726e9f3c8",
+    "size_bytes": 68857944
+  },
+  "baseline_library": {
+    "sha256": "adca5451a5083f0b27a500dbb3db5f5ecabadab0e650c1c1eb7d7d76e890df36",
+    "size_bytes": 68859166
+  },
+  "generated": {
+    "file_count": 328,
+    "inventory_sha256": "af8cfeb13f6ca3cad108419106dd72704ecf1e1205861f5050f8c17e90038e3f",
+    "size_bytes": 86375092
+  },
+  "objects": {
+    "object_count": 327,
+    "object_inventory_without_timestamps": "600ff4f83f02e3379a4e24feb1b0f285f0b979a93147283df03cb38502a751c3",
+    "changed_objects": [
+      "unit_00D5.cpp.obj"
+    ],
+    "unchanged_objects": 326
+  },
+  "independent_d5_object_sha256_without_timestamp": "8b4cfa818a37aeb2df70c499a8121eda7128e796f9fc484278f4e2716a053828",
+  "compiler_receipt": {
+    "sha256": "b273452571e01090a53afc3811cc0da314d938a38561201a1f6dc9c398c84867",
+    "size_bytes": 399
+  },
+  "recipe_comparison": {
+    "compile_units_checked": 327,
+    "flags_and_include_order_equal_after_generated_path_normalization": true,
+    "canonical_fields": [
+      "FLAGS = /DWIN32 /D_WINDOWS /EHsc /O2 /Ob2 /DNDEBUG -std:c++20 -MD -Wno-unused-label -Wno-unused-variable",
+      "INCLUDES = -I<generated> -IC:\\Antigravity\\gt4-staticrecomp\\private\\references\\ps2-web-recomp\\runtime\\include"
+    ],
+    "current_tools": {
+      "compiler": {
+        "path": "C:\\Program Files\\LLVM\\bin\\clang-cl.exe",
+        "sha256": "e7956e325bc32a1a96838a19a14c58a18916e710f202776c62f27c621ec79411",
+        "version": "clang version 23.1.2 (https://github.com/llvm/llvm-project 85ac560262434c9ccfc0c183ec22d4138ed647fb)\nTarget: x86_64-pc-windows-msvc\nThread model: posix\nInstalledDir: C:\\Program Files\\LLVM\\bin\nBuild config: +alloc:rpmalloc"
+      },
+      "cmake": {
+        "path": "C:\\Program Files\\CMake\\bin\\cmake.exe",
+        "sha256": "70fa92ce2ac9f54b0ae395b0b3790d9147ef2ebdbd7c4e0bb20852aac581baea",
+        "version": "cmake version 4.3.3\n\nCMake suite maintained and supported by Kitware (kitware.com/cmake)."
+      },
+      "ninja": {
+        "path": "C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\Common7\\IDE\\COMMON~1\\MICROS~1\\CMake\\Ninja\\ninja.exe",
+        "sha256": "ff29bcb5f547174bae6b73c84278cce9b674e8ebc2f3c3926ab21030b33f34b8",
+        "version": "1.12.1"
+      }
+    },
+    "cmake_cache_versions": {
+      "baseline": {
+        "CMAKE_CACHE_MAJOR_VERSION": "4",
+        "CMAKE_CACHE_MINOR_VERSION": "3",
+        "CMAKE_CACHE_PATCH_VERSION": "3"
+      },
+      "candidate": {
+        "CMAKE_CACHE_MAJOR_VERSION": "4",
+        "CMAKE_CACHE_MINOR_VERSION": "3",
+        "CMAKE_CACHE_PATCH_VERSION": "3"
+      }
+    },
+    "historical_baseline_compiler_executable_hash": "Unknown; current hash is not evidence of historical executable identity",
+    "limits": "Compile recipes and current tool identities; source/archive equality gates remain separate"
+  },
+  "controls": {
+    "ctest_passed": 1,
+    "ctest_total": 1,
+    "ctest_seconds": 7.36,
+    "python_passed": 155,
+    "python_skipped": 0,
+    "new_controls": 8,
+    "native_fixture_build": "frozen slice130 binaries; not rebuilt",
+    "independent_archive_and_source_replay": true,
+    "observed_compile_warnings": 0
+  },
+  "source_canonical_lf_sha256": {
+    "scripts/ee_observation_library.py": "9afccaf06e64cd3f8ad6657b56c94b8f74b0a079dae86bb6f99a277fd292ddde",
+    "tests/python/test_ee_observation_library.py": "7029b00d40f78d60f08104bb99d6560037c7e874415a2e7560cdc4729a3c73d9"
+  },
+  "private_artifact_sha256": {
+    "private/slice131-observation-library/game-build/build.ninja": "7191cc2ac8ba66664185fa4647087c1680d1cdfd6c64c5d82ad0f744dc091886",
+    "private/slice131-observation-library/game-build/Testing/Temporary/LastTest.log": "d10f2a3cb62c4157f9ae935bf8ba9a5ee984cdeee22fffc4dea98b1e4c26c3da",
+    "private/slice131-observation-library/game-build/toolchain.txt": "b273452571e01090a53afc3811cc0da314d938a38561201a1f6dc9c398c84867",
+    "private/slice131-observation-library/library-preparation.json": "73564b983ddf3a6c58533d9041215338f1723e2d851f31d971aa4c26a6a0b60f",
+    "private/slice131-observation-library/observation-library.json": "cafea50108afcba6389c33a6f89b5b882cb7f5fbf44be47c4678a7c5f84dc7d3",
+    "private/slice131-observation-study/build_library.cmd": "7a310382ba5e07142ead551cff8e348cd83cc2cb941c8bcfc60e61ebd0c148ce",
+    "private/slice131-observation-study/compile-recipe-comparison.json": "466ba9521ae0a7834331a6ce2d12b75530e2f86d457838fb8301bd1afce37f48",
+    "private/slice131-observation-study/ctest.log": "c3ea4062e87f86ae7227f66d4539558ce0392285f72c0994e6f7f4adf831914f",
+    "private/slice131-observation-study/implementation-review/review-metadata.json": "1eb00a311b6408cf0e2714ba54367b602515288487bffbed8c70e215d75181c3",
+    "private/slice131-observation-study/implementation-review/review.md": "c0cf3b411e0c3d6fe1e39c092666f6b4c4f568e45201b2eca717932e8f116fbd",
+    "private/slice131-observation-study/independent-review/independent-replay.json": "dafd2384627ec52a51caa99c6b723a3bcec264e3f2bb0805252acf2136e355ea",
+    "private/slice131-observation-study/independent-review/independent-review.json": "e1eaefaad61f8f3f07214503bcd7847bf2c9007c5c7c2f760d7e3bc57f57f86d",
+    "private/slice131-observation-study/independent-review/independent-review.md": "04a6cc12e24d65803649a8b6d42ae83c9d43cbc359f1993ff1b8379b25ca0115",
+    "private/slice131-observation-study/independent-review/replay.py": "7ce1b29c77daa9ce08a94ba4baf2e1a2d99c35e7e9140564e559b9aecb7b3df6",
+    "private/slice131-observation-study/library-build.log": "6182f4b8011e78b7873a026761bbc4549d58f8c741ceb7b37baad70b9e6138aa",
+    "private/slice131-observation-study/publish_metadata.py": "0d6b7734aad9ec36f80711af98e3076fddfe9188d311dce5ce3e78932099370c",
+    "private/slice131-observation-study/research/library-gate-review.md": "cc17c9c14da0c109543a3002366468c7f8438698749f4484e74455db9e3537a1",
+    "private/slice131-observation-study/research/review-metadata.json": "6f58e47be41b31b680312372357c98fb41732bffaa69b70f65738e37629140b2",
+    "private/slice131-observation-study/verify_compile_recipe.py": "16af75f495b66d542f4550bedf971fd299168fd47d666f4c62f7e85ba2d2b196"
+  },
+  "retail_game_executed": false,
+  "game_session_controlled": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "limitations": [
+    "No retail runtime linkage or owner-led capture",
+    "COFF equality is not PS2 fidelity or runtime noninterference",
+    "Historical baseline compiler executable hash Unknown"
+  ],
+  "next_boundary": "Separate linked default-off observation executable, then owner-led capture"
+}
