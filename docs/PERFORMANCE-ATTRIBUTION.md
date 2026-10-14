@@ -402,3 +402,35 @@ Unknown: real unit split until owner data, exact probe overhead, actual GPU time
 distinct scenes and PS2 fidelity. No VU AOT generation, game optimization or FPS
 improvement claim. [Source pins](inputs/slice149-vu-split-runtime.json),
 [candidate pins](inputs/slice149-vu-unit-attribution.json).
+
+## Owner split result and intermittent menu pacing (slice150)
+
+149 session `session-20261014-183606-232153` records F7 at379 and complete9-line
+F8 at380–388:1139/1139 samples/49.161s,23.17VBlanks/s. Mean43.161545ms,
+median42.711,p9548.981,p9951.127,max63.468ms. ThreadCPU33.513ms/77.6%; guest
+cycle-model speed38.61%. VU1 interpreted26.987ms is62.53% of total wall;
+VU0 micro prints0.000ms, legacy aggregate0.000ms, rollup26.987ms. GS completion
+wait9.367ms (21.70%) is second, then EE2.297ms and VIF/GIF1.149ms.
+
+The16 exclusive terms sum43.162ms versus43.161545ms from duration/count, within
+printed precision. The derived rollup is not added again. No invalid/counter
+reset or periodic reset in manual interval; exact split profile matches pin.
+Session closed normally, exit0/no timeout, card hashes unchanged. Independent
+read-only validation and extraction assertions preserve scope and rounding limits.
+Raw log/result/report and owner image remain private; [metadata](inputs/slice150-owner-vu-split-results.json).
+
+**Confirmed within this instrumented scene:** VU1 interpreter fallback is the
+dominant measured exclusive wall category. **Unknown:** exact telemetry/scheduler
+contribution, all VU0 costs, generated VU1 AOT, GPU timestamp duration, independent
+PS2 fidelity. A rounded0.000ms is not proof that VU0 micro never runs; entry counts
+are not printed. VU0 macro operations execute under EE, outside these markers.
+Use bounded VU1 content-key/call inventory next, then one qualified offline-AOT
+program, with interpreter fallback/no JIT. No optimization is claimed by150.
+
+The owner separately reports menu output without3D showing60FPS on some openings,
+about43FPS on others, and43 stabilizing to60 later in the same latest opening.
+Screenshot shows43FPS/10.2ms,CPU95C/3506MHz and GPU9%, one unsynchronized snapshot.
+Overlay FPS/frametime averaging windows are unspecified; do not infer reciprocal
+equality or match the screenshot to the timed race interval. No menu timestamps
+or manual menu interval were supplied. Record only: no causal build association,
+audio/shader warm-up, thermal, scheduler or pacing diagnosis, and no menu audit/fix.

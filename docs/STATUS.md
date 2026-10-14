@@ -1,6 +1,6 @@
 # Current Status
 
-2026-10-14 — Slice 149, separate VU0-micro/VU1-interpreter timing candidate.
+2026-10-14 — Slice 150, owner split report identifies VU1 interpreted wall cost.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
 `main` retains slice140/native-scene work; this candidate stays on the hybrid track.
@@ -66,8 +66,17 @@ full9/9 with Python175 zero skips. Initial category rejection was caught/correct
 by fixtures/review. Frozen143/145 unchanged; no algorithm/clock optimization.
 Next owner F7/F8 interval identifies the slower interpreter unit. VU0 macro in EE
 and generated VU1 AOT are outside this scope. [Candidate](inputs/slice149-vu-unit-attribution.json).
-Independent final artifact gate passed; protected149 player now open with VU0/VU1
-timer title, native Vulkan/audio initialized and per-session card backup verified.
+Independent final artifact gate passed; protected149 player initialized native
+Vulkan/audio with verified backup, then owner completed and closed the150 session.
+**Confirmed (slice150):** completed149 interval1139 samples/49.161s,
+median42.711ms. VU1 interpreted26.987ms is62.53% of interval wall; VU0 micro
+prints0.000ms (rounded, not proof of no calls). VU0 macro remains in EE; generated
+VU1 AOT excluded. GS completion wait9.367ms is next largest category. All16 terms
+sum within rounding; normal close/card unchanged. [Evidence](inputs/slice150-owner-vu-split-results.json).
+Owner additionally reports menu pacing sometimes43FPS then60FPS in the same
+opening. Screenshot/description recorded only; cause and transition timing Unknown.
+Next: bounded VU1 content-key/call inventory before selecting one offline-AOT
+program. No menu audit/fix or runtime optimization in150; no new game launch.
 See [pair protocol](PERFORMANCE-ATTRIBUTION.md#matched-overhead-pair-slice145)
 and [VU AOT feasibility](VU-AOT-FEASIBILITY.md).
 See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)

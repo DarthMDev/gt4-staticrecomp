@@ -1,0 +1,126 @@
+{
+  "slice": 150,
+  "date": "2026-10-14",
+  "baseline_commit": "32cb348",
+  "classification": "Confirmed completed split interval; VU1 interpreter dominates measured wall category in this scene",
+  "source_session": "session-20261014-183606-232153",
+  "source_lines": [
+    380,
+    388
+  ],
+  "runtime": {
+    "path": "private/slice149-vu-unit-attribution/build/gt4vulkan.exe",
+    "size_bytes": 54472192,
+    "sha256": "ac425df507ee8be65a3b4600a79e0810e0978655d1dbe5dab629d8b1f966c118"
+  },
+  "owner_scenario": {
+    "car": "Toyota Prius (year/trim not supplied)",
+    "camera": "external",
+    "track": "Nordschleife",
+    "context": "Owner supplied scenario for slice144 manual interval",
+    "video_mode": "Unknown; preserve the same GT4 setting for both profiles"
+  },
+  "artifacts": [
+    {
+      "path": "private/slice150-owner-vu-split-results/probe.log",
+      "size_bytes": 66538,
+      "sha256": "cb443644128e616a966e1fd9ac016f76d7f8e21e6226c7e9eea19e6dc99987a5"
+    },
+    {
+      "path": "private/slice150-owner-vu-split-results/result.json",
+      "size_bytes": 1732,
+      "sha256": "09dca8a99d7f8c7f485060f6146650851b08cbd2fe61ff85ab34e90c297ebf03"
+    },
+    {
+      "path": "private/slice150-owner-vu-split-results/manual-report.log",
+      "size_bytes": 1542,
+      "sha256": "a5cccb6457fa5e03077c76dc5efbc16f4c2f39a4d47d0dda8a3cf066fd03e259"
+    },
+    {
+      "path": "private/slice150-owner-vu-split-results/owner-menu-overlay.png",
+      "size_bytes": 92526,
+      "sha256": "cf2ea92a859d8597f67f74383c3ac4dcf2ad1263b5050e675da34ffeb58f56d8"
+    }
+  ],
+  "controls": {
+    "complete_report_lines": 9,
+    "retained_samples": 1139,
+    "invalid_reports": 0,
+    "counter_resets": 0,
+    "periodic_resets_in_manual_interval": 0,
+    "exclusive_category_count": 16,
+    "exclusive_sum_ms": 43.162,
+    "elapsed_per_sample_ms": 43.161545215100965,
+    "rollup_excluded_from_partition": true,
+    "normal_close": true,
+    "unchanged_card_hash": {
+      "size_bytes": 8650752,
+      "sha256": "2489efcbf8c3022c030875ea98c005bdcf7a4de4b0016a5846f28a6110fcce1c"
+    },
+    "independent_review": "GPT6 Luna read-only confirms9line block,16category partition, rollup exclusion, roundedzero scope, pinned runtime/normal closure/unchanged card"
+  },
+  "observations": {
+    "vblank_samples": 1139,
+    "seconds": 49.161,
+    "vblanks_per_second": 23.17,
+    "mean_ms": 43.161545215100965,
+    "median_ms": 42.711,
+    "p95_ms": 48.981,
+    "p99_ms": 51.127,
+    "max_ms": 63.468,
+    "thread_cpu_ms": 33.513,
+    "thread_cpu_occupancy_percent": 77.6,
+    "guest_clock_model_speed_percent": 38.61,
+    "exclusive_ms": {
+      "ee_dispatch": 2.297,
+      "vu_interpret": 0.0,
+      "iop_run": 0.56,
+      "vif_gif": 1.149,
+      "gs_host_copy": 0.604,
+      "gs_execute": 0.883,
+      "presentation": 0.345,
+      "audio_push": 0.129,
+      "host_vblank": 0.106,
+      "gs_fence_wait": 9.367,
+      "acquire_wait": 0.01,
+      "present_wait": 0.007,
+      "audio_wait": 0.0,
+      "unattributed": 0.718,
+      "vu0_micro_interpret": 0.0,
+      "vu1_interpret": 26.987
+    },
+    "vu_interpreter_total_exclusive_ms": 26.987,
+    "vu1_wall_share_percent": 62.52556498037062,
+    "gs_fence_wall_share_percent": 21.702188726836315
+  },
+  "menu_observation": {
+    "classification": "Owner-reported intermittent behavior; record only",
+    "owner_report": "Some openings show60FPS in a menu without3D; others about43FPS. Owner reports60,43,60,43 across recent openings, then43 settled to60 in the same latest session.",
+    "screenshot": {
+      "method": "Visual transcription; no GUI automation",
+      "fps": 43,
+      "frametime_ms": 10.2,
+      "cpu_temperature_c": 95,
+      "cpu_frequency_mhz": 3506,
+      "overall_cpu_percent": 17,
+      "gpu_percent": 9
+    },
+    "limits": [
+      "No timed menu interval or exact transition timestamps supplied",
+      "Overlay FPS/frametime use unspecified averaging windows; do not infer reciprocal equality",
+      "No claim of build causality, shader warmup, audio pacing, thermal or scheduler cause",
+      "No menu performance investigation or fix performed"
+    ]
+  },
+  "interpretation": {
+    "confirmed": "VU1 interpreted fallback largest measured exclusive wall category; GS completion wait next",
+    "unknown": [
+      "Sub-microsecond VU0micro activity and unprinted call counts; rounded0.000ms does not prove no calls",
+      "VU0macro costs in EE and generatedVU1AOT costs excluded",
+      "Exact instrumentation overhead and PS2 fidelity",
+      "GPU timestamp time and distinct scene frame rate",
+      "Cause of intermittent menu43to60FPS"
+    ]
+  },
+  "next": "Bounded content-key/call inventory of VU1 for one owner scene before selecting one offline AOT program; preserve interpreter fallback/noJIT"
+}

@@ -68,3 +68,19 @@ Slice149 qualifies run_fast per-unit timing without compiling microcode. New uni
 categories are disjoint and their derived exclusive sum preserves the previous
 aggregate partition in controls. Owner data remains pending; diagnostic overhead
 is unresolved after initial A/B/A. Use this attribution before choosing a program.
+
+Slice150 owner data confirms VU1 interpreted fallback26.987ms/62.53% of interval
+wall in the Prius/external/Nordschleife scene. VU0micro rounds0.000ms, not proof of
+global absence; macroEE cost remains separate. This supports prioritizing bounded
+VU1 identity/call inventory next. It does not identify a hot program/content key,
+validate emitted code or predict a speedup. Existing emitter safety gates remain.
+
+Smallest next census proposal: opt-in fixed-capacity metadata only (for example64
+records plus overflow count), entry/code-generation/program-key and registry hit/
+fallback/run-entry calls, emitted at F8. Reuse cold lookup's key computation and
+cache identity/status per entry generation; do not hash/reachability-scan every
+call. Existing lookup/run_entry boundaries are at donor vu_micro.cpp788–837;
+Program/reachable/key definitions are vu_ops.hpp24–90. Preserve timing scopes and
+interpreter behavior, no per-instruction logging or VU code bytes at this stage.
+Avoid PS2_VU_RECORD/PS2_VU_COUNT bulk dumps/logs. This proposal is not implemented
+by150, and a64-bit key alone is not collision-proof content identity.

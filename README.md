@@ -44,8 +44,9 @@ FPS. See [testing instructions](docs/PERFORMANCE-ATTRIBUTION.md#playable-diagnos
 Matched detailed and lighter diagnostic builds are now ready to measure the
 instrumentation's own cost before selecting an optimization. One owner interval
 shows VU interpretation as the largest recorded wall-time category. A separate
-diagnostic candidate now times VU0 micro and VU1 interpretation individually;
-owner results and offline AOT qualification remain pending, with no speedup claim.
+diagnostic candidate now times VU0 micro and VU1 interpretation individually.
+One owner race interval attributes about62.5% of wall time to interpreted VU1;
+hot-program identification and offline AOT qualification remain, with no speedup claim.
 
 ## The Experience We Want to Build
 
