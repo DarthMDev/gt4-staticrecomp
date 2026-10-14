@@ -58,6 +58,10 @@ input double-triggering, audio continuity, and physical XInput validation.
 Past observations from the original model do not automatically validate this
 different runtime. Performance investigation is now delegated to OpenCode;
 Codex prepared the handoff, and input fixes remain outside that investigation.
+The owner separately authorized slice136's keyboard correction: arrows had been
+sent as both D-pad and left-stick axes. Host merge now sends digital buttons/
+pressures only, retaining XInput axes. Source/native regression controls qualify
+this mapping delta, not its live GT4 menu/steering behavior.
 This architecture analysis is neither a performance profile nor a fix.
 
 ## Proposed Native Scene Renderer

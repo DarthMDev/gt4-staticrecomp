@@ -32,12 +32,15 @@ production target. Native internal scale remains1;16:9 viewport is not HD/4K.
 
 Real menus/racing, native Vulkan, Windows audio and keyboard/XInput code exist.
 Owner confirms480i/480p/1080i gameplay at16:9;480p subjectively most stable.
-Physical XInput is untested. Keyboard directions reportedly double-trigger.
+Physical XInput is untested. Owner separately authorized a keyboard double-trigger
+fix in slice136: arrows now emit D-pad buttons only, no duplicate analog axes.
+Native controls pass; owner menu/steering confirmation remains pending.
 Low3D performance and inconsistent frametime are recorded; cause unknown.
 Owner explicitly requested recording only: no input/performance fix or audit
 until further instruction. The owner has now authorized performance investigation
 and experimental builds delegated to OpenCode; Codex only prepares the handoff.
-See docs/OPENCODE-PERFORMANCE-HANDOFF.md. Input fixes remain outside that task.
+See docs/OPENCODE-PERFORMANCE-HANDOFF.md. Input correction is separately authorized
+for Codex/Luna; performance work remains delegated to OpenCode.
 No Computer Use, GUI automation, simulated input or scripted game navigation:
 the owner controls gameplay. Launching a tested candidate is authorized; preserve
 their card/backups/locks and do not interfere with an existing session.
@@ -195,6 +198,13 @@ CTest7/7/Python164/164, zero skips; physical F8/real scene identity still Unknow
 Bounded synchronous export may pause one frame; no performance-neutral claim.
 Launcher clears inherited capture env, uses fresh private session output, preserves
 card/backups/locks. Never script owner navigation or enable capture automatically.
+
+Slice136 changes only keyboard axis duplication in native/host_io.cpp plus its
+controls. All keyboard bits/pressures remain supported; XInput keeps ownership
+of analog axes. New capture launcher pins docs/inputs/slice136-keyboard-input.json
+and its fresh136 runtime; frozen134/135 are preserved. CTest7/7/Python164/164,
+zero skips, plus old-code regression rejection. Physical input/menu/race steering
+still needs owner confirmation. Close/restart is owner-controlled, no GUI injection.
 
 All project code and general tooling must be human readable: descriptive names,
 straightforward flow and formatting, explicit guest addresses/fixed-width state,

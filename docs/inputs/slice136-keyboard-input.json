@@ -1,0 +1,180 @@
+{
+  "classification": "Confirmed removal of duplicate keyboard digital/analog channels; live menu/steering retest pending",
+  "slice": 136,
+  "baseline_commit": "57e6f5f",
+  "branch": "codex/gt4-keyboard-input-136",
+  "client_completion_date": "2026-10-14",
+  "profile": "observation",
+  "runtime": {
+    "path": "private/slice136-keyboard-input/build/gt4vulkan.exe",
+    "size_bytes": 54479360,
+    "sha256": "87214eaebe6e11ff7dfb08dafdd3c701f44e8f4a66e14e112c566306c5959857"
+  },
+  "game_library": {
+    "path": "private/slice131-observation-library/game-build/ps2game.lib",
+    "sha256": "ee530c1f4a1288cc7c57dde6674004a56cfd348d13387fb42f5672d726e9f3c8",
+    "size_bytes": 68857944
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice118-ee-candidates/shaders/copy_read.spv",
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6",
+      "size_bytes": 7872
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/copy_write.spv",
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c",
+      "size_bytes": 8892
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/decode.spv",
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856",
+      "size_bytes": 13780
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/display.spv",
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2",
+      "size_bytes": 9028
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/load_clut.spv",
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9",
+      "size_bytes": 10416
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/raster.spv",
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20",
+      "size_bytes": 50520
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/resolve.spv",
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3",
+      "size_bytes": 2320
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/snapshot.spv",
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7",
+      "size_bytes": 2328
+    },
+    {
+      "path": "private/slice118-ee-candidates/shaders/upload.spv",
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c",
+      "size_bytes": 12336
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6",
+    "size_bytes": 8650752
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072",
+    "size_bytes": 8650752
+  },
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6",
+      "size_bytes": 8650752
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072",
+      "size_bytes": 8650752
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574",
+      "size_bytes": 8650752
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af",
+      "size_bytes": 8650752
+    }
+  ],
+  "capture_activation_implemented": true,
+  "capture_export_implemented": true,
+  "capture_schema_version": 1,
+  "capture_initially_enabled": false,
+  "record_limit": 256,
+  "encoded_byte_limit": 262144,
+  "one_capture_per_launch": true,
+  "key": "F8; non-repeat host latch, serviced at EE-owned vblank",
+  "output": "Owner assets checkout/private/manual-play/session-.../shape-capture.json",
+  "input_change": {
+    "keyboard_direction": "D-pad digital buttons only; no synthesized analog axes",
+    "xinput_axes_changed": false,
+    "other_button_mapping_changed": false,
+    "held_buttons_or_pressure_suppressed": false,
+    "live_gt4_cause": "High confidence, not directly reproduced by agent"
+  },
+  "controls": {
+    "ctest_passed": 7,
+    "ctest_total": 7,
+    "ctest_seconds": 13.03,
+    "python_passed": 164,
+    "python_skipped": 0,
+    "initial_build_steps": 70,
+    "observed_compile_warnings": 0,
+    "all_keyboard_bits": 16,
+    "digital_directions": 4,
+    "hold_release_chord_and_xinput_preservation": true,
+    "old_code_regression": {
+      "old_implementation_commit": "57e6f5f",
+      "exit_code": 1,
+      "expected_regression_rejected": true,
+      "reason": "FAIL: keyboard button leaves analog axes neutral",
+      "scope": "Current mapper fixture against old production implementation; no guest input/game navigation"
+    }
+  },
+  "source_canonical_lf_sha256": {
+    "native/host_io.cpp": "9ae8a05890cb78785b8b3821ea42cea5c15884ecf45268aaceb8a34df8ba4671",
+    "native/host_io_fixture.cpp": "f8aa769c9c1352074c8f3cab96bc427e8dd74d464a5707b27c9434727d88c17d",
+    "scripts/external_runtime_probe.py": "0ec23c562af7cb6668494598be00705145610a890ada5799ff32417cadc27aee",
+    "scripts/play_shape_capture.py": "436806951bc80abceb0636b2922aecfd6c1660bc3eae219af5417833360ca210",
+    "tests/python/test_native_vulkan.py": "597f7abf0e2c0e92b161380d02a4bc5017168274a2e3ed3107880d50e30bd148",
+    "tests/python/test_play_shape_capture.py": "78d2614b123cae92514b1e5ff8b20f889566b551046e79f48fc81fe106566c7c"
+  },
+  "private_artifact_sha256": {
+    "private/slice136-keyboard-input/build/build.ninja": "ba6ab20ad89daf397a0725b85cdafa8c4a5f4c622d7fba73cf3046aaf68a49a7",
+    "private/slice136-keyboard-input/build/CMakeCache.txt": "d52d04a12b3e98f94e7d49275704aff2a5c402f2bdbe988984cf0f22c80cffd3",
+    "private/slice136-keyboard-input/build/host_io_fixture.exe": "79afcec6fe0bae5dfe27f1a76ea4e8e986db956ae08a0a72b3dd85a677d5c528",
+    "private/slice136-keyboard-input/build/observation-game.map": "b88aa880320165a80a908c0f948cfbeebf396dff28181e31caf06b2f29a5c222",
+    "private/slice136-keyboard-input/build/Testing/Temporary/LastTest.log": "59ff535555c8568898f6929aa6eb66d3b8bc25dd073d05f8d5b9f7585f40eceb",
+    "private/slice136-keyboard-input/build_control.cmd": "61b6abdb7d134b7b1fcd5dedb9af412e1c2a2cd1c972f7adf37ee41bfca9c89c",
+    "private/slice136-keyboard-input/build_native.cmd": "22d38fbb59039bcfd53b98566a2105a06ba943021ba6316eaa3f47ecb809d947",
+    "private/slice136-keyboard-input/control/CMakeLists.txt": "e9bcbc6cd9aab9f760580e0cc1e6f7db016ab5aed3a5c21f9c2ebc91435e6d24",
+    "private/slice136-keyboard-input/control/old_host_io.cpp": "eb6b92eb29731b6fc85d5fee8b64ac7f33ee8aa82ccc693e5ec98d9670d049f2",
+    "private/slice136-keyboard-input/control-build.log": "932c9a17c6b5159ab7ff2af4eb695c561bddf910afcdf2242d4fa907e69f8050",
+    "private/slice136-keyboard-input/ctest.log": "1a062e4f6713a25a998b63ef5da07437aca0ec501b165b746be00fc06a78ceb5",
+    "private/slice136-keyboard-input/independent-review/keyboard-review.md": "ac66b4cb30fe274b6a93570f141223c33824bff0703adda7fa53328776e360ce",
+    "private/slice136-keyboard-input/independent-review/metadata.json": "8092e75f0b5578e46ba89ce66c06cde4cc4344bd1c7f36294b07804cfc06e476",
+    "private/slice136-keyboard-input/native-build.log": "2800c3651d4db8d66eaa1f84658c7909c1b207b7e08cbc31378ff36baa938b7d",
+    "private/slice136-keyboard-input/old-control-build/old_keyboard_control.exe": "0298ce2c8c88b4ffa4c05a59212c724ad28d2f5d475dcd9d3710d0fdaa49b94b",
+    "private/slice136-keyboard-input/overlay-preparation.log": "d0d5e224af20bd9ac03ab17c432e96de6d8eec18d178978954b46b40b69dffef",
+    "private/slice136-keyboard-input/publish_metadata.py": "7b32e5e5fe456c1e38641ab52b593763f8fbc1fb0ae8f1643195aef38131ab49",
+    "private/slice136-keyboard-input/regression-control.json": "4e83a48e6e333273c3189d9da44bf676864cededf98a030142184d61497acf1c",
+    "private/slice136-keyboard-input/regression-control.stderr": "ace5bcad35d7321e7cd0567c7137833b3aefbd0411abfb9d5bcc133150c68ea2",
+    "private/slice136-keyboard-input/regression-control.stdout": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "private/slice136-keyboard-input/research/diagnosis-metadata.json": "ccb147b7c323327fc9656395add91ebbc73ffde22720762b9bd29fdb6acb38d8",
+    "private/slice136-keyboard-input/research/diagnosis.md": "125467395f73c2e2183f114d735be4832b3a2de29e2d923da020aa1479922691",
+    "private/slice136-runtime-overlay/dispatch.cpp": "25840053c8f4ec9b9f1ae89bcda49abec0a02a66b26d9e5ce363e0a31f37c64e",
+    "private/slice136-runtime-overlay/kernel.cpp": "9f39ae97db3c0020d0b70204fd614c6bd5ee9198f6627f61890c6eb5694378bc",
+    "private/slice136-runtime-overlay/runtime-overlay.json": "f00db2f569765e5f9a52dcca7c5b7b8db2d9a44cc6662ccf3cf92075081e0ba7",
+    "private/slice136-runtime-overlay/system.cpp": "8d0d2388c03fa803e17f28b8429254e537fb45947e8bca86603d4b1418e8f3a8"
+  },
+  "retail_game_executed_by_controls": false,
+  "physical_keyboard_tested_by_agent": false,
+  "game_input_sent_by_agent": false,
+  "performance_probes_run": false,
+  "private_assets_published": false,
+  "limitations": [
+    "Owner menu/other-button confirmation still pending",
+    "Digital D-pad steering in races unqualified; keyboard analog steering removed",
+    "Physical XInput untested",
+    "Prior capture fault/cost/fidelity limitations retained"
+  ],
+  "next_boundary": "Owner closes existing session normally; launch qualified136 for keyboard and F8 retest"
+}

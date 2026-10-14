@@ -341,3 +341,27 @@ and may pause a frame; capture is an explicit evidence operation, not a performa
 measurement. Driver/file fault and abrupt termination limits from133 still apply.
 No geometry extraction or renderer substitution is implemented by this control.
 See [slice134 evidence](inputs/slice134-manual-capture.json).
+
+## Keyboard correction for capture selection (slice136)
+
+The owner authorized fixing arrow-key double movement before selecting a car.
+**Confirmed:** the old keyboard merge set digital D-pad bits4-7 and also forced
+left-stick axes to endpoints. Native window/runtime/SIO2 forwarded both separate
+fields. The merge now sets only button bits and their pressure; XInput remains
+the analog source. The donor browser independently separates arrows/D-pad from
+I/J/K/L axes; its native host retains the old duplication, so this is not a claim
+that every donor frontend already behaves identically. No new native stick keys.
+
+Fresh136 CTest7/7/Python164/164, zero skips. Production-mapper controls cover all
+16 bits and pressures, four directions with neutral axes, held/released states,
+chords and preserved non-neutral XInput axes/buttons. Compiling the same fixture
+against old host code fails precisely at keyboard analog neutrality. This is a
+causal host regression control, not a live GT4 UI test. Other buttons had no axis
+duplication in source; no speculative debounce or held-input suppression added.
+
+The strict manual launcher now selects only the new136 manifest/runtime, keeping
+134 producers frozen. Existing owner save/lock/backup and default-off F8 capture
+are retained. **High confidence:** this addresses the menu's doubled direction
+mechanism. **Unknown:** owner confirmation and digital D-pad steering in races;
+keyboard analog steering is no longer synthesized. Physical XInput remains untested.
+See [slice136 evidence](inputs/slice136-keyboard-input.json).

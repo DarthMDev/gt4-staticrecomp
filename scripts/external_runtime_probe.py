@@ -13,8 +13,8 @@ from gt4disc import fingerprint
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CAPTURE_MANIFEST = 'slice134-manual-capture.json'
-CAPTURE_RUNTIME = 'private/slice134-manual-capture/build/gt4vulkan.exe'
+CAPTURE_MANIFEST = 'slice136-keyboard-input.json'
+CAPTURE_RUNTIME = 'private/slice136-keyboard-input/build/gt4vulkan.exe'
 
 
 def verify_manual_capture_profile(manifest, evidence, runtime_workspace):

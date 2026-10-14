@@ -16,10 +16,10 @@ class ManualCaptureLauncherTests(unittest.TestCase):
     def prepare(self, root, qualified=True):
         inputs = root / 'docs/inputs'
         inputs.mkdir(parents=True)
-        manifest = inputs / 'slice134-manual-capture.json'
+        manifest = inputs / 'slice136-keyboard-input.json'
         manifest.write_text(json.dumps({'profile': 'observation', 'capture_activation_implemented': qualified,
                                        'capture_schema_version': 1,
-                                       'runtime': {'path': 'private/slice134-manual-capture/build/gt4vulkan.exe'}}))
+                                       'runtime': {'path': 'private/slice136-keyboard-input/build/gt4vulkan.exe'}}))
         directory = root / 'private/manual-play'
         directory.mkdir(parents=True)
         card = directory / 'card.ps2'
@@ -32,7 +32,7 @@ class ManualCaptureLauncherTests(unittest.TestCase):
             with patch.object(capture, 'ROOT', root), patch.object(capture, 'play') as play, \
                     patch.object(sys, 'argv', ['capture', '--assets-root', str(root), '--aspect', '4:3']):
                 self.assertEqual(capture.main(), 0)
-            play.assert_called_once_with('4:3', root, root / 'docs/inputs/slice134-manual-capture.json', capture_shapes=True)
+            play.assert_called_once_with('4:3', root, root / 'docs/inputs/slice136-keyboard-input.json', capture_shapes=True)
 
     def test_capture_holds_save_lock_and_releases_after_probe_failure(self):
         with tempfile.TemporaryDirectory() as folder:

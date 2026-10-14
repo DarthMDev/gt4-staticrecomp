@@ -159,3 +159,11 @@ The native window consumes the explicit `GT4_OBSERVATION_OUTPUT` provided by tha
 launcher; generic launches clear any inherited value. Invalid/existing native output
 fails closed before emulation. Default production launch remains unchanged.
 See [manual instructions](SCENE-OBSERVATION.md#owner-controlled-capture-slice134).
+
+The current manual launcher selects the separately qualified136 candidate via
+`docs/inputs/slice136-keyboard-input.json`, replacing its active134 selection without
+overwriting that frozen build. It includes the minimal keyboard merge correction:
+arrows emit digital D-pad only; keyboard never forces analog axes. Fresh136 native
+CTest7/7/Python164/164 passes; the unchanged fixture rejects the old merge code.
+All seeds/shaders/library pins and save/backup/lock behavior are preserved.
+Owner must close the current window normally before launching the corrected build.

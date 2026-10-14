@@ -1,11 +1,25 @@
 # Current Status
 
-2026-10-14 — Slice 135, manual capture candidate launched for owner control.
+2026-10-14 — Slice 136, keyboard direction duplication removed; owner retest pending.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-owner-capture-launch-135`, based on commit 5890192.
+`codex/gt4-keyboard-input-136`, based on commit 57e6f5f.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
+
+- **Confirmed (slice 136):** owner separately authorized the input fix blocking
+  car selection. Arrows previously emitted both a digital D-pad bit and a full
+  left-stick axis; keyboard merge now emits only buttons/pressures. XInput axes,
+  rumble and all other button mappings remain unchanged. No arbitrary debounce.
+- **Confirmed (slice 136):** fresh CTest7/7 in13.03s and Python164/164, zero skips.
+  Native controls cover all16 keyboard bits, four directions, hold/release/chord
+  and preservation of non-neutral XInput axes. The same new fixture rejects the
+  old implementation specifically for non-neutral keyboard-derived axes.
+- **High confidence:** duplicate digital/analog channels explain the reported
+  menu double movement. **Unknown:** owner keyboard/menu confirmation and digital
+  D-pad steering in races. The strict capture launcher now selects the frozen136
+  candidate; physical input/game navigation remains owner-controlled.
+  See [keyboard evidence](inputs/slice136-keyboard-input.json).
 
 The owner authorized P0/P1 while OpenCode continues its separate performance
 branch. Work uses an isolated checkout; no OpenCode edits, session or saves changed.
@@ -253,10 +267,11 @@ prior to cleanup. Private data, saves, and frozen producers remain local.
 
 Severe performance and frametime degradation recorded: 19 FPS in-race, 11 FPS in 3D car showroom,
 18 FPS / 72.5 ms in 1080i screenshot; overlay metrics are not independently calibrated.
-Keyboard arrow keys produce double-movements per keystroke per owner report; other keys
-suspect. Root causes unknown. The prior record-only performance restriction is now
+Keyboard arrow keys produced double-movements per keystroke per owner report; other keys
+remain suspect. Slice136 removes the confirmed dual digital/analog keyboard mapping;
+live menu/steering confirmation remains pending. The prior record-only performance restriction is now
 superseded for an owner-delegated OpenCode investigation; Codex prepares context only.
-Input fixes remain deferred. Gameplay is owner-controlled: no Computer Use,
+The owner separately authorized this keyboard correction. Gameplay is owner-controlled: no Computer Use,
 GUI automation, simulated input or scripted navigation. Manual play window and memory card are untouched
 by this cleanup. CPU/GPU fidelity, CFC2(28), temporal deinterlacing, 100% realtime rate,
 prolonged stability, completed full races, and broad save scenarios remain open qualification items.

@@ -70,11 +70,59 @@ int main() {
       require(axis >= previous, "axis monotonicity");
       previous = axis;
     }
-    auto pad = PadState{};
-    merge_keyboard(pad, (1u << 7) | (1u << 14));
-    require(pad.axes[2] == 0 && pad.pressures[14] == 255 &&
-                pad.buttons == 0x4080,
-            "keyboard merge");
+    for (int bit = 0; bit < 16; ++bit) {
+      auto pad = map_gamepad(XINPUT_GAMEPAD{});
+      const auto keyboard_button = static_cast<std::uint16_t>(1u << bit);
+      merge_keyboard(pad, keyboard_button);
+      require(pad.buttons == keyboard_button,
+              "keyboard bit maps to one digital button");
+      for (int pressure = 0; pressure < 16; ++pressure)
+        require(pad.pressures[pressure] == (pressure == bit ? 255 : 0),
+                "keyboard pressure maps to matching button");
+      require(pad.axes == PadState{}.axes,
+              "keyboard button leaves analog axes neutral");
+    }
+    const std::uint16_t directions[] = {
+        1u << 4, 1u << 5, 1u << 6, 1u << 7};
+    for (const auto direction : directions) {
+      auto pad = map_gamepad(XINPUT_GAMEPAD{});
+      merge_keyboard(pad, direction);
+      require(pad.buttons == direction && pad.axes == PadState{}.axes,
+              "keyboard direction emits one digital direction only");
+    }
+    auto held = map_gamepad(XINPUT_GAMEPAD{});
+    merge_keyboard(held, 1u << 7);
+    require(held.buttons == (1u << 7), "keyboard direction held");
+    auto held_again = map_gamepad(XINPUT_GAMEPAD{});
+    merge_keyboard(held_again, 1u << 7);
+    require(held_again.buttons == held.buttons &&
+                held_again.pressures == held.pressures &&
+                held_again.axes == held.axes,
+            "keyboard direction remains stable while held");
+    auto released = map_gamepad(XINPUT_GAMEPAD{});
+    merge_keyboard(released, 0);
+    require(released.buttons == 0 && released.axes == PadState{}.axes &&
+                released.pressures == PadState{}.pressures,
+            "keyboard direction release returns to neutral");
+    auto chord = map_gamepad(XINPUT_GAMEPAD{});
+    merge_keyboard(chord, (1u << 7) | (1u << 14));
+    require(chord.buttons == 0x4080 && chord.pressures[7] == 255 &&
+                chord.pressures[14] == 255 && chord.axes == PadState{}.axes,
+            "keyboard direction and action chord");
+    XINPUT_GAMEPAD analog_gamepad{};
+    analog_gamepad.wButtons = XINPUT_GAMEPAD_A;
+    analog_gamepad.sThumbLX = 20000;
+    analog_gamepad.sThumbLY = -18000;
+    analog_gamepad.sThumbRX = -16000;
+    analog_gamepad.sThumbRY = 14000;
+    auto combined = map_gamepad(analog_gamepad);
+    const auto xinput_axes = combined.axes;
+    const auto xinput_buttons = combined.buttons;
+    merge_keyboard(combined, directions[0] | directions[3]);
+    require(combined.axes == xinput_axes,
+            "keyboard directions preserve XInput analog axes");
+    require((combined.buttons & xinput_buttons) == xinput_buttons,
+            "keyboard directions preserve XInput buttons");
     for (const std::uint16_t rumble : {0, 0x0100, 0xff00, 1, 0xff01}) {
       const auto vibration = map_rumble(rumble);
       require(vibration.wLeftMotorSpeed == (rumble >> 8) * 257 &&
@@ -87,7 +135,7 @@ int main() {
                 neutral.pressures == PadState{}.pressures,
             "focus loss neutral");
     std::fprintf(stderr, "PASS: XInput mapping, pressures, signed axes, "
-                         "keyboard, focus, rumble\n");
+                         "digital keyboard, focus, rumble\n");
     AudioOutput audio;
     std::array<std::int16_t, 64> samples{};
     for (int index = 0; index < 32; ++index) {

@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 from play_external_runtime import ROOT, play
+from external_runtime_probe import CAPTURE_MANIFEST
 
 
 def main():
@@ -12,7 +13,7 @@ def main():
     parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9')
     options = parser.parse_args()
     try:
-        play(options.aspect, options.assets_root, ROOT / 'docs/inputs/slice134-manual-capture.json',
+        play(options.aspect, options.assets_root, ROOT / 'docs/inputs' / CAPTURE_MANIFEST,
              capture_shapes=True)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

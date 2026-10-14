@@ -74,14 +74,6 @@ void merge_keyboard(PadState &pad, std::uint16_t buttons) {
   for (int bit = 0; bit < 16; ++bit)
     if (buttons & (1u << bit))
       pad.pressures[bit] = 255;
-  if (buttons & (1u << 7))
-    pad.axes[2] = 0;
-  if (buttons & (1u << 5))
-    pad.axes[2] = 255;
-  if (buttons & (1u << 4))
-    pad.axes[3] = 0;
-  if (buttons & (1u << 6))
-    pad.axes[3] = 255;
 }
 
 XINPUT_VIBRATION map_rumble(std::uint16_t rumble) {

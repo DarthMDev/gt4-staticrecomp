@@ -23,6 +23,10 @@ GT4Recomp is a static recompilation project targeting **Gran Turismo 4 USA v2.00
 
 **Critical work remains before a stable experience is reached:** low performance in 3D scenes, inconsistent frametimes, audio dropouts, and reports of keyboard double-triggering. Graphical compatibility, saves beyond tested scenarios, and extended stability remain under active qualification.
 
+A keyboard correction now removes duplicate D-pad/analog signals from arrow
+keys in the latest capture candidate. Automated controls pass; menu navigation
+and digital steering still need owner confirmation. XInput analog sticks remain unchanged.
+
 Manual testing has shown 480p to be the most stable mode so far. Interlaced modes function, but their visual and temporal fidelity are not yet fully qualified.
 
 ## The Experience We Want to Build

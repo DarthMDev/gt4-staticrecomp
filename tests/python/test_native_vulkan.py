@@ -172,6 +172,7 @@ class NativeVulkanTests(unittest.TestCase):
         result = subprocess.run([str(executable)], capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('PASS: XInput mapping', result.stderr)
+        self.assertIn('digital keyboard, focus, rumble', result.stderr)
         self.assertIn('completed=2592 canceled=0', result.stderr)
         self.assertIn('PASS: real Windows audio completion', result.stderr)
 
