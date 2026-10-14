@@ -1,0 +1,173 @@
+{
+  "slice": 146,
+  "date": "2026-10-14",
+  "baseline_commit": "73fcf3f",
+  "classification": "Confirmed completed detailed interval; paired overhead result pending",
+  "source_session": "session-20261014-181701-302246",
+  "runtime": {
+    "path": "private/slice145-performance-pair/detailed/build/gt4vulkan.exe",
+    "size_bytes": 54471680,
+    "sha256": "9941703b729e3b3e07cbe072931e021e9cdca90dd586475f181ee0911634771d"
+  },
+  "owner_scenario": {
+    "car": "Toyota Prius (year/trim not supplied)",
+    "camera": "external",
+    "track": "Nordschleife",
+    "context": "Owner supplied scenario for slice144 manual interval",
+    "video_mode": "Unknown; preserve the same GT4 setting for both profiles"
+  },
+  "reports": [
+    {
+      "source_lines": [
+        161,
+        168
+      ],
+      "vblank_samples": 962,
+      "seconds": 40.732,
+      "vblanks_per_second": 23.62,
+      "mean_ms": 42.34095634095634,
+      "median_ms": 42.065,
+      "p95_ms": 48.162,
+      "p99_ms": 50.736,
+      "max_ms": 58.382,
+      "thread_cpu_ms": 32.533,
+      "thread_cpu_occupancy_percent": 76.8,
+      "exclusive_ms": {
+        "ee_dispatch": 2.269,
+        "vu_interpret": 26.246,
+        "iop_run": 0.535,
+        "vif_gif": 1.143,
+        "gs_host_copy": 0.636,
+        "gs_execute": 0.869,
+        "presentation": 0.314,
+        "audio_push": 0.126,
+        "host_vblank": 0.105,
+        "gs_fence_wait": 9.392,
+        "acquire_wait": 0.011,
+        "present_wait": 0.006,
+        "audio_wait": 0.0,
+        "unattributed": 0.689
+      },
+      "exclusive_sum_ms": 42.341,
+      "vu_wall_share_percent": 61.987263085534714,
+      "gs_fence_wait_share_percent": 22.181832465874496,
+      "classification": "Primary30-60s interval"
+    },
+    {
+      "source_lines": [
+        169,
+        176
+      ],
+      "vblank_samples": 60,
+      "seconds": 2.704,
+      "vblanks_per_second": 22.19,
+      "mean_ms": 45.06666666666667,
+      "median_ms": 44.806,
+      "p95_ms": 49.179,
+      "p99_ms": 50.726,
+      "max_ms": 50.726,
+      "thread_cpu_ms": 35.677,
+      "thread_cpu_occupancy_percent": 79.2,
+      "exclusive_ms": {
+        "ee_dispatch": 2.215,
+        "vu_interpret": 28.328,
+        "iop_run": 0.542,
+        "vif_gif": 1.237,
+        "gs_host_copy": 0.722,
+        "gs_execute": 0.915,
+        "presentation": 0.316,
+        "audio_push": 0.126,
+        "host_vblank": 0.067,
+        "gs_fence_wait": 9.854,
+        "acquire_wait": 0.01,
+        "present_wait": 0.002,
+        "audio_wait": 0.0,
+        "unattributed": 0.735
+      },
+      "exclusive_sum_ms": 45.068999999999996,
+      "vu_wall_share_percent": 62.85798816568047,
+      "gs_fence_wait_share_percent": 21.865384615384613,
+      "classification": "Short follow-up F8; not an independent30-60s trial"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "private/slice146-owner-detailed-results/probe.log",
+      "size_bytes": 62342,
+      "sha256": "931684c25bceceda13010c6c8d5826ac1beaf1641fa259ce7e8fbb6768ce8976"
+    },
+    {
+      "path": "private/slice146-owner-detailed-results/result.json",
+      "size_bytes": 1737,
+      "sha256": "b912eab3c4ebf8d59a99d6c09d3d4605586b0088ae677e90606a163a2970cbe7"
+    },
+    {
+      "path": "private/slice146-owner-detailed-results/manual-1.log",
+      "size_bytes": 1312,
+      "sha256": "a3292e8d17a23df3a8fe523ba07d30c692606ac6ddf18fc051221e23db79bc05"
+    },
+    {
+      "path": "private/slice146-owner-detailed-results/manual-2.log",
+      "size_bytes": 1308,
+      "sha256": "e52a010069889bb458860e71ce566089f2dbbaf3c0e16c39237f57483c31ccc5"
+    },
+    {
+      "path": "private/slice146-owner-detailed-results/owner-overlay.png",
+      "size_bytes": 478616,
+      "sha256": "2d34e3ce74ed6bfe18f1de5994f45e3f0c3f32f2196df811c3b4e7c5ce96f145"
+    }
+  ],
+  "controls": {
+    "invalid_reports": 0,
+    "guest_counter_resets": 0,
+    "exclusive_sum_within_printed_rounding": true,
+    "completed_session": true,
+    "unchanged_card_hash": {
+      "size_bytes": 8650752,
+      "sha256": "2489efcbf8c3022c030875ea98c005bdcf7a4de4b0016a5846f28a6110fcce1c"
+    },
+    "independent_review": "GPT6 Luna read-only log/result validation confirms boundaries, arithmetic, short follow-up exclusion and unchanged card"
+  },
+  "screenshot": {
+    "method": "Visual transcription of owner-provided screenshot; no GUI automation",
+    "overlay_fps": 29,
+    "overlay_frametime_ms": 35.3,
+    "highest_visible_logical_cpu_percent": 71,
+    "highest_visible_logical_cpu_label": "CPU3",
+    "overall_cpu_percent": 14,
+    "cpu_temperature_c": 95,
+    "cpu_frequency_mhz": 3206,
+    "gpu_percent": 31,
+    "limits": "One snapshot; logical-CPU activity is not game-thread identity; not time-aligned with full manual interval; migration/thermal throttling not measured"
+  },
+  "interpretation": {
+    "confirmed": "VU is the largest instrumented exclusive wall category; separate measured owner-thread CPU occupancy76.8%",
+    "high_confidence": "Low average CPU and no fixed logical CPU at100% cannot exclude a serial critical path with waits",
+    "hypotheses": [
+      "OS migration can spread one thread across logical processors; actual migration not observed"
+    ],
+    "unknown": [
+      "Diagnostic overhead until matched145control trials",
+      "VU0 micro versus VU1 timing split",
+      "GPU timestamp time and distinct scene frame rate",
+      "Thermal throttling or power limitation",
+      "Exact car position/GT4video setting and scene match with previous144run"
+    ]
+  },
+  "control_launch": {
+    "session": "session-20261014-182103-412804",
+    "mode": "frame-only",
+    "pid": 43684,
+    "runtime_manifest": "slice145-performance-frame-only.json",
+    "startup": {
+      "path": "private/slice146-owner-detailed-results/control-startup-prefix.log",
+      "size_bytes": 609,
+      "sha256": "fb97c94e2b47bae265e02d5bb9cca8f58537b95dd539c2f500c6ddfff7b76a69"
+    },
+    "card_backup": {
+      "size_bytes": 8650752,
+      "sha256": "2489efcbf8c3022c030875ea98c005bdcf7a4de4b0016a5846f28a6110fcce1c"
+    },
+    "qualification": "Process/startup/backup verified only; owner controls all gameplay and manual interval"
+  }
+}

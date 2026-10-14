@@ -260,3 +260,37 @@ No current session restart or new gameplay probe was performed by the agent.
 
 VU0/VU1 separation is a following pinned derivation; it is not silently added to
 this single-variable overhead pair. See [offline AOT feasibility](VU-AOT-FEASIBILITY.md).
+
+## Detailed owner run and logical-CPU screenshot (slice146)
+
+The owner repeated the Prius/external-camera/Nordschleife test in145 detailed.
+Session `session-20261014-181701-302246` records F7 at160 and a complete8-line
+F8 block161–168:962/962 samples,40.732s,23.62VBlanks/s. Median42.065ms,
+p9548.162ms,p9950.736ms,max58.382ms. VU26.246ms is61.99% of interval wall;
+GS fence9.392ms is22.18%, followed by EE2.269ms and VIF/GIF1.143ms. Separate
+owner-thread CPU is32.533ms/sample,76.8% occupancy; guest clock-model speed39.36%.
+The14 exclusive categories sum42.341ms versus42.340956ms from duration/count,
+within printed rounding. No invalid/reset marker or automatic reset in interval.
+
+A second F8 at169 reports60 samples/2.704s: a short follow-up after the first
+report reset, not another30–60s trial. Both are preserved and classified separately.
+Result records detailed mode, pinned runtime, normal window closure, exit0/no
+timeout and identical card before/after. Independent Luna verification agrees.
+Full closed log/result, extracted blocks and owner screenshot are frozen privately;
+[public metadata](inputs/slice146-owner-detailed-results.json) carries hashes/limits.
+
+The screenshot shows29FPS/35.3ms, overallCPU14%, highest visible logicalCPU71%
+(CPU3),CPU95C and GPU31%. These are point-in-time overlay readings, not interval
+statistics or identities of game threads. Our GetThreadTimes sample follows the
+owner thread independently of which logical processor runs it. Serial work plus
+waits can limit the frame without a fixed processor reading100%; migration can
+also distribute activity across logical processors. Actual migration, CPU-bound
+instruction cost and thermal/power limiting are not established by this screenshot.
+Its35.3ms is not the40.732s interval median or a distinct-scene-FPS measurement.
+
+After the owner confirmed closure and absence of a running game was checked,
+the protected frame-only launcher opened `session-20261014-182103-412804`,
+PID43684. Executable selection, Vulkan1x/16:9/48kHz startup and8650752B backup
+confirmed; all gameplay remains manual. No live probe, build, input injection,
+runtime change or performance optimization by the agent. Matched control data
+is still needed before quantifying detailed instrumentation overhead.

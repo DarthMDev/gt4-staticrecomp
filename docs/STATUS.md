@@ -1,6 +1,6 @@
 # Current Status
 
-2026-10-14 — Slice 145, matched detailed/frame-only diagnostic pair qualified.
+2026-10-14 — Slice 146, new detailed owner interval verified; frame-only opened.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
 `main` retains slice140/native-scene work; this candidate stays on the hybrid track.
@@ -30,10 +30,19 @@ EE/runtime/port/shaders and all guest settings. Frame-only compiles subsystem
 scopes and host operation counter hooks out; common boundary CPU/wall clocks and
 guest progress counters remain. Native CTest7/7 each, separate full9/9 with
 Python173/173 zero skips. Object-symbol controls confirm no Probe references in
-five frame-only hot-path objects. Owner closed143 normally;145 detailed is now
-open in a fresh protected session. Matched owner intervals remain pending.
+five frame-only hot-path objects. Owner closed143 normally and completed the145
+detailed trial recorded below. Matched control intervals remain pending.
 Next: owner matched detailed/control/detailed intervals, then VU0-micro/VU1 timing
 separation and one content-identified offline AOT experiment. No speedup claim.
+**Confirmed (slice146):**145 detailed manual interval covers962 samples/40.732s,
+23.62 VBlanks/s, median42.065ms; VU26.246ms (61.99%), GS fence9.392ms,
+owner-thread CPU32.533ms/76.8%. SecondF8 covers only2.704s, recorded separately.
+Independent review and arithmetic controls pass; detailed session closed normally,
+card hashes unchanged. Owner confirmed closure;145 frame-only now open through
+protected launcher. Its manual interval/overhead result remain pending.
+Owner screenshot is a single logical-CPU/overlay snapshot: no fixed CPU at100%
+does not rule out serial work with waits/migration; neither migration nor thermal
+limiting is measured. See [detailed evidence](inputs/slice146-owner-detailed-results.json).
 See [pair protocol](PERFORMANCE-ATTRIBUTION.md#matched-overhead-pair-slice145)
 and [VU AOT feasibility](VU-AOT-FEASIBILITY.md).
 See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)
