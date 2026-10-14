@@ -1,0 +1,116 @@
+{
+  "slice": 148,
+  "date": "2026-10-14",
+  "baseline_commit": "bb56408",
+  "classification": "Confirmed complete initial A/B/A sequence; causal overhead unresolved",
+  "source_session": "session-20261014-182403-457646",
+  "source_lines": [
+    235,
+    242
+  ],
+  "runtime": {
+    "path": "private/slice145-performance-pair/detailed/build/gt4vulkan.exe",
+    "size_bytes": 54471680,
+    "sha256": "9941703b729e3b3e07cbe072931e021e9cdca90dd586475f181ee0911634771d"
+  },
+  "owner_scenario": {
+    "car": "Toyota Prius (year/trim not supplied)",
+    "camera": "external",
+    "track": "Nordschleife",
+    "context": "Owner supplied scenario for slice144 manual interval",
+    "video_mode": "Unknown; preserve the same GT4 setting for both profiles"
+  },
+  "artifacts": [
+    {
+      "path": "private/slice148-owner-aba-results/probe.log",
+      "size_bytes": 40573,
+      "sha256": "d22983b13793e37829260664105c4ea5be78369cc19e8877df35eb5af589039b"
+    },
+    {
+      "path": "private/slice148-owner-aba-results/result.json",
+      "size_bytes": 1738,
+      "sha256": "c77500c44bb9e40b8f3c6f673693ad9950ba81823d6e917ed3447b1db146f8a0"
+    },
+    {
+      "path": "private/slice148-owner-aba-results/manual-report.log",
+      "size_bytes": 1315,
+      "sha256": "a5c4cd84d0db550041e268c16d45881e31b39ee22781c68f84c354e0bea6f15e"
+    }
+  ],
+  "observations": {
+    "vblank_samples": 1191,
+    "seconds": 53.161,
+    "vblanks_per_second": 22.4,
+    "mean_ms": 44.635600335852224,
+    "median_ms": 43.779,
+    "p95_ms": 51.349,
+    "p99_ms": 56.683,
+    "max_ms": 65.955,
+    "thread_cpu_ms": 35.094,
+    "thread_cpu_occupancy_percent": 78.6,
+    "exclusive_ms": {
+      "ee_dispatch": 2.384,
+      "vu_interpret": 28.155,
+      "iop_run": 0.568,
+      "vif_gif": 1.189,
+      "gs_host_copy": 0.618,
+      "gs_execute": 0.921,
+      "presentation": 0.397,
+      "audio_push": 0.13,
+      "host_vblank": 0.144,
+      "gs_fence_wait": 9.364,
+      "acquire_wait": 0.011,
+      "present_wait": 0.006,
+      "audio_wait": 0.0,
+      "unattributed": 0.749
+    },
+    "exclusive_sum_ms": 44.636,
+    "vu_wall_share_percent": 63.07745339628676,
+    "guest_clock_model_speed_percent": 37.34
+  },
+  "controls": {
+    "invalid_reports": 0,
+    "counter_resets": 0,
+    "exclusive_sum_matches_rounding": true,
+    "normal_close": true,
+    "unchanged_card_hash": {
+      "size_bytes": 8650752,
+      "sha256": "2489efcbf8c3022c030875ea98c005bdcf7a4de4b0016a5846f28a6110fcce1c"
+    },
+    "independent_review": "GPT6 Luna read-only report/result arithmetic and boundaries confirmed"
+  },
+  "sequence": [
+    {
+      "mode": "detailed A1",
+      "median_ms": 42.065,
+      "p99_ms": 50.736,
+      "thread_cpu_ms": 32.533,
+      "seconds": 40.732
+    },
+    {
+      "mode": "frame-only B",
+      "median_ms": 46.311,
+      "p99_ms": 83.614,
+      "thread_cpu_ms": 37.274,
+      "seconds": 56.199
+    },
+    {
+      "mode": "detailed A2",
+      "median_ms": 43.779,
+      "p99_ms": 56.683,
+      "thread_cpu_ms": 35.094,
+      "seconds": 53.161
+    }
+  ],
+  "interpretation": {
+    "confirmed": "Control was slower than both detailed runs; VU remains largest measured detailed wall category",
+    "unknown": "Instrumentation overhead magnitude/sign and thermal/scheduler/scene causes remain unidentified",
+    "next": "Stop repeating this initial sequence; qualify mutually exclusive VU0-micro/VU1-interpreter timing in a fresh candidate, no optimization claim"
+  },
+  "limits": [
+    "One sequence only, no controlled identical scene/positions/conditions; durations differ",
+    "No statistical overhead estimate or negative instrumentation cost conclusion",
+    "No game speedup, thermal diagnosis or independent PS2 fidelity claim",
+    "Generated VU1 AOT and VU0 macro operations lie outside the run_fast interpreter scope"
+  ]
+}

@@ -332,3 +332,28 @@ Following scope change: replace the existing aggregate `run_fast(unit,pc)` timin
 with mutually exclusive VU0-micro and VU1-interpreter-fallback categories in a fresh
 pinned derivation; prove their sum preserves the old exclusive partition. That
 site excludes generated VU1 AOT work; keep the label narrow and preserve143/145.
+
+## Initial A/B/A sequence complete (slice148)
+
+Repeated145 detailed session `session-20261014-182403-457646` closed normally,
+card hashes unchanged. F7line234/F8lines235–242 contains1191/1191 samples in
+53.161s,22.40VBlanks/s. Mean44.635600ms, median43.779,p9551.349,p9956.683,
+max65.955ms. Measured threadCPU35.094ms/78.6%; exclusive sum44.636ms reconciles
+within rounding, VU28.155ms remains largest category, GS fence9.364ms second.
+No invalid/reset marker; independent Luna review agrees. Artifacts are frozen
+privately; [public sequence](inputs/slice148-owner-aba-results.json) records pins.
+
+| Run | Median | p99 | Thread CPU/sample |
+|---|---:|---:|---:|
+| Detailed A1 |42.065ms|50.736ms|32.533ms|
+| Frame-only B |46.311ms|83.614ms|37.274ms|
+| Detailed A2 |43.779ms|56.683ms|35.094ms|
+
+Removing subsystem hooks did not improve this observed sequence. That is not a
+negative instrumentation-cost measurement: exact scene/position, interval lengths
+and machine conditions vary, and there is only one B run. Overhead magnitude/sign,
+thermal cause and any game optimization remain Unknown. Do not keep requesting
+repeats of this initial sequence before making the bounded per-unit attribution
+available. Next fresh candidate splits mutually exclusive interpreter timings,
+with synthetic partition/routing controls; frozen145 pair remains available for
+later matched experiments. No runtime or build changes in this evidence slice.

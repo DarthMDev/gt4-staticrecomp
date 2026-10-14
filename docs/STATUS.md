@@ -1,6 +1,6 @@
 # Current Status
 
-2026-10-14 — Slice 147, frame-only interval verified; repeated detailed opened.
+2026-10-14 — Slice 148, initial detailed/control/detailed sequence complete.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
 `main` retains slice140/native-scene work; this candidate stays on the hybrid track.
@@ -50,6 +50,14 @@ pass. It is slower than detailed in this one sample; different durations/scenes/
 machine state prevent causal overhead attribution. Protected145 detailed repeat
 now open, owner controls F7/F8. No optimization or thermal-cause conclusion.
 See [control evidence](inputs/slice147-owner-control-results.json).
+**Confirmed (slice148):** detailed repeat1191 samples/53.161s, median43.779ms,
+p9956.683ms, threadCPU35.094ms/78.6%, VU28.155ms. Normal close/card unchanged;
+exclusive partition and independent log checks pass. Initial sequence medians
+42.065/46.311/43.779ms: control slower than both detailed runs. Causal overhead
+remains Unknown under varying scenes/durations/machine state; no more repeats of
+this initial sequence requested now. Next is a fresh VU0-micro/VU1-interpreter
+scope split, keeping149+ candidate separate from frozen143/145. No optimization.
+See [sequence evidence](inputs/slice148-owner-aba-results.json).
 See [pair protocol](PERFORMANCE-ATTRIBUTION.md#matched-overhead-pair-slice145)
 and [VU AOT feasibility](VU-AOT-FEASIBILITY.md).
 See [attribution](PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143)
