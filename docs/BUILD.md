@@ -1,5 +1,9 @@
 # Current Path Build Guide
 
+Slice142 adds host-only `perf_accounting_fixture` to CTest. It uses authored
+timestamps and requires no game/input/performance run. It does not replace the
+player's probe or runtime. See [attribution qualification](PERFORMANCE-ATTRIBUTION.md).
+
 ## Qualified Environment
 
 Windows x86-64, VS2022 Build Tools / SDK 10.0.26100.0, clang-cl 23.1.2,

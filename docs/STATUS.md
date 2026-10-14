@@ -1,12 +1,21 @@
 # Current Status
 
-2026-10-14 — Slice 141, Windows-first hybrid no-JIT optimization/port plan.
+2026-10-14 — Slice 142, OpenCode evidence review and controlled-clock accounting.
 Playable base remains slice 114, corrected owner capture candidate slice136.
-Planning branch: `codex/hybrid-no-jit-port-plan-141`, based on commit25fd40e.
+Active track: `codex/hybrid-no-jit-port-plan-141`; slice142 based on432252a.
 `main` retains slice140/native-scene work; no implementation is changed here.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Active priority on this branch
+
+**Slice142:** OpenCode executable/hash and4/4/34-test receipt reconciled, but its
+inclusive subsystem timers/report boundaries/F9 semantics are not suitable for
+exclusive ranking. Controlled old-header repro confirms defects. Added portable
+host-only accounting core with independent nested/cut/toggle controls, CTest8/8,
+Python164/164 zero skips. Core is not yet connected to the player build; no
+performance improvement or bottleneck claim. The494-report dataset selection
+remains unreproduced. See [attribution](PERFORMANCE-ATTRIBUTION.md). Next: integrate
+and qualify a corrected instrumented candidate before the owner's next interval.
 
 Owner changed direction: optimize the hybrid base for correct game speed and
 stable60FPS on Windows, then add GS internal scaling/dithering and portability.

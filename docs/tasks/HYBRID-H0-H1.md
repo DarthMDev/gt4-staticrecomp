@@ -1,6 +1,8 @@
 # H0/H1: freeze and attribute the Windows no-JIT baseline
 
 Status: ready to scope the next implementation slice; not executed by slice 141.
+Slice142 reviews OpenCode evidence and qualifies the standalone time-accounting
+core; [integration/counter/clock gates remain](../PERFORMANCE-ATTRIBUTION.md).
 Parent: [Hybrid Port Plan](../HYBRID-PORT-PLAN.md). Windows first. Owner controls
 all gameplay; no GUI automation, synthetic inputs or scene navigation.
 

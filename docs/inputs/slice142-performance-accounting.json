@@ -1,0 +1,126 @@
+{
+  "classification": "Confirmed OpenCode instrumentation defects and standalone controlled-clock accounting; no new game performance measurement or playable probe integration",
+  "parent_commit": "432252a876722ae7415a95081756fc6e40bf41a2",
+  "implementation_branch": "codex/perf-accounting-142",
+  "integration_track": "codex/hybrid-no-jit-port-plan-141",
+  "opencode_source_commit": "dd666464b4bb40e111b8d43adb8099a634a0d9e1",
+  "opencode_executable": {
+    "path": "private/slice115-perf-investigation/subsystem-attribution/build/gt4vulkan.exe",
+    "size_bytes": 54469632,
+    "sha256": "69eb3cc98249eb125a9e6ae8f1942442c8f4696ff8944b1da9c128d3f923a726"
+  },
+  "opencode_test_receipt": {
+    "path": "private/slice115-perf-investigation/subsystem-attribution/build/Testing/Temporary/LastTest.log",
+    "ctest_passed": 4,
+    "ctest_total": 4,
+    "python_tests_passed": 34,
+    "python_skipped": 0,
+    "manifest_ctest_passed": 3,
+    "manifest_ctest_total": 3,
+    "manifest_python_passed": 32,
+    "manifest_python_total": 32,
+    "receipt_time": "2026-10-13 05:55 America/Sao_Paulo"
+  },
+  "opencode_reviewed_source_sha256": {
+    "scripts/prepare_perf_runtime.py": "82f3d6f7a503a277c8a2bd74fc6dce256e27f3ae84e11c95620b9ace07aa632a",
+    "native/native_vulkan.cpp": "3a61ef48100175c8203ce758e44829a324177c18a13d63e13cb826649ac4805f",
+    "native/perf_probe.hpp": "bb81207ed14c5103c15c778b8251f2b14c26727defeb23a6d9b0e92c09b2de27",
+    "native/host_io.cpp": "2e03df24aec2845fbfc2e3ce296adfde91ee0dd6c2139bce0fdd57575f8c331a",
+    "native/perf_probe_fixture.cpp": "b1963fea4ae55d00401125f31a3d673abb90b75651e5e5e012ed4a25faea212f",
+    "native/window.cpp": "9219158bf67a4e5650315e32d0a75f83610be48491ecbeecddf4936f1a37be3d"
+  },
+  "retained_first_session_log": {
+    "path": "private/manual-play/session-20261013-043825-535039/probe.log",
+    "size_bytes": 4620165,
+    "sha256": "e6da7243906fc5771ee02ded577a7b6be2f5a559e9f773ff4188c8476411899c",
+    "periodic_report_blocks": 6081,
+    "manual_report_blocks": 0
+  },
+  "reported_494_dataset_selection_reproduced": false,
+  "independent_controls": {
+    "old_probe_fake_clock_characterizations_passed": 6,
+    "old_probe_regressions": [
+      "Disabled scope still makes2QPC calls",
+      "Disabled-started scope charged afterenable",
+      "Disabled gap retained:1000020us",
+      "Pre-cut scope time leaks into next interval",
+      "NestedEE30us includesIOP7us; not additive",
+      "Presentation frame bytes labeled upload bytes"
+    ],
+    "core_categories": 14,
+    "core_scope_capacity": 64,
+    "core_controls": [
+      "NestedEE/VIF/VU andIOP/host/waits",
+      "Exclusivepartition closure",
+      "Pending scope checkpoint/restart",
+      "Disabled and re-enable with active scope",
+      "Direct and interleaved inclusive recursion unions",
+      "LIFO/backward-clock/category/capacity faults",
+      "Largeuint64 timestamps"
+    ],
+    "ctest_passed": 8,
+    "ctest_total": 8,
+    "ctest_seconds": 14.58,
+    "python_passed": 164,
+    "python_skipped": 0,
+    "post_fixture_hardening_targeted_ctest_passed": 1,
+    "native_build_warnings": 0,
+    "final_old_probe_control_compile_warnings": 0
+  },
+  "public_source_hash_method": "SHA256 of LF-normalized Git text; private hashes are exact bytes",
+  "public_source_sha256": {
+    "native/perf_accounting.hpp": "c1e905f869b6afaf47769c1500768d639bf812214d85a26a7851fa529fd0ca0f",
+    "native/perf_accounting_fixture.cpp": "e065cd1f1e84ab3563b1e3ffc217701d9418ec4861d47f0cfa1f784356dd5067"
+  },
+  "private_artifacts": {
+    "private/slice142-opencode-integration/build-controls.log": {
+      "size_bytes": 9889,
+      "sha256": "9af14f717fd8c338ec73ccdddabb9de1619136f33294dfdd06bf354f50f14040"
+    },
+    "private/slice142-opencode-integration/initial-ctest.log": {
+      "size_bytes": 428794,
+      "sha256": "4bb774fa4b1a174c273c023c27cd66679f875d9dfecc4e732efa6899530c4561"
+    },
+    "private/slice142-opencode-integration/regression.log": {
+      "size_bytes": 650,
+      "sha256": "67ee58901a2110f846b92b6ccee15a8ec7520faa878211e186d0b6707ab3a215"
+    },
+    "private/slice142-opencode-integration/old-probe-regression-final.log": {
+      "size_bytes": 1245,
+      "sha256": "8b99e06fa9053e7e83dfc1f1ec61d868f96e9c18a0230f7c3c93f8cccbfa5060"
+    },
+    "private/slice142-opencode-integration/luna-review/review.md": {
+      "size_bytes": 9881,
+      "sha256": "49a180f598efbab73377f7ba69c695d73c72c2bea69f5dc49dd692c52a977d39"
+    },
+    "private/slice142-opencode-integration/luna-review/metadata.json": {
+      "size_bytes": 2617,
+      "sha256": "8b08efa74a5a43a16f4008baae0a0a88d508dddc4f2d7a28c7409497d389d4f0"
+    },
+    "private/slice142-opencode-integration/luna-review/core-review.md": {
+      "size_bytes": 3775,
+      "sha256": "b10078398f8f8db69cafa3bb1c307a1408f96609f7a458bad095e4dbfbb38c0f"
+    },
+    "private/slice142-opencode-integration/luna-review/probe_regression.cpp": {
+      "size_bytes": 6306,
+      "sha256": "745614b625ae5aea9001069ed3df5b0fb2ab54e080495642aa20e2a49a5f3959"
+    }
+  },
+  "limitations": [
+    "Exclusive host wall time is not actual threadCPU time",
+    "Fence latency is not GPU timestamp execution time",
+    "Core has no clock adapter, environment or game hooks yet",
+    "Single host thread precondition; worker configurations unqualified",
+    "No corrected percentiles/counters/report formatting in the player yet",
+    "No performance or overhead gain measured",
+    "Existing shader/capture runtime profile only used for functional controls"
+  ],
+  "game_runtime_instrumentation_changed": false,
+  "new_playable_performance_candidate": false,
+  "game_launched": false,
+  "performance_probes_run": false,
+  "owner_card_touched": false,
+  "opencode_checkout_changed": false,
+  "private_game_data_published": false,
+  "next_boundary": "Qualify clock/frame/counter adapters, strict frozen-donor derivation and exclusive/wait hooks; preservekeyboardfix before owner-runF7/F8 candidate"
+}
