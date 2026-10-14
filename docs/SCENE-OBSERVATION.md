@@ -365,3 +365,28 @@ are retained. **High confidence:** this addresses the menu's doubled direction
 mechanism. **Unknown:** owner confirmation and digital D-pad steering in races;
 keyboard analog steering is no longer synthesized. Physical XInput remains untested.
 See [slice136 evidence](inputs/slice136-keyboard-input.json).
+
+## First owner live capture (slice139)
+
+**Confirmed:** bounded structural review of session20261014-030636-705690's
+JSON finds256 records,180767 bytes, one epoch3/incarnation1/opaque owner3, sequence
+values1..256,30 distinct original argument0 addresses and all raw before/after
+sample validity masks0x3f. Started/completed257, dropped1, all rejection/ambiguity/
+abort/incomplete counters zero. The next completion after256 fills the cap, stops
+observation and triggers host export; no manual stop is required. These records
+are shape-call observations. A rendered scene may invoke the hook many times,
+so the cap may be reached quickly; timestamps and frame identifiers are absent.
+
+Luna's independent exact schema/hex/bounds/counter replay matches the parent.
+Original capture remains in the owner's session; a fresh private139 copy matches
+SHA2569e384b6b19bf2740f236621ad88184455503ebc501452065e400318e8e314fbb.
+Only metadata/hashes/counts are published; raw capture remains ignored.
+
+**Owner context:** supplied screenshot shows Ford Ka '01 selected in Arcade and
+the saved title. This is useful scene context, but the record schema has no car
+name/model identifier. Owner3 is a guest-thread key, not car ID. Distinct addresses
+are not30 identified car parts. Sequence order describes this capture; suspended/
+recursive observations do not generally require globally ordered completion.
+Real asset/shape crosswalk, channel/geometry/submission ownership and capture
+duration remain Unknown. The agent did not navigate, send input or measure FPS.
+See [slice139 evidence](inputs/slice139-live-capture.json).

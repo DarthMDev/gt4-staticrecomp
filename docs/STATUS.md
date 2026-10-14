@@ -1,11 +1,22 @@
 # Current Status
 
-2026-10-14 — Slice 138, owner-requested fresh capture retry open.
+2026-10-14 — Slice 139, owner live capture structurally verified.
 Playable base remains slice 114. Implementation branch:
-`codex/gt4-owner-capture-retry-138`, based on commit dcb7e32.
+`codex/gt4-live-capture-check-139`, based on commit 4d24646.
 Slice 118 candidates remain separate and owner gameplay qualification is pending.
 
 ## Authorized P0/P1 Progress
+
+- **Confirmed (slice 139):** owner capture exports valid schema1,180767 bytes,
+  256 completed records, all before/after validity masks0x3f. Started/completed257,
+  dropped1 reconcile with automatic record-cap stop; no orphan/abort/rejected/
+  ambiguous/incomplete sample counters. Independent bounded JSON review matches.
+- **Owner context:** screenshot shows Ford Ka '01 in Arcade selection and
+  `capture saved`. **Unknown:** which of30 distinct raw shape arguments belong
+  to that car, geometry and submission ownership. No timestamps/frame IDs exist;
+  capture speed/duration is not measured. Original preserved and frozen private
+  copy hash-matched. Game remains owner-controlled. See
+  [capture verification](inputs/slice139-live-capture.json).
 
 - **Confirmed (slice 138):** owner reported capture began before the car appeared
   and explicitly requested close/reopen. Delivered normal close; exit0/session
