@@ -30,7 +30,8 @@ EE/runtime/port/shaders and all guest settings. Frame-only compiles subsystem
 scopes and host operation counter hooks out; common boundary CPU/wall clocks and
 guest progress counters remain. Native CTest7/7 each, separate full9/9 with
 Python173/173 zero skips. Object-symbol controls confirm no Probe references in
-five frame-only hot-path objects. Current143 owner session is preserved.
+five frame-only hot-path objects. Owner closed143 normally;145 detailed is now
+open in a fresh protected session. Matched owner intervals remain pending.
 Next: owner matched detailed/control/detailed intervals, then VU0-micro/VU1 timing
 separation and one content-identified offline AOT experiment. No speedup claim.
 See [pair protocol](PERFORMANCE-ATTRIBUTION.md#matched-overhead-pair-slice145)
