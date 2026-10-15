@@ -922,6 +922,28 @@ identical to slice167; scanout dumps 640x448, PSNR 26.6-50.7 dB against the dono
 Limits: the window path was exercised only on a hidden test window (fixture), never with the game; pacing is not
 measured; races, night, rally and showroom are owner checks.
 
+## paraLLEl-GS high-resolution window output (slice169, TASK-012)
+
+Slice169 = slice168 plus `GT4_PGS_HIRES` (paraLLEl-GS high-resolution scanout in the window and in scanout
+dumps). Only `gs.cpp` of the port differs from slice168. Details: PARALLEL-GS-PLAN.md section 11.
+
+Derive `private\slice169-parallel-port` with `prepare_external_vulkan.py ... --parallel-hooks`, copy the slice153
+shaders to `private\slice169-parallel-shaders`, and configure as slice168 with `GT4_PORT_DIR` and
+`GT4_SHADER_DIR` set to those directories and the build directory
+`C:\Antigravity\gt4-staticrecomp\private\slice169-parallel-build\build`. Pins:
+[slice169-parallel-runtime.json](inputs/slice169-parallel-runtime.json) and
+[slice169-parallel.json](inputs/slice169-parallel.json) (`--mode parallel`).
+
+Owner launch (from the worktree until TASK-012 is merged):
+
+    cd C:\Antigravity\gt4-wt-012
+    C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode parallel --force-480p --ssaa 4 --hires
+    (--ssaa 8 --hires, --ssaa 16 --hires; without --hires for super-sampling only; --renderer donor for A/B)
+
+Measured (executable 97,048,576 bytes, sha256 9ceb8cb7..., clang-cl 22.1.3): build 0 errors; CTest 25/25; Python
+290 run, OK, 12 skipped; donor 42 of 42 identical to slice157; menu scanout dumps 1280x447 at 4x and 16x with
+`GT4_PGS_HIRES=1`. No timing here is a measurement.
+
 ## Slice 160 (TASK-013): VU0 microcode AOT
 
 The 14 `VCALLMS` entries of the pinned VU0 image (docs/VU0-MICROCODE-MAP.md) run compiled. The

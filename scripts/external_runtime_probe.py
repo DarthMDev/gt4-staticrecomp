@@ -49,20 +49,25 @@ PERF_PROFILES = {
     # Current main (slice166): vu0-aot built from main after TASK-008/009/010/013; accepts --force-480p.
     # (slice165 baked a worktree junction shader path and does not start; kept as history only.)
     'main': ('slice166-main.json', 'private/slice166-main-build/build/gt4vulkan.exe'),
-    # TASK-012 candidate (slice168): the main feature set with the paraLLEl-GS renderer and window output.
-    # GT4_RENDERER is set by the launcher (--renderer parallel by default, donor for A/B in the same binary).
-    'parallel': ('slice168-parallel.json', 'private/slice168-parallel-build/build/gt4vulkan.exe'),
+    # TASK-012 candidate (slice169): the main feature set with the paraLLEl-GS renderer, window output and
+    # optional high-resolution scanout. GT4_RENDERER is set by the launcher (--renderer parallel by default,
+    # donor for A/B in the same binary). slice168-parallel.json (first window build) is kept as history.
+    'parallel': ('slice169-parallel.json', 'private/slice169-parallel-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
-                     'slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json')
+                     'slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json',
+                     'slice169-parallel.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
-VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json')
-# Manifests whose binaries contain both renderers (slice168): GT4_RENDERER selects one per run.
-RENDERER_MANIFESTS = ('slice168-parallel.json',)
+VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json', 'slice169-parallel.json')
+# Manifests whose binaries contain both renderers (slice168+): GT4_RENDERER selects one per run.
+RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json')
+# Manifests whose binaries accept GT4_PGS_HIRES (paraLLEl-GS high-resolution scanout, slice169).
+HIGH_RESOLUTION_MANIFESTS = ('slice169-parallel.json',)
+HIGH_RESOLUTION_FACTORS = (4, 8, 16)
 RENDERERS = ('parallel', 'donor')
 # paraLLEl-GS super-sampling factors accepted by the binary (GT4_PGS_SSAA); 1 is the default.
 SUPER_SAMPLING_FACTORS = (1, 2, 4, 8, 16)
@@ -211,7 +216,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              renderer=None, super_sampling=1, artifact_workspace=None):
+              renderer=None, super_sampling=1, artifact_workspace=None, high_resolution=False):
     workspace = workspace.resolve()
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
@@ -279,6 +284,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('--renderer needs the parallel manifest and one of: ' + ', '.join(RENDERERS))
     if super_sampling not in SUPER_SAMPLING_FACTORS or (super_sampling != 1 and renderer != 'parallel'):
         raise ValueError('--ssaa takes 1, 2, 4, 8 or 16 and needs the parallel renderer')
+    is_high_resolution_manifest = runtime_manifest in {
+        (runtime_workspace / 'docs/inputs' / name).resolve() for name in HIGH_RESOLUTION_MANIFESTS}
+    if high_resolution and (not is_high_resolution_manifest or super_sampling not in HIGH_RESOLUTION_FACTORS):
+        raise ValueError('--hires needs the slice169 parallel manifest and --ssaa 4, 8 or 16')
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
         dependency_path = (artifact_workspace / dependency['path']).resolve()
@@ -401,6 +410,9 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         if super_sampling != 1:
             environment['GT4_PGS_SSAA'] = str(super_sampling)
             renderer_environment['GT4_PGS_SSAA'] = str(super_sampling)
+        if high_resolution:
+            environment['GT4_PGS_HIRES'] = '1'
+            renderer_environment['GT4_PGS_HIRES'] = '1'
         result['renderer_environment'] = renderer_environment
     with log_path.open('wb') as output:
         try:

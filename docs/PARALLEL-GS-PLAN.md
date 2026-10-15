@@ -576,3 +576,57 @@ Upstream has GitHub issues disabled and accepts no external contributions; sendi
    ring allows two presents in flight. Measure F8 with both renderers before any claim.
 3. Deinterlacing options, high-resolution scanout and SSAA are not qualified.
 4. Save states refuse in parallel mode.
+
+## 11. Progress (slice 169, branch task/012-parallel-gs): high-resolution window output
+
+Owner session 2026-10-15 10:35 (`--mode parallel`, slice168, 1x): night race a steady 60 FPS after a short dip to
+about 50 at race start, replay 60 throughout (owner report). Build
+`C:\Antigravity\gt4-staticrecomp\private\slice169-parallel-build\build` (fresh, main-checkout paths only; the
+only baked path is `private/slice169-parallel-shaders`). The slice number 169 is shared with another session's
+`slice169-mtvu-*` directories; the names do not overlap.
+
+**Race-start dip: first-use pipeline compiles (Confirmed from the owner log).** The 10:35 session log has 11
+"Stalled compile ... mode: sync" lines; four of them follow the first `SetGsCrt interlace 0 mode 0x50` (race
+start at 480p) and add up to about 470 ms (401, 15, 34 and 20 ms); later race starts in the same session show
+none. paraLLEl-GS pre-compiles only the ubershader variants, asynchronously at start-up
+(`GSRenderer::kick_compilation_tasks`; `PGS_SKIP_COMPILATION_TASKS=1` turns it off); other compute and graphics
+pipelines compile on first use, synchronously. Granite has a `VkPipelineCache` API
+(`Device::init_pipeline_cache(data, size)`, `get_pipeline_cache_data`), but its file persistence needs Granite
+system handles, which the standalone build does not create, so nothing is persisted between sessions. Open item:
+load a pipeline cache file from `private/` before `GSInterface::init` and save it at exit or after new compiles
+(Hypothesis: this removes the dip from the second session on; the AMD driver's own shader cache may already
+shorten it). Not implemented in this slice.
+
+**High-resolution scanout (`GT4_PGS_HIRES=1`, launcher `--hires`, needs `--ssaa 4|8|16`).** The window and the
+headless scanout dumps request paraLLEl-GS `high_resolution_scanout`. Findings:
+- Confirmed (fixture, 4x/8x/16x): 480p progressive (SetGsCrt 0x50, DISPLAY MAGH=1 DW=1279) scans out at
+  1280x896; 480i frame mode (FFMD=1, GT4 menus, DISPLAY DH=447) at 1280x447. The 1x scanout stays 640x448.
+- 1280x447 is paraLLEl-GS's field-aware rendering by design: in frame mode both output fields are built from the
+  super samples of the one 224-line field buffer (448 lines of full-frame detail), and the last line is dropped
+  "to avoid a one line flicker" (`gs_renderer.cpp`). Horizontal resolution doubles; vertical becomes full-frame.
+  The window keeps the 448-line scale for such an image (`high_resolution_target`: 539 of 540 rows in a 960x540
+  client, last line black), so 480i and 480p pictures have the same geometry.
+- An earlier fixture result of 640x896 in 480p came from reusing the NTSC DISPLAY (MAGH=3, DW=2559) with the
+  component clock; with the standard 480p DISPLAY the width doubles. GT4's own 480p DISPLAY values are not logged
+  yet (Unknown); the owner's window shows whether they match.
+- Blit filter (`present_filter`): the 1x path keeps nearest (donor behaviour); a high-resolution image uses
+  nearest only for an exact integer upscale and linear otherwise (downscale into a small window, or non-integer).
+- Confirmed (headless, `GT4_PGS_SSAA=4` and `16`, `GT4_PGS_HIRES=1`, scanout dumps): menus dump at 1280x447;
+  halved horizontally they match slice157 at PSNR 26.4 to 47.4 dB (edge offsets from the bob, as in section 10);
+  4x and 16x give the same menu pixels (GT4 draws its menus with texture blits, which carry no extra samples);
+  consecutive VBlanks at 4x are identical (frames 990-1000).
+- Fixture: 57 checks (high-resolution sizes for 4x/8x/16x in both modes, high-resolution presents on the hidden
+  window, filter and target rules).
+
+**Launcher:** `--mode parallel` now points at `slice169-parallel.json` (`slice168-parallel.json` stays as
+history, unchanged). `--hires` is refused without `--ssaa 4|8|16`, with `--renderer donor` and outside the mode;
+the probe also refuses it before any output. `GT4_PGS_HIRES=1` is recorded in `result.json`
+(`renderer_environment`); inherited values are removed. The binary refuses `GT4_PGS_HIRES` other than 0/1, and 1
+with SSAA below 4.
+
+**Evidence:** donor 42 of 42 identical to slice157; parallel VRAM dumps identical to slice167; CTest 25/25; Python
+290 run, OK, 12 skipped; launcher dry run with real pins (process mocked) passes for `--ssaa 16 --hires` and
+`--renderer donor`.
+
+**Open issues after slice 169:** owner check of 4x/8x/16x with and without `--hires` in races (480p) and menus;
+pipeline cache (above); GT4 480p DISPLAY values; deinterlace options; save states in parallel mode.

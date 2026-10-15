@@ -19,9 +19,10 @@ import test_external_runtime_probe as probe_tests
 ROOT = Path(__file__).resolve().parents[2]
 # Builds live in the main checkout's private/ also when the tests run in a worktree.
 MAIN_CHECKOUT = Path('C:/Antigravity/gt4-staticrecomp')
-PARALLEL_RUNTIME = 'private/slice168-parallel-build/build/gt4vulkan.exe'
-PARALLEL_MANIFEST = 'slice168-parallel.json'
-PARALLEL_SOURCE = 'slice168-parallel-runtime.json'
+# Slice 169: the parallel mode points at the high-resolution build; slice168 pins stay as history.
+PARALLEL_RUNTIME = 'private/slice169-parallel-build/build/gt4vulkan.exe'
+PARALLEL_MANIFEST = 'slice169-parallel.json'
+PARALLEL_SOURCE = 'slice169-parallel-runtime.json'
 
 
 class ParallelProfileTests(unittest.TestCase):
@@ -30,7 +31,8 @@ class ParallelProfileTests(unittest.TestCase):
         self.assertIn('parallel', performance.MODES)
         self.assertIn(PARALLEL_MANIFEST, probe.VU1_AOT_MANIFESTS)
         self.assertIn(PARALLEL_MANIFEST, probe.VU0_AOT_MANIFESTS)
-        self.assertEqual(probe.RENDERER_MANIFESTS, (PARALLEL_MANIFEST,))
+        self.assertEqual(probe.RENDERER_MANIFESTS, ('slice168-parallel.json', PARALLEL_MANIFEST))
+        self.assertEqual(probe.HIGH_RESOLUTION_MANIFESTS, (PARALLEL_MANIFEST,))
 
     def test_scrub_removes_inherited_renderer_choices(self):
         environment = {'GT4_RENDERER': 'donor', 'GT4_PGS_SSAA': '16', 'GT4_PGS_CAPTURE': 'x', 'PATH': '/bin'}
@@ -69,6 +71,26 @@ class ParallelWrapperTests(unittest.TestCase):
             self.assertEqual(code, 0)
             play.assert_called_once_with(root, root / 'docs/inputs' / PARALLEL_MANIFEST, performance=True,
                                          super_sampling=4)
+
+    def test_high_resolution_is_forwarded_with_4x_8x_16x(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for factor in (4, 8, 16):
+                code, play = self.run_wrapper(['--mode', 'parallel', '--ssaa', str(factor), '--hires'], root)
+                self.assertEqual(code, 0)
+                play.assert_called_once_with(root, root / 'docs/inputs' / PARALLEL_MANIFEST, performance=True,
+                                             super_sampling=factor, high_resolution=True)
+
+    def test_high_resolution_is_refused_without_enough_super_sampling(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for arguments in (['--mode', 'parallel', '--hires'], ['--mode', 'parallel', '--ssaa', '2', '--hires'],
+                              ['--mode', 'parallel', '--renderer', 'donor', '--hires'],
+                              ['--mode', 'main', '--hires']):
+                with self.subTest(arguments=arguments):
+                    code, play = self.run_wrapper(arguments, root)
+                    self.assertEqual(code, 1)
+                    play.assert_not_called()
 
     def test_renderer_options_are_refused_before_play(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -120,12 +142,18 @@ class ParallelProbeTests(unittest.TestCase):
             result, seen = self.launch(Path(folder), super_sampling=8)
             self.assertEqual(seen['environment']['GT4_PGS_SSAA'], '8')
             self.assertEqual(result['renderer_environment'], {'GT4_RENDERER': 'parallel', 'GT4_PGS_SSAA': '8'})
+        with tempfile.TemporaryDirectory() as folder:
+            result, seen = self.launch(Path(folder), super_sampling=16, high_resolution=True)
+            self.assertEqual(seen['environment']['GT4_PGS_HIRES'], '1')
+            self.assertEqual(result['renderer_environment'],
+                             {'GT4_RENDERER': 'parallel', 'GT4_PGS_SSAA': '16', 'GT4_PGS_HIRES': '1'})
 
     def test_invalid_renderer_choices_are_refused_before_output(self):
-        for options in ({'renderer': 'software'}, {'renderer': 'donor', 'super_sampling': 4}, {'super_sampling': 3}):
+        for options in ({'renderer': 'software'}, {'renderer': 'donor', 'super_sampling': 4}, {'super_sampling': 3},
+                        {'high_resolution': True}, {'super_sampling': 2, 'high_resolution': True}):
             with self.subTest(options=options), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
-                with self.assertRaisesRegex(ValueError, 'renderer|ssaa'):
+                with self.assertRaisesRegex(ValueError, 'renderer|ssaa|hires'):
                     self.launch(root, **options)
                 self.assertFalse((root / 'private/run').exists())
 
@@ -170,7 +198,7 @@ class ParallelManifestTests(unittest.TestCase):
         self.assertEqual(manifest['vu_scope_profile'], 'unit_split_run_fast_only')
         self.assertEqual(len(manifest['runtime_dependencies']), 9)
         for dependency in manifest['runtime_dependencies']:
-            self.assertTrue(dependency['path'].startswith('private/slice168-parallel-shaders/'))
+            self.assertTrue(dependency['path'].startswith('private/slice169-parallel-shaders/'))
 
     def test_runtime_pins_match_files_when_the_build_exists(self):
         manifest = json.loads((ROOT / 'docs/inputs' / PARALLEL_MANIFEST).read_text(encoding='utf-8'))
@@ -185,7 +213,7 @@ class ParallelManifestTests(unittest.TestCase):
 
     def test_runtime_source_manifest_pins_the_parallel_port(self):
         manifest = json.loads((ROOT / 'docs/inputs' / PARALLEL_SOURCE).read_text(encoding='utf-8'))
-        self.assertEqual(manifest['slice'], 168)
+        self.assertEqual(manifest['slice'], 169)
         self.assertEqual(set(manifest['inputs']['PORT']),
                          {'gif.cpp', 'gpu.cpp', 'gpu.hpp', 'gs.cpp', 'hw.cpp', 'main.cpp'})
         self.assertEqual(len(manifest['inputs']['SHADERS']), 9)

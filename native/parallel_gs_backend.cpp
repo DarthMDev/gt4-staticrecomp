@@ -418,7 +418,7 @@ void Backend::resize_window(std::uint32_t width, std::uint32_t height) {
         impl->platform.request_resize(width, height);
 }
 
-bool Backend::present(std::uint32_t phase) {
+bool Backend::present(std::uint32_t phase, bool high_resolution) {
     if (!impl->wsi)
         return false;
     // A minimised window has no drawable surface: keep the frame contexts moving, present nothing.
@@ -443,7 +443,7 @@ bool Backend::present(std::uint32_t phase) {
     info.force_progressive = true;
     info.anti_blur = true;
     info.adapt_to_internal_horizontal_resolution = true;
-    info.high_resolution_scanout = false;
+    info.high_resolution_scanout = high_resolution;
     impl->gs.flush();
     const auto scanout = impl->gs.vsync(info);
 
@@ -461,10 +461,13 @@ bool Backend::present(std::uint32_t phase) {
     if (scanout.image) {
         cmd->barrier(transfer, VK_ACCESS_2_TRANSFER_WRITE_BIT, transfer, VK_ACCESS_2_TRANSFER_WRITE_BIT);
         const PresentationRect rect = widescreen_rect(swapchain.get_width(), swapchain.get_height());
-        cmd->blit_image(swapchain, *scanout.image, {int(rect.left), int(rect.top), 0},
-                        {int(rect.width), int(rect.height), 1}, {0, 0, 0},
+        const std::uint32_t image_height = scanout.image->get_height();
+        const PresentationRect target = high_resolution_target(rect, image_height, high_resolution);
+        const PresentFilter filter = present_filter(high_resolution, scanout.image->get_width(), image_height, rect);
+        cmd->blit_image(swapchain, *scanout.image, {int(target.left), int(target.top), 0},
+                        {int(target.width), int(target.height), 1}, {0, 0, 0},
                         {int(scanout.image->get_width()), int(scanout.image->get_height()), 1}, 0, 0, 0, 0, 1,
-                        VK_FILTER_NEAREST);
+                        filter == PresentFilter::linear ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
     }
     cmd->image_barrier(swapchain, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, transfer,
                        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_NONE, 0);

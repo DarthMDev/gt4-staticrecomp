@@ -11,7 +11,7 @@ from external_runtime_probe import (RENDERER_MANIFESTS, ROOT, VU1_CORPUS_NAME, r
 
 
 def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, renderer=None, super_sampling=1):
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, renderer=None, super_sampling=1, high_resolution=False):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -66,7 +66,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
             if renderer is None and manifest.name in RENDERER_MANIFESTS:
                 renderer = 'parallel'  # the probe applies the same default
             if renderer == 'parallel':
-                print(f'Renderer: paraLLEl-GS (GT4_RENDERER=parallel, {super_sampling}x super-sampling).', flush=True)
+                print(f'Renderer: paraLLEl-GS (GT4_RENDERER=parallel, {super_sampling}x super-sampling, '
+                      f'high-resolution scanout {"on" if high_resolution else "off"}).', flush=True)
             elif renderer == 'donor':
                 print('Renderer: donor GS renderer (GT4_RENDERER=donor), same binary, for A/B.', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
@@ -75,7 +76,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                                runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
                                vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
                                force_480p=force_480p, vu0_verify=vu0_verify, renderer=renderer,
-                               super_sampling=super_sampling, artifact_workspace=workspace)
+                               super_sampling=super_sampling, artifact_workspace=workspace,
+                               high_resolution=high_resolution)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:

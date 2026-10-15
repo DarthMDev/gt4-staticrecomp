@@ -226,6 +226,18 @@ void set_display_ntsc_interlaced_frame(Backend &backend, std::uint32_t field) {
     backend.write_privileged(kDisplay1, display); // DX=636 DY=50 MAGH=3 DW=2559 DH=447
 }
 
+// A 480p display (SetGsCrt interlace 0, mode 0x50, as GT4 requests for races): progressive NTSC timing
+// with the component clock (2 clocks per pixel), so DISPLAY uses MAGH=1, DW=1279, DX=318, DY=50 for a
+// 640x448 picture. GT4's own 480p DISPLAY values are not logged yet (Unknown); this is the standard setup.
+void set_display_480p_progressive(Backend &backend) {
+    const auto video = gt4::gs::map_set_gs_crt({0, 0x50, 1});
+    backend.write_privileged(kSmode1, video.registers.smode1);
+    backend.write_privileged(kSmode2, video.registers.smode2);
+    const std::uint64_t display = 318 | (50ull << 12) | (1ull << 23) | (std::uint64_t(kFrameWidth * 2 - 1) << 32) |
+                                  (std::uint64_t(kFrameHeight - 1) << 44);
+    backend.write_privileged(kDisplay1, display);
+}
+
 void expect(bool condition, const char *what) {
     std::printf("[%s] %s\n", condition ? "PASS" : "FAIL", what);
     if (!condition)
@@ -252,6 +264,18 @@ void check_window_presentation(Backend &backend) {
     expect(tall.left == 0 && tall.top == 60 && tall.width == 1920 && tall.height == 1080, "16:9 rect letterboxes 1920x1200");
     expect(wide.left == 320 && wide.top == 0 && wide.width == 1920 && wide.height == 1080, "16:9 rect pillarboxes 2560x1080");
     expect(widescreen_rect(0, 0).width == 0, "zero-sized client gives an empty rect");
+    using gt4::parallel_gs::present_filter;
+    using gt4::parallel_gs::PresentFilter;
+    expect(present_filter(false, 640, 448, full) == PresentFilter::nearest, "1x path keeps nearest (donor behaviour)");
+    expect(present_filter(true, 1280, 447, full) == PresentFilter::linear, "high-resolution downscale uses linear");
+    expect(present_filter(true, 960, 540, full) == PresentFilter::nearest, "exact 1:1 high-resolution uses nearest");
+    expect(present_filter(true, 960, 540, tall) == PresentFilter::nearest, "exact 2x upscale uses nearest");
+    expect(present_filter(true, 1280, 896, tall) == PresentFilter::linear, "non-integer upscale uses linear");
+    using gt4::parallel_gs::high_resolution_target;
+    expect(high_resolution_target(full, 447, true).height == 539 && high_resolution_target(full, 447, true).top == 0,
+           "447-line frame-mode image keeps the 448-line scale (539 of 540 rows)");
+    expect(high_resolution_target(full, 896, true).height == 540 && high_resolution_target(full, 447, false).height == 540,
+           "even heights and the 1x path fill the rectangle");
 
     WNDCLASSW window_class{};
     window_class.lpfnWndProc = DefWindowProcW;
@@ -290,6 +314,15 @@ void check_window_presentation(Backend &backend) {
         expect(!backend.present(1), "a zero-sized (minimised) client presents nothing");
         backend.resize_window(960, 540);
         expect(backend.present(1), "present resumes after the client is restored");
+        // High-resolution presentation (slice 169) in both GT4 display modes.
+        expect(backend.set_super_sampling(4), "4x super-sampling for the high-resolution presents");
+        backend.gif_transfer(3, gif.data(), gif.bytes());
+        bool high_resolution_presented = backend.present(0, true) && backend.present(1, true);
+        set_display_480p_progressive(backend);
+        high_resolution_presented = backend.present(0, true) && backend.present(1, true) && high_resolution_presented;
+        expect(high_resolution_presented, "high-resolution presents at 4x in 480i frame mode and 480p");
+        set_display_ntsc_interlaced_frame(backend, 1);
+        expect(backend.set_super_sampling(1), "back to 1x after the high-resolution presents");
     }
     backend.wait_idle();
     // The swapchain stays with the backend (never destroyed while the process runs, as in the game);
@@ -405,6 +438,35 @@ int main() {
     expect(frame_4x.valid && frame_4x.width == 2 * kFrameWidth && frame_4x.height == 2 * kFrameHeight,
            "4x SSAA high-resolution scanout is 1280x896");
     backend.next_frame();
+
+    // Slice 169: GT4's two display modes at 4x, 8x and 16x. Menus are 480i frame mode (FFMD=1, one
+    // 224-line field per VBlank, DISPLAY DH=447); races at 480p are progressive (448 lines). In frame
+    // mode paraLLEl-GS uses field-aware rendering: both output fields come from the super samples of
+    // the one field buffer, and it drops the last line to avoid a one-line flicker, hence 1280x447
+    // (upstream design, gs_renderer.cpp "Avoid a one line flicker due to field rendering").
+    for (const std::uint32_t factor : {4u, 8u, 16u}) {
+        expect(backend.set_super_sampling(factor), "super-sampling factor accepted");
+        gif.clear();
+        build_scene(gif, 0);
+        backend.gif_transfer(3, gif.data(), gif.bytes());
+        char what[128];
+        set_display_ntsc_interlaced_frame(backend, 1);
+        backend.flush();
+        const ScanoutImage frame_mode = backend.scanout(high_resolution);
+        std::snprintf(what, sizeof what, "%ux SSAA, 480i frame mode: high-resolution scanout is 1280x447 (got %ux%u)", factor,
+                      frame_mode.width, frame_mode.height);
+        expect(frame_mode.valid && frame_mode.width == 2 * kFrameWidth && frame_mode.height == 2 * 224 - 1, what);
+        const ScanoutImage frame_mode_1x = backend.scanout(request);
+        std::snprintf(what, sizeof what, "%ux SSAA, 480i frame mode: 1x scanout is still 640x448", factor);
+        expect(frame_mode_1x.valid && frame_mode_1x.width == kFrameWidth && frame_mode_1x.height == kFrameHeight, what);
+        set_display_480p_progressive(backend);
+        backend.flush();
+        const ScanoutImage progressive = backend.scanout(high_resolution);
+        std::snprintf(what, sizeof what, "%ux SSAA, 480p progressive: high-resolution scanout is 1280x896 (got %ux%u)", factor,
+                      progressive.width, progressive.height);
+        expect(progressive.valid && progressive.width == 2 * kFrameWidth && progressive.height == 2 * kFrameHeight, what);
+        backend.next_frame();
+    }
     backend.wait_idle();
 
     // Back to 1x and the GT4 frame-mode registers before the window checks.

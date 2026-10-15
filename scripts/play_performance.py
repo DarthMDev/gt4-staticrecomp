@@ -46,7 +46,9 @@ exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
 paraLLEl-GS candidate (--mode parallel, slice168, TASK-012): the main feature set (all VU1 and VU0 entries
 compiled, quick fixes) with the paraLLEl-GS renderer and window output. --renderer parallel (default) or
 --renderer donor runs the same binary with either renderer for A/B. --ssaa N (1, 2, 4, 8 or 16, default 1)
-sets paraLLEl-GS super-sampling (experimental). Accepts --force-480p, --vu0-verify N and the VU1 options.
+sets paraLLEl-GS super-sampling (experimental); --hires (with --ssaa 4, 8 or 16) presents paraLLEl-GS's
+high-resolution scanout (2x horizontal; 2x vertical in 480p, full-frame 448 lines from the 224-line fields in
+480i menus). Accepts --force-480p, --vu0-verify N and the VU1 options.
 The build lives in the assets checkout's private/ even when this launcher runs from a git worktree.
 """
 import argparse
@@ -74,6 +76,8 @@ def main():
                         help='parallel mode only: GS renderer of the same binary (default parallel)')
     parser.add_argument('--ssaa', type=int, default=1, metavar='N',
                         help='parallel mode with the parallel renderer: super-sampling 1, 2, 4, 8 or 16 (experimental)')
+    parser.add_argument('--hires', action='store_true',
+                        help='parallel mode: high-resolution scanout (needs --ssaa 4, 8 or 16)')
     args = parser.parse_args()
     try:
         if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel'):
@@ -84,6 +88,8 @@ def main():
             raise ValueError('--renderer requires --mode parallel')
         if args.ssaa != 1 and (args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (2, 4, 8, 16)):
             raise ValueError('--ssaa takes 1, 2, 4, 8 or 16 and requires --mode parallel with the parallel renderer')
+        if args.hires and (args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (4, 8, 16)):
+            raise ValueError('--hires requires --mode parallel with the parallel renderer and --ssaa 4, 8 or 16')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
@@ -109,6 +115,8 @@ def main():
             if args.mode == 'parallel':
                 if args.ssaa != 1:
                     options['super_sampling'] = args.ssaa
+                if args.hires:
+                    options['high_resolution'] = True
             play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

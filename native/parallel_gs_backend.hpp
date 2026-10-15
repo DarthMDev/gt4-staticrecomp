@@ -65,6 +65,34 @@ constexpr PresentationRect widescreen_rect(std::uint32_t width, std::uint32_t he
     return {(width - fitted_width) / 2, (height - fitted_height) / 2, fitted_width, fitted_height};
 }
 
+// Blit filter for the window: nearest for the default 1x path and for exact integer upscales of a
+// high-resolution image, linear for any other scale (downscale into a small window, or non-integer).
+enum class PresentFilter { nearest, linear };
+constexpr PresentFilter present_filter(bool high_resolution, std::uint32_t image_width, std::uint32_t image_height,
+                                       const PresentationRect &rect) {
+    if (!high_resolution || !image_width || !image_height)
+        return PresentFilter::nearest;
+    const bool integer_upscale = rect.width >= image_width && rect.height >= image_height &&
+                                 rect.width % image_width == 0 && rect.height % image_height == 0 &&
+                                 rect.width / image_width == rect.height / image_height;
+    return integer_upscale ? PresentFilter::nearest : PresentFilter::linear;
+}
+
+// Destination of the scanout inside the 16:9 rectangle. In 480i frame mode (FFMD=1) paraLLEl-GS's
+// field-aware high-resolution scanout drops the last line on purpose (2 x 224 - 1 = 447 lines, upstream
+// "avoid a one line flicker"). Stretching 447 lines over the full rectangle would scale the picture
+// 0.2 percent taller than the 448-line 1x and 480p images; instead the image keeps the 448-line scale
+// and the missing bottom line stays black. Even heights, and the 1x path, use the whole rectangle.
+constexpr PresentationRect high_resolution_target(const PresentationRect &rect, std::uint32_t image_height,
+                                                  bool high_resolution) {
+    if (!high_resolution || !image_height || (image_height & 1u) == 0)
+        return rect;
+    PresentationRect target = rect;
+    target.height = static_cast<std::uint32_t>((std::uint64_t(rect.height) * image_height + (image_height + 1) / 2) /
+                                               (image_height + 1));
+    return target;
+}
+
 struct ScanoutImage {
     // False when paraLLEl-GS produced no image, for example for SMODE1 = 0 ("Unknown video format").
     bool valid = false;
@@ -134,10 +162,14 @@ public:
     // Records the new client size; the swapchain is rebuilt before the next present.
     void resize_window(std::uint32_t width, std::uint32_t height);
     // One presentation per guest VBlank: acquires a swapchain image (this also advances the Granite
-    // frame context), builds the 1x scanout for `phase`, clears the image to black and blits the
-    // scanout into the 16:9 rectangle with nearest filtering, then presents. Returns false when
-    // nothing was presented (no window, zero-sized window, or no scanout image this frame).
-    bool present(std::uint32_t phase);
+    // frame context), builds the scanout for `phase`, clears the image to black and blits the scanout
+    // into the 16:9 rectangle, then presents. Returns false when nothing was presented (no window,
+    // zero-sized window, or no scanout image this frame).
+    // `high_resolution` requests paraLLEl-GS's high-resolution scanout (2x per axis from the super
+    // samples; needs 4x SSAA or more, otherwise paraLLEl-GS returns the 1x image). The 1x image is
+    // blitted with nearest filtering (as the donor presenter); a high-resolution image uses nearest
+    // only for an exact integer upscale and linear filtering otherwise (slice 169, present_filter).
+    bool present(std::uint32_t phase, bool high_resolution = false);
 
 private:
     struct Impl;

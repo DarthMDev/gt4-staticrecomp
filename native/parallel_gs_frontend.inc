@@ -44,6 +44,26 @@ std::uint32_t parallel_super_sampling() {
     std::exit(EXIT_FAILURE);
 }
 
+// GT4_PGS_HIRES=0|1 (default 0): paraLLEl-GS high-resolution scanout (2x per axis) in the window and in
+// scanout dumps. Needs GT4_PGS_SSAA=4, 8 or 16; any other combination or value stops the process.
+bool parallel_high_resolution() {
+    static const bool enabled = [] {
+        const char *value = std::getenv("GT4_PGS_HIRES");
+        if (!value || std::strcmp(value, "0") == 0)
+            return false;
+        if (std::strcmp(value, "1") != 0) {
+            std::fprintf(stderr, "[pgs] GT4_PGS_HIRES=\"%s\" is not 0 or 1; refusing to start\n", value);
+            std::exit(EXIT_FAILURE);
+        }
+        if (parallel_super_sampling() < 4) {
+            std::fprintf(stderr, "[pgs] GT4_PGS_HIRES=1 needs GT4_PGS_SSAA=4, 8 or 16; refusing to start\n");
+            std::exit(EXIT_FAILURE);
+        }
+        return true;
+    }();
+    return enabled;
+}
+
 // GT4_PGS_DUMP_SOURCE=vram|scanout (default vram). vram decodes the display buffer from the copied
 // VRAM with the donor decode (comparable with donor dumps); scanout dumps the paraLLEl-GS scanout
 // image, the same image the window shows (before the 16:9 blit). Other values stop the process.
@@ -101,8 +121,10 @@ ParallelFrontEnd &parallel() {
             std::fprintf(stderr, "[pgs] GT4_PGS_SSAA=%u refused by paraLLEl-GS\n", super_sampling);
             std::exit(EXIT_FAILURE);
         }
-        std::fprintf(stderr, "[pgs] GT4_RENDERER=parallel: paraLLEl-GS backend started (SSAA %ux), donor Vulkan renderer not created\n",
-                     super_sampling);
+        const bool high_resolution = parallel_high_resolution();
+        std::fprintf(stderr, "[pgs] GT4_RENDERER=parallel: paraLLEl-GS backend started (SSAA %ux, high-resolution scanout %s), "
+                             "donor Vulkan renderer not created\n",
+                     super_sampling, high_resolution ? "on" : "off");
         return created;
     }();
     return *front_end;
@@ -161,13 +183,14 @@ bool parallel_attach_window(std::uint64_t window, std::uint32_t width, std::uint
 
 void parallel_resize_window(std::uint32_t width, std::uint32_t height) { parallel().backend.resize_window(width, height); }
 
-bool parallel_present() { return parallel().backend.present(parallel_scanout_phase()); }
+bool parallel_present() { return parallel().backend.present(parallel_scanout_phase(), parallel_high_resolution()); }
 
 // Headless dump of the scanout image (GT4_PGS_DUMP_SOURCE=scanout). Pixels are RGBA8 with the red
 // channel in the low byte, as the donor decode returns them; alpha is forced opaque the same way.
 bool parallel_scanout_frame(std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {
     gt4::parallel_gs::ScanoutRequest request;
     request.phase = parallel_scanout_phase();
+    request.high_resolution = parallel_high_resolution();
     const gt4::parallel_gs::ScanoutImage image = parallel().backend.scanout(request);
     if (!image.valid)
         return false;
