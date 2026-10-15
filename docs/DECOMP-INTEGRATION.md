@@ -21,6 +21,17 @@ class already seen at 0x44EA58/0x44EAC8 (slice 117). Feeding the decomp's full
 function list to the translator as extra entries could close crash risks in
 modes nobody has played yet.
 
+Follow-up classification (2026-10-15, read-only scan of the ELF): of the 5,676
+functions without an entry, 3,223 are in decomp `runtime` (libraries/runtime
+support), 546 `race`, 507 `network`, 412 `ui`, 383 `engine`, 226 `adhoc`,
+160 `libstream`, 132 `gamedata` and the rest small groups; 5,603 are unnamed.
+Only 1 address appears as a 32-bit word anywhere in the ELF (no vtable
+evidence), 14 are built as addresses by `lui`+`addiu/ori` in code, and 343 are
+`jal` targets only from code that is itself unreached. **High confidence:** most
+are dead code linked into the executable (unused library and engine functions),
+so the crash risk is smaller than the count suggests. The 14 code-built
+addresses are the first candidates for extra entries.
+
 ## Level 1: names (cheap)
 
 - A read-only `ee_symbols` script builds a canonical name table (aliases and
