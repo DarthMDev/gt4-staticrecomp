@@ -192,7 +192,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
     runtime_workspace = Path(runtime_workspace or workspace).resolve()
-    runtime_private = runtime_workspace / 'private'
+    runtime_private = (runtime_workspace / 'private').resolve()
     if capture_shapes and run_directory.absolute() != run_directory.resolve():
         raise ValueError('Shape capture session must use an ordinary canonical private path')
     run_directory = run_directory.resolve()
