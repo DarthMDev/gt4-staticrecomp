@@ -265,3 +265,58 @@ Checks on this build: `native_pacing` (pure fixture), `native_audio_input` (incl
 run on the real device), CTest 18/18, Python 217 OK with `GT4_NATIVE_BUILD` set to the slice153
 build, and 42 identical headless frame dumps against the slice152 build. Owner gameplay
 measurement is pending. Diagnostics print in F8 and the periodic report when `GT4_PERF=1`.
+
+Slice154 adds per-program VU1 flag elision on the slice153 pacing build (O1 follow-up). Fresh
+pins only: capsule `private/slice154-vu1-flags-runtime` (derived with
+`scripts/prepare_perf_runtime.py --vu1-aot`, overlay sha256 in its `runtime.json`), table
+`private/slice154-vu1-flags-gen` (generated from `private/slice151-vu1-corpus-union`, 100
+programs, 0 refused), build `private/slice154-vu1-flags-build/build`. The adapter and the nine
+shaders are the slice153 directories, unchanged. Pins: [slice154-vu1-flags-runtime.json](inputs/slice154-vu1-flags-runtime.json),
+[slice154-vu1-flags.json](inputs/slice154-vu1-flags.json). Configure with the slice153 cache values,
+`GT4_PERF_RUNTIME_SOURCE` and `GT4_VU1_GENERATED_DIR` pointing at the slice154 directories, and
+`GT4_VU_CORPUS_DIR` at the corpus. Regenerate the table with
+`gt4_vu_recomp <corpus> <fresh_dir>`; `--no-flag-elision` (and `--namespace NAME`) emit the donor
+behaviour for comparison. Owner command, from the repository root:
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode vu1-flags
+
+`--vu1-verify N` and `--vu1-interpret-only` apply as in the vu1-aot and pacing modes. The
+pacing environment variables (`GT4_PACING`, `GT4_PRESENT_MODE`) are unchanged.
+
+What changes. The emitter computes MAC only where a later reader or the program exit can see
+it. A MAC reader sees a write only at distance 4 or more with no later write before it, and
+clip readers at distance 3 or more (FlagPipe windows). The exit state stays exact: `r.mac` and
+`r.clip` are written back at every exit. VU1 status is not computed when the image has no
+status instruction (0x14-0x17 and FSSET 0x15). CFC2 reads VU0 registers only, so the EE cannot
+observe VU1 status; the corpus image has no such instruction. The clip word is a chain through
+every CLIP instruction (`clip_value` reads the previous clip), so clip values are always
+computed and only the FlagPipe pushes are elided. Programs with an end bit in a branch delay
+slot are refused: the donor runs the target once more and then ends.
+
+Evidence on this build (Confirmed unless marked):
+
+- Sites, 100 programs of the corpus: 6,024 flag-setting writes. Before: 6,024 MAC computations
+  with status and 6,024 FlagPipe pushes. After: 642 MAC computations (170 pushed for readers,
+  472 for the exit state only) and no status. 607 CLIP writes compute their chain value; 403
+  are pushed (was 607). Manifests: `private/slice154-vu1-flags-gen/manifest.json` (mac_mode,
+  mac_writers, mac_sites, mac_reader_sites, clip_*).
+- Micro-benchmark `gt4_vu1_flag_bench` (CTest does not run it): 200 seeded states (100
+  programs, 2 seeds, 4,000-instruction budget). Both tables leave the same status, resume PC,
+  registers and VU1 memory (200 compared, 0 failures). Timed: the 68 states that exhaust the
+  budget inside generated code (the other 132 leave through an interpreter hand-off and are
+  not timed). Two runs: 9,972 and 10,044 ns per call before, 4,681 and 4,674 after; ratio 0.47.
+  Random states, not recorded gameplay: an estimate of the direction, not of the showroom time.
+- CTest: see the journal entry. Corpus differential 208 checks, 0 failures (100 programs). Fixture
+  differential 907 checks, 0 failures, with 40 budget exits resumed in the interpreter.
+- Headless smoke: 4,200 frames, the slice153 schedule (12 presses), no window: 42 frame dumps
+  identical to [slice153-smoke](../private/slice153-smoke/headless-153.frames.sha256) (run
+  `private/slice154-smoke/final-headless`).
+- Headless verify: `GT4_VU1_VERIFY=1` on the same schedule, every VU1 call compared with the
+  interpreter: see the journal entry for the counters and mismatch count. Frames identical to
+  the smoke run.
+
+Limits. Owner gameplay is not measured; the O1 target (showroom VU1 time) is not claimed. The
+known limit of the AOT path stays: an interpreter hand-off or a budget resume does not carry
+the FlagPipe history, so a MAC or clip read within four instructions after the hand-off can
+differ from an uninterrupted run. Random seeds reach the end of a VU1 program rarely, so the
+benchmark uses the budget as the workload. Build outputs and card seeds are not committed.

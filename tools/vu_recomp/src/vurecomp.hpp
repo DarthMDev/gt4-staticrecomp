@@ -1,6 +1,8 @@
 // Hardened VU1 offline emitter derived from the MIT ps2-web-recomp donor (MIT-LICENSE.txt; attribution in native/THIRD_PARTY.md).
 #pragma once
 
+#include "program_identity.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
@@ -10,6 +12,14 @@
 namespace gt4::vurecomp {
 
 constexpr std::size_t kImageBytes = 16384;
+
+// Flag elision (default on). When on, a program computes MAC and clip only where a
+// later reader or the program exit observes them, and VU1 status is not kept when
+// no image instruction reads it (see FunctionGenerator in vurecomp.cpp). Off emits
+// the donor behaviour for comparison builds. The setting is also part of the
+// generated manifest.
+void set_flag_elision(bool enabled);
+bool flag_elision();
 constexpr std::uint32_t kCodeMask = 16383u;
 
 // Mirrors the donor interpreter's scan_flags over the whole image: when any
@@ -41,6 +51,15 @@ struct ProgramRecord {
     std::string source_sha256;       // SHA-256 of the 16 KiB input file
     std::string digest_sha256;       // identity: flag bit, entry, reachable instruction words
     bool image_flags_used = false;   // image-wide flag reader present (see image_flags_used)
+    bool image_status_used = false;  // image-wide status instruction present (see image_status_used)
+    std::string mac_mode;            // "none", "full" or "observed" (see MacMode)
+    std::size_t interpreter_calls = 0; // emitted hand-offs to ps2::vu::interpret
+    std::size_t mac_writers = 0;     // flag-setting writes in the reachable code
+    std::size_t mac_sites = 0;       // writes that still compute a MAC value
+    std::size_t mac_reader_sites = 0; // writes pushed to the FlagPipe for a MAC reader
+    std::size_t clip_writers = 0;    // clip writes in the reachable code
+    std::size_t clip_sites = 0;      // clip writes that still compute a value
+    std::size_t clip_reader_sites = 0; // clip writes pushed to the FlagPipe for a clip reader
     std::vector<std::uint32_t> reachable;
     std::vector<std::uint8_t> image; // 16 KiB code image used for generation
     std::size_t fallback_sites = 0;  // lower encodings that exit to the interpreter
@@ -59,7 +78,7 @@ bool parse_input_file_name(const std::string &name, std::uint64_t &key, std::uin
 bool read_input_image(const std::filesystem::path &path, std::vector<std::uint8_t> &image, std::string &error);
 
 // Identity over entry and the reachable instruction words, as lowercase SHA-256 hex.
-std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used);
+std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used, bool status_used);
 
 // Adds a candidate. An equal key with an equal digest is a duplicate and is
 // skipped. An equal key with a different digest is a collision and is refused.
@@ -78,7 +97,7 @@ bool prepare_fresh_output_directory(const std::filesystem::path &directory, std:
 std::string emit_program_function(ProgramRecord &record);
 
 // Emits all records into one translation unit with a table of emitted programs.
-std::string emit_generated_source(std::vector<ProgramRecord> &records);
+std::string emit_generated_source(std::vector<ProgramRecord> &records, const std::string &name_space = "gt4::vugen::generated");
 
 // Writes the JSON manifest describing every record.
 std::string manifest_json(const std::vector<ProgramRecord> &records, const std::string &generated_file_name,

@@ -72,7 +72,7 @@ else()
     file(WRITE "${VU_CORPUS_SOURCE}" "#include \"vu_recomp_contract.hpp\"
 
 namespace gt4::vugen::generated {
-extern const ProgramEntry kPrograms[] = {{0u, 0u, false, \"\", nullptr}};
+extern const ProgramEntry kPrograms[] = {{0u, 0u, false, false, \"\", nullptr}};
 extern const std::uint32_t kProgramCount = 0u;
 }
 ")
@@ -86,6 +86,24 @@ add_executable(gt4_vu_corpus_differential "${VU_RECOMP_TESTS}/corpus_differentia
 target_include_directories(gt4_vu_corpus_differential PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
 target_link_libraries(gt4_vu_corpus_differential PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
 target_compile_options(gt4_vu_corpus_differential PRIVATE /W4 -Wno-unused-label)
+
+# Flag-elision benchmark: the corpus table with flag elision next to the same corpus
+# emitted with the donor flag behaviour (namespace gt4::vugen::baseline). Corpus only.
+if(GT4_VU_CORPUS_DIR)
+    set(VU_BASELINE_OUTPUT_DIR "${VU_GENERATED_ROOT}/corpus_baseline")
+    set(VU_BASELINE_SOURCE "${VU_BASELINE_OUTPUT_DIR}/vu1_generated.cpp")
+    add_custom_command(
+        OUTPUT "${VU_BASELINE_SOURCE}" "${VU_BASELINE_OUTPUT_DIR}/manifest.json"
+        COMMAND "${CMAKE_COMMAND}" -E rm -rf "${VU_BASELINE_OUTPUT_DIR}"
+        COMMAND $<TARGET_FILE:gt4_vu_recomp> --no-flag-elision --namespace gt4::vugen::baseline "${GT4_VU_CORPUS_DIR}" "${VU_BASELINE_OUTPUT_DIR}"
+        DEPENDS gt4_vu_recomp
+        VERBATIM)
+    set_source_files_properties("${VU_BASELINE_SOURCE}" PROPERTIES GENERATED TRUE)
+    add_executable(gt4_vu1_flag_bench "${VU_RECOMP_TESTS}/vu1_flag_bench.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" "${VU_CORPUS_SOURCE}" "${VU_BASELINE_SOURCE}")
+    target_include_directories(gt4_vu1_flag_bench PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
+    target_link_libraries(gt4_vu1_flag_bench PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
+    target_compile_options(gt4_vu1_flag_bench PRIVATE /W4 -Wno-unused-label)
+endif()
 
 # VU1 AOT registry controls: only with the AOT capsule, which provides the runtime
 # overlay and the game table (GT4_VU1_GENERATED_DIR).

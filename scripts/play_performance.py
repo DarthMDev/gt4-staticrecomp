@@ -13,6 +13,10 @@ Pacing candidate (--mode pacing): gs-async plus the paced guest clock (60 Hz wal
 non-blocking audio with rate control). Set GT4_PACING=audio to restore the blocking audio
 clock for A/B, and GT4_PRESENT_MODE=fifo|mailbox|immediate to test presentation modes
 (default fifo). Both variables are recorded in the run evidence.
+
+VU1 flag candidate (--mode vu1-flags): pacing with the slice154 VU1 table, which computes
+MAC and clip only where a later reader or the program exit can observe them. Same options,
+same pacing environment variables; the VU1 status word is not kept (no image instruction reads it).
 """
 import argparse
 import sys
@@ -29,13 +33,13 @@ def main():
     parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9')
     parser.add_argument('--mode', choices=MODES, default='detailed')
     parser.add_argument('--vu1-verify', type=int, default=0, metavar='N',
-                        help='sample every Nth generated VU1 call and compare (vu1-aot, gs-async and pacing)')
+                        help='sample every Nth generated VU1 call and compare (vu1-aot, gs-async, pacing and vu1-flags)')
     parser.add_argument('--vu1-interpret-only', action='store_true',
-                        help='force the interpreter in the vu1-aot, gs-async and pacing binaries (vu1-aot, gs-async and pacing)')
+                        help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async or pacing')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing or vu1-flags')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:

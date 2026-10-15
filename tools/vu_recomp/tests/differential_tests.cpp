@@ -52,7 +52,9 @@ int main() {
     Counters counters;
     const std::vector<Fixture> fixtures = gt4::vurecomp::fixtures::build_fixtures();
     const std::uint32_t program_count = gt4::vugen::generated::kProgramCount;
-    expect(counters, program_count == 7, std::format("emitted program count {}, expected 7 (5 recorded plus 2 jump targets)", program_count));
+    // The original six fixtures emit 7 programs (5 recorded plus 2 jump targets). The flag
+    // fixtures add recorded entries and their jump targets: 22 in total.
+    expect(counters, program_count == 22, std::format("emitted program count {}, expected 22", program_count));
 
     for (const Fixture &fixture : fixtures) {
         for (std::uint32_t entry : fixture.entries) {
@@ -76,6 +78,46 @@ int main() {
             check_program(fixture.image.data(), table_entry.entry, table_entry.function, {4, true}, gt4::vugen::kInterpreterInstructionBudget, fixture.name, counters);
         }
         expect(counters, matched, std::format("table entry 0x{:016X} at 0x{:04X} matches no authored image", table_entry.key, table_entry.entry));
+    }
+
+    // Chained calls: the fixture's recorded entries run back to back, so the second
+    // program sees the MAC and clip that the first one left at its exit.
+    for (const Fixture &fixture : fixtures) {
+        if (fixture.entries.size() < 2 || fixture.expect_refused) continue;
+        std::uint64_t first_key = 0, second_key = 0;
+        const gt4::vugen::ProgramFunction first = find_function(fixture.image, fixture.entries[0], first_key);
+        const gt4::vugen::ProgramFunction second = find_function(fixture.image, fixture.entries[1], second_key);
+        expect(counters, first != nullptr && second != nullptr, fixture.name + ": chained programs must be emitted");
+        if (!first || !second) continue;
+        for (std::uint32_t seed = 1; seed <= 3; ++seed)
+            check_chain(fixture.image.data(), fixture.entries[0], first, fixture.entries[1], second, {seed, false}, fixture.name, counters);
+        check_chain(fixture.image.data(), fixture.entries[0], first, fixture.entries[1], second, {4, true}, fixture.name, counters);
+    }
+
+    // Budget sweep on the flag loop: every budget from 1 to 60 ends a call inside or after
+    // the loop. A budget exit resumes in the interpreter, and the final state must equal
+    // the reference run, which also checks the MAC and clip seen at each exit.
+    for (const Fixture &fixture : fixtures) {
+        if (fixture.name != "mac_loop_budget") continue;
+        std::uint64_t key = 0;
+        const gt4::vugen::ProgramFunction function = find_function(fixture.image, 0, key);
+        expect(counters, function != nullptr, fixture.name + ": loop program must be emitted for the budget sweep");
+        if (!function) continue;
+        for (std::uint32_t seed = 1; seed <= 2; ++seed) {
+            const ps2::Vu0Regs state = make_state({seed, false});
+            const std::vector<std::uint8_t> memory = make_memory({seed, false});
+            const Outcome expected = run_reference(fixture.image.data(), 0, state, memory);
+            for (std::uint32_t budget = 1; budget <= 60; ++budget) {
+                load_state(fixture.image.data(), state, memory);
+                RunContext context{budget, 0};
+                if (function(ps2::vu::regs(1), ps2::g_vu1_mem, context) == RunStatus::BudgetExhausted) {
+                    ++counters.resumed;
+                    ps2::vu::interpret(1, context.resume_pc);
+                }
+                compare_outcomes(expected, capture(), std::format("{} seed {} budget {}", fixture.name, seed, budget), counters,
+                                 gt4::vurecomp::image_status_used(fixture.image.data(), kCodeBytes));
+            }
+        }
     }
 
     const Fixture &loop = fixtures[0];

@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "profile": "performance",
+  "perf_schema_version": 1,
+  "keyboard_input_fix": "digital_only_slice136",
+  "capture_activation_implemented": false,
+  "environment": {
+    "guest_settings": "scrub inherited PS2_/GT4_PERF_ options; set GT4_PERF=1 PS2_SCALE=1 PS2_GS=gpu",
+    "vulkan": "preserve and record VK_ overrides in session result; other driver/overlay state not controlled",
+    "gs_submission": "GT4_GS_SYNC=0 default (asynchronous); GT4_GS_SYNC=1 restores the fully synchronous path (launcher records the value in the session result)",
+    "pacing": "GT4_PACING unset or paced (default): paced clock. GT4_PACING=audio: blocking WinMM clock as in slice152. GT4_PRESENT_MODE unset or fifo (default); mailbox and immediate are experiments and fail at swapchain creation when the surface lacks them. The launcher refuses other values and records both names in result.json (pacing_environment)."
+  },
+  "toolchain": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "build": "CMake/Ninja VS2022 x64 ABI Windows SDK10.0.26100.0",
+    "cmake": "4.3.3",
+    "ninja": "1.12.1"
+  },
+  "slice": 154,
+  "date": "2026-10-15",
+  "baseline_commit": "b963112",
+  "branch": "codex/optimization-plan-151",
+  "measurement_mode": "vu1-flags",
+  "vu_scope_profile": "unit_split_run_fast_only",
+  "classification": "O1 follow-up candidate: pacing build (gs-async plus paced clock, slice153) with a VU1 table in which MAC and clip are computed only where a later reader or the program exit observes them, and VU1 status is not kept when no image instruction reads it (no status reader in the corpus image). Exit MAC and clip stay exact; the status word is excluded from differential and verify comparisons only when the image does not read it.",
+  "runtime": {
+    "path": "private/slice154-vu1-flags-build/build/gt4vulkan.exe",
+    "size_bytes": 56144896,
+    "sha256": "800da980bc14e982b83a0dc235e4a517afcf7972fd23ec280394a63ca74f65de"
+  },
+  "source_capsule": "private/slice154-vu1-flags-runtime",
+  "source_manifest": "slice154-vu1-flags-runtime.json",
+  "preserved_inputs": "Production EE library, donor 1b48087 runtime capsule with the slice154 VU1 AOT overlay (private/slice154-vu1-flags-runtime, derived with scripts/prepare_perf_runtime.py --vu1-aot), slice153 pacing adapter and nine shaders reused byte-identical from private/slice153-pacing-port and private/slice153-pacing-shaders; slice151/152/153 build directories untouched.",
+  "controls": {
+    "ctest": "see docs/BUILD.md slice154 section; CTest results recorded in the implementing agent report",
+    "headless_smoke": "4200 frames, same schedule as slice153 (12 presses, frames every 100): 42 frame dumps identical to private/slice153-smoke/headless-153.frames.sha256",
+    "verify_smoke": "GT4_VU1_VERIFY=1 headless run on the same schedule (see BUILD.md)",
+    "not_run": "No window or gameplay session was launched by the implementing agent; owner measurement is required."
+  },
+  "limits": [
+    "Elision is per image: a different VU1 image (uploaded at runtime) gets its own identity (digest bit image_status_used); a mismatch falls back to the interpreter.",
+    "Only the 100 programs of the 86-file corpus image are emitted; entries outside the table run the interpreter (counted by the overlay).",
+    "Known limit kept: after an interpreter hand-off or budget resume the FlagPipe history is not transferred (vu_recomp_contract.hpp).",
+    "VU1 status is not maintained by emitted code in this image; CFC2 reads VU0 registers only, so the EE cannot observe it.",
+    "Owner gameplay frame measurements are not taken; no speed claim is made from the headless benchmark alone."
+  ],
+  "review": {
+    "status": "pending",
+    "note": "Owner gameplay and frame timing not run; local headless, CTest, Python and benchmark evidence only."
+  },
+  "owner_launch": {
+    "play": "python scripts/play_performance.py --assets-root . --mode vu1-flags",
+    "verify": "python scripts/play_performance.py --assets-root . --mode vu1-flags --vu1-verify 50",
+    "interpreter_ab": "python scripts/play_performance.py --assets-root . --mode vu1-flags --vu1-interpret-only"
+  },
+  "vu1_aot": {
+    "generated_dir": "private/slice154-vu1-flags-gen",
+    "generated_source_sha256": "281be95edb157a2434318597491c05fbc2e979cdf7ab27a58dd9cab259a25e38",
+    "generated_manifest_sha256": "01b89dd655589d2c67523d271036a4e9721f7f8109608fdff75e1b33c06d2a5d",
+    "programs": 100,
+    "corpus": "private/slice151-vu1-corpus-union (86 files, 1 distinct image)",
+    "overlay_sha256": "171b07c36fbe54be2579a84f579e06e4796b93648ca9f1d13b429d8abad0cd32",
+    "flag_elision": true
+  },
+  "port_capsule": "private/slice153-pacing-port",
+  "shader_capsule": "private/slice153-pacing-shaders",
+  "purpose": "O4 frame pacing candidate: gs-async plus paced guest clock (GT4_PACING=paced default) and non-blocking audio",
+  "status": "candidate: local checks pass; owner gameplay measurement pending",
+  "runtime_dependencies": [
+    {
+      "path": "private/slice153-pacing-shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ]
+}

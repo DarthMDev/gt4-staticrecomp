@@ -2,6 +2,8 @@
 
 ## Current state (2026-10-15)
 
+2026-10-15 — Slice 154, O1 follow-up (candidate, not owner-measured): `--mode vu1-flags` = slice 153 pacing with a VU1 table that computes MAC and clip only where a reader or the exit observes them (exit state exact); VU1 status is not kept, since the image never reads it and the EE cannot read VU1 flags. Local evidence: corpus differential 0 failures over 100 programs, fixture differential 0 failures, 42 identical headless frames versus slice 153, verify smoke with 0 mismatches. Read [journal 2026-10-15](journal/2026-10-15.md) and [BUILD](BUILD.md).
+
 Branch `codex/optimization-plan-151` (fast-forwarded into `main`). Machine: Ryzen 7
 5700X, RX 9060 XT. Plan: [OPTIMIZATION-PLAN](OPTIMIZATION-PLAN.md). Journal:
 [2026-10-15](journal/2026-10-15.md).

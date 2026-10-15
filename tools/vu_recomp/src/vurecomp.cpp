@@ -54,9 +54,20 @@ const char *const kLane = "xyzw";
 
 bool lane(unsigned dest, int i) { return dest & (8u >> i); }
 
+// Which observable results of one instruction must be computed. The donor
+// interpreter keeps MAC/status/clip for every write; the emitted code keeps only
+// what a later reader or the program exit can see (see FunctionGenerator::observe).
+struct FlagUse {
+    bool full = true;         // donor behaviour: flags() with status, every write
+    bool mac_reader = true;   // MAC pushed to the FlagPipe for a later MAC reader
+    bool mac_exit = true;     // MAC kept in last_mac for the program exit
+    bool clip_reader = true;  // clip pushed to the FlagPipe for a later clip reader (the value is always kept)
+};
+
 struct Upper {
     std::string pre, post;
-    bool sets_flags = false;
+    bool sets_flags = false;  // flag-setting arithmetic (MAC writer), independent of FlagUse
+    bool clip = false;        // clip writer (upper CLIP), independent of FlagUse
     bool known = true;  // false for encodings the donor decoder would silently treat as NOP
     int target = -1;
     unsigned mask = 0;
@@ -79,7 +90,18 @@ std::string lane_mask(unsigned d) {
     return mask + "}";
 }
 
-Upper upper(std::uint32_t hi, bool flags_live) {
+// MAC update for one flag-setting result over its destination lanes. Empty when
+// no MAC value is observable, so the arithmetic is emitted without flag work.
+std::string mac_update(const std::string &value, unsigned d, const FlagUse &use) {
+    if (use.full) return std::format("flags(r, {}, {}u); fl.set_mac(r.mac, r.status); ", value, d);
+    if (!use.mac_reader && !use.mac_exit) return {};
+    std::string s = std::format("{{ const std::uint32_t m = mac_of_result({}, {}u); ", value, d);
+    if (use.mac_reader) s += "fl.set_mac(m, r.status); ";
+    if (use.mac_exit) s += "last_mac = m; ";
+    return s + "} ";
+}
+
+Upper upper(std::uint32_t hi, const FlagUse &use) {
     Upper u;
     if ((hi & 0x3FFFFFFFu) == kVnopUpperWithoutFlags) return u;  // VNOP, known no-op encoding
     const unsigned dest = (hi >> 21) & 15u, ft = (hi >> 16) & 31u, fs = (hi >> 11) & 31u, fd = (hi >> 6) & 31u, bc = hi & 3u;
@@ -160,13 +182,28 @@ Upper upper(std::uint32_t hi, bool flags_live) {
     }
     if (kind == Nop) return u;
     if (kind == Clip) {
-        u.pre = std::format("const std::uint32_t uclip = clip_value(r, r.vf[{}], r.vf[{}].w[3]); ", fs, ft);
-        u.post = "r.clip = uclip; fl.set_clip(uclip, fl.t); ";
+        // The clip word is a chain through every CLIP instruction (clip_result), so the
+        // value is always computed; only the FlagPipe push depends on a clip reader.
+        u.clip = true;
+        u.pre = std::format("const std::uint32_t uclip = clip_result(last_clip, r.vf[{}], r.vf[{}].w[3]); ", fs, ft);
+        u.post = "last_clip = uclip; ";
+        if (use.clip_reader) u.post += "fl.set_clip(uclip, fl.t); ";
         return u;
     }
     unsigned d = dest;
     if (kind == Opmula || kind == Opmsub) d = 0xE;
-    if (d == 0 || (target == 0 && !(flags && flags_live))) return u;
+    if (d == 0) {
+        // No lane is written, but the donor interpreter still runs set_flags on the empty
+        // result, which sets MAC to 0 and pushes it. A flag-setting op is therefore a MAC
+        // writer here as well.
+        if (flags) {
+            u.sets_flags = true;
+            u.post = mac_update("r.vf[0]", 0, use);
+        }
+        return u;
+    }
+    const bool mac_kept = flags && (use.full || use.mac_reader || use.mac_exit);
+    if (target == 0 && !mac_kept) return u;
     const auto b = [&](int i) -> std::string {
         switch (src) {
         case Vec: return vf(ft, i);
@@ -229,14 +266,16 @@ Upper upper(std::uint32_t hi, bool flags_live) {
         }
         if (!e.empty()) u.pre += std::format("const v4u uv = {}; ", e);
         if (target == 0) {
-            u.post = std::format("{{ Reg128 uf; vstore(uf, uv); flags(r, uf, {}u); fl.set_mac(r.mac, r.status); }} ", d);
+            const std::string mac = mac_update("uf", d, use);
+            if (mac.empty()) u.pre.clear();  // VF0 is not written and no MAC is observed: nothing to compute
+            else u.post = std::format("{{ Reg128 uf; vstore(uf, uv); {}}} ", mac);
             u.sets_flags = true;
             return u;
         }
         if (d == 0xF) u.post += std::format("vstore({}, uv); ", dst);
         else u.post += std::format("vstore({0}, vsel(vload({0}), uv, {1})); ", dst, lane_mask(d));
         u.sets_flags = flags;
-        if (flags && flags_live) u.post += std::format("flags(r, {}, {}u); fl.set_mac(r.mac, r.status); ", dst, d);
+        if (flags) u.post += mac_update(dst, d, use);
         return u;
     }
     for (int i = 0; i < 4; ++i) {
@@ -268,17 +307,22 @@ Upper upper(std::uint32_t hi, bool flags_live) {
         u.pre += std::format("const std::uint32_t u{} = {}; ", kLane[i], e);
     }
     if (target == 0) {
-        u.post = "{ Reg128 uf{}; ";
-        for (int i = 0; i < 4; ++i)
-            if (lane(d, i)) u.post += std::format("uf.w[{}] = u{}; ", i, kLane[i]);
-        u.post += std::format("flags(r, uf, {}u); fl.set_mac(r.mac, r.status); }} ", d);
+        const std::string mac = mac_update("uf", d, use);
+        if (mac.empty()) {
+            u.pre.clear();  // VF0 is not written and no MAC is observed: nothing to compute
+        } else {
+            u.post = "{ Reg128 uf{}; ";
+            for (int i = 0; i < 4; ++i)
+                if (lane(d, i)) u.post += std::format("uf.w[{}] = u{}; ", i, kLane[i]);
+            u.post += mac + "} ";
+        }
         u.sets_flags = true;
         return u;
     }
     for (int i = 0; i < 4; ++i)
         if (lane(d, i)) u.post += std::format("{}.w[{}] = u{}; ", dst, i, kLane[i]);
     u.sets_flags = flags;
-    if (flags && flags_live) u.post += std::format("flags(r, {}, {}u); fl.set_mac(r.mac, r.status); ", dst, d);
+    if (flags) u.post += mac_update(dst, d, use);
     return u;
 }
 
@@ -301,7 +345,7 @@ std::string lanes_store(unsigned dest, const std::string &qword_expr, const std:
 struct Lower {
     std::string code;
     int writes = -1;
-    bool reads_flags = false, reads_status = false;
+    bool reads_flags = false, reads_status = false, reads_clip = false;
     bool branch = false, jump = false;
     std::uint32_t target = 0;
     bool supported = true;
@@ -438,10 +482,10 @@ Lower lower(std::uint32_t w, std::uint32_t pc) {
         break;
     case 0x08: c = std::format("set_vi(r, {}, r.vi[{}] + {}u); ", it, is, imm15); break;
     case 0x09: c = std::format("set_vi(r, {}, r.vi[{}] - {}u); ", it, is, imm15); break;
-    case 0x10: c = std::format("set_vi(r, 1, (fl.clip() & 0xFFFFFFu) == {}u ? 1u : 0u); ", w & 0xFFFFFFu); break;
-    case 0x11: c = std::format("r.clip = {}u; fl.set_clip(r.clip, fl.t - 4u); ", w & 0xFFFFFFu); break;
-    case 0x12: c = std::format("set_vi(r, 1, (fl.clip() & {}u) ? 1u : 0u); ", w & 0xFFFFFFu); break;
-    case 0x13: c = std::format("set_vi(r, 1, ((fl.clip() | {}u) & 0xFFFFFFu) == 0xFFFFFFu ? 1u : 0u); ", w & 0xFFFFFFu); break;
+    case 0x10: c = std::format("set_vi(r, 1, (fl.clip() & 0xFFFFFFu) == {}u ? 1u : 0u); ", w & 0xFFFFFFu); l.reads_clip = true; break;
+    case 0x11: c = std::format("last_clip = {}u; fl.set_clip(last_clip, fl.t - 4u); ", w & 0xFFFFFFu); break;
+    case 0x12: c = std::format("set_vi(r, 1, (fl.clip() & {}u) ? 1u : 0u); ", w & 0xFFFFFFu); l.reads_clip = true; break;
+    case 0x13: c = std::format("set_vi(r, 1, ((fl.clip() | {}u) & 0xFFFFFFu) == 0xFFFFFFu ? 1u : 0u); ", w & 0xFFFFFFu); l.reads_clip = true; break;
     case 0x14: c = std::format("set_vi(r, {}, (fl.status() & 0xFFFu) == {}u ? 1u : 0u); ", it, imm12); l.reads_flags = l.reads_status = true; break;
     case 0x15: c = std::format("r.status = (fl.status() & 0x3Fu) | ({}u & 0xFC0u); fl.force_mac(r.mac, r.status); ", imm12); l.reads_flags = l.reads_status = true; break;
     case 0x16: c = std::format("set_vi(r, {}, fl.status() & {}u); ", it, imm12); l.reads_flags = l.reads_status = true; break;
@@ -449,7 +493,7 @@ Lower lower(std::uint32_t w, std::uint32_t pc) {
     case 0x18: c = std::format("set_vi(r, {}, (fl.mac() & 0xFFFFu) == r.vi[{}] ? 1u : 0u); ", it, is); l.reads_flags = true; break;
     case 0x1A: c = std::format("set_vi(r, {}, fl.mac() & r.vi[{}]); ", it, is); l.reads_flags = true; break;
     case 0x1B: c = std::format("set_vi(r, {}, ((fl.mac() | r.vi[{}]) & 0xFFFFu) == 0xFFFFu ? 1u : 0u); ", it, is); l.reads_flags = true; break;
-    case 0x1C: c = std::format("set_vi(r, {}, fl.clip() & 0xFFFu); ", it); break;
+    case 0x1C: c = std::format("set_vi(r, {}, fl.clip() & 0xFFFu); ", it); l.reads_clip = true; break;
     case 0x20: c = "pend = true; "; l.branch = true; l.target = target; break;
     case 0x21: c = std::format("set_vi(r, {}, {}u); pend = true; ", it, (pc + 16u) / 8u); l.branch = true; l.target = target; break;
     case 0x24: c = std::format("jpc = (static_cast<std::uint32_t>(r.vi[{}]) * 8u) & {}u; pendj = true; ", is, kMask); l.jump = true; break;
@@ -473,7 +517,8 @@ void replace_all(std::string &s, const std::string &from, const std::string &to)
 
 // Keeps VI registers in locals inside one function. Locals are written back at
 // each VUGEN_SYNC; marker before interpreter calls, exits and budget exhaustion.
-std::string localize_vi(std::string o) {
+// extra_sync writes the other exit-state locals (MAC, clip) back at the same points.
+std::string localize_vi(std::string o, const std::string &extra_sync) {
     std::string declarations, sync;
     replace_all(o, "set_vi(r, 0, ", "drop_vi(");
     replace_all(o, "r.vi[0]", "0u");
@@ -487,9 +532,32 @@ std::string localize_vi(std::string o) {
         if (written) sync += std::format("r.vi[{}] = i{}; ", n, n);
     }
     replace_all(o, "    VUGEN_LOCALS;\n", declarations);
-    replace_all(o, "VUGEN_SYNC;", sync);
+    replace_all(o, "VUGEN_SYNC;", sync + extra_sync);
     return o;
 }
+
+// Observation windows, in instructions. FlagPipe::mac_slot reads the newest MAC
+// entry with mac_ts + 4 <= t, and clip() the newest clip entry with clip_ts + 3 <= t,
+// so a write at distance k from a reader is seen only if no later write of the same
+// channel sits at distance 1 .. d - window.
+constexpr int kMacWindow = 4;
+constexpr int kClipWindow = 3;
+// Observation states per node: none (no later write yet) and 0 .. window - 1.
+constexpr int kStateSlots = kMacWindow + 1;
+
+// How MAC and status are kept for one program.
+enum class MacMode {
+    None,      // the image has no MAC reader: the donor interpreter keeps no flags either
+    Full,      // donor behaviour: flags() with status and a FlagPipe entry for every write
+    Observed,  // MAC only where a reader or the program exit can see it; status is not kept
+};
+
+// Whether a write can be seen by a later reader of its channel, or is the last write
+// before some exit of the program (exit state is exact, see generate()).
+struct Observed {
+    bool reader = false;
+    bool exit = false;
+};
 
 // Per-program analysis and text generation. Donor delay-slot model: a node
 // is followed by pc+8, and a delay-slot node is also followed by the target of
@@ -512,7 +580,10 @@ public:
             return {};
         }
         record_.function_name = std::format("vu1_{:016X}", record_.key);
-        return generate();
+        std::string text = generate();
+        // Every interpreter hand-off (lower exit, unknown successor, dispatch, end) is a call here.
+        for (std::size_t at = text.find("ps2::vu::interpret("); at != std::string::npos; at = text.find("ps2::vu::interpret(", at + 1)) ++record_.interpreter_calls;
+        return text;
     }
 
 private:
@@ -522,8 +593,12 @@ private:
     std::set<std::uint32_t> in_;
     std::map<std::uint32_t, Lower> lowers_;
     std::map<std::uint32_t, Upper> uppers_;
-    std::map<std::uint32_t, bool> live_in_;
-    bool any_status_ = false, any_flags_ = false;
+    std::map<std::uint32_t, FlagUse> use_;
+    MacMode mac_mode_ = MacMode::Full;
+    bool clip_all_live_ = false;
+    // Visit marks for observe(): one slot per (node, state), compared with stamp_.
+    std::vector<std::uint32_t> stamps_;
+    std::uint32_t stamp_ = 0;
     std::set<int> shadowed_;
     std::size_t fallback_count_ = 0;
     std::size_t upper_nop_count_ = 0;
@@ -564,15 +639,17 @@ private:
     }
 
     void analyze() {
+        stamps_.assign(static_cast<std::size_t>(kCodeMask + 1u) / 8u * kStateSlots, 0u);
         // Pass 1 decodes every instruction so later passes can look at neighbours.
         for (std::uint32_t pc : pcs_) {
             const std::uint32_t lower_word = lo(pc), upper_word = hi(pc);
             Lower lower_info;
             if (!(upper_word & kImmediateBit)) lower_info = lower(lower_word, pc);
             lowers_[pc] = lower_info;
-            uppers_[pc] = upper(upper_word, true);
-            any_status_ = any_status_ || lower_info.reads_status;
-            any_flags_ = any_flags_ || lower_info.reads_flags;
+            uppers_[pc] = upper(upper_word, FlagUse{});
+            // A lower clip write (0x11) is visible at once and is not modelled by the
+            // window analysis, so a program that has one keeps every clip write.
+            if (!(upper_word & kImmediateBit) && (lower_word >> 25) == 0x11u) clip_all_live_ = true;
         }
         // Pass 2 counts interpreter exits and refuses hazardous ones.
         for (std::uint32_t pc : pcs_) {
@@ -583,38 +660,111 @@ private:
             if (refusal_.empty() && fallback_hazard(pc))
                 refusal_ = std::format("interpreter exit at 0x{:04X} follows a branch or end bit", pc);
         }
-        liveness();
+        // An end bit on a branch or jump delay slot: the donor runs the branch target once more
+        // and then ends, while the emitted code would continue past the end. Refused, not emitted.
+        for (std::uint32_t pc : pcs_) {
+            const std::uint32_t prev = (pc - 8u) & kMask;
+            if (!(hi(pc) & kEndBit) || !in_.count(prev) || !refusal_.empty()) continue;
+            if (lowers_.at(prev).branch || lowers_.at(prev).jump)
+                refusal_ = std::format("end bit at 0x{:04X} sits in the delay slot of a branch or jump", pc);
+        }
+        select_flag_uses();
         for (std::uint32_t pc : pcs_)
-            for (int reg : upper(hi(pc), true).shadow_reads) shadowed_.insert(reg);
+            for (int reg : uppers_.at(pc).shadow_reads) shadowed_.insert(reg);
     }
 
-    void liveness() {
-        for (std::uint32_t pc : pcs_) live_in_[pc] = false;
-        for (bool changed = true; changed;) {
-            changed = false;
-            for (auto it = pcs_.rbegin(); it != pcs_.rend(); ++it) {
-                const std::uint32_t pc = *it;
-                bool out = false;
-                for (std::int64_t s : successors(pc)) out = out || s < 0 || !in_.count(static_cast<std::uint32_t>(s)) || live_in_[static_cast<std::uint32_t>(s)];
-                bool reader_near = false;
-                for (std::uint32_t k = 1; k <= 3; ++k) {
-                    const std::uint32_t q = (pc + 8u * k) & kMask;
-                    if (in_.count(q) && (lowers_[q].reads_flags || lowers_[q].branch || lowers_[q].jump)) reader_near = true;
+    bool channel_reader(std::uint32_t pc, bool mac) const { return mac ? lowers_.at(pc).reads_flags : lowers_.at(pc).reads_clip; }
+    bool channel_writer(std::uint32_t pc, bool mac) const { return mac ? uppers_.at(pc).sets_flags : uppers_.at(pc).clip; }
+
+    // Decides, for every reachable instruction, which of its flag results must be
+    // computed, and fills the site counters. Full keeps everything; Observed asks
+    // observe() for each write.
+    void select_flag_uses() {
+        if (!record_.image_flags_used) mac_mode_ = MacMode::None;
+        else if (flag_elision() && !record_.image_status_used) mac_mode_ = MacMode::Observed;
+        else mac_mode_ = MacMode::Full;
+        record_.mac_mode = mac_mode_ == MacMode::None ? "none" : mac_mode_ == MacMode::Full ? "full" : "observed";
+        const bool clip_all = clip_all_live_ || !flag_elision();
+        for (std::uint32_t pc : pcs_) {
+            const Upper &analysis = uppers_.at(pc);
+            FlagUse use;
+            if (mac_mode_ == MacMode::None) {
+                use.full = use.mac_reader = use.mac_exit = false;
+            } else if (mac_mode_ == MacMode::Observed) {
+                use.full = false;
+                use.mac_reader = use.mac_exit = false;
+                if (analysis.sets_flags) {
+                    const Observed seen = observe(pc, true);
+                    use.mac_reader = seen.reader;
+                    use.mac_exit = seen.exit;
                 }
-                const bool kills = uppers_[pc].sets_flags && !reader_near;
-                const bool v = lowers_[pc].reads_flags || (!kills && out);
-                if (v != live_in_[pc]) {
-                    live_in_[pc] = v;
-                    changed = true;
-                }
+            }
+            if (!analysis.clip) {
+                use.clip_reader = false;
+            } else if (clip_all) {
+                use.clip_reader = true;
+            } else {
+                use.clip_reader = observe(pc, false).reader;
+            }
+            use_[pc] = use;
+            if (analysis.sets_flags) {
+                ++record_.mac_writers;
+                if (use.full || use.mac_reader || use.mac_exit) ++record_.mac_sites;
+                if (use.full || use.mac_reader) ++record_.mac_reader_sites;
+            }
+            if (analysis.clip) {
+                ++record_.clip_writers;
+                ++record_.clip_sites;
+                if (use.clip_reader) ++record_.clip_reader_sites;
             }
         }
     }
 
-    bool out_live(std::uint32_t pc) const {
-        for (std::int64_t s : successors(pc))
-            if (s < 0 || !in_.count(static_cast<std::uint32_t>(s)) || live_in_.at(static_cast<std::uint32_t>(s))) return true;
-        return false;
+    // Walks the program from one write and reports whether a reader of its channel
+    // can see it, and whether it is the last write of its channel before an exit on
+    // some path. State is the distance from the first later write of the channel:
+    // none before any, then 0 .. window - 1. A reader at a state >= window does not
+    // see the write, and a path that reaches that state is settled. Backward
+    // transfers are also exits, because the budget check may leave there.
+    Observed observe(std::uint32_t write_pc, bool mac) {
+        constexpr int kNone = -1;
+        const int window = mac ? kMacWindow : kClipWindow;
+        ++stamp_;
+        Observed seen;
+        std::vector<std::pair<std::uint32_t, int>> work;
+        const auto edge = [&](std::int64_t target, int state) {
+            if (target < 0 || !in_.count(static_cast<std::uint32_t>(target))) {
+                if (state == kNone) seen.exit = true;
+                return;
+            }
+            work.emplace_back(static_cast<std::uint32_t>(target), state);
+        };
+        // A backward transfer is also an exit, because the budget check may leave there.
+        const auto leave = [&](std::uint32_t from, std::int64_t next, int after) {
+            if (next >= 0 && static_cast<std::uint32_t>(next) <= from && after == kNone) seen.exit = true;
+            edge(next, after);
+        };
+        for (std::int64_t next : successors(write_pc)) leave(write_pc, next, kNone);
+        while (!work.empty()) {
+            const std::pair<std::uint32_t, int> item = work.back();
+            work.pop_back();
+            const std::uint32_t node = item.first;
+            const int state = item.second;
+            std::uint32_t &mark = stamps_[static_cast<std::size_t>(node >> 3) * kStateSlots + static_cast<std::size_t>(state + 1)];
+            if (mark == stamp_) continue;
+            mark = stamp_;
+            if (lower_exit(node)) {
+                if (state == kNone) seen.exit = true;
+                continue;
+            }
+            // A reader sees the write unless a later write is at least window instructions before it.
+            if (channel_reader(node, mac) && (state == kNone || state < window)) seen.reader = true;
+            const int here = state == kNone && channel_writer(node, mac) ? 0 : state;
+            const int after = here == kNone ? kNone : here + 1;
+            if (after >= window) continue;
+            for (std::int64_t next : successors(node)) leave(node, next, after);
+        }
+        return seen;
     }
 
     // Upper bound on instructions executed on a forward-only path from target.
@@ -648,6 +798,10 @@ private:
         o += "    FlagPipe fl;\n    fl.start(r);\n";
         o += "    bool pend = false, pendj = false, ending = false;\n";
         o += "    std::uint32_t jpc = 0;\n    (void)pend;\n    (void)pendj;\n    (void)ending;\n    (void)jpc;\n    (void)mem;\n";
+        // Exit state: MAC is kept in last_mac in Observed mode, and clip in last_clip. Both start
+        // from the incoming state and are written back at every exit (VUGEN_SYNC).
+        if (mac_mode_ == MacMode::Observed) o += "    std::uint32_t last_mac = r.mac;\n    (void)last_mac;\n";
+        o += "    std::uint32_t last_clip = r.clip;\n    (void)last_clip;\n";
         for (int reg : shadowed_) o += std::format("    v4u {} = vfix(vload({}));\n", reg == kAcc ? "nacc" : std::format("n{}", reg), reg == kAcc ? "r.acc" : std::format("r.vf[{}]", reg));
         o += "    VUGEN_LOCALS;\n";
         o += "    " + charge(record_.entry);
@@ -656,7 +810,9 @@ private:
         if (uses_dispatch_) o += "dispatch:\n    VUGEN_SYNC; ps2::vu::interpret(1, jpc); return RunStatus::Completed;\n";
         if (uses_exhausted_) o += "vugen_exhausted:\n    VUGEN_SYNC; return RunStatus::BudgetExhausted;\n";
         o += "}\n\n";
-        return localize_vi(o);
+        std::string exit_sync = "r.clip = last_clip; ";
+        if (mac_mode_ == MacMode::Observed) exit_sync = "r.mac = last_mac; " + exit_sync;
+        return localize_vi(o, exit_sync);
     }
 
     std::string block(std::uint32_t pc) {
@@ -667,8 +823,7 @@ private:
         if (lower_exit(pc)) {
             o += std::format("{}: {{ VUGEN_SYNC; ps2::vu::interpret(1, {}u); return RunStatus::Completed; }}\n", label(pc), pc);
         } else {
-            // Flags follow the interpreter: image-wide flag use makes every flag write live.
-            const Upper refreshed = upper(upper_word, record_.image_flags_used || any_status_ || (any_flags_ && out_live(pc)));
+            const Upper refreshed = upper(upper_word, use_.at(pc));
             o +=std::format("{}: {{ ++fl.t; ", label(pc));
             o += refreshed.pre;
             if (immediate) o += std::format("r.i = {}u; ", lower_word);
@@ -782,8 +937,15 @@ bool read_input_image(const fs::path &path, std::vector<std::uint8_t> &image, st
     return true;
 }
 
-std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used) {
-    return program_identity_digest(image.data(), reachable, entry, flags_used);
+namespace {
+bool g_flag_elision = true;
+}
+
+void set_flag_elision(bool enabled) { g_flag_elision = enabled; }
+bool flag_elision() { return g_flag_elision; }
+
+std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used, bool status_used) {
+    return program_identity_digest(image.data(), reachable, entry, flags_used, status_used);
 }
 
 bool add_program_record(std::vector<ProgramRecord> &records, ProgramRecord candidate, std::string &error) {
@@ -836,7 +998,8 @@ bool collect_program_records(const fs::path &input_dir, std::vector<ProgramRecor
         record.source_name = name;
         record.source_sha256 = sha256_hex(record.image);
         record.image_flags_used = image_flags_used(record.image.data(), kImageBytes);
-        record.digest_sha256 = program_digest(record.image, record.reachable, entry, record.image_flags_used);
+        record.image_status_used = image_status_used(record.image.data(), kImageBytes);
+        record.digest_sha256 = program_digest(record.image, record.reachable, entry, record.image_flags_used, record.image_status_used);
         if (!add_program_record(records, record, error)) return false;
         recorded.push_back(std::move(record));
     }
@@ -862,7 +1025,8 @@ bool collect_program_records(const fs::path &input_dir, std::vector<ProgramRecor
             derived.source_name = parent.source_name;
             derived.source_sha256 = parent.source_sha256;
             derived.image_flags_used = parent.image_flags_used;
-            derived.digest_sha256 = program_digest(derived.image, derived.reachable, target, derived.image_flags_used);
+            derived.image_status_used = parent.image_status_used;
+            derived.digest_sha256 = program_digest(derived.image, derived.reachable, target, derived.image_flags_used, derived.image_status_used);
             if (!add_program_record(records, std::move(derived), error)) return false;
         }
     }
@@ -897,7 +1061,7 @@ std::string emit_program_function(ProgramRecord &record) {
     return generator.run();
 }
 
-std::string emit_generated_source(std::vector<ProgramRecord> &records) {
+std::string emit_generated_source(std::vector<ProgramRecord> &records, const std::string &name_space) {
     std::string functions;
     std::string table;
     std::size_t emitted = 0;
@@ -905,19 +1069,20 @@ std::string emit_generated_source(std::vector<ProgramRecord> &records) {
         const std::string text = emit_program_function(record);
         if (record.refused) continue;
         functions += text;
-        table += std::format("    {{0x{:016X}ull, {}u, {}, \"{}\", {}}},\n", record.key, record.entry, record.image_flags_used ? "true" : "false", record.digest_sha256, record.function_name);
+        table += std::format("    {{0x{:016X}ull, {}u, {}, {}, \"{}\", {}}},\n", record.key, record.entry, record.image_flags_used ? "true" : "false",
+                             record.image_status_used ? "true" : "false", record.digest_sha256, record.function_name);
         ++emitted;
     }
     std::string source = "// Generated by gt4_vu_recomp. Do not edit.\n";
     source += "#include \"vu_recomp_contract.hpp\"\n\n";
-    source += "namespace gt4::vugen::generated {\n\nusing namespace ps2;\nusing namespace ps2::vuops;\n\n";
+    source += std::format("namespace {} {{\n\nusing namespace ps2;\nusing namespace ps2::vuops;\n\n", name_space);
     for (const ProgramRecord &record : records) {
         if (record.refused) continue;
         source += std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx);\n", record.function_name);
     }
     source += "\n" + functions;
     source += "extern const ProgramEntry kPrograms[] = {\n" + table;
-    if (emitted == 0) source += "    {0u, 0u, false, \"\", nullptr},\n";
+    if (emitted == 0) source += "    {0u, 0u, false, false, \"\", nullptr},\n";
     source += "};\n";
     source += std::format("extern const std::uint32_t kProgramCount = {}u;\n\n}}\n", emitted);
     return source;
@@ -926,13 +1091,18 @@ std::string emit_generated_source(std::vector<ProgramRecord> &records) {
 std::string manifest_json(const std::vector<ProgramRecord> &records, const std::string &generated_file_name, const std::string &generated_sha256) {
     std::string json = "{\n  \"tool\": \"gt4_vu_recomp\",\n  \"donor_commit\": \"1b4808793a12c45125262fd2d5f50a9ec9f7c020\",\n";
     json += std::format("  \"generated_file\": \"{}\",\n  \"generated_sha256\": \"{}\",\n", json_escape(generated_file_name), generated_sha256);
+    json += std::format("  \"flag_elision\": {},\n", flag_elision() ? "true" : "false");
     json += std::format("  \"instruction_budget\": {},\n  \"programs\": [\n", 1000000u);
     for (std::size_t i = 0; i < records.size(); ++i) {
         const ProgramRecord &record = records[i];
         json += "    {";
         json += std::format("\"key\": \"0x{:016X}\", \"entry\": {}, \"origin\": \"{}\", ", record.key, record.entry, record.origin);
-        json += std::format("\"digest_sha256\": \"{}\", \"reachable_instructions\": {}, \"image_flags_used\": {}, ", record.digest_sha256, record.reachable.size(), record.image_flags_used ? "true" : "false");
-        json += std::format("\"digest_sha256\": \"{}\", \"reachable_instructions\": {}, ", record.digest_sha256, record.reachable.size());
+        json += std::format("\"digest_sha256\": \"{}\", \"reachable_instructions\": {}, \"image_flags_used\": {}, \"image_status_used\": {}, ", record.digest_sha256,
+                            record.reachable.size(), record.image_flags_used ? "true" : "false", record.image_status_used ? "true" : "false");
+        json += std::format("\"interpreter_calls\": {}, ", record.interpreter_calls);
+        json += std::format("\"mac_mode\": \"{}\", \"mac_writers\": {}, \"mac_sites\": {}, \"mac_reader_sites\": {}, ", record.mac_mode, record.mac_writers,
+                            record.mac_sites, record.mac_reader_sites);
+        json += std::format("\"clip_writers\": {}, \"clip_sites\": {}, \"clip_reader_sites\": {}, ", record.clip_writers, record.clip_sites, record.clip_reader_sites);
         json += std::format("\"fallback_sites\": {}, \"upper_nop_sites\": {}, \"budget_heads\": {}, ", record.fallback_sites, record.upper_nop_sites, record.budget_heads);
         json += "\"exit_pcs\": [";
         for (std::size_t k = 0; k < record.exit_pcs.size(); ++k) json += std::format("{}{}", k ? ", " : "", record.exit_pcs[k]);

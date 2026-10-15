@@ -91,9 +91,11 @@ int main(int argc, char **argv) {
                std::format("table entry 0x{:04X} is found for its own image", table_entry.entry));
         // Identity control: the digest binds the image-wide flag bit.
         const std::vector<std::uint32_t> pcs = ps2::vu::reachable(match->bytes.data(), 16383u, table_entry.entry);
-        const std::string digest = gt4::vurecomp::program_identity_digest(match->bytes.data(), pcs, table_entry.entry, table_entry.image_flags_used);
+        const std::string digest = gt4::vurecomp::program_identity_digest(match->bytes.data(), pcs, table_entry.entry, table_entry.image_flags_used, table_entry.image_status_used);
         expect(counters, digest == table_entry.identity_sha256, std::format("identity digest matches for entry 0x{:04X}", table_entry.entry));
-        const std::string other_flag = gt4::vurecomp::program_identity_digest(match->bytes.data(), pcs, table_entry.entry, !table_entry.image_flags_used);
+        const std::string other_flag = gt4::vurecomp::program_identity_digest(match->bytes.data(), pcs, table_entry.entry, !table_entry.image_flags_used, table_entry.image_status_used);
+        const std::string other_status = gt4::vurecomp::program_identity_digest(match->bytes.data(), pcs, table_entry.entry, table_entry.image_flags_used, !table_entry.image_status_used);
+        expect(counters, other_status != table_entry.identity_sha256, std::format("identity digest changes with the status bit for entry 0x{:04X}", table_entry.entry));
         expect(counters, other_flag != table_entry.identity_sha256, std::format("identity digest changes with the flag bit for entry 0x{:04X}", table_entry.entry));
         // Key control: a changed reachable word is a different program and must not match.
         std::vector<std::uint8_t> changed = match->bytes;

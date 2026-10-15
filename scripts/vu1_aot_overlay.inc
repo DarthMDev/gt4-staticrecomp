@@ -66,13 +66,14 @@ const gt4::vugen::ProgramEntry *aot_find_program(std::uint32_t entry) {
     slot.program = nullptr;
     if (g_scan[1]) scan_flags(1, g_vu1_code, 16384);
     const bool flags_used = g_flags_used[1];
+    const bool status_used = gt4::vurecomp::image_status_used(g_vu1_code, 16384);
     const std::vector<std::uint32_t> pcs = reachable(g_vu1_code, 16383u, address);
     const std::uint64_t key = program_key(g_vu1_code, pcs, address);
     for (std::size_t i = 0; i < gt4::vugen::generated::kProgramCount; ++i) {
         const gt4::vugen::ProgramEntry &candidate = gt4::vugen::generated::kPrograms[i];
         if (candidate.key != key || candidate.entry != address) continue;
-        if (candidate.image_flags_used != flags_used ||
-            gt4::vurecomp::program_identity_digest(g_vu1_code, pcs, address, flags_used) != candidate.identity_sha256) {
+        if (candidate.image_flags_used != flags_used || candidate.image_status_used != status_used ||
+            gt4::vurecomp::program_identity_digest(g_vu1_code, pcs, address, flags_used, status_used) != candidate.identity_sha256) {
             ++vu1aot::g_counters.identity_rejects;
             continue;
         }
@@ -98,7 +99,8 @@ void aot_run_compiled(const gt4::vugen::ProgramEntry &program) {
 }
 
 // Returns the first differing Vu0Regs field, or an empty string.
-std::string aot_first_regs_difference(const Vu0Regs &a, const Vu0Regs &b) {
+// VU1 status is compared only when the program can observe it (image_status_used).
+std::string aot_first_regs_difference(const Vu0Regs &a, const Vu0Regs &b, bool compare_status) {
     for (int reg = 0; reg < 32; ++reg)
         if (std::memcmp(&a.vf[reg], &b.vf[reg], 16) != 0) return "vf" + std::to_string(reg);
     if (std::memcmp(&a.acc, &b.acc, 16) != 0) return "acc";
@@ -108,7 +110,7 @@ std::string aot_first_regs_difference(const Vu0Regs &a, const Vu0Regs &b) {
     if (a.i != b.i) return "i";
     if (a.r != b.r) return "r";
     if (a.mac != b.mac) return "mac";
-    if (a.status != b.status) return "status";
+    if (compare_status && a.status != b.status) return "status";
     if (a.clip != b.clip) return "clip";
     if (a.cmsar0 != b.cmsar0) return "cmsar0";
     if (a.tpc != b.tpc) return "tpc";
@@ -170,7 +172,7 @@ void aot_verify(const gt4::vugen::ProgramEntry &program, std::uint32_t entry) {
     g_kick_sink = nullptr;
 
     ++vu1aot::g_counters.verified;
-    std::string difference = aot_first_regs_difference(compiled_regs, g_vu1);
+    std::string difference = aot_first_regs_difference(compiled_regs, g_vu1, program.image_status_used);
     if (difference.empty() && std::memcmp(compiled_memory.data(), g_vu1_mem, compiled_memory.size()) != 0) difference = "memory";
     if (difference.empty() && !aot_same_kicks(compiled_kicks, interpreted_kicks)) difference = "xgkick";
     if (!difference.empty()) {
