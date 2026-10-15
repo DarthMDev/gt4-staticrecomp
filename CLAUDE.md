@@ -25,9 +25,13 @@ claim zero emulation or full PS2 fidelity.
 
 - **Phase 1 (current):** fast, stable recompiled port: 60 FPS at 100% game speed,
   smooth frametime, no interpreter on the normal path.
-- **Phase 2 (later):** apply the gt4-decomp decompilation function by function
-  behind a guest ABI/memory bridge so the game reads like source; then a native
-  renderer, physics decoupled from frame rate, ultrawide, remaster features.
+- **Out of scope here:** a decompilation-based source port, a native (non-GS)
+  renderer, physics decoupled from frame rate, ultrawide and remaster features
+  will be a separate project, possibly a fork. This repository's goal is the
+  original game running natively, optimized and as faithful as possible.
+- **Renderer focus now:** the accurate Vulkan (GS) renderer, gaining features
+  ported from PCSX2 (TASK-011, TASK-030); the lighter PCSX2-based Custom
+  renderer comes later.
 - **Graphics:** two launcher-selectable renderers: **Vulkan (GS)** = the current
   accurate compute GS emulation (to gain internal scaling and options) and
   **Vulkan (Custom)** = a PCSX2-based hardware renderer specialized for GT4

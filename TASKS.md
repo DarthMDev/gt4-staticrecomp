@@ -6,7 +6,7 @@ into `main` (workflow rules in [CLAUDE.md](CLAUDE.md)). Evidence for finished
 tasks lives in `docs/journal/` and `docs/inputs/`; background studies are linked
 from [STATUS](docs/STATUS.md).
 
-States: ✅ Done · 🔄 In progress · ⏭️ Next · 📋 Planned · 🔭 Long term
+States: ✅ Done · 🔄 In progress · ⏭️ Next · 📋 Planned
 
 Task IDs are stable; the overview lists tasks in execution order.
 
@@ -14,36 +14,35 @@ Task IDs are stable; the overview lists tasks in execution order.
 
 | Task | Goal | State |
 |---|---|---|
-| TASK-001 | Rebuild the slice 149 baseline on this machine | ✅ Done |
-| TASK-002 | Owner-launched VU1 program recording mode | ✅ Done |
-| TASK-003 | Hardened VU1 AOT emitter with differential tests | ✅ Done |
-| TASK-004 | VU1 microcode compiled ahead of time in the game | ✅ Done |
-| TASK-005 | Asynchronous GPU submission + overlay (RTSS) fix | ✅ Done |
-| TASK-006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
-| TASK-007 | VU1 per-program flag elision | ✅ Done |
-| TASK-008 | Full static VU1 entry coverage | 🔄 In progress |
-| TASK-009 | Quick fixes: window title, fixed 16:9, fullscreen toggle, per-interval counters, 480p boot and 16:9 option (if the study shows it is small) | ⏭️ Next |
-| TASK-018 | Faster builds (parallel jobs, compiler cache, lld-link) | 📋 Planned |
-| TASK-010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
-| TASK-019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
-| TASK-011 | Upscaling 1x-6x on the Vulkan (GS) renderer | 📋 Planned |
-| TASK-030 | Vulkan (GS) renderer features: census, post-processing, dithering, deinterlacing, texture options | 📋 Planned |
-| TASK-012 | Night races: remove the GS readback wait | 📋 Planned |
-| TASK-013 | License-test crash | 📋 Planned |
-| TASK-014 | VU0 microcode compiled ahead of time | 📋 Planned |
-| TASK-015 | EE entry coverage from the decomp function list | 📋 Planned |
-| TASK-016 | LWR sign-extension fidelity fix | 📋 Planned |
-| TASK-017 | IOP per-module cost counters and review | 📋 Planned |
-| TASK-020 | In-game 16:9 option by default (guest hook); 480p via guest hook if the TASK-009 switch fails | 📋 Planned |
-| TASK-021 | Merged into TASK-009 | — |
-| TASK-022 | Decomp names in generated EE code | 📋 Planned |
-| TASK-023 | Launcher (Rust + egui/GPUI): video, controls, game image | 📋 Planned |
-| TASK-024 | Vulkan (Custom) renderer P0: GT4 GS feature census and replay harness | 📋 Planned |
-| TASK-025 | Vulkan (Custom) renderer P1-P3: PCSX2 HW renderer import, adapter, options | 📋 Planned |
-| TASK-026 | Racing wheels (G27/G29 and others) with force feedback | 📋 Planned |
-| TASK-027 | Android build | 📋 Planned |
-| TASK-028 | iOS build (Metal) | 📋 Planned |
-| TASK-029 | Phase 2: decompilation bridge and first native functions | 🔭 Long term |
+| TASK‑001 | Rebuild the slice 149 baseline on this machine | ✅ Done |
+| TASK‑002 | Owner-launched VU1 program recording mode | ✅ Done |
+| TASK‑003 | Hardened VU1 AOT emitter with differential tests | ✅ Done |
+| TASK‑004 | VU1 microcode compiled ahead of time in the game | ✅ Done |
+| TASK‑005 | Asynchronous GPU submission + overlay (RTSS) fix | ✅ Done |
+| TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
+| TASK‑007 | VU1 per-program flag elision | ✅ Done |
+| TASK‑008 | Full static VU1 entry coverage | 🔄 In progress |
+| TASK‑009 | Quick fixes: window title, fixed 16:9, fullscreen toggle, per-interval counters, 480p boot and 16:9 option (if the study shows it is small) | ⏭️ Next |
+| TASK‑018 | Faster builds (parallel jobs, compiler cache, lld-link) | 📋 Planned |
+| TASK‑010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
+| TASK‑019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
+| TASK‑011 | Upscaling 1x-6x on the Vulkan (GS) renderer | 📋 Planned |
+| TASK‑030 | Vulkan (GS) renderer features: census, post-processing, dithering, deinterlacing, texture options | 📋 Planned |
+| TASK‑012 | Night races: remove the GS readback wait | 📋 Planned |
+| TASK‑013 | License-test crash | 📋 Planned |
+| TASK‑014 | VU0 microcode compiled ahead of time | 📋 Planned |
+| TASK‑015 | EE entry coverage from the decomp function list | 📋 Planned |
+| TASK‑016 | LWR sign-extension fidelity fix | 📋 Planned |
+| TASK‑017 | IOP per-module cost counters and review | 📋 Planned |
+| TASK‑020 | In-game 16:9 option by default (guest hook); 480p via guest hook if the TASK-009 switch fails | 📋 Planned |
+| TASK‑021 | Merged into TASK-009 | — |
+| TASK‑022 | Decomp names in generated EE code | 📋 Planned |
+| TASK‑023 | Launcher (Rust + egui/GPUI): video, controls, game image | 📋 Planned |
+| TASK‑024 | Vulkan (Custom) renderer P0: GT4 GS feature census and replay harness | 📋 Planned |
+| TASK‑025 | Vulkan (Custom) renderer P1-P3: PCSX2 HW renderer import, adapter, options | 📋 Planned |
+| TASK‑026 | Racing wheels (G27/G29 and others) with force feedback | 📋 Planned |
+| TASK‑027 | Android build | 📋 Planned |
+| TASK‑028 | iOS build (Metal) | 📋 Planned |
 
 ## Done
 
@@ -198,11 +197,13 @@ High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 ARM64 builds, host layers, on-screen controls with Bluetooth controller
 switching; iOS via MoltenVK first, Metal later (ARMSX2 as case study).
 
-### TASK-029 — Phase 2
-Decompilation bridge (`GPtr`, ABI thunks, A/B comparison), then native renderer,
-physics decoupled from frame rate, ultrawide.
-
 ## Ideas (not scheduled)
+
+Phase 2 (decompilation-based source port, native renderer, physics decoupled
+from frame rate, ultrawide, remaster) is out of scope for this repository and
+will be a separate project, possibly a fork. This repository focuses on running
+the original game natively, optimized and as faithfully as possible.
+
 
 LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
 settings menus, Spec II as a second target or data source (docs/SPEC2-STUDY.md),
