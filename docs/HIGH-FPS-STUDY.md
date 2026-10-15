@@ -165,3 +165,130 @@ Only real intermediate frames are considered here: no optical flow, no generativ
 ## 8. Sources read
 
 CLAUDE.md, README.md (status and scene table), docs/ARCHITECTURE.md, docs/OPTIMIZATION-PLAN.md, docs/GS-ASYNC-DESIGN.md, docs/MTVU-PLAN.md (sections 0-2 in full; sections 3-4 read), docs/STATUS.md (current state), docs/journal/2026-10-15.md (F8 tables, MTVU notes), docs/hw-renderer-spec/14 (capture and metrics), docs/GS-RENDERER-OPTIONS.md, native/pacing.cpp, native/frame_clock.cpp, native/window.cpp (`release_frame`, `on_vblank`), native/pacing.hpp (constants), donor `runtime/src/system.cpp` (VBlank, clock, idle), `runtime/src/kernel.cpp` (on_vblank_start), decomp `RaceBase__updateRace.cpp`, `RaceSolitaire__updatePlay.cpp`, `RigidBodyManager__Update.cpp`, `CameraBase__getModelviewMatrix.cpp`, `RaceBase__getFrameInterval.cpp`, `PlayStation3__RenderLoopGetFlipCycle.cpp`, and `git show task/012-parallel-gs:native/parallel_gs_backend.cpp`.
+
+## 9. Prototype A (slice 187): offline primitive-interpolation oracle
+
+Tool: `tools/gs_interp/` (Python 3.14 stdlib only; numpy is not in the tooling venv). Tests:
+`tests/python/test_gs_interp.py` (20 tests, one reads the menu capture when `GT4_INTERP_MENU_CAPTURE` is set).
+Captures are owner data under `private/`; they are not committed.
+
+### 9.1 Layout
+
+- `gif.py`: GIF packet decoding per path (a tag may continue into the next packet of its path), with the
+  packed-format rules of the TASK-026 clean-room parser (`native/hw_gs/frontend/hw_gif_parser.cpp` on
+  task/027-hw-renderer): descriptors, ADC bit 111 (non-drawing kick), XYZ3/XYZF3 never draw, the Q latch reset
+  per tag, Q sanitising. Encoding writes register writes as A+D quads and kicks as PACKED quads (ADC kept).
+- `capture.py`: record reader (mmap), frames split at 'V', byte ranges per frame, serialiser.
+- `prims.py`: primitive assembly (point, line, line strip, triangle, strip, fan, sprite) and the context key
+  (PRIM type, TEX0, FRAME, ZBUF of the active context). Strips and fans are flagged `shared`.
+- `match.py`: context runs; the k-th run of a key in A pairs with the k-th run of that key in B, then by position
+  when kind and vertex count agree. Two keys: literal (TASK-031 rule: TEX0, FRAME, ZBUF) and relaxed (TEX0 only).
+- `synth.py`: each vertex of B is lerped with its partner in A (XYZ, fog and RGBA linear; ST perspective-correct
+  through S/Q, T/Q and 1/Q). The vertex is written before its kick, and RGBAQ and ST are restored after the
+  primitive's last kick. Other events of B stay in order, except the page-selecting writes (9.3).
+- `oracle.py`, `__main__.py`: interpolated N (N-1 and N+1, t = 0.5) and extrapolated N (N-2 and N-1, t = 2.0,
+  predicted = 2(N-1) - (N-2)). Each becomes a capture (real records before N, synthetic frame N, its 'V'),
+  replayed by the renderer and compared with real N. Commands: `python -m gs_interp real|oracle|info`.
+- `metrics.py`: PPM reader, pct_bad (any channel differs by more than 8), PSNR, PNG writer, difference image.
+
+### 9.2 Renderer path
+
+Chosen: `hw_cpuref_replay.exe` (native/hw_gs/cpuref on task/027-hw-renderer, built as
+`private/slice177-cpuref-build`). It reads the GT4_PGS_CAPTURE format directly and writes one PPM per frame, so
+the oracle needed no new C++. The paraLLEl-GS path would have needed a new replay harness. The renderer's match
+with the donor on menus is taken from the slice175 notes; it was not re-measured here.
+
+Serialiser check: the untouched frame N, re-serialised, renders a byte-identical PPM (menu frames 60, 301, 900).
+
+### 9.3 Finding: menu frames alternate pages and fade colour
+
+Measured on menu frames 231 to 234 (`kicks equal` on all four, images equal):
+
+- Consecutive frames have identical vertex kicks and identical uploaded images. What changes: RGBAQ colour
+  (a small fade, for example 0x5e to 0x55 to 0x4d), XYOFFSET, and the draw page (FRAME_1 alternates between two
+  addresses; DISPFB2 0x12000090 alternates too).
+- Taking every non-geometry write from the later frame, as first written in TASK-031, shows the wrong page. A
+  copy of frame N+1 rendered as frame N reproduced real frame N-1 exactly. Used instead: the page-selecting writes
+  (FRAME_1/2, ZBUF_1/2, DISPFB2) come from frame N-2, which has N's parity. Counted as
+  `page_writes_remapped` in the report. This is a deviation from the TASK-031 rule and is recorded as one.
+- The literal key (with FRAME and ZBUF) never pairs frames of different parity, so the extrapolation (N-2 with
+  N-1) matched nothing with it. The relaxed key (TEX0 only) pairs geometry; both are reported. Race captures may
+  alternate pages too: **Unknown** until the owner's capture is read.
+
+### 9.4 Menu results
+
+Capture `private/slice175-capture/menu-0-1100.gscap` (1,101 frames, 640x448). Real frames were rendered once from
+the whole capture. Interpolated and extrapolated frames were rendered per sample. Baselines: real N-1 (hold
+previous) and real N+1 (hold next). Full JSON: `private/slice187-interp-samples/menu-oracle.json`.
+
+| N | prims in B | interp pct_bad / PSNR | extrap pct_bad / PSNR | hold prev | hold next |
+|---|---|---|---|---|---|
+| 16 | 5 sprites, 5/5 matched | 0.00 / inf | 1.57 / 43.2 (0/5 matched) | 0.34 / 50.2 | 1.77 / 40.8 |
+| 282 | 0 | 0.00 / inf | 0.17 / 47.3 | 0.22 / 40.3 | 0.21 / 39.4 |
+| 814 | 0 | 0.00 / inf | 15.25 / 28.3 | 12.82 / 31.4 | 18.35 / 28.9 |
+| 821 | 0 | 0.00 / inf | 43.39 / 17.9 | 38.72 / 22.0 | 39.08 / 21.3 |
+| 828 | 0 | 0.00 / inf | 29.15 / 15.6 | 33.04 / 17.4 | 34.79 / 16.9 |
+| 835 | 0 | 0.00 / inf | 18.00 / 19.9 | 23.47 / 18.9 | 20.93 / 19.4 |
+| 842 | 0 | 0.00 / inf | 8.74 / 23.6 | 17.85 / 20.2 | 17.59 / 20.3 |
+| 849 | 0 | 0.00 / inf | 4.11 / 30.0 | 16.06 / 21.1 | 15.94 / 21.1 |
+| 905 | 0 (198 in N-1) | 0.00 / inf | 79.86 / 21.2 | 66.20 / 20.7 | 78.30 / 20.0 |
+| 912 | 0 | 0.00 / inf | 81.81 / 19.6 | 63.55 / 26.9 | 41.49 / 29.5 |
+| 926 | 0 | 0.00 / inf | 39.34 / 27.1 | 24.90 / 31.5 | 22.67 / 31.4 |
+| 933 | 0 | 0.00 / inf | 39.16 / 27.1 | 22.81 / 27.1 | 26.20 / 26.1 |
+
+Reading, carefully:
+
+- The interpolated frame is bit-identical to real N on all 12 frames. That does not measure the lerp. Frame N+1
+  carries the same kicks and images as frame N; only colour, offsets and page differ, and the page is taken from
+  N-2. The copy of N+1 with N-2's page is therefore already real N. The menu has one frame with matchable
+  primitives (16), and there the lerp of the sprite colour gives the exact output.
+- The extrapolated frame is not identical (0.17 to 81.8 % bad). Its mismatch is not explained yet. Note that
+  for 905 the frame before has 198 point primitives that were not matched (no pair in N-2).
+- The 95 % primitive gate cannot be judged on the menu (too few matchable primitives). The race PSNR gate
+  (32 dB) was not measured: no race capture exists yet.
+
+### 9.5 Samples
+
+`private/slice187-interp-samples/menu_fNNNNN_{real,interp,extrap,diff_interp,diff_extrap}.png` for the 12
+frames above (60 PNG files). Diff images show the largest channel difference times 4.
+
+### 9.6 Owner race capture (windowed; not run by the agent)
+
+The launcher scrubs `GT4_PGS_*` from the environment (`scripts/external_runtime_probe.py`,
+`PERFORMANCE_SCRUB_PREFIXES`), so the capture switch cannot go through `play_performance.py`. The command runs
+the slice185 build directly, with the same files as the slice185 headless run. It uses a fresh run folder and a
+copy of the pinned widescreen seed card, so the owner's card is not touched. Run it only when no owner session is
+running.
+
+```powershell
+$M = 'C:\Antigravity\gt4-staticrecomp'
+$run = "$M\private\slice187-capture\run"
+New-Item -ItemType Directory -Force "$M\private\slice187-capture" | Out-Null
+New-Item -ItemType Directory -Force "$run" | Out-Null
+Copy-Item "$M\private\slice185-headless-hires2\SCUS_973.28" "$run\SCUS_973.28" -Force
+Copy-Item "$M\private\slice113-video\widescreen-seed\card.ps2" "$run\card.ps2" -Force
+$env:GT4_RENDERER = 'parallel'
+$env:GT4_PGS_SSAA = '16'
+$env:GT4_PGS_HIRES = '2'
+$env:GT4_FORCE_480P = '1'
+$env:GT4_PGS_CAPTURE = "$M\private\slice187-capture\race.gscap"
+Set-Location $run
+& "$M\private\slice185-parallel-build\build\gt4vulkan.exe" "$run\SCUS_973.28" --ntsc --disc "$M\Gran Turismo 4 (USA) (v2.00).iso" --frames 72000 --memcard "$run\card.ps2" --misses "$run\misses.txt" --window
+```
+
+Play to Time Trial, Nordschleife, Toyota Supra Wood One. Drive about 5 s of race, then close the game normally.
+The capture is flushed every frame. To keep only a frame window, set `GT4_PGS_CAPTURE_FRAMES=first:last`
+(frame counts since boot) before the run. Without it the file holds the whole session from boot.
+
+Expected size (estimate, not measured): the menu capture is 517,600,834 bytes for 1,101 frames (about 0.47 MB per
+frame). With boot to race at 3,000 to 4,000 frames plus 300 race frames at 0.5 to 1 MB each, expect about
+1.6 to 2.2 GB in total.
+
+### 9.7 Not verified
+
+- Race captures: none yet. Both kill criteria (match rate 95 %, race PSNR 32 dB) are open.
+- The extrapolation mismatch on the menu (9.4) is not explained.
+- Strips and fans are matched but never rewritten; their share on race frames is **Unknown**.
+- Non-drawing kicks (XYZ3, ADC) are kept in the event stream, but they are not part of the primitive model.
+- The renderer is not re-validated against the donor here. Interlaced 480i output is not special-cased.
+- Cost and latency of an in-engine version: not measured.

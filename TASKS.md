@@ -68,7 +68,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (owner, 2026-10-15) · pure libraries done on task/027-hw-renderer |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
-| TASK‑031 | High frame rate (120-144 FPS) with game physics untouched: GS primitive interpolation, native render-rate study | 🔬 Study and offline prototype |
+| TASK‑031 | High frame rate (120-144 FPS) with game physics untouched: GS primitive interpolation, native render-rate study | 🔬 Prototype A oracle built (slice 187); menus inconclusive; race capture pending from owner |
 
 ## Phase 2 — Android
 
