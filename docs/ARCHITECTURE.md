@@ -55,16 +55,12 @@ The 16:9 viewport matches the original GT4 option for camera/HUD. This does not 
 - PS2Recomp: reference studied; no GPL implementation imported or linked.
 - PCSX2: historical comparison tool and source of Khronos headers;
   no PCSX2 emulation core is linked to the game.
-- Original EE recompiler/runtime of this project: now on the archive branch,
-  with no active target/build/test on main.
 
 ## Unknown
 
 Full EE/IOP/VU/GS/SPU2 fidelity, long-term stability, root cause of sluggishness,
 input double-triggering, audio continuity, and physical XInput validation.
-Past observations from the original model do not automatically validate this
-different runtime. Performance investigation is now delegated to OpenCode;
-Codex prepared the handoff, and input fixes remain outside that investigation.
+Performance work since slice 151 is tracked in `TASKS.md`.
 The owner separately authorized slice136's keyboard correction: arrows had been
 sent as both D-pad and left-stick axes. Host merge now sends digital buttons/
 pressures only, retaining XInput axes. Source/native regression controls qualify

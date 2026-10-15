@@ -464,9 +464,8 @@ observation does not qualify racing or performance. Recovered remains unlaunched
 IOP/VU interpreted, and PS2 hardware/services modeled in software. Vulkan compute,
 Win32, WinMM, and XInput. Does not use a browser, WebAssembly, or embedded PCSX2.
 
-The original engine, dedicated tooling, and engine-specific tests have been removed from `main`;
-preserved on `codex/archive-original-recomp-20261013`, commit 95f6155, published to origin
-prior to cleanup. Private data, saves, and frozen producers remain local.
+Earlier pre-donor work was removed from this repository and lives in the private
+`gt4-staticrecomp-legacy` repository. Private data, saves, and frozen producers remain local.
 
 ## Confirmed Results and Limits
 
@@ -535,7 +534,7 @@ and the owner's session/card are preserved. Input, audio, save and stability wor
 continues to require its own authorized package and acceptance controls.
 
 Technical reference: [Architecture](ARCHITECTURE.md), [Build](BUILD.md),
-[Legacy Archive](LEGACY.md), [Slice 114 Report](reverse-engineering/slice114-native-base-cleanup.md).
+[Slice 114 Report](reverse-engineering/slice114-native-base-cleanup.md).
 Prior functional evidence: reports 110–113, corresponding manifests, and
 `inputs/slice113-owner-results.json`. Slice 114 does not reclassify these results
 as complete fidelity proofs or official benchmarks.

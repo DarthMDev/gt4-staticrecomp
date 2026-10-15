@@ -13,7 +13,6 @@ Local Python in `private/tooling-venv` with `scripts/requirements.txt`
 and swapchain maintenance1. There is no evidence of full Khronos conformance validation.
 
 `native/build.cmd` initializes the VS x64 environment and sets UTF-8 encoding prior to invoking CMake.
-This Clang build replaces the legacy MSVC build from the original engine.
 
 ## Private Prerequisites
 
@@ -36,8 +35,7 @@ pinned ELF from verified CORE/ISO input, rebuilds the donor translator and creat
 a separate AOT library with fresh CMake caches. It does not yet replace the
 production library or automate a clean-checkout playable game build. The ordinary
 native build still recompiles runtime/host/adapters and links the existing qualified
-library. Keep candidate and production qualification distinct; the archived
-original engine is not used to run the game.
+library. Keep candidate and production qualification distinct.
 
 Slice 118 adds [isolated baseline/recovered EE builds](EE-CANDIDATES.md) with
 separate library/executable manifests and a candidate launcher. The default build
@@ -54,9 +52,6 @@ ctest --test-dir private/slice114-native-base/build --output-on-failure
 ```
 
 CTest runs the GPU/Vulkan checks, Windows audio/input tests, and active Python test suite.
-The 54 C++ tests from the original engine were archived alongside the removed code,
-without modifying their assertions. This changes the test population; it does not make
-their historical passing results proof of donor runtime correctness.
 
 Running Python tests standalone, when needed:
 

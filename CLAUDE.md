@@ -10,9 +10,9 @@ The ordered task list is `TASKS.md`. Current state is at the top of
 `docs/journal/YYYY-MM-DD.md`. `README.md`, `docs/ARCHITECTURE.md` and
 `docs/BUILD.md` give the public overview, architecture and build recipes per
 slice. Older slice-by-slice history lives in STATUS (History section) and the
-journals. The old EE recompiler is archived on `codex/archive-original-recomp-20261013`
-(commit `95f615519b992c65505d77da35af825fc6a13a53`, see `docs/LEGACY.md`); do not
-restore it without a documented technical reason.
+journals. Work from before the ps2-web-recomp base (the project's earlier own
+recompiler) lives only in the private repository `moesuito/gt4-staticrecomp-legacy`;
+do not reintroduce it here.
 
 ## Mission and direction (owner, 2026-10-15)
 

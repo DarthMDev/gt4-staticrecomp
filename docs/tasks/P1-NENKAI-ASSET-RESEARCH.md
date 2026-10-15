@@ -9,7 +9,7 @@ experiments in their own private directories. No external provider setup or
 unattended recurring work is authorized by this task.
 
 Baseline: `dc46c0b`, after slice 118 candidate preparation and renderer scope
-clarification. Read `docs/STATUS.md`, `AGENTS.md`, `docs/CAR-ASSET-RESEARCH.md`,
+clarification. Read `docs/STATUS.md`, `CLAUDE.md`, `docs/CAR-ASSET-RESEARCH.md`,
 `docs/RENDER-CONTRACTS.md` and `docs/inputs/slice118-volume-catalogue.json` first.
 P1 remains in progress. This task does not implement the renderer or its live hooks.
 

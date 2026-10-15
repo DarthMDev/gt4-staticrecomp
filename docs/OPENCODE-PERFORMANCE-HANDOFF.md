@@ -20,7 +20,7 @@ they do not authorize navigating gameplay. Launching the real game through its
 CLI/launcher is authorized. Do not manipulate the owner's window after launch.
 
 Keep documentation, reports, prompts, and new code comments in **en-US**.
-Owner-facing conversation may remain Portuguese. Read the current `AGENTS.md`.
+Owner-facing conversation may remain Portuguese. Read the current `CLAUDE.md`.
 
 ## Read first and establish the baseline
 
@@ -163,8 +163,7 @@ private/tooling-venv/Scripts/python.exe -m unittest discover -s tests/python
 ```
 
 Current suite contains 3 CTest entries, including 32 Python tests. Extend existing
-fixtures for nontrivial changes and do not weaken assertions. The old 54 C++
-tests belong to the archived engine. Record results of this build, not inherited
+fixtures for nontrivial changes and do not weaken assertions. Record results of this build, not inherited
 green results. Do not rebuild/link over a running executable.
 
 Create a **new** runtime manifest under `docs/inputs` with exact size/hash pins

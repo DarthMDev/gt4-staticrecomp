@@ -22,6 +22,7 @@ Task IDs are stable; the overview lists tasks in execution order.
 | TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
 | TASK‑007 | VU1 per-program flag elision | ✅ Done |
 | TASK‑008 | Full static VU1 entry coverage | 🔄 In progress |
+| TASK‑030 | Repository cleanup: pre-donor material moved to a private backup | 🔄 In progress |
 | TASK‑009 | Quick fixes: window title, fixed 16:9, fullscreen toggle, per-interval counters, 480p boot and 16:9 option (if the study shows it is small) | ⏭️ Next |
 | TASK‑018 | Faster builds (parallel jobs, compiler cache, lld-link) | 📋 Planned |
 | TASK‑010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
@@ -85,6 +86,20 @@ identical to slice 154, interpreted calls 0 and verify 0 mismatches headless.
   targets, block starts and the recorded entries).
 - Acceptance: headless frames identical to TASK-007; verify mode 0 mismatches;
   owner night race, rally and showroom show `interpreted_calls` 0 in F8.
+
+## In progress (cleanup)
+
+### TASK-030 — Repository cleanup (pre-donor material)
+Branch: `task/030-legacy-cleanup`. Full history and all branches mirrored to the
+private repository `moesuito/gt4-staticrecomp-legacy` (2026-10-15, including the
+local m22-m29 branches as `local/*`). Owner choice: clean files and branches only,
+no public history rewrite. Done in the branch: `docs/LEGACY.md` removed; README,
+CLAUDE.md, BUILD, ARCHITECTURE, requirements, THIRD_PARTY, STATUS, handoff and
+workflow docs no longer point to the archived engine (old AGENTS.md references
+now point to CLAUDE.md). Historical reports, journals, decisions and pins are
+left unchanged as evidence. After the owner's approval and merge: delete the
+legacy branches on GitHub (archive branch, slice95-109 branches) and the merged
+donor-era `codex/*` branches; all are in the backup.
 
 ## Planned
 

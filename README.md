@@ -193,7 +193,7 @@ Exact revisions, licenses and imported files are listed in [THIRD_PARTY.md](nati
 
 The active runtime foundation comes from the MIT-licensed [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) donor, adapted to native Windows and Vulkan. Our binary runs directly on Windows without a browser, WebAssembly, or embedded PCSX2. Credits, revisions, and licensing terms are documented in [THIRD_PARTY.md](native/THIRD_PARTY.md).
 
-Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The original recompiler engine has been archived on the [`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013) branch. The `main` branch is dedicated exclusively to the current native base.
+Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The `main` branch contains only this native base.
 
 - [STATUS](docs/STATUS.md): Confirmed milestones and pending tasks.
 - [HYBRID-PORT-PLAN](docs/HYBRID-PORT-PLAN.md): Active Windows-first no-JIT optimization, GS graphics and future Android/iOS phases.
@@ -208,6 +208,5 @@ Development has progressed through boot and menus, Vulkan integration, audio and
 - [ROADMAP](docs/ROADMAP.md): Earlier timing analysis and selective migration proposal, retained as technical context.
 - [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
 - [BUILD](docs/BUILD.md): Build environment setup and verification procedures.
-- [LEGACY](docs/LEGACY.md): Preservation and retrieval of archived work.
 
 Active source code resides in `native/`, with tooling in `scripts/`, automated tests in `tests/`, and technical records in `docs/`. The active development fork is [`moesuito/gt4-staticrecomp`](https://github.com/moesuito/gt4-staticrecomp).
