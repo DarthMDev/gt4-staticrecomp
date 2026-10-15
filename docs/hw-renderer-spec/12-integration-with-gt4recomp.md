@@ -36,7 +36,7 @@ template. Every anchor that routes to paraLLEl-GS must route to HWR when HWR is
 selected. The boundary is the **GIF transfer**, not individual register writes,
 because the donor's packed-register path updates ST/Q/RGBAQ/UV/FOG without
 going through its generic register writer (Confirmed in the paraLLEl-GS plan,
-section 2). HWR therefore owns a complete GIF parser (chapter 01).
+section 2). HWR therefore owns a complete GIF parser (chapter 02).
 
 ## 12.2 Renderer selection (Decision)
 
@@ -71,8 +71,8 @@ front end code is shared. Behavioural contract per operation:
 | `reset_gif_paths()` | Clears all paths' tag state (GIF reset). |
 | `write_privileged(addr, value)` | Stores 0x12000000-0x12001FFF writes by address. CSR/IMR/SIGLBLID semantics stay in the donor; HWR only reads display registers (PMODE, SMODE1, SMODE2, SRFSH, SYNCH1/2, SYNCV, DISPFB1/2, DISPLAY1/2, EXTBUF, EXTDATA, EXTWRITE, BGCOLOR). Returns false outside the range. |
 | `reset_context()` / `clear_vram()` | GS reset: registers, vertex queue, CLUT buffer; `clear_vram` zeroes GS memory **and** drops all cached targets/sources. |
-| `read_transfer_fifo(dst, qwords)` | Returns LOCAL->HOST data produced by the most recent TRXDIR=1 (chapter 08). Reading past the end returns zeros and counts a fault. |
-| `map_vram(offset, size)` | Returns a CPU view of GS memory that is **coherent with all GPU work recorded so far** (forces target write-back for the range, chapter 08). Used for VRAM frame dumps and diagnostics. |
+| `read_transfer_fifo(dst, qwords)` | Returns LOCAL->HOST data produced by the most recent TRXDIR=1 (chapter 10). Reading past the end returns zeros and counts a fault. |
+| `map_vram(offset, size)` | Returns a CPU view of GS memory that is **coherent with all GPU work recorded so far** (forces target write-back for the range, chapter 10). Used for VRAM frame dumps and diagnostics. |
 | `flush()` | Submits recorded work; never waits. |
 | `next_frame()` | Headless frame boundary (deferred deletions, age counters). |
 | `wait_idle()` | Blocks until the GPU is idle. |
@@ -100,7 +100,7 @@ operation returns GPU results except `read_transfer_fifo`, `map_vram`,
   donor's `g_odd_field` at present time (same function as
   `parallel_scanout_phase`).
 - GT4 boots 480i (FFMD=1 in menus, interlaced), and races can run in 480p from
-  the in-game option. Both must be handled (chapter 10 and 11).
+  the in-game option. Both must be handled (chapter 13).
 
 ## 12.5 Device, presentation and pacing (Decision)
 
@@ -111,7 +111,7 @@ operation returns GPU results except `read_transfer_fifo`, `map_vram`,
   `native_vulkan.cpp` (loader, Win32 surface creation, swapchain rebuild on
   resize, present-mode parsing, presentation rectangle arithmetic) should be
   factored into a small shared helper rather than duplicated.
-- Present path per VBlank: acquire, render the output stage (chapter 10:
+- Present path per VBlank: acquire, render the output stage (chapter 13:
   merge circuits, deinterlace, optional post-processing) **directly into the
   16:9 rectangle** of the swapchain image with a fragment pass (not a blit,
   because post-processing and filtering need a shader), clear the borders to
@@ -129,7 +129,13 @@ operation returns GPU results except `read_transfer_fifo`, `map_vram`,
   for vblank on its own, except the swapchain acquire/present waits implied by
   FIFO, which are accounted as `presentation_wait`.
 - Window resize and fullscreen toggle (Alt+Enter, F11) only set a flag; the
-  swapchain is rebuilt before the next present.
+  swapchain is rebuilt before the next present. **AMD RDNA4 (the owner's
+  RX 9060 XT)**: recreating a swapchain while passing the old one as
+  `oldSwapchain` stalls the next 2-3 acquires for about 2 seconds (Confirmed by a
+  separate study, also a known vendor workaround). HWR waits for the old
+  swapchain's presents, destroys it, then creates the new one without
+  `oldSwapchain` (on all AMD devices; chapter 13.6). The same rule should be
+  applied to the shared helper used by the donor and paraLLEl-GS paths.
 - Submission model: one primary command buffer per "GPU batch" (normally one
   per guest frame, split earlier only when a readback or a ring-full condition
   forces it), a timeline semaphore for ordering, and a 3-slot ring of
@@ -147,7 +153,7 @@ Required (refuse to start without them, with a list): Vulkan 1.2 core,
 images, `R8G8B8A8_UNORM` and `R16G16B16A16_UNORM` colour attachments with
 blending, `R32_SFLOAT` colour attachment.
 
-Optional, with a fallback each (chapter 07 explains the use):
+Optional, with a fallback each (chapter 08 explains the use):
 `VK_EXT_rasterization_order_attachment_access` or
 `VK_EXT_attachment_feedback_loop_layout` (framebuffer read without a copy;
 fallback = copy the touched rectangle of the target to a temporary texture
@@ -155,7 +161,14 @@ before the draw), `VK_KHR_dynamic_rendering` (simplifies render-pass
 management; fallback = classic render passes with a cache),
 `VK_EXT_line_rasterization` (Bresenham lines; fallback = lines expanded to
 quads), `VK_KHR_push_descriptor` (fallback = descriptor pools per frame),
-`VK_EXT_memory_budget` (fallback = fixed budget, chapter 04).
+`VK_EXT_memory_budget` (fallback = fixed budget, chapter 04),
+`VK_EXT_provoking_vertex` in last-vertex mode (fallback = de-indexed flat
+colours, chapter 03.2), `wideLines`/`largePoints` covering the scale (fallback =
+vertex-shader expansion, chapter 03.2), `textureCompressionBC` (fallback = CPU
+decode of BC replacement textures, chapter 11.4), `dualSrcBlend` is required
+only for blend level `basic`/`medium` mixed modes and SPLIT_RGB_ONLY (fallback =
+SHADER blending and PASS_THEN_FAIL, chapter 08). Every optional feature found or
+missing is logged once at start and recorded in `result.json`.
 
 Every limit used for sizing (max image dimension 2D, max framebuffer size,
 max push constants, max storage buffer range) is read from the device. The RX
@@ -191,20 +204,40 @@ A Python fixture parses the new block.
 
 Environment variables in phase 1 (the launcher, TASK-019, writes them later):
 
-| Variable | Values | Default |
-|---|---|---|
-| `GT4_HW_SCALE` | 1..8 integer (chapter 05) | 1 |
-| `GT4_HW_BLEND` | `basic`, `medium`, `high`, `full` (chapter 07) | `medium` |
-| `GT4_HW_MIPMAP` | `off`, `basic`, `full` (chapter 02) | `full` |
-| `GT4_HW_FILTER` | `nearest`, `ps2`, `forced` bilinear (chapter 02) | `ps2` |
-| `GT4_HW_DITHER` | `off`, `scaled`, `unscaled` (chapter 07) | `unscaled` |
-| `GT4_HW_DEINTERLACE` | `auto`, `off`, `weave`, `bob`, `blend`, `adaptive` (chapter 10) | `auto` |
-| `GT4_HW_POSTFX` | comma list: `cas`, `fxaa`, `shadeboost`, `scanlines` | empty |
-| `GT4_HW_TEXTURES` | directory of the texture root (chapter 09) | unset = off |
-| `GT4_HW_DUMP_TEXTURES` | `0`, `1`, `mips` | 0 |
-| `GT4_HW_GAME_FIXES` | `1` (GT4 fix table on), `0` (diagnostic only) | 1 |
-| `GT4_HW_DUMP_SOURCE` | `vram`, `scanout` | `vram` |
-| `GT4_HW_GPU_TIMING` | `0`, `1` | 0 |
+| Variable | Values | Default | Chapter |
+|---|---|---|---|
+| `GT4_HW_SCALE` | 1..8 integer | 1 | 06 |
+| `GT4_HW_HALF_PIXEL` | `native`, `normal`, `off` | `native` | 06 |
+| `GT4_HW_SPRITE_FIX` | comma list: `round`, `round_full`, `align`, `merge` | empty | 06 |
+| `GT4_HW_NATIVE_POSTFX` | `off`, `normal`, `aggressive` | `off` | 06 |
+| `GT4_HW_BLEND` | `basic`, `medium`, `high`, `full` | `high` (GT4 needs exact blending) | 08 |
+| `GT4_HW_ACCURATE_ATEST` | `0`, `1` | 0 | 08 |
+| `GT4_HW_MIPMAP` | `off`, `basic`, `full` | `full` | 03 |
+| `GT4_HW_FILTER` | `ps2`, `nearest`, `forced` | `ps2` | 03 |
+| `GT4_HW_DITHER` | `native`, `fine`, `off` | `native` | 06, 08 |
+| `GT4_HW_AUTOFLUSH` | `sprites`, `all`, `off` | `sprites` | 02 |
+| `GT4_HW_SYNC_MODE` | `cache`, `writeback` (reference mode) | `cache` | 00, 10 |
+| `GT4_HW_GLM` | `1`, `0` (diagnostic: write back instead) | 1 | 04 |
+| `GT4_HW_READBACK` | `exact`, `full`, `none` | `exact` | 10 |
+| `GT4_HW_READBACK_SPIN` | `0`, `1` | 0 | 10 |
+| `GT4_HW_DIRTY_FILTER` | `auto`, `linear`, `nearest` | `auto` | 05 |
+| `GT4_HW_CLUT_ALWAYS_LOAD` | `0`, `1` | 0 | 07 |
+| `GT4_HW_VERIFY_SHUFFLE` | `0`, `1` (debug comparison against the GLM path) | 0 | 09 |
+| `GT4_HW_DEINTERLACE` | `auto`, `off`, `weave`, `bob`, `blend`, `adaptive` (optional `_bff` suffix) | `auto` | 13 |
+| `GT4_HW_ANTIBLUR` | `1`, `0` | 1 | 13 |
+| `GT4_HW_POSTFX` | comma list: `shadeboost`, `fxaa`, `cas`, `scanlines` | empty | 13 |
+| `GT4_HW_SHADEBOOST` | `b,c,s,g` integers (50 = neutral) | `50,50,50,50` | 13 |
+| `GT4_HW_CAS_SHARPNESS` | 0..100 | 50 | 13 |
+| `GT4_HW_PRESENT_FILTER` | `bilinear`, `nearest`, `sharp` | `bilinear` | 13 |
+| `GT4_HW_CROP` | `l,t,r,b` native pixels | `0,0,0,0` | 13 |
+| `GT4_HW_TEXTURES` | directory of the texture root | unset = off | 11 |
+| `GT4_HW_TEXTURES_PRECACHE` | `0`, `1` | 0 | 11 |
+| `GT4_HW_DUMP_TEXTURES` | `0`, `1`, `mips` | 0 | 11 |
+| `GT4_HW_DUMP_FORMAT` | `g`, `p` | `g` | 11 |
+| `GT4_HW_GAME_FIXES` | `1` (GT4 pattern rules on), `0` (diagnostic only) | 1 | 09, 14 |
+| `GT4_HW_DUMP_SOURCE` | `vram`, `scanout` | `vram` | 12.9 |
+| `GT4_HW_GPU_TIMING` | `0`, `1` | 0 | 12.7 |
+| `GT4_HW_GPU_DECODE` | `0`, `1` (later optimisation: decode memory sources from the GLM) | 0 | 04 |
 
 Unknown values stop the process. All chosen values are logged once at start
 and recorded in `result.json` by the launch scripts (the scripts scrub
@@ -214,10 +247,11 @@ inherited `GT4_*` variables, so they must pass these explicitly).
 
 - `GT4_HW_DUMP_SOURCE=vram` (default): `gs::display` calls `alt_sync_memory`,
   which makes the shadow GS memory coherent (every target overlapping the
-  displayed rectangle is written back at **1x**, i.e. downsampled when the scale
-  is above 1, chapter 05) and then uses the donor's own decode. This makes HWR
+  displayed rectangle is written back at **1x**, taking the top-left sub-sample
+  of each native pixel when the scale is above 1, chapter 10.4) and then uses the
+  donor's own decode. This makes HWR
   frames directly comparable with donor frames and is the primary 1x
-  validation path (chapter 13).
+  validation path (chapter 14).
 - `GT4_HW_DUMP_SOURCE=scanout`: the HWR output image before the 16:9 placement,
   at internal resolution; used for upscaling and post-processing review.
 - Save states: refused with a clear error in phase 1 (same as paraLLEl-GS).
@@ -264,3 +298,10 @@ knowledge, ps2tek), our donor renderer (MIT) and the Vulkan specification.
 - `docs/PARALLEL-GS-PLAN.md` on `task/012-parallel-gs`, sections 0-5.
 - `docs/GS-ASYNC-DESIGN.md` on `task/012-parallel-gs`.
 - `docs/GSDX-STUDY.md` on `task/012-parallel-gs`, section 2 (entry points).
+- Research report `output-postfx-vulkan-perf.md` part B (device features,
+  formats, swapchain, RDNA4 recreation stall, streaming, descriptors).
+- Research report `upscaling-clut-readbacks.md` C.2, C.7, C.8 (FIFO reads,
+  SIGNAL/FINISH/LABEL, GS thread model).
+- Research report `gt4-gamedb-hacks-donor.md` 3.4, 4.4 (donor environment
+  variables, headless comparison, GT4_PGS_CAPTURE format).
+- Coordinator note 2026-10-15 (RDNA4 swapchain stall study).
