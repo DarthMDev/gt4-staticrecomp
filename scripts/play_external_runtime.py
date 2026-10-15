@@ -6,10 +6,10 @@ import msvcrt
 from pathlib import Path
 import sys
 
-from external_runtime_probe import ROOT, run_probe, verify_manual_capture_profile, verify_performance_profile
+from external_runtime_probe import ROOT, VU1_CORPUS_NAME, run_probe, verify_manual_capture_profile, verify_performance_profile
 
 
-def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False):
+def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -49,10 +49,14 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=
             if performance:
                 print(f"Measurement mode: {video.get('measurement_mode', 'detailed')}", flush=True)
                 print('Performance test: F7 starts, F8 reports, F9 toggles diagnostics. Owner controls gameplay.', flush=True)
+            if vu1_record:
+                print(f'VU1 recording: missed programs go to {run_directory / VU1_CORPUS_NAME}', flush=True)
+                print('Summary is written when the game exits. Owner controls gameplay.', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
                                window=True, interactive=True, play_card=card, aspect=aspect,
-                               runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance)
+                               runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
+                               vu1_record=vu1_record)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:

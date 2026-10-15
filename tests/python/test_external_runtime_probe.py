@@ -438,5 +438,117 @@ class ProbeTests(unittest.TestCase):
             self.assertEqual((output / 'probe.log').read_text(), 'partial guest log\n')
 
 
+class Vu1RecordTests(unittest.TestCase):
+    def pinned_manifest(self, root, name, runtime_path, mode, **extra):
+        evidence = json.loads((root / 'docs/inputs/slice114-native-base.json').read_text())
+        runtime = root / runtime_path
+        runtime.parent.mkdir(parents=True)
+        runtime.write_bytes((root / evidence['runtime']['path']).read_bytes())
+        evidence['runtime']['path'] = runtime_path
+        evidence.update(profile='performance', perf_schema_version=1,
+                        keyboard_input_fix='digital_only_slice136', capture_activation_implemented=False,
+                        measurement_mode=mode, vu_scope_profile='unit_split_run_fast_only')
+        evidence.update(extra)
+        manifest = root / 'docs/inputs' / name
+        manifest.write_text(json.dumps(evidence))
+        return manifest, evidence
+
+    def vu1_manifest(self, root):
+        return self.pinned_manifest(root, probe.VU1_RECORD_MANIFEST, probe.VU1_RECORD_RUNTIME, 'vu-split')
+
+    def test_recording_env_and_summary_in_vu1_mode(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ProbeTests.make_workspace(self, root)
+            manifest, _ = self.vu1_manifest(root)
+            seen = {}
+            def execute(arguments, **options):
+                corpus = Path(options['env']['PS2_VU_RECORD'])
+                seen['corpus'] = corpus
+                self.assertFalse(corpus.exists())
+                corpus.mkdir()
+                (corpus / ('A' * 16 + '_0040.bin')).write_bytes(bytes(16384))
+                (corpus / 'short_0001.bin').write_bytes(b'x' * 100)
+                options['stdout'].write(b'[ee] stopped after 0 frames, 2 cycles: window closed\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            contaminated = {'PS2_VU_RECORD': 'stale', 'PS2_VU_COUNT': '0', 'PS2_TIME': '1,100'}
+            with patch.dict(probe.os.environ, contaminated), patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/vu1', 0, 1, [], runtime_manifest=manifest,
+                    window=True, interactive=True, performance=True, vu1_record=True)
+            self.assertTrue(result['manual_session_closed'])
+            self.assertEqual(seen['corpus'].name, probe.VU1_CORPUS_NAME)
+            self.assertEqual(seen['corpus'].parent, (root / 'private/vu1').resolve())
+            self.assertEqual(result['vu1_record_environment']['PS2_VU_COUNT'], '1')
+            summary = json.loads((seen['corpus'].parent / probe.VU1_CORPUS_SUMMARY).read_text())
+            self.assertEqual((summary['file_count'], summary['total_bytes']), (2, 16384 + 100))
+            good = next(item for item in summary['files'] if item['name'].endswith('_0040.bin'))
+            self.assertEqual((good['key'], good['entry']), ('A' * 16, '0040'))
+            self.assertEqual(good['sha256'], hashlib.sha256(bytes(16384)).hexdigest())
+            self.assertEqual([item['name'] for item in summary['rejected']], ['short_0001.bin'])
+            self.assertEqual(set(summary['rejected'][0]['reasons']), {'wrong_size', 'unexpected_name'})
+            self.assertEqual(result['vu1_corpus']['rejected_count'], 1)
+
+    def test_default_vu_split_never_records_or_writes_summary(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ProbeTests.make_workspace(self, root)
+            manifest, _ = self.pinned_manifest(root, probe.PERF_PROFILES['vu-split'][0],
+                probe.PERF_PROFILES['vu-split'][1], 'vu-split')
+            def execute(arguments, **options):
+                self.assertNotIn('PS2_VU_RECORD', options['env'])
+                self.assertNotIn('PS2_VU_COUNT', options['env'])
+                options['stdout'].write(b'[ee] stopped after 0 frames, 2 cycles: window closed\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.dict(probe.os.environ, {'PS2_VU_RECORD': 'stale', 'PS2_VU_COUNT': '1'}), \
+                 patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/split', 0, 1, [], runtime_manifest=manifest,
+                    window=True, interactive=True, performance=True)
+            self.assertNotIn('vu1_corpus', result)
+            self.assertFalse((root / 'private/split' / probe.VU1_CORPUS_SUMMARY).exists())
+
+    def test_vu1_manifest_and_flag_must_match(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ProbeTests.make_workspace(self, root)
+            vu1_manifest, _ = self.vu1_manifest(root)
+            split_manifest, _ = self.pinned_manifest(root, probe.PERF_PROFILES['vu-split'][0],
+                probe.PERF_PROFILES['vu-split'][1], 'vu-split')
+            cases = [(split_manifest, True, True), (vu1_manifest, False, True), (vu1_manifest, True, False)]
+            for manifest, record, performance in cases:
+                with self.subTest(manifest=manifest.name, record=record, performance=performance), \
+                     patch.object(probe.subprocess, 'run') as execute:
+                    with self.assertRaisesRegex(ValueError, 'VU1|qualified'):
+                        probe.run_probe(root, root / 'private/bad', 0, 1, [], runtime_manifest=manifest,
+                            window=True, interactive=True, performance=performance, vu1_record=record)
+                    execute.assert_not_called()
+                    self.assertFalse((root / 'private/bad').exists())
+
+    def test_corpus_must_be_fresh(self):
+        with tempfile.TemporaryDirectory() as folder:
+            run = Path(folder) / 'session'
+            self.assertEqual(probe.prepare_vu1_corpus(run), run / probe.VU1_CORPUS_NAME)
+            (run / probe.VU1_CORPUS_NAME).mkdir(parents=True)
+            with self.assertRaisesRegex(ValueError, 'already exists'):
+                probe.prepare_vu1_corpus(run)
+
+    def test_summary_flags_wrong_size_bad_name_and_non_files(self):
+        with tempfile.TemporaryDirectory() as folder:
+            corpus = Path(folder) / 'vu1-corpus'
+            self.assertEqual(probe.summarize_vu1_corpus(corpus)['file_count'], 0)
+            corpus.mkdir()
+            (corpus / ('0' * 16 + '_0000.bin')).write_bytes(bytes(16384))
+            (corpus / ('1' * 16 + '_0010.bin')).write_bytes(bytes(16383))
+            (corpus / 'notes.txt').write_bytes(bytes(16384))
+            (corpus / ('2' * 16 + '_0020.bin')).mkdir()
+            summary = probe.summarize_vu1_corpus(corpus)
+            self.assertEqual(summary['file_count'], 4)
+            reasons = {item['name']: set(item['reasons']) for item in summary['rejected']}
+            self.assertEqual(reasons['1' * 16 + '_0010.bin'], {'wrong_size'})
+            self.assertEqual(reasons['notes.txt'], {'unexpected_name'})
+            self.assertIn('not_regular_file', reasons['2' * 16 + '_0020.bin'])
+            self.assertEqual(len(summary['rejected']), 3)
+            self.assertEqual(summary['files'][0]['sha256'], hashlib.sha256(bytes(16384)).hexdigest())
+
+
 if __name__ == '__main__':
     unittest.main()

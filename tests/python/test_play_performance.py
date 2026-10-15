@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
 import play_performance as performance
 import play_external_runtime as launcher
-from external_runtime_probe import PERF_MANIFEST, PERF_RUNTIME, PERF_PROFILES
+from external_runtime_probe import PERF_MANIFEST, PERF_RUNTIME, PERF_PROFILES, VU1_RECORD_MANIFEST, VU1_RECORD_RUNTIME
 
 
 class PerformanceLauncherTests(unittest.TestCase):
@@ -52,3 +52,40 @@ class PerformanceLauncherTests(unittest.TestCase):
                     launcher.play('16:9', root, manifest, performance=True)
             self.assertEqual(card.read_bytes(), b'c' * 8650752)
             self.assertFalse(any(directory.glob('session-*')))
+
+    def test_vu1_record_mode_selects_only_its_pinned_manifest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
+                 patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'vu1-record']):
+                self.assertEqual(performance.main(), 0)
+            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / VU1_RECORD_MANIFEST,
+                                         performance=True, vu1_record=True)
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
+                 patch.object(sys, 'argv', ['perf', '--assets-root', str(root)]):
+                self.assertEqual(performance.main(), 0)
+            self.assertEqual(play.call_args.kwargs, {'performance': True})
+
+    def test_vu1_record_launch_passes_flag_and_protects_card(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder).resolve()
+            inputs = root / 'docs/inputs'
+            inputs.mkdir(parents=True)
+            manifest = inputs / VU1_RECORD_MANIFEST
+            evidence = {'profile': 'performance', 'perf_schema_version': 1,
+                        'keyboard_input_fix': 'digital_only_slice136', 'capture_activation_implemented': False,
+                        'measurement_mode': 'vu-split', 'vu_scope_profile': 'unit_split_run_fast_only',
+                        'runtime': {'path': VU1_RECORD_RUNTIME}, 'default_card_seed': {'path': 'private/seed.ps2'}}
+            manifest.write_text(json.dumps(evidence))
+            directory = root / 'private/manual-play'
+            directory.mkdir(parents=True)
+            card = directory / 'card.ps2'
+            card.write_bytes(b'c' * 8650752)
+            with patch.object(launcher, 'ROOT', root), patch.object(launcher, 'run_probe') as execute:
+                self.assertEqual(launcher.play('16:9', root, manifest, performance=True, vu1_record=True), None)
+                self.assertTrue(execute.call_args.kwargs['vu1_record'])
+                self.assertTrue(execute.call_args.kwargs['performance'])
+                execute.reset_mock()
+                launcher.play('16:9', root, manifest, performance=True)
+                self.assertFalse(execute.call_args.kwargs['vu1_record'])
+            self.assertEqual(card.read_bytes(), b'c' * 8650752)

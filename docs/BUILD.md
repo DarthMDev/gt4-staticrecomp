@@ -206,3 +206,18 @@ private/slice149-vu-split-runtime; frame-only rejected. Fresh149 build reuses fr
 143port/shaders as immutable inputs with production EE. Native7/7 and separate
 full9/9 with Python175/175 pass. Explicit `play_performance.py --mode vu-split`
 selects149; default detailed/frame-only still select145. See attribution guide.
+
+Slice151 adds an owner-launched VU1 recording mode on the slice149 vu-split binary.
+Owner command, from the repository root:
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode vu1-record
+
+The mode pins [slice151-vu1-record.json](inputs/slice151-vu1-record.json) to
+`private/slice149-vu-split-build/build/gt4vulkan.exe`. After the performance
+scrub of inherited `PS2_` options, it sets `PS2_VU_RECORD` to a fresh
+`vu1-corpus` directory in the session directory and `PS2_VU_COUNT=1`. Stderr
+stays in `probe.log`. At exit, `vu1-corpus-summary.json` lists file count, bytes,
+per-file sha256, key and entry parsed from names, and rejects any file that is
+not exactly 16384 bytes. Card backup, session lock and default modes are
+unchanged; default modes never set the recording variables. This is recording
+only: no AOT, no timing claim, and the owner controls gameplay.

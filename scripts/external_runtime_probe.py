@@ -1,6 +1,7 @@
 """Run a qualified external pilot with pinned inputs and private outputs."""
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -25,14 +26,27 @@ PERF_PROFILES = {
     'frame-only': ('slice145-performance-frame-only.json',
                    'private/slice145-performance-pair/frame-only/build/gt4vulkan.exe'),
 }
+# Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
+VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
+VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
+VU1_CORPUS_NAME = 'vu1-corpus'
+VU1_CORPUS_SUMMARY = 'vu1-corpus-summary.json'
+VU1_PROGRAM_BYTES = 16384
+VU1_NAME_PATTERN = re.compile(r'([0-9A-F]{16})_([0-9A-F]{4})\.bin')
+
+
+def expected_performance_pin(manifest, runtime_workspace):
+    inputs = runtime_workspace / 'docs/inputs'
+    if manifest == (inputs / VU1_RECORD_MANIFEST).resolve():
+        return VU1_RECORD_RUNTIME, 'vu-split'
+    for mode, (name, runtime) in PERF_PROFILES.items():
+        if manifest == (inputs / name).resolve():
+            return runtime, mode
+    return PERF_RUNTIME, None
 
 
 def verify_performance_profile(manifest, evidence, runtime_workspace):
-    expected_runtime, expected_mode = PERF_RUNTIME, None
-    for mode, (name, runtime) in PERF_PROFILES.items():
-        if manifest == (runtime_workspace / 'docs/inputs' / name).resolve():
-            expected_runtime, expected_mode = runtime, mode
-            break
+    expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
             (expected_mode == 'vu-split' and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
@@ -72,10 +86,56 @@ def summarize_exit(log_text, frame_count, exit_code, timed_out):
     return summary
 
 
+def prepare_vu1_corpus(run_directory):
+    """Return the session's VU1 corpus path; the game creates it on the first miss."""
+    corpus = run_directory / VU1_CORPUS_NAME
+    if corpus.exists():
+        raise ValueError('VU1 corpus directory already exists; select a fresh session')
+    return corpus
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(65536), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def summarize_vu1_corpus(corpus):
+    """Describe recorded VU1 programs; any entry that breaks the contract is listed in rejected."""
+    summary = {'schema_version': 1, 'directory': VU1_CORPUS_NAME,
+               'expected_program_bytes': VU1_PROGRAM_BYTES,
+               'file_count': 0, 'total_bytes': 0, 'files': [], 'rejected': []}
+    if not corpus.is_dir():
+        return summary
+    for path in sorted(corpus.iterdir()):
+        size = path.lstat().st_size
+        record = {'name': path.name, 'size_bytes': size}
+        reasons = []
+        if path.is_symlink() or not path.is_file():
+            reasons.append('not_regular_file')
+        else:
+            record['sha256'] = sha256_file(path)
+        match = VU1_NAME_PATTERN.fullmatch(path.name)
+        if match:
+            record.update(key=match.group(1), entry=match.group(2))
+        else:
+            reasons.append('unexpected_name')
+        if size != VU1_PROGRAM_BYTES:
+            reasons.append('wrong_size')
+        summary['file_count'] += 1
+        summary['total_bytes'] += size
+        summary['files'].append(record)
+        if reasons:
+            summary['rejected'].append({'name': path.name, 'reasons': reasons})
+    return summary
+
+
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, aspect='16:9', runtime_workspace=None, capture_shapes=False,
-              performance=False):
+              performance=False, vu1_record=False):
     workspace = workspace.resolve()
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
@@ -119,6 +179,11 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         verify_manual_capture_profile(runtime_manifest, runtime_evidence, runtime_workspace)
     if performance:
         verify_performance_profile(runtime_manifest, runtime_evidence, runtime_workspace)
+    is_vu1_manifest = runtime_manifest == (runtime_workspace / 'docs/inputs' / VU1_RECORD_MANIFEST).resolve()
+    if vu1_record and (not performance or not is_vu1_manifest):
+        raise ValueError('VU1 recording requires the qualified VU1 record manifest')
+    if is_vu1_manifest and not vu1_record:
+        raise ValueError('The VU1 record manifest is only valid with VU1 recording')
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
         dependency_path = (runtime_workspace / dependency['path']).resolve()
@@ -213,6 +278,11 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']
     if capture_audio:
         environment['PS2_DUMP_AUDIO'] = str(run_directory / 'audio.wav')
+    corpus = None
+    if vu1_record:
+        corpus = prepare_vu1_corpus(run_directory)
+        environment.update(PS2_VU_RECORD=str(corpus), PS2_VU_COUNT='1')
+        result['vu1_record_environment'] = {'PS2_VU_RECORD': str(corpus), 'PS2_VU_COUNT': '1'}
     with log_path.open('wb') as output:
         try:
             process = subprocess.run(arguments, cwd=run_directory, stdout=output,
@@ -222,6 +292,12 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
             exit_code, timed_out = None, True
     result.update(summarize_exit(log_path.read_text(encoding='utf-8', errors='replace'),
                                  frame_count, exit_code, timed_out))
+    if corpus is not None:
+        corpus_summary = summarize_vu1_corpus(corpus)
+        (run_directory / VU1_CORPUS_SUMMARY).write_text(json.dumps(corpus_summary, indent=2) + '\n', encoding='utf-8')
+        result['vu1_corpus'] = {'summary': VU1_CORPUS_SUMMARY, 'file_count': corpus_summary['file_count'],
+                                'total_bytes': corpus_summary['total_bytes'],
+                                'rejected_count': len(corpus_summary['rejected'])}
     result['elapsed_seconds'] = time.monotonic() - start
     if interactive:
         result['manual_session_closed'] = (not timed_out and exit_code == 0
