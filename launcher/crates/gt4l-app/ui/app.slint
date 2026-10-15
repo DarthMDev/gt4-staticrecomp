@@ -288,7 +288,7 @@ component NavItem inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    title: "Gran Turismo 4";
+    title: "GT4Recomp";
     preferred-width: 1280px;
     preferred-height: 720px;
     min-width: 960px;
@@ -707,12 +707,12 @@ export component AppWindow inherits Window {
                             wrap: word-wrap;
                         }
                         if !root.controls-capturing : PrimaryButton {
-                            label: "Press a key";
+                            label: "Press a control";
                             enabled: root.controls-selected >= 0;
                             clicked => { root.controls-start-capture(); }
                         }
                         if root.controls-capturing : Text {
-                            text: "Press a key now. Esc cancels.";
+                            text: "Press a button, trigger or key now. Esc cancels.";
                             color: Palette.accent;
                             font-size: 13px;
                             wrap: word-wrap;

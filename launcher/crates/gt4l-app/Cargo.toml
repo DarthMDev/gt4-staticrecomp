@@ -8,6 +8,10 @@ rust-version.workspace = true
 description = "GT4Recomp launcher application (Slint UI)"
 build = "build.rs"
 
+[features]
+# Development only: GT4RECOMP_VISUAL_SCREEN / GT4RECOMP_VISUAL_PAGE pick the first page for screenshots.
+visual-check = []
+
 [[bin]]
 name = "GT4Recomp"
 path = "src/main.rs"
@@ -27,6 +31,7 @@ windows = { version = "0.62", features = [
     "Win32_UI_Input_XboxController",
     "Win32_System_JobObjects",
     "Win32_System_Threading",
+    "Win32_Security",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

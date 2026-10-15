@@ -1,6 +1,6 @@
 # TASK-019 — Launcher, installer and branding: plan
 
-Status: planning study, 2026-10-15. No repository file was changed. Inputs read: CLAUDE.md,
+Status: planning study, 2026-10-15; implementation status in section 14 (branch `task/019-launcher`). Inputs read: CLAUDE.md,
 TASKS.md, README.md, docs/BUILD.md, docs/ARCHITECTURE.md, docs/EE-PRODUCER.md,
 docs/VOLUME-READER.md, native/THIRD_PARTY.md (main and the TASK-012 worktree),
 docs/PARALLEL-GS-PLAN.md (TASK-012 worktree), scripts/play_performance.py,
@@ -785,3 +785,44 @@ Dates and items shown are sample values.
 | v1 cut without `.max`/`.cbs`/`.xps` | ≈ 12–14.5 |
 | Later: decrypted day/credits summary | +3–4 |
 | Not recommended: runtime folder card (a1) / MCMAN HLE (a2) | 10–15 / 15–25 |
+
+## 14. Implementation status (branch `task/019-launcher`, 2026-10-15)
+
+Not yet owner-approved; not merged. Labels as above.
+
+Done (Confirmed by tests or by the screenshots in `docs/launcher/shots/`):
+- Branch merges: TASK-029 controls table (`docs/CONTROLS.md`), TASK-025 `gt4saves` and `memcard_store`,
+  origin/main (MTVU, slice 178). The launcher workspace has all five crates.
+- Saves and Replays pages use `gt4saves::library` (`launcher/crates/gt4l-app/src/saves.rs`): list, import
+  (never overwrites), make active, delete to the Recycle Bin (`recycle.rs`, SHFileOperationW with
+  FOF_ALLOWUNDO), card prepare before each start (a card left by the game is harvested first), harvest
+  after the game exits. The library lives in the data folder under `library`. Tests build synthetic cards.
+- Controls: "Press a control" captures XInput buttons and triggers (`pad.rs`, XInputGetState, baseline
+  taken at capture start) and keys. Stick capture is implemented and tested but has no Controls-page row.
+- `gt4controls` follows `docs/CONTROLS.md`: the mirrored tables stay, and `tests/docs_match.rs` fails when
+  they or `docs/controls/*.toml` drift from the document.
+- Settings show only options the game reads. CoreGS 1.1 rows: Internal resolution (`PS2_SCALE` 1-3),
+  Scaling filter (`GT4_PRESENT_FILTER` automatic|nearest|linear|fsr; automatic sends nothing),
+  FSR sharpness (`GT4_FSR_SHARPNESS`, only with FSR, default 0.2), Deinterlacing (`GT4_DEINTERLACE`,
+  default auto), Anti-aliasing (`GT4_AA`, default off). Names and values come from task/028
+  `docs/BUILD.md` slice 182 and `native/gpu_init.inc`; they exist only on that branch until it merges.
+  paraLLEl-GS: super-sampling and high-resolution output only. CoreGS 2.0: one greyed entry. Display
+  shows fullscreen and VSync only; the unwired overscan and offset rows were removed.
+- Release blockers: the shader folder is `<game folder>\shaders` when present, else the build-time path
+  (`native/native_vulkan.cpp`, not compiled here: no private assets or Vulkan headers in this worktree);
+  the launcher joins a kill-on-close Job Object (`process.rs`), so the game ends with it; a second launcher
+  brings the first window forward (window title `GT4Recomp`, not the game's title).
+- Cover: `launcher/assets/brand/source/cover-front.jpeg` is the owner's 1000x1500 image; `make_brand.py`
+  derives `cover-front.png` from it. The cover is not drawn in the UI yet.
+
+Open:
+- Stick rebinding has no Controls-page row (the page lists the 16 buttons only).
+- Replays: every replay goes on the card at each start; the "On card" choice from the mockup is not built.
+  A full card stops the start with a message.
+- Save export and the `.max`/`.cbs`/`.xps` importers are not built.
+- The Recycle Bin call and the delete path were not run on a real item (tests cover the refusal rules only).
+- Home and the other pages need prepared game files; the screenshots were taken with the
+  `visual-check` cargo feature (`GT4RECOMP_VISUAL_SCREEN`, `GT4RECOMP_VISUAL_PAGE`), which is not in release builds.
+- The AMD Radeon metrics overlay (`amdow.exe`) is drawn into some captures (setup, home).
+- The native shader change needs a candidate build and the launcher manifest pin; not built here.
+- The Setup page still shows the "Cover art" placeholder.

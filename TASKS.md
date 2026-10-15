@@ -190,6 +190,12 @@ High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 ### TASK-019 — Launcher
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
+State (2026-10-15, branch `task/019-launcher`, not yet owner-approved, not merged): the launcher
+(Rust + Slint, `launcher/`) merges TASK-029 and TASK-025 and origin/main. Saves and Replays use the real
+`gt4saves` library; controls capture XInput; CoreGS 1.1 options are wired (names from task/028, which
+is not merged); release blockers for the shader folder, the kill-on-close job and the single instance are
+done (the shader change is not built here). Screenshots of every page are in `docs/launcher/shots/`.
+Open items are listed in `docs/launcher/LAUNCHER-PLAN.md` section 14.
 
 ### TASK-025 — Save manager
 One standard 8 MB PS2 card image per slot under the user data folder; the

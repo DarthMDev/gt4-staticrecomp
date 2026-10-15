@@ -3,6 +3,8 @@
 //! worker threads and report back through `slint::invoke_from_event_loop`.
 
 mod game;
+mod pad;
+mod process;
 mod recycle;
 mod rows;
 mod saves;
@@ -12,7 +14,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use gt4controls::{self as controls_file, Controls, Curve, TriggerTuning, CONTROLS_FILE_NAME};
 use gt4l_core::config::{self, ConfigFile};
@@ -48,6 +50,8 @@ struct App {
     page_rows: Vec<rows::RowData>,
     library_root: PathBuf,
     library: Library,
+    /// Controller state when the current capture started; a control already held does not bind.
+    pad_baseline: Option<pad::PadSample>,
     /// Result of the last import, delete or activate, shown on the Saves and Replays pages.
     saves_status: String,
 }
@@ -55,9 +59,15 @@ struct App {
 type Shared = Arc<Mutex<App>>;
 
 fn main() -> Result<(), slint::PlatformError> {
+    if !process::claim_single_instance() {
+        return Ok(());
+    }
     let dirs = DataDirs::from_environment().expect("LOCALAPPDATA is not set and GT4RECOMP_DATA_DIR is not given");
     let _ = fs::create_dir_all(dirs.root());
     log(&dirs, &format!("GT4Recomp {LAUNCHER_VERSION} starting"));
+    if let Err(message) = process::join_kill_on_close_job() {
+        log(&dirs, &format!("the game would not end with the launcher: {message}"));
+    }
 
     let (config, warnings) = config::load(&dirs.config_file());
     for warning in &warnings {
@@ -100,6 +110,7 @@ fn main() -> Result<(), slint::PlatformError> {
         page_rows: Vec::new(),
         library_root,
         library,
+        pad_baseline: None,
         saves_status: String::new(),
     }));
 
@@ -297,6 +308,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 let mut state = lock(&app);
                 state.controls_selected = usize::try_from(index).ok().filter(|index| *index < CONTROL_INPUTS.len());
                 state.capturing = false;
+                state.pad_baseline = None;
                 state.controls_status.clear();
             }
             refresh_controls(&ui, &app);
@@ -309,6 +321,7 @@ fn main() -> Result<(), slint::PlatformError> {
             {
                 let mut state = lock(&app);
                 state.capturing = state.controls_selected.is_some();
+                state.pad_baseline = if state.capturing { pad::read_first_connected() } else { None };
             }
             refresh_controls(&ui, &app);
         });
@@ -317,7 +330,11 @@ fn main() -> Result<(), slint::PlatformError> {
         let (weak, app) = (ui.as_weak(), app.clone());
         ui.on_controls_cancel_capture(move || {
             let Some(ui) = weak.upgrade() else { return };
-            lock(&app).capturing = false;
+            {
+                let mut state = lock(&app);
+                state.capturing = false;
+                state.pad_baseline = None;
+            }
             refresh_controls(&ui, &app);
         });
     }
@@ -364,7 +381,35 @@ fn main() -> Result<(), slint::PlatformError> {
         });
     }
 
+    // Polls the controller while a capture waits for a button, trigger or stick.
+    let pad_timer = slint::Timer::default();
+    {
+        let (weak, app) = (ui.as_weak(), app.clone());
+        pad_timer.start(slint::TimerMode::Repeated, Duration::from_millis(30), move || {
+            if let Some(ui) = weak.upgrade() {
+                poll_pad(&ui, &app);
+            }
+        });
+    }
+
+    #[cfg(feature = "visual-check")]
+    apply_visual_check(&ui, &app);
+
     ui.run()
+}
+
+/// Development hook for the visual pass (`--features visual-check` only): opens a page directly.
+/// `GT4RECOMP_VISUAL_SCREEN` is 0 setup, 1 home, 2 settings; `GT4RECOMP_VISUAL_PAGE` is the settings page.
+#[cfg(feature = "visual-check")]
+fn apply_visual_check(ui: &AppWindow, app: &Shared) {
+    if let Some(screen) = std::env::var("GT4RECOMP_VISUAL_SCREEN").ok().and_then(|value| value.parse().ok()) {
+        ui.set_screen(screen);
+    }
+    if let Some(page) = std::env::var("GT4RECOMP_VISUAL_PAGE").ok().and_then(|value| value.parse::<i32>().ok()) {
+        lock(app).settings_page = page;
+        ui.set_settings_page(page);
+        refresh_settings(ui, app);
+    }
 }
 
 fn lock(app: &Shared) -> MutexGuard<'_, App> {
@@ -600,26 +645,53 @@ fn capture_key(app: &Shared, text: &str) {
         return;
     }
     state.capturing = false;
-    let Some(index) = state.controls_selected else { return };
-    let input = CONTROL_INPUTS[index];
+    state.pad_baseline = None;
     let Some(key) = key_name(text) else {
         state.controls_status = "That key cannot be used. Try a letter, a number, an arrow or Enter.".into();
         return;
     };
-    // Replace the keyboard source of the input and keep its controller sources.
+    bind(&mut state, "key:", &format!("key:{key}"), &key);
+}
+
+/// Checks the controls for a newly pressed controller control while a capture waits for one.
+fn poll_pad(ui: &AppWindow, app: &Shared) {
+    let captured = {
+        let state = lock(app);
+        if !state.capturing || state.controls_selected.is_none() {
+            return;
+        }
+        let Some(baseline) = state.pad_baseline else { return };
+        let Some(now) = pad::read_first_connected() else { return };
+        pad::captured_source(&baseline, &now, pad::Target::Button)
+    };
+    let Some(source) = captured else { return };
+    {
+        let mut state = lock(app);
+        state.capturing = false;
+        state.pad_baseline = None;
+        let label = source.trim_start_matches("xinput:").to_string();
+        bind(&mut state, "xinput:", &source, &label);
+    }
+    refresh_controls(ui, app);
+}
+
+/// Replaces the sources of one kind (`key:` or `xinput:`) on the selected input and keeps the others.
+fn bind(state: &mut App, prefix: &str, source: &str, label: &str) {
+    let Some(index) = state.controls_selected else { return };
+    let input = CONTROL_INPUTS[index];
     let mut sources: Vec<String> = state
         .controls
         .sources(input)
         .unwrap_or(&[])
         .iter()
-        .filter(|source| !source.starts_with("key:"))
+        .filter(|existing| !existing.starts_with(prefix))
         .cloned()
         .collect();
-    sources.push(format!("key:{key}"));
+    sources.push(source.to_string());
     match state.controls.set_sources(input, sources) {
         Ok(()) => {
-            state.controls_status = format!("{} is now bound to {key}.", pretty_name(input));
-            save_controls(&state);
+            state.controls_status = format!("{} is now bound to {label}.", pretty_name(input));
+            save_controls(state);
         }
         Err(error) => state.controls_status = error.to_string(),
     }

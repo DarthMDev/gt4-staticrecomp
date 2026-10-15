@@ -189,7 +189,35 @@ Context::~Context() {
     FreeLibrary(loader_);
 }
 
-void Context::initialize(const std::filesystem::path &shaders) {
+namespace {
+
+// The shader folder for a start. An installed game keeps `shaders` next to its executable, so the
+// installed copy needs no repository path. Development builds have no such folder and use the
+// build-time path, as before.
+std::filesystem::path choose_shader_directory(const std::filesystem::path &executable_directory,
+                                              const std::filesystem::path &build_time_directory) {
+  const std::filesystem::path beside_executable = executable_directory / "shaders";
+  std::error_code error;
+  if (std::filesystem::is_directory(beside_executable, error))
+    return beside_executable;
+  return build_time_directory;
+}
+
+std::filesystem::path running_executable_directory() {
+  wchar_t path[MAX_PATH];
+  const DWORD length = GetModuleFileNameW(nullptr, path, MAX_PATH);
+  if (length == 0 || length >= MAX_PATH)
+    return {};
+  return std::filesystem::path(path).parent_path();
+}
+
+} // namespace
+
+void Context::initialize(const std::filesystem::path &build_time_shaders) {
+  const std::filesystem::path shaders =
+      choose_shader_directory(running_executable_directory(), build_time_shaders);
+  std::fprintf(stderr, "[vulkan] shader folder: %s
+", shaders.string().c_str());
   aspect_ = Aspect::widescreen;
   // Unknown names throw here; support on this surface is checked at swapchain creation.
   present_mode_ = gt4::pacing::parse_present_mode(std::getenv("GT4_PRESENT_MODE"));
