@@ -5,6 +5,11 @@ namespace ps2::vu {
 __attribute__((weak)) void aot_report(std::FILE *) {}  // strong definition: VU1 AOT overlay
 }
 #endif
+#ifdef GT4_VU0_AOT
+namespace ps2::vu {
+__attribute__((weak)) void vu0_aot_report(std::FILE *) {}  // strong definition: VU0 AOT overlay (slice 160)
+}
+#endif
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -35,6 +40,9 @@ constexpr const char *names[] = {
     "vu0_micro_interpret", "vu1_interpret"
 #ifdef GT4_VU1_AOT
     , "vu1_aot"
+#endif
+#ifdef GT4_VU0_AOT
+    , "vu0_aot"
 #endif
     };
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
@@ -257,6 +265,9 @@ void Probe::print(const char *reason) noexcept {
   }
 #ifdef GT4_VU1_AOT
   ps2::vu::aot_report(output_);
+#endif
+#ifdef GT4_VU0_AOT
+  ps2::vu::vu0_aot_report(output_);
 #endif
   std::fflush(output_);
 }

@@ -48,7 +48,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ✅ Done (tuning measurements pending) |
 | TASK‑011 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
 | TASK‑012 | paraLLEl-GS as the PC renderer: integration, upscaling, deinterlacing, readbacks, extras, GT4 validation | 🔄 In progress |
-| TASK‑013 | VU0 microcode compiled ahead of time | 🧪 Owner test |
+| TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost counters and review | 📋 Planned |
@@ -116,6 +116,13 @@ generated tables, `-Wno-unused-label` on generated code. `GT4_FP_CONTRACT_OFF`
 and `GT4_X86_64_V3` options exist (default off); their speed effect is Unknown
 until an idle-CPU bench. ThinLTO/PGO not attempted.
 
+### TASK-013 — VU0 microcode AOT (slice 160; main build slice 165)
+All 14 VCALLMS entries compiled with exact MAC/status/clip (the EE reads them via
+CFC2) and exact `run(0,pc)` hand-offs. 28,000-case differential vs the donor,
+0 failures; headless frames identical. Owner test: 0 interpreted VU0 calls;
+showroom 58.0, night 57.9, rally 60.0 VBlanks/s (performance neutral, VU0 cost
+0.1-0.3 ms/frame). `--mode main` (slice 165) is the build of main with all of it.
+
 ## Phase 1 details
 
 ### TASK-011 — MTVU
@@ -142,10 +149,6 @@ One large task, delivered in verified steps on its own branch:
 5. Extras where paraLLEl-GS allows: post-processing (sharpening, FXAA, filters),
    dithering/texture options, texture dump/replacement feasibility.
 Replaces the former donor-renderer upscaling, readback-wait and renderer-feature tasks.
-
-### TASK-013 — VU0 microcode AOT
-All 14 `VCALLMS` entries are known statically (docs/VU0-MICROCODE-MAP.md).
-Extend `tools/vu_recomp` to unit 0. Acceptance: VU0 interpreted calls 0.
 
 ### TASK-014 — EE entry coverage
 Add translator entries for decomp functions without one, starting with the 15

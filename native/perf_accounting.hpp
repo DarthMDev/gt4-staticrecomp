@@ -14,6 +14,9 @@ enum class Category : std::size_t {
 #ifdef GT4_VU1_AOT
   vu1_aot,  // generated VU1 execution (VU1 AOT overlay only)
 #endif
+#ifdef GT4_VU0_AOT
+  vu0_aot,  // generated VU0 execution (VU0 AOT overlay only, slice 160)
+#endif
   count
 };
 

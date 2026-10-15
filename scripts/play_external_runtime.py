@@ -10,7 +10,7 @@ from external_runtime_probe import ROOT, VU1_CORPUS_NAME, run_probe, verify_manu
 
 
 def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, force_480p=False):
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -59,12 +59,15 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                       'mismatches go to the session log.', flush=True)
             if vu1_interpret_only:
                 print('VU1 interpret-only: this binary runs the interpreter for every VU1 call (A/B).', flush=True)
+            if vu0_verify:
+                print(f'VU0 verify: every {vu0_verify}th generated VU0 call is compared with the exact interpreter; '
+                      'mismatches go to the session log.', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
                                window=True, interactive=True, play_card=card,
                                runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
                                vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
-                               force_480p=force_480p)
+                               force_480p=force_480p, vu0_verify=vu0_verify)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:

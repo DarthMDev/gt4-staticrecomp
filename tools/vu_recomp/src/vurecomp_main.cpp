@@ -4,6 +4,9 @@
 //   gt4_vu_recomp [options] --image FILE --entries FILE <fresh_output_dir>
 //                                                                  explicit-entry mode (slice 155)
 //
+// --unit 0 (slice 160) emits the VU0 profile: explicit-entry mode only, a 4096-byte image, and the
+// output vu0_generated.cpp (parts vu0_generated_NNN.cpp). Unit 1 is the default.
+//
 // Writes vu1_generated.cpp (functions plus kPrograms table) and manifest.json.
 // Refuses an existing non-empty output directory before reading any input.
 // Nothing is deleted.
@@ -49,12 +52,21 @@ int main(int argc, char **argv) {
     // --programs-per-file N splits the functions into vu1_generated_NNN.cpp parts (0: one file).
     std::string entry_policy = "unspecified";
     std::size_t programs_per_file = 0;
+    // --unit 0 selects the VU0 profile (slice 160). Only explicit-entry mode supports it.
+    int unit = 1;
     int first = 1;
     while (first < argc && argv[first][0] == '-') {
         const std::string option = argv[first];
         if (option == "--no-flag-elision") {
             gt4::vurecomp::set_flag_elision(false);
             first += 1;
+        } else if (option == "--unit" && first + 1 < argc) {
+            unit = std::atoi(argv[first + 1]);
+            if (unit != 0 && unit != 1) {
+                std::fprintf(stderr, "gt4_vu_recomp: --unit takes 0 or 1\n");
+                return 2;
+            }
+            first += 2;
         } else if (option == "--namespace" && first + 1 < argc) {
             name_space = argv[first + 1];
             first += 2;
@@ -84,6 +96,11 @@ int main(int argc, char **argv) {
                      "       gt4_vu_recomp [--no-flag-elision] [--namespace NAME] [--programs-per-file N] [--entry-policy LABEL] --image FILE --entries FILE <fresh_output_dir>\n");
         return 2;
     }
+    if (unit == 0 && !explicit_mode) {
+        std::fprintf(stderr, "gt4_vu_recomp: --unit 0 requires --image and --entries (explicit-entry mode)\n");
+        return 2;
+    }
+    const gt4::vurecomp::UnitProfile &profile = gt4::vurecomp::unit_profile(unit);
     const std::filesystem::path output_dir = argv[argc - 1];
     std::string error;
     if (!gt4::vurecomp::prepare_fresh_output_directory(output_dir, error)) {
@@ -98,13 +115,15 @@ int main(int argc, char **argv) {
         const std::filesystem::path entries_path = entries_argument;
         std::vector<std::uint8_t> image, entry_bytes;
         std::vector<std::uint32_t> entries;
-        if (!gt4::vurecomp::read_input_image(image_path, image, error) || !gt4::vurecomp::read_entry_list(entries_path, entries, error) ||
+        if (!gt4::vurecomp::read_input_image(image_path, image, error, profile.image_bytes) ||
+            !gt4::vurecomp::read_entry_list(entries_path, entries, error, profile.code_mask()) ||
             !read_bytes(entries_path, entry_bytes, error) ||
-            !gt4::vurecomp::collect_explicit_program_records(image, entries, records, error)) {
+            !gt4::vurecomp::collect_explicit_program_records(image, entries, records, error, profile)) {
             std::fprintf(stderr, "gt4_vu_recomp: %s\n", error.c_str());
             return 1;
         }
         manifest_input.kind = "explicit_entries";
+        manifest_input.unit = unit;
         manifest_input.image_sha256 = gt4::vurecomp::sha256_hex(image);
         manifest_input.entry_list_sha256 = gt4::vurecomp::sha256_hex(entry_bytes);
         input_description = image_path.string() + " with " + std::to_string(entries.size()) + " entries";
@@ -116,7 +135,7 @@ int main(int argc, char **argv) {
         }
         input_description = input_dir.string();
     }
-    const std::string generated_name = "vu1_generated.cpp";
+    const std::string generated_name = profile.file_prefix + ".cpp";
     manifest_input.entry_policy = entry_policy;
     manifest_input.programs_per_file = programs_per_file;
     std::string source;

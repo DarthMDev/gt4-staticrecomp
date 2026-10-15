@@ -1,0 +1,177 @@
+{
+  "schema_version": 1,
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "profile": "performance",
+  "perf_schema_version": 1,
+  "keyboard_input_fix": "digital_only_slice136",
+  "capture_activation_implemented": false,
+  "environment": {
+    "guest_settings": "scrub inherited PS2_/GT4_PERF_ options; set GT4_PERF=1 PS2_SCALE=1 PS2_GS=gpu",
+    "vulkan": "preserve and record VK_ overrides in session result; other driver/overlay state not controlled",
+    "gs_submission": "GT4_GS_SYNC=0 default (asynchronous); GT4_GS_SYNC=1 restores the fully synchronous path (launcher records the value in the session result)",
+    "pacing": "GT4_PACING unset or paced (default): paced clock. GT4_PACING=audio: blocking WinMM clock as in slice152. GT4_PRESENT_MODE unset or fifo (default); mailbox and immediate are experiments and fail at swapchain creation when the surface lacks them. The launcher refuses other values and records both names in result.json (pacing_environment)."
+  },
+  "toolchain": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "build": "CMake/Ninja VS2022 x64 ABI Windows SDK10.0.26100.0",
+    "cmake": "4.3.3",
+    "ninja": "1.12.1"
+  },
+  "slice": 165,
+  "date": "2026-10-15",
+  "baseline_commit": "task/013-vu0-aot merged with main 4dbb894",
+  "branch": "main (after TASK-008, 009, 010, 013)",
+  "measurement_mode": "main",
+  "vu_scope_profile": "unit_split_run_fast_only",
+  "classification": "Main build: the slice160 VU0 AOT profile (all 2,048 VU1 entries, 14 VU0 entries) built from main with the TASK-009 quick fixes (16:9, fullscreen, GT4_FORCE_480P race display hold) and the TASK-010 build pipeline. Same runtime capsule, port and shaders as slice160.",
+  "runtime": {
+    "path": "private/slice165-vu0-main-build/build/gt4vulkan.exe",
+    "size_bytes": 95529472,
+    "sha256": "0604ef53d8dd24648f397c2137ba4532000b762fe18f44544067ce0e3e9eeba7"
+  },
+  "source_capsule": "private/slice160-vu0-runtime",
+  "source_manifest": "slice160-vu0-runtime.json",
+  "preserved_inputs": "Production EE library, donor 1b48087 runtime capsule with the VU1 AOT overlay (private/slice155-vu1-full-runtime, receipt identical to slice154), slice153 pacing adapter and nine shaders reused byte-identical from private/slice153-pacing-port and private/slice153-pacing-shaders; slice151-154 build directories untouched.",
+  "controls": {
+    "vu0_differential": "28,000 seeds (14 entries x finite/raw x 1000) plus 896 budget-resume runs; 0 failures; fast-path negative control differs in 768 states",
+    "vu0_registry": "14 of 14 entries found; 87 checks, 0 failures",
+    "vu0_emitter": "20 checks, 0 failures",
+    "vu1_table_control": "regenerated vu1_generated.cpp and manifest.json equal the slice157 hashes (3eed39d6..., 07ae2077...)",
+    "ctest": "CTest 21/21 on private/slice160-vu0-build/build after merge of task/010-build-pipeline (d6638f5)",
+    "python": "unittest discover with GT4_NATIVE_BUILD on slice160 build: 246 OK, 1 skipped (pre-existing)",
+    "headless_smoke": "4200 frames, slice157 schedule (12 presses): 42 dumps identical to private/slice157-smoke/headless-157/frames; vu0_aot compiled_calls=1256000 interpreted_calls=0 budget_resumes=0 handoffs=0 identity_rejects=0",
+    "verify_smoke": "GT4_VU0_VERIFY=1 same schedule: 42 dumps identical; verified=1255999 verify_mismatches=0"
+  },
+  "limits": [
+    "The VCALLMS list is the 14 entries of docs/VU0-MICROCODE-MAP.md; the EE call-site scan was not run (no VCALLMS decoder in the donor). An EE call to another entry is counted as interpreted_calls.",
+    "Only the headless schedule was run (no gameplay session). Coverage of the 14 entries in owner scenes is unverified.",
+    "Interpreter hand-offs inside generated code (JR dispatch to an unlisted return site, budget resume) use the exact run(0, pc) path and are counted as handoffs, not interpreted_calls.",
+    "The VU1 ITOF/FTOI SIMD helpers (vitof/vftoi) are not bit-identical to the donor per-lane fp::from_fixed/to_fixed; VU0 uses the donor path. VU1 output is unchanged (byte-identical control), so VU1 keeps the SIMD conversion. Not investigated for VU1 gameplay effect.",
+    "VU0 emitted arithmetic uses the donor exact fp:: operations (run(0) path), not run_fast normalization; VU1 keeps the run_fast path.",
+    "The worktree private/ is a junction to the main checkout private/ for this slice; the capsule and build paths are under the main checkout."
+  ],
+  "review": {
+    "status": "pending",
+    "note": "Built from the merged tree; component tasks were owner-approved individually (TASK-008, 009, 010, 013)."
+  },
+  "owner_launch": {
+    "play": "python scripts/play_performance.py --assets-root . --mode main --force-480p",
+    "verify": "python scripts/play_performance.py --assets-root . --mode main --force-480p --vu0-verify 50 --vu1-verify 50"
+  },
+  "vu1_aot": {
+    "generated_dir": "private/slice157-vu1-all-gen",
+    "generated_source_sha256": "3eed39d69ffa12520237afb2ff44e248d19afa63995a2dcf6c578585784a2266",
+    "generated_manifest_sha256": "07ae2077817e074e2ef68106592191c1449a0557983c34d05d3643ebb68a18d0",
+    "programs": 2048,
+    "parts": 128,
+    "programs_per_file": 16,
+    "entry_policy": "all: 2048 static entries of the pinned image",
+    "image": "private/slice155-vu1-image/vu1_image.bin",
+    "image_sha256": "9e5bc86098904fa8a4bd82fdea0872d5b1d8220269471014dd4630c46796cdff",
+    "entry_list_sha256": "284330f8d4587af4e4f57db29199f22e01c918a1c6cb259359be2e89f5d6c798",
+    "corpus": "private/slice155-vu1-full-corpus (426 recorded-layout files; the 2,048 corpus is not built into CTest)",
+    "overlay_sha256": "171b07c36fbe54be2579a84f579e06e4796b93648ca9f1d13b429d8abad0cd32",
+    "flag_elision": true
+  },
+  "port_capsule": "private/slice153-pacing-port",
+  "shader_capsule": "private/slice153-pacing-shaders",
+  "purpose": "Playable build of main with every approved Phase 1 task through TASK-013.",
+  "status": "candidate: CTest 23/23 on the fresh build; owner session pending",
+  "runtime_dependencies": [
+    {
+      "path": "private/slice153-pacing-shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ],
+  "vu0_aot": {
+    "generated_dir": "private/slice160-vu0-gen-r3",
+    "programs": 14,
+    "entry_policy": "vcallms: 14 entries (docs/VU0-MICROCODE-MAP.md; vu0_image.py entries)",
+    "image": "private/slice160-vu0-image/vu0_image.bin",
+    "image_sha256": "2d7b26535008f1b3402ba70e8365cae749e64079eb32381d6853612abc896d44",
+    "entry_list_sha256": "2f5ac510cda32588c706b550a2ef1181537296d258039709180d7909a251471e",
+    "table_sha256": "ef59e476e957679e9894ce8613302ec3e1b52ebeed2567e17b9470d503de340c",
+    "manifest_sha256": "eb027ffaf69674c1ac171f6982f738dcb80a53d838d22747da8a86377d8390ae",
+    "overlay_sha256": "9e5fee2b08ad87bbeeba08adb426ee927f499df20fce9b44134ae87733bad25b",
+    "vu1_table": "private/slice157-vu1-all-gen (unchanged, regeneration byte-identical)"
+  }
+}

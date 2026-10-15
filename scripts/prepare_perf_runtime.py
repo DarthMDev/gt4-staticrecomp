@@ -4,6 +4,8 @@ Options:
   --split-vu  attribute VU interpreter time per unit (vu_interpreter_category).
   --vu1-aot   also overlay the VU1 AOT registry (scripts/vu1_aot_overlay.inc). Implies
               --split-vu. Default and --split-vu derivations are unchanged by this option.
+  --vu0-aot   also overlay the VU0 AOT registry (scripts/vu0_aot_overlay.inc, slice 160). Implies
+              --vu1-aot (the VU0 capsule keeps the VU1 table) and --split-vu.
 
 Slices 156 and 158 used --gs-crt-override and --display-table-override. Both hooks were removed in slice164
 (the 480p switch is a host-side guest RAM write, native/race_display.*). Their capsules stay pinned in
@@ -34,6 +36,7 @@ PATCHES = {
          'void transfer(int unit, const std::uint8_t *data, std::uint32_t qwc) {\n    gt4::perf::Scope perf_vif(gt4::perf::Category::vif_gif);\n')],
 }
 OVERLAY_PATH = ROOT / 'scripts/vu1_aot_overlay.inc'
+VU0_OVERLAY_PATH = ROOT / 'scripts/vu0_aot_overlay.inc'
 # Each overlay section is inserted at one unique donor anchor, by mode.
 OVERLAY_ANCHORS = {
     'includes': ('after', '#include "ps2/vu_ops.hpp"\n'),
@@ -42,9 +45,16 @@ OVERLAY_ANCHORS = {
     'helpers': ('before', 'void run_entry(int unit, std::uint32_t pc) {\n'),
     'run_gate': ('before', '    if (unit == 1 && !interpret_only) {\n'),
 }
+# VU0 overlay (slice 160). The run() gate sits before the donor's PS2_VU_EXACT line; the helpers before run().
+VU0_OVERLAY_ANCHORS = {
+    'includes': ('after', '#include "ps2/vu_ops.hpp"\n'),
+    'helpers': ('before', 'void run(int n, std::uint32_t address) {\n'),
+    'run_gate': ('before', '    static const bool exact = std::getenv("PS2_VU_EXACT") != nullptr;\n'),
+}
 PREFIX = '// Measurement-only MIT donor derivation; see native/THIRD_PARTY.md.\n#include "perf_probe.hpp"\n'
 
-def overlay_sections(text):
+
+def overlay_sections(text, anchors=OVERLAY_ANCHORS):
     sections, name, lines = {}, None, []
     for line in text.split('\n'):
         if line.startswith('//@section '):
@@ -55,19 +65,19 @@ def overlay_sections(text):
             lines.append(line)
     if name is not None:
         sections[name] = '\n'.join(lines).rstrip('\n') + '\n'
-    if set(sections) != set(OVERLAY_ANCHORS):
-        raise ValueError('VU1 AOT overlay sections do not match the anchor table')
+    if set(sections) != set(anchors):
+        raise ValueError('AOT overlay sections do not match the anchor table')
     return sections
 
 
-def apply_vu1_aot(source):
-    """Inserts every overlay section; checks that removing them restores the input."""
-    sections = overlay_sections(OVERLAY_PATH.read_text(encoding='utf-8').replace('\r\n', '\n'))
+def apply_overlay(source, path, anchors, label):
+    """Inserts every overlay section at its anchor; checks that removing them restores the input."""
+    sections = overlay_sections(path.read_text(encoding='utf-8').replace('\r\n', '\n'), anchors)
     result = source
     edits = []
-    for name, (mode, anchor) in OVERLAY_ANCHORS.items():
+    for name, (mode, anchor) in anchors.items():
         if result.count(anchor) != 1:
-            raise ValueError(f'Expected one qualified VU1 AOT anchor: {name}')
+            raise ValueError(f'Expected one qualified {label} anchor: {name}')
         text = sections[name]
         if mode == 'after':
             replacement = anchor + text
@@ -80,14 +90,24 @@ def apply_vu1_aot(source):
     inverse = result
     for anchor, replacement in reversed(edits):
         if inverse.count(replacement) != 1:
-            raise ValueError('Unexpected VU1 AOT overlay reversal')
+            raise ValueError(f'Unexpected {label} overlay reversal')
         inverse = inverse.replace(replacement, anchor)
     if inverse != source:
-        raise ValueError('VU1 AOT overlay does not reverse to the input')
+        raise ValueError(f'{label} overlay does not reverse to the input')
     return result
 
 
-def derive(name, source, *, split_vu=False, vu1_aot=False):
+def apply_vu1_aot(source):
+    """VU1 overlay (slice 151-157); its output and receipt are unchanged by the VU0 overlay."""
+    return apply_overlay(source, OVERLAY_PATH, OVERLAY_ANCHORS, 'VU1 AOT')
+
+
+def apply_vu0_aot(source):
+    """VU0 overlay (slice 160), applied on top of the VU1 overlay."""
+    return apply_overlay(source, VU0_OVERLAY_PATH, VU0_OVERLAY_ANCHORS, 'VU0 AOT')
+
+
+def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False):
     original = source
     patches = [(before, after.replace('gt4::perf::Category::vu_interpret',
                 'gt4::perf::vu_interpreter_category(unit)') if split_vu else after)
@@ -100,6 +120,9 @@ def derive(name, source, *, split_vu=False, vu1_aot=False):
     if vu1_aot and name == 'vu_micro.cpp':
         # apply_vu1_aot checks that its own overlay reverses to the patched text.
         source = apply_vu1_aot(patched)
+    if vu0_aot and name == 'vu_micro.cpp':
+        # apply_vu0_aot checks that its overlay reverses to the VU1-overlaid text.
+        source = apply_vu0_aot(source)
     inverse = patched
     for before, after in reversed(patches):
         inverse = inverse.replace(after, before)
@@ -108,7 +131,9 @@ def derive(name, source, *, split_vu=False, vu1_aot=False):
     return PREFIX + source
 
 
-def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False):
+def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False):
+    if vu0_aot:
+        vu1_aot = True
     if vu1_aot:
         split_vu = True
     output = Path(output).absolute()
@@ -123,7 +148,7 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False):
         if hashlib.sha256(data).hexdigest() != expected:
             raise ValueError(f'Qualified donor source differs: {name}')
         text = data.decode('utf-8').replace('\r\n', '\n')
-        sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot)
+        sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot, vu0_aot=vu0_aot)
     output.mkdir()
     receipt = {'donor_revision': '1b4808793a12c45125262fd2d5f50a9ec9f7c020',
                'donor_sha256': PINS, 'source_sha256': {}}
@@ -134,6 +159,9 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False):
         # Hashed with LF line endings: a checkout with core.autocrlf stores the overlay with CRLF, and the
         # pinned value (slice 154) is the LF text that the derivation parses.
         receipt['vu1_aot_overlay_sha256'] = hashlib.sha256(OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+    if vu0_aot:
+        receipt['vu0_aot_profile'] = 'overlay-v1'
+        receipt['vu0_aot_overlay_sha256'] = hashlib.sha256(VU0_OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
     for name, text in sources.items():
         path = output / name
         path.write_text(text, encoding='utf-8', newline='\n')
@@ -148,5 +176,6 @@ if __name__ == '__main__':
     parser.add_argument('--assets-root', type=Path)
     parser.add_argument('--split-vu', action='store_true')
     parser.add_argument('--vu1-aot', action='store_true')
+    parser.add_argument('--vu0-aot', action='store_true')
     args = parser.parse_args()
-    prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot)
+    prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot, vu0_aot=args.vu0_aot)
