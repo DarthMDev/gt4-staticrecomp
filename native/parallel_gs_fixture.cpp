@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -332,6 +333,8 @@ void check_window_presentation(Backend &backend) {
 } // namespace
 
 int main() {
+    // Unbuffered: a crash must not hide the checks that already ran.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     Backend backend;
     std::string error;
     if (!backend.init(error)) {
@@ -467,6 +470,91 @@ int main() {
         expect(progressive.valid && progressive.width == 2 * kFrameWidth && progressive.height == 2 * kFrameHeight, what);
         backend.next_frame();
     }
+
+    // Slice 176: 3x and 4x high-resolution scanouts from the 16x ordered grid (4x4 super samples per pixel).
+    // Progressive 480p: the 4x image holds one super sample per output pixel, the 3x image the nearest
+    // sample to each output centre, and the 2x image the average of each 2x2 quadrant (donor shader).
+    // Both checks are exact: they compare the same render at the same sample positions.
+    expect(backend.set_super_sampling(16), "16x super-sampling for the 3x and 4x scanouts");
+    set_display_480p_progressive(backend);
+    gif.clear();
+    build_scene(gif, 0);
+    backend.gif_transfer(3, gif.data(), gif.bytes());
+    backend.flush();
+    ScanoutRequest scaled = request;
+    scaled.high_resolution = true;
+    scaled.high_resolution_scale = 2;
+    const ScanoutImage scanout_2x = backend.scanout(scaled);
+    scaled.high_resolution_scale = 3;
+    const ScanoutImage scanout_3x = backend.scanout(scaled);
+    scaled.high_resolution_scale = 4;
+    const ScanoutImage scanout_4x = backend.scanout(scaled);
+    expect(scanout_2x.valid && scanout_2x.width == 2 * kFrameWidth && scanout_2x.height == 2 * kFrameHeight &&
+               scanout_2x.high_resolution_scale == 2,
+           "16x SSAA, 480p: the scale 2 request still gives the donor 1280x896 image");
+    expect(scanout_3x.valid && scanout_3x.width == 3 * kFrameWidth && scanout_3x.height == 3 * kFrameHeight &&
+               scanout_3x.high_resolution_scale == 3,
+           "16x SSAA, 480p: the scale 3 request gives 1920x1344");
+    expect(scanout_4x.valid && scanout_4x.width == 4 * kFrameWidth && scanout_4x.height == 4 * kFrameHeight &&
+               scanout_4x.high_resolution_scale == 4,
+           "16x SSAA, 480p: the scale 4 request gives 2560x1792");
+
+    if (scanout_2x.valid && scanout_4x.valid) {
+        // Output pixel (x, y) at 2x is the mean of the 2x2 block (2x..2x+1, 2y..2y+1) at 4x.
+        std::uint64_t mismatches_2x = 0;
+        int worst_2x = 0;
+        for (std::uint32_t y = 0; y < 2 * kFrameHeight; ++y)
+            for (std::uint32_t x = 0; x < 2 * kFrameWidth; ++x)
+                for (std::uint32_t channel = 0; channel < 4; ++channel) {
+                    int sum = 0;
+                    for (std::uint32_t dy = 0; dy < 2; ++dy)
+                        for (std::uint32_t dx = 0; dx < 2; ++dx)
+                            sum += scanout_4x.rgba[((2 * y + dy) * scanout_4x.width + 2 * x + dx) * 4 + channel];
+                    const int mean = (sum + 2) / 4;
+                    const int delta = std::abs(mean - int(scanout_2x.rgba[(y * scanout_2x.width + x) * 4 + channel]));
+                    worst_2x = std::max(worst_2x, delta);
+                    if (delta > 1)
+                        ++mismatches_2x;
+                }
+        char what[160];
+        std::snprintf(what, sizeof what,
+                      "4x samples average to the donor 2x quadrants (mismatches over 1: %llu, worst %d)",
+                      static_cast<unsigned long long>(mismatches_2x), worst_2x);
+        expect(mismatches_2x == 0, what);
+    }
+
+    if (scanout_3x.valid && scanout_4x.valid) {
+        // 3x output pixel (x, y): PS2 pixel (x / 3, y / 3), grid sample g = floor((2l + 1) * 4 / 6) for local l.
+        std::uint64_t mismatches_3x = 0;
+        for (std::uint32_t y = 0; y < 3 * kFrameHeight; ++y)
+            for (std::uint32_t x = 0; x < 3 * kFrameWidth; ++x) {
+                const std::uint32_t gx = ((2 * (x % 3) + 1) * 4) / 6;
+                const std::uint32_t gy = ((2 * (y % 3) + 1) * 4) / 6;
+                const std::uint32_t source_x = (x / 3) * 4 + gx;
+                const std::uint32_t source_y = (y / 3) * 4 + gy;
+                const std::size_t a = (y * scanout_3x.width + x) * 4;
+                const std::size_t b = (source_y * scanout_4x.width + source_x) * 4;
+                if (std::memcmp(&scanout_3x.rgba[a], &scanout_4x.rgba[b], 4) != 0)
+                    ++mismatches_3x;
+            }
+        char what[160];
+        std::snprintf(what, sizeof what, "3x pixels are the nearest 4x super samples (mismatching pixels: %llu)",
+                      static_cast<unsigned long long>(mismatches_3x));
+        expect(mismatches_3x == 0, what);
+    }
+
+    // Field-aware 480i frames keep the donor 2x image when 3x or 4x is requested (slice 176 fallback).
+    set_display_ntsc_interlaced_frame(backend, 1);
+    gif.clear();
+    build_scene(gif, 0);
+    backend.gif_transfer(3, gif.data(), gif.bytes());
+    backend.flush();
+    scaled.high_resolution_scale = 4;
+    const ScanoutImage frame_mode_4x = backend.scanout(scaled);
+    expect(frame_mode_4x.valid && frame_mode_4x.width == 2 * kFrameWidth && frame_mode_4x.height == 2 * 224 - 1 &&
+               frame_mode_4x.high_resolution_scale == 2,
+           "16x SSAA, 480i frame mode: a scale 4 request falls back to the 1280x447 field-aware image");
+    backend.next_frame();
     backend.wait_idle();
 
     // Back to 1x and the GT4 frame-mode registers before the window checks.

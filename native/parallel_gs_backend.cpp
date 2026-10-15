@@ -347,6 +347,7 @@ ScanoutImage Backend::scanout(const ScanoutRequest &request) {
     info.anti_blur = request.anti_blur;
     info.adapt_to_internal_horizontal_resolution = true;
     info.high_resolution_scanout = request.high_resolution;
+    info.high_resolution_scale = request.high_resolution_scale;
 
     impl->gs.flush();
     const auto result = impl->gs.vsync(info);
@@ -355,6 +356,7 @@ ScanoutImage Backend::scanout(const ScanoutRequest &request) {
 
     frame.width = result.image->get_width();
     frame.height = result.image->get_height();
+    frame.high_resolution_scale = result.high_resolution_scale;
     BufferCreateInfo buffer_info = {};
     buffer_info.domain = BufferDomain::CachedHost;
     buffer_info.size = VkDeviceSize(frame.width) * frame.height * 4;
@@ -418,7 +420,7 @@ void Backend::resize_window(std::uint32_t width, std::uint32_t height) {
         impl->platform.request_resize(width, height);
 }
 
-bool Backend::present(std::uint32_t phase, bool high_resolution) {
+bool Backend::present(std::uint32_t phase, bool high_resolution, std::uint32_t high_resolution_scale) {
     if (!impl->wsi)
         return false;
     // A minimised window has no drawable surface: keep the frame contexts moving, present nothing.
@@ -444,6 +446,7 @@ bool Backend::present(std::uint32_t phase, bool high_resolution) {
     info.anti_blur = true;
     info.adapt_to_internal_horizontal_resolution = true;
     info.high_resolution_scanout = high_resolution;
+    info.high_resolution_scale = high_resolution_scale;
     impl->gs.flush();
     const auto scanout = impl->gs.vsync(info);
 

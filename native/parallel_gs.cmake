@@ -97,9 +97,42 @@ if(NOT "${GT4_PARALLEL_GS_PATCHED}" IN_LIST parallel_gs_sources)
 endif()
 set_property(TARGET parallel-gs PROPERTY SOURCES ${parallel_gs_sources})
 
+# Slice 176 (TASK-012) patch: 3x and 4x high-resolution scanout. native/parallel_gs_scale/patch_parallel_gs_scale.py
+# writes patched gs_renderer.cpp, gs_renderer.hpp and gs_interface.hpp (every anchor counted, see the script)
+# plus the SPIR-V of native/parallel_gs_scale/sample_circuit_scaled.frag, sha256-pinned in the script. The
+# patched directory is first on the include path of the backend, so the headers agree in both units.
+# The donor 2x path is unchanged: scale 2 reuses the donor quad shader.
+set(GT4_PARALLEL_GS_SCALE_DIR "${GT4_ROOT}/native/parallel_gs_scale")
+set(GT4_PARALLEL_GS_PATCH_DIR "${CMAKE_CURRENT_BINARY_DIR}/parallel-gs-patched")
+set(parallel_gs_scale_inputs
+    "${GT4_PARALLEL_GS_SCALE_DIR}/patch_parallel_gs_scale.py"
+    "${GT4_PARALLEL_GS_SCALE_DIR}/sample_circuit_scaled_p0.spv"
+    "${GT4_PARALLEL_GS_SCALE_DIR}/sample_circuit_scaled_p1.spv")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${parallel_gs_scale_inputs}
+    "${GT4_PARALLEL_GS_SOURCE}/gs/gs_renderer.cpp" "${GT4_PARALLEL_GS_SOURCE}/gs/gs_renderer.hpp"
+    "${GT4_PARALLEL_GS_SOURCE}/gs/gs_interface.hpp")
+execute_process(
+    COMMAND "${GT4_PARALLEL_GS_PYTHON}" "${GT4_PARALLEL_GS_SCALE_DIR}/patch_parallel_gs_scale.py"
+            --vendor-gs "${GT4_PARALLEL_GS_SOURCE}/gs" --spv-dir "${GT4_PARALLEL_GS_SCALE_DIR}"
+            --out "${GT4_PARALLEL_GS_PATCH_DIR}"
+    RESULT_VARIABLE parallel_gs_scale_result
+    OUTPUT_VARIABLE parallel_gs_scale_output
+    ERROR_VARIABLE parallel_gs_scale_error)
+if(NOT parallel_gs_scale_result EQUAL 0)
+    message(FATAL_ERROR "paraLLEl-GS scale patch failed: ${parallel_gs_scale_error}")
+endif()
+get_target_property(parallel_gs_sources parallel-gs SOURCES)
+list(TRANSFORM parallel_gs_sources REPLACE "^gs_renderer\\.cpp$" "${GT4_PARALLEL_GS_PATCH_DIR}/gs_renderer.cpp")
+if(NOT "${GT4_PARALLEL_GS_PATCH_DIR}/gs_renderer.cpp" IN_LIST parallel_gs_sources)
+    message(FATAL_ERROR "paraLLEl-GS target no longer lists gs_renderer.cpp; review the slice 176 patch")
+endif()
+set_property(TARGET parallel-gs PROPERTY SOURCES ${parallel_gs_sources})
+
 # Granite's Vulkan headers differ from the PCSX2-tree headers used by ps2runtime_vulkan. Only this
 # library and its fixture see them, through the backend translation unit.
 add_library(gt4_parallel_gs STATIC parallel_gs_backend.cpp)
+# The patched headers (slice 176: VSyncInfo::high_resolution_scale) must win over the pinned ones.
+target_include_directories(gt4_parallel_gs BEFORE PRIVATE "${GT4_PARALLEL_GS_PATCH_DIR}")
 # /W3 rather than /W4: Granite's own headers trigger -Wmissing-field-initializers and -Wsign-compare
 # when included from this unit, and those diagnostics are not ours to fix.
 target_compile_options(gt4_parallel_gs PRIVATE /W3)

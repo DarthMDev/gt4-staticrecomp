@@ -44,25 +44,40 @@ std::uint32_t parallel_super_sampling() {
     std::exit(EXIT_FAILURE);
 }
 
-// GT4_PGS_HIRES=0|1 (default 0): paraLLEl-GS high-resolution scanout (2x per axis) in the window and in
-// scanout dumps. Needs GT4_PGS_SSAA=4, 8 or 16; any other combination or value stops the process.
-bool parallel_high_resolution() {
-    static const bool enabled = [] {
+// GT4_PGS_HIRES=0|1|2|3|4 (default 0): paraLLEl-GS high-resolution scanout in the window and in scanout
+// dumps. The value is the scale per axis: 1 and 2 give the donor 2x image (GT4_PGS_SSAA=4, 8 or 16), 3 and 4
+// give 3x and 4x images from the 16x ordered grid (GT4_PGS_SSAA=16, slice 176). Field-aware 480i frames
+// stay at 2x. Other combinations or values stop the process. Returns 0 when off.
+std::uint32_t parallel_high_resolution_scale() {
+    static const std::uint32_t scale = [] {
         const char *value = std::getenv("GT4_PGS_HIRES");
         if (!value || std::strcmp(value, "0") == 0)
-            return false;
-        if (std::strcmp(value, "1") != 0) {
-            std::fprintf(stderr, "[pgs] GT4_PGS_HIRES=\"%s\" is not 0 or 1; refusing to start\n", value);
+            return std::uint32_t(0);
+        std::uint32_t requested = 0;
+        if (std::strcmp(value, "1") == 0 || std::strcmp(value, "2") == 0)
+            requested = 2;
+        else if (std::strcmp(value, "3") == 0 || std::strcmp(value, "4") == 0)
+            requested = std::uint32_t(value[0] - '0');
+        else {
+            std::fprintf(stderr, "[pgs] GT4_PGS_HIRES=\"%s\" is not 0, 1, 2, 3 or 4; refusing to start\n", value);
             std::exit(EXIT_FAILURE);
         }
-        if (parallel_super_sampling() < 4) {
-            std::fprintf(stderr, "[pgs] GT4_PGS_HIRES=1 needs GT4_PGS_SSAA=4, 8 or 16; refusing to start\n");
+        const std::uint32_t super_sampling = parallel_super_sampling();
+        if (requested == 2 && super_sampling < 4) {
+            std::fprintf(stderr, "[pgs] GT4_PGS_HIRES=%s needs GT4_PGS_SSAA=4, 8 or 16; refusing to start\n", value);
             std::exit(EXIT_FAILURE);
         }
-        return true;
+        if (requested > 2 && super_sampling != 16) {
+            std::fprintf(stderr, "[pgs] GT4_PGS_HIRES=%s needs GT4_PGS_SSAA=16 (4x4 ordered grid); refusing to start\n",
+                         value);
+            std::exit(EXIT_FAILURE);
+        }
+        return requested;
     }();
-    return enabled;
+    return scale;
 }
+
+bool parallel_high_resolution() { return parallel_high_resolution_scale() != 0; }
 
 // GT4_PGS_DUMP_SOURCE=vram|scanout (default vram). vram decodes the display buffer from the copied
 // VRAM with the donor decode (comparable with donor dumps); scanout dumps the paraLLEl-GS scanout
@@ -121,10 +136,13 @@ ParallelFrontEnd &parallel() {
             std::fprintf(stderr, "[pgs] GT4_PGS_SSAA=%u refused by paraLLEl-GS\n", super_sampling);
             std::exit(EXIT_FAILURE);
         }
-        const bool high_resolution = parallel_high_resolution();
+        const std::uint32_t high_resolution_scale = parallel_high_resolution_scale();
+        char scale_text[8] = "off";
+        if (high_resolution_scale)
+            std::snprintf(scale_text, sizeof scale_text, "%ux", high_resolution_scale);
         std::fprintf(stderr, "[pgs] GT4_RENDERER=parallel: paraLLEl-GS backend started (SSAA %ux, high-resolution scanout %s), "
                              "donor Vulkan renderer not created\n",
-                     super_sampling, high_resolution ? "on" : "off");
+                     super_sampling, scale_text);
         return created;
     }();
     return *front_end;
@@ -183,14 +201,19 @@ bool parallel_attach_window(std::uint64_t window, std::uint32_t width, std::uint
 
 void parallel_resize_window(std::uint32_t width, std::uint32_t height) { parallel().backend.resize_window(width, height); }
 
-bool parallel_present() { return parallel().backend.present(parallel_scanout_phase(), parallel_high_resolution()); }
+bool parallel_present() {
+    const std::uint32_t scale = parallel_high_resolution_scale();
+    return parallel().backend.present(parallel_scanout_phase(), scale != 0, scale ? scale : 2);
+}
 
 // Headless dump of the scanout image (GT4_PGS_DUMP_SOURCE=scanout). Pixels are RGBA8 with the red
 // channel in the low byte, as the donor decode returns them; alpha is forced opaque the same way.
 bool parallel_scanout_frame(std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {
     gt4::parallel_gs::ScanoutRequest request;
     request.phase = parallel_scanout_phase();
-    request.high_resolution = parallel_high_resolution();
+    const std::uint32_t scale = parallel_high_resolution_scale();
+    request.high_resolution = scale != 0;
+    request.high_resolution_scale = scale ? scale : 2;
     const gt4::parallel_gs::ScanoutImage image = parallel().backend.scanout(request);
     if (!image.valid)
         return false;

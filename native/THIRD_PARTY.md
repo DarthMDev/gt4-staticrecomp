@@ -113,6 +113,12 @@ Notes:
   can relink, as LGPL-3.0 section 4 requires. No binary is distributed by this slice. The plan
   ([PARALLEL-GS-PLAN.md](../docs/PARALLEL-GS-PLAN.md)) requires an owner decision on distribution
   before any public binary; none is recorded yet.
+- Local patch (slice 176, TASK-012): `native/parallel_gs_scale/patch_parallel_gs_scale.py` writes patched
+  `gs_renderer.cpp`, `gs_renderer.hpp` and `gs_interface.hpp` into `<build>/native/parallel-gs-patched/` with
+  anchored replacements (exact counts, configure fails otherwise) that generalise the 2x high-resolution scanout
+  to 3x and 4x. The new sample shader `native/parallel_gs_scale/sample_circuit_scaled.frag` is derived from
+  `gs/shaders/sample_circuit.frag` (LGPL-3.0+, Arntzen Software AS); its SPIR-V is committed and sha256-pinned.
+  Each changed line carries a `GT4Recomp slice 176` comment. Scale 2 and the donor path are unchanged.
 - Local patch (slice 167): `native/parallel_gs.cmake` copies `gs/gs_interface.cpp` into the build tree
   (`<build>/native/parallel-gs-patched/`), applies two anchored text replacements in
   `GSInterface::gif_transfer`, and compiles the copy instead of the original. The optimized PACKED

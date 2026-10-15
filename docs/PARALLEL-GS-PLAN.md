@@ -630,3 +630,63 @@ with SSAA below 4.
 
 **Open issues after slice 169:** owner check of 4x/8x/16x with and without `--hires` in races (480p) and menus;
 pipeline cache (above); GT4 480p DISPLAY values; deinterlace options; save states in parallel mode.
+
+## 12. Progress (slice 176, branch task/012-pgs-upscale): 3x and 4x high-resolution scanout
+
+Labels as in section 0. Question from the owner: can paraLLEl-GS scan out more than 2x per axis? Answer: yes
+for progressive frames with the 16x ordered grid (4x and 3x, prototype below); 480i field-aware frames stay at
+2x. Pinned source: `private/references/parallel-gs` at cc6184a (read only; not modified).
+
+**Why 2x was the cap (Confirmed by source reading, file:line in the pinned checkout):**
+- Sample layout: `GSInterface::set_super_sampling_rate` (`gs/gs_interface.cpp:65-117`) turns the SSAA factor into
+  a power-of-two grid per PS2 pixel; 16x ordered is 4x4 (`sampling_rate_x_log2 = y_log2 = 2`). The rasterizer
+  stores sample `i` in VRAM slice `2 + i`; the lane-to-sample mapping is in `gs/shaders/ubershader.comp`
+  (`local_pixel` for NUM_SAMPLES 16, lines ~160-300), giving `sample_index = (sy&1) + 2(sx&1) + 4(sy>>1) + 8(sx>>1)`.
+- The high-resolution scanout is hard-wired to 2x: `gs/gs_renderer.cpp` multiplies the circuit and merged images
+  by 2 (about lines 4646-4649, 4704-4707, 4851-4852), the blit viewports by 2 (4921-4928, 4954-4961), the raw
+  path and CRTC arithmetic by `>> 1` (4766-4769, 4840-4841). The header comment (`gs/gs_interface.hpp:187-191`)
+  says "2x per axis".
+- The sample shader is 2x only: `gs/shaders/sample_circuit.frag` reads a 2x2 quadrant of the super grid
+  (`quad_offset`, `NUM_SSAA_SAMPLES = SUPER_SAMPLES / 4`) and averages it. Nothing in it can return one sample per
+  output pixel at 4x.
+- 480i field-aware frames (`gs_interface.cpp:4676`, `gs_renderer.cpp:4312`) keep their own path; not changed.
+- Not possible in this renderer: 6x and 8x (grid would need 36 or 64 samples; the rasterizer supports 1..16 with
+  power-of-two rates), and any scale that is not a power of two except through point sampling of a 4x4 grid.
+  Texture detail is still native-rate (the owner's "16x not much better" is expected: edges gain, textures do not).
+
+**Prototype (contained, build-tree patch; the pinned checkout is untouched):**
+- `native/parallel_gs_scale/patch_parallel_gs_scale.py` writes patched `gs_renderer.cpp`, `gs_renderer.hpp`,
+  `gs_interface.hpp` and a SPIR-V include into `parallel-gs-patched/`. Every anchor must occur the expected number
+  of times. The SPIR-V (`sample_circuit_scaled_p{0,1}.spv`, from `sample_circuit_scaled.frag`, glslangValidator
+  1.4.341.1 vulkan1.2) is sha256-pinned in the script. Scale 2 keeps the donor quad shader; scale 3 and 4 use the
+  new shader with the same resource layout written by hand (this build has no SPIRV-Cross reflection).
+- The new shader writes one output pixel per super sample (4x: exact sample; 3x: nearest sample to the output
+  centre, grid positions 0, 2, 3). Two details found on the way: all VRAM access goes through one 32-bit buffer
+  (two declarations on binding 0 make pipeline creation fail), and the hand-written layout needs `output_mask = 1`
+  (Granite derives `render_target_mask` from it; without it the draw is silently dropped).
+- `high_resolution_scale` is carried by `VSyncInfo` and reported back in `ScanoutResult`. Field-aware frames and
+  scale 2 fall back to the donor 2x path. `GT4_PGS_HIRES=1|2` = 2x (as before), `3|4` = 3x/4x; 3 and 4 require
+  `GT4_PGS_SSAA=16` (`parallel_gs_frontend.inc`).
+
+**Verification (headless, fixture, Confirmed):**
+- Fixture (`parallel_gs_fixture`, 16x SSAA, progressive 480p): 2x 1280x896 (donor), 3x 1920x1344, 4x 2560x1792;
+  480i frame mode with a 4x request falls back to 1280x447. 1x unchanged.
+- 4x vs donor 2x: every 2x output equals the mean of its 2x2 block of 4x pixels (0 mismatches, worst delta 0), which
+  checks the sample-slot mapping against the donor's quadrant layout.
+- 3x: every pixel equals the nearest 4x super sample it is defined to take (0 mismatches).
+- `gs_video_mode_fixture` and `parallel_gs_fixture` pass under CTest (`native_parallel_gs`, `native_gs_video_mode`).
+- The sample scene (`private/slice176-pgs-upscale-samples/fixture_scene_{2,3,4}x_full.png`) is the fixture test
+  scene, not GT4. Not a game frame.
+- The frontend fragment was syntax-checked with stubs (clang-cl -fsyntax-only): no errors in the edited functions.
+
+**Not done (honest limits):**
+1. No full game build and no headless GT4 run at 3x/4x: that needs a new pinned port and runtime manifest (a new
+   executable hash), which the launcher does not have. The launcher still maps `--hires` to `GT4_PGS_HIRES=1` (2x).
+2. Race scenes and menus at 3x/4x are unverified; field-aware (480i menus) stays 2x.
+3. The 4x and 3x content is not yet compared against a reference renderer or the owner's eyes.
+4. Pipeline cache, deinterlacing and save states are unchanged open items (sections 10-11).
+5. Local notes: `private/references/ps2-web-recomp/.../vu_ops.hpp` and `private/slice114-native-base/` in this
+   worktree are copies needed only to configure the fixture target (git-ignored).
+
+**Owner test (after a candidate is pinned):** `GT4_PGS_HIRES=4 GT4_PGS_SSAA=16` (or 3) with the parallel renderer,
+races at 480p; compare with `GT4_PGS_HIRES=1 GT4_PGS_SSAA=16`. Report the visual result and F8 (no perf claim yet).

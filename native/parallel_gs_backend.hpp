@@ -31,8 +31,11 @@ struct ScanoutRequest {
     std::uint32_t phase = 0;
     bool force_progressive = true;
     bool anti_blur = true;
-    // Requests the 4x+ super-sampled scanout. paraLLEl-GS ignores it below 4x SSAA.
+    // Requests the super-sampled high-resolution scanout. paraLLEl-GS ignores it below 4x SSAA.
     bool high_resolution = false;
+    // Scale per axis when high_resolution is set: 2 (donor path, 4x SSAA or more), 3 or 4 (16x SSAA
+    // only, progressive frames; field-aware frames fall back to 2). Slice 176.
+    std::uint32_t high_resolution_scale = 2;
 };
 
 // Window presentation (slice 168, step 6). The swapchain belongs to Granite's device: paraLLEl-GS
@@ -98,6 +101,9 @@ struct ScanoutImage {
     bool valid = false;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    // Scale per axis paraLLEl-GS actually used: 1 for the 1x image, otherwise the high-resolution scale
+    // (it can be lower than requested, for example 2 for field-aware frames). Slice 176.
+    std::uint32_t high_resolution_scale = 1;
     // Tightly packed RGBA8 rows, width * height * 4 bytes.
     std::vector<std::uint8_t> rgba;
 };
@@ -118,6 +124,7 @@ public:
     void set_signal_handler(SignalHandler *handler);
 
     // Super-sampling factor 1, 2, 4, 8 or 16 (paraLLEl-GS X1..X16). Returns false when unsupported.
+    // Scale 3 and 4 of the high-resolution scanout need 16 (ordered 4x4 grid), see the scanout request.
     bool set_super_sampling(std::uint32_t factor);
 
     // GIF packet stream for one path (1, 2 or 3); state persists between calls like the donor GIF.
@@ -169,7 +176,8 @@ public:
     // samples; needs 4x SSAA or more, otherwise paraLLEl-GS returns the 1x image). The 1x image is
     // blitted with nearest filtering (as the donor presenter); a high-resolution image uses nearest
     // only for an exact integer upscale and linear filtering otherwise (slice 169, present_filter).
-    bool present(std::uint32_t phase, bool high_resolution = false);
+    // `high_resolution_scale` (slice 176) is 2, 3 or 4 and applies only when `high_resolution` is set.
+    bool present(std::uint32_t phase, bool high_resolution = false, std::uint32_t high_resolution_scale = 2);
 
 private:
     struct Impl;
