@@ -71,7 +71,12 @@
   "source_manifest": "slice191-gs-stream-runtime.json",
   "preserved_inputs": "Same production EE library, VU1 table (slice157-vu1-all-gen), VU0 table (slice160-vu0-gen-r3) and slice153 pacing shaders as slice178; the runtime capsule adds the GS stream hooks to gif.cpp and hw.cpp, the port adds them to gs.cpp.",
   "controls": {
-    "pending": "filled in by the slice191 verification (docs/BUILD.md slice 191)"
+    "build": "cmake --build on private/slice191-gs-stream-build/build, exit 0; gt4vulkan.exe 95,634,432 bytes sha256 03173665...; gs_stream_record.exe sha256 b5cf7e2b...",
+    "ctest": "CTest 29/29 (native_gs_stream_ipc, native_gs_stream_client new)",
+    "python": "unittest discover (GT4_NATIVE_BUILD on slice191 build, GT4_ASSETS_ROOT main checkout): 321 tests OK, 12 skipped",
+    "headless_donor": "4,200 frames, slice157 schedule: GT4_RENDERER unset 42/42 identical to slice157; GT4_RENDERER=donor with GT4_GS_CAPTURE 42/42 identical",
+    "headless_pcsx2": "GT4_RENDERER=pcsx2 with the recorder: completed; in-process capture == donor capture (sha256 e651bba3...); recorder file = same bytes + CONTROL shutdown (sha256 73bee2da...); 0 readbacks",
+    "poc_replay": "converted frames 0-1100 byte-identical to private/slice190-dump/menu-0-1100.gs; GSRunner 1x PNGs 1,100/1,100 identical to private/slice190-gsrunner-out/1x/f"
   },
   "limits": [
     "GT4_RENDERER=pcsx2 shows no image: the pinned GS process is a recorder/null consumer, not a renderer (TASK-036).",
