@@ -52,7 +52,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done |
 | TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, races in 480p | ✅ Done |
 | TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ✅ Done (tuning measurements pending) |
-| TASK‑011 | MTVU: VU1 on its own thread, on by default | 🔄 Steps 0-4 and 6 done; merging into the main build |
+| TASK‑011 | MTVU: VU1 on its own thread, on by default | ✅ Done · in `--mode main` (slice178), `GT4_MTVU=0` A/B |
 | TASK‑012 | paraLLEl-GS as an optional PC renderer: integration, super-sampling, high-resolution output | 🔄 Plays (night race 60 FPS); quality capped at 2x; kept as an option |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
