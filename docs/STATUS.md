@@ -2,6 +2,8 @@
 
 ## Current state (2026-10-15)
 
+**Current renderer plan (2026-10-15, [decision 0070](decisions/0070-pcsx2-gs-separate-process.md)):** TASK-032 (decision docs) is done in its PR; TASK-034 (PCSX2 GS proof of concept) is in progress, with an owner go/no-go gate before TASK-035/036. paraLLEl-GS (TASK-012) is dropped; CoreGS 1.1 stays the built-in fallback. Plan: [GSDX-PLAN](GSDX-PLAN.md).
+
 **Latest (merged to main):** TASK-008 slice 157 (all 2,048 VU1 entries, owner: night
 58.9, rally 59.9, showroom 60.0 VBlanks/s, 0 interpreted VU1 calls), TASK-010 build
 pipeline (slice 159) and TASK-009 slice 164 `--mode quickfix3 --force-480p` (title,

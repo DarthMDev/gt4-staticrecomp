@@ -23,20 +23,18 @@ list (private repository `moesuito/gt4-staticrecomp-legacy`). Third renumbering
 
 | Phase | Platform | Goal |
 |---|---|---|
-| **Phase 1** (current) | Windows PC | Original game running natively: correct speed, smooth 60 FPS, no interpreter on the normal path, paraLLEl-GS renderer |
+| **Phase 1** (current) | Windows PC | Original game running natively: correct speed, smooth 60 FPS, no interpreter on the normal path, PCSX2 GS renderer in a separate process (decision 0070), CoreGS 1.1 fallback |
 | **Phase 2** | Android | ARM64 build with the ARMSX2 mobile GS pipeline (Vulkan) |
 | **Phase 3** | iOS | ARM64 build with the ARMSX2 Metal GS pipeline |
 
-**Renderer decision (2026-10-15, [decision 0069](docs/decisions/0069-own-hardware-renderer-clean-room.md)):**
-PC offers **paraLLEl-GS** (Vulkan compute, LGPL-3.0+) and, planned, **our own MIT
-hardware GS renderer** written by clean room from a specification of the PCSX2
-hardware renderer's behavior (TASK-026 specification, TASK-027 implementation:
-internal resolution 1x-6x, texture packs). The release ships the prebuilt game
-executable. The donor compute GS renderer stays only as an experimental fallback
-and comparison reference; it gets no new features.
-Mobile uses the **ARMSX2 GS pipeline** (PCSX2 hardware renderer adapted for
-Android Vulkan and iOS Metal, with GPU driver profiles and a tile-friendly pass
-scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
+**Renderer decision (2026-10-15, [decision 0070](docs/decisions/0070-pcsx2-gs-separate-process.md)):**
+PC uses the **PCSX2 GS** in a separate GPL process, `gt4-gs.exe`, built from our fork
+`moesuito/gt4recomp-gs` and downloaded by the launcher (TASK-032..044). **CoreGS 1.1** (our MIT
+Vulkan compute renderer) is built in as the fallback and offline default. **CoreGS 2.0** (our MIT
+hardware renderer, clean room from the TASK-026 specification; TASK-027) is planned and paused. paraLLEl-GS
+is dropped from the release (0070 supersedes the renderer options of 0069). The game executable never
+contains GPL code. Mobile uses the **ARMSX2 GS pipeline** (Vulkan on Android, Metal on iOS) without its JIT.
+See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX-PLAN.md).
 
 ## Phase 1 — Windows PC
 
@@ -53,22 +51,37 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, races in 480p | ✅ Done |
 | TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ✅ Done (tuning measurements pending) |
 | TASK‑011 | MTVU: VU1 on its own thread, on by default | ✅ Done · in `--mode main` (slice178), `GT4_MTVU=0` A/B |
-| TASK‑012 | paraLLEl-GS as an optional PC renderer: integration, super-sampling, high-resolution output | 🔄 Plays (night race 60 FPS); quality capped at 2x; kept as an option |
+| TASK‑012 | paraLLEl-GS as an optional PC renderer | ❌ Dropped (decision 0070): LGPL code not shipped. Branch `task/012-parallel-gs` kept as history; MIT seam and capture code salvaged into TASK-035 |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
-| TASK‑017 | License-test crash | 🔄 In progress (EE FPU rounding lead) |
+| TASK‑017 | License-test crash | 🔄 In progress: waiting for the owner's FSV trace test |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher 1.0.0 (Rust + Slint) and NSIS per-user installer | 🔄 In progress (branch `task/019-launcher`) |
-| TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 🔄 In progress |
-| TASK‑028 | CoreGS 1.1: upscaling up to 3x (4x available), interlaced-only deinterlace, FXAA-class AA, FSR 1.0 viewport scaling | 🔄 Upscaler done (1x-4x); filters in progress |
-| TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | 🔄 In progress |
+| TASK‑019 | Launcher 1.0.0 (Rust + Slint) and NSIS per-user installer | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 (decision 0070) |
+| TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
 | TASK‑026 | CoreGS 2.0, part 1: clean-room specification of the PCSX2 hardware renderer | ✅ Done (docs/hw-renderer-spec, PR #17) |
-| TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (owner, 2026-10-15) · pure libraries done on task/027-hw-renderer |
+| TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (unchanged) · pure libraries done on `task/027-hw-renderer` |
+| TASK‑028 | CoreGS 1.1: upscaling, interlaced-only deinterlace, FXAA-class AA, FSR 1.0 | ⏸️ Paused by the owner: 3x shows native-size aliasing on 3D models; stays the built-in fallback renderer (`task/028-donor-upscale`, latest slice186) |
+| TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
+| TASK‑030 | Night-race readback wait (CoreGS 1.1) | ⏸️ Paused: owner test 59.07 FPS, wait unchanged at 4.3 ms because the page is drawn the same frame (`task/030-night-readback`) |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
-| TASK‑031 | High frame rate (120-144 FPS) with game physics untouched: GS primitive interpolation, native render-rate study | 🔬 Study and offline prototype |
+| TASK‑031 | High frame rate (120-144 FPS) with game physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS (study docs on `task/031-high-fps`) |
+| TASK‑032 | Decision 0070 docs: PCSX2 GS in a separate process, clean-room wording, renderer docs | ✅ Done (this PR) |
+| TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | 📋 Planned |
+| TASK‑034 | Proof of concept: replay our `.gscap` capture through the PCSX2 GS and compare images | 🔄 In progress · go/no-go gate with the owner before TASK-035/036 |
+| TASK‑035 | MIT GS stream protocol, shared-memory IPC and renderer seam on main | 📋 Planned (after the gate) |
+| TASK‑036 | Live `gt4-gs.exe` MVP: the game drives the PCSX2 GS over IPC | 📋 Planned (after the gate) |
+| TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
+| TASK‑038 | GS window, fullscreen, focus, input and crash handling | 📋 Planned |
+| TASK‑039 | GS settings table and `gt4-gs.ini` | 📋 Planned |
+| TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
+| TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | 📋 Planned |
+| TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | 📋 Planned |
+| TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
+| TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | 📋 Planned |
+| TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 
 ## Phase 2 — Android
 
@@ -136,6 +149,9 @@ CFC2) and exact `run(0,pc)` hand-offs. 28,000-case differential vs the donor,
 showroom 58.0, night 57.9, rally 60.0 VBlanks/s (performance neutral, VU0 cost
 0.1-0.3 ms/frame). `--mode main` (slice 165) is the build of main with all of it.
 
+### TASK-032 — Decision 0070 docs
+Docs only, branch `docs/decision-0070-gs-process`: decision 0070 (PCSX2 GS in a separate process, owner answers recorded), `docs/GSDX-PLAN.md` with the go/no-go gate, TASK-032..045 in this file, CLAUDE.md clean-room wording, RELEASE-1.0.0-PLAN workstream W8, README renderer text, GS-RENDERER-OPTIONS note, journal 2026-10-15. No code, build or game launch.
+
 ## Phase 1 details
 
 ### TASK-011 — MTVU
@@ -146,6 +162,7 @@ showroom/night/race frametime equal or better.
 State: ✅ Done (release 1.0.0 W1, branch `task/011-mtvu`). Plan in docs/MTVU-PLAN.md; step 0 (slice169 measurement), steps 1-4 (ring and journal, slice170 worker, slice171 per-thread F8, slice172 EE-side signals) and step 6 (`--cpu-cores N`) are in. Release W1 (slice178): MTVU is part of `--mode main`, on by default (`GT4_MTVU=0` is the A/B switch), and `--mode main` holds 480p by default. Checks: CTest 27/27, Python 281 OK (12 skipped), headless 4,200 frames: 42/42 identical to slice157 with MTVU on (three runs) and off (one run), and with the default environment. The PR into `main` is not opened yet (ready for review); the merge waits for owner approval. Owner A/B (MTVU-PLAN section 12.6) still pending. Details: BUILD.md "Slice178".
 
 ### TASK-012 — paraLLEl-GS as the PC renderer
+Dropped (decision 0070): not shipped; LGPL code is not merged. Branch `task/012-parallel-gs` is kept as history; its MIT renderer seam and capture code are salvaged in TASK-035. The text below is the original plan.
 One large task, delivered in verified steps on its own branch:
 1. Import paraLLEl-GS (github.com/Arntzen-Software/parallel-gs, LGPL-3.0+, with
    Granite MIT) pinned by commit; build it in our CMake; bridge its Vulkan device
@@ -189,6 +206,7 @@ High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md).
 
 ### TASK-019 — Launcher
+Paused (owner, 2026-10-15; Tauri 2 WIP). Resumes for TASK-043 (decision 0070).
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
 
@@ -261,6 +279,158 @@ before its names are imported.
 ### TASK-020 — Decomp names in generated code
 Label comments in generated units with identical object code.
 
+Common rules for TASK-032..045: agents that open PCSX2 sources or the fork are PCSX2-tainted and never
+work on TASK-027. MIT files in this repository never contain PCSX2 code. The fork's own rules: one writer at
+a time, commits as `moesuito`, every release built by CI from a tag.
+
+### TASK-032 — Decision 0070 docs
+Repo: main, branch `docs/decision-0070-gs-process`. Haiku, 1 session.
+Goal: add `docs/decisions/0070-pcsx2-gs-separate-process.md`, `docs/GSDX-PLAN.md`, the CLAUDE.md
+clean-room paragraph and renderer lines, GS-RENDERER-OPTIONS update, these TASKS rows, STATUS and journal.
+Acceptance: owner answers to GSDX-PLAN section G recorded; links valid; Python suite unchanged.
+Parallel: none needed; first.
+
+### TASK-033 — Fork, reproducible build, CI releases
+Repo: fork `moesuito/gt4recomp-gs` (GitHub fork of PCSX2/pcsx2), branch `gt4gs/main` from the pinned
+upstream commit. Haiku, Opus if the dependency build stalls; 2-3 sessions.
+Goal: CMake + Ninja + clang-cl build of the unmodified `pcsx2-gsrunner` (`-DENABLE_QT_UI=OFF
+-DENABLE_GSRUNNER=ON`, Vulkan/D3D11/D3D12), dependency script trimmed of Qt and cached, `gt4gs/BUILD.md`,
+NOTICE, third-party license list, a release workflow that publishes `gt4-gs-<ver>-win64.zip`, its SHA-256,
+a source archive and build provenance.
+Acceptance: CI green from a clean runner; release zip contains COPYING.GPLv3, NOTICE, licenses; GSRunner
+smoke on CI with `-renderer null` on a tiny dump; local rebuild from the tag on the owner's machine produces
+the same file list (bit-identical is a goal, recorded either way).
+Risks: dependency build time and breakage; runner disk limits.
+Parallel: with TASK-035.
+
+### TASK-034 — Proof of concept: our capture through the PCSX2 GS
+Repos: fork branch `gt4gs/gscap2gs` (GPL converter) and main branch `task/034-gs-replay-compare` (MIT
+compare script). Haiku, Opus for the GS freeze state; 2-3 sessions.
+Goal: `gscap2gs` converts `private/slice175-capture/menu-0-1100.gscap` to a `.gs` dump: header with serial
+`SCUS-97328`, freeze state of a freshly reset GS, an 8 KiB privileged block maintained from 'P' records and
+emitted as Registers before each VSync, 'G' path 1/2/3 to Path1New/Path2/Path3, 'R' to ReadFIFO2, 'V' to
+VSync with alternating field. Stock GSRunner replays it (`-dumpdir`, `-renderer vulkan`, `-upscale 1` and
+`4`, `-perf`).
+Acceptance: 1,101 frames replayed, no errors; frame count and VSync count match the capture; a MIT script
+compares frames 100..1100 with the donor frames in `private/slice175-capture/run-menu/frames` (pct_bad > 8,
+PSNR, as in `scripts/compare_frame_dumps.py`) and writes a JSON report and contact sheet; the 4x replay
+shows upscaled output; GS-thread ms/frame from `-perf` recorded; GameDB fixes for SCUS-97328 reported as
+active in the log. Owner review of side-by-side images.
+Risks: freeze-state format (only in the fork); field parity; the donor is not bit-identical to PCSX2, so
+the gate is "recognisably the same frame", not equality.
+Parallel: with TASK-035 (different repos).
+
+### TASK-035 — MIT GS stream protocol, IPC and renderer seam
+Repo: main, branch `task/035-gs-stream`. Opus, 4-6 sessions.
+Goal: `native/gs_stream/gs_stream_protocol.h` (plain C, versioned records GIF, PRIV, VSYNC, READ_FIFO,
+RESET, CONTROL, reserved STATE and AUX_FRAME; back-channel READY, STATS, ERROR, SNAPSHOT_DONE, EXITING;
+control block; written from GS hardware semantics and our `.gscap`, not from PCSX2 code); cross-process SPSC
+ring with named events and peer-handle waits; `GT4_RENDERER` dispatch on main with values `donor` (default)
+and `pcsx2`, salvaging only the MIT seam from task/012; `GT4_GS_CAPTURE` (generalized `GT4_PGS_CAPTURE`,
+capture v2 header); a MIT consumer `gs_stream_sink` (records to `.gscap`, or discards) used as the test peer;
+the MTVU journal drain writes to the ring; signals applied on the EE for all paths.
+Acceptance: CTest ring fixtures (wrap, split, full ring, peer death, spurious wake, 10^6 random records
+byte-identical); protocol round trip; headless 4,200-frame run with `GT4_RENDERER=pcsx2` against the sink:
+the sink's capture is byte-identical to the in-process `GT4_GS_CAPTURE` of a `donor` run with the same
+schedule; donor frames still 42/42 identical to slice157 with the default renderer; Python suite green;
+launcher pins updated.
+Risks: ordering between MTVU worker output and EE work; readback blocking with the worker.
+Parallel: with TASK-033/034.
+
+### TASK-036 — Live MVP
+Repos: fork branch `gt4gs/live`, main branch `task/036-gs-live`. Opus, 4-6 sessions.
+Goal: fork adds `pcsx2-gt4gs/` frontend (from GSRunner) producing `gt4-gs.exe`, `GSStreamReplayer` (an R5900
+CPU provider reading the ring or a `.gscap` with `--replay-gscap`), handshake, child window in the game
+window, VMManager hooks; the protocol header vendored with its hash checked. Main: spawn with Job Object,
+handshake, pin check of `gt4-gs.exe`, `play_performance.py --mode pcsx2-gs` with a new pinned manifest,
+headless frame dumps via `CONTROL snapshot`.
+Acceptance: headless run: live frames equal the offline `--replay-gscap` frames of the same session capture;
+boot to menus, Time Trial, race at 1x and 3x; GS crash (killed) ends the game cleanly with a message and a
+flushed card; protocol-version mismatch refused; owner plays the reference scene.
+Risks: VMManager boot without BIOS in stream mode; first-run shader compile stutter.
+Parallel: 037/038/039 start once the MVP boots.
+
+### TASK-037 — Readbacks and night race
+Repos: both, branches `task/037-gs-readback`, `gt4gs/readback`. Opus, 2-3 sessions.
+Goal: READ_FIFO round trip through `MTGS::InitAndReadFIFO`; `HWDownloadMode` and readback spin options
+exposed; F8 counts and wait time; Unsynchronized mode served without draining the ring (if the owner allows).
+Acceptance: CTest/fixture with a scripted stream (draw, TRXDIR=1, read) compared with the donor bytes;
+headless frames unchanged; owner night race at 60 FPS with `gs_ipc_readback_wait` reported; lens flare and
+night lighting correct versus CoreGS 1.1.
+Risks: GPU sync cost at high upscale.
+Parallel: with 038/039.
+
+### TASK-038 — Window, fullscreen, focus, input, lifecycle
+Repos: both, branches `task/038-gs-window`, `gt4gs/window`. Opus, 3-4 sessions.
+Goal: child window hardening (own pump thread, `HTTRANSPARENT`, `MA_NOACTIVATE`), Alt+Enter/F11 borderless,
+resize, minimize, DPI, multi-monitor, focus loss; GS hotkeys forwarded (screenshot, OSD toggle); fallback
+option 2 (GS-owned window, keyboard forwarding) behind a switch.
+Acceptance: Python/CTest for the message contract; a scripted soak (resize and fullscreen toggles, 1,000
+cycles) with no hang; a GS-thread stall test does not freeze our window beyond the stall; RTSS overlay
+visible; owner checklist (fullscreen, alt-tab, minimize, controller and keyboard).
+Risks: attached input queues; DWM latency in child windows.
+Parallel: with 037/039.
+
+### TASK-039 — Settings table and `gt4-gs.ini`
+Repos: main `task/039-gs-settings`, fork `gt4gs/config`. Haiku, 2-3 sessions.
+Goal: `docs/launcher/gs-settings.toml` (GSDX-PLAN D.1), generator to `gt4-gs.ini` (dev script now, launcher
+later), allow-list validation in `gt4-gs.exe`, folders under the user data directory, `CONTROL
+reload_config`.
+Acceptance: Python tests (table schema, generated INI golden file, refusal of unknown keys and out-of-range
+values); `gt4-gs.exe` reports effective settings in READY; owner checks 1x/3x/6x, FXAA, CAS, dithering,
+deinterlace in menus.
+Parallel: with 037/038.
+
+### TASK-040 — Texture dumping and replacement
+Repos: fork `gt4gs/textures`, main docs. Haiku, 1-2 sessions.
+Goal: folder layout `...\gs\textures\SCUS-97328\{replacements,dumps}` and `.zip` packs; dump, load, async,
+precache options; user documentation.
+Acceptance: scripted test: dump from a replayed capture, replace one texture with a solid colour, replay,
+detect it in the frame; owner tries a community GT4 pack if available.
+Parallel: after 039.
+
+### TASK-041 — Performance
+Repos: both, branches `task/041-gs-perf`, `gt4gs/perf`. Haiku for counters, Opus for tuning; 3-4 sessions.
+Goal: F8 `[gs-ipc]` section (game: write, back-pressure, vsync post, readback wait, bytes, records; GS:
+thread busy, GPU ms, draws, uploads, readbacks, present wait, ring occupancy); tuning: frames in flight,
+ring size, direct GS-thread feed; `--cpu-cores 2` check.
+Acceptance: `perf_probe_fixture` covers the new categories; owner A/B in showroom, night race, rally,
+reference scene: CoreGS 1.1 vs PCSX2 GS at 1x and 3x, 60 FPS, flat frametime, no measurements while builds run.
+Parallel: after 037.
+
+### TASK-042 — JIT-free `gt4-gs.exe`
+Repo: fork, branch `gt4gs/no-jit`. Opus, 3-5 sessions.
+Goal: `GT4GS_ONLY` build without EE/IOP/VU recompilers, without RWX code mapping, with the C draw-scanline
+path or CPU sprite/CLUT render refused.
+Acceptance: binary scan finds no recompiler symbols; a VirtualAlloc/VirtualProtect audit shows no executable
+private memory; PoC and live frames unchanged; GSRunner tests still pass.
+Parallel: with 037-041 (fork-only).
+
+### TASK-043 — Launcher integration
+Repo: main, branch `task/019-launcher` (when the launcher resumes). Haiku, 2-3 sessions.
+Goal: renderer manifest (version, URL, size, SHA-256, protocol version, upstream commit) in the launcher;
+download with progress and resume, verify, unpack to the user data folder, update to newer pinned versions,
+offline fallback to CoreGS 1.1; settings pages generated from the table; license/source links shown.
+Acceptance: Rust tests (hash mismatch refused, partial download resumed, wrong protocol refused, fallback);
+owner end-to-end install.
+
+### TASK-044 — Packaging and release notes
+Repos: both. Haiku, 1-2 sessions.
+Goal: fork release `gt4-gs v1.0.0` (notes: upstream commit, our patch list, license, source); main: README
+renderer section, `native/THIRD_PARTY.md`, RELEASE-1.0.0-PLAN renderer table and W8, known issues.
+Acceptance: release assets complete; links valid; owner approval.
+
+### TASK-045 — High frame rate on the PCSX2 GS
+Repos: both. Opus, 10-14 sessions, after release 1.0.0.
+Plan: (1) D1: VRR and present-mode tests, no interpolation (1 session). (2) Oracle on the PCSX2 GS: the MIT
+`tools/gs_interp` builds interpolated and extrapolated frames as streams; replay them with `gt4-gs.exe
+--replay-gscap` and compare with real frames (race capture needed; kill if matched primitives < 95% or
+race PSNR < 32 dB) (2-3 sessions). (3) In engine: the game holds frame N+1, generates the in-between stream
+(MIT, game side) and sends it as `AUX_FRAME` before N+1; the GS renders and presents it without guest-visible
+side effects (readbacks and signals stripped; targets overwritten by N+1); present scheduler for 120/144 Hz;
++1 frame latency measured (6-10 sessions).
+Risks: texture-cache pollution by auxiliary frames, page alternation (HIGH-FPS 9.3), HUD.
+
 ## Phase 2 — Android details
 
 ### TASK-021 — Mobile GS (ARMSX2 pipeline, Vulkan)
@@ -294,6 +464,7 @@ separate project, possibly a fork. Presenting more than 60 FPS with the game's
 fixed 1/60 s physics untouched is in scope (TASK-031, owner 2026-10-15).
 
 ### TASK-031 — High frame rate (physics untouched)
+Dropped in this form (decision 0070): redone as TASK-045 on the PCSX2 GS after 1.0.0. Study docs stay on branch `task/031-high-fps`.
 Goal: present 120-144 FPS while the game's physics keeps its fixed 1/60 s step
 (`RaceBase__updateRace` uses a constant dt; read-only study, 2026-10-15).
 Approaches: (A) GS primitive interpolation between two guest frames, with real
