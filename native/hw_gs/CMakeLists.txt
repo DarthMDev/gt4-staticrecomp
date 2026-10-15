@@ -15,10 +15,44 @@ add_library(gt4_hw_options STATIC hw_gs_options.cpp)
 target_compile_options(gt4_hw_options PRIVATE /W4)
 target_compile_definitions(gt4_hw_options PRIVATE _CRT_SECURE_NO_WARNINGS)
 
+# CPU side of the write-back reference (TASK-027 M4): GS front end (M3), shadow local memory (M2),
+# CLUT (M3), pixel library (per-pixel state), display (M6) and the CPU sink wrapping the memory model.
+# Pure C++, no Vulkan. The same sources are listed by cpuref/CMakeLists.txt for the standalone build.
+set(HW_GS_CORE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+add_library(gt4_hw_core STATIC
+    cpuref/cpuref_memory.cpp
+    memory/hw_memory.cpp
+    clut/hw_clut.cpp
+    frontend/hw_gs_registers.cpp
+    frontend/hw_gif_parser.cpp
+    frontend/hw_transfers.cpp
+    frontend/hw_batch.cpp
+    frontend/hw_front_end.cpp
+    pixel/hw_gs_pixel.cpp
+    display/hw_gs_display.cpp)
+target_include_directories(gt4_hw_core PUBLIC
+    "${HW_GS_CORE_DIR}/cpuref" "${HW_GS_CORE_DIR}/memory" "${HW_GS_CORE_DIR}/clut"
+    "${HW_GS_CORE_DIR}/frontend" "${HW_GS_CORE_DIR}/pixel" "${HW_GS_CORE_DIR}/display")
+target_compile_options(gt4_hw_core PRIVATE /W4 /permissive-)
+
+# GPU write-back drawer (Vulkan entry points resolved at run time) and its device entry-point table.
+add_library(gt4_hw_gpu STATIC
+    writeback/hw_gs_writeback_gpu.cpp
+    writeback/hw_gs_vulkan_device_table.cpp)
+target_include_directories(gt4_hw_gpu PRIVATE "${GT4_HW_VULKAN_SDK}/Include")
+target_link_libraries(gt4_hw_gpu PUBLIC gt4_hw_shaders)
+target_compile_options(gt4_hw_gpu PRIVATE /W4)
+target_compile_definitions(gt4_hw_gpu PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+# Renderer of the write-back mode: front end, batch translation, GPU draw, SLM write-back, display.
+add_library(gt4_hw_writeback STATIC writeback/hw_gs_writeback.cpp)
+target_link_libraries(gt4_hw_writeback PUBLIC gt4_hw_core gt4_hw_gpu)
+target_compile_options(gt4_hw_writeback PRIVATE /W4)
+
 # Backend, dispatch front end and device code. Vulkan is linked from the SDK import library.
 add_library(gt4_hw_backend STATIC hw_gs_backend.cpp hw_gs_dispatch.cpp hw_gs_vulkan_loader.cpp)
 target_include_directories(gt4_hw_backend PRIVATE "${GT4_HW_VULKAN_SDK}/Include")
-target_link_libraries(gt4_hw_backend PUBLIC gt4_hw_options gt4_pacing "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
+target_link_libraries(gt4_hw_backend PUBLIC gt4_hw_options gt4_pacing gt4_hw_writeback "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
 target_compile_options(gt4_hw_backend PRIVATE /W4)
 target_compile_definitions(gt4_hw_backend PRIVATE _CRT_SECURE_NO_WARNINGS)
 

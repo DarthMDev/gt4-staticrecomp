@@ -41,12 +41,17 @@ layout(location = 4) out vec2 out_uv;
 layout(location = 5) noperspective out float out_z;
 
 void main() {
-    vec2 native = vec2(int(in_xy.x) - pc.offset_x, int(in_xy.y) - pc.offset_y) / 16.0;
+    // X and Y are 12.4 two's complement values stored as uint16: sign-extend before use.
+    int xi = int(in_xy.x << 16u) >> 16;
+    int yi = int(in_xy.y << 16u) >> 16;
+    vec2 native = vec2(xi - pc.offset_x, yi - pc.offset_y) / 16.0;
     const float bias = 1.0 / 320.0;
     vec2 gpu = pc.scale * native + vec2(0.5 * pc.scale_offset) - vec2(bias);
 
-    float clipped_z = float(min(in_z, pc.z_max));
-    float depth = clipped_z * (1.0 / 4294967296.0);
+    // Depth is only used for clipping (no depth attachment in M4); the format clamp is applied
+    // per pixel, as the CPU reference does (IN-206).
+    float clipped_z = float(in_z);
+    float depth = float(min(in_z, pc.z_max)) * (1.0 / 4294967296.0);
     vec2 ndc = gpu / pc.viewport_size * 2.0 - 1.0;
     gl_Position = vec4(ndc, depth, 1.0);
 

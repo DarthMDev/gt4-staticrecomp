@@ -77,7 +77,12 @@ void hw_mirror_privileged(std::uint32_t address, std::uint64_t value) {
 // own decode yields the black frame at the size the display registers describe.
 void hw_sync_memory() {
     init(); // swizzle tables for read_pixel; builds once, then returns
-    std::memset(g_memory, 0, kMemorySize);
+    // M4: the shadow local memory is the GS memory (write-back mode keeps it coherent after each batch).
+    const std::uint8_t *shadow = hw_backend().map_vram(0, kMemorySize);
+    if (shadow)
+        std::memcpy(g_memory, shadow, kMemorySize);
+    else
+        std::memset(g_memory, 0, kMemorySize);
 }
 
 bool hw_options_dump_scanout() {
