@@ -39,3 +39,23 @@ pub fn move_to_recycle_bin(path: &Path) -> Result<(), String> {
 pub fn move_to_recycle_bin(path: &Path) -> Result<(), String> {
     Err(format!("the Recycle Bin is only available on Windows: {}", path.display()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_missing_path_is_refused_and_nothing_is_deleted() {
+        let missing = std::env::temp_dir().join(format!("gt4l-recycle-missing-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&missing);
+        assert!(move_to_recycle_bin(&missing).is_err());
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn off_windows_every_delete_is_refused() {
+        let path = std::env::temp_dir();
+        let error = move_to_recycle_bin(&path).unwrap_err();
+        assert!(error.contains("only available on Windows"));
+    }
+}

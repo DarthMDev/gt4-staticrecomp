@@ -18,7 +18,7 @@ mod windows_impl {
     use windows::Win32::System::Threading::{CreateMutexW, GetCurrentProcess};
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE};
 
-    /// Title of the launcher window (`title` in ui/app.slint). Not the game title: the game window is
+    /// Title of the launcher window (the window title set by the UI shell). Not the game title: the game window is
     /// "Gran Turismo 4", and focusing it from a second launcher would bring the game forward.
     const WINDOW_TITLE: PCWSTR = w!("GT4Recomp");
 
