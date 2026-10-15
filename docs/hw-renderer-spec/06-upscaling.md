@@ -90,10 +90,11 @@ scaled.
 
 - Points cover s x s, lines have width s (chapter 03.2), so they keep native
   thickness.
-- Dither (`GT4_HW_DITHER`): `unscaled` (default) indexes DIMX by the native
-  pixel (gpu coordinate / s), which looks like the native pattern; `scaled`
-  indexes by the upscaled pixel (finer, weaker); `off`. (Note: these names follow
-  the owner-facing meaning "pattern size"; chapter 12 lists the values.)
+- Dither (`GT4_HW_DITHER=native|fine|off`): `native` (default, Decision:
+  faithful look) indexes DIMX by the native pixel (gpu coordinate / s), so each
+  dither cell covers s x s sub-pixels like the PS2 pattern; `fine` indexes by
+  the upscaled pixel (finer, weaker pattern; the studied reference's default);
+  `off` disables dithering. Owner question Q-05.
 - SCANMSK counts native rows (chapter 03.8).
 
 ## 6.6 Native-resolution post-effects (optional; default off)
