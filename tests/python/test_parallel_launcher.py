@@ -23,6 +23,8 @@ MAIN_CHECKOUT = Path('C:/Antigravity/gt4-staticrecomp')
 PARALLEL_RUNTIME = 'private/slice169-parallel-build/build/gt4vulkan.exe'
 PARALLEL_MANIFEST = 'slice169-parallel.json'
 PARALLEL_SOURCE = 'slice169-parallel-runtime.json'
+# Slice 174 (M0b): the single renderer dispatch build; GT4_RENDERER=hw selects HWR.
+HW_MANIFEST = 'slice175-hw.json'
 
 
 class ParallelProfileTests(unittest.TestCase):
@@ -31,7 +33,7 @@ class ParallelProfileTests(unittest.TestCase):
         self.assertIn('parallel', performance.MODES)
         self.assertIn(PARALLEL_MANIFEST, probe.VU1_AOT_MANIFESTS)
         self.assertIn(PARALLEL_MANIFEST, probe.VU0_AOT_MANIFESTS)
-        self.assertEqual(probe.RENDERER_MANIFESTS, ('slice168-parallel.json', PARALLEL_MANIFEST))
+        self.assertEqual(probe.RENDERER_MANIFESTS, ('slice168-parallel.json', PARALLEL_MANIFEST, HW_MANIFEST))
         self.assertEqual(probe.HIGH_RESOLUTION_MANIFESTS, (PARALLEL_MANIFEST,))
 
     def test_scrub_removes_inherited_renderer_choices(self):

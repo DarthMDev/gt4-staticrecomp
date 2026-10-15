@@ -115,6 +115,9 @@ if(GT4_HW_GS)
     add_test(NAME hw_smoke_window COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 120 --window)
     set_tests_properties(hw_smoke_window PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
         PASS_REGULAR_EXPRESSION "black_presents=120")
+    # Fullscreen-style toggles on the hidden window: resize flag, swapchain rebuild, every present under 100 ms.
+    add_test(NAME hw_smoke_resize COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1 --resize-toggles 5)
+    set_tests_properties(hw_smoke_resize PROPERTIES ENVIRONMENT "GT4_RENDERER=hw" PASS_REGULAR_EXPRESSION "resize_toggles=5")
     add_test(NAME hw_smoke_parallel_refused COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1)
     set_tests_properties(hw_smoke_parallel_refused PROPERTIES ENVIRONMENT "GT4_RENDERER=parallel" WILL_FAIL TRUE)
     add_test(NAME hw_smoke_unknown_renderer_refused COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1)

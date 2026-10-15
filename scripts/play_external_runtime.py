@@ -64,12 +64,15 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                 print(f'VU0 verify: every {vu0_verify}th generated VU0 call is compared with the exact interpreter; '
                       'mismatches go to the session log.', flush=True)
             if renderer is None and manifest.name in RENDERER_MANIFESTS:
-                renderer = 'parallel'  # the probe applies the same default
+                renderer = 'hw' if manifest.name == 'slice175-hw.json' else 'parallel'  # the probe applies the same default
             if renderer == 'parallel':
                 print(f'Renderer: paraLLEl-GS (GT4_RENDERER=parallel, {super_sampling}x super-sampling, '
                       f'high-resolution scanout {"on" if high_resolution else "off"}).', flush=True)
             elif renderer == 'donor':
                 print('Renderer: donor GS renderer (GT4_RENDERER=donor), same binary, for A/B.', flush=True)
+            elif renderer == 'hw':
+                print('Renderer: HWR hardware renderer (GT4_RENDERER=hw): black frames at M0, GS data path not yet drawn.',
+                      flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
                                window=True, interactive=True, play_card=card,

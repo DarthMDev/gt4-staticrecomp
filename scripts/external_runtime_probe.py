@@ -53,6 +53,9 @@ PERF_PROFILES = {
     # optional high-resolution scanout. GT4_RENDERER is set by the launcher (--renderer parallel by default,
     # donor for A/B in the same binary). slice168-parallel.json (first window build) is kept as history.
     'parallel': ('slice169-parallel.json', 'private/slice169-parallel-build/build/gt4vulkan.exe'),
+    # TASK-027 M0b (slice174): one binary with the donor, paraLLEl-GS and HWR renderers (GT4_RENDERER). The hw
+    # mode runs HWR, which presents black at M0 (GS data path stubbed); --renderer donor|parallel A/B the same binary.
+    'hw': ('slice175-hw.json', 'private/slice175-hw-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -60,15 +63,18 @@ PACING_MANIFEST = 'slice153-pacing.json'
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json',
-                     'slice169-parallel.json')
+                     'slice169-parallel.json', 'slice175-hw.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
-VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json', 'slice169-parallel.json')
-# Manifests whose binaries contain both renderers (slice168+): GT4_RENDERER selects one per run.
-RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json')
+VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json', 'slice169-parallel.json',
+                     'slice175-hw.json')
+# Manifests whose binaries contain the renderers (slice168+): GT4_RENDERER selects one per run.
+RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json', 'slice175-hw.json')
+# The hw manifest (slice174) is the only one whose binary carries HWR; its launcher default is hw.
+HW_MANIFEST = 'slice175-hw.json'
 # Manifests whose binaries accept GT4_PGS_HIRES (paraLLEl-GS high-resolution scanout, slice169).
 HIGH_RESOLUTION_MANIFESTS = ('slice169-parallel.json',)
 HIGH_RESOLUTION_FACTORS = (4, 8, 16)
-RENDERERS = ('parallel', 'donor')
+RENDERERS = ('parallel', 'donor', 'hw')
 # paraLLEl-GS super-sampling factors accepted by the binary (GT4_PGS_SSAA); 1 is the default.
 SUPER_SAMPLING_FACTORS = (1, 2, 4, 8, 16)
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
@@ -279,9 +285,11 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('VU0 AOT verification needs a positive sample period and the vu0-aot manifest')
     is_renderer_manifest = runtime_manifest in {(runtime_workspace / 'docs/inputs' / name).resolve() for name in RENDERER_MANIFESTS}
     if is_renderer_manifest and renderer is None:
-        renderer = 'parallel'
+        renderer = 'hw' if runtime_manifest.name == HW_MANIFEST else 'parallel'
     if renderer is not None and (not is_renderer_manifest or renderer not in RENDERERS):
-        raise ValueError('--renderer needs the parallel manifest and one of: ' + ', '.join(RENDERERS))
+        raise ValueError('--renderer needs a renderer manifest and one of: ' + ', '.join(RENDERERS))
+    if renderer == 'hw' and runtime_manifest.name != HW_MANIFEST:
+        raise ValueError('--renderer hw needs the slice174 hw manifest (the slice169 binary has no HWR)')
     if super_sampling not in SUPER_SAMPLING_FACTORS or (super_sampling != 1 and renderer != 'parallel'):
         raise ValueError('--ssaa takes 1, 2, 4, 8 or 16 and needs the parallel renderer')
     is_high_resolution_manifest = runtime_manifest in {

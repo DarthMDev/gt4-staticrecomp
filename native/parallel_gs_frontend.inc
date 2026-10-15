@@ -1,26 +1,5 @@
-// TASK-012 slice 163: paraLLEl-GS front end, selected by GT4_RENDERER=parallel.
+// TASK-012 slice 163: paraLLEl-GS front end, selected by GT4_RENDERER=parallel (dispatch: renderer_dispatch.inc).
 // Spliced into the derived gs.cpp by scripts/prepare_external_vulkan.py --parallel-hooks.
-// Every hook tests parallel_active() first, so the donor path is unchanged unless the
-// environment selects paraLLEl-GS. Unknown GT4_RENDERER values stop the process.
-
-enum class Renderer { donor, parallel };
-
-Renderer renderer_mode() {
-    static const Renderer mode = [] {
-        const char *value = std::getenv("GT4_RENDERER");
-        if (!value)
-            return Renderer::donor;
-        if (std::strcmp(value, "donor") == 0)
-            return Renderer::donor;
-        if (std::strcmp(value, "parallel") == 0)
-            return Renderer::parallel;
-        std::fprintf(stderr, "[gs] GT4_RENDERER=\"%s\" is not donor or parallel; refusing to start\n", value);
-        std::exit(EXIT_FAILURE);
-    }();
-    return mode;
-}
-
-bool parallel_active() { return renderer_mode() == Renderer::parallel; }
 
 // Game register writes and SetGsCrt decisions, one line each, when GT4_PGS_REG_LOG names a file.
 std::FILE *parallel_register_log() {
@@ -254,13 +233,22 @@ void parallel_sync_memory() {
 // every call, no longer only until the game writes it; GT4 rewrites SMODE2 itself every frame anyway).
 // Unknown modes write nothing.
 void note_crt_mode(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field) {
-    if (!parallel_active())
+    if (!alt_active())
         return;
     const ::gt4::gs::CrtRequest request{interlace, mode, field};
     const ::gt4::gs::CrtMapping mapping = ::gt4::gs::map_set_gs_crt(request);
     if (mapping.status != ::gt4::gs::CrtMappingStatus::ok) {
         std::fprintf(stderr, "[pgs] SetGsCrt interlace %u mode 0x%X field %u not mapped (%s); no scanout registers written\n",
                      interlace, mode, field, ::gt4::gs::describe(mapping.status));
+        return;
+    }
+    if (hw_active()) {
+        // HWR keeps its own privileged mirror (chapter 12.4); the paraLLEl-GS backend is not created.
+        alt_mirror_privileged(0x12000010u, mapping.registers.smode1);
+        alt_mirror_privileged(0x12000020u, mapping.registers.smode2);
+        std::fprintf(stderr, "[hw] SetGsCrt interlace %u mode 0x%X field %u -> SMODE1 0x%llX SMODE2 0x%llX\n", interlace,
+                     mode, field, static_cast<unsigned long long>(mapping.registers.smode1),
+                     static_cast<unsigned long long>(mapping.registers.smode2));
         return;
     }
     ParallelFrontEnd &front_end = parallel();

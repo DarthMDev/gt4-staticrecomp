@@ -1017,3 +1017,38 @@ cmake -S . -B private\slice168-audio-builduild -G Ninja -DCMAKE_BUILD_TYPE=Rele
 cmake --build private\slice168-audio-builduild --target host_io_fixture
 ctest --test-dir private\slice168-audio-builduild -R native_audio_input --output-on-failure
 ```
+
+## Renderer dispatch and HWR hookup (slice174 port, slice175 build, TASK-027 M0b)
+
+One executable carries the donor, paraLLEl-GS and HWR renderers. `GT4_RENDERER=donor|parallel|hw` selects the
+path once per process; any other value stops the process (no silent fallback). The hooks in `gs.cpp`, `gif.cpp`
+and `hw.cpp` call neutral `alt_*` entry points (`native/renderer_dispatch.inc`, `native/renderer_routers.inc`),
+which route to paraLLEl-GS (`native/parallel_gs_frontend.inc`) or HWR (`native/hw_gs_frontend.inc`). The HWR
+front end presents black frames at M0; its GS data path is still a stub (spec chapter 12.3).
+
+Splice: `scripts\prepare_external_vulkan.py <dir> --renderer-hooks` (`--parallel-hooks` is an alias). Port
+`private\slice174-hw-port`, shaders `private\slice174-hw-shaders` (copies of the slice169 shaders). Runtime
+pin: [slice174-parallel-runtime.json](inputs/slice174-parallel-runtime.json).
+
+Build directory `C:\Antigravity\gt4-staticrecomp\private\slice175-hw-build\build` (configured from this worktree
+with `GT4_HW_GS=ON`, `GT4_HW_VULKAN_SDK=C:/VulkanSDK/1.4.341.1`, `GT4_PORT_DIR=private/slice174-hw-port`,
+`GT4_SHADER_DIR=private/slice174-hw-shaders`, the slice 169 configure options otherwise). Pins:
+[slice175-hw.json](inputs/slice175-hw.json) (`--mode hw`, default renderer hw). [slice174-hw.json](inputs/slice174-hw.json)
+is kept as history only: its executable crashed at `GT4_RENDERER=hw` start (see below).
+
+Defect found and fixed in this slice: `granite-volk.lib` (linked for paraLLEl-GS) defines `vkCreateInstance` and
+the other entry-point names as data. The HWR backend called those names directly, so the calls jumped into
+zero-filled memory (DEP violation, no output). Fix: `native/hw_gs/hw_gs_vulkan_loader.*` renames the names to
+`gt4_hw_*` and fills the pointers from `vulkan-1.dll` at run time.
+
+Measured (slice175 executable ff1c0c335f449f0b...; sha256 prefix only, full pin in slice175-hw.json):
+- Build: 318 steps, no errors (two warnings from generated VU1 code, pre-existing).
+- CTest 33/33 (`hw_smoke_resize` passes); Python suite 333 run, OK, 14 skipped.
+- Donor (GT4_RENDERER unset), 4,200-frame slice157 schedule: 42 of 42 dumps identical to slice157, exit 0.
+- `GT4_RENDERER=hw`, same schedule: exit 0, 42 frames, no faults, all frames black (640x448).
+- `GT4_RENDERER=parallel`, same schedule: exit 0, 42 frames; mean absolute byte difference to the donor reference
+  0.18 (max 0.39 per frame, sampled). Close to donor, not identical, as before.
+- Resize and fullscreen-style toggles (`hw_gs_smoke --frames 1 --resize-toggles 5`): max toggle 85.01, 33.84 and
+  51.29 ms over three runs (limit 100 ms). Not a performance claim.
+
+Headless evidence: `private\slice175-hw-smoke\{unset-donor,hw-headless,parallel-headless}`.

@@ -16,7 +16,7 @@ target_compile_options(gt4_hw_options PRIVATE /W4)
 target_compile_definitions(gt4_hw_options PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 # Backend, dispatch front end and device code. Vulkan is linked from the SDK import library.
-add_library(gt4_hw_backend STATIC hw_gs_backend.cpp hw_gs_dispatch.cpp)
+add_library(gt4_hw_backend STATIC hw_gs_backend.cpp hw_gs_dispatch.cpp hw_gs_vulkan_loader.cpp)
 target_include_directories(gt4_hw_backend PRIVATE "${GT4_HW_VULKAN_SDK}/Include")
 target_link_libraries(gt4_hw_backend PUBLIC gt4_hw_options gt4_pacing "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
 target_compile_options(gt4_hw_backend PRIVATE /W4)

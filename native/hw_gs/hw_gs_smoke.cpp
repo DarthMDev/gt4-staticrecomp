@@ -14,6 +14,7 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -64,6 +65,7 @@ int main(int argc, char **argv) {
   bool print_only = false;
   bool use_window = false;
   std::uint64_t frames = 4200;
+  std::uint64_t resize_toggles = 0;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "--print-options") {
@@ -72,6 +74,9 @@ int main(int argc, char **argv) {
       use_window = true;
     } else if (arg == "--frames" && i + 1 < argc) {
       frames = std::strtoull(argv[++i], nullptr, 10);
+    } else if (arg == "--resize-toggles" && i + 1 < argc) {
+      resize_toggles = std::strtoull(argv[++i], nullptr, 10);
+      use_window = true;
     } else {
       return usage();
     }
@@ -119,6 +124,45 @@ int main(int argc, char **argv) {
   }
   backend.flush();
   backend.wait_idle();
+
+  // Fullscreen-toggle stall check (TASK-027 M0b): each toggle changes the window's client size and sets the
+  // resize flag, exactly as Alt+Enter and F11 do; the swapchain is rebuilt before the next present. Every
+  // toggle is timed from the flag to the end of that present. Limit: 100 ms (the owner's stall criterion).
+  if (resize_toggles > 0) {
+    double worst_ms = 0.0;
+    for (std::uint64_t toggle = 0; toggle < resize_toggles; ++toggle) {
+      const std::uint32_t client_width = toggle % 2 == 0 ? 800u : 640u;
+      const std::uint32_t client_height = client_width * 9u / 16u;
+      RECT outer{}, client{};
+      GetWindowRect(window, &outer);
+      GetClientRect(window, &client);
+      const int frame_width = (outer.right - outer.left) - (client.right - client.left);
+      const int frame_height = (outer.bottom - outer.top) - (client.bottom - client.top);
+      SetWindowPos(window, nullptr, 0, 0, static_cast<int>(client_width) + frame_width,
+                   static_cast<int>(client_height) + frame_height, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+      const auto started = std::chrono::steady_clock::now();
+      backend.resize_window(client_width, client_height);
+      backend.next_frame();
+      backend.present(gt4::hw::PresentPhase::progressive);
+      backend.wait_idle();
+      const double elapsed_ms =
+          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+      if (elapsed_ms > worst_ms) worst_ms = elapsed_ms;
+    }
+    const gt4::hw::Stats toggled = backend.stats();
+    std::printf("resize_toggles=%llu max_toggle_ms=%.2f swapchain_recreations=%llu\n",
+                static_cast<unsigned long long>(resize_toggles), worst_ms,
+                static_cast<unsigned long long>(toggled.swapchain_recreations));
+    if (worst_ms > 100.0) {
+      std::fprintf(stderr, "hw_gs_smoke: a fullscreen-style toggle stalled for %.2f ms (limit 100 ms)\n", worst_ms);
+      if (use_window) {
+        backend.detach_window();
+        DestroyWindow(window);
+      }
+      dispatch->stop();
+      return 1;
+    }
+  }
 
   const gt4::hw::Stats stats = backend.stats();
   std::printf("frames=%llu presents=%llu black_presents=%llu gif_bytes=%llu swapchain_recreations=%llu faults=%llu\n",
