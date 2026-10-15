@@ -12,6 +12,8 @@
 ![GS](https://img.shields.io/badge/GS-Vulkan%20compute-blue)
 
 ![Race](https://img.shields.io/badge/race-60%20FPS%20%C2%B7%20100%25%20speed-2ea44f)
+![Scenes](https://img.shields.io/badge/scenes%20tested-6-informational)
+![Known issues](https://img.shields.io/badge/known%20issues-license%20tests%20crash-red)
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
@@ -27,9 +29,11 @@ reproduced in software, and graphics run on **Vulkan**. Nothing generates code
 while the game runs, which is also what makes future **Android and iOS** builds
 possible.
 
-**Where we are:** real boot, menus and racing at **60 FPS, 100% game speed and a
-flat 16.7 ms frametime** on the Nordschleife (Ryzen 7 5700X + RX 9060 XT, 480p).
-Car showrooms still dip to about 45 FPS and are the current optimization target.
+**Where we are:** real boot, menus, races against AI and replays at or near
+**60 FPS and full game speed**, with a **flat 16.7 ms frametime** in Time Trial on
+the Nordschleife (Ryzen 7 5700X + RX 9060 XT, 480p). Night races, rally and the car
+showroom are still below 60 FPS, and **license tests currently crash** while
+loading their demo run. See [Scene results](#scene-results) and [Known issues](#known-issues).
 
 [Status](docs/STATUS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Build guide](docs/BUILD.md) · [Credits](#credits)
 
@@ -42,7 +46,7 @@ interpreted at run time:
 |---|---|---|---|
 | **EE** (main CPU) | Game logic, physics, menus, draw lists | Translated ahead of time to C++; no EE interpreter exists | **100%** of executed code · 5,676 unreached decomp functions to add for coverage |
 | **VU0 macro** | Vector math inside EE code | Translated together with the EE | **100%** |
-| **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; 102 entry points compiled ahead of time | **100%** of calls in tested scenes (0 interpreted out of 57 M) · full entry coverage in progress |
+| **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; 102 entry points compiled ahead of time | **100%** of calls in day races, replays and menus · night races and rally reach a few entries not yet compiled (interpreted fallback) · full static entry coverage next |
 | **VU0 microcode** | Small helper programs | All 14 entry points and the image mapped | **0%** · next |
 | **IOP** (I/O CPU) | Sound, disc, memory card, USB | System libraries replaced by native code; 23 game modules interpreted | **System libraries native** · game modules later |
 | **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | Hardware renderer planned |
@@ -61,6 +65,34 @@ built-in F7/F8 profiler:
 
 <img src="docs/images/frametime-flat.webp" alt="Flat frametime graph at 60 FPS" width="460">
 
+## Scene results
+
+Owner sessions on the current build (single-clock pacing, VU1 AOT, async GPU),
+one F7/F8 interval per scene:
+
+| Scene | FPS (VBlanks/s) | Game speed | Notes |
+|---|---|---|---|
+| Time Trial, Nordschleife, Supra (480p) | **60.0** | **100%** | 99.6% of frames within 16–17 ms |
+| Arcade race, Nordschleife, 5 AI cars | 58.0 | 97% | Occasional heavier frames with many cars on screen |
+| Replay of that race | 59.1 | 98.5% | |
+| Night race with AI cars | 46.2 | 77% | New VU1 entry points interpreted; extra GPU wait under investigation |
+| Rally, Grand Canyon, 1 AI car | 53.9 | 90% | New VU1 entry points interpreted |
+| Car showroom (rotating car) | 44.8 | 75% | High-detail car model: VU1 work 2.3x a race frame |
+
+## Known issues
+
+- **License tests crash** when the demo run loads (also with every new
+  optimization disabled, so it predates them). The crash is traced to
+  `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`;
+  the demo-input data appears to arrive wrong or late. Under investigation.
+- **Night races and rally** use VU1 entry points that are not compiled yet; full
+  static coverage of the recovered VU1 image is the next VU1 task.
+- **Car showroom** is limited by VU1 work; flag elimination and a dedicated VU1
+  thread (MTVU) are in progress.
+- Menus are interlaced like the original game (480p applies in races); a
+  deinterlacing filter is planned with the new renderer.
+- Physical gamepads, racing wheels and long sessions are not fully qualified yet.
+
 ## Roadmap
 
 | Stage | Goal | State |
@@ -68,7 +100,8 @@ built-in F7/F8 profiler:
 | **O1** | VU1 microcode compiled ahead of time | ✅ Done |
 | **O2** | Asynchronous GPU submission | ✅ Done |
 | **O4** | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
-| **VU1+** | Per-program flag elimination, VU1 on its own thread (MTVU) | 🔄 **In progress** |
+| **VU1+** | Per-program flag elimination, full static entry coverage, VU1 on its own thread (MTVU) | 🔄 **In progress** |
+| **Fixes** | License-test crash, window title, fixed 16:9 | 🔄 **In progress** |
 | **O3** | VU0 microcode AOT, full VU1/EE entry coverage, IOP review, build tuning | ⏭️ Next |
 | **Launcher** | Lightweight launcher (Rust): video, controls, game image | 📋 Planned |
 | **O5** | GT4-specialist hardware renderer based on PCSX2: upscaling, dithering control, deinterlacing, texture packs | 📋 Planned |
