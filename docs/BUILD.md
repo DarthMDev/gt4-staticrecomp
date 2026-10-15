@@ -624,3 +624,50 @@ Limits:
 2. Frame identity is shown for one 4,200-frame headless schedule, not for owner gameplay. No speed claim.
 3. PGO, ThinLTO, the dispatch divide change and the sccache option are not implemented or measured.
 4. No candidate pin or launcher mode was added: T0 and T1 are build variants only, not playable candidates.
+
+## paraLLEl-GS front end (slice163, TASK-012 step 5)
+
+Step 5 splices the paraLLEl-GS front end into a new derived port. Default off: without
+`GT4_RENDERER=parallel` the binary takes the donor path, and its headless frames match slice157 (42 of 42
+dump sha256 identical). Window output is not implemented (step 6), so `GT4_RENDERER=parallel` has no window
+image. Owner gameplay is not launched by this slice.
+
+Derive the port (fresh directory, from the repository root; the main checkout holds the private inputs):
+
+    private\tooling-venv\Scripts\python.exe scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice163-parallel-port --assets-root C:\Antigravity\gt4-staticrecomp --parallel-hooks
+
+Without `--parallel-hooks` the output equals the slice153 port file for file (test
+`test_default_derivation_matches_slice153_port`). The output may now also live under `--assets-root`'s
+`private/` (a worktree has none). Shaders are copies of slice153 (`private/slice163-parallel-shaders`).
+Pins: [slice163-parallel-runtime.json](inputs/slice163-parallel-runtime.json) (capsule
+`private/slice157-vu1-all-runtime`, table `private/slice157-vu1-all-gen`). CMake recognises the slice163
+port only with `GT4_PARALLEL_GS=ON`, and reads the slice163 pin from `docs/inputs`.
+
+Configure the candidate (fresh build directory; a worktree also needs its ignored copies, see slice162; the
+donor `runtime/include` tree is copied into the worktree's private directory because `vu_ops.hpp` includes
+`cpu.hpp`):
+
+    cmake -S . -B C:\Antigravity\gt4-staticrecomp\private\slice163-parallel-build\build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe -DGT4_PARALLEL_GS=ON -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-runtime -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice163-parallel-port -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice163-parallel-shaders -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen
+    cmake --build C:\Antigravity\gt4-staticrecomp\private\slice163-parallel-build\build
+
+Environment: `GT4_RENDERER` unset or `donor` (donor path), `parallel` (paraLLEl-GS; other values stop the
+process). `GT4_PGS_REG_LOG=<file>` writes the game's PMODE, SMODE1, SMODE2, DISPFB and DISPLAY writes and the
+SetGsCrt decisions.
+
+Headless smoke (no window, 4,200 frames, the slice157 schedule). Each run needs a fresh directory with a copy of
+`SCUS_973.28`, a seed card (copy `slice113-video/widescreen-seed/card.ps2`) and an empty `frames` directory
+(dumps are silently skipped without it):
+
+    gt4vulkan.exe <dir>\SCUS_973.28 --ntsc --disc "Gran Turismo 4 (USA) (v2.00).iso" --frames 4200 --memcard <dir>\card.ps2 --misses <dir>\misses.txt --frames-dir <dir>\frames --frame-every 100 --trace-syscalls --press 600:start:30 --press 900:cross:30 --press 1200:start:30 --press 1500:down:30 --press 1800:cross:30 --press 2100:start:30 --press 2400:down:30 --press 2700:cross:30 --press 3000:start:30 --press 3300:down:30 --press 3600:cross:30 --press 3900:start:30
+
+Add `GT4_RENDERER=parallel` and `GT4_PGS_REG_LOG` for the parallel run.
+
+Measured (slice163 candidate, RX 9060 XT, clang-cl 22.1.3): the candidate build finished with 0 errors. Donor
+headless: 42 dumps, sha256 identical to slice157. Parallel headless: 42 dumps (elapsed time not recorded), log in
+`private/slice163-parallel-smoke/parallel/probe.log`. Timings are not comparable: other agents were compiling.
+CTest 20/20 on the candidate build (69 s). Python: 255 run, 9 skipped, 0 failures, with `GT4_NATIVE_BUILD` on the
+candidate build.
+
+Limits: parallel frames show flat blocks where the donor shows text and textures (see PARALLEL-GS-PLAN.md section 8,
+open issue 1). Similarity figures are report-only. Step 6 (window), the launcher mode and save states in parallel
+mode (refused, not implemented) are not done.

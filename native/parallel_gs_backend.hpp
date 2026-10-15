@@ -71,6 +71,15 @@ public:
     // Returns the mirrored privileged register value (0 if never written or out of range).
     std::uint64_t read_privileged(std::uint32_t guest_address) const;
 
+    // Clears every GIF path's tag and loop state (GIF reset or GS reset).
+    void reset_gif_paths();
+    // True while path `path` (0..3) still expects packets of its current GIF tag.
+    bool gif_busy(std::uint32_t path);
+    // Resets paraLLEl-GS register and context state; VRAM is not touched.
+    void reset_context();
+    // Zeroes all 4 MiB of VRAM through paraLLEl-GS's page-tracked host mapping.
+    void clear_vram();
+
     // Reads `words` 128-bit words of the transfer FIFO filled by a LOCAL->HOST transfer.
     // The buffer must hold words * 16 bytes.
     void read_transfer_fifo(void *destination, std::uint32_t words);

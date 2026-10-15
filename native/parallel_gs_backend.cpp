@@ -138,6 +138,25 @@ std::uint64_t Backend::read_privileged(std::uint32_t guest_address) const {
     return (guest_address & 0x1000u) ? priv.qwords_hi[index] : priv.qwords_lo[index];
 }
 
+void Backend::reset_gif_paths() {
+    for (std::uint32_t path = 0; path < 4; ++path)
+        impl->gs.get_gif_path(path) = ParallelGS::GIFPath{};
+}
+
+bool Backend::gif_busy(std::uint32_t path) {
+    const auto &state = impl->gs.get_gif_path(path);
+    return state.loop != state.tag.NLOOP;
+}
+
+void Backend::reset_context() { impl->gs.reset_context_state(); }
+
+void Backend::clear_vram() {
+    constexpr std::size_t kVramBytes = 4u << 20;
+    void *vram = impl->gs.map_vram_write(0, kVramBytes);
+    std::memset(vram, 0, kVramBytes);
+    impl->gs.end_vram_write(0, kVramBytes);
+}
+
 void Backend::read_transfer_fifo(void *destination, std::uint32_t words) {
     impl->gs.read_transfer_fifo(destination, words);
 }

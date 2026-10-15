@@ -369,3 +369,54 @@ SMODE2 INT[0], FFMD[1].
 6. LGPL distribution: the owner must decide before any public binary (THIRD_PARTY.md).
 7. Worktree prerequisites (two copies, see BUILD.md) are a development-environment workaround,
    not a clean-checkout build. The clean-checkout path (`native/build.cmd` in main) is unchanged.
+
+## 8. Progress (slice 163, branch task/012-parallel-gs, uncommitted)
+
+Step 5 (front-end hooks) is implemented and built; step 6 (window output) is not started. Labels as in section 0.
+
+**Step 5 — hooks, done with a visible defect.** `scripts/prepare_external_vulkan.py --parallel-hooks`
+derives `private/slice163-parallel-port` (gs.cpp, gif.cpp, hw.cpp, gpu.cpp, gpu.hpp, main.cpp). The
+default derivation is byte-identical to the slice153 port (Confirmed, sha256 per file). The hooks are
+anchored replacements that fail when an anchor is missing or repeated; the splice block is
+`native/parallel_gs_frontend.inc`. `GT4_RENDERER` unset or `donor` keeps the donor path. `parallel` selects
+paraLLEl-GS. Any other value, including empty, stops the process.
+- GIF transfers go to `Backend::gif_transfer` (path state via `get_gif_path`); `gif::busy` and `gif::reset`
+  map to paraLLEl-GS state.
+- Privileged writes are mirrored by guest address. The game's PMODE, SMODE1, SMODE2, DISPFB1/2 and
+  DISPLAY1/2 writes are recorded in the file named by `GT4_PGS_REG_LOG`.
+- SetGsCrt (HLE) maps through `gs_video_mode` and writes SMODE1, and SMODE2 until the game writes it.
+  Unmapped modes write nothing and log a line.
+- VBlank flushes paraLLEl-GS and advances its frame context. `read_image` uses the transfer FIFO.
+  The async GS queue is inactive in parallel mode. Save states throw in parallel mode.
+- Display dumps copy the 4 MiB paraLLEl-GS VRAM into the donor memory image and decode it with the donor
+  `read_pixel` path, so dumps are comparable with the donor's. Window `present` returns false (step 6).
+- Confirmed: candidate `private/slice163-parallel-build/build/gt4vulkan.exe` built with 0 errors.
+- Confirmed, donor path: 4,200 frames, the slice157 schedule (12 presses), 42 dumps. Each file's sha256 is
+  identical to `private/slice157-smoke/headless-157/frames` (Confirmed, `diff` on sorted sha256 lists).
+- Confirmed, parallel path: 4,200 frames, the same schedule, 42 dumps, no errors. Game register log
+  `private/slice163-parallel-smoke/parallel/game-regs.log` (16,784 lines). Our SetGsCrt at vblank 1 wrote
+  SMODE1 0x4100 and SMODE2 0x1. The game then wrote SMODE2 0x3 (INT=1, FFMD=1, frame mode) from vblank 5.
+  The mapping chose FFMD=0 (field mode) for the field-1 request, so the game's own value differs. Recorded;
+  not changed.
+- Confirmed, similarity (report only, no thresholds; per-frame table in
+  `private/slice163-parallel-smoke/similarity.txt`): 42 frames, all 640x448. Frames 100 to 800: 0 to 6.1 percent of pixels
+  differ by more than 8 in some channel, PSNR 14.9 to 58.4 dB (the donor is near black there too). From
+  frame 900 on: 58 to 82 percent of pixels differ, PSNR 9.0 to 12.6 dB. Frame 900 is the donor's "L's Home"
+  menu; the parallel frame has blocks in the same screen areas.
+- Confirmed, defect: in the parallel dump the garage and home menu layout is present, but the frame is made of
+  flat blocks about 64 by 64 pixels. Text and textures are missing. Visible in
+  `private/slice163-parallel-smoke/` side-by-side previews (not committed).
+- Hypothesis: texture or CLUT uploads (HOST to LOCAL via path 3 IMAGE packets, possibly split across DMA
+  chunks) are not reaching the texture cache correctly, or the readback decodes the wrong pages. Not
+  investigated in this slice. The first check is a `[pgs]` counter of IMAGE qwords per path and a capture of
+  one DMA chunk boundary.
+
+**Step 6 — not started.** The window output would show this defect. A Granite WSI platform and the blit
+are the next work, after the texture path is fixed or bounded.
+
+**Open issues for steps 5+ (slice 163):**
+1. Texture and text missing in parallel mode (see above). Blocks all owner-visible qualification.
+2. Frame-mode SMODE2 written by the game conflicts with the synthesized field-mode value; the game's value
+   wins once written. Check against owner logs before step 6.
+3. The launcher mode `--mode parallel-gs` is not added; it would be a black window until step 6.
+4. CTest and the Python suite run on the slice163 build (see BUILD.md slice163). No owner gameplay run.
