@@ -17,7 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
-![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2025-2ea44f)
+![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2024-2ea44f)
 
 </div>
 
@@ -125,20 +125,19 @@ in game before it is merged.
 | TASK‑014 | Full EE entry coverage from the decompilation | 📋 Planned |
 | TASK‑015 | LWR instruction fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
-| TASK‑017 | In-game 16:9 option by default | 📋 Planned |
-| TASK‑018 | Decompilation names in the generated code | 📋 Planned |
-| TASK‑019 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
-| TASK‑020 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑021 | License-test crash | 📋 Planned |
+| TASK‑017 | Decompilation names in the generated code | 📋 Planned |
+| TASK‑018 | License-test crash | 📋 Planned |
+| TASK‑019 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑020 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS
 
 | Task | Goal | State |
 |---|---|---|
-| TASK‑022 | ARMSX2 GS pipeline (Vulkan) for Android | 📋 Planned |
-| TASK‑023 | Android app: touch controls, Bluetooth controllers | 📋 Planned |
-| TASK‑024 | ARMSX2 Metal GS for iOS | 📋 Planned |
-| TASK‑025 | iOS app | 📋 Planned |
+| TASK‑021 | ARMSX2 GS pipeline (Vulkan) for Android | 📋 Planned |
+| TASK‑022 | Android app: touch controls, Bluetooth controllers | 📋 Planned |
+| TASK‑023 | ARMSX2 Metal GS for iOS | 📋 Planned |
+| TASK‑024 | iOS app | 📋 Planned |
 
 Details: [TASKS.md](TASKS.md) · [GS renderer options](docs/GS-RENDERER-OPTIONS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md).
 

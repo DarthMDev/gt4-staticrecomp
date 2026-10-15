@@ -11,7 +11,9 @@ States: ✅ Done · 🧪 Waiting for owner test · 🔄 In progress · ⏭️ Ne
 Tasks are numbered in execution order (renumbered on 2026-10-15). Older
 journals and commits use the previous numbers: 018→010, 010→011, 031→012,
 014→013, 015→014, 016→015, 017→016, 020→017, 022→018, 023→019, 026→020,
-013→021, 024→022, 027→023, 025→024, 028→025. Earlier IDs 011, 012, 019, 029
+013→021, 024→022, 027→023, 025→024, 028→025. Second renumbering (same day): 022→017, 021→018,
+020→019, 019→020, phase 2/3 tasks 022-025→021-024; the in-game 16:9 task was
+dropped (the owner's game already boots in 16:9). Earlier IDs 011, 012, 019, 029
 were merged into the new 010/012; the pre-donor cleanup was done outside the
 list (private repository `moesuito/gt4-staticrecomp-legacy`).
 
@@ -50,25 +52,24 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑014 | EE entry coverage from the decomp function list | 📋 Planned |
 | TASK‑015 | LWR sign-extension fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost counters and review | 📋 Planned |
-| TASK‑017 | In-game 16:9 option by default (guest hook) | 📋 Planned |
-| TASK‑018 | Decomp names in generated EE code | 📋 Planned |
-| TASK‑019 | Launcher (Rust + egui/GPUI) | 📋 Planned |
-| TASK‑020 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑021 | License-test crash (later; optimization first) | 📋 Planned |
+| TASK‑017 | Decomp names in generated EE code | 📋 Planned |
+| TASK‑018 | License-test crash (later; optimization first) | 📋 Planned |
+| TASK‑019 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑020 | Launcher (Rust + egui/GPUI) | 📋 Planned |
 
 ## Phase 2 — Android
 
 | Task | Goal | State |
 |---|---|---|
-| TASK‑022 | Mobile GS: ARMSX2 GS pipeline (Vulkan) behind our GS front end | 📋 Planned |
-| TASK‑023 | Android app: ARM64 build, host layers, touch controls, Bluetooth controllers | 📋 Planned |
+| TASK‑021 | Mobile GS: ARMSX2 GS pipeline (Vulkan) behind our GS front end | 📋 Planned |
+| TASK‑022 | Android app: ARM64 build, host layers, touch controls, Bluetooth controllers | 📋 Planned |
 
 ## Phase 3 — iOS
 
 | Task | Goal | State |
 |---|---|---|
-| TASK‑024 | ARMSX2 Metal GS backend | 📋 Planned |
-| TASK‑025 | iOS app: ARM64 build, signing, touch and controller input | 📋 Planned |
+| TASK‑023 | ARMSX2 Metal GS backend | 📋 Planned |
+| TASK‑024 | iOS app: ARM64 build, signing, touch and controller input | 📋 Planned |
 
 ## Done
 
@@ -165,47 +166,42 @@ generated units for lone LWR uses.
 Per-module instruction counters and per-library HLE call counts in F8; decide
 whether the sound modules need native HLE (docs/IOP-MAP.md).
 
-### TASK-017 — In-game 16:9 option by default
-The wide flag is set through `MOption get_wide_mode` (0x180108) →
-`func_00437110` (flag at object +0x14); forcing it needs a guest-side write after
-the save loads.
-
-### TASK-018 — Decomp names in generated code
+### TASK-017 — Decomp names in generated code
 Label comments in generated units with identical object code.
 
-### TASK-019 — Launcher
-Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
-upscaling, video mode, controls; CPU feature detection for build variants.
-
-### TASK-020 — Racing wheels
-High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
-(docs/MENUS-AND-WHEEL.md).
-
-### TASK-021 — License-test crash
+### TASK-018 — License-test crash
 Pre-existing; traced to `RaceSolitaire::loadDemoInputs` (0x3EAD18) →
 `AutomobileControlRecord::Manager::load` (0x346BB8) reading a bad record count.
 Env-gated logging there and in the PS2ZIP loader for `replay/license/` files,
 plus a CDVD read trace; one owner reproduction; fix the cause.
 
+### TASK-019 — Racing wheels
+High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
+(docs/MENUS-AND-WHEEL.md).
+
+### TASK-020 — Launcher
+Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
+upscaling, video mode, controls; CPU feature detection for build variants.
+
 ## Phase 2 — Android details
 
-### TASK-022 — Mobile GS (ARMSX2 pipeline, Vulkan)
+### TASK-021 — Mobile GS (ARMSX2 pipeline, Vulkan)
 Bring the ARMSX2 GS pipeline (PCSX2 hardware renderer with ARMSX2's Android
 changes: GPU driver profiles, tile-friendly pass scheduler, framebuffer-fetch
 policy) behind our GS front end. ARMSX2's ARM64 JIT is not used (no JIT rule).
 Owner's ARMSX2 checkout: `C:/Antigravity/armsx2` (upstream `ARMSX2/ARMSX2`).
 
-### TASK-023 — Android app
+### TASK-022 — Android app
 ARM64 build of the AOT EE/VU code and runtime (fp-contract off), Android host
 layers (window, audio, input, storage, lifecycle), on-screen controls that hide
 when a Bluetooth controller connects; target Galaxy S23 Ultra.
 
 ## Phase 3 — iOS details
 
-### TASK-024 — Metal GS (ARMSX2)
+### TASK-023 — Metal GS (ARMSX2)
 ARMSX2's Metal backend for the same GS pipeline.
 
-### TASK-025 — iOS app
+### TASK-024 — iOS app
 ARM64 build, iOS host layers, signing/installation on iPhone 15 Pro Max and
 17 Pro Max (built on a Mac with Xcode).
 

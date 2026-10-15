@@ -37,7 +37,7 @@ claim zero emulation or full PS2 fidelity.
   iOS) without ARMSX2's JIT. See `docs/GS-RENDERER-OPTIONS.md`.
 - GPL-3.0 reuse (e.g. PCSX2 GS) is accepted (decision 0066): pin sources, keep
   notices, record provenance in `native/THIRD_PARTY.md`. Never import PCSX2 JITs.
-- The launcher (TASK-019) and racing wheels (TASK-020) are planned tasks;
+- The launcher (TASK-020) and racing wheels (TASK-019) are planned tasks;
   LAN/online launcher, in-game settings menus and Spec II are recorded ideas.
 
 Working fork: github.com/moesuito/gt4-staticrecomp. Upstream
