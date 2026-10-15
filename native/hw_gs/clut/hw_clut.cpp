@@ -1,0 +1,343 @@
+// Copyright 2026 GT4Recomp contributors. Licensed under the MIT License (see LICENSE).
+// Written from the TASK-026 specification (docs/hw-renderer-spec) (clean room).
+#include "hw_clut.hpp"
+
+#include <algorithm>
+
+namespace hwgs {
+namespace clut {
+namespace {
+
+// In-block column tables for 32-bit (8x8 block) and 16-bit (16x8 block) formats,
+// rows indexed by block row parity, entries by block x (chapter 01.3).
+constexpr uint8_t kWordInBlock32[2][8] = {
+    {0, 1, 4, 5, 8, 9, 12, 13},
+    {2, 3, 6, 7, 10, 11, 14, 15},
+};
+
+constexpr uint8_t kHalfwordInBlock16[2][16] = {
+    {0, 2, 8, 10, 16, 18, 24, 26, 1, 3, 9, 11, 17, 19, 25, 27},
+    {4, 6, 12, 14, 20, 22, 28, 30, 5, 7, 13, 15, 21, 23, 29, 31},
+};
+
+// Block numbers inside a page, rows top to bottom (chapter 01.3).
+constexpr uint8_t kBlocksCt32[4][8] = {
+    {0, 1, 4, 5, 16, 17, 20, 21},
+    {2, 3, 6, 7, 18, 19, 22, 23},
+    {8, 9, 12, 13, 24, 25, 28, 29},
+    {10, 11, 14, 15, 26, 27, 30, 31},
+};
+
+constexpr uint8_t kBlocksCt16[8][4] = {
+    {0, 2, 8, 10},
+    {1, 3, 9, 11},
+    {4, 6, 12, 14},
+    {5, 7, 13, 15},
+    {16, 18, 24, 26},
+    {17, 19, 25, 27},
+    {20, 22, 28, 30},
+    {21, 23, 29, 31},
+};
+
+constexpr uint8_t kBlocksCt16S[8][4] = {
+    {0, 2, 16, 18},
+    {1, 3, 17, 19},
+    {8, 10, 24, 26},
+    {9, 11, 25, 27},
+    {4, 6, 20, 22},
+    {5, 7, 21, 23},
+    {12, 14, 28, 30},
+    {13, 15, 29, 31},
+};
+
+bool IsCt16Family(uint32_t format) { return format == psm::kCt16 || format == psm::kCt16S; }
+
+bool IsCpsmValid(uint32_t cpsm) { return cpsm == psm::kCt32 || IsCt16Family(cpsm); }
+
+bool SameLoadKey(const Tex0Write& a, const Tex0Write& b) {
+    return a.cbp == b.cbp && a.cpsm == b.cpsm && a.csm == b.csm && a.csa == b.csa &&
+           IsIndexedPsm(a.psm) && IsIndexedPsm(b.psm) &&
+           ((a.psm & 7u) == 3u) == ((b.psm & 7u) == 3u) &&
+           a.texclutCbw == b.texclutCbw && a.texclutCou == b.texclutCou &&
+           a.texclutCov == b.texclutCov;
+}
+
+uint32_t ReadLittle(const uint8_t* bytes, uint32_t count) {
+    uint32_t value = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        value |= static_cast<uint32_t>(bytes[i]) << (8u * i);
+    }
+    return value;
+}
+
+}  // namespace
+
+bool LocatePixel(uint32_t format, uint32_t bufferPointer, uint32_t bufferWidth,
+                 uint32_t x, uint32_t y, PixelLocation& out) {
+    uint32_t pageWidth = 0;
+    uint32_t pageHeight = 0;
+    uint32_t blockWidth = 0;
+    uint32_t blockHeight = 0;
+    switch (format) {
+        case psm::kCt32:
+            pageWidth = 64; pageHeight = 32; blockWidth = 8; blockHeight = 8;
+            break;
+        case psm::kCt16:
+        case psm::kCt16S:
+            pageWidth = 64; pageHeight = 64; blockWidth = 16; blockHeight = 8;
+            break;
+        default:
+            return false;
+    }
+
+    // Pages per row: BW counts 64-pixel units and both formats have 64-pixel pages.
+    const uint32_t pagesPerRow = bufferWidth;
+    const uint32_t page = (y / pageHeight) * pagesPerRow + (x / pageWidth);
+    const uint32_t inPageX = (x % pageWidth) / blockWidth;
+    const uint32_t inPageY = (y % pageHeight) / blockHeight;
+
+    uint32_t blockInPage = 0;
+    if (format == psm::kCt32) {
+        blockInPage = kBlocksCt32[inPageY][inPageX];
+    } else if (format == psm::kCt16) {
+        blockInPage = kBlocksCt16[inPageY][inPageX];
+    } else {
+        blockInPage = kBlocksCt16S[inPageY][inPageX];
+    }
+
+    // Z formats XOR the in-page entry; CLUT sources are colour formats only.
+    out.block = (bufferPointer + kBlocksPerPage * page + blockInPage) % kBlocksTotal;
+
+    const uint32_t bx = x % blockWidth;
+    const uint32_t by = y % blockHeight;
+    const uint32_t column = by / 2u;
+    if (format == psm::kCt32) {
+        const uint32_t word = kWordInBlock32[by & 1u][bx];
+        out.byteInBlock = 64u * column + 4u * word;
+    } else {
+        const uint32_t halfword = kHalfwordInBlock16[by & 1u][bx];
+        out.byteInBlock = 64u * column + 2u * halfword;
+    }
+    return true;
+}
+
+void CsmEntryPosition(uint32_t index, bool eightBitIndex, uint32_t& x, uint32_t& y) {
+    if (eightBitIndex) {
+        x = (index & 7u) + 8u * ((index >> 4) & 1u);
+        y = 2u * (index >> 5) + ((index >> 3) & 1u);
+    } else {
+        x = index & 7u;
+        y = index >> 3;
+    }
+}
+
+TexaState TexaState::FromRegister(uint64_t texa) {
+    TexaState state;
+    state.ta0 = static_cast<uint32_t>(BitRange(texa, 0, 7));
+    state.aem = BitRange(texa, 15, 15) != 0;
+    state.ta1 = static_cast<uint32_t>(BitRange(texa, 32, 39));
+    return state;
+}
+
+uint32_t ExpandRgb16(uint16_t value, const TexaState& texa, bool wholeValueRule) {
+    const uint32_t r = (static_cast<uint32_t>(value) & 0x1Fu) << 3;
+    const uint32_t g = ((static_cast<uint32_t>(value) >> 5) & 0x1Fu) << 3;
+    const uint32_t b = ((static_cast<uint32_t>(value) >> 10) & 0x1Fu) << 3;
+    uint32_t a = (value & 0x8000u) ? texa.ta1 : texa.ta0;
+    const bool zero = wholeValueRule ? (value == 0u) : (r == 0u && g == 0u && b == 0u);
+    if (texa.aem && zero) {
+        a = 0;
+    }
+    return r | (g << 8) | (b << 16) | (a << 24);
+}
+
+uint32_t ExpandRgb24(uint32_t value, const TexaState& texa) {
+    const uint32_t r = value & 0xFFu;
+    const uint32_t g = (value >> 8) & 0xFFu;
+    const uint32_t b = (value >> 16) & 0xFFu;
+    uint32_t a = texa.ta0;
+    if (texa.aem && r == 0u && g == 0u && b == 0u) {
+        a = 0;
+    }
+    return r | (g << 8) | (b << 16) | (a << 24);
+}
+
+ClutUnit::ClutUnit(CounterSet& counters) : counters_(counters) {}
+
+void ClutUnit::Reset() {
+    std::fill(std::begin(halfwords_), std::end(halfwords_), uint16_t{0});
+    cbp0_ = 0;
+    cbp1_ = 0;
+    haveLast_ = false;
+    stale_ = true;
+    sourceBlocks_.reset();
+    ++generation_;
+}
+
+ClutDecision ClutUnit::Decide(const Tex0Write& write) const {
+    ClutDecision decision;
+    if (!IsIndexedPsm(write.psm)) {
+        return decision;  // nothing happens, CBP0/CBP1 unchanged
+    }
+    switch (write.cld) {
+        case 1:
+            decision.load = true;
+            break;
+        case 2:
+            decision.load = true;
+            decision.setCbp0 = true;
+            break;
+        case 3:
+            decision.load = true;
+            decision.setCbp1 = true;
+            break;
+        case 4:
+            if (write.cbp != cbp0_) {
+                decision.load = true;
+                decision.setCbp0 = true;
+            }
+            break;
+        case 5:
+            if (write.cbp != cbp1_) {
+                decision.load = true;
+                decision.setCbp1 = true;
+            }
+            break;
+        default:  // 0, 6 and 7 do nothing
+            break;
+    }
+    decision.newCbp = write.cbp;
+    return decision;
+}
+
+void ClutUnit::ApplySideEffects(const ClutDecision& decision) {
+    if (decision.setCbp0) {
+        cbp0_ = decision.newCbp;
+    }
+    if (decision.setCbp1) {
+        cbp1_ = decision.newCbp;
+    }
+}
+
+bool ClutUnit::ProcessWrite(const Tex0Write& write, const uint8_t* localMemory,
+                            const std::function<void()>& flushBeforeLoad) {
+    const ClutDecision decision = Decide(write);
+    if (!decision.load) {
+        return false;
+    }
+    counters_.Add(Counter::ClutLoadsRequested);
+    ApplySideEffects(decision);
+
+    Tex0Write effective = write;
+    const bool redundant = haveLast_ && !stale_ && !alwaysLoad_ && SameLoadKey(effective, last_);
+    if (redundant) {
+        counters_.Add(Counter::ClutLoadsSkipped);
+        return false;
+    }
+    if (flushBeforeLoad) {
+        flushBeforeLoad();
+    }
+    Copy(effective, localMemory);
+    counters_.Add(Counter::ClutLoadsPerformed);
+    return true;
+}
+
+void ClutUnit::Copy(const Tex0Write& write, const uint8_t* localMemory) {
+    if (!IsCpsmValid(write.cpsm)) {
+        counters_.Add(Counter::ClutBadCpsm);
+        haveLast_ = false;
+        return;
+    }
+    const bool eightBit = (write.psm & 7u) == 3u;
+    const uint32_t entryCount = eightBit ? 256u : 16u;
+    const bool is32 = write.cpsm == psm::kCt32;
+    const uint32_t csaGroup = write.csa & 15u;
+    if (write.csm == 1u && write.cpsm != psm::kCt16) {
+        counters_.Add(Counter::Csm2NonSixteen);
+    }
+
+    sourceBlocks_.reset();
+    for (uint32_t e = 0; e < entryCount; ++e) {
+        uint32_t x = 0;
+        uint32_t y = 0;
+        uint32_t base = write.cbp;
+        uint32_t width = 1;
+        if (write.csm == 0u) {
+            CsmEntryPosition(e, eightBit, x, y);
+        } else {
+            x = write.texclutCou * 16u + e;
+            y = write.texclutCov;
+            width = write.texclutCbw;
+        }
+
+        PixelLocation location;
+        if (!LocatePixel(write.cpsm, base, width, x, y, location)) {
+            continue;
+        }
+        sourceBlocks_.set(location.block);
+        const uint8_t* source = localMemory + location.PhysicalByte();
+
+        if (is32) {
+            const uint32_t raw = ReadLittle(source, 4);
+            // Palette group g lives at buffer group g + CSA (clamped rows are not loaded).
+            const uint32_t group = (e >> 4) + csaGroup;
+            if (group > 15u) {
+                continue;
+            }
+            const uint32_t index = 16u * group + (e & 15u);
+            halfwords_[index] = static_cast<uint16_t>(raw & 0xFFFFu);
+            halfwords_[index + 256u] = static_cast<uint16_t>(raw >> 16);
+        } else {
+            const uint16_t raw = static_cast<uint16_t>(ReadLittle(source, 2));
+            halfwords_[(16u * write.csa + e) & 511u] = raw;
+        }
+    }
+
+    ++generation_;
+    haveLast_ = true;
+    stale_ = false;
+    last_ = write;
+}
+
+void ClutUnit::NoteBlocksWritten(uint32_t blockBegin, uint32_t blockCount) {
+    if (!haveLast_ || stale_) {
+        return;
+    }
+    for (uint32_t i = 0; i < blockCount; ++i) {
+        const uint32_t block = (blockBegin + i) % kBlocksTotal;
+        if (sourceBlocks_.test(block)) {
+            stale_ = true;
+            return;
+        }
+    }
+}
+
+Palette ClutUnit::Decode(uint32_t format, uint32_t cpsm, uint32_t csa, uint64_t texa) const {
+    Palette palette;
+    palette.count = (format & 7u) == 3u ? 256u : 16u;
+    const TexaState state = TexaState::FromRegister(texa);
+    const uint32_t csaGroup = csa & 15u;
+
+    palette.minAlpha = 255;
+    palette.maxAlpha = 0;
+    for (uint32_t e = 0; e < palette.count; ++e) {
+        uint32_t value = 0;
+        if (cpsm == psm::kCt32) {
+            const uint32_t group = std::min<uint32_t>((e >> 4) + csaGroup, 15u);
+            const uint32_t index = 16u * group + (e & 15u);
+            value = static_cast<uint32_t>(halfwords_[index]) |
+                    (static_cast<uint32_t>(halfwords_[index + 256u]) << 16);
+        } else if (IsCt16Family(cpsm)) {
+            const uint32_t index = (16u * csa + e) & 511u;
+            value = ExpandRgb16(halfwords_[index], state, true);
+        }
+        palette.entries[e] = value;
+        const uint8_t alpha = static_cast<uint8_t>(value >> 24);
+        palette.minAlpha = std::min(palette.minAlpha, alpha);
+        palette.maxAlpha = std::max(palette.maxAlpha, alpha);
+    }
+    return palette;
+}
+
+}  // namespace clut
+}  // namespace hwgs
