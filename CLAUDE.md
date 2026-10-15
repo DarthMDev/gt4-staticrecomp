@@ -29,7 +29,7 @@ claim zero emulation or full PS2 fidelity.
   renderer, physics decoupled from frame rate, ultrawide and remaster features
   will be a separate project, possibly a fork. This repository's goal is the
   original game running natively, optimized and as faithful as possible.
-- **Renderer focus now:** integrate paraLLEl-GS (TASK-031..033).
+- **Renderer focus now:** integrate paraLLEl-GS (TASK-031).
 - **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
 - **Graphics:** PC renderer = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+); the
   current donor compute GS renderer is an experimental fallback/reference only

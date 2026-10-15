@@ -37,15 +37,10 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
 | TASK‑007 | VU1 per-program flag elision | ✅ Done |
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 In progress |
-| TASK‑030 | Repository cleanup: pre-donor material moved to a private backup | 🧪 Waiting for owner review |
 | TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, 480p everywhere | 🔄 480p rework |
-| TASK‑018 | Faster builds (parallel jobs, compiler cache, lld-link) | ⏭️ Next |
+| TASK‑018 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ⏭️ Next |
 | TASK‑010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
-| TASK‑031 | paraLLEl-GS integration as the PC renderer | 📋 Planned |
-| TASK‑032 | paraLLEl-GS options and GT4 validation: upscaling, deinterlacing, readbacks | 📋 Planned |
-| TASK‑033 | Renderer extras on paraLLEl-GS: post-processing, dithering/texture options | 📋 Planned |
-| TASK‑019 | Build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
-| TASK‑013 | License-test crash | 📋 Planned |
+| TASK‑031 | paraLLEl-GS as the PC renderer: integration, upscaling, deinterlacing, readbacks, extras, GT4 validation | 📋 Planned |
 | TASK‑014 | VU0 microcode compiled ahead of time | 📋 Planned |
 | TASK‑015 | EE entry coverage from the decomp function list | 📋 Planned |
 | TASK‑016 | LWR sign-extension fidelity fix | 📋 Planned |
@@ -54,9 +49,11 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑022 | Decomp names in generated EE code | 📋 Planned |
 | TASK‑023 | Launcher (Rust + egui/GPUI) | 📋 Planned |
 | TASK‑026 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑011 | Upscaling on the donor renderer | ⛔ Superseded by TASK‑032 |
-| TASK‑012 | Night-race readback wait on the donor renderer | ⛔ Superseded by TASK‑032 |
-| TASK‑029 | Donor renderer features | ⛔ Superseded by TASK‑033 |
+| TASK‑013 | License-test crash (later; optimization first) | 📋 Planned |
+| TASK‑011 | Upscaling on the donor renderer | ⛔ Superseded by TASK‑031 |
+| TASK‑012 | Night-race readback wait on the donor renderer | ⛔ Superseded by TASK‑031 |
+| TASK‑029 | Donor renderer features | ⛔ Superseded by TASK‑031 |
+| TASK‑019 | Build tuning | ⛔ Merged into TASK‑018 |
 | TASK‑021 | Per-interval counters | ⛔ Merged into TASK‑009 |
 
 ## Phase 2 — Android
@@ -110,14 +107,6 @@ entries of the decrypted image (about 40 MB larger executable is fine); flag
 elision applies per program automatically. Acceptance: interpreted calls 0 in
 night race, rally and showroom.
 
-### TASK-030 — Repository cleanup (pre-donor material)
-Branch `task/030-legacy-cleanup`. Full history and all branches mirrored to the
-private repository `moesuito/gt4-staticrecomp-legacy`. Owner choice: clean files
-and branches only, no public history rewrite. `docs/LEGACY.md` removed and
-archive references trimmed; historical reports, journals, decisions and pins
-kept as evidence. After approval and merge: delete the legacy and merged
-branches on GitHub (all are in the backup).
-
 ### TASK-009 — Quick fixes
 Branch `task/009-quick-fixes`, slice 156 `--mode quickfix`. Owner accepted:
 title "GT4Recomp", fixed 16:9 (F6/4:3 removed), Alt+Enter/F11 borderless
@@ -129,9 +118,11 @@ fullscreen, interval and session counters. Rework:
   original-byte verification, so boot, menus and races run progressive.
 - Fix the `late_frames` definition (it counts almost every paced frame).
 
-### TASK-018 — Faster builds
-Parallel jobs inside one build (split large generated units), compiler cache,
-lld-link. Measure before/after; speeds up every later task.
+### TASK-018 — Build pipeline: speed and tuning
+Faster builds: parallel jobs inside one build (split large generated units),
+compiler cache, lld-link; measure before/after. Build tuning (was TASK-019), one
+variable per candidate: `-ffp-contract=off` control, x86-64-v3 runtime variant
+chosen by the launcher, dispatch divide removal, ThinLTO, PGO.
 
 ### TASK-010 — MTVU
 Run VU1 programs on a worker thread (donor `start_vu_thread` exists), on by
@@ -139,31 +130,24 @@ default with an env switch to disable; exact sync points wherever the EE observe
 VU1 results. Acceptance: identical headless frames, verify 0 mismatches, owner
 showroom/night/race frametime equal or better.
 
-### TASK-031 — paraLLEl-GS integration
-Import paraLLEl-GS (github.com/Arntzen-Software/parallel-gs, LGPL-3.0+, with
-Granite MIT) pinned by commit; build it in our CMake; bridge its Vulkan device to
-ours (Granite device shim or port); adapter from our GS front end (`write`,
-`write_packed`, `write_image`, `read_image`, privileged registers, signals,
-vsync) to its interface (`gif_transfer`, `write_register`, `map_vram_*`,
-`read_transfer_fifo`, `vsync` → scanout). Renderer selected by env (later the
-launcher); the donor renderer stays as experimental fallback. Acceptance: GT4
-boots, menus and races render correctly; image comparison against the donor
-renderer at 1x; owner check of race, night, rally, showroom, menus.
-
-### TASK-032 — paraLLEl-GS options and GT4 validation
-Super-sampling upscaling (2x-16x) by env; deinterlacing and field options for
-the interlaced menus; page-tracked readbacks against the night-race wait; GT4
-checks (channel-shuffle brightness effects, lens flares, half-pixel issues);
-performance per scene. Supersedes TASK-011 and TASK-012.
-
-### TASK-033 — Renderer extras on paraLLEl-GS
-Post-processing (sharpening, FXAA, filters) and dithering/texture options where
-paraLLEl-GS allows them; texture dump/replacement feasibility. Supersedes
-TASK-029.
-
-### TASK-019 — Build tuning
-`-ffp-contract=off` control, x86-64-v3 runtime variant chosen by the launcher,
-dispatch divide removal, ThinLTO, PGO; one variable per candidate.
+### TASK-031 — paraLLEl-GS as the PC renderer
+One large task, delivered in verified steps on its own branch:
+1. Import paraLLEl-GS (github.com/Arntzen-Software/parallel-gs, LGPL-3.0+, with
+   Granite MIT) pinned by commit; build it in our CMake; bridge its Vulkan device
+   to ours (Granite device shim or port).
+2. Adapter from our GS front end (`write`, `write_packed`, `write_image`,
+   `read_image`, privileged registers, signals, vsync) to its interface
+   (`gif_transfer`, `write_register`, `map_vram_*`, `read_transfer_fifo`,
+   `vsync` → scanout). Renderer selected by env (later the launcher); the donor
+   renderer stays as experimental fallback.
+3. GT4 validation: boot, menus, races, night, rally, showroom; image comparison
+   against the donor renderer at 1x; channel-shuffle brightness effects, lens
+   flares, half-pixel issues.
+4. Options: super-sampling upscaling 2x-16x, deinterlacing/field options for the
+   interlaced menus, page-tracked readbacks against the night-race wait.
+5. Extras where paraLLEl-GS allows: post-processing (sharpening, FXAA, filters),
+   dithering/texture options, texture dump/replacement feasibility.
+Supersedes TASK-011, TASK-012 and TASK-029.
 
 ### TASK-013 — License-test crash
 Pre-existing; traced to `RaceSolitaire::loadDemoInputs` (0x3EAD18) →
@@ -203,9 +187,10 @@ upscaling, video mode, controls; CPU feature detection for build variants.
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md).
 
-### Superseded
-TASK-011 (donor upscaling) and TASK-012 (donor readback wait) → TASK-032;
-TASK-029 (donor renderer features) → TASK-033; TASK-021 → TASK-009.
+### Superseded or merged
+TASK-011, TASK-012, TASK-029 → TASK-031; TASK-019 → TASK-018; TASK-021 → TASK-009.
+The pre-donor repository cleanup was done outside the task list (history and
+branches in the private `moesuito/gt4-staticrecomp-legacy` repository).
 
 ## Phase 2 — Android details
 

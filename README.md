@@ -17,7 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
-![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2029-2ea44f)
+![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2025-2ea44f)
 
 </div>
 
@@ -117,15 +117,10 @@ in game before it is merged.
 | TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done · flat 16.7 ms frametime |
 | TASK‑007 | VU1 per-program flag elision | ✅ Done · showroom 45 → 59 FPS, 5-AI race 60 FPS |
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 **In progress** |
-| TASK‑030 | Repository cleanup (pre-donor material to a private backup) | 🧪 Owner review |
 | TASK‑009 | Title, fixed 16:9, fullscreen, 480p everywhere | 🔄 480p rework |
-| TASK‑018 | Faster builds | ⏭️ Next |
+| TASK‑018 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ⏭️ Next |
 | TASK‑010 | MTVU: VU1 on its own thread | 📋 Planned |
-| TASK‑031 | paraLLEl-GS as the PC renderer | 📋 Planned |
-| TASK‑032 | paraLLEl-GS upscaling, deinterlacing, readbacks, GT4 validation | 📋 Planned |
-| TASK‑033 | Renderer extras: post-processing, dithering/texture options | 📋 Planned |
-| TASK‑019 | Build tuning (CPU variants, LTO, PGO) | 📋 Planned |
-| TASK‑013 | License-test crash | 📋 Planned |
+| TASK‑031 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 📋 Planned |
 | TASK‑014 | VU0 microcode compiled ahead of time | 📋 Planned |
 | TASK‑015 | Full EE entry coverage from the decompilation | 📋 Planned |
 | TASK‑016 | LWR instruction fidelity fix | 📋 Planned |
@@ -134,6 +129,7 @@ in game before it is merged.
 | TASK‑022 | Decompilation names in the generated code | 📋 Planned |
 | TASK‑023 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
 | TASK‑026 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑013 | License-test crash | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS
 
