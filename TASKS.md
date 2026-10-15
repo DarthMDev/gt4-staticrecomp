@@ -71,7 +71,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑032 | Decision 0070 docs: PCSX2 GS in a separate process, clean-room wording, renderer docs | ✅ Done (this PR) |
 | TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | 📋 Planned |
 | TASK‑034 | Proof of concept: replay our `.gscap` capture through the PCSX2 GS and compare images | 🧪 Waiting for owner review of the side-by-side images · [report](docs/GS-PCSX2-POC.md) |
-| TASK‑035 | MIT GS stream protocol, shared-memory IPC and renderer seam on main | 📋 Planned (after the gate) |
+| TASK‑035 | MIT GS stream protocol, shared-memory IPC and renderer seam on main | 🧪 Built (slice191, branch `task/035-gs-stream`): CTest 29/29, Python 321 OK; headless stream byte-identical donor vs pcsx2 vs recorder; PoC replay frames identical · waiting for owner review · [spec](docs/GS-STREAM-PROTOCOL.md) |
 | TASK‑036 | Live `gt4-gs.exe` MVP: the game drives the PCSX2 GS over IPC | 📋 Planned (after the gate) |
 | TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
 | TASK‑038 | GS window, fullscreen, focus, input and crash handling | 📋 Planned |
@@ -336,6 +336,20 @@ schedule; donor frames still 42/42 identical to slice157 with the default render
 launcher pins updated.
 Risks: ordering between MTVU worker output and EE work; readback blocking with the worker.
 Parallel: with TASK-033/034.
+State (2026-10-15, slice191, branch `task/035-gs-stream`): built; owner review pending, no PR.
+- Protocol `native/gs_stream/gs_stream_protocol.h` (C++20 header, fixed-width structs) and the normative
+  [GS-STREAM-PROTOCOL](docs/GS-STREAM-PROTOCOL.md); transport `gs_stream_ipc` (mapping, rings, events with
+  waiter flags, peer-handle waits, Job Object spawn); `.gscap` v2 files; game client `gs_stream_client` spliced by
+  `prepare_external_vulkan.py --gs-stream-hooks` and `prepare_perf_runtime.py --gs-stream`; consumer
+  `tools/gs_stream_record` (recorder or null consumer; readbacks answered with zeros); F8 `[gs-ipc]`.
+- CTest 29/29 (`native_gs_stream_ipc`, `native_gs_stream_client` new); Python 321 OK, 12 skipped.
+- Headless 4,200 frames: donor 42/42 identical (default and with `GT4_GS_CAPTURE`); `GT4_RENDERER=pcsx2` completes;
+  donor capture == pcsx2 in-process capture == recorder file (plus CONTROL shutdown); 619 KB and 390 records per
+  frame, 0 readbacks. Converted frames 0-1100 equal the TASK-034 PoC dump byte for byte; GSRunner PNGs 1,100/1,100
+  identical to the PoC (300 and 700 included). EE cost in menus: `gs_ipc_write` about 0.08 ms/frame, VSYNC post
+  0.004 ms/frame, no back-pressure.
+- Not verified: readbacks over IPC in the game (none in the schedule; covered by fixtures only), race scenes,
+  window mode (`--mode pcsx2-stream` shows a black window by design), weak CPUs.
 
 ### TASK-036 — Live MVP
 Repos: fork branch `gt4gs/live`, main branch `task/036-gs-live`. Opus, 4-6 sessions.
