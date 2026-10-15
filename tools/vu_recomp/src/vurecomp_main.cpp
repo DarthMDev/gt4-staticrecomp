@@ -1,4 +1,8 @@
-// Command line driver: gt4_vu_recomp <input_dir> <fresh_output_dir>
+// Command line driver.
+//
+//   gt4_vu_recomp [options] <input_dir> <fresh_output_dir>          corpus mode (KEY_ENTRY.bin files)
+//   gt4_vu_recomp [options] --image FILE --entries FILE <fresh_output_dir>
+//                                                                  explicit-entry mode (slice 155)
 //
 // Writes vu1_generated.cpp (functions plus kPrograms table) and manifest.json.
 // Refuses an existing non-empty output directory before reading any input.
@@ -9,6 +13,7 @@
 
 #include <cstdio>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -21,12 +26,24 @@ bool write_text(const std::filesystem::path &path, const std::string &text) {
     return static_cast<bool>(file);
 }
 
+bool read_bytes(const std::filesystem::path &path, std::vector<std::uint8_t> &bytes, std::string &error) {
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        error = "cannot open " + path.filename().string();
+        return false;
+    }
+    bytes.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+    return true;
 }
+
+}  // namespace
 
 int main(int argc, char **argv) {
     // Options come first: --no-flag-elision emits the donor flag behaviour (comparison
-    // builds), --namespace NAME places the table and functions in another namespace.
+    // builds), --namespace NAME places the table and functions in another namespace,
+    // --image and --entries select explicit-entry mode.
     std::string name_space = "gt4::vugen::generated";
+    std::string image_argument, entries_argument;
     int first = 1;
     while (first < argc && argv[first][0] == '-') {
         const std::string option = argv[first];
@@ -36,38 +53,71 @@ int main(int argc, char **argv) {
         } else if (option == "--namespace" && first + 1 < argc) {
             name_space = argv[first + 1];
             first += 2;
+        } else if (option == "--image" && first + 1 < argc) {
+            image_argument = argv[first + 1];
+            first += 2;
+        } else if (option == "--entries" && first + 1 < argc) {
+            entries_argument = argv[first + 1];
+            first += 2;
         } else {
             std::fprintf(stderr, "gt4_vu_recomp: unknown option %s\n", option.c_str());
             return 2;
         }
     }
-    if (argc - first != 2) {
-        std::fprintf(stderr, "usage: gt4_vu_recomp [--no-flag-elision] [--namespace NAME] <input_dir> <fresh_output_dir>\n");
+    const bool explicit_mode = !image_argument.empty() || !entries_argument.empty();
+    const int positional = argc - first;
+    const bool usage_ok = explicit_mode ? (!image_argument.empty() && !entries_argument.empty() && positional == 1) : positional == 2;
+    if (!usage_ok) {
+        std::fprintf(stderr,
+                     "usage: gt4_vu_recomp [--no-flag-elision] [--namespace NAME] <input_dir> <fresh_output_dir>\n"
+                     "       gt4_vu_recomp [--no-flag-elision] [--namespace NAME] --image FILE --entries FILE <fresh_output_dir>\n");
         return 2;
     }
-    const std::filesystem::path input_dir = argv[first];
-    const std::filesystem::path output_dir = argv[first + 1];
+    const std::filesystem::path output_dir = argv[argc - 1];
     std::string error;
     if (!gt4::vurecomp::prepare_fresh_output_directory(output_dir, error)) {
         std::fprintf(stderr, "gt4_vu_recomp: %s\n", error.c_str());
         return 1;
     }
     std::vector<gt4::vurecomp::ProgramRecord> records;
-    if (!gt4::vurecomp::collect_program_records(input_dir, records, error)) {
-        std::fprintf(stderr, "gt4_vu_recomp: %s\n", error.c_str());
-        return 1;
+    gt4::vurecomp::ManifestInput manifest_input;
+    std::string input_description;
+    if (explicit_mode) {
+        const std::filesystem::path image_path = image_argument;
+        const std::filesystem::path entries_path = entries_argument;
+        std::vector<std::uint8_t> image, entry_bytes;
+        std::vector<std::uint32_t> entries;
+        if (!gt4::vurecomp::read_input_image(image_path, image, error) || !gt4::vurecomp::read_entry_list(entries_path, entries, error) ||
+            !read_bytes(entries_path, entry_bytes, error) ||
+            !gt4::vurecomp::collect_explicit_program_records(image, entries, records, error)) {
+            std::fprintf(stderr, "gt4_vu_recomp: %s\n", error.c_str());
+            return 1;
+        }
+        manifest_input.kind = "explicit_entries";
+        manifest_input.image_sha256 = gt4::vurecomp::sha256_hex(image);
+        manifest_input.entry_list_sha256 = gt4::vurecomp::sha256_hex(entry_bytes);
+        input_description = image_path.string() + " with " + std::to_string(entries.size()) + " entries";
+    } else {
+        const std::filesystem::path input_dir = argv[first];
+        if (!gt4::vurecomp::collect_program_records(input_dir, records, error)) {
+            std::fprintf(stderr, "gt4_vu_recomp: %s\n", error.c_str());
+            return 1;
+        }
+        input_description = input_dir.string();
     }
     const std::string generated_name = "vu1_generated.cpp";
     const std::string source = gt4::vurecomp::emit_generated_source(records, name_space);
     const std::string source_sha256 = gt4::vurecomp::sha256_hex(
         reinterpret_cast<const std::uint8_t *>(source.data()), source.size());
+    manifest_input.generated_bytes = source.size();
     if (!write_text(output_dir / generated_name, source) ||
-        !write_text(output_dir / "manifest.json", gt4::vurecomp::manifest_json(records, generated_name, source_sha256))) {
+        !write_text(output_dir / "manifest.json", gt4::vurecomp::manifest_json(records, generated_name, source_sha256, manifest_input))) {
         std::fprintf(stderr, "gt4_vu_recomp: cannot write outputs\n");
         return 1;
     }
     std::size_t emitted = 0, refused = 0;
     for (const auto &record : records) (record.refused ? refused : emitted) += 1;
-    std::printf("gt4_vu_recomp: %zu programs emitted, %zu refused, from %s\n", emitted, refused, input_dir.string().c_str());
+    std::printf("gt4_vu_recomp: %zu programs emitted, %zu refused, %zu source bytes, from %s\n", emitted, refused, source.size(),
+                input_description.c_str());
     return 0;
 }

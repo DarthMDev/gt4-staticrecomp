@@ -1034,6 +1034,70 @@ bool collect_program_records(const fs::path &input_dir, std::vector<ProgramRecor
     return true;
 }
 
+bool read_entry_list(const fs::path &path, std::vector<std::uint32_t> &entries, std::string &error) {
+    std::ifstream file(path);
+    if (!file) {
+        error = "cannot open entry list";
+        return false;
+    }
+    std::set<std::uint32_t> unique;
+    std::string line;
+    int line_number = 0;
+    while (std::getline(file, line)) {
+        ++line_number;
+        while (!line.empty() && (line.back() == '\r' || line.back() == ' ')) line.pop_back();
+        if (line.empty() || line[0] == '#') continue;
+        std::uint64_t value = 0;
+        if (line.size() != 4 || !parse_hex(line, value)) {
+            error = std::format("entry list line {} is not a 4-digit uppercase hex address: {}", line_number, line);
+            return false;
+        }
+        if (value > kCodeMask || (value & 7u) != 0) {
+            error = std::format("entry list line {} must be an 8-byte aligned address below 0x4000: {}", line_number, line);
+            return false;
+        }
+        unique.insert(static_cast<std::uint32_t>(value));
+    }
+    if (file.bad()) {
+        error = "cannot read entry list";
+        return false;
+    }
+    if (unique.empty()) {
+        error = "entry list has no entries";
+        return false;
+    }
+    entries.assign(unique.begin(), unique.end());
+    return true;
+}
+
+bool collect_explicit_program_records(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &entries,
+                                      std::vector<ProgramRecord> &records, std::string &error) {
+    if (image.size() != kImageBytes) {
+        error = "image must be 16384 bytes";
+        return false;
+    }
+    // Image-wide flag and status use is computed once: it is part of every entry's identity.
+    const bool flags_used = image_flags_used(image.data(), kImageBytes);
+    const bool status_used = image_status_used(image.data(), kImageBytes);
+    const std::string image_sha256 = sha256_hex(image);
+    for (std::uint32_t entry : entries) {
+        ProgramRecord record;
+        record.image = image;
+        record.entry = entry;
+        record.reachable = ps2::vu::reachable(record.image.data(), kMask, entry);
+        record.key = ps2::vu::program_key(record.image.data(), record.reachable, entry);
+        record.origin = "explicit";
+        record.source_name = "image";
+        record.source_sha256 = image_sha256;
+        record.image_flags_used = flags_used;
+        record.image_status_used = status_used;
+        record.digest_sha256 = program_digest(record.image, record.reachable, entry, flags_used, status_used);
+        if (!add_program_record(records, std::move(record), error)) return false;
+    }
+    std::sort(records.begin(), records.end(), [](const ProgramRecord &a, const ProgramRecord &b) { return a.key < b.key; });
+    return true;
+}
+
 bool prepare_fresh_output_directory(const fs::path &directory, std::string &error) {
     std::error_code status_error;
     if (fs::exists(directory, status_error)) {
@@ -1088,9 +1152,17 @@ std::string emit_generated_source(std::vector<ProgramRecord> &records, const std
     return source;
 }
 
-std::string manifest_json(const std::vector<ProgramRecord> &records, const std::string &generated_file_name, const std::string &generated_sha256) {
+std::string manifest_json(const std::vector<ProgramRecord> &records, const std::string &generated_file_name, const std::string &generated_sha256,
+                          const ManifestInput &input) {
+    std::size_t functions = 0;
+    for (const ProgramRecord &record : records)
+        if (!record.refused) ++functions;
     std::string json = "{\n  \"tool\": \"gt4_vu_recomp\",\n  \"donor_commit\": \"1b4808793a12c45125262fd2d5f50a9ec9f7c020\",\n";
+    json += std::format("  \"input\": \"{}\",\n", json_escape(input.kind));
+    if (input.kind == "explicit_entries")
+        json += std::format("  \"image_sha256\": \"{}\",\n  \"entry_list_sha256\": \"{}\",\n", input.image_sha256, input.entry_list_sha256);
     json += std::format("  \"generated_file\": \"{}\",\n  \"generated_sha256\": \"{}\",\n", json_escape(generated_file_name), generated_sha256);
+    json += std::format("  \"generated_bytes\": {},\n  \"entry_count\": {},\n  \"function_count\": {},\n", input.generated_bytes, records.size(), functions);
     json += std::format("  \"flag_elision\": {},\n", flag_elision() ? "true" : "false");
     json += std::format("  \"instruction_budget\": {},\n  \"programs\": [\n", 1000000u);
     for (std::size_t i = 0; i < records.size(); ++i) {

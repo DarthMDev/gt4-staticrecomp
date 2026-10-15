@@ -75,7 +75,11 @@ Showroom 44.8 → 59.1 FPS; 5-AI race at 60.0. Commit `26e211d`, merged in PR #1
 ## In progress
 
 ### TASK-008 — Full static VU1 entry coverage
-Branch: `feat/vu1-entry-coverage`.
+Branch: `feat/vu1-entry-coverage`. **Status: candidate ready, waiting for the owner
+in-game test** (`--mode vu1-full`, slice 155, executable `3cf5f998`): 426 entries
+from the decrypted image (targeted policy; all-2,048 table measured at 51.5 MB /
+400 s compile and kept as an option), CTest 18/18, Python 231 OK, headless frames
+identical to slice 154, interpreted calls 0 and verify 0 mismatches headless.
 - Decrypt the VU1 image from the pinned ELF; compile every plausible entry
   (all 2,046 addresses if size allows, otherwise program starts, branch/jump
   targets, block starts and the recorded entries).
@@ -90,15 +94,16 @@ Branch: `feat/vu1-entry-coverage`.
 - Fullscreen toggle: Alt+Enter (Windows convention) and F11, borderless
   fullscreen on the current monitor.
 - Per-interval perf counters (`late_frames`, `audio_underruns`; was TASK-021).
-- 480p by default (experimental switch, default on only after the owner check):
-  the game applies the saved option at race start through `SetGsCrt`
-  (480p = interlace 0 / mode 0x50, 480i = interlace 1 / mode 0x51; menus use
-  mode 0x2 and are untouched). The host rewrites 0x51 → 0x50 in the `SetGsCrt`
-  syscall (donor `kernel.cpp:474` / `hw.cpp:165`) when the switch is on. Risk:
-  the game still prepares 480i field buffers, so the owner must confirm the race
-  image; otherwise this moves back to TASK-020 with a guest-side hook.
-  Study: `RaceDisplay` state at object +0x16B0, table `D_00618648`
-  (`MOption::applyRaceDisplayMode`).
+- 480p everywhere (experimental switch, default on only after the owner check).
+  Study (corrected): race display options are `normal` (default 480i, mode
+  table id 1 = interlace 1 / mode 0x2), `480p` (id 6 = 0 / 0x50) and `1080i`
+  (id 7 = 1 / 0x51); menus and boot always use the default id, and `MOption`
+  resets the index to `normal`. Spec II does not force 480p (it adds a
+  `480i_frame` mode). Plan: rewrite `SetGsCrt` (1, 0x2) → (0, 0x50) on the host
+  (donor `kernel.cpp:474` / `hw.cpp:165`), equivalent to the guest default id 6;
+  frame size stays 640x448, 1080i untouched. Risk: menu field rendering; owner
+  checks menus, boot and races. Fallback: guest write of the default id at
+  0x10764C (TASK-020).
 Owner check: title, fullscreen in menus/race, 16:9 image, F8 counters.
 
 ### TASK-010 — MTVU

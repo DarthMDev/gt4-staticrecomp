@@ -99,8 +99,27 @@ std::string emit_program_function(ProgramRecord &record);
 // Emits all records into one translation unit with a table of emitted programs.
 std::string emit_generated_source(std::vector<ProgramRecord> &records, const std::string &name_space = "gt4::vugen::generated");
 
-// Writes the JSON manifest describing every record.
+// Explicit-entry mode (slice 155): one static image and a list of entry addresses,
+// instead of recorded KEY_ENTRY.bin files. Reads one 4-digit uppercase hex address per
+// line; blank lines and lines starting with '#' are ignored. Each address must be
+// 8-byte aligned and below 0x4000. Duplicate addresses are read once.
+bool read_entry_list(const std::filesystem::path &path, std::vector<std::uint32_t> &entries, std::string &error);
+
+// One record per distinct entry of the image, in key order. No jump-target discovery is
+// done: the list is the complete entry set. Same collision rule as collect_program_records.
+bool collect_explicit_program_records(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &entries,
+                                      std::vector<ProgramRecord> &records, std::string &error);
+
+// Describes the input of a manifest. Corpus mode leaves the explicit fields empty.
+struct ManifestInput {
+    std::string kind = "corpus";           // "corpus" (KEY_ENTRY.bin files) or "explicit_entries"
+    std::string image_sha256;              // explicit mode: SHA-256 of the 16 KiB image
+    std::string entry_list_sha256;         // explicit mode: SHA-256 of the entry list file
+    std::size_t generated_bytes = 0;       // size of the generated source
+};
+
+// Writes the JSON manifest describing every record, with entry, function and size counts.
 std::string manifest_json(const std::vector<ProgramRecord> &records, const std::string &generated_file_name,
-                          const std::string &generated_sha256);
+                          const std::string &generated_sha256, const ManifestInput &input = {});
 
 }

@@ -128,7 +128,9 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False):
         receipt['vu_scope_profile'] = 'unit_split_run_fast_only'
     if vu1_aot:
         receipt['vu1_aot_profile'] = 'overlay-v1'
-        receipt['vu1_aot_overlay_sha256'] = hashlib.sha256(OVERLAY_PATH.read_bytes()).hexdigest()
+        # Hashed with LF line endings: a checkout with core.autocrlf stores the overlay with CRLF, and the
+        # pinned value (slice 154) is the LF text that the derivation parses.
+        receipt['vu1_aot_overlay_sha256'] = hashlib.sha256(OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
     for name, text in sources.items():
         path = output / name
         path.write_text(text, encoding='utf-8', newline='\n')

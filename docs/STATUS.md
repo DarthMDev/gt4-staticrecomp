@@ -4,7 +4,8 @@
 
 **Latest:** slice 154 `--mode vu1-flags` (executable `800da980`) adds VU1 flag
 elision: showroom 59.14 VBlanks/s (was 44.79), 5-AI race 60.00 at 480p. Next:
-full static VU1 entry coverage (branch `feat/vu1-entry-coverage`).
+full static VU1 entry coverage: slice 155 `--mode vu1-full` (426 entries) is
+built and checked headless, waiting for the owner test.
 
 2026-10-15 — Slice 154, O1 follow-up (candidate, not owner-measured): `--mode vu1-flags` = slice 153 pacing with a VU1 table that computes MAC and clip only where a reader or the exit observes them (exit state exact); VU1 status is not kept, since the image never reads it and the EE cannot read VU1 flags. Local evidence: corpus differential 0 failures over 100 programs, fixture differential 0 failures, 42 identical headless frames versus slice 153, verify smoke with 0 mismatches. Read [journal 2026-10-15](journal/2026-10-15.md) and [BUILD](BUILD.md).
 

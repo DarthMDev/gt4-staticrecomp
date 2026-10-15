@@ -17,7 +17,7 @@ change in this slice.
 | O1 VU1 AOT | Done (slice 151; 102 entries; in-game verify 0 mismatches) |
 | O2 async GS | Done (slice 152; readback staging and render thread still open) |
 | O4 pacing | Done (slice 153; race 60.00 VBlanks/s, flat frametime) |
-| VU1+ (flags, full entry coverage, MTVU) | In progress (slice 154 flags) |
+| VU1+ (flags, full entry coverage, MTVU) | In progress (slice 154 flags; slice 155 full static entry table, candidate) |
 | O3 (VU0 AOT, EE coverage, IOP, build) | Next |
 | Fixes (license crash, title, fixed 16:9) | Queued |
 | O5 renderers, launcher, wheels, O6 mobile, phase 2 | Planned |
@@ -160,13 +160,15 @@ and a VBlank-interval histogram control (mean 60 ± 0.1 Hz, p95 < 18 ms).
 
 **Status (slice 154, candidate):** `--mode vu1-flags` on the slice153 pacing build with a per-program VU1 table. MAC is computed only where a later reader or the program exit observes it (FlagPipe windows 4 and 3, exit state exact); VU1 status is not kept when the image has no status instruction, which the corpus image lacks. The fixed-budget micro-benchmark halves generated-code time per call on the timed states (0.47, random seeds, not gameplay). Owner frame measurement is open. Next VU1 lever: a VU1 worker thread (O4) if the showroom stays VU1-bound.
 
+**Status (slice 155, candidate):** full static VU1 entry coverage (TASK-008): `--mode vu1-full` uses a table of 426 entries generated from the decrypted, pinned image instead of recordings. The 2,048-entry set was measured (51.5 MB source, 21.8 times the slice154 table) and not used under the size rule; the targeted set has 4.3 times the source. Corpus differential over the 426 programs: 0 failures; headless frames identical to slice154; interpreted calls 0 on the headless schedule, which does not reach the new entries. Owner measurement is open; the MSCAL and VIF entry addresses are not verified. See [journal 2026-10-15](journal/2026-10-15.md).
+
 ### Backlog from slice 151 studies
 
 | Item | Phase | Source |
 |---|---|---|
 | Build speed: parallel jobs inside one build, compiler cache, lld-link | now, any time | owner request |
 | Translate the 5,676 decomp functions that have no EE entry (crash risk in unplayed modes) | O3, stability | [DECOMP-INTEGRATION](DECOMP-INTEGRATION.md) |
-| VU1 static entry coverage: MSCAL targets from EE code, or compile every plausible entry of the 2,046-instruction image (10 E-bit blocks, 9 seen) | O1 follow-up | [VU1-MICROCODE-SOURCE](VU1-MICROCODE-SOURCE.md) |
+| VU1 static entry coverage: MSCAL targets from EE code, or compile every plausible entry of the 2,046-instruction image (10 E-bit blocks, 9 seen) | O1 follow-up: **slice 155 candidate** (426 static entries, targeted policy; MSCAL and VIF targets still unverified; see [journal 2026-10-15](journal/2026-10-15.md)) | [VU1-MICROCODE-SOURCE](VU1-MICROCODE-SOURCE.md) |
 | Static flag elimination per program (microVU-style last-4-writers) | O1 follow-up: **implemented, slice 154 candidate** (MAC computed at 642 of 6,024 writes, no status, exit state exact; see [journal 2026-10-15](journal/2026-10-15.md)) | [PCSX2-LESSONS](PCSX2-LESSONS.md) |
 | Wait-loop and INTC_STAT spin skipping (no game-time change) | O3 | [PCSX2-LESSONS](PCSX2-LESSONS.md) |
 | Check whether disc read timing is modeled slower than needed (loading time) | O3 | owner observation (GT2 port) |
