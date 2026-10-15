@@ -73,3 +73,15 @@ fixture. Root donor license/attribution remains with the local source checkout;
 no new dependency or GPL implementation is introduced. The default game target
 uses the existing donor sources. [Shape Observation](../docs/SCENE-OBSERVATION.md)
 records exact inverse checks and synthetic qualification limits.
+
+## VU1 recompiler tooling (slice 151)
+
+`tools/vu_recomp/src/vurecomp.cpp` is derived from `recomp/vurecomp.cpp` of the
+MIT ps2-web-recomp donor, commit `1b4808793a12c45125262fd2d5f50a9ec9f7c020`
+(donor file SHA-256 `07aefe0130e4866973c43467853181edfc31b67b97e71fc9b572ece389381323`,
+Copyright (c) 2026 Samir Nuri). Its decode tables are kept from the donor; the
+hardening changes are listed in the file header. The donor header
+`runtime/include/ps2/vu_ops.hpp` is included unmodified (MIT). The MIT text is in
+`tools/vu_recomp/MIT-LICENSE.txt`. `tools/vu_recomp/src/sha256.cpp` and the
+fixtures in `tools/vu_recomp/tests/` are original code. The emitter output is
+not linked into the game; the provider is a later, separate step.

@@ -14,6 +14,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 add_subdirectory(native)
+add_subdirectory(tools/vu_recomp)
 
 enable_testing()
 set(GT4_PYTHON "${CMAKE_SOURCE_DIR}/private/tooling-venv/Scripts/python.exe"
@@ -39,3 +40,9 @@ if(TARGET shape_runtime_fixture)
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     set_property(TEST python_native_contracts APPEND PROPERTY ENVIRONMENT "GT4_SHAPE_RUNTIME_TESTS=1")
 endif()
+add_test(NAME vu_recomp_core COMMAND $<TARGET_FILE:gt4_vu_recomp_core_tests>)
+add_test(NAME vu_recomp_differential COMMAND $<TARGET_FILE:gt4_vu_differential_tests>)
+add_test(NAME vu_recomp_corpus COMMAND $<TARGET_FILE:gt4_vu_corpus_differential>)
+set_tests_properties(vu_recomp_core vu_recomp_differential vu_recomp_corpus PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+set_tests_properties(vu_recomp_corpus PROPERTIES ENVIRONMENT "GT4_VU_CORPUS_DIR=${GT4_VU_CORPUS_DIR}")

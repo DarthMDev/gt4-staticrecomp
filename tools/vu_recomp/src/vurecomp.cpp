@@ -1,0 +1,967 @@
+// Hardened VU1 offline emitter. Derived from recomp/vurecomp.cpp of the MIT
+// ps2-web-recomp donor, commit 1b4808793a12c45125262fd2d5f50a9ec9f7c020:
+//   Copyright (c) 2026 Samir Nuri, MIT License (see MIT-LICENSE.txt).
+//
+// Changes from the donor emitter:
+//   - input files: exact 16384-byte reads, strict KEY_ENTRY.bin names, key
+//     recomputed and checked, fail-closed on anything unexpected;
+//   - output: fresh directories only, nothing is deleted;
+//   - identity: SHA-256 over entry and reachable instruction words, and
+//     refusal of equal keys with different identities;
+//   - bounded execution with an explicit interpreter fallback (see
+//     vu_recomp_contract.hpp), instead of unbounded goto loops;
+//   - unknown upper or lower encodings exit to the interpreter and are counted;
+//     they are never emitted as NOPs.
+
+#include "vurecomp.hpp"
+
+#include "sha256.hpp"
+#include "ps2/vu_ops.hpp"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
+#include <format>
+#include <fstream>
+#include <map>
+#include <set>
+#include <string>
+#include <system_error>
+#include <vector>
+
+namespace fs = std::filesystem;
+
+namespace gt4::vurecomp {
+namespace {
+
+constexpr std::uint32_t kMask = kCodeMask;
+constexpr int kAcc = 32;
+constexpr std::uint32_t kVnopUpperWithoutFlags = 0x0000033Cu;
+constexpr std::uint32_t kEndBit = 0x40000000u;
+constexpr std::uint32_t kImmediateBit = 0x80000000u;
+
+
+std::uint32_t word(const std::vector<std::uint8_t> &code, std::uint32_t at) {
+    std::uint32_t v;
+    std::memcpy(&v, code.data() + (at & kMask), 4);
+    return v;
+}
+
+std::string label(std::uint32_t pc) { return std::format("L_{:04X}", pc); }
+
+const char *const kLane = "xyzw";
+
+bool lane(unsigned dest, int i) { return dest & (8u >> i); }
+
+struct Upper {
+    std::string pre, post;
+    bool sets_flags = false;
+    bool known = true;  // false for encodings the donor decoder would silently treat as NOP
+    int target = -1;
+    unsigned mask = 0;
+    bool normalized = false;
+    std::vector<int> shadow_reads;
+};
+
+std::string vf(unsigned i, int lane_index) {
+    if (!i) return lane_index == 3 ? "0x3F800000u" : "0u";
+    return std::format("r.vf[{}].w[{}]", i, lane_index);
+}
+
+std::string vreg(unsigned i) { return i ? std::format("vload(r.vf[{}])", i) : "v4u{0u, 0u, 0u, 0x3F800000u}"; }
+
+std::string shadow(int reg) { return reg == kAcc ? "nacc" : std::format("n{}", reg); }
+
+std::string lane_mask(unsigned d) {
+    std::string mask = "v4u{";
+    for (int i = 0; i < 4; ++i) mask += std::string(i ? ", " : "") + (lane(d, i) ? "0xFFFFFFFFu" : "0u");
+    return mask + "}";
+}
+
+Upper upper(std::uint32_t hi, bool flags_live) {
+    Upper u;
+    if ((hi & 0x3FFFFFFFu) == kVnopUpperWithoutFlags) return u;  // VNOP, known no-op encoding
+    const unsigned dest = (hi >> 21) & 15u, ft = (hi >> 16) & 31u, fs = (hi >> 11) & 31u, fd = (hi >> 6) & 31u, bc = hi & 3u;
+    const unsigned funct = hi & 63u;
+    enum Kind { Nop, Add, Sub, Madd, Msub, Max, Min, Mul, Abs, Ftoi, Itof, Clip, Opmula, Opmsub } kind = Nop;
+    enum Src { Vec, Bc, Q, I } src = Vec;
+    int target = -1;
+    bool flags = false;
+    int frac = 0;
+    static const int kFrac[4] = {0, 4, 12, 15};
+    const auto set = [&](Kind k, Src s, int t, bool f) {
+        kind = k;
+        src = s;
+        target = t;
+        flags = f;
+    };
+    if (funct < 0x3C) {
+        switch (funct) {
+        case 0x00: case 0x01: case 0x02: case 0x03: set(Add, Bc, fd, true); break;
+        case 0x04: case 0x05: case 0x06: case 0x07: set(Sub, Bc, fd, true); break;
+        case 0x08: case 0x09: case 0x0A: case 0x0B: set(Madd, Bc, fd, true); break;
+        case 0x0C: case 0x0D: case 0x0E: case 0x0F: set(Msub, Bc, fd, true); break;
+        case 0x10: case 0x11: case 0x12: case 0x13: set(Max, Bc, fd, false); break;
+        case 0x14: case 0x15: case 0x16: case 0x17: set(Min, Bc, fd, false); break;
+        case 0x18: case 0x19: case 0x1A: case 0x1B: set(Mul, Bc, fd, true); break;
+        case 0x1C: set(Mul, Q, fd, true); break;
+        case 0x1D: set(Max, I, fd, false); break;
+        case 0x1E: set(Mul, I, fd, true); break;
+        case 0x1F: set(Min, I, fd, false); break;
+        case 0x20: set(Add, Q, fd, true); break;
+        case 0x21: set(Madd, Q, fd, true); break;
+        case 0x22: set(Add, I, fd, true); break;
+        case 0x23: set(Madd, I, fd, true); break;
+        case 0x24: set(Sub, Q, fd, true); break;
+        case 0x25: set(Msub, Q, fd, true); break;
+        case 0x26: set(Sub, I, fd, true); break;
+        case 0x27: set(Msub, I, fd, true); break;
+        case 0x28: set(Add, Vec, fd, true); break;
+        case 0x29: set(Madd, Vec, fd, true); break;
+        case 0x2A: set(Mul, Vec, fd, true); break;
+        case 0x2B: set(Max, Vec, fd, false); break;
+        case 0x2C: set(Sub, Vec, fd, true); break;
+        case 0x2D: set(Msub, Vec, fd, true); break;
+        case 0x2E: set(Opmsub, Vec, fd, true); break;
+        case 0x2F: set(Min, Vec, fd, false); break;
+        default: u.known = false; break;
+        }
+    } else {
+        const unsigned index = ((hi >> 6) & 31u) * 4u + (funct & 3u);
+        switch (index) {
+        case 0x00: case 0x01: case 0x02: case 0x03: set(Add, Bc, kAcc, true); break;
+        case 0x04: case 0x05: case 0x06: case 0x07: set(Sub, Bc, kAcc, true); break;
+        case 0x08: case 0x09: case 0x0A: case 0x0B: set(Madd, Bc, kAcc, true); break;
+        case 0x0C: case 0x0D: case 0x0E: case 0x0F: set(Msub, Bc, kAcc, true); break;
+        case 0x10: case 0x11: case 0x12: case 0x13: set(Itof, Vec, static_cast<int>(ft), false); frac = kFrac[index & 3u]; break;
+        case 0x14: case 0x15: case 0x16: case 0x17: set(Ftoi, Vec, static_cast<int>(ft), false); frac = kFrac[index & 3u]; break;
+        case 0x18: case 0x19: case 0x1A: case 0x1B: set(Mul, Bc, kAcc, true); break;
+        case 0x1C: set(Mul, Q, kAcc, true); break;
+        case 0x1D: set(Abs, Vec, static_cast<int>(ft), false); break;
+        case 0x1E: set(Mul, I, kAcc, true); break;
+        case 0x1F: set(Clip, Vec, -1, false); break;
+        case 0x20: set(Add, Q, kAcc, true); break;
+        case 0x21: set(Madd, Q, kAcc, true); break;
+        case 0x22: set(Add, I, kAcc, true); break;
+        case 0x23: set(Madd, I, kAcc, true); break;
+        case 0x24: set(Sub, Q, kAcc, true); break;
+        case 0x25: set(Msub, Q, kAcc, true); break;
+        case 0x26: set(Sub, I, kAcc, true); break;
+        case 0x27: set(Msub, I, kAcc, true); break;
+        case 0x28: set(Add, Vec, kAcc, true); break;
+        case 0x29: set(Madd, Vec, kAcc, true); break;
+        case 0x2A: set(Mul, Vec, kAcc, true); break;
+        case 0x2C: set(Sub, Vec, kAcc, true); break;
+        case 0x2D: set(Msub, Vec, kAcc, true); break;
+        case 0x2E: set(Opmula, Vec, kAcc, true); break;
+        default: u.known = false; break;
+        }
+    }
+    if (kind == Nop) return u;
+    if (kind == Clip) {
+        u.pre = std::format("const std::uint32_t uclip = clip_value(r, r.vf[{}], r.vf[{}].w[3]); ", fs, ft);
+        u.post = "r.clip = uclip; fl.set_clip(uclip, fl.t); ";
+        return u;
+    }
+    unsigned d = dest;
+    if (kind == Opmula || kind == Opmsub) d = 0xE;
+    if (d == 0 || (target == 0 && !(flags && flags_live))) return u;
+    const auto b = [&](int i) -> std::string {
+        switch (src) {
+        case Vec: return vf(ft, i);
+        case Bc: return vf(ft, static_cast<int>(bc));
+        case Q: return "r.q";
+        default: return "r.i";
+        }
+    };
+    const std::string dst = target == kAcc ? "r.acc" : std::format("r.vf[{}]", target);
+    const bool vector = kind == Add || kind == Sub || kind == Mul || kind == Madd || kind == Msub || kind == Max || kind == Min || kind == Abs || kind == Ftoi || kind == Itof;
+    const bool arithmetic = kind == Add || kind == Sub || kind == Mul || kind == Madd || kind == Msub;
+    if (target != 0) {
+        u.target = target;
+        u.mask = d;
+        u.normalized = vector && arithmetic;
+    }
+    if (arithmetic) {
+        const auto operand = [&](unsigned reg) -> std::string {
+            if (!reg) return vreg(0);
+            u.shadow_reads.push_back(static_cast<int>(reg));
+            return shadow(static_cast<int>(reg));
+        };
+        std::string nb;
+        switch (src) {
+        case Vec: nb = operand(ft); break;
+        case Bc:
+            if (ft) u.shadow_reads.push_back(static_cast<int>(ft));
+            nb = ft ? std::format("vsplat(n{}[{}])", ft, bc) : std::format("vsplat({})", vf(0, static_cast<int>(bc)));
+            break;
+        case Q: nb = "vfix(vsplat(r.q))"; break;
+        default: nb = "vfix(vsplat(r.i))"; break;
+        }
+        const std::string ns = operand(fs);
+        if (kind == Madd || kind == Msub) u.shadow_reads.push_back(kAcc);
+        switch (kind) {
+        case Add: u.pre += std::format("const v4u uv = vaddn({}, {}); ", ns, nb); break;
+        case Sub: u.pre += std::format("const v4u uv = vsubn({}, {}); ", ns, nb); break;
+        case Mul: u.pre += std::format("const v4u uv = vmuln({}, {}); ", ns, nb); break;
+        case Madd: u.pre += std::format("const v4u uv = vmaddn(nacc, {}, {}); ", ns, nb); break;
+        default: u.pre += std::format("const v4u uv = vmsubn(nacc, {}, {}); ", ns, nb); break;
+        }
+    }
+    if (vector) {
+        std::string vb;
+        switch (src) {
+        case Vec: vb = vreg(ft); break;
+        case Bc: vb = std::format("vsplat({})", vf(ft, static_cast<int>(bc))); break;
+        case Q: vb = "vsplat(r.q)"; break;
+        default: vb = "vsplat(r.i)"; break;
+        }
+        const std::string vs = vreg(fs);
+        std::string e;
+        switch (kind) {
+        case Max: e = std::format("vmax({}, {})", vs, vb); break;
+        case Min: e = std::format("vmin({}, {})", vs, vb); break;
+        case Abs: e = std::format("vabs({})", vs); break;
+        case Ftoi: e = std::format("vftoi({}, {})", vs, frac); break;
+        case Itof: e = std::format("vitof({}, {})", vs, frac); break;
+        default: break;
+        }
+        if (!e.empty()) u.pre += std::format("const v4u uv = {}; ", e);
+        if (target == 0) {
+            u.post = std::format("{{ Reg128 uf; vstore(uf, uv); flags(r, uf, {}u); fl.set_mac(r.mac, r.status); }} ", d);
+            u.sets_flags = true;
+            return u;
+        }
+        if (d == 0xF) u.post += std::format("vstore({}, uv); ", dst);
+        else u.post += std::format("vstore({0}, vsel(vload({0}), uv, {1})); ", dst, lane_mask(d));
+        u.sets_flags = flags;
+        if (flags && flags_live) u.post += std::format("flags(r, {}, {}u); fl.set_mac(r.mac, r.status); ", dst, d);
+        return u;
+    }
+    for (int i = 0; i < 4; ++i) {
+        if (!lane(d, i)) continue;
+        std::string e;
+        switch (kind) {
+        case Add: e = std::format("add({}, {})", vf(fs, i), b(i)); break;
+        case Sub: e = std::format("sub({}, {})", vf(fs, i), b(i)); break;
+        case Mul: e = std::format("mul({}, {})", vf(fs, i), b(i)); break;
+        case Madd: e = std::format("madd(r.acc.w[{}], {}, {})", i, vf(fs, i), b(i)); break;
+        case Msub: e = std::format("msub(r.acc.w[{}], {}, {})", i, vf(fs, i), b(i)); break;
+        case Max: e = std::format("max({}, {})", vf(fs, i), b(i)); break;
+        case Min: e = std::format("min({}, {})", vf(fs, i), b(i)); break;
+        case Abs: e = std::format("({} & 0x7FFFFFFFu)", vf(fs, i)); break;
+        case Ftoi: e = std::format("fp::to_fixed({}, {})", vf(fs, i), frac); break;
+        case Itof: e = std::format("fp::from_fixed(r.vf[{}].sw[{}], {})", fs, i, frac); break;
+        case Opmula: {
+            static const int a[3] = {1, 2, 0}, c[3] = {2, 0, 1};
+            e = std::format("mul({}, {})", vf(fs, a[i]), vf(ft, c[i]));
+            break;
+        }
+        case Opmsub: {
+            static const int a[3] = {1, 2, 0}, c[3] = {2, 0, 1};
+            e = std::format("msub(r.acc.w[{}], {}, {})", i, vf(fs, a[i]), vf(ft, c[i]));
+            break;
+        }
+        default: break;
+        }
+        u.pre += std::format("const std::uint32_t u{} = {}; ", kLane[i], e);
+    }
+    if (target == 0) {
+        u.post = "{ Reg128 uf{}; ";
+        for (int i = 0; i < 4; ++i)
+            if (lane(d, i)) u.post += std::format("uf.w[{}] = u{}; ", i, kLane[i]);
+        u.post += std::format("flags(r, uf, {}u); fl.set_mac(r.mac, r.status); }} ", d);
+        u.sets_flags = true;
+        return u;
+    }
+    for (int i = 0; i < 4; ++i)
+        if (lane(d, i)) u.post += std::format("{}.w[{}] = u{}; ", dst, i, kLane[i]);
+    u.sets_flags = flags;
+    if (flags && flags_live) u.post += std::format("flags(r, {}, {}u); fl.set_mac(r.mac, r.status); ", dst, d);
+    return u;
+}
+
+std::string lanes_copy(unsigned dest, const std::string &to, const std::string &from_qword) {
+    if (dest == 0xF) return std::format("std::memcpy(&{}, {}, 16); ", to, from_qword);
+    std::string s;
+    for (int i = 0; i < 4; ++i)
+        if (lane(dest, i)) s += std::format("std::memcpy(&{}.w[{}], {} + {}, 4); ", to, i, from_qword, i * 4);
+    return s;
+}
+
+std::string lanes_store(unsigned dest, const std::string &qword_expr, const std::string &from) {
+    if (dest == 0xF) return std::format("std::memcpy({}, &{}, 16); ", qword_expr, from);
+    std::string s;
+    for (int i = 0; i < 4; ++i)
+        if (lane(dest, i)) s += std::format("std::memcpy({} + {}, &{}.w[{}], 4); ", qword_expr, i * 4, from, i);
+    return s;
+}
+
+struct Lower {
+    std::string code;
+    int writes = -1;
+    bool reads_flags = false, reads_status = false;
+    bool branch = false, jump = false;
+    std::uint32_t target = 0;
+    bool supported = true;
+};
+
+Lower lower(std::uint32_t w, std::uint32_t pc) {
+    Lower l;
+    const unsigned dest = (w >> 21) & 15u, it = (w >> 16) & 15u, is = (w >> 11) & 15u, id = (w >> 6) & 15u;
+    const unsigned ft = (w >> 16) & 31u, fs = (w >> 11) & 31u;
+    const std::int32_t imm11 = static_cast<std::int32_t>(w << 21) >> 21;
+    std::string &c = l.code;
+    if ((w >> 25) == 0x40u) {
+        const unsigned funct = w & 63u;
+        if (funct < 0x3C) {
+            switch (funct) {
+            case 0x30: c = std::format("set_vi(r, {}, r.vi[{}] + r.vi[{}]); ", id, is, it); break;
+            case 0x31: c = std::format("set_vi(r, {}, r.vi[{}] - r.vi[{}]); ", id, is, it); break;
+            case 0x32: c = std::format("set_vi(r, {}, r.vi[{}] + {}u); ", it, is, static_cast<std::uint32_t>(static_cast<std::int32_t>(((w >> 6) & 31u) << 27) >> 27)); break;
+            case 0x34: c = std::format("set_vi(r, {}, r.vi[{}] & r.vi[{}]); ", id, is, it); break;
+            case 0x35: c = std::format("set_vi(r, {}, r.vi[{}] | r.vi[{}]); ", id, is, it); break;
+            default: l.supported = false; break;
+            }
+            return l;
+        }
+        const unsigned index = ((w >> 6) & 31u) * 4u + (funct & 3u);
+        const unsigned fsf = (w >> 21) & 3u, ftf = (w >> 23) & 3u;
+        switch (index) {
+        case 0x30:
+            if (ft) l.writes = static_cast<int>(ft);
+            if (ft) for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("r.vf[{}].w[{}] = r.vf[{}].w[{}]; ", ft, i, fs, i);
+            break;
+        case 0x31:
+            if (ft) l.writes = static_cast<int>(ft);
+            if (ft) {
+                c = std::format("{{ const Reg128 m = r.vf[{}]; ", fs);
+                for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("r.vf[{}].w[{}] = m.w[{}]; ", ft, i, (i + 1) & 3);
+                c += "} ";
+            }
+            break;
+        case 0x34:
+            if (ft) l.writes = static_cast<int>(ft);
+            c = std::format("{{ const std::uint8_t *q = qword(mem, r.vi[{}]); ", is);
+            if (ft) c += lanes_copy(dest, std::format("r.vf[{}]", ft), "q");
+            c += std::format("set_vi(r, {}, r.vi[{}] + 1u); }} ", is, is);
+            break;
+        case 0x35:
+            c = std::format("{{ std::uint8_t *q = qword(mem, r.vi[{}]); ", it) + lanes_store(dest, "q", std::format("r.vf[{}]", fs)) +
+                std::format("set_vi(r, {}, r.vi[{}] + 1u); }} ", it, it);
+            break;
+        case 0x36:
+            if (ft) l.writes = static_cast<int>(ft);
+            c = std::format("{{ set_vi(r, {}, r.vi[{}] - 1u); const std::uint8_t *q = qword(mem, r.vi[{}]); ", is, is, is);
+            if (ft) c += lanes_copy(dest, std::format("r.vf[{}]", ft), "q");
+            c += "} ";
+            break;
+        case 0x37:
+            c = std::format("{{ set_vi(r, {}, r.vi[{}] - 1u); std::uint8_t *q = qword(mem, r.vi[{}]); ", it, it, it) +
+                lanes_store(dest, "q", std::format("r.vf[{}]", fs)) + "} ";
+            break;
+        case 0x38: c = std::format("vu::div(r, r.vf[{}].w[{}], r.vf[{}].w[{}]); ", fs, fsf, ft, ftf); break;
+        case 0x39: c = std::format("vu::sqrt(r, r.vf[{}].w[{}]); ", ft, ftf); break;
+        case 0x3A: c = std::format("vu::rsqrt(r, r.vf[{}].w[{}], r.vf[{}].w[{}]); ", fs, fsf, ft, ftf); break;
+        case 0x3B: break;
+        case 0x3C: c = std::format("set_vi(r, {}, r.vf[{}].w[{}]); ", it, fs, fsf); break;
+        case 0x3D:
+            if (ft) l.writes = static_cast<int>(ft);
+            if (ft) {
+                c = std::format("{{ const std::uint32_t v = static_cast<std::uint32_t>(static_cast<std::int32_t>(static_cast<std::int16_t>(r.vi[{}]))); ", is);
+                for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("r.vf[{}].w[{}] = v; ", ft, i);
+                c += "} ";
+            }
+            break;
+        case 0x3E:
+            for (int i = 0; i < 4; ++i)
+                if (lane(dest, i)) {
+                    c = std::format("{{ std::uint16_t v; std::memcpy(&v, qword(mem, r.vi[{}]) + {}, 2); set_vi(r, {}, v); }} ", is, i * 4, it);
+                    break;
+                }
+            break;
+        case 0x3F:
+            c = std::format("{{ std::uint8_t *q = qword(mem, r.vi[{}]); const std::uint32_t v = r.vi[{}]; ", is, it);
+            for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("std::memcpy(q + {}, &v, 4); ", i * 4);
+            c += "} ";
+            break;
+        case 0x40:
+            if (ft) l.writes = static_cast<int>(ft);
+            c = "r.r = vu::rand_next(r.r); ";
+            if (ft) for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("r.vf[{}].w[{}] = r.r | fp::kOne; ", ft, i);
+            break;
+        case 0x41:
+            if (ft) l.writes = static_cast<int>(ft);
+            if (ft) for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("r.vf[{}].w[{}] = (r.r & 0x7FFFFFu) | fp::kOne; ", ft, i);
+            break;
+        case 0x42: c = std::format("r.r = r.vf[{}].w[{}] & 0x7FFFFFu; ", fs, fsf); break;
+        case 0x43: c = std::format("r.r = (r.r ^ r.vf[{}].w[{}]) & 0x7FFFFFu; ", fs, fsf); break;
+        case 0x64:
+            if (ft) l.writes = static_cast<int>(ft);
+            if (ft) for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("r.vf[{}].w[{}] = r.p; ", ft, i); break;
+        case 0x68: c = std::format("set_vi(r, {}, vu::top()); ", it); break;
+        case 0x69: c = std::format("set_vi(r, {}, vu::itop()); ", it); break;
+        case 0x6C: c = std::format("vu::kick(1, r.vi[{}]); ", is); break;
+        case 0x70: case 0x71: case 0x72: case 0x73: case 0x74: case 0x75: case 0x76: case 0x78: case 0x79: case 0x7A: case 0x7C: case 0x7D: case 0x7E:
+            c = std::format("efu(r, {}u, {}u, {}u); ", index, fs, fsf);
+            break;
+        case 0x7B: break;
+        default: l.supported = false; break;
+        }
+        return l;
+    }
+    const std::uint32_t imm15 = ((w >> 10) & 0x7800u) | (w & 0x7FFu);
+    const std::uint32_t imm12 = ((w >> 10) & 0x800u) | (w & 0x7FFu);
+    const std::uint32_t target = (pc + 8u + static_cast<std::uint32_t>(imm11) * 8u) & kMask;
+    switch (w >> 25) {
+    case 0x00:
+        if (ft) l.writes = static_cast<int>(ft);
+        c = std::format("{{ const std::uint8_t *q = qword(mem, r.vi[{}] + {}u); ", is, static_cast<std::uint32_t>(imm11));
+        if (ft) c += lanes_copy(dest, std::format("r.vf[{}]", ft), "q");
+        c += "} ";
+        break;
+    case 0x01:
+        c = std::format("{{ std::uint8_t *q = qword(mem, r.vi[{}] + {}u); ", it, static_cast<std::uint32_t>(imm11)) + lanes_store(dest, "q", std::format("r.vf[{}]", fs)) + "} ";
+        break;
+    case 0x04:
+        for (int i = 0; i < 4; ++i)
+            if (lane(dest, i)) {
+                c = std::format("{{ std::uint16_t v; std::memcpy(&v, qword(mem, r.vi[{}] + {}u) + {}, 2); set_vi(r, {}, v); }} ", is, static_cast<std::uint32_t>(imm11), i * 4, it);
+                break;
+            }
+        break;
+    case 0x05:
+        c = std::format("{{ std::uint8_t *q = qword(mem, r.vi[{}] + {}u); const std::uint32_t v = r.vi[{}]; ", is, static_cast<std::uint32_t>(imm11), it);
+        for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("std::memcpy(q + {}, &v, 4); ", i * 4);
+        c += "} ";
+        break;
+    case 0x08: c = std::format("set_vi(r, {}, r.vi[{}] + {}u); ", it, is, imm15); break;
+    case 0x09: c = std::format("set_vi(r, {}, r.vi[{}] - {}u); ", it, is, imm15); break;
+    case 0x10: c = std::format("set_vi(r, 1, (fl.clip() & 0xFFFFFFu) == {}u ? 1u : 0u); ", w & 0xFFFFFFu); break;
+    case 0x11: c = std::format("r.clip = {}u; fl.set_clip(r.clip, fl.t - 4u); ", w & 0xFFFFFFu); break;
+    case 0x12: c = std::format("set_vi(r, 1, (fl.clip() & {}u) ? 1u : 0u); ", w & 0xFFFFFFu); break;
+    case 0x13: c = std::format("set_vi(r, 1, ((fl.clip() | {}u) & 0xFFFFFFu) == 0xFFFFFFu ? 1u : 0u); ", w & 0xFFFFFFu); break;
+    case 0x14: c = std::format("set_vi(r, {}, (fl.status() & 0xFFFu) == {}u ? 1u : 0u); ", it, imm12); l.reads_flags = l.reads_status = true; break;
+    case 0x15: c = std::format("r.status = (fl.status() & 0x3Fu) | ({}u & 0xFC0u); fl.force_mac(r.mac, r.status); ", imm12); l.reads_flags = l.reads_status = true; break;
+    case 0x16: c = std::format("set_vi(r, {}, fl.status() & {}u); ", it, imm12); l.reads_flags = l.reads_status = true; break;
+    case 0x17: c = std::format("set_vi(r, {}, ((fl.status() | {}u) & 0xFFFu) == 0xFFFu ? 1u : 0u); ", it, imm12); l.reads_flags = l.reads_status = true; break;
+    case 0x18: c = std::format("set_vi(r, {}, (fl.mac() & 0xFFFFu) == r.vi[{}] ? 1u : 0u); ", it, is); l.reads_flags = true; break;
+    case 0x1A: c = std::format("set_vi(r, {}, fl.mac() & r.vi[{}]); ", it, is); l.reads_flags = true; break;
+    case 0x1B: c = std::format("set_vi(r, {}, ((fl.mac() | r.vi[{}]) & 0xFFFFu) == 0xFFFFu ? 1u : 0u); ", it, is); l.reads_flags = true; break;
+    case 0x1C: c = std::format("set_vi(r, {}, fl.clip() & 0xFFFu); ", it); break;
+    case 0x20: c = "pend = true; "; l.branch = true; l.target = target; break;
+    case 0x21: c = std::format("set_vi(r, {}, {}u); pend = true; ", it, (pc + 16u) / 8u); l.branch = true; l.target = target; break;
+    case 0x24: c = std::format("jpc = (static_cast<std::uint32_t>(r.vi[{}]) * 8u) & {}u; pendj = true; ", is, kMask); l.jump = true; break;
+    case 0x25: c = std::format("jpc = (static_cast<std::uint32_t>(r.vi[{}]) * 8u) & {}u; set_vi(r, {}, {}u); pendj = true; ", is, kMask, it, (pc + 16u) / 8u); l.jump = true; break;
+    case 0x28: c = std::format("pend = r.vi[{}] == r.vi[{}]; ", is, it); l.branch = true; l.target = target; break;
+    case 0x29: c = std::format("pend = r.vi[{}] != r.vi[{}]; ", is, it); l.branch = true; l.target = target; break;
+    case 0x2C: c = std::format("pend = static_cast<std::int16_t>(r.vi[{}]) < 0; ", is); l.branch = true; l.target = target; break;
+    case 0x2D: c = std::format("pend = static_cast<std::int16_t>(r.vi[{}]) > 0; ", is); l.branch = true; l.target = target; break;
+    case 0x2E: c = std::format("pend = static_cast<std::int16_t>(r.vi[{}]) <= 0; ", is); l.branch = true; l.target = target; break;
+    case 0x2F: c = std::format("pend = static_cast<std::int16_t>(r.vi[{}]) >= 0; ", is); l.branch = true; l.target = target; break;
+    default: l.supported = false; break;
+    }
+    return l;
+}
+
+
+
+void replace_all(std::string &s, const std::string &from, const std::string &to) {
+    for (std::size_t at = s.find(from); at != std::string::npos; at = s.find(from, at + to.size())) s.replace(at, from.size(), to);
+}
+
+// Keeps VI registers in locals inside one function. Locals are written back at
+// each VUGEN_SYNC; marker before interpreter calls, exits and budget exhaustion.
+std::string localize_vi(std::string o) {
+    std::string declarations, sync;
+    replace_all(o, "set_vi(r, 0, ", "drop_vi(");
+    replace_all(o, "r.vi[0]", "0u");
+    for (int n = 1; n < 16; ++n) {
+        const std::string set = std::format("set_vi(r, {}, ", n), get = std::format("r.vi[{}]", n);
+        const bool written = o.find(set) != std::string::npos;
+        if (!written && o.find(get) == std::string::npos) continue;
+        replace_all(o, set, std::format("set_vi(i{}, ", n));
+        replace_all(o, get, std::format("i{}", n));
+        declarations += std::format("    std::uint16_t i{} = r.vi[{}];\n", n, n);
+        if (written) sync += std::format("r.vi[{}] = i{}; ", n, n);
+    }
+    replace_all(o, "    VUGEN_LOCALS;\n", declarations);
+    replace_all(o, "VUGEN_SYNC;", sync);
+    return o;
+}
+
+// Per-program analysis and text generation. Donor delay-slot model: a node
+// is followed by pc+8, and a delay-slot node is also followed by the target of
+// its branch. A successor of -1 marks an exit.
+class FunctionGenerator {
+public:
+    explicit FunctionGenerator(ProgramRecord &record) : record_(record), code_(record.image.data()) {}
+
+    std::string run() {
+        pcs_ = ps2::vu::reachable(code_, kMask, record_.entry);
+        in_.insert(pcs_.begin(), pcs_.end());
+        analyze();
+        record_.fallback_sites = fallback_count_;
+        record_.upper_nop_sites = upper_nop_count_;
+        record_.exit_pcs = exit_pcs_;
+        if (!refusal_.empty()) {
+            record_.refused = true;
+            record_.refusal = refusal_;
+            record_.function_name.clear();
+            return {};
+        }
+        record_.function_name = std::format("vu1_{:016X}", record_.key);
+        return generate();
+    }
+
+private:
+    ProgramRecord &record_;
+    const std::uint8_t *code_;
+    std::vector<std::uint32_t> pcs_;
+    std::set<std::uint32_t> in_;
+    std::map<std::uint32_t, Lower> lowers_;
+    std::map<std::uint32_t, Upper> uppers_;
+    std::map<std::uint32_t, bool> live_in_;
+    bool any_status_ = false, any_flags_ = false;
+    std::set<int> shadowed_;
+    std::size_t fallback_count_ = 0;
+    std::size_t upper_nop_count_ = 0;
+    std::vector<std::uint32_t> exit_pcs_;
+    std::string refusal_;
+    bool uses_dispatch_ = false, uses_exhausted_ = false;
+
+    std::uint32_t lo(std::uint32_t pc) const { return word(record_.image, pc); }
+    std::uint32_t hi(std::uint32_t pc) const { return word(record_.image, pc + 4); }
+
+    std::vector<std::int64_t> successors(std::uint32_t pc) const {
+        std::vector<std::int64_t> out{static_cast<std::int64_t>((pc + 8u) & kMask)};
+        const std::uint32_t prev = (pc - 8u) & kMask;
+        if (in_.count(prev)) {
+            const Lower &previous = lowers_.at(prev);
+            const std::uint32_t previous_hi = hi(prev);
+            if (previous.branch) out.push_back(previous.target);
+            if (previous.jump || (previous_hi & kEndBit)) out.push_back(-1);
+        }
+        return out;
+    }
+
+    // Only lower encodings the donor emitter does not model exit to the interpreter.
+    // Unknown upper encodings are no-ops in the donor interpreter (fast_upper default)
+    // and are emitted as such; they are counted in upper_nop_sites.
+    bool lower_exit(std::uint32_t pc) const {
+        const bool immediate = hi(pc) & kImmediateBit;
+        return !immediate && !lowers_.at(pc).supported;
+    }
+
+    // An unknown or unsupported instruction exits to the interpreter. That exit
+    // cannot carry a pending delay branch or an end-of-program bit from the
+    // previous instruction, so such programs are refused, not emitted.
+    bool fallback_hazard(std::uint32_t pc) const {
+        const std::uint32_t prev = (pc - 8u) & kMask;
+        if (!in_.count(prev)) return false;
+        return lowers_.at(prev).branch || lowers_.at(prev).jump || (hi(prev) & kEndBit);
+    }
+
+    void analyze() {
+        // Pass 1 decodes every instruction so later passes can look at neighbours.
+        for (std::uint32_t pc : pcs_) {
+            const std::uint32_t lower_word = lo(pc), upper_word = hi(pc);
+            Lower lower_info;
+            if (!(upper_word & kImmediateBit)) lower_info = lower(lower_word, pc);
+            lowers_[pc] = lower_info;
+            uppers_[pc] = upper(upper_word, true);
+            any_status_ = any_status_ || lower_info.reads_status;
+            any_flags_ = any_flags_ || lower_info.reads_flags;
+        }
+        // Pass 2 counts interpreter exits and refuses hazardous ones.
+        for (std::uint32_t pc : pcs_) {
+            if (!uppers_.at(pc).known) ++upper_nop_count_;
+            if (!lower_exit(pc)) continue;
+            ++fallback_count_;
+            exit_pcs_.push_back(pc);
+            if (refusal_.empty() && fallback_hazard(pc))
+                refusal_ = std::format("interpreter exit at 0x{:04X} follows a branch or end bit", pc);
+        }
+        liveness();
+        for (std::uint32_t pc : pcs_)
+            for (int reg : upper(hi(pc), true).shadow_reads) shadowed_.insert(reg);
+    }
+
+    void liveness() {
+        for (std::uint32_t pc : pcs_) live_in_[pc] = false;
+        for (bool changed = true; changed;) {
+            changed = false;
+            for (auto it = pcs_.rbegin(); it != pcs_.rend(); ++it) {
+                const std::uint32_t pc = *it;
+                bool out = false;
+                for (std::int64_t s : successors(pc)) out = out || s < 0 || !in_.count(static_cast<std::uint32_t>(s)) || live_in_[static_cast<std::uint32_t>(s)];
+                bool reader_near = false;
+                for (std::uint32_t k = 1; k <= 3; ++k) {
+                    const std::uint32_t q = (pc + 8u * k) & kMask;
+                    if (in_.count(q) && (lowers_[q].reads_flags || lowers_[q].branch || lowers_[q].jump)) reader_near = true;
+                }
+                const bool kills = uppers_[pc].sets_flags && !reader_near;
+                const bool v = lowers_[pc].reads_flags || (!kills && out);
+                if (v != live_in_[pc]) {
+                    live_in_[pc] = v;
+                    changed = true;
+                }
+            }
+        }
+    }
+
+    bool out_live(std::uint32_t pc) const {
+        for (std::int64_t s : successors(pc))
+            if (s < 0 || !in_.count(static_cast<std::uint32_t>(s)) || live_in_.at(static_cast<std::uint32_t>(s))) return true;
+        return false;
+    }
+
+    // Upper bound on instructions executed on a forward-only path from target.
+    // Forward edges strictly increase the masked PC, so a path visits each
+    // node at most once and the reachable count bounds its length.
+    std::size_t forward_region_size(std::uint32_t target) const {
+        std::set<std::uint32_t> seen{target};
+        std::vector<std::uint32_t> work{target};
+        while (!work.empty()) {
+            const std::uint32_t pc = work.back();
+            work.pop_back();
+            for (std::int64_t s : successors(pc)) {
+                if (s < 0) continue;
+                const auto next = static_cast<std::uint32_t>(s);
+                if (next > pc && in_.count(next) && seen.insert(next).second) work.push_back(next);
+            }
+        }
+        return seen.size();
+    }
+
+    // Charges the budget for arrival at a backward target. Returns C text.
+    std::string charge(std::uint32_t target) {
+        const std::size_t weight = forward_region_size(target);
+        ++record_.budget_heads;
+        uses_exhausted_ = true;
+        return std::format("if (ctx.budget < {}u) {{ ctx.resume_pc = {}u; goto vugen_exhausted; }} ctx.budget -= {}u; ", weight, target, weight);
+    }
+
+    std::string generate() {
+        std::string o = std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx) {{\n", record_.function_name);
+        o += "    FlagPipe fl;\n    fl.start(r);\n";
+        o += "    bool pend = false, pendj = false, ending = false;\n";
+        o += "    std::uint32_t jpc = 0;\n    (void)pend;\n    (void)pendj;\n    (void)ending;\n    (void)jpc;\n    (void)mem;\n";
+        for (int reg : shadowed_) o += std::format("    v4u {} = vfix(vload({}));\n", reg == kAcc ? "nacc" : std::format("n{}", reg), reg == kAcc ? "r.acc" : std::format("r.vf[{}]", reg));
+        o += "    VUGEN_LOCALS;\n";
+        o += "    " + charge(record_.entry);
+        o += std::format("goto {};\n", label(record_.entry));
+        for (std::uint32_t pc : pcs_) o += block(pc);
+        if (uses_dispatch_) o += "dispatch:\n    VUGEN_SYNC; ps2::vu::interpret(1, jpc); return RunStatus::Completed;\n";
+        if (uses_exhausted_) o += "vugen_exhausted:\n    VUGEN_SYNC; return RunStatus::BudgetExhausted;\n";
+        o += "}\n\n";
+        return localize_vi(o);
+    }
+
+    std::string block(std::uint32_t pc) {
+        const std::uint32_t lower_word = lo(pc), upper_word = hi(pc);
+        const bool immediate = upper_word & kImmediateBit;
+        const Lower &l = lowers_[pc];
+        std::string o;
+        if (lower_exit(pc)) {
+            o += std::format("{}: {{ VUGEN_SYNC; ps2::vu::interpret(1, {}u); return RunStatus::Completed; }}\n", label(pc), pc);
+        } else {
+            // Flags follow the interpreter: image-wide flag use makes every flag write live.
+            const Upper refreshed = upper(upper_word, record_.image_flags_used || any_status_ || (any_flags_ && out_live(pc)));
+            o +=std::format("{}: {{ ++fl.t; ", label(pc));
+            o += refreshed.pre;
+            if (immediate) o += std::format("r.i = {}u; ", lower_word);
+            else o += l.code;
+            o += refreshed.post;
+            const int lower_write = immediate ? -1 : l.writes;
+            if (lower_write >= 0 && shadowed_.count(lower_write)) o += std::format("{} = vfix(vload({})); ", shadow_name(lower_write), raw_name(lower_write));
+            if (refreshed.target >= 0 && refreshed.target != lower_write && shadowed_.count(refreshed.target)) {
+                if (!refreshed.normalized) o += std::format("{} = vfix(vload({})); ", shadow_name(refreshed.target), raw_name(refreshed.target));
+                else if (refreshed.mask == 0xF) o += std::format("{} = uv; ", shadow_name(refreshed.target));
+                else o += std::format("{0} = vsel({0}, uv, {1}); ", shadow_name(refreshed.target), lane_mask(refreshed.mask));
+            }
+            if (upper_word & kEndBit) o += "ending = true; ";
+            o += "}\n";
+        }
+        const std::uint32_t prev = (pc - 8u) & kMask;
+        if (in_.count(prev)) {
+            const Lower &previous = lowers_[prev];
+            const std::uint32_t previous_hi = hi(prev);
+            if (previous_hi & kEndBit) o += std::format("    if (ending) {{ VUGEN_SYNC; r.tpc = {}u; return RunStatus::Completed; }}\n", (pc + 8u) & kMask);
+            if (previous.branch) {
+                const std::uint32_t target = previous.target;
+                o += "    if (pend) { pend = false; ";
+                if (target <= pc) o += charge(target);
+                o += std::format("goto {}; }}\n", label(target));
+            }
+            if (previous.jump) {
+                uses_dispatch_ = true;
+                o += "    if (pendj) { pendj = false; goto dispatch; }\n";
+            }
+        }
+        const std::uint32_t next = (pc + 8u) & kMask;
+        if (!in_.count(next)) {
+            o += std::format("    VUGEN_SYNC; ps2::vu::interpret(1, {}u); return RunStatus::Completed;\n", next);
+        } else if (next <= pc) {
+            o += "    " + charge(next);
+            o += std::format("goto {};\n", label(next));
+        }
+        return o;
+    }
+
+    static std::string shadow_name(int reg) { return reg == kAcc ? "nacc" : std::format("n{}", reg); }
+    static std::string raw_name(int reg) { return reg == kAcc ? "r.acc" : std::format("r.vf[{}]", reg); }
+};
+
+// Digest identity: entry, instruction count, then (pc, lower, upper) per
+// reachable instruction, all little-endian, hashed with SHA-256.
+std::vector<std::uint8_t> identity_bytes(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used) {
+    std::vector<std::uint8_t> bytes;
+    const auto append_u32 = [&bytes](std::uint32_t value) {
+        for (int shift = 0; shift < 32; shift += 8) bytes.push_back(static_cast<std::uint8_t>(value >> shift));
+    };
+    const char tag[] = "GT4-VU1-PROGRAM-IDENTITY-1";
+    bytes.insert(bytes.end(), tag, tag + sizeof tag - 1);
+    append_u32(entry);
+    append_u32(flags_used ? 1u : 0u);
+    append_u32(static_cast<std::uint32_t>(reachable.size()));
+    for (std::uint32_t pc : reachable) {
+        append_u32(pc);
+        append_u32(word(image, pc));
+        append_u32(word(image, pc + 4));
+    }
+    return bytes;
+}
+
+bool is_lower_hex(char c) { return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'); }
+
+bool parse_hex(const std::string &text, std::uint64_t &value) {
+    value = 0;
+    for (char c : text) {
+        if (!is_lower_hex(c)) return false;
+        value = value * 16u + static_cast<std::uint64_t>(c <= '9' ? c - '0' : c - 'A' + 10);
+    }
+    return true;
+}
+
+std::string json_escape(const std::string &text) {
+    std::string out;
+    for (char c : text) {
+        if (c == '"' || c == '\\') out += '\\';
+        out += c;
+    }
+    return out;
+}
+
+}  // namespace
+
+bool parse_input_file_name(const std::string &name, std::uint64_t &key, std::uint32_t &entry, std::string &error) {
+    // KEY16HEX_ENTRY4HEX.bin, for example 0123456789ABCDEF_0040.bin.
+    const std::string expected_suffix = ".bin";
+    if (name.size() != 16 + 1 + 4 + expected_suffix.size() || name.compare(name.size() - 4, 4, expected_suffix) != 0 || name[16] != '_') {
+        error = std::format("input name must be KEY16HEX_ENTRY4HEX.bin: {}", name);
+        return false;
+    }
+    const std::string key_text = name.substr(0, 16), entry_text = name.substr(17, 4);
+    std::uint64_t entry_value = 0;
+    if (!parse_hex(key_text, key) || !parse_hex(entry_text, entry_value)) {
+        error = std::format("input name has non-hex or lowercase digits: {}", name);
+        return false;
+    }
+    if (entry_value > kCodeMask || (entry_value & 7u) != 0) {
+        error = std::format("entry must be an 8-byte aligned address below 0x4000: {}", name);
+        return false;
+    }
+    entry = static_cast<std::uint32_t>(entry_value);
+    return true;
+}
+
+bool read_input_image(const fs::path &path, std::vector<std::uint8_t> &image, std::string &error) {
+    std::error_code size_error;
+    const std::uintmax_t size = fs::file_size(path, size_error);
+    if (size_error) {
+        error = std::format("cannot stat {}: {}", path.filename().string(), size_error.message());
+        return false;
+    }
+    if (size != kImageBytes) {
+        error = std::format("{}: size {} is not {} bytes", path.filename().string(), static_cast<unsigned long long>(size), kImageBytes);
+        return false;
+    }
+    std::ifstream file(path, std::ios::binary);
+    if (!file) {
+        error = std::format("cannot open {}", path.filename().string());
+        return false;
+    }
+    image.assign(kImageBytes, 0);
+    file.read(reinterpret_cast<char *>(image.data()), static_cast<std::streamsize>(image.size()));
+    if (file.gcount() != static_cast<std::streamsize>(kImageBytes) || file.bad()) {
+        error = std::format("{}: short read", path.filename().string());
+        return false;
+    }
+    return true;
+}
+
+std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used) {
+    return sha256_hex(identity_bytes(image, reachable, entry, flags_used));
+}
+
+bool add_program_record(std::vector<ProgramRecord> &records, ProgramRecord candidate, std::string &error) {
+    for (const ProgramRecord &existing : records) {
+        if (existing.key != candidate.key) continue;
+        if (existing.digest_sha256 == candidate.digest_sha256) return true;
+        error = std::format("key collision: key 0x{:016X} has two different reachable identities", candidate.key);
+        return false;
+    }
+    records.push_back(std::move(candidate));
+    return true;
+}
+
+bool collect_program_records(const fs::path &input_dir, std::vector<ProgramRecord> &records, std::string &error) {
+    std::error_code directory_error;
+    if (!fs::is_directory(input_dir, directory_error)) {
+        error = "input is not a directory";
+        return false;
+    }
+    std::vector<fs::path> files;
+    for (const auto &item : fs::directory_iterator(input_dir, directory_error)) files.push_back(item.path());
+    if (directory_error) {
+        error = "cannot list input directory";
+        return false;
+    }
+    std::sort(files.begin(), files.end(), [](const fs::path &a, const fs::path &b) { return a.filename().string() < b.filename().string(); });
+
+    std::vector<ProgramRecord> recorded;
+    for (const fs::path &file : files) {
+        const std::string name = file.filename().string();
+        std::uint64_t key = 0;
+        std::uint32_t entry = 0;
+        if (!parse_input_file_name(name, key, entry, error)) return false;
+        std::error_code type_error;
+        if (!fs::is_regular_file(file, type_error)) {
+            error = std::format("{} is not a regular file", name);
+            return false;
+        }
+        ProgramRecord record;
+        if (!read_input_image(file, record.image, error)) return false;
+        record.reachable = ps2::vu::reachable(record.image.data(), kMask, entry);
+        const std::uint64_t computed = ps2::vu::program_key(record.image.data(), record.reachable, entry);
+        if (computed != key) {
+            error = std::format("{}: key mismatch, file name says 0x{:016X} and content gives 0x{:016X}", name, key, computed);
+            return false;
+        }
+        record.key = key;
+        record.entry = entry;
+        record.origin = "recorded";
+        record.source_name = name;
+        record.source_sha256 = sha256_hex(record.image);
+        record.image_flags_used = image_flags_used(record.image.data(), kImageBytes);
+        record.digest_sha256 = program_digest(record.image, record.reachable, entry, record.image_flags_used);
+        if (!add_program_record(records, record, error)) return false;
+        recorded.push_back(std::move(record));
+    }
+
+    // Jump targets: continuation of JAL/JALR links and constant loads into vi0-based
+    // registers, the same discovery rule as the donor emitter.
+    for (const ProgramRecord &parent : recorded) {
+        std::set<std::uint32_t> targets;
+        for (std::uint32_t pc : parent.reachable) {
+            const std::uint32_t lower_word = word(parent.image, pc), upper_word = word(parent.image, pc + 4);
+            if (upper_word & kImmediateBit) continue;
+            const std::uint32_t op = lower_word >> 25;
+            if (op == 0x21 || op == 0x25) targets.insert((pc + 16u) & kMask);
+            if (op == 0x08 && ((lower_word >> 11) & 15u) == 0) targets.insert(((((lower_word >> 10) & 0x7800u) | (lower_word & 0x7FFu)) * 8u) & kMask);
+        }
+        for (std::uint32_t target : targets) {
+            ProgramRecord derived;
+            derived.image = parent.image;
+            derived.entry = target;
+            derived.reachable = ps2::vu::reachable(derived.image.data(), kMask, target);
+            derived.key = ps2::vu::program_key(derived.image.data(), derived.reachable, target);
+            derived.origin = "jump_target";
+            derived.source_name = parent.source_name;
+            derived.source_sha256 = parent.source_sha256;
+            derived.image_flags_used = parent.image_flags_used;
+            derived.digest_sha256 = program_digest(derived.image, derived.reachable, target, derived.image_flags_used);
+            if (!add_program_record(records, std::move(derived), error)) return false;
+        }
+    }
+    std::sort(records.begin(), records.end(), [](const ProgramRecord &a, const ProgramRecord &b) { return a.key < b.key; });
+    return true;
+}
+
+bool prepare_fresh_output_directory(const fs::path &directory, std::string &error) {
+    std::error_code status_error;
+    if (fs::exists(directory, status_error)) {
+        if (!fs::is_directory(directory, status_error)) {
+            error = "output path exists and is not a directory";
+            return false;
+        }
+        if (!fs::is_empty(directory, status_error)) {
+            error = "output directory exists and is not empty; use a fresh directory";
+            return false;
+        }
+        return true;
+    }
+    std::error_code create_error;
+    fs::create_directories(directory, create_error);
+    if (create_error) {
+        error = "cannot create output directory";
+        return false;
+    }
+    return true;
+}
+
+std::string emit_program_function(ProgramRecord &record) {
+    FunctionGenerator generator(record);
+    return generator.run();
+}
+
+std::string emit_generated_source(std::vector<ProgramRecord> &records) {
+    std::string functions;
+    std::string table;
+    std::size_t emitted = 0;
+    for (ProgramRecord &record : records) {
+        const std::string text = emit_program_function(record);
+        if (record.refused) continue;
+        functions += text;
+        table += std::format("    {{0x{:016X}ull, {}u, {}, {}}},\n", record.key, record.entry, record.image_flags_used ? "true" : "false", record.function_name);
+        ++emitted;
+    }
+    std::string source = "// Generated by gt4_vu_recomp. Do not edit.\n";
+    source += "#include \"vu_recomp_contract.hpp\"\n\n";
+    source += "namespace gt4::vugen::generated {\n\nusing namespace ps2;\nusing namespace ps2::vuops;\n\n";
+    for (const ProgramRecord &record : records) {
+        if (record.refused) continue;
+        source += std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx);\n", record.function_name);
+    }
+    source += "\n" + functions;
+    source += "extern const ProgramEntry kPrograms[] = {\n" + table;
+    if (emitted == 0) source += "    {0u, 0u, false, nullptr},\n";
+    source += "};\n";
+    source += std::format("extern const std::uint32_t kProgramCount = {}u;\n\n}}\n", emitted);
+    return source;
+}
+
+std::string manifest_json(const std::vector<ProgramRecord> &records, const std::string &generated_file_name, const std::string &generated_sha256) {
+    std::string json = "{\n  \"tool\": \"gt4_vu_recomp\",\n  \"donor_commit\": \"1b4808793a12c45125262fd2d5f50a9ec9f7c020\",\n";
+    json += std::format("  \"generated_file\": \"{}\",\n  \"generated_sha256\": \"{}\",\n", json_escape(generated_file_name), generated_sha256);
+    json += std::format("  \"instruction_budget\": {},\n  \"programs\": [\n", 1000000u);
+    for (std::size_t i = 0; i < records.size(); ++i) {
+        const ProgramRecord &record = records[i];
+        json += "    {";
+        json += std::format("\"key\": \"0x{:016X}\", \"entry\": {}, \"origin\": \"{}\", ", record.key, record.entry, record.origin);
+        json += std::format("\"digest_sha256\": \"{}\", \"reachable_instructions\": {}, \"image_flags_used\": {}, ", record.digest_sha256, record.reachable.size(), record.image_flags_used ? "true" : "false");
+        json += std::format("\"digest_sha256\": \"{}\", \"reachable_instructions\": {}, ", record.digest_sha256, record.reachable.size());
+        json += std::format("\"fallback_sites\": {}, \"upper_nop_sites\": {}, \"budget_heads\": {}, ", record.fallback_sites, record.upper_nop_sites, record.budget_heads);
+        json += "\"exit_pcs\": [";
+        for (std::size_t k = 0; k < record.exit_pcs.size(); ++k) json += std::format("{}{}", k ? ", " : "", record.exit_pcs[k]);
+        json += "], ";
+        json += std::format("\"status\": \"{}\", ", record.refused ? "refused" : "emitted");
+        json += std::format("\"refusal\": \"{}\", \"function\": \"{}\"", json_escape(record.refusal), json_escape(record.function_name));
+        json += i + 1 < records.size() ? "},\n" : "}\n";
+    }
+    json += "  ]\n}\n";
+    return json;
+}
+
+}
