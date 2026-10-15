@@ -1,5 +1,53 @@
 # Current Status
 
+## Current state (2026-10-15)
+
+Branch `codex/optimization-plan-151` (fast-forwarded into `main`). Machine: Ryzen 7
+5700X, RX 9060 XT. Plan: [OPTIMIZATION-PLAN](OPTIMIZATION-PLAN.md). Journal:
+[2026-10-15](journal/2026-10-15.md).
+
+**Playable candidate:** slice 153 `--mode pacing` (executable `c8d31fdf`):
+VU1 AOT (102 entries) + asynchronous GS submission + single-clock pacing with
+rate-controlled audio. A/B switches: `GT4_PACING=audio`, `GT4_GS_SYNC=1`,
+`--vu1-interpret-only`, `--vu1-verify N`, `GT4_PRESENT_MODE`.
+
+**Confirmed (owner measurements):**
+
+| Scene | VBlanks/s | Speed | Notes |
+|---|---|---|---|
+| Time Trial, Nordschleife, Supra, 480p | 60.00 | 100% | median 16.665 ms, 99.6% of intervals 16-17 ms |
+| Arcade race, Nordschleife, 5 AI | 57.98 | 96.6% | VU1 8.4 ms |
+| Replay | 59.10 | 98.5% | |
+| Night race | 46.15 | 76.9% | uncompiled VU1 entries (3.7 ms interpreted) + 4.1 ms GS wait (readback suspected) |
+| Rally, Grand Canyon | 53.85 | 89.8% | uncompiled VU1 entries, VU1 11.3 ms |
+| Car showroom | 44.79 | 74.6% | VU1 16.2 ms, 46k primitives/frame |
+
+Starting point the same day was about 30 FPS and 51% speed (VU1 interpreted
+17 ms, synchronous GS wait 10.8 ms). VU1 AOT verified on real game state
+(140,034 in-game comparisons, 0 mismatches). RTSS overlay works on AMD since the
+swapchain requests color-attachment usage.
+
+**Known issues:** license tests crash in every configuration (pre-existing;
+traced to `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`
+reading a bad record count); night/rally VU1 entry coverage; showroom VU1 load;
+night GS readback wait; counters `late_frames`/`audio_underruns` look
+session-cumulative.
+
+**In progress / next:** VU1 per-program flag elimination (slice 154, subagent);
+then full static VU1 entry coverage, MTVU (VU1 thread, default on), window title
+"GT4Recomp" and fixed 16:9 (remove F6/4:3), license-crash instrumentation, LDL/LDR
+semantics check, GS readback counting/staging, Vulkan (GS) internal scale 2-3x
+experiment, then O3 (VU0 AOT, EE entry coverage, IOP review, build tuning).
+
+**Research done (docs):** [VU1 microcode source](VU1-MICROCODE-SOURCE.md),
+[VU0 map](VU0-MICROCODE-MAP.md), [IOP map](IOP-MAP.md),
+[decomp identity](DECOMP-IDENTITY.md), [decomp integration](DECOMP-INTEGRATION.md),
+[GS async design](GS-ASYNC-DESIGN.md), [PCSX2 lessons](PCSX2-LESSONS.md),
+[hardware renderer plan](HW-RENDERER-PLAN.md), [Spec II study](SPEC2-STUDY.md),
+[menus and wheel](MENUS-AND-WHEEL.md), [online notes](ONLINE-NOTES.md).
+
+## History (newest first)
+
 2026-10-15 — Slice 153, O4 frame pacing (candidate, not owner-measured): `--mode pacing` (VU1 AOT plus asynchronous GS, as slice 152) with one 60 Hz wall-clock guest VBlank grid, non-blocking audio (16 x 256-frame buffers, 60 ms target, +-0.5 % resample control), and `GT4_PACING=audio` for the old blocking clock. FIFO stays default; `GT4_PRESENT_MODE` for experiments. Local checks: pacing and paced-device fixtures, CTest 18/18, Python 217 OK, 42 identical headless frames versus slice 152. Owner measurement pending. Read [journal 2026-10-15](journal/2026-10-15.md) and [BUILD](BUILD.md).
 
 2026-10-14 — Slice 152, O2 asynchronous GS submission (candidate, not owner-measured):

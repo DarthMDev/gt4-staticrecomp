@@ -9,7 +9,23 @@ replacement) is a later goal. This document supersedes the ordering of
 gates and no-JIT definition still apply. Planning only: no build, run or code
 change in this slice.
 
-## 1. Where the time goes today
+## 0. Status (2026-10-15)
+
+| Stage | State |
+|---|---|
+| O0 local baseline | Done (slice 149 rebuilt on this machine) |
+| O1 VU1 AOT | Done (slice 151; 102 entries; in-game verify 0 mismatches) |
+| O2 async GS | Done (slice 152; readback staging and render thread still open) |
+| O4 pacing | Done (slice 153; race 60.00 VBlanks/s, flat frametime) |
+| VU1+ (flags, full entry coverage, MTVU) | In progress (slice 154 flags) |
+| O3 (VU0 AOT, EE coverage, IOP, build) | Next |
+| Fixes (license crash, title, fixed 16:9) | Queued |
+| O5 renderers, launcher, wheels, O6 mobile, phase 2 | Planned |
+
+Order rule: attack whatever the F8 report shows as the largest cost; O4 ran
+before O3 for that reason.
+
+## 1. Where the time goes (slice 150 baseline, historical)
 
 Owner interval, slice 150 (Prius, external camera, Nordschleife, 149 candidate):
 

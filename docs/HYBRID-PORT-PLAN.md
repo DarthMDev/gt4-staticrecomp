@@ -1,5 +1,9 @@
 # Windows-first hybrid optimization and portable no-JIT builds
 
+> **Superseded for current work (2026-10-15):** the active plan, order and status are in
+> [OPTIMIZATION-PLAN](OPTIMIZATION-PLAN.md) and [STATUS](STATUS.md). This document is kept
+> as technical context.
+
 2026-10-14, slice 141. Owner-requested direction change from the scene-renderer
 work at commit `25fd40e5e6c62c6ee2695d633ba1040aab1a5847`.
 Branch: `codex/hybrid-no-jit-port-plan-141`. This revision is planning and

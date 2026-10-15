@@ -1,9 +1,11 @@
 # Active Architecture — Native Windows with PS2 Subsystems
 
-**Planning update2026-10-14:** the [Hybrid Port Plan](HYBRID-PORT-PLAN.md) prioritizes
-optimization of this architecture, GS graphics options and future ARM64 ports.
-The scene-renderer replacement remains a deferred alternative. No PCSX2 code,
-ARM64 backend, upscaling or new optimization is implemented by that plan.
+**Update 2026-10-15 (slices 151-153):** VU1 microcode now runs as AOT C++ from
+`tools/vu_recomp` (102 entries, interpreter kept as counted fallback); GS work is
+submitted asynchronously through a three-slot ring; frames are paced by one
+high-resolution clock with rate-controlled audio. Active plan:
+[OPTIMIZATION-PLAN](OPTIMIZATION-PLAN.md). The table below records the donor as
+adopted in slice 114; rows marked "now" give the current state.
 
 2026-10-13, decision 0056 / slice 114. Evidence obtained from frozen code of donor
 1b4808793a12c45125262fd2d5f50a9ec9f7c020 and local adapters.
@@ -22,12 +24,12 @@ This does not eliminate subsystem emulation:
 | Subsystem | Confirmed implementation in donor |
 |---|---|
 | IOP | `runtime/src/iop/cpu.cpp:61–74` fetches/decodes R3000 instructions; `iop/kernel.cpp:144–167` binds imports to HLE services |
-| VU microprograms | `runtime/src/vu_micro.cpp:788–812` supports registered compiled VU1 microprograms, otherwise interprets; current programs are interpreted |
+| VU microprograms | `runtime/src/vu_micro.cpp:788–812` supports registered compiled VU1 microprograms, otherwise interprets. **Now:** VU1 programs are AOT (slice 151 overlay `scripts/vu1_aot_overlay.inc`); VU0 micro is still interpreted |
 | VU0 macro operations | `recomp/codegen.cpp:389`, cases around 670–720 emit native C++ helpers with EE code; `Vcallms`/`Vcallmsr` enter separate micro execution |
 | VU JIT | `runtime/src/vu_jit_web.cpp:18–30` returns mode 0 outside Emscripten; no Windows JIT is active |
-| VU AOT Registration | No registration generated in current set; `vu_micro.cpp:978` provides an empty weak registry |
+| VU AOT Registration | Donor default is an empty weak registry (`vu_micro.cpp:978`). **Now:** the slice 151+ capsules register the generated table with identity checks |
 | Kernel/hardware | Memory models, timers, interrupts, DMA, VIF, disc, SIF/IOP, IPU, SPU2, and memory card |
-| GS | PS2 algorithms/memory preserved in batching and compute shaders; our adapter uses Vulkan directly |
+| GS | PS2 algorithms/memory preserved in batching and compute shaders; our adapter uses Vulkan directly. **Now:** asynchronous submission (slice 152, `GT4_GS_SYNC=1` restores synchronous) |
 
 Therefore, the precise term is **native hybrid recompilation**. The fact that an
 interpreter is compiled for x86-64 does not turn the code it interprets into

@@ -1,5 +1,9 @@
 # Native Renderer and Game Port Plan
 
+> **Superseded for current work (2026-10-15):** the active plan, order and status are in
+> [OPTIMIZATION-PLAN](OPTIMIZATION-PLAN.md) and [STATUS](STATUS.md). This document is kept
+> as technical context.
+
 **2026-10-14 direction update:** the owner now prioritizes the
 [Windows-first hybrid no-JIT plan](HYBRID-PORT-PLAN.md) on
 `codex/hybrid-no-jit-port-plan-141`. This scene-renderer track is preserved at

@@ -1,262 +1,113 @@
 # Persistent project instructions
 
-## Current branch direction (owner update2026-10-14)
-
-On `codex/hybrid-no-jit-port-plan-141`, prioritize docs/HYBRID-PORT-PLAN.md:
-Windows stable60FPS/correct speed, measured hybrid optimization, GS internal
-scaling/dithering, then ARM64 Android(S23 Ultra/Snapdragon8 Gen2) and iOS
-(iPhone15 Pro Max). Windows comes first. The scene-renderer track at slice140/main
-is preserved; do not resume its capture/geometry work by default on this branch.
-No PS2 CPU/VU JIT; target-specific AOT and explicit interpreted paths are allowed.
-Selective PCSX2 GS implementation reuse is authorized, with GPL-compatible
-derivative licensing/attribution and dependency review before imports. No GPL
-code is linked by the planning change. Do not change source licenses without
-actual implementation/provenance review or distribute private game code/assets.
-Existing OpenCode performance work stays isolated; consume verified evidence
-before reuse. Slice141 is planning only, with no profiling/build/launch. The
-next bounded package is docs/tasks/HYBRID-H0-H1.md; preserve all old gates, owner
-control and session/card protections. Keep this branch separate from main until
-a qualified slice is integrated; do not rewrite either track.
-
 ## Read first
 
-Read `docs/STATUS.md` first. Then `README.md`, `docs/ARCHITECTURE.md` and
-`docs/BUILD.md` as needed. Current implementation lives in `native/`.
-The old EE recompiler/runtime and its tests are archived on
-`codex/archive-original-recomp-20261013`, commit
-`95f615519b992c65505d77da35af825fc6a13a53`. Do not restore them into main
-without a documented technical reason. See `docs/LEGACY.md`.
+Read `docs/STATUS.md` (current state at the top), then `docs/OPTIMIZATION-PLAN.md`
+(active plan and backlog), `README.md`, `docs/ARCHITECTURE.md` and `docs/BUILD.md`
+as needed. The latest daily journal is `docs/journal/YYYY-MM-DD.md`. Earlier
+slice-by-slice history lives in STATUS (History section) and the journals.
+Current implementation lives in `native/`, `tools/` and `scripts/`.
 
-## Mission and current base
+The old EE recompiler/runtime is archived on
+`codex/archive-original-recomp-20261013` (commit
+`95f615519b992c65505d77da35af825fc6a13a53`); do not restore it without a
+documented technical reason. See `docs/LEGACY.md`.
 
-GT4Recomp targets pinned Gran Turismo4 USA v2.00 on Windows x86-64.
-First make real gameplay functional and stable; then make game code readable,
-modifiable and extensible. Learning and evidence quality remain important.
-Working fork: github.com/moesuito/gt4-staticrecomp. The original upstream
-github.com/Kaezzey/gt4-staticrecomp is read-only: no pushes or PRs there.
+## Mission and direction (owner, 2026-10-15)
 
-The active base is the MIT ps2-web-recomp donor at
-1b4808793a12c45125262fd2d5f50a9ec9f7c020, adapted to native Windows/Vulkan.
-EE game code is AOT C++/x86-64. IOP and current VU microprogram execution
-remain interpreted; PS2 hardware/services are software models. No browser,
-WebAssembly or embedded PCSX2. Never claim zero emulation or full PS2 fidelity.
-No PS2Recomp GPL implementation is linked. Preserve third-party attribution.
+GT4Recomp targets Gran Turismo 4 NTSC-U (SCUS-97328, disc labeled v2.00; its
+CORE.GT4 is byte-identical to the gt4-decomp target) on Windows x86-64 first,
+then Android and iOS. **No JIT ever**: guest code (EE, VU, IOP) is compiled ahead
+of time per target; interpreters may remain only as explicit, counted fallbacks.
+GPU driver shader compilation is allowed.
 
-The qualified native build uses Clang/clang-cl,C++20, VS2022 x64 SDK/ABI,
-Ninja and CMake3.24+. The former MSVC engine is archival, not a second active
-production target. Native internal scale remains1;16:9 viewport is not HD/4K.
+- **Phase 1 (current):** a fast, stable recompiled port: 60 FPS at 100% game
+  speed, smooth frametime, no interpreter on the normal path.
+- **Phase 2 (later):** apply the gt4-decomp decompilation function by function
+  behind a guest ABI/memory bridge so the game reads like source; then a native
+  renderer, physics decoupled from frame rate, ultrawide, remaster features.
+- Graphics: two launcher-selectable renderers: **Vulkan (GS)** = current accurate
+  compute GS emulation (to gain internal scaling and options) and **Vulkan
+  (Custom)** = PCSX2-based hardware renderer specialized for GT4 (mobile, weaker
+  PCs, upscaling, dithering control, deinterlacing, texture packs).
+- GPL-3.0 reuse (e.g. PCSX2 GS) is accepted (decision 0066): pin sources, keep
+  notices, record provenance in `native/THIRD_PARTY.md`. Never import PCSX2 JITs.
+- Future ideas recorded in docs (not scheduled): launcher (Rust + egui/GPUI),
+  racing wheels with force feedback, LAN/online launcher, in-game settings
+  menus, Spec II as a second target or data source.
 
-## Owner priorities and current limits
+Working fork: github.com/moesuito/gt4-staticrecomp. Upstream
+github.com/Kaezzey/gt4-staticrecomp is read-only.
 
-Real menus/racing, native Vulkan, Windows audio and keyboard/XInput code exist.
-Owner confirms480i/480p/1080i gameplay at16:9;480p subjectively most stable.
-Physical XInput is untested. Owner separately authorized a keyboard double-trigger
-fix in slice136: arrows now emit D-pad buttons only, no duplicate analog axes.
-Native controls pass; owner menu/steering confirmation remains pending.
-Low3D performance and inconsistent frametime are recorded; cause unknown.
-Owner explicitly requested recording only: no input/performance fix or audit
-until further instruction. The previous performance investigation/builds were
-delegated to OpenCode; Codex prepared docs/OPENCODE-PERFORMANCE-HANDOFF.md.
-Preserve that task's scope/checkout. The owner now requests the separate hybrid
-optimization plan above; later tasks use its bounded measurement/verification
-contracts. Input correction is separately authorized for Codex/Luna.
-Owner update 2026-10-14: the agent may launch tested candidates and drive the
-game itself through Computer Use (screen, keyboard, mouse) to test and measure.
-Keyboard: arrows = D-pad, Z = Cross/accelerate, A = Square/brake, S = Triangle,
-X = Circle, Enter = Start. Reference scene: Time Trial, Nordschleife, Toyota
-Supra Wood One (last Toyota in the list), game video set to 480p (boots 480i).
-Preserve the owner's card/backups/locks; never interfere with a session the
-owner is using; close the game normally.
+## Current base
 
-Future goals:144FPS/monitor refresh independent of physics at100% game speed,
-progressive-only output, internal1080p/1440p/4K and setup launcher; later effects,
-textures and native gameplay ultrawide with undistorted/repositioned HUD.
-Do not raise the guest clock or repeat frames to claim these goals achieved.
-Finished races, broad saves, audio continuity, known CPU/GPU divergence,
-CFC2(28) and PS2 scan-mode fidelity remain qualification work.
+MIT ps2-web-recomp donor at `1b4808793a12c45125262fd2d5f50a9ec9f7c020`
+(`private/references/ps2-web-recomp`, frozen; change donor behavior only through
+pinned overlay capsules such as `scripts/prepare_perf_runtime.py`).
 
-Owner requested architecture planning after114: see docs/ROADMAP.md. It is a
-proposal, not authorization to implement all stages or run performance probes.
-Owner now authorized P0/P1: see docs/EE-PRODUCER.md and docs/RENDER-CONTRACTS.md.
-The slice116 producer is separate from production and does not relax library pins.
-Slice117 qualifies one explicit-seed callback recovery offline; see
-docs/EE-CALLBACK-COVERAGE.md. Diagnostic source/objects do not replace production.
-Owner authorized slice118 candidate integration and Luna's one-car research:
-docs/EE-CANDIDATES.md, docs/CAR-ASSET-RESEARCH.md. Separate baseline/recovered
-runtime/library pins do not change default production selection. Use one build/
-test at a time; no owner session termination. Candidate cards use the existing
-assets checkout locks/backups, never a frozen seed as a mutable card.
-P0/P1 remain open until coverage, candidate integration and real-car contracts pass.
-Missing callback entries44EA58/44EAC8 are recorded; live reachability is Unknown.
-Luna is preferred for bounded inventory/research; semantic contracts need independent review.
-Slice119 delegates Nenkai-reference research to Luna instead of Antigravity:
-docs/NENKAI-REFERENCES.md and docs/tasks/P1-NENKAI-ASSET-RESEARCH.md. Six source
-clones stay ignored; none is linked. A bounded private RoFS catalogue experiment
-and independent replay pass, but production reader/B-tree lookup, named-car
-identity, payload parsing and live hooks remain unqualified. Preserve slice119
-results; new extraction uses a fresh capsule and reviewed caps/fixtures. The
-packed RoFS version matches 0x00030001; qualified pages inflate before XOR 0x55,
-including non-final flush segments. Do not adopt private experiments as production
-tooling or assume GTPS2ModelTool has complete GT4 support.
-Slice120 adds bounded offline scripts/gt4_volume.py and public fixtures:
-docs/VOLUME-READER.md, docs/inputs/slice120-car-identity.json. Verify the whole
-ISO and frozen catalogue hashes; extract explicit selections only into fresh
-private capsules. Caps:8 files,16MiB per file,32MiB aggregate stored/decoded.
-Ford Ka '01 is confirmed as SpecDB ka_01/code59, but menu/LOD mapping is Unknown.
-Do not guess from11 Ford-prefixed files or assume GT5 MODEL_INFO exists in GT4.
-SpecDB Huffman decoding remains private research, not an adopted production
-decoder. No model/texture payload or live hook qualified; P1 remains open.
-Slice121 now resolves the offline model map via CAR_VARIATION/VARIATION:
-ka_01/code59 -> key444/table42 ->11 physical rows ->SDB1598/fdeu0006.
-See docs/MODEL-ASSET-PROBE.md and docs/inputs/slice121-model-file-map.json.
-Two exact car files extracted; bounded public header probe only. Preserve
-repeated physical row IDs, signed opaque VM fields and zero-size Tex1 header
-semantics as Unknown. Geometry/material/texture bodies and live getter argument
-chain remain unqualified. Preserve frozen121 capsule; next scope is fixed records.
-Slice122 bounds fixed shape/descriptors/material/PGLU/transfer arrays:
-docs/MODEL-RECORDS.md, docs/inputs/slice122-shape-records.json. Shape+4 is
-opaque, packet offsets are shape-relative and QWC*16 spans are MDLS-bounded.
-Transfer starts are Tex1-relative; pixel extent remains Unknown. No VIF/vertex/
-pixel decoding or live hook. Preserve frozen122; next scope is VIF framing.
-Slice123 adds conditional byte framing: docs/VIF-FRAMING.md and
-docs/inputs/slice123-vif-framing.json. Explicit initial CL/WL required; zero-cycle
-and packed/reserved UNPACK reject. All 466 packet spans close under (1,1), but no
-STCYCL appears and live incoming state is Unknown. Fill mode reduces input;
-do not adopt the superseded worker report's destination-only/V4-5 formulas.
-No VU/GIF/channel/topology/vertex semantics or renderer substitution qualified.
-Slice124 static source/ELF contracts: docs/VIF-STATE-CONTRACT.md and
-docs/inputs/slice124-vif-state-contract.json. Shape argument+4 flows to F12;
-helper 49E548 conditionally writes transformed VF1-3 values and 144 buffer bytes.
-Runtime descriptors use direct masked addresses; disk relocation remains open.
-Buffered 0/4 then 4/4 commands do not prove live cycle/channel ownership. Do not
-adopt PDTools channel/4096/UV flip/strip heuristics as game geometry contracts.
-Next scope is controlled raw integer lanes plus concrete submission ownership.
-Slice125 adds scripts/gt4_raw_lanes.py and literal public controls:
-docs/RAW-CHANNEL-LANES.md, docs/inputs/slice125-raw-channel-lanes.json.
-Explicit width/components/post-fill source count/signedness/alignment required;
-32-bit patterns stay u32, padding is opaque, no float/channel/VU interpretation.
-Selected raw counts remain conditional on initial (1,1) and USN assumptions.
-Do not label raw values vertices or adopt channel/topology heuristics silently.
-Slice126 research: docs/CHANNEL-SELECTION-AUDIT.md and
-docs/inputs/slice126-channel-selection.json. Reference position predicates match
-466 packets; float-normal predicate only 6/312 race, 23 garage UV candidates skipped
-for 3 components. These are conditional matches, not proved game roles. Full
-qualified-header audit matches derived counts; no legacy parser or converter
-adopted. Preserve missing/multiple roles; next is authoritative observation/
-ownership and bounded channel/topology contracts, not guessed conversion.
-Separating presentation/game time does not require eliminating IOP/VU models.
-Slice127 source contract: docs/SCENE-OBSERVATION.md. Two existing --probes at
-455A5C/455A64 require a fresh profile/library, original-input tokens, ordinary
-guest-owner incarnation/epoch and lifecycle invalidation across resume. Do not
-infer helper FPR12 from D5 incoming bits or cursor deltas as buffer extents.
-Next scope is bounded metadata correlation core, then separately qualified
-generation/runtime integration; no whole-scene or live qualification yet.
-Slice128 core/fixture: native/shape_observer.hpp/.cpp and
-docs/inputs/slice128-shape-observer.json. Default-off,64owners/16pending/256records,
-global stop+abort on ambiguity/capacity, bounded raw RAM samples, no live linkage.
-Fresh native128 build CTest4/4/Python132/132; old118 caches omit observer fixture.
-Next is exact two-probe generation and lifecycle adapter, preserving baseline
-gates. Core IDs opaque; adapter must reject idle/unknown kernel owners.
-Slice129 scripts/ee_observation.py produces only the exact two-probe source
-profile in fresh private output. All328 files compared, only54 inserted D5bytes;
-baseline ee_producer.py remains strict. D5 compiles, producerCTest1/1/Python141/141
-using128 native fixtures. Full library/probe/lifecycle linkage remains pending.
-Slice130 adds opt-in synthetic runtime adapter/lifecycle fixtures:
-docs/inputs/slice130-shape-runtime.json, native/shape_observer_adapter and
-scripts/prepare_shape_observation.py. CTest5/5/Python147/147 with zero skips.
-Exact overlays only fixture, game target remains untouched. Epochs monotonic,
-not event counts; defined-Cpu/public-status equivalence is not full kernel state.
-Actual synthetic handler tested; owner2 lifecycle tokens injected, no retail EE.
-Next is full separately qualified probed-library/game profile and owner-led
-capture; no live ownership, geometry, rendering or timing claim yet.
-Prioritize reproducible EE generation, then measured attribution and temporal
-separation; native subsystem migration needs demonstrated cost/dependency.
-144 distinct scenes require game render/update hooks, not repeated scanout.
+- EE: translated AOT to C++ (private pinned `ps2game.lib`); VU0 macro inline.
+- VU1 microcode: compiled AOT by `tools/vu_recomp` (derived from the donor
+  emitter); the whole image is decrypted from the ELF (docs/VU1-MICROCODE-SOURCE.md).
+- VU0 micro, IOP game modules: interpreted for now (mapped in
+  docs/VU0-MICROCODE-MAP.md, docs/IOP-MAP.md).
+- GS: donor compute rasterizer on Vulkan with asynchronous submission; frames
+  paced by one high-resolution clock with rate-controlled audio.
+- Never claim zero emulation or full PS2 fidelity.
 
-Owner subsequently requested a comprehensive scene-renderer/native-port plan:
-docs/NATIVE-PORT-PLAN.md supersedes ROADMAP phase order; docs/AGENT-WORKFLOW.md
-defines bounded model routing and independent review. Initial owner-selected
-target: Windows, entry-level dedicated GPU, internal1080p at60FPS; exact hardware
-and feasibility are not yet qualified. Final direction excludes JIT and retires
-PS2 graphics/execution/device dependencies in distinct gated phases. No-JIT
-already holds for current Windows; it does not mean zero emulation.
-Recommended first package is reproducible EE generation and one-car model/camera
-contract research. Publishing these plans does not authorize all implementation
-stages, external worker dispatch/provider setup or scheduled24/7 execution.
-Game script/content VMs are distinct from PS2 instruction interpretation.
+Toolchain: clang-cl (C++20), VS2022 x64 SDK, Ninja, CMake 3.24+. This machine:
+Ryzen 7 5700X, RX 9060 XT (AMD Vulkan driver), Windows 11.
 
-## Autonomy and communication
+## Workflow
 
-- Engineer plans, implements, verifies, documents, commits and pushes to origin.
-- Commits/branches/pushes are authorized; keep main green, never rewrite history.
-- Use small verified branches for multi-step work; merge by fast-forward when green.
-- Speak Portuguese plainly. Lead with behavior and evidence; ask owner only for
-  decisions requiring their input, not code review or routine implementation.
-- Keep repository documentation, reports, prompts and new code comments in en-US.
-  The owner translated existing documentation; preserve that language standard.
-- Use subagents for read-only exploration/review and parallelizable work.
-  Give paths/constraints explicitly, review their claims; only one repository writer.
+- Speak Brazilian Portuguese with the owner, in plain lay language; keep all
+  repository docs, reports, prompts and code comments in en-US.
+- The main agent orchestrates, reviews and tests; implementation and research go
+  to subagents (Haiku by default; escalate to Opus or do it directly when a task
+  stalls). Research/studies run in parallel and read-only; **exactly one
+  repository writer at a time**.
+- Review every subagent claim: rerun CTest/Python and check pins before commit.
+- One variable per candidate build; keep A/B switches (`GT4_PACING=audio`,
+  `GT4_GS_SYNC=1`, `--vu1-interpret-only`, `--vu1-verify N`).
+- Commits, branches and pushes are authorized; never rewrite history. Active
+  branch `codex/optimization-plan-151`; fast-forward `main` when green.
+- Ask the owner only for decisions and gameplay tests, not code review.
+
+## Testing the game
+
+- While the owner is awake, the owner plays and reports (F7 starts an interval,
+  F8 reports to the session `probe.log`, one interval per scene).
+- When left unattended, the agent may launch candidates and drive the game via
+  Computer Use. Keys: arrows = D-pad, Z = Cross/accelerate, A = Square/brake,
+  S = Triangle, X = Circle, Enter = Start.
+- Reference scene: Time Trial, Nordschleife, Toyota Supra Wood One, in-game
+  video 480p (game boots 480i; menus stay interlaced).
+- Launch through `scripts/play_performance.py --assets-root <repo> --mode <mode>`
+  (current: `pacing`). Preserve the owner's card, backups and locks; never
+  interfere with an owner session; close the game normally.
 
 ## Code and evidence
 
-Slices131/132 qualify the full two-probe library and an isolated default-off
-`GT4_EE_PROFILE=observation` game build. It requires the strict runtime overlay
-capsule and pins in docs/inputs/slice131-observation-library.json. Production
-launcher/profile remains unchanged. CTest5/5/Python155/155, zero skips; synthetic
-controls and actual game link-map provenance only. No retail execution, manual
-capture/export, live car identity or performance-neutrality qualification yet.
-See docs/SCENE-OBSERVATION.md; preserve every frozen private slice producer.
-Slice133 adds stopped-observer metadata JSON/export controls only, no game caller.
-CTest6/6/Python156/156, zero skips; CREATE_NEW no-overwrite behavior verified.
-Fault injection/crash atomicity and caller path policy remain unqualified.
-For future manual capture, WndProc must latch only: audio waits pump messages
-inside synchronous IOP work. Consume commands/export at the EE-owned vblank host
-boundary or after run exits. No Computer Use/game navigation or automatic capture.
-Slice134 implements that observation-only F8 latch/EE-boundary control and
-scripts/play_shape_capture.py with exact docs/inputs/slice134-manual-capture.json
-and runtime capsule selection. One capture per process, initially off; repeat
-ignored, parity-coalesced requests, record-preserving retry/shutdown. Automatic
-export after observer fail-closed stop is allowed only after owner starts capture.
-CTest7/7/Python164/164, zero skips; physical F8/real scene identity still Unknown.
-Bounded synchronous export may pause one frame; no performance-neutral claim.
-Launcher clears inherited capture env, uses fresh private session output, preserves
-card/backups/locks. Never script owner navigation or enable capture automatically.
-
-Slice136 changes only keyboard axis duplication in native/host_io.cpp plus its
-controls. All keyboard bits/pressures remain supported; XInput keeps ownership
-of analog axes. New capture launcher pins docs/inputs/slice136-keyboard-input.json
-and its fresh136 runtime; frozen134/135 are preserved. CTest7/7/Python164/164,
-zero skips, plus old-code regression rejection. Physical input/menu/race steering
-still needs owner confirmation. Close/restart is owner-controlled, no GUI injection.
-
-All project code and general tooling must be human readable: descriptive names,
-straightforward flow and formatting, explicit guest addresses/fixed-width state,
-defined wrapping and no host undefined behavior standing in for guest semantics.
-Tests may be concise. New behavior needs automated controls in existing CTest
-and Python fixtures. Never silently accept unsupported instructions/services.
+All code and tooling must be human readable: descriptive names, straightforward
+flow, explicit guest addresses and fixed-width state, defined wrapping, no host
+undefined behavior standing in for guest semantics. New behavior needs automated
+controls in CTest and Python fixtures. Never silently accept unsupported
+instructions or services. Do not weaken acceptance checks to make tests pass.
 
 Label claims Confirmed / High confidence / Hypothesis / Unknown. Record hashes,
-tool versions, addresses/offsets, observations, method and limits. Prefer
-independent controls. Original-model gates now exist in the archive; they are
-not validation of this different runtime. Do not weaken active acceptance checks.
+tool versions, addresses/offsets, method and limits.
 
 ## Data, builds and documentation
 
-- ISO/BIOS/CORE/ELF, translated game code, cards, captures, outputs and binaries
-  remain ignored under private/generated/build or ignored ISO paths. Never stage.
-- Verify against `docs/inputs/` before use; verification must not update pins.
-- Preserve frozen producers/capsules. New slices use a fresh private output path;
-  do not overwrite old slice directories or reuse their checkpoint identity.
-- Preserve owner saves and backup/trava behavior. An archive branch saves tracked
-  files only; ignored data stays local and must not be deleted by cleanup scripts.
-- Current build: `cmd /c native\build.cmd`, then
-  `ctest --test-dir private/slice114-native-base/build --output-on-failure`.
-  Run builds/tests serially; Windows link outputs and manual cards can be locked.
-- Python: `private/tooling-venv/Scripts/python.exe -m unittest discover -s tests/python`.
-- Current build still needs the pinned private ps2game.lib. Follow BUILD.md;
-  do not describe this as an end-to-end clean-checkout build.
-
-Documentation is part of completion: update STATUS when state changes, append
-`docs/journal/YYYY-MM-DD.md`, add numbered decisions/evidence/lessons as useful.
-Only distributable metadata goes in docs/inputs. Before ending: check
-`git status --short`, commit code/tests/docs together and push verified changes.
+- ISO/BIOS/CORE/ELF, translated code, cards, captures, outputs and binaries stay
+  ignored under `private/`, `generated/`, `build/` or ignored ISO paths. Never stage.
+- Verify inputs against `docs/inputs/`; verification never updates pins.
+- New candidates use fresh `private/sliceNNN-*` directories and new manifests;
+  never overwrite earlier slice outputs.
+- Build/test serially (`cmd /c` with VsDevCmd; see BUILD.md for the current
+  candidate recipe). CTest per build dir; Python:
+  `GT4_NATIVE_BUILD=<build dir> private/tooling-venv/Scripts/python.exe -m unittest discover -s tests/python`.
+- The build still needs the pinned private `ps2game.lib`; it is not an
+  end-to-end clean-checkout build.
+- Documentation is part of completion: update STATUS when state changes, append
+  the daily journal, add numbered decisions as useful, keep README progress and
+  known issues current. Before ending: `git status --short`, commit and push.

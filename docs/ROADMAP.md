@@ -1,5 +1,9 @@
 # Plan: Speed, Rendering, and Selective Migration to Native Code
 
+> **Superseded for current work (2026-10-15):** the active plan, order and status are in
+> [OPTIMIZATION-PLAN](OPTIMIZATION-PLAN.md) and [STATUS](STATUS.md). This document is kept
+> as technical context.
+
 **2026-10-14 active branch:** [Hybrid Port Plan](HYBRID-PORT-PLAN.md) defines the
 owner's new Windows-first optimization, GS improvements and no-JIT mobile
 direction. This document and the scene-renderer plan remain technical context;
