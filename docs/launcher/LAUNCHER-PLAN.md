@@ -21,7 +21,14 @@ Labels: **Confirmed** (read in code/data or measured), **High confidence**, **Hy
 2. **Branding = official.** The launcher and the executable icons use the official Gran Turismo 4
    cover art and the game's logo/icon style. Every official asset lives in one folder
    (`branding/official/`) and is listed in one manifest (`brand.toml`); a de-branded build swaps the
-   folder for `branding/neutral/` (section 5).
+   folder for `branding/neutral/` (section 8).
+3. **Owner design feedback (round 2).** Clean and minimalist, borrowing the Gran Turismo identity
+   (GT4 plus the GT Sport/GT7 look) without copying GT4 screens; far less information everywhere;
+   Home = art, logo, Play and a way to Settings only; setup step renamed "Preparing game files";
+   memory card created automatically (no choice in setup); Graphics = renderer, resolution (race
+   display mode), super-sampling, high-resolution output, deinterlacing and the paraLLEl-GS options;
+   Advanced = Asynchronous GS (on), renderer hacks, diagnostics; no frame-pacing option; no variable
+   names in the UI. Applied in sections 3, 6 and 12 and in the three mockups.
 
 Consequences to record when TASK-019 starts (documentation changes, not done here):
 `TASKS.md` "First stable release" currently says *"no game assets or binaries derived from the
@@ -36,10 +43,10 @@ A **Rust + Slint** launcher (`GT4Recomp.exe`) installed per-user by an **NSIS** 
 pre-checks it in under a second (size + `SYSTEM.CNF`), hashes it against the existing pin with a
 progress bar, extracts `CORE.GT4`, rebuilds the pinned ELF (both hash-checked), optionally extracts
 the 64 in-game photo JPEGs for the home background, creates the memory-card location and writes a
-receipt. Later runs open straight to the home screen: full-bleed art, a large **PLAY** button at the
-bottom, and a settings page whose normal section exposes paraLLEl-GS upscaling and deinterlacing and
-whose **Advanced/Experimental** section hides the A/B and debug switches. 480p in races is the
-default (flipped in the game itself). The launcher starts the game executable with validated
+receipt. Later runs open straight to the home screen: full-bleed art, the logo, a **PLAY** button
+and a Settings icon, nothing else. Settings has three short pages (Graphics, Display, Advanced) in a
+GT7-style option list. The race display mode (Native 480i / 480p / 1080i) is a setting with 480p as
+the default, held by the game itself. The launcher starts the game executable with validated
 settings passed as environment variables on the child process only, supervises it, backs up the card,
 and turns a crash into a readable report. paraLLEl-GS moves into its own DLL to satisfy LGPL-3.0
 relinking cleanly.
@@ -73,7 +80,7 @@ The launcher reproduces exactly this contract natively, minus the developer-only
 | Shader directory is an absolute path baked at compile time | `native/CMakeLists.txt:336` `GT4_VULKAN_SHADER_DIR="${SHADERS}"`, used by `gpu_init.inc:7` | Resolve shaders relative to the exe (`<exe dir>\shaders`) in release builds; keep the baked path for dev builds. (Slice 165 already broke on this.) |
 | No window/exe icon, no version resource | `window.cpp:241-247` (no `hIcon`), no `.rc` in CMake | `.rc` with icon + VERSIONINFO; `WNDCLASSEXW.hIcon/hIconSm` from resource 1 |
 | Start-in-fullscreen throws | `window.cpp:239` `open_window(true)` → "not qualified" | `GT4_FULLSCREEN=1` that applies the existing Alt+Enter borderless path after creation |
-| 480p is opt-in | `GT4_FORCE_480P` unset = off (`window.cpp:291`) | Flip default to on; keep `GT4_FORCE_480P=0` as a hidden opt-out |
+| 480p is opt-in and binary | `GT4_FORCE_480P` unset = off (`window.cpp:291`); the hold writes index 1 only when the index reads 0 | Generalize to `GT4_RACE_DISPLAY=480i\|480p\|1080i` (default `480p` when unset): at each guest VBlank hold the race display index (`[0x622F4C]+0x38CB0+0x16B0`) at 0, 1 or 2. Menus stay as the game draws them. Keep `GT4_FORCE_480P` as an alias for one release. Index 2 = 1080i is **High confidence** (BUILD.md: "a user choosing 1080i keeps it"); confirm in game. |
 | CRT is `/MD` | worktree `native/THIRD_PARTY.md` notes | Ship `vcruntime140*.dll`/`msvcp140.dll` app-local (Microsoft "Distributable Code") or build `/MT`; decide once |
 | Crash evidence is only the log | — | Unhandled-exception filter writing a minidump (`MiniDumpWriteDump`) into the session folder |
 
@@ -88,11 +95,11 @@ The launcher reproduces exactly this contract natively, minus the developer-only
 | Reconstructed ELF → `prepared\SCUS_973.28` | Raw-deflate CORE, rebuild layout per `usa-v2.00-native.json`, verify pin | Passed as argv[1] |
 | `GT4.VOL`, `IRX/`, `IOPRP300.IMG`, everything else | — | Read **from the ISO** by the exe via `--disc` (streamed; no extraction) |
 | VU1/VU0 microcode images | **Not needed under A** (the game uploads microcode from the ELF; compiled programs are matched by identity digest) | — |
-| In-game photos `GT4.VOL: photo/000.JPG … 063.JPG` (64 JPEGs, 1280x960, ~10.9 MB) | Optional extraction to `art\` for the home background (Confirmed: plain JFIF inside PS2ZIP entries) | Read by the launcher only |
+| In-game photos `GT4.VOL: photo/000.JPG … 063.JPG` (64 JPEGs, 1280x960, ~10.9 MB) | Extracted to `art\` as part of "Preparing game files" (no separate step; Confirmed: plain JFIF inside PS2ZIP entries) | Read by the launcher only (Home background) |
 
 **PS2 BIOS: not required — Confirmed.** The donor runtime has no BIOS loader: `rom0:` modules are
 HLE (`iop/cdvd.cpp:169`), `ROMVER` is synthesized (`iop/io.cpp:57`), the launcher passes no BIOS
-argument and no BIOS file is pinned. The setup screen should say so ("No PS2 BIOS needed").
+argument and no BIOS file is pinned. (Not shown in the UI; it belongs in the README/FAQ.)
 
 ### 3.2 Identity check and friendly rejection
 
@@ -107,12 +114,14 @@ argument and no BIOS file is pinned. The setup screen should say so ("No PS2 BIO
    - Size ≠ 5,314,478,080 → "This copy is incomplete or modified."
    (Owner's `Gran Turismo 4 Spec II v1.10.iso` is a ready negative fixture.)
 2. **Full hash** (SHA-256 with SHA-NI/AVX2 via the `sha2` crate's asm backend). Speed is disk-bound:
-   NVMe a few seconds, SATA SSD ~10-20 s, HDD ~45-90 s (**Hypothesis**, measure). Shown as a
-   tachometer-style ring with MB/s. Mismatch with correct serial/version → "This dump differs from
+   NVMe a few seconds, SATA SSD ~10-20 s, HDD ~45-90 s (**Hypothesis**, measure). Shown as a thin
+   progress bar with a percentage ("Checking disc"). Mismatch with correct serial/version → "This dump differs from
    the known good v2.00 disc (damaged or patched). Please re-dump your disc."
-3. **Extract + rebuild** CORE and ELF, verify both pins. Any mismatch at this point is an internal
-   error (the disc hash already matched) and is reported as a bug.
-4. **Memory card** (section 3.3). 5. **Art** (optional, skippable). 6. **Receipt**
+3. **Preparing game files (shown as "about a minute"):** extract `CORE.GT4`, rebuild the game's ELF
+   from it (a fixed-layout reconstruction: nothing is compiled and the executable is not touched),
+   extract the disc photos, verify the CORE and ELF pins. Any mismatch here is an internal error (the
+   disc hash already matched) and is reported as a bug.
+4. **Memory card**, created automatically (section 3.3). 5. **Receipt**
    `prepared\prepare.json` (launcher version, payload kind, disc path/size/file-ID/mtime/hash, CORE and
    ELF hashes, timestamps).
 
@@ -125,9 +134,10 @@ A missing card file is presented to the game as a **new, unformatted** 8,650,752
 written on save; GT4 then offers to format it. So the launcher does not need any seed card (the pinned
 seeds stay private evidence). Layout under `%LOCALAPPDATA%\GT4Recomp\memcards\`:
 `Mcd001.ps2` (slot 1), `backups\Mcd001-YYYYMMDD-HHMMSS.ps2` (copy before each session, keep the last
-10). **Import**: accept an existing PCSX2 8 MB `.ps2` card — same size and raw page+ECC layout
-(**High confidence**; validate size and the `Sony PS2 Memory Card Format` superblock magic before
-import). Hold the card lock (same byte-lock design as `session.lock`) while the game runs.
+10). Setup offers no choice: the card is simply created. **Import** of an existing PCSX2 8 MB `.ps2`
+card (same size and raw page+ECC layout, **High confidence**; validate size and the
+`Sony PS2 Memory Card Format` superblock magic) is a later feature under Settings › About, not part
+of setup or v1. Hold the card lock (same byte-lock design as `session.lock`) while the game runs.
 
 **Hypothesis to check during TASK-019:** the owner's game boots in 16:9 because the seed card has the
 game's wide option set; a fresh card may show a 4:3 image in the fixed 16:9 window until the player
@@ -135,12 +145,13 @@ enables 16:9 in GT4's options. Either show a one-time tip or add a hold similar 
 
 ### 3.4 Progress UI, errors, repair
 
-- Wizard with four steps (Disc → Verify → Prepare → Ready), each sub-task a row with state icon,
-  duration and a short explanation; Cancel is always available and leaves no partial output (write to
+- One list of four rows: **Disc** (name, region, version), **Checking disc** (progress bar),
+  **Preparing game files** ("about a minute"), **Memory card**. Each row shows only a tick, a
+  percentage or "Not supported". Cancel is always available and leaves no partial output (write to
   `prepared.tmp\`, atomic rename at the end).
-- Errors are written for players ("what happened / what to do"), with a "Details" expander and
-  "Copy details" button containing the technical line.
-- **Repair** (Settings → Saves & files): re-verify installed binaries against the release manifest
+- Errors are one or two plain sentences ("what happened / what to do"); technical detail goes to the
+  log only.
+- **Repair** (Settings › About): re-verify installed binaries against the release manifest
   (hash list shipped with the installer, < 1 s for ~110 MB); re-run setup from the ISO; never touches
   memory cards. Under A a damaged binary means "reinstall" (link opens the release page).
 - **Re-run setup** = "Change disc image…" (same flow, keeps saves).
@@ -229,48 +240,54 @@ unofficial fan project, not affiliated or endorsed").
 
 ## 6. Settings model
 
-### 6.1 Today and from TASK-012 (Confirmed from code unless marked)
+There are three short pages. The UI shows no variable names. Each control maps to exactly one variable (the A/B rule), all of them listed in one Rust table. Settings save as soon as they change and take effect at the next Play.
 
-| Setting (UI) | Variable / argument | Values | Section |
+### 6.1 Graphics
+
+| Group | UI control | Values (default **bold**) | Variable / paraLLEl-GS field |
 |---|---|---|---|
-| Renderer | `GT4_RENDERER` | `parallel` (default once TASK-012 qualifies), `donor` (legacy fallback) | Graphics |
-| Upscaling (super-sampling) | `GT4_PGS_SSAA` (planned name; backend maps 1/2/4/8/16 in `parallel_gs_backend.cpp:46-54`) | 1, 2, 4, 8, 16 | Graphics |
-| High-resolution scanout | `GT4_PGS_HIGHRES` (planned) | 0/1, only with ≥4x | Graphics |
-| Deinterlacing (menus are 480i) | `GT4_PGS_PROGRESSIVE`, `GT4_PGS_ANTIBLUR` (planned); paraLLEl-GS `force_progressive`, `anti_blur`, `skip_deinterlace` | UI: Auto (progressive + anti-blur) / Sharp (progressive, no anti-blur) / Original (interlaced fields) | Graphics |
-| 480p in races | `GT4_FORCE_480P` | default **on** in the exe; launcher never sets it unless the hidden opt-out is used | Advanced |
-| Present mode | `GT4_PRESENT_MODE` | `fifo` (VSync, default) / `mailbox` / `immediate`; launcher greys out modes the surface lacks (query before showing) | Display |
-| Start in fullscreen | `GT4_FULLSCREEN` (new) | 0/1 | Display |
-| Frame pacing clock | `GT4_PACING` | `paced` (default) / `audio` | Experimental |
-| Synchronous GS | `GT4_GS_SYNC` | 0/1 | Experimental |
-| GS hacks | `GT4_PGS_HACKS` (planned) | comma list: `disable_mipmaps`, `backbuffer_promotion`, `allow_blend_demote` (not `unsynced_readbacks`: diagnostic only) | Experimental |
-| VU1 verify / VU0 verify | `GT4_VU1_VERIFY`, `GT4_VU0_VERIFY` | sample period N | Experimental → Diagnostics |
-| VU1 interpreter only | `PS2_VU_INTERPRET=1` | flag | Experimental → Diagnostics |
-| Performance overlay / F7-F8 | `GT4_PERF=1` | flag | Experimental → Diagnostics |
-| Donor scale | `PS2_SCALE` | keep 1 (donor renderer only) | not exposed |
-| Future (TASK-012 step 5) | post-processing (sharpen/FXAA), dithering, texture options | — | Graphics when qualified |
-| Controls | keyboard map fixed (arrows/Z/A/S/X/Enter), XInput | read-only reference page now; remapping and wheels (TASK-018) later | Controls |
-| CPU build variant | x86-64 / x86-64-v3 folder | auto by CPUID; only baseline shipped until v3 shows a benefit (TASK-010: Unknown) | Advanced |
+| Image | Renderer (dropdown) | **paraLLEl-GS**, Legacy | `GT4_RENDERER=parallel\|donor` (Confirmed in the TASK-012 worktree) |
+| Image | Resolution (dropdown): race display mode. Helper: "480p is recommended: it is progressive. Native and 1080i are interlaced, which looks softer and flickers." | Native (480i), **480p**, 1080i | `GT4_RACE_DISPLAY=480i\|480p\|1080i` (new; generalizes `GT4_FORCE_480P`, see section 2) |
+| Image | Super-sampling (segmented) | Off, 2×, 4×, 8×, 16×. The default is chosen after the TASK-012 measurements; the mockup shows 4×. | `GT4_PGS_SSAA=1\|2\|4\|8\|16` → `SuperSampling::X1..X16` (Confirmed enum, `gs_renderer.hpp:232`) |
+| Image | High-resolution output (toggle, disabled below 4×; helper "Needs 4× or more.") | **On** at ≥4× | `GT4_PGS_HIGHRES` → `VSyncInfo::high_resolution_scanout`, which also needs `force_progressive` (Confirmed, `gs_renderer.cpp:4294-4310`) |
+| Image | Super-sampled textures (toggle) | **Off** | `GT4_PGS_SS_TEXTURES` → `set_super_sampling_rate(…, super_sampled_textures)` |
+| Interlacing | Deinterlacing (dropdown; helper "For screens the game draws interlaced, such as menus.") | **Progressive**, Weave (motion-adaptive), Off | Progressive = `force_progressive`. Weave = paraLLEl-GS's built-in deinterlacer: the `weave` program, plus a motion-adaptive pass over the last 4 fields labelled "fastmad" in the source (Confirmed, `gs_renderer.cpp:5106-5190`). Off = `skip_deinterlace` (raw fields, shown as they are) |
+| Interlacing | Reduce field blending (toggle) | **On** | `anti_blur` (the paraLLEl-GS header calls it "usually a good idea" with progressive or SSAA) |
 
-### 6.2 How the launcher passes settings
+### 6.2 Display
 
-- **v1: environment variables on the child process only** (no system/user environment change). The
-  exe already parses and refuses unknown values for most of them, so this needs no new game code and
-  matches the A/B rule (one switch = one variable). The launcher starts from a scrubbed environment
-  (drops every inherited `GT4_*`/`PS2_*`, as `external_runtime_probe` does), then applies its own.
-- One Rust table is the single source of truth: setting id → variable → allowed values → default →
-  section (Normal/Advanced/Experimental/Diagnostics) → "requires" rules (e.g. high-res scanout needs
-  ≥4x; verify modes are mutually exclusive with interpreter-only, as in `play_performance.py`).
-  Validation runs on load and before launch; invalid values reset to default with a notice.
-- Persisted in `%LOCALAPPDATA%\GT4Recomp\config\settings.toml` (`schema_version`, unknown keys kept
-  but ignored, migration function per version).
-- Each launch writes `launch.json` into the session folder: arguments, the exact variables set,
-  versions and hashes — the release equivalent of `result.json`, and part of crash reports.
-- **Later (optional):** the exe reads the same TOML via `--config` so in-game settings menus (idea list)
-  can share it. Not needed for TASK-019.
+| Group | UI control | Values (default **bold**) | Variable / field |
+|---|---|---|---|
+| Window | Fullscreen (toggle; helper "Alt+Enter or F11 switches while playing.") | **On** | `GT4_FULLSCREEN` (new) |
+| Window | VSync (dropdown) | **On** (fifo), Fast (mailbox), Off (immediate). Modes the surface lacks are hidden, based on a Vulkan surface query. | `GT4_PRESENT_MODE` (Confirmed) |
+| Picture | Show overscan | **Off** | `VSyncInfo::overscan` |
+| Picture | Use the game's screen offsets | **Off** | `crtc_offsets` |
+| Picture | Match the game's horizontal resolution | **On** (to be confirmed by measuring on GT4) | `adapt_to_internal_horizontal_resolution` |
+| Picture | Direct scanout | **Off** | `raw_circuit_scanout` |
 
-Experimental and Diagnostics sit behind a collapsed "Advanced" panel with an amber "may reduce
-stability or speed" banner; values that differ from defaults show a small dot on the Settings tab and
-a chip on the home screen ("Experimental: GS sync") so A/B states are never forgotten.
+### 6.3 Advanced (kept short)
+
+| Group | UI control | Default | Variable / field |
+|---|---|---|---|
+| Performance | Asynchronous GS | **On** | `GT4_GS_SYNC`: unset or 0 = on (Confirmed). Turning it off writes `GT4_GS_SYNC=1`. Under paraLLEl-GS this switch must map to that renderer's own submission path; how is **Unknown** until TASK-012 step 2 settles it. |
+| Renderer hacks ("may cause glitches") | Disable mipmaps · Back-buffer promotion · Blend demotion · Unsynced readbacks | all **Off** | `GT4_PGS_HACKS=` comma list → `Hacks::{disable_mipmaps, backbuffer_promotion, allow_blend_demote, unsynced_readbacks}` (Confirmed struct, `gs_interface.hpp:211-237`) |
+| Diagnostics | Performance report (F7/F8) | **Off** | `GT4_PERF=1` |
+| Diagnostics | Check compiled VU code | **Off** (choices: Off / every 100th / every 1000th call) | `GT4_VU1_VERIFY`, `GT4_VU0_VERIFY` |
+
+These are deliberately left out of the UI:
+- **Frame pacing:** always paced. The launcher never sets `GT4_PACING`; the audio-clock A/B stays a developer switch in the Python launcher.
+- **Developer and debug switches:** `PS2_VU_INTERPRET`, `PS2_SCALE`, paraLLEl-GS `ordered_super_sampling` (a debug aid) and `DebugMode`.
+- **Controls remapping:** comes later; racing wheels are TASK-018.
+- **CPU build variant:** chosen automatically from CPUID. Only the baseline x86-64 build ships until TASK-010 shows that x86-64-v3 helps.
+
+### 6.4 How the launcher passes settings
+
+- **Environment variables on the game process only.** Nothing changes in the system or user environment. The launcher starts from a scrubbed environment (it drops every inherited `GT4_*`/`PS2_*`, as `external_runtime_probe` does) and then sets the renderer plus any value that differs from its default.
+- **One Rust table is the single source of truth.** Each entry lists: setting id → variable → allowed values → default → page → "requires" rules. Examples of rules: high-resolution output needs ≥4× and progressive; the two verify modes exclude each other. Values are validated on load and again before launch; an invalid value resets to its default.
+- **Storage:** `%LOCALAPPDATA%\GT4Recomp\config\settings.toml`, with a `schema_version` and migrations.
+- **Launch record:** each launch writes `launch.json` (arguments, variables, versions, hashes) into the session folder.
+- **Later (optional):** the exe reads the same TOML through `--config`, so in-game settings menus and the Android build can share it.
+- **Native work this implies:** `GT4_RACE_DISPLAY`, `GT4_FULLSCREEN` and the `GT4_PGS_*` names. TASK-012 owns the paraLLEl-GS ones. Each must refuse unknown values, as the existing variables do.
 
 ## 7. Launcher architecture
 
@@ -352,12 +369,12 @@ add and handy for testing.
   stdout/stderr to `<session>\game.log`, process in a Job Object (so "Stop game" works and children die
   with it). The ELF is passed in place (`prepared\SCUS_973.28`, the name argv0 needs) instead of
   copying it per session.
-- While the game runs the launcher shows a slim "Running" state (elapsed time, Stop game) and can
+- While the game runs, Play becomes "Running · Stop" (nothing else) and the launcher can
   minimize to the taskbar; option "Close launcher when the game starts" (off by default, because the
   launcher reports crashes).
 - Exit classification: exit code 0 and `[ee] stopped … window closed` = normal. Anything else = crash
   dialog: what happened in one sentence (reason from the `[ee] stopped` line, e.g. "no translated code
-  at 0x…"), last 40 log lines, buttons **Open session folder**, **Copy report** (zip of `game.log`,
+  at 0x…"), no log text on screen, buttons **Open session folder**, **Copy report** (zip of `game.log`,
   `launch.json`, `misses.txt`, minidump if present; card and ISO excluded; user name in paths
   replaced by `%USER%`), **Play again**. Nothing is uploaded automatically.
 
@@ -377,7 +394,7 @@ folder; it then runs it silently (`/S`) into the same per-user folder and restar
 display_name   = "Gran Turismo 4"          # neutral: "GT4Recomp"
 product_name   = "GT4Recomp"
 tagline        = "Native PC recompilation"
-accent         = "#2F7BFF"
+accent         = "#2C6BED"   # focus ring only
 [assets]
 cover_front    = "cover-front.png"   # 1200x1700 (shown at 600x850)
 logo_wordmark  = "logo-gt4.png"      # transparent, ~1600 px wide (or .svg)
@@ -398,10 +415,10 @@ greps the neutral package for any file hash listed in the official manifest.
 
 | Slot | Used in (mockup id) | Source / how we obtain it |
 |---|---|---|
-| `cover_front` | Setup left panel (`slot-cover`), About page, installer welcome bitmap (cropped) | **Not on the disc** (Confirmed: the ISO root holds only CORE.GT4, GT4.VOL, IRX, NET, EPSON, IOPRP300.IMG, SCUS_973.28, SYSTEM.CNF). Owner supplies a clean scan/photo of the NTSC-U box front (own copy), color-corrected, ≥1200x1700. |
-| `logo_wordmark` | Home top-left (`slot-logo`), Setup header, splash | Owner-supplied vector/PNG of the GT4 logo (trace from the cover scan). In-disc title textures exist as Tex1 `.img` files in `GT4.VOL` (e.g. `advertise/loading.img`, `advertise/us/main.img`), but decoding Tex1 is new work and which file holds the logo is **Unknown** — not planned for v1. |
+| `cover_front` | Setup left column, About page, installer welcome bitmap (cropped) | **Not on the disc** (Confirmed: the ISO root holds only CORE.GT4, GT4.VOL, IRX, NET, EPSON, IOPRP300.IMG, SCUS_973.28, SYSTEM.CNF). Owner supplies a clean scan/photo of the NTSC-U box front (own copy), color-corrected, ≥1200x1700. |
+| `logo_wordmark` | Home bottom-left above Play, Setup header, Settings nav | Owner-supplied vector/PNG of the GT4 logo (trace from the cover scan). In-disc title textures exist as Tex1 `.img` files in `GT4.VOL` (e.g. `advertise/loading.img`, `advertise/us/main.img`), but decoding Tex1 is new work and which file holds the logo is **Unknown** — not planned for v1. |
 | `emblem` → `launcher.ico`, `game.ico` | Taskbar, Task Manager, Start Menu, desktop shortcut, window title bar, Alt+Tab | Derived from the official GT emblem/logo style (owner-supplied master). Generated by a script (`scripts/make_icons.py` with Pillow) into multi-size ICO: 16, 20, 24, 32, 40, 48, 64, 96, 128, 256 (256 PNG-compressed). Launcher and game get **distinct** variants (e.g. game = emblem on dark tile, launcher = emblem with a small chevron badge) so the two taskbar buttons are distinguishable. |
-| Home background (`slot-hero`) | Home, Setup "Ready" step | **From the user's own disc at setup**: `GT4.VOL photo/000.JPG…063.JPG` (64 in-game photos, 1280x960 JPEG, Confirmed by extraction in this study), resized/cropped to 16:9 and cached in `%LOCALAPPDATA%\GT4Recomp\art\`; never shipped. Before setup completes, `hero_fallback` (official screenshots or neutral art) is used. |
+| Home background | Home (full-bleed, one cross-fade every 15 s) | **From the user's own disc at setup**: `GT4.VOL photo/000.JPG…063.JPG` (64 in-game photos, 1280x960 JPEG, Confirmed by extraction in this study), resized/cropped to 16:9 and cached in `%LOCALAPPDATA%\GT4Recomp\art\`; never shipped. Before setup completes, `hero_fallback` (official screenshots or neutral art) is used. |
 | Save icon (Saves page, optional) | Settings → Saves | `GT4.VOL icon/gamedata.ico` is a PS2 3D save icon, not a Windows icon; rendering it is optional future work. |
 | Course/car thumbnails (future) | — | `piece/crs_pict`, `piece/car_pict` Tex1 textures; needs the Tex1 decoder (PDTools, MIT reference). Not in v1. |
 
@@ -449,11 +466,11 @@ Trademark note: using the Gran Turismo name and logo makes the release look offi
 | # | Milestone | Acceptance checks | Effort (agent-days) |
 |---|---|---|---|
 | M0 | Decision record + TASKS/README release wording; branding folders with neutral placeholders | Decision file merged; neutral package builds | 0.5 |
-| M1 | Native release prerequisites: exe-relative shader dir (release config), `.rc` icon + VERSIONINFO, window `hIcon`, `GT4_FULLSCREEN`, 480p default on (opt-out `0`), minidump filter, decide `/MD`+app-local CRT vs `/MT` | CTest + Python suite green; new fixture: exe started from a copied folder finds shaders; headless 4,200-frame smoke identical to slice 166 (480p hold only changes race display index); owner check of icon in taskbar/Task Manager | 2-3 |
+| M1 | Native release prerequisites: exe-relative shader dir (release config), `.rc` icon + VERSIONINFO, window `hIcon`, `GT4_FULLSCREEN`, `GT4_RACE_DISPLAY` (default 480p; 480i/1080i holds), minidump filter, decide `/MD`+app-local CRT vs `/MT` | CTest + Python suite green; new fixture: exe started from a copied folder finds shaders; headless 4,200-frame smoke identical to slice 166 (480p hold only changes race display index); owner check of icon in taskbar/Task Manager | 2-3 |
 | M2 | paraLLEl-GS as `gt4_parallel_gs.dll` with C ABI (after TASK-012 step 2 lands) | Fixture suite passes through the DLL; frames identical to the static build; F8 shows no GS cost change beyond noise; relink test: rebuild DLL from the source package, drop in, game runs | 2-3 |
 | M3 | `gt4l-disc`: ISO9660 + SYSTEM.CNF + hash + CORE/ELF rebuild + VOL photo reader | Synthetic ISO fixtures (good, wrong serial, PAL-like, Spec II-like, truncated, wrong VER, bin/cue); private parity tests: CORE/ELF bytes equal the pinned files; Spec II ISO rejected with the Spec II message; 64 photos extracted with hashes recorded | 3 |
 | M4 | `gt4l-core` + `gt4l-payload` (Bundled): paths, settings table + TOML, card manager (new/import/backup/lock), launch/supervise, exit classification, crash report zip, single instance | Unit tests for every validation rule mirrored from `play_performance.py`; dry-run launch prints the exact argv/env; scrubbed env test; crash classification tests from recorded logs; second instance focuses the first | 3 |
-| M5 | Slint UI: theme, setup wizard, home, settings (normal + advanced), running state, crash dialog, about/licenses; motion; keyboard/gamepad navigation (XInput: D-pad + A to PLAY) | Screens match the mockups at 1280x720 and scale at 125/150%; reduced-motion honored; whole flow usable by keyboard and controller; owner design review | 6-8 |
+| M5 | Slint UI with the tokens and components of section 12: setup list, home, settings (Graphics/Display/Advanced/About), running state, crash dialog, licenses; keyboard/gamepad navigation (XInput: D-pad + A to PLAY) | Screens match the mockups at 1280x720 and scale at 125/150%; reduced-motion honored; whole flow usable by keyboard and controller; owner design review | 6-8 |
 | M6 | Branding pipeline: `brand.toml`, icon generation script, official assets dropped in, neutral swap test | Neutral package contains no official asset hash; official build shows art/icons everywhere listed in 8.2 | 1-2 |
 | M7 | NSIS installer/uninstaller + release packaging + license bundle | Install/uninstall as a standard (non-admin) user in Windows Sandbox; non-ASCII user name; OneDrive-redirected Desktop; upgrade over previous version keeps data; uninstall keeps saves by default | 2-3 |
 | M8 | End-to-end QA + owner test | Clean machine: install → select ISO → play → save → exit → relaunch skips setup → crash path (forced) produces a report; owner plays the reference scene from the launcher | 2 |
@@ -476,26 +493,100 @@ TASK-012 progress; M1-M5 can start in parallel with it (single-writer rule: one 
 5. **Name in Windows**: Start Menu/Task Manager show "Gran Turismo 4" (official look) or
    "GT4Recomp" (lower trademark exposure)?
 
-## 12. Visual design (mockups next to this file)
+## 12. Visual design system (round 2: clean, minimalist, Gran Turismo identity)
 
-`mockup-setup.html` (states: verifying / rejected Spec II / ready), `mockup-home.html` (ready /
-game running), `mockup-settings.html` (Graphics / Advanced & experimental), all 1280x720, inline
-CSS, original placeholder art. Toggle "Show official asset slots" outlines every official or
-disc-derived asset in magenta with its file name and source.
+The mockups sit next to this file. All three are 1280x720, use inline CSS and quiet original placeholder art:
+- `mockup-setup.html`: checking / wrong disc / done
+- `mockup-home.html`: ready / running
+- `mockup-settings.html`: Graphics / Display / Advanced
 
-- **Palette:** asphalt black `#07090C`, graphite panels `#121820`/`#17202B`, chrome text `#EEF2F7`,
-  muted `#8792A2`, one accent "GT blue" `#2F7BFF` (glow `#79ACFF`), amber `#FFB020` only for
-  experimental/warnings, green `#35D07F` for verified/running, red `#FF4545` for rejections.
-  The accent comes from `brand.toml`, so the neutral brand can recolor without code changes.
-- **Type:** condensed DIN-style headings (Bahnschrift on Windows; the Slint build embeds an
-  OFL condensed face such as Barlow Condensed for portability) with wide tracking for labels,
-  tabular numerals for counters; Segoe UI for body text.
-- **Layout:** Home = full-bleed art, dark left/bottom shade, title + 360x78 PLAY bottom-left,
-  frosted status cards right, disc-photo strip bottom-right. Setup = cover art on the left (3D
-  tilt), four-step wizard right. Settings = sidebar, rows with one-line explanations, live
-  preview/"what the game receives" panel right, sticky Save bar.
-- **Motion** (all off under reduced motion): Ken Burns + 12 s cross-fade of disc photos; PLAY
-  breathing glow + periodic sheen; staggered card rise (80 ms); tachometer progress ring for the
-  disc hash; spinning disc while working; 1x/4x comparison wipe; 200 ms toggle springs.
-- **Input:** full keyboard and XInput navigation (D-pad focus ring in accent, A = activate,
-  B = back, Start = Play).
+The "Official asset slots" toggle outlines every official or disc-derived asset in magenta, with its file and source. Rendered screenshots are in `../shots/*.png`.
+
+### 12.1 What the Gran Turismo identity is (research)
+
+- **Official web brand (Confirmed: I read the computed styles on gran-turismo.com on 2026-10-15):**
+  - Fonts: `"Helvetica Neue", HelveticaNeue-Medium, HelveticaNeue-Light, Roboto` and `"Roboto Condensed"` (loaded from Google Fonts), plus one heading face, `bebas-neue-pro`.
+  - Backgrounds: `#000000`, `#13161B`, `#0A0C14`, and translucent `rgba(67,67,67,.85)`.
+  - Text: `#FFFFFF`, `#DEDEDE`.
+  - Light surfaces: `#E7E7E7`, `#F8F8F8`, with dark text `#171717` on them.
+  - The GT7 online manual uses the same font stack.
+- **GT4 in-game (Confirmed string):** the European-language font file on the disc, `GT4.VOL font/europe.kf`, contains the name **`ShinGo-M`** (Morisawa A-OTF Shin Go Medium). The other GT4 font files name `DFHeiBold-B5` (DynaFont, Traditional Chinese) and custom bitmap sets (`FC_*`, `DC_*`, `GT4meter`). So GT4's Latin UI text is set in Shin Go Medium (**High confidence**).
+- **GT7 / GT Sport in-game UI typeface: Unknown.** No public source names it. The logo is custom lettering, not a font.
+- **Look**, from GT4, GT Sport and GT7 menu screenshots:
+  - full-bleed car photography;
+  - quiet panels: near-black or charcoal in GT7 options and GT Sport, pale silver or paper in GT4 menus and the GT7 Café;
+  - thin hairline separators;
+  - small uppercase labels with wide letter spacing, and large light-weight titles;
+  - flat line icons and one restrained accent colour;
+  - almost no glow or decoration.
+
+  We borrow this identity, not the layout of any particular GT4 screen.
+
+### 12.2 Tokens
+
+| Token | Value | Use |
+|---|---|---|
+| `ink` | `#0A0C14` | Window background, nav column (from gran-turismo.com) |
+| `carbon` | `#13161B` | Page background (from gran-turismo.com) |
+| `graphite` | `#1E2229` | Controls, inactive toggles |
+| `hair` | `rgba(255,255,255,.10)` | Row separators, outlines |
+| `white` / `silver` | `#FFFFFF` / `#DEDEDE` | Primary / secondary text (from gran-turismo.com) |
+| `dim` / `faint` | `#9AA0A8` / `#5C626B` | Helper text / disabled |
+| `paper` / `paper-ink` | `#F8F8F8` / `#171717` | Primary button, selected segment, toggle "on" (light surface from gran-turismo.com) |
+| `accent` | `#2C6BED` | Keyboard and controller focus ring only (**Hypothesis**: a GT-style blue; the owner can pick another) |
+| `ok` / `error` | `#2FA866` / `#D64545` | Ticks, "Not supported" |
+
+**Type scale** (size/line height in px):
+- Titles: 34/40 Light (setup), 30/36 Light (settings); the neutral-build logo text is 44 Light.
+- Body 14/20 Regular; helper text 12/16.
+- Labels: Roboto Condensed Medium at 11–13, uppercase, letter spacing 0.12–0.24 em.
+
+**Spacing:** 8 px grid (8, 16, 24, 32, 40, 48, 72, 96). Corner radius 3 px. Rows are 48 px high (56 px in setup).
+
+**Effects:** no shadow except on the cover art, no gradients on controls, no glow anywhere.
+
+### 12.3 Fonts
+
+| Role | Official / reference | Redistributable? | We ship |
+|---|---|---|---|
+| UI text | Helvetica Neue (gran-turismo.com); Shin Go Medium (GT4 in-game) | No (commercial licenses from Linotype/Monotype and Morisawa) | **Roboto**: the official site's own fallback. SIL Open Font License 1.1 in current Google Fonts releases; older releases were Apache-2.0 (**High confidence**) |
+| Labels / numbers | Roboto Condensed (gran-turismo.com) | Yes | **Roboto Condensed** (same license as Roboto) |
+| Display heading (optional) | Bebas Neue Pro (gran-turismo.com) | No (commercial) | Not used. If ever needed: Bebas Neue (OFL) |
+| Japanese/CJK (later: Android, other locales) | Shin Go / DynaFont | No | Noto Sans JP / Noto Sans CJK (OFL) |
+| Logo | Custom GT lettering | Official asset | Only as `logo-gt4.png` in `branding/official/` |
+
+The fonts are embedded in the Slint build, so nothing depends on fonts installed on the machine. This matters on Android.
+
+### 12.4 Components (Slint, portable)
+
+| Component | Description |
+|---|---|
+| `TitleBar` | Icon slot, app name, window buttons |
+| `PrimaryButton` | Paper fill, ink text, uppercase condensed label, 52 px high; hover darkens; focus = 2 px accent ring |
+| `SecondaryButton` | Hairline outline |
+| `IconButton` | 40 px; used for the settings gear |
+| `OptionRow` | Label plus an optional one-line helper on the left, exactly one control on the right, hairline below |
+| `GroupHeader` | Small uppercase label |
+| `Dropdown` | — |
+| `Segmented` | Selected segment = paper fill |
+| `Toggle` | On = paper track with an ink knob |
+| `StepRow` | Number, label, short detail, and a tick, percentage or status |
+| `ProgressLine` | 2 px bar |
+| `NavList` | Text items; a 2 px marker on the left shows the current page |
+| `ArtBackground` | Cross-fading image with a dark shade along the bottom |
+
+Components make no platform calls. The Windows shell (title bar, file dialog, process launch) stays outside them, so Android can reuse the same `.slint` files with a different shell.
+
+### 12.5 Screens and motion
+
+- **Setup:** cover art on the left. On the right: logo, "Set up your game", "This only happens once.", four step rows and one primary button. For a wrong disc: one red status, a two-line explanation and "Choose another file".
+- **Home:** full-bleed disc photo, logo at bottom-left, Play under it, a Settings gear at top-right. While the game runs, Play becomes "Running · Stop". Nothing else: no cards, no news, no hints, no footer.
+- **Settings:** a nav column (Back, logo, Graphics, Display, Advanced, About, version). Each page has a title, the single line "Changes apply the next time you play." and its option rows. About holds licenses, disc and game files, repair and log access.
+- **Motion:**
+  - background cross-fade of 1 s every 15 s;
+  - button hover 150 ms, toggle 150 ms;
+  - page-change fade 200 ms;
+  - the progress bar's width eases.
+
+  There is no Ken Burns, sheen, breathing effect or staggered entrance. Reduced-motion turns all of it off.
+- **Input:** keyboard and XInput. D-pad moves focus, A activates, B goes back, Start = Play.
