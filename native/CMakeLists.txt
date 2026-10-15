@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 get_filename_component(GT4_ROOT ".." ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(GT4_ASSETS_ROOT "${GT4_ROOT}" CACHE PATH "Verified private assets checkout")
+# TASK-011 step 3 (slice171): the perf accounting enum carries the MTVU categories in every target, so the
+# Accounting layout matches across translation units. Legacy report lines are unchanged (kLegacyCategoryCount).
+add_compile_definitions(GT4_MTVU_RUNTIME)
 set(GT4_EE_PROFILE "production" CACHE STRING "Pinned EE library profile")
 set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation)
 set(GT4_SHAPE_RUNTIME_SOURCE "" CACHE PATH "Verified experimental runtime overlay capsule")
@@ -127,11 +130,15 @@ target_compile_options(gt4_mtvu_journal PRIVATE /W4)
 add_executable(mtvu_ring_fixture mtvu_ring_fixture.cpp)
 target_compile_options(mtvu_ring_fixture PRIVATE /W4)
 add_executable(mtvu_journal_fixture mtvu_journal_fixture.cpp)
+# TASK-011 step 3 (slice171): per-thread accounting controls (worker scopes, shared probe validity).
+add_executable(mtvu_perf_fixture mtvu_perf_fixture.cpp)
+target_link_libraries(mtvu_perf_fixture PRIVATE gt4_perf_probe)
+target_compile_options(mtvu_perf_fixture PRIVATE /W4)
 target_link_libraries(mtvu_journal_fixture PRIVATE gt4_mtvu_journal)
 target_compile_options(mtvu_journal_fixture PRIVATE /W4)
 # TASK-011 step 2: worker runtime (EE shadow, worker dispatch, journal drain). Linked into the slice170 runtime only.
 add_library(gt4_mtvu_runtime STATIC mtvu_runtime.cpp)
-target_link_libraries(gt4_mtvu_runtime PUBLIC gt4_mtvu_journal gt4_mtvu_measure)
+target_link_libraries(gt4_mtvu_runtime PUBLIC gt4_mtvu_journal gt4_mtvu_measure gt4_perf_probe)
 target_compile_options(gt4_mtvu_runtime PRIVATE /W4)
 if(GT4_PERF_FRAME_ONLY)
     target_compile_definitions(gt4_perf_probe PUBLIC GT4_PERF_FRAME_ONLY)

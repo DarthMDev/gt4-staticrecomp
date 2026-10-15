@@ -4,14 +4,17 @@
 #include "mtvu_journal.hpp"
 #include "mtvu_measure.hpp"
 #include "mtvu_ring.hpp"
+#include "perf_probe.hpp"
 
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <string_view>
 #include <string>
 #include <thread>
 
@@ -31,6 +34,7 @@ class DonorSink final : public GsSink {
  public:
   explicit DonorSink(void (*render)(int, const std::uint8_t *, std::uint32_t)) : render_(render) {}
   void gif_transfer(std::uint8_t path, const std::uint8_t *data, std::size_t bytes) override {
+    gt4::perf::Scope drain(gt4::perf::Category::gs_drain);
     render_(path, data, static_cast<std::uint32_t>(bytes / 16));
   }
   // The runtime synchronises GIF, VBlank and privileged operations instead of journaling them (section 5.3).
@@ -41,6 +45,17 @@ class DonorSink final : public GsSink {
  private:
   void (*render_)(int, const std::uint8_t *, std::uint32_t);
 };
+
+// Cumulative worker totals, published by the worker after each job (before its JobDone). The EE reads them only
+// after a blocking drain, when the worker is idle, so the release/acquire of the ring orders the reads.
+struct WorkerTotals {
+  std::uint64_t idle_us = 0, vu1_us = 0, output_us = 0, jobs = 0;
+};
+
+std::uint64_t wall_us() {
+  return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
 struct Runtime {
   Settings settings;
@@ -66,9 +81,16 @@ struct Runtime {
   std::uint64_t vif_packets = 0, vif_writes = 0, ee_transfers = 0, direct_transfers = 0, gs_renders = 0;
   std::map<std::string, std::uint64_t> syncs;
   std::atomic<std::uint64_t> path1_signals{0};
-  std::uint64_t verify_frames = 0, verify_mismatches = 0;
+  std::uint64_t verify_frames = 0, verify_mismatches = 0, report_frames = 0;
   std::uint64_t frame_hash = kFnvOffset;
   bool path1_reported = false;
+
+  // TASK-011 step 3 (slice171) per-thread accounting. The worker owns worker_accounting; the EE reads only
+  // `published` (atomics) and `baseline` (EE only).
+  gt4::perf::Accounting worker_accounting{false};
+  std::atomic<std::uint64_t> published_idle_us{0}, published_vu1_us{0}, published_output_us{0}, published_jobs{0};
+  std::uint64_t worker_idle_us = 0, worker_jobs = 0;  // worker thread only
+  WorkerTotals baseline;                              // EE thread only: totals at the last interval reset
 };
 
 Runtime &rt() {
@@ -117,13 +139,31 @@ void run_job(Runtime &r, RecordKind kind, const std::vector<std::uint8_t> &paylo
   }
 }
 
+// Publishes the worker's cumulative totals. Category times come from the worker's own accounting (its scopes are
+// closed at this point, so the interval is current).
+void publish_worker_totals(Runtime &r) {
+  const auto &categories = r.worker_accounting.interval().categories;
+  std::uint64_t vu1 = categories[static_cast<std::size_t>(gt4::perf::Category::vu1_interpret)].exclusive_us;
+#ifdef GT4_VU1_AOT
+  vu1 += categories[static_cast<std::size_t>(gt4::perf::Category::vu1_aot)].exclusive_us;
+#endif
+  r.published_vu1_us.store(vu1, std::memory_order_relaxed);
+  r.published_output_us.store(categories[static_cast<std::size_t>(gt4::perf::Category::mtvu_output)].exclusive_us,
+                              std::memory_order_relaxed);
+  r.published_idle_us.store(r.worker_idle_us, std::memory_order_relaxed);
+  r.published_jobs.store(r.worker_jobs, std::memory_order_relaxed);
+}
+
 void worker_main() {
   t_on_worker = true;
   Runtime &r = rt();
+  gt4::perf::bind_worker(&r.worker_accounting, wall_us);
   RecordHeader header;
   std::vector<std::uint8_t> payload;
   for (;;) {
+    const std::uint64_t idle_start = wall_us();
     r.worker_end->receive(header, payload);
+    r.worker_idle_us += wall_us() - idle_start;
     const auto kind = static_cast<RecordKind>(header.kind);
     if (kind == RecordKind::Stop) return;
     r.worker_job = header.job;
@@ -136,22 +176,76 @@ void worker_main() {
         r.worker_failed.store(true, std::memory_order_release);
       }
     }
+    ++r.worker_jobs;
+    publish_worker_totals(r);
     r.worker_end->emit_job_done(header.job);
   }
 }
 
 }  // namespace
 
-Settings parse_settings(const char *mtvu, const char *verify, const char *strict) {
+Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every) {
   Settings settings;
   settings.enabled = parse_flag("GT4_MTVU", mtvu, true);
   settings.verify = parse_flag("GT4_MTVU_VERIFY", verify, false);
   settings.strict = parse_flag("GT4_MTVU_STRICT", strict, false);
+  if (report_every != nullptr) {
+    const std::string_view digits(report_every);
+    if (digits.empty() || digits.find_first_not_of("0123456789") != std::string_view::npos)
+      throw std::invalid_argument("GT4_MTVU_REPORT_EVERY must be a VBlank count");
+    settings.report_every = std::stoull(report_every);
+  }
   return settings;
 }
 
 Settings settings_from_environment() {
-  return parse_settings(std::getenv("GT4_MTVU"), std::getenv("GT4_MTVU_VERIFY"), std::getenv("GT4_MTVU_STRICT"));
+  return parse_settings(std::getenv("GT4_MTVU"), std::getenv("GT4_MTVU_VERIFY"), std::getenv("GT4_MTVU_STRICT"),
+                        std::getenv("GT4_MTVU_REPORT_EVERY"));
+}
+
+WorkerTotals published_totals(const Runtime &r) {
+  WorkerTotals totals;
+  totals.idle_us = r.published_idle_us.load(std::memory_order_relaxed);
+  totals.vu1_us = r.published_vu1_us.load(std::memory_order_relaxed);
+  totals.output_us = r.published_output_us.load(std::memory_order_relaxed);
+  totals.jobs = r.published_jobs.load(std::memory_order_relaxed);
+  return totals;
+}
+
+// Installed as the probe's [mtvu] section (EE thread, at each report). The EE categories come from the probe's own
+// interval; the worker totals are the difference since the last interval reset. Times are ms per VBlank.
+void report_interval(std::FILE *file, const gt4::perf::IntervalTime &ee, std::uint64_t frames) {
+  if (!frames) return;
+  Runtime &r = rt();
+  const WorkerTotals now = published_totals(r);
+  const double scale = static_cast<double>(frames) * 1000.0;
+  const auto ee_ms = [&](gt4::perf::Category category) {
+    return ee.categories[static_cast<std::size_t>(category)].exclusive_us / scale;
+  };
+  const double wait_vblank = ee_ms(gt4::perf::Category::mtvu_wait_vblank);
+  const double wait_download = ee_ms(gt4::perf::Category::mtvu_wait_download);
+  const double wait_privileged = ee_ms(gt4::perf::Category::mtvu_wait_gs_privileged);
+  const double wait_vu_memory = ee_ms(gt4::perf::Category::mtvu_wait_vu_memory);
+  const double wait_other = ee_ms(gt4::perf::Category::mtvu_wait_other);
+  const double wait_total = wait_vblank + wait_download + wait_privileged + wait_vu_memory + wait_other;
+  const double vu1 = (now.vu1_us - r.baseline.vu1_us) / scale;
+  const double output = (now.output_us - r.baseline.output_us) / scale;
+  const double idle = (now.idle_us - r.baseline.idle_us) / scale;
+  const double busy = vu1 + output;
+  const double overlap = busy > wait_total ? busy - wait_total : 0.0;
+  std::fprintf(file, "[mtvu] EE wait ms/frame: vblank=%.3f download=%.3f gs_privileged=%.3f vu_memory=%.3f other=%.3f total=%.3f\n",
+               wait_vblank, wait_download, wait_privileged, wait_vu_memory, wait_other, wait_total);
+  std::fprintf(file, "[mtvu] EE gs_drain ms/frame=%.3f (journal GS front end on the EE thread)\n",
+               ee_ms(gt4::perf::Category::gs_drain));
+  std::fprintf(file, "[mtvu] worker ms/frame: vu1_program=%.3f output_path12=%.3f busy=%.3f idle=%.3f jobs/frame=%.1f\n",
+               vu1, output, busy, idle, (now.jobs - r.baseline.jobs) / static_cast<double>(frames));
+  std::fprintf(file, "[mtvu] overlap achieved ms/frame=%.3f (worker busy %.3f minus EE wait for the worker %.3f)\n",
+               overlap, busy, wait_total);
+}
+
+void reset_worker_baseline() {
+  Runtime &r = rt();
+  r.baseline = published_totals(r);
 }
 
 void start(const Settings &settings, const Donor &donor) {
@@ -170,6 +264,9 @@ void start(const Settings &settings, const Donor &donor) {
   r.sink = std::make_unique<DonorSink>(donor.render_gs);
   r.journal = std::make_unique<EeJournal>(*r.input, *r.output, r.bell, *r.sink);
   r.worker_end = std::make_unique<WorkerEnd>(*r.input, *r.output, r.bell);
+  r.worker_accounting = gt4::perf::Accounting(gt4::perf::Probe::shared().enabled());
+  r.baseline = WorkerTotals{};
+  gt4::perf::Probe::set_mtvu_hooks(report_interval, reset_worker_baseline);
   r.running.store(true);
   r.worker = std::thread(worker_main);
 }
@@ -258,6 +355,14 @@ void sync(const char *reason) {
   Runtime &r = rt();
   if (!enabled() || t_on_worker) return;
   ++r.syncs[reason];
+  const std::string_view why(reason);
+  using gt4::perf::Category;
+  const Category wait = why == "vblank" ? Category::mtvu_wait_vblank
+                      : why == "download" ? Category::mtvu_wait_download
+                      : why == "gs_privileged" ? Category::mtvu_wait_gs_privileged
+                      : why == "vu_memory" ? Category::mtvu_wait_vu_memory
+                      : Category::mtvu_wait_other;
+  gt4::perf::Scope waiting(wait);
   r.journal->drain(true);
   rethrow_worker_error();
 }
@@ -273,6 +378,12 @@ void vblank_sync() {
   Runtime &r = rt();
   if (!r.started) return;
   sync("vblank");
+  if (r.settings.report_every) {
+    // Headless runs have no window, so the probe's boundary never runs: drive it here (guest counters are zero).
+    gt4::perf::Probe &probe = gt4::perf::Probe::shared();
+    if (++r.report_frames % r.settings.report_every == 0) probe.request(gt4::perf::Request::report);
+    probe.frame_boundary(gt4::perf::GuestSample{});
+  }
   if (!r.settings.verify) return;
   ++r.verify_frames;
   const std::uint64_t shadow = enabled() ? r.donor.vif1_state_hash(false) : 0;
@@ -304,6 +415,7 @@ void worker_gif(int path, const std::uint8_t *data, std::uint32_t qwc) {
       if (r.settings.strict) throw std::runtime_error("mtvu strict: PATH1 SIGNAL/FINISH/LABEL");
     }
   }
+  gt4::perf::Scope output(gt4::perf::Category::mtvu_output);
   r.worker_end->emit_gif(static_cast<std::uint8_t>(path), r.worker_job, data, static_cast<std::size_t>(qwc) * 16);
 }
 

@@ -521,3 +521,38 @@ Build `private/slice170-mtvu-build/build`, `gt4vulkan.exe` sha256 a0b4968b2c5907
 
 Limits of this evidence: menus only (the headless schedule), so VU1 work is light; no timing claim. The owner
 A/B (showroom, night race, rally) is the next gate (section 6, step 5). F8 is not per-thread yet (11.5).
+
+### 11.7 Step 3: per-thread accounting and the [mtvu] F8 section (slice 171)
+
+Build `private/slice171-mtvu-build/build`; `gt4vulkan.exe` 95,569,920 bytes, sha256
+6e60fe72bc870c25d6252cb79b276fbbd870b857dc10343855854cb0ee37269d. The runtime capsule is unchanged
+(`private/slice170-mtvu-runtime`, pin `slice170-mtvu-runtime.json`); the launcher pin is `slice171-mtvu.json`.
+
+- Categories (appended after the legacy ones, `GT4_MTVU_RUNTIME` defined in every native target):
+  `mtvu_wait_vblank`, `mtvu_wait_download`, `mtvu_wait_gs_privileged`, `mtvu_wait_vu_memory`,
+  `mtvu_wait_other` (EE waits in `sync` by reason), `gs_drain` (GS front end executed from the journal, EE),
+  `mtvu_output` (worker PATH1/PATH2 GIF output). The legacy exclusive/inclusive lines stop at
+  `kLegacyCategoryCount`, so `GT4_MTVU=0` keeps the legacy lines unchanged.
+- Worker accounting: scopes opened on a thread bound with `gt4::perf::bind_worker` go to the worker's own
+  `Accounting` (thread-local binding in `Scope`), never to the shared probe. The worker publishes cumulative
+  totals (VU1 program, output, idle, jobs) as atomics after each job, before its JobDone; the EE reads them only
+  at a report (after the VBlank drain, worker idle). Race-free by the same release/acquire ordering as the ring.
+- F8 section: `Probe::print` calls the `[mtvu]` hook after the legacy lines, only when the runtime is started.
+  Lines: EE wait per frame by reason and total; EE gs_drain; worker vu1_program, output_path12, busy, idle, jobs
+  per frame; overlap achieved = worker busy minus EE wait for the worker (clamped at 0). Ms per VBlank.
+- Headless F8-equivalent: `GT4_MTVU_REPORT_EVERY=N` (validated, digits) drives the probe boundary at each VBlank
+  and requests a report every N VBlanks. It also enables the probe accounting (the probe is otherwise on only with
+  GT4_PERF=1, which the launcher removes outside performance mode). Guest counters are zero in this mode.
+- Limits: the EE-side wait categories were zero in every headless interval (menus, worker always idle at VBlank),
+  and VU1 program time was 0.000-0.02 ms/frame (menus run almost no VU1, step 0). No race scene is available
+  headless, so the per-thread numbers for the race scenes come from the owner F8, not from this evidence.
+  Worker categories cover only scopes inside jobs; dispatch time between scopes is not in busy.
+
+Verification (slice171, headless 4,200 frames, slice157 schedule, dumps every 100):
+- CTest 27/27 (new `native_mtvu_perf`: worker scopes on the worker accounting, exclusive attribution, shared probe
+  stays valid). Python 264 OK, 12 skipped.
+- Frames identical to slice157 (42/42): `GT4_MTVU=1` three runs (on1, on2, on3), `GT4_MTVU=0` one run (off1).
+- F8-equivalent: 8 reports per run (every 500 VBlanks). With MTVU on, the legacy lines are followed by the
+  `[mtvu]` section; with MTVU off, the same legacy lines and no `[mtvu]` section.
+- Sample (on1, interval at frame 1000): EE gs_drain 0.09-0.16 ms/frame, worker output 0.02-0.07 ms/frame,
+  worker idle 7-73 ms/frame, overlap 0.007-0.069 ms/frame, jobs 52-1372 per frame.

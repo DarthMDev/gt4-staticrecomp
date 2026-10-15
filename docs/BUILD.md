@@ -402,7 +402,7 @@ Measurement outputs kept in private directories: `private/slice155-vu1-full-gen-
 Slice156 (TASK-009 quick fixes) is a candidate on the slice155 profile. Owner command, from the
 repository root:
 
-    private	ooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix
 
 Changes: window title `GT4Recomp`; the presentation is fixed 16:9 (F6, the 4:3 option and
 `GT4_ASPECT` / `--aspect` are removed); Alt+Enter and F11 toggle borderless fullscreen on the
@@ -945,3 +945,26 @@ python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp
 `GT4_MTVU` unset means 1. Add `GT4_MTVU_VERIFY=1` for a stream check (the per-frame `[mtvu-verify]` lines; MTVU
 on and off must print the same `gs` hashes). Known limit: F8 is not per-thread yet (MTVU-PLAN section 11.5), so
 the owner's F8 under MTVU is flagged invalid by the probe until step 3.
+
+### Slice171 - MTVU step 3 (per-thread F8)
+
+Same runtime capsule as slice170 (`private/slice170-mtvu-runtime`, unchanged). Build `private/slice171-mtvu-build`
+(same CMake recipe as slice170, with `-DGT4_PERF_RUNTIME_SOURCE=.../slice170-mtvu-runtime`). `gt4vulkan.exe`
+95,569,920 bytes, sha256 6e60fe72bc870c25d6252cb79b276fbbd870b857dc10343855854cb0ee37269d. Launcher pin
+`docs/inputs/slice171-mtvu.json`; mode `mtvu` now points to it.
+
+Owner A/B (PowerShell, from the worktree or the main checkout; `GT4_MTVU` unset means 1):
+
+```
+$env:GT4_MTVU="0"; C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+$env:GT4_MTVU="1"; C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+```
+
+Compare, per scene (showroom, night race, rally, Nordschleife TT 480p), the F8 lines `frame ms` (median, p95,
+p99, max), `VBlanks/s`, the `exclusive wall ms/frame` line (`vu1_aot`, `vu1_interpret`, `ee_dispatch`, `gs_execute`),
+and with GT4_MTVU=1 the `[mtvu]` lines: `EE wait ms/frame` (by reason; `mtvu_wait_vblank` should be small),
+`EE gs_drain`, `worker ms/frame` (vu1_program, output_path12, busy, idle), and `overlap achieved`.
+Acceptance (MTVU-PLAN step 5): median and p99 equal or better in each scene; `vu1_aot` on the EE thread near 0 with
+MTVU on (the worker's time appears in the `[mtvu]` worker line). F8 under MTVU is valid (no INVALID line).
+Headless identity check: `GT4_MTVU_REPORT_EVERY=500 external_runtime_probe.py ... --runtime-manifest docs\inputs\slice171-mtvu.json`
+(42 frames compared with slice157).

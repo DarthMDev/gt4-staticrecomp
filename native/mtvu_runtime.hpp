@@ -17,10 +17,13 @@ struct Settings {
   bool enabled = true;  // GT4_MTVU: worker thread and shadow VIF1 (default on; 0 restores the single-thread path)
   bool verify = false;  // GT4_MTVU_VERIFY: per-frame GS stream hash, shadow vs worker VIF1 state at each VBlank
   bool strict = false;  // GT4_MTVU_STRICT: abort on a violated invariant (PATH1 signal, verify mismatch)
+  // GT4_MTVU_REPORT_EVERY (slice171): print the F8-equivalent probe report every N VBlanks (headless; 0 = off).
+  std::uint64_t report_every = 0;
 };
 
-// Each variable accepts unset, "0" or "1". Any other value throws std::invalid_argument naming the variable.
-Settings parse_settings(const char *mtvu, const char *verify, const char *strict);
+// Each switch accepts unset, "0" or "1"; GT4_MTVU_REPORT_EVERY accepts unset or a VBlank count. Any other value
+// throws std::invalid_argument naming the variable.
+Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every);
 Settings settings_from_environment();
 
 // Donor operations. The worker callbacks run on the worker thread; render_gs runs on the EE thread.

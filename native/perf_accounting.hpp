@@ -17,8 +17,22 @@ enum class Category : std::size_t {
 #ifdef GT4_VU0_AOT
   vu0_aot,  // generated VU0 execution (VU0 AOT overlay only, slice 160)
 #endif
+#ifdef GT4_MTVU_RUNTIME
+  // TASK-011 step 3 (slice171): EE waits for the VU1 worker, by sync reason; GS front end executed from the journal;
+  // worker-side GIF output (PATH1/PATH2 bytes). Reported only in the [mtvu] section, never in the legacy lines.
+  mtvu_wait_vblank, mtvu_wait_download, mtvu_wait_gs_privileged, mtvu_wait_vu_memory, mtvu_wait_other,
+  gs_drain, mtvu_output,
+#endif
   count
 };
+
+// Categories printed by the legacy exclusive/inclusive lines; the MTVU categories are appended after them.
+constexpr std::size_t kLegacyCategoryCount =
+#ifdef GT4_MTVU_RUNTIME
+    static_cast<std::size_t>(Category::mtvu_wait_vblank);
+#else
+    static_cast<std::size_t>(Category::count);
+#endif
 
 constexpr Category vu_interpreter_category(int unit) noexcept {
   return unit == 0 ? Category::vu0_micro_interpret :

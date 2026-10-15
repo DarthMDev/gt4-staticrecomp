@@ -37,6 +37,11 @@ public:
   void audio(std::uint64_t produced, std::uint64_t completed,
              std::uint64_t empty_refills = 0) noexcept;
   void finish() noexcept;
+  // TASK-011 step 3: the [mtvu] report section (after the legacy lines) and the interval reset that goes with it.
+  // Installed by the worker runtime on the EE thread; with no hooks the report is unchanged.
+  using MtvuReport = void (*)(std::FILE *, const IntervalTime &, std::uint64_t);
+  using MtvuReset = void (*)();
+  static void set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept;
   // Extra report lines (for example pacing diagnostics) printed after each
   // interval report. An empty function removes the section.
   void set_report_section(std::function<void(std::FILE *)> section);
@@ -80,16 +85,36 @@ public:
   explicit Scope(Category) noexcept {}
 };
 #else
+// TASK-011 step 3 (slice171): a thread that bound a worker accounting (bind_worker) records its scopes there,
+// not in the shared probe. Only that thread touches the accounting; other threads never see it.
+struct WorkerBinding {
+  Accounting *accounting = nullptr;
+  std::uint64_t (*wall_us)() = nullptr;
+};
+inline thread_local WorkerBinding t_worker_binding{};
+void bind_worker(Accounting *accounting, std::uint64_t (*wall_us)()) noexcept;
+
 class Scope {
 public:
-  explicit Scope(Category category) noexcept : probe_(Probe::shared()),
-      token_(probe_.enter(category)) {}
-  ~Scope() { if (token_) probe_.leave(token_); }
+  explicit Scope(Category category) noexcept : worker_(t_worker_binding.accounting) {
+    if (worker_)
+      token_ = worker_->enter(category, t_worker_binding.wall_us());
+    else {
+      probe_ = &Probe::shared();
+      token_ = probe_->enter(category);
+    }
+  }
+  ~Scope() {
+    if (!token_) return;
+    if (worker_) worker_->leave(token_, t_worker_binding.wall_us());
+    else probe_->leave(token_);
+  }
   Scope(const Scope &) = delete;
   Scope &operator=(const Scope &) = delete;
 private:
-  Probe &probe_;
-  Accounting::Token token_;
+  Accounting *worker_ = nullptr;
+  Probe *probe_ = nullptr;
+  Accounting::Token token_ = 0;
 };
 #endif
 } // namespace gt4::perf

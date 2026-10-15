@@ -19,6 +19,9 @@ __attribute__((weak)) void vu0_aot_report(std::FILE *) {}  // strong definition:
 
 namespace gt4::perf {
 namespace {
+// Installed by the VU1 worker runtime (EE thread): report section and interval reset (TASK-011 step 3).
+Probe::MtvuReport g_mtvu_report = nullptr;
+Probe::MtvuReset g_mtvu_reset = nullptr;
 std::uint64_t wall_us() {
   return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
       std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -43,6 +46,10 @@ constexpr const char *names[] = {
 #endif
 #ifdef GT4_VU0_AOT
     , "vu0_aot"
+#endif
+#ifdef GT4_MTVU_RUNTIME
+    , "mtvu_wait_vblank", "mtvu_wait_download", "mtvu_wait_gs_privileged", "mtvu_wait_vu_memory",
+    "mtvu_wait_other", "gs_drain", "mtvu_output"
 #endif
     };
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
@@ -69,7 +76,12 @@ Probe &Probe::shared() {
 #endif
   static Probe probe({wall_us, cpu_us}, [] {
     char value[8]{};
-    return GetEnvironmentVariableA("GT4_PERF", value, sizeof value) == 1 && value[0] == '1';
+    if (GetEnvironmentVariableA("GT4_PERF", value, sizeof value) == 1 && value[0] == '1')
+      return true;
+    // TASK-011 step 3: GT4_MTVU_REPORT_EVERY (headless [mtvu] report) turns the accounting on; "0" or unset does not.
+    char every[32]{};
+    const DWORD length = GetEnvironmentVariableA("GT4_MTVU_REPORT_EVERY", every, sizeof every);
+    return length > 0 && !(length == 1 && every[0] == '0');
   }(), stderr, detailed, split_vu);
   return probe;
 }
@@ -129,6 +141,8 @@ void Probe::audio(std::uint64_t produced, std::uint64_t completed,
 
 void Probe::reset(std::uint64_t now, GuestSample guest) noexcept {
   accounting_.restart(now);
+  if (g_mtvu_reset)
+    g_mtvu_reset();
   last_us_ = last_frame_us_ = now;
   last_guest_ = guest;
   frames_ = guest_cycles_ = primitives_ = vu_calls_ = 0;
@@ -232,18 +246,20 @@ void Probe::print(const char *reason) noexcept {
   else std::fputs("[perf] measured_thread_cpu=Unknown\n", output_);
   if (report_section_)
     report_section_(output_);
+  if (g_mtvu_report)
+    g_mtvu_report(output_, accounting_.interval(), frames_);
   if (!detailed_) {
     std::fputs("[perf] subsystem timers/host traffic counters=Unavailable (compiled out); boundary clocks/guest counters remain\n", output_);
     std::fflush(output_);
     return;
   }
   std::fputs("[perf] exclusive wall ms/frame (additive, includes instrumentation/scheduler time):", output_);
-  for (std::size_t index = 0; index < std::size(names); ++index)
+  for (std::size_t index = 0; index < kLegacyCategoryCount; ++index)
     std::fprintf(output_, " %s=%.3f", names[index],
         accounting_.interval().categories[index].exclusive_us / 1000.0 / frames);
   std::fputc('\n', output_);
   std::fputs("[perf] inclusive wall ms/frame (overlapping, DO NOT SUM):", output_);
-  for (std::size_t index = 0; index < std::size(names); ++index)
+  for (std::size_t index = 0; index < kLegacyCategoryCount; ++index)
     std::fprintf(output_, " %s=%.3f", names[index],
         accounting_.interval().categories[index].inclusive_us / 1000.0 / frames);
   std::fprintf(output_, "\n[perf] mapped_write_bytes/frame=%.0f mapped_read_bytes/frame=%.0f presented_RGBA_bytes/frame=%.0f presents/frame=%.2f dispatches/frame=%.1f workgroups/frame=%.0f\n",
@@ -270,6 +286,15 @@ void Probe::print(const char *reason) noexcept {
   ps2::vu::vu0_aot_report(output_);
 #endif
   std::fflush(output_);
+}
+
+void Probe::set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept {
+  g_mtvu_report = report;
+  g_mtvu_reset = reset;
+}
+
+void bind_worker(Accounting *accounting, std::uint64_t (*wall)()) noexcept {
+  t_worker_binding = {accounting, wall};
 }
 
 void Probe::set_report_section(std::function<void(std::FILE *)> section) {
