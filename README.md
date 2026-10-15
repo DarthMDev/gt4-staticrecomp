@@ -147,8 +147,8 @@ in game before it is merged.
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design done |
 | TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 📋 Planned |
-| TASK‑026 | Own hardware renderer (MIT, clean room): specification | 🔄 In progress |
-| TASK‑027 | Own hardware renderer: implementation, 3x-6x resolution and texture packs | 📋 Planned |
+| TASK‑026 | CoreGS 2.0 (our own MIT hardware renderer, clean room): specification | ✅ Done |
+| TASK‑027 | CoreGS 2.0: implementation, 3x-6x resolution and texture packs | ⏸️ Paused · core libraries done, resumes after 1.0.0 |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 
