@@ -12,6 +12,7 @@
 #include "frame_clock.hpp"
 #include "pacing.hpp"
 #include "window_mode.hpp"
+#include "gs_prim_stats.hpp"
 #ifdef GT4_SHAPE_CAPTURE
 #include "shape_capture_control.hpp"
 #include "shape_observer_adapter.hpp"
@@ -126,6 +127,11 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     return 0;
   }
 #endif
+  // F10 (slice 186): capture the next presented frame (native size and 1x) into private/manual-play/session-*.
+  if (message == WM_KEYDOWN && first == VK_F10 && !((second & (1ll << 30)) != 0)) {
+    gs_prim_stats::request_capture();
+    return 0;
+  }
   if (message == WM_CLOSE) {
     DestroyWindow(window);
     return 0;
@@ -365,6 +371,7 @@ int run_window(const std::function<int()> &emulate) {
 #ifdef GT4_PERF_PROBE
     gt4::perf::Probe::shared().set_report_section([](std::FILE *output) {
       // F8 report: counter differences since the last F7 or report, then totals.
+      gs_prim_stats::report(output);
       const gt4::pacing::Counters session = pacing_counters();
       pacing_diagnostics.format(output, pacing_mode,
                                 session.since(counters_at_last_report), session);

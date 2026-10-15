@@ -1,0 +1,81 @@
+{
+  "donor_revision": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "donor_sha256": {
+    "system.cpp": "f30c8dd90c40e930635375ae2a3091f052655d797744de4348a5c7261a710bb2",
+    "vu_micro.cpp": "5fc349d96364f72818da96cd2376637421d3d4d9150547c22034863c15d22a1d",
+    "vif.cpp": "6fc9efc739daec951172bc7f97f64b05802145314bc17b049c0c3219be654e18"
+  },
+  "source_sha256": {
+    "system.cpp": "7ca58519c08cba6461ee782127ff04c0206fdbdc5b548f5ddf0e1175f0f7fb40",
+    "vu_micro.cpp": "60af75b69021bbe5d0ced2ccabc2aeb8d65bab5fd5ebffedbe0e11b2286aa17c",
+    "vif.cpp": "6449989a2a39c58990beea1d06aba9f61238c53329adf73d1859e54177db5223"
+  },
+  "receipt_sha256": "b9a408792d670652fe1a8faab11df60dbf20bbd1ba1ce78291936eac8cad597b",
+  "inputs": {
+    "PORT": {
+      "gpu.cpp": "e2445fabca78173a019e73a6e68d3a5909a336287e9122e3d94e5699f8a6611c",
+      "gpu.hpp": "28e50f7b1af97a9bb4ef42501048699d329ac7303ba98226baab87679f31c71f",
+      "gs.cpp": "16caf05ea21bd16c415f6d07f8af67a7a5bb9166d44b6324217037139e01db93",
+      "main.cpp": "99564a06d2006cb22c9479682d764e975683c36c2f55a6c25c5d122330785f8e"
+    },
+    "SHADERS": {
+      "copy_read.spv": "d42738e36e821c02597dd2b2e35b89e0d51e79b94579c6ea7128b3cdd10831da",
+      "copy_write.spv": "8f04d4a2893c74d13af1c40c7801687ac5b823ebcca1ea46fc1c868e1294da09",
+      "decode.spv": "253bdb58eeee3df8a1aedea7d58dba2266d48a78ca6d71b6557e91d32fe63639",
+      "display.spv": "55c53d25987aec48ff0345f090d7636295ebd717dbc34cfa2a3d98d9a0caa570",
+      "load_clut.spv": "b3ebd5b9cdd9104d997e752d19281ce0af26f879742714201392e97788be6018",
+      "post.spv": "eae843482f807de300394cf2fa492bc69d03ae7f786bb417edbc391ccc429da6",
+      "raster.spv": "c0fa01dbffcff34920ad381f2ed9e9156e9007f08c06ab08c09db43ced97adb4",
+      "resolve.spv": "04b2a430b006a0efa2460ec92460bb7033bd5a1ffa8d261426311da81d21d68b",
+      "snapshot.spv": "4a5f6c0507423b410fb29469706e3532079dcf9e04c8e69fa92dcf115398ac77",
+      "upload.spv": "52a5e9c13d4d05a3a8c21aee84ad32c3c140b850ed59085b5f8daa1c8daa8b09"
+    }
+  },
+  "vu_scope_profile": "unit_split_run_fast_only",
+  "vu1_aot_profile": "overlay-v1",
+  "vu1_aot_overlay_sha256": "171b07c36fbe54be2579a84f579e06e4796b93648ca9f1d13b429d8abad0cd32",
+  "slice": 186,
+  "purpose": "slice186 (TASK-028): slice184 adapter plus GS primitive statistics (GT4_GS_PRIM_STATS=1), F10 owner capture, and sprite sub-sample switches (GT4_GS_SPRITE_SUBSAMPLE, GT4_GS_SPRITE_SNAP) on by default at PS2_SCALE > 1.",
+  "date": "2026-10-15",
+  "source_capsule": "private/slice160-vu0-runtime",
+  "vu1_table": {
+    "generated_dir": "private/slice157-vu1-all-gen",
+    "entry_policy": "all: every 8-byte aligned address of the image (vu1_image.py entries --policy all)",
+    "image": "private/slice155-vu1-image/vu1_image.bin",
+    "image_sha256": "9e5bc86098904fa8a4bd82fdea0872d5b1d8220269471014dd4630c46796cdff",
+    "entry_list_sha256": "284330f8d4587af4e4f57db29199f22e01c918a1c6cb259359be2e89f5d6c798",
+    "programs": 2048,
+    "programs_per_file": 16,
+    "parts": 128,
+    "table_file": "vu1_generated.cpp",
+    "table_sha256": "3eed39d69ffa12520237afb2ff44e248d19afa63995a2dcf6c578585784a2266",
+    "manifest_sha256": "07ae2077817e074e2ef68106592191c1449a0557983c34d05d3643ebb68a18d0"
+  },
+  "vu0_aot_profile": "overlay-v1",
+  "vu0_aot_overlay_sha256": "9e5fee2b08ad87bbeeba08adb426ee927f499df20fce9b44134ae87733bad25b",
+  "vu0_table": {
+    "generated_dir": "private/slice160-vu0-gen",
+    "entry_policy": "vcallms: 14 entries of docs/VU0-MICROCODE-MAP.md (vu0_image.py entries)",
+    "image": "private/slice160-vu0-image/vu0_image.bin",
+    "image_sha256": "2d7b26535008f1b3402ba70e8365cae749e64079eb32381d6853612abc896d44",
+    "entry_list_sha256": "2f5ac510cda32588c706b550a2ef1181537296d258039709180d7909a251471e",
+    "programs": 14,
+    "table_file": "vu0_generated.cpp",
+    "table_sha256": "9d1b028a9862933912a378d17887fdd2419278743b5e2771718a79e05c1820e5",
+    "manifest_sha256": "efb01307b57f3ceefbbd8e113e30208f71841bf8297144f21a93ca1ef1ecc8cb",
+    "vu1_table": "private/slice157-vu1-all-gen (unchanged; byte-identical regeneration checked)"
+  },
+  "status": "candidate: CTest and headless controls; owner race capture pending",
+  "derived_from": {
+    "port_generator": "scripts/prepare_external_vulkan.py (slice 186 splice anchors; native/gs_prim_stats_hook.inc)",
+    "shader_tool": "tools/wgsl_spirv not rerun: slice182 scale SPIR-V copied byte-identical; donor gs.wgsl and native/post/present.wgsl unchanged"
+  },
+  "source_manifest": "slice160-vu0-runtime.json",
+  "gs_source": {
+    "donor": "private/references/ps2-web-recomp/runtime/src/gs/gpu/gs.wgsl",
+    "donor_sha256": "a6ed68e9ca53ea9b6c90307d3ffeb2b74b15c5f0a20dd776f51bc243ef80d4a5",
+    "derived": "private/slice186-gs-src/gs.wgsl",
+    "derived_sha256": "dfdfb6f696da2e41e1b4639867722b94eef539b12077dd50b2c325d1cb1eeb8e",
+    "generator": "scripts/derive_upscale_gs_shader.py"
+  }
+}

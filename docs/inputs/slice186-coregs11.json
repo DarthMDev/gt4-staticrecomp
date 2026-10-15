@@ -1,0 +1,188 @@
+{
+  "schema_version": 1,
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "profile": "upscale",
+  "toolchain": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "build": "CMake/Ninja VS2022 x64 ABI Windows SDK10.0.26100.0",
+    "cmake": "4.3.3",
+    "ninja": "1.12.1"
+  },
+  "slice": 186,
+  "date": "2026-10-15",
+  "baseline_commit": "task/028-donor-upscale (slice 184 window and FSR)",
+  "branch": "task/028-donor-upscale",
+  "measurement_mode": "upscale",
+  "vu_scope_profile": "unit_split_run_fast_only",
+  "classification": "CoreGS 1.1 candidate with owner capture (TASK-028): slice186 = slice184 adapter plus GS primitive statistics (GT4_GS_PRIM_STATS), F10 frame capture, and sprite sub-sample switches (GT4_GS_SPRITE_SUBSAMPLE, GT4_GS_SPRITE_SNAP) on by default at PS2_SCALE > 1. Shaders: slice186 derived gs.wgsl per scale.",
+  "runtime": {
+    "path": "private/slice186-coregs11-build/build/gt4vulkan.exe",
+    "size_bytes": 95577600,
+    "sha256": "16da396b468754b43d541fc297ad7900f45c1a1ceae7889c11d7e44d29d14419"
+  },
+  "source_capsule": "private/slice160-vu0-runtime",
+  "source_manifest": "slice160-vu0-runtime.json",
+  "port_capsule": "private/slice186-coregs11-port",
+  "shader_capsule": "private/slice186-coregs11-shaders (scale 1); private/slice186-coregs11-shaders-s2, -s3, -s4",
+  "internal_scale": {
+    "environment": "PS2_SCALE",
+    "values": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "default": 1,
+    "presentation_filter": "linear when scaled; GT4_PRESENT_FILTER=nearest|linear overrides",
+    "frame_dumps": "1x box-average by default; GT4_DUMP_NATIVE_SIZE=1 writes the scaled image",
+    "window": "windowed client 960x540 at scale 1; 16:9 at 448 x scale otherwise (1593x896, 2389x1344, 3185x1792), clamped to the work area of the monitor under the cursor and centred"
+  },
+  "vu1_aot": {
+    "generated_dir": "private/slice157-vu1-all-gen",
+    "generated_source_sha256": "3eed39d69ffa12520237afb2ff44e248d19afa63995a2dcf6c578585784a2266",
+    "generated_manifest_sha256": "07ae2077817e074e2ef68106592191c1449a0557983c34d05d3643ebb68a18d0",
+    "programs": 2048,
+    "parts": 128,
+    "programs_per_file": 16,
+    "entry_policy": "all: 2048 static entries of the pinned image",
+    "image": "private/slice155-vu1-image/vu1_image.bin",
+    "image_sha256": "9e5bc86098904fa8a4bd82fdea0872d5b1d8220269471014dd4630c46796cdff",
+    "entry_list_sha256": "284330f8d4587af4e4f57db29199f22e01c918a1c6cb259359be2e89f5d6c798",
+    "corpus": "private/slice155-vu1-full-corpus (426 recorded-layout files; the 2,048 corpus is not built into CTest)",
+    "overlay_sha256": "171b07c36fbe54be2579a84f579e06e4796b93648ca9f1d13b429d8abad0cd32",
+    "flag_elision": true
+  },
+  "vu0_aot": {
+    "generated_dir": "private/slice160-vu0-gen-r3",
+    "programs": 14,
+    "entry_policy": "vcallms: 14 entries (docs/VU0-MICROCODE-MAP.md; vu0_image.py entries)",
+    "image": "private/slice160-vu0-image/vu0_image.bin",
+    "image_sha256": "2d7b26535008f1b3402ba70e8365cae749e64079eb32381d6853612abc896d44",
+    "entry_list_sha256": "2f5ac510cda32588c706b550a2ef1181537296d258039709180d7909a251471e",
+    "table_sha256": "ef59e476e957679e9894ce8613302ec3e1b52ebeed2567e17b9470d503de340c",
+    "manifest_sha256": "eb027ffaf69674c1ac171f6982f738dcb80a53d838d22747da8a86377d8390ae",
+    "overlay_sha256": "9e5fee2b08ad87bbeeba08adb426ee927f499df20fce9b44134ae87733bad25b",
+    "vu1_table": "private/slice157-vu1-all-gen (unchanged, regeneration byte-identical)"
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice186-coregs11-shaders/copy_read.spv",
+      "size_bytes": 7904,
+      "sha256": "d42738e36e821c02597dd2b2e35b89e0d51e79b94579c6ea7128b3cdd10831da"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/copy_write.spv",
+      "size_bytes": 8924,
+      "sha256": "8f04d4a2893c74d13af1c40c7801687ac5b823ebcca1ea46fc1c868e1294da09"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/decode.spv",
+      "size_bytes": 13812,
+      "sha256": "253bdb58eeee3df8a1aedea7d58dba2266d48a78ca6d71b6557e91d32fe63639"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/display.spv",
+      "size_bytes": 9060,
+      "sha256": "55c53d25987aec48ff0345f090d7636295ebd717dbc34cfa2a3d98d9a0caa570"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/load_clut.spv",
+      "size_bytes": 10448,
+      "sha256": "b3ebd5b9cdd9104d997e752d19281ce0af26f879742714201392e97788be6018"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/post.spv",
+      "size_bytes": 35768,
+      "sha256": "eae843482f807de300394cf2fa492bc69d03ae7f786bb417edbc391ccc429da6"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/raster.spv",
+      "size_bytes": 51224,
+      "sha256": "c0fa01dbffcff34920ad381f2ed9e9156e9007f08c06ab08c09db43ced97adb4"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/resolve.spv",
+      "size_bytes": 2352,
+      "sha256": "04b2a430b006a0efa2460ec92460bb7033bd5a1ffa8d261426311da81d21d68b"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/snapshot.spv",
+      "size_bytes": 2360,
+      "sha256": "4a5f6c0507423b410fb29469706e3532079dcf9e04c8e69fa92dcf115398ac77"
+    },
+    {
+      "path": "private/slice186-coregs11-shaders/upload.spv",
+      "size_bytes": 12368,
+      "sha256": "52a5e9c13d4d05a3a8c21aee84ad32c3c140b850ed59085b5f8daa1c8daa8b09"
+    }
+  ],
+  "purpose": "Owner test of TASK-028 sprite and capture switches at --mode upscale: slice186 adds GS primitive statistics, F10 frame capture and two sprite switches (sub-sample coverage, no texel snap) at PS2_SCALE > 1.",
+  "status": "candidate: CTest and headless controls; owner race capture pending; not merged",
+  "review": {
+    "status": "pending",
+    "note": "Worktree task/028-donor-upscale; not merged."
+  },
+  "controls": {
+    "headless_scale1": "slice157 schedule, 4,200 frames, PS2_SCALE 1: 42 of 42 dumps byte-identical to private/slice157-smoke/headless-157/frames (checked on the final binary)",
+    "headless_scale3": "slice157 schedule, PS2_SCALE 3, GT4_DUMP_NATIVE_SIZE=1: sprite switches on vs off; 41 of 42 dumps identical; frame 900 (garage home menu) differs",
+    "ctest": "CTest on the slice186 build; see docs/BUILD.md slice 186 for the count and any exception"
+  },
+  "owner_launch": {
+    "default_fixes_on": "python scripts/play_performance.py --assets-root . --mode upscale --scale 3 --force-480p --present-filter linear --aa off",
+    "switches_off": "set GT4_GS_SPRITE_SUBSAMPLE=0 GT4_GS_SPRITE_SNAP=1 in the environment, then the same command",
+    "capture": "press F10 on a race scene with trees and guardrails, then F8 for the report (GT4_GS_PRIM_STATS=1 is needed for the stats lines)"
+  },
+  "coregs11_options": {
+    "GT4_DEINTERLACE": "auto|off|weave|bob|blend|adaptive (default auto: adaptive on really interlaced output; progressive untouched)",
+    "GT4_AA": "off|fxaa (default off)",
+    "GT4_PRESENT_FILTER": "nearest|linear|fsr (default automatic: nearest at scale 1, linear when scaled)",
+    "GT4_FSR_SHARPNESS": "percentage 0 to 100 (default 50; 100 is sharpest, 0 softest; stops = 2 * (1 - percent/100)); FSR scales the scaled internal image (640x448 x SCALE) to the 16:9 window rectangle"
+  },
+  "runtime_source_pin": "docs/inputs/slice186-coregs11-runtime.json",
+  "gs_switches": {
+    "GT4_GS_SPRITE_SUBSAMPLE": "0|1, default 1 at PS2_SCALE > 1: sprite coverage at sub-sample positions (px, py)",
+    "GT4_GS_SPRITE_SNAP": "0|1, default 0 at PS2_SCALE > 1: 0 = no texel snap for sprites; 1 = slice 184 snap to the integer pixel",
+    "GT4_GS_PRIM_STATS": "0|1, default 0: per-batch primitive statistics; printed at exit (headless) and at F8",
+    "GT4_GS_PRIM_STATS_TRACE": "0|1, default 0: with GT4_GS_PRIM_STATS=1 and no window, one line per display() call",
+    "not_implemented": "GT4_GS_LINE_SUBSAMPLE: no line sub-sample coverage (lines are absent in the measured schedules; see docs/BUILD.md slice 186)",
+    "capture": "F10 writes the next presented frame at scale and as a 1x box average (PNG) plus a stats text into the newest private/manual-play/session-* folder"
+  }
+}

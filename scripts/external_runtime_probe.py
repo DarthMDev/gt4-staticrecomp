@@ -52,7 +52,7 @@ PERF_PROFILES = {
 }
 # Internal-resolution candidate (slice176, TASK-028). Not a performance profile: PS2_SCALE is passed
 # through from the scale argument (1 to 4); scale 1 is the default and the qualified output.
-UPSCALE_MANIFEST = 'slice184-coregs11.json'
+UPSCALE_MANIFEST = 'slice186-coregs11.json'
 # CoreGS 1.1 presentation options (slice182): environment names and their accepted values.
 COREGS11_OPTIONS = {
     'GT4_DEINTERLACE': ('auto', 'off', 'weave', 'bob', 'blend', 'adaptive'),
@@ -60,6 +60,16 @@ COREGS11_OPTIONS = {
     'GT4_PRESENT_FILTER': ('nearest', 'linear', 'fsr'),
 }
 UPSCALE_SCALES = (1, 2, 3, 4)
+# Slice 186 (TASK-028) owner switches. The two sprite switches act only at PS2_SCALE > 1 and default ON there
+# (GT4_GS_SPRITE_SUBSAMPLE=1, GT4_GS_SPRITE_SNAP=0); the statistics switches only count and print.
+GS_SLICE186_OPTIONS = {
+    'GT4_GS_SPRITE_SUBSAMPLE': ('0', '1'),
+    'GT4_GS_SPRITE_SNAP': ('0', '1'),
+    'GT4_GS_PRIM_STATS': ('0', '1'),
+    'GT4_GS_PRIM_STATS_TRACE': ('0', '1'),
+}
+GS_SLICE186_DEFAULTS = {'GT4_GS_SPRITE_SUBSAMPLE': '1', 'GT4_GS_SPRITE_SNAP': '0',
+                        'GT4_GS_PRIM_STATS': '0', 'GT4_GS_PRIM_STATS_TRACE': '0'}
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
@@ -376,6 +386,17 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
                     raise ValueError(f'{name} must be one of {", ".join(COREGS11_OPTIONS.get(name, ()))}')
                 environment[name] = str(value)
             result['coregs11_environment'] = {name: str(value) for name, value in coregs11.items()}
+        effective = dict(GS_SLICE186_DEFAULTS)
+        for name, allowed in GS_SLICE186_OPTIONS.items():
+            if name in environment:
+                if environment[name] not in allowed:
+                    raise ValueError(f'{name} must be one of {", ".join(allowed)}')
+                effective[name] = environment[name]
+        # Recorded as effective values: unset names take the default shown here; the switches are scale-1 neutral.
+        result['gs_slice186_switches'] = {'scale': scale, 'effective': effective,
+                                          'defaults': GS_SLICE186_DEFAULTS,
+                                          'set_by_environment': sorted(name for name in GS_SLICE186_OPTIONS if name in environment),
+                                          'not_implemented': {'GT4_GS_LINE_SUBSAMPLE': 'no line sub-sample path (no lines in the measured schedules)'}}
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))

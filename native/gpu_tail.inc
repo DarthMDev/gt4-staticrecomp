@@ -300,10 +300,39 @@ std::uint32_t run_post_passes(const PostSettings& settings, std::uint32_t width,
     return current;
 }
 
+// F10 capture (slice 186): the frame about to be presented, at its scaled size and as a 1x box average.
+void write_capture(const DisplaySource& source) {
+    const std::uint32_t width = source.width * g_scale, height = source.height * g_scale;
+    const auto parameters = push_params({source.fbp, source.fbw, source.psm, source.dbx, source.dby,
+                                        source.width, source.height, source.halved ? 1u : 0u});
+    g_commands.push_back({kDisplay, (width + 7) / 8, (height + 7) / 8, parameters});
+    submit();
+    std::vector<std::uint32_t> native(static_cast<std::size_t>(width) * height);
+    read_back(g_scratch, native.size() * 4, native.data());
+    std::vector<std::uint32_t> box(static_cast<std::size_t>(source.width) * source.height, 0xFF000000u);
+    const std::uint32_t count = g_scale * g_scale;
+    for (std::uint32_t y = 0; y < source.height; ++y)
+        for (std::uint32_t x = 0; x < source.width; ++x) {
+            std::uint32_t sums[3] = {0, 0, 0};
+            for (std::uint32_t j = 0; j < g_scale; ++j)
+                for (std::uint32_t i = 0; i < g_scale; ++i) {
+                    const std::uint32_t p = native[static_cast<std::size_t>(y * g_scale + j) * width + x * g_scale + i];
+                    sums[0] += p & 0xFFu;
+                    sums[1] += (p >> 8) & 0xFFu;
+                    sums[2] += (p >> 16) & 0xFFu;
+                }
+            box[static_cast<std::size_t>(y) * source.width + x] = 0xFF000000u |
+                ((sums[0] + count / 2) / count) | (((sums[1] + count / 2) / count) << 8) | (((sums[2] + count / 2) / count) << 16);
+        }
+    gs_prim_stats::save_capture(native, width, height, box, source.width, source.height, g_scale);
+}
+
 bool present(const DisplaySource& source) {
     if (!has_surface()) return false;
     flush_all();
     check_display_source(source);
+    if (gs_prim_stats::take_capture()) write_capture(source);
+    gs_prim_stats::frame_presented();
     static std::uint32_t previous_width = 0, previous_height = 0;
     static bool previous_halved = false;
     if (source.width != previous_width || source.height != previous_height || source.halved != previous_halved) {

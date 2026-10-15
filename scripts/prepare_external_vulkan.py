@@ -15,6 +15,12 @@ SOURCE_PINS = {
 }
 
 
+def _splice_once(source, old, new):
+    if source.count(old) != 1:
+        raise ValueError(f"Donor anchor changed: {old.strip()[:60]!r}")
+    return source.replace(old, new)
+
+
 def replace_section(source, start, end, replacement):
     first = source.index(start)
     last = source.index(end, first)
@@ -79,7 +85,15 @@ std::uint32_t g_post_history_words = 0, g_post_temp_words = 0;'''
     source = source[:source.index('void flush() {')] + (replacements / 'gpu_tail.inc').read_text() + '\n}\n'
     if 'wgpu' in source.lower() or 'WGPU' in source:
         raise ValueError('Unexpected WebGPU reference remains after the native port')
-    source = '// MIT donor batching, derived from pinned ps2-web-recomp gpu.cpp; see THIRD_PARTY.md.\n#include \"coregs_options.hpp\"\n' + source
+    # Slice 186: GS primitive statistics and owner capture; sprite sub-sample switches (see gs_prim_stats.hpp).
+    source = _splice_once(source, 'plan_decodes(prims);\n', 'plan_decodes(prims);\n' + (replacements / 'gs_prim_stats_hook.inc').read_text(encoding='utf-8'))
+    source = _splice_once(source, '    if ((st.texa >> 15) & 1u) flags |= 32768u;\n',
+                          '    if ((st.texa >> 15) & 1u) flags |= 32768u;\n    flags |= gs_prim_stats::upscale_setup_bits(g_scale);\n')
+    source = _splice_once(source, 'minx = std::max(scax0, static_cast<int>(std::ceil(std::min(x0, x1))));',
+                          'minx = std::max(scax0, gs_prim_stats::sprite_box_min(flags, std::min(x0, x1)));')
+    source = _splice_once(source, 'miny = std::max(scay0, static_cast<int>(std::ceil(std::min(y0, y1))));',
+                          'miny = std::max(scay0, gs_prim_stats::sprite_box_min(flags, std::min(y0, y1)));')
+    source = '// MIT donor batching, derived from pinned ps2-web-recomp gpu.cpp; see THIRD_PARTY.md.\n#include \"coregs_options.hpp\"\n#include \"gs_prim_stats.hpp\"\n' + source
     header = (donor / 'gpu.hpp').read_text().replace('../gs.hpp', 'gs.hpp')
     header = header.replace('enum Kind { X11, Wayland, Canvas }', 'enum Kind { X11, Wayland, Canvas, Win32 }')
     header = header.replace('bool has_surface();', 'bool has_surface();\nvoid set_widescreen(bool enabled);')

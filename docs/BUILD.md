@@ -1029,3 +1029,130 @@ Limits:
 2. The 2x, 3x and 4x sizes come from the owner's table; 2x and 4x are not exact 16:9 (within one pixel).
 3. The lead's per-draw path counts are not measured; the decode-on/off identity is for the headless schedule only.
 4. Save states and fullscreen at the scaled size are not exercised.
+
+## Slice 186 - owner capture and sprite sub-sample switches (TASK-028)
+
+Owner report on slice 184 (race, progressive 480p, `PS2_SCALE=3`): the image is sharper than 1x, but tree silhouettes,
+guardrails and the car body still show stair steps about one native PS2 pixel wide; PCSX2 at 3x looks cleaner.
+
+Correction to slice 184: the "55% of 3x3 blocks unequal in frames 1300 to 3700" figure is wrong. Those frames are the garage
+menu, not a race (the slice157 headless schedule never reaches 3D: the frame mean colour is constant from about frame 1000 to
+4200). The block metric also counts sub-sample detail, not steps: the menu text at 3x is smooth (see the crops below).
+
+### What the code says (Confirmed, donor `gs.wgsl` and `gpu.cpp`, read in this slice)
+
+- Triangles: XY keeps its 1/16 fraction (`sx = (x - ofx) / 16`, no snap in setup). Coverage and attributes are evaluated
+  at the sub-sample positions `px, py`. Triangle polygon edges are therefore sub-sample accurate at scale > 1.
+- Sprites (kind 1): coverage tests the integer pixel `(cx, cy)`. Texel coordinates snap to `f32(x)` for point-sampled
+  textures when the texel rate is at least the pixel rate. A 1:1 texel gives the same texel index with or without the
+  snap, so the snap matters for minified sprites. Coverage at the integer pixel cuts fractional sprite edges to native size.
+- Lines (kind 2): coverage is per integer pixel, so every sub-sample of a line pixel takes the line colour.
+- Textures: `fetch` reads texel `floor(u)` and sub-sample `k` of that texel. A 1:1 point-sampled texture therefore has
+  native-size texel steps, whatever the triangle edge resolution (texel content, not coverage).
+- Decoded textures: `decode` reads sub-sample 0 only. The donor skips decode for pages rendered at scale > 1 (`rendered`
+  guard in plan_decodes). A page written by the same batch can still be decoded stale.
+- Display and present read every sub-sample (no native-size step there).
+
+### Measured (Confirmed, headless, slice157 schedule, PS2_SCALE 3, GT4_GS_PRIM_STATS=1; menus only, no race)
+
+| Quantity | Value |
+|---|---|
+| Batches / primitives | 5,114 / 1,113,131 (exit totals) |
+| Triangles / sprites / lines / points | 1,054,914 (94.8%) / 58,217 (5.2%) / 0 / 0 |
+| Textured / untextured | 994,035 / 119,096 |
+| Alpha test / bilinear | 7,600 / 1,087,789 |
+| Texture format (tpsm) | 0x14 (4-bit CLUT) 898,213; 0x13 (8-bit CLUT) 81,880; 0x01 (24-bit) 7,600; 0x00 (32-bit) 6,342 |
+| Decoded / direct textured | 124,760 / 869,275 |
+| Stale decode (decoded page written in the same batch) | 0 |
+| Sprites snap-eligible texel rate (u / v) | 13,300 / 13,300 |
+
+The race (trees, guardrails, car) is not measured: no race in headless. The owner's F10 capture is the next input.
+
+### Evidence on the stepped edges (menus; the race is not measured)
+
+- `private/slice186-aliasing-samples/crop186_photolab_icon_off_vs_fixed.png`: both panels are 3x native, nearest x4, switches
+  off (left) and on (right). The rotated photo prints and the sky show native-size steps in both. The white print border is
+  texture content, so these steps come from point-sampled 1:1 texels (Confirmed by crop; Hypothesis that this is the same
+  class as the owner's trees and guardrails).
+- `check_garage_title.png` (left: 1x nearest x12; right: 3x native x4): the text edges are smooth at 3x; no native steps in
+  the triangle-drawn text.
+- `f900_fixed_1x.png` and `f900_off_1x.png`: frame 900 (garage home menu) is the only dump that changes with the sprite
+  switches: 342,854 of 2,580,480 pixels, mean absolute difference 1.09 per byte, max 109 (Confirmed, local). The change is
+  in minified sprite sampling, not in the edge placement of the sprites shown in the crops.
+
+### Changes
+
+1. `native/gs_prim_stats.hpp` (new): statistics (`GT4_GS_PRIM_STATS=1`), the F8 line, exit totals, the per-frame trace
+   (`GT4_GS_PRIM_STATS_TRACE=1`), the F10 capture writer (PNG, stored deflate, no library). `upscale_setup_bits(scale)` sets
+   setup flag bits 16 (sprite sub-sample coverage) and 18 (no texel snap) only when the scale is above 1. Bits 16 and 18 do
+   not overlap the donor flags (bits 0 to 15).
+2. `native/gs_prim_stats_hook.inc` (new): read-only hook after `plan_decodes` in `flush_batch`; counts primitives, textured
+   and decoded setups, sprite snap eligibility and stale decodes.
+3. `native/gpu_tail.inc`: `write_capture` (F10) reads the presented frame at its scaled size and as a 1x box average.
+   `present()` calls it when a capture was requested, then `frame_presented()`.
+4. `native/window.cpp`: F10 (F7, F8, F9 and F11 unchanged) requests a capture; the F8 report prints the stats line first.
+5. `scripts/prepare_external_vulkan.py`: anchored splices for the hook, the flag bits, the stats include and the sprite box
+   floor (`sprite_box_min`). At scale 1 the box is `ceil` as before; `floor` applies only when the sub-sample bit is set.
+6. `scripts/derive_upscale_gs_shader.py` (new): derives the slice 186 `gs.wgsl` from the pinned donor (sha256 `a6ed68e9...`,
+   CRLF normalised). Changes: sprite coverage at `px, py` (bit 16) and the texel snap skipped (bit 18), both only at
+   `SCALE > 1`. Derived shader: `private/slice186-gs-src/gs.wgsl`, sha256 recorded in the runtime pin.
+7. `native/CMakeLists.txt`: slice186 port and shader branch; runtime pin path.
+8. `scripts/external_runtime_probe.py`: `UPSCALE_MANIFEST` = `slice186-coregs11.json`; validates
+   `GT4_GS_SPRITE_SUBSAMPLE`, `GT4_GS_SPRITE_SNAP`, `GT4_GS_PRIM_STATS` and `GT4_GS_PRIM_STATS_TRACE` (0 or 1); records the
+   effective values in `result.json` under `gs_slice186_switches`.
+9. Pins: `docs/inputs/slice186-coregs11-runtime.json` (PORT and SHADERS hashes, derived gs.wgsl hash, receipt of the
+   unchanged vu0 runtime capsule) and `docs/inputs/slice186-coregs11.json` (executable sha256 16da396b...).
+
+### Switches (owner A/B; the two sprite switches act only at PS2_SCALE > 1)
+
+| Variable | Default at scale > 1 | Effect |
+|---|---|---|
+| `GT4_GS_SPRITE_SUBSAMPLE` | 1 | sprite coverage at sub-sample positions; 0 = integer pixel (slice 184) |
+| `GT4_GS_SPRITE_SNAP` | 0 | 0 = no texel snap for sprites; 1 = snap to the integer pixel (slice 184) |
+| `GT4_GS_PRIM_STATS` | 0 | counts and prints the primitive statistics (F8 line, exit totals) |
+| `GT4_GS_PRIM_STATS_TRACE` | 0 | with stats on and no window, one line per `display()` call |
+| `GT4_GS_LINE_SUBSAMPLE` | not implemented | see limits |
+
+With `GT4_GS_PRIM_STATS` unset nothing is counted, and F10 does nothing until pressed. The statistics change no output.
+
+### Controls
+
+- Scale 1, headless slice157 schedule, final binary: 42 of 42 dumps byte-identical to `private/slice157-smoke/headless-157/frames`.
+- Scale 3, `GT4_DUMP_NATIVE_SIZE=1`, switches off (`GT4_GS_SPRITE_SUBSAMPLE=0 GT4_GS_SPRITE_SNAP=1`): 42 of 42 dumps
+  byte-identical to the slice 184 scale 3 native dumps. The switches are the only change in this slice's output.
+- Scale 3, switches on (default): 41 of 42 identical to switches off; frame 900 differs (see above).
+- CTest 29 of 29 on the slice186 build. Python `unittest discover` with `GT4_NATIVE_BUILD` on the slice186 build: 264 tests,
+  10 skipped, OK.
+- Pinned files copied into the worktree `private/` and checked against the pins (port, shaders, derived gs.wgsl, executable,
+  runtime dependencies): no mismatches.
+
+### Owner commands (PowerShell, from the worktree; its `private/` holds the pinned copies)
+
+Default (fixes on):
+
+```powershell
+C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root . --mode upscale --scale 3 --force-480p --present-filter linear --aa off
+```
+
+All switches off (slice 184 image):
+
+```powershell
+$env:GT4_GS_SPRITE_SUBSAMPLE="0"; $env:GT4_GS_SPRITE_SNAP="1"; C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root . --mode upscale --scale 3 --force-480p --present-filter linear --aa off
+```
+
+Capture: with `GT4_GS_PRIM_STATS=1` in the environment, play a race scene with trees and guardrails, press F10 (writes
+`private/manual-play/session-*/frame-NNNN-3x.png`, `frame-NNNN-1x.png` and `frame-NNNN-stats.txt`), then F8 for the report.
+
+### Limits
+
+1. Not verified: the F10 capture and the F8 stats line in a window (no windowed launch in this slice). The capture path
+   compiles and reuses the display pass of the dumps; it is unexercised at runtime.
+2. No race measured: the primitive mix above is menus only. The stepped race classes (trees, guardrails, car body) are
+   unmeasured; the owner's F10 capture is the input for the next slice.
+3. `GT4_GS_LINE_SUBSAMPLE` is not implemented: the measured schedule has no lines, and a line sub-sample path needs a
+   per-sub-sample hit test that is not in the donor.
+4. Texel point sampling is not changed. If the race capture confirms texel-size steps on trees and guardrails, the next
+   candidate is bilinear sampling at the sub-sample rate for point-sampled 1:1 textures. That is a visible filtering change,
+   so it needs its own switch and owner A/B; it is not in this slice.
+5. The half-sample convention (sub-sample at `x + sub/SCALE`, not the centre) is not changed (Hypothesis: small bias).
+6. Stale decode is counted per decoded setup and is 0 in the measured menus; the race may differ.
