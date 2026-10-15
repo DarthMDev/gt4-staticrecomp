@@ -95,22 +95,26 @@ one F7/F8 interval per scene:
 
 ## Roadmap
 
-| Stage | Goal | State |
-|---|---|---|
-| **O1** | VU1 microcode compiled ahead of time | ✅ Done |
-| **O2** | Asynchronous GPU submission | ✅ Done |
-| **O4** | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
-| **VU1 flags** | Per-program flag elimination | ✅ Done |
-| **VU1+** | Full static entry coverage, VU1 on its own thread (MTVU) | 🔄 **In progress** |
-| **Fixes** | License-test crash, window title, fixed 16:9 | 🔄 **In progress** |
-| **O3** | VU0 microcode AOT, full VU1/EE entry coverage, IOP review, build tuning | ⏭️ Next |
-| **Launcher** | Lightweight launcher (Rust): video, controls, game image | 📋 Planned |
-| **O5** | GT4-specialist hardware renderer based on PCSX2: upscaling, dithering control, deinterlacing, texture packs | 📋 Planned |
-| **Wheels** | Logitech G27/G29 and others with force feedback | 📋 Planned |
-| **O6** | Android, then iOS (Metal) | 📋 Planned |
-| **Phase 2** | Source-like code from the decompilation, native renderer, physics decoupled from frame rate, ultrawide | 🔭 Long term |
+Work is tracked as numbered tasks in [TASKS.md](TASKS.md); each task is tested
+in game before it is merged.
 
-Details: [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Hardware renderer study](docs/HW-RENDERER-PLAN.md).
+| Task | Goal | State |
+|---|---|---|
+| TASK-001…007 | Baseline, VU1 AOT, async GPU submission, frame pacing, VU1 flag elision | ✅ Done |
+| TASK-008 | Full static VU1 entry coverage (night races, rally) | 🔄 **In progress** |
+| TASK-009 | Window title, fixed 16:9 | ⏭️ Next |
+| TASK-010 | MTVU: VU1 on its own thread | 📋 Planned |
+| TASK-011 | Upscaling 1x–6x on the accurate GS renderer | 📋 Planned |
+| TASK-012 | Night races: remove the GPU readback wait | 📋 Planned |
+| TASK-013 | License-test crash | 📋 Planned |
+| TASK-014…022 | VU0 AOT, EE coverage, IOP review, build speed and tuning, 480p boot | 📋 Planned |
+| TASK-023 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
+| TASK-024…025 | Vulkan (Custom): GT4-specialist hardware renderer based on PCSX2 | 📋 Planned |
+| TASK-026 | Racing wheels with force feedback | 📋 Planned |
+| TASK-027…028 | Android, then iOS (Metal) | 📋 Planned |
+| TASK-029 | Phase 2: decompilation bridge, native renderer, decoupled physics, ultrawide | 🔭 Long term |
+
+Details: [TASKS.md](TASKS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Hardware renderer study](docs/HW-RENDERER-PLAN.md).
 
 ## The Experience We Want to Build
 

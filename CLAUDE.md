@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Read first
 
-Current state is at the top of `docs/STATUS.md`; the active plan, stage status and
-backlog are in `docs/OPTIMIZATION-PLAN.md`; daily progress goes to
+The ordered task list is `TASKS.md`. Current state is at the top of
+`docs/STATUS.md`; technical background for the optimization work is in
+`docs/OPTIMIZATION-PLAN.md`; daily progress goes to
 `docs/journal/YYYY-MM-DD.md`. `README.md`, `docs/ARCHITECTURE.md` and
 `docs/BUILD.md` give the public overview, architecture and build recipes per
 slice. Older slice-by-slice history lives in STATUS (History section) and the
@@ -52,9 +53,17 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
 - One variable per candidate build; keep A/B switches (`GT4_PACING=audio`,
   `GT4_GS_SYNC=1`, `--vu1-interpret-only`, `--vu1-verify N`). Attack whatever the
   F8 report shows as the largest cost.
-- Commits, branches and pushes are authorized; never rewrite history. `main` is
-  the integration branch: do work on a short-lived branch per task and merge it
-  into `main` through a GitHub PR once tests are green.
+- Work is organized in `TASKS.md` (TASK-001, TASK-002, ...). Keep it current:
+  states, branch, acceptance, and new tasks appended in order.
+- **Task lifecycle:** each task gets its own branch from `main`
+  (`task/NNN-short-name`) → implementation by the single writer → automated
+  checks (CTest, Python, headless frame comparison, verify modes) → in-game test
+  by the owner → **explicit owner approval** → PR into `main` and merge
+  (`gh pr create` / `gh pr merge --merge`) → next task on a new branch. Never
+  merge a task the owner has not approved. Commits and pushes are authorized;
+  never rewrite history.
+- Update README (progress, scene results, known issues), STATUS and the journal
+  as part of each task.
 - Ask the owner only for decisions and gameplay tests, not code review.
 
 ## Testing the game
