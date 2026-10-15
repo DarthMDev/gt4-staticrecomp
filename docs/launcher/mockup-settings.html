@@ -21,7 +21,7 @@ body{background:#000;color:var(--silver);font:14px/20px var(--text);min-height:1
 .controls label{cursor:pointer;padding:4px 10px;border:1px solid var(--hair);border-radius:3px}
 input.st{position:absolute;opacity:0;pointer-events:none}
 #p-gfx:checked ~ .controls [for=p-gfx],#p-dsp:checked ~ .controls [for=p-dsp],#p-sav:checked ~ .controls [for=p-sav],#p-adv:checked ~ .controls [for=p-adv],
-#tip:checked ~ .controls [for=tip],#imp:checked ~ .controls [for=imp],#empty:checked ~ .controls [for=empty],#slots:checked ~ .controls [for=slots]{background:var(--white);color:var(--paper-ink);border-color:var(--white)}
+#tip:checked ~ .controls [for=tip],#imp:checked ~ .controls [for=imp],#empty:checked ~ .controls [for=empty],#first:checked ~ .controls [for=first],#slots:checked ~ .controls [for=slots]{background:var(--white);color:var(--paper-ink);border-color:var(--white)}
 .viewport{width:100%;overflow-x:auto;display:flex;justify-content:center}
 .frame{position:relative;width:1280px;height:720px;flex:none;background:var(--carbon);overflow:hidden;display:grid;grid-template-columns:280px 1fr;grid-template-rows:32px 1fr}
 
@@ -82,24 +82,25 @@ h2{font:500 11px var(--label);letter-spacing:.18em;text-transform:uppercase;colo
 
 /* saves */
 .slots{margin-top:20px;border-top:1px solid var(--hair);height:530px;overflow-y:scroll;scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
-.slot-row{display:grid;grid-template-columns:28px 40px 1fr 150px 150px;align-items:center;height:52px;border-bottom:1px solid var(--hair)}
+.slot-row{display:grid;grid-template-columns:28px 40px 1fr 160px 88px;align-items:center;height:52px;border-bottom:1px solid var(--hair)}
 .slot-row .radio{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--faint)}
 .slot-row.active .radio{border:5px solid var(--paper)}
 .slot-row .no{font:500 13px var(--label);color:var(--faint)}
 .slot-row .nm{color:var(--white)}
 .slot-row .nm small{margin-left:10px;font:500 11px var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--paper-ink);background:var(--paper);padding:2px 6px;border-radius:2px}
-.slot-row .meta{font:400 13px var(--label);letter-spacing:.04em;color:var(--dim)}
-.slot-row .date{font-size:13px;color:var(--dim);text-align:right}
-.slot-row .acts{display:none;justify-content:flex-end;gap:8px}
-.slot-row.hov{background:rgba(255,255,255,.03)}
-.slot-row.hov .date{display:none}
-.slot-row.hov .acts{display:flex}
+.slot-row .date{font:400 13px var(--label);letter-spacing:.04em;color:var(--dim);text-align:right;padding-right:16px}
+.slot-row .acts{display:flex;justify-content:flex-end;gap:4px}
+.iconbtn{width:36px;height:36px;border:0;background:transparent;color:var(--white);opacity:.4;display:grid;place-items:center;border-radius:3px;cursor:pointer;transition:opacity .15s}
+.iconbtn:hover,.iconbtn:focus-visible,.iconbtn.hot{opacity:1}
+.iconbtn.del:hover,.iconbtn.del.hot{color:#ff8a8a}
 .slot-row.empty .nm,.slot-row.empty .no{color:var(--faint)}
-.emptystate{display:none;height:480px;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--dim);text-align:center}
+.emptystate{display:none;height:480px;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--dim);text-align:center}
 .emptystate h3{font:300 24px var(--text);color:var(--white)}
-#empty:checked ~ .viewport .slots{display:none}
+.slots.first{display:none}
+#first:checked ~ .viewport .slots.full{display:none}
+#first:checked ~ .viewport .slots.first{display:block}
+#empty:checked ~ .viewport .slots{display:none!important}
 #empty:checked ~ .viewport .emptystate{display:flex}
-#empty:checked ~ .viewport .pg-sav .head .btn{display:none}
 
 /* import dialog */
 .scrim{display:none;position:absolute;inset:0;background:rgba(5,6,10,.72);z-index:30;align-items:center;justify-content:center}
@@ -144,10 +145,11 @@ h2{font:500 11px var(--label);letter-spacing:.18em;text-transform:uppercase;colo
 <input class="st" type="checkbox" id="tip">
 <input class="st" type="checkbox" id="imp">
 <input class="st" type="checkbox" id="empty">
+<input class="st" type="checkbox" id="first">
 <input class="st" type="checkbox" id="slots">
 <div class="controls"><b>Settings</b>
   <label for="p-gfx">Graphics</label><label for="p-dsp">Display</label><label for="p-sav">Saves</label><label for="p-adv">Advanced</label><label for="p-abt">About</label>
-  <i></i><label for="tip">Tooltip open</label><label for="imp">Import dialog</label><label for="empty">No saves</label>
+  <i></i><label for="tip">Tooltip open</label><label for="imp">Import dialog</label><label for="empty">No saves (first run)</label><label for="first">After first save</label>
   <span style="flex:1"></span><label for="slots">Official asset slots</label></div>
 
 <div class="viewport"><div class="frame">
@@ -198,20 +200,33 @@ h2{font:500 11px var(--label);letter-spacing:.18em;text-transform:uppercase;colo
     <!-- SAVES -->
     <section class="page pg-sav">
       <div class="head"><div><h1>Saves</h1><p class="note" style="margin-bottom:0">The selected save is used the next time you play.</p></div><button class="btn primary">Import save</button></div>
-      <div class="slots">
-        <div class="slot-row active"><span class="radio"></span><span class="no">01</span><span class="nm">Player<small>Next play</small></span><span class="meta">Day 412 · Cr 1,284,300</span><span class="date">Today 06:31</span></div>
-        <div class="slot-row hov"><span class="radio"></span><span class="no">02</span><span class="nm">License run</span><span class="meta">Day 98 · Cr 212,450</span><span class="date">12 Oct</span><span class="acts"><button class="btn">Export</button><button class="btn danger">Delete</button></span></div>
-        <div class="slot-row"><span class="radio"></span><span class="no">03</span><span class="nm">PCSX2 save</span><span class="meta">Day 1,045 · Cr 18,904,120</span><span class="date">3 Sep</span></div>
-        <div class="slot-row"><span class="radio"></span><span class="no">04</span><span class="nm">Mcd001 · imported</span><span class="meta">Day 7 · Cr 31,200</span><span class="date">28 Aug</span></div>
-        <div class="slot-row"><span class="radio"></span><span class="no">05</span><span class="nm">GT4 save</span><span class="meta">1.5 MB</span><span class="date">2 Aug</span></div>
-        <div class="slot-row empty"><span class="radio"></span><span class="no">06</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
-        <div class="slot-row empty"><span class="radio"></span><span class="no">07</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
-        <div class="slot-row empty"><span class="radio"></span><span class="no">08</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
-        <div class="slot-row empty"><span class="radio"></span><span class="no">09</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
-        <div class="slot-row empty"><span class="radio"></span><span class="no">10</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
-        <div class="slot-row empty"><span class="radio"></span><span class="no">11</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
+      <div class="slots full">
+        <div class="slot-row active"><span class="radio"></span><span class="no">01</span><span class="nm">Save 01<small>Next play</small></span><span class="date">Today 06:31</span><span class="acts"><button class="iconbtn" title="Export" aria-label="Export"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="iconbtn del" title="Delete" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></span></div>
+        <div class="slot-row"><span class="radio"></span><span class="no">02</span><span class="nm">Save 02</span><span class="date">12 Oct 2026 22:14</span><span class="acts"><button class="iconbtn" title="Export" aria-label="Export"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="iconbtn del hot" title="Delete" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></span></div>
+        <div class="slot-row"><span class="radio"></span><span class="no">03</span><span class="nm">Save 03</span><span class="date">3 Sep 2026 19:02</span><span class="acts"><button class="iconbtn" title="Export" aria-label="Export"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="iconbtn del" title="Delete" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></span></div>
+        <div class="slot-row"><span class="radio"></span><span class="no">04</span><span class="nm">Save 04</span><span class="date">28 Aug 2026 14:47</span><span class="acts"><button class="iconbtn" title="Export" aria-label="Export"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="iconbtn del" title="Delete" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></span></div>
+        <div class="slot-row"><span class="radio"></span><span class="no">05</span><span class="nm">Save 05</span><span class="date">2 Aug 2026 21:30</span><span class="acts"><button class="iconbtn" title="Export" aria-label="Export"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="iconbtn del" title="Delete" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">06</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">07</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">08</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">09</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">10</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">11</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
       </div>
-      <div class="emptystate"><h3>No saves yet</h3><p>Play and save in the game, or import a save.</p><button class="btn primary">Import save</button></div>
+      <div class="slots first">
+        <div class="slot-row active"><span class="radio"></span><span class="no">01</span><span class="nm">Save 01<small>Next play</small></span><span class="date">Today 21:08</span><span class="acts"><button class="iconbtn" title="Export" aria-label="Export"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg></button><button class="iconbtn del" title="Delete" aria-label="Delete"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></svg></button></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">02</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">03</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">04</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">05</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">06</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">07</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">08</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">09</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">10</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">11</span><span class="nm">Empty</span><span class="date"></span><span class="acts"></span></div>
+      </div>
+      <div class="emptystate"><h3>No saves yet</h3><p>Your first save appears here after you save in the game.</p></div>
     </section>
 
     <!-- ADVANCED -->
@@ -250,14 +265,14 @@ h2{font:500 11px var(--label);letter-spacing:.18em;text-transform:uppercase;colo
       <h3>Import from memory card</h3>
       <p class="src">Mcd001.ps2 · 8 MB memory card image</p>
       <div class="pick">
-        <div class="it"><span class="cb on"></span><span class="t">Gran Turismo 4 · Game data<small>Day 1,045 · Cr 18,904,120 · 14 Oct 2026</small></span><span class="sz">1.5 MB</span></div>
-        <div class="it"><span class="cb"></span><span class="t">Gran Turismo 4 · Replay<small>14 Oct 2026</small></span><span class="sz">410 KB</span></div>
+        <div class="it"><span class="cb on"></span><span class="t">Gran Turismo 4 · Game data<small>Saved 14 Oct 2026 21:40</small></span><span class="sz">1.5 MB</span></div>
+        <div class="it"><span class="cb"></span><span class="t">Gran Turismo 4 · Replay<small>Saved 14 Oct 2026 21:52</small></span><span class="sz">410 KB</span></div>
         <div class="it off"><span class="cb"></span><span class="t">Other game<small>Not a Gran Turismo 4 save</small></span><span class="sz">220 KB</span></div>
       </div>
       <div class="foot"><span>Goes into a new slot (06).</span><button class="btn">Cancel</button><button class="btn primary">Import</button></div>
     </div></div>
   </main>
 </div></div>
-<div class="legend">Hover any "i" for its description (no helper text under rows). Super-sampling segments are live: below 4× "High-resolution output" is dimmed and locked. Saves: 10+ slots, scrolling, unlimited; hover a slot for Export/Delete; import always fills a new empty slot. Replay import is shown as a later option (see plan). Magenta = official asset slots.</div>
+<div class="legend">Hover any "i" for its description (no helper text under rows). Super-sampling segments are live: below 4× "High-resolution output" is dimmed and locked. Saves: 10+ slots, scrolling, unlimited; filled rows always show dimmed Export/Delete icons that brighten on hover; import always fills a new empty slot. Replay import is shown as a later option (see plan). Magenta = official asset slots.</div>
 </body>
 </html>

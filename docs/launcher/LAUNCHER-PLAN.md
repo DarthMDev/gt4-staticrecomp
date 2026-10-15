@@ -141,8 +141,8 @@ If the ISO later moves, the home screen shows "Disc image not found — Locate�
 
 A missing card file is presented to the game as a **new, unformatted** 8,650,752-byte card and is
 written on save; GT4 then offers to format it. So the launcher does not need any seed card (the pinned
-seeds stay private evidence). Setup offers no choice: it creates save slot 1 (empty; the card file
-appears on the first in-game save) and makes it active. Storage, backups and the Saves page are the
+seeds stay private evidence). Setup creates nothing and asks nothing. On the first Play, the active slot is slot 01 (no file yet).
+The slot appears in the Saves page when the game first creates its save. Storage, backups and the Saves page are the
 save manager's (section 13). **Import** of an existing PCSX2 8 MB `.ps2`
 card (same size and raw page+ECC layout, **High confidence**; validate size and the
 `Sony PS2 Memory Card Format` superblock magic) is part of the save manager (section 13), never part of setup. Hold the card lock (same byte-lock design as `session.lock`) while the game runs.
@@ -487,7 +487,7 @@ Then `enable_language(RC)` (llvm-rc with clang-cl).
 | M7 | NSIS installer/uninstaller + release packaging + license bundle | Install/uninstall as a standard (non-admin) user in Windows Sandbox; non-ASCII user name; OneDrive-redirected Desktop; upgrade over previous version keeps data; uninstall keeps saves by default | 2-3 |
 | M8 | End-to-end QA + owner test | Clean machine: install → select ISO → play → save → exit → relaunch skips setup → crash path (forced) produces a report; owner plays the reference scene from the launcher | 2 |
 | M9 | Release candidate: CHANGELOG, known issues, GitHub Release on `moesuito/gt4-staticrecomp` | Owner approval → tag | 0.5 |
-| — | **Dependency: TASK-025 save manager** (section 13): slot storage and the Saves page; the launcher's v1 can fall back to a single slot if it slips | see 13.6 | 13-17 (v1 cut 8-10) |
+| — | **Dependency: TASK-025 save manager** (section 13): slot storage and the Saves page; the launcher's v1 can fall back to a single slot if it slips | see 13.6 | 10-13 (cut 8-10) |
 | M10 (insurance, optional) | Option B spike: freestanding game-code DLL + bundled clang-cl/lld-link build on a test VM | Game DLL built on a clean VM from the ISO; frames identical; F8 shows the DLL boundary cost; first-run time measured on 4 and 16 threads | 5-8 |
 
 Total for A: about **22-28 agent-days** (M0-M9), plus owner review/testing time. M2 depends on
@@ -605,7 +605,7 @@ Components make no platform calls. The Windows shell (title bar, file dialog, pr
 
 Proposed as **TASK-025: Save manager** (appended after the phase 2/3 numbers, per the TASKS.md rule).
 - **Dependency:** the TASK-019 Saves page and the slot-based launch need its core. The launcher can ship v1 with one slot only if TASK-025 slips.
-- **Effort:** about 13–17 agent-days (table in 13.6).
+- **Effort:** about 10–13 agent-days for v1 (table in 13.6).
 
 ### 13.1 How saves are stored today (study)
 
@@ -626,7 +626,7 @@ All findings come from read-only inspection of `private/manual-play/card.ps2` an
 | Backups today: the Python launcher copies `card-before.ps2` into each session folder (34 sessions exist). There is no rotation and no restore UI. | `external_runtime_probe.py`; folder listing | Confirmed |
 | **PCSX2 folder memory cards**: a host directory with one sub-folder per save plus PCSX2 metadata files (`_pcsx2_superblock`, `_pcsx2_meta_directory`). Our runtime cannot mount them, and emulating them would mean re-implementing PCSX2's GPL FolderMemoryCard (not wanted). The launcher can still **import** from one by reading the save sub-folder as a raw directory. | PCSX2 behaviour from knowledge | High confidence |
 | **Single-save formats:** `.psu` (uLaunchELF/EMS: uncompressed, 512-byte header per entry); `.max` (Action Replay MAX: `Ps2PowerSave` header, LZARI-compressed); `.cbs` (CodeBreaker: `CFU` header, RC4-style encryption + zlib); `.xps`/`.sps` (X-Port/SharkPort: `SharkPortSave` header, uncompressed); a raw directory (folder containing `icon.sys` and the files). We implement all of them from format facts. mymcplus is GPL-3.0, so its code is not copied into MIT code. | Public format documentation | High confidence |
-| **Readable progress:** Nenkai PDTools (MIT, commit `ffe0bb2`, `PDTools.SaveFile.GT4.GT4Save.Load(directory)`) decrypts GT4 saves. GT4SaveEditor shows the profile name, credits (`GarageFile.Money`) and the calendar day from them. Porting that decryption to Rust gives "Name · Day N · Cr X" per slot. Caveat (from its README): some garage cars do not decrypt exactly because of PS2 float behaviour; that does not affect name, money or day. | Private clones `private/slice151-research/nenkai/{PDTools,GT4SaveEditor}` | High confidence (feasible); port not done |
+| **Readable progress:** Nenkai PDTools (MIT, commit `ffe0bb2`, `PDTools.SaveFile.GT4.GT4Save.Load(directory)`) decrypts GT4 saves. GT4SaveEditor shows the profile name, credits (`GarageFile.Money`) and the calendar day from them. Porting that decryption to Rust could give "Day N · Cr X" per slot. **Not in v1** (owner, round 4): kept as a later optional step, after our own reverse-engineering review. Caveat (from its README): some garage cars do not decrypt exactly because of PS2 float behaviour; that does not affect name, money or day. | Private clones `private/slice151-research/nenkai/{PDTools,GT4SaveEditor}` | High confidence (feasible); deferred, not v1 |
 
 ### 13.2 Storage model: one 8 MB card image per slot
 
@@ -645,7 +645,7 @@ Why one card file per slot instead of folder cards:
 - each slot is self-contained, so export, delete and backup are plain file operations;
 - PCSX2 can open the files directly.
 
-Cost: 8.25 MB per slot (100 slots ≈ 825 MB, acceptable). Slot ids only grow (never reused). Labels are editable; by default they show the GT4 profile name.
+Cost: 8.25 MB per slot (100 slots ≈ 825 MB, acceptable). Slot ids only grow (never reused). Names are generic and fixed in v1: "Save 01", "Save 02", … taken from the slot number. The only other data shown is the saved date and time: the `modified` timestamp of the `BASCUS-97328GAMEDATA` directory entry on that card (Confirmed field in the directory entry), falling back to the file's last-write time.
 
 **Launching with a slot:** the launcher reads `active_slot` and passes `--memcard saves\slot-NNNN.ps2`. An empty slot has no file, so the runtime presents an unformatted card and GT4 offers to format it. Backup before launch; lock while running. The Saves page is read-only while the game runs. Card writes stay where the game puts them.
 
@@ -661,25 +661,30 @@ Cost: 8.25 MB per slot (100 slots ≈ 825 MB, acceptable). Slot ids only grow (n
   - **Validation before writing:** sizes, directory names and a read-back of the written card through our own reader.
 - **Export** (row action): "Memory card image (.ps2)", copying the slot file, or "Single save (.psu)" of the GT4 directory.
 - **Delete** (row action): a confirm dialog naming the slot and its summary. The file goes to the Windows Recycle Bin (`IFileOperation` with `FOFX_RECYCLEONDELETE`), so it can be undone; its backups stay until the user empties them in About › Game files.
-- **List:** at least 10 rows always visible, the used slots first, then empty rows, scrolling, no upper limit. Each used row shows a label, a summary ("Day 412 · Cr 1,284,300" when decryptable; otherwise "1.5 MB") and the last played or modified date. Export/Delete appear on hover or focus.
-- **Empty state** (no slot has data): "No saves yet", "Play and save in the game, or import a save.", plus an Import button.
-- **First run:** setup creates slot 1 (empty) and makes it active. For the owner, a one-time migration offers to import `private/manual-play/card.ps2` (dev builds only).
+- **List:** at least 10 rows always visible, the used slots first, then empty rows, scrolling, no upper limit.
+  - Each filled row shows: radio, number, "Save NN" (plus the "Next play" tag when active), the saved date and time, and two **icon buttons**: Export (an "upload / send out" arrow from a tray) and Delete (trash can).
+  - The icons are always visible on filled rows, drawn dimmed (40% opacity) at rest; each goes to full brightness on hover or focus, and Delete turns red.
+  - Empty rows show "Empty" and no icons.
+- **Empty state (first install):** no slot has data. The page shows only "No saves yet / Your first save appears here after you save in the game." The Import save button stays in the header.
+- **First save:** the launcher passes `saves\slot-0001.ps2` for the first Play. When the runtime writes that card and it contains `BASCUS-97328GAMEDATA`, slot 01 appears as "Save 01", active, with its date. The launcher detects this after the game exits, or live by watching the folder (read-only, debounced). A card that GT4 has only formatted, with no game data yet, still counts as empty.
+- **Owner migration (dev builds only):** a one-time offer to import `private/manual-play/card.ps2`.
 
 ### 13.4 Crates
 
 - `gt4l-mcfs`: PS2 card filesystem reader/writer with ECC, plus the importers for psu/max/cbs/xps/sps, folder cards and raw directories, and the psu exporter.
-- `gt4l-gt4save`: port of the PDTools GT4 decryption to Rust, read-only summary.
+- `gt4l-gt4save` (later, not v1): port of the PDTools GT4 decryption to Rust, read-only summary (day, credits).
 
 Both crates have no UI, so the Android build can reuse them. Fixtures are synthetic cards and saves built by our own writer. Private parity tests use the owner's card (read-only) and must match the PDTools output for name, money and day.
 
 ### 13.5 Mockups
 
 `mockup-settings.html`:
-- **Saves:** 10+ slots, one active, one hovered showing Export/Delete.
-- **Import dialog:** a card image listing its saves.
-- **No saves:** the empty state.
+- **Saves:** 5 filled slots and empty rows; dimmed export/delete icons on every filled row (row 02's delete shown in its hover state).
+- **No saves (first run):** the empty state.
+- **After first save:** slot 01 filled and active, the rest empty.
+- **Import dialog:** a card image listing its saves (date only).
 
-Renders: `settings-saves.png`, `settings-saves-import.png`, `settings-saves-empty.png`. The replay row in the dialog and all slot data are sample values.
+Renders: `settings-saves.png`, `settings-saves-first-run.png`, `settings-saves-after-first-save.png`, `settings-saves-import.png`. Dates and the replay row are sample values.
 
 ### 13.6 Effort
 
@@ -688,7 +693,9 @@ Renders: `settings-saves.png`, `settings-saves-import.png`, `settings-saves-empt
 | `gt4l-mcfs` reader/writer + ECC + fixtures | 4–5 |
 | Importers: card images (with/without ECC), raw dir, folder card, `.psu` | 2 |
 | Importers: `.max` (LZARI), `.cbs` (RC4 + zlib), `.xps`/`.sps` | 2–3 |
-| `gt4l-gt4save` (PDTools decryption port, summary only) + parity tests | 3–4 |
+| `gt4l-gt4save` (PDTools decryption port, summary only) + parity tests — **later, not v1** | (3–4) |
 | Slots storage, backups, Recycle Bin delete, launch integration, atomic-flush overlay | 2 |
 | Saves page + import dialog (Slint) | 1–2 |
-| **Total** | **≈ 13–17** (the v1 cut without .max/.cbs/.xps and without the decryption summary: ≈ 8–10) |
+| **v1 total** (names "Save NN" + date only; all importers) | **≈ 10–13** |
+| v1 cut without `.max`/`.cbs`/`.xps` | ≈ 8–10 |
+| Later: decrypted day/credits summary | +3–4 |
