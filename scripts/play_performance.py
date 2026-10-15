@@ -44,6 +44,9 @@ Internal-resolution candidate (--mode upscale, slice176, TASK-028): not a perfor
 the scaled image (linear filter when N > 1; GT4_PRESENT_FILTER=nearest|linear overrides). Game logic and
 the guest-visible readbacks are unchanged. Accepts --force-480p. Requires the merged slice176 build under
 private/slice176-donor-upscale-build.
+Readback candidate (--mode readback, slice183, TASK-030): main-equivalent VU AOT build on the slice176
+adapter at scale 1. Scale-1 GS readbacks wait only for the submissions that wrote the bytes read.
+GT4_GS_READBACK=full restores the whole-queue wait (A/B control); the F8 report adds a gs_readback line.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
@@ -73,15 +76,15 @@ def main():
                         help='internal resolution 1 to 4 (PS2_SCALE); only with --mode upscale')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot or main')
-        if args.vu0_verify and args.mode not in ('vu0-aot', 'main'):
-            raise ValueError('--vu0-verify requires --mode vu0-aot or main')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'readback'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot, main or readback')
+        if args.vu0_verify and args.mode not in ('vu0-aot', 'main', 'readback'):
+            raise ValueError('--vu0-verify requires --mode vu0-aot, main or readback')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'upscale'):
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'upscale', 'readback'):
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main or upscale')
         if args.scale != 1 and args.mode != 'upscale':
             raise ValueError('--scale requires --mode upscale')

@@ -32,6 +32,9 @@ public:
   void request(Request request, bool repeated = false) noexcept;
   void frame_boundary(GuestSample guest) noexcept;
   void bytes(bool read, std::uint64_t bytes) noexcept;
+  // One GS-to-host readback of `bytes`. `forced` when pending work had to be submitted first;
+  // `blocked` when the CPU waited for the GPU.
+  void readback(std::uint64_t bytes, bool forced, bool blocked) noexcept;
   void presentation(std::uint64_t rgba_bytes) noexcept;
   void dispatch(std::uint64_t workgroups) noexcept;
   void audio(std::uint64_t produced, std::uint64_t completed,
@@ -67,6 +70,7 @@ private:
   std::uint64_t frames_ = 0, guest_cycles_ = 0, primitives_ = 0, vu_calls_ = 0;
   GuestSample last_guest_{};
   std::uint64_t read_bytes_ = 0, write_bytes_ = 0, rgba_bytes_ = 0;
+  std::uint64_t readbacks_ = 0, readbacks_forced_ = 0, readbacks_blocked_ = 0;
   std::uint64_t presentations_ = 0, dispatches_ = 0, workgroups_ = 0;
   std::uint64_t audio_produced_ = 0, audio_completed_ = 0, empty_refills_ = 0;
   static constexpr std::size_t capacity = 4096;

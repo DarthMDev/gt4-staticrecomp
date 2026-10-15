@@ -54,7 +54,7 @@ class AsyncProfileTests(unittest.TestCase):
                 probe.verify_performance_profile(manifest, async_evidence(runtime={'path': 'private/other.exe'}), root)
 
     def test_both_aot_manifests_accept_verify_and_interpret_options(self):
-        self.assertEqual(set(probe.VU1_AOT_MANIFESTS), {'slice151-vu1-aot.json', ASYNC_MANIFEST, 'slice153-pacing.json', 'slice154-vu1-flags.json', 'slice155-vu1-full.json', 'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json', 'slice160-vu0-aot.json', 'slice166-main.json'})
+        self.assertEqual(set(probe.VU1_AOT_MANIFESTS), {'slice151-vu1-aot.json', ASYNC_MANIFEST, 'slice153-pacing.json', 'slice154-vu1-flags.json', 'slice155-vu1-full.json', 'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json', 'slice160-vu0-aot.json', 'slice166-main.json', 'slice183-night-readback.json'})
 
 
 class AsyncManifestTests(unittest.TestCase):
@@ -142,3 +142,27 @@ class AsyncPlayForwardingTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ReadbackProfileTests(unittest.TestCase):
+    """slice183 (TASK-030): GT4_GS_READBACK is validated, recorded and forwarded; the profile pin is committed."""
+
+    def test_readback_environment_is_validated_and_recorded(self):
+        self.assertEqual(probe.readback_overrides({}), {})
+        self.assertEqual(probe.readback_overrides({'GT4_GS_READBACK': 'full'}),
+                         {'readback_environment': {'GT4_GS_READBACK': 'full'}})
+        self.assertEqual(probe.readback_overrides({'GT4_GS_READBACK': 'tracked'}),
+                         {'readback_environment': {'GT4_GS_READBACK': 'tracked'}})
+        with self.assertRaisesRegex(ValueError, 'GT4_GS_READBACK must be one of tracked, full'):
+            probe.readback_overrides({'GT4_GS_READBACK': 'partial'})
+
+    def test_readback_profile_is_registered_with_its_pin(self):
+        self.assertIn('readback', probe.PERF_PROFILES)
+        manifest, runtime = probe.PERF_PROFILES['readback']
+        self.assertEqual(manifest, 'slice183-night-readback.json')
+        self.assertEqual(runtime, 'private/slice183-night-build/gt4vulkan.exe')
+        pin = json.loads((ROOT / 'docs/inputs' / manifest).read_text(encoding='utf-8'))
+        self.assertEqual(pin['runtime']['path'], runtime)
+        self.assertEqual(pin['port_capsule'], 'private/slice183-night-port')
+        self.assertEqual(pin['shader_capsule'], 'private/slice183-night-shaders')
+        self.assertIn(manifest, probe.VU1_AOT_MANIFESTS)

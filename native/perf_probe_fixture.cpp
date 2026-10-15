@@ -49,6 +49,7 @@ void check_manual_and_boundaries(std::FILE *stream) {
     cpu_tick = std::uint64_t(frame) * 1000;
     probe.presentation(640ull * 448 * 4);
     probe.bytes(false, 10); probe.bytes(true, 20);
+    probe.readback(20, frame % 2 == 0, frame == 1);
     probe.audio(800, 800, 1); probe.dispatch(2);
     probe.frame_boundary({200 + std::uint64_t(frame) * 4915200, 2 + std::uint64_t(frame), 3 + std::uint64_t(frame)});
   }
@@ -66,6 +67,10 @@ void check_manual_and_boundaries(std::FILE *stream) {
   require(text.find("presented_RGBA_bytes/frame") != std::string::npos &&
           text.find("upload bytes") == std::string::npos, "accurate byte labels");
   require(text.find("measured_thread_cpu_ms/frame=1.000") != std::string::npos, "actual CPU units");
+  // Six readbacks over seven frames: three forced (frames 2, 4, 6), one blocking (frame 1).
+  require(text.find("gs_readback/frame=0.86 bytes/frame=") != std::string::npos &&
+          text.find("forced_flushes/frame=0.43 blocking_waits/frame=0.14") != std::string::npos,
+          "readback counters per frame");
   require(probe.frames() == 0 && probe.interval().elapsed_us == 0, "report clips pending EE");
   tick += 1000; probe.leave(ee);
   require(probe.interval().elapsed_us == 1000, "old EE time must not leak");

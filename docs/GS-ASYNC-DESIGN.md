@@ -112,7 +112,8 @@ Deviations from the design above:
    submissions at once.
 2. Readbacks are still synchronous (the CPU waits for the timeline). The GPU-copy
    staging of mid-frame downloads is not implemented, so the GS wait category is only
-   partly reduced. How often each readback occurs is not counted yet.
+   partly reduced. Slice 183 (TASK-030) counts readbacks (`gs_readback` in F8) and waits
+   only for the submissions that wrote the bytes read (`native/gs_write_tracker.hpp`).
 3. Barriers after each dispatch stay full. Two swapchain image barriers were tightened
    to `TRANSFER` (source) and `ALL_COMMANDS` (final destination) to match the acquire and
    signal stages that synchronization validation checks.

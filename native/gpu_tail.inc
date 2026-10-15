@@ -8,16 +8,48 @@ void wait_idle() { flush(); g_vulkan.wait_idle(); }
 
 // At scale > 1 each VRAM word holds SCALE x SCALE sub-samples. Guest-visible bytes are the
 // first sub-sample of every word, produced by the resolve pass into g_scratch.
+// True when pending unsubmitted work (uploads, the open primitive batch, an open image
+// transfer) may write a byte of [lo, hi). Such work must be submitted before a read.
+bool unsubmitted_writes_overlap(std::uint64_t lo, std::uint64_t hi) {
+    for (const PreOp& op : g_pre)
+        if (!op.clut && op.range.overlaps(lo, hi)) return true;
+    const Batch& b = g_batch;
+    if (!b.prims.empty()) {
+        if (pages(b.fbp, b.fbw, b.fpsm, b.minx, b.miny, b.maxx, b.maxy).overlaps(lo, hi)) return true;
+        if (b.zwrite && pages(b.zbp, b.fbw, b.zpsm, b.minx, b.miny, b.maxx, b.maxy).overlaps(lo, hi)) return true;
+    }
+    const Image& im = g_image;
+    if (im.active && im.rrw) {
+        const std::uint32_t rows = (im.total + im.rrw - 1) / im.rrw;
+        if (region(im.dbp, im.dbw, im.dpsm, static_cast<int>(im.dsax), static_cast<int>(im.dsay),
+                   static_cast<int>(im.dsax + im.rrw - 1), static_cast<int>(im.dsay + rows - 1)).overlaps(lo, hi))
+            return true;
+    }
+    return false;
+}
+
+// Scale 1 reads wait only for the submissions that wrote the bytes read. Pending work is
+// submitted only when it writes those bytes; everything else keeps queuing.
 void download(std::uint8_t* memory, std::uint32_t offset, std::uint32_t bytes) {
     if (offset > kMemorySize || bytes > kMemorySize - offset) throw std::runtime_error("GS download outside VRAM");
-    flush();
-    if (g_scale == 1) {
-        read_back(g_vram, bytes, memory + offset, offset);
+    if (!bytes) {
+        flush();
         return;
     }
+    const std::uint64_t lo = offset, hi = static_cast<std::uint64_t>(offset) + bytes;
+    if (g_scale == 1) {
+        const bool full = full_readback_wait();
+        const bool forced = full || g_vram_writes.pending_overlaps(lo, hi) || unsubmitted_writes_overlap(lo, hi);
+        if (forced) flush();
+        // The full mode waits for the whole queue, as before this change.
+        const std::uint64_t target = full ? g_vulkan.last_submission() : g_vram_writes.latest_writer(lo, hi);
+        g_vulkan.read_after(g_vram, offset, memory + offset, bytes, target, forced);
+        return;
+    }
+    flush();
     dispatch_linear(kResolve, bytes / 4, push_params({offset / 4}));
     submit();
-    read_back(g_scratch, bytes, memory + offset, offset);
+    g_vulkan.read_after(g_scratch, offset, memory + offset, bytes, g_vulkan.last_submission(), true);
 }
 
 std::uint32_t g_completed_serial = 0;

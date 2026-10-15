@@ -540,6 +540,26 @@ void Context::read(Buffer *buffer, std::uint64_t offset, void *destination,
 #endif
 }
 
+void Context::read_after(Buffer *buffer, std::uint64_t offset, void *destination,
+                         std::uint64_t bytes, std::uint64_t id, bool forced) {
+  GT4_PERF_SCOPE(gt4::perf::Category::gs_upload);
+  if (!buffer || offset > buffer->size || bytes > buffer->size - offset)
+    throw std::runtime_error("Vulkan buffer read outside allocation");
+  // Submissions complete in order, so waiting for `id` also completes every earlier one.
+  const bool blocked = id != 0 && completed_submission() < id;
+  if (blocked)
+    wait_timeline(id);
+  if (bytes)
+    std::memcpy(destination,
+                static_cast<std::uint8_t *>(buffer->mapped) + offset,
+                static_cast<std::size_t>(bytes));
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
+  gt4::perf::Probe::shared().readback(bytes, forced, blocked);
+#else
+  (void)forced;
+#endif
+}
+
 void Context::bind_buffers(const std::array<Buffer *, 8> &buffers) {
   for (std::uint32_t index = 0; index < buffers.size(); ++index) {
     // Indices 2 and 3 may be null: submit() never reads them.

@@ -26,7 +26,9 @@ bool submit(std::uint32_t present_width = 0, std::uint32_t present_height = 0) {
         submission.present_height = present_height;
     }
     bool presented = false;
-    g_vulkan.submit(submission, &presented);
+    // Pending VRAM writes now belong to this submission (page-tracked readbacks, slice 183).
+    const std::uint64_t id = g_vulkan.submit(submission, &presented);
+    g_vram_writes.submitted(id);
     ++g_submits;
     g_commands.clear();
     // Cache entries stamped with this id are protected until it completes.
@@ -40,5 +42,14 @@ bool submit(std::uint32_t present_width = 0, std::uint32_t present_height = 0) {
 
 void read_back(gt4::vulkan::Buffer* source, std::uint64_t bytes, void* output, std::uint64_t offset = 0) {
     g_vulkan.read(source, offset, output, bytes);
+}
+
+// Set GT4_GS_READBACK=full to restore the whole-queue wait for every readback (A/B control).
+bool full_readback_wait() {
+    static const bool full = [] {
+        const char* mode = std::getenv("GT4_GS_READBACK");
+        return mode && std::strcmp(mode, "full") == 0;
+    }();
+    return full;
 }
 

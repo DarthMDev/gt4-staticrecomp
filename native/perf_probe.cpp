@@ -115,6 +115,12 @@ void Probe::add(std::uint64_t &value, std::uint64_t amount) noexcept {
 void Probe::bytes(bool read, std::uint64_t bytes) noexcept {
   add(read ? read_bytes_ : write_bytes_, bytes);
 }
+void Probe::readback(std::uint64_t bytes, bool forced, bool blocked) noexcept {
+  add(readbacks_, 1);
+  if (forced) add(readbacks_forced_, 1);
+  if (blocked) add(readbacks_blocked_, 1);
+  this->bytes(true, bytes);
+}
 void Probe::presentation(std::uint64_t rgba_bytes) noexcept {
   add(presentations_, 1); add(rgba_bytes_, rgba_bytes);
 }
@@ -133,6 +139,7 @@ void Probe::reset(std::uint64_t now, GuestSample guest) noexcept {
   last_guest_ = guest;
   frames_ = guest_cycles_ = primitives_ = vu_calls_ = 0;
   read_bytes_ = write_bytes_ = rgba_bytes_ = 0;
+  readbacks_ = readbacks_forced_ = readbacks_blocked_ = 0;
   presentations_ = dispatches_ = workgroups_ = 0;
   audio_produced_ = audio_completed_ = empty_refills_ = 0;
   period_count_ = next_period_ = 0;
@@ -249,6 +256,8 @@ void Probe::print(const char *reason) noexcept {
   std::fprintf(output_, "\n[perf] mapped_write_bytes/frame=%.0f mapped_read_bytes/frame=%.0f presented_RGBA_bytes/frame=%.0f presents/frame=%.2f dispatches/frame=%.1f workgroups/frame=%.0f\n",
       write_bytes_ / frames, read_bytes_ / frames, rgba_bytes_ / frames,
       presentations_ / frames, dispatches_ / frames, workgroups_ / frames);
+  std::fprintf(output_, "[perf] gs_readback/frame=%.2f bytes/frame=%.0f forced_flushes/frame=%.2f blocking_waits/frame=%.2f\n",
+      readbacks_ / frames, read_bytes_ / frames, readbacks_forced_ / frames, readbacks_blocked_ / frames);
   std::fprintf(output_, "[perf] audio frames/frame: produced=%.1f completed=%.1f empty_refills=%.2f; gpu_timestamp_time=Unknown\n",
       audio_produced_ / frames, audio_completed_ / frames, empty_refills_ / frames);
   if (split_vu_) {

@@ -899,3 +899,52 @@ Limits:
 2. Window presentation at 2x and 3x is accepted by the control (`check_presentation`), not viewed in the owner's window.
 3. A scaled frame's `decode` skip (donor `rendered` guard) changes texture decoding; not separately validated against the 1x path beyond the image comparison.
 4. No fullscreen, FSR, FXAA or deinterlace: see the CoreGS 1.1 workstream entry in the journal.
+
+## Slice 183 (TASK-030): page-tracked GS readbacks (`--mode readback`)
+
+Scale-1 GS-to-host readbacks wait only for the submissions that wrote the bytes read
+(`native/gs_write_tracker.hpp`). Pending work is submitted only when it writes those bytes. The
+donor files are spliced as before; the splice (`scripts/prepare_external_vulkan.py`) now records
+each VRAM write where the donor marks it (`mark_rendered`: raster and local copies; `emit_pre`:
+uploads). `GT4_GS_READBACK=full` restores the whole-queue wait (A/B control). Scale 2-4 readbacks
+are unchanged in wait semantics (flush, then wait for the resolve).
+
+Steps (fresh directories in the main checkout; run from the worktree root):
+
+1. Shaders are byte-identical to slice176: copied to `private\slice183-night-shaders` (and `-s2`, `-s3`, `-s4`).
+2. Port: `python scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice183-night-port --assets-root C:\Antigravity\gt4-staticrecomp`.
+3. Configure `private\slice183-night-build` with `GT4_ASSETS_ROOT`, `GT4_PERF_RUNTIME_SOURCE` = `slice160-vu0-runtime`,
+   `GT4_VU1_GENERATED_DIR` = `slice157-vu1-all-gen`, `GT4_VU0_GENERATED_DIR` = `slice160-vu0-gen-r3`, `GT4_PORT_DIR` and
+   `GT4_SHADER_DIR` = the slice183 directories (absolute). Pins: [slice183-night-runtime.json](inputs/slice183-night-runtime.json)
+   (port and shader hashes) and [slice183-night-readback.json](inputs/slice183-night-readback.json) (launcher run manifest).
+4. Controls: CTest 28 tests, including `native_gs_write_tracker` (pure model: which submission a read waits for, forced
+   submits only for overlapping pending writes, bytes equal to a full-sync reference; 2,389 readbacks) and the page-0
+   readback of `vulkan_fixture` while a page-1 draw is pending. `perf_probe_fixture` checks the new counters. Python: 265 tests.
+5. Headless (no window), the slice157 schedule: 42 of 42 dumps identical to slice157 in the default mode and in
+   `GT4_GS_READBACK=full` (`compare_frame_dumps.py`, scale 1). The headless schedule prints no F7/F8 report.
+
+F8 report (new line, after `mapped_read_bytes`): `[perf] gs_readback/frame=N bytes/frame=N forced_flushes/frame=N
+blocking_waits/frame=N`. `forced_flushes` counts readbacks that had to submit pending work; `blocking_waits` counts
+readbacks that waited for the GPU. The wait time is the existing `gs_fence_wait` category.
+
+Owner A/B (PowerShell; the launcher reads pins from the checkout of its script, so run the worktree script with the main
+checkout as `--assets-root`). A first, then B; only `GT4_GS_READBACK` differs:
+
+```powershell
+$env:GT4_GS_READBACK = 'full'
+C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe C:\Antigravity\gt4-wt-030-night\scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode readback --force-480p
+Remove-Item Env:GT4_GS_READBACK
+C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe C:\Antigravity\gt4-wt-030-night\scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode readback --force-480p
+```
+
+Compare, per night-race interval (F7 to F8): `manual (F8)` or `periodic` VBlanks/s, `gs_fence_wait=` (exclusive ms/frame),
+the new `gs_readback` line, `mapped_read_bytes/frame`, `frame ms: median/p95/p99` and `late_frames`. `result.json` records
+`readback_environment` for each run. Logs: `private\manual-play\session-*\probe.log`.
+
+Limits:
+
+1. Not measured on the owner's window yet. The headless run proves identical output, not a frame-rate change.
+2. A readback whose bytes were written by draws still pending in the current frame must still wait for those draws
+   (the data is needed by the EE at once); the tracking removes only the waits on unrelated work and on writers that
+   have already completed.
+3. Scale 2-4 readbacks keep the whole-queue wait; `GT4_GS_READBACK` applies to scale 1 only.

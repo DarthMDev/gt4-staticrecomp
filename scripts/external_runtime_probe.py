@@ -49,6 +49,9 @@ PERF_PROFILES = {
     # Current main (slice166): vu0-aot built from main after TASK-008/009/010/013; accepts --force-480p.
     # (slice165 baked a worktree junction shader path and does not start; kept as history only.)
     'main': ('slice166-main.json', 'private/slice166-main-build/build/gt4vulkan.exe'),
+    # TASK-030 candidate (slice183): main-equivalent VU AOT build on the slice176 adapter with page-tracked
+    # GS readbacks. GT4_GS_READBACK=full restores the whole-queue wait for A/B comparison.
+    'readback': ('slice183-night-readback.json', 'private/slice183-night-build/gt4vulkan.exe'),
 }
 # Internal-resolution candidate (slice176, TASK-028). Not a performance profile: PS2_SCALE is passed
 # through from the scale argument (1 to 4); scale 1 is the default and the qualified output.
@@ -59,14 +62,17 @@ PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
-                     'slice160-vu0-aot.json', 'slice166-main.json')
+                     'slice160-vu0-aot.json', 'slice166-main.json', 'slice183-night-readback.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
-VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json')
+VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice183-night-readback.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
 # GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
+# GT4_GS_READBACK (slice183): tracked (default) waits only for the GPU writes to the bytes read; full waits
+# for the whole queue as before. Forwarded and recorded; the native host refuses other values.
+READBACK_VALUES = ('tracked', 'full')
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -113,6 +119,15 @@ def pacing_overrides(environment):
             raise ValueError(f"{name} must be one of {', '.join(allowed)}")
         recorded[name] = environment[name]
     return {'pacing_environment': recorded} if recorded else {}
+
+
+def readback_overrides(environment):
+    """Validates GT4_GS_READBACK (slice183) and returns the value to record in run evidence."""
+    if 'GT4_GS_READBACK' not in environment:
+        return {}
+    if environment['GT4_GS_READBACK'] not in READBACK_VALUES:
+        raise ValueError(f"GT4_GS_READBACK must be one of {', '.join(READBACK_VALUES)}")
+    return {'readback_environment': {'GT4_GS_READBACK': environment['GT4_GS_READBACK']}}
 
 
 def verify_performance_profile(manifest, evidence, runtime_workspace):
@@ -364,6 +379,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
+    result.update(readback_overrides(environment))
     if force_480p:
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:

@@ -156,6 +156,17 @@ int main() {
     sprite(state, 20, 20, 28, 28, 0x80FFAA99);
     gpu::download(downloaded.data());
     compare_memory(downloaded, "framebuffer channel mask");
+    // Page-tracked readback (slice 183): a pending draw that writes only page 1 (framebuffer
+    // rows 32-63) must not hold back a readback of page 0, which the earlier draws wrote and
+    // which are already submitted. The bytes must still equal the CPU reference.
+    sprite(state, 2, 34, 12, 40, 0x80ABCDEFu);
+    std::vector<std::uint8_t> page0(8192);
+    gpu::download(page0.data(), 0, 8192);
+    if (std::memcmp(page0.data(), memory(), 8192) != 0)
+      throw std::runtime_error("Page-tracked readback of page 0 differs from the CPU reference");
+    std::fprintf(stderr, "[fixture] page 0 readback matches while a page 1 draw is pending\n");
+    gpu::download(downloaded.data());
+    compare_memory(downloaded, "page 1 draw after a page 0 readback");
     std::vector<std::uint32_t> pixels;
     std::uint32_t width = 0, height = 0;
     gpu::display({0, 1, PSMCT32, 0, 0, 64, 64, false}, pixels, width, height);

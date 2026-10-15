@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.h>
 
 #include "gs_submit_ring.hpp"
+#include "gs_write_tracker.hpp"
 #include "pacing.hpp"
 
 #include <array>
@@ -87,6 +88,13 @@ public:
   std::uint64_t next_submission() const { return ring_->next_id(); }
   // Last submission known to have completed (non-blocking query).
   std::uint64_t completed_submission();
+  // Last committed submission id, zero before the first; waiting for it drains the queue.
+  std::uint64_t last_submission() const { return ring_->last_committed(); }
+  // Copies bytes out of a host-visible buffer. Waits only for submission `id`, the
+  // latest writer of those bytes (zero: none), then copies. `forced` marks a readback
+  // that had to submit pending work first. Counted by the performance probe.
+  void read_after(Buffer *buffer, std::uint64_t offset, void *destination,
+                  std::uint64_t bytes, std::uint64_t id, bool forced);
   // Blocks until every submitted GPU operation has completed.
   void wait_submissions();
   void wait_idle();

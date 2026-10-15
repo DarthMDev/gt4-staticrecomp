@@ -47,7 +47,8 @@ gt4::vulkan::Buffer *g_clut = nullptr, *g_scratch = nullptr, *g_decoded = nullpt
 std::uint32_t g_scale = 1, g_copy_words = 2048u * 2048u, g_field_words = 1u << 19;
 bool g_rendered[512] = {};
 bool g_decode = true;
-std::uint32_t g_decoded_used = 0;'''
+std::uint32_t g_decoded_used = 0;
+gt4::vulkan::WriteTracker g_vram_writes;'''
     source = replace_section(source, 'WGPUInstance g_instance', 'struct Command {', globals_text)
     source = replace_section(source, 'struct CommandInfo {', 'std::vector<Command> g_commands;', '')
     source = source.replace('WGPUStringView view(const char *s) { return WGPUStringView{s, WGPU_STRLEN}; }\n', '')
@@ -61,6 +62,21 @@ std::uint32_t g_decoded_used = 0;'''
     source = source.replace(guard_old, guard_new)
     source = replace_section(source, 'void note_raster(', 'void flush_batch()', '')
     source = source.replace('    note_raster(prims, tiles, total, snapshot);\n', '')
+    # Page-tracked readbacks (slice 183): each VRAM write is recorded where the donor marks it.
+    # Raster (framebuffer and Z) and local copies both pass through mark_rendered; uploads are
+    # dispatched in emit_pre. Anchors are checked for exact counts, so a donor change fails loudly.
+    mark_old = """void mark_rendered(const Range &r) {
+    for (std::uint64_t at = r.lo; at < r.hi; at += 8192) g_rendered[(at >> 13) & 511u] = true;
+}"""
+    mark_new = mark_old[:-1] + '    g_vram_writes.note_write(r.lo, r.hi);\n}'
+    if source.count(mark_old) != 1:
+        raise ValueError('mark_rendered anchor changed in the donor source')
+    source = source.replace(mark_old, mark_new)
+    upload_old = '        else dispatch_linear(kUpload, total, push_params({offset, count, total}));'
+    upload_new = upload_old + '\n        for (std::size_t k = i; k < j; ++k) g_vram_writes.note_write(g_pre[k].range.lo, g_pre[k].range.hi);'
+    if source.count(upload_old) != 1:
+        raise ValueError('upload dispatch anchor changed in the donor source')
+    source = source.replace(upload_old, upload_new)
     source = source.replace('const std::uint32_t snapshot = snapshot_batch(prims, snapshot_lo, snapshot_hi);',
                             'snapshot_batch(prims, snapshot_lo, snapshot_hi);')
     replacements = ROOT / 'native'
