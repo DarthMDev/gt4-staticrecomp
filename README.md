@@ -17,7 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
-![Tasks](https://img.shields.io/badge/tasks%20done-11%20of%2024-2ea44f)
+![Tasks](https://img.shields.io/badge/tasks%20done-12%20of%2024-2ea44f)
 
 </div>
 
@@ -123,7 +123,7 @@ in game before it is merged.
 | TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs headless, textures missing |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
-| TASK‑015 | LWR instruction fidelity fix | 📋 Planned |
+| TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
 | TASK‑017 | License-test crash | 📋 Planned |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |

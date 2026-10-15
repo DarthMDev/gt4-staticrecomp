@@ -139,11 +139,9 @@ int main() {
     std::fprintf(stderr, "PASS: XInput mapping, pressures, signed axes, "
                          "digital keyboard, focus, rumble\n");
     AudioOutput audio;
+    // Silence: the checks below count frames, timing and queue bounds only, so
+    // zeroed PCM keeps the test off the speakers without changing any assertion.
     std::array<std::int16_t, 64> samples{};
-    for (int index = 0; index < 32; ++index) {
-      samples[index * 2] = static_cast<std::int16_t>(index * 100);
-      samples[index * 2 + 1] = static_cast<std::int16_t>(-index * 200);
-    }
     for (int block = 0; block < 81; ++block)
       require(audio.push(samples.data(), 32), "audio fragmented submission");
     audio.close(true);
@@ -189,8 +187,8 @@ int main() {
       for (int guest_frame = 0; guest_frame < 180; ++guest_frame) {
         clock.wait_until(pacer.deadline());
         pacer.release(clock.now());
-        for (std::size_t index = 0; index < frame_audio.size(); ++index)
-          frame_audio[index] = static_cast<std::int16_t>((index * 37 + guest_frame) % 20000 - 10000);
+        // Silence (zeroed PCM): only timing and queue bounds are asserted.
+        std::fill(frame_audio.begin(), frame_audio.end(), std::int16_t{0});
         const std::int64_t before = clock.now();
         require(paced.push(frame_audio.data(), 800), "paced push accepted");
         worst_push = std::max(worst_push, clock.now() - before);
