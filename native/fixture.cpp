@@ -120,8 +120,21 @@ int main() {
       context.read(buffers[0], 0, &result, sizeof(result));
       if (result != sentinel)
         throw std::runtime_error("Zero-work dispatch changed VRAM");
-      const gt4::vulkan::Dispatch invalid[] = {
-          {9, 0, 0, 0}, {5, 0, 0, 1}, {5, UINT32_MAX, 0, 0}};
+      std::vector<gt4::vulkan::Dispatch> invalid = {{9, 0, 0, 0},
+                                                    {5, 0, 0, 1}};
+      // Oversized workgroup counts are only invalid above the device limit;
+      // some drivers report UINT32_MAX as the maximum on an axis.
+      const std::uint32_t limit_x = context.max_workgroup_count(0);
+      const std::uint32_t limit_y = context.max_workgroup_count(1);
+      if (limit_x < UINT32_MAX) {
+        invalid.push_back({5, limit_x + 1, 1, 0});
+      } else if (limit_y < UINT32_MAX) {
+        invalid.push_back({5, 1, limit_y + 1, 0});
+      } else {
+        std::fprintf(stderr, "[fixture] device accepts UINT32_MAX workgroups "
+                             "on x and y; oversized-dispatch case not "
+                             "representable\n");
+      }
       for (const auto &dispatch : invalid) {
         bool rejected = false;
         try {

@@ -55,6 +55,10 @@ public:
   void set_aspect(Aspect aspect) { aspect_ = aspect; }
   bool present(Buffer *rgba, std::uint32_t width, std::uint32_t height);
   bool has_window() const { return window_ != nullptr; }
+  // Device maximum workgroup count for axis 0 (x) or 1 (y).
+  std::uint32_t max_workgroup_count(int axis) const {
+    return limits_.maxComputeWorkGroupCount[axis];
+  }
   std::uint64_t presentations() const { return presentations_; }
 
 private:
