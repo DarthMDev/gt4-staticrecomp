@@ -131,7 +131,7 @@ wrapping/flags/memory semantics.
 ### Reusable worker instruction
 
 ```text
-Read docs/STATUS.md first, then the task's named references. Follow AGENTS.md.
+Read docs/STATUS.md first, then the task's named references. Follow CLAUDE.md.
 Execute only the attached task contract. If a required semantic contract is
 missing, return the unknown and the smallest evidence needed to resolve it.
 Do not invent permission to launch gameplay, profile, modify another task's

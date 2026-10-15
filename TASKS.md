@@ -43,13 +43,13 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑005 | Asynchronous GPU submission + overlay (RTSS) fix | ✅ Done |
 | TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
 | TASK‑007 | VU1 per-program flag elision | ✅ Done |
-| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 In progress |
-| TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, 480p everywhere | 🔄 480p rework |
-| TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ⏭️ Next |
+| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done |
+| TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, races in 480p | ✅ Done |
+| TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ✅ Done (tuning measurements pending) |
 | TASK‑011 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
-| TASK‑012 | paraLLEl-GS as the PC renderer: integration, upscaling, deinterlacing, readbacks, extras, GT4 validation | 📋 Planned |
-| TASK‑013 | VU0 microcode compiled ahead of time | 📋 Planned |
-| TASK‑014 | EE entry coverage from the decomp function list | 📋 Planned |
+| TASK‑012 | paraLLEl-GS as the PC renderer: integration, upscaling, deinterlacing, readbacks, extras, GT4 validation | 🔄 In progress |
+| TASK‑013 | VU0 microcode compiled ahead of time | 🧪 Owner test |
+| TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost counters and review | 📋 Planned |
 | TASK‑017 | Decomp names in generated EE code | 📋 Planned |
@@ -99,36 +99,24 @@ Flat 16.7 ms frametime (99.6% of intervals in 16-17 ms). Commit `fe51478`.
 ### TASK-007 — VU1 flag elision (slice 154)
 Showroom 44.8 → 59.1 FPS; 5-AI race at 60.0. Commit `26e211d`, merged in PR #1.
 
+### TASK-008 — Full static VU1 entry coverage (slice 157)
+All 2,048 entries of the decrypted VU1 image compiled. Owner test on an idle
+CPU: night race 58.9 FPS (remaining cost is the 4.1 ms GS fence wait, for
+TASK-012), rally 59.9, showroom 60.0; 0 interpreted VU1 calls in all three.
+
+### TASK-009 — Quick fixes (slice 164)
+Title "GT4Recomp", fixed 16:9, Alt+Enter/F11 borderless fullscreen, interval
+counters, `late_frames` fixed. `--force-480p` holds the game's race display
+option (index at `[0x622F4C]+0x38CB0+0x16B0`) at 480p: owner confirmed races
+render 480p while menus stay 480i as in the original.
+
+### TASK-010 — Build pipeline (slice 159)
+Full build 3,942 → about 1,700 CPU-seconds: shared corpus library, split
+generated tables, `-Wno-unused-label` on generated code. `GT4_FP_CONTRACT_OFF`
+and `GT4_X86_64_V3` options exist (default off); their speed effect is Unknown
+until an idle-CPU bench. ThinLTO/PGO not attempted.
+
 ## Phase 1 details
-
-### TASK-008 — Full static VU1 entry coverage
-Branch `feat/vu1-entry-coverage`. Slice 155 (426 targeted entries) owner test:
-night race 0 interpreted calls, rally still 354,837. Owner chose all 2,048
-entries of the decrypted image (about 40 MB larger executable is fine); flag
-elision applies per program automatically. Acceptance: interpreted calls 0 in
-night race, rally and showroom.
-**Status: all-entries candidate ready for owner retest** (slice 157, `--mode
-vu1-all`, executable `40388a41`, 95 MB): 2,048 entries (the 426 targeted ones
-identical inside it), table split into 128 parts for parallel compilation,
-CTest 18/18, Python 236 OK, registry 2,048/2,048, headless frames identical to
-slice 154, interpreted calls 0 headless.
-
-### TASK-009 — Quick fixes
-Branch `task/009-quick-fixes`, slice 156 `--mode quickfix`. Owner accepted:
-title "GT4Recomp", fixed 16:9 (F6/4:3 removed), Alt+Enter/F11 borderless
-fullscreen, interval and session counters. Rework:
-- 480p everywhere: the `SetGsCrt` rewrite alone does not work, because the game
-  programs SMODE2/DISPLAY from its internal mode (default row id 1 of table
-  `D_00618648`) and resets the option to `normal` at boot. New approach: patch
-  the default row in guest RAM at load (id 1 → interlace 0 / mode 0x50), with
-  original-byte verification, so boot, menus and races run progressive.
-- Fix the `late_frames` definition (it counts almost every paced frame).
-
-### TASK-010 — Build pipeline: speed and tuning
-Faster builds: parallel jobs inside one build (split large generated units),
-compiler cache, lld-link; measure before/after. Build tuning (formerly a separate task), one
-variable per candidate: `-ffp-contract=off` control, x86-64-v3 runtime variant
-chosen by the launcher, dispatch divide removal, ThinLTO, PGO.
 
 ### TASK-011 — MTVU
 Run VU1 programs on a worker thread (donor `start_vu_thread` exists), on by

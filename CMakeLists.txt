@@ -37,7 +37,7 @@ endif()
 add_test(NAME native_vulkan_pixels COMMAND $<TARGET_FILE:vulkan_fixture>)
 add_test(NAME native_vulkan_pixels_sync COMMAND $<TARGET_FILE:vulkan_fixture>)
 set_tests_properties(native_vulkan_pixels_sync PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_ASPECT=16:9;GT4_GS_SYNC=1")
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_GS_SYNC=1")
 add_test(NAME native_gs_submit_ring COMMAND $<TARGET_FILE:gs_submit_ring_fixture>)
 add_test(NAME native_vulkan_async_stress_async
     COMMAND $<TARGET_FILE:vulkan_async_stress> "${CMAKE_BINARY_DIR}/async-stress-async.bin")
@@ -47,12 +47,14 @@ add_test(NAME native_vulkan_async_stress_compare
     COMMAND ${CMAKE_COMMAND} -E compare_files "${CMAKE_BINARY_DIR}/async-stress-async.bin" "${CMAKE_BINARY_DIR}/async-stress-sync.bin")
 set_tests_properties(native_gs_submit_ring native_vulkan_async_stress_async native_vulkan_async_stress_sync
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 600 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-set_tests_properties(native_vulkan_async_stress_async PROPERTIES ENVIRONMENT "GT4_ASPECT=16:9;GT4_GS_SYNC=0")
-set_tests_properties(native_vulkan_async_stress_sync PROPERTIES ENVIRONMENT "GT4_ASPECT=16:9;GT4_GS_SYNC=1")
+set_tests_properties(native_vulkan_async_stress_async PROPERTIES ENVIRONMENT "GT4_GS_SYNC=0")
+set_tests_properties(native_vulkan_async_stress_sync PROPERTIES ENVIRONMENT "GT4_GS_SYNC=1")
 set_tests_properties(native_vulkan_async_stress_compare PROPERTIES DEPENDS
     "native_vulkan_async_stress_async;native_vulkan_async_stress_sync")
 add_test(NAME native_audio_input COMMAND $<TARGET_FILE:host_io_fixture>)
 add_test(NAME native_pacing COMMAND $<TARGET_FILE:pacing_fixture>)
+add_test(NAME native_quickfix COMMAND $<TARGET_FILE:quickfix_fixture>)
+add_test(NAME native_race_display COMMAND $<TARGET_FILE:race_display_fixture>)
 add_test(NAME native_shape_observer COMMAND $<TARGET_FILE:shape_observer_fixture>)
 add_test(NAME native_performance_accounting COMMAND $<TARGET_FILE:perf_accounting_fixture>)
 add_test(NAME native_performance_probe COMMAND $<TARGET_FILE:perf_probe_fixture>)
@@ -60,9 +62,9 @@ add_test(NAME native_shape_capture_export COMMAND $<TARGET_FILE:shape_capture_ex
 add_test(NAME native_shape_capture_control COMMAND $<TARGET_FILE:shape_capture_control_fixture>)
 add_test(NAME python_native_contracts
     COMMAND "${GT4_PYTHON}" -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/python")
-set_tests_properties(native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
+set_tests_properties(native_quickfix native_race_display native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
-    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_ASPECT=16:9;GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
 if(TARGET shape_runtime_fixture)
     add_test(NAME native_shape_runtime COMMAND $<TARGET_FILE:shape_runtime_fixture>)
     set_tests_properties(native_shape_runtime PROPERTIES RUN_SERIAL TRUE TIMEOUT 120

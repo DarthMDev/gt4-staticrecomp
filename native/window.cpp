@@ -1,4 +1,6 @@
 #include "window.hpp"
+#include "race_display.hpp"
+#include "ps2/memory.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
 #include "host_io.hpp"
@@ -7,6 +9,7 @@
 #include "perf_probe.hpp"
 #include "frame_clock.hpp"
 #include "pacing.hpp"
+#include "window_mode.hpp"
 #ifdef GT4_SHAPE_CAPTURE
 #include "shape_capture_control.hpp"
 #include "shape_observer_adapter.hpp"
@@ -20,11 +23,12 @@
 #include <string>
 
 namespace {
+constexpr wchar_t window_title[] = L"GT4Recomp";
 HWND game_window = nullptr;
 bool surface_attached = false;
 bool closing = false;
 ControllerInput *controller = nullptr;
-bool widescreen = true;
+gt4::window_mode::ToggleState fullscreen_state;
 #ifdef GT4_SHAPE_CAPTURE
 std::unique_ptr<gt4::observation::CaptureControl> capture;
 #endif
@@ -34,36 +38,12 @@ gt4::pacing::Mode pacing_mode = gt4::pacing::Mode::paced;
 std::unique_ptr<FrameClock> frame_clock;
 std::unique_ptr<gt4::pacing::FramePacer> frame_pacer;
 gt4::pacing::Diagnostics pacing_diagnostics;
+// Session totals at the last F7 start or F8 report; the next report prints the difference.
+gt4::pacing::Counters counters_at_last_report;
+// GT4_FORCE_480P (slice164): set at window start; counts guest VBlank writes of the race display index.
+bool force_480p_enabled = false;
+gt4::display::Force480pState force_480p_state;
 AudioOutput *audio_output = nullptr;
-
-void update_title() {
-  std::wstring title = widescreen
-                                  ? L"GT4Recomp — 16:9 — F6: proporção — "
-                                    L"Enter: Start, Z: acelerar, A: frear"
-                                  : L"GT4Recomp — 4:3 — F6: proporção — Enter: "
-                                    L"Start, Z: acelerar, A: frear";
-#ifdef GT4_PERF_PROBE
-  title += L" — F7: start test, F8: report, F9: diagnostics";
-#ifdef GT4_PERF_FRAME_ONLY
-  title += L" — frame-only control";
-#endif
-#ifdef GT4_PERF_VU_SPLIT
-  title += L" — VU0/VU1 timers";
-#endif
-#endif
-#ifdef GT4_SHAPE_CAPTURE
-  if (capture) {
-    using gt4::observation::CapturePhase;
-    switch (capture->phase()) {
-    case CapturePhase::idle: title += L" — F8: start capture"; break;
-    case CapturePhase::capturing: title += L" — F8: stop capture"; break;
-    case CapturePhase::ready: title += L" — F8: retry export"; break;
-    case CapturePhase::exported: title += L" — capture saved"; break;
-    }
-  }
-#endif
-  SetWindowTextW(game_window, title.c_str());
-}
 
 void apply_pad(const PadState &pad) {
   ps2::set_pad_buttons(pad.buttons);
@@ -73,10 +53,65 @@ void apply_pad(const PadState &pad) {
     ps2::set_pad_pressure(button, pad.pressures[button]);
 }
 
+gt4::pacing::Counters pacing_counters() {
+  gt4::pacing::Counters counters;
+  if (frame_pacer)
+    counters.late_frames = frame_pacer->late_frames();
+  if (audio_output) {
+    counters.audio_underruns = audio_output->underruns();
+    counters.ring_overflow_frames = audio_output->overflow_frames();
+  }
+  return counters;
+}
+
+gt4::window_mode::Rect to_rect(const RECT &rect) {
+  return {rect.left, rect.top, rect.right, rect.bottom};
+}
+
+// Borderless fullscreen on the monitor that holds the window. The windowed frame
+// and style are kept by the toggle state and restored on the next toggle. The
+// swapchain follows the new client size through WM_SIZE.
+void set_fullscreen(bool enabled) {
+  using gt4::window_mode::Placement;
+  if (enabled) {
+    RECT windowed{};
+    if (!GetWindowRect(game_window, &windowed))
+      return;
+    MONITORINFO monitor{};
+    monitor.cbSize = sizeof monitor;
+    if (!GetMonitorInfoW(MonitorFromWindow(game_window, MONITOR_DEFAULTTONEAREST),
+                         &monitor))
+      return;
+    const auto style = static_cast<std::uint32_t>(GetWindowLongW(game_window, GWL_STYLE));
+    if (!fullscreen_state.enter(Placement{to_rect(windowed), style}))
+      return;
+    SetWindowLongW(game_window, GWL_STYLE,
+                   static_cast<LONG>(gt4::window_mode::fullscreen_style(style)));
+    const RECT area = monitor.rcMonitor;
+    SetWindowPos(game_window, HWND_TOP, area.left, area.top,
+                 area.right - area.left, area.bottom - area.top,
+                 SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    return;
+  }
+  Placement restored{};
+  if (!fullscreen_state.leave(restored))
+    return;
+  SetWindowLongW(game_window, GWL_STYLE, static_cast<LONG>(restored.style));
+  const auto &bounds = restored.bounds;
+  SetWindowPos(game_window, nullptr, bounds.left, bounds.top,
+               bounds.right - bounds.left, bounds.bottom - bounds.top,
+               SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER);
+}
+
 LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
                                   LPARAM second) {
 #ifdef GT4_PERF_PROBE
   if (message == WM_KEYDOWN && (first == VK_F7 || first == VK_F8 || first == VK_F9)) {
+    if (first == VK_F7) {
+      // The F7/F8 interval starts here: histogram and counter deltas restart.
+      counters_at_last_report = pacing_counters();
+      pacing_diagnostics.reset();
+    }
     const auto request = first == VK_F7 ? gt4::perf::Request::start :
         first == VK_F8 ? gt4::perf::Request::report : gt4::perf::Request::toggle;
     gt4::perf::Probe::shared().request(request, (second & (1ll << 30)) != 0);
@@ -93,11 +128,12 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     DestroyWindow(window);
     return 0;
   }
-  if (message == WM_KEYDOWN && first == VK_F6 && !(second & (1ll << 30))) {
-    widescreen = !widescreen;
-    if (surface_attached)
-      ps2::gs::gpu::set_widescreen(widescreen);
-    update_title();
+  // Alt+Enter arrives as WM_SYSKEYDOWN; Alt+Enter and F11 toggle borderless fullscreen.
+  // Auto-repeat (previous key state bit set) is ignored.
+  const bool repeat = (second & (1ll << 30)) != 0;
+  if ((message == WM_SYSKEYDOWN && first == VK_RETURN && !repeat) ||
+      (message == WM_KEYDOWN && first == VK_F11 && !repeat)) {
+    set_fullscreen(!fullscreen_state.fullscreen());
     return 0;
   }
   if (message == WM_DESTROY) {
@@ -146,17 +182,6 @@ void release_frame() {
   pacing_diagnostics.record_release(released, frame_clock->frequency());
 }
 
-gt4::pacing::Counters pacing_counters() {
-  gt4::pacing::Counters counters;
-  if (frame_pacer)
-    counters.late_frames = frame_pacer->late_frames();
-  if (audio_output) {
-    counters.audio_underruns = audio_output->underruns();
-    counters.ring_overflow_frames = audio_output->overflow_frames();
-  }
-  return counters;
-}
-
 void on_vblank() {
 #ifdef GT4_PERF_PROBE
   gt4::perf::Probe::shared().frame_boundary(
@@ -166,12 +191,11 @@ void on_vblank() {
   GT4_PERF_SCOPE(gt4::perf::Category::host_vblank);
   if (!pump_messages())
     return;
+  if (force_480p_enabled)
+    gt4::display::force_race_480p_at_vblank(ps2::g_ram, ps2::kRamSize, force_480p_state);
 #ifdef GT4_SHAPE_CAPTURE
-  if (capture) {
-    const auto previous = capture->phase();
+  if (capture)
     capture->service();
-    if (capture->phase() != previous) update_title();
-  }
 #endif
   std::uint16_t buttons = 0;
   const bool focused = GetForegroundWindow() == game_window;
@@ -186,9 +210,14 @@ void on_vblank() {
         {'Z', 1u << 14},      {'A', 1u << 15},    {'S', 1u << 12},
         {'Q', 1u << 10},      {'W', 1u << 11},    {'1', 1u << 8},
         {'2', 1u << 9}};
-    for (const auto &binding : bindings)
+    // Alt+Enter toggles fullscreen: while Alt is held, Enter is not Start.
+    const bool alt_held = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    for (const auto &binding : bindings) {
+      if (binding.key == VK_RETURN && alt_held)
+        continue;
       if (GetAsyncKeyState(binding.key) & 0x8000)
         buttons |= binding.mask;
+    }
   }
   if (ps2::g_options.presses.empty()) {
     apply_pad(controller->poll(focused, buttons));
@@ -217,21 +246,18 @@ bool open_window(bool fullscreen) {
   window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
-  widescreen = gt4::vulkan::parse_aspect(std::getenv("GT4_ASPECT")) ==
-               gt4::vulkan::Aspect::widescreen;
-  RECT window_bounds{0, 0, 960, widescreen ? 540 : 720};
+  // The presentation is fixed 16:9: the client area is 960x540.
+  RECT window_bounds{0, 0, 960, 540};
   if (!AdjustWindowRectEx(&window_bounds, WS_OVERLAPPEDWINDOW, FALSE, 0))
     throw std::runtime_error("Cannot size native game window");
   game_window = CreateWindowExW(
-      0, window_class.lpszClassName,
-      L"GT4Recomp — Audio + XInput — Enter: Start, Z: acelerar, A: frear",
+      0, window_class.lpszClassName, window_title,
       WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
       window_bounds.right - window_bounds.left,
       window_bounds.bottom - window_bounds.top, nullptr, nullptr,
       window_class.hInstance, nullptr);
   if (!game_window)
     throw std::runtime_error("Cannot create native game window");
-  update_title();
   return true;
 }
 
@@ -262,11 +288,16 @@ int run_window(const std::function<int()> &emulate) {
     game_window = nullptr;
   };
   try {
+    force_480p_enabled = gt4::display::parse_force_480p(std::getenv("GT4_FORCE_480P"));
+    force_480p_state = {};
+    if (force_480p_enabled)
+      std::fprintf(stderr, "[display] GT4_FORCE_480P=1: race display index held at 480p (guest VBlank)\n");
     pacing_mode = gt4::pacing::parse_mode(std::getenv("GT4_PACING"));
     frame_clock = std::make_unique<FrameClock>();
     frame_pacer = std::make_unique<gt4::pacing::FramePacer>(
         frame_clock->frequency(), gt4::pacing::guest_vblank_rate);
     pacing_diagnostics.reset();
+    counters_at_last_report = {};
     std::fprintf(stderr, "[pacing] mode=%s; guest VBlank %llu Hz; timer=%s\n",
                  gt4::pacing::mode_name(pacing_mode),
                  static_cast<unsigned long long>(gt4::pacing::guest_vblank_rate),
@@ -279,7 +310,6 @@ int run_window(const std::function<int()> &emulate) {
     if (length) {
       capture = std::make_unique<gt4::observation::CaptureControl>(
           gt4::observation::runtime_observer(), std::filesystem::path(output.data()));
-      update_title();
     } else {
       std::fputs("[shape-capture] disabled: no explicit GT4_OBSERVATION_OUTPUT\n", stderr);
     }
@@ -302,7 +332,8 @@ int run_window(const std::function<int()> &emulate) {
                                 nullptr, nullptr, bounds.right, bounds.bottom))
       throw std::runtime_error("Native Vulkan presentation refused window");
     surface_attached = true;
-    ps2::gs::gpu::set_widescreen(widescreen);
+    // The presentation is fixed 16:9.
+    ps2::gs::gpu::set_widescreen(true);
     std::fprintf(stderr,
                  "[window] real guest GPU output through native Vulkan\n");
     // shortcut: one thread and FIFO presentation, qualify pipelining later.
@@ -311,7 +342,14 @@ int run_window(const std::function<int()> &emulate) {
     audio_output = &audio;
 #ifdef GT4_PERF_PROBE
     gt4::perf::Probe::shared().set_report_section([](std::FILE *output) {
-      pacing_diagnostics.format(output, pacing_mode, pacing_counters());
+      // F8 report: counter differences since the last F7 or report, then totals.
+      const gt4::pacing::Counters session = pacing_counters();
+      pacing_diagnostics.format(output, pacing_mode,
+                                session.since(counters_at_last_report), session);
+      if (force_480p_enabled)
+        std::fprintf(output, "[display] GT4_FORCE_480P: race display index writes %llu\n",
+                     static_cast<unsigned long long>(force_480p_state.writes));
+      counters_at_last_report = session;
       pacing_diagnostics.reset();
     });
 #endif

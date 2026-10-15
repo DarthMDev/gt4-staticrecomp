@@ -35,17 +35,26 @@ PERF_PROFILES = {
     'vu1-flags': ('slice154-vu1-flags.json', 'private/slice154-vu1-flags-build/build/gt4vulkan.exe'),
     # TASK-008 candidate: vu1-flags plus the static VU1 table with 426 entries generated from the pinned image.
     'vu1-full': ('slice155-vu1-full.json', 'private/slice155-vu1-full-build/build/gt4vulkan.exe'),
+    # TASK-009 candidate: vu1-full with 16:9 fixed, fullscreen toggle, interval counters and the GT4_FORCE_480P hook.
+    'quickfix': ('slice156-quickfix.json', 'private/slice156-quickfix-build/build/gt4vulkan.exe'),
+
     # TASK-008 candidate: vu1-full with the all-entries table (every 2,048 addresses, split into 128 parts).
     'vu1-all': ('slice157-vu1-all.json', 'private/slice157-vu1-all-build/build/gt4vulkan.exe'),
+    # TASK-009 candidate: vu1-all with the quick fixes and the 480p CRT table rewrite (GT4_FORCE_480P=1).
+    'quickfix2': ('slice158-quickfix2.json', 'private/slice158-quickfix2-build/build/gt4vulkan.exe'),
+    # TASK-009 candidate (slice164): vu1-all with the quick fixes; GT4_FORCE_480P=1 holds the race display index at 480p.
+    'quickfix3': ('slice164-quickfix3.json', 'private/slice164-quickfix3-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
-                     'slice157-vu1-all.json')
+                     'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
+# GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
+FORCE_480P_VALUES = ('0', '1')
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -98,7 +107,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'vu1-all') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -183,8 +192,8 @@ def summarize_vu1_corpus(corpus):
 
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
-              play_card=None, aspect='16:9', runtime_workspace=None, capture_shapes=False,
-              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False):
+              play_card=None, runtime_workspace=None, capture_shapes=False,
+              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False):
     workspace = workspace.resolve()
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
@@ -194,8 +203,9 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('Shape capture session must use an ordinary canonical private path')
     run_directory = run_directory.resolve()
     private_root = workspace / 'private'
-    if aspect not in ('16:9', '4:3'):
-        raise ValueError('Presentation aspect must be 16:9 or 4:3')
+    # Refused before any output: the window is fixed 16:9, and unknown GT4_FORCE_480P values stop the run.
+    if os.environ.get('GT4_FORCE_480P', '0') not in FORCE_480P_VALUES:
+        raise ValueError('GT4_FORCE_480P must be 0 or 1')
     if not run_directory.is_relative_to(private_root) or run_directory == private_root:
         raise ValueError('Probe output must be a new directory inside private/')
     if run_directory.exists():
@@ -301,7 +311,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if window:
         arguments.append('--window')
     result = {'arguments': arguments, 'timeout_seconds': timeout_seconds,
-              'presentation_aspect': aspect,
+              'presentation_aspect': '16:9',
               'disc_sha256': disc_manifest['disc']['sha256'],
               'runtime_sha256': executable_pin['sha256']}
     if seed_pin is not None:
@@ -313,21 +323,25 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     start = time.monotonic()
     log_path = run_directory / 'probe.log'
     environment = os.environ.copy()
-    environment['GT4_ASPECT'] = aspect
     environment.pop('PS2_DUMP_AUDIO', None)
+    # Aspect selection was removed in slice156; a stale inherited value must not reach the game.
+    environment.pop('GT4_ASPECT', None)
     environment.pop('GT4_OBSERVATION_OUTPUT', None)
     environment.pop('GT4_PERF', None)
     if performance:
         scrub_performance_environment(environment)
         environment.update(GT4_PERF='1', PS2_SCALE='1', PS2_GS='gpu')
-        result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu',
-                                             'GT4_ASPECT': aspect}
+        result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu'}
         result['measurement_mode'] = runtime_evidence.get('measurement_mode', 'detailed')
         result['vulkan_loader_environment'] = {
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
+    if force_480p:
+        environment['GT4_FORCE_480P'] = '1'
+    if 'GT4_FORCE_480P' in environment:
+        result['force_480p_environment'] = {'GT4_FORCE_480P': environment['GT4_FORCE_480P']}
     if capture_shapes:
         environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']
@@ -390,12 +404,13 @@ def main():
     parser.add_argument('--window', action='store_true', help='Present real guest output in a native window')
     parser.add_argument('--capture-audio', action='store_true', help='Record guest PCM in private audio.wav')
     parser.add_argument('--interactive', action='store_true', help='Manual window play without scripted input or captures')
-    parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9', help='Presentation ratio; match the game Screen Ratio option')
+    parser.add_argument('--force-480p', action='store_true',
+                        help='Experimental: hold the race display index at 480p (GT4_FORCE_480P=1)')
     options = parser.parse_args()
     try:
         result = run_probe(ROOT, options.run_directory, options.frames, options.timeout,
                            options.press, options.card_seed, options.runtime_manifest, options.window,
-                           options.capture_audio, options.interactive, aspect=options.aspect)
+                           options.capture_audio, options.interactive, force_480p=options.force_480p)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')
     print(json.dumps(result, indent=2))

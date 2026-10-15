@@ -25,14 +25,6 @@ VkPresentModeKHR vulkan_present_mode(gt4::pacing::PresentMode mode) {
 } // namespace
 
 
-Aspect parse_aspect(const char *value) {
-  if (!value || std::strcmp(value, "16:9") == 0)
-    return Aspect::widescreen;
-  if (std::strcmp(value, "4:3") == 0)
-    return Aspect::standard;
-  throw std::runtime_error("GT4_ASPECT must be 16:9 or 4:3");
-}
-
 PresentationRect presentation_rect(std::uint32_t width, std::uint32_t height,
                                    Aspect aspect) {
   if (!width || !height)
@@ -198,7 +190,7 @@ Context::~Context() {
 }
 
 void Context::initialize(const std::filesystem::path &shaders) {
-  aspect_ = parse_aspect(std::getenv("GT4_ASPECT"));
+  aspect_ = Aspect::widescreen;
   // Unknown names throw here; support on this surface is checked at swapchain creation.
   present_mode_ = gt4::pacing::parse_present_mode(std::getenv("GT4_PRESENT_MODE"));
   std::fprintf(stderr, "[vulkan] present mode request: %s\n",

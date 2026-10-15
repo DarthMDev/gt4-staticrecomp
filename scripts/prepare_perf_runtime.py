@@ -4,6 +4,10 @@ Options:
   --split-vu  attribute VU interpreter time per unit (vu_interpreter_category).
   --vu1-aot   also overlay the VU1 AOT registry (scripts/vu1_aot_overlay.inc). Implies
               --split-vu. Default and --split-vu derivations are unchanged by this option.
+
+Slices 156 and 158 used --gs-crt-override and --display-table-override. Both hooks were removed in slice164
+(the 480p switch is a host-side guest RAM write, native/race_display.*). Their capsules stay pinned in
+docs/inputs and are not re-derivable from this script.
 """
 import argparse
 import hashlib
@@ -39,7 +43,6 @@ OVERLAY_ANCHORS = {
     'run_gate': ('before', '    if (unit == 1 && !interpret_only) {\n'),
 }
 PREFIX = '// Measurement-only MIT donor derivation; see native/THIRD_PARTY.md.\n#include "perf_probe.hpp"\n'
-
 
 def overlay_sections(text):
     sections, name, lines = {}, None, []

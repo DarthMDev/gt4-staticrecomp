@@ -2,7 +2,13 @@
 
 ## Current state (2026-10-15)
 
-**Latest:** slice 154 `--mode vu1-flags` (executable `800da980`) adds VU1 flag
+**Latest (merged to main):** TASK-008 slice 157 (all 2,048 VU1 entries, owner: night
+58.9, rally 59.9, showroom 60.0 VBlanks/s, 0 interpreted VU1 calls), TASK-010 build
+pipeline (slice 159) and TASK-009 slice 164 `--mode quickfix3 --force-480p` (title,
+16:9, fullscreen, races held at 480p; owner approved). In flight: TASK-012 paraLLEl-GS
+(step 5 headless, textures missing), TASK-013 VU0 AOT (owner test), TASK-014 stage A.
+
+**Earlier:** slice 154 `--mode vu1-flags` (executable `800da980`) adds VU1 flag
 elision: showroom 59.14 VBlanks/s (was 44.79), 5-AI race 60.00 at 480p. Next:
 full static VU1 entry coverage: slice 155 `--mode vu1-full` (426 entries) is
 built and checked headless, waiting for the owner test.
@@ -464,9 +470,8 @@ observation does not qualify racing or performance. Recovered remains unlaunched
 IOP/VU interpreted, and PS2 hardware/services modeled in software. Vulkan compute,
 Win32, WinMM, and XInput. Does not use a browser, WebAssembly, or embedded PCSX2.
 
-The original engine, dedicated tooling, and engine-specific tests have been removed from `main`;
-preserved on `codex/archive-original-recomp-20261013`, commit 95f6155, published to origin
-prior to cleanup. Private data, saves, and frozen producers remain local.
+Earlier pre-donor work was removed from this repository and lives in the private
+`gt4-staticrecomp-legacy` repository. Private data, saves, and frozen producers remain local.
 
 ## Confirmed Results and Limits
 
@@ -535,7 +540,7 @@ and the owner's session/card are preserved. Input, audio, save and stability wor
 continues to require its own authorized package and acceptance controls.
 
 Technical reference: [Architecture](ARCHITECTURE.md), [Build](BUILD.md),
-[Legacy Archive](LEGACY.md), [Slice 114 Report](reverse-engineering/slice114-native-base-cleanup.md).
+[Slice 114 Report](reverse-engineering/slice114-native-base-cleanup.md).
 Prior functional evidence: reports 110–113, corresponding manifests, and
 `inputs/slice113-owner-results.json`. Slice 114 does not reclassify these results
 as complete fidelity proofs or official benchmarks.

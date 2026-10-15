@@ -18,13 +18,14 @@
 
 namespace gt4::vulkan {
 
+// The host presents 16:9 only (no environment selection). `standard` remains
+// because the pinned slice153 adapter exports set_widescreen(false); the host never calls it.
 enum class Aspect { widescreen, standard };
 
 struct PresentationRect {
   std::uint32_t left, top, width, height;
 };
 
-Aspect parse_aspect(const char *value);
 PresentationRect presentation_rect(std::uint32_t width, std::uint32_t height,
                                    Aspect aspect);
 
