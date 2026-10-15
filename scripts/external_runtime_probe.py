@@ -49,6 +49,9 @@ PERF_PROFILES = {
     # Current main (slice166): vu0-aot built from main after TASK-008/009/010/013; accepts --force-480p.
     # (slice165 baked a worktree junction shader path and does not start; kept as history only.)
     'main': ('slice166-main.json', 'private/slice166-main-build/build/gt4vulkan.exe'),
+    # TASK-017 diagnostic candidate (slice181): the slice166 profile plus the FSV read trace (GT4_FSV_TRACE=1
+    # writes one [fsv] line per guest disc read to stderr). Not a performance candidate.
+    'license-trace': ('slice181-license-trace.json', 'private/slice181-license-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -353,6 +356,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:
         result['force_480p_environment'] = {'GT4_FORCE_480P': environment['GT4_FORCE_480P']}
+    if 'GT4_FSV_TRACE' in environment:
+        result['fsv_trace_environment'] = {'GT4_FSV_TRACE': environment['GT4_FSV_TRACE']}
     if capture_shapes:
         environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']

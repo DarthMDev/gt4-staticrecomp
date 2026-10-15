@@ -6,6 +6,8 @@ Options:
               --split-vu. Default and --split-vu derivations are unchanged by this option.
   --vu0-aot   also overlay the VU0 AOT registry (scripts/vu0_aot_overlay.inc, slice 160). Implies
               --vu1-aot (the VU0 capsule keeps the VU1 table) and --split-vu.
+  --fsv-trace add the FSV read trace to iop/cdvdfsv.cpp (scripts/fsv_trace_overlay.inc, slice 181).
+              Adds cdvdfsv.cpp to the capsule; without GT4_FSV_TRACE set at run time the game behaves as the donor.
 
 Slices 156 and 158 used --gs-crt-override and --display-table-override. Both hooks were removed in slice164
 (the 480p switch is a host-side guest RAM write, native/race_display.*). Their capsules stay pinned in
@@ -34,6 +36,15 @@ PATCHES = {
     'vif.cpp': [
         ('void transfer(int unit, const std::uint8_t *data, std::uint32_t qwc) {\n',
          'void transfer(int unit, const std::uint8_t *data, std::uint32_t qwc) {\n    gt4::perf::Scope perf_vif(gt4::perf::Category::vif_gif);\n')],
+}
+# FSV read trace (slice 181, TASK-017): one donor file, read as bytes (CRLF in the donor, LF in the overlay).
+FSV_PIN = {'iop/cdvdfsv.cpp': 'c313e10af0baaf63d9bd31040c168f38936c979c37fdce45afdf060d11560fbe'}
+FSV_OVERLAY_PATH = ROOT / 'scripts/fsv_trace_overlay.inc'
+FSV_OVERLAY_ANCHORS = {
+    'includes': ('after', '#include <cstdio>\n'),
+    'local_headers': ('replace', '#include "kernel.hpp"\n#include "sif.hpp"\n'),
+    'helpers': ('before', 'void read_to_ee(std::uint32_t sector, std::uint32_t count, std::uint32_t dst) {\n'),
+    'read_trace': ('after', '    std::memcpy(ps2::g_ram + at, data.data(), std::min<std::size_t>(data.size(), ps2::kRamSize - at));\n'),
 }
 OVERLAY_PATH = ROOT / 'scripts/vu1_aot_overlay.inc'
 VU0_OVERLAY_PATH = ROOT / 'scripts/vu0_aot_overlay.inc'
@@ -107,6 +118,11 @@ def apply_vu0_aot(source):
     return apply_overlay(source, VU0_OVERLAY_PATH, VU0_OVERLAY_ANCHORS, 'VU0 AOT')
 
 
+def apply_fsv_trace(source):
+    """FSV read trace overlay (slice 181): checks that removing its sections restores the input."""
+    return apply_overlay(source, FSV_OVERLAY_PATH, FSV_OVERLAY_ANCHORS, 'FSV trace')
+
+
 def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False):
     original = source
     patches = [(before, after.replace('gt4::perf::Category::vu_interpret',
@@ -131,7 +147,7 @@ def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False):
     return PREFIX + source
 
 
-def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False):
+def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False, fsv_trace=False):
     if vu0_aot:
         vu1_aot = True
     if vu1_aot:
@@ -149,9 +165,22 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
             raise ValueError(f'Qualified donor source differs: {name}')
         text = data.decode('utf-8').replace('\r\n', '\n')
         sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot, vu0_aot=vu0_aot)
+    fsv_sources = {}
+    if fsv_trace:
+        for name, expected in FSV_PIN.items():
+            data = (donor / name).read_bytes()
+            if hashlib.sha256(data).hexdigest() != expected:
+                raise ValueError(f'Qualified donor source differs: {name}')
+            text = data.decode('utf-8').replace('\r\n', '\n')
+            fsv_sources[Path(name).name] = apply_fsv_trace(text)
+    sources.update(fsv_sources)
     output.mkdir()
     receipt = {'donor_revision': '1b4808793a12c45125262fd2d5f50a9ec9f7c020',
-               'donor_sha256': PINS, 'source_sha256': {}}
+               'donor_sha256': dict(PINS), 'source_sha256': {}}
+    if fsv_trace:
+        receipt['donor_sha256'].update(FSV_PIN)
+        receipt['fsv_trace_profile'] = 'overlay-v1'
+        receipt['fsv_trace_overlay_sha256'] = hashlib.sha256(FSV_OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
     if split_vu:
         receipt['vu_scope_profile'] = 'unit_split_run_fast_only'
     if vu1_aot:
@@ -177,5 +206,7 @@ if __name__ == '__main__':
     parser.add_argument('--split-vu', action='store_true')
     parser.add_argument('--vu1-aot', action='store_true')
     parser.add_argument('--vu0-aot', action='store_true')
+    parser.add_argument('--fsv-trace', action='store_true')
     args = parser.parse_args()
-    prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot, vu0_aot=args.vu0_aot)
+    prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot, vu0_aot=args.vu0_aot,
+            fsv_trace=args.fsv_trace)

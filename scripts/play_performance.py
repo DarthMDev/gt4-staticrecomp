@@ -42,6 +42,11 @@ index is 0 (normal) it is written 1 (480p). Indices 1 and 2 are never changed.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
+
+License trace (--mode license-trace, slice181, TASK-017): the slice166 profile with the FSV read trace.
+Set GT4_FSV_TRACE=1 before launching; each guest disc read is logged to stderr as "[fsv] read ...".
+Diagnostic only: the run is not a performance measurement. Compare the log with the disc using
+scripts/compare_fsv_trace.py <log> <iso>.
 """
 import argparse
 import sys
