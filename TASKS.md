@@ -151,6 +151,8 @@ One large task, delivered in verified steps on its own branch:
 Replaces the former donor-renderer upscaling, readback-wait and renderer-feature tasks.
 Slice 185 (task/012-pgs-upscale, not merged): `--mode parallel-hires --hires 2|4` candidate (4x target; 3x dropped by
 owner decision). Owner gameplay test pending; the 6x study is in PARALLEL-GS-PLAN.md section 13.
+Slice 188 (task/012-pgs-upscale, not merged): diagnostic build of slice 185. `[pgs] scanout` log of the presented
+image and F10 PNG dump; the 4x vs 2x look is not yet explained (PARALLEL-GS-PLAN.md section 14). Owner test pending.
 
 ### TASK-014 — EE entry coverage
 Add translator entries for decomp functions without one, starting with the 15

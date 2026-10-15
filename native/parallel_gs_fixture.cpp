@@ -8,6 +8,8 @@
 
 #include "gs_video_mode.hpp"
 #include "parallel_gs_backend.hpp"
+#include "png_stored.hpp"
+#include "presented_scanout_dump.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -245,6 +247,67 @@ void expect(bool condition, const char *what) {
         ++failures;
 }
 
+// F10 PNG encoder (slice 188): check-value vectors for CRC-32 and Adler-32, the fixed IEND trailer, and a
+// round trip through the stored deflate blocks (a frame above 64 KiB of scanlines, so two blocks).
+void check_png_encoder() {
+    const std::uint8_t digits[] = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+    expect(gt4::png::crc32(0, digits, sizeof digits) == 0xCBF43926u, "PNG CRC-32 of \"123456789\" is 0xCBF43926");
+    const std::uint8_t wiki[] = {'W', 'i', 'k', 'i', 'p', 'e', 'd', 'i', 'a'};
+    expect(gt4::png::adler32(wiki, sizeof wiki) == 0x11E60398u, "zlib Adler-32 of \"Wikipedia\" is 0x11E60398");
+
+    const std::uint32_t width = 100, height = 300;
+    std::vector<std::uint8_t> pixels(std::size_t(width) * height * 4);
+    for (std::size_t i = 0; i < pixels.size(); ++i)
+        pixels[i] = std::uint8_t(i * 7 + (i >> 9));
+    const std::vector<std::uint8_t> file = gt4::png::encode_rgba(width, height, pixels.data());
+    const std::uint8_t signature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+    expect(file.size() > 8 && std::equal(signature, signature + 8, file.begin()), "PNG signature");
+    const std::uint8_t iend[12] = {0, 0, 0, 0, 'I', 'E', 'N', 'D', 0xAE, 0x42, 0x60, 0x82};
+    expect(file.size() >= 12 && std::equal(iend, iend + 12, file.end() - 12), "PNG ends with the IEND chunk");
+    expect(file[16] == 0 && file[17] == 0 && file[18] == 0 && file[19] == 100 && file[20] == 0 && file[21] == 0 &&
+               file[22] == 1 && file[23] == 44,
+           "IHDR carries width 100 and height 300 (big-endian)");
+
+    // Walk the chunks to the IDAT payload: zlib header, stored blocks, Adler-32.
+    std::size_t at = 8;
+    std::vector<std::uint8_t> zlib;
+    while (at + 12 <= file.size()) {
+        const std::uint32_t length = (std::uint32_t(file[at]) << 24) | (std::uint32_t(file[at + 1]) << 16) |
+                                     (std::uint32_t(file[at + 2]) << 8) | file[at + 3];
+        if (std::memcmp(&file[at + 4], "IDAT", 4) == 0)
+            zlib.assign(file.begin() + std::ptrdiff_t(at + 8), file.begin() + std::ptrdiff_t(at + 8 + length));
+        at += 12 + length;
+    }
+    std::vector<std::uint8_t> inflated;
+    bool stored_ok = zlib.size() > 6 && zlib[0] == 0x78 && zlib[1] == 0x01;
+    std::size_t position = 2;
+    int blocks = 0;
+    while (stored_ok && position + 5 <= zlib.size() - 4) {
+        const bool final_block = (zlib[position] & 1u) != 0;
+        const std::size_t size = zlib[position + 1] | (std::size_t(zlib[position + 2]) << 8);
+        const std::size_t complement = zlib[position + 3] | (std::size_t(zlib[position + 4]) << 8);
+        stored_ok = (zlib[position] & 6u) == 0 && (size ^ 0xFFFFu) == complement &&
+                    position + 5 + size <= zlib.size() - 4;
+        if (!stored_ok)
+            break;
+        inflated.insert(inflated.end(), zlib.begin() + std::ptrdiff_t(position + 5),
+                        zlib.begin() + std::ptrdiff_t(position + 5 + size));
+        position += 5 + size;
+        ++blocks;
+        if (final_block)
+            break;
+    }
+    bool rows_ok = stored_ok && inflated.size() == std::size_t(height) * (width * 4 + 1);
+    for (std::uint32_t y = 0; rows_ok && y < height; ++y) {
+        const std::size_t row = std::size_t(y) * (width * 4 + 1);
+        rows_ok = inflated[row] == 0 &&
+                  std::equal(pixels.begin() + std::ptrdiff_t(std::size_t(y) * width * 4),
+                             pixels.begin() + std::ptrdiff_t(std::size_t(y + 1) * width * 4),
+                             inflated.begin() + std::ptrdiff_t(row + 1));
+    }
+    expect(rows_ok && blocks == 2, "IDAT inflates to the filtered scanlines (two stored blocks)");
+}
+
 bool has_non_zero_pixel(const ScanoutImage &image) {
     for (std::uint8_t byte : image.rgba)
         if (byte)
@@ -309,6 +372,26 @@ void check_window_presentation(Backend &backend) {
         for (std::uint32_t frame = 0; frame < 6; ++frame)
             all_presented = backend.present(frame & 1) && all_presented;
         expect(all_presented, "six consecutive presents with a scanout image");
+        // F10 (slice 188): the request writes the presented image as scanout-NNNN.png at its native size.
+        gt4::presented_scanout_dump_requested().store(true);
+        expect(backend.present(0), "a present with the F10 request");
+        expect(!gt4::presented_scanout_dump_requested().load(), "the F10 request is consumed by the present");
+        if (std::FILE *dump = std::fopen("scanout-0001.png", "rb")) {
+            std::uint8_t head[24] = {};
+            const std::size_t read = std::fread(head, 1, sizeof head, dump);
+            std::fclose(dump);
+            const std::uint8_t signature[8] = {0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
+            const std::uint32_t dump_width = (std::uint32_t(head[16]) << 24) | (std::uint32_t(head[17]) << 16) |
+                                             (std::uint32_t(head[18]) << 8) | head[19];
+            const std::uint32_t dump_height = (std::uint32_t(head[20]) << 24) | (std::uint32_t(head[21]) << 16) |
+                                              (std::uint32_t(head[22]) << 8) | head[23];
+            expect(read == sizeof head && std::equal(signature, signature + 8, head) && dump_width == 640 &&
+                       dump_height == 448,
+                   "F10 writes scanout-0001.png: PNG signature, native 640x448 (1x)");
+            std::remove("scanout-0001.png");
+        } else {
+            expect(false, "F10 writes scanout-0001.png in the working directory");
+        }
         backend.resize_window(640, 360);
         expect(backend.present(0), "present after a resize to 640x360 rebuilds the swapchain");
         backend.resize_window(0, 0);
@@ -561,6 +644,8 @@ int main() {
     expect(backend.set_super_sampling(1), "1x super-sampling restored");
     set_display_ntsc_interlaced_frame(backend, 1);
     check_window_presentation(backend);
+
+    check_png_encoder();
 
     std::printf("failures: %d\n", failures);
     return failures ? 1 : 0;

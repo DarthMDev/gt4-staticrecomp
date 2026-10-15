@@ -1046,3 +1046,58 @@ Measured:
 
 Limits: no windowed run by the agent; race scenes at 2x and 4x are not verified; timings are wall-clock with no GPU
 timestamps and are not a cost measurement.
+
+## paraLLEl-GS scanout proof: presented-image log and F10 dump (slice188, TASK-012)
+
+Slice188 = slice185 with a diagnostic patch. The owner saw the same resolution at `--hires 2` and `--hires 4`
+(session-20261015-180225-166320, 4x viewport 2474x1392). Slice188 shows which scanout the window presents and
+writes that exact image to disk. It changes no rendering: the scale path, shaders and window geometry are those of
+slice185.
+
+What changed:
+- `native/parallel_gs_scale/patch_parallel_gs_scale.py`: `ScanoutResult` gets `field_aware_rendering` (set next to
+  `high_resolution_scale`), so the log can say whether the frame was field-aware.
+- `native/parallel_gs_backend.cpp`, `Backend::present()`: prints `[pgs] scanout WxH (high_resolution_scale N,
+  field_aware X)` when the presented image size, scale or field-aware flag changes. The size is that of the image the
+  window blit reads.
+- F10 (`native/window.cpp`, flag in `native/presented_scanout_dump.hpp`): the next presented frame is read back
+  before the blit and written as `scanout-NNNN.png` in the working directory at native size (its size is in the
+  log line). The launcher runs the game in the session folder, so the file lands next to `probe.log`. The log prints the
+  absolute path. With the donor renderer the request is never consumed.
+- `native/png_stored.hpp`: header-only PNG writer (RGBA8, stored deflate blocks, no compression library).
+- `native/parallel_gs_fixture.cpp` (CTest `native_parallel_gs`): CRC-32 and Adler-32 check values, the IEND trailer, the
+  IHDR size and an inflate round trip over two stored blocks.
+- Launcher: `--mode parallel-hires` now points at `slice188-parallel.json` and
+  `private/slice188-parallel-build/build/gt4vulkan.exe`; the slice185 pin files stay as history.
+
+Derive the port and shaders (from the repository root; the port is byte-identical to slice185):
+
+    private\tooling-venv\Scripts\python.exe scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice188-parallel-port --assets-root C:\Antigravity\gt4-staticrecomp --parallel-hooks
+    (copy private\slice153-pacing-shaders\*.spv to private\slice188-parallel-shaders)
+
+Configure from the worktree (`-S C:\Antigravity\gt4-wt-012-upscale`), build directory
+`C:\Antigravity\gt4-staticrecomp\private\slice188-parallel-build\build`, with the slice185 options and
+`GT4_PORT_DIR` / `GT4_SHADER_DIR` set to the slice188 directories. The build tree compiles the patched copies of
+`gs_interface.cpp` and `gs_renderer.cpp` (`build\native\parallel-gs-patched`), first on the include path.
+
+Pins: [slice188-parallel-runtime.json](inputs/slice188-parallel-runtime.json) and
+[slice188-parallel.json](inputs/slice188-parallel.json). Executable 97,085,952 bytes, sha256 7a51936a...; shaders checked
+against the runtime pin.
+
+Owner commands (use a fresh session each time; F10 writes into the session folder):
+
+    C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode parallel-hires --hires 2 --force-480p
+    C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode parallel-hires --hires 4 --force-480p
+
+In the game, race at the Time Trial reference scene. Press F10 once, then F8 for the probe report. The `[pgs] scanout`
+line in the console (or in `probe.log`) gives the presented size and scale. The `scanout-NNNN.png` file is the
+presented image at its native size.
+
+Measured here (agent, headless only, no window):
+- Build 0 errors; CTest and the Python suite are reported in the slice188 journal entry.
+- The static checks of the build tree, the scale selection and the blit filter are recorded in
+  PARALLEL-GS-PLAN.md section 14.
+
+Limits: the in-game race scene was not run by the agent; no progressive headless frame exists in the menu schedule.
+The PNG and log lines are the evidence the owner's next session will produce; nothing here shows the 4x image looks
+different from 2x.

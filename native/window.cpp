@@ -10,6 +10,7 @@
 #include "frame_clock.hpp"
 #include "pacing.hpp"
 #include "window_mode.hpp"
+#include "presented_scanout_dump.hpp"
 #ifdef GT4_SHAPE_CAPTURE
 #include "shape_capture_control.hpp"
 #include "shape_observer_adapter.hpp"
@@ -125,6 +126,12 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     return 0;
   }
 #endif
+  // F10 (slice 188): the next presented paraLLEl-GS scanout is written as scanout-NNNN.png in the working
+  // directory, at its native size. Auto-repeat is ignored. The donor renderer never consumes the request.
+  if (message == WM_KEYDOWN && first == VK_F10 && !(second & (1ll << 30))) {
+    gt4::presented_scanout_dump_requested().store(true);
+    return 0;
+  }
   if (message == WM_CLOSE) {
     DestroyWindow(window);
     return 0;

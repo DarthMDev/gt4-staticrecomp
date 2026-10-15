@@ -81,6 +81,15 @@ if(GT4_PERF_RUNTIME_SOURCE)
         set(GT4_PERF_PACING_PORT ON)
         set(GT4_PERF_PARALLEL_PORT ON)
         set(GT4_PERF_PARALLEL_SLICE 185)
+    # Slice 188: the slice 185 port and shaders (identical files) with the F10 scanout dump and the
+    # [pgs] scanout log in the backend; same capsule as slice 168.
+    elseif(PORT STREQUAL "${GT4_ASSETS_ROOT}/private/slice188-parallel-port" AND
+           SHADERS STREQUAL "${GT4_ASSETS_ROOT}/private/slice188-parallel-shaders")
+        set(GT4_PERF_QUALIFIED_PORT ON)
+        set(GT4_PERF_ASYNC_PORT ON)
+        set(GT4_PERF_PACING_PORT ON)
+        set(GT4_PERF_PARALLEL_PORT ON)
+        set(GT4_PERF_PARALLEL_SLICE 188)
     else()
         set(GT4_PERF_QUALIFIED_PORT OFF)
     endif()

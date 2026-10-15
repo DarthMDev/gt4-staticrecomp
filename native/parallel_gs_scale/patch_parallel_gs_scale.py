@@ -63,7 +63,9 @@ def patch_renderer_header(text):
         "\tbool high_resolution_scanout;\n",
         "\tbool high_resolution_scanout;\n"
         "\t// GT4Recomp slice 176: scale per axis of the high-resolution image actually used (1 when off).\n"
-        "\tuint32_t high_resolution_scale = 1;\n",
+        "\tuint32_t high_resolution_scale = 1;\n"
+        "\t// GT4Recomp slice 188: true when this frame was field-aware (2x fallback), for the scanout log.\n"
+        "\tbool field_aware_rendering = false;\n",
         1, "ScanoutResult high_resolution_scanout")
     return text
 
@@ -166,7 +168,8 @@ def patch_renderer_source(text):
         text,
         "\tresult.high_resolution_scanout = high_resolution_scanout;\n",
         "\tresult.high_resolution_scanout = high_resolution_scanout;\n"
-        "\tresult.high_resolution_scale = high_resolution_scanout ? high_resolution_scale : 1;\n",
+        "\tresult.high_resolution_scale = high_resolution_scanout ? high_resolution_scale : 1;\n"
+        "\tresult.field_aware_rendering = field_aware_rendering; // GT4Recomp slice 188\n",
         1, "result high_resolution_scanout")
     text = replace_exact(
         text,

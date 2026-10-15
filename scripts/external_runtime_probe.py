@@ -53,9 +53,9 @@ PERF_PROFILES = {
     # optional high-resolution scanout. GT4_RENDERER is set by the launcher (--renderer parallel by default,
     # donor for A/B in the same binary). slice168-parallel.json (first window build) is kept as history.
     'parallel': ('slice169-parallel.json', 'private/slice169-parallel-build/build/gt4vulkan.exe'),
-    # TASK-012 candidate (slice185): the parallel mode with a true 3x and 4x scanout (--hires N, GT4_PGS_HIRES=N,
+    # TASK-012 candidate (slice188): the parallel mode with a true 3x and 4x scanout (--hires N, GT4_PGS_HIRES=N,
     # GT4_PGS_SSAA=16) and a window scaled to the chosen factor. --mode parallel keeps the slice169 build.
-    'parallel-hires': ('slice185-parallel.json', 'private/slice185-parallel-build/build/gt4vulkan.exe'),
+    'parallel-hires': ('slice188-parallel.json', 'private/slice188-parallel-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -63,16 +63,16 @@ PACING_MANIFEST = 'slice153-pacing.json'
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json',
-                     'slice169-parallel.json', 'slice185-parallel.json')
+                     'slice169-parallel.json', 'slice188-parallel.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json', 'slice169-parallel.json',
-                     'slice185-parallel.json')
+                     'slice188-parallel.json')
 # Manifests whose binaries contain both renderers (slice168+): GT4_RENDERER selects one per run.
-RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json', 'slice185-parallel.json')
-# GT4_PGS_HIRES values accepted per manifest. slice169: 1 (2x, GT4_PGS_SSAA 4, 8 or 16). slice185: 2 or 4 (GT4_PGS_SSAA 16
+RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json', 'slice188-parallel.json')
+# GT4_PGS_HIRES values accepted per manifest. slice169: 1 (2x, GT4_PGS_SSAA 4, 8 or 16). slice188: 2 or 4 (GT4_PGS_SSAA 16
 # only; 2 is the donor 2x quadrant average, 4 is one super sample per output pixel). The 3x path of slice 176 is not exposed.
-HIGH_RESOLUTION_SCALES = {'slice169-parallel.json': (1,), 'slice185-parallel.json': (2, 4)}
-HIGH_RESOLUTION_SUPER_SAMPLING = {'slice169-parallel.json': (4, 8, 16), 'slice185-parallel.json': (16,)}
+HIGH_RESOLUTION_SCALES = {'slice169-parallel.json': (1,), 'slice188-parallel.json': (2, 4)}
+HIGH_RESOLUTION_SUPER_SAMPLING = {'slice169-parallel.json': (4, 8, 16), 'slice188-parallel.json': (16,)}
 RENDERERS = ('parallel', 'donor')
 # paraLLEl-GS super-sampling factors accepted by the binary (GT4_PGS_SSAA); 1 is the default.
 SUPER_SAMPLING_FACTORS = (1, 2, 4, 8, 16)

@@ -12,9 +12,16 @@
 #include "gs_interface.hpp"
 #include "wsi.hpp"
 
+#include "png_stored.hpp"
+#include "presented_scanout_dump.hpp"
+
+#include <atomic>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <vector>
 
 // After the Granite headers: volk declares the same Win32 handle typedefs, and the Win32 surface
 // needs GetModuleHandleW.
@@ -96,6 +103,31 @@ public:
         resize = true;
     }
 };
+
+// Copies a scanout image to host memory as tightly packed RGBA8 rows. Used by scanout() and by the F10
+// dump of the presented image (slice 188), so both read the same bytes the same way.
+std::vector<std::uint8_t> read_back_scanout(Device &device, const Vulkan::Image &image) {
+    const std::uint32_t width = image.get_width();
+    const std::uint32_t height = image.get_height();
+    BufferCreateInfo buffer_info = {};
+    buffer_info.domain = BufferDomain::CachedHost;
+    buffer_info.size = VkDeviceSize(width) * height * 4;
+    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    auto buffer = device.create_buffer(buffer_info);
+    auto cmd = device.request_command_buffer();
+    cmd->copy_image_to_buffer(*buffer, image, 0, {0, 0, 0}, {width, height, 1}, 0, 0,
+                              {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1});
+    cmd->barrier(VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_HOST_BIT,
+                 VK_ACCESS_HOST_READ_BIT);
+    Fence fence;
+    device.submit(cmd, &fence);
+    fence->wait();
+    const auto *mapped = static_cast<const std::uint8_t *>(
+        device.map_host_buffer(*buffer, Vulkan::MEMORY_ACCESS_READ_BIT));
+    std::vector<std::uint8_t> rgba(mapped, mapped + buffer_info.size);
+    device.unmap_host_buffer(*buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
+    return rgba;
+}
 
 Vulkan::PresentMode granite_present_mode(PresentMode mode) {
     switch (mode) {
@@ -189,6 +221,15 @@ private:
     std::string vram_directory;
 };
 
+// Last scanout that present() reported. The [pgs] line is printed again only when size or scale changes.
+struct PresentedScanoutLog {
+    bool printed = false;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::uint32_t scale = 0;
+    bool field_aware = false;
+};
+
 struct Backend::Impl {
     ContextHandle context;
     DeviceHandle device;
@@ -200,6 +241,8 @@ struct Backend::Impl {
     Win32Platform platform;
     std::unique_ptr<Vulkan::WSI> wsi;
     bool ready = false;
+    PresentedScanoutLog presented_log;
+    std::uint32_t presented_dumps = 0;
 };
 
 Backend::Backend() : impl(std::make_unique<Impl>()) {}
@@ -357,23 +400,7 @@ ScanoutImage Backend::scanout(const ScanoutRequest &request) {
     frame.width = result.image->get_width();
     frame.height = result.image->get_height();
     frame.high_resolution_scale = result.high_resolution_scale;
-    BufferCreateInfo buffer_info = {};
-    buffer_info.domain = BufferDomain::CachedHost;
-    buffer_info.size = VkDeviceSize(frame.width) * frame.height * 4;
-    buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    auto buffer = impl->device->create_buffer(buffer_info);
-    auto cmd = impl->device->request_command_buffer();
-    cmd->copy_image_to_buffer(*buffer, *result.image, 0, {0, 0, 0}, {frame.width, frame.height, 1}, 0, 0,
-                              {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1});
-    cmd->barrier(VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_HOST_BIT,
-                 VK_ACCESS_HOST_READ_BIT);
-    Fence fence;
-    impl->device->submit(cmd, &fence);
-    fence->wait();
-    const auto *mapped = static_cast<const std::uint8_t *>(
-        impl->device->map_host_buffer(*buffer, Vulkan::MEMORY_ACCESS_READ_BIT));
-    frame.rgba.assign(mapped, mapped + buffer_info.size);
-    impl->device->unmap_host_buffer(*buffer, Vulkan::MEMORY_ACCESS_READ_BIT);
+    frame.rgba = read_back_scanout(*impl->device, *result.image);
     frame.valid = true;
     return frame;
 }
@@ -449,6 +476,38 @@ bool Backend::present(std::uint32_t phase, bool high_resolution, std::uint32_t h
     info.high_resolution_scale = high_resolution_scale;
     impl->gs.flush();
     const auto scanout = impl->gs.vsync(info);
+    if (scanout.image) {
+        // Slice 188: the image the window is about to show. Logged when size or scale changes; an F10
+        // request writes exactly this image (native readback, before the window blit) as a PNG.
+        const std::uint32_t shown_width = scanout.image->get_width();
+        const std::uint32_t shown_height = scanout.image->get_height();
+        PresentedScanoutLog &logged = impl->presented_log;
+        if (!logged.printed || logged.width != shown_width || logged.height != shown_height ||
+            logged.scale != scanout.high_resolution_scale || logged.field_aware != scanout.field_aware_rendering) {
+            logged.printed = true;
+            logged.width = shown_width;
+            logged.height = shown_height;
+            logged.scale = scanout.high_resolution_scale;
+            logged.field_aware = scanout.field_aware_rendering;
+            std::fprintf(stderr, "[pgs] scanout %ux%u (high_resolution_scale %u, field_aware %d)\n", shown_width,
+                         shown_height, scanout.high_resolution_scale, scanout.field_aware_rendering ? 1 : 0);
+        }
+        if (gt4::presented_scanout_dump_requested().exchange(false)) {
+            impl->gs.flush();
+            std::vector<std::uint8_t> rgba = read_back_scanout(*impl->device, *scanout.image);
+            for (std::size_t i = 3; i < rgba.size(); i += 4)
+                rgba[i] = 0xFF;
+            const std::vector<std::uint8_t> file = gt4::png::encode_rgba(shown_width, shown_height, rgba.data());
+            char name[32];
+            std::snprintf(name, sizeof name, "scanout-%04u.png", ++impl->presented_dumps);
+            std::ofstream out(name, std::ios::binary);
+            out.write(reinterpret_cast<const char *>(file.data()), std::streamsize(file.size()));
+            const bool written = bool(out);
+            std::fprintf(stderr, "[pgs] F10: %s %s (%ux%u, native size, before window scaling)\n",
+                         written ? "wrote" : "could not write",
+                         std::filesystem::absolute(name).string().c_str(), shown_width, shown_height);
+        }
+    }
 
     Device &device = *impl->device;
     const auto &swapchain = device.get_swapchain_view().get_image();

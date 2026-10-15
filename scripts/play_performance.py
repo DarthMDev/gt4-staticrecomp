@@ -49,7 +49,7 @@ compiled, quick fixes) with the paraLLEl-GS renderer and window output. --render
 sets paraLLEl-GS super-sampling (experimental); --hires (with --ssaa 4, 8 or 16) presents paraLLEl-GS's
 high-resolution scanout (2x horizontal; 2x vertical in 480p, full-frame 448 lines from the 224-line fields in
 480i menus). Accepts --force-480p, --vu0-verify N and the VU1 options.
-High-resolution candidate (--mode parallel-hires, slice185, TASK-012): the paraLLEl-GS renderer with a 2x or 4x
+High-resolution candidate (--mode parallel-hires, slice188, TASK-012): the paraLLEl-GS renderer with a 2x or 4x
 scanout. --hires N (2 or 4) is required and sets GT4_PGS_HIRES=N and GT4_PGS_SSAA=16 (the 4x4 ordered grid); 2 is
 the donor 2x quadrant average, 4 is one super sample per output pixel. The window opens at 16:9 with height 448 * N,
 clamped to the primary work area and centred. The 3x path is not exposed (owner decision).

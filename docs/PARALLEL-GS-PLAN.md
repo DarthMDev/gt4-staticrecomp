@@ -759,3 +759,43 @@ upstream-level change to the sample layout (items 1 and 3): a separate, large ta
    2x vs 4x crop was saved (the owner's race test is the check).
 2. The 6x numbers are arithmetic and source reading; no 6x build or run exists.
 3. Race scenes at 4x are unverified (owner test pending on the slice185 candidate).
+
+
+## 14. Progress (slice 188, branch task/012-pgs-upscale): proof of the presented scanout
+
+Question from the owner (slice185 session-20261015-180225-166320, `--hires 4`, race): the 4x viewport (2474x1392) is
+bigger, but the picture looks the same as 2x. Slice 188 adds evidence before any rendering change. No rendering path
+is changed; the verdict is open until the owner's F10 image and log line exist.
+
+Checks made in the worktree (static, no game run):
+
+- Confirmed: the build compiles the patched copies. `build.ninja` of slice185 and slice188 compiles
+  `build/native/parallel-gs-patched/gs_interface.cpp` and `gs_renderer.cpp` into `parallel-gs.lib`, with
+  `-Ibuild/native/parallel-gs-patched` ahead of the pinned `private/references/parallel-gs/gs`. The pinned upstream
+  files are not compiled into the executable. The bug is not a stale build.
+- Confirmed: `GSRenderer::vsync` takes the 16x scaled shader (`sample_circuit_scaled`, OUTPUT_SCALE = 3 or 4) only when
+  the scale is above 2, the frame is progressive (`!field_aware_rendering`) and both sampling rates are log2 2. Otherwise
+  it keeps the donor 2x quadrant shader. The shader SPIR-V is pinned by sha256 in the patch script.
+- Confirmed: the window blit (`Backend::present`) is a nearest copy for an exact integer upscale and a linear copy
+  otherwise (`present_filter`, CTest `native_parallel_gs`). At 4x the 1792-line image goes to a 1392-line rectangle with
+  a linear filter. That is a downscale; it cannot turn a 4x image into the 2x look.
+- Confirmed: `GSInterface::vsync` clears `force_progressive` while `has_complex_scanmsk_timeout` is set, and
+  `GSRenderer::vsync` then drops `high_resolution_scanout` (`if (!force_progressive || ...)`). By code reading, a frame in that state
+  is presented at 1x, not at 4x; the slice188 log line would show `high_resolution_scale 1`.
+- Hypothesis: the content may carry no more detail at 4x. PS2 textures stay at native resolution; 16x super-sampling
+  improves edges and sub-pixel coverage. A same-looking textured surface at 2x and 4x would then be expected. This
+  cannot be tested without the presented image.
+- Unknown: whether the owner's race frames hit the complex-scanmask timeout, and what the 4x image looks like at native
+  size. The slice188 log and the F10 PNG answer both.
+
+Slice188 changes (see BUILD.md slice188): `[pgs] scanout WxH (high_resolution_scale N, field_aware X)` on every change
+of the presented image; F10 writes the presented image as `scanout-NNNN.png` (native size, read back before the blit)
+into the session folder; the PNG writer has CTest checks. `--mode parallel-hires` points at slice188.
+
+GPU time: Granite in the pinned revision has timestamp intervals (`Device::register_time_interval`, `timestamp_log`),
+so GPU milliseconds per frame for the scanout and the GS work are possible in principle. Not added in slice188: the
+F8 report has no plumbing for them, and the timings were not validated. The 1.9 to 4.7 ms vif_gif rise in the owner's
+logs is wall-clock time on the emulation thread; it is not evidence of GPU back-pressure by itself.
+
+Next step (owner): run the two commands in BUILD.md section slice188, race at Time Trial, F10 once, F8 for the probe,
+and send the `[pgs] scanout` lines and the `scanout-NNNN.png` files. The decision follows the image, not the timing.

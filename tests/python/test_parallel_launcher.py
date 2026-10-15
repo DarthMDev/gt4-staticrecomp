@@ -24,9 +24,9 @@ PARALLEL_RUNTIME = 'private/slice169-parallel-build/build/gt4vulkan.exe'
 PARALLEL_MANIFEST = 'slice169-parallel.json'
 PARALLEL_SOURCE = 'slice169-parallel-runtime.json'
 # Slice 185: parallel-hires is the 2x and 4x scanout build (--hires 2 or 4, GT4_PGS_SSAA=16); --mode parallel stays.
-HIRES_RUNTIME = 'private/slice185-parallel-build/build/gt4vulkan.exe'
-HIRES_MANIFEST = 'slice185-parallel.json'
-HIRES_SOURCE = 'slice185-parallel-runtime.json'
+HIRES_RUNTIME = 'private/slice188-parallel-build/build/gt4vulkan.exe'
+HIRES_MANIFEST = 'slice188-parallel.json'
+HIRES_SOURCE = 'slice188-parallel-runtime.json'
 
 
 class ParallelProfileTests(unittest.TestCase):
@@ -282,7 +282,7 @@ class ParallelManifestTests(unittest.TestCase):
         self.assertEqual(manifest['vu_scope_profile'], 'unit_split_run_fast_only')
         self.assertEqual(len(manifest['runtime_dependencies']), 9)
         for dependency in manifest['runtime_dependencies']:
-            self.assertTrue(dependency['path'].startswith('private/slice185-parallel-shaders/'))
+            self.assertTrue(dependency['path'].startswith('private/slice188-parallel-shaders/'))
         for entry in [manifest['runtime']] + manifest['runtime_dependencies']:
             path = next((root / entry['path'] for root in (ROOT, MAIN_CHECKOUT) if (root / entry['path']).exists()),
                         ROOT / entry['path'])
@@ -294,7 +294,7 @@ class ParallelManifestTests(unittest.TestCase):
 
     def test_hires_runtime_source_pins_the_port(self):
         manifest = json.loads((ROOT / 'docs/inputs' / HIRES_SOURCE).read_text(encoding='utf-8'))
-        self.assertEqual(manifest['slice'], 185)
+        self.assertEqual(manifest['slice'], 188)
         self.assertEqual(set(manifest['inputs']['PORT']),
                          {'gif.cpp', 'gpu.cpp', 'gpu.hpp', 'gs.cpp', 'hw.cpp', 'main.cpp'})
         self.assertEqual(len(manifest['inputs']['SHADERS']), 9)
