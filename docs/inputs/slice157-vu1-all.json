@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "profile": "performance",
+  "perf_schema_version": 1,
+  "keyboard_input_fix": "digital_only_slice136",
+  "capture_activation_implemented": false,
+  "environment": {
+    "guest_settings": "scrub inherited PS2_/GT4_PERF_ options; set GT4_PERF=1 PS2_SCALE=1 PS2_GS=gpu",
+    "vulkan": "preserve and record VK_ overrides in session result; other driver/overlay state not controlled",
+    "gs_submission": "GT4_GS_SYNC=0 default (asynchronous); GT4_GS_SYNC=1 restores the fully synchronous path (launcher records the value in the session result)",
+    "pacing": "GT4_PACING unset or paced (default): paced clock. GT4_PACING=audio: blocking WinMM clock as in slice152. GT4_PRESENT_MODE unset or fifo (default); mailbox and immediate are experiments and fail at swapchain creation when the surface lacks them. The launcher refuses other values and records both names in result.json (pacing_environment)."
+  },
+  "toolchain": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "build": "CMake/Ninja VS2022 x64 ABI Windows SDK10.0.26100.0",
+    "cmake": "4.3.3",
+    "ninja": "1.12.1"
+  },
+  "slice": 157,
+  "date": "2026-10-15",
+  "baseline_commit": "b963112",
+  "branch": "feat/vu1-entry-coverage",
+  "measurement_mode": "vu1-all",
+  "vu_scope_profile": "unit_split_run_fast_only",
+  "classification": "TASK-008 all-entries candidate: slice154 flag-elision profile with a static VU1 table of all 2,048 entries generated from the decrypted pinned image (no gameplay recording). Interpreter calls should be zero in every covered scene; the owner slice155 test measured 354,837 interpreted calls in rally and 0 in the night race, to be re-checked in rally, night race and showroom.",
+  "runtime": {
+    "path": "private/slice157-vu1-all-build/build/gt4vulkan.exe",
+    "size_bytes": 95125504,
+    "sha256": "40388a4163f7904ac45db938b4f27d2cd95b0c9f56210191776614cf8a32369e"
+  },
+  "source_capsule": "private/slice157-vu1-all-runtime",
+  "source_manifest": "slice157-vu1-all-runtime.json",
+  "preserved_inputs": "Production EE library, donor 1b48087 runtime capsule with the VU1 AOT overlay (private/slice155-vu1-full-runtime, receipt identical to slice154), slice153 pacing adapter and nine shaders reused byte-identical from private/slice153-pacing-port and private/slice153-pacing-shaders; slice151-154 build directories untouched.",
+  "controls": {
+    "ctest": "CTest 18/18 on private/slice155-vu1-full-build/build (46.5 s); emitter core 110 checks, 0 failures; vu1_aot_registry 426 of 426 entries, 2130 checks, 0 failures; vu_recomp_corpus over the 426-file corpus private/slice155-vu1-full-corpus: 426 programs matched, 1150 checks, 0 failures.",
+    "python": "unittest discover with GT4_NATIVE_BUILD on the slice155 build: 231 OK, 1 skipped (pre-existing).",
+    "headless_smoke": "4200 frames, slice153/154 schedule (12 presses), frames every 100: 42 dumps identical to private/slice154-smoke/final-headless/frames.sha256. vu1_aot compiled_calls=20002 interpreted_calls=0 budget_resumes=0 identity_rejects=0 (per-call counter run).",
+    "verify_smoke": "GT4_VU1_VERIFY=1 on the same schedule: 42 dumps identical; verified=4300 (top-level calls only), verify_mismatches=0, compiled_calls=20002, interpreted_calls=0.",
+    "not_run": "No window or gameplay session was launched by the implementing agent; owner measurement is required. The schedule calls only slice154 table entries: the slice154 verify run on the same schedule logged interpreted_calls=0 at 20000 compiled calls, so the 326 new entries are not executed by this schedule. Their execution is covered by the corpus differential only.",
+    "ctest_final": "Final rebuild and CTest 18/18 after the corpus reconfigure (46 s)."
+  },
+  "limits": [
+    "Coverage is static and heuristic: the 426 targeted entries are E-bit successors, branch and jump-link return targets, branch targets, IADDIU constants that can feed JR/JALR, block starts after delay slots, and the previous 100 entries. An entry the EE passes that is outside this set still runs the interpreter (counted as interpreted_calls). Owner scenes are not verified.",
+    "The full 8-byte aligned set (2048 entries, 51.5 MB source, 44.6 MB object on a standalone compile) was measured but not used: its source is 21.8 times the slice154 table, above the 3x limit of the decision rule.",
+    "The verify counter (verified) covers top-level calls only. Calls made while a verification runs (jump-register dispatch, chained hand-offs) run compiled inside both legs and are not compared with the interpreter individually; this predates slice155.",
+    "Elision is per image: a VU1 image uploaded at run time gets its own identity (identity_rejects); a mismatch falls back to the interpreter.",
+    "Known limit kept: after an interpreter hand-off or budget resume the FlagPipe history is not transferred (vu_recomp_contract.hpp).",
+    "VU1 status is not maintained by emitted code in this image; CFC2 reads VU0 registers only.",
+    "The generated source has about 65,000 unused-label warnings in the native build (labels per instruction; the same pattern as slice154, not an error).",
+    "Owner gameplay frame measurements are not taken; no speed claim is made from headless runs."
+  ],
+  "review": {
+    "status": "pending",
+    "note": "Owner gameplay and frame timing not run; local CTest, Python, headless frame and verify evidence only."
+  },
+  "owner_launch": {
+    "play": "python scripts/play_performance.py --assets-root . --mode vu1-all",
+    "verify": "python scripts/play_performance.py --assets-root . --mode vu1-all --vu1-verify 50",
+    "interpreter_ab": "python scripts/play_performance.py --assets-root . --mode vu1-all --vu1-interpret-only"
+  },
+  "vu1_aot": {
+    "generated_dir": "private/slice157-vu1-all-gen",
+    "generated_source_sha256": "3eed39d69ffa12520237afb2ff44e248d19afa63995a2dcf6c578585784a2266",
+    "generated_manifest_sha256": "07ae2077817e074e2ef68106592191c1449a0557983c34d05d3643ebb68a18d0",
+    "programs": 2048,
+    "parts": 128,
+    "programs_per_file": 16,
+    "entry_policy": "all: 2048 static entries of the pinned image",
+    "image": "private/slice155-vu1-image/vu1_image.bin",
+    "image_sha256": "9e5bc86098904fa8a4bd82fdea0872d5b1d8220269471014dd4630c46796cdff",
+    "entry_list_sha256": "284330f8d4587af4e4f57db29199f22e01c918a1c6cb259359be2e89f5d6c798",
+    "corpus": "private/slice155-vu1-full-corpus (426 recorded-layout files; the 2,048 corpus is not built into CTest)",
+    "overlay_sha256": "171b07c36fbe54be2579a84f579e06e4796b93648ca9f1d13b429d8abad0cd32",
+    "flag_elision": true
+  },
+  "port_capsule": "private/slice153-pacing-port",
+  "shader_capsule": "private/slice153-pacing-shaders",
+  "purpose": "Full static VU1 entry coverage, all 2,048 addresses (TASK-008), on the slice155 measurement profile.",
+  "status": "candidate: local checks pass (CTest, Python, corpus differential, headless frames and verify); owner gameplay measurement pending",
+  "runtime_dependencies": [
+    {
+      "path": "private/slice153-pacing-shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ]
+}

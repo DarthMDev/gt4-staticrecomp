@@ -4,8 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Read first
 
-Current state is at the top of `docs/STATUS.md`; the active plan, stage status and
-backlog are in `docs/OPTIMIZATION-PLAN.md`; daily progress goes to
+The ordered task list is `TASKS.md`. Current state is at the top of
+`docs/STATUS.md`; technical background for the optimization work is in
+`docs/OPTIMIZATION-PLAN.md`; daily progress goes to
 `docs/journal/YYYY-MM-DD.md`. `README.md`, `docs/ARCHITECTURE.md` and
 `docs/BUILD.md` give the public overview, architecture and build recipes per
 slice. Older slice-by-slice history lives in STATUS (History section) and the
@@ -17,25 +18,27 @@ restore it without a documented technical reason.
 
 GT4Recomp is a static recompilation of Gran Turismo 4 NTSC-U (SCUS-97328, disc
 labeled v2.00; its CORE.GT4 is byte-identical to the gt4-decomp target) for
-Windows x86-64 + Vulkan first, then Android and iOS. **No JIT ever**: guest code
+Windows x86-64 + Vulkan first, then Android (phase 2) and iOS (phase 3). **No JIT ever**: guest code
 (EE, VU, IOP) is compiled ahead of time per target; interpreters may remain only
 as explicit, counted fallbacks. GPU driver shader compilation is allowed. Never
 claim zero emulation or full PS2 fidelity.
 
 - **Phase 1 (current):** fast, stable recompiled port: 60 FPS at 100% game speed,
   smooth frametime, no interpreter on the normal path.
-- **Phase 2 (later):** apply the gt4-decomp decompilation function by function
-  behind a guest ABI/memory bridge so the game reads like source; then a native
-  renderer, physics decoupled from frame rate, ultrawide, remaster features.
-- **Graphics:** two launcher-selectable renderers: **Vulkan (GS)** = the current
-  accurate compute GS emulation (to gain internal scaling and options) and
-  **Vulkan (Custom)** = a PCSX2-based hardware renderer specialized for GT4
-  (mobile, weaker PCs, upscaling, dithering control, deinterlacing, texture packs).
+- **Out of scope here:** a decompilation-based source port, a native (non-GS)
+  renderer, physics decoupled from frame rate, ultrawide and remaster features
+  will be a separate project, possibly a fork. This repository's goal is the
+  original game running natively, optimized and as faithful as possible.
+- **Renderer focus now:** integrate paraLLEl-GS (TASK-012).
+- **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
+- **Graphics:** PC renderer = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+); the
+  current donor compute GS renderer is an experimental fallback/reference only
+  (no new features). Mobile = **ARMSX2 GS pipeline** (Vulkan on Android, Metal on
+  iOS) without ARMSX2's JIT. See `docs/GS-RENDERER-OPTIONS.md`.
 - GPL-3.0 reuse (e.g. PCSX2 GS) is accepted (decision 0066): pin sources, keep
   notices, record provenance in `native/THIRD_PARTY.md`. Never import PCSX2 JITs.
-- Recorded ideas, not scheduled: launcher (Rust + egui/GPUI), racing wheels with
-  force feedback, LAN/online launcher, in-game settings menus, Spec II as a
-  second target or data source (see the docs linked from STATUS).
+- The launcher (TASK-020) and racing wheels (TASK-019) are planned tasks;
+  LAN/online launcher, in-game settings menus and Spec II are recorded ideas.
 
 Working fork: github.com/moesuito/gt4-staticrecomp. Upstream
 github.com/Kaezzey/gt4-staticrecomp is read-only.
@@ -52,9 +55,17 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
 - One variable per candidate build; keep A/B switches (`GT4_PACING=audio`,
   `GT4_GS_SYNC=1`, `--vu1-interpret-only`, `--vu1-verify N`). Attack whatever the
   F8 report shows as the largest cost.
-- Commits, branches and pushes are authorized; never rewrite history. `main` is
-  the integration branch: do work on a short-lived branch per task and merge it
-  into `main` through a GitHub PR once tests are green.
+- Work is organized in `TASKS.md` (TASK-001, TASK-002, ...). Keep it current:
+  states, branch, acceptance, and new tasks appended in order.
+- **Task lifecycle:** each task gets its own branch from `main`
+  (`task/NNN-short-name`) → implementation by the single writer → automated
+  checks (CTest, Python, headless frame comparison, verify modes) → in-game test
+  by the owner → **explicit owner approval** → PR into `main` and merge
+  (`gh pr create` / `gh pr merge --merge`) → next task on a new branch. Never
+  merge a task the owner has not approved. Commits and pushes are authorized;
+  never rewrite history.
+- Update README (progress, scene results, known issues), STATUS and the journal
+  as part of each task.
 - Ask the owner only for decisions and gameplay tests, not code review.
 
 ## Testing the game

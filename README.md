@@ -17,6 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
+![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2024-2ea44f)
 
 </div>
 
@@ -73,11 +74,11 @@ one F7/F8 interval per scene:
 | Scene | FPS (VBlanks/s) | Game speed | Notes |
 |---|---|---|---|
 | Time Trial, Nordschleife, Supra (480p) | **60.0** | **100%** | 99.6% of frames within 16–17 ms |
-| Arcade race, Nordschleife, 5 AI cars | 58.0 | 97% | Occasional heavier frames with many cars on screen |
+| Arcade race, Nordschleife, 5 AI cars | **60.0** | **100%** | After VU1 flag elision (was 58.0) |
 | Replay of that race | 59.1 | 98.5% | |
 | Night race with AI cars | 46.2 | 77% | New VU1 entry points interpreted; extra GPU wait under investigation |
 | Rally, Grand Canyon, 1 AI car | 53.9 | 90% | New VU1 entry points interpreted |
-| Car showroom (rotating car) | 44.8 | 75% | High-detail car model: VU1 work 2.3x a race frame |
+| Car showroom (rotating car) | 59.1 | 98.6% | After VU1 flag elision (was 44.8); VU1 9.3 ms |
 
 ## Known issues
 
@@ -87,38 +88,70 @@ one F7/F8 interval per scene:
   the demo-input data appears to arrive wrong or late. Under investigation.
 - **Night races and rally** use VU1 entry points that are not compiled yet; full
   static coverage of the recovered VU1 image is the next VU1 task.
-- **Car showroom** is limited by VU1 work; flag elimination and a dedicated VU1
-  thread (MTVU) are in progress.
+- **Car showroom** is just below 60 FPS after VU1 flag elision; a dedicated VU1
+  thread (MTVU) is planned.
 - Menus are interlaced like the original game (480p applies in races); a
   deinterlacing filter is planned with the new renderer.
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
 
 ## Roadmap
 
-| Stage | Goal | State |
-|---|---|---|
-| **O1** | VU1 microcode compiled ahead of time | ✅ Done |
-| **O2** | Asynchronous GPU submission | ✅ Done |
-| **O4** | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
-| **VU1+** | Per-program flag elimination, full static entry coverage, VU1 on its own thread (MTVU) | 🔄 **In progress** |
-| **Fixes** | License-test crash, window title, fixed 16:9 | 🔄 **In progress** |
-| **O3** | VU0 microcode AOT, full VU1/EE entry coverage, IOP review, build tuning | ⏭️ Next |
-| **Launcher** | Lightweight launcher (Rust): video, controls, game image | 📋 Planned |
-| **O5** | GT4-specialist hardware renderer based on PCSX2: upscaling, dithering control, deinterlacing, texture packs | 📋 Planned |
-| **Wheels** | Logitech G27/G29 and others with force feedback | 📋 Planned |
-| **O6** | Android, then iOS (Metal) | 📋 Planned |
-| **Phase 2** | Source-like code from the decompilation, native renderer, physics decoupled from frame rate, ultrawide | 🔭 Long term |
+Work is tracked as numbered tasks in [TASKS.md](TASKS.md); each task is tested
+in game before it is merged.
 
-Details: [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Hardware renderer study](docs/HW-RENDERER-PLAN.md).
+| Phase | Platform | Renderer |
+|---|---|---|
+| **Phase 1** (current) | Windows PC | paraLLEl-GS (Vulkan compute); current renderer kept as experimental fallback |
+| **Phase 2** | Android | ARMSX2 GS pipeline (Vulkan) |
+| **Phase 3** | iOS | ARMSX2 GS pipeline (Metal) |
+
+### Phase 1 — Windows PC
+
+| Task | Goal | Result / State |
+|---|---|---|
+| TASK‑001 | Rebuild the measured baseline on the new test PC | ✅ Done |
+| TASK‑002 | Record the VU1 programs the game uses while playing | ✅ Done · 86 programs captured |
+| TASK‑003 | Hardened VU1 compiler with differential tests | ✅ Done · 100/100 programs compiled |
+| TASK‑004 | VU1 microcode compiled ahead of time in the game | ✅ Done · 30 → 45 FPS, 0 mismatches in 140k checks |
+| TASK‑005 | Asynchronous GPU submission + overlay fix | ✅ Done · 45 → 60 FPS, 100% game speed |
+| TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done · flat 16.7 ms frametime |
+| TASK‑007 | VU1 per-program flag elision | ✅ Done · showroom 45 → 59 FPS, 5-AI race 60 FPS |
+| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 **In progress** |
+| TASK‑009 | Title, fixed 16:9, fullscreen, 480p everywhere | 🔄 480p rework |
+| TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ⏭️ Next |
+| TASK‑011 | MTVU: VU1 on its own thread | 📋 Planned |
+| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 📋 Planned |
+| TASK‑013 | VU0 microcode compiled ahead of time | 📋 Planned |
+| TASK‑014 | Full EE entry coverage from the decompilation | 📋 Planned |
+| TASK‑015 | LWR instruction fidelity fix | 📋 Planned |
+| TASK‑016 | IOP per-module cost review | 📋 Planned |
+| TASK‑017 | Decompilation names in the generated code | 📋 Planned |
+| TASK‑018 | License-test crash | 📋 Planned |
+| TASK‑019 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑020 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
+
+### Phase 2 — Android · Phase 3 — iOS
+
+| Task | Goal | State |
+|---|---|---|
+| TASK‑021 | ARMSX2 GS pipeline (Vulkan) for Android | 📋 Planned |
+| TASK‑022 | Android app: touch controls, Bluetooth controllers | 📋 Planned |
+| TASK‑023 | ARMSX2 Metal GS for iOS | 📋 Planned |
+| TASK‑024 | iOS app | 📋 Planned |
+
+Details: [TASKS.md](TASKS.md) · [GS renderer options](docs/GS-RENDERER-OPTIONS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md).
 
 ## The Experience We Want to Build
 
 - **Correct speed, smooth 60 FPS** on ordinary PCs, then on phones.
 - **Configurable internal resolution** (1080p, 1440p, 4K) with real internal upscaling.
-- **Clean image options:** dithering control, deinterlaced menus, texture replacement packs.
+- **Clean image options:** paraLLEl-GS super-sampling, deinterlaced menus, post-processing.
 - **Racing wheels** with force feedback.
-- **Ultrawide** with a correct camera and repositioned HUD, and **high refresh rates** independent of physics (phase 2).
-- **Readable, moddable code** built together with the community decompilation.
+- **Faithful first:** the original game, as accurate as possible, just faster and sharper.
+
+A decompilation-based source port (native renderer, high refresh rates independent of
+physics, ultrawide, remaster features) is a possible separate project later; it is not
+part of this repository's roadmap.
 
 ## How It Works
 

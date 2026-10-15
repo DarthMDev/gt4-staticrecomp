@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "slice": 155,
+  "date": "2026-10-15",
+  "purpose": "Static VU1 code image of GT4 USA v2.00, decrypted from the pinned reconstructed ELF with the 16 tail bytes from the recorded snapshots (docs/VU1-MICROCODE-SOURCE.md).",
+  "elf": {
+    "path": "private/reconstructed/SCUS_973.28.elf",
+    "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c",
+    "pin": "docs/inputs/usa-v2.00-native.json native_elf_sha256",
+    "offset": 5397968,
+    "blob_bytes": 16368
+  },
+  "keystream": {
+    "state": 841445488,
+    "multiplier": 1566083941,
+    "order": "advance the state, then plain = enc ^ (state & 0xFF)"
+  },
+  "image": {
+    "path": "private/slice155-vu1-image/vu1_image.bin",
+    "bytes": 16384,
+    "sha256": "9e5bc86098904fa8a4bd82fdea0872d5b1d8220269471014dd4630c46796cdff"
+  },
+  "blob_sha256": "ae6b6cb3b4406ff3350a9d32b8abc044122c62e3e86f0e295bac54b38d2ac4c1",
+  "tail_hex": "00000000000000000000000000000000",
+  "corpus_control": {
+    "directory": "private/slice151-vu1-corpus-union",
+    "snapshots": 86,
+    "result": "every snapshot equals the blob over 0x0000-0x3FEF and all snapshots agree on the tail"
+  },
+  "entry_lists": {
+    "all": {
+      "path": "private/slice155-vu1-image/entries-all.txt",
+      "entries": 2048,
+      "sha256": "284330f8d4587af4e4f57db29199f22e01c918a1c6cb259359be2e89f5d6c798"
+    },
+    "targeted": {
+      "path": "private/slice155-vu1-image/entries-targeted.txt",
+      "entries": 426,
+      "sha256": "ec0b9116771d3ec21b8743fbcdbc865607d609b472af0455c8aead097bd85c94",
+      "selected": true
+    }
+  },
+  "tool": "scripts/vu1_image.py (build, check, entries)"
+}

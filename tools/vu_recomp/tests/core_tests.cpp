@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -180,9 +181,114 @@ void check_emission() {
     expect(manifest.find("\"instruction_budget\": 1000000") != std::string::npos, "manifest records the instruction budget");
 }
 
+// Explicit-entry mode (slice 155): entry-list syntax, and records that match the recorded-file
+// path for the same image and entry (same key and identity digest).
+void check_explicit_mode() {
+    const fs::path directory = fresh_temp_directory("explicit_mode");
+    const auto write_text_file = [](const fs::path &path, const std::string &text) {
+        std::ofstream file(path, std::ios::binary);
+        file << text;
+    };
+    std::vector<std::uint32_t> entries;
+    std::string error;
+    const fs::path good = directory / "good.txt";
+    write_text_file(good, "# comment line\n0040\n0000\n0040\n\n");
+    expect(read_entry_list(good, entries, error), "entry list with comments and blanks is read: " + error);
+    expect(entries == std::vector<std::uint32_t>({0x0000u, 0x0040u}), "entry list is sorted and deduplicated");
+
+    const std::vector<std::string> refused_lists = {"0041\n", "4000\n", "004g\n", "00ab\n", "40\n", "# only comments\n"};
+    for (std::size_t i = 0; i < refused_lists.size(); ++i) {
+        const fs::path path = directory / ("bad" + std::to_string(i) + ".txt");
+        write_text_file(path, refused_lists[i]);
+        std::vector<std::uint32_t> rejected;
+        expect(!read_entry_list(path, rejected, error), "entry list line refused: " + refused_lists[i]);
+    }
+
+    const std::vector<gt4::vurecomp::fixtures::Fixture> fixtures = gt4::vurecomp::fixtures::build_fixtures();
+    for (std::size_t index = 0; index < fixtures.size(); ++index) {
+        const auto &fixture = fixtures[index];
+        std::vector<ProgramRecord> explicit_records;
+        expect(collect_explicit_program_records(fixture.image, fixture.entries, explicit_records, error),
+               "explicit records are collected for " + fixture.name + ": " + error);
+
+        std::set<std::uint32_t> distinct(fixture.entries.begin(), fixture.entries.end());
+        expect(explicit_records.size() == distinct.size(), "explicit records match distinct entries for " + fixture.name);
+
+        const fs::path corpus = fresh_temp_directory("explicit_corpus_" + std::to_string(index));
+        for (std::uint32_t entry : fixture.entries) write_bytes(corpus / recorded_name(fixture.image, entry), fixture.image);
+        std::vector<ProgramRecord> recorded;
+        expect(collect_program_records(corpus, recorded, error), "recorded corpus is collected for " + fixture.name + ": " + error);
+        for (const ProgramRecord &explicit_record : explicit_records) {
+            bool matched = false;
+            for (const ProgramRecord &record : recorded)
+                matched = matched || (record.key == explicit_record.key && record.digest_sha256 == explicit_record.digest_sha256 &&
+                                      record.entry == explicit_record.entry);
+            expect(matched, std::format("explicit entry 0x{:04X} matches the recorded identity in {}", explicit_record.entry, fixture.name));
+        }
+    }
+
+    // A wrong-size image is refused before any record is built.
+    std::vector<ProgramRecord> none;
+    expect(!collect_explicit_program_records(std::vector<std::uint8_t>(100, 0), {0u}, none, error), "explicit mode refuses a wrong-size image");
+
+    // Explicit output carries the mode in its manifest and the entry count.
+    std::vector<ProgramRecord> records;
+    const auto &first = fixtures.front();
+    expect(collect_explicit_program_records(first.image, first.entries, records, error), "explicit records for the manifest: " + error);
+    const std::string source = emit_generated_source(records);
+    ManifestInput input;
+    input.kind = "explicit_entries";
+    input.image_sha256 = sha256_hex(first.image);
+    input.generated_bytes = source.size();
+    const std::string manifest = manifest_json(records, "vu1_generated.cpp", sha256_hex(reinterpret_cast<const std::uint8_t *>(source.data()), source.size()), input);
+    expect(manifest.find("\"input\": \"explicit_entries\"") != std::string::npos, "manifest names the explicit input");
+    expect(manifest.find(std::format("\"entry_count\": {}", records.size())) != std::string::npos, "manifest counts the entries");
+    expect(manifest.find(std::format("\"generated_bytes\": {}", source.size())) != std::string::npos, "manifest records the generated size");
+}
+
+}
+
+// Split output (slice 157): every emitted function is defined exactly once, in record order, in
+// parts of at most programs_per_file functions; the table file declares and registers all of them.
+void check_split_emission() {
+    // A zero image with five entries: every entry emits a program (refusals are excluded from the parts).
+    std::vector<std::uint8_t> image(16384, 0);
+    std::vector<std::uint32_t> entries = {0x0000u, 0x0008u, 0x0010u, 0x0018u, 0x0020u};
+    std::vector<ProgramRecord> records;
+    std::string error;
+    if (!collect_explicit_program_records(image, entries, records, error)) {
+        expect(false, "split emission records: " + error);
+        return;
+    }
+    std::vector<GeneratedPart> parts;
+    const std::string table = emit_generated_split(records, 2, parts);
+    std::size_t emitted = 0;
+    for (const ProgramRecord &record : records) emitted += record.refused ? 0 : 1;
+    expect(emitted > 0, "the zero image emits at least one program");
+    expect(parts.size() == (emitted + 1) / 2, "emitted programs in parts of two (ceiling division)");
+    std::size_t definitions = 0;
+    for (const GeneratedPart &part : parts) {
+        expect(part.programs <= 2, "a part holds at most programs_per_file functions");
+        for (const ProgramRecord &record : records) {
+            const std::string definition = std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx) {{", record.function_name);
+            if (!record.refused && part.text.find(definition) != std::string::npos) ++definitions;
+        }
+    }
+    expect(definitions == emitted, std::format("each function is defined once across the parts ({} of {})", definitions, emitted));
+    expect(table.find("kPrograms[]") != std::string::npos && table.find(std::format("kProgramCount = {}u;", emitted)) != std::string::npos,
+           "table file registers the emitted programs");
+    for (const ProgramRecord &record : records) {
+        if (record.refused) continue;
+        expect(table.find(std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx);", record.function_name)) != std::string::npos,
+               "table file declares " + record.function_name);
+        expect(table.find(std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx) {{", record.function_name)) == std::string::npos,
+               "table file does not define " + record.function_name);
+    }
+    expect(!parts.empty() && parts.front().file_name == "vu1_generated_000.cpp", "part names are numbered from zero");
 }
 
 int main() {
+    check_split_emission();
     check_sha256();
     check_names();
     check_image_sizes();
@@ -190,6 +296,7 @@ int main() {
     check_collision_refusal();
     check_output_directory_rules();
     check_emission();
+    check_explicit_mode();
     std::printf("vu_recomp core: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

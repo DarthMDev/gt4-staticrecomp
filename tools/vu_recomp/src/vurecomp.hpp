@@ -99,8 +99,45 @@ std::string emit_program_function(ProgramRecord &record);
 // Emits all records into one translation unit with a table of emitted programs.
 std::string emit_generated_source(std::vector<ProgramRecord> &records, const std::string &name_space = "gt4::vugen::generated");
 
-// Writes the JSON manifest describing every record.
+// One part of a split table: a translation unit with the function bodies of up to
+// programs_per_file emitted programs.
+struct GeneratedPart {
+    std::string file_name;  // vu1_generated_NNN.cpp
+    std::string text;
+    std::size_t programs = 0;
+};
+
+// Split output (slice 157): the returned text is the table file vu1_generated.cpp (forward
+// declarations of every emitted function and the kPrograms table). Parts are appended to
+// `parts` in record order, programs_per_file functions each, so Ninja can compile them in
+// parallel. Deterministic for the same records.
+std::string emit_generated_split(std::vector<ProgramRecord> &records, std::size_t programs_per_file, std::vector<GeneratedPart> &parts,
+                                 const std::string &name_space = "gt4::vugen::generated");
+
+// Explicit-entry mode (slice 155): one static image and a list of entry addresses,
+// instead of recorded KEY_ENTRY.bin files. Reads one 4-digit uppercase hex address per
+// line; blank lines and lines starting with '#' are ignored. Each address must be
+// 8-byte aligned and below 0x4000. Duplicate addresses are read once.
+bool read_entry_list(const std::filesystem::path &path, std::vector<std::uint32_t> &entries, std::string &error);
+
+// One record per distinct entry of the image, in key order. No jump-target discovery is
+// done: the list is the complete entry set. Same collision rule as collect_program_records.
+bool collect_explicit_program_records(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &entries,
+                                      std::vector<ProgramRecord> &records, std::string &error);
+
+// Describes the input of a manifest. Corpus mode leaves the explicit fields empty.
+struct ManifestInput {
+    std::string kind = "corpus";           // "corpus" (KEY_ENTRY.bin files) or "explicit_entries"
+    std::string image_sha256;              // explicit mode: SHA-256 of the 16 KiB image
+    std::string entry_list_sha256;         // explicit mode: SHA-256 of the entry list file
+    std::size_t generated_bytes = 0;       // size of the generated source (all files)
+    std::string entry_policy = "unspecified";  // label of the entry list, e.g. "all" or "targeted" (vu1_image.py)
+    std::size_t programs_per_file = 0;     // 0: one translation unit; otherwise the split of emit_generated_split
+    std::vector<GeneratedPart> parts;      // split mode: the part files, recorded with their hashes
+};
+
+// Writes the JSON manifest describing every record, with entry, function and size counts.
 std::string manifest_json(const std::vector<ProgramRecord> &records, const std::string &generated_file_name,
-                          const std::string &generated_sha256);
+                          const std::string &generated_sha256, const ManifestInput &input = {});
 
 }
