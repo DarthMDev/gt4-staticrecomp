@@ -17,6 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
+![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2028-2ea44f)
 
 </div>
 
@@ -98,9 +99,15 @@ one F7/F8 interval per scene:
 Work is tracked as numbered tasks in [TASKS.md](TASKS.md); each task is tested
 in game before it is merged.
 
-| Task | Goal | State |
+| Task | Goal | Result / State |
 |---|---|---|
-| TASK-001…007 | Baseline, VU1 AOT, async GPU submission, frame pacing, VU1 flag elision | ✅ Done |
+| TASK-001 | Rebuild the measured baseline on the new test PC | ✅ Done |
+| TASK-002 | Record the VU1 programs the game uses while playing | ✅ Done · 86 programs captured |
+| TASK-003 | Hardened VU1 compiler with differential tests | ✅ Done · 100/100 programs compiled |
+| TASK-004 | VU1 microcode compiled ahead of time in the game | ✅ Done · 30 → 45 FPS, 0 mismatches in 140k checks |
+| TASK-005 | Asynchronous GPU submission + overlay fix | ✅ Done · 45 → 60 FPS, 100% game speed |
+| TASK-006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done · flat 16.7 ms frametime |
+| TASK-007 | VU1 per-program flag elision | ✅ Done · showroom 45 → 59 FPS, 5-AI race 60 FPS |
 | TASK-008 | Full static VU1 entry coverage (night races, rally) | 🔄 **In progress** |
 | TASK-009 | Window title, fixed 16:9, fullscreen toggle, 480p boot | ⏭️ Next |
 | TASK-018 | Faster builds | 📋 Planned |
@@ -109,11 +116,18 @@ in game before it is merged.
 | TASK-011 | Upscaling 1x–6x on the accurate GS renderer | 📋 Planned |
 | TASK-012 | Night races: remove the GPU readback wait | 📋 Planned |
 | TASK-013 | License-test crash | 📋 Planned |
-| TASK-014…022 | VU0 AOT, EE coverage, LWR fix, IOP review, decomp names | 📋 Planned |
+| TASK-014 | VU0 microcode compiled ahead of time | 📋 Planned |
+| TASK-015 | Full EE entry coverage from the decompilation | 📋 Planned |
+| TASK-016 | LWR instruction fidelity fix | 📋 Planned |
+| TASK-017 | IOP per-module cost review | 📋 Planned |
+| TASK-020 | 480p boot and 16:9 option (if not done in TASK-009) | 📋 Planned |
+| TASK-022 | Decompilation names in the generated code | 📋 Planned |
 | TASK-023 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
-| TASK-024…025 | Vulkan (Custom): GT4-specialist hardware renderer based on PCSX2 | 📋 Planned |
+| TASK-024 | Vulkan (Custom) renderer: GT4 GS feature census and replay harness | 📋 Planned |
+| TASK-025 | Vulkan (Custom) renderer: PCSX2-based hardware renderer for GT4 | 📋 Planned |
 | TASK-026 | Racing wheels with force feedback | 📋 Planned |
-| TASK-027…028 | Android, then iOS (Metal) | 📋 Planned |
+| TASK-027 | Android | 📋 Planned |
+| TASK-028 | iOS (Metal) | 📋 Planned |
 | TASK-029 | Phase 2: decompilation bridge, native renderer, decoupled physics, ultrawide | 🔭 Long term |
 
 Details: [TASKS.md](TASKS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Hardware renderer study](docs/HW-RENDERER-PLAN.md).
