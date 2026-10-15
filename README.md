@@ -150,6 +150,7 @@ in game before it is merged.
 | TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 🔄 In progress |
 | TASK‑028 | CoreGS 1.1: up to 3x internal resolution, deinterlace, FXAA, FSR 1.0 | 🔄 Upscaler done · filters in progress |
 | TASK‑029 | Controller and keyboard mapping with a launcher menu | 🔄 In progress |
+| TASK‑034 | PCSX2 GS proof of concept: our capture replayed offline through the PCSX2 GS | 🧪 Offline replay done: GO for the fork and protocol, conditional GO for the live MVP · [report](docs/GS-PCSX2-POC.md) |
 | TASK‑026 | CoreGS 2.0 (our own MIT hardware renderer, clean room): specification | ✅ Done |
 | TASK‑027 | CoreGS 2.0: implementation, 3x-6x resolution and texture packs | ⏸️ Paused · core libraries done, resumes after 1.0.0 |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
