@@ -27,7 +27,7 @@ Task IDs are stable; the overview lists tasks in execution order.
 | TASK‑010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
 | TASK‑019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
 | TASK‑011 | Upscaling 1x-6x on the Vulkan (GS) renderer | 📋 Planned |
-| TASK‑030 | Vulkan (GS) renderer features: census, post-processing, dithering, deinterlacing, texture options | 📋 Planned |
+| TASK‑029 | Vulkan (GS) renderer features: census, post-processing, dithering, deinterlacing, texture options | 📋 Planned |
 | TASK‑012 | Night races: remove the GS readback wait | 📋 Planned |
 | TASK‑013 | License-test crash | 📋 Planned |
 | TASK‑014 | VU0 microcode compiled ahead of time | 📋 Planned |
@@ -114,7 +114,7 @@ memory: GS memory buffers grow with scale², 36x at 6x). Use the donor resolve
 pass before CPU readbacks. Acceptance: 1x identical to TASK-010; owner visual
 check and frame rate at 2x/3x/4x/6x.
 
-### TASK-030 — Vulkan (GS) renderer features (runs after TASK-011)
+### TASK-029 — Vulkan (GS) renderer features (runs after TASK-011)
 Bring PCSX2 renderer features that fit our accurate compute renderer, before the
 Custom renderer. With every feature off, output stays pixel-identical. Each step
 gets an env switch until the launcher exists; shader changes need a fresh SPIR-V

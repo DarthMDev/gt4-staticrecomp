@@ -30,7 +30,7 @@ claim zero emulation or full PS2 fidelity.
   will be a separate project, possibly a fork. This repository's goal is the
   original game running natively, optimized and as faithful as possible.
 - **Renderer focus now:** the accurate Vulkan (GS) renderer, gaining features
-  ported from PCSX2 (TASK-011, TASK-030); the lighter PCSX2-based Custom
+  ported from PCSX2 (TASK-011, TASK-029); the lighter PCSX2-based Custom
   renderer comes later.
 - **Graphics:** two launcher-selectable renderers: **Vulkan (GS)** = the current
   accurate compute GS emulation (to gain internal scaling and options) and

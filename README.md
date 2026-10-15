@@ -114,7 +114,7 @@ in game before it is merged.
 | TASK‑010 | MTVU: VU1 on its own thread | 📋 Planned |
 | TASK‑019 | Build tuning (CPU variants, LTO, PGO) | 📋 Planned |
 | TASK‑011 | Upscaling 1x–6x on the accurate GS renderer | 📋 Planned |
-| TASK‑030 | Accurate renderer features: deinterlacing filters, dithering control, sharpening, texture options | 📋 Planned |
+| TASK‑029 | Accurate renderer features: deinterlacing filters, dithering control, sharpening, texture options | 📋 Planned |
 | TASK‑012 | Night races: remove the GPU readback wait | 📋 Planned |
 | TASK‑013 | License-test crash | 📋 Planned |
 | TASK‑014 | VU0 microcode compiled ahead of time | 📋 Planned |
