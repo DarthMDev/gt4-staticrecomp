@@ -398,3 +398,93 @@ Limits:
 Measurement outputs kept in private directories: `private/slice155-vu1-full-gen-all` (policy a,
 51.5 MB, not used), `private/slice155-vu1-full-gen-targeted` (same content as the candidate table),
 `private/slice155-smoke/*`.
+
+Slice157 (TASK-008, all entries) replaces the owner's slice155 table policy with every 8-byte
+address of the pinned image (2,048 programs). The owner tested slice155 with 354,837 interpreted
+VU1 calls in the rally and 0 in the night race; the all-entries table is the response. Owner
+command, from the repository root:
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode vu1-all
+
+`--vu1-verify N` and `--vu1-interpret-only` apply as in vu1-full. Pins:
+[slice157-vu1-all-runtime.json](inputs/slice157-vu1-all-runtime.json) (capsule, same overlay and
+donor hashes as slice155) and [slice157-vu1-all.json](inputs/slice157-vu1-all.json) (launcher,
+runtime `private/slice157-vu1-all-build/build/gt4vulkan.exe`, 95,125,504 bytes, sha256 40388a41...2369e).
+Directories: table `private/slice157-vu1-all-gen` (vu1_generated.cpp plus 128 parts
+`vu1_generated_000.cpp` to `vu1_generated_127.cpp`, 16 programs each), entries
+`private/slice157-vu1-all-entries`, corpus `private/slice157-vu1-all-corpus` (2,048 files), capsule
+`private/slice157-vu1-all-runtime`, build `private/slice157-vu1-all-build/build`. Image and shaders are
+the slice155 and slice153 files, unchanged.
+
+Steps. All outputs are generated offline in fresh private directories and are not committed.
+
+1. Entry lists (policy label recorded in a sidecar, `<list>.json`):
+   `scripts\vu1_image.py entries --image private\slice155-vu1-image\vu1_image.bin --policy all --out private\slice157-vu1-all-entries\entries-all.txt`
+   (2,048 addresses, sha256 284330f8...). `--policy targeted --table-manifest private\slice154-vu1-flags-gen\manifest.json`
+   reproduces the slice155 list (sha256 ec0b9116..., 426 addresses). The targeted policy is kept.
+2. Generator (new options, default output unchanged):
+   `gt4_vu_recomp --programs-per-file 16 --entry-policy all --image ... --entries private\slice157-vu1-all-entries\entries-all.txt private\slice157-vu1-all-gen`
+   writes the table file, the 128 parts and a manifest with `entry_policy`, `programs_per_file` and
+   `generated_parts` (file, sha256, bytes, programs). The table file declares every function and holds
+   kPrograms; each part defines its 16 functions. CMake compiles every `vu1_generated_*.cpp` in the
+   table directory (sorted), so Ninja builds them in parallel.
+3. Reproduction control: the same emitter without the new options, on the targeted list, produces
+   `vu1_generated.cpp` with sha256 d65474f8..., identical to the slice155 table.
+4. Corpus: `scripts\vu1_image.py corpus --image ... --entries private\slice157-vu1-all-entries\entries-all.txt --out private\slice157-vu1-all-corpus`
+   writes 2,048 KEY_ENTRY.bin files for the registry control.
+5. Runtime capsule: `scripts\prepare_perf_runtime.py private\slice157-vu1-all-runtime --vu1-aot`
+   (source hashes and overlay 171b07c3... identical to slice155).
+6. Configure as slice155 with `GT4_PERF_RUNTIME_SOURCE=private/slice157-vu1-all-runtime` and
+   `GT4_VU1_GENERATED_DIR=private/slice157-vu1-all-gen`. `GT4_VU_CORPUS_DIR` stays the 426-file
+   slice155 corpus (the corpus differential builds its own table from it; see the limits).
+
+Entry policy comparison (Confirmed, from the manifests):
+`vu1_image.py compare --targeted <slice155 targeted manifest> --full <slice157 manifest>` reports
+426 of 426 targeted rows equal to the full table in key, digest, flag-elision flags, MAC and clip
+counts, reachable size, status and function name, 0 differences. The full table has 2,048 emitted,
+0 refused, `image_flags_used` true in 2,048 programs, `image_status_used` false in 2,048 programs,
+0 interpreter exit sites, `mac_mode` observed in all. Flag elision is per program (the emitter's
+`image_flags_used` per record), and the counts show it applied to every program.
+
+Sizes and time (Confirmed, local):
+
+| Item | Value |
+|---|---|
+| Table source `vu1_generated.cpp` | 449,433 bytes |
+| Part sources `vu1_generated_NNN.cpp` (128) | 51,268,101 bytes (51.7 MB together with the table) |
+| Objects, game table (128 parts + table file) | 87.8 MB + 0.8 MB |
+| Executable `gt4vulkan.exe` | 95,125,504 bytes (slice155: 62,204,416, +32.9 MB) |
+| Emitter `gt4_vu_recomp` (new options) | rebuilt in `private/slice157-vu1-all-tools` |
+| Table generation | 2.4 s (emitter) |
+| Game table compile | about 3 min wall clock on 16 cores (parts from 06:54 to 06:57) |
+| Full configure and build, 231 steps | about 6.5 min, 0 errors, about 2,400 unused-label warnings in the first part of the log |
+
+Results (Confirmed unless marked; candidate, not owner-measured):
+
+- CTest 18/18 on `private/slice157-vu1-all-build/build` (about 2 min). `vu1_aot_registry` against the
+  2,048-file corpus: 2,048 of 2,048 table entries found, 10,240 checks, 0 failures. `vu_recomp_core`:
+  128 checks (new split-emission control included), 0 failures. `vu_recomp_corpus` (426 programs,
+  the slice155 corpus): 0 failures.
+- Python: 236 OK, 1 skipped (pre-existing), with `GT4_NATIVE_BUILD` on the slice157 build. New tests:
+  policy comparison (synthetic), a private control for the 2,048 table with 128 parts, and the
+  VU1 image tests (19 in total in `test_vu1_image.py`).
+- Headless smoke, 4,200 frames, the slice153/154 schedule with 12 presses (`600:start:30`, then
+  cross, start, down every 300 frames to `3900:start:30`), no window: 42 frame dumps identical to
+  `private/slice154-smoke/final-headless/frames.sha256` (per-file sha256 compared).
+- Headless verify, `GT4_VU1_VERIFY=1`, same schedule: completed 4,200 frames, 42 frame dumps identical
+  to the smoke run. The probe log has no VU1 counter lines in verify mode; see the journal for the
+  counter pass.
+
+Limits:
+
+1. Coverage is now complete over the 2,048 aligned addresses, but the interpreter still runs for any
+   entry that is not an 8-byte aligned address in the image, and for any
+   program refused by the emitter (0 refused). Owner scenes (rally, night race, showroom) are not run
+   here; the owner decides whether `interpreted_calls` is 0 in F8.
+2. The corpus differential (`gt4_vu_corpus_differential`) runs over the 426-file slice155 corpus, not
+   the 2,048 files. The 2,048 coverage uses the registry control (keys, digests and identity) and the
+   static emitter; a standalone 2,048 corpus differential needs one more single-table build (not run).
+3. The emitter output for the 2,048 table is about 51.7 MB of C++ in 129 translation units. The
+   executable is 32.9 MB larger than slice155 (owner-accepted size).
+4. Owner frame measurement is not taken. No speed claim is made. The FlagPipe history limit and the
+   `verified` counter limits of slice155 are unchanged.

@@ -15,7 +15,11 @@ Commands:
   corpus   write one KEY_ENTRY.bin file per entry (the recorded-file layout of gt4_vu_recomp), so the
            corpus differential test covers the same entries; the keys are the donor program keys
 
-Entry policies (see docs/BUILD.md, slice 155):
+  compare  check that the targeted table rows (key, digest, flag elision, sites) equal the full table
+           rows, and print the full table's flag-elision counts (slice 157)
+
+Entry policies (see docs/BUILD.md, slices 155 and 157). `entries` also writes LIST.json with the policy label:
+
   all       every 8-byte aligned address of the image (2048 entries)
   targeted  address 0, the 8-byte address after each E-bit delay slot, every branch and jump-link
             return target, every branch target, every IADDIU constant that can feed a JR/JALR
@@ -142,6 +146,44 @@ def write_entry_list(path, entries):
     text = ''.join(f'{address:04X}\n' for address in entries)
     with open(path, 'x', encoding='utf-8', newline='\n') as handle:
         handle.write(text)
+    return hashlib.sha256(text.encode('ascii')).hexdigest()
+
+
+def compare_tables(targeted_manifest, full_manifest):
+    """Checks that the targeted table is a subset of the full table with identical rows (slice157).
+
+    Compares every field that the emitter derives per program: key, identity digest, the
+    flag-elision flags, the MAC and clip site counts, the reachable size and the function name.
+    Returns (checked_rows, problems). An empty problems list means the rows agree.
+    """
+    full = {program['entry']: program for program in full_manifest['programs']}
+    problems = []
+    fields = ('key', 'digest_sha256', 'image_flags_used', 'image_status_used', 'mac_mode', 'mac_writers', 'mac_sites',
+              'mac_reader_sites', 'clip_writers', 'clip_sites', 'clip_reader_sites', 'fallback_sites', 'upper_nop_sites',
+              'budget_heads', 'reachable_instructions', 'exit_pcs', 'status', 'function')
+    for program in targeted_manifest['programs']:
+        other = full.get(program['entry'])
+        if other is None:
+            problems.append(f"entry {program['entry']} missing from the full table")
+            continue
+        for field in fields:
+            if program[field] != other[field]:
+                problems.append(f"entry {program['entry']} field {field}: {program[field]!r} != {other[field]!r}")
+    return len(targeted_manifest['programs']), problems
+
+
+def elision_counts(manifest):
+    """Per-program flag-elision facts of a table manifest, for the summary line of the slice157 record."""
+    programs = manifest['programs']
+    return {
+        'programs': len(programs),
+        'emitted': sum(1 for p in programs if p['status'] == 'emitted'),
+        'refused': sum(1 for p in programs if p['status'] != 'emitted'),
+        'image_flags_used': sum(1 for p in programs if p['image_flags_used']),
+        'image_status_used': sum(1 for p in programs if p['image_status_used']),
+        'interpreter_exit_sites': sum(len(p['exit_pcs']) for p in programs),
+        'mac_mode': sorted({p['mac_mode'] for p in programs}),
+    }
 
 
 FNV_OFFSET = 0xCBF29CE484222325
@@ -286,9 +328,28 @@ def cmd_entries(arguments):
     else:
         table = read_table_entries(arguments.table_manifest) if arguments.table_manifest else []
         entries = targeted_entries(image, table)
-    write_entry_list(arguments.out, entries)
-    print(f'vu1-entries: {len(entries)} {arguments.policy} entries')
+    list_sha = write_entry_list(arguments.out, entries)
+    # Sidecar with the policy label; gt4_vu_recomp --entry-policy copies the same label into its manifest.
+    sidecar = {'policy': arguments.policy, 'entries': len(entries), 'entry_list_sha256': list_sha,
+               'image_sha256': hashlib.sha256(image).hexdigest(),
+               'table_manifest': arguments.table_manifest or None,
+               'rules': 'every 8-byte aligned address (2048)' if arguments.policy == 'all' else
+               'slice155 targeted rules (docs/BUILD.md slice155) plus the entries of --table-manifest'}
+    Path(str(arguments.out) + '.json').write_text(json.dumps(sidecar, indent=2) + '\n', encoding='utf-8')
+    print(f'vu1-entries: {len(entries)} {arguments.policy} entries, sha256={list_sha}')
     return 0
+
+
+def cmd_compare(arguments):
+    targeted = json.loads(Path(arguments.targeted).read_text(encoding='utf-8'))
+    full = json.loads(Path(arguments.full).read_text(encoding='utf-8'))
+    checked, problems = compare_tables(targeted, full)
+    counts = elision_counts(full)
+    print(f"vu1-compare: {checked} targeted rows checked against {len(full['programs'])} full rows, {len(problems)} differences")
+    print(f"vu1-compare: full table {json.dumps(counts, sort_keys=True)}")
+    for problem in problems[:20]:
+        print(f'FAIL: {problem}', file=sys.stderr)
+    return 1 if problems else 0
 
 
 def main(argv=None):
@@ -308,6 +369,10 @@ def main(argv=None):
     entries.add_argument('--table-manifest', help='manifest.json of a previous table whose entries are included')
     entries.add_argument('--out', required=True, help='new entry list file (must not exist)')
     entries.set_defaults(run=cmd_entries)
+    compare = commands.add_parser('compare')
+    compare.add_argument('--targeted', required=True, help='manifest.json of the targeted table')
+    compare.add_argument('--full', required=True, help='manifest.json of the full table (must contain the targeted rows)')
+    compare.set_defaults(run=cmd_compare)
     corpus = commands.add_parser('corpus')
     corpus.add_argument('--image', required=True)
     corpus.add_argument('--entries', required=True, help='entry list written by the entries command')

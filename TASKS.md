@@ -6,11 +6,33 @@ into `main` (workflow rules in [CLAUDE.md](CLAUDE.md)). Evidence for finished
 tasks lives in `docs/journal/` and `docs/inputs/`; background studies are linked
 from [STATUS](docs/STATUS.md).
 
-States: ✅ Done · 🔄 In progress · ⏭️ Next · 📋 Planned
+States: ✅ Done · 🧪 Waiting for owner test · 🔄 In progress · ⏭️ Next · 📋 Planned
 
-Task IDs are stable; the overview lists tasks in execution order.
+Tasks are numbered in execution order (renumbered on 2026-10-15). Older
+journals and commits use the previous numbers: 018→010, 010→011, 031→012,
+014→013, 015→014, 016→015, 017→016, 020→017, 022→018, 023→019, 026→020,
+013→021, 024→022, 027→023, 025→024, 028→025. Second renumbering (same day): 022→017, 021→018,
+020→019, 019→020, phase 2/3 tasks 022-025→021-024; the in-game 16:9 task was
+dropped (the owner's game already boots in 16:9). Earlier IDs 011, 012, 019, 029
+were merged into the new 010/012; the pre-donor cleanup was done outside the
+list (private repository `moesuito/gt4-staticrecomp-legacy`).
 
-## Overview
+## Phases
+
+| Phase | Platform | Goal |
+|---|---|---|
+| **Phase 1** (current) | Windows PC | Original game running natively: correct speed, smooth 60 FPS, no interpreter on the normal path, paraLLEl-GS renderer |
+| **Phase 2** | Android | ARM64 build with the ARMSX2 mobile GS pipeline (Vulkan) |
+| **Phase 3** | iOS | ARM64 build with the ARMSX2 Metal GS pipeline |
+
+**Renderer decision (2026-10-15):** PC uses **paraLLEl-GS** (Vulkan compute,
+LGPL-3.0+) as the renderer. The current donor compute GS renderer stays only as
+an experimental fallback and comparison reference; it gets no new features.
+Mobile uses the **ARMSX2 GS pipeline** (PCSX2 hardware renderer adapted for
+Android Vulkan and iOS Metal, with GPU driver profiles and a tile-friendly pass
+scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
+
+## Phase 1 — Windows PC
 
 | Task | Goal | State |
 |---|---|---|
@@ -21,29 +43,33 @@ Task IDs are stable; the overview lists tasks in execution order.
 | TASK‑005 | Asynchronous GPU submission + overlay (RTSS) fix | ✅ Done |
 | TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
 | TASK‑007 | VU1 per-program flag elision | ✅ Done |
-| TASK‑008 | Full static VU1 entry coverage | 🔄 In progress |
-| TASK‑030 | Repository cleanup: pre-donor material moved to a private backup | 🔄 In progress |
-| TASK‑009 | Quick fixes: window title, fixed 16:9, fullscreen toggle, per-interval counters, 480p boot and 16:9 option (if the study shows it is small) | ⏭️ Next |
-| TASK‑018 | Faster builds (parallel jobs, compiler cache, lld-link) | 📋 Planned |
-| TASK‑010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
-| TASK‑019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
-| TASK‑011 | Upscaling 1x-6x on the Vulkan (GS) renderer | 📋 Planned |
-| TASK‑029 | Vulkan (GS) renderer features: census, post-processing, dithering, deinterlacing, texture options | 📋 Planned |
-| TASK‑012 | Night races: remove the GS readback wait | 📋 Planned |
-| TASK‑013 | License-test crash | 📋 Planned |
-| TASK‑014 | VU0 microcode compiled ahead of time | 📋 Planned |
-| TASK‑015 | EE entry coverage from the decomp function list | 📋 Planned |
-| TASK‑016 | LWR sign-extension fidelity fix | 📋 Planned |
-| TASK‑017 | IOP per-module cost counters and review | 📋 Planned |
-| TASK‑020 | In-game 16:9 option by default (guest hook); 480p via guest hook if the TASK-009 switch fails | 📋 Planned |
-| TASK‑021 | Merged into TASK-009 | — |
-| TASK‑022 | Decomp names in generated EE code | 📋 Planned |
-| TASK‑023 | Launcher (Rust + egui/GPUI): video, controls, game image | 📋 Planned |
-| TASK‑024 | Vulkan (Custom) renderer P0: GT4 GS feature census and replay harness | 📋 Planned |
-| TASK‑025 | Vulkan (Custom) renderer P1-P3: PCSX2 HW renderer import, adapter, options | 📋 Planned |
-| TASK‑026 | Racing wheels (G27/G29 and others) with force feedback | 📋 Planned |
-| TASK‑027 | Android build | 📋 Planned |
-| TASK‑028 | iOS build (Metal) | 📋 Planned |
+| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 In progress |
+| TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, 480p everywhere | 🔄 480p rework |
+| TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ⏭️ Next |
+| TASK‑011 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
+| TASK‑012 | paraLLEl-GS as the PC renderer: integration, upscaling, deinterlacing, readbacks, extras, GT4 validation | 📋 Planned |
+| TASK‑013 | VU0 microcode compiled ahead of time | 📋 Planned |
+| TASK‑014 | EE entry coverage from the decomp function list | 📋 Planned |
+| TASK‑015 | LWR sign-extension fidelity fix | 📋 Planned |
+| TASK‑016 | IOP per-module cost counters and review | 📋 Planned |
+| TASK‑017 | Decomp names in generated EE code | 📋 Planned |
+| TASK‑018 | License-test crash (later; optimization first) | 📋 Planned |
+| TASK‑019 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑020 | Launcher (Rust + egui/GPUI) | 📋 Planned |
+
+## Phase 2 — Android
+
+| Task | Goal | State |
+|---|---|---|
+| TASK‑021 | Mobile GS: ARMSX2 GS pipeline (Vulkan) behind our GS front end | 📋 Planned |
+| TASK‑022 | Android app: ARM64 build, host layers, touch controls, Bluetooth controllers | 📋 Planned |
+
+## Phase 3 — iOS
+
+| Task | Goal | State |
+|---|---|---|
+| TASK‑023 | ARMSX2 Metal GS backend | 📋 Planned |
+| TASK‑024 | iOS app: ARM64 build, signing, touch and controller input | 📋 Planned |
 
 ## Done
 
@@ -73,158 +99,122 @@ Flat 16.7 ms frametime (99.6% of intervals in 16-17 ms). Commit `fe51478`.
 ### TASK-007 — VU1 flag elision (slice 154)
 Showroom 44.8 → 59.1 FPS; 5-AI race at 60.0. Commit `26e211d`, merged in PR #1.
 
-## In progress
+## Phase 1 details
 
 ### TASK-008 — Full static VU1 entry coverage
-Branch: `feat/vu1-entry-coverage`. **Status: candidate ready, waiting for the owner
-in-game test** (`--mode vu1-full`, slice 155, executable `3cf5f998`): 426 entries
-from the decrypted image (targeted policy; all-2,048 table measured at 51.5 MB /
-400 s compile and kept as an option), CTest 18/18, Python 231 OK, headless frames
-identical to slice 154, interpreted calls 0 and verify 0 mismatches headless.
-- Decrypt the VU1 image from the pinned ELF; compile every plausible entry
-  (all 2,046 addresses if size allows, otherwise program starts, branch/jump
-  targets, block starts and the recorded entries).
-- Acceptance: headless frames identical to TASK-007; verify mode 0 mismatches;
-  owner night race, rally and showroom show `interpreted_calls` 0 in F8.
-
-## In progress (cleanup)
-
-### TASK-030 — Repository cleanup (pre-donor material)
-Branch: `task/030-legacy-cleanup`. Full history and all branches mirrored to the
-private repository `moesuito/gt4-staticrecomp-legacy` (2026-10-15, including the
-local m22-m29 branches as `local/*`). Owner choice: clean files and branches only,
-no public history rewrite. Done in the branch: `docs/LEGACY.md` removed; README,
-CLAUDE.md, BUILD, ARCHITECTURE, requirements, THIRD_PARTY, STATUS, handoff and
-workflow docs no longer point to the archived engine (old AGENTS.md references
-now point to CLAUDE.md). Historical reports, journals, decisions and pins are
-left unchanged as evidence. After the owner's approval and merge: delete the
-legacy branches on GitHub (archive branch, slice95-109 branches) and the merged
-donor-era `codex/*` branches; all are in the backup.
-
-## Planned
+Branch `feat/vu1-entry-coverage`. Slice 155 (426 targeted entries) owner test:
+night race 0 interpreted calls, rally still 354,837. Owner chose all 2,048
+entries of the decrypted image (about 40 MB larger executable is fine); flag
+elision applies per program automatically. Acceptance: interpreted calls 0 in
+night race, rally and showroom.
+**Status: all-entries candidate ready for owner retest** (slice 157, `--mode
+vu1-all`, executable `40388a41`, 95 MB): 2,048 entries (the 426 targeted ones
+identical inside it), table split into 128 parts for parallel compilation,
+CTest 18/18, Python 236 OK, registry 2,048/2,048, headless frames identical to
+slice 154, interpreted calls 0 headless.
 
 ### TASK-009 — Quick fixes
-- Window title becomes just "GT4Recomp".
-- Fixed 16:9: remove F6 and the 4:3 framing option (launcher `--aspect`).
-- Fullscreen toggle: Alt+Enter (Windows convention) and F11, borderless
-  fullscreen on the current monitor.
-- Per-interval perf counters (`late_frames`, `audio_underruns`; was TASK-021).
-- 480p everywhere (experimental switch, default on only after the owner check).
-  Study (corrected): race display options are `normal` (default 480i, mode
-  table id 1 = interlace 1 / mode 0x2), `480p` (id 6 = 0 / 0x50) and `1080i`
-  (id 7 = 1 / 0x51); menus and boot always use the default id, and `MOption`
-  resets the index to `normal`. Spec II does not force 480p (it adds a
-  `480i_frame` mode). Plan: rewrite `SetGsCrt` (1, 0x2) → (0, 0x50) on the host
-  (donor `kernel.cpp:474` / `hw.cpp:165`), equivalent to the guest default id 6;
-  frame size stays 640x448, 1080i untouched. Risk: menu field rendering; owner
-  checks menus, boot and races. Fallback: guest write of the default id at
-  0x10764C (TASK-020).
-Owner check: title, fullscreen in menus/race, 16:9 image, F8 counters.
+Branch `task/009-quick-fixes`, slice 156 `--mode quickfix`. Owner accepted:
+title "GT4Recomp", fixed 16:9 (F6/4:3 removed), Alt+Enter/F11 borderless
+fullscreen, interval and session counters. Rework:
+- 480p everywhere: the `SetGsCrt` rewrite alone does not work, because the game
+  programs SMODE2/DISPLAY from its internal mode (default row id 1 of table
+  `D_00618648`) and resets the option to `normal` at boot. New approach: patch
+  the default row in guest RAM at load (id 1 → interlace 0 / mode 0x50), with
+  original-byte verification, so boot, menus and races run progressive.
+- Fix the `late_frames` definition (it counts almost every paced frame).
 
-### TASK-010 — MTVU
+### TASK-010 — Build pipeline: speed and tuning
+Faster builds: parallel jobs inside one build (split large generated units),
+compiler cache, lld-link; measure before/after. Build tuning (formerly a separate task), one
+variable per candidate: `-ffp-contract=off` control, x86-64-v3 runtime variant
+chosen by the launcher, dispatch divide removal, ThinLTO, PGO.
+
+### TASK-011 — MTVU
 Run VU1 programs on a worker thread (donor `start_vu_thread` exists), on by
 default with an env switch to disable; exact sync points wherever the EE observes
 VU1 results. Acceptance: identical headless frames, verify 0 mismatches, owner
 showroom/night/race frametime equal or better.
 
-### TASK-011 — Upscaling on the Vulkan (GS) renderer
-Internal scale selected by environment variable until the launcher exists, from
-1x up to 6x (the donor supports 1-3x; 4-6x needs checking shader assumptions and
-memory: GS memory buffers grow with scale², 36x at 6x). Use the donor resolve
-pass before CPU readbacks. Acceptance: 1x identical to TASK-010; owner visual
-check and frame rate at 2x/3x/4x/6x.
+### TASK-012 — paraLLEl-GS as the PC renderer
+One large task, delivered in verified steps on its own branch:
+1. Import paraLLEl-GS (github.com/Arntzen-Software/parallel-gs, LGPL-3.0+, with
+   Granite MIT) pinned by commit; build it in our CMake; bridge its Vulkan device
+   to ours (Granite device shim or port).
+2. Adapter from our GS front end (`write`, `write_packed`, `write_image`,
+   `read_image`, privileged registers, signals, vsync) to its interface
+   (`gif_transfer`, `write_register`, `map_vram_*`, `read_transfer_fifo`,
+   `vsync` → scanout). Renderer selected by env (later the launcher); the donor
+   renderer stays as experimental fallback.
+3. GT4 validation: boot, menus, races, night, rally, showroom; image comparison
+   against the donor renderer at 1x; channel-shuffle brightness effects, lens
+   flares, half-pixel issues.
+4. Options: super-sampling upscaling 2x-16x, deinterlacing/field options for the
+   interlaced menus, page-tracked readbacks against the night-race wait.
+5. Extras where paraLLEl-GS allows: post-processing (sharpening, FXAA, filters),
+   dithering/texture options, texture dump/replacement feasibility.
+Replaces the former donor-renderer upscaling, readback-wait and renderer-feature tasks.
 
-### TASK-029 — Vulkan (GS) renderer features (runs after TASK-011)
-Bring PCSX2 renderer features that fit our accurate compute renderer, before the
-Custom renderer. With every feature off, output stays pixel-identical. Each step
-gets an env switch until the launcher exists; shader changes need a fresh SPIR-V
-pin. Study findings: the renderer has **no dithering** (DTHE/DIMX stored, never
-applied), **no mipmapping** (MIPTBP/MXL unused), presentation duplicates field
-lines with a nearest blit and no field selection, and the donor's temporal field
-blend (`blit.wgsl`) is unused.
-- T0 census (`GT4_GS_CENSUS=1`): per-frame use of mipmaps, dithering, field and
-  interlace registers, 16-bit targets. Decides T2/T4.
-- T1 presentation chain: output filter nearest/sharp bilinear, integer scaling,
-  CAS sharpening, FXAA, ShadeBoost (PCSX2 shaders, GPL-3.0 accepted).
-- T2 dithering: off / scaled / unscaled / force 32-bit (if GT4 uses DTHE).
-- T3 field-correct deinterlacing: weave, bob, blend, adaptive, automatic, with
-  correct field order (CSR field bit); for interlaced menus.
-- T4 texture filtering override and mipmapping (only if the census shows mips).
-- T5 texture dump and replacement packs (after TASK-011 upscaling).
-
-### TASK-012 — Night race GS readback wait
-Count GS→host readbacks per frame by scene (lens flare suspected), then copy only
-requested regions and batch consecutive reads without draws between them; keep
-results exact. Acceptance: owner night race GS wait near zero.
-
-### TASK-013 — License-test crash
-Env-gated logging at `RaceSolitaire::loadDemoInputs` (0x3EAD18),
-`AutomobileControlRecord::Manager::load` (0x346BB8) and the PS2ZIP loader for
-`replay/license/` files, plus a CDVD read trace; one owner reproduction; fix the
-cause. Acceptance: owner completes the first license tests.
-
-### TASK-014 — VU0 microcode AOT
+### TASK-013 — VU0 microcode AOT
 All 14 `VCALLMS` entries are known statically (docs/VU0-MICROCODE-MAP.md).
 Extend `tools/vu_recomp` to unit 0. Acceptance: VU0 interpreted calls 0.
 
-### TASK-015 — EE entry coverage
+### TASK-014 — EE entry coverage
 Add translator entries for decomp functions without one, starting with the 15
-referenced ones (docs/DECOMP-INTEGRATION.md). Acceptance: new library pins,
-headless frames identical, owner smoke over several modes.
+referenced ones (docs/DECOMP-INTEGRATION.md).
 
-### TASK-016 — LWR fidelity
+### TASK-015 — LWR fidelity
 Lone LWR with offset != 0 must sign-extend to 64 bits; fix via overlay and scan
 generated units for lone LWR uses.
 
-### TASK-017 — IOP per-module counters
+### TASK-016 — IOP per-module counters
 Per-module instruction counters and per-library HLE call counts in F8; decide
 whether the sound modules need native HLE (docs/IOP-MAP.md).
 
-### TASK-018 — Faster builds (runs right after TASK-009)
-Parallel jobs inside one build, a compiler cache, lld-link. Measure before/after;
-speeds up every later task.
-
-### TASK-019 — Build tuning (runs after TASK-010)
-`-ffp-contract=off` control, x86-64-v3 runtime variant chosen by the launcher,
-dispatch divide removal, ThinLTO, PGO; one variable per candidate.
-
-### TASK-020 — In-game 16:9 option by default
-The wide flag is set through `MOption get_wide_mode` (0x180108) →
-`func_00437110` (flag at object +0x14); forcing it needs a guest-side hook after
-the save loads (MOption instance address still to confirm). Also the fallback
-for 480p if the TASK-009 `SetGsCrt` switch is not acceptable.
-
-### TASK-021 — Merged into TASK-009
-
-### TASK-022 — Decomp names in generated code
+### TASK-017 — Decomp names in generated code
 Label comments in generated units with identical object code.
 
-### TASK-023 — Launcher
-Rust + egui or GPUI: game image, renderer (Vulkan GS / Vulkan Custom), internal
-scale, video mode, controls; CPU feature detection for build variants.
+### TASK-018 — License-test crash
+Pre-existing; traced to `RaceSolitaire::loadDemoInputs` (0x3EAD18) →
+`AutomobileControlRecord::Manager::load` (0x346BB8) reading a bad record count.
+Env-gated logging there and in the PS2ZIP loader for `replay/license/` files,
+plus a CDVD read trace; one owner reproduction; fix the cause.
 
-### TASK-024 / TASK-025 — Vulkan (Custom) renderer
-PCSX2-based hardware renderer specialized for GT4: census and replay harness
-first, then import, adapter, 1x pixel diff against Vulkan (GS), then upscaling,
-dithering control, deinterlacing, mipmapping and texture packs
-(docs/HW-RENDERER-PLAN.md).
-
-### TASK-026 — Racing wheels
+### TASK-019 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md).
 
-### TASK-027 / TASK-028 — Android and iOS
-ARM64 builds, host layers, on-screen controls with Bluetooth controller
-switching; iOS via MoltenVK first, Metal later (ARMSX2 as case study).
+### TASK-020 — Launcher
+Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
+upscaling, video mode, controls; CPU feature detection for build variants.
+
+## Phase 2 — Android details
+
+### TASK-021 — Mobile GS (ARMSX2 pipeline, Vulkan)
+Bring the ARMSX2 GS pipeline (PCSX2 hardware renderer with ARMSX2's Android
+changes: GPU driver profiles, tile-friendly pass scheduler, framebuffer-fetch
+policy) behind our GS front end. ARMSX2's ARM64 JIT is not used (no JIT rule).
+Owner's ARMSX2 checkout: `C:/Antigravity/armsx2` (upstream `ARMSX2/ARMSX2`).
+
+### TASK-022 — Android app
+ARM64 build of the AOT EE/VU code and runtime (fp-contract off), Android host
+layers (window, audio, input, storage, lifecycle), on-screen controls that hide
+when a Bluetooth controller connects; target Galaxy S23 Ultra.
+
+## Phase 3 — iOS details
+
+### TASK-023 — Metal GS (ARMSX2)
+ARMSX2's Metal backend for the same GS pipeline.
+
+### TASK-024 — iOS app
+ARM64 build, iOS host layers, signing/installation on iPhone 15 Pro Max and
+17 Pro Max (built on a Mac with Xcode).
 
 ## Ideas (not scheduled)
 
-Phase 2 (decompilation-based source port, native renderer, physics decoupled
-from frame rate, ultrawide, remaster) is out of scope for this repository and
-will be a separate project, possibly a fork. This repository focuses on running
-the original game natively, optimized and as faithfully as possible.
-
-
 LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
-settings menus, Spec II as a second target or data source (docs/SPEC2-STUDY.md),
-DLSS/FSR 2+ after the native renderer.
+settings menus, Spec II as a second target or data source (docs/SPEC2-STUDY.md).
+
+A decompilation-based source port (native renderer, physics decoupled from frame
+rate, ultrawide, remaster) is out of scope for this repository and would be a
+separate project, possibly a fork.
