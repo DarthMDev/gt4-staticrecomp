@@ -52,8 +52,9 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
 - One variable per candidate build; keep A/B switches (`GT4_PACING=audio`,
   `GT4_GS_SYNC=1`, `--vu1-interpret-only`, `--vu1-verify N`). Attack whatever the
   F8 report shows as the largest cost.
-- Commits, branches and pushes are authorized; never rewrite history. Active
-  branch `codex/optimization-plan-151`; fast-forward `main` when green.
+- Commits, branches and pushes are authorized; never rewrite history. `main` is
+  the integration branch: do work on a short-lived branch per task and merge it
+  into `main` through a GitHub PR once tests are green.
 - Ask the owner only for decisions and gameplay tests, not code review.
 
 ## Testing the game
