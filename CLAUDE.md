@@ -30,8 +30,8 @@ claim zero emulation or full PS2 fidelity.
   will be a separate project, possibly a fork. This repository's goal is the
   original game running natively, optimized and as faithful as possible.
   Presenting more than 60 FPS while the game's fixed 1/60 s physics stays
-  untouched is in scope (TASK-031: GS primitive interpolation or a native
-  render rate; owner, 2026-10-15).
+  untouched is in scope (TASK-045 on the PCSX2 GS, after 1.0.0; TASK-031 study;
+  owner, 2026-10-15).
 - **Renderer focus now:** TASK-032..044 (PCSX2 GS in a separate process, decision
   0070; CoreGS 1.1 built in as the fallback).
 - **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
