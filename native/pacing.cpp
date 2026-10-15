@@ -71,7 +71,8 @@ std::int64_t FramePacer::remaining(std::int64_t now) const {
 bool FramePacer::release(std::int64_t now) {
   if (!anchored_)
     anchor(now);
-  const bool late = now > deadline();
+  // A release within one millisecond of its deadline is scheduling jitter, not a late frame.
+  const bool late = now > deadline() + static_cast<std::int64_t>(frequency_ / late_tolerance_divisor);
   if (late)
     ++late_frames_;
   // One period in scaled units is exactly frequency_ (period = frequency / rate).
@@ -253,8 +254,14 @@ void Diagnostics::record_queue_frames(std::uint64_t frames) {
 
 void Diagnostics::record_ratio(double ratio) { ratios_.add(ratio); }
 
-void Diagnostics::format(std::FILE *output, Mode mode,
-                         const Counters &counters) const {
+Counters Counters::since(const Counters &earlier) const {
+  return {late_frames - earlier.late_frames,
+          audio_underruns - earlier.audio_underruns,
+          ring_overflow_frames - earlier.ring_overflow_frames};
+}
+
+void Diagnostics::format(std::FILE *output, Mode mode, const Counters &interval,
+                         const Counters &session) const {
   std::fprintf(output, "[pacing] mode=%s vblank_intervals=%llu mean=%.3f ms buckets(ms):",
                mode_name(mode), static_cast<unsigned long long>(intervals_.total()),
                intervals_.mean_ms());
@@ -272,10 +279,14 @@ void Diagnostics::format(std::FILE *output, Mode mode,
   if (ratios_.size())
     std::fprintf(output, "[pacing] resample ratio min=%.6f median=%.6f max=%.6f\n",
                  ratios_.minimum(), ratios_.median(), ratios_.maximum());
-  std::fprintf(output, "[pacing] late_frames=%llu audio_underruns=%llu ring_overflow_frames=%llu\n",
-               static_cast<unsigned long long>(counters.late_frames),
-               static_cast<unsigned long long>(counters.audio_underruns),
-               static_cast<unsigned long long>(counters.ring_overflow_frames));
+  std::fprintf(output, "[pacing] interval late_frames=%llu audio_underruns=%llu ring_overflow_frames=%llu\n",
+               static_cast<unsigned long long>(interval.late_frames),
+               static_cast<unsigned long long>(interval.audio_underruns),
+               static_cast<unsigned long long>(interval.ring_overflow_frames));
+  std::fprintf(output, "[pacing] session late_frames=%llu audio_underruns=%llu ring_overflow_frames=%llu\n",
+               static_cast<unsigned long long>(session.late_frames),
+               static_cast<unsigned long long>(session.audio_underruns),
+               static_cast<unsigned long long>(session.ring_overflow_frames));
   std::fflush(output);
 }
 

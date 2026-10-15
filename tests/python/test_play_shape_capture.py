@@ -26,13 +26,22 @@ class ManualCaptureLauncherTests(unittest.TestCase):
         card.write_bytes(b'c' * 8650752)
         return manifest, directory, card
 
-    def test_cli_selects_only_pinned_manual_capture_manifest(self):
+    def test_cli_refuses_aspect_and_selects_only_pinned_manual_capture_manifest(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             with patch.object(capture, 'ROOT', root), patch.object(capture, 'play') as play, \
                     patch.object(sys, 'argv', ['capture', '--assets-root', str(root), '--aspect', '4:3']):
+                with self.assertRaises(SystemExit):
+                    capture.main()
+            play.assert_not_called()
+
+    def test_cli_selects_only_pinned_manual_capture_manifest(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with patch.object(capture, 'ROOT', root), patch.object(capture, 'play') as play, \
+                    patch.object(sys, 'argv', ['capture', '--assets-root', str(root)]):
                 self.assertEqual(capture.main(), 0)
-            play.assert_called_once_with('4:3', root, root / 'docs/inputs/slice136-keyboard-input.json', capture_shapes=True)
+            play.assert_called_once_with(root, root / 'docs/inputs/slice136-keyboard-input.json', capture_shapes=True)
 
     def test_capture_holds_save_lock_and_releases_after_probe_failure(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -49,7 +58,7 @@ class ManualCaptureLauncherTests(unittest.TestCase):
                 raise ValueError('synthetic runtime preflight failure')
             with patch.object(launcher, 'ROOT', root), patch.object(launcher, 'run_probe', side_effect=reject):
                 with self.assertRaisesRegex(ValueError, 'preflight'):
-                    launcher.play('16:9', root, manifest, capture_shapes=True)
+                    launcher.play(root, manifest, capture_shapes=True)
             self.assertEqual(card.read_bytes(), original)
             self.assertFalse(any(directory.glob('session-*')))
             with (directory / 'session.lock').open('r+b') as released:
@@ -63,13 +72,13 @@ class ManualCaptureLauncherTests(unittest.TestCase):
             original = card.read_bytes()
             with patch.object(launcher, 'ROOT', root), patch.object(launcher, 'run_probe') as execute:
                 with self.assertRaisesRegex(ValueError, 'qualified manual observation'):
-                    launcher.play('16:9', root, manifest, capture_shapes=True)
+                    launcher.play(root, manifest, capture_shapes=True)
                 lock_path = directory / 'session.lock'
                 with lock_path.open('r+b') as active:
                     msvcrt.locking(active.fileno(), msvcrt.LK_NBLCK, 1)
                     try:
                         with self.assertRaisesRegex(ValueError, 'already running'):
-                            launcher.play('16:9', root, manifest, capture_shapes=True)
+                            launcher.play(root, manifest, capture_shapes=True)
                     finally:
                         msvcrt.locking(active.fileno(), msvcrt.LK_UNLCK, 1)
                 execute.assert_not_called()

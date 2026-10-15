@@ -22,7 +22,7 @@ def native_executable(name):
 
 
 class NativeVulkanTests(unittest.TestCase):
-    def test_first_manual_card_uses_matching_aspect_seed_and_preserves_existing_card(self):
+    def test_first_manual_card_uses_default_seed_and_preserves_existing_card(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             inputs = root / 'docs/inputs'
@@ -30,18 +30,16 @@ class NativeVulkanTests(unittest.TestCase):
             (inputs / 'slice114-native-base.json').write_text(json.dumps({
                 'default_card_seed': {'path': 'private/wide.ps2'},
                 'standard_card_seed': {'path': 'private/standard.ps2'}}))
-            for aspect, seed in (('16:9', root / 'private/wide.ps2'),
-                                 ('4:3', root / 'private/standard.ps2')):
-                with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
-                     return_value={'manual_session_closed': True}) as launch:
-                    play.play(aspect)
-                self.assertEqual(launch.call_args.args[5], seed)
-                self.assertEqual(launch.call_args.kwargs['aspect'], aspect)
+            with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
+                 return_value={'manual_session_closed': True}) as launch:
+                play.play()
+            self.assertEqual(launch.call_args.args[5], root / 'private/wide.ps2')
+            self.assertNotIn('aspect', launch.call_args.kwargs)
             card = root / 'private/manual-play/card.ps2'
             card.write_bytes(b'existing owner card')
             with patch.object(play, 'ROOT', root), patch.object(play, 'run_probe',
                  return_value={'manual_session_closed': True}) as launch:
-                play.play('16:9')
+                play.play()
             self.assertIsNone(launch.call_args.args[5])
             self.assertEqual(card.read_bytes(), b'existing owner card')
 
@@ -74,25 +72,48 @@ class NativeVulkanTests(unittest.TestCase):
                 execute.assert_not_called()
             self.assertFalse((root / 'private/corrupt').exists())
 
-    def test_aspect_is_explicit_and_invalid_values_stop_before_launch(self):
+    def test_presentation_is_fixed_16_9_and_aspect_selection_is_removed(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             probe_tests.ProbeTests().make_workspace(root)
-            for aspect in ('16:9', '4:3'):
-                def execute(arguments, **options):
-                    self.assertEqual(options['env']['GT4_ASPECT'], aspect)
-                    options['stdout'].write(b'[ee] stopped after 100 frames, 1 cycles: frame limit reached\n')
-                    return subprocess.CompletedProcess(arguments, 0)
-                with patch.dict(probe.os.environ, {'GT4_ASPECT': 'inherited invalid value'}), \
-                     patch.object(probe.subprocess, 'run', side_effect=execute):
-                    result = probe.run_probe(root, root / f'private/{aspect.replace(":", "-")}',
-                                             100, 1, [], aspect=aspect)
-                self.assertEqual(result['presentation_aspect'], aspect)
+            def execute(arguments, **options):
+                self.assertNotIn('GT4_ASPECT', options['env'])
+                options['stdout'].write(b'[ee] stopped after 100 frames, 1 cycles: frame limit reached\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.dict(probe.os.environ, {'GT4_ASPECT': 'inherited value is ignored'}), \
+                 patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/wide', 100, 1, [])
+            self.assertEqual(result['presentation_aspect'], '16:9')
             with patch.object(probe.subprocess, 'run') as execute:
-                with self.assertRaisesRegex(ValueError, 'aspect'):
-                    probe.run_probe(root, root / 'private/rejected', 100, 1, [], aspect='21:9')
+                with self.assertRaises(TypeError):
+                    probe.run_probe(root, root / 'private/rejected', 100, 1, [], aspect='4:3')
                 execute.assert_not_called()
             self.assertFalse((root / 'private/rejected').exists())
+            with patch.object(sys, 'argv', ['probe', str(root / 'private/cli'), '--aspect', '4:3']):
+                with self.assertRaises(SystemExit) as refused:
+                    probe.main()
+            self.assertEqual(refused.exception.code, 2)
+            self.assertFalse((root / 'private/cli').exists())
+
+    def test_force_480p_is_off_by_default_and_refuses_unknown_values(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            probe_tests.ProbeTests().make_workspace(root)
+            def execute(arguments, **options):
+                options['stdout'].write(b'[ee] stopped after 100 frames, 1 cycles: frame limit reached\n')
+                return subprocess.CompletedProcess(arguments, 0)
+            with patch.dict(probe.os.environ, {}, clear=True), patch.object(probe.subprocess, 'run', side_effect=execute):
+                result = probe.run_probe(root, root / 'private/off', 100, 1, [])
+            self.assertNotIn('force_480p_environment', result)
+            with patch.dict(probe.os.environ, {}, clear=True), patch.object(probe.subprocess, 'run', side_effect=execute) as run:
+                result = probe.run_probe(root, root / 'private/forced', 100, 1, [], force_480p=True)
+            self.assertEqual(result['force_480p_environment'], {'GT4_FORCE_480P': '1'})
+            self.assertEqual(run.call_args.kwargs['env']['GT4_FORCE_480P'], '1')
+            with patch.dict(probe.os.environ, {'GT4_FORCE_480P': '480p'}), patch.object(probe.subprocess, 'run') as run:
+                with self.assertRaisesRegex(ValueError, 'GT4_FORCE_480P must be 0 or 1'):
+                    probe.run_probe(root, root / 'private/unknown', 100, 1, [])
+                run.assert_not_called()
+            self.assertFalse((root / 'private/unknown').exists())
 
     def test_changed_donor_is_rejected_without_output(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -161,7 +182,7 @@ class NativeVulkanTests(unittest.TestCase):
         self.assertIn('fragmented upload PSM 44', result.stderr)
         self.assertIn('PASS: real Vulkan', result.stderr)
         self.assertIn('zero-work dispatch preserves VRAM', result.stderr)
-        self.assertIn('default16:9/optional4:3', result.stderr)
+        self.assertIn('fixed 16:9 centered', result.stderr)
         self.assertIn('display 1920x1080 halved=0: all pixels match CPU', result.stderr)
         self.assertIn('display 2048x2048 halved=0: all pixels match CPU', result.stderr)
 

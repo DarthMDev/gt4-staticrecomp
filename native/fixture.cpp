@@ -73,7 +73,6 @@ int main() {
     using gt4::vulkan::Aspect;
     using gt4::vulkan::presentation_rect;
     const auto wide = presentation_rect(1920, 1080, Aspect::widescreen);
-    const auto standard = presentation_rect(1920, 1080, Aspect::standard);
     const auto wide_in_standard =
         presentation_rect(960, 720, Aspect::widescreen);
     const auto wide_in_ultrawide =
@@ -83,26 +82,15 @@ int main() {
     const auto huge =
         presentation_rect(UINT32_MAX, UINT32_MAX, Aspect::widescreen);
     if (wide.left != 0 || wide.top != 0 || wide.width != 1920 ||
-        wide.height != 1080 || standard.left != 240 || standard.top != 0 ||
-        standard.width != 1440 || standard.height != 1080 ||
-        wide_in_standard.top != 90 || wide_in_standard.width != 960 ||
-        wide_in_standard.height != 540 || wide_in_ultrawide.left != 320 ||
-        wide_in_ultrawide.width != 1920 || empty.width != 0 ||
-        empty.height != 0 || tiny.width != 1 || tiny.height != 1 ||
-        huge.width != UINT32_MAX || huge.height != 2415919103u ||
-        gt4::vulkan::parse_aspect(nullptr) != Aspect::widescreen ||
-        gt4::vulkan::parse_aspect("4:3") != Aspect::standard)
+        wide.height != 1080 || wide_in_standard.top != 90 ||
+        wide_in_standard.width != 960 || wide_in_standard.height != 540 ||
+        wide_in_ultrawide.left != 320 || wide_in_ultrawide.width != 1920 ||
+        empty.width != 0 || empty.height != 0 || tiny.width != 1 ||
+        tiny.height != 1 || huge.width != UINT32_MAX ||
+        huge.height != 2415919103u)
       throw std::runtime_error(
-          "Aspect rectangle or default differs from expected values");
-    bool invalid_aspect_refused = false;
-    try {
-      gt4::vulkan::parse_aspect("21:9");
-    } catch (const std::runtime_error &) {
-      invalid_aspect_refused = true;
-    }
-    if (!invalid_aspect_refused)
-      throw std::runtime_error("Unsupported aspect was accepted");
-    std::fprintf(stderr, "[fixture] default16:9/optional4:3 centered "
+          "16:9 presentation rectangle differs from expected values");
+    std::fprintf(stderr, "[fixture] fixed 16:9 centered "
                          "rectangles and overflow controls passed\n");
     {
       gt4::vulkan::Context context;
@@ -258,9 +246,6 @@ int main() {
       gpu::set_widescreen(true);
       if (!gpu::present(source))
         throw std::runtime_error("Widescreen resolution presentation refused");
-      gpu::set_widescreen(false);
-      if (!gpu::present(source))
-        throw std::runtime_error("Standard resolution presentation refused");
     }
     DestroyWindow(window);
     std::fprintf(stderr,

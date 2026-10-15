@@ -9,8 +9,8 @@ import sys
 from external_runtime_probe import ROOT, VU1_CORPUS_NAME, run_probe, verify_manual_capture_profile, verify_performance_profile
 
 
-def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, vu0_verify=0):
+def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -38,11 +38,12 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=
             video = json.loads(manifest.read_text(encoding='utf-8'))
             if capture_shapes:
                 verify_manual_capture_profile(manifest, video, ROOT)
-            seed_key = 'default_card_seed' if aspect == '16:9' else 'standard_card_seed'
-            seed = None if card.exists() else workspace / video[seed_key]['path']
+            seed = None if card.exists() else workspace / video['default_card_seed']['path']
             print('GT4 experimental: audio + XInput. Close window to exit.', flush=True)
             print('Keyboard: Enter starts, arrow keys steer, Z accelerates, A brakes; S returns in options.', flush=True)
-            print(f'Display: {aspect}. F6 toggles 16:9/4:3; match aspect ratio in GT4 options.', flush=True)
+            print('Display: 16:9 fixed. Alt+Enter or F11 toggles borderless fullscreen.', flush=True)
+            if force_480p:
+                print('GT4_FORCE_480P=1: experimental 480p request rewrite; the owner checks menus and races.', flush=True)
             print(f'Local save: {card}\nSession log: {run_directory}', flush=True)
             if capture_shapes:
                 print('Capture starts OFF. Select the scene yourself, then press F8 to start/stop.', flush=True)
@@ -63,9 +64,10 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=
                       'mismatches go to the session log.', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
-                               window=True, interactive=True, play_card=card, aspect=aspect,
+                               window=True, interactive=True, play_card=card,
                                runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
-                               vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only, vu0_verify=vu0_verify)
+                               vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
+                               force_480p=force_480p, vu0_verify=vu0_verify)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:
@@ -75,10 +77,11 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9')
+    parser.add_argument('--force-480p', action='store_true',
+                        help='Experimental: rewrite the default 480i request to 480p progressive (GT4_FORCE_480P=1)')
     options = parser.parse_args()
     try:
-        play(options.aspect)
+        play(force_480p=options.force_480p)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         print(f'FAIL: {error}', file=sys.stderr)
         raise SystemExit(1)

@@ -1,6 +1,6 @@
 # Active Requirements
 
-2026-10-13; supersedes the original engine summary, which is preserved on the archive branch.
+2026-10-13.
 
 1. Hash-pinned GT4 USA v2.00, Windows x86-64 / C++20 / Clang, ahead-of-time (AOT) main game code,
    and required PS2 runtime. First make the game functional and stable; subsequently decompile
@@ -18,5 +18,4 @@
    repeating frames or raising the guest clock does not demonstrate true high-refresh support.
 7. Explicit guest state, human-readable code, and no silent fallbacks.
    New changes require automated controls; evidence and documentation are mandatory parts of delivery.
-8. The original engine is not a second active product; restoring code from the
-   preserved archive branch requires a documented technical decision.
+8. Only the ps2-web-recomp-based native base is developed in this repository.

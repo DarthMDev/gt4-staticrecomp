@@ -6,6 +6,10 @@ Options:
               --split-vu. Default and --split-vu derivations are unchanged by this option.
   --vu0-aot   also overlay the VU0 AOT registry (scripts/vu0_aot_overlay.inc, slice 160). Implies
               --vu1-aot (the VU0 capsule keeps the VU1 table) and --split-vu.
+
+Slices 156 and 158 used --gs-crt-override and --display-table-override. Both hooks were removed in slice164
+(the 480p switch is a host-side guest RAM write, native/race_display.*). Their capsules stay pinned in
+docs/inputs and are not re-derivable from this script.
 """
 import argparse
 import hashlib

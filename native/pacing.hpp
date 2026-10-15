@@ -40,6 +40,9 @@ const char *present_mode_name(PresentMode mode);
 // so 10,000 frames accumulate no drift.
 class FramePacer {
 public:
+  // Lateness tolerance: frequency / late_tolerance_divisor ticks (1 ms).
+  static constexpr std::uint64_t late_tolerance_divisor = 1000;
+
   FramePacer(std::uint64_t frequency, std::uint64_t rate);
 
   // Starts the grid: the first frame is due at `now`.
@@ -50,10 +53,11 @@ public:
   // Ticks until the deadline, zero when the frame is due.
   std::int64_t remaining(std::int64_t now) const;
   // Records a release at `now` and advances to the next grid point. A frame
-  // released after its deadline counts as late. If the host is behind by a
-  // full period or more, the grid restarts one period after `now`: missed
-  // frames are not replayed, so the guest never runs faster than the clock.
-  // Returns true when the release was late.
+  // released more than one millisecond after its deadline counts as late
+  // (late_frames); smaller lateness is jitter and is not counted. If the host
+  // is behind by a full period or more, the grid restarts one period after
+  // `now`: missed frames are not replayed, so the guest never runs faster than
+  // the clock. Returns true when the release was late.
   bool release(std::int64_t now);
   std::uint64_t late_frames() const { return late_frames_; }
   std::uint64_t resyncs() const { return resyncs_; }
@@ -172,11 +176,14 @@ private:
   std::size_t next_ = 0;
 };
 
-// Counters owned by the host and printed with the histogram.
+// Session-cumulative counters owned by the host. The F8 report prints the
+// difference since the previous F7 (or report) next to the session totals.
 struct Counters {
   std::uint64_t late_frames = 0;
   std::uint64_t audio_underruns = 0;
   std::uint64_t ring_overflow_frames = 0;
+  // Counts accrued after `earlier`; each field of `earlier` must not exceed this one.
+  Counters since(const Counters &earlier) const;
 };
 
 // Diagnostics for the F8 and periodic report. Print with format(), then reset().
@@ -186,7 +193,9 @@ public:
   void record_release(std::int64_t ticks, std::uint64_t frequency);
   void record_queue_frames(std::uint64_t frames);
   void record_ratio(double ratio);
-  void format(std::FILE *output, Mode mode, const Counters &counters) const;
+  // `interval` is the counter difference for this report; `session` the totals.
+  void format(std::FILE *output, Mode mode, const Counters &interval,
+              const Counters &session) const;
   void reset();
 
 private:
