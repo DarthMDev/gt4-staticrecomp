@@ -165,7 +165,12 @@ tool versions, addresses/offsets, method and limits.
 
 - ISO/BIOS/CORE/ELF, translated code, cards, captures, outputs and binaries stay
   ignored under `private/`, `generated/`, `build/` or ignored ISO paths. Never stage.
-- Verify inputs against `docs/inputs/`; verification never updates pins. Never
+- Verify inputs against `docs/inputs/`; verification never updates pins.
+- Git worktrees for parallel tasks must not link `private/` (no junctions or
+  symlinks to the main checkout's `private/`, which holds the owner's cards and
+  saves): pass `-DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp` or copy the
+  few files CMake needs. Before removing a worktree, check `dir /AL` and remove
+  any junction with plain `rmdir <link>` first; never delete recursively through it. Never
   overwrite an existing `private/slice*` directory or edit an existing manifest
   to make a hash match; create a new slice.
 - After a rebuild the executable hash changes; the launcher manifest pin must be
