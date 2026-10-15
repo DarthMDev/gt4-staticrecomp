@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,15 +86,46 @@ def replace_section(source, start, end, replacement):
     return source[:first] + replacement + '\n\n' + source[last:]
 
 
-def apply_hooks(name, source, frontend=''):
-    for anchor, replacement in PARALLEL_HOOKS[name]:
+# TASK-027 M0b (chapter 12.2): one dispatch front end for donor, parallel and hw. The anchors are the
+# slice 163 anchors; the replacements call the neutral alt_* entry points (native/renderer_routers.inc),
+# which route to paraLLEl-GS or HWR. Identifiers are renamed from PARALLEL_HOOKS by a whole-word rule.
+ALT_RENAME_PATTERN = r'\bparallel_(active|reset_gif|reset|gif_transfer|gif_busy|read_image|wait|vblank|present|attach_window|resize_window|mirror_privileged|sync_memory|dump_scanout|scanout_frame)\b'
+# alt_attach_window also takes the window kind (the donor presenter's kind), unlike the paraLLEl-GS helper.
+ALT_SIGNATURE_FIXES = [
+    ('alt_attach_window(window, width, height)', 'alt_attach_window(kind, window, width, height)'),
+    ('GT4_RENDERER=parallel")', 'GT4_RENDERER=parallel or hw")'),
+]
+HW_INCLUDES = '#include "hw_gs/hw_gs_backend.hpp"\n#include "hw_gs/hw_gs_options.hpp"\n'
+
+
+def renderer_hooks():
+    renamed_hooks = {}
+    for name, pairs in PARALLEL_HOOKS.items():
+        renamed = []
+        for anchor, replacement in pairs:
+            text = re.sub(ALT_RENAME_PATTERN, r'alt_\1', replacement)
+            for old, new in ALT_SIGNATURE_FIXES:
+                text = text.replace(old, new)
+            if name == 'gs.cpp' and anchor == '#include "gif.hpp"\n':
+                text = text.replace('#include "parallel_gs_backend.hpp"\n',
+                                    '#include "parallel_gs_backend.hpp"\n' + HW_INCLUDES, 1)
+            renamed.append((anchor, text))
+        renamed_hooks[name] = renamed
+    return renamed_hooks
+
+
+RENDERER_HOOKS = renderer_hooks()
+
+
+def apply_hooks(name, source, frontend='', hooks=None):
+    for anchor, replacement in (hooks or PARALLEL_HOOKS)[name]:
         if source.count(anchor) != 1:
             raise ValueError(f'Anchor changed in donor {name}: {anchor[:50]!r}')
         source = source.replace(anchor, replacement.replace('@FRONTEND@', frontend))
     return source
 
 
-def prepare(output, assets_root=None, parallel=False):
+def prepare(output, assets_root=None, parallel=False, renderer=False):
     output = output.resolve()
     assets_root = Path(assets_root or ROOT).resolve()
     allowed_roots = [ROOT / 'private', assets_root / 'private']
@@ -154,13 +186,20 @@ std::uint32_t g_decoded_used = 0;'''
     graphics_source = graphics.read_text(encoding='utf-8')
     graphics_source = graphics_source.replace('"../hw.hpp"', '"hw.hpp"')
     graphics_source = graphics_source.replace('"gpu/gpu.hpp"', '"gpu.hpp"')
-    if parallel:
-        frontend = (ROOT / 'native' / 'parallel_gs_frontend.inc').read_text(encoding='utf-8')
-        graphics_source = apply_hooks('gs.cpp', graphics_source, frontend)
+    if parallel or renderer:
+        # --parallel-hooks is an alias of --renderer-hooks since M0b: the paraLLEl-GS front end now
+        # depends on the shared dispatch, so one port carries the donor, parallel and hw paths.
+        native = ROOT / 'native'
+        frontend = ('#define GT4_RENDERER_HW_SPLICED 1\n'
+                    + (native / 'renderer_dispatch.inc').read_text(encoding='utf-8') + '\n'
+                    + (native / 'parallel_gs_frontend.inc').read_text(encoding='utf-8') + '\n'
+                    + (native / 'hw_gs_frontend.inc').read_text(encoding='utf-8') + '\n'
+                    + (native / 'renderer_routers.inc').read_text(encoding='utf-8'))
+        graphics_source = apply_hooks('gs.cpp', graphics_source, frontend, RENDERER_HOOKS)
         donor_gif = (donor.parent / 'gif.cpp').read_text(encoding='utf-8')
         donor_hw = (donor.parents[1] / 'hw.cpp').read_text(encoding='utf-8')
-        (output / 'gif.cpp').write_text(apply_hooks('gif.cpp', donor_gif), encoding='utf-8')
-        (output / 'hw.cpp').write_text(apply_hooks('hw.cpp', donor_hw), encoding='utf-8')
+        (output / 'gif.cpp').write_text(apply_hooks('gif.cpp', donor_gif, hooks=RENDERER_HOOKS), encoding='utf-8')
+        (output / 'hw.cpp').write_text(apply_hooks('hw.cpp', donor_hw, hooks=RENDERER_HOOKS), encoding='utf-8')
     (output / 'gs.cpp').write_text(graphics_source, encoding='utf-8')
     host = donor.parents[3] / 'host/main.cpp'
     host_source = host.read_text(encoding='utf-8')
@@ -174,7 +213,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
     parser.add_argument('--assets-root', type=Path)
+    parser.add_argument('--renderer-hooks', action='store_true',
+                        help='Splice the single renderer dispatch (donor, paraLLEl-GS, HWR); also writes gif.cpp and hw.cpp')
     parser.add_argument('--parallel-hooks', action='store_true',
-                        help='Splice the slice 163 paraLLEl-GS front end (also writes gif.cpp and hw.cpp)')
+                        help='Alias of --renderer-hooks (slice 163 command lines)')
     options = parser.parse_args()
-    prepare(options.output, options.assets_root, options.parallel_hooks)
+    prepare(options.output, options.assets_root, parallel=options.parallel_hooks,
+            renderer=options.renderer_hooks)

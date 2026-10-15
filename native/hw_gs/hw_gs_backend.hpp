@@ -105,6 +105,9 @@ public:
   // One call per guest VBlank: a black 16:9 frame. Headless (no window) only counts.
   void present(PresentPhase phase);
 
+  // True while a window (swapchain) is attached; headless runs advance frames themselves.
+  bool has_window() const;
+
   const Options &options() const;
   const DeviceReport &device_report() const;
   Stats stats() const;

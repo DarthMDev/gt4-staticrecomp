@@ -49,6 +49,10 @@ compiled, quick fixes) with the paraLLEl-GS renderer and window output. --render
 sets paraLLEl-GS super-sampling (experimental); --hires (with --ssaa 4, 8 or 16) presents paraLLEl-GS's
 high-resolution scanout (2x horizontal; 2x vertical in 480p, full-frame 448 lines from the 224-line fields in
 480i menus). Accepts --force-480p, --vu0-verify N and the VU1 options.
+hw candidate (--mode hw, slice174, TASK-027 M0b): one binary with the donor, paraLLEl-GS and HWR renderers. The
+default is GT4_RENDERER=hw: the HWR backend starts with the GT4_HW_* options and presents black frames (M0: the GS
+data path is a stub, so no game image is drawn yet). --renderer parallel or donor runs the same binary with those
+renderers for A/B. The VU1 and VU0 options apply as in parallel mode.
 The build lives in the assets checkout's private/ even when this launcher runs from a git worktree.
 """
 import argparse
@@ -72,20 +76,20 @@ def main():
                         help='experimental: hold the race display option at 480p (quickfix3 mode)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
-    parser.add_argument('--renderer', choices=('parallel', 'donor'),
-                        help='parallel mode only: GS renderer of the same binary (default parallel)')
+    parser.add_argument('--renderer', choices=('parallel', 'donor', 'hw'),
+                        help='parallel or hw mode: GS renderer of the same binary (default parallel, or hw in hw mode)')
     parser.add_argument('--ssaa', type=int, default=1, metavar='N',
                         help='parallel mode with the parallel renderer: super-sampling 1, 2, 4, 8 or 16 (experimental)')
     parser.add_argument('--hires', action='store_true',
                         help='parallel mode: high-resolution scanout (needs --ssaa 4, 8 or 16)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot, main or parallel')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel', 'hw'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot, main, parallel or hw')
         if args.vu0_verify and args.mode not in ('vu0-aot', 'main', 'parallel'):
             raise ValueError('--vu0-verify requires --mode vu0-aot, main or parallel')
-        if args.renderer and args.mode != 'parallel':
-            raise ValueError('--renderer requires --mode parallel')
+        if args.renderer and args.mode not in ('parallel', 'hw'):
+            raise ValueError('--renderer requires --mode parallel or hw')
         if args.ssaa != 1 and (args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (2, 4, 8, 16)):
             raise ValueError('--ssaa takes 1, 2, 4, 8 or 16 and requires --mode parallel with the parallel renderer')
         if args.hires and (args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (4, 8, 16)):

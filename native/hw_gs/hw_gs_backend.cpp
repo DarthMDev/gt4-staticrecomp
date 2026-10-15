@@ -584,8 +584,8 @@ void Backend::reset_context() {}
 void Backend::clear_vram() {}
 
 std::size_t Backend::read_transfer_fifo(void *destination, std::size_t qwords) {
+  // M0 stub: no LOCAL->HOST data exists yet, so the caller receives zeros (not a fault; chapter 10 is later).
   std::memset(destination, 0, qwords * 16);
-  impl_->stats.faults++; // M0: no LOCAL->HOST data exists yet
   return qwords;
 }
 
@@ -664,6 +664,8 @@ void Backend::present(PresentPhase phase) {
   }
   if (s.swapchain) s.present_black();
 }
+
+bool Backend::has_window() const { return impl_->window != nullptr; }
 
 const Options &Backend::options() const { return impl_->options; }
 

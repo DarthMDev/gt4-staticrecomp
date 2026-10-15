@@ -2,7 +2,7 @@
 # after native/, which provides ps2runtime_vulkan for the differential test.
 # Tests are registered by the root CMakeLists.txt so CTest sees them.
 
-set(GT4_VU_DONOR "${CMAKE_SOURCE_DIR}/private/references/ps2-web-recomp")
+set(GT4_VU_DONOR "${GT4_ASSETS_ROOT}/private/references/ps2-web-recomp")  # main checkout (worktrees have no private/)
 if(NOT EXISTS "${GT4_VU_DONOR}/runtime/include/ps2/vu_ops.hpp")
     message(FATAL_ERROR "vu_recomp requires the pinned donor checkout under private/references")
 endif()
