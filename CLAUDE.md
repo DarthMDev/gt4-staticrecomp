@@ -26,9 +26,12 @@ claim zero emulation or full PS2 fidelity.
 - **Phase 1 (current):** fast, stable recompiled port: 60 FPS at 100% game speed,
   smooth frametime, no interpreter on the normal path.
 - **Out of scope here:** a decompilation-based source port, a native (non-GS)
-  renderer, physics decoupled from frame rate, ultrawide and remaster features
+  renderer, changes to the game's physics timing, ultrawide and remaster features
   will be a separate project, possibly a fork. This repository's goal is the
   original game running natively, optimized and as faithful as possible.
+  Presenting more than 60 FPS while the game's fixed 1/60 s physics stays
+  untouched is in scope (TASK-031: GS primitive interpolation or a native
+  render rate; owner, 2026-10-15).
 - **Renderer focus now:** integrate paraLLEl-GS (TASK-012).
 - **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
 - **Graphics:** PC renderers = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+) and,

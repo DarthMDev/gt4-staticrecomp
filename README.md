@@ -154,6 +154,7 @@ in game before it is merged.
 | TASK‑027 | CoreGS 2.0: implementation, 3x-6x resolution and texture packs | ⏸️ Paused · core libraries done, resumes after 1.0.0 |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
+| TASK‑031 | 120-144 FPS with the game's physics untouched (real rasterised in-between frames, no frame generation) | 🔬 Study and offline prototype ([study](docs/HIGH-FPS-STUDY.md)) |
 
 ### Phase 2 — Android · Phase 3 — iOS
 
