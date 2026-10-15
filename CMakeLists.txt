@@ -25,6 +25,8 @@ endif()
 if(GT4_X86_64_V3)
     add_compile_options(/clang:-march=x86-64-v3)
 endif()
+# HWR hardware GS renderer (TASK-027, chapter 12.10): default OFF until qualified.
+option(GT4_HW_GS "Build the HWR hardware GS renderer (native/hw_gs)" OFF)
 add_subdirectory(native)
 add_subdirectory(tools/vu_recomp)
 
@@ -89,4 +91,26 @@ if(TARGET gt4_vu0_aot_registry_test)
     set_tests_properties(vu0_aot_registry PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
     add_test(NAME vu0_aot_differential COMMAND $<TARGET_FILE:gt4_vu0_differential_tests> "${GT4_VU0_IMAGE_FILE}")
     set_tests_properties(vu0_aot_differential PROPERTIES RUN_SERIAL TRUE TIMEOUT 3600 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endif()
+if(GT4_HW_GS)
+    add_test(NAME hw_options COMMAND $<TARGET_FILE:hw_options_fixture>)
+    add_test(NAME hw_present_rect COMMAND $<TARGET_FILE:hw_present_rect_fixture>)
+    # Empty GT4_RENDERER means unset (donor): nothing runs.
+    add_test(NAME hw_smoke_donor COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 10)
+    set_tests_properties(hw_smoke_donor PROPERTIES ENVIRONMENT "GT4_RENDERER=" PASS_REGULAR_EXPRESSION "HWR not selected")
+    # Headless 4,200 frames with black presents (no window: presents are counted, nothing shown).
+    add_test(NAME hw_smoke_headless COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 4200)
+    set_tests_properties(hw_smoke_headless PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
+        PASS_REGULAR_EXPRESSION "frames=4200 presents=4200 black_presents=0")
+    # Hidden window with a real swapchain: one black present per frame, then the fail-closed cases.
+    add_test(NAME hw_smoke_window COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 120 --window)
+    set_tests_properties(hw_smoke_window PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
+        PASS_REGULAR_EXPRESSION "black_presents=120")
+    add_test(NAME hw_smoke_parallel_refused COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1)
+    set_tests_properties(hw_smoke_parallel_refused PROPERTIES ENVIRONMENT "GT4_RENDERER=parallel" WILL_FAIL TRUE)
+    add_test(NAME hw_smoke_unknown_renderer_refused COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1)
+    set_tests_properties(hw_smoke_unknown_renderer_refused PROPERTIES ENVIRONMENT "GT4_RENDERER=vulkan" WILL_FAIL TRUE)
+    set_tests_properties(hw_options hw_present_rect hw_smoke_donor hw_smoke_headless hw_smoke_window
+        hw_smoke_parallel_refused hw_smoke_unknown_renderer_refused
+        PROPERTIES RUN_SERIAL TRUE TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()
