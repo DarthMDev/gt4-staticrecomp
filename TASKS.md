@@ -60,7 +60,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | 🔄 In progress (EE FPU rounding lead) |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher 1.0.0 (Rust + Slint) and NSIS per-user installer | 🔄 In progress (branch `task/019-launcher`) |
+| TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ⏸️ Paused (last in release 1.0.0); frontend moves to Tauri 2, see LAUNCHER-PLAN §15 |
 | TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 🔄 In progress |
 | TASK‑028 | CoreGS 1.1: upscaling up to 3x (4x available), interlaced-only deinterlace, FXAA-class AA, FSR 1.0 viewport scaling | 🔄 Upscaler done (1x-4x); filters in progress |
 | TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | 🔄 In progress |
