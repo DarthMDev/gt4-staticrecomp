@@ -18,7 +18,7 @@ restore it without a documented technical reason.
 
 GT4Recomp is a static recompilation of Gran Turismo 4 NTSC-U (SCUS-97328, disc
 labeled v2.00; its CORE.GT4 is byte-identical to the gt4-decomp target) for
-Windows x86-64 + Vulkan first, then Android and iOS. **No JIT ever**: guest code
+Windows x86-64 + Vulkan first, then Android (phase 2) and iOS (phase 3). **No JIT ever**: guest code
 (EE, VU, IOP) is compiled ahead of time per target; interpreters may remain only
 as explicit, counted fallbacks. GPU driver shader compilation is allowed. Never
 claim zero emulation or full PS2 fidelity.
@@ -29,18 +29,16 @@ claim zero emulation or full PS2 fidelity.
   renderer, physics decoupled from frame rate, ultrawide and remaster features
   will be a separate project, possibly a fork. This repository's goal is the
   original game running natively, optimized and as faithful as possible.
-- **Renderer focus now:** the accurate Vulkan (GS) renderer, gaining features
-  ported from PCSX2 (TASK-011, TASK-029); the lighter PCSX2-based Custom
-  renderer comes later.
-- **Graphics:** two launcher-selectable renderers: **Vulkan (GS)** = the current
-  accurate compute GS emulation (to gain internal scaling and options) and
-  **Vulkan (Custom)** = a PCSX2-based hardware renderer specialized for GT4
-  (mobile, weaker PCs, upscaling, dithering control, deinterlacing, texture packs).
+- **Renderer focus now:** integrate paraLLEl-GS (TASK-031..033).
+- **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
+- **Graphics:** PC renderer = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+); the
+  current donor compute GS renderer is an experimental fallback/reference only
+  (no new features). Mobile = **ARMSX2 GS pipeline** (Vulkan on Android, Metal on
+  iOS) without ARMSX2's JIT. See `docs/GS-RENDERER-OPTIONS.md`.
 - GPL-3.0 reuse (e.g. PCSX2 GS) is accepted (decision 0066): pin sources, keep
   notices, record provenance in `native/THIRD_PARTY.md`. Never import PCSX2 JITs.
-- Recorded ideas, not scheduled: launcher (Rust + egui/GPUI), racing wheels with
-  force feedback, LAN/online launcher, in-game settings menus, Spec II as a
-  second target or data source (see the docs linked from STATUS).
+- The launcher (TASK-023) and racing wheels (TASK-026) are planned tasks;
+  LAN/online launcher, in-game settings menus and Spec II are recorded ideas.
 
 Working fork: github.com/moesuito/gt4-staticrecomp. Upstream
 github.com/Kaezzey/gt4-staticrecomp is read-only.
