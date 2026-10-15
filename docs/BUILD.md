@@ -650,8 +650,19 @@ Steps:
    `GT4_VU1_GENERATED_DIR=private/slice157-vu1-all-gen`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to the slice153
    directories, then build. The launcher pin is filled after the link (sha256 and size).
 
-Status: the capsule is derived and its pin written. Not yet done in this run: the build, CTest, the Python run with
-`GT4_NATIVE_BUILD`, the headless smoke and the launcher pin. The build was blocked for this run (see the journal).
+Status (candidate, not owner-measured). Built at `private/slice164-quickfix3-build/build` (gt4vulkan.exe 95,126,016 bytes,
+sha256 78b92c63...af014e). CTest 20/20 including `native_race_display`. Python discover with `GT4_NATIVE_BUILD` on this build:
+248 run, OK, 1 skipped (pre-existing). Launcher pin `slice164-quickfix3.json` written.
+
+Headless smoke, 4,200 frames, the slice158 12-press schedule, card `private/slice113-video/widescreen-seed/card.ps2`:
+- Unset: 42 frame dumps identical to `private/slice158-smoke/headless-158` (0 differ).
+- `--force-480p`: 42 dumps identical to the unset run (0 differ) and to the slice158 forced run (0 differ).
+- The forced log has no `[display]` line and no `[window]` or `[pacing]` line. The only SetGsCrt is
+  `interlace 1 mode 0x2 field 1`, so no race-start request with interlace 0 / mode 0x50 was seen.
+
+**The headless path never calls `open_window`, so the VBlank hook never runs.** The headless smoke therefore
+does not test the race display write. Only a windowed run (`probe --window`, which presents) exercises it.
+That run has not been done.
 
 Limits:
 

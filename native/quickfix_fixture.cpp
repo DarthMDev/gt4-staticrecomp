@@ -1,8 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
-// Pure fixture for the slice156 quick fixes: the fullscreen toggle state
-// machine, the borderless style mask, and the experimental 480p request rewrite.
-// No window, no device and no environment are touched.
-#include "display_override.hpp"
+// Pure fixture for the quick fixes: the fullscreen toggle state machine, the borderless style
+// mask, and the GT4_FORCE_480P value parser (race_display). No window or device is touched.
+#include "race_display.hpp"
 #include "window_mode.hpp"
 
 #include <cstdint>
@@ -12,7 +11,6 @@
 
 namespace {
 
-using gt4::display::CrtRequest;
 using namespace gt4::window_mode;
 
 void require(bool value, const std::string &label) {
@@ -62,25 +60,6 @@ void test_fullscreen_style_mask() {
   require(fullscreen_style(0) == popup_style, "empty style becomes popup");
 }
 
-void test_480p_rewrite_is_limited_to_default_ntsc() {
-  const CrtRequest default_ntsc{1, 0x2};
-  const CrtRequest forced = gt4::display::rewrite_crt_request(default_ntsc, true);
-  require(forced.interlace == 0 && forced.mode == 0x50,
-          "default NTSC 480i becomes 480p progressive when forced");
-  const CrtRequest unforced = gt4::display::rewrite_crt_request(default_ntsc, false);
-  require(unforced.interlace == 1 && unforced.mode == 0x2,
-          "default NTSC is untouched when not forced");
-  const CrtRequest progressive{0, 0x50}, interlaced_1080{1, 0x51}, hd720{0, 0x52};
-  for (const CrtRequest request : {progressive, interlaced_1080, hd720}) {
-    const CrtRequest out = gt4::display::rewrite_crt_request(request, true);
-    require(out.interlace == request.interlace && out.mode == request.mode,
-            "480p, 1080i and 720p requests are never rewritten");
-  }
-  const CrtRequest other_mode = gt4::display::rewrite_crt_request({1, 0x3}, true);
-  require(other_mode.interlace == 1 && other_mode.mode == 0x3,
-          "same interlace with another mode is untouched");
-}
-
 void test_environment_values_are_strict() {
   require(!gt4::display::parse_force_480p(nullptr), "unset disables the switch");
   require(!gt4::display::parse_force_480p("0"), "0 disables the switch");
@@ -97,7 +76,6 @@ int main() {
   try {
     test_toggle_restores_windowed_placement();
     test_fullscreen_style_mask();
-    test_480p_rewrite_is_limited_to_default_ntsc();
     test_environment_values_are_strict();
     std::puts("quickfix fixture PASS");
     return 0;

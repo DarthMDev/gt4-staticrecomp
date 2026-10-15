@@ -1,5 +1,6 @@
 #include "window.hpp"
 #include "race_display.hpp"
+#include "ps2/memory.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
 #include "host_io.hpp"
@@ -290,8 +291,7 @@ int run_window(const std::function<int()> &emulate) {
     force_480p_enabled = gt4::display::parse_force_480p(std::getenv("GT4_FORCE_480P"));
     force_480p_state = {};
     if (force_480p_enabled)
-      std::fprintf(stderr, "[display] GT4_FORCE_480P=1: race display index held at 480p (guest VBlank)
-");
+      std::fprintf(stderr, "[display] GT4_FORCE_480P=1: race display index held at 480p (guest VBlank)\n");
     pacing_mode = gt4::pacing::parse_mode(std::getenv("GT4_PACING"));
     frame_clock = std::make_unique<FrameClock>();
     frame_pacer = std::make_unique<gt4::pacing::FramePacer>(
@@ -347,8 +347,7 @@ int run_window(const std::function<int()> &emulate) {
       pacing_diagnostics.format(output, pacing_mode,
                                 session.since(counters_at_last_report), session);
       if (force_480p_enabled)
-        std::fprintf(output, "[display] GT4_FORCE_480P: race display index writes %llu
-",
+        std::fprintf(output, "[display] GT4_FORCE_480P: race display index writes %llu\n",
                      static_cast<unsigned long long>(force_480p_state.writes));
       counters_at_last_report = session;
       pacing_diagnostics.reset();
