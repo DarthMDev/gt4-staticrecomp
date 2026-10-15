@@ -819,3 +819,16 @@ Limits:
    The VU1 SIMD `vitof`/`vftoi` helpers are not bit-identical to the donor per-lane conversion. VU1
    output is unchanged (byte-identical control), so this is an open finding for VU1, not investigated.
 5. `private/` in the worktree is a directory junction to the main checkout (see the report).
+
+## Slice 168 - audio test silenced (TASK-015 part B)
+
+`native/host_io_fixture.cpp` now submits zeroed PCM in both the ramp and the paced sawtooth buffers. The assertions
+are unchanged. Build only the fixture, then run its CTest:
+
+```
+cmake -S . -B private\slice168-audio-builduild -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp
+cmake --build private\slice168-audio-builduild --target host_io_fixture
+ctest --test-dir private\slice168-audio-builduild -R native_audio_input --output-on-failure
+```

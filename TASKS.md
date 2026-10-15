@@ -155,8 +155,10 @@ Add translator entries for decomp functions without one, starting with the 15
 referenced ones (docs/DECOMP-INTEGRATION.md).
 
 ### TASK-015 — LWR fidelity
-Lone LWR with offset != 0 must sign-extend to 64 bits; fix via overlay and scan
-generated units for lone LWR uses.
+State: analysis done, no runtime change (branch task/015-lwr-fidelity). The donor helper matches PCSX2:
+offset 0 sign-extends, offsets 1-3 preserve the upper 32 bits. The brief's premise does not hold in code.
+The lone-LWR scan found one site (0x00549178, `lwr r5, 0(r2)`). A change would need hardware evidence and
+an overlay or ps2game.lib regeneration, so it is parked. Part B (silent audio test) is done.
 
 ### TASK-016 — IOP per-module counters
 Per-module instruction counters and per-library HLE call counts in F8; decide
