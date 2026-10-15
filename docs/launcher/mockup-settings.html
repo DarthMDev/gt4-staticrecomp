@@ -8,18 +8,20 @@
 :root{
   --ink:#0a0c14; --carbon:#13161b; --graphite:#1e2229; --hair:rgba(255,255,255,.10);
   --white:#ffffff; --silver:#dedede; --dim:#9aa0a8; --faint:#5c626b;
-  --paper-ink:#171717; --accent:#2c6bed;
+  --paper:#f8f8f8; --paper-ink:#171717; --paper-dim:#5f636a; --accent:#2c6bed; --error:#d64545;
   --label:"Roboto Condensed","Helvetica Neue Condensed","Arial Narrow",sans-serif;
   --text:"Roboto","Helvetica Neue",Arial,sans-serif;
   --slot:#ff3df2;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#000;color:var(--silver);font:14px/20px var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
-.controls{width:1280px;max-width:100%;display:flex;gap:8px;align-items:center;font:12px var(--text);color:var(--dim);margin-bottom:12px;flex-wrap:wrap}
-.controls b{font:500 12px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--white);margin-right:10px}
+.controls{width:1280px;max-width:100%;display:flex;gap:6px;align-items:center;font:12px var(--text);color:var(--dim);margin-bottom:12px;flex-wrap:wrap}
+.controls b{font:500 12px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--white);margin:0 6px 0 0}
+.controls i{width:1px;height:18px;background:var(--hair);margin:0 6px}
 .controls label{cursor:pointer;padding:4px 10px;border:1px solid var(--hair);border-radius:3px}
 input.st{position:absolute;opacity:0;pointer-events:none}
-#p1:checked ~ .controls [for=p1],#p2:checked ~ .controls [for=p2],#p3:checked ~ .controls [for=p3],#slots:checked ~ .controls [for=slots]{background:var(--white);color:var(--paper-ink);border-color:var(--white)}
+#p-gfx:checked ~ .controls [for=p-gfx],#p-dsp:checked ~ .controls [for=p-dsp],#p-sav:checked ~ .controls [for=p-sav],#p-adv:checked ~ .controls [for=p-adv],
+#tip:checked ~ .controls [for=tip],#imp:checked ~ .controls [for=imp],#empty:checked ~ .controls [for=empty],#slots:checked ~ .controls [for=slots]{background:var(--white);color:var(--paper-ink);border-color:var(--white)}
 .viewport{width:100%;overflow-x:auto;display:flex;justify-content:center}
 .frame{position:relative;width:1280px;height:720px;flex:none;background:var(--carbon);overflow:hidden;display:grid;grid-template-columns:280px 1fr;grid-template-rows:32px 1fr}
 
@@ -31,32 +33,96 @@ nav{background:var(--ink);padding:40px 0 32px 40px;display:flex;flex-direction:c
 .back{display:flex;align-items:center;gap:10px;color:var(--dim);font:500 12px var(--label);letter-spacing:.14em;text-transform:uppercase;margin-bottom:40px;text-decoration:none}
 .logo{width:150px;height:22px;font:500 12px var(--label);letter-spacing:.2em;text-transform:uppercase;color:var(--white);margin-bottom:28px;display:flex;align-items:center}
 nav label{display:block;cursor:pointer;font:400 16px/44px var(--text);color:var(--dim);border-left:2px solid transparent;padding-left:14px;margin-left:-16px}
-#p1:checked ~ .viewport nav [for=p1],#p2:checked ~ .viewport nav [for=p2],#p3:checked ~ .viewport nav [for=p3]{color:var(--white);border-left-color:var(--white)}
-nav .about{color:var(--faint);font-size:14px}
+#p-gfx:checked ~ .viewport nav [for=p-gfx],#p-dsp:checked ~ .viewport nav [for=p-dsp],#p-sav:checked ~ .viewport nav [for=p-sav],#p-adv:checked ~ .viewport nav [for=p-adv],#p-abt:checked ~ .viewport nav [for=p-abt]{color:var(--white);border-left-color:var(--white)}
 nav .ver{margin-top:auto;font-size:12px;color:var(--faint)}
 
-main{padding:40px 96px 32px 64px;overflow:hidden}
+main{padding:40px 96px 32px 64px;position:relative}
 .page{display:none}
-#p1:checked ~ .viewport .g1,#p2:checked ~ .viewport .g2,#p3:checked ~ .viewport .g3{display:block}
+#p-gfx:checked ~ .viewport .pg-gfx,#p-dsp:checked ~ .viewport .pg-dsp,#p-sav:checked ~ .viewport .pg-sav,#p-adv:checked ~ .viewport .pg-adv,#p-abt:checked ~ .viewport .pg-abt{display:block}
+.head{display:flex;align-items:flex-end;justify-content:space-between}
 h1{font:300 30px/36px var(--text);color:var(--white)}
 .note{font-size:13px;color:var(--faint);margin:4px 0 20px}
 h2{font:500 11px var(--label);letter-spacing:.18em;text-transform:uppercase;color:var(--dim);margin:20px 0 4px}
-.row{display:flex;align-items:center;min-height:48px;border-bottom:1px solid var(--hair);gap:24px}
-.row .k{flex:1;color:var(--white)}
-.row .k small{display:block;font-size:12px;line-height:16px;color:var(--dim);margin-top:2px}
-.row.off .k{color:var(--faint)}
-/* components */
+.row{display:flex;align-items:center;height:48px;border-bottom:1px solid var(--hair);gap:24px}
+.row .k{flex:1;color:var(--white);display:flex;align-items:center;gap:8px}
+
+/* info "i" + hover card */
+.info{position:relative;width:15px;height:15px;border-radius:50%;border:1px solid var(--faint);color:var(--dim);font:500 10px/13px var(--label);text-align:center;cursor:default;flex:none}
+.info:hover{border-color:var(--white);color:var(--white)}
+.tipcard{display:none;position:absolute;left:24px;top:-8px;z-index:20;width:280px;background:var(--paper);color:var(--paper-ink);border-radius:3px;padding:10px 12px;font:400 12px/17px var(--text);text-align:left;letter-spacing:0}
+.tipcard b{display:block;font:500 11px var(--label);letter-spacing:.12em;text-transform:uppercase;margin-bottom:4px}
+.info:hover .tipcard,#tip:checked ~ .viewport .info.res .tipcard{display:block}
+
+/* controls */
 .select{display:flex;align-items:center;justify-content:space-between;width:200px;height:34px;padding:0 12px;border:1px solid var(--hair);border-radius:3px;color:var(--white);background:var(--graphite)}
 .select::after{content:"";width:7px;height:7px;border-right:1.5px solid var(--dim);border-bottom:1.5px solid var(--dim);transform:rotate(45deg) translateY(-2px)}
 .seg{display:flex;border:1px solid var(--hair);border-radius:3px;overflow:hidden}
-.seg span{min-width:48px;height:32px;display:grid;place-items:center;font:500 13px var(--label);letter-spacing:.06em;color:var(--dim);border-left:1px solid var(--hair)}
-.seg span:first-child{border-left:0}
-.seg span.on{background:var(--white);color:var(--paper-ink)}
+.seg label{min-width:48px;height:32px;display:grid;place-items:center;font:500 13px var(--label);letter-spacing:.06em;color:var(--dim);border-left:1px solid var(--hair);cursor:pointer}
+.seg label:first-child{border-left:0}
+#ss1:checked ~ .viewport .seg [for=ss1],#ss2:checked ~ .viewport .seg [for=ss2],#ss4:checked ~ .viewport .seg [for=ss4],#ss8:checked ~ .viewport .seg [for=ss8],#ss16:checked ~ .viewport .seg [for=ss16]{background:var(--paper);color:var(--paper-ink)}
 .tg{width:36px;height:20px;border-radius:10px;background:var(--graphite);border:1px solid var(--hair);position:relative;flex:none}
-.tg::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--faint);transition:left .15s}
-.tg.on{background:var(--white);border-color:var(--white)}
+.tg::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:var(--faint)}
+.tg.on{background:var(--paper);border-color:var(--paper)}
 .tg.on::after{left:18px;background:var(--paper-ink)}
 .val{font:500 13px var(--label);letter-spacing:.06em;color:var(--dim)}
+/* high-resolution output: locked below 4x */
+.hr .k .name{color:var(--faint)}
+.hr .tg{opacity:.35}
+.hr .tg.on{background:var(--graphite);border-color:var(--hair)}
+.hr .tg.on::after{left:2px;background:var(--faint)}
+#ss4:checked ~ .viewport .hr .k .name,#ss8:checked ~ .viewport .hr .k .name,#ss16:checked ~ .viewport .hr .k .name{color:var(--white)}
+#ss4:checked ~ .viewport .hr .tg,#ss8:checked ~ .viewport .hr .tg,#ss16:checked ~ .viewport .hr .tg{opacity:1}
+#ss4:checked ~ .viewport .hr .tg.on,#ss8:checked ~ .viewport .hr .tg.on,#ss16:checked ~ .viewport .hr .tg.on{background:var(--paper);border-color:var(--paper)}
+#ss4:checked ~ .viewport .hr .tg.on::after,#ss8:checked ~ .viewport .hr .tg.on::after,#ss16:checked ~ .viewport .hr .tg.on::after{left:18px;background:var(--paper-ink)}
+
+/* buttons */
+.btn{font:500 12px var(--label);letter-spacing:.12em;text-transform:uppercase;height:36px;padding:0 16px;border:1px solid var(--hair);background:transparent;color:var(--white);border-radius:3px;cursor:pointer}
+.btn.primary{background:var(--paper);color:var(--paper-ink);border-color:var(--paper)}
+.btn.danger{color:#ff8a8a;border-color:rgba(214,69,69,.5)}
+
+/* saves */
+.slots{margin-top:20px;border-top:1px solid var(--hair);height:530px;overflow-y:scroll;scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
+.slot-row{display:grid;grid-template-columns:28px 40px 1fr 150px 150px;align-items:center;height:52px;border-bottom:1px solid var(--hair)}
+.slot-row .radio{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--faint)}
+.slot-row.active .radio{border:5px solid var(--paper)}
+.slot-row .no{font:500 13px var(--label);color:var(--faint)}
+.slot-row .nm{color:var(--white)}
+.slot-row .nm small{margin-left:10px;font:500 11px var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--paper-ink);background:var(--paper);padding:2px 6px;border-radius:2px}
+.slot-row .meta{font:400 13px var(--label);letter-spacing:.04em;color:var(--dim)}
+.slot-row .date{font-size:13px;color:var(--dim);text-align:right}
+.slot-row .acts{display:none;justify-content:flex-end;gap:8px}
+.slot-row.hov{background:rgba(255,255,255,.03)}
+.slot-row.hov .date{display:none}
+.slot-row.hov .acts{display:flex}
+.slot-row.empty .nm,.slot-row.empty .no{color:var(--faint)}
+.emptystate{display:none;height:480px;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--dim);text-align:center}
+.emptystate h3{font:300 24px var(--text);color:var(--white)}
+#empty:checked ~ .viewport .slots{display:none}
+#empty:checked ~ .viewport .emptystate{display:flex}
+#empty:checked ~ .viewport .pg-sav .head .btn{display:none}
+
+/* import dialog */
+.scrim{display:none;position:absolute;inset:0;background:rgba(5,6,10,.72);z-index:30;align-items:center;justify-content:center}
+#imp:checked ~ .viewport .scrim{display:flex}
+.dialog{width:600px;background:var(--carbon);border:1px solid var(--hair);border-radius:3px;padding:28px 32px 24px}
+.dialog h3{font:300 24px/30px var(--text);color:var(--white)}
+.dialog .src{font-size:13px;color:var(--dim);margin:4px 0 18px}
+.pick{border-top:1px solid var(--hair)}
+.pick .it{display:grid;grid-template-columns:28px 1fr 90px;align-items:center;height:52px;border-bottom:1px solid var(--hair)}
+.pick .cb{width:16px;height:16px;border-radius:2px;border:1.5px solid var(--faint)}
+.pick .cb.on{background:var(--paper);border-color:var(--paper);position:relative}
+.pick .cb.on::after{content:"";position:absolute;left:4px;top:0;width:5px;height:9px;border:solid var(--paper-ink);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.pick .t{color:var(--white)}
+.pick .t small{display:block;font:400 12px/16px var(--label);letter-spacing:.04em;color:var(--dim)}
+.pick .sz{text-align:right;font:500 13px var(--label);color:var(--dim)}
+.pick .it.off .t,.pick .it.off .sz{color:var(--faint)}
+.pick .it.off .t small{color:var(--faint)}
+.dialog .foot{display:flex;align-items:center;gap:10px;margin-top:22px}
+.dialog .foot span{margin-right:auto;font-size:13px;color:var(--dim)}
+
+/* about */
+.notice{max-width:720px;color:var(--silver);font-size:13px;line-height:20px}
+.notice p{margin-bottom:10px}
 
 .slot{position:relative}
 #slots:checked ~ .viewport .slot{outline:1.5px dashed var(--slot);outline-offset:3px}
@@ -65,73 +131,133 @@ h2{font:500 11px var(--label);letter-spacing:.18em;text-transform:uppercase;colo
 </style>
 </head>
 <body>
-<input class="st" type="radio" name="p" id="p1" checked>
-<input class="st" type="radio" name="p" id="p2">
-<input class="st" type="radio" name="p" id="p3">
-<input class="st" type="checkbox" id="slots" checked>
-<div class="controls"><b>Settings</b><label for="p1">Graphics</label><label for="p2">Display</label><label for="p3">Advanced</label>
+<input class="st" type="radio" name="p" id="p-gfx" checked>
+<input class="st" type="radio" name="p" id="p-dsp">
+<input class="st" type="radio" name="p" id="p-sav">
+<input class="st" type="radio" name="p" id="p-adv">
+<input class="st" type="radio" name="p" id="p-abt">
+<input class="st" type="radio" name="ss" id="ss1">
+<input class="st" type="radio" name="ss" id="ss2">
+<input class="st" type="radio" name="ss" id="ss4" checked>
+<input class="st" type="radio" name="ss" id="ss8">
+<input class="st" type="radio" name="ss" id="ss16">
+<input class="st" type="checkbox" id="tip">
+<input class="st" type="checkbox" id="imp">
+<input class="st" type="checkbox" id="empty">
+<input class="st" type="checkbox" id="slots">
+<div class="controls"><b>Settings</b>
+  <label for="p-gfx">Graphics</label><label for="p-dsp">Display</label><label for="p-sav">Saves</label><label for="p-adv">Advanced</label><label for="p-abt">About</label>
+  <i></i><label for="tip">Tooltip open</label><label for="imp">Import dialog</label><label for="empty">No saves</label>
   <span style="flex:1"></span><label for="slots">Official asset slots</label></div>
 
 <div class="viewport"><div class="frame">
-  <div class="titlebar"><span class="ico slot" data-slot="OFFICIAL launcher.ico · branding/official/"></span>GT4Recomp<div class="winbtns"><span>&#8212;</span><span>&#9633;</span><span>&#10005;</span></div></div>
+  <div class="titlebar"><span class="ico slot" data-slot="OFFICIAL launcher.ico · assets/brand/"></span>Gran Turismo 4<div class="winbtns"><span>&#8212;</span><span>&#9633;</span><span>&#10005;</span></div></div>
 
   <nav>
     <a class="back" href="mockup-home.html"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>Back</a>
-    <div class="logo slot" data-slot="OFFICIAL logo-gt4.png · branding/official/">GT4 logo</div>
-    <label for="p1">Graphics</label>
-    <label for="p2">Display</label>
-    <label for="p3">Advanced</label>
-    <label class="about">About</label>
+    <div class="logo slot" data-slot="OFFICIAL GT4 logo · assets/brand/logo-gt4.png">GT4 logo</div>
+    <label for="p-gfx">Graphics</label>
+    <label for="p-dsp">Display</label>
+    <label for="p-sav">Saves</label>
+    <label for="p-adv">Advanced</label>
+    <label for="p-abt">About</label>
     <div class="ver">Version 1.0.0</div>
   </nav>
 
   <main>
     <!-- GRAPHICS -->
-    <section class="page g1">
+    <section class="page pg-gfx">
       <h1>Graphics</h1>
       <p class="note">Changes apply the next time you play.</p>
       <h2>Image</h2>
-      <div class="row"><div class="k">Renderer</div><div class="select">paraLLEl-GS</div></div>
-      <div class="row"><div class="k">Resolution<small>480p is recommended: it is progressive. Native and 1080i are interlaced, which looks softer and flickers.</small></div><div class="select">480p</div></div>
-      <div class="row"><div class="k">Super-sampling</div><div class="seg"><span>Off</span><span>2×</span><span class="on">4×</span><span>8×</span><span>16×</span></div></div>
-      <div class="row"><div class="k">High-resolution output<small>Needs 4× or more.</small></div><span class="tg on"></span></div>
-      <div class="row"><div class="k">Super-sampled textures</div><span class="tg"></span></div>
+      <div class="row"><div class="k">Renderer<span class="info">i<span class="tipcard"><b>Renderer</b>paraLLEl-GS draws the PS2 graphics chip on your GPU. Legacy is the older renderer, kept as a fallback.</span></span></div><div class="select">paraLLEl-GS</div></div>
+      <div class="row"><div class="k">Input resolution<span class="info res">i<span class="tipcard"><b>Input resolution</b>The video mode the game renders races in. 480p is recommended: it is progressive. Native (480i) and 1080i are interlaced, which looks softer and flickers. Menus are not affected.</span></span></div><div class="select">480p</div></div>
+      <div class="row"><div class="k">Super-sampling<span class="info">i<span class="tipcard"><b>Super-sampling</b>Renders each pixel several times for smoother edges. Higher values need a faster GPU.</span></span></div>
+        <div class="seg"><label for="ss1">Off</label><label for="ss2">2×</label><label for="ss4">4×</label><label for="ss8">8×</label><label for="ss16">16×</label></div></div>
+      <div class="row hr"><div class="k"><span class="name">High-resolution output</span><span class="info">i<span class="tipcard"><b>High-resolution output</b>Uses the extra samples to output a sharper, higher-resolution image. Available with super-sampling at 4× or more.</span></span></div><span class="tg on"></span></div>
+      <div class="row"><div class="k">Super-sampled textures<span class="info">i<span class="tipcard"><b>Super-sampled textures</b>Also super-samples textures. Can sharpen some surfaces at extra GPU cost.</span></span></div><span class="tg"></span></div>
       <h2>Interlacing</h2>
-      <div class="row"><div class="k">Deinterlacing<small>For screens the game draws interlaced, such as menus.</small></div><div class="select">Progressive</div></div>
-      <div class="row"><div class="k">Reduce field blending</div><span class="tg on"></span></div>
+      <div class="row"><div class="k">Deinterlacing<span class="info">i<span class="tipcard"><b>Deinterlacing</b>For screens the game draws interlaced, such as menus. Progressive shows full frames; Weave blends fields adaptively; Off shows raw fields.</span></span></div><div class="select">Progressive</div></div>
+      <div class="row"><div class="k">Reduce field blending<span class="info">i<span class="tipcard"><b>Reduce field blending</b>Removes the soft double image some PS2 games add to hide interlacing.</span></span></div><span class="tg on"></span></div>
     </section>
 
     <!-- DISPLAY -->
-    <section class="page g2">
+    <section class="page pg-dsp">
       <h1>Display</h1>
       <p class="note">Changes apply the next time you play.</p>
       <h2>Window</h2>
-      <div class="row"><div class="k">Fullscreen<small>Alt+Enter or F11 switches while playing.</small></div><span class="tg on"></span></div>
-      <div class="row"><div class="k">VSync</div><div class="select">On</div></div>
+      <div class="row"><div class="k">Fullscreen<span class="info">i<span class="tipcard"><b>Fullscreen</b>Start in fullscreen. Alt+Enter or F11 switches while playing.</span></span></div><span class="tg on"></span></div>
+      <div class="row"><div class="k">VSync<span class="info">i<span class="tipcard"><b>VSync</b>On keeps motion smooth with no tearing. Fast and Off lower latency and may tear.</span></span></div><div class="select">On</div></div>
       <h2>Picture</h2>
-      <div class="row"><div class="k">Show overscan<small>Includes the black border area of a TV picture.</small></div><span class="tg"></span></div>
-      <div class="row"><div class="k">Use the game's screen offsets</div><span class="tg"></span></div>
-      <div class="row"><div class="k">Match the game's horizontal resolution</div><span class="tg on"></span></div>
-      <div class="row"><div class="k">Direct scanout<small>Skips the final merge step when the game uses one output.</small></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Show overscan<span class="info">i<span class="tipcard"><b>Show overscan</b>Includes the border area a TV would hide.</span></span></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Use the game's screen offsets<span class="info">i<span class="tipcard"><b>Screen offsets</b>Applies the game's own picture position. Can add thin black borders.</span></span></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Match the game's horizontal resolution<span class="info">i<span class="tipcard"><b>Horizontal resolution</b>Avoids an extra blur when the game uses a narrower picture.</span></span></div><span class="tg on"></span></div>
+      <div class="row"><div class="k">Direct scanout<span class="info">i<span class="tipcard"><b>Direct scanout</b>Skips the final merge step when the game uses a single output.</span></span></div><span class="tg"></span></div>
+    </section>
+
+    <!-- SAVES -->
+    <section class="page pg-sav">
+      <div class="head"><div><h1>Saves</h1><p class="note" style="margin-bottom:0">The selected save is used the next time you play.</p></div><button class="btn primary">Import save</button></div>
+      <div class="slots">
+        <div class="slot-row active"><span class="radio"></span><span class="no">01</span><span class="nm">Player<small>Next play</small></span><span class="meta">Day 412 · Cr 1,284,300</span><span class="date">Today 06:31</span></div>
+        <div class="slot-row hov"><span class="radio"></span><span class="no">02</span><span class="nm">License run</span><span class="meta">Day 98 · Cr 212,450</span><span class="date">12 Oct</span><span class="acts"><button class="btn">Export</button><button class="btn danger">Delete</button></span></div>
+        <div class="slot-row"><span class="radio"></span><span class="no">03</span><span class="nm">PCSX2 save</span><span class="meta">Day 1,045 · Cr 18,904,120</span><span class="date">3 Sep</span></div>
+        <div class="slot-row"><span class="radio"></span><span class="no">04</span><span class="nm">Mcd001 · imported</span><span class="meta">Day 7 · Cr 31,200</span><span class="date">28 Aug</span></div>
+        <div class="slot-row"><span class="radio"></span><span class="no">05</span><span class="nm">GT4 save</span><span class="meta">1.5 MB</span><span class="date">2 Aug</span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">06</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">07</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">08</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">09</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">10</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
+        <div class="slot-row empty"><span class="radio"></span><span class="no">11</span><span class="nm">Empty</span><span class="meta"></span><span class="date"></span></div>
+      </div>
+      <div class="emptystate"><h3>No saves yet</h3><p>Play and save in the game, or import a save.</p><button class="btn primary">Import save</button></div>
     </section>
 
     <!-- ADVANCED -->
-    <section class="page g3">
+    <section class="page pg-adv">
       <h1>Advanced</h1>
       <p class="note">Changes apply the next time you play.</p>
       <h2>Performance</h2>
-      <div class="row"><div class="k">Asynchronous GS</div><span class="tg on"></span></div>
-      <h2>Renderer hacks<span style="text-transform:none;letter-spacing:0;font-family:var(--text);color:var(--faint)"> · may cause glitches</span></h2>
-      <div class="row"><div class="k">Disable mipmaps<small>Sharper distant textures when super-sampling.</small></div><span class="tg"></span></div>
-      <div class="row"><div class="k">Back-buffer promotion</div><span class="tg"></span></div>
-      <div class="row"><div class="k">Blend demotion<small>Cheaper heavy fog and blending.</small></div><span class="tg"></span></div>
-      <div class="row"><div class="k">Unsynced readbacks<small>Faster, but effects that read the screen will be wrong.</small></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Asynchronous GS<span class="info">i<span class="tipcard"><b>Asynchronous GS</b>Sends graphics work to the GPU without waiting. Needed for full speed; turn off only to compare.</span></span></div><span class="tg on"></span></div>
+      <h2>Renderer hacks</h2>
+      <div class="row"><div class="k">Disable mipmaps<span class="info">i<span class="tipcard"><b>Disable mipmaps</b>Sharper distant textures when super-sampling. May cause glitches.</span></span></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Back-buffer promotion<span class="info">i<span class="tipcard"><b>Back-buffer promotion</b>Shows the game's full-quality image instead of its final scaled copy. May cause glitches.</span></span></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Blend demotion<span class="info">i<span class="tipcard"><b>Blend demotion</b>Makes heavy fog and blending cheaper. May cause glitches.</span></span></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Unsynced readbacks<span class="info">i<span class="tipcard"><b>Unsynced readbacks</b>Faster, but effects that read the screen will be wrong.</span></span></div><span class="tg"></span></div>
       <h2>Diagnostics</h2>
-      <div class="row"><div class="k">Performance report (F7 / F8)</div><span class="tg"></span></div>
-      <div class="row"><div class="k">Check compiled VU code</div><span class="val">Off</span></div>
+      <div class="row"><div class="k">Performance report<span class="info">i<span class="tipcard"><b>Performance report</b>Records frame timing while you play for bug reports.</span></span></div><span class="tg"></span></div>
+      <div class="row"><div class="k">Check compiled VU code<span class="info">i<span class="tipcard"><b>Check compiled VU code</b>Compares compiled vector-unit code with the reference while playing. Slower.</span></span></div><span class="val">Off</span></div>
     </section>
+
+    <!-- ABOUT -->
+    <section class="page pg-abt">
+      <h1>About</h1>
+      <p class="note">GT4Recomp 1.0.0</p>
+      <div class="notice">
+        <p>GT4Recomp is an unofficial fan project. It is not affiliated with, endorsed by or sponsored by Sony Interactive Entertainment or Polyphony Digital.</p>
+        <p>Gran Turismo, the Gran Turismo 4 logo, the GT emblem and the Gran Turismo 4 cover artwork are trademarks or copyrighted property of Sony Interactive Entertainment Inc. and Polyphony Digital Inc. They are used here only to identify the game. You need your own copy of the game to play.</p>
+      </div>
+      <h2>More</h2>
+      <div class="row"><div class="k">Open-source licenses</div><span class="val">›</span></div>
+      <div class="row"><div class="k">Disc image</div><span class="val">D:\Games\PS2\Gran Turismo 4 (USA) (v2.00).iso</span></div>
+      <div class="row"><div class="k">Repair game files</div><span class="val">›</span></div>
+      <div class="row"><div class="k">Open log folder</div><span class="val">›</span></div>
+    </section>
+
+    <!-- IMPORT DIALOG -->
+    <div class="scrim"><div class="dialog">
+      <h3>Import from memory card</h3>
+      <p class="src">Mcd001.ps2 · 8 MB memory card image</p>
+      <div class="pick">
+        <div class="it"><span class="cb on"></span><span class="t">Gran Turismo 4 · Game data<small>Day 1,045 · Cr 18,904,120 · 14 Oct 2026</small></span><span class="sz">1.5 MB</span></div>
+        <div class="it"><span class="cb"></span><span class="t">Gran Turismo 4 · Replay<small>14 Oct 2026</small></span><span class="sz">410 KB</span></div>
+        <div class="it off"><span class="cb"></span><span class="t">Other game<small>Not a Gran Turismo 4 save</small></span><span class="sz">220 KB</span></div>
+      </div>
+      <div class="foot"><span>Goes into a new slot (06).</span><button class="btn">Cancel</button><button class="btn primary">Import</button></div>
+    </div></div>
   </main>
 </div></div>
-<div class="legend">GT7-style option list: label left, one control right, hairline rows, small uppercase group headers. Dropdowns: Renderer = paraLLEl-GS / Legacy; Resolution = Native (480i) / 480p / 1080i; Deinterlacing = Progressive / Weave (motion-adaptive) / Off; VSync = On / Fast (mailbox) / Off. Settings save on change; no Save bar. Magenta = official asset slots.</div>
+<div class="legend">Hover any "i" for its description (no helper text under rows). Super-sampling segments are live: below 4× "High-resolution output" is dimmed and locked. Saves: 10+ slots, scrolling, unlimited; hover a slot for Export/Delete; import always fills a new empty slot. Replay import is shown as a later option (see plan). Magenta = official asset slots.</div>
 </body>
 </html>

@@ -20,8 +20,8 @@ Labels: **Confirmed** (read in code/data or measured), **High confidence**, **Hy
    a `GamePayload` / prepare-step abstraction (section 7.3) so switching to B is a contained change.
 2. **Branding = official.** The launcher and the executable icons use the official Gran Turismo 4
    cover art and the game's logo/icon style. Every official asset lives in one folder
-   (`branding/official/`) and is listed in one manifest (`brand.toml`); a de-branded build swaps the
-   folder for `branding/neutral/` (section 8).
+   (`launcher/assets/brand/`) and is listed in one manifest (`brand.toml`); a de-branded build swaps the
+   folder for `launcher/assets/brand-neutral/` (section 8).
 3. **Owner design feedback (round 2).** Clean and minimalist, borrowing the Gran Turismo identity
    (GT4 plus the GT Sport/GT7 look) without copying GT4 screens; far less information everywhere;
    Home = art, logo, Play and a way to Settings only; setup step renamed "Preparing game files";
@@ -29,6 +29,15 @@ Labels: **Confirmed** (read in code/data or measured), **High confidence**, **Hy
    display mode), super-sampling, high-resolution output, deinterlacing and the paraLLEl-GS options;
    Advanced = Asynchronous GS (on), renderer hacks, diagnostics; no frame-pacing option; no variable
    names in the UI. Applied in sections 3, 6 and 12 and in the three mockups.
+4. **Owner feedback (round 3).** "Resolution" renamed "Input resolution"; no helper text under any
+   option row, each option title gets an "i" with a hover card instead; High-resolution output is
+   visible but locked below 4× super-sampling; public official GT4 images and logos are bundled in
+   the launcher with a trademark/IP notice (section 8); a Saves page with a save manager
+   (section 13, separate task TASK-025).
+5. **Owner decisions (2026-10-15):** MIT license for our own code (LICENSE added on main by the
+   coordinator; third-party parts keep their licenses, paraLLEl-GS LGPL in its DLL); installers are
+   GitHub Releases of `moesuito/gt4-staticrecomp` and the launcher source lives in the same
+   repository; the Windows display name is "Gran Turismo 4".
 
 Consequences to record when TASK-019 starts (documentation changes, not done here):
 `TASKS.md` "First stable release" currently says *"no game assets or binaries derived from the
@@ -132,12 +141,11 @@ If the ISO later moves, the home screen shows "Disc image not found — Locate�
 
 A missing card file is presented to the game as a **new, unformatted** 8,650,752-byte card and is
 written on save; GT4 then offers to format it. So the launcher does not need any seed card (the pinned
-seeds stay private evidence). Layout under `%LOCALAPPDATA%\GT4Recomp\memcards\`:
-`Mcd001.ps2` (slot 1), `backups\Mcd001-YYYYMMDD-HHMMSS.ps2` (copy before each session, keep the last
-10). Setup offers no choice: the card is simply created. **Import** of an existing PCSX2 8 MB `.ps2`
+seeds stay private evidence). Setup offers no choice: it creates save slot 1 (empty; the card file
+appears on the first in-game save) and makes it active. Storage, backups and the Saves page are the
+save manager's (section 13). **Import** of an existing PCSX2 8 MB `.ps2`
 card (same size and raw page+ECC layout, **High confidence**; validate size and the
-`Sony PS2 Memory Card Format` superblock magic) is a later feature under Settings › About, not part
-of setup or v1. Hold the card lock (same byte-lock design as `session.lock`) while the game runs.
+`Sony PS2 Memory Card Format` superblock magic) is part of the save manager (section 13), never part of setup. Hold the card lock (same byte-lock design as `session.lock`) while the game runs.
 
 **Hypothesis to check during TASK-019:** the owner's game boots in 16:9 because the seed card has the
 game's wide option set; a fresh card may show a 4:3 image in the fixed 16:9 window until the player
@@ -186,9 +194,9 @@ the same UX and the same model as A. No takedown of either is known to me as of 
 repositories distributing builds (High confidence). Sony's posture toward recompilation projects is
 **Unknown**.
 
-**Risk reducers for A (recommended):** host release binaries **outside** the source repository (a
-separate `gt4recomp-releases` repo or other host) so a DMCA notice against binaries does not take the
-source repo and its history down; never ship ISO-derived data files (ELF, CORE, photos) — those are
+**Risk reducers for A:** the owner decided to publish installers as GitHub Releases of the source
+repository itself (accepted risk: a DMCA notice against the binaries could affect the whole
+repository; keep a private mirror of the repo and its history as a precaution); never ship ISO-derived data files (ELF, CORE, photos) — those are
 always produced on the user's PC; keep B's DLL split prototyped (milestone M10) so the fallback is real.
 
 **GPL interaction (important):** under A the distributed exe combines our code with code we cannot
@@ -207,7 +215,7 @@ A as decided, with three structural choices that keep B one step away:
    (verifies hashes of shipped files); B = `BuildFromIsoPayload` (runs translator + compiler). The UI
    only sees "prepare steps" with progress, so B adds steps, not screens.
 2. paraLLEl-GS in a DLL now (needed for LGPL anyway).
-3. Fallback branding: B ships with `branding/neutral/` and name "GT4Recomp" only.
+3. Fallback branding: B ships with `launcher/assets/brand-neutral/` and name "GT4Recomp" only.
 
 Installer: ~40 MB, first run ~1 min. If B is ever needed, installer grows to ~100 MB and first run
 to 5-20 min with a "Building the game for your PC…" step.
@@ -225,7 +233,7 @@ to 5-20 min with a "Building the game for your PC…" step.
 | Slint | GPLv3 / Royalty-free 2.0 / commercial | Royalty-free license for desktop apps requires attribution ("Made with Slint" in About) — or GPLv3 if the launcher is GPL. Choose with the project license question. |
 | MSVC runtime DLLs (if `/MD`) | Microsoft Distributable Code | App-local copy allowed; include no headers/libs |
 | NSIS | zlib/libpng-style | No notice required in the installer output |
-| **GT4Recomp itself** | **none yet — the repo has no LICENSE file (Confirmed)** | Must be chosen before release (open question 1) |
+| **GT4Recomp itself** | **MIT** (owner decision 2026-10-15; LICENSE added on main) | MIT notice in the installer and the About › Licenses screen; MIT is compatible with shipping the LGPL DLL and with the game-derived code under option A |
 
 DLL ABI: a small `extern "C"` API (init with our `VkDevice`/queues, `gif_transfer`,
 `write_register`, privileged register state, `read_transfer_fifo`, `map_vram_*`, `vsync`,
@@ -247,18 +255,22 @@ There are three short pages. The UI shows no variable names. Each control maps t
 | Group | UI control | Values (default **bold**) | Variable / paraLLEl-GS field |
 |---|---|---|---|
 | Image | Renderer (dropdown) | **paraLLEl-GS**, Legacy | `GT4_RENDERER=parallel\|donor` (Confirmed in the TASK-012 worktree) |
-| Image | Resolution (dropdown): race display mode. Helper: "480p is recommended: it is progressive. Native and 1080i are interlaced, which looks softer and flickers." | Native (480i), **480p**, 1080i | `GT4_RACE_DISPLAY=480i\|480p\|1080i` (new; generalizes `GT4_FORCE_480P`, see section 2) |
+| Image | **Input resolution** (dropdown): race display mode. "i" card: "480p is recommended: it is progressive. Native (480i) and 1080i are interlaced, which looks softer and flickers. Menus are not affected." | Native (480i), **480p**, 1080i | `GT4_RACE_DISPLAY=480i\|480p\|1080i` (new; generalizes `GT4_FORCE_480P`, see section 2) |
 | Image | Super-sampling (segmented) | Off, 2×, 4×, 8×, 16×. The default is chosen after the TASK-012 measurements; the mockup shows 4×. | `GT4_PGS_SSAA=1\|2\|4\|8\|16` → `SuperSampling::X1..X16` (Confirmed enum, `gs_renderer.hpp:232`) |
-| Image | High-resolution output (toggle, disabled below 4×; helper "Needs 4× or more.") | **On** at ≥4× | `GT4_PGS_HIGHRES` → `VSyncInfo::high_resolution_scanout`, which also needs `force_progressive` (Confirmed, `gs_renderer.cpp:4294-4310`) |
+| Image | High-resolution output (toggle; always visible, dimmed and not toggleable unless super-sampling is 4×, 8× or 16×; choosing ≥4× unlocks it and restores the user's last value) | **On** at ≥4× | `GT4_PGS_HIGHRES` → `VSyncInfo::high_resolution_scanout`, which also needs `force_progressive` (Confirmed, `gs_renderer.cpp:4294-4310`) |
 | Image | Super-sampled textures (toggle) | **Off** | `GT4_PGS_SS_TEXTURES` → `set_super_sampling_rate(…, super_sampled_textures)` |
-| Interlacing | Deinterlacing (dropdown; helper "For screens the game draws interlaced, such as menus.") | **Progressive**, Weave (motion-adaptive), Off | Progressive = `force_progressive`. Weave = paraLLEl-GS's built-in deinterlacer: the `weave` program, plus a motion-adaptive pass over the last 4 fields labelled "fastmad" in the source (Confirmed, `gs_renderer.cpp:5106-5190`). Off = `skip_deinterlace` (raw fields, shown as they are) |
+| Interlacing | Deinterlacing (dropdown) | **Progressive**, Weave (motion-adaptive), Off | Progressive = `force_progressive`. Weave = paraLLEl-GS's built-in deinterlacer: the `weave` program, plus a motion-adaptive pass over the last 4 fields labelled "fastmad" in the source (Confirmed, `gs_renderer.cpp:5106-5190`). Off = `skip_deinterlace` (raw fields, shown as they are) |
 | Interlacing | Reduce field blending (toggle) | **On** | `anti_blur` (the paraLLEl-GS header calls it "usually a good idea" with progressive or SSAA) |
+
+**No helper text under any row** (all pages). Every option title has a small "i" in a circle; hover
+(or keyboard/controller focus) opens a small paper-coloured card with one or two sentences. The
+texts live in the settings table next to each option so Android can show them on tap.
 
 ### 6.2 Display
 
 | Group | UI control | Values (default **bold**) | Variable / field |
 |---|---|---|---|
-| Window | Fullscreen (toggle; helper "Alt+Enter or F11 switches while playing.") | **On** | `GT4_FULLSCREEN` (new) |
+| Window | Fullscreen (toggle) | **On** | `GT4_FULLSCREEN` (new) |
 | Window | VSync (dropdown) | **On** (fifo), Fast (mailbox), Off (immediate). Modes the surface lacks are hidden, based on a Vulkan surface query. | `GT4_PRESENT_MODE` (Confirmed) |
 | Picture | Show overscan | **Off** | `VSyncInfo::overscan` |
 | Picture | Use the game's screen offsets | **Off** | `crtc_offsets` |
@@ -271,7 +283,7 @@ There are three short pages. The UI shows no variable names. Each control maps t
 |---|---|---|---|
 | Performance | Asynchronous GS | **On** | `GT4_GS_SYNC`: unset or 0 = on (Confirmed). Turning it off writes `GT4_GS_SYNC=1`. Under paraLLEl-GS this switch must map to that renderer's own submission path; how is **Unknown** until TASK-012 step 2 settles it. |
 | Renderer hacks ("may cause glitches") | Disable mipmaps · Back-buffer promotion · Blend demotion · Unsynced readbacks | all **Off** | `GT4_PGS_HACKS=` comma list → `Hacks::{disable_mipmaps, backbuffer_promotion, allow_blend_demote, unsynced_readbacks}` (Confirmed struct, `gs_interface.hpp:211-237`) |
-| Diagnostics | Performance report (F7/F8) | **Off** | `GT4_PERF=1` |
+| Diagnostics | Performance report (on/off) | **Off** | `GT4_PERF=1` |
 | Diagnostics | Check compiled VU code | **Off** (choices: Off / every 100th / every 1000th call) | `GT4_VU1_VERIFY`, `GT4_VU0_VERIFY` |
 
 These are deliberately left out of the UI:
@@ -314,14 +326,16 @@ launcher/
                             #   CORE.GT4 raw-deflate + ELF rebuild (port of ee_producer prepare),
                             #   GT4.VOL catalogue reader (port of gt4_volume.py subset) for photo/*.JPG
     gt4l-payload/           # trait GamePayload + BundledPayload (A); BuildFromIsoPayload stub (B)
+    gt4l-mcfs/              # TASK-025: PS2 card filesystem (ECC), save importers/exporters
+    gt4l-gt4save/           # TASK-025: GT4 save decryption (PDTools port), read-only summary
     gt4l-app/               # Slint UI (ui/*.slint), app state machine, theme, brand loading
       build.rs              # embed-resource: icon + VERSIONINFO from $GT4_BRANDING_DIR
     gt4l-cli/               # headless: `gt4l-cli prepare --iso X --data-dir Y`, `verify`, `launch --dry-run`
   tests/                    # synthetic ISO fixtures, parity tests vs Python (private, skip if absent)
 installer/
-  gt4recomp.nsi, pages/*.nsh, art/ (bitmaps generated from branding/)
-branding/
-  official/  brand.toml + assets      neutral/  brand.toml + original assets
+  gt4recomp.nsi, pages/*.nsh, art/ (bitmaps generated from launcher/assets/brand/)
+launcher/assets/
+  brand/  brand.toml + official assets (bundled)      brand-neutral/  brand.toml + original assets
 ```
 
 Key crates: `slint`, `sha2` (asm), `flate2` (raw deflate, `miniz_oxide` or `zlib-rs` backend),
@@ -353,7 +367,7 @@ launcher contains no reference to the official branding or bundled payload.
 | What | Where |
 |---|---|
 | Program (installer-owned, replaced on update) | `%LOCALAPPDATA%\Programs\GT4Recomp\` → `GT4Recomp.exe`, `game\gt4recomp-game.exe`, `game\gt4_parallel_gs.dll`, `game\shaders\*.spv`, `branding\`, `licenses\`, `release-manifest.json`, `uninstall.exe` |
-| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `memcards\`, `art\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20), `cache\` (Vulkan pipeline cache) |
+| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `saves\` (slot cards, backups, `slots.toml`; section 13), `art\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20), `cache\` (Vulkan pipeline cache) |
 
 `%LOCALAPPDATA%` (not Roaming) avoids syncing 8 MB cards and 6 MB ELFs through roaming profiles/
 OneDrive. A "Portable mode" (a `portable.txt` next to the exe redirects data to `.\data`) is cheap to
@@ -362,10 +376,10 @@ add and handy for testing.
 ### 7.5 Launch, supervision, crash report
 
 - Single instance: named mutex `Local\GT4Recomp.Launcher`; a second start activates the first window.
-  Game lock: byte lock on `memcards\session.lock` (same as today) so two games never share a card.
+  Game lock: byte lock on `saves\session.lock` (same design as today) so two games never share a card.
 - Launch: verify payload (fast), cheap disc recheck, back up card, create session folder, write
   `launch.json`, `CreateProcessW(game\gt4recomp-game.exe, "prepared\SCUS_973.28 --ntsc --disc <iso>
-  --frames 0 --memcard memcards\Mcd001.ps2 --misses <session>\misses.txt --window")`, cwd = session,
+  --frames 0 --memcard saves\slot-NNNN.ps2 (active slot) --misses <session>\misses.txt --window")`, cwd = session,
   stdout/stderr to `<session>\game.log`, process in a Job Object (so "Stop game" works and children die
   with it). The ELF is passed in place (`prepared\SCUS_973.28`, the name argv0 needs) instead of
   copying it per session.
@@ -386,53 +400,48 @@ folder; it then runs it silently (`/S`) into the same per-user folder and restar
 
 ## 8. Branding and assets
 
-### 8.1 One folder, one manifest
+### 8.1 Decision: official assets bundled in the launcher
 
-`branding/official/brand.toml` (and `branding/neutral/brand.toml` with the same keys):
+The owner decided (round 3) to download public official GT4 images and logos and bundle them in the launcher. Every official file lives in one folder, `launcher/assets/brand/`, which the Slint build embeds. The game exe's `.rc` takes its icon from the same folder. A manifest, `launcher/assets/brand/brand.toml`, lists each file with its source URL, retrieval date, SHA-256 and pixel size.
 
-```toml
-display_name   = "Gran Turismo 4"          # neutral: "GT4Recomp"
-product_name   = "GT4Recomp"
-tagline        = "Native PC recompilation"
-accent         = "#2C6BED"   # focus ring only
-[assets]
-cover_front    = "cover-front.png"   # 1200x1700 (shown at 600x850)
-logo_wordmark  = "logo-gt4.png"      # transparent, ~1600 px wide (or .svg)
-emblem         = "emblem-gt.png"     # square, transparent, 1024x1024 (icon master)
-launcher_icon  = "launcher.ico"
-game_icon      = "game.ico"
-hero_fallback  = ["hero-01.jpg", "hero-02.jpg"]   # 1920x1080, used when no disc art was extracted
-installer_welcome = "nsis-welcome.bmp"            # 164x314 (MUI2), plus @2x 328x628
-installer_header  = "nsis-header.bmp"             # 150x57, plus @2x
-```
+A de-branded build (fallback if Sony objects) is one switch: the cargo feature `brand-neutral`, plus `GT4_BRANDING_DIR` for the game's `.rc`, point at `launcher/assets/brand-neutral/` instead. That folder holds original art and the text name "GT4Recomp". A CI check fails if any hash from the official manifest appears in a neutral package.
 
-The launcher loads the folder at run time (missing file → embedded neutral fallback); the two `.ico`
-files are compiled in (launcher via `build.rs`, game via the `.rc`) from `GT4_BRANDING_DIR`, so a
-de-branded build is: point `GT4_BRANDING_DIR` at `branding/neutral`, rebuild, repackage. A CI check
-greps the neutral package for any file hash listed in the official manifest.
+The Windows display name is **"Gran Turismo 4"** everywhere the OS shows it:
+- the Start Menu shortcut;
+- the window titles of the launcher and the game;
+- `FileDescription` and `ProductName` in both exes' VERSIONINFO, which Task Manager shows;
+- the installer title and the "Apps & features" `DisplayName`.
 
-### 8.2 Official asset slots and their sources
+Internal ids stay `GT4Recomp`: the install folder, the registry key, the AppUserModelIDs `GT4Recomp.Launcher` and `GT4Recomp.Game`, the data folder and the repository. Keeping them stable means a later rename never orphans user data.
 
-| Slot | Used in (mockup id) | Source / how we obtain it |
-|---|---|---|
-| `cover_front` | Setup left column, About page, installer welcome bitmap (cropped) | **Not on the disc** (Confirmed: the ISO root holds only CORE.GT4, GT4.VOL, IRX, NET, EPSON, IOPRP300.IMG, SCUS_973.28, SYSTEM.CNF). Owner supplies a clean scan/photo of the NTSC-U box front (own copy), color-corrected, ≥1200x1700. |
-| `logo_wordmark` | Home bottom-left above Play, Setup header, Settings nav | Owner-supplied vector/PNG of the GT4 logo (trace from the cover scan). In-disc title textures exist as Tex1 `.img` files in `GT4.VOL` (e.g. `advertise/loading.img`, `advertise/us/main.img`), but decoding Tex1 is new work and which file holds the logo is **Unknown** — not planned for v1. |
-| `emblem` → `launcher.ico`, `game.ico` | Taskbar, Task Manager, Start Menu, desktop shortcut, window title bar, Alt+Tab | Derived from the official GT emblem/logo style (owner-supplied master). Generated by a script (`scripts/make_icons.py` with Pillow) into multi-size ICO: 16, 20, 24, 32, 40, 48, 64, 96, 128, 256 (256 PNG-compressed). Launcher and game get **distinct** variants (e.g. game = emblem on dark tile, launcher = emblem with a small chevron badge) so the two taskbar buttons are distinguishable. |
-| Home background | Home (full-bleed, one cross-fade every 15 s) | **From the user's own disc at setup**: `GT4.VOL photo/000.JPG…063.JPG` (64 in-game photos, 1280x960 JPEG, Confirmed by extraction in this study), resized/cropped to 16:9 and cached in `%LOCALAPPDATA%\GT4Recomp\art\`; never shipped. Before setup completes, `hero_fallback` (official screenshots or neutral art) is used. |
-| Save icon (Saves page, optional) | Settings → Saves | `GT4.VOL icon/gamedata.ico` is a PS2 3D save icon, not a Windows icon; rendering it is optional future work. |
-| Course/car thumbnails (future) | — | `piece/crs_pict`, `piece/car_pict` Tex1 textures; needs the Tex1 decoder (PDTools, MIT reference). Not in v1. |
+### 8.2 Official images to source (listed only; nothing has been downloaded)
 
-Embedding in the game exe (CMake): `native/gt4recomp.rc.in` → `configure_file` with
-`IDI_APP ICON "@GT4_BRANDING_DIR@/game.ico"` and `VS_VERSION_INFO` (`FileDescription` =
-"Gran Turismo 4 — GT4Recomp" or "GT4Recomp" in neutral; `ProductVersion`, `CompanyName` empty,
-`LegalCopyright` with the unofficial-project notice); `enable_language(RC)` (llvm-rc with clang-cl).
-Task Manager shows `FileDescription`; the taskbar uses the window icon, so `window.cpp` must register
-`WNDCLASSEXW` with `hIcon`/`hIconSm` loaded from resource `IDI_APP`. Set an explicit
-AppUserModelID per process (`GT4Recomp.Launcher`, `GT4Recomp.Game`) and the same IDs on the Start Menu
-shortcuts so pinning works.
+| Asset | Used in | Resolution needed | Candidate public sources (verify size/quality before download) |
+|---|---|---|---|
+| `cover-front.png`: GT4 NTSC-U front box art | Setup left column (300x425 shown); About; installer welcome bitmap (cropped); blurred backdrop before setup | ≥ 900x1275 (3x of the 300x425 slot), ideally ~1200x1700, no scan glare, no plastic-case border | 1. Giant Bomb image gallery for Gran Turismo 4: lists a "High Res Cropped NTSC PS2 Cover" (seen in search results). 2. The Cover Project (thecoverproject.net, full-wrap scans; front crop needed). 3. MobyGames cover-art page for GT4 (PS2, NA release). 4. LaunchBox Games Database (front box image). 5. libretro-thumbnails `Sony_-_PlayStation_2/Named_Boxarts/Gran Turismo 4 (USA).png` (GitHub; usually ~512 px, too small for 2x/3x). The Wikipedia infobox image is a low-resolution fair-use file: not suitable. |
+| `logo-gt4.png` (or `.svg`): GT4 wordmark, transparent | Home bottom-left above Play (≈360x96 slot); Setup header; Settings nav; installer header | Vector preferred; else PNG ≥ 1600 px wide with alpha | 1. Vector copies on logo sites (VectorSeek "Gran Turismo 4 Logo Vector", iconape "gran turismo 4 logo" SVG). Their terms say "not for commercial use / identification only", which fits a free fan project but should be recorded. 2. The Gran Turismo fandom wiki file pages. 3. Clean trace from the high-resolution cover (last resort). |
+| `emblem-gt.svg`: the GT emblem (the GT4-era "GT" mark) | Source for `launcher.ico` and `game.ico`, plus the small title-bar icon | Vector, or PNG ≥ 1024x1024 with alpha | 1. Cropped from the GT4 logo vector above (the emblem is part of the GT4 logo). 2. Brandfetch's gran-turismo.com assets (modern GT emblem, SVG); use only if the GT4-era mark is unavailable, since its style differs. |
+| `launcher.ico`, `game.ico` | Taskbar, Task Manager, Start Menu, Alt+Tab, window title | Multi-size ICO: 16, 20, 24, 32, 40, 48, 64, 96, 128, 256 (256 PNG-compressed) | Generated from `emblem-gt.svg` by `scripts/make_icons.py` (Pillow + resvg). Game = emblem on a dark tile; launcher = same emblem with a small play-chevron badge, so the two taskbar buttons differ. |
+| Home background | Home | 1920x1080 | **Not bundled**: comes from the user's disc at setup (`GT4.VOL photo/*.JPG`, Confirmed). Before setup completes, a blurred `cover-front.png` is shown. |
+| NSIS bitmaps | Installer welcome/finish (164x314, @2x 328x628) and header (150x57, @2x 300x114) | — | Generated from `cover-front.png` and `logo-gt4.png` at build time |
 
-Trademark note: using the Gran Turismo name and logo makes the release look official; keep the
-"unofficial, not affiliated" line visible on the About page and in the installer's first page.
+### 8.3 Trademark / IP notice
+
+The same text goes in three places: the repository (`NOTICE.md`, linked from README), the About page, and the installer's first page.
+
+> **Gran Turismo 4** — GT4Recomp is an unofficial fan project. It is not affiliated with, endorsed by or sponsored by Sony Interactive Entertainment Inc. or Polyphony Digital Inc. "Gran Turismo", "GT", the Gran Turismo 4 logo, the GT emblem and the Gran Turismo 4 cover artwork are trademarks or copyrighted works of Sony Interactive Entertainment Inc. and/or Polyphony Digital Inc., used here only to identify the game. No game data is included in the source repository; you need your own copy of Gran Turismo 4 (USA, v2.00) to play. If you are a rights holder and want something removed, please open an issue at github.com/moesuito/gt4-staticrecomp.
+
+`NOTICE.md` also lists each bundled official asset with its source and date, taken from `brand.toml`.
+
+### 8.4 Embedding in the game exe (CMake)
+
+`native/gt4recomp.rc.in` → `configure_file` with:
+- `IDI_APP ICON "@GT4_BRANDING_DIR@/game.ico"`;
+- a `VS_VERSION_INFO` block: `FileDescription` and `ProductName` "Gran Turismo 4" (de-branded: "GT4Recomp"), the version numbers, and `LegalCopyright` carrying the short unofficial-project notice.
+
+Then `enable_language(RC)` (llvm-rc with clang-cl).
+
+`window.cpp` registers a `WNDCLASSEXW` with `hIcon`/`hIconSm` loaded from `IDI_APP` and sets the window title "Gran Turismo 4". Each process sets an explicit AppUserModelID, and the Start Menu shortcut carries the same ID so pinning works. The launcher gets its icon and version resource through `embed-resource` in `build.rs`.
 
 ## 9. Installer (NSIS)
 
@@ -440,11 +449,14 @@ Trademark note: using the Gran Turismo name and logo makes the release look offi
   current`; registry only under `HKCU\Software\GT4Recomp` and
   `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\GT4Recomp` (DisplayName, DisplayIcon,
   DisplayVersion, Publisher, EstimatedSize, UninstallString, QuietUninstallString, NoModify/NoRepair).
-- Pages (MUI2, custom bitmaps from `branding/`): Welcome (cover art + "you need your own GT4 USA v2.00
+- Installer title, Start Menu shortcut and "Apps & features" `DisplayName` = **"Gran Turismo 4"**
+  (registry key and folder stay `GT4Recomp`). Published as GitHub Releases of
+  `moesuito/gt4-staticrecomp`.
+- Pages (MUI2, bitmaps generated from `launcher/assets/brand/`): Welcome (cover art + "you need your own GT4 USA v2.00
   disc image") → Notice/License (unofficial project, third-party licenses) → Folder (default shown,
-  changeable) → Install → Finish ("Start GT4Recomp" checked; "Create desktop shortcut" checkbox).
+  changeable) → Install → Finish ("Start Gran Turismo 4" checked; "Create desktop shortcut" checkbox).
   The beautiful onboarding happens in the launcher; the installer stays short and clean.
-- Shortcuts: Start Menu `GT4Recomp.lnk` (launcher icon, AUMID set via `WinShell` plugin), optional
+- Shortcuts: Start Menu `Gran Turismo 4.lnk` (launcher icon, AUMID set via `WinShell` plugin), optional
   desktop shortcut. No auto-start, no file associations.
 - Silent mode (`/S`) for updates; upgrade in place detects a running launcher/game and asks to close.
 - Uninstaller: removes the program folder and shortcuts; a custom page asks
@@ -471,10 +483,11 @@ Trademark note: using the Gran Turismo name and logo makes the release look offi
 | M3 | `gt4l-disc`: ISO9660 + SYSTEM.CNF + hash + CORE/ELF rebuild + VOL photo reader | Synthetic ISO fixtures (good, wrong serial, PAL-like, Spec II-like, truncated, wrong VER, bin/cue); private parity tests: CORE/ELF bytes equal the pinned files; Spec II ISO rejected with the Spec II message; 64 photos extracted with hashes recorded | 3 |
 | M4 | `gt4l-core` + `gt4l-payload` (Bundled): paths, settings table + TOML, card manager (new/import/backup/lock), launch/supervise, exit classification, crash report zip, single instance | Unit tests for every validation rule mirrored from `play_performance.py`; dry-run launch prints the exact argv/env; scrubbed env test; crash classification tests from recorded logs; second instance focuses the first | 3 |
 | M5 | Slint UI with the tokens and components of section 12: setup list, home, settings (Graphics/Display/Advanced/About), running state, crash dialog, licenses; keyboard/gamepad navigation (XInput: D-pad + A to PLAY) | Screens match the mockups at 1280x720 and scale at 125/150%; reduced-motion honored; whole flow usable by keyboard and controller; owner design review | 6-8 |
-| M6 | Branding pipeline: `brand.toml`, icon generation script, official assets dropped in, neutral swap test | Neutral package contains no official asset hash; official build shows art/icons everywhere listed in 8.2 | 1-2 |
+| M6 | Branding: source the official images listed in 8.2 (owner approves each), `brand.toml` with sources/hashes, icon generation, `NOTICE.md` + About notice, neutral swap test | Neutral package contains no official asset hash; official build shows art/icons everywhere listed in 8.2; notice present in repo, installer and About | 1-2 |
 | M7 | NSIS installer/uninstaller + release packaging + license bundle | Install/uninstall as a standard (non-admin) user in Windows Sandbox; non-ASCII user name; OneDrive-redirected Desktop; upgrade over previous version keeps data; uninstall keeps saves by default | 2-3 |
 | M8 | End-to-end QA + owner test | Clean machine: install → select ISO → play → save → exit → relaunch skips setup → crash path (forced) produces a report; owner plays the reference scene from the launcher | 2 |
-| M9 | Release candidate: CHANGELOG, known issues, release hosting per decision | Owner approval → tag | 0.5 |
+| M9 | Release candidate: CHANGELOG, known issues, GitHub Release on `moesuito/gt4-staticrecomp` | Owner approval → tag | 0.5 |
+| — | **Dependency: TASK-025 save manager** (section 13): slot storage and the Saves page; the launcher's v1 can fall back to a single slot if it slips | see 13.6 | 13-17 (v1 cut 8-10) |
 | M10 (insurance, optional) | Option B spike: freestanding game-code DLL + bundled clang-cl/lld-link build on a test VM | Game DLL built on a clean VM from the ISO; frames identical; F8 shows the DLL boundary cost; first-run time measured on 4 and 16 threads | 5-8 |
 
 Total for A: about **22-28 agent-days** (M0-M9), plus owner review/testing time. M2 depends on
@@ -482,16 +495,13 @@ TASK-012 progress; M1-M5 can start in parallel with it (single-writer rule: one 
 
 ## 11. Open questions for the owner
 
-1. **Project license** (there is no LICENSE file today). Recommendation: MIT for our own code
-   (matches the donor and keeps option A legally simple), LGPL parts in the DLL. Alternative GPL-3.0
-   blocks combining with game code in a distributed binary (see 4.2).
-2. **Where to host the binaries**: separate releases repository/host (recommended, protects the
-   source repo) or the main repo's Releases page?
-3. **Official artwork files**: will you provide the NTSC-U cover scan and a clean GT4 logo/emblem
-   master (section 8.2), or should we trace them from a scan you approve?
-4. **Code signing**: ship v1 unsigned (SmartScreen warning) or budget for a certificate?
-5. **Name in Windows**: Start Menu/Task Manager show "Gran Turismo 4" (official look) or
-   "GT4Recomp" (lower trademark exposure)?
+1. **Code signing:** ship v1 unsigned (SmartScreen warning until reputation builds) or pay for a certificate (section 9)?
+
+Decided on 2026-10-15 (recorded so nobody re-asks):
+- **Project license:** MIT for our own code. Third-party parts keep their licenses; paraLLEl-GS stays LGPL inside its DLL.
+- **Hosting:** installers are published as GitHub Releases of `moesuito/gt4-staticrecomp`, and the launcher source lives in the same repository.
+- **Display name:** "Gran Turismo 4".
+- **Artwork:** public official images, bundled (section 8).
 
 ## 12. Visual design system (round 2: clean, minimalist, Gran Turismo identity)
 
@@ -553,7 +563,7 @@ The "Official asset slots" toggle outlines every official or disc-derived asset 
 | Labels / numbers | Roboto Condensed (gran-turismo.com) | Yes | **Roboto Condensed** (same license as Roboto) |
 | Display heading (optional) | Bebas Neue Pro (gran-turismo.com) | No (commercial) | Not used. If ever needed: Bebas Neue (OFL) |
 | Japanese/CJK (later: Android, other locales) | Shin Go / DynaFont | No | Noto Sans JP / Noto Sans CJK (OFL) |
-| Logo | Custom GT lettering | Official asset | Only as `logo-gt4.png` in `branding/official/` |
+| Logo | Custom GT lettering | Official asset | Only as `logo-gt4.png` in `launcher/assets/brand/` |
 
 The fonts are embedded in the Slint build, so nothing depends on fonts installed on the machine. This matters on Android.
 
@@ -581,7 +591,7 @@ Components make no platform calls. The Windows shell (title bar, file dialog, pr
 
 - **Setup:** cover art on the left. On the right: logo, "Set up your game", "This only happens once.", four step rows and one primary button. For a wrong disc: one red status, a two-line explanation and "Choose another file".
 - **Home:** full-bleed disc photo, logo at bottom-left, Play under it, a Settings gear at top-right. While the game runs, Play becomes "Running · Stop". Nothing else: no cards, no news, no hints, no footer.
-- **Settings:** a nav column (Back, logo, Graphics, Display, Advanced, About, version). Each page has a title, the single line "Changes apply the next time you play." and its option rows. About holds licenses, disc and game files, repair and log access.
+- **Settings:** a nav column (Back, logo, Graphics, Display, Saves, Advanced, About, version). Option rows carry no helper text; an "i" next to each title opens a hover card (one state shown open in the mockup). High-resolution output is dimmed and locked below 4× (both states rendered). Each page has a title, the single line "Changes apply the next time you play." and its option rows. About holds licenses, disc and game files, repair and log access.
 - **Motion:**
   - background cross-fade of 1 s every 15 s;
   - button hover 150 ms, toggle 150 ms;
@@ -590,3 +600,95 @@ Components make no platform calls. The Windows shell (title bar, file dialog, pr
 
   There is no Ken Burns, sheen, breathing effect or staggered entrance. Reduced-motion turns all of it off.
 - **Input:** keyboard and XInput. D-pad moves focus, A activates, B goes back, Start = Play.
+
+## 13. Save manager (separate task; the launcher depends on it)
+
+Proposed as **TASK-025: Save manager** (appended after the phase 2/3 numbers, per the TASKS.md rule).
+- **Dependency:** the TASK-019 Saves page and the slot-based launch need its core. The launcher can ship v1 with one slot only if TASK-025 slips.
+- **Effort:** about 13–17 agent-days (table in 13.6).
+
+### 13.1 How saves are stored today (study)
+
+All findings come from read-only inspection of `private/manual-play/card.ps2` and two pinned seed cards, using a throwaway parser in the scratchpad, plus the donor `runtime/src/iop/sio2.cpp`.
+
+| Finding | Evidence | Label |
+|---|---|---|
+| The card is a **raw PS2 memory card image with ECC**: 8,650,752 bytes = 16,384 pages × 528 bytes (512 data + 16 spare/ECC). | File size; donor `sio2.cpp:47` `kPageBytes = 528, kPages = 0x4000` | Confirmed |
+| Superblock `"Sony PS2 Memory Card Format 1.2.0.0"`, page 512, 2 pages per cluster, 16 pages per erase block, 8,192 clusters, `alloc_offset` 41, `alloc_end` 8,135, root directory at cluster 0, indirect FAT cluster 8, card type 2, flags 0x2B. | Parsed superblock (owner card and both seeds identical) | Confirmed |
+| This is the same file format as PCSX2's 8 MB file memory cards (`.ps2`). `.mcd` images from other tools use the same raw layout. Some dumps omit the ECC bytes (8,388,608 bytes); those need ECC added on import. | Format match; PCSX2 behaviour from knowledge | High confidence |
+| The runtime has **one card, slot 1 only**. SIO2 port 2 goes to `memory_card()`; no slot 2 exists. | `sio2.cpp:269-270` | Confirmed |
+| The runtime opens it via `--memcard <path>`. It reads up to 8,650,752 bytes into memory; a missing file becomes an **unformatted** card (all 0xFF); a shorter file is padded with 0xFF. | `sio2.cpp:173-179`, `host/main.cpp:51` | Confirmed |
+| Writes rewrite the **whole file in place** (`ofstream` truncate) once 50 polls pass without new card writes. This is not atomic: a crash or power loss mid-write can corrupt the card. | `sio2.cpp:322-333` | Confirmed |
+| Whether the game's ECC bytes on our cards are valid (if PCSX2 checks them, it might reject our cards). | Not checked | Unknown |
+| **Contents:** one root entry, directory `BASCUS-97328GAMEDATA`, holding `garage` 1,280,064 B, `BASCUS-97328GAMEDATA` 237,760 B, `icon0.ico` 9,796 B and `icon.sys` 964 B (title "ＧＲＡＮ　ＴＵＲＩＳＭＯ　４ / Ｇａｍｅ　ｄａｔａ"). Total 1,528,584 B. Free space 6,635 KiB. | Directory walk | Confirmed |
+| **Only one GT4 game save fits per card in practice.** The directory name is fixed (`BASCUS-97328GAMEDATA`), so a second save would overwrite the first, even though about 5 × 1.5 MB would physically fit. | Fixed name seen on 3 cards; GT4 behaviour | High confidence |
+| GT4 also writes replay and photo saves to other directories. The disc has save icons for them: `GT4.VOL icon/GT4_Rep_*.ico`, `GT4_photo_*.ico`, `GT4_film_*.ico`. Their exact directory names and sizes are not yet known. | Disc catalogue | Confirmed (icons); Unknown (names) |
+| Backups today: the Python launcher copies `card-before.ps2` into each session folder (34 sessions exist). There is no rotation and no restore UI. | `external_runtime_probe.py`; folder listing | Confirmed |
+| **PCSX2 folder memory cards**: a host directory with one sub-folder per save plus PCSX2 metadata files (`_pcsx2_superblock`, `_pcsx2_meta_directory`). Our runtime cannot mount them, and emulating them would mean re-implementing PCSX2's GPL FolderMemoryCard (not wanted). The launcher can still **import** from one by reading the save sub-folder as a raw directory. | PCSX2 behaviour from knowledge | High confidence |
+| **Single-save formats:** `.psu` (uLaunchELF/EMS: uncompressed, 512-byte header per entry); `.max` (Action Replay MAX: `Ps2PowerSave` header, LZARI-compressed); `.cbs` (CodeBreaker: `CFU` header, RC4-style encryption + zlib); `.xps`/`.sps` (X-Port/SharkPort: `SharkPortSave` header, uncompressed); a raw directory (folder containing `icon.sys` and the files). We implement all of them from format facts. mymcplus is GPL-3.0, so its code is not copied into MIT code. | Public format documentation | High confidence |
+| **Readable progress:** Nenkai PDTools (MIT, commit `ffe0bb2`, `PDTools.SaveFile.GT4.GT4Save.Load(directory)`) decrypts GT4 saves. GT4SaveEditor shows the profile name, credits (`GarageFile.Money`) and the calendar day from them. Porting that decryption to Rust gives "Name · Day N · Cr X" per slot. Caveat (from its README): some garage cars do not decrypt exactly because of PS2 float behaviour; that does not affect name, money or day. | Private clones `private/slice151-research/nenkai/{PDTools,GT4SaveEditor}` | High confidence (feasible); port not done |
+
+### 13.2 Storage model: one 8 MB card image per slot
+
+```
+%LOCALAPPDATA%\GT4Recomp\saves\
+  slots.toml                 # schema_version, active_slot, [[slot]] id, label, created, source, last_played, cached summary
+  slot-0001.ps2              # standard 8,650,752-byte card (format 1.2.0.0 with ECC), slot 1 of the PS2
+  slot-0002.ps2
+  backups\slot-0001\slot-0001-YYYYMMDD-HHMMSS.ps2   # copy before each session, keep the last 5 per slot
+  session.lock               # byte lock while a game runs
+```
+
+Why one card file per slot instead of folder cards:
+- the runtime already mounts exactly this format (no native change);
+- GT4 allows one game save per card anyway;
+- each slot is self-contained, so export, delete and backup are plain file operations;
+- PCSX2 can open the files directly.
+
+Cost: 8.25 MB per slot (100 slots ≈ 825 MB, acceptable). Slot ids only grow (never reused). Labels are editable; by default they show the GT4 profile name.
+
+**Launching with a slot:** the launcher reads `active_slot` and passes `--memcard saves\slot-NNNN.ps2`. An empty slot has no file, so the runtime presents an unformatted card and GT4 offers to format it. Backup before launch; lock while running. The Saves page is read-only while the game runs. Card writes stay where the game puts them.
+
+**Native change recommended (small):** make the runtime's card flush atomic: write `slot.ps2.tmp`, flush, then `ReplaceFileW`/rename. This is an overlay capsule on `sio2.cpp`, tested by a CTest fixture.
+
+### 13.3 Operations
+
+- **Select:** a radio button per slot. The active slot shows a "Next play" tag. Only one is active.
+- **Import save** opens one file picker accepting `.ps2 .mcd .bin` (card images), `.psu .max .cbs .xps .sps`, or a folder.
+  - **Single save** (a GT4 `BASCUS-97328*` directory): imported directly.
+  - **Card image or PCSX2 folder card:** opened read-only. Its saves are listed in a dialog, grouped by directory, with GT4 game data, GT4 replays and "Not a Gran Turismo 4 save" (greyed, not selectable). The user ticks what to import.
+  - **Destination rule:** import **always creates a new slot** and never overwrites one. The new card is formatted fresh by our `gt4l-mcfs` writer (superblock, FAT, ECC). Selected directories are copied in with their timestamps, modes and `icon.sys`. One GT4 game-data directory per new slot; ticked replays from the same source go into that slot. Two game-data saves (from two sources) become two slots.
+  - **Validation before writing:** sizes, directory names and a read-back of the written card through our own reader.
+- **Export** (row action): "Memory card image (.ps2)", copying the slot file, or "Single save (.psu)" of the GT4 directory.
+- **Delete** (row action): a confirm dialog naming the slot and its summary. The file goes to the Windows Recycle Bin (`IFileOperation` with `FOFX_RECYCLEONDELETE`), so it can be undone; its backups stay until the user empties them in About › Game files.
+- **List:** at least 10 rows always visible, the used slots first, then empty rows, scrolling, no upper limit. Each used row shows a label, a summary ("Day 412 · Cr 1,284,300" when decryptable; otherwise "1.5 MB") and the last played or modified date. Export/Delete appear on hover or focus.
+- **Empty state** (no slot has data): "No saves yet", "Play and save in the game, or import a save.", plus an Import button.
+- **First run:** setup creates slot 1 (empty) and makes it active. For the owner, a one-time migration offers to import `private/manual-play/card.ps2` (dev builds only).
+
+### 13.4 Crates
+
+- `gt4l-mcfs`: PS2 card filesystem reader/writer with ECC, plus the importers for psu/max/cbs/xps/sps, folder cards and raw directories, and the psu exporter.
+- `gt4l-gt4save`: port of the PDTools GT4 decryption to Rust, read-only summary.
+
+Both crates have no UI, so the Android build can reuse them. Fixtures are synthetic cards and saves built by our own writer. Private parity tests use the owner's card (read-only) and must match the PDTools output for name, money and day.
+
+### 13.5 Mockups
+
+`mockup-settings.html`:
+- **Saves:** 10+ slots, one active, one hovered showing Export/Delete.
+- **Import dialog:** a card image listing its saves.
+- **No saves:** the empty state.
+
+Renders: `settings-saves.png`, `settings-saves-import.png`, `settings-saves-empty.png`. The replay row in the dialog and all slot data are sample values.
+
+### 13.6 Effort
+
+| Part | Agent-days |
+|---|---|
+| `gt4l-mcfs` reader/writer + ECC + fixtures | 4–5 |
+| Importers: card images (with/without ECC), raw dir, folder card, `.psu` | 2 |
+| Importers: `.max` (LZARI), `.cbs` (RC4 + zlib), `.xps`/`.sps` | 2–3 |
+| `gt4l-gt4save` (PDTools decryption port, summary only) + parity tests | 3–4 |
+| Slots storage, backups, Recycle Bin delete, launch integration, atomic-flush overlay | 2 |
+| Saves page + import dialog (Slint) | 1–2 |
+| **Total** | **≈ 13–17** (the v1 cut without .max/.cbs/.xps and without the decryption summary: ≈ 8–10) |
