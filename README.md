@@ -19,6 +19,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
+![License](https://img.shields.io/badge/license-MIT-blue)
 ![Tasks](https://img.shields.io/badge/tasks%20done-12%20of%2024-2ea44f)
 
 </div>
@@ -118,7 +119,7 @@ in game before it is merged.
 
 | Phase | Platform | Renderer |
 |---|---|---|
-| **Phase 1** (current) | Windows PC | paraLLEl-GS (Vulkan compute); current renderer kept as experimental fallback |
+| **Phase 1** (current) | Windows PC | paraLLEl-GS (Vulkan compute) and our own MIT hardware renderer (planned, 3x-6x); current renderer kept as experimental fallback |
 | **Phase 2** | Android | ARMSX2 GS pipeline (Vulkan) |
 | **Phase 3** | iOS | ARMSX2 GS pipeline (Metal) |
 
@@ -136,7 +137,7 @@ in game before it is merged.
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done · 0 interpreted VU1 calls; rally 60, showroom 60, night 59 FPS |
 | TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
 | TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
-| TASK‑011 | MTVU: VU1 on its own thread | 🔄 Plan done · step 0 (measurement) in progress |
+| TASK‑011 | MTVU: VU1 on its own thread | 🔄 Measured: 3.5–7.3 ms/frame can move off the main core; implementing |
 | TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs, textures missing (debugging) |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
@@ -144,7 +145,10 @@ in game before it is merged.
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
 | TASK‑017 | License-test crash | 📋 Planned |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design and plan in progress |
+| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design done |
+| TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 📋 Planned |
+| TASK‑026 | Own hardware renderer (MIT, clean room): specification | 🔄 In progress |
+| TASK‑027 | Own hardware renderer: implementation, 3x-6x resolution and texture packs | 📋 Planned |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 
@@ -223,6 +227,15 @@ GT4Recomp stands on the work of others. Thank you:
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) (Apache-2.0 OR MIT) | Khronos Group | Vulkan API headers. |
 
 Exact revisions, licenses and imported files are listed in [THIRD_PARTY.md](native/THIRD_PARTY.md).
+
+## License
+
+The project's own code is [MIT](LICENSE). Third-party components keep their own
+licenses ([THIRD_PARTY.md](native/THIRD_PARTY.md)); paraLLEl-GS is LGPL-3.0+.
+Gran Turismo, Gran Turismo 4 and their logos and artwork are trademarks or property
+of Sony Interactive Entertainment and Polyphony Digital. GT4Recomp is an unofficial
+fan project, not affiliated with or endorsed by them; it does not include the game,
+and you need your own copy.
 
 ## Documentation
 
