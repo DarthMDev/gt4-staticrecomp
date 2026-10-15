@@ -317,6 +317,9 @@ These are deliberately left out of the UI:
 
 Slint's licensing (Royalty-free 2.0 with attribution, or GPLv3) fits either project-license answer.
 
+**Superseded (owner, 2026-10-15): the frontend moves to Tauri 2 with the HTML mockups; see section 15.**
+The Rust crates stay; only `gt4l-app` (Slint) is replaced.
+
 ### 7.2 Crate layout (`launcher/` Cargo workspace inside the repo)
 
 ```
@@ -788,7 +791,8 @@ Dates and items shown are sample values.
 
 ## 14. Implementation status (branch `task/019-launcher`, 2026-10-15)
 
-Not yet owner-approved; not merged. Labels as above.
+Not yet owner-approved; not merged. Labels as above. Paused by the owner on 2026-10-15; the Slint UI
+below is superseded by section 15 (Tauri 2 with the HTML design).
 
 Done (Confirmed by tests or by the screenshots in `docs/launcher/shots/`):
 - Branch merges: TASK-029 controls table (`docs/CONTROLS.md`), TASK-025 `gt4saves` and `memcard_store`,
@@ -826,3 +830,47 @@ Open:
 - The AMD Radeon metrics overlay (`amdow.exe`) is drawn into some captures (setup, home).
 - The native shader change needs a candidate build and the launcher manifest pin; not built here.
 - The Setup page still shows the "Cover art" placeholder.
+
+## 15. Frontend decision: Tauri 2 with the approved HTML design (owner, 2026-10-15)
+
+State: **paused**, documentation only. Nothing is built for this section until the owner resumes the launcher,
+which is planned as the last release 1.0.0 workstream.
+
+Why: the Slint screens (section 14, `docs/launcher/shots/`) drifted from the design the owner approved over
+rounds 2-6. That design is already HTML: `mockup-setup.html`, `mockup-home.html` and
+`mockup-settings.html` (Graphics, Display, Advanced, Saves, Replays, About), with the section 12 tokens.
+Tauri 2 renders HTML in the system WebView2, so the approved pages become the real UI instead of being
+redrawn.
+
+What stays (Rust, unchanged, with their tests):
+- `gt4l-core`: settings table, config TOML, launch line and environment, exit classification, process lock,
+  Job Object, single instance.
+- `gt4l-disc`: ISO check, CORE.GT4 extraction, ELF rebuild, setup pipeline.
+- `gt4saves`: card library, import, harvest, build card.
+- `gt4controls`: the binding schema of `docs/CONTROLS.md`.
+- XInput capture (`pad.rs`) and Recycle Bin deletes (`recycle.rs`), moved out of `gt4l-app` into a
+  UI-free crate.
+
+What changes:
+- `gt4l-app` (Slint) is replaced by a Tauri 2 app crate, `gt4l-tauri`. Its frontend is the mockup HTML,
+  split into one page per screen, with no framework beyond plain HTML, CSS and JS unless the owner asks.
+- The UI calls Rust through Tauri commands only: setup progress and cancel, settings get and set from the
+  settings table, play, saves and replays operations, controls capture.
+- Settings rows are generated from the `gt4l-core` settings table. The page never hard-codes an option,
+  so only real options appear (the owner rule).
+- Tauri security: a strict CSP, no remote content, all assets bundled, and capabilities limited to the
+  commands above. There is no shell plugin and no arbitrary file system access from the page.
+- WebView2: Windows 11 ships it. For older systems the NSIS installer uses Tauri's
+  `embedBootstrapper` or `downloadBootstrapper` mode; that choice is left open for the owner.
+  The installer stays per-user NSIS (Tauri's NSIS bundler, or the existing `installer/gt4recomp.nsi`).
+- Licences: Tauri and WebView2 are MIT/Apache-2.0 and Microsoft-redistributable. The Slint attribution
+  goes away with Slint.
+
+Settings to add to the HTML design when it resumes:
+- FSR sharpness as a 0-100 % slider, default 50 %, shown only when the scaling filter is FSR. It maps to
+  `GT4_FSR_SHARPNESS` 0-100 (task/028 slice 184).
+- Controls page: an original vector DualShock 2 drawing, with the PS2 names and the current binding on
+  each control. The Slint generic pad is not the design.
+
+Effort estimate (Hypothesis): port the three mockups into Tauri pages and wire the commands in about 2-3
+agent sessions. The Rust core needs no rewrite.
