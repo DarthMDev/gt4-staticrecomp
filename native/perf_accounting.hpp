@@ -10,7 +10,11 @@ namespace gt4::perf {
 enum class Category : std::size_t {
   ee_dispatch, vu_interpret, iop_run, vif_gif, gs_upload, gs_execute,
   presentation, audio_push, host_vblank, gs_wait, acquire_wait,
-  presentation_wait, audio_wait, unattributed, vu0_micro_interpret, vu1_interpret, count
+  presentation_wait, audio_wait, unattributed, vu0_micro_interpret, vu1_interpret,
+#ifdef GT4_VU1_AOT
+  vu1_aot,  // generated VU1 execution (VU1 AOT overlay only)
+#endif
+  count
 };
 
 constexpr Category vu_interpreter_category(int unit) noexcept {

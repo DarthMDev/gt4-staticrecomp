@@ -54,6 +54,8 @@ struct ProgramEntry {
     // The function is valid only for images whose image-wide flag-use bit equals
     // this value (see image_flags_used in vurecomp.hpp). The registrar must match it.
     bool image_flags_used;
+    // Lowercase SHA-256 of the identity stream (program_identity.hpp); checked by the runtime.
+    const char *identity_sha256;
     ProgramFunction function;
 };
 

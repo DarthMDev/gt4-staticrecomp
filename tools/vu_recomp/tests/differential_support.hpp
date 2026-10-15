@@ -22,7 +22,21 @@
 #include <string>
 #include <vector>
 
+#ifdef GT4_VU1_AOT
+namespace ps2::vu {
+void aot_set_enabled(bool enabled);  // scripts/vu1_aot_overlay.inc
+}
+#endif
+
 namespace gt4::vutest {
+
+// The donor entry point ps2::vu::run must reach the interpreter for reference runs.
+// Under the AOT overlay that is an explicit switch, not an environment variable.
+inline void use_interpreter_reference() {
+#ifdef GT4_VU1_AOT
+    ps2::vu::aot_set_enabled(false);
+#endif
+}
 
 constexpr std::uint32_t kTpcSentinel = 0xFFFFFFFFu;
 constexpr std::size_t kCodeBytes = 16384;

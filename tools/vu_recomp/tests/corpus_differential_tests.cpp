@@ -51,6 +51,7 @@ std::vector<CorpusImage> load_corpus(const fs::path &directory) {
 }
 
 int main(int argc, char **argv) {
+    gt4::vutest::use_interpreter_reference();
     std::string corpus = argc > 1 ? argv[1] : "";
     if (corpus.empty()) {
         const char *from_env = std::getenv("GT4_VU_CORPUS_DIR");

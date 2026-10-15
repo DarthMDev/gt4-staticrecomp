@@ -48,6 +48,7 @@ void check_budget(Counters &counters, const Fixture &fixture, std::uint32_t entr
 }
 
 int main() {
+    gt4::vutest::use_interpreter_reference();
     Counters counters;
     const std::vector<Fixture> fixtures = gt4::vurecomp::fixtures::build_fixtures();
     const std::uint32_t program_count = gt4::vugen::generated::kProgramCount;

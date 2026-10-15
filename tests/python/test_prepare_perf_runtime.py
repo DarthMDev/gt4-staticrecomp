@@ -73,3 +73,49 @@ class PerformanceDerivationTests(unittest.TestCase):
         for source in ('no match', '    run_fast(unit, pc);\n    run_fast(unit, pc);'):
             with self.assertRaisesRegex(ValueError, 'one qualified'):
                 producer.derive('vu_micro.cpp', source)
+
+
+class DefaultDerivationPinTests(unittest.TestCase):
+    """Default and split derivations must stay byte-identical after the VU1 AOT option was added."""
+    PINNED = {
+        'default': {'system.cpp': '7ca58519c08cba6461ee782127ff04c0206fdbdc5b548f5ddf0e1175f0f7fb40',
+                    'vu_micro.cpp': 'da9f08b5f3e6fd9e671f9d628b216218da218f84a179f225c796e9f74ab2628d',
+                    'vif.cpp': '6449989a2a39c58990beea1d06aba9f61238c53329adf73d1859e54177db5223'},
+        'split': {'system.cpp': '7ca58519c08cba6461ee782127ff04c0206fdbdc5b548f5ddf0e1175f0f7fb40',
+                  'vu_micro.cpp': 'fedbd1a5e77673d9a493eb000aed28479d99e9abcc6fa1931fbf96c24680902e',
+                  'vif.cpp': '6449989a2a39c58990beea1d06aba9f61238c53329adf73d1859e54177db5223'},
+    }
+
+    def derived(self, **options):
+        donor = Path(producer.ROOT) / 'private/references/ps2-web-recomp/runtime/src'
+        if not donor.exists():
+            self.skipTest('donor checkout is not present')
+        result = {}
+        for name in producer.PINS:
+            text = (donor / name).read_bytes().decode('utf-8').replace('\r\n', '\n')
+            result[name] = hashlib.sha256(producer.derive(name, text, **options).encode('utf-8')).hexdigest()
+        return result
+
+    def test_default_and_split_match_recorded_hashes(self):
+        default = self.derived()
+        split = self.derived(split_vu=True)
+        self.assertEqual(split['vu_micro.cpp'], self.PINNED['split']['vu_micro.cpp'])
+        self.assertEqual(split['system.cpp'], self.PINNED['split']['system.cpp'])
+        self.assertEqual(split['vif.cpp'], self.PINNED['split']['vif.cpp'])
+        self.assertEqual(default['system.cpp'], self.PINNED['default']['system.cpp'])
+        self.assertEqual(default['vif.cpp'], self.PINNED['default']['vif.cpp'])
+        self.assertEqual(default['vu_micro.cpp'], self.PINNED['default']['vu_micro.cpp'])
+        self.assertNotEqual(default['vu_micro.cpp'], split['vu_micro.cpp'])
+
+    def test_aot_option_changes_only_vu_micro_and_is_reversible(self):
+        base = self.derived(split_vu=True)
+        aot = self.derived(split_vu=True, vu1_aot=True)
+        self.assertEqual(aot['system.cpp'], base['system.cpp'])
+        self.assertEqual(aot['vif.cpp'], base['vif.cpp'])
+        self.assertNotEqual(aot['vu_micro.cpp'], base['vu_micro.cpp'])
+
+    def test_aot_overlay_sections_cover_every_anchor(self):
+        sections = producer.overlay_sections(producer.OVERLAY_PATH.read_text(encoding='utf-8'))
+        self.assertEqual(set(sections), set(producer.OVERLAY_ANCHORS))
+        for name, text in sections.items():
+            self.assertTrue(text.strip(), name)

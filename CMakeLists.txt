@@ -46,3 +46,8 @@ add_test(NAME vu_recomp_corpus COMMAND $<TARGET_FILE:gt4_vu_corpus_differential>
 set_tests_properties(vu_recomp_core vu_recomp_differential vu_recomp_corpus PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 set_tests_properties(vu_recomp_corpus PROPERTIES ENVIRONMENT "GT4_VU_CORPUS_DIR=${GT4_VU_CORPUS_DIR}")
+if(TARGET gt4_vu1_aot_registry_test)
+    add_test(NAME vu1_aot_registry COMMAND $<TARGET_FILE:gt4_vu1_aot_registry_test>)
+    set_tests_properties(vu1_aot_registry PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_VU_CORPUS_DIR=${GT4_VU_CORPUS_DIR}")
+endif()

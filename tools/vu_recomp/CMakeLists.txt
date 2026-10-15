@@ -72,13 +72,26 @@ else()
     file(WRITE "${VU_CORPUS_SOURCE}" "#include \"vu_recomp_contract.hpp\"
 
 namespace gt4::vugen::generated {
-extern const ProgramEntry kPrograms[] = {{0u, 0u, false, nullptr}};
+extern const ProgramEntry kPrograms[] = {{0u, 0u, false, \"\", nullptr}};
 extern const std::uint32_t kProgramCount = 0u;
 }
 ")
 endif()
 set_source_files_properties("${VU_CORPUS_SOURCE}" PROPERTIES GENERATED TRUE)
+add_executable(gt4_vu1_mismatch_replay "${VU_RECOMP_TESTS}/vu1_mismatch_replay.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" "${VU_CORPUS_SOURCE}")
+target_include_directories(gt4_vu1_mismatch_replay PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
+target_link_libraries(gt4_vu1_mismatch_replay PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
+target_compile_options(gt4_vu1_mismatch_replay PRIVATE /W4 -Wno-unused-label)
 add_executable(gt4_vu_corpus_differential "${VU_RECOMP_TESTS}/corpus_differential_tests.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" "${VU_CORPUS_SOURCE}")
 target_include_directories(gt4_vu_corpus_differential PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
 target_link_libraries(gt4_vu_corpus_differential PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
 target_compile_options(gt4_vu_corpus_differential PRIVATE /W4 -Wno-unused-label)
+
+# VU1 AOT registry controls: only with the AOT capsule, which provides the runtime
+# overlay and the game table (GT4_VU1_GENERATED_DIR).
+if(GT4_VU1_GENERATED_DIR)
+    add_executable(gt4_vu1_aot_registry_test "${VU_RECOMP_TESTS}/vu1_aot_registry_test.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp")
+    target_include_directories(gt4_vu1_aot_registry_test PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
+    target_link_libraries(gt4_vu1_aot_registry_test PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
+    target_compile_options(gt4_vu1_aot_registry_test PRIVATE /W4 -Wno-unused-label)
+endif()

@@ -178,10 +178,18 @@ void check_split_vu_report(std::FILE *stream) {
   require(report.find("vu0_micro_interpret=1.000 vu1_interpret=2.000") != std::string::npos &&
           report.find("vu_interpreter_total_exclusive_ms/frame=3.000") != std::string::npos,
           "separate unit times and derived total");
+#ifdef GT4_VU1_AOT
+  // The VU1 AOT overlay build reports generated execution as included, in its own category.
+  require(report.find("vu_scope=unit-split run_fast only") != std::string::npos &&
+          report.find("measurement_mode=vu-split") != std::string::npos &&
+          report.find("VU0_macro_in_EE; generated_VU1_AOT_included") != std::string::npos,
+          "unit scope reports generated VU1 AOT execution as included");
+#else
   require(report.find("vu_scope=unit-split run_fast only") != std::string::npos &&
           report.find("measurement_mode=vu-split") != std::string::npos &&
           report.find("VU0_macro_in_EE; generated_VU1_AOT_excluded") != std::string::npos,
           "unit scope excludes macro/AOT paths explicitly");
+#endif
 }
 }
 

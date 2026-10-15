@@ -1,4 +1,10 @@
 #include "perf_probe.hpp"
+
+#ifdef GT4_VU1_AOT
+namespace ps2::vu {
+__attribute__((weak)) void aot_report(std::FILE *) {}  // strong definition: VU1 AOT overlay
+}
+#endif
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -26,7 +32,11 @@ constexpr const char *names[] = {
     "ee_dispatch", "vu_interpret", "iop_run", "vif_gif", "gs_host_copy",
     "gs_execute", "presentation", "audio_push", "host_vblank",
     "gs_fence_wait", "acquire_wait", "present_wait", "audio_wait", "unattributed",
-    "vu0_micro_interpret", "vu1_interpret"};
+    "vu0_micro_interpret", "vu1_interpret"
+#ifdef GT4_VU1_AOT
+    , "vu1_aot"
+#endif
+    };
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
 }
 
@@ -235,9 +245,17 @@ void Probe::print(const char *reason) noexcept {
     const auto &categories = accounting_.interval().categories;
     const double total_us = static_cast<double>(categories[static_cast<std::size_t>(Category::vu0_micro_interpret)].exclusive_us) +
         categories[static_cast<std::size_t>(Category::vu1_interpret)].exclusive_us;
+#ifdef GT4_VU1_AOT
+    std::fprintf(output_, "[perf] vu_scope=unit-split run_fast only; vu_interpreter_total_exclusive_ms/frame=%.3f; VU0_macro_in_EE; generated_VU1_AOT_included (vu1_aot category)\n",
+                 total_us / 1000.0 / frames);
+#else
     std::fprintf(output_, "[perf] vu_scope=unit-split run_fast only; vu_interpreter_total_exclusive_ms/frame=%.3f; VU0_macro_in_EE; generated_VU1_AOT_excluded\n",
                  total_us / 1000.0 / frames);
+#endif
   }
+#ifdef GT4_VU1_AOT
+  ps2::vu::aot_report(output_);
+#endif
   std::fflush(output_);
 }
 

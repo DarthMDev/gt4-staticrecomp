@@ -9,7 +9,8 @@ import sys
 from external_runtime_probe import ROOT, VU1_CORPUS_NAME, run_probe, verify_manual_capture_profile, verify_performance_profile
 
 
-def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False):
+def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
+         vu1_verify=0, vu1_interpret_only=False):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -52,11 +53,16 @@ def play(aspect='16:9', assets_root=None, runtime_manifest=None, capture_shapes=
             if vu1_record:
                 print(f'VU1 recording: missed programs go to {run_directory / VU1_CORPUS_NAME}', flush=True)
                 print('Summary is written when the game exits. Owner controls gameplay.', flush=True)
+            if vu1_verify:
+                print(f'VU1 verify: every {vu1_verify}th generated call is compared with the interpreter; '
+                      'mismatches go to the session log.', flush=True)
+            if vu1_interpret_only:
+                print('VU1 interpret-only: this binary runs the interpreter for every VU1 call (A/B).', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,
                                manifest,
                                window=True, interactive=True, play_card=card, aspect=aspect,
                                runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
-                               vu1_record=vu1_record)
+                               vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:
