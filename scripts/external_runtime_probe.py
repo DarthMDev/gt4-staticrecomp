@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import time
 
+from cpu_affinity import apply_process_affinity, plan_affinity
 from gt4disc import fingerprint
 
 
@@ -46,23 +47,40 @@ PERF_PROFILES = {
     'quickfix3': ('slice164-quickfix3.json', 'private/slice164-quickfix3-build/build/gt4vulkan.exe'),
     # TASK-013 candidate: vu1-all plus the VU0 AOT overlay with the 14 VCALLMS entries (slice 160).
     'vu0-aot': ('slice160-vu0-aot.json', 'private/slice160-vu0-build/build/gt4vulkan.exe'),
-    # Current main (slice166): vu0-aot built from main after TASK-008/009/010/013; accepts --force-480p.
-    # (slice165 baked a worktree junction shader path and does not start; kept as history only.)
-    'main': ('slice166-main.json', 'private/slice166-main-build/build/gt4vulkan.exe'),
+    # Current main (slice178, release 1.0.0 W1): the slice166 main features plus the slice172 MTVU worker runtime
+    # (GT4_MTVU default 1; 0 is the A/B path). The launcher holds 480p by default in this mode (play_performance.py).
+    # slice166 (main without MTVU) stays pinned as history: docs/inputs/slice166-main.json.
+    'main': ('slice178-main.json', 'private/slice178-main-build/build/gt4vulkan.exe'),
+    # TASK-011 step 0 (slice169): main plus MTVU measurement counters ([mtvu-measure] lines in F8;
+    # GT4_MTVU_MEASURE=0 disables them). No guest-visible change.
+    'mtvu-measure': ('slice169-mtvu-measure.json', 'private/slice169-mtvu-measure-build/build/gt4vulkan.exe'),
+    # TASK-011 step 2 (slice170): VU1 worker thread. GT4_MTVU (default on) selects the worker; 0 is the main path.
+    # slice171 (TASK-011 step 3): the slice170 worker runtime with per-thread accounting ([mtvu] F8 lines).
+    # slice172 (TASK-011 step 4): SIGNAL/FINISH/LABEL applied at acceptance; the launcher mode mtvu points here.
+    'mtvu': ('slice172-mtvu.json', 'private/slice172-mtvu-build/build/gt4vulkan.exe'),
+    'mtvu-slice171': ('slice171-mtvu.json', 'private/slice171-mtvu-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
-                     'slice160-vu0-aot.json', 'slice166-main.json')
+                     'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
+                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
-VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json')
+VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
+                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
 # GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
+# GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
+MTVU_MEASURE_VALUES = ('0', '1')
+# TASK-011 step 2 (slice170): worker runtime switches. Unset means the default shown; forwarded and recorded.
+MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'}
+# GT4_MTVU_REPORT_EVERY (slice171): VBlank count for the headless [mtvu] F8-equivalent report; unset means off.
+MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -115,7 +133,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -198,15 +216,28 @@ def summarize_vu1_corpus(corpus):
     return summary
 
 
+def binary_workspace_for(runtime_workspace, workspace):
+    """Checkout holding the pinned binaries: the runtime checkout, or the assets checkout when the runtime
+    checkout is a worktree without private/ (worktrees never link the main private/ directory)."""
+    runtime_workspace = Path(runtime_workspace).resolve()
+    return runtime_workspace if (runtime_workspace / 'private').is_dir() else Path(workspace).resolve()
+
+
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
-              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
+              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
+              binary_workspace=None, cpu_cores=None):
     workspace = workspace.resolve()
+    if cpu_cores is not None and not performance:
+        raise ValueError('--cpu-cores is refused outside performance modes')
+    affinity_plan = plan_affinity(cpu_cores) if cpu_cores is not None else None
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
     runtime_workspace = Path(runtime_workspace or workspace).resolve()
-    runtime_private = (runtime_workspace / 'private').resolve()
+    # Manifests come from runtime_workspace/docs/inputs; pinned binaries from binary_workspace/private.
+    binary_workspace = Path(binary_workspace or runtime_workspace).resolve()
+    runtime_private = (binary_workspace / 'private').resolve()
     if capture_shapes and run_directory.absolute() != run_directory.resolve():
         raise ValueError('Shape capture session must use an ordinary canonical private path')
     run_directory = run_directory.resolve()
@@ -214,6 +245,14 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     # Refused before any output: the window is fixed 16:9, and unknown GT4_FORCE_480P values stop the run.
     if os.environ.get('GT4_FORCE_480P', '0') not in FORCE_480P_VALUES:
         raise ValueError('GT4_FORCE_480P must be 0 or 1')
+    if os.environ.get('GT4_MTVU_MEASURE', '1') not in MTVU_MEASURE_VALUES:
+        raise ValueError('GT4_MTVU_MEASURE must be 0 or 1')
+    if not os.environ.get('GT4_MTVU_MEASURE_EVERY', '0').isdigit():
+        raise ValueError('GT4_MTVU_MEASURE_EVERY must be a VBlank count')
+    # Worker switches are validated here, before any output, and never scrubbed: a bad value stops the run.
+    for switch, default in MTVU_SWITCHES.items():
+        if os.environ.get(switch, default) not in ('0', '1'):
+            raise ValueError(f'{switch} must be 0 or 1')
     if not run_directory.is_relative_to(private_root) or run_directory == private_root:
         raise ValueError('Probe output must be a new directory inside private/')
     if run_directory.exists():
@@ -261,11 +300,11 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('VU0 AOT verification needs a positive sample period and the vu0-aot manifest')
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
-        dependency_path = (runtime_workspace / dependency['path']).resolve()
+        dependency_path = (binary_workspace / dependency['path']).resolve()
         if not dependency_path.is_relative_to(runtime_private):
             raise ValueError('Runtime dependency must be inside private/')
         verify_file(dependency_path, {key: dependency[key] for key in ('size_bytes', 'sha256')})
-    executable = runtime_workspace / executable_pin['path']
+    executable = binary_workspace / executable_pin['path']
     if not executable.resolve().is_relative_to(runtime_private):
         raise ValueError('Runtime executable must be inside private/')
     verify_file(executable, {key: executable_pin[key] for key in ('size_bytes', 'sha256')})
@@ -353,6 +392,14 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:
         result['force_480p_environment'] = {'GT4_FORCE_480P': environment['GT4_FORCE_480P']}
+    mtvu_measure = {name: environment[name] for name in ('GT4_MTVU_MEASURE', 'GT4_MTVU_MEASURE_EVERY') if name in environment}
+    if mtvu_measure:
+        result['mtvu_measure_environment'] = mtvu_measure
+    if MTVU_REPORT_EVERY in environment and not environment[MTVU_REPORT_EVERY].isdigit():
+        raise ValueError('GT4_MTVU_REPORT_EVERY must be a VBlank count')
+    mtvu_switches = {name: environment[name] for name in (*MTVU_SWITCHES, MTVU_REPORT_EVERY) if name in environment}
+    if mtvu_switches:
+        result['mtvu_environment'] = mtvu_switches
     if capture_shapes:
         environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']
@@ -374,9 +421,28 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         result['vu1_interpret_environment'] = {'PS2_VU_INTERPRET': '1'}
     with log_path.open('wb') as output:
         try:
-            process = subprocess.run(arguments, cwd=run_directory, stdout=output,
-                                     stderr=subprocess.STDOUT, timeout=timeout_seconds, env=environment)
-            exit_code, timed_out = process.returncode, False
+            if affinity_plan is None:
+                process = subprocess.run(arguments, cwd=run_directory, stdout=output,
+                                         stderr=subprocess.STDOUT, timeout=timeout_seconds, env=environment)
+                exit_code, timed_out = process.returncode, False
+            else:
+                # Affinity: start, then set the mask on the running process (see scripts/cpu_affinity.py).
+                process = subprocess.Popen(arguments, cwd=run_directory, stdout=output,
+                                           stderr=subprocess.STDOUT, env=environment)
+                try:
+                    apply_process_affinity(process.pid, affinity_plan['mask'])
+                except OSError:
+                    process.kill()
+                    process.wait()
+                    raise
+                result['cpu_affinity'] = dict(affinity_plan, applied=True, mask=hex(affinity_plan['mask']),
+                                              method='SetProcessAffinityMask after process start')
+                try:
+                    exit_code, timed_out = process.wait(timeout=timeout_seconds), False
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                    raise
         except subprocess.TimeoutExpired:
             exit_code, timed_out = None, True
     result.update(summarize_exit(log_path.read_text(encoding='utf-8', errors='replace'),
@@ -420,11 +486,15 @@ def main():
     parser.add_argument('--interactive', action='store_true', help='Manual window play without scripted input or captures')
     parser.add_argument('--force-480p', action='store_true',
                         help='Experimental: hold the race display index at 480p (GT4_FORCE_480P=1)')
+    parser.add_argument('--assets-root', type=Path,
+                        help='Checkout with private/ and the disc (default: this checkout); outputs go under it')
     options = parser.parse_args()
     try:
-        result = run_probe(ROOT, options.run_directory, options.frames, options.timeout,
+        assets = (options.assets_root or ROOT).resolve()
+        result = run_probe(assets, options.run_directory, options.frames, options.timeout,
                            options.press, options.card_seed, options.runtime_manifest, options.window,
-                           options.capture_audio, options.interactive, force_480p=options.force_480p)
+                           options.capture_audio, options.interactive, force_480p=options.force_480p,
+                           runtime_workspace=ROOT, binary_workspace=binary_workspace_for(ROOT, assets))
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')
     print(json.dumps(result, indent=2))

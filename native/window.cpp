@@ -10,6 +10,9 @@
 #include "frame_clock.hpp"
 #include "pacing.hpp"
 #include "window_mode.hpp"
+#ifdef GT4_MTVU_MEASURE
+#include "mtvu_measure.hpp"
+#endif
 #ifdef GT4_SHAPE_CAPTURE
 #include "shape_capture_control.hpp"
 #include "shape_observer_adapter.hpp"
@@ -111,6 +114,10 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
       // The F7/F8 interval starts here: histogram and counter deltas restart.
       counters_at_last_report = pacing_counters();
       pacing_diagnostics.reset();
+#ifdef GT4_MTVU_MEASURE
+      if ((second & (1ll << 30)) == 0)
+        gt4::mtvu::request_interval_reset();
+#endif
     }
     const auto request = first == VK_F7 ? gt4::perf::Request::start :
         first == VK_F8 ? gt4::perf::Request::report : gt4::perf::Request::toggle;
@@ -351,6 +358,11 @@ int run_window(const std::function<int()> &emulate) {
                      static_cast<unsigned long long>(force_480p_state.writes));
       counters_at_last_report = session;
       pacing_diagnostics.reset();
+#ifdef GT4_MTVU_MEASURE
+      // TASK-011 step 0: interval counters since the last F7 or report, then a new interval.
+      gt4::mtvu::report(output, "interval");
+      gt4::mtvu::reset_interval();
+#endif
     });
 #endif
     ps2::set_audio_sink(

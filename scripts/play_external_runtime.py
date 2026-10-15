@@ -6,11 +6,12 @@ import msvcrt
 from pathlib import Path
 import sys
 
-from external_runtime_probe import ROOT, VU1_CORPUS_NAME, run_probe, verify_manual_capture_profile, verify_performance_profile
+from external_runtime_probe import (ROOT, VU1_CORPUS_NAME, binary_workspace_for, run_probe, verify_manual_capture_profile,
+                                    verify_performance_profile)
 
 
 def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, cpu_cores=None):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -67,7 +68,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                                window=True, interactive=True, play_card=card,
                                runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
                                vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
-                               force_480p=force_480p, vu0_verify=vu0_verify)
+                               force_480p=force_480p, vu0_verify=vu0_verify, cpu_cores=cpu_cores,
+                               binary_workspace=binary_workspace_for(ROOT, workspace))
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:

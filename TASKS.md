@@ -52,7 +52,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done |
 | TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, races in 480p | ✅ Done |
 | TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ✅ Done (tuning measurements pending) |
-| TASK‑011 | MTVU: VU1 on its own thread, on by default | 🔄 Steps 0-4 and 6 done; merging into the main build |
+| TASK‑011 | MTVU: VU1 on its own thread, on by default | ✅ Done · in `--mode main` (slice178), `GT4_MTVU=0` A/B |
 | TASK‑012 | paraLLEl-GS as an optional PC renderer: integration, super-sampling, high-resolution output | 🔄 Plays (night race 60 FPS); quality capped at 2x; kept as an option |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
@@ -142,6 +142,7 @@ Run VU1 programs on a worker thread (donor `start_vu_thread` exists), on by
 default with an env switch to disable; exact sync points wherever the EE observes
 VU1 results. Acceptance: identical headless frames, verify 0 mismatches, owner
 showroom/night/race frametime equal or better.
+State: ✅ Done (release 1.0.0 W1, branch `task/011-mtvu`). Plan in docs/MTVU-PLAN.md; step 0 (slice169 measurement), steps 1-4 (ring and journal, slice170 worker, slice171 per-thread F8, slice172 EE-side signals) and step 6 (`--cpu-cores N`) are in. Release W1 (slice178): MTVU is part of `--mode main`, on by default (`GT4_MTVU=0` is the A/B switch), and `--mode main` holds 480p by default. Checks: CTest 27/27, Python 281 OK (12 skipped), headless 4,200 frames: 42/42 identical to slice157 with MTVU on (three runs) and off (one run), and with the default environment. The PR into `main` is not opened yet (ready for review); the merge waits for owner approval. Owner A/B (MTVU-PLAN section 12.6) still pending. Details: BUILD.md "Slice178".
 
 ### TASK-012 — paraLLEl-GS as the PC renderer
 One large task, delivered in verified steps on its own branch:
