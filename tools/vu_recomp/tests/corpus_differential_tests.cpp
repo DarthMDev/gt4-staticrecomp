@@ -84,6 +84,7 @@ int main(int argc, char **argv) {
             if (key != table_entry.key) continue;
             // Same reachable code with a different image-wide flag reader is a different program.
             if (gt4::vurecomp::image_flags_used(image.bytes.data(), kCodeBytes) != table_entry.image_flags_used) continue;
+            if (gt4::vurecomp::image_status_used(image.bytes.data(), kCodeBytes) != table_entry.image_status_used) continue;
             ++matches;
             for (const SeedMode &seed : seeds)
                 check_program(image.bytes.data(), table_entry.entry, table_entry.function, seed, gt4::vugen::kInterpreterInstructionBudget,

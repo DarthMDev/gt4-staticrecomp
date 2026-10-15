@@ -24,12 +24,29 @@ bool write_text(const std::filesystem::path &path, const std::string &text) {
 }
 
 int main(int argc, char **argv) {
-    if (argc != 3) {
-        std::fprintf(stderr, "usage: gt4_vu_recomp <input_dir> <fresh_output_dir>\n");
+    // Options come first: --no-flag-elision emits the donor flag behaviour (comparison
+    // builds), --namespace NAME places the table and functions in another namespace.
+    std::string name_space = "gt4::vugen::generated";
+    int first = 1;
+    while (first < argc && argv[first][0] == '-') {
+        const std::string option = argv[first];
+        if (option == "--no-flag-elision") {
+            gt4::vurecomp::set_flag_elision(false);
+            first += 1;
+        } else if (option == "--namespace" && first + 1 < argc) {
+            name_space = argv[first + 1];
+            first += 2;
+        } else {
+            std::fprintf(stderr, "gt4_vu_recomp: unknown option %s\n", option.c_str());
+            return 2;
+        }
+    }
+    if (argc - first != 2) {
+        std::fprintf(stderr, "usage: gt4_vu_recomp [--no-flag-elision] [--namespace NAME] <input_dir> <fresh_output_dir>\n");
         return 2;
     }
-    const std::filesystem::path input_dir = argv[1];
-    const std::filesystem::path output_dir = argv[2];
+    const std::filesystem::path input_dir = argv[first];
+    const std::filesystem::path output_dir = argv[first + 1];
     std::string error;
     if (!gt4::vurecomp::prepare_fresh_output_directory(output_dir, error)) {
         std::fprintf(stderr, "gt4_vu_recomp: %s\n", error.c_str());
@@ -41,7 +58,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     const std::string generated_name = "vu1_generated.cpp";
-    const std::string source = gt4::vurecomp::emit_generated_source(records);
+    const std::string source = gt4::vurecomp::emit_generated_source(records, name_space);
     const std::string source_sha256 = gt4::vurecomp::sha256_hex(
         reinterpret_cast<const std::uint8_t *>(source.data()), source.size());
     if (!write_text(output_dir / generated_name, source) ||

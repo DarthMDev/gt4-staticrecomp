@@ -11,6 +11,7 @@
 
 #include "gif_capture.hpp"
 #include "vu_recomp_contract.hpp"
+#include "vurecomp.hpp"
 
 #include "hw.hpp"
 #include "vu_micro.hpp"
@@ -112,7 +113,8 @@ inline std::vector<std::uint8_t> make_memory(SeedMode mode) {
 }
 
 // Returns the first differing field, or an empty string.
-inline std::string first_difference(const ps2::Vu0Regs &a, const ps2::Vu0Regs &b) {
+// VU1 status is compared only when the image can observe it (see image_status_used).
+inline std::string first_difference(const ps2::Vu0Regs &a, const ps2::Vu0Regs &b, bool compare_status = true) {
     for (int reg = 0; reg < 32; ++reg)
         if (std::memcmp(&a.vf[reg], &b.vf[reg], 16) != 0) return "vf" + std::to_string(reg);
     if (std::memcmp(&a.acc, &b.acc, 16) != 0) return "acc";
@@ -122,7 +124,7 @@ inline std::string first_difference(const ps2::Vu0Regs &a, const ps2::Vu0Regs &b
     if (a.i != b.i) return "i";
     if (a.r != b.r) return "r";
     if (a.mac != b.mac) return "mac";
-    if (a.status != b.status) return "status";
+    if (compare_status && a.status != b.status) return "status";
     if (a.clip != b.clip) return "clip";
     if (a.cmsar0 != b.cmsar0) return "cmsar0";
     if (a.tpc != b.tpc) return "tpc";
@@ -174,7 +176,7 @@ inline Outcome run_generated(gt4::vugen::ProgramFunction function, const std::ui
 }
 
 // Compares one reference and one generated outcome. Returns true when compared.
-inline bool compare_outcomes(const Outcome &expected, const Outcome &actual, const std::string &context, Counters &counters) {
+inline bool compare_outcomes(const Outcome &expected, const Outcome &actual, const std::string &context, Counters &counters, bool compare_status = true) {
     // The interpreter is the reference. If it hit its instruction cap, the case is
     // capped. The emitted code charges an upper bound, so it can exhaust earlier and
     // resume the interpreter under a second cap; that total may exceed one cap and is
@@ -184,7 +186,7 @@ inline bool compare_outcomes(const Outcome &expected, const Outcome &actual, con
         return false;
     }
     expect(counters, actual.completed, context + ": emitted code did not end where the reference did");
-    const std::string difference = first_difference(expected.regs, actual.regs);
+    const std::string difference = first_difference(expected.regs, actual.regs, compare_status);
     expect(counters, difference.empty(), context + ": register state differs at " + difference);
     expect(counters, expected.memory == actual.memory, context + ": VU1 data memory differs");
     expect(counters, expected.kicks == actual.kicks, context + std::format(": XGKICK bytes differ ({} vs {})", expected.kicks.size(), actual.kicks.size()));
@@ -192,7 +194,9 @@ inline bool compare_outcomes(const Outcome &expected, const Outcome &actual, con
     return true;
 }
 
-// Full differential check for one program and one seed.
+// Full differential check for one program and one seed. Status is compared only
+// when the image reads status: otherwise the emitted code does not keep it and no
+// VU1 instruction can observe it.
 inline void check_program(const std::uint8_t *code, std::uint32_t entry, gt4::vugen::ProgramFunction function, SeedMode mode, std::uint32_t budget,
                           const std::string &label, Counters &counters) {
     const ps2::Vu0Regs state = make_state(mode);
@@ -201,7 +205,30 @@ inline void check_program(const std::uint8_t *code, std::uint32_t entry, gt4::vu
     bool resumed = false;
     const Outcome actual = run_generated(function, code, state, memory, budget, resumed);
     if (resumed) ++counters.resumed;
-    compare_outcomes(expected, actual, std::format("{} entry 0x{:04X} seed {}{} budget {}", label, entry, mode.seed, mode.raw_bits ? " raw" : "", budget), counters);
+    const bool compare_status = gt4::vurecomp::image_status_used(code, kCodeBytes);
+    compare_outcomes(expected, actual, std::format("{} entry 0x{:04X} seed {}{} budget {}", label, entry, mode.seed, mode.raw_bits ? " raw" : "", budget), counters,
+                     compare_status);
+}
+
+// Two programs run back to back from one state, as a VU1 call sequence does. The
+// second program reads the MAC and clip left by the first.
+inline void check_chain(const std::uint8_t *code, std::uint32_t first_entry, gt4::vugen::ProgramFunction first, std::uint32_t second_entry,
+                        gt4::vugen::ProgramFunction second, SeedMode mode, const std::string &label, Counters &counters) {
+    const ps2::Vu0Regs state = make_state(mode);
+    const std::vector<std::uint8_t> memory = make_memory(mode);
+    load_state(code, state, memory);
+    ps2::vu::run(1, first_entry);
+    ps2::vu::run(1, second_entry);
+    const Outcome expected = capture();
+    load_state(code, state, memory);
+    gt4::vugen::RunContext context{gt4::vugen::kInterpreterInstructionBudget, 0};
+    first(ps2::vu::regs(1), ps2::g_vu1_mem, context);
+    gt4::vugen::RunContext second_context{gt4::vugen::kInterpreterInstructionBudget, 0};
+    const bool resumed = second(ps2::vu::regs(1), ps2::g_vu1_mem, second_context) == gt4::vugen::RunStatus::BudgetExhausted;
+    if (resumed) ps2::vu::interpret(1, second_context.resume_pc);
+    const Outcome actual = capture();
+    compare_outcomes(expected, actual, std::format("{} chain 0x{:04X} then 0x{:04X} seed {}", label, first_entry, second_entry, mode.seed), counters,
+                     gt4::vurecomp::image_status_used(code, kCodeBytes));
 }
 
 }

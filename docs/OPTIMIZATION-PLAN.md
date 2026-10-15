@@ -158,6 +158,8 @@ and a VBlank-interval histogram control (mean 60 ± 0.1 Hz, p95 < 18 ms).
 
 **Status (slice 153, candidate):** implemented as `--mode pacing` (`GT4_PACING=audio` for the old clock). One wall-clock VBlank grid at the donor 60 Hz rate; non-blocking audio with a 60 ms ring target and +-0.5 % resample control; FIFO default with `GT4_PRESENT_MODE` experiments; interval histogram and queue counters in F8. Local evidence: pure and device fixtures, CTest 18/18, Python 217 OK, 42 identical headless frames. Owner frame measurement is open, and the start-up queue transient (about 8 s) is not corrected; see [journal 2026-10-15](journal/2026-10-15.md).
 
+**Status (slice 154, candidate):** `--mode vu1-flags` on the slice153 pacing build with a per-program VU1 table. MAC is computed only where a later reader or the program exit observes it (FlagPipe windows 4 and 3, exit state exact); VU1 status is not kept when the image has no status instruction, which the corpus image lacks. The fixed-budget micro-benchmark halves generated-code time per call on the timed states (0.47, random seeds, not gameplay). Owner frame measurement is open. Next VU1 lever: a VU1 worker thread (O4) if the showroom stays VU1-bound.
+
 ### Backlog from slice 151 studies
 
 | Item | Phase | Source |
@@ -165,7 +167,7 @@ and a VBlank-interval histogram control (mean 60 ± 0.1 Hz, p95 < 18 ms).
 | Build speed: parallel jobs inside one build, compiler cache, lld-link | now, any time | owner request |
 | Translate the 5,676 decomp functions that have no EE entry (crash risk in unplayed modes) | O3, stability | [DECOMP-INTEGRATION](DECOMP-INTEGRATION.md) |
 | VU1 static entry coverage: MSCAL targets from EE code, or compile every plausible entry of the 2,046-instruction image (10 E-bit blocks, 9 seen) | O1 follow-up | [VU1-MICROCODE-SOURCE](VU1-MICROCODE-SOURCE.md) |
-| Static flag elimination per program (microVU-style last-4-writers) | O1 follow-up | [PCSX2-LESSONS](PCSX2-LESSONS.md) |
+| Static flag elimination per program (microVU-style last-4-writers) | O1 follow-up: **implemented, slice 154 candidate** (MAC computed at 642 of 6,024 writes, no status, exit state exact; see [journal 2026-10-15](journal/2026-10-15.md)) | [PCSX2-LESSONS](PCSX2-LESSONS.md) |
 | Wait-loop and INTC_STAT spin skipping (no game-time change) | O3 | [PCSX2-LESSONS](PCSX2-LESSONS.md) |
 | Check whether disc read timing is modeled slower than needed (loading time) | O3 | owner observation (GT2 port) |
 | Decomp names in generated code (comments, identical object code) | any time | [DECOMP-INTEGRATION](DECOMP-INTEGRATION.md) |

@@ -170,7 +170,8 @@ void check_emission() {
         }
         if (record.fallback_sites > 0) ++with_fallback;
     }
-    expect(refused == 1, std::format("exactly one refused program, found {}", refused));
+    // Two refusals: an interpreter exit in a delay slot, and an end bit in a branch delay slot.
+    expect(refused == 2, std::format("exactly two refused programs, found {}", refused));
     expect(with_fallback == 2, std::format("programs with interpreter exits: expected 2 (refused delay-slot exit, unknown lower), found {}", with_fallback));
 
     const std::string manifest = manifest_json(records, "vu1_generated.cpp", sha256_hex(reinterpret_cast<const std::uint8_t *>(source.data()), source.size()));
