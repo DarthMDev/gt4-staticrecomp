@@ -1,0 +1,84 @@
+// MIT License. Copyright (c) 2026 João Alano and GT4Recomp contributors.
+// Written for TASK-027 M0b (slice 175) from the Vulkan specification and native/native_vulkan.cpp.
+// Clean room: no PCSX2 sources were read. See hw_gs_vulkan_loader.hpp for why the names are renamed.
+
+#include "hw_gs_vulkan_loader.hpp"
+
+namespace gt4::hw::vulkan_loader {
+namespace {
+
+PFN_vkGetInstanceProcAddr get_instance_proc = nullptr;
+
+// Resolves one entry point through vkGetInstanceProcAddr; a missing name is reported, not called.
+template <typename Pointer>
+void resolve(Pointer &slot, VkInstance instance, const char *name, std::vector<std::string> &missing) {
+  slot = reinterpret_cast<Pointer>(get_instance_proc(instance, name));
+  if (!slot) missing.push_back(name);
+}
+
+} // namespace
+
+bool load_loader(std::string &error) {
+  if (get_instance_proc) return true;
+  HMODULE library = LoadLibraryExW(L"vulkan-1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+  if (!library) {
+    error = "vulkan-1.dll could not be loaded";
+    return false;
+  }
+  get_instance_proc = reinterpret_cast<PFN_vkGetInstanceProcAddr>(
+      GetProcAddress(library, "vkGetInstanceProcAddr"));
+  if (!get_instance_proc) {
+    error = "vulkan-1.dll lacks vkGetInstanceProcAddr";
+    return false;
+  }
+  gt4_hw_vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(
+      get_instance_proc(nullptr, "vkCreateInstance"));
+  if (!gt4_hw_vkCreateInstance) {
+    error = "vulkan-1.dll lacks vkCreateInstance";
+    return false;
+  }
+  return true;
+}
+
+bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &missing) {
+  resolve(gt4_hw_vkAcquireNextImageKHR, instance, "vkAcquireNextImageKHR", missing);
+  resolve(gt4_hw_vkAllocateCommandBuffers, instance, "vkAllocateCommandBuffers", missing);
+  resolve(gt4_hw_vkBeginCommandBuffer, instance, "vkBeginCommandBuffer", missing);
+  resolve(gt4_hw_vkCmdClearColorImage, instance, "vkCmdClearColorImage", missing);
+  resolve(gt4_hw_vkCmdPipelineBarrier, instance, "vkCmdPipelineBarrier", missing);
+  resolve(gt4_hw_vkCreateCommandPool, instance, "vkCreateCommandPool", missing);
+  resolve(gt4_hw_vkCreateDevice, instance, "vkCreateDevice", missing);
+  resolve(gt4_hw_vkCreateFence, instance, "vkCreateFence", missing);
+  resolve(gt4_hw_vkCreateSemaphore, instance, "vkCreateSemaphore", missing);
+  resolve(gt4_hw_vkCreateSwapchainKHR, instance, "vkCreateSwapchainKHR", missing);
+  resolve(gt4_hw_vkCreateWin32SurfaceKHR, instance, "vkCreateWin32SurfaceKHR", missing);
+  resolve(gt4_hw_vkDestroyCommandPool, instance, "vkDestroyCommandPool", missing);
+  resolve(gt4_hw_vkDestroyDevice, instance, "vkDestroyDevice", missing);
+  resolve(gt4_hw_vkDestroyFence, instance, "vkDestroyFence", missing);
+  resolve(gt4_hw_vkDestroyInstance, instance, "vkDestroyInstance", missing);
+  resolve(gt4_hw_vkDestroySemaphore, instance, "vkDestroySemaphore", missing);
+  resolve(gt4_hw_vkDestroySurfaceKHR, instance, "vkDestroySurfaceKHR", missing);
+  resolve(gt4_hw_vkDestroySwapchainKHR, instance, "vkDestroySwapchainKHR", missing);
+  resolve(gt4_hw_vkDeviceWaitIdle, instance, "vkDeviceWaitIdle", missing);
+  resolve(gt4_hw_vkEndCommandBuffer, instance, "vkEndCommandBuffer", missing);
+  resolve(gt4_hw_vkEnumerateDeviceExtensionProperties, instance, "vkEnumerateDeviceExtensionProperties", missing);
+  resolve(gt4_hw_vkEnumeratePhysicalDevices, instance, "vkEnumeratePhysicalDevices", missing);
+  resolve(gt4_hw_vkGetDeviceQueue, instance, "vkGetDeviceQueue", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceFeatures2, instance, "vkGetPhysicalDeviceFeatures2", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceFormatProperties, instance, "vkGetPhysicalDeviceFormatProperties", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceProperties, instance, "vkGetPhysicalDeviceProperties", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceQueueFamilyProperties, instance, "vkGetPhysicalDeviceQueueFamilyProperties", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceSurfaceFormatsKHR, instance, "vkGetPhysicalDeviceSurfaceFormatsKHR", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceSurfacePresentModesKHR, instance, "vkGetPhysicalDeviceSurfacePresentModesKHR", missing);
+  resolve(gt4_hw_vkGetPhysicalDeviceSurfaceSupportKHR, instance, "vkGetPhysicalDeviceSurfaceSupportKHR", missing);
+  resolve(gt4_hw_vkGetSwapchainImagesKHR, instance, "vkGetSwapchainImagesKHR", missing);
+  resolve(gt4_hw_vkQueuePresentKHR, instance, "vkQueuePresentKHR", missing);
+  resolve(gt4_hw_vkQueueSubmit, instance, "vkQueueSubmit", missing);
+  resolve(gt4_hw_vkResetCommandBuffer, instance, "vkResetCommandBuffer", missing);
+  resolve(gt4_hw_vkResetFences, instance, "vkResetFences", missing);
+  resolve(gt4_hw_vkWaitForFences, instance, "vkWaitForFences", missing);
+  return missing.empty();
+}
+
+} // namespace gt4::hw::vulkan_loader

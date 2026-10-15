@@ -11,11 +11,7 @@
 #include "../pacing.hpp"
 #include "hw_gs_present_rect.hpp"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <windows.h>
-#define VK_USE_PLATFORM_WIN32_KHR
-#include <vulkan/vulkan.h>
+#include "hw_gs_vulkan_loader.hpp" // Vulkan names renamed to gt4_hw_*; pointers loaded at run time
 
 #include <algorithm>
 #include <array>
@@ -151,6 +147,7 @@ struct Backend::Impl {
 
   // Feature report and device choice (chapter 12.6). Returns false with `error` set when no device qualifies.
   bool create_instance(std::string &error) {
+    if (!vulkan_loader::load_loader(error)) return false;
     const char *extensions[] = {VK_KHR_SURFACE_EXTENSION_NAME, VK_KHR_WIN32_SURFACE_EXTENSION_NAME};
     VkApplicationInfo app{VK_STRUCTURE_TYPE_APPLICATION_INFO};
     app.pApplicationName = "GT4Recomp HWR";
@@ -162,6 +159,12 @@ struct Backend::Impl {
     const VkResult result = vkCreateInstance(&info, nullptr, &instance);
     if (result != VK_SUCCESS) {
       error = std::string("vkCreateInstance failed: ") + vk_result_text(result);
+      return false;
+    }
+    std::vector<std::string> missing;
+    if (!vulkan_loader::load_instance_entry_points(instance, missing)) {
+      error = "Vulkan entry points missing from the loader:";
+      for (const std::string &name : missing) error += " " + name;
       return false;
     }
     return true;
