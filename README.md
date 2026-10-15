@@ -73,11 +73,11 @@ one F7/F8 interval per scene:
 | Scene | FPS (VBlanks/s) | Game speed | Notes |
 |---|---|---|---|
 | Time Trial, Nordschleife, Supra (480p) | **60.0** | **100%** | 99.6% of frames within 16–17 ms |
-| Arcade race, Nordschleife, 5 AI cars | 58.0 | 97% | Occasional heavier frames with many cars on screen |
+| Arcade race, Nordschleife, 5 AI cars | **60.0** | **100%** | After VU1 flag elision (was 58.0) |
 | Replay of that race | 59.1 | 98.5% | |
 | Night race with AI cars | 46.2 | 77% | New VU1 entry points interpreted; extra GPU wait under investigation |
 | Rally, Grand Canyon, 1 AI car | 53.9 | 90% | New VU1 entry points interpreted |
-| Car showroom (rotating car) | 44.8 | 75% | High-detail car model: VU1 work 2.3x a race frame |
+| Car showroom (rotating car) | 59.1 | 98.6% | After VU1 flag elision (was 44.8); VU1 9.3 ms |
 
 ## Known issues
 
@@ -87,8 +87,8 @@ one F7/F8 interval per scene:
   the demo-input data appears to arrive wrong or late. Under investigation.
 - **Night races and rally** use VU1 entry points that are not compiled yet; full
   static coverage of the recovered VU1 image is the next VU1 task.
-- **Car showroom** is limited by VU1 work; flag elimination and a dedicated VU1
-  thread (MTVU) are in progress.
+- **Car showroom** is just below 60 FPS after VU1 flag elision; a dedicated VU1
+  thread (MTVU) is planned.
 - Menus are interlaced like the original game (480p applies in races); a
   deinterlacing filter is planned with the new renderer.
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
@@ -100,7 +100,8 @@ one F7/F8 interval per scene:
 | **O1** | VU1 microcode compiled ahead of time | ✅ Done |
 | **O2** | Asynchronous GPU submission | ✅ Done |
 | **O4** | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
-| **VU1+** | Per-program flag elimination, full static entry coverage, VU1 on its own thread (MTVU) | 🔄 **In progress** |
+| **VU1 flags** | Per-program flag elimination | ✅ Done |
+| **VU1+** | Full static entry coverage, VU1 on its own thread (MTVU) | 🔄 **In progress** |
 | **Fixes** | License-test crash, window title, fixed 16:9 | 🔄 **In progress** |
 | **O3** | VU0 microcode AOT, full VU1/EE entry coverage, IOP review, build tuning | ⏭️ Next |
 | **Launcher** | Lightweight launcher (Rust): video, controls, game image | 📋 Planned |
