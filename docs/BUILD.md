@@ -238,3 +238,30 @@ Runtime pins are [slice152-gs-async-runtime.json](inputs/slice152-gs-async-runti
 (launcher). CMake refuses any other port or shader directory on the performance
 profile. Owner command: `python scripts/play_performance.py --assets-root . --mode gs-async`.
 `GT4_GS_SYNC=1` in the environment restores the synchronous GS path for A/B.
+
+Slice153 adds frame pacing (O4) on the slice152 async build. Fresh pins only: adapter
+`private/slice153-pacing-port` and shaders `private/slice153-pacing-shaders` (copies of the
+slice152 files, byte-identical), build `private/slice153-pacing-build/build`, runtime capsule
+unchanged (`private/slice151-vu1-aot-runtime`). Configure with the slice152 cache values but
+`GT4_PORT_DIR` and `GT4_SHADER_DIR` pointing at the slice153 directories; CMake accepts them only
+with `GT4_PERF_RUNTIME_SOURCE` on the 151 capsule and reads
+[slice153-pacing-runtime.json](inputs/slice153-pacing-runtime.json). Launcher pins are
+[slice153-pacing.json](inputs/slice153-pacing.json). Owner command, from the repository root:
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pacing
+
+The host paces guest VBlanks on one wall-clock grid at 60 Hz (the donor's `frame_cycles`
+is `kEeClock / 60`, NTSC 60.000 Hz, not 59.94). Audio no longer blocks the emulation
+thread: 16 x 256-frame WinMM buffers, a 16384-frame ring and a 60 ms (2880-frame) target,
+with a linear resampler whose ratio stays within +-0.5 percent under a PI controller. Set
+`GT4_PACING=audio` to restore the blocking audio clock of slice152 for A/B. Unknown values
+of `GT4_PACING` or `GT4_PRESENT_MODE` are refused by the launcher and by the host.
+`GT4_PRESENT_MODE` accepts `fifo` (default), `mailbox` or `immediate` and fails at swapchain
+creation when the surface does not support it. Both variables are forwarded unchanged and
+recorded as `pacing_environment` in the run result. Headless runs (`--frames`) never enter the
+window path, so they are unpaced and their frames are unchanged.
+
+Checks on this build: `native_pacing` (pure fixture), `native_audio_input` (includes a 3 s paced
+run on the real device), CTest 18/18, Python 217 OK with `GT4_NATIVE_BUILD` set to the slice153
+build, and 42 identical headless frame dumps against the slice152 build. Owner gameplay
+measurement is pending. Diagnostics print in F8 and the periodic report when `GT4_PERF=1`.

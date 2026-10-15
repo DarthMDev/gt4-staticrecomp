@@ -222,6 +222,8 @@ void Probe::print(const char *reason) noexcept {
     std::fprintf(output_, "[perf] measured_thread_cpu_ms/frame=%.3f; occupancy=%.1f%%\n",
         (cpu_now - cpu_start_) / 1000.0 / frames, double(cpu_now - cpu_start_) / elapsed * 100);
   else std::fputs("[perf] measured_thread_cpu=Unknown\n", output_);
+  if (report_section_)
+    report_section_(output_);
   if (!detailed_) {
     std::fputs("[perf] subsystem timers/host traffic counters=Unavailable (compiled out); boundary clocks/guest counters remain\n", output_);
     std::fflush(output_);
@@ -257,6 +259,11 @@ void Probe::print(const char *reason) noexcept {
   ps2::vu::aot_report(output_);
 #endif
   std::fflush(output_);
+}
+
+void Probe::set_report_section(std::function<void(std::FILE *)> section) {
+  if (owner())
+    report_section_ = std::move(section);
 }
 
 void Probe::finish() noexcept {

@@ -140,6 +140,8 @@ falls behind. Design: one authoritative clock (audio device sample counter),
 smaller submit granularity, a 50-80 ms audio ring, non-blocking presentation,
 and a VBlank-interval histogram control (mean 60 ± 0.1 Hz, p95 < 18 ms).
 
+**Status (slice 153, candidate):** implemented as `--mode pacing` (`GT4_PACING=audio` for the old clock). One wall-clock VBlank grid at the donor 60 Hz rate; non-blocking audio with a 60 ms ring target and +-0.5 % resample control; FIFO default with `GT4_PRESENT_MODE` experiments; interval histogram and queue counters in F8. Local evidence: pure and device fixtures, CTest 18/18, Python 217 OK, 42 identical headless frames. Owner frame measurement is open, and the start-up queue transient (about 8 s) is not corrected; see [journal 2026-10-15](journal/2026-10-15.md).
+
 ### Backlog from slice 151 studies
 
 | Item | Phase | Source |

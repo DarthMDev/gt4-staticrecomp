@@ -152,8 +152,20 @@ void ControllerInput::stop() {
   motors_ = 0;
 }
 
-AudioOutput::AudioOutput(std::function<bool()> pump_messages)
-    : pump_messages_(std::move(pump_messages)) {
+namespace {
+// Blocking audio path: four 512-frame buffers, as before the paced mode.
+constexpr std::size_t blocking_frames_per_buffer = 512;
+constexpr std::size_t blocking_buffer_count = 4;
+// Paced path: sixteen 256-frame buffers (5.3 ms each) under a 60 ms target.
+constexpr std::size_t paced_frames_per_buffer = 256;
+constexpr std::size_t paced_buffer_count = 16;
+} // namespace
+
+AudioOutput::AudioOutput(std::function<bool()> pump_messages, gt4::pacing::Mode mode)
+    : mode_(mode), pump_messages_(std::move(pump_messages)) {
+  const bool paced = mode_ == gt4::pacing::Mode::paced;
+  frames_per_buffer_ = paced ? paced_frames_per_buffer : blocking_frames_per_buffer;
+  buffer_count_ = paced ? paced_buffer_count : blocking_buffer_count;
   event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
   if (!event_)
     throw std::runtime_error("Cannot create audio completion event");
@@ -169,17 +181,24 @@ AudioOutput::AudioOutput(std::function<bool()> pump_messages)
                             reinterpret_cast<DWORD_PTR>(event_), 0,
                             CALLBACK_EVENT),
                 "waveOutOpen stereo16/48000");
-    for (auto &buffer : buffers_) {
+    for (std::size_t index = 0; index < buffer_count_; ++index) {
+      auto &buffer = buffers_[index];
       buffer.header.lpData = reinterpret_cast<LPSTR>(buffer.samples.data());
       buffer.header.dwBufferLength =
-          static_cast<DWORD>(buffer.samples.size() * sizeof(std::int16_t));
+          static_cast<DWORD>(frames_per_buffer_ * 2 * sizeof(std::int16_t));
       check_audio(
           waveOutPrepareHeader(device_, &buffer.header, sizeof(WAVEHDR)),
           "waveOutPrepareHeader");
       buffer.prepared = true;
     }
-    std::fprintf(stderr,
-                 "[audio] Windows PCM stereo16 48000 Hz, 4 x 512 frames\n");
+    if (paced)
+      std::fprintf(stderr,
+                   "[audio] Windows PCM stereo16 48000 Hz, paced: %zu x %zu "
+                   "frames, 60 ms target, non-blocking, rate control +-0.5 percent\n",
+                   buffer_count_, frames_per_buffer_);
+    else
+      std::fprintf(stderr,
+                   "[audio] Windows PCM stereo16 48000 Hz, 4 x 512 frames\n");
   } catch (...) {
     try {
       close(false);
@@ -204,7 +223,8 @@ AudioOutput::~AudioOutput() {
 
 std::size_t AudioOutput::reap() {
   std::size_t queued = 0;
-  for (auto &buffer : buffers_) {
+  for (std::size_t index = 0; index < buffer_count_; ++index) {
+    auto &buffer = buffers_[index];
     if (buffer.queued && (buffer.header.dwFlags & WHDR_DONE)) {
       completed_ += buffer.header.dwBufferLength / 4;
 #if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
@@ -214,6 +234,13 @@ std::size_t AudioOutput::reap() {
     }
     queued += buffer.queued;
   }
+  return queued;
+}
+
+std::size_t AudioOutput::queued_device_buffers() const {
+  std::size_t queued = 0;
+  for (std::size_t index = 0; index < buffer_count_; ++index)
+    queued += buffers_[index].queued;
   return queued;
 }
 
@@ -263,7 +290,28 @@ bool AudioOutput::submit() {
   submitted_ += pending_frames_;
   peak_ = std::max(peak_, queued + 1);
   pending_frames_ = 0;
-  next_buffer_ = (next_buffer_ + 1) % buffers_.size();
+  next_buffer_ = (next_buffer_ + 1) % buffer_count_;
+  return true;
+}
+
+void AudioOutput::submit_paced_block() {
+  auto &buffer = buffers_[next_buffer_];
+  // Callers check that at least one full block is in the ring.
+  ring_.read(buffer.samples.data(), frames_per_buffer_);
+  buffer.header.dwBufferLength = static_cast<DWORD>(frames_per_buffer_ * 4);
+  check_audio(waveOutWrite(device_, &buffer.header, sizeof(WAVEHDR)),
+              "waveOutWrite");
+  buffer.queued = true;
+  submitted_ += frames_per_buffer_;
+  peak_ = std::max(peak_, queued_device_buffers());
+  next_buffer_ = (next_buffer_ + 1) % buffer_count_;
+}
+
+bool AudioOutput::push_paced(const std::int16_t *samples, std::size_t frames) {
+  converted_.clear();
+  const std::size_t produced = resampler_.process(samples, frames, converted_);
+  const std::size_t accepted = ring_.write(converted_.data(), produced);
+  overflow_frames_ += produced - accepted;
   return true;
 }
 
@@ -275,16 +323,46 @@ bool AudioOutput::push(const std::int16_t *samples, std::size_t frames) {
 #if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
   gt4::perf::Probe::shared().audio(frames, 0);
 #endif
+  if (mode_ == gt4::pacing::Mode::paced)
+    return push_paced(samples, frames);
   while (frames) {
-    const auto count = std::min(frames, frames_per_buffer - pending_frames_);
+    const auto count = std::min(frames, frames_per_buffer_ - pending_frames_);
     std::copy_n(samples, count * 2, pending_.data() + pending_frames_ * 2);
     samples += count * 2;
     frames -= count;
     pending_frames_ += count;
-    if (pending_frames_ == frames_per_buffer && !submit())
+    if (pending_frames_ == frames_per_buffer_ && !submit())
       return false;
   }
   return true;
+}
+
+void AudioOutput::pump() {
+  if (mode_ != gt4::pacing::Mode::paced || !device_)
+    return;
+  reap();
+  if (!started_ && ring_.size() >= gt4::pacing::target_latency_frames)
+    started_ = true;
+  if (!started_)
+    return;
+  // Nothing queued on the device after audio was submitted: the device starved.
+  if (!queued_device_buffers() && submitted_)
+    ++underruns_;
+  // The controller sees the whole queue: device plus ring.
+  resampler_.set_ratio(controller_.update(static_cast<double>(queued_frames())));
+  // Submit only while the device stays within the target: the excess waits in
+  // the ring, where the controller can see it.
+  while (ring_.size() >= frames_per_buffer_ &&
+         (queued_device_buffers() + 1) * frames_per_buffer_ <=
+             gt4::pacing::target_latency_frames &&
+         !buffers_[next_buffer_].queued)
+    submit_paced_block();
+}
+
+std::uint64_t AudioOutput::queued_frames() {
+  reap();
+  const std::uint64_t device = queued_device_buffers() * frames_per_buffer_;
+  return device + (mode_ == gt4::pacing::Mode::paced ? ring_.size() : pending_frames_);
 }
 
 void AudioOutput::close(bool drain) {
@@ -293,7 +371,8 @@ void AudioOutput::close(bool drain) {
       wait_for(nullptr);
     reap();
     check_audio(waveOutReset(device_), "waveOutReset");
-    for (auto &buffer : buffers_) {
+    for (std::size_t index = 0; index < buffer_count_; ++index) {
+      auto &buffer = buffers_[index];
       if (buffer.queued) {
         canceled_ += buffer.header.dwBufferLength / 4;
         buffer.queued = false;
@@ -317,6 +396,13 @@ void AudioOutput::close(bool drain) {
         static_cast<unsigned long long>(canceled_), pending_frames_, peak_,
         static_cast<unsigned long long>(waits_),
         static_cast<unsigned long long>(empty_queue_));
+    if (mode_ == gt4::pacing::Mode::paced)
+      std::fprintf(stderr,
+                   "[audio] paced: underruns=%llu ring_overflow_frames=%llu "
+                   "ring_left=%zu ratio=%.6f\n",
+                   static_cast<unsigned long long>(underruns_),
+                   static_cast<unsigned long long>(overflow_frames_),
+                   ring_.size(), resampler_.ratio());
   }
   if (event_) {
     CloseHandle(event_);

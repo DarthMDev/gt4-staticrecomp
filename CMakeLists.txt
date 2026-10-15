@@ -40,6 +40,7 @@ set_tests_properties(native_vulkan_async_stress_sync PROPERTIES ENVIRONMENT "GT4
 set_tests_properties(native_vulkan_async_stress_compare PROPERTIES DEPENDS
     "native_vulkan_async_stress_async;native_vulkan_async_stress_sync")
 add_test(NAME native_audio_input COMMAND $<TARGET_FILE:host_io_fixture>)
+add_test(NAME native_pacing COMMAND $<TARGET_FILE:pacing_fixture>)
 add_test(NAME native_shape_observer COMMAND $<TARGET_FILE:shape_observer_fixture>)
 add_test(NAME native_performance_accounting COMMAND $<TARGET_FILE:perf_accounting_fixture>)
 add_test(NAME native_performance_probe COMMAND $<TARGET_FILE:perf_probe_fixture>)

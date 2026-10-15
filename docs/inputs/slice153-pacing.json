@@ -1,0 +1,163 @@
+{
+  "schema_version": 1,
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice153-pacing-shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice153-pacing-shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    }
+  ],
+  "profile": "performance",
+  "perf_schema_version": 1,
+  "keyboard_input_fix": "digital_only_slice136",
+  "capture_activation_implemented": false,
+  "environment": {
+    "guest_settings": "scrub inherited PS2_/GT4_PERF_ options; set GT4_PERF=1 PS2_SCALE=1 PS2_GS=gpu",
+    "vulkan": "preserve and record VK_ overrides in session result; other driver/overlay state not controlled",
+    "gs_submission": "GT4_GS_SYNC=0 default (asynchronous); GT4_GS_SYNC=1 restores the fully synchronous path (launcher records the value in the session result)",
+    "pacing": "GT4_PACING unset or paced (default): paced clock. GT4_PACING=audio: blocking WinMM clock as in slice152. GT4_PRESENT_MODE unset or fifo (default); mailbox and immediate are experiments and fail at swapchain creation when the surface lacks them. The launcher refuses other values and records both names in result.json (pacing_environment)."
+  },
+  "toolchain": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "build": "CMake/Ninja VS2022 x64 ABI Windows SDK10.0.26100.0",
+    "cmake": "4.3.3",
+    "ninja": "1.12.1"
+  },
+  "slice": 153,
+  "date": "2026-10-15",
+  "baseline_commit": "b963112",
+  "branch": "codex/optimization-plan-151",
+  "measurement_mode": "pacing",
+  "vu_scope_profile": "unit_split_run_fast_only",
+  "classification": "O4 frame pacing candidate: gs-async (VU1 AOT plus asynchronous GS) with one wall-clock guest VBlank grid at 60 Hz (donor frame_cycles = kEeClock / 60), non-blocking audio with a 60 ms ring target and +-0.5 percent resample rate control. GT4_PACING=audio restores the blocking audio clock for A/B. Headless emulation is unpaced and unchanged.",
+  "runtime": {
+    "path": "private/slice153-pacing-build/build/gt4vulkan.exe",
+    "size_bytes": 57728000,
+    "sha256": "c8d31fdf825e0ae60ec0a18ee5e417ebb131f1339512096ea94d9bb16261b788"
+  },
+  "source_capsule": "private/slice151-vu1-aot-runtime",
+  "source_manifest": "slice153-pacing-runtime.json",
+  "preserved_inputs": "Production EE library, donor 1b48087 runtime capsule (slice151 VU1 AOT overlay), slice152 adapter and nine shaders copied byte-identical into private/slice153-pacing-port and private/slice153-pacing-shaders; slice151/152 build directories untouched.",
+  "controls": {
+    "ctest": "CTest 18/18 on private/slice153-pacing-build/build (native_pacing: pacer grid, stall handling, resampler identity and sine accuracy, rate controller convergence, saturation and jitter, ring, histogram, windows, diagnostics format; host_io_fixture: real WinMM audio plus a 3 s paced device run).",
+    "python": "Python 217 tests OK with GT4_NATIVE_BUILD set to the slice153 build; one pre-existing skip.",
+    "headless_smoke": "4200 frames, 12-press schedule (600:start:30, then 900-3900 every 300), no window: 42 frame dumps (every 100) identical to the slice152 async build. Headless runs never call the window paced path.",
+    "present_forwarding": "GT4_PRESENT_MODE=mailbox forwarded to the native host and logged (\"present mode request: mailbox\"); recorded as pacing_environment in result.json.",
+    "not_run": "No window or gameplay session was launched by the implementing agent; owner measurement is required."
+  },
+  "limits": [
+    "Pacing constants: 60 Hz guest grid; 60 ms audio target (2880 frames); 16 x 256-frame WinMM buffers; 16384-frame ring; device at most 2816 frames; resample ratio within +-0.5 percent; proportional gain 0.03, integral gain 0.002.",
+    "Start-up transient (measured with the host fixture on the real device): the device starts about two guest frames after first submission, so the queue peaks near 4500 frames (about 95 ms) and returns to the target in roughly 8 s at the +-0.5 percent authority. No underrun was observed.",
+    "FIFO presentation blocks on the monitor refresh. On a 60.000 Hz monitor the grid and presents align; on a 59.94 Hz panel presents back up and can add stalls (speed effect unmeasured).",
+    "A frame that overruns its period is counted late and the grid restarts one period after the late release; no guest frame is skipped and the clock is not raised.",
+    "Diagnostics print only with GT4_PERF=1 (the F7/F8 probe); the histogram is recorded in both pacing modes.",
+    "Shutdown in paced mode drains only the device queue; the ring remainder (under 60 ms) is discarded.",
+    "Owner gameplay frame measurements (median, p95, p99, speed) are not yet taken. The O4 targets are not claimed."
+  ],
+  "review": {
+    "status": "pending",
+    "note": "Owner gameplay, frame timing and overlay checks not run; local headless, CTest and Python evidence only."
+  },
+  "owner_launch": {
+    "play": "python scripts/play_performance.py --assets-root . --mode pacing",
+    "verify": "python scripts/play_performance.py --assets-root . --mode pacing --vu1-verify 50",
+    "ab_blocking_audio": "set GT4_PACING=audio (PowerShell: $env:GT4_PACING=audio) then python scripts/play_performance.py --assets-root . --mode pacing",
+    "ab_synchronous_gs": "set GT4_GS_SYNC=1 then the play command above (A/B of the slice152 GS path)",
+    "presentation_experiment": "set GT4_PRESENT_MODE=mailbox (or immediate) then the play command above; FIFO stays the default",
+    "report": "F8 and the 5 s periodic report print [pacing] lines: VBlank interval histogram, audio queue min/median/max, resample ratio, late frames, audio underruns and ring overflow."
+  },
+  "vu1_aot": {
+    "generated_dir": "private/slice151-vu1-gen-smoke",
+    "generated_source_sha256": "895b0c18f963ba6ebee1fe92fc92f781afb00fa7169f53edfe90bf46cea973c2",
+    "generated_manifest_sha256": "68b387d0b1f5328ece09fa80eacd56258fb0150e2eba6eb6be32f042aa9c7a60",
+    "programs": 102,
+    "overlay_sha256": "6df495c5c466a25354411f8f0c590f7b24b50c23a64e843e33ddf07346598299",
+    "instruction_budget": 1000000,
+    "interpreter_selector": "PS2_VU_INTERPRET=1 (same binary, owner A/B: --vu1-interpret-only)",
+    "verify_selector": "GT4_VU1_VERIFY=N (play_performance.py --vu1-verify N)",
+    "report": "F8 perf report and every GT4_VU1_REPORT_EVERY calls: vu1_aot compiled/interpreted/budget/identity/verify counters; vu1_aot timing category"
+  },
+  "port_capsule": "private/slice153-pacing-port",
+  "shader_capsule": "private/slice153-pacing-shaders",
+  "purpose": "O4 frame pacing candidate: gs-async plus paced guest clock (GT4_PACING=paced default) and non-blocking audio",
+  "status": "candidate: local checks pass; owner gameplay measurement pending"
+}

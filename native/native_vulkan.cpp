@@ -10,7 +10,20 @@
 #include <string>
 #include <vector>
 
+#include "pacing.hpp"
+
 namespace gt4::vulkan {
+namespace {
+VkPresentModeKHR vulkan_present_mode(gt4::pacing::PresentMode mode) {
+  switch (mode) {
+  case gt4::pacing::PresentMode::fifo: return VK_PRESENT_MODE_FIFO_KHR;
+  case gt4::pacing::PresentMode::mailbox: return VK_PRESENT_MODE_MAILBOX_KHR;
+  case gt4::pacing::PresentMode::immediate: return VK_PRESENT_MODE_IMMEDIATE_KHR;
+  }
+  return VK_PRESENT_MODE_FIFO_KHR;
+}
+} // namespace
+
 
 Aspect parse_aspect(const char *value) {
   if (!value || std::strcmp(value, "16:9") == 0)
@@ -73,6 +86,7 @@ namespace {
   X(vkCreateWin32SurfaceKHR) \
   X(vkGetPhysicalDeviceSurfaceSupportKHR) \
   X(vkGetPhysicalDeviceSurfaceFormatsKHR) \
+  X(vkGetPhysicalDeviceSurfacePresentModesKHR) \
   X(vkCreateSwapchainKHR) \
   X(vkGetSwapchainImagesKHR) \
   X(vkQueuePresentKHR) \
@@ -185,6 +199,10 @@ Context::~Context() {
 
 void Context::initialize(const std::filesystem::path &shaders) {
   aspect_ = parse_aspect(std::getenv("GT4_ASPECT"));
+  // Unknown names throw here; support on this surface is checked at swapchain creation.
+  present_mode_ = gt4::pacing::parse_present_mode(std::getenv("GT4_PRESENT_MODE"));
+  std::fprintf(stderr, "[vulkan] present mode request: %s\n",
+               gt4::pacing::present_mode_name(present_mode_));
   if (const char *sync = std::getenv("GT4_GS_SYNC")) {
     if (std::strcmp(sync, "1") == 0)
       synchronous_ = true;
@@ -812,7 +830,21 @@ void Context::rebuild_swapchain() {
   info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   info.preTransform = capabilities.currentTransform;
   info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
+  info.presentMode = vulkan_present_mode(present_mode_);
+  {
+    std::uint32_t mode_count = 0;
+    check(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_, surface_,
+                                                    &mode_count, nullptr),
+          "surface present modes");
+    std::vector<VkPresentModeKHR> modes(mode_count);
+    check(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_, surface_,
+                                                    &mode_count, modes.data()),
+          "surface present modes");
+    if (std::find(modes.begin(), modes.end(), info.presentMode) == modes.end())
+      throw std::runtime_error(std::string("GT4_PRESENT_MODE ") +
+                               gt4::pacing::present_mode_name(present_mode_) +
+                               " is not supported by this surface");
+  }
   info.clipped = VK_TRUE;
   info.oldSwapchain = swapchain_;
   // Implicit overlay layers may add bits to the create info, so log the request.

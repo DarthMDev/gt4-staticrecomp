@@ -1,5 +1,7 @@
 # Current Status
 
+2026-10-15 — Slice 153, O4 frame pacing (candidate, not owner-measured): `--mode pacing` (VU1 AOT plus asynchronous GS, as slice 152) with one 60 Hz wall-clock guest VBlank grid, non-blocking audio (16 x 256-frame buffers, 60 ms target, +-0.5 % resample control), and `GT4_PACING=audio` for the old blocking clock. FIFO stays default; `GT4_PRESENT_MODE` for experiments. Local checks: pacing and paced-device fixtures, CTest 18/18, Python 217 OK, 42 identical headless frames versus slice 152. Owner measurement pending. Read [journal 2026-10-15](journal/2026-10-15.md) and [BUILD](BUILD.md).
+
 2026-10-14 — Slice 152, O2 asynchronous GS submission (candidate, not owner-measured):
 `--mode gs-async` = VU1 AOT plus a three-slot submission ring on one timeline semaphore,
 presentation merged into the slot submission, at most two presents in flight, cache

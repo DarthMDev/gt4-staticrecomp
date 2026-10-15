@@ -8,6 +8,7 @@
 #include <vulkan/vulkan.h>
 
 #include "gs_submit_ring.hpp"
+#include "pacing.hpp"
 
 #include <array>
 #include <cstdint>
@@ -156,6 +157,8 @@ private:
   std::array<Slot, kSlotCount> slots_{};
   std::unique_ptr<SubmitRing> ring_;
   bool synchronous_ = false;
+  // GT4_PRESENT_MODE; fifo unless overridden for experiments.
+  gt4::pacing::PresentMode present_mode_ = gt4::pacing::PresentMode::fifo;
   HWND window_ = nullptr;
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;

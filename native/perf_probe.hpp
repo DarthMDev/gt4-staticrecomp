@@ -3,6 +3,7 @@
 #include "perf_accounting.hpp"
 #include <atomic>
 #include <cstdio>
+#include <functional>
 #include <thread>
 
 namespace gt4::perf {
@@ -36,6 +37,9 @@ public:
   void audio(std::uint64_t produced, std::uint64_t completed,
              std::uint64_t empty_refills = 0) noexcept;
   void finish() noexcept;
+  // Extra report lines (for example pacing diagnostics) printed after each
+  // interval report. An empty function removes the section.
+  void set_report_section(std::function<void(std::FILE *)> section);
   bool enabled() const noexcept { return accounting_.enabled(); }
   bool valid() const noexcept;
   std::uint64_t frames() const noexcept { return frames_; }
@@ -57,6 +61,7 @@ private:
   bool counter_fault_ = false, guest_reset_ = false, cpu_valid_ = false;
   bool first_frame_ = true, manual_ = false;
   bool pending_start_ = false, pending_report_ = false, pending_toggle_ = false;
+  std::function<void(std::FILE *)> report_section_;
   std::uint64_t last_us_ = 0, last_frame_us_ = 0, cpu_start_ = 0;
   std::uint64_t cpu_at_boundary_ = UINT64_MAX;
   std::uint64_t frames_ = 0, guest_cycles_ = 0, primitives_ = 0, vu_calls_ = 0;

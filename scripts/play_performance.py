@@ -8,6 +8,11 @@ VU1 AOT candidate (--mode vu1-aot):
 Asynchronous GS candidate (--mode gs-async): VU1 AOT plus asynchronous GS submission. The
 same verify and interpreter options apply. Set GT4_GS_SYNC=1 in the environment before
 launching to restore the synchronous GS path for A/B comparison.
+
+Pacing candidate (--mode pacing): gs-async plus the paced guest clock (60 Hz wall grid,
+non-blocking audio with rate control). Set GT4_PACING=audio to restore the blocking audio
+clock for A/B, and GT4_PRESENT_MODE=fifo|mailbox|immediate to test presentation modes
+(default fifo). Both variables are recorded in the run evidence.
 """
 import argparse
 import sys
@@ -24,13 +29,13 @@ def main():
     parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9')
     parser.add_argument('--mode', choices=MODES, default='detailed')
     parser.add_argument('--vu1-verify', type=int, default=0, metavar='N',
-                        help='sample every Nth generated VU1 call and compare (vu1-aot and gs-async)')
+                        help='sample every Nth generated VU1 call and compare (vu1-aot, gs-async and pacing)')
     parser.add_argument('--vu1-interpret-only', action='store_true',
-                        help='force the interpreter in the vu1-aot and gs-async binaries (vu1-aot and gs-async)')
+                        help='force the interpreter in the vu1-aot, gs-async and pacing binaries (vu1-aot, gs-async and pacing)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot or gs-async')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async or pacing')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:

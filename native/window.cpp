@@ -5,6 +5,8 @@
 #include "native_vulkan.hpp"
 #include "ps2/system.hpp"
 #include "perf_probe.hpp"
+#include "frame_clock.hpp"
+#include "pacing.hpp"
 #ifdef GT4_SHAPE_CAPTURE
 #include "shape_capture_control.hpp"
 #include "shape_observer_adapter.hpp"
@@ -26,6 +28,13 @@ bool widescreen = true;
 #ifdef GT4_SHAPE_CAPTURE
 std::unique_ptr<gt4::observation::CaptureControl> capture;
 #endif
+// Pacing state (see pacing.hpp). The clock and histogram run in both modes;
+// the release grid only in paced mode.
+gt4::pacing::Mode pacing_mode = gt4::pacing::Mode::paced;
+std::unique_ptr<FrameClock> frame_clock;
+std::unique_ptr<gt4::pacing::FramePacer> frame_pacer;
+gt4::pacing::Diagnostics pacing_diagnostics;
+AudioOutput *audio_output = nullptr;
 
 void update_title() {
   std::wstring title = widescreen
@@ -122,11 +131,38 @@ bool pump_messages() {
   return !closing;
 }
 
+// Releases the guest frame. Paced mode waits on the wall-clock grid first, so
+// each VBlank comes at the donor's 60 Hz rate and audio never sets the pace.
+// The interval histogram is recorded in both modes.
+void release_frame() {
+  if (pacing_mode == gt4::pacing::Mode::paced) {
+    if (!frame_pacer->anchored())
+      frame_pacer->anchor(frame_clock->now());
+    frame_clock->wait_until(frame_pacer->deadline());
+  }
+  const std::int64_t released = frame_clock->now();
+  if (pacing_mode == gt4::pacing::Mode::paced)
+    frame_pacer->release(released);
+  pacing_diagnostics.record_release(released, frame_clock->frequency());
+}
+
+gt4::pacing::Counters pacing_counters() {
+  gt4::pacing::Counters counters;
+  if (frame_pacer)
+    counters.late_frames = frame_pacer->late_frames();
+  if (audio_output) {
+    counters.audio_underruns = audio_output->underruns();
+    counters.ring_overflow_frames = audio_output->overflow_frames();
+  }
+  return counters;
+}
+
 void on_vblank() {
 #ifdef GT4_PERF_PROBE
   gt4::perf::Probe::shared().frame_boundary(
       {ps2::now(), ps2::primitives_drawn(), ps2::vu1_interpreted_calls()});
 #endif
+  release_frame();
   GT4_PERF_SCOPE(gt4::perf::Category::host_vblank);
   if (!pump_messages())
     return;
@@ -158,6 +194,13 @@ void on_vblank() {
     apply_pad(controller->poll(focused, buttons));
     if (focused)
       controller->rumble(ps2::pad_rumble());
+  }
+  if (audio_output) {
+    // Paced mode: move ring data to the device without waiting.
+    audio_output->pump();
+    pacing_diagnostics.record_queue_frames(audio_output->queued_frames());
+    if (audio_output->mode() == gt4::pacing::Mode::paced)
+      pacing_diagnostics.record_ratio(audio_output->resampler_ratio());
   }
   ps2::gs::present();
 }
@@ -197,8 +240,12 @@ int run_window(const std::function<int()> &emulate) {
   controller = &input;
   const auto cleanup = [&]() {
 #ifdef GT4_PERF_PROBE
+    gt4::perf::Probe::shared().set_report_section({});
     gt4::perf::Probe::shared().finish();
 #endif
+    audio_output = nullptr;
+    frame_pacer.reset();
+    frame_clock.reset();
 #ifdef GT4_SHAPE_CAPTURE
     if (capture) {
       capture->finish();
@@ -215,6 +262,15 @@ int run_window(const std::function<int()> &emulate) {
     game_window = nullptr;
   };
   try {
+    pacing_mode = gt4::pacing::parse_mode(std::getenv("GT4_PACING"));
+    frame_clock = std::make_unique<FrameClock>();
+    frame_pacer = std::make_unique<gt4::pacing::FramePacer>(
+        frame_clock->frequency(), gt4::pacing::guest_vblank_rate);
+    pacing_diagnostics.reset();
+    std::fprintf(stderr, "[pacing] mode=%s; guest VBlank %llu Hz; timer=%s\n",
+                 gt4::pacing::mode_name(pacing_mode),
+                 static_cast<unsigned long long>(gt4::pacing::guest_vblank_rate),
+                 frame_clock->high_resolution_timer() ? "high-resolution" : "1 ms");
 #ifdef GT4_SHAPE_CAPTURE
     std::array<wchar_t, 32768> output{};
     const auto length = GetEnvironmentVariableW(L"GT4_OBSERVATION_OUTPUT", output.data(),
@@ -251,7 +307,14 @@ int run_window(const std::function<int()> &emulate) {
                  "[window] real guest GPU output through native Vulkan\n");
     // shortcut: one thread and FIFO presentation, qualify pipelining later.
     ps2::g_options.on_vblank = on_vblank;
-    AudioOutput audio(pump_messages);
+    AudioOutput audio(pump_messages, pacing_mode);
+    audio_output = &audio;
+#ifdef GT4_PERF_PROBE
+    gt4::perf::Probe::shared().set_report_section([](std::FILE *output) {
+      pacing_diagnostics.format(output, pacing_mode, pacing_counters());
+      pacing_diagnostics.reset();
+    });
+#endif
     ps2::set_audio_sink(
         [&audio](const std::int16_t *samples, std::size_t frames) {
           if (!audio.push(samples, frames))
@@ -266,6 +329,7 @@ int run_window(const std::function<int()> &emulate) {
     }
     ps2::set_audio_sink({});
     audio.close(!closing && result == 0);
+    audio_output = nullptr;
     cleanup();
     return result;
   } catch (const std::exception &error) {

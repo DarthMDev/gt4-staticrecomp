@@ -1,5 +1,7 @@
 #include "host_io.hpp"
+#include "frame_clock.hpp"
 
+#include <algorithm>
 #include <cstdio>
 #include <stdexcept>
 
@@ -171,6 +173,45 @@ int main() {
     require(rejected, "closed sink refuses new samples");
     std::fprintf(stderr, "PASS: real Windows audio completion, ring wrap, "
                          "partial drain and cancel\n");
+    // Paced mode on the real device: three seconds at 60 Hz, one 800-frame
+    // block per guest frame. Pushes never wait; the queue stays bounded; the
+    // device consumes at wall-clock rate; the resample ratio stays in bounds.
+    {
+      FrameClock clock;
+      gt4::pacing::FramePacer pacer(clock.frequency(), gt4::pacing::guest_vblank_rate);
+      AudioOutput paced(nullptr, gt4::pacing::Mode::paced);
+      std::array<std::int16_t, 800 * 2> frame_audio{};
+      const std::uint64_t bound = gt4::pacing::target_latency_frames + 16 * 256;
+      const std::int64_t longest_push = static_cast<std::int64_t>(clock.frequency() / 500);
+      std::int64_t worst_push = 0;
+      std::uint64_t worst_queue = 0;
+      pacer.anchor(clock.now());
+      for (int guest_frame = 0; guest_frame < 180; ++guest_frame) {
+        clock.wait_until(pacer.deadline());
+        pacer.release(clock.now());
+        for (std::size_t index = 0; index < frame_audio.size(); ++index)
+          frame_audio[index] = static_cast<std::int16_t>((index * 37 + guest_frame) % 20000 - 10000);
+        const std::int64_t before = clock.now();
+        require(paced.push(frame_audio.data(), 800), "paced push accepted");
+        worst_push = std::max(worst_push, clock.now() - before);
+        paced.pump();
+        worst_queue = std::max(worst_queue, paced.queued_frames());
+      }
+      require(worst_push < longest_push, "paced push never waits for the device");
+      require(worst_queue <= bound, "paced queue stays bounded");
+      require(paced.completed_frames() >= 130000, "device consumes at wall-clock rate");
+      require(paced.underruns() <= 2, "paced audio does not starve");
+      require(paced.resampler_ratio() >= 0.995 && paced.resampler_ratio() <= 1.005,
+              "resample ratio bounded");
+      require(paced.overflow_frames() == 0, "ring never overflows at nominal rate");
+      std::fprintf(stderr,
+                   "PASS: paced audio (3 s, 60 Hz): worst push %.3f ms, max queue %llu "
+                   "frames, completed %llu, underruns %llu, ratio %.6f\n",
+                   1000.0 * static_cast<double>(worst_push) / static_cast<double>(clock.frequency()),
+                   static_cast<unsigned long long>(worst_queue),
+                   static_cast<unsigned long long>(paced.completed_frames()),
+                   static_cast<unsigned long long>(paced.underruns()), paced.resampler_ratio());
+    }
     return 0;
   } catch (const std::exception &error) {
     std::fprintf(stderr, "FAIL: %s\n", error.what());

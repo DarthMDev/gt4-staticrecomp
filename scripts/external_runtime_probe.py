@@ -29,10 +29,16 @@ PERF_PROFILES = {
     'vu1-aot': ('slice151-vu1-aot.json', 'private/slice151-vu1-aot-build/build/gt4vulkan.exe'),
     # O2 candidate: VU1 AOT plus asynchronous GS submission (GT4_GS_SYNC=1 restores the synchronous path).
     'gs-async': ('slice152-gs-async.json', 'private/slice152-gs-async-build/build/gt4vulkan.exe'),
+    # O4 candidate: gs-async plus the paced clock (GT4_PACING=audio restores the blocking audio clock).
+    'pacing': ('slice153-pacing.json', 'private/slice153-pacing-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
+PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
-VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST)
+VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST)
+# Host pacing overrides, forwarded unchanged and recorded in run evidence.
+PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
+                    'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -53,11 +59,39 @@ def expected_performance_pin(manifest, runtime_workspace):
     return PERF_RUNTIME, None
 
 
+# Inherited names that a performance run must not carry into the measured binary.
+# GT4_PACING and GT4_PRESENT_MODE are not scrubbed: they are recorded and forwarded.
+PERFORMANCE_SCRUB_PREFIXES = ('PS2_', 'GT4_PERF_', 'GT4_VU1_')
+
+
+def scrub_performance_environment(environment):
+    """Removes inherited measurement-affecting names from a performance environment in place."""
+    for name in list(environment):
+        if name.upper().startswith(PERFORMANCE_SCRUB_PREFIXES):
+            environment.pop(name)
+
+
+def pacing_overrides(environment):
+    """Validates GT4_PACING and GT4_PRESENT_MODE; returns the values to record in run evidence.
+
+    Unknown values are refused here, before launch, and the native host refuses them too.
+    Unset names are not recorded.
+    """
+    recorded = {}
+    for name, allowed in PACING_OVERRIDES.items():
+        if name not in environment:
+            continue
+        if environment[name] not in allowed:
+            raise ValueError(f"{name} must be one of {', '.join(allowed)}")
+        recorded[name] = environment[name]
+    return {'pacing_environment': recorded} if recorded else {}
+
+
 def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -277,9 +311,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     environment.pop('GT4_OBSERVATION_OUTPUT', None)
     environment.pop('GT4_PERF', None)
     if performance:
-        for name in list(environment):
-            if name.upper().startswith(('PS2_', 'GT4_PERF_', 'GT4_VU1_')):
-                environment.pop(name)
+        scrub_performance_environment(environment)
         environment.update(GT4_PERF='1', PS2_SCALE='1', PS2_GS='gpu')
         result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu',
                                              'GT4_ASPECT': aspect}
@@ -288,6 +320,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
+    result.update(pacing_overrides(environment))
     if capture_shapes:
         environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']
