@@ -6,7 +6,7 @@
 
 ![EE](https://img.shields.io/badge/EE%20(main%20CPU)-100%25%20AOT-2ea44f)
 ![VU0 macro](https://img.shields.io/badge/VU0%20macro-100%25%20AOT-2ea44f)
-![VU1 micro](https://img.shields.io/badge/VU1%20micro-AOT%20%C2%B7%20102%20programs-2ea44f)
+![VU1 micro](https://img.shields.io/badge/VU1%20micro-AOT%20%C2%B7%20all%202%2C048%20entries-2ea44f)
 ![VU0 micro](https://img.shields.io/badge/VU0%20micro-mapped%2C%20AOT%20next-yellow)
 ![IOP](https://img.shields.io/badge/IOP-HLE%20%2B%20interpreter-orange)
 ![GS](https://img.shields.io/badge/GS-Vulkan%20compute-blue)
@@ -17,7 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
-![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2024-2ea44f)
+![Tasks](https://img.shields.io/badge/tasks%20done-10%20of%2024-2ea44f)
 
 </div>
 
@@ -47,7 +47,7 @@ interpreted at run time:
 |---|---|---|---|
 | **EE** (main CPU) | Game logic, physics, menus, draw lists | Translated ahead of time to C++; no EE interpreter exists | **100%** of executed code · 5,676 unreached decomp functions to add for coverage |
 | **VU0 macro** | Vector math inside EE code | Translated together with the EE | **100%** |
-| **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; 102 entry points compiled ahead of time | **100%** of calls in day races, replays and menus · night races and rally reach a few entries not yet compiled (interpreted fallback) · full static entry coverage next |
+| **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; all 2,048 entry points compiled ahead of time | **100%** · 0 interpreted calls in day/night races, rally, showroom |
 | **VU0 microcode** | Small helper programs | All 14 entry points and the image mapped | **0%** · next |
 | **IOP** (I/O CPU) | Sound, disc, memory card, USB | System libraries replaced by native code; 23 game modules interpreted | **System libraries native** · game modules later |
 | **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | Hardware renderer planned |
@@ -76,8 +76,8 @@ one F7/F8 interval per scene:
 | Time Trial, Nordschleife, Supra (480p) | **60.0** | **100%** | 99.6% of frames within 16–17 ms |
 | Arcade race, Nordschleife, 5 AI cars | **60.0** | **100%** | After VU1 flag elision (was 58.0) |
 | Replay of that race | 59.1 | 98.5% | |
-| Night race with AI cars | 46.2 | 77% | New VU1 entry points interpreted; extra GPU wait under investigation |
-| Rally, Grand Canyon, 1 AI car | 53.9 | 90% | New VU1 entry points interpreted |
+| Night race with AI cars | 58.9 | 98% | VU1 fully compiled; remaining cost is a 4.1 ms GS readback wait (paraLLEl-GS, TASK-012) |
+| Rally, Grand Canyon, 1 AI car | 59.9 | 99.8% | All VU1 entries compiled (was 53.9) |
 | Car showroom (rotating car) | 59.1 | 98.6% | After VU1 flag elision (was 44.8); VU1 9.3 ms |
 
 ## Known issues
@@ -116,13 +116,13 @@ in game before it is merged.
 | TASK‑005 | Asynchronous GPU submission + overlay fix | ✅ Done · 45 → 60 FPS, 100% game speed |
 | TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done · flat 16.7 ms frametime |
 | TASK‑007 | VU1 per-program flag elision | ✅ Done · showroom 45 → 59 FPS, 5-AI race 60 FPS |
-| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 **In progress** |
-| TASK‑009 | Title, fixed 16:9, fullscreen, 480p everywhere | 🔄 480p rework |
-| TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ⏭️ Next |
+| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done · 0 interpreted VU1 calls; rally 60, showroom 60, night 59 FPS |
+| TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
+| TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
 | TASK‑011 | MTVU: VU1 on its own thread | 📋 Planned |
-| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 📋 Planned |
-| TASK‑013 | VU0 microcode compiled ahead of time | 📋 Planned |
-| TASK‑014 | Full EE entry coverage from the decompilation | 📋 Planned |
+| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress |
+| TASK‑013 | VU0 microcode compiled ahead of time | 🧪 Owner test · 14/14 entries compiled |
+| TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
 | TASK‑017 | Decompilation names in the generated code | 📋 Planned |
