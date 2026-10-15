@@ -102,12 +102,14 @@ in game before it is merged.
 |---|---|---|
 | TASK-001…007 | Baseline, VU1 AOT, async GPU submission, frame pacing, VU1 flag elision | ✅ Done |
 | TASK-008 | Full static VU1 entry coverage (night races, rally) | 🔄 **In progress** |
-| TASK-009 | Window title, fixed 16:9 | ⏭️ Next |
+| TASK-009 | Window title, fixed 16:9, fullscreen toggle, 480p boot | ⏭️ Next |
+| TASK-018 | Faster builds | 📋 Planned |
 | TASK-010 | MTVU: VU1 on its own thread | 📋 Planned |
+| TASK-019 | Build tuning (CPU variants, LTO, PGO) | 📋 Planned |
 | TASK-011 | Upscaling 1x–6x on the accurate GS renderer | 📋 Planned |
 | TASK-012 | Night races: remove the GPU readback wait | 📋 Planned |
 | TASK-013 | License-test crash | 📋 Planned |
-| TASK-014…022 | VU0 AOT, EE coverage, IOP review, build speed and tuning, 480p boot | 📋 Planned |
+| TASK-014…022 | VU0 AOT, EE coverage, LWR fix, IOP review, decomp names | 📋 Planned |
 | TASK-023 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
 | TASK-024…025 | Vulkan (Custom): GT4-specialist hardware renderer based on PCSX2 | 📋 Planned |
 | TASK-026 | Racing wheels with force feedback | 📋 Planned |

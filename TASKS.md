@@ -8,6 +8,8 @@ from [STATUS](docs/STATUS.md).
 
 States: ✅ Done · 🔄 In progress · ⏭️ Next · 📋 Planned · 🔭 Long term
 
+Task IDs are stable; the overview lists tasks in execution order.
+
 ## Overview
 
 | Task | Goal | State |
@@ -20,8 +22,10 @@ States: ✅ Done · 🔄 In progress · ⏭️ Next · 📋 Planned · 🔭 Long
 | TASK-006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
 | TASK-007 | VU1 per-program flag elision | ✅ Done |
 | TASK-008 | Full static VU1 entry coverage | 🔄 In progress |
-| TASK-009 | Quick fixes: window title, fixed 16:9 | ⏭️ Next |
+| TASK-009 | Quick fixes: window title, fixed 16:9, fullscreen toggle, per-interval counters, 480p boot and 16:9 option (if the study shows it is small) | ⏭️ Next |
+| TASK-018 | Faster builds (parallel jobs, compiler cache, lld-link) | 📋 Planned |
 | TASK-010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
+| TASK-019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
 | TASK-011 | Upscaling 1x-6x on the Vulkan (GS) renderer | 📋 Planned |
 | TASK-012 | Night races: remove the GS readback wait | 📋 Planned |
 | TASK-013 | License-test crash | 📋 Planned |
@@ -29,10 +33,8 @@ States: ✅ Done · 🔄 In progress · ⏭️ Next · 📋 Planned · 🔭 Long
 | TASK-015 | EE entry coverage from the decomp function list | 📋 Planned |
 | TASK-016 | LWR sign-extension fidelity fix | 📋 Planned |
 | TASK-017 | IOP per-module cost counters and review | 📋 Planned |
-| TASK-018 | Faster builds (parallel jobs, compiler cache, lld-link) | 📋 Planned |
-| TASK-019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
-| TASK-020 | Boot directly in 480p; keep the in-game screen ratio at 16:9 | 📋 Planned |
-| TASK-021 | Perf report counters per interval (late frames, underruns) | 📋 Planned |
+| TASK-020 | 480p boot and 16:9 option (only if not done in TASK-009) | 📋 Planned |
+| TASK-021 | Merged into TASK-009 | — |
 | TASK-022 | Decomp names in generated EE code | 📋 Planned |
 | TASK-023 | Launcher (Rust + egui/GPUI): video, controls, game image | 📋 Planned |
 | TASK-024 | Vulkan (Custom) renderer P0: GT4 GS feature census and replay harness | 📋 Planned |
@@ -83,8 +85,14 @@ Branch: `feat/vu1-entry-coverage`.
 ## Planned
 
 ### TASK-009 — Quick fixes
-Window title becomes just "GT4Recomp"; remove F6 and the 4:3 framing option
-(launcher `--aspect`), fixed 16:9. Owner check: title and image in menus/race.
+- Window title becomes just "GT4Recomp".
+- Fixed 16:9: remove F6 and the 4:3 framing option (launcher `--aspect`).
+- Fullscreen toggle: Alt+Enter (Windows convention) and F11, borderless
+  fullscreen on the current monitor.
+- Per-interval perf counters (`late_frames`, `audio_underruns`; was TASK-021).
+- 480p by default at boot and the in-game screen ratio kept at 16:9, if the
+  feasibility study shows it is small; otherwise it stays TASK-020.
+Owner check: title, fullscreen in menus/race, 16:9 image, F8 counters.
 
 ### TASK-010 — MTVU
 Run VU1 programs on a worker thread (donor `start_vu_thread` exists), on by
@@ -127,10 +135,11 @@ generated units for lone LWR uses.
 Per-module instruction counters and per-library HLE call counts in F8; decide
 whether the sound modules need native HLE (docs/IOP-MAP.md).
 
-### TASK-018 — Faster builds
-Parallel jobs inside one build, a compiler cache, lld-link. Measure before/after.
+### TASK-018 — Faster builds (runs right after TASK-009)
+Parallel jobs inside one build, a compiler cache, lld-link. Measure before/after;
+speeds up every later task.
 
-### TASK-019 — Build tuning
+### TASK-019 — Build tuning (runs after TASK-010)
 `-ffp-contract=off` control, x86-64-v3 runtime variant chosen by the launcher,
 dispatch divide removal, ThinLTO, PGO; one variable per candidate.
 
@@ -138,8 +147,7 @@ dispatch divide removal, ThinLTO, PGO; one variable per candidate.
 Locate the video-mode and screen-ratio settings via decomp names and set them at
 startup (launcher options).
 
-### TASK-021 — Perf counters per interval
-`late_frames` and `audio_underruns` currently look session-cumulative.
+### TASK-021 — Merged into TASK-009
 
 ### TASK-022 — Decomp names in generated code
 Label comments in generated units with identical object code.
