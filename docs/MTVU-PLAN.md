@@ -418,3 +418,106 @@ this mode only).
   design; a later GS-thread step could move it.
 
 **Verdict: go** for steps 1-2.
+
+## 11. Step 1 and step 2 implementation (slice 170, 2026-10-15)
+
+Choices made while implementing steps 1-2 where section 5 left the detail open. Labels as above.
+
+### 11.1 Step 1 (done, host only)
+
+- `native/mtvu_ring.hpp`: SPSC byte ring, 16-byte record header (`kind, path, flags, bytes, job`), records
+  padded to 16 bytes, a Wrap filler when a record does not fit before the end, monotonic 64-bit positions.
+  Largest record is capacity/2 (guarantees filler + record fit in an empty ring). Chunks above that are split
+  by the callers with `kFlagMore`. Waits use one shared `Doorbell` (snapshot, check, `atomic::wait`), so there
+  is no lost wakeup and no `sleep_for`.
+- `native/mtvu_journal.{hpp,cpp}`: `EeJournal` (EE only) holds placeholders and EE GS entries; `WorkerEnd` is
+  the worker side. Drain executes in journal order. Deadlock rule: any EE wait for input space first moves all
+  worker output into an EE-side queue (`pump_output`).
+- Choice: the journal's reset and VBlank-flush entries exist and are tested, but the runtime does not use them.
+  GIF reset, VBlank, privileged GS writes, downloads and VU memory access are blocking syncs (11.3). That is
+  simpler and exact; the cost is measured by the `sync` counters.
+
+### 11.2 Step 2 runtime
+
+- Capsule `private/slice170-mtvu-runtime` from `scripts/prepare_perf_runtime.py --mtvu` (implies `--vu0-aot`).
+  Patched donor files: `system.cpp`, `vif.cpp`, `vu_micro.cpp`; derived: `gif.cpp`, `memory.cpp`, `hw.cpp`,
+  `dmac.cpp`. Without `--mtvu` the derivation reproduces slice160 and slice169 byte for byte (checked).
+- Host: `native/mtvu_runtime.{hpp,cpp}` (worker thread, EE API, settings, verify, counters) and
+  `native/mtvu_bridge.cpp` (the donor glue: `vif::transfer`, `vif::write`, `vu::reset`, `gif::render`).
+  `ps2::run()` starts the worker and stops it after the loop (`start_with_donor`, `stop`, `report`), so the
+  headless path (`main.cpp` of the pinned port) and the window path both get it.
+- VIF1 shadow: the donor's shadow rules are kept with the predicates pointed at the worker: `shadow(1)` is
+  `mtvu::enabled() && !on_worker()`; a packet or register write is posted as a job before the shadow parses it.
+  `run_vu` on the EE copies the VU1 TOP/ITOP into `g_top/g_itop` before returning (the shadow never runs VU1),
+  so VU0 `XTOP` reads the same value as the single-thread path.
+- Worker: runs `vif::transfer(1)` / `vif::write(1)` on its own `g_vu_side`, runs VU1 (AOT, interpreter fallback),
+  and emits PATH1 (XGKICK) and PATH2 (DIRECT) bytes through `gif::transfer` -> `worker_gif`. Each job ends with a
+  JobDone, also when the packet stalled, so the EE never waits for a stall that only the EE can clear.
+- `g_top`/`g_itop` are `thread_local`. Nothing else needed it: `g_chaining`, `g_chained`, the `run_entry`
+  counters and the AOT caches are read only by the worker for unit 1, and VU0 (`unit 0`) runs only on the EE.
+- EE GS operations (PATH3 from DMA, anything not from the worker) go through `gt4::mtvu::gif_transfer`: scan
+  signals with the step 0 `GifScanner` (side effect free, complete for SIGNAL/FINISH/LABEL because REGLIST
+  addresses only registers 0-15); a signal forces a blocking sync and an immediate render; otherwise render
+  now if the journal is empty, else append a copy.
+- Shadow DIRECT (PATH2): `shadow_direct` scans the same way; a signal forces a blocking sync at the EE point
+  (the packet is already a job, so the drain returns once its outputs are rendered).
+- PATH1 invariant (section 5.3): the worker scans PATH1 with the same scanner; a violation increments
+  `path1_signal` and prints once. `GT4_MTVU_STRICT=1` throws on the worker; the exception is rethrown on the EE
+  at the next sync. Non-strict runs apply the IRQ late (known divergence, counted). No session fallback is
+  implemented yet: the owner measurement showed 0 PATH1 signals (section 10).
+- Worker failure: the worker records the first exception, then only acknowledges jobs so the EE never hangs;
+  the EE rethrows at the next sync or pump.
+
+### 11.3 Synchronization points (implemented)
+
+| Point | Call | Why |
+|---|---|---|
+| VBlank, before the host present | `vblank_sync` (system.cpp `vblank`) | outputs must be rendered before present |
+| GS download (DMA ch1 reverse, `read128` of GS FIFO) | `sync("download")` | downloads read render state |
+| Privileged GS writes (write32/write64/`gs_set_imr`) | `sync("gs_privileged")` | the register writes touch state the renderer reads |
+| EE access to VU0/VU1 memory (slow path) | `sync("vu_memory")` | the worker may write VU1 memory |
+| GIF reset, hardware reset, VIF reset, VU reset | `sync(...)` | reset touches render or worker state |
+| Save/load state (`sync_vu_thread`) | `sync("state")` | the state is serialized from both sides |
+| End of run | `stop()` (sync, Stop record, join) | the report must see final state |
+
+Not synchronized (exact by construction): VIF1 register reads, DMA ch1 completion and interrupts, VIF1 IRQ and
+STAT (shadow), PATH3 transfers with no signal (journal), VU0 programs (EE only).
+
+### 11.4 Diagnostics
+
+- `GT4_MTVU` (default 1), `GT4_MTVU_VERIFY` (default 0), `GT4_MTVU_STRICT` (default 0): each accepts only 0 or
+  1; the launcher and `parse_settings` reject other values before output. The launcher records them as
+  `mtvu_environment` in `result.json` and does not scrub them.
+- `GT4_MTVU_VERIFY=1` prints one line per VBlank: `[mtvu-verify] frame N gs <FNV-1a of every GS render in the
+  frame, path and bytes> vif1 shadow <hash> worker <hash> same|MISMATCH`. The GS hash is taken where the EE
+  renders (both modes), so MTVU on and off must print the same GS hashes frame by frame. The VIF1 hash covers
+  every unit field and the pending bytes.
+- `report` prints jobs, packets, writes, EE transfers, direct transfers, renders, `path1_signal` and the sync
+  counts by reason (`[mtvu] sync <reason> <count>`).
+
+### 11.5 Known limits of step 2
+
+- F8 (`perf probe`) is not yet per-thread: a perf scope opened on the worker sets the probe's wrong-thread flag
+  and F8 reports invalid. Headless determinism runs do not use F8 timing. Per-thread accounting is step 3.
+- GS privileged writes are blocking syncs. Their count per frame is not yet measured; if it is large, a
+  journal op (`GsPriv`) is the next step.
+- No PATH1 session fallback yet (11.2).
+
+### 11.6 Results (slice 170, headless, idle machine)
+
+Build `private/slice170-mtvu-build/build`, `gt4vulkan.exe` sha256 a0b4968b2c59071bb06945b263e195a939ad2bb2c53513590a05244536cd333e.
+
+| Check | Result | Label |
+|---|---|---|
+| CTest | 26/26 (includes `native_mtvu_ring`, `native_mtvu_journal`) | Confirmed |
+| Python `unittest discover` | 264 OK, 12 skipped | Confirmed |
+| Headless 4,200 frames, `GT4_MTVU=1`, three runs | 42/42 identical to slice157 each run | Confirmed |
+| Headless 4,200 frames, `GT4_MTVU=0` | 42/42 identical | Confirmed |
+| `GT4_MTVU_VERIFY=1`, on and off | VIF1 shadow vs worker: 0 mismatches in 4,200 frames; GS render hash identical in 4,200 frames | Confirmed |
+| PATH1 SIGNAL/FINISH/LABEL | 0 | Confirmed (menus only) |
+| Syncs per run (on) | vblank 4,200, gs_privileged 20,984 (about 5 per frame), gif_reset 1, shutdown 1 | Confirmed |
+| Journal jobs per run (on) | 2,782,335 (VIF1 packets 2,711,960; VIF1 writes 70,375); PATH2 DIRECT 1,205,303 | Confirmed |
+| `renders` counter across runs | 387,068 and 386,605: the fast-path choice depends on worker timing; output identical | Confirmed |
+
+Limits of this evidence: menus only (the headless schedule), so VU1 work is light; no timing claim. The owner
+A/B (showroom, night race, rally) is the next gate (section 6, step 5). F8 is not per-thread yet (11.5).

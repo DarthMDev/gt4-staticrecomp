@@ -54,7 +54,7 @@ class AsyncProfileTests(unittest.TestCase):
                 probe.verify_performance_profile(manifest, async_evidence(runtime={'path': 'private/other.exe'}), root)
 
     def test_both_aot_manifests_accept_verify_and_interpret_options(self):
-        self.assertEqual(set(probe.VU1_AOT_MANIFESTS), {'slice151-vu1-aot.json', ASYNC_MANIFEST, 'slice153-pacing.json', 'slice154-vu1-flags.json', 'slice155-vu1-full.json', 'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json', 'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json'})
+        self.assertEqual(set(probe.VU1_AOT_MANIFESTS), {'slice151-vu1-aot.json', ASYNC_MANIFEST, 'slice153-pacing.json', 'slice154-vu1-flags.json', 'slice155-vu1-full.json', 'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json', 'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json'})
 
 
 class AsyncManifestTests(unittest.TestCase):

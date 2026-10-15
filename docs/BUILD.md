@@ -886,3 +886,62 @@ Owner command (from the worktree or, after merge, the main checkout):
 Limits: downloads are counted as TRXDIR=1 writes, not `gs::read_image` calls; EE counts cover the slow
 memory path, which is the only EE path to VU memory in the donor; host timings are only meaningful on an
 idle machine.
+
+## Slice170 - MTVU step 2 (TASK-011): VU1 on a worker thread
+
+Branch `task/011-mtvu`, worktree `C:\Antigravity\gt4-wt-011` (no `private/` junction). Capsule
+`private/slice170-mtvu-runtime`, derived from the main checkout:
+
+```
+python scripts\prepare_perf_runtime.py C:/Antigravity/gt4-staticrecomp/private/slice170-mtvu-runtime ^
+  --assets-root C:/Antigravity/gt4-staticrecomp --mtvu
+```
+
+`--mtvu` implies `--vu0-aot`; its hooks are `prepare_perf_runtime.py` `MTVU_PATCHES`. Without `--mtvu` the
+derivation reproduces slice160 (`system.cpp`, `vif.cpp`, `vu_micro.cpp`, `runtime.json`) and slice169 byte for byte.
+Pin: `docs/inputs/slice170-mtvu-runtime.json` (receipt sha256 4e5f1e4dc2c1287dd73572e083794475dbfd2f6726badfbdffb8303ce4645e20).
+
+Build (clang-cl 22.1.3, Ninja, Release; same pinned inputs as slice169, new runtime capsule):
+
+```
+cmake -S C:\Antigravity\gt4-wt-011 -B C:\Antigravity\gt4-staticrecomp\private\slice170-mtvu-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" ^
+  -DGT4_EE_PROFILE=production -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp ^
+  -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice170-mtvu-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-port ^
+  -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice170-mtvu-build\build
+```
+
+Executable `gt4vulkan.exe` 95,561,728 bytes, sha256 a0b4968b2c59071bb06945b263e195a939ad2bb2c53513590a05244536cd333e.
+Launcher pin: `docs/inputs/slice170-mtvu.json` (mode `mtvu`). Step 1 fixtures (`native_mtvu_ring`,
+`native_mtvu_journal`) are in the same build.
+
+Controls:
+
+- CTest 26/26 on `private/slice170-mtvu-build/build` (includes `native_mtvu_ring`, `native_mtvu_journal`).
+- Headless 4,200 frames, slice157 press schedule (12 presses), frame dumps every 100 frames, compared with
+  `private/slice157-smoke/headless-157/frames`: 42 of 42 identical for `GT4_MTVU=1` (three runs: `on`, `on2`,
+  `on3`), and 42 of 42 identical for `GT4_MTVU=0` (`off`). Outputs `private/slice170-smoke/{on,on2,on3,off}`.
+- `GT4_MTVU_VERIFY=1` headless, on and off (`verify-on`, `verify-off`): 4,200 `[mtvu-verify]` lines each, 0 VIF1
+  shadow/worker mismatches, and the per-frame GS render hash identical in all 4,200 frames (4,196 frames carry GS
+  renders). Frame dumps of both runs identical to the reference (42 of 42).
+- Python: 264 OK, 12 skipped (`GT4_NATIVE_BUILD` on this build, `GT4_ASSETS_ROOT` main checkout).
+
+Owner A/B (showroom, night race, rally; one F7/F8 interval each; the `mtvu` mode is the same for both):
+
+```
+set GT4_MTVU=0
+python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+set GT4_MTVU=1
+python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+```
+
+`GT4_MTVU` unset means 1. Add `GT4_MTVU_VERIFY=1` for a stream check (the per-frame `[mtvu-verify]` lines; MTVU
+on and off must print the same `gs` hashes). Known limit: F8 is not per-thread yet (MTVU-PLAN section 11.5), so
+the owner's F8 under MTVU is flagged invalid by the probe until step 3.

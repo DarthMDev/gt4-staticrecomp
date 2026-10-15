@@ -134,7 +134,9 @@ default with an env switch to disable; exact sync points wherever the EE observe
 VU1 results. Acceptance: identical headless frames, verify 0 mismatches, owner
 showroom/night/race frametime equal or better.
 State: plan in docs/MTVU-PLAN.md; step 0 (measurement build slice169, `--mode mtvu-measure`) done on
-branch `task/011-mtvu`; owner F7/F8 scenes pending before the go/no-go.
+branch `task/011-mtvu`; owner verdict go (section 10). Step 1 (SPSC ring and ordered journal, CTest
+`native_mtvu_ring`, `native_mtvu_journal`) committed. Step 2 (runtime capsule slice170, `--mode mtvu`,
+`GT4_MTVU`) implemented; headless determinism and owner A/B pending (see docs/MTVU-PLAN.md section 11).
 
 ### TASK-012 — paraLLEl-GS as the PC renderer
 One large task, delivered in verified steps on its own branch:

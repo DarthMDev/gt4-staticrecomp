@@ -52,15 +52,17 @@ PERF_PROFILES = {
     # TASK-011 step 0 (slice169): main plus MTVU measurement counters ([mtvu-measure] lines in F8;
     # GT4_MTVU_MEASURE=0 disables them). No guest-visible change.
     'mtvu-measure': ('slice169-mtvu-measure.json', 'private/slice169-mtvu-measure-build/build/gt4vulkan.exe'),
+    # TASK-011 step 2 (slice170): VU1 worker thread. GT4_MTVU (default on) selects the worker; 0 is the main path.
+    'mtvu': ('slice170-mtvu.json', 'private/slice170-mtvu-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
-                     'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json')
+                     'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
-VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json')
+VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -68,6 +70,8 @@ PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
 FORCE_480P_VALUES = ('0', '1')
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
 MTVU_MEASURE_VALUES = ('0', '1')
+# TASK-011 step 2 (slice170): worker runtime switches. Unset means the default shown; forwarded and recorded.
+MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'}
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -120,7 +124,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -233,6 +237,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('GT4_MTVU_MEASURE must be 0 or 1')
     if not os.environ.get('GT4_MTVU_MEASURE_EVERY', '0').isdigit():
         raise ValueError('GT4_MTVU_MEASURE_EVERY must be a VBlank count')
+    # Worker switches are validated here, before any output, and never scrubbed: a bad value stops the run.
+    for switch, default in MTVU_SWITCHES.items():
+        if os.environ.get(switch, default) not in ('0', '1'):
+            raise ValueError(f'{switch} must be 0 or 1')
     if not run_directory.is_relative_to(private_root) or run_directory == private_root:
         raise ValueError('Probe output must be a new directory inside private/')
     if run_directory.exists():
@@ -375,6 +383,9 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     mtvu_measure = {name: environment[name] for name in ('GT4_MTVU_MEASURE', 'GT4_MTVU_MEASURE_EVERY') if name in environment}
     if mtvu_measure:
         result['mtvu_measure_environment'] = mtvu_measure
+    mtvu_switches = {name: environment[name] for name in MTVU_SWITCHES if name in environment}
+    if mtvu_switches:
+        result['mtvu_environment'] = mtvu_switches
     if capture_shapes:
         environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']

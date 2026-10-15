@@ -7,6 +7,8 @@
 pipeline (slice 159) and TASK-009 slice 164 `--mode quickfix3 --force-480p` (title,
 16:9, fullscreen, races held at 480p; owner approved). In flight: TASK-012 paraLLEl-GS
 (step 5 headless, textures missing), TASK-013 VU0 AOT (owner test), TASK-014 stage A.
+TASK-011 MTVU (branch `task/011-mtvu`): slice 170 `--mode mtvu` (VU1 worker thread, `GT4_MTVU`
+default on) is headless-identical (42/42, on and off); owner A/B pending.
 
 **Earlier:** slice 154 `--mode vu1-flags` (executable `800da980`) adds VU1 flag
 elision: showroom 59.14 VBlanks/s (was 44.79), 5-AI race 60.00 at 480p. Next:
