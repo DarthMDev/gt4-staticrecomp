@@ -20,6 +20,9 @@ same pacing environment variables; the VU1 status word is not kept (no image ins
 
 VU1 full-entry candidate (--mode vu1-full): vu1-flags with the slice155 static VU1 table (426
 entries generated from the pinned image, not from recordings). Same options and environment.
+
+VU1 all-entries candidate (--mode vu1-all): vu1-flags with the slice157 static VU1 table, every
+8-byte address of the pinned image (2,048 programs, built as 128 parts). Same options and environment.
 """
 import argparse
 import sys
@@ -41,8 +44,8 @@ def main():
                         help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags or vu1-full')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'vu1-all'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full or vu1-all')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:

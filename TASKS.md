@@ -107,6 +107,11 @@ night race 0 interpreted calls, rally still 354,837. Owner chose all 2,048
 entries of the decrypted image (about 40 MB larger executable is fine); flag
 elision applies per program automatically. Acceptance: interpreted calls 0 in
 night race, rally and showroom.
+**Status: all-entries candidate ready for owner retest** (slice 157, `--mode
+vu1-all`, executable `40388a41`, 95 MB): 2,048 entries (the 426 targeted ones
+identical inside it), table split into 128 parts for parallel compilation,
+CTest 18/18, Python 236 OK, registry 2,048/2,048, headless frames identical to
+slice 154, interpreted calls 0 headless.
 
 ### TASK-009 — Quick fixes
 Branch `task/009-quick-fixes`, slice 156 `--mode quickfix`. Owner accepted:
