@@ -9,9 +9,11 @@
 ![VU1 micro](https://img.shields.io/badge/VU1%20micro-AOT%20%C2%B7%20all%202%2C048%20entries-2ea44f)
 ![VU0 micro](https://img.shields.io/badge/VU0%20micro-AOT%20%C2%B7%2014%2F14%20entries-2ea44f)
 ![IOP](https://img.shields.io/badge/IOP-HLE%20%2B%20interpreter-orange)
-![GS](https://img.shields.io/badge/GS-Vulkan%20compute-blue)
+![GS](https://img.shields.io/badge/GS-Vulkan%20compute%20%C2%B7%20paraLLEl--GS%20in%20progress-blue)
 
 ![Race](https://img.shields.io/badge/race-60%20FPS%20%C2%B7%20100%25%20speed-2ea44f)
+![Showroom](https://img.shields.io/badge/showroom-60%20FPS-2ea44f)
+![Night race](https://img.shields.io/badge/night%20race-59%20FPS-yellowgreen)
 ![Scenes](https://img.shields.io/badge/scenes%20tested-6-informational)
 ![Known issues](https://img.shields.io/badge/known%20issues-license%20tests%20crash-red)
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
@@ -30,11 +32,17 @@ reproduced in software, and graphics run on **Vulkan**. Nothing generates code
 while the game runs, which is also what makes future **Android and iOS** builds
 possible.
 
-**Where we are:** real boot, menus, races against AI and replays at or near
-**60 FPS and full game speed**, with a **flat 16.7 ms frametime** in Time Trial on
-the Nordschleife (Ryzen 7 5700X + RX 9060 XT, 480p). Night races, rally and the car
-showroom are still below 60 FPS, and **license tests currently crash** while
-loading their demo run. See [Scene results](#scene-results) and [Known issues](#known-issues).
+**Where we are (October 2026):** the game boots, plays and races natively at
+**60 FPS and full game speed** with a **flat 16.7 ms frametime**: Time Trial and
+AI races, rally and the car showroom all hold 60 FPS, and night races run at
+about 59 (Ryzen 7 5700X + RX 9060 XT). Every PS2 vector-unit program the game
+uses (all VU1 and VU0 microcode) now runs as precompiled native code, with no
+interpreter on the normal path. Races render in **480p progressive**, the window
+is **16:9** with borderless fullscreen. Next: the **paraLLEl-GS** renderer
+(upscaling, sharper image), VU1 on its own CPU core for weaker CPUs and phones,
+and a one-click **launcher and installer** for the first stable release.
+**License tests still crash** while loading their demo run.
+See [Scene results](#scene-results) and [Known issues](#known-issues).
 
 [Status](docs/STATUS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Build guide](docs/BUILD.md) · [Credits](#credits)
 
@@ -50,7 +58,7 @@ interpreted at run time:
 | **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; all 2,048 entry points compiled ahead of time | **100%** · 0 interpreted calls in day/night races, rally, showroom |
 | **VU0 microcode** | Small helper programs | All 14 entry points compiled ahead of time with exact flags | **100%** · 0 interpreted calls |
 | **IOP** (I/O CPU) | Sound, disc, memory card, USB | System libraries replaced by native code; 23 game modules interpreted | **System libraries native** · game modules later |
-| **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | Hardware renderer planned |
+| **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | paraLLEl-GS integration in progress (runs; image not correct yet) |
 
 ## Performance journey
 
@@ -64,21 +72,29 @@ built-in F7/F8 profiler:
 | + asynchronous GPU submission | 60 VBlanks/s | 60 | 100% |
 | + single-clock frame pacing | **16.67 ms** (99.6% of frames within 16–17 ms) | **60** | **100%** |
 
+Harder scenes, same machine:
+
+| Scene | Before (VU1 partly interpreted) | Now (all VU1/VU0 compiled, flag elision) |
+|---|---|---|
+| Car showroom | 44.8 FPS | **60 FPS** |
+| Rally, Grand Canyon | 53.9 FPS | **59.9 FPS** |
+| Night race with AI cars | 46.2 FPS | **58.9 FPS** |
+
 <img src="docs/images/frametime-flat.webp" alt="Flat frametime graph at 60 FPS" width="460">
 
 ## Scene results
 
-Owner sessions on the current build (single-clock pacing, VU1 and VU0 compiled,
-async GPU), one F7/F8 interval per scene:
+Owner sessions on the current `main` build (`--mode main`: single-clock pacing,
+all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
 
 | Scene | FPS (VBlanks/s) | Game speed | Notes |
 |---|---|---|---|
 | Time Trial, Nordschleife, Supra (480p) | **60.0** | **100%** | 99.6% of frames within 16–17 ms |
 | Arcade race, Nordschleife, 5 AI cars | **60.0** | **100%** | After VU1 flag elision (was 58.0) |
 | Replay of that race | 59.1 | 98.5% | |
-| Night race with AI cars | 58.9 | 98% | VU1 fully compiled; remaining cost is a 4.1 ms GS readback wait (paraLLEl-GS, TASK-012) |
+| Night race with AI cars | 58.9 | 98% | Remaining cost is a ~4 ms GPU readback wait, targeted by paraLLEl-GS (TASK-012) |
 | Rally, Grand Canyon, 1 AI car | 59.9 | 99.8% | All VU1 entries compiled (was 53.9) |
-| Car showroom (rotating car) | 58.0–60.0 | 97–100% | Varies with the car shown (was 44.8 before flag elision) |
+| Car showroom (rotating car) | **60.0** | **100%** | Steady on the main build (was 44.8); short dips to 58 with some cars |
 
 ## Known issues
 
@@ -88,8 +104,9 @@ async GPU), one F7/F8 interval per scene:
   the demo-input data appears to arrive wrong or late. Under investigation.
 - **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
   that the new renderer (paraLLEl-GS, TASK-012) is expected to remove.
-- **Car showroom** dips to about 58 FPS with some cars; a dedicated VU1 thread
-  (MTVU, TASK-011) is planned.
+- **Weaker CPUs:** VU1 work (5–8 ms per frame) still shares the main CPU core;
+  moving it to its own core (MTVU, TASK-011) is in progress and matters most for
+  older PCs and phones.
 - Menus are interlaced like the original game (480p applies in races); a
   deinterlacing filter is planned with the new renderer.
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
@@ -119,15 +136,15 @@ in game before it is merged.
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done · 0 interpreted VU1 calls; rally 60, showroom 60, night 59 FPS |
 | TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
 | TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
-| TASK‑011 | MTVU: VU1 on its own thread | 📋 Planned |
-| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs headless, textures missing |
+| TASK‑011 | MTVU: VU1 on its own thread | 🔄 Plan done · step 0 (measurement) in progress |
+| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs, textures missing (debugging) |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
 | TASK‑017 | License-test crash | 📋 Planned |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
+| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design and plan in progress |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 
@@ -158,8 +175,9 @@ part of this repository's roadmap.
 
 The EE game code is translated ahead of time (AOT) into C++ and compiled for
 x86-64. The VU1 microcode, stored encrypted inside the executable, is recovered,
-compiled offline and verified against a reference interpreter on real game state
-(hundreds of thousands of checks, zero mismatches). IOP system services are
+compiled offline (all 2,048 entry points) and verified against a reference
+interpreter on real game state (hundreds of thousands of checks, zero
+mismatches); the 14 VU0 microprograms are compiled the same way with exact flags. IOP system services are
 native; the GS is reproduced with Vulkan compute shaders. Frames are paced by a
 single high-resolution clock with rate-controlled audio. Interpreters remain only
 as counted fallbacks. This is a **hybrid recompilation**: PS2 hardware is still
@@ -171,7 +189,7 @@ For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
 The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. A separate [EE producer](docs/EE-PRODUCER.md) now rebuilds the translator and game library from verified inputs; production still uses its qualified private library while candidate integration and gameplay checks remain pending. A clean end-to-end playable build remains future work.
 
-Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates required files, and preserves the existing memory card. The current build starts with `scripts/play_performance.py --mode main --force-480p` (F7 starts a measured interval, F8 reports it). Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
+Once the environment is prepared, the current build starts with `scripts/play_performance.py --mode main --force-480p` (F7 starts a measured interval, F8 reports it); it validates every input against its pin and preserves the existing memory card. The planned launcher (TASK-019) replaces this with an installer and a Play button. Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
 
 | Key | Action |
 |---|---|
@@ -185,7 +203,7 @@ Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates r
 
 The presentation is fixed at 16:9; there is no 4:3 framing option. Set **Options → Screen → Aspect Ratio** in the game to 16:9. Fullscreen restores the previous windowed size and position when toggled off. Existing memory cards retain saved settings.
 
-`--force-480p` (or `GT4_FORCE_480P=1`) holds the game's race display option at 480p: races render progressive while menus stay 480i as in the original. Without the switch the game's own setting is used.
+`--force-480p` (or `GT4_FORCE_480P=1`) holds the game's race display option at 480p: races render progressive while menus stay 480i as in the original. It becomes the default with the launcher.
 
 ## Credits
 
