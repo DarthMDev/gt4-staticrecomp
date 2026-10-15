@@ -33,6 +33,11 @@ private:
     std::vector<std::uint32_t> output_, even_, odd_;
 };
 
+// FSR 1.0 (EASU then RCAS) from input_width x input_height to output_width x output_height, as the shader computes it.
+std::vector<std::uint32_t> fsr_reference(const std::vector<std::uint32_t> &frame, std::uint32_t input_width,
+                                         std::uint32_t input_height, std::uint32_t output_width, std::uint32_t output_height,
+                                         float sharpness);
+
 // FXAA (edge-only) on one frame, as the shader computes it. Stateless.
 std::vector<std::uint32_t> fxaa(const std::vector<std::uint32_t> &frame, std::uint32_t width, std::uint32_t height);
 

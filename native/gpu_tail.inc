@@ -140,9 +140,10 @@ void set_widescreen(bool enabled) {
 }
 
 // ---- CoreGS 1.1 present-path post passes (slice 182). Shader: native/post/present.wgsl (entry "post").
-// Each op is one dispatch; the parameter record layout is the one the shader reads (P_* constants).
+// Each op is one dispatch; the parameter record layout is the one the shader reads (P_* constants;
+// FSR constants at words 16..31).
 constexpr std::uint32_t kPostCopy = 0, kPostWeave = 1, kPostBob = 2, kPostBlendTap = 3, kPostAdaptive = 4,
-                        kPostHistoryCopy = 5, kPostFxaa = 6;
+                        kPostHistoryCopy = 5, kPostFxaa = 6, kPostEasu = 7, kPostRcas = 8;
 constexpr std::uint32_t kPostScratch = 0, kPostTemp = 1;
 constexpr float kAdaptiveThreshold = 0.08f; // normalised per channel (spec 13.4)
 
@@ -180,24 +181,46 @@ void ensure_post_capacity(std::uint64_t frame_words, std::uint64_t output_words)
     }
 }
 
+// One post dispatch: `fields` are the parameter words (see the P_* constants in the shader).
+void push_post_record(const std::array<std::uint32_t, 32> &fields, std::uint32_t dispatch_x, std::uint32_t dispatch_y) {
+    std::array<std::uint32_t, kParamStride / 4> record{};
+    std::copy(fields.begin(), fields.end(), record.begin());
+    const auto parameters = static_cast<std::uint32_t>(g_param_records.size());
+    g_param_records.push_back(record);
+    g_commands.push_back({kPost, dispatch_x, dispatch_y, parameters});
+}
+
 void push_post_pass(std::uint32_t op, std::uint32_t input, std::uint32_t output, std::uint32_t width, std::uint32_t height,
                     std::uint32_t out_width, std::uint32_t out_height, std::uint32_t field, std::uint32_t shift,
                     std::uint32_t flags, std::uint32_t slot) {
-    const std::uint32_t parameters = push_params({op, width, height, input, output, field, shift, flags,
-                                                  float_bits(kAdaptiveThreshold), out_width, out_height,
-                                                  width * height, slot});
-    g_commands.push_back({kPost, (out_width + 7) / 8, (out_height + 7) / 8, parameters});
+    std::array<std::uint32_t, 32> fields{};
+    fields[0] = op;
+    fields[1] = width;
+    fields[2] = height;
+    fields[3] = input;
+    fields[4] = output;
+    fields[5] = field;
+    fields[6] = shift;
+    fields[7] = flags;
+    fields[8] = float_bits(kAdaptiveThreshold);
+    fields[9] = out_width;
+    fields[10] = out_height;
+    fields[11] = width * height;
+    fields[12] = slot;
+    push_post_record(fields, (out_width + 7) / 8, (out_height + 7) / 8);
 }
 
 bool post_active(const PostSettings& settings, bool interlaced) {
     const bool deinterlace = interlaced && settings.deinterlace != PostDeinterlace::off;
-    return deinterlace || settings.fxaa;
+    return deinterlace || settings.fxaa || settings.filter == PostFilter::fsr;
 }
 
 // Appends the post passes for the frame in scratch and returns the buffer that holds the result.
 // Deinterlace runs only for really interlaced output; automatic picks adaptive then, off otherwise.
+// FSR (filter fsr) upscales to target_width x target_height when the target is known (zero disables it).
 std::uint32_t run_post_passes(const PostSettings& settings, std::uint32_t width, std::uint32_t height, bool interlaced,
-                              std::uint32_t field, std::uint32_t& out_width, std::uint32_t& out_height) {
+                              std::uint32_t field, std::uint32_t target_width, std::uint32_t target_height,
+                              std::uint32_t& out_width, std::uint32_t& out_height) {
     PostDeinterlace mode = settings.deinterlace;
     if (mode == PostDeinterlace::automatic) mode = PostDeinterlace::adaptive;
     if (!interlaced) mode = PostDeinterlace::off;
@@ -239,8 +262,41 @@ std::uint32_t run_post_passes(const PostSettings& settings, std::uint32_t width,
         push_post_pass(kPostFxaa, current, other, width, height, width, height, field, 0, flags, 0);
         current = other;
     }
-    out_width = width;
-    out_height = height;
+    std::uint32_t result_width = width, result_height = height;
+    if (settings.filter == PostFilter::fsr && target_width && target_height) {
+        if (static_cast<std::uint64_t>(target_width) * target_height > g_copy_words)
+            throw std::runtime_error("FSR output exceeds the scratch capacity; use a window of at most g_copy_words pixels");
+        // EASU writes the other buffer than its input; RCAS sharpens it back into the first one.
+        const std::uint32_t easu_output = current == kPostTemp ? kPostScratch : kPostTemp;
+        const std::uint32_t rcas_output = current;
+        const auto constants = fsr::easu_constants(static_cast<float>(width), static_cast<float>(height),
+                                                   static_cast<float>(target_width), static_cast<float>(target_height));
+        std::array<std::uint32_t, 32> easu{};
+        easu[0] = kPostEasu;
+        easu[1] = width;
+        easu[2] = height;
+        easu[3] = current;
+        easu[4] = easu_output;
+        easu[9] = target_width;
+        easu[10] = target_height;
+        for (std::size_t i = 0; i < constants.size(); ++i) easu[16 + i] = float_bits(constants[i]);
+        push_post_record(easu, (target_width + 7) / 8, (target_height + 7) / 8);
+        std::array<std::uint32_t, 32> rcas{};
+        rcas[0] = kPostRcas;
+        rcas[1] = target_width;
+        rcas[2] = target_height;
+        rcas[3] = easu_output;
+        rcas[4] = rcas_output;
+        rcas[9] = target_width;
+        rcas[10] = target_height;
+        rcas[16] = float_bits(fsr::rcas_constant(settings.sharpness));
+        push_post_record(rcas, (target_width + 7) / 8, (target_height + 7) / 8);
+        current = rcas_output;
+        result_width = target_width;
+        result_height = target_height;
+    }
+    out_width = result_width;
+    out_height = result_height;
     return current;
 }
 
@@ -265,27 +321,36 @@ bool present(const DisplaySource& source) {
         return submit(width, height);
     const std::uint32_t field = g_post_field;
     if (source.halved) g_post_field ^= 1u;
-    ensure_post_capacity(static_cast<std::uint64_t>(width) * height, static_cast<std::uint64_t>(width) * height);
+    // The presentation rectangle is the window's 16:9 area; FSR scales to it, so the blit is 1:1.
+    const gt4::vulkan::PresentationRect target = g_vulkan.presentation();
+    const std::uint64_t frame = static_cast<std::uint64_t>(width) * height;
+    ensure_post_capacity(frame, std::max<std::uint64_t>(frame, static_cast<std::uint64_t>(target.width) * target.height));
     std::uint32_t out_width = 0, out_height = 0;
-    const std::uint32_t result = run_post_passes(g_post_settings, width, height, source.halved, field, out_width, out_height);
+    const std::uint32_t result = run_post_passes(g_post_settings, width, height, source.halved, field, target.width,
+                                                 target.height, out_width, out_height);
     return submit(out_width, out_height, result == kPostScratch ? g_scratch : g_post_temp);
 }
 
 // Test entry (native/post/post_test.hpp): one frame through the post passes; state is kept between calls.
+// `target_width` x `target_height` is the FSR output size (ignored unless the filter is fsr).
 bool post_frame_for_test(const std::vector<std::uint32_t>& pixels, std::uint32_t width, std::uint32_t height,
-                         bool interlaced, std::uint32_t field, const PostSettings& settings, std::vector<std::uint32_t>& result) {
+                         bool interlaced, std::uint32_t field, const PostSettings& settings, std::uint32_t target_width,
+                         std::uint32_t target_height, std::vector<std::uint32_t>& result) {
     const std::uint64_t frame = static_cast<std::uint64_t>(width) * height;
     if (!width || !height || pixels.size() != frame || frame > g_copy_words)
         throw std::runtime_error("post test frame has the wrong size");
     wait_idle();
     g_vulkan.write(g_scratch, 0, pixels.data(), frame * 4);
-    ensure_post_capacity(frame, frame);
+    const bool fsr_active = settings.filter == PostFilter::fsr && target_width && target_height;
+    const std::uint64_t output = fsr_active ? static_cast<std::uint64_t>(target_width) * target_height : frame;
+    ensure_post_capacity(frame, std::max(frame, output));
     std::uint32_t out_width = 0, out_height = 0;
-    const std::uint32_t which = run_post_passes(settings, width, height, interlaced, field & 1u, out_width, out_height);
+    const std::uint32_t which = run_post_passes(settings, width, height, interlaced, field & 1u, target_width, target_height,
+                                                out_width, out_height);
     submit();
     wait_idle();
-    result.resize(frame);
-    read_back(which == kPostScratch ? g_scratch : g_post_temp, frame * 4, result.data());
+    result.resize(static_cast<std::size_t>(out_width) * out_height);
+    read_back(which == kPostScratch ? g_scratch : g_post_temp, result.size() * 4, result.data());
     return true;
 }
 

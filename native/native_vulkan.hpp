@@ -95,6 +95,8 @@ public:
   void set_aspect(Aspect aspect) { aspect_ = aspect; }
   // Linear filtering when the presented image is scaled (PS2_SCALE > 1); nearest otherwise.
   void set_linear_present(bool linear) { linear_present_ = linear; }
+  // The 16:9 presentation rectangle of the current swapchain (zero size before a surface exists).
+  PresentationRect presentation() const { return presentation_rect(extent_.width, extent_.height, aspect_); }
   bool has_window() const { return window_ != nullptr; }
   bool synchronous() const { return synchronous_; }
   // Device maximum workgroup count for axis 0 (x) or 1 (y).

@@ -84,3 +84,29 @@ hardening changes are listed in the file header. The donor header
 `tools/vu_recomp/MIT-LICENSE.txt`. `tools/vu_recomp/src/sha256.cpp` and the
 fixtures in `tools/vu_recomp/tests/` are original code. The emitter output is
 not linked into the game; the provider is a later, separate step.
+
+## AMD FidelityFX Super Resolution 1.0 (CoreGS 1.1, slice 182)
+
+`native/third_party/fsr1/ffx_a.h` and `ffx_fsr1.h` are vendored unmodified from
+https://github.com/GPUOpen-Effects/FidelityFX-FSR at commit
+`a21ffb8f6c13233ba336352bdff293894c706575` (master, 2021-11-15). Their MIT
+licence (Copyright (c) 2021 Advanced Micro Devices, Inc.) is in
+`native/third_party/fsr1/LICENSE.txt`. SHA-256 of the vendored files:
+
+- ffx_a.h `c82c2092e0739121f9c26aee5b6afec765d44466f010518cbc43fdbc6dcbc7b7`
+- ffx_fsr1.h `6d16231b29f0537f7737aebdb4affabba6da114247fecb8da93b060511659ce0`
+- LICENSE.txt `84bb6af6a570cc2d737b1d530534139592c89f5a9114e4c6aabf0fb8e7762375`
+
+The GPU pass is a WGSL transcription of EASU and RCAS (`native/post/present.wgsl`,
+functions `fsr_*`). The CPU reference (`native/post/fsr_reference.cpp`) is a line-by-line
+C++ transcription of the same functions. The headers are not compiled as C++ (their
+GPU path needs GLSL or HLSL vector types); the CTest `native_post_passes` compares the
+WGSL pass with the C++ transcription, not with the header itself.
+
+## CoreGS 1.1 deinterlace, FXAA
+
+Deinterlace (weave, bob, blend, adaptive) follows our clean-room description in
+`docs/hw-renderer-spec/13-output-and-postfx.md` and the MIT CPU reference of task/027
+(`native/hw_gs/display`), ported to `native/post/post_reference.cpp` and
+`native/post/present.wgsl`. FXAA is written from the published FXAA 3.11 algorithm
+description (edge-only, no subpixel term); no FXAA source file is copied.

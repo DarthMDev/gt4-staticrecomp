@@ -25,6 +25,8 @@ const OP_BLEND_TAP: u32 = 3u;
 const OP_ADAPTIVE: u32 = 4u;
 const OP_HISTORY_COPY: u32 = 5u;
 const OP_FXAA: u32 = 6u;
+const OP_EASU: u32 = 7u;
+const OP_RCAS: u32 = 8u;
 
 // Parameter words (params word index).
 const P_OP: u32 = 0u;
@@ -180,6 +182,199 @@ fn fxaa_pixel(x: u32, y: u32, which: u32, w: u32, h: u32) -> u32 {
     return pack4(r, g, b, chan(center, 3u));
 }
 
+// ---- AMD FidelityFX Super Resolution 1.0: EASU (edge-adaptive upscale) and RCAS (robust contrast
+// adaptive sharpening). Transcribed from ffx_fsr1.h (MIT, AMD, copyright 2021; vendored at
+// native/third_party/fsr1, see native/THIRD_PARTY.md). Constants come from the host (FsrEasuCon,
+// FsrRcasCon) in the parameter record: EASU con0..con3 at words 16..31, RCAS sharpness at word 16.
+// The gather order is the one textureGather returns: (bottom-left, bottom-right, top-right, top-left)
+// of the 2x2 block at floor(p * size - 0.5), with clamp-to-edge.
+
+fn fsr_texel(which: u32, x: i32, y: i32, w: u32, h: u32) -> vec3<f32> {
+    let cx = u32(clamp(x, 0, i32(w) - 1));
+    let cy = u32(clamp(y, 0, i32(h) - 1));
+    let c = load_px(which, cy * w + cx);
+    return vec3<f32>(f32(chan(c, 0u)), f32(chan(c, 1u)), f32(chan(c, 2u))) / 255.0;
+}
+
+// Gather of one channel at continuous position p (texel units from the normalised coordinate).
+fn fsr_gather(which: u32, p: vec2<f32>, w: u32, h: u32, channel: u32) -> vec4<f32> {
+    let x0 = i32(floor(p.x * f32(w) - 0.5));
+    let y0 = i32(floor(p.y * f32(h) - 0.5));
+    let bl = fsr_texel(which, x0, y0 + 1, w, h)[channel];
+    let br = fsr_texel(which, x0 + 1, y0 + 1, w, h)[channel];
+    let tr = fsr_texel(which, x0 + 1, y0, w, h)[channel];
+    let tl = fsr_texel(which, x0, y0, w, h)[channel];
+    return vec4<f32>(bl, br, tr, tl);
+}
+
+// APrxLoRcpF1, APrxMedRcpF1 and APrxLoRsqF1 of ffx_a.h (bit-trick approximations).
+fn fsr_rcp_lo(a: f32) -> f32 {
+    return bitcast<f32>(0x7ef07ebbu - bitcast<u32>(a));
+}
+
+fn fsr_rcp_med(a: f32) -> f32 {
+    let b = bitcast<f32>(0x7ef19fffu - bitcast<u32>(a));
+    return b * (-b * a + 2.0);
+}
+
+fn fsr_rsq_lo(a: f32) -> f32 {
+    return bitcast<f32>(0x5f347d74u - (bitcast<u32>(a) >> 1u));
+}
+
+// FsrEasuSetF: the gradient direction and length contribution of one bilinear tap group.
+fn fsr_easu_set(w: f32, la: f32, lb: f32, lc: f32, ld: f32, le: f32) -> vec3<f32> {
+    let dc = ld - lc;
+    let cb = lc - lb;
+    var len_x = max(abs(dc), abs(cb));
+    len_x = fsr_rcp_lo(len_x);
+    let dir_x = ld - lb;
+    len_x = clamp(abs(dir_x) * len_x, 0.0, 1.0);
+    len_x = len_x * len_x;
+    let ec = le - lc;
+    let ca = lc - la;
+    var len_y = max(abs(ec), abs(ca));
+    len_y = fsr_rcp_lo(len_y);
+    let dir_y = le - la;
+    len_y = clamp(abs(dir_y) * len_y, 0.0, 1.0);
+    len_y = len_y * len_y;
+    return vec3<f32>(dir_x * w, dir_y * w, (len_x + len_y) * w);
+}
+
+// FsrEasuTapF: one tap of the 12-tap Lanczos-like filter; returns (weighted colour, weight).
+fn fsr_easu_tap(off: vec2<f32>, dir: vec2<f32>, len: vec2<f32>, lob: f32, clp: f32, c: vec3<f32>) -> vec4<f32> {
+    var v = vec2<f32>(off.x * dir.x + off.y * dir.y, off.x * (-dir.y) + off.y * dir.x);
+    v = v * len;
+    var d2 = v.x * v.x + v.y * v.y;
+    d2 = min(d2, clp);
+    var wb = (2.0 / 5.0) * d2 + (-1.0);
+    var wa = lob * d2 + (-1.0);
+    wb = wb * wb;
+    wa = wa * wa;
+    wb = (25.0 / 16.0) * wb + (-(25.0 / 16.0 - 1.0));
+    let w = wb * wa;
+    return vec4<f32>(c * w, w);
+}
+
+fn fsr_easu_pixel(x: u32, y: u32, which: u32, w: u32, h: u32) -> vec3<f32> {
+    let con0 = vec4<f32>(prm_f(16u), prm_f(17u), prm_f(18u), prm_f(19u));
+    let con1 = vec4<f32>(prm_f(20u), prm_f(21u), prm_f(22u), prm_f(23u));
+    let con2 = vec4<f32>(prm_f(24u), prm_f(25u), prm_f(26u), prm_f(27u));
+    let con3 = vec4<f32>(prm_f(28u), prm_f(29u), prm_f(30u), prm_f(31u));
+    var pp = vec2<f32>(f32(x), f32(y)) * con0.xy + con0.zw;
+    let fp = floor(pp);
+    pp = pp - fp;
+    let p0 = fp * con1.xy + con1.zw;
+    let p1 = p0 + con2.xy;
+    let p2 = p0 + con2.zw;
+    let p3 = p0 + con3.xy;
+    let bczz_r = fsr_gather(which, p0, w, h, 0u);
+    let bczz_g = fsr_gather(which, p0, w, h, 1u);
+    let bczz_b = fsr_gather(which, p0, w, h, 2u);
+    let ijfe_r = fsr_gather(which, p1, w, h, 0u);
+    let ijfe_g = fsr_gather(which, p1, w, h, 1u);
+    let ijfe_b = fsr_gather(which, p1, w, h, 2u);
+    let klhg_r = fsr_gather(which, p2, w, h, 0u);
+    let klhg_g = fsr_gather(which, p2, w, h, 1u);
+    let klhg_b = fsr_gather(which, p2, w, h, 2u);
+    let zzon_r = fsr_gather(which, p3, w, h, 0u);
+    let zzon_g = fsr_gather(which, p3, w, h, 1u);
+    let zzon_b = fsr_gather(which, p3, w, h, 2u);
+    let bczz_l = bczz_b * 0.5 + (bczz_r * 0.5 + bczz_g);
+    let ijfe_l = ijfe_b * 0.5 + (ijfe_r * 0.5 + ijfe_g);
+    let klhg_l = klhg_b * 0.5 + (klhg_r * 0.5 + klhg_g);
+    let zzon_l = zzon_b * 0.5 + (zzon_r * 0.5 + zzon_g);
+    let bL = bczz_l.x;
+    let cL = bczz_l.y;
+    let iL = ijfe_l.x;
+    let jL = ijfe_l.y;
+    let fL = ijfe_l.z;
+    let eL = ijfe_l.w;
+    let kL = klhg_l.x;
+    let lL = klhg_l.y;
+    let hL = klhg_l.z;
+    let gL = klhg_l.w;
+    let oL = zzon_l.z;
+    let nL = zzon_l.w;
+    let w_s = (1.0 - pp.x) * (1.0 - pp.y);
+    let w_t = pp.x * (1.0 - pp.y);
+    let w_u = (1.0 - pp.x) * pp.y;
+    let w_v = pp.x * pp.y;
+    var acc = fsr_easu_set(w_s, bL, eL, fL, gL, jL);
+    acc = acc + fsr_easu_set(w_t, cL, fL, gL, hL, kL);
+    acc = acc + fsr_easu_set(w_u, fL, iL, jL, kL, nL);
+    acc = acc + fsr_easu_set(w_v, gL, jL, kL, lL, oL);
+    var dir = acc.xy;
+    var len = acc.z;
+    let dir2 = dir * dir;
+    var dir_r = dir2.x + dir2.y;
+    let zro = dir_r < (1.0 / 32768.0);
+    dir_r = fsr_rsq_lo(dir_r);
+    if (zro) {
+        dir_r = 1.0;
+        dir.x = 1.0;
+    }
+    dir = dir * dir_r;
+    len = len * 0.5;
+    len = len * len;
+    let stretch = (dir.x * dir.x + dir.y * dir.y) * fsr_rcp_lo(max(abs(dir.x), abs(dir.y)));
+    let len2 = vec2<f32>(1.0 + (stretch - 1.0) * len, 1.0 + (-0.5) * len);
+    let lob = 0.5 + ((1.0 / 4.0 - 0.04) - 0.5) * len;
+    let clp = fsr_rcp_lo(lob);
+    let min4 = min(min(min(ijfe_r.z, klhg_r.w), ijfe_r.y), klhg_r.x);
+    let min4_g = min(min(min(ijfe_g.z, klhg_g.w), ijfe_g.y), klhg_g.x);
+    let min4_b = min(min(min(ijfe_b.z, klhg_b.w), ijfe_b.y), klhg_b.x);
+    let max4 = max(max(max(ijfe_r.z, klhg_r.w), ijfe_r.y), klhg_r.x);
+    let max4_g = max(max(max(ijfe_g.z, klhg_g.w), ijfe_g.y), klhg_g.x);
+    let max4_b = max(max(max(ijfe_b.z, klhg_b.w), ijfe_b.y), klhg_b.x);
+    // Tap colours as (R, G, B) from the gathers; offsets are relative to the resolve position.
+    var ac = vec3<f32>(0.0, 0.0, 0.0);
+    var aw = 0.0;
+    var t = vec4<f32>(0.0);
+    t = fsr_easu_tap(vec2<f32>(0.0, -1.0) - pp, dir, len2, lob, clp, vec3<f32>(bczz_r.x, bczz_g.x, bczz_b.x)); ac = ac + t.xyz; aw = aw + t.w; // b
+    t = fsr_easu_tap(vec2<f32>(1.0, -1.0) - pp, dir, len2, lob, clp, vec3<f32>(bczz_r.y, bczz_g.y, bczz_b.y)); ac = ac + t.xyz; aw = aw + t.w; // c
+    t = fsr_easu_tap(vec2<f32>(-1.0, 1.0) - pp, dir, len2, lob, clp, vec3<f32>(ijfe_r.x, ijfe_g.x, ijfe_b.x)); ac = ac + t.xyz; aw = aw + t.w; // i
+    t = fsr_easu_tap(vec2<f32>(0.0, 1.0) - pp, dir, len2, lob, clp, vec3<f32>(ijfe_r.y, ijfe_g.y, ijfe_b.y)); ac = ac + t.xyz; aw = aw + t.w; // j
+    t = fsr_easu_tap(vec2<f32>(0.0, 0.0) - pp, dir, len2, lob, clp, vec3<f32>(ijfe_r.z, ijfe_g.z, ijfe_b.z)); ac = ac + t.xyz; aw = aw + t.w; // f
+    t = fsr_easu_tap(vec2<f32>(-1.0, 0.0) - pp, dir, len2, lob, clp, vec3<f32>(ijfe_r.w, ijfe_g.w, ijfe_b.w)); ac = ac + t.xyz; aw = aw + t.w; // e
+    t = fsr_easu_tap(vec2<f32>(1.0, 1.0) - pp, dir, len2, lob, clp, vec3<f32>(klhg_r.x, klhg_g.x, klhg_b.x)); ac = ac + t.xyz; aw = aw + t.w; // k
+    t = fsr_easu_tap(vec2<f32>(2.0, 1.0) - pp, dir, len2, lob, clp, vec3<f32>(klhg_r.y, klhg_g.y, klhg_b.y)); ac = ac + t.xyz; aw = aw + t.w; // l
+    t = fsr_easu_tap(vec2<f32>(2.0, 0.0) - pp, dir, len2, lob, clp, vec3<f32>(klhg_r.z, klhg_g.z, klhg_b.z)); ac = ac + t.xyz; aw = aw + t.w; // h
+    t = fsr_easu_tap(vec2<f32>(1.0, 0.0) - pp, dir, len2, lob, clp, vec3<f32>(klhg_r.w, klhg_g.w, klhg_b.w)); ac = ac + t.xyz; aw = aw + t.w; // g
+    t = fsr_easu_tap(vec2<f32>(1.0, 2.0) - pp, dir, len2, lob, clp, vec3<f32>(zzon_r.z, zzon_g.z, zzon_b.z)); ac = ac + t.xyz; aw = aw + t.w; // o
+    t = fsr_easu_tap(vec2<f32>(0.0, 2.0) - pp, dir, len2, lob, clp, vec3<f32>(zzon_r.w, zzon_g.w, zzon_b.w)); ac = ac + t.xyz; aw = aw + t.w; // n
+    let lo = vec3<f32>(min4, min4_g, min4_b);
+    let hi = vec3<f32>(max4, max4_g, max4_b);
+    let avg = ac * (1.0 / aw);
+    return min(hi, max(lo, avg));
+}
+
+fn fsr_rcas_pixel(x: u32, y: u32, which: u32, w: u32, h: u32) -> vec3<f32> {
+    let con = prm_f(16u);
+    let xi = i32(x);
+    let yi = i32(y);
+    let b = fsr_texel(which, xi, yi - 1, w, h);
+    let d = fsr_texel(which, xi - 1, yi, w, h);
+    let e = fsr_texel(which, xi, yi, w, h);
+    let f = fsr_texel(which, xi + 1, yi, w, h);
+    let hh = fsr_texel(which, xi, yi + 1, w, h);
+    let mn4 = min(min(min(b, d), f), hh);
+    let mx4 = max(max(max(b, d), f), hh);
+    let hit_min = min(mn4, e) * (1.0 / (4.0 * mx4));
+    let hit_max = (vec3<f32>(1.0) - max(mx4, e)) * (1.0 / (4.0 * mn4 + vec3<f32>(-4.0)));
+    let lobe_c = max(-hit_min, hit_max);
+    let lobe_m = max(max(lobe_c.x, lobe_c.y), lobe_c.z);
+    let lobe = max(-(0.25 - 1.0 / 16.0), min(lobe_m, 0.0)) * con;
+    let rcp_l = fsr_rcp_med(4.0 * lobe + 1.0);
+    return (lobe * b + lobe * d + lobe * hh + lobe * f + e) * rcp_l;
+}
+
+fn fsr_store(which: u32, i: u32, c: vec3<f32>) {
+    let r = u32(clamp(c.r * 255.0 + 0.5, 0.0, 255.0));
+    let g = u32(clamp(c.g * 255.0 + 0.5, 0.0, 255.0));
+    let b = u32(clamp(c.b * 255.0 + 0.5, 0.0, 255.0));
+    store_px(which, i, pack4(r, g, b, 255u));
+}
+
 @compute @workgroup_size(8, 8)
 fn post(@builtin(global_invocation_id) gid: vec3<u32>) {
     let op = prm(P_OP);
@@ -255,5 +450,9 @@ fn post(@builtin(global_invocation_id) gid: vec3<u32>) {
         history[prm(P_SLOT) * slot_words + i] = load_px(src_buf, i);
     } else if (op == OP_FXAA) {
         store_px(dst_buf, i, fxaa_pixel(x, y, src_buf, w, h));
+    } else if (op == OP_EASU) {
+        fsr_store(dst_buf, i, fsr_easu_pixel(x, y, src_buf, w, h));
+    } else if (op == OP_RCAS) {
+        fsr_store(dst_buf, i, fsr_rcas_pixel(x, y, src_buf, w, h));
     }
 }

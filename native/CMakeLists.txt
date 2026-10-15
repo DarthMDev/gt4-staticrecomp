@@ -373,7 +373,7 @@ target_include_directories(upscale_fixture PRIVATE "${PORT}")
 target_link_libraries(upscale_fixture PRIVATE ps2runtime_vulkan user32)
 target_compile_options(upscale_fixture PRIVATE /W4)
 # slice182 (CoreGS 1.1): post passes (deinterlace, FXAA) against the CPU reference.
-add_executable(post_fixture post_fixture.cpp post/post_reference.cpp)
+add_executable(post_fixture post_fixture.cpp post/post_reference.cpp post/fsr_reference.cpp)
 target_include_directories(post_fixture PRIVATE "${PORT}" "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(post_fixture PRIVATE ps2runtime_vulkan user32)
 target_compile_options(post_fixture PRIVATE /W4)

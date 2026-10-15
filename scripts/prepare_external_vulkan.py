@@ -39,7 +39,7 @@ def prepare(output, assets_root=None):
         raise ValueError('Donor GPU source differs from the qualified version')
     source = gpu_bytes.decode('utf-8').replace('\r\n', '\n')
     source = replace_section(source, '#include <webgpu/', '#include <algorithm>',
-                             '#include "native_vulkan.hpp"\n#include "post/post_settings.hpp"\n#include <stdexcept>')
+                             '#include "native_vulkan.hpp"\n#include "post/post_settings.hpp"\n#include "post/fsr_constants.hpp"\n#include <stdexcept>')
     source = source.replace('extern const char kGsShader[];\nextern const char kBlitShader[];\n', '')
     globals_text = '''gt4::vulkan::Context g_vulkan;
 gt4::vulkan::Buffer *g_vram = nullptr, *g_tables = nullptr;

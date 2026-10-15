@@ -15,6 +15,8 @@
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
+#include <utility>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -50,7 +52,7 @@ std::vector<std::uint32_t> make_frame(std::uint32_t index) {
 std::vector<std::uint32_t> run_gpu(const std::vector<std::uint32_t> &frame, bool interlaced, std::uint32_t field,
                                    const PostSettings &settings) {
     std::vector<std::uint32_t> result;
-    gpu::post_frame_for_test(frame, kWidth, kHeight, interlaced, field, settings, result);
+    gpu::post_frame_for_test(frame, kWidth, kHeight, interlaced, field, settings, kWidth, kHeight, result);
     return result;
 }
 
@@ -141,6 +143,24 @@ int main() {
         std::vector<std::uint32_t> flat(kWidth * kHeight, 0xFF203040u);
         compare_exact(run_gpu(flat, false, 0, fxaa), flat, "fxaa flat", 0);
         std::fprintf(stderr, "[post] FXAA within one level of the reference; flat image unchanged\n");
+        // FSR 1.0 (EASU then RCAS) at 2x, 3x and a non-integer size: near the CPU reference.
+        const std::pair<std::uint32_t, std::uint32_t> targets[] = {{32, 24}, {48, 36}, {40, 30}};
+        for (const auto &target : targets) {
+            gpu::post_reset_for_test();
+            PostSettings fsr_settings;
+            fsr_settings.filter = gpu::PostFilter::fsr;
+            fsr_settings.sharpness = 0.2f;
+            for (std::uint32_t index = 0; index < 3; ++index) {
+                const auto frame = make_frame(index);
+                std::vector<std::uint32_t> gpu_frame;
+                gpu::post_frame_for_test(frame, kWidth, kHeight, false, 0, fsr_settings, target.first, target.second, gpu_frame);
+                const auto cpu_frame = post_reference::fsr_reference(frame, kWidth, kHeight, target.first, target.second, 0.2f);
+                require(gpu_frame.size() == cpu_frame.size(), "FSR output size");
+                compare_near(gpu_frame, cpu_frame, "fsr " + std::to_string(target.first) + "x" + std::to_string(target.second) +
+                                                       " frame " + std::to_string(index));
+            }
+        }
+        std::fprintf(stderr, "[post] FSR 1.0 EASU and RCAS within one level of the reference at three sizes\n");
         std::fprintf(stderr, "[post] PASS\n");
         return 0;
     } catch (const std::exception &error) {
