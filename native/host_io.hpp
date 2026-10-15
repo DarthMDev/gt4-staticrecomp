@@ -8,6 +8,7 @@
 #include <Xinput.h>
 // clang-format on
 
+#include "controls.hpp"
 #include "pacing.hpp"
 
 #include <array>
@@ -21,18 +22,23 @@ struct PadState {
   std::array<std::uint8_t, 16> pressures{};
 };
 
+// Maps one XInput state through the binding table. The default-argument overload
+// uses controls::default_controls(), which equals the slice 157 mapping.
+PadState map_gamepad(const XINPUT_GAMEPAD &gamepad, const gt4::controls::ControlMap &map);
 PadState map_gamepad(const XINPUT_GAMEPAD &gamepad);
 void merge_keyboard(PadState &pad, std::uint16_t buttons);
 XINPUT_VIBRATION map_rumble(std::uint16_t rumble);
 
 class ControllerInput {
 public:
+  explicit ControllerInput(gt4::controls::ControlMap map = gt4::controls::default_controls());
   ~ControllerInput();
   PadState poll(bool focused, std::uint16_t keyboard_buttons);
   void rumble(std::uint16_t value);
   void stop();
 
 private:
+  gt4::controls::ControlMap map_;
   DWORD slot_ = XUSER_MAX_COUNT;
   ULONGLONG next_scan_ = 0;
   std::uint16_t motors_ = 0;

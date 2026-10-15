@@ -1,0 +1,26 @@
+# GT4Recomp controls: the built-in mapping, written out in full.
+# Loading this file gives exactly the mapping used when GT4_CONTROLS_FILE is unset.
+schema = 1
+
+[bindings]
+dpad_up = ["xinput:DpadUp", "key:Up"]
+dpad_right = ["xinput:DpadRight", "key:Right"]
+dpad_down = ["xinput:DpadDown", "key:Down"]
+dpad_left = ["xinput:DpadLeft", "key:Left"]
+cross = ["xinput:A", "key:Z"]
+circle = ["xinput:B", "key:X"]
+square = ["xinput:X", "key:A"]
+triangle = ["xinput:Y", "key:S"]
+l1 = ["xinput:LB", "key:Q"]
+r1 = ["xinput:RB", "key:W"]
+# Triggers are pressure-sensitive: the trigger value is the L2/R2 pressure.
+l2 = ["xinput:LT", "key:1"]
+r2 = ["xinput:RT", "key:2"]
+l3 = ["xinput:LThumb", "key:C"]
+r3 = ["xinput:RThumb", "key:V"]
+select = ["xinput:Back", "key:Backspace"]
+start = ["xinput:Start", "key:Enter"]
+rstick_x = ["xinput:RX"]
+rstick_y = ["xinput:RY | invert=true"]
+lstick_x = ["xinput:LX"]
+lstick_y = ["xinput:LY | invert=true"]

@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import time
+import tomllib
 
 from gt4disc import fingerprint
 
@@ -61,6 +62,12 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
+# GT4_CONTROLS_FILE (docs/CONTROLS.md): input bindings in a TOML file. Unset means the built-in map.
+CONTROLS_SCHEMA = 1
+CONTROLS_INPUTS = ('dpad_up', 'dpad_right', 'dpad_down', 'dpad_left', 'cross', 'circle', 'square',
+                   'triangle', 'l1', 'r1', 'l2', 'r2', 'l3', 'r3', 'select', 'start',
+                   'rstick_x', 'rstick_y', 'lstick_x', 'lstick_y')
+CONTROLS_SOURCE_KINDS = ('xinput', 'key')
 # GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
@@ -198,10 +205,64 @@ def summarize_vu1_corpus(corpus):
     return summary
 
 
+def resolve_controls_file(controls_file):
+    """Returns the absolute controls path, or None for the built-in bindings.
+
+    Checks the TOML shape the launcher can see: schema 1, [bindings] only, known input names,
+    and string sources with a known kind. The C++ reader (native/controls.cpp) applies the full
+    rules at start; this check refuses the obvious mistakes before any run output exists.
+    """
+    if controls_file is None:
+        return None
+    path = Path(controls_file).resolve()
+    if not path.is_file():
+        raise ValueError(f'Controls file not found: {path}')
+    try:
+        document = tomllib.loads(path.read_bytes().decode('utf-8'))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise ValueError(f'Controls file is not valid TOML: {path}: {error}') from error
+    unknown_tables = sorted(set(document) - {'schema', 'bindings'})
+    if unknown_tables:
+        raise ValueError(f'Controls file has unknown keys: {unknown_tables}')
+    if type(document.get('schema')) is not int or document['schema'] != CONTROLS_SCHEMA:
+        raise ValueError(f'Controls file needs schema = {CONTROLS_SCHEMA}')
+    bindings = document.get('bindings', {})
+    if not isinstance(bindings, dict):
+        raise ValueError('Controls file: [bindings] must be a table')
+    for name, sources in bindings.items():
+        if name not in CONTROLS_INPUTS:
+            raise ValueError(f'Controls file: unknown input {name!r}')
+        items = [sources] if isinstance(sources, str) else sources
+        if not isinstance(items, list) or not all(isinstance(item, str) for item in items):
+            raise ValueError(f'Controls file: {name} must be a string or a list of strings')
+        for item in items:
+            kind = item.split('|', 1)[0].partition(':')[0].strip().lower()
+            if kind not in CONTROLS_SOURCE_KINDS:
+                raise ValueError(f'Controls file: {name} has an unknown source {item!r}')
+    return path
+
+
+def controls_evidence(path):
+    """Run evidence for the bindings in force: the file hash when a file was used."""
+    if path is None:
+        return {'source': 'default'}
+    data = path.read_bytes()
+    return {'source': 'file', 'path': str(path), 'size_bytes': len(data),
+            'sha256': hashlib.sha256(data).hexdigest()}
+
+
+def apply_controls_environment(environment, path):
+    """Sets GT4_CONTROLS_FILE for the game only; an inherited value never selects the bindings."""
+    environment.pop('GT4_CONTROLS_FILE', None)
+    if path is not None:
+        environment['GT4_CONTROLS_FILE'] = str(path)
+
+
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
-              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
+              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
+              controls_file=None):
     workspace = workspace.resolve()
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
@@ -233,6 +294,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         if not play_card.exists() and card_seed is None:
             raise ValueError('First manual play needs a pinned seed card')
 
+    # Refused before any output: a bad controls file must stop the start, not the game.
+    controls_path = resolve_controls_file(controls_file)
     inputs = workspace / 'docs/inputs'
     native = json.loads((inputs / 'usa-v2.00-native.json').read_text(encoding='utf-8'))
     disc_manifest = json.loads((inputs / 'usa-v2.00.json').read_text(encoding='utf-8'))
@@ -325,6 +388,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               'presentation_aspect': '16:9',
               'disc_sha256': disc_manifest['disc']['sha256'],
               'runtime_sha256': executable_pin['sha256']}
+    result['controls'] = controls_evidence(controls_path)
     if seed_pin is not None:
         result['card_seed'] = seed_pin
     if play_card is not None:
@@ -338,6 +402,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     # Aspect selection was removed in slice156; a stale inherited value must not reach the game.
     environment.pop('GT4_ASPECT', None)
     environment.pop('GT4_OBSERVATION_OUTPUT', None)
+    apply_controls_environment(environment, controls_path)
     environment.pop('GT4_PERF', None)
     if performance:
         scrub_performance_environment(environment)
@@ -418,13 +483,16 @@ def main():
     parser.add_argument('--window', action='store_true', help='Present real guest output in a native window')
     parser.add_argument('--capture-audio', action='store_true', help='Record guest PCM in private audio.wav')
     parser.add_argument('--interactive', action='store_true', help='Manual window play without scripted input or captures')
+    parser.add_argument('--controls', type=Path, default=None,
+                        help='Controls TOML file (docs/CONTROLS.md); default: built-in bindings')
     parser.add_argument('--force-480p', action='store_true',
                         help='Experimental: hold the race display index at 480p (GT4_FORCE_480P=1)')
     options = parser.parse_args()
     try:
         result = run_probe(ROOT, options.run_directory, options.frames, options.timeout,
                            options.press, options.card_seed, options.runtime_manifest, options.window,
-                           options.capture_audio, options.interactive, force_480p=options.force_480p)
+                           options.capture_audio, options.interactive, force_480p=options.force_480p,
+                           controls_file=options.controls)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')
     print(json.dumps(result, indent=2))

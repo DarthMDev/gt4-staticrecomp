@@ -1,0 +1,25 @@
+# GT4Recomp controls: keyboard only. Sticks need an analog controller, so they are unbound.
+# Unlisted inputs would keep their defaults; every input is listed here on purpose.
+schema = 1
+
+[bindings]
+dpad_up = ["key:W"]
+dpad_right = ["key:D"]
+dpad_down = ["key:S"]
+dpad_left = ["key:A"]
+cross = ["key:J"]
+circle = ["key:K"]
+square = ["key:H"]
+triangle = ["key:U"]
+l1 = ["key:Q"]
+r1 = ["key:E"]
+l2 = ["key:1"]
+r2 = ["key:2"]
+l3 = ["key:C"]
+r3 = ["key:V"]
+select = ["key:Backspace"]
+start = ["key:Enter"]
+rstick_x = []
+rstick_y = []
+lstick_x = []
+lstick_y = []

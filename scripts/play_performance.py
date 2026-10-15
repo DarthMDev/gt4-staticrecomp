@@ -64,7 +64,11 @@ def main():
                         help='experimental: hold the race display option at 480p (quickfix3 mode)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
+    parser.add_argument('--controls', type=Path, default=None,
+                        help='controls TOML file (docs/CONTROLS.md); default: built-in bindings')
     args = parser.parse_args()
+    # Passed only when given, so the launch arguments stay the same without --controls.
+    controls_option = {'controls_file': args.controls} if args.controls else {}
     try:
         if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main'):
             raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot or main')
@@ -78,10 +82,10 @@ def main():
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3 or main')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
-                 performance=True, vu1_record=True)
+                 performance=True, vu1_record=True, **controls_option)
         else:
             manifest, _ = PERF_PROFILES[args.mode]
-            options = {}
+            options = dict(controls_option)
             if args.vu1_verify:
                 options['vu1_verify'] = args.vu1_verify
             if args.vu1_interpret_only:

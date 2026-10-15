@@ -10,7 +10,7 @@ from external_runtime_probe import ROOT, VU1_CORPUS_NAME, run_probe, verify_manu
 
 
 def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, controls_file=None):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -67,7 +67,7 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                                window=True, interactive=True, play_card=card,
                                runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
                                vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
-                               force_480p=force_480p, vu0_verify=vu0_verify)
+                               force_480p=force_480p, vu0_verify=vu0_verify, controls_file=controls_file)
             if not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
         finally:
@@ -79,9 +79,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--force-480p', action='store_true',
                         help='Experimental: rewrite the default 480i request to 480p progressive (GT4_FORCE_480P=1)')
+    parser.add_argument('--controls', type=Path, default=None,
+                        help='Controls TOML file (docs/CONTROLS.md); default: built-in bindings')
     options = parser.parse_args()
     try:
-        play(force_480p=options.force_480p)
+        play(force_480p=options.force_480p, controls_file=options.controls)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         print(f'FAIL: {error}', file=sys.stderr)
         raise SystemExit(1)
