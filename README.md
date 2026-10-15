@@ -1,137 +1,110 @@
+<div align="center">
+
 # GT4Recomp
 
-**Gran Turismo 4 on PC. Preserving the original experience and paving the way for what comes next.**
+**Gran Turismo 4, recompiled to run natively on PC — no JIT, no emulator window, full speed.**
 
-GT4Recomp is a static recompilation project targeting **Gran Turismo 4 USA v2.00 for Windows x86-64**. Our goal is to bring the PlayStation 2 classic to PC with stable performance, configurable graphics, and a codebase structured for research, modding, and future expansion.
+![EE](https://img.shields.io/badge/EE%20(main%20CPU)-100%25%20AOT-2ea44f)
+![VU0 macro](https://img.shields.io/badge/VU0%20macro-100%25%20AOT-2ea44f)
+![VU1 micro](https://img.shields.io/badge/VU1%20micro-AOT%20%C2%B7%20102%20programs-2ea44f)
+![VU0 micro](https://img.shields.io/badge/VU0%20micro-mapped%2C%20AOT%20next-yellow)
+![IOP](https://img.shields.io/badge/IOP-HLE%20%2B%20interpreter-orange)
+![GS](https://img.shields.io/badge/GS-Vulkan%20compute-blue)
 
-**The game already boots, navigates menus, and enters real racing gameplay.** The current base features Vulkan rendering, Windows audio, keyboard support, an XInput controller implementation, and persistent memory card storage. We are in an experimental development phase: the immediate challenge is turning this milestone into a reliable gameplay experience.
+![Race](https://img.shields.io/badge/race-60%20FPS%20%C2%B7%20100%25%20speed-2ea44f)
+![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
+![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
+![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
 
-[Detailed Status](docs/STATUS.md) · [Hybrid Optimization and Port Plan](docs/HYBRID-PORT-PLAN.md) · [Build Guide](docs/BUILD.md)
+</div>
 
-**Development direction on this branch:** Windows first, stable 60 FPS at correct
-game speed, no guest JIT, and improved GS graphics. Android on Galaxy S23 Ultra
-and iOS on iPhone 15 Pro Max are planned targets. Neither mobile port nor stable
-60 FPS is qualified today. The earlier native-scene renderer work is preserved
-on `main` at slice 140; this branch explores the optimized hybrid route.
+![Toyota Supra on the Nordschleife at 60 FPS](docs/images/race-nordschleife-60fps.webp)
 
-## Current Status
+GT4Recomp is a static recompilation of **Gran Turismo 4 (NTSC-U, SCUS-97328)**
+for **Windows x86-64**. The game's own code is translated ahead of time into C++
+and compiled to native machine code; the PlayStation 2 hardware it talks to is
+reproduced in software, and graphics run on **Vulkan**. Nothing generates code
+while the game runs, which is also what makes future **Android and iOS** builds
+possible.
 
-| Feature | Current State |
-|---|---|
-| **Boot and menus** | Real boot, navigable menus, and car/track selection |
-| **Gameplay** | In-game racing on Nürburgring accessed and controls exercised; full-race stability still undergoing validation |
-| **Vulkan** | Native Windows backend rendering genuine game output on the GPU |
-| **16:9 Display** | Project default, using GT4's native option for camera and HUD; 4:3 also available |
-| **Video Modes** | 480i, 480p, and 1080i manually tested during gameplay, all in 16:9 |
-| **Audio** | 48 kHz stereo output on Windows; continuity improvements still required |
-| **Controls** | Functional keyboard and implemented XInput with analog sticks and rumble; physical gamepad hardware untested |
-| **Persistence** | Profile and settings saved by the game; persistent memory card with per-session backup and mutual exclusion lock |
+**Where we are:** real boot, menus and racing at **60 FPS, 100% game speed and a
+flat 16.7 ms frametime** on the Nordschleife (Ryzen 7 5700X + RX 9060 XT, 480p).
+Car showrooms still dip to about 45 FPS and are the current optimization target.
 
-**Critical work remains before a stable experience is reached:** low performance in 3D scenes, inconsistent frametimes, audio dropouts, and reports of keyboard double-triggering. Graphical compatibility, saves beyond tested scenarios, and extended stability remain under active qualification.
+[Status](docs/STATUS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Build guide](docs/BUILD.md) · [Credits](#credits)
 
-A keyboard correction now removes duplicate D-pad/analog signals from arrow
-keys in the latest capture and performance candidates. Automated controls pass; menu navigation
-and digital steering still need owner confirmation. XInput analog sticks remain unchanged.
+## Recompilation progress
 
-Manual testing has shown 480p to be the most stable mode so far. Interlaced modes function, but their visual and temporal fidelity are not yet fully qualified.
+How much of each PS2 processor runs as precompiled native code instead of being
+interpreted at run time:
 
-The latest experimental build adds corrected performance diagnostics: F7 starts
-a continuous test interval, F8 saves its report in the session log, and F9 pauses
-or resumes measurement. It separates overlapping subsystem timings and measures
-host-thread CPU time. This prepares owner-driven testing; it does not yet improve
-FPS. See [testing instructions](docs/PERFORMANCE-ATTRIBUTION.md#playable-diagnostic-candidate-slice143).
+| Unit | What it does | Status | Progress |
+|---|---|---|---|
+| **EE** (main CPU) | Game logic, physics, menus, draw lists | Translated ahead of time to C++; no EE interpreter exists | **100%** of executed code · 5,676 unreached decomp functions to add for coverage |
+| **VU0 macro** | Vector math inside EE code | Translated together with the EE | **100%** |
+| **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; 102 entry points compiled ahead of time | **100%** of calls in tested scenes (0 interpreted out of 57 M) · full entry coverage in progress |
+| **VU0 microcode** | Small helper programs | All 14 entry points and the image mapped | **0%** · next |
+| **IOP** (I/O CPU) | Sound, disc, memory card, USB | System libraries replaced by native code; 23 game modules interpreted | **System libraries native** · game modules later |
+| **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | Hardware renderer planned |
 
-Matched detailed and lighter diagnostic builds are now ready to measure the
-instrumentation's own cost before selecting an optimization. One owner interval
-shows VU interpretation as the largest recorded wall-time category. A separate
-diagnostic candidate now times VU0 micro and VU1 interpretation individually.
-One owner race interval attributes about62.5% of wall time to interpreted VU1;
-hot-program identification and offline AOT qualification remain, with no speedup claim.
+## Performance journey
+
+Same machine, same scene (Time Trial, Nordschleife, Supra), measured with the
+built-in F7/F8 profiler:
+
+| Step | Frame time (median) | FPS | Game speed |
+|---|---|---|---|
+| Starting point (VU1 interpreted, synchronous GPU) | 33.3 ms | ~30 | 51% |
+| VU1 compiled ahead of time | 22.0 ms | ~45 | 75% |
+| + asynchronous GPU submission | 60 VBlanks/s | 60 | 100% |
+| + single-clock frame pacing | **16.67 ms** (99.6% of frames within 16–17 ms) | **60** | **100%** |
+
+<img src="docs/images/frametime-flat.webp" alt="Flat frametime graph at 60 FPS" width="460">
+
+## Roadmap
+
+| Stage | Goal | State |
+|---|---|---|
+| **O1** | VU1 microcode compiled ahead of time | ✅ Done |
+| **O2** | Asynchronous GPU submission | ✅ Done |
+| **O4** | Frame pacing on a single clock, rate-controlled audio | ✅ Done |
+| **VU1+** | Per-program flag elimination, VU1 on its own thread (MTVU) | 🔄 **In progress** |
+| **O3** | VU0 microcode AOT, full VU1/EE entry coverage, IOP review, build tuning | ⏭️ Next |
+| **Launcher** | Lightweight launcher (Rust): video, controls, game image | 📋 Planned |
+| **O5** | GT4-specialist hardware renderer based on PCSX2: upscaling, dithering control, deinterlacing, texture packs | 📋 Planned |
+| **Wheels** | Logitech G27/G29 and others with force feedback | 📋 Planned |
+| **O6** | Android, then iOS (Metal) | 📋 Planned |
+| **Phase 2** | Source-like code from the decompilation, native renderer, physics decoupled from frame rate, ultrawide | 🔭 Long term |
+
+Details: [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Hardware renderer study](docs/HW-RENDERER-PLAN.md).
 
 ## The Experience We Want to Build
 
-The primary objective is **playing GT4 stably and at correct game speed on PC**. Building on that foundation, we plan to develop:
-
-- **FPS independent of game speed:** Rendering at 144 FPS or monitor refresh rate while preserving original physics, timers, and game pace.
-- **Configurable internal resolution:** 1920×1080, 2560×1440, 3840×2160, and beyond, with progressive-scan output.
-- **Ultrawide gameplay:** Adapted camera projection and repositioned HUD, maintaining proportions and legibility.
-- **Extensible graphics:** A game-level rendering interface that can support separately scoped future upgrades.
-- **Simple configuration:** A launcher to configure video and input settings before launching the game.
-- **Readable and modifiable code:** Ongoing decompilation to facilitate research, bug fixes, and future mods.
-
-These are **development goals**, not currently available features. The internal rendering scale remains 1x; resizing the window does not increase the internal resolution. Likewise, decoupled 144 FPS rendering independent of physics is not yet implemented.
+- **Correct speed, smooth 60 FPS** on ordinary PCs, then on phones.
+- **Configurable internal resolution** (1080p, 1440p, 4K) with real internal upscaling.
+- **Clean image options:** dithering control, deinterlaced menus, texture replacement packs.
+- **Racing wheels** with force feedback.
+- **Ultrawide** with a correct camera and repositioned HUD, and **high refresh rates** independent of physics (phase 2).
+- **Readable, moddable code** built together with the community decompilation.
 
 ## How It Works
 
-The main game code is translated ahead-of-time (AOT) into C++ and compiled to run natively on **x86-64**. Host PC integration provides a native Windows window, **Vulkan**, audio, and input.
-
-The current architecture is a **hybrid recompilation**: IOP and VU microprograms
-remain interpreted, and PS2 hardware services are software models. VU0 macro
-operations are translated with the EE. Vulkan reproduces the original GS behavior.
-The current plan keeps that architecture while optimizing measured costs and
-adding graphics controls. Selective offline VU compilation and PCSX2 GS reuse
-are candidates, not implemented improvements. The scene-level renderer remains
-a preserved later alternative. No guest JIT is required by this direction.
+The EE game code is translated ahead of time (AOT) into C++ and compiled for
+x86-64. The VU1 microcode, stored encrypted inside the executable, is recovered,
+compiled offline and verified against a reference interpreter on real game state
+(hundreds of thousands of checks, zero mismatches). IOP system services are
+native; the GS is reproduced with Vulkan compute shaders. Frames are paced by a
+single high-resolution clock with rate-controlled audio. Interpreters remain only
+as counted fallbacks. This is a **hybrid recompilation**: PS2 hardware is still
+modeled in software, so we do not claim zero emulation or full PS2 fidelity.
 
 For implementation details, see [Architecture](docs/ARCHITECTURE.md).
-
-## Next Steps
-
-1. Establish an owner-tested Windows performance baseline and identify CPU/GPU work and waits.
-2. Optimize demonstrated costs without guest JIT, preserving gameplay, audio and saves.
-3. Qualify GS internal scaling, dithering and scan-mode presentation; reuse existing donor mechanisms before larger renderer changes where practical.
-4. Build a portable ARM64 core and qualify an Android APK, then an iOS signed build.
-5. Expand tested hardware and graphics presets, including the longer-term Windows 1080p/60 target.
-
-Deferred rendering and a graphical remaster are outside the current roadmap.
-The current focus is stable Windows gameplay and efficient hybrid rendering.
-Internal upscaling is different from enlarging the final image. Dithering and
-deinterlacing are separate features. Native ultrawide and 144 distinct frames
-independent of physics remain later game-level work.
-
-These are proposed phases, not completed features or published minimum requirements.
-The exact entry-level Windows machine remains to be selected. The named phones
-are future test targets, with OS/GPU capabilities and sustained performance still
-to be qualified. Controls, audio and saves remain part of every acceptance gate;
-the delegated performance investigation supplies evidence about costs.
-
-We work in small verified steps. The [Hybrid Port Plan](docs/HYBRID-PORT-PLAN.md)
-defines the active branch's phases, licensing boundaries and completion gates;
-the [Agent Workflow](docs/AGENT-WORKFLOW.md) describes economical workers and
-independent review. There is no announced completion timeline. PCSX2 source
-reuse is permitted by the owner under compatible license obligations; no PCSX2
-implementation has been imported or linked by this planning change.
-
-The EE translator/library can now be rebuilt from verified inputs. Initial model
-and camera mapping is documented, and an isolated experiment has recovered one
-omitted callback pair with compilation checks. These foundations are still being
-qualified. Separate baseline/recovered runtime candidates are prepared for owner
-validation. Tested offline tooling now reads the volume catalogue and extracts
-selected resources. The Ford Ka '01 is identified in the correct version's
-database and mapped to its exact garage and racing model files. Their serialized
-headers and fixed record boundaries are verified; geometry, texture decoding and
-live integration remain pending.
-See the [one-car research ledger](docs/CAR-ASSET-RESEARCH.md) and
-[model asset probe](docs/MODEL-ASSET-PROBE.md).
-The [fixed record inventory](docs/MODEL-RECORDS.md) supplies the next boundary
-before interpreting shape packets and reconstructing renderable geometry.
-The dedicated game-scene renderer has not started replacing live graphics.
-The first bounded observation core now has native automated controls for
-preserving original shape-call inputs across synthetic suspension and thread
-changes. A separately verified full library inserts only the two planned probes.
-An isolated observation executable now links those probes and the runtime hooks;
-capture starts disabled. A separate manual candidate now supports F8 start/stop
-and bounded private metadata export, with synthetic controls and save protection.
-The first owner capture has a strong partial layout association with 18 of the
-menu Ford Ka's 22 serialized shapes. Live geometry/ownership remain unqualified;
-further scene-replacement research is deferred on this optimization branch.
-See [Shape Observation](docs/SCENE-OBSERVATION.md).
 
 ## Testing and Development
 
 The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. A separate [EE producer](docs/EE-PRODUCER.md) now rebuilds the translator and game library from verified inputs; production still uses its qualified private library while candidate integration and gameplay checks remain pending. A clean end-to-end playable build remains future work.
 
-Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates required files, and preserves the existing memory card. Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
+Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates required files, and preserves the existing memory card. The current performance candidate starts with `scripts/play_performance.py --mode pacing` (F7 starts a measured interval, F8 reports it). Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
 
 | Key | Action |
 |---|---|
