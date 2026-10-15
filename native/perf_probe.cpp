@@ -22,6 +22,8 @@ namespace {
 // Installed by the VU1 worker runtime (EE thread): report section and interval reset (TASK-011 step 3).
 Probe::MtvuReport g_mtvu_report = nullptr;
 Probe::MtvuReset g_mtvu_reset = nullptr;
+Probe::MtvuReport g_gs_ipc_report = nullptr;
+Probe::MtvuReset g_gs_ipc_reset = nullptr;
 std::uint64_t wall_us() {
   return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
       std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -49,7 +51,8 @@ constexpr const char *names[] = {
 #endif
 #ifdef GT4_MTVU_RUNTIME
     , "mtvu_wait_vblank", "mtvu_wait_download", "mtvu_wait_gs_privileged", "mtvu_wait_vu_memory",
-    "mtvu_wait_gif_reset", "mtvu_wait_reset", "mtvu_wait_state", "mtvu_wait_other", "gs_drain", "mtvu_output"
+    "mtvu_wait_gif_reset", "mtvu_wait_reset", "mtvu_wait_state", "mtvu_wait_other", "gs_drain", "mtvu_output",
+    "gs_ipc_write", "gs_ipc_backpressure", "gs_ipc_vsync_post", "gs_ipc_readback_wait"
 #endif
     };
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
@@ -143,6 +146,8 @@ void Probe::reset(std::uint64_t now, GuestSample guest) noexcept {
   accounting_.restart(now);
   if (g_mtvu_reset)
     g_mtvu_reset();
+  if (g_gs_ipc_reset)
+    g_gs_ipc_reset();
   last_us_ = last_frame_us_ = now;
   last_guest_ = guest;
   frames_ = guest_cycles_ = primitives_ = vu_calls_ = 0;
@@ -285,12 +290,19 @@ void Probe::print(const char *reason) noexcept {
 #ifdef GT4_VU0_AOT
   ps2::vu::vu0_aot_report(output_);
 #endif
+  if (g_gs_ipc_report)
+    g_gs_ipc_report(output_, accounting_.interval(), frames_);
   std::fflush(output_);
 }
 
 void Probe::set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept {
   g_mtvu_report = report;
   g_mtvu_reset = reset;
+}
+
+void Probe::set_gs_ipc_hooks(MtvuReport report, MtvuReset reset) noexcept {
+  g_gs_ipc_report = report;
+  g_gs_ipc_reset = reset;
 }
 
 void bind_worker(Accounting *accounting, std::uint64_t (*wall)()) noexcept {

@@ -281,5 +281,103 @@ class CompareFrameTests(unittest.TestCase):
         self.assertEqual(self.frames.downscale_box(image, 2), (1, 1, bytes([6, 6, 6])))
 
 
+# --- TASK-035: .gscap version 2 (GS stream protocol records). The writer below follows
+# docs/GS-STREAM-PROTOCOL.md section 6 independently of the converter's reader.
+class V2Writer:
+    def __init__(self, serial=b"SCUS-97328", first_frame=0):
+        self.blob = bytearray(struct.pack("<8sHHHHII16sQ16x", b"GSSTREAM", 2, 1, 0, 64, 16, 0, serial, first_frame))
+        self.sequence = 0
+
+    def record(self, kind, payload, flags=0):
+        self.sequence += 1
+        self.blob += struct.pack("<HHIQ", kind, flags, len(payload), self.sequence)
+        self.blob += payload + bytes((-len(payload)) % 16)
+        return self
+
+    def gif(self, path, data, flags=0):
+        return self.record(1, struct.pack("<B3xII4x", path, 1, len(data)) + data, flags)
+
+    def priv(self, address, value):
+        return self.record(2, struct.pack("<I4xQ", address, value))
+
+    def vsync(self, frame, field_bit):
+        return self.record(3, struct.pack("<QB3xI", frame, field_bit, 1))
+
+    def fifo(self, qwords, request):
+        return self.record(4, struct.pack("<I4xQ", qwords, request))
+
+    def reset(self, kind, mask):
+        return self.record(5, struct.pack("<II8x", kind, mask))
+
+    def control(self, kind):
+        return self.record(6, struct.pack("<I4x3Q", kind, 0, 0, 0))
+
+
+NATIVE_BUILD = Path(os.environ.get("GT4_NATIVE_BUILD", ROOT / "build"))
+
+
+class Version2CaptureTests(unittest.TestCase):
+    def test_version2_converts_like_the_equivalent_version1_capture(self):
+        data_a, data_b = bytes(range(32)), bytes(range(48))
+        v2 = (V2Writer().reset(1, 0).priv(CSR, 0x200).gif(3, data_a).gif(1, data_b).fifo(2, 1)
+              .vsync(0, 1).priv(PRIV + 0x70, 5).vsync(1, 0).control(1))
+        v1 = capture_bytes(priv(CSR, 0x200), gif(3, data_a), gif(1, data_b), fifo(2), vsync(0),
+                           priv(PRIV + 0x70, 5), vsync(1))
+        blob2, stats2 = convert_bytes(bytes(v2.blob))
+        blob1, _ = convert_bytes(v1)
+        self.assertEqual(blob2, blob1)
+        self.assertEqual(stats2.records, {"X": 1, "P": 2, "G": 2, "R": 1, "V": 2, "C": 1})
+
+    def test_more_parts_are_joined_into_one_transfer(self):
+        part1, part2 = bytes([1]) * 32, bytes([2]) * 16
+        v2 = V2Writer().gif(2, part1, flags=1).gif(2, part2).vsync(0, 0)
+        records = list(converter.read_capture(io.BytesIO(bytes(v2.blob))))
+        self.assertEqual([r.kind for r in records], ["G", "V"])
+        self.assertEqual((records[0].path, records[0].data), (2, part1 + part2))
+        self.assertEqual(records[1].field, 0)
+
+    def test_field_from_stream_uses_the_recorded_bit(self):
+        v2 = V2Writer().vsync(0, 1).vsync(1, 1)
+        blob, _ = convert_bytes(bytes(v2.blob), field_from_stream=True)
+        fields = [packet[1] for packet in parse_dump(blob)["packets"] if packet[0] == "vsync"]
+        self.assertEqual(fields, [0, 0])  # field bit 1 -> field byte 0, twice
+        blob, _ = convert_bytes(bytes(v2.blob))
+        fields = [packet[1] for packet in parse_dump(blob)["packets"] if packet[0] == "vsync"]
+        self.assertEqual(fields, [1, 0])  # default: frame parity, as for version 1
+
+    def test_malformed_version2_input_is_refused(self):
+        good = V2Writer().gif(3, bytes(16))
+        cases = {
+            "bad version": bytes(good.blob[:8]) + struct.pack("<H", 3) + bytes(good.blob[10:]),
+            "truncated": bytes(good.blob[:-8]),
+            "dangling more": bytes(V2Writer().gif(3, bytes(16), flags=1).blob),
+            "size mismatch": bytes(V2Writer().record(1, struct.pack("<B3xII4x", 3, 0, 32) + bytes(16)).blob),
+            "unknown type": bytes(V2Writer().record(99, bytes(16)).blob),
+        }
+        skipped = V2Writer().gif(3, bytes(16))
+        skipped.sequence += 1
+        skipped.gif(3, bytes(16))
+        cases["sequence gap"] = bytes(skipped.blob)
+        for name, blob in cases.items():
+            with self.subTest(name):
+                with self.assertRaises(converter.CaptureError):
+                    list(converter.read_capture(io.BytesIO(blob)))
+
+    def test_native_client_fixture_capture_converts_if_built(self):
+        """The C++ writer (CTest native_gs_stream_client) and this reader agree on the format."""
+        capture = NATIVE_BUILD / "gs-stream-client-scratch" / "donor-capture.gscap"
+        if not capture.exists():
+            self.skipTest(f"no native fixture capture at {capture}")
+        with open(capture, "rb") as handle:
+            records = list(converter.read_capture(handle))
+        kinds = [r.kind for r in records]
+        self.assertEqual(kinds.count("V"), 10)
+        self.assertEqual(kinds.count("X"), 2)
+        self.assertEqual(kinds.count("R"), 1)
+        self.assertEqual(kinds.count("G"), 31)  # 30 per-frame chunks + one split chunk joined from two parts
+        self.assertTrue(any(len(r.data) == (16 << 20) + 48 for r in records if r.kind == "G"))
+        self.assertEqual([r.field for r in records if r.kind == "V"], [i & 1 for i in range(10)])
+
+
 if __name__ == "__main__":
     unittest.main()

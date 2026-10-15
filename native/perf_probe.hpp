@@ -42,6 +42,8 @@ public:
   using MtvuReport = void (*)(std::FILE *, const IntervalTime &, std::uint64_t);
   using MtvuReset = void (*)();
   static void set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept;
+  // TASK-035: the [gs-ipc] section (GS stream counters), printed after the legacy lines; same signatures.
+  static void set_gs_ipc_hooks(MtvuReport report, MtvuReset reset) noexcept;
   // Extra report lines (for example pacing diagnostics) printed after each
   // interval report. An empty function removes the section.
   void set_report_section(std::function<void(std::FILE *)> section);

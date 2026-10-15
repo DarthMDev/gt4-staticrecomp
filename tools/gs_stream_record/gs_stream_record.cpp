@@ -63,7 +63,10 @@ struct Recorder {
     session->post_event(RecordType::error, &error, sizeof error);
   }
 
-  void post_stats() { session->post_event(RecordType::stats, &stats, sizeof stats); }
+  void post_stats() {
+    stats.wait_us = session->wait_totals().data_wait_us;
+    session->post_event(RecordType::stats, &stats, sizeof stats);
+  }
 
   bool valid_payload(const RecordView &view) {
     const RecordHeader &h = *view.header;
@@ -255,7 +258,6 @@ int main(int argc, char **argv) {
     std::fprintf(stderr, "[gs-record] stream error: %s\n", error.what());
     exit_code = 3;
   }
-  recorder.stats.wait_us = session.wait_totals().data_wait_us;
   recorder.output.close();
   std::fprintf(stderr,
                "[gs-record] end: vsyncs %llu records %llu bytes %llu readbacks %llu (zero-filled) bad %llu; file %llu "
