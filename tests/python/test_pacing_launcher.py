@@ -71,17 +71,17 @@ class PacingWrapperTests(unittest.TestCase):
             root = Path(folder)
             code, play = self.run_wrapper(['--mode', 'pacing'], root)
             self.assertEqual(code, 0)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / PACING_MANIFEST, performance=True)
+            play.assert_called_once_with(root, root / 'docs/inputs' / PACING_MANIFEST, performance=True)
 
     def test_verify_and_interpret_only_are_forwarded_to_pacing(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             code, play = self.run_wrapper(['--mode', 'pacing', '--vu1-verify', '50'], root)
             self.assertEqual(code, 0)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / PACING_MANIFEST,
+            play.assert_called_once_with(root, root / 'docs/inputs' / PACING_MANIFEST,
                                          performance=True, vu1_verify=50)
             code, play = self.run_wrapper(['--mode', 'pacing', '--vu1-interpret-only'], root)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / PACING_MANIFEST,
+            play.assert_called_once_with(root, root / 'docs/inputs' / PACING_MANIFEST,
                                          performance=True, vu1_interpret_only=True)
 
     def test_options_remain_rejected_outside_the_aot_modes(self):

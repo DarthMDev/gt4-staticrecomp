@@ -31,9 +31,8 @@ no PCSX2 implementation or PS2Recomp GPL implementation is linked here.
 Vulkan is resolved from the Windows System32 loader and installed driver.
 
 The donor IOP interpreter and PS2 device models are still used; native Windows
-does not mean zero emulation. Current VU programs are interpreted. The original
-MSVC EE engine is archived, while this Clang/native path is now main's active
-implementation. Game, BIOS, translated game code, captures, cards, SPIR-V and
+does not mean zero emulation. VU1 programs are compiled ahead of time since slice 151; VU0 micro is interpreted.
+This Clang/native path is main's only implementation. Game, BIOS, translated game code, captures, cards, SPIR-V and
 native binaries remain private and ignored. The pinned game's generated static
 library is linked locally; it is not redistributed.
 

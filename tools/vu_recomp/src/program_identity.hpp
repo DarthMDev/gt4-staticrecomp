@@ -33,15 +33,15 @@ inline bool image_status_used(const std::uint8_t *image, std::uint32_t size) {
     return false;
 }
 
-// Lowercase SHA-256 hex of the identity stream for a 16 KiB code image.
+// Lowercase SHA-256 hex of the identity stream for a code image. The tag names the unit
+// (GT4-VU1-... for VU1, GT4-VU0-... for VU0), so the two namespaces never share a digest.
 inline std::string program_identity_digest(const std::uint8_t *image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used,
-                                           bool status_used) {
+                                           bool status_used, const std::string &tag = "GT4-VU1-PROGRAM-IDENTITY-2") {
     std::vector<std::uint8_t> bytes;
     const auto append_u32 = [&bytes](std::uint32_t value) {
         for (int shift = 0; shift < 32; shift += 8) bytes.push_back(static_cast<std::uint8_t>(value >> shift));
     };
-    const char tag[] = "GT4-VU1-PROGRAM-IDENTITY-2";
-    bytes.insert(bytes.end(), tag, tag + sizeof tag - 1);
+    bytes.insert(bytes.end(), tag.begin(), tag.end());
     append_u32(entry);
     append_u32(flags_used ? 1u : 0u);
     append_u32(status_used ? 1u : 0u);

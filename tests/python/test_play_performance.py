@@ -21,7 +21,7 @@ class PerformanceLauncherTests(unittest.TestCase):
                 with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
                      patch.object(sys, 'argv', arguments):
                     self.assertEqual(performance.main(), 0)
-                play.assert_called_once_with('16:9', root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True)
+                play.assert_called_once_with(root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True)
 
     def test_lock_failure_and_profile_rejection_preserve_card(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -43,13 +43,13 @@ class PerformanceLauncherTests(unittest.TestCase):
                     msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
                     try:
                         with self.assertRaisesRegex(ValueError, 'already running'):
-                            launcher.play('16:9', root, manifest, performance=True)
+                            launcher.play(root, manifest, performance=True)
                     finally:
                         lock.seek(0); msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
                 execute.assert_not_called()
                 manifest.write_text(json.dumps(dict(evidence, profile='old')))
                 with self.assertRaisesRegex(ValueError, 'qualified'):
-                    launcher.play('16:9', root, manifest, performance=True)
+                    launcher.play(root, manifest, performance=True)
             self.assertEqual(card.read_bytes(), b'c' * 8650752)
             self.assertFalse(any(directory.glob('session-*')))
 
@@ -59,7 +59,7 @@ class PerformanceLauncherTests(unittest.TestCase):
             with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'vu1-record']):
                 self.assertEqual(performance.main(), 0)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / VU1_RECORD_MANIFEST,
+            play.assert_called_once_with(root, root / 'docs/inputs' / VU1_RECORD_MANIFEST,
                                          performance=True, vu1_record=True)
             with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root)]):
@@ -82,10 +82,10 @@ class PerformanceLauncherTests(unittest.TestCase):
             card = directory / 'card.ps2'
             card.write_bytes(b'c' * 8650752)
             with patch.object(launcher, 'ROOT', root), patch.object(launcher, 'run_probe') as execute:
-                self.assertEqual(launcher.play('16:9', root, manifest, performance=True, vu1_record=True), None)
+                self.assertEqual(launcher.play(root, manifest, performance=True, vu1_record=True), None)
                 self.assertTrue(execute.call_args.kwargs['vu1_record'])
                 self.assertTrue(execute.call_args.kwargs['performance'])
                 execute.reset_mock()
-                launcher.play('16:9', root, manifest, performance=True)
+                launcher.play(root, manifest, performance=True)
                 self.assertFalse(execute.call_args.kwargs['vu1_record'])
             self.assertEqual(card.read_bytes(), b'c' * 8650752)

@@ -54,7 +54,7 @@ class AsyncProfileTests(unittest.TestCase):
                 probe.verify_performance_profile(manifest, async_evidence(runtime={'path': 'private/other.exe'}), root)
 
     def test_both_aot_manifests_accept_verify_and_interpret_options(self):
-        self.assertEqual(set(probe.VU1_AOT_MANIFESTS), {'slice151-vu1-aot.json', ASYNC_MANIFEST, 'slice153-pacing.json', 'slice154-vu1-flags.json', 'slice155-vu1-full.json', 'slice157-vu1-all.json'})
+        self.assertEqual(set(probe.VU1_AOT_MANIFESTS), {'slice151-vu1-aot.json', ASYNC_MANIFEST, 'slice153-pacing.json', 'slice154-vu1-flags.json', 'slice155-vu1-full.json', 'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json', 'slice160-vu0-aot.json', 'slice166-main.json'})
 
 
 class AsyncManifestTests(unittest.TestCase):
@@ -102,16 +102,16 @@ class AsyncWrapperTests(unittest.TestCase):
             root = Path(folder)
             code, play = self.run_wrapper(['--mode', 'gs-async'], root)
             self.assertEqual(code, 0)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / ASYNC_MANIFEST, performance=True)
+            play.assert_called_once_with(root, root / 'docs/inputs' / ASYNC_MANIFEST, performance=True)
 
     def test_verify_and_interpret_only_are_forwarded(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             code, play = self.run_wrapper(['--mode', 'gs-async', '--vu1-verify', '50'], root)
             self.assertEqual(code, 0)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / ASYNC_MANIFEST, performance=True, vu1_verify=50)
+            play.assert_called_once_with(root, root / 'docs/inputs' / ASYNC_MANIFEST, performance=True, vu1_verify=50)
             code, play = self.run_wrapper(['--mode', 'gs-async', '--vu1-interpret-only'], root)
-            play.assert_called_once_with('16:9', root, root / 'docs/inputs' / ASYNC_MANIFEST, performance=True, vu1_interpret_only=True)
+            play.assert_called_once_with(root, root / 'docs/inputs' / ASYNC_MANIFEST, performance=True, vu1_interpret_only=True)
 
     def test_options_are_rejected_outside_the_aot_modes_and_before_play(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -135,7 +135,7 @@ class AsyncPlayForwardingTests(unittest.TestCase):
             manifest.write_text(json.dumps(async_evidence()))
             with patch.object(launcher, 'ROOT', root), patch.object(launcher, 'run_probe', return_value={'manual_session_closed': True}) as execute, \
                  patch.object(launcher, 'verify_performance_profile'):
-                launcher.play('16:9', root, manifest, performance=True, vu1_verify=50)
+                launcher.play(root, manifest, performance=True, vu1_verify=50)
             self.assertEqual(execute.call_args.kwargs['vu1_verify'], 50)
             self.assertFalse(execute.call_args.kwargs['vu1_interpret_only'])
 

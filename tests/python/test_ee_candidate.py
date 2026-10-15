@@ -96,7 +96,7 @@ class CandidateControls(unittest.TestCase):
             manifest.write_text('{}')
             with patch.object(play, 'ROOT', runtime), patch.object(play, 'run_probe',
                     return_value={'manual_session_closed': True}) as launch:
-                play.play('16:9', assets, manifest)
+                play.play(assets, manifest)
             self.assertEqual(launch.call_args.args[0], assets)
             self.assertIsNone(launch.call_args.args[5])
             self.assertEqual(launch.call_args.kwargs['runtime_workspace'], runtime)

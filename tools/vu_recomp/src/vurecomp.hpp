@@ -13,6 +13,26 @@ namespace gt4::vurecomp {
 
 constexpr std::size_t kImageBytes = 16384;
 
+// Per-unit emitter profile (slice 160). Unit 1 is the VU1 profile of slices 151-157: its
+// generated output, manifest and identity are byte-identical to those slices. Unit 0 is the
+// VU0 profile: 4 KiB code and data, EE-visible MAC, status and clip exact at every write
+// (no elision), an exact interpreter hand-off (ctx.exact_run, which runs run(0, pc)) and no XGKICK.
+struct UnitProfile {
+    int unit = 1;
+    std::uint32_t image_bytes = 16384;     // code memory and input image size
+    std::uint32_t uploaded_bytes = 16384;  // reachable code at or beyond this is refused
+    std::uint32_t data_qwords = 1024;      // data memory in qwords; the qword index mask is data_qwords - 1
+    bool xgkick_allowed = true;
+    bool exact_flags = false;              // MAC, status and clip kept at every write; image flags forced on
+    std::string file_prefix = "vu1_generated";  // table vu1_generated.cpp, parts vu1_generated_NNN.cpp
+    std::string function_prefix = "vu1_";  // emitted function names: prefix + key
+    std::string identity_tag = "GT4-VU1-PROGRAM-IDENTITY-2";
+    std::uint32_t code_mask() const { return image_bytes - 1u; }
+};
+
+// Profile of unit 0 or 1. Any other unit is a programming error (the caller checks first).
+const UnitProfile &unit_profile(int unit);
+
 // Flag elision (default on). When on, a program computes MAC and clip only where a
 // later reader or the program exit observes them, and VU1 status is not kept when
 // no image instruction reads it (see FunctionGenerator in vurecomp.cpp). Off emits
@@ -50,6 +70,7 @@ struct ProgramRecord {
     std::string source_name;         // input file name the code came from
     std::string source_sha256;       // SHA-256 of the 16 KiB input file
     std::string digest_sha256;       // identity: flag bit, entry, reachable instruction words
+    int unit = 1;                    // emitter profile (unit_profile): 1 for VU1, 0 for VU0
     bool image_flags_used = false;   // image-wide flag reader present (see image_flags_used)
     bool image_status_used = false;  // image-wide status instruction present (see image_status_used)
     std::string mac_mode;            // "none", "full" or "observed" (see MacMode)
@@ -74,11 +95,14 @@ struct ProgramRecord {
 // Parses KEY16HEX_ENTRY4HEX.bin, for example 0123456789ABCDEF_0040.bin.
 bool parse_input_file_name(const std::string &name, std::uint64_t &key, std::uint32_t &entry, std::string &error);
 
-// Reads exactly kImageBytes bytes. Fails on any other size or short read.
-bool read_input_image(const std::filesystem::path &path, std::vector<std::uint8_t> &image, std::string &error);
+// Reads exactly image_bytes bytes (default kImageBytes). Fails on any other size or short read.
+bool read_input_image(const std::filesystem::path &path, std::vector<std::uint8_t> &image, std::string &error,
+                      std::size_t image_bytes = kImageBytes);
 
-// Identity over entry and the reachable instruction words, as lowercase SHA-256 hex.
-std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used, bool status_used);
+// Identity over entry and the reachable instruction words, as lowercase SHA-256 hex. The tag
+// separates the VU0 and VU1 identity namespaces.
+std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used, bool status_used,
+                           const std::string &tag = "GT4-VU1-PROGRAM-IDENTITY-2");
 
 // Adds a candidate. An equal key with an equal digest is a duplicate and is
 // skipped. An equal key with a different digest is a collision and is refused.
@@ -118,16 +142,18 @@ std::string emit_generated_split(std::vector<ProgramRecord> &records, std::size_
 // instead of recorded KEY_ENTRY.bin files. Reads one 4-digit uppercase hex address per
 // line; blank lines and lines starting with '#' are ignored. Each address must be
 // 8-byte aligned and below 0x4000. Duplicate addresses are read once.
-bool read_entry_list(const std::filesystem::path &path, std::vector<std::uint32_t> &entries, std::string &error);
+bool read_entry_list(const std::filesystem::path &path, std::vector<std::uint32_t> &entries, std::string &error, std::uint32_t code_mask = kCodeMask);
 
 // One record per distinct entry of the image, in key order. No jump-target discovery is
 // done: the list is the complete entry set. Same collision rule as collect_program_records.
+// The profile gives the unit (VU0 or VU1 image size, identity tag and flag policy).
 bool collect_explicit_program_records(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &entries,
-                                      std::vector<ProgramRecord> &records, std::string &error);
+                                      std::vector<ProgramRecord> &records, std::string &error, const UnitProfile &profile = unit_profile(1));
 
 // Describes the input of a manifest. Corpus mode leaves the explicit fields empty.
 struct ManifestInput {
     std::string kind = "corpus";           // "corpus" (KEY_ENTRY.bin files) or "explicit_entries"
+    int unit = 1;                          // 1 leaves the manifest unchanged; other units add "unit" and "identity_tag"
     std::string image_sha256;              // explicit mode: SHA-256 of the 16 KiB image
     std::string entry_list_sha256;         // explicit mode: SHA-256 of the entry list file
     std::size_t generated_bytes = 0;       // size of the generated source (all files)

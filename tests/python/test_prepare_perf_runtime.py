@@ -119,3 +119,26 @@ class DefaultDerivationPinTests(unittest.TestCase):
         self.assertEqual(set(sections), set(producer.OVERLAY_ANCHORS))
         for name, text in sections.items():
             self.assertTrue(text.strip(), name)
+
+
+class Slice156CapsuleTests(unittest.TestCase):
+    """Real-file controls; skipped when the private capsules or donor are not present."""
+
+    def test_slice156_unchanged_sources_are_byte_identical_to_slice155(self):
+        old = producer.ROOT / 'private/slice155-vu1-full-runtime'
+        new = producer.ROOT / 'private/slice156-quickfix-runtime'
+        if not (old / 'runtime.json').exists() or not (new / 'runtime.json').exists():
+            self.skipTest('slice155 or slice156 capsule not present')
+        for name in ('system.cpp', 'vu_micro.cpp', 'vif.cpp'):
+            self.assertEqual((old / name).read_bytes(), (new / name).read_bytes(), name)
+        self.assertTrue((new / 'hw.cpp').exists())
+
+    def test_default_derivation_reproduces_slice155_capsule(self):
+        old = producer.ROOT / 'private/slice155-vu1-full-runtime'
+        donor = producer.ROOT / 'private/references/ps2-web-recomp/runtime/src'
+        if not (old / 'runtime.json').exists() or not donor.exists():
+            self.skipTest('slice155 capsule or donor not present')
+        for name in ('system.cpp', 'vu_micro.cpp', 'vif.cpp'):
+            text = (donor / name).read_bytes().decode('utf-8').replace('\r\n', '\n')
+            derived = producer.derive(name, text, split_vu=True, vu1_aot=True)
+            self.assertEqual(derived.encode('utf-8'), (old / name).read_bytes(), name)

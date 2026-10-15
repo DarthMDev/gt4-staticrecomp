@@ -34,3 +34,14 @@ lookup in `run(0, ...)`. Controls: blob SHA-256 pin, registry covering all 26
 sites, per-entry differential against the interpreter, unchanged VU1 tests.
 Estimated 4-7 days including controls. Low speed value; it completes the
 "no interpreter on the normal path" goal.
+
+## Status (slice 160, TASK-013)
+
+Implemented. The 14 `VCALLMS` entries run compiled (BUILD.md slice 160). Confirmed by controls:
+the image upload is 2,688 bytes at file offset 0x5D4280; 4 KiB code and data; EE-visible MAC, status
+and clip are computed at every write; hand-offs use `run(0, pc)`, not `interpret(0, pc)` (the fast path
+does not write MAC or status for this image); no XGKICK in the 14 entries. Differential: 28,000
+comparisons and 896 budget resumes, 0 failures.
+
+Not yet confirmed: whether the EE reads any of the 14 entries through another address, and the purpose
+of the programs. The two suffix addresses 0x308 and 0x478 are included in the table.

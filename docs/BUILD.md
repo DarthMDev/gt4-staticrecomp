@@ -13,7 +13,6 @@ Local Python in `private/tooling-venv` with `scripts/requirements.txt`
 and swapchain maintenance1. There is no evidence of full Khronos conformance validation.
 
 `native/build.cmd` initializes the VS x64 environment and sets UTF-8 encoding prior to invoking CMake.
-This Clang build replaces the legacy MSVC build from the original engine.
 
 ## Private Prerequisites
 
@@ -36,8 +35,7 @@ pinned ELF from verified CORE/ISO input, rebuilds the donor translator and creat
 a separate AOT library with fresh CMake caches. It does not yet replace the
 production library or automate a clean-checkout playable game build. The ordinary
 native build still recompiles runtime/host/adapters and links the existing qualified
-library. Keep candidate and production qualification distinct; the archived
-original engine is not used to run the game.
+library. Keep candidate and production qualification distinct.
 
 Slice 118 adds [isolated baseline/recovered EE builds](EE-CANDIDATES.md) with
 separate library/executable manifests and a candidate launcher. The default build
@@ -54,9 +52,6 @@ ctest --test-dir private/slice114-native-base/build --output-on-failure
 ```
 
 CTest runs the GPU/Vulkan checks, Windows audio/input tests, and active Python test suite.
-The 54 C++ tests from the original engine were archived alongside the removed code,
-without modifying their assertions. This changes the test population; it does not make
-their historical passing results proof of donor runtime correctness.
 
 Running Python tests standalone, when needed:
 
@@ -404,6 +399,58 @@ Measurement outputs kept in private directories: `private/slice155-vu1-full-gen-
 51.5 MB, not used), `private/slice155-vu1-full-gen-targeted` (same content as the candidate table),
 `private/slice155-smoke/*`.
 
+Slice156 (TASK-009 quick fixes) is a candidate on the slice155 profile. Owner command, from the
+repository root:
+
+    private	ooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix
+
+Changes: window title `GT4Recomp`; the presentation is fixed 16:9 (F6, the 4:3 option and
+`GT4_ASPECT` / `--aspect` are removed); Alt+Enter and F11 toggle borderless fullscreen on the
+window's monitor and restore the windowed frame (`native/window_mode.*`, fixture
+`native/quickfix_fixture.cpp`, CTest `native_quickfix`); the F8 report prints `interval` counter
+differences since the last F7 or report next to `session` totals (`Counters::since`, pacing
+fixture); `GT4_FORCE_480P=1` (`--force-480p`, default off) rewrites the guest default NTSC request
+(SetGsCrt interlace 1, mode 0x2) to 480p progressive (interlace 0, mode 0x50); other modes are
+unchanged (`native/display_override.*`; hook in the donor `hw.cpp` `gs_set_crt`).
+
+Pins: [slice156-quickfix-runtime.json](inputs/slice156-quickfix-runtime.json) (capsule receipt;
+system, vu_micro and vif sources byte-identical to slice155, `hw.cpp` is the only new source) and
+[slice156-quickfix.json](inputs/slice156-quickfix.json) (launcher). Build directory
+`private/slice156-quickfix-build/build`; capsule `private/slice156-quickfix-runtime`. The VU1
+table `private/slice155-vu1-full-gen`, the adapter and shaders `private/slice153-pacing-port` and
+`private/slice153-pacing-shaders` are reused unchanged.
+
+Steps:
+
+1. `scripts\prepare_perf_runtime.py private\slice156-quickfix-runtime --vu1-aot --gs-crt-override`
+2. Configure with `GT4_PERF_RUNTIME_SOURCE=private/slice156-quickfix-runtime`,
+   `GT4_VU1_GENERATED_DIR=private/slice155-vu1-full-gen`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to
+   the slice153 directories (the adapter check requires them), then build with `--parallel 1`.
+
+Controls (candidate, not owner-measured): CTest 19/19 on the slice156 build, including
+`native_quickfix` and `python_native_contracts` (GT4_NATIVE_BUILD on this build). Headless smoke,
+4,200 frames, the slice153-156 schedule (12 presses, `--press 600:start:30` then cross/start/down
+every 300 frames to 3900, card seed `private/slice113-video/widescreen-seed/card.ps2`):
+GT4_FORCE_480P unset gives 42 frame dumps identical to `private/slice155-smoke/headless-155/frames.sha256`.
+With `GT4_FORCE_480P=1` the frames are also identical (0 of 42 differ), and `probe.log` has one
+line `[display] GT4_FORCE_480P: SetGsCrt interlace 1 mode 0x2 rewritten to interlace 0 mode 0x50`
+followed by `[gs] SetGsCrt interlace 0 mode 0x50 field 1`. The headless path does not present to a
+window, so these frames say nothing about the displayed image; no correctness claim is made.
+
+Limits:
+
+1. The pinned slice153 adapter still exports `set_widescreen(false)` (4:3 presentation). The
+   host never calls it; removing it needs a new adapter pin.
+2. `GT4_FORCE_480P` is validated at window start (`validate_environment`) and per SetGsCrt request;
+   the headless path does not print the startup line.
+3. The 480p rewrite changes only the CRT request. Whether the GS output and the menus follow it is
+   the owner's check.
+4. Fullscreen uses a WS_POPUP window over the monitor, not exclusive mode; the swapchain follows
+   through the existing WM_SIZE path. Owner visual check pending.
+5. Alt+Enter is consumed by the host and Enter is not read as Start while Alt is held.
+6. Owner gameplay and frame timing are not measured.
+
+
 Slice157 (TASK-008, all entries) replaces the owner's slice155 table policy with every 8-byte
 address of the pinned image (2,048 programs). The owner tested slice155 with 354,837 interpreted
 VU1 calls in the rally and 0 in the night race; the all-entries table is the response. Owner
@@ -541,6 +588,140 @@ build from clean 61 steps, 41.5 s, 0 errors and 0 warnings from our units.
 Limits: no window presentation (step 6), no GS front-end hook (step 5), no state save (step 10). The SMODE1
 values come from `gs_video_mode.cpp`; the FFMD choice and the VGA mode range are hypotheses recorded in
 [PARALLEL-GS-PLAN.md](PARALLEL-GS-PLAN.md) section 7.
+
+Slice158 (TASK-009 quick fixes, second candidate) is built on the slice157 all-entries VU1 capsule with the
+slice156 quick fixes. Owner command, from the repository root (the slice156 `quickfix` mode and its pins are
+kept as history):
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix2
+
+`--force-480p` (GT4_FORCE_480P=1, default off) is accepted by `quickfix2`. The name `quickfix2` is new so that
+`quickfix` still reproduces the slice156 binary the owner tested; the two candidates keep separate pins.
+
+Changes:
+
+- 480p through the guest CRT mode table, not SetGsCrt. The table D_00618648 (ELF .data at 0x618648) holds 8
+  rows of {id, interlace, mode, field}. `func_001060A0(interlace, mode, field)` returns the id of the first
+  matching row (0 when none), and `func_00106058(id)` returns the matching row, or row 8 (the fallback) when
+  none matches. When GT4_FORCE_480P=1 the boot hook (donor `system.cpp` `boot()`, after `load_elf`, before the
+  main thread starts) checks the pinned bytes and rewrites row id 1 and the fallback row to {0, 0x50, 1}.
+  Any other bytes refuse the rewrite with exit status 2. Code: `native/display_table.*`, fixture
+  `native/display_table_fixture.cpp` (CTest `native_display_table`), prepare option `--display-table-override`.
+- The slice156 `hw.cpp` SetGsCrt rewrite is not part of this capsule (`--gs-crt-override` still derives slice156).
+- `late_frames` counts a release only when it is more than 1 ms (frequency / 1000 ticks) after its deadline
+  (`native/pacing.*`, fixture `pacing_fixture`). Lateness within the tolerance is not counted.
+
+Pins: [slice158-quickfix2-runtime.json](inputs/slice158-quickfix2-runtime.json) (capsule; `vu_micro.cpp` and
+`vif.cpp` byte-identical to slice157, `system.cpp` adds the boot hook) and
+[slice158-quickfix2.json](inputs/slice158-quickfix2.json) (launcher; runtime
+`private/slice158-quickfix2-build/build/gt4vulkan.exe`, 95,128,576 bytes, sha256 0f498bfc...b6e3b9).
+Directories: capsule `private/slice158-quickfix2-runtime`, build `private/slice158-quickfix2-build/build`, table
+`private/slice157-vu1-all-gen` (reused), smoke `private/slice158-smoke`.
+
+Steps:
+
+1. `private\tooling-venv\Scripts\python.exe scripts\prepare_perf_runtime.py private\slice158-quickfix2-runtime --vu1-aot --display-table-override`
+2. Configure as slice157 with `GT4_PERF_RUNTIME_SOURCE=private/slice158-quickfix2-runtime` and
+   `GT4_VU1_GENERATED_DIR=private/slice157-vu1-all-gen`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to the slice153
+   directories, then build.
+
+Results (candidate, not owner-measured):
+
+- CTest 20/20 on the slice158 build (includes `native_display_table` and `native_pacing`).
+- Python: 251 OK, 1 skipped (pre-existing), with `GT4_NATIVE_BUILD` on the slice158 build. New tests in
+  `tests/python/test_display_table.py`: the pinned ELF rows (skipped when the ELF is absent), the lookup model,
+  the boot hook derivation and reversal, and the slice158 pins.
+- Headless smoke, 4,200 frames, the slice157 press schedule, no window. `GT4_FORCE_480P` unset: 42 frame dumps
+  identical to the slice157 build run with the same script. `GT4_FORCE_480P=1`: the log has
+  `[display] GT4_FORCE_480P=1: CRT table rows id 1 and fallback set to interlace 0 mode 0x50 field 1`, the
+  frames are identical to the unset run (0 of 42 differ), and the only SetGsCrt line is still
+  `[gs] SetGsCrt interlace 1 mode 0x2 field 1`.
+
+Finding, which blocks the 480p claim: the rewritten table does not change the request that reaches the GS.
+The boot issues one SetGsCrt (480i) through syscall 0x02 (`kernel.cpp`, stub 0x5ad8a0), called by the GS display
+wrappers 0x57fd08 and 0x57fe00, which 0x4a03c0 reaches through a function table (no direct `jal` found). The
+table lookups (`func_001060A0` at 0x107640, `func_00106058` at 0x10754C) are a separate path that the headless
+boot did not show to change that request. The slice156 SetGsCrt rewrite changed only the syscall argument, and
+the owner did not see 480p.
+
+Limits:
+
+1. GT4_FORCE_480P=1 is not a verified 480p switch. Do not test it as 480p until the request path is traced.
+2. The fallback row is also rewritten, so unlisted CRT requests resolve to 480p while the switch is on.
+3. `--mode quickfix` (slice156) still runs the SetGsCrt rewrite and keeps its owner result.
+4. A `--load-state` save restores RAM after the boot hook, so a state saved without the hook keeps its table.
+5. Owner gameplay, frame timing and the window (half-height) path are not checked here.
+
+Slice164 (TASK-009, race display index) replaces the slice158 CRT table rewrite, which did not change the
+request that reaches the GS. The owner decision: races always 480p; menus keep the original interlaced
+behaviour. Owner command, from the repository root (`quickfix`, `quickfix2` and their pins are kept as history):
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix3 --force-480p
+
+Confirmed (from the pinned `private/reconstructed/SCUS_973.28.elf`, text offset = vaddr - 0xFF000; words
+decoded by a scratch MIPS reader, checked in `tests/python/test_race_display.py`):
+
+| Guest word | Meaning | Evidence |
+|---|---|---|
+| 0x622F4C | owner pointer | `func_001103E0`: `lui v0,0x62; lw a0,0x2F4C(v0)`; `func_0043A490` stores it |
+| owner + 0x38CB0 | race option object | `func_001103E0`: `lui at,0x3; ori at,0x8CB0; addu a0,at,a0`, passed to `func_00436740` |
+| object + 0x16B0 | race display index (0 normal, 1 480p, 2 1080i) | `func_00436640` 0x43665C `lw v1,0x16B0(s1)`; `func_004363A0` 0x436598 `sw zero,0x16B0(s0)` |
+| 0x622DF0 | names table: "normal", "480p", "1080i" | `func_00437380` and `func_004373F0` read it by index |
+
+`func_00436640` (race start) selects the setting by the index: index 1 calls `func_001074D0(&D_006184D0,2,6,640,448)`
+(row id 6, the 480p row), index 0 the default row. The index is zero after `setDefault` (0x436598).
+
+Design:
+
+- `native/race_display.*`: pure helpers `race_display_index_address` (owner pointer to index address, 64-bit sum,
+  refused outside guest RAM; null owner refused), `should_force_480p_index` (only 0 changes), and
+  `force_race_480p_at_vblank` (one guest VBlank: writes 1 at the index when it is 0, counts writes, logs the first).
+- Host hook: `native/window.cpp` `on_vblank`, after `pump_messages`, when `GT4_FORCE_480P=1`. No donor source is
+  changed: the capsule `private/slice164-quickfix3-runtime` is the slice157 derivation (system.cpp, vu_micro.cpp and
+  vif.cpp byte-identical to slice157). The F8 report prints `race display index writes N` when forced.
+- Removed: `native/display_override.*` (SetGsCrt rewrite), `native/display_table.*` and
+  `display_table_fixture.cpp` (CRT table), the `--gs-crt-override` and `--display-table-override` options of
+  `prepare_perf_runtime.py` with their tests, and the CTest `native_display_table`. A build of the slice156 or
+  slice158 capsule no longer compiles from this tree; their pins and executables remain as history.
+- Fixture: `native/race_display_fixture.cpp` (CTest `native_race_display`): environment parsing, address chain
+  (including refused edge owners), write decision, one write then none at 480p, 1080i kept, invalid owner ignored.
+- Launcher: `--mode quickfix3` (`docs/inputs/slice164-quickfix3.json`, runtime
+  `private/slice164-quickfix3-build/build/gt4vulkan.exe`); `--force-480p` is accepted by `quickfix3`.
+- Pins: [slice164-quickfix3-runtime.json](inputs/slice164-quickfix3-runtime.json) (capsule receipt and sources).
+
+Steps:
+
+1. `private\tooling-venv\Scripts\python.exe scripts\prepare_perf_runtime.py private\slice164-quickfix3-runtime --vu1-aot`
+   (done in this slice; the derivation is the slice157 one).
+2. Configure as slice157 with `GT4_PERF_RUNTIME_SOURCE=private/slice164-quickfix3-runtime`,
+   `GT4_VU1_GENERATED_DIR=private/slice157-vu1-all-gen`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to the slice153
+   directories, then build. The launcher pin is filled after the link (sha256 and size).
+
+Status (candidate, not owner-measured). Built at `private/slice164-quickfix3-build/build` (gt4vulkan.exe 95,126,016 bytes,
+sha256 78b92c63...af014e). CTest 20/20 including `native_race_display`. Python discover with `GT4_NATIVE_BUILD` on this build:
+248 run, OK, 1 skipped (pre-existing). Launcher pin `slice164-quickfix3.json` written.
+
+Headless smoke, 4,200 frames, the slice158 12-press schedule, card `private/slice113-video/widescreen-seed/card.ps2`:
+- Unset: 42 frame dumps identical to `private/slice158-smoke/headless-158` (0 differ).
+- `--force-480p`: 42 dumps identical to the unset run (0 differ) and to the slice158 forced run (0 differ).
+- The forced log has no `[display]` line and no `[window]` or `[pacing]` line. The only SetGsCrt is
+  `interlace 1 mode 0x2 field 1`, so no race-start request with interlace 0 / mode 0x50 was seen.
+
+**The headless path never calls `open_window`, so the VBlank hook never runs.** The headless smoke therefore
+does not test the race display write. Only a windowed run (`probe --window`, which presents) exercises it.
+That run has not been done.
+
+Limits:
+
+1. GT4_FORCE_480P does not change the GS, the table or any SetGsCrt request. It writes the game's race option index.
+   Whether the race output is 480p on the owner's display is the owner's check; the headless path does not present.
+2. The write also happens while the index is 0 outside races (menus, options). A user who chooses "normal" in the
+   options menu is moved back to 480p at the next VBlank; the menu may therefore show 480p while the race uses it.
+3. The index is forced only when it reads 0; a user choosing 1080i keeps it. The check runs at every VBlank, so a
+   reset to 0 by `setDefault` is undone within one frame.
+4. The race path (func_00436640) is confirmed from the ELF only by the words above, not by a traced race start.
+   The headless schedule may not reach a race; the smoke says so when it does not.
+5. No performance claim is made. Owner gameplay is not measured here.
 ## Build pipeline and tuning (slice159, TASK-010)
 
 Status: local evidence only. No pin, launcher mode or owner session was added (no playable candidate).
@@ -671,3 +852,63 @@ candidate build.
 Limits: parallel frames show flat blocks where the donor shows text and textures (see PARALLEL-GS-PLAN.md section 8,
 open issue 1). Similarity figures are report-only. Step 6 (window), the launcher mode and save states in parallel
 mode (refused, not implemented) are not done.
+## Slice 160 (TASK-013): VU0 microcode AOT
+
+The 14 `VCALLMS` entries of the pinned VU0 image (docs/VU0-MICROCODE-MAP.md) run compiled. The
+VU0 emitter profile is `gt4_vu_recomp --unit 0`; the VU1 profile is unchanged (its table
+`vu1_generated.cpp` and manifest hashes equal slice157: 3eed39d6... and 07ae2077...). Pins:
+[slice160-vu0-image.json](inputs/slice160-vu0-image.json) (static image),
+[slice160-vu0-runtime.json](inputs/slice160-vu0-runtime.json) (runtime capsule, VU1 and VU0 overlays)
+and [slice160-vu0-aot.json](inputs/slice160-vu0-aot.json) (launcher).
+
+Steps, from the repository root. Outputs go to fresh private directories:
+
+1. `vu0_image.py build --elf private\reconstructed\SCUS_973.28.elf --out private\slice160-vu0-image`
+   reads the 2,688-byte upload at file offset 0x5D4280 (vaddr 0x6D3280) and pads it with zeros to
+   4096 bytes. Upload sha256 6ee4bdde...; image sha256 2d7b2653.... `vu0_image.py entries` writes the
+   14 addresses (sha256 2f5ac510...). The list includes 0x308 and 0x478, which the slice-158 plan
+   counted as fall-through suffixes; both are kept so every listed VCALLMS target runs compiled.
+2. Emitter: `gt4_vu_recomp --unit 0 --namespace gt4::vugen::vu0 --entry-policy vcallms --image
+   private\slice160-vu0-image\vu0_image.bin --entries private\slice160-vu0-image\entries-vcallms.txt
+   private\slice160-vu0-gen-r3`. Output `vu0_generated.cpp` (14 programs, 0 refused) and manifest.json
+   (`"unit": 0`, `identity_tag` GT4-VU0-PROGRAM-IDENTITY-1).
+3. Runtime capsule: `prepare_perf_runtime.py private\slice160-vu0-runtime --vu0-aot` (implies
+   `--vu1-aot`). The VU1 overlay hash stays 171b07c3...; VU0 overlay 9e5fee2b....
+4. Build: configure with `GT4_PERF_RUNTIME_SOURCE` = the capsule, `GT4_VU1_GENERATED_DIR`
+   = `private\slice157-vu1-all-gen` and `GT4_VU0_GENERATED_DIR` = the VU0 directory. Build directory
+   `private\slice160-vu0-build\build`. The executable has `GT4_VU0_AOT` defined; the VU0 counters
+   are in the F8 report.
+5. Controls (CTest 21/21): `vu0_emitter` (20 checks), `vu0_aot_registry` (14 of 14 entries; 87 checks),
+   `vu0_aot_differential` (below), plus the existing VU1 suites.
+
+Owner command (from the repository root): `python scripts\play_performance.py --assets-root . --mode vu0-aot`.
+Verify: add `--vu0-verify 50` (samples every 50th VU0 call against the exact interpreter path).
+`--vu1-verify` and `--vu1-interpret-only` also apply in this mode.
+
+Numbers (local controls only; no owner session):
+
+- Differential, `gt4_vu0_differential_tests`: 14 entries, 1000 finite and 1000 raw-bit seeds each
+  (28,000 comparisons over every Vu0Regs field and the 4 KiB data memory), 896 budget-resume runs with
+  budgets 1 to 24, 0 failures. Negative control: `interpret(0, pc)` (run_fast) differs from `run(0, pc)`
+  in MAC or status in 768 states, which is why hand-offs use the exact path.
+- Registry, `gt4_vu0_aot_registry_test`: 14 of 14 entries found, changed reachable word not registered,
+  padding change keeps the hit, `code_changed(0)` invalidates, VF0 not normalized takes the interpreter.
+- Headless smoke, 4200 frames, the slice157 schedule (12 presses), no window: 42 frame dumps identical
+  to `private/slice157-smoke/headless-157/frames`. `[perf] vu0_aot compiled_calls=1256000
+  interpreted_calls=0 budget_resumes=0 handoffs=0 identity_rejects=0`.
+- Headless verify, `GT4_VU0_VERIFY=1`, same schedule: 42 frame dumps identical; `verified=1255999
+  verify_mismatches=0`.
+- Python: unittest discover with `GT4_NATIVE_BUILD` on this build: 246 OK, 1 skipped (pre-existing).
+- Executable `gt4vulkan.exe` 95,529,984 bytes, sha256 a0206c16... (after the merge of task/010-build-pipeline).
+
+Limits:
+
+1. The VCALLMS list is the 14 entries of the VU0 map. The EE call-site scan was not run (the donor has
+   no VCALLMS decoder), so an EE call to another address is counted as `interpreted_calls`.
+2. Only the headless schedule was run. Owner scenes are not verified.
+3. Hand-offs inside generated code (a JR to a return site outside the table's static set, or a budget
+   resume) run `run(0, pc)` and are counted as `handoffs`, not `interpreted_calls`.
+4. VU0 uses the donor exact `fp::` arithmetic (the `run(0)` path). VU1 keeps its `run_fast` SIMD path.
+   The VU1 SIMD `vitof`/`vftoi` helpers are not bit-identical to the donor per-lane conversion. VU1
+   output is unchanged (byte-identical control), so this is an open finding for VU1, not investigated.
+5. `private/` in the worktree is a directory junction to the main checkout (see the report).

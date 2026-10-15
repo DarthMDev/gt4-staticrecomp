@@ -6,8 +6,8 @@
 
 ![EE](https://img.shields.io/badge/EE%20(main%20CPU)-100%25%20AOT-2ea44f)
 ![VU0 macro](https://img.shields.io/badge/VU0%20macro-100%25%20AOT-2ea44f)
-![VU1 micro](https://img.shields.io/badge/VU1%20micro-AOT%20%C2%B7%20102%20programs-2ea44f)
-![VU0 micro](https://img.shields.io/badge/VU0%20micro-mapped%2C%20AOT%20next-yellow)
+![VU1 micro](https://img.shields.io/badge/VU1%20micro-AOT%20%C2%B7%20all%202%2C048%20entries-2ea44f)
+![VU0 micro](https://img.shields.io/badge/VU0%20micro-AOT%20%C2%B7%2014%2F14%20entries-2ea44f)
 ![IOP](https://img.shields.io/badge/IOP-HLE%20%2B%20interpreter-orange)
 ![GS](https://img.shields.io/badge/GS-Vulkan%20compute-blue)
 
@@ -17,7 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
-![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2024-2ea44f)
+![Tasks](https://img.shields.io/badge/tasks%20done-11%20of%2024-2ea44f)
 
 </div>
 
@@ -47,8 +47,8 @@ interpreted at run time:
 |---|---|---|---|
 | **EE** (main CPU) | Game logic, physics, menus, draw lists | Translated ahead of time to C++; no EE interpreter exists | **100%** of executed code · 5,676 unreached decomp functions to add for coverage |
 | **VU0 macro** | Vector math inside EE code | Translated together with the EE | **100%** |
-| **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; 102 entry points compiled ahead of time | **100%** of calls in day races, replays and menus · night races and rally reach a few entries not yet compiled (interpreted fallback) · full static entry coverage next |
-| **VU0 microcode** | Small helper programs | All 14 entry points and the image mapped | **0%** · next |
+| **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; all 2,048 entry points compiled ahead of time | **100%** · 0 interpreted calls in day/night races, rally, showroom |
+| **VU0 microcode** | Small helper programs | All 14 entry points compiled ahead of time with exact flags | **100%** · 0 interpreted calls |
 | **IOP** (I/O CPU) | Sound, disc, memory card, USB | System libraries replaced by native code; 23 game modules interpreted | **System libraries native** · game modules later |
 | **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | Hardware renderer planned |
 
@@ -68,17 +68,17 @@ built-in F7/F8 profiler:
 
 ## Scene results
 
-Owner sessions on the current build (single-clock pacing, VU1 AOT, async GPU),
-one F7/F8 interval per scene:
+Owner sessions on the current build (single-clock pacing, VU1 and VU0 compiled,
+async GPU), one F7/F8 interval per scene:
 
 | Scene | FPS (VBlanks/s) | Game speed | Notes |
 |---|---|---|---|
 | Time Trial, Nordschleife, Supra (480p) | **60.0** | **100%** | 99.6% of frames within 16–17 ms |
 | Arcade race, Nordschleife, 5 AI cars | **60.0** | **100%** | After VU1 flag elision (was 58.0) |
 | Replay of that race | 59.1 | 98.5% | |
-| Night race with AI cars | 46.2 | 77% | New VU1 entry points interpreted; extra GPU wait under investigation |
-| Rally, Grand Canyon, 1 AI car | 53.9 | 90% | New VU1 entry points interpreted |
-| Car showroom (rotating car) | 59.1 | 98.6% | After VU1 flag elision (was 44.8); VU1 9.3 ms |
+| Night race with AI cars | 58.9 | 98% | VU1 fully compiled; remaining cost is a 4.1 ms GS readback wait (paraLLEl-GS, TASK-012) |
+| Rally, Grand Canyon, 1 AI car | 59.9 | 99.8% | All VU1 entries compiled (was 53.9) |
+| Car showroom (rotating car) | 58.0–60.0 | 97–100% | Varies with the car shown (was 44.8 before flag elision) |
 
 ## Known issues
 
@@ -86,10 +86,10 @@ one F7/F8 interval per scene:
   optimization disabled, so it predates them). The crash is traced to
   `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`;
   the demo-input data appears to arrive wrong or late. Under investigation.
-- **Night races and rally** use VU1 entry points that are not compiled yet; full
-  static coverage of the recovered VU1 image is the next VU1 task.
-- **Car showroom** is just below 60 FPS after VU1 flag elision; a dedicated VU1
-  thread (MTVU) is planned.
+- **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
+  that the new renderer (paraLLEl-GS, TASK-012) is expected to remove.
+- **Car showroom** dips to about 58 FPS with some cars; a dedicated VU1 thread
+  (MTVU, TASK-011) is planned.
 - Menus are interlaced like the original game (480p applies in races); a
   deinterlacing filter is planned with the new renderer.
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
@@ -116,13 +116,13 @@ in game before it is merged.
 | TASK‑005 | Asynchronous GPU submission + overlay fix | ✅ Done · 45 → 60 FPS, 100% game speed |
 | TASK‑006 | Frame pacing on a single clock, rate-controlled audio | ✅ Done · flat 16.7 ms frametime |
 | TASK‑007 | VU1 per-program flag elision | ✅ Done · showroom 45 → 59 FPS, 5-AI race 60 FPS |
-| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 **In progress** |
-| TASK‑009 | Title, fixed 16:9, fullscreen, 480p everywhere | 🔄 480p rework |
-| TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ⏭️ Next |
+| TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done · 0 interpreted VU1 calls; rally 60, showroom 60, night 59 FPS |
+| TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
+| TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
 | TASK‑011 | MTVU: VU1 on its own thread | 📋 Planned |
-| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 📋 Planned |
-| TASK‑013 | VU0 microcode compiled ahead of time | 📋 Planned |
-| TASK‑014 | Full EE entry coverage from the decompilation | 📋 Planned |
+| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs headless, textures missing |
+| TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
+| TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
 | TASK‑017 | Decompilation names in the generated code | 📋 Planned |
@@ -170,7 +170,7 @@ For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
 The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. A separate [EE producer](docs/EE-PRODUCER.md) now rebuilds the translator and game library from verified inputs; production still uses its qualified private library while candidate integration and gameplay checks remain pending. A clean end-to-end playable build remains future work.
 
-Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates required files, and preserves the existing memory card. The current performance candidate starts with `scripts/play_performance.py --mode pacing` (F7 starts a measured interval, F8 reports it). Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
+Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates required files, and preserves the existing memory card. The current build starts with `scripts/play_performance.py --mode main --force-480p` (F7 starts a measured interval, F8 reports it). Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
 
 | Key | Action |
 |---|---|
@@ -180,9 +180,11 @@ Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates r
 | S | Triangle / Back |
 | X | Circle |
 | Arrow Keys | Navigate / Steer |
-| F6 | Toggle 16:9 / 4:3 Window Framing |
+| Alt+Enter, F11 | Toggle borderless fullscreen on the current monitor |
 
-F6 toggles the window framing. Match this setting under in-game **Options → Screen → Aspect Ratio** to correct the camera aspect ratio and HUD positioning. `Jogar-GT4.cmd --aspect 4:3` boots using 4:3 framing. Existing memory cards retain saved settings. 480p and 1080i modes must be verified during races; menus can use the standard display mode.
+The presentation is fixed at 16:9; there is no 4:3 framing option. Set **Options → Screen → Aspect Ratio** in the game to 16:9. Fullscreen restores the previous windowed size and position when toggled off. Existing memory cards retain saved settings.
+
+`--force-480p` (or `GT4_FORCE_480P=1`) holds the game's race display option at 480p: races render progressive while menus stay 480i as in the original. Without the switch the game's own setting is used.
 
 ## Credits
 
@@ -202,7 +204,7 @@ Exact revisions, licenses and imported files are listed in [THIRD_PARTY.md](nati
 
 The active runtime foundation comes from the MIT-licensed [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) donor, adapted to native Windows and Vulkan. Our binary runs directly on Windows without a browser, WebAssembly, or embedded PCSX2. Credits, revisions, and licensing terms are documented in [THIRD_PARTY.md](native/THIRD_PARTY.md).
 
-Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The original recompiler engine has been archived on the [`codex/archive-original-recomp-20261013`](https://github.com/moesuito/gt4-staticrecomp/tree/codex/archive-original-recomp-20261013) branch. The `main` branch is dedicated exclusively to the current native base.
+Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The `main` branch contains only this native base.
 
 - [STATUS](docs/STATUS.md): Confirmed milestones and pending tasks.
 - [HYBRID-PORT-PLAN](docs/HYBRID-PORT-PLAN.md): Active Windows-first no-JIT optimization, GS graphics and future Android/iOS phases.
@@ -217,6 +219,5 @@ Development has progressed through boot and menus, Vulkan integration, audio and
 - [ROADMAP](docs/ROADMAP.md): Earlier timing analysis and selective migration proposal, retained as technical context.
 - [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
 - [BUILD](docs/BUILD.md): Build environment setup and verification procedures.
-- [LEGACY](docs/LEGACY.md): Preservation and retrieval of archived work.
 
 Active source code resides in `native/`, with tooling in `scripts/`, automated tests in `tests/`, and technical records in `docs/`. The active development fork is [`moesuito/gt4-staticrecomp`](https://github.com/moesuito/gt4-staticrecomp).
