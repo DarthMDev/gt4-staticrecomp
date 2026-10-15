@@ -145,7 +145,8 @@ in game before it is merged.
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
 | TASK‑017 | License-test crash | 📋 Planned |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design and plan in progress |
+| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design done |
+| TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 📋 Planned |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 

@@ -56,7 +56,8 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑016 | IOP per-module cost counters and review | 📋 Planned |
 | TASK‑017 | License-test crash | 📋 Planned |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust + egui/GPUI) | 📋 Planned |
+| TASK‑019 | Launcher (Rust + Slint) and NSIS per-user installer | 🔄 Design and plan done (branch `task/019-launcher`) |
+| TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 📋 Planned |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 
@@ -180,6 +181,15 @@ High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 ### TASK-019 — Launcher
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
+
+### TASK-025 — Save manager
+One standard 8 MB PS2 card image per slot under the user data folder; the
+launcher passes the active slot's card to the game. Import from single-save files
+(.psu first; .max/.cbs/.xps later), from card images (.ps2/.mcd, listing their
+saves) and from PCSX2 folder cards; import always creates a new slot and never
+overwrites one. Export, delete to Recycle Bin, backups. Optional slot summary
+(day, credits) from Nenkai's PDTools save format. Atomic card writes in the
+runtime. Design: `docs/launcher/LAUNCHER-PLAN.md` on branch `task/019-launcher`.
 
 ### First stable release
 After TASK-019: a tagged GitHub Release of this repository with the NSIS
