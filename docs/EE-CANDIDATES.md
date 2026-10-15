@@ -59,7 +59,7 @@ In a VS2022 x64 Native Tools terminal, configure the full recovered library:
 
 ```text
 cmake -S tools/ee_producer -B private/slice118-ee-candidates/recovered/game-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_MAKE_PROGRAM="C:/PROGRA~2/MICROS~2/2022/BUILDT~1/Common7/IDE/COMMON~1/MICROS~1/CMake/Ninja/ninja.exe" -DGT4_DONOR="C:/Antigravity/gt4-staticrecomp/private/references/ps2-web-recomp" -DGT4_GENERATED="C:/Users/Alano/.codex/worktrees/native-renderer-roadmap/gt4-staticrecomp/private/slice118-ee-candidates/recovered/generated" -DGT4_BUILD_TRANSLATOR=OFF
-cmake --build private/slice118-ee-candidates/recovered/game-build --target ps2game --parallel 1
+cmake --build private/slice118-ee-candidates/recovered/game-build --target ps2game
 ```
 
 Then record its validated object/source differences:

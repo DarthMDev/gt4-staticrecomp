@@ -122,7 +122,7 @@ a fresh cache, using the diagnostic source/list, then build only the object targ
 
 ```text
 cmake -S tools/ee_producer -B private/ee-coverage-new-attempt/compile-check -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_MAKE_PROGRAM="C:/PROGRA~2/MICROS~2/2022/BUILDT~1/Common7/IDE/COMMON~1/MICROS~1/CMake/Ninja/ninja.exe" -DGT4_DONOR="C:/Antigravity/gt4-staticrecomp/private/references/ps2-web-recomp" -DGT4_GENERATED="C:/Users/Alano/.codex/worktrees/native-renderer-roadmap/gt4-staticrecomp/private/ee-coverage-new-attempt/supplier_seed/generated" -DGT4_CHANGED_UNITS="C:/Users/Alano/.codex/worktrees/native-renderer-roadmap/gt4-staticrecomp/private/ee-coverage-new-attempt/changed-units.txt" -DGT4_BUILD_TRANSLATOR=OFF
-cmake --build private/ee-coverage-new-attempt/compile-check --target ee_changed_unit_controls --parallel 1
+cmake --build private/ee-coverage-new-attempt/compile-check --target ee_changed_unit_controls
 ```
 
 Adapt absolute paths to the receiving checkout. This diagnostic CMake target does

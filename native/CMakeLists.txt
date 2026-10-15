@@ -291,6 +291,10 @@ if(GT4_VU1_GENERATED_DIR)
     target_sources(ps2runtime_vulkan PRIVATE "${GT4_VU1_GENERATED_DIR}/vu1_generated.cpp" ${vu1_generated_parts}
         "${GT4_ROOT}/tools/vu_recomp/src/sha256.cpp")
     target_include_directories(ps2runtime_vulkan PUBLIC "${GT4_ROOT}/tools/vu_recomp/src")
+    # TASK-010: the emitter writes one label per instruction; a label with no branch is expected.
+    # Suppressed for generated sources only, so warnings in hand-written code stay visible.
+    set_source_files_properties("${GT4_VU1_GENERATED_DIR}/vu1_generated.cpp" ${vu1_generated_parts}
+        PROPERTIES COMPILE_OPTIONS "-Wno-unused-label")
 elseif(GT4_PERF_RUNTIME_SOURCE AND GT4_PERF_RUNTIME_SOURCE MATCHES "slice151-vu1-aot-runtime$|slice154-vu1-flags-runtime$|slice155-vu1-full-runtime$|slice156-quickfix-runtime$|slice157-vu1-all-runtime$|slice158-quickfix2-runtime$|slice164-quickfix3-runtime$")
     message(FATAL_ERROR "The VU1 AOT capsule requires GT4_VU1_GENERATED_DIR")
 endif()

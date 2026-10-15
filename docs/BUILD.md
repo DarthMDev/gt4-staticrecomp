@@ -664,3 +664,86 @@ Limits:
 4. The race path (func_00436640) is confirmed from the ELF only by the words above, not by a traced race start.
    The headless schedule may not reach a race; the smoke says so when it does not.
 5. No performance claim is made. Owner gameplay is not measured here.
+## Build pipeline and tuning (slice159, TASK-010)
+
+Status: local evidence only. No pin, launcher mode or owner session was added (no playable candidate).
+Timings were taken under heavy concurrent load from other agents on this machine: compare CPU-seconds
+from the ninja log, not wall time, and treat every timing here as not comparable across runs.
+
+Changes (one variable per build directory):
+
+1. Serial recipes removed. The --parallel 1 option is gone from native/build_candidate.cmd,
+   tools/ee_producer/build.cmd, tools/ee_producer/build_analysis.cmd and the two EE recipes in
+   docs/EE-CANDIDATES.md and docs/EE-CALLBACK-COVERAGE.md. Ninja now uses all cores by default.
+2. Corpus table compiled once. tools/vu_recomp/CMakeLists.txt builds the 426-file corpus table as the
+   OBJECT library gt4_vu_corpus_table. gt4_vu1_mismatch_replay and gt4_vu_corpus_differential link its
+   objects. Before, each compiled its own copy.
+3. Flag benchmark on demand. gt4_vu1_flag_bench and its baseline table are EXCLUDE_FROM_ALL. Build them
+   explicitly with: cmake --build <build-dir> --target gt4_vu1_flag_bench. No CTest target depends on it.
+   Every CTest executable is still built by default (18 tests).
+4. Unused-label suppression scoped. -Wno-unused-label is applied only to the generated VU1 sources
+   (native/CMakeLists.txt, set_source_files_properties). Measured on one part (vu1_generated_000.cpp,
+   slice157 capsule, /O2 /Ob2): 2,484 unused-label warnings without the suppression, 0 with it. Other
+   parts were not measured; the earlier "about 65,000" figure was not verified.
+5. Tuning options (CMakeLists.txt, default OFF, applied to every target of the tree):
+   - -DGT4_FP_CONTRACT_OFF=ON adds /clang:-ffp-contract=off (control, T0).
+   - -DGT4_X86_64_V3=ON adds /clang:-march=x86-64-v3 and implies the fp-contract flag (T1).
+   The pinned EE game library ps2game.lib is not rebuilt, so its code keeps the default flags.
+6. Compiler cache (S4, not installed). sccache or ccache needs owner approval. The hook would be
+   -DCMAKE_CXX_COMPILER_LAUNCHER=sccache on the configure line. Not done.
+
+Build commands (fresh directories; the worktree private directory is a junction to the main checkout so
+the perf capsule and port paths pass the checks in native/CMakeLists.txt):
+
+    cmake -S <worktree> -B <main>/private/slice159-build-<name>/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_ASSETS_ROOT=<main>
+      -DGT4_EE_PROFILE=production -DGT4_PERF_RUNTIME_SOURCE=<worktree>/private/slice157-vu1-all-runtime
+      -DGT4_PORT_DIR=<worktree>/private/slice153-pacing-port -DGT4_SHADER_DIR=<worktree>/private/slice153-pacing-shaders
+      -DGT4_VU1_GENERATED_DIR=<main>/private/slice157-vu1-all-gen -DGT4_VU_CORPUS_DIR=<main>/private/slice155-vu1-full-corpus
+      -DGT4_PYTHON=<main>/private/tooling-venv/Scripts/python.exe [-DGT4_FP_CONTRACT_OFF=ON | -DGT4_X86_64_V3=ON]
+    cmake --build <main>/private/slice159-build-<name>/build
+
+Measurements (CPU-seconds are the sum of job durations in .ninja_log; wall time is not comparable):
+
+| Build | Jobs | Wall (load-affected) | CPU-s |
+|---|---|---|---|
+| slice157 (baseline, slice158 plan) | 240 | 401 s | 3,942 |
+| slice159 S1-S3 (slice159-build-s123) | 230 | 189 s | 1,700 |
+| slice159 T0 -ffp-contract=off | 230 | 231 s | 2,045 |
+| slice159 T1 x86-64-v3 + T0 | 230 | 229 s | 2,216 |
+
+The S1-S3 build removes the 204 s serial flag-bench tail and two of three corpus-table compiles (about
+176 CPU-s). The T0 and T1 CPU-s are higher under the same load, which the flags alone do not explain: the
+runs overlapped with other agents' compiles. Treat the CPU-s column as an upper bound until repeated on an
+idle machine.
+
+Correctness (Confirmed):
+
+- T0 vs slice157: the runtime library differs as a file, but the disassembly of 159 of 160 runtime objects
+  is identical. The exception is vu_micro.cpp (slice157 runtime capsule): instruction order and register
+  choice differ, with no FMA emitted for the default target.
+- Headless 4,200 frames, the slice153/154 schedule (12 presses), frame dumps every 100 frames: T0 42 of 42
+  identical to private/slice157-smoke/headless-157/frames; T1 (v3) 42 of 42 identical.
+- CTest 18/18 on S1-S3 (slice159-build-s123), T0 and T1 (slice159-build-v3).
+- Python unittest discover: 236 OK, 1 skipped (pre-existing), with GT4_NATIVE_BUILD on the S1-S3 and T0 builds.
+
+VU1 micro-benchmark, baseline vs v3 (gt4_vu1_flag_bench 50 2 private/slice155-vu1-full-corpus):
+
+| Build | Elided ns/call (timed calls, best of 2 passes) | Compared / failures |
+|---|---|---|
+| default (slice159-build-s123) | 10,715 | 852 / 0 |
+| x86-64-v3 (slice159-build-v3) | 11,630 | 852 / 0 |
+
+Verdict: Unknown. The run shared the machine with other compiles. The v3 build is not faster in this run.
+Rerun on an idle machine, 3 or more times each, and compare the elided figure:
+
+    <main>/private/slice159-build-s123/build/gt4_vu1_flag_bench.exe 200 5 <main>/private/slice155-vu1-full-corpus
+    <main>/private/slice159-build-v3/build/gt4_vu1_flag_bench.exe 200 5 <main>/private/slice155-vu1-full-corpus
+
+Limits:
+
+1. The T0 and T1 flags apply to the runtime, the generated VU1 code and the tests. The pinned EE library
+   and the qualified donor objects are not rebuilt by these options.
+2. Frame identity is shown for one 4,200-frame headless schedule, not for owner gameplay. No speed claim.
+3. PGO, ThinLTO, the dispatch divide change and the sccache option are not implemented or measured.
+4. No candidate pin or launcher mode was added: T0 and T1 are build variants only, not playable candidates.

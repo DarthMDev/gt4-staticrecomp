@@ -18,7 +18,7 @@ if exist "%GT4_BUILD%" (
 )
 cmake -S . -B "%GT4_BUILD%" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_MAKE_PROGRAM="C:/PROGRA~2/MICROS~2/2022/BUILDT~1/Common7/IDE/COMMON~1/MICROS~1/CMake/Ninja/ninja.exe" -DGT4_EE_PROFILE="%GT4_PROFILE%" -DGT4_ASSETS_ROOT="%GT4_ASSETS%" -DGT4_PYTHON="%GT4_ASSETS%/private/tooling-venv/Scripts/python.exe"
 if errorlevel 1 exit /b %errorlevel%
-cmake --build "%GT4_BUILD%" --parallel 1
+cmake --build "%GT4_BUILD%"
 if errorlevel 1 exit /b %errorlevel%
 ctest --test-dir "%GT4_BUILD%" --output-on-failure
 exit /b %errorlevel%
