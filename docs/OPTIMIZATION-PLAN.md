@@ -131,6 +131,28 @@ hybrid plan (correct speed, p99 ≤ 20 ms), then the stricter stable-60 gate.
 Evaluate the donor VU thread (MTVU-style) only if VU1 AOT is still the critical
 path. Investigate the intermittent 43/60 fps menu pacing here.
 
+Pacing findings (slice 151 study, read-only): audio is the only wall-clock
+throttle today. `native/host_io.cpp` blocks in `wait_for` on a 4 x 512-frame
+WinMM queue, so waits are quantized to 10.67 ms while a frame is 16.67 ms; a mix
+of 16.7/33.3 ms frames explains about 43 fps menus (Hypothesis). The guest clock
+is virtual (`system.cpp` `now()`, `idle()` skips) with no catch-up when the host
+falls behind. Design: one authoritative clock (audio device sample counter),
+smaller submit granularity, a 50-80 ms audio ring, non-blocking presentation,
+and a VBlank-interval histogram control (mean 60 ± 0.1 Hz, p95 < 18 ms).
+
+### Backlog from slice 151 studies
+
+| Item | Phase | Source |
+|---|---|---|
+| Build speed: parallel jobs inside one build, compiler cache, lld-link | now, any time | owner request |
+| Translate the 5,676 decomp functions that have no EE entry (crash risk in unplayed modes) | O3, stability | [DECOMP-INTEGRATION](DECOMP-INTEGRATION.md) |
+| VU1 static entry coverage: MSCAL targets from EE code, or compile every plausible entry of the 2,046-instruction image (10 E-bit blocks, 9 seen) | O1 follow-up | [VU1-MICROCODE-SOURCE](VU1-MICROCODE-SOURCE.md) |
+| Static flag elimination per program (microVU-style last-4-writers) | O1 follow-up | [PCSX2-LESSONS](PCSX2-LESSONS.md) |
+| Wait-loop and INTC_STAT spin skipping (no game-time change) | O3 | [PCSX2-LESSONS](PCSX2-LESSONS.md) |
+| Check whether disc read timing is modeled slower than needed (loading time) | O3 | owner observation (GT2 port) |
+| Decomp names in generated code (comments, identical object code) | any time | [DECOMP-INTEGRATION](DECOMP-INTEGRATION.md) |
+| EE build flags: -ffp-contract=off control, x86-64-v3 on runtime, dispatch divide removal, ThinLTO, PGO | O3 | EE build study |
+
 ### O5 — Graphics (later, not part of the speed work)
 
 First the donor's scale 1..3 compute path (`gs.wgsl` `SCALE` override,
