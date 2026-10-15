@@ -52,16 +52,18 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done |
 | TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, races in 480p | ✅ Done |
 | TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ✅ Done (tuning measurements pending) |
-| TASK‑011 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
-| TASK‑012 | paraLLEl-GS as the PC renderer: integration, upscaling, deinterlacing, readbacks, extras, GT4 validation | 🔄 In progress |
+| TASK‑011 | MTVU: VU1 on its own thread, on by default | 🔄 Steps 0-4 and 6 done; merging into the main build |
+| TASK‑012 | paraLLEl-GS as an optional PC renderer: integration, super-sampling, high-resolution output | 🔄 Plays (night race 60 FPS); quality capped at 2x; kept as an option |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
-| TASK‑017 | License-test crash | 📋 Planned |
+| TASK‑017 | License-test crash | 🔄 In progress (EE FPU rounding lead) |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust + Slint) and NSIS per-user installer | 🔄 Design and plan done (branch `task/019-launcher`) |
-| TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 📋 Planned |
+| TASK‑019 | Launcher 1.0.0 (Rust + Slint) and NSIS per-user installer | 🔄 In progress (branch `task/019-launcher`) |
+| TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 🔄 In progress |
+| TASK‑028 | CoreGS 1.1: upscaling up to 3x (4x available), interlaced-only deinterlace, FXAA-class AA, FSR 1.0 viewport scaling | 🔄 Upscaler done (1x-4x); filters in progress |
+| TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | 🔄 In progress |
 | TASK‑026 | CoreGS 2.0, part 1: clean-room specification of the PCSX2 hardware renderer | ✅ Done (docs/hw-renderer-spec, PR #17) |
 | TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (owner, 2026-10-15) · pure libraries done on task/027-hw-renderer |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
@@ -196,6 +198,20 @@ saves) and from PCSX2 folder cards; import always creates a new slot and never
 overwrites one. Export, delete to Recycle Bin, backups. Optional slot summary
 (day, credits) from Nenkai's PDTools save format. Atomic card writes in the
 runtime. Design: `docs/launcher/LAUNCHER-PLAN.md` on branch `task/019-launcher`.
+
+### TASK-028 — CoreGS 1.1
+Our current Vulkan compute GS renderer (CoreGS 1.x, donor lineage, MIT) gains:
+internal resolution scale 1x-4x (`--mode upscale --scale N`, PS2_SCALE; 3x is
+the release target), a deinterlace filter active only for interlaced output
+(behaviour from our clean-room description in docs/hw-renderer-spec chapter 13,
+no GPL/LGPL code copied), an FXAA-class AA pass and AMD FSR 1.0 (MIT) for
+viewport scaling. Branch `task/028-donor-upscale`. Part of release 1.0.0
+(docs/RELEASE-1.0.0-PLAN.md).
+
+### TASK-029 — Controller and keyboard mapping
+Binding table in the runtime (XInput auto-map, LT/RT as L2/R2 pressure,
+keyboard remap, deadzones/curves) read from a controls file the launcher
+writes; schema in docs/CONTROLS.md. Branch `task/029-input-mapping`.
 
 ### TASK-026 — Own hardware renderer: clean-room specification
 Study only (decision 0069). The specification team reads the PCSX2 hardware GS
