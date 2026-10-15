@@ -29,7 +29,7 @@ claim zero emulation or full PS2 fidelity.
   renderer, physics decoupled from frame rate, ultrawide and remaster features
   will be a separate project, possibly a fork. This repository's goal is the
   original game running natively, optimized and as faithful as possible.
-- **Renderer focus now:** integrate paraLLEl-GS (TASK-031).
+- **Renderer focus now:** integrate paraLLEl-GS (TASK-012).
 - **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
 - **Graphics:** PC renderer = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+); the
   current donor compute GS renderer is an experimental fallback/reference only
@@ -37,7 +37,7 @@ claim zero emulation or full PS2 fidelity.
   iOS) without ARMSX2's JIT. See `docs/GS-RENDERER-OPTIONS.md`.
 - GPL-3.0 reuse (e.g. PCSX2 GS) is accepted (decision 0066): pin sources, keep
   notices, record provenance in `native/THIRD_PARTY.md`. Never import PCSX2 JITs.
-- The launcher (TASK-023) and racing wheels (TASK-026) are planned tasks;
+- The launcher (TASK-019) and racing wheels (TASK-020) are planned tasks;
   LAN/online launcher, in-game settings menus and Spec II are recorded ideas.
 
 Working fork: github.com/moesuito/gt4-staticrecomp. Upstream

@@ -118,27 +118,27 @@ in game before it is merged.
 | TASK‑007 | VU1 per-program flag elision | ✅ Done · showroom 45 → 59 FPS, 5-AI race 60 FPS |
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | 🔄 **In progress** |
 | TASK‑009 | Title, fixed 16:9, fullscreen, 480p everywhere | 🔄 480p rework |
-| TASK‑018 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ⏭️ Next |
-| TASK‑010 | MTVU: VU1 on its own thread | 📋 Planned |
-| TASK‑031 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 📋 Planned |
-| TASK‑014 | VU0 microcode compiled ahead of time | 📋 Planned |
-| TASK‑015 | Full EE entry coverage from the decompilation | 📋 Planned |
-| TASK‑016 | LWR instruction fidelity fix | 📋 Planned |
-| TASK‑017 | IOP per-module cost review | 📋 Planned |
-| TASK‑020 | In-game 16:9 option by default | 📋 Planned |
-| TASK‑022 | Decompilation names in the generated code | 📋 Planned |
-| TASK‑023 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
-| TASK‑026 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑013 | License-test crash | 📋 Planned |
+| TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ⏭️ Next |
+| TASK‑011 | MTVU: VU1 on its own thread | 📋 Planned |
+| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 📋 Planned |
+| TASK‑013 | VU0 microcode compiled ahead of time | 📋 Planned |
+| TASK‑014 | Full EE entry coverage from the decompilation | 📋 Planned |
+| TASK‑015 | LWR instruction fidelity fix | 📋 Planned |
+| TASK‑016 | IOP per-module cost review | 📋 Planned |
+| TASK‑017 | In-game 16:9 option by default | 📋 Planned |
+| TASK‑018 | Decompilation names in the generated code | 📋 Planned |
+| TASK‑019 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
+| TASK‑020 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑021 | License-test crash | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS
 
 | Task | Goal | State |
 |---|---|---|
-| TASK‑024 | ARMSX2 GS pipeline (Vulkan) for Android | 📋 Planned |
-| TASK‑027 | Android app: touch controls, Bluetooth controllers | 📋 Planned |
-| TASK‑025 | ARMSX2 Metal GS for iOS | 📋 Planned |
-| TASK‑028 | iOS app | 📋 Planned |
+| TASK‑022 | ARMSX2 GS pipeline (Vulkan) for Android | 📋 Planned |
+| TASK‑023 | Android app: touch controls, Bluetooth controllers | 📋 Planned |
+| TASK‑024 | ARMSX2 Metal GS for iOS | 📋 Planned |
+| TASK‑025 | iOS app | 📋 Planned |
 
 Details: [TASKS.md](TASKS.md) · [GS renderer options](docs/GS-RENDERER-OPTIONS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md).
 
