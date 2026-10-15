@@ -4,6 +4,10 @@ VU1 AOT candidate (--mode vu1-aot):
   --vu1-verify N         compare every Nth generated VU1 call with the interpreter; mismatches
                          are counted and printed to the session log.
   --vu1-interpret-only   run the same vu1-aot binary with the interpreter only (A/B).
+
+Asynchronous GS candidate (--mode gs-async): VU1 AOT plus asynchronous GS submission. The
+same verify and interpreter options apply. Set GT4_GS_SYNC=1 in the environment before
+launching to restore the synchronous GS path for A/B comparison.
 """
 import argparse
 import sys
@@ -20,13 +24,13 @@ def main():
     parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9')
     parser.add_argument('--mode', choices=MODES, default='detailed')
     parser.add_argument('--vu1-verify', type=int, default=0, metavar='N',
-                        help='sample every Nth generated VU1 call and compare (vu1-aot only)')
+                        help='sample every Nth generated VU1 call and compare (vu1-aot and gs-async)')
     parser.add_argument('--vu1-interpret-only', action='store_true',
-                        help='force the interpreter in the vu1-aot binary (vu1-aot only)')
+                        help='force the interpreter in the vu1-aot and gs-async binaries (vu1-aot and gs-async)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode != 'vu1-aot':
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot or gs-async')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:

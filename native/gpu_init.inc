@@ -19,7 +19,7 @@ bool init(Mode requested) {
     g_decoded = g_vulkan.create_buffer(static_cast<std::uint64_t>(kDecodedWords) * 4);
     g_cache_copy.assign(kCacheWords, 0);
     if (const char* decode = std::getenv("PS2_DECODE")) g_decode = std::strcmp(decode, "0") != 0;
-    ensure_capacity();
+    rebuild_group();
     g_mode = requested;
     std::fprintf(stderr, "[vulkan] GS mode=%s; CPU raster=%s\n",
                  requested == Mode::primary ? "primary" : "mirror",

@@ -1,5 +1,15 @@
 # Current Status
 
+2026-10-14 — Slice 152, O2 asynchronous GS submission (candidate, not owner-measured):
+`--mode gs-async` = VU1 AOT plus a three-slot submission ring on one timeline semaphore,
+presentation merged into the slot submission, at most two presents in flight, cache
+eviction guarded by completion, and `GT4_GS_SYNC=1` for synchronous A/B. Confirmed headless:
+4200-frame dumps identical sync vs async; stress VRAM byte-identical; CTest 17/17; Python 203
+OK. Synchronization validation is clean with overlay layers disabled; with the installed
+overlay layers it reports present-after-write (pre-existing class). Step 0: swapchain now
+requests COLOR_ATTACHMENT (overlay layers previously hit render-pass VUIDs). Owner gameplay,
+overlay check and frame timing pending. Read [GS async design](GS-ASYNC-DESIGN.md#implementation-status-slice-152).
+
 2026-10-14 — Slice 151, owner replanning: [Optimization Plan](OPTIMIZATION-PLAN.md)
 and [decision 0065](decisions/0065-aot-all-guest-code-no-jit.md) set the order of work:
 VU1 AOT first (donor recording + `vurecomp` flow never activated for GT4; all VU1

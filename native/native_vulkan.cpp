@@ -106,7 +106,9 @@ namespace {
   X(vkGetPhysicalDeviceFormatProperties) \
   X(vkDestroyImage) \
   X(vkGetImageMemoryRequirements) \
-  X(vkAcquireNextImageKHR)
+  X(vkAcquireNextImageKHR) \
+  X(vkWaitSemaphores) \
+  X(vkGetSemaphoreCounterValue)
 // clang-format on
 
 #define DECLARE_FUNCTION(name) PFN_##name name = nullptr;
@@ -137,6 +139,7 @@ Context::~Context() {
   if (queue_ && vkQueueWaitIdle)
     vkQueueWaitIdle(queue_);
   if (device_) {
+    wait_all_presentations();
     for (auto *buffer : buffers_) {
       if (buffer->mapped)
         vkUnmapMemory(device_, buffer->memory);
@@ -149,12 +152,16 @@ Context::~Context() {
     destroy_image();
     if (swapchain_)
       vkDestroySwapchainKHR(device_, swapchain_, nullptr);
-    if (acquired_)
-      vkDestroySemaphore(device_, acquired_, nullptr);
-    if (rendered_)
-      vkDestroySemaphore(device_, rendered_, nullptr);
-    if (present_fence_)
-      vkDestroyFence(device_, present_fence_, nullptr);
+    for (auto &slot : slots_) {
+      if (slot.acquired)
+        vkDestroySemaphore(device_, slot.acquired, nullptr);
+      if (slot.rendered)
+        vkDestroySemaphore(device_, slot.rendered, nullptr);
+      if (slot.present_fence)
+        vkDestroyFence(device_, slot.present_fence, nullptr);
+    }
+    if (timeline_)
+      vkDestroySemaphore(device_, timeline_, nullptr);
     for (auto pipeline : pipelines_)
       if (pipeline)
         vkDestroyPipeline(device_, pipeline, nullptr);
@@ -164,8 +171,6 @@ Context::~Context() {
       vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
     if (descriptor_layout_)
       vkDestroyDescriptorSetLayout(device_, descriptor_layout_, nullptr);
-    if (fence_)
-      vkDestroyFence(device_, fence_, nullptr);
     if (command_pool_)
       vkDestroyCommandPool(device_, command_pool_, nullptr);
     vkDestroyDevice(device_, nullptr);
@@ -180,6 +185,12 @@ Context::~Context() {
 
 void Context::initialize(const std::filesystem::path &shaders) {
   aspect_ = parse_aspect(std::getenv("GT4_ASPECT"));
+  if (const char *sync = std::getenv("GT4_GS_SYNC")) {
+    if (std::strcmp(sync, "1") == 0)
+      synchronous_ = true;
+    else if (std::strcmp(sync, "0") != 0)
+      throw std::runtime_error("GT4_GS_SYNC must be 0 or 1");
+  }
   loader_ =
       LoadLibraryExW(L"vulkan-1.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
   if (!loader_)
@@ -237,7 +248,7 @@ void Context::initialize(const std::filesystem::path &shaders) {
     throw std::runtime_error("GPU limits do not support the GS compute layout");
   std::fprintf(
       stderr,
-      "[vulkan] device=%s api=%u.%u.%u; direct compute, scale=1, synchronous\n",
+      "[vulkan] device=%s api=%u.%u.%u; direct compute, scale=1\n",
       properties.deviceName, VK_VERSION_MAJOR(properties.apiVersion),
       VK_VERSION_MINOR(properties.apiVersion),
       VK_VERSION_PATCH(properties.apiVersion));
@@ -257,6 +268,10 @@ void Context::initialize(const std::filesystem::path &shaders) {
   }
   if (!found)
     throw std::runtime_error("No Vulkan graphics/compute queue");
+  std::fprintf(stderr, "[vulkan] queue family %u: graphics=%d compute=%d\n",
+               queue_family_,
+               (families[queue_family_].queueFlags & VK_QUEUE_GRAPHICS_BIT) ? 1 : 0,
+               (families[queue_family_].queueFlags & VK_QUEUE_COMPUTE_BIT) ? 1 : 0);
   const float priority = 1.0f;
   VkDeviceQueueCreateInfo queue_info{};
   queue_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -270,6 +285,10 @@ void Context::initialize(const std::filesystem::path &shaders) {
   VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance{};
   maintenance.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
+  VkPhysicalDeviceTimelineSemaphoreFeatures timeline_features{};
+  timeline_features.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+  maintenance.pNext = &timeline_features;
   VkPhysicalDeviceFeatures2 queried{};
   queried.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
   queried.pNext = &maintenance;
@@ -277,6 +296,8 @@ void Context::initialize(const std::filesystem::path &shaders) {
   if (!maintenance.swapchainMaintenance1)
     throw std::runtime_error(
         "Vulkan pilot requires maintenance1 present fences");
+  if (!timeline_features.timelineSemaphore)
+    throw std::runtime_error("Vulkan pilot requires timeline semaphores");
   const char *device_extensions[] = {"VK_KHR_swapchain",
                                      "VK_KHR_swapchain_maintenance1"};
   VkDeviceCreateInfo device_info{};
@@ -301,17 +322,39 @@ void Context::initialize(const std::filesystem::path &shaders) {
   pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
   check(vkCreateCommandPool(device_, &pool_info, nullptr, &command_pool_),
         "command pool");
+  VkSemaphoreTypeCreateInfo timeline_type{};
+  timeline_type.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
+  timeline_type.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
+  timeline_type.initialValue = 0;
+  VkSemaphoreCreateInfo timeline_info{};
+  timeline_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+  timeline_info.pNext = &timeline_type;
+  check(vkCreateSemaphore(device_, &timeline_info, nullptr, &timeline_),
+        "GS timeline semaphore");
+  std::array<VkCommandBuffer, kSlotCount> command_buffers{};
   VkCommandBufferAllocateInfo commands{};
   commands.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   commands.commandPool = command_pool_;
   commands.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  commands.commandBufferCount = 1;
-  check(vkAllocateCommandBuffers(device_, &commands, &command_),
-        "command buffer");
+  commands.commandBufferCount = kSlotCount;
+  check(vkAllocateCommandBuffers(device_, &commands, command_buffers.data()),
+        "command buffers");
+  VkSemaphoreCreateInfo semaphore{};
+  semaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
   VkFenceCreateInfo fence_info{};
   fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-  check(vkCreateFence(device_, &fence_info, nullptr, &fence_),
-        "submission fence");
+  for (std::uint32_t index = 0; index < kSlotCount; ++index) {
+    slots_[index].command = command_buffers[index];
+    check(vkCreateSemaphore(device_, &semaphore, nullptr,
+                            &slots_[index].acquired),
+          "acquire semaphore");
+    check(vkCreateSemaphore(device_, &semaphore, nullptr,
+                            &slots_[index].rendered),
+          "present semaphore");
+    check(vkCreateFence(device_, &fence_info, nullptr,
+                        &slots_[index].present_fence),
+          "presentation fence");
+  }
   std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
   for (std::uint32_t index = 0; index < bindings.size(); ++index) {
     bindings[index].binding = index;
@@ -336,23 +379,28 @@ void Context::initialize(const std::filesystem::path &shaders) {
                                &pipeline_layout_),
         "pipeline layout");
   VkDescriptorPoolSize sizes[] = {
-      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7},
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1}};
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7 * kSlotCount},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, kSlotCount}};
   VkDescriptorPoolCreateInfo descriptors{};
   descriptors.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  descriptors.maxSets = 1;
+  descriptors.maxSets = kSlotCount;
   descriptors.poolSizeCount = 2;
   descriptors.pPoolSizes = sizes;
   check(
       vkCreateDescriptorPool(device_, &descriptors, nullptr, &descriptor_pool_),
       "descriptor pool");
+  std::array<VkDescriptorSetLayout, kSlotCount> layouts{};
+  layouts.fill(descriptor_layout_);
+  std::array<VkDescriptorSet, kSlotCount> sets{};
   VkDescriptorSetAllocateInfo allocation{};
   allocation.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
   allocation.descriptorPool = descriptor_pool_;
-  allocation.descriptorSetCount = 1;
-  allocation.pSetLayouts = &descriptor_layout_;
-  check(vkAllocateDescriptorSets(device_, &allocation, &descriptor_set_),
-        "descriptor set");
+  allocation.descriptorSetCount = kSlotCount;
+  allocation.pSetLayouts = layouts.data();
+  check(vkAllocateDescriptorSets(device_, &allocation, sets.data()),
+        "descriptor sets");
+  for (std::uint32_t index = 0; index < kSlotCount; ++index)
+    slots_[index].descriptors = sets[index];
   const char *entries[] = {"upload",    "copy_read", "copy_write",
                            "load_clut", "display",   "raster",
                            "resolve",   "snapshot",  "decode"};
@@ -389,6 +437,14 @@ void Context::initialize(const std::filesystem::path &shaders) {
     vkDestroyShaderModule(device_, module, nullptr);
     check(result, entries[index]);
   }
+  ring_ = std::make_unique<SubmitRing>(
+      kSlotCount, [this] { return completed_submission(); },
+      [this](std::uint64_t value) { wait_timeline(value); });
+  for (auto &slot : slots_)
+    ensure_slot_capacity(slot, 0, 64 * 1024);
+  std::fprintf(stderr, "[vulkan] GS submissions %s, ring of %u slots\n",
+               synchronous_ ? "synchronous (GT4_GS_SYNC=1)" : "asynchronous",
+               kSlotCount);
 }
 
 Buffer *Context::create_buffer(std::uint64_t bytes) {
@@ -464,6 +520,7 @@ void Context::read(Buffer *buffer, std::uint64_t offset, void *destination,
   GT4_PERF_SCOPE(gt4::perf::Category::gs_upload);
   if (!buffer || offset > buffer->size || bytes > buffer->size - offset)
     throw std::runtime_error("Vulkan buffer read outside allocation");
+  wait_submissions();
   if (bytes)
     std::memcpy(destination,
                 static_cast<std::uint8_t *>(buffer->mapped) + offset,
@@ -474,17 +531,102 @@ void Context::read(Buffer *buffer, std::uint64_t offset, void *destination,
 }
 
 void Context::bind_buffers(const std::array<Buffer *, 8> &buffers) {
-  parameter_bytes_ = buffers[2] ? buffers[2]->size : 0;
+  for (std::uint32_t index = 0; index < buffers.size(); ++index) {
+    // Indices 2 and 3 may be null: submit() never reads them.
+    if (!buffers[index] && (index == 2 || index == 3)) {
+      shared_[index] = nullptr;
+      continue;
+    }
+    if (!buffers[index] || buffers[index]->size < 256 ||
+        buffers[index]->size > limits_.maxStorageBufferRange)
+      throw std::runtime_error("GS descriptor buffer exceeds Vulkan limits");
+    shared_[index] = buffers[index];
+  }
+}
+
+void Context::memory_barrier(VkCommandBuffer command,
+                             VkPipelineStageFlags source,
+                             VkPipelineStageFlags destination,
+                             VkAccessFlags writes, VkAccessFlags reads) {
+  VkMemoryBarrier barrier{};
+  barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+  barrier.srcAccessMask = writes;
+  barrier.dstAccessMask = reads;
+  vkCmdPipelineBarrier(command, source, destination, 0, 1, &barrier, 0,
+                       nullptr, 0, nullptr);
+}
+
+std::uint64_t Context::completed_submission() {
+  std::uint64_t value = 0;
+  check(vkGetSemaphoreCounterValue(device_, timeline_, &value),
+        "read GS timeline");
+  return value;
+}
+
+void Context::wait_timeline(std::uint64_t value) {
+  GT4_PERF_SCOPE(gt4::perf::Category::gs_wait);
+  VkSemaphoreWaitInfo info{};
+  info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO;
+  info.semaphoreCount = 1;
+  info.pSemaphores = &timeline_;
+  info.pValues = &value;
+  check(vkWaitSemaphores(device_, &info, UINT64_MAX), "wait GS timeline");
+}
+
+void Context::wait_submissions() { ring_->drain(); }
+
+void Context::wait_presentation(Slot &slot) {
+  if (!slot.presented)
+    return;
+  GT4_PERF_SCOPE(gt4::perf::Category::presentation_wait);
+  check(vkWaitForFences(device_, 1, &slot.present_fence, VK_TRUE,
+                        UINT64_MAX),
+        "wait presentation completion");
+  slot.presented = false;
+}
+
+void Context::wait_all_presentations() {
+  for (auto &slot : slots_)
+    wait_presentation(slot);
+}
+
+void Context::ensure_slot_capacity(Slot &slot, std::uint64_t arena_bytes,
+                                   std::uint64_t parameter_bytes) {
+  constexpr std::uint64_t kChunk = 4ull << 20;
+  const std::uint64_t data_bytes = std::max<std::uint64_t>(arena_bytes, 16);
+  if (!slot.data || slot.data->size < data_bytes) {
+    const std::uint64_t current = slot.data ? slot.data->size : 0;
+    const std::uint64_t rounded = (data_bytes + kChunk - 1) & ~(kChunk - 1);
+    const std::uint64_t grown = std::max<std::uint64_t>(current * 2, rounded);
+    destroy_buffer(slot.data);
+    slot.data = create_buffer(grown);
+  }
+  const std::uint64_t parameter_need =
+      std::max<std::uint64_t>(parameter_bytes, 256);
+  if (!slot.parameters || slot.parameters->size < parameter_need) {
+    const std::uint64_t current = slot.parameters ? slot.parameters->size : 0;
+    const std::uint64_t grown = std::max<std::uint64_t>(
+        current * 2, std::max<std::uint64_t>(parameter_need, 64 * 1024));
+    destroy_buffer(slot.parameters);
+    slot.parameters = create_buffer(grown);
+  }
+}
+
+void Context::update_descriptors(const Slot &slot, bool bound_buffers) {
   std::array<VkDescriptorBufferInfo, 8> information{};
   std::array<VkWriteDescriptorSet, 8> writes{};
-  for (std::uint32_t index = 0; index < buffers.size(); ++index) {
-    if (!buffers[index] || buffers[index]->size < 256 ||
-        (index != 2 && buffers[index]->size > limits_.maxStorageBufferRange))
+  for (std::uint32_t index = 0; index < writes.size(); ++index) {
+    Buffer *buffer = index == 2   ? (bound_buffers ? shared_[2] : slot.parameters)
+                     : index == 3 ? (bound_buffers ? shared_[3] : slot.data)
+                                  : shared_[index];
+    if (!buffer)
+      throw std::runtime_error("GS descriptor buffer is not bound");
+    if (index != 2 && buffer->size > limits_.maxStorageBufferRange)
       throw std::runtime_error("GS descriptor buffer exceeds Vulkan limits");
-    information[index].buffer = buffers[index]->handle;
-    information[index].range = index == 2 ? 256 : buffers[index]->size;
+    information[index].buffer = buffer->handle;
+    information[index].range = index == 2 ? 256 : buffer->size;
     writes[index].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[index].dstSet = descriptor_set_;
+    writes[index].dstSet = slot.descriptors;
     writes[index].dstBinding = index;
     writes[index].descriptorCount = 1;
     writes[index].pBufferInfo = &information[index];
@@ -496,61 +638,8 @@ void Context::bind_buffers(const std::array<Buffer *, 8> &buffers) {
                          writes.data(), 0, nullptr);
 }
 
-void Context::begin_commands() {
-  check(vkResetCommandBuffer(command_, 0), "reset command buffer");
-  VkCommandBufferBeginInfo begin{};
-  begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  check(vkBeginCommandBuffer(command_, &begin), "begin command buffer");
-}
-
-void Context::finish_commands(VkSemaphore wait, VkSemaphore signal) {
-  check(vkEndCommandBuffer(command_), "end command buffer");
-  check(vkResetFences(device_, 1, &fence_), "reset fence");
-  const VkPipelineStageFlags stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-  VkSubmitInfo submit{};
-  submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submit.commandBufferCount = 1;
-  submit.pCommandBuffers = &command_;
-  if (wait) {
-    submit.waitSemaphoreCount = 1;
-    submit.pWaitSemaphores = &wait;
-    submit.pWaitDstStageMask = &stage;
-  }
-  if (signal) {
-    submit.signalSemaphoreCount = 1;
-    submit.pSignalSemaphores = &signal;
-  }
-  check(vkQueueSubmit(queue_, 1, &submit, fence_), "queue submit");
-  {
-    GT4_PERF_SCOPE(gt4::perf::Category::gs_wait);
-    check(vkWaitForFences(device_, 1, &fence_, VK_TRUE, UINT64_MAX),
-          "wait submission fence");
-  }
-}
-
-void Context::memory_barrier(VkPipelineStageFlags source,
-                             VkPipelineStageFlags destination,
-                             VkAccessFlags writes, VkAccessFlags reads) {
-  VkMemoryBarrier barrier{};
-  barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-  barrier.srcAccessMask = writes;
-  barrier.dstAccessMask = reads;
-  vkCmdPipelineBarrier(command_, source, destination, 0, 1, &barrier, 0,
-                       nullptr, 0, nullptr);
-}
-
-void Context::execute(const Dispatch *commands, std::size_t count) {
-  GT4_PERF_SCOPE(gt4::perf::Category::gs_execute);
-  if (!count)
-    return;
-  begin_commands();
-  memory_barrier(VK_PIPELINE_STAGE_HOST_BIT |
-                     VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                 VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
-                 VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT |
-                     VK_ACCESS_SHADER_WRITE_BIT);
+void Context::validate_dispatches(const Dispatch *commands, std::size_t count,
+                                  std::uint64_t parameter_capacity) const {
   for (std::size_t index = 0; index < count; ++index) {
     const auto &dispatch = commands[index];
     if (dispatch.pipeline >= pipelines_.size() ||
@@ -558,13 +647,28 @@ void Context::execute(const Dispatch *commands, std::size_t count) {
         dispatch.y > limits_.maxComputeWorkGroupCount[1] ||
         static_cast<std::uint64_t>(dispatch.parameter) * 256 > UINT32_MAX ||
         static_cast<std::uint64_t>(dispatch.parameter) * 256 + 256 >
-            parameter_bytes_)
+            parameter_capacity)
       throw std::runtime_error(
           "Invalid GS Vulkan dispatch: pipeline=" +
           std::to_string(dispatch.pipeline) + " x=" +
           std::to_string(dispatch.x) + " y=" + std::to_string(dispatch.y) +
           " parameter=" + std::to_string(dispatch.parameter) +
-          " parameter_bytes=" + std::to_string(parameter_bytes_));
+          " parameter_bytes=" + std::to_string(parameter_capacity));
+  }
+}
+
+void Context::record_dispatches(VkCommandBuffer command,
+                                VkDescriptorSet descriptors,
+                                const Dispatch *commands, std::size_t count) {
+  // Host uploads of this slot are visible to the shaders.
+  memory_barrier(command,
+                 VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                 VK_ACCESS_HOST_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT,
+                 VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT |
+                     VK_ACCESS_SHADER_WRITE_BIT);
+  for (std::size_t index = 0; index < count; ++index) {
+    const auto &dispatch = commands[index];
     // Vulkan permits zero workgroups; fully clipped batches do no shader work.
     if ((!dispatch.x || !dispatch.y) && zero_dispatches_++ == 0)
       std::fprintf(stderr,
@@ -573,24 +677,24 @@ void Context::execute(const Dispatch *commands, std::size_t count) {
                    dispatch.pipeline, dispatch.x, dispatch.y,
                    dispatch.parameter);
     const std::uint32_t offset = dispatch.parameter * 256;
-    vkCmdBindPipeline(command_, VK_PIPELINE_BIND_POINT_COMPUTE,
+    vkCmdBindPipeline(command, VK_PIPELINE_BIND_POINT_COMPUTE,
                       pipelines_[dispatch.pipeline]);
-    vkCmdBindDescriptorSets(command_, VK_PIPELINE_BIND_POINT_COMPUTE,
-                            pipeline_layout_, 0, 1, &descriptor_set_, 1,
-                            &offset);
-    vkCmdDispatch(command_, dispatch.x, dispatch.y, 1);
+    vkCmdBindDescriptorSets(command, VK_PIPELINE_BIND_POINT_COMPUTE,
+                            pipeline_layout_, 0, 1, &descriptors, 1, &offset);
+    vkCmdDispatch(command, dispatch.x, dispatch.y, 1);
 #if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
     gt4::perf::Probe::shared().dispatch(std::uint64_t(dispatch.x) * dispatch.y);
 #endif
-    memory_barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+    // Every dispatch fully orders the next one (kept deliberately).
+    memory_barrier(command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                    VK_ACCESS_SHADER_WRITE_BIT,
                    VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT);
   }
-  memory_barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                 VK_PIPELINE_STAGE_HOST_BIT, VK_ACCESS_SHADER_WRITE_BIT,
-                 VK_ACCESS_HOST_READ_BIT);
-  finish_commands();
+  memory_barrier(command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_HOST_BIT,
+                 VK_ACCESS_SHADER_WRITE_BIT,
+                 VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_HOST_READ_BIT);
 }
 
 void Context::wait_idle() {
@@ -618,16 +722,6 @@ void Context::attach_window(HWND window, std::uint32_t width,
   if (!supported)
     throw std::runtime_error(
         "Selected GPU queue cannot present to this Win32 surface");
-  VkSemaphoreCreateInfo semaphore{};
-  semaphore.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-  check(vkCreateSemaphore(device_, &semaphore, nullptr, &acquired_),
-        "acquire semaphore");
-  check(vkCreateSemaphore(device_, &semaphore, nullptr, &rendered_),
-        "present semaphore");
-  VkFenceCreateInfo fence_info{};
-  fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-  check(vkCreateFence(device_, &fence_info, nullptr, &present_fence_),
-        "presentation fence");
   rebuild_swapchain();
 }
 
@@ -641,6 +735,7 @@ void Context::rebuild_swapchain() {
   if (!window_width_ || !window_height_)
     return;
   wait_idle();
+  wait_all_presentations();
   VkSurfaceCapabilitiesKHR capabilities{};
   check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_, surface_,
                                                   &capabilities),
@@ -705,13 +800,23 @@ void Context::rebuild_swapchain() {
   info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
   info.imageExtent = extent_;
   info.imageArrayLayers = 1;
+  // Overlay layers (RivaTuner, Steam) draw into swapchain images, so request
+  // color-attachment use whenever the surface supports it. Transfer is kept.
   info.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  if (capabilities.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) {
+    info.imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  } else {
+    std::fprintf(stderr, "[vulkan] surface lacks COLOR_ATTACHMENT usage; "
+                         "overlay layers may not draw\n");
+  }
   info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   info.preTransform = capabilities.currentTransform;
   info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   info.presentMode = VK_PRESENT_MODE_FIFO_KHR;
   info.clipped = VK_TRUE;
   info.oldSwapchain = swapchain_;
+  // Implicit overlay layers may add bits to the create info, so log the request.
+  const VkImageUsageFlags requested_usage = info.imageUsage;
   VkSwapchainKHR next = VK_NULL_HANDLE;
   check(vkCreateSwapchainKHR(device_, &info, nullptr, &next),
         "create swapchain");
@@ -720,9 +825,11 @@ void Context::rebuild_swapchain() {
   swapchain_ = next;
   resized_ = false;
   std::fprintf(stderr,
-               "[vulkan] Win32 swapchain %ux%u, format=%d; GPU blit, no "
-               "temporal field blend\n",
-               extent_.width, extent_.height, static_cast<int>(format));
+               "[vulkan] Win32 swapchain %ux%u, format=%d, requested usage=0x%x "
+               "(surface supports 0x%x); GPU blit, no temporal field blend\n",
+               extent_.width, extent_.height, static_cast<int>(format),
+               static_cast<unsigned>(requested_usage),
+               static_cast<unsigned>(capabilities.supportedUsageFlags));
 }
 
 void Context::destroy_image() {
@@ -734,8 +841,8 @@ void Context::destroy_image() {
   display_memory_ = VK_NULL_HANDLE;
 }
 
-void Context::image_barrier(VkImage image, VkImageLayout old_layout,
-                            VkImageLayout new_layout,
+void Context::image_barrier(VkCommandBuffer command, VkImage image,
+                            VkImageLayout old_layout, VkImageLayout new_layout,
                             VkPipelineStageFlags source,
                             VkPipelineStageFlags destination,
                             VkAccessFlags writes, VkAccessFlags reads) {
@@ -749,105 +856,84 @@ void Context::image_barrier(VkImage image, VkImageLayout old_layout,
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = image;
   barrier.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-  vkCmdPipelineBarrier(command_, source, destination, 0, 0, nullptr, 0, nullptr,
+  vkCmdPipelineBarrier(command, source, destination, 0, 0, nullptr, 0, nullptr,
                        1, &barrier);
 }
 
-bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
-  GT4_PERF_SCOPE(gt4::perf::Category::presentation);
-  if (!window_ || !window_width_ || !window_height_)
-    return false;
-  if (resized_ || !swapchain_)
-    rebuild_swapchain();
-  if (!extent_.width || !extent_.height)
-    return false;
-  if (!rgba || !width || !height ||
-      static_cast<std::uint64_t>(width) * height * 4 > rgba->size)
-    throw std::runtime_error("Invalid native Vulkan frame size");
-  if (width != image_width_ || height != image_height_) {
-    wait_idle();
-    destroy_image();
-    VkImageCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    info.imageType = VK_IMAGE_TYPE_2D;
-    info.format = VK_FORMAT_R8G8B8A8_UNORM;
-    info.extent = {width, height, 1};
-    info.mipLevels = 1;
-    info.arrayLayers = 1;
-    info.samples = VK_SAMPLE_COUNT_1_BIT;
-    info.tiling = VK_IMAGE_TILING_OPTIMAL;
-    info.usage =
-        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    check(vkCreateImage(device_, &info, nullptr, &display_image_),
-          "display image");
-    VkMemoryRequirements requirements{};
-    vkGetImageMemoryRequirements(device_, display_image_, &requirements);
-    VkMemoryAllocateInfo allocation{};
-    allocation.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocation.allocationSize = requirements.size;
-    allocation.memoryTypeIndex =
-        memory_type(memory_properties_, requirements.memoryTypeBits,
-                    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    check(vkAllocateMemory(device_, &allocation, nullptr, &display_memory_),
-          "display image memory");
-    check(vkBindImageMemory(device_, display_image_, display_memory_, 0),
-          "bind display image");
-    image_width_ = width;
-    image_height_ = height;
-  }
-  std::uint32_t selected = 0;
-  VkResult acquired;
-  {
-    GT4_PERF_SCOPE(gt4::perf::Category::acquire_wait);
-    acquired = vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX,
-                                     acquired_, VK_NULL_HANDLE, &selected);
-  }
-  if (acquired == VK_ERROR_OUT_OF_DATE_KHR) {
-    resized_ = true;
-    return false;
-  }
-  if (acquired != VK_SUBOPTIMAL_KHR)
-    check(acquired, "acquire swapchain image");
-  std::uint32_t count = 0;
-  check(vkGetSwapchainImagesKHR(device_, swapchain_, &count, nullptr),
-        "swapchain images");
-  std::vector<VkImage> images(count);
-  check(vkGetSwapchainImagesKHR(device_, swapchain_, &count, images.data()),
-        "swapchain images");
-  if (selected >= images.size())
-    throw std::runtime_error("Invalid acquired swapchain image index");
-  begin_commands();
-  memory_barrier(VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
-                     VK_PIPELINE_STAGE_HOST_BIT,
+void Context::ensure_display_image(std::uint32_t width, std::uint32_t height) {
+  if (width == image_width_ && height == image_height_)
+    return;
+  // The display image is shared by every submission; drain them before replacing it.
+  wait_idle();
+  destroy_image();
+  VkImageCreateInfo info{};
+  info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  info.imageType = VK_IMAGE_TYPE_2D;
+  info.format = VK_FORMAT_R8G8B8A8_UNORM;
+  info.extent = {width, height, 1};
+  info.mipLevels = 1;
+  info.arrayLayers = 1;
+  info.samples = VK_SAMPLE_COUNT_1_BIT;
+  info.tiling = VK_IMAGE_TILING_OPTIMAL;
+  info.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  check(vkCreateImage(device_, &info, nullptr, &display_image_),
+        "display image");
+  VkMemoryRequirements requirements{};
+  vkGetImageMemoryRequirements(device_, display_image_, &requirements);
+  VkMemoryAllocateInfo allocation{};
+  allocation.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  allocation.allocationSize = requirements.size;
+  allocation.memoryTypeIndex =
+      memory_type(memory_properties_, requirements.memoryTypeBits,
+                  VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  check(vkAllocateMemory(device_, &allocation, nullptr, &display_memory_),
+        "display image memory");
+  check(vkBindImageMemory(device_, display_image_, display_memory_, 0),
+        "bind display image");
+  image_width_ = width;
+  image_height_ = height;
+}
+
+void Context::record_presentation(VkCommandBuffer command,
+                                  const Submission &submission,
+                                  VkImage target) {
+  const std::uint32_t width = submission.present_width;
+  const std::uint32_t height = submission.present_height;
+  memory_barrier(command, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                              VK_PIPELINE_STAGE_HOST_BIT,
                  VK_PIPELINE_STAGE_TRANSFER_BIT,
                  VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_HOST_WRITE_BIT,
                  VK_ACCESS_TRANSFER_READ_BIT);
   // Contents are replaced completely; UNDEFINED deliberately discards the
   // previous frame.
-  image_barrier(
-      display_image_, VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_TRANSFER_BIT, 0, VK_ACCESS_TRANSFER_WRITE_BIT);
+  image_barrier(command, display_image_, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                VK_ACCESS_TRANSFER_WRITE_BIT);
   VkBufferImageCopy copy{};
   copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
   copy.imageExtent = {width, height, 1};
-  vkCmdCopyBufferToImage(command_, rgba->handle, display_image_,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-  image_barrier(display_image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  vkCmdCopyBufferToImage(command, submission.present_source->handle,
+                         display_image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         1, &copy);
+  image_barrier(command, display_image_, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_READ_BIT);
-  const VkImage target = images[selected];
-  image_barrier(
-      target, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
-      VK_ACCESS_TRANSFER_WRITE_BIT);
+  // The acquire semaphore is waited at TRANSFER; the transition must be ordered after it.
+  image_barrier(command, target, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                VK_ACCESS_TRANSFER_WRITE_BIT);
   const VkClearColorValue black{{0.0f, 0.0f, 0.0f, 1.0f}};
   const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
-  vkCmdClearColorImage(command_, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  vkCmdClearColorImage(command, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                        &black, 1, &range);
-  memory_barrier(VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                 VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_TRANSFER_WRITE_BIT);
+  memory_barrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                 VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
+                 VK_ACCESS_TRANSFER_WRITE_BIT);
   const auto destination =
       presentation_rect(extent_.width, extent_.height, aspect_);
   VkImageBlit blit{};
@@ -859,47 +945,179 @@ bool Context::present(Buffer *rgba, std::uint32_t width, std::uint32_t height) {
   blit.dstOffsets[1] = {static_cast<int>(destination.left + destination.width),
                         static_cast<int>(destination.top + destination.height),
                         1};
-  vkCmdBlitImage(command_, display_image_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+  vkCmdBlitImage(command, display_image_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
                  VK_FILTER_NEAREST);
-  image_barrier(target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+  // The rendered semaphore signals at ALL_COMMANDS, so presentation follows this transition.
+  image_barrier(command, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                 VK_ACCESS_TRANSFER_WRITE_BIT, 0);
-  finish_commands(acquired_, rendered_);
-  VkPresentInfoKHR present_info{};
-  present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-  present_info.waitSemaphoreCount = 1;
-  present_info.pWaitSemaphores = &rendered_;
-  present_info.swapchainCount = 1;
-  present_info.pSwapchains = &swapchain_;
-  present_info.pImageIndices = &selected;
-  VkSwapchainPresentFenceInfoKHR completion{};
-  completion.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR;
-  completion.swapchainCount = 1;
-  completion.pFences = &present_fence_;
-  present_info.pNext = &completion;
-  check(vkResetFences(device_, 1, &present_fence_), "reset present fence");
-  const auto result = vkQueuePresentKHR(queue_, &present_info);
-  if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR &&
-      result != VK_ERROR_OUT_OF_DATE_KHR && result != VK_ERROR_SURFACE_LOST_KHR)
-    check(result, "present submission");
-  // shortcut: wait for actual presentation lifetime, qualify overlap later.
+}
+
+bool Context::acquire_image(Slot &slot, const Submission &submission,
+                            VkImage &target, std::uint32_t &image) {
+  if (!window_ || !window_width_ || !window_height_)
+    return false;
+  if (resized_ || !swapchain_)
+    rebuild_swapchain();
+  if (!extent_.width || !extent_.height)
+    return false;
+  const std::uint32_t width = submission.present_width;
+  const std::uint32_t height = submission.present_height;
+  if (!submission.present_source || !width || !height ||
+      static_cast<std::uint64_t>(width) * height * 4 >
+          submission.present_source->size)
+    throw std::runtime_error("Invalid native Vulkan frame size");
+  ensure_display_image(width, height);
+  std::uint32_t count = 0;
+  check(vkGetSwapchainImagesKHR(device_, swapchain_, &count, nullptr),
+        "swapchain images");
+  std::vector<VkImage> images(count);
+  check(vkGetSwapchainImagesKHR(device_, swapchain_, &count, images.data()),
+        "swapchain images");
+  VkResult acquired;
   {
-    GT4_PERF_SCOPE(gt4::perf::Category::presentation_wait);
-    check(vkWaitForFences(device_, 1, &present_fence_, VK_TRUE, UINT64_MAX),
-          "wait presentation completion");
+    GT4_PERF_SCOPE(gt4::perf::Category::acquire_wait);
+    acquired = vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX,
+                                     slot.acquired, VK_NULL_HANDLE, &image);
   }
-  if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR ||
-      acquired == VK_SUBOPTIMAL_KHR)
+  if (acquired == VK_ERROR_OUT_OF_DATE_KHR) {
+    resized_ = true;
+    return false;
+  }
+  if (acquired == VK_SUBOPTIMAL_KHR)
     resized_ = true;
   else
-    check(result, "present frame");
-  ++presentations_;
-#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
-  gt4::perf::Probe::shared().presentation(std::uint64_t(width) * height * 4);
-#endif
+    check(acquired, "acquire swapchain image");
+  if (image >= images.size())
+    throw std::runtime_error("Invalid acquired swapchain image index");
+  target = images[image];
   return true;
+}
+
+void Context::execute(const Dispatch *commands, std::size_t count) {
+  Submission submission;
+  submission.commands = commands;
+  submission.command_count = count;
+  submission.use_bound_buffers = true;
+  submit(submission);
+}
+
+std::uint64_t Context::submit(const Submission &submission, bool *presented) {
+  if (presented)
+    *presented = false;
+  if (!submission.command_count && !submission.present_source)
+    return 0;
+  if (submission.command_count && !submission.commands)
+    throw std::runtime_error("GS submission has no dispatch list");
+  const std::uint64_t id = ring_->next_id();
+  // Blocks only while the submission that used this slot is still in flight.
+  Slot &slot = slots_[ring_->reserve()];
+  wait_presentation(slot);
+  if (!submission.use_bound_buffers) {
+    ensure_slot_capacity(slot, submission.arena_bytes,
+                         submission.parameter_bytes);
+    if (submission.arena_bytes)
+      write(slot.data, 0, submission.arena, submission.arena_bytes);
+    if (submission.parameter_bytes)
+      write(slot.parameters, 0, submission.parameters,
+            submission.parameter_bytes);
+  }
+  Buffer *parameters =
+      submission.use_bound_buffers ? shared_[2] : slot.parameters;
+  if (!parameters)
+    throw std::runtime_error("GS dispatch parameters are not bound");
+  // Validate before acquiring or signaling anything: a throw after the
+  // acquire semaphore is signaled would leave it unbalanced.
+  validate_dispatches(submission.commands, submission.command_count,
+                      parameters->size);
+  update_descriptors(slot, submission.use_bound_buffers);
+  if (submission.present_source && id > kMaxPresentsInFlight)
+    wait_presentation(
+        slots_[ring_->slot_for(id - kMaxPresentsInFlight)]);
+  VkImage target = VK_NULL_HANDLE;
+  std::uint32_t image = 0;
+  const bool presenting =
+      submission.present_source && acquire_image(slot, submission, target, image);
+  GT4_PERF_SCOPE(gt4::perf::Category::gs_execute);
+  check(vkResetCommandBuffer(slot.command, 0), "reset GS command buffer");
+  VkCommandBufferBeginInfo begin{};
+  begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  check(vkBeginCommandBuffer(slot.command, &begin), "begin GS command buffer");
+  record_dispatches(slot.command, slot.descriptors, submission.commands,
+                    submission.command_count);
+  if (presenting)
+    record_presentation(slot.command, submission, target);
+  check(vkEndCommandBuffer(slot.command), "end GS command buffer");
+  // Submissions share one queue, but Vulkan orders separate submissions only
+  // through synchronization. Each waits for its predecessor's timeline value.
+  VkSemaphore waits[2] = {timeline_, slot.acquired};
+  VkPipelineStageFlags wait_stages[2] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                                         VK_PIPELINE_STAGE_TRANSFER_BIT};
+  std::uint64_t wait_values[2] = {id - 1, 0};
+  VkSemaphore signals[2] = {timeline_, slot.rendered};
+  std::uint64_t signal_values[2] = {id, 0};
+  const std::uint32_t wait_count = presenting ? 2 : 1;
+  VkTimelineSemaphoreSubmitInfo timeline{};
+  timeline.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+  timeline.waitSemaphoreValueCount = wait_count;
+  timeline.pWaitSemaphoreValues = wait_values;
+  timeline.signalSemaphoreValueCount = wait_count;
+  timeline.pSignalSemaphoreValues = signal_values;
+  VkSubmitInfo info{};
+  info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  info.pNext = &timeline;
+  info.waitSemaphoreCount = wait_count;
+  info.pWaitSemaphores = waits;
+  info.pWaitDstStageMask = wait_stages;
+  info.commandBufferCount = 1;
+  info.pCommandBuffers = &slot.command;
+  info.signalSemaphoreCount = wait_count;
+  info.pSignalSemaphores = signals;
+  check(vkQueueSubmit(queue_, 1, &info, VK_NULL_HANDLE), "queue GS submit");
+  if (ring_->commit() != id)
+    throw std::runtime_error("GS submission ids out of order");
+  if (presenting) {
+    check(vkResetFences(device_, 1, &slot.present_fence),
+          "reset presentation fence");
+    VkPresentInfoKHR present_info{};
+    present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    present_info.waitSemaphoreCount = 1;
+    present_info.pWaitSemaphores = &slot.rendered;
+    present_info.swapchainCount = 1;
+    present_info.pSwapchains = &swapchain_;
+    present_info.pImageIndices = &image;
+    VkSwapchainPresentFenceInfoKHR completion{};
+    completion.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR;
+    completion.swapchainCount = 1;
+    completion.pFences = &slot.present_fence;
+    present_info.pNext = &completion;
+    const auto result = vkQueuePresentKHR(queue_, &present_info);
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR &&
+        result != VK_ERROR_OUT_OF_DATE_KHR &&
+        result != VK_ERROR_SURFACE_LOST_KHR)
+      check(result, "present submission");
+    // The fence signals when this presentation completes, including failures.
+    slot.presented = true;
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR)
+      resized_ = true;
+    else if (result != VK_SUCCESS)
+      check(result, "present frame");
+    ++presentations_;
+#if defined(GT4_PERF_PROBE) && !defined(GT4_PERF_FRAME_ONLY)
+    gt4::perf::Probe::shared().presentation(
+        std::uint64_t(submission.present_width) * submission.present_height * 4);
+#endif
+    if (presented)
+      *presented = true;
+  }
+  if (synchronous_) {
+    wait_timeline(id);
+    wait_presentation(slot);
+  }
+  return id;
 }
 
 } // namespace gt4::vulkan

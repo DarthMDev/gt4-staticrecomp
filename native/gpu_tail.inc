@@ -102,8 +102,7 @@ bool present(const DisplaySource& source) {
     const auto parameters = push_params({source.fbp, source.fbw, source.psm, source.dbx, source.dby,
                                         source.width, source.height, source.halved ? 1u : 0u});
     g_commands.push_back({kDisplay, (source.width + 7) / 8, (source.height + 7) / 8, parameters});
-    submit();
-    return g_vulkan.present(g_scratch, source.width, source.height);
+    return submit(source.width, source.height);
 }
 
 double busy_ms() { throw std::runtime_error("Native Vulkan GPU busy time is not measured"); }

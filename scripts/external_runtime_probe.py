@@ -27,7 +27,12 @@ PERF_PROFILES = {
                    'private/slice145-performance-pair/frame-only/build/gt4vulkan.exe'),
     # VU1 AOT candidate: generated VU1 programs in place of the interpreter (O1c).
     'vu1-aot': ('slice151-vu1-aot.json', 'private/slice151-vu1-aot-build/build/gt4vulkan.exe'),
+    # O2 candidate: VU1 AOT plus asynchronous GS submission (GT4_GS_SYNC=1 restores the synchronous path).
+    'gs-async': ('slice152-gs-async.json', 'private/slice152-gs-async-build/build/gt4vulkan.exe'),
 }
+GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
+# Manifests whose binaries accept the VU1 AOT verification and interpreter options.
+VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST)
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -52,7 +57,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -187,7 +192,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('VU1 recording requires the qualified VU1 record manifest')
     if is_vu1_manifest and not vu1_record:
         raise ValueError('The VU1 record manifest is only valid with VU1 recording')
-    is_aot_manifest = runtime_manifest == (runtime_workspace / 'docs/inputs' / VU1_AOT_MANIFEST).resolve()
+    is_aot_manifest = runtime_manifest in {(runtime_workspace / 'docs/inputs' / name).resolve() for name in VU1_AOT_MANIFESTS}
     if (vu1_verify or vu1_interpret_only) and (not performance or not is_aot_manifest):
         raise ValueError('VU1 AOT verification and interpret-only require the qualified VU1 AOT manifest')
     if vu1_verify < 0 or (vu1_verify and vu1_interpret_only):
@@ -281,6 +286,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         result['measurement_mode'] = runtime_evidence.get('measurement_mode', 'detailed')
         result['vulkan_loader_environment'] = {
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
+    if 'GT4_GS_SYNC' in environment:
+        result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     if capture_shapes:
         environment['GT4_OBSERVATION_OUTPUT'] = str(run_directory / 'shape-capture.json')
         result['shape_capture_path'] = environment['GT4_OBSERVATION_OUTPUT']

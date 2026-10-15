@@ -41,18 +41,23 @@ def prepare(output, assets_root=None):
                              '#include "native_vulkan.hpp"\n#include <stdexcept>')
     source = source.replace('extern const char kGsShader[];\nextern const char kBlitShader[];\n', '')
     globals_text = '''gt4::vulkan::Context g_vulkan;
-gt4::vulkan::Buffer *g_vram = nullptr, *g_tables = nullptr, *g_params = nullptr;
-gt4::vulkan::Buffer *g_data = nullptr, *g_clut = nullptr, *g_scratch = nullptr, *g_decoded = nullptr;
+gt4::vulkan::Buffer *g_vram = nullptr, *g_tables = nullptr;
+gt4::vulkan::Buffer *g_clut = nullptr, *g_scratch = nullptr, *g_decoded = nullptr;
 std::uint32_t g_scale = 1, g_copy_words = 2048u * 2048u, g_field_words = 1u << 19;
 bool g_rendered[512] = {};
 bool g_decode = true;
-std::uint32_t g_decoded_used = 0;
-std::uint64_t g_params_size = 0, g_data_size = 0;'''
+std::uint32_t g_decoded_used = 0;'''
     source = replace_section(source, 'WGPUInstance g_instance', 'struct Command {', globals_text)
     source = replace_section(source, 'struct CommandInfo {', 'std::vector<Command> g_commands;', '')
     source = source.replace('WGPUStringView view(const char *s) { return WGPUStringView{s, WGPU_STRLEN}; }\n', '')
     source = source.replace('WGPUBuffer g_cache = nullptr;', 'gt4::vulkan::Buffer* g_cache = nullptr;')
     source = source.replace('wgpuQueueWriteBuffer(g_queue, g_cache,', 'g_vulkan.write(g_cache,')
+    # Asynchronous submission: an entry may be overwritten only after the submission that last used it completed.
+    guard_old = 'if (front.used == g_serial) return false;'
+    guard_new = 'if (front.used > g_vulkan.completed_submission()) return false;'
+    if source.count(guard_old) != 1:
+        raise ValueError('Cache eviction guard anchor changed in the donor source')
+    source = source.replace(guard_old, guard_new)
     source = replace_section(source, 'void note_raster(', 'void flush_batch()', '')
     source = source.replace('    note_raster(prims, tiles, total, snapshot);\n', '')
     source = source.replace('const std::uint32_t snapshot = snapshot_batch(prims, snapshot_lo, snapshot_hi);',

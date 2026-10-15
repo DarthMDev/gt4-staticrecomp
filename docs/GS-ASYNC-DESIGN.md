@@ -77,3 +77,72 @@ The donor protocol exists (`gs.cpp:985-1004`, back-pressure of 2 frames at
 VBlank async + ring 5-8 of 10.8 ms; merged display submit 0.5-1.5 ms; blit wait
 0.3-1 ms; deferred mid-frame downloads 0-3 ms depending on frequency. Overlap
 is bounded by actual GPU busy time.
+
+## Implementation status (slice 152)
+
+Confirmed (slice 152 build, executable pin in
+[slice152-gs-async.json](inputs/slice152-gs-async.json)): steps 1-3 of this design are
+implemented in the adapter, behind the performance profile `--mode gs-async`.
+Step 4 (render thread) is not implemented.
+
+- Ring of three slots (`native/native_vulkan.cpp`, `native/gs_submit_ring.hpp`). Each
+  slot owns a command buffer, descriptor set, `g_data`/`g_params`-equivalent upload
+  buffers, an acquire semaphore, a render-finished semaphore and a present fence.
+- One timeline semaphore orders submissions: each waits for its predecessor's value
+  at `ALL_COMMANDS` and signals its own id. Vulkan does not order separate submissions
+  by itself, so this chain is required for safe overlap.
+- Reuse is gated by completion: `SubmitRing::reserve` waits only when the submission
+  that last used the slot, three ids earlier, has not completed. CPU waits are at ring
+  full, readbacks (`read`), resize, state transfer and shutdown.
+- Presentation is recorded into the same slot submission as the display dispatch
+  (copy and blit). At most two presentations are pending; the older present fence is
+  waited before a third is issued.
+- Cache eviction guard: an entry may be overwritten only when its last submission has
+  completed (`SubmitRing::may_overwrite`, `completed_submission()`).
+- `GT4_GS_SYNC=1` restores a fully synchronous path: every submission and every present
+  is waited before returning. Any other value is refused.
+- Step 0 (overlay visibility): the swapchain requests `COLOR_ATTACHMENT` when the surface
+  supports it, with `TRANSFER_DST` kept. The present queue family is family 0 with
+  graphics and compute, which is what the surface-support query requires.
+
+Deviations from the design above:
+
+1. One display image instead of one per slot. The timeline chain already orders every
+   submission after its predecessor, so the shared display image is never used by two
+   submissions at once.
+2. Readbacks are still synchronous (the CPU waits for the timeline). The GPU-copy
+   staging of mid-frame downloads is not implemented, so the GS wait category is only
+   partly reduced. How often each readback occurs is not counted yet.
+3. Barriers after each dispatch stay full. Two swapchain image barriers were tightened
+   to `TRANSFER` (source) and `ALL_COMMANDS` (final destination) to match the acquire and
+   signal stages that synchronization validation checks.
+4. `vulkan_fixture` keeps its public `bind_buffers`/`execute` contract. `execute()` uses
+   the buffers the caller binds at indices 2 and 3; `submit()` uses slot-owned buffers.
+
+Verification (Confirmed, this build): `gs_submit_ring_fixture` (slot order, ring-full
+blocking, eviction guard, shutdown drain, random completion lag); `vulkan_fixture` in
+both modes; `native_vulkan_async_stress_compare` (async and `GT4_GS_SYNC=1` VRAM are
+byte-identical, 4 MiB). Full CTest 17/17; Python 203 tests, OK, one pre-existing skip.
+
+Stress determinism finding (Confirmed): draws that overlap inside one batch are not
+deterministic on the existing raster path, in the old slice 151 adapter and in the new
+build alike, so the stress workload flushes after each primitive. Uploads alone are
+deterministic and identical across modes.
+
+Headless smoke (Confirmed, 4200 frames, fixed press schedule, no window): every dumped
+frame (42 at 100-frame interval, including the 700-frame multiples) is identical between
+synchronous and asynchronous runs and between two synchronous runs. Wall times include
+boot and are not a frame-time measurement: sync 34.7 s and 33.7 s, async 30.5 s, one run each.
+
+Synchronization validation (Confirmed, overlay layers disabled): zero errors in both
+modes. With implicit overlay layers enabled (OBS, Epic, Steam, RTSS on this machine),
+the layers draw into swapchain images and report `PRESENT_AFTER_WRITE` on every
+presentation, in the old adapter too. The old adapter also reported render-pass VUIDs
+(`VkFramebufferCreateInfo pAttachments-00877`), consistent with overlays drawing into an
+image without color-attachment usage; those VUIDs are absent after Step 0.
+With implicit layers enabled, the create-info usage read back after
+`vkCreateSwapchainKHR` is `0x1b` (requested `0x12`); with them disabled it stays `0x12`. Whether RTSS now draws on the owner's machine is Unknown
+until the owner checks it.
+
+Open: owner gameplay measurement (`--mode gs-async`), owner check of the overlay, the
+download staging step and the render thread.

@@ -221,3 +221,20 @@ per-file sha256, key and entry parsed from names, and rejects any file that is
 not exactly 16384 bytes. Card backup, session lock and default modes are
 unchanged; default modes never set the recording variables. This is recording
 only: no AOT, no timing claim, and the owner controls gameplay.
+
+Slice152 adds asynchronous GS submission (O2) on the slice151 VU1 AOT runtime
+capsule. Fresh pins only: adapter `private/slice152-gs-async-port`, shaders
+`private/slice152-gs-async-shaders` (the nine unchanged slice143 SPIR-V files),
+build `private/slice152-gs-async-build/build`. Splice command, from the repository
+root:
+
+    private\tooling-venv\Scripts\python.exe scripts\prepare_external_vulkan.py private\slice152-gs-async-port
+
+The build is configured like slice151 with the 152 adapter and shader paths
+(`GT4_PORT_DIR`, `GT4_SHADER_DIR`), the slice151 runtime capsule
+(`GT4_PERF_RUNTIME_SOURCE`) and the generated VU1 table (`GT4_VU1_GENERATED_DIR`).
+Runtime pins are [slice152-gs-async-runtime.json](inputs/slice152-gs-async-runtime.json)
+(port and shader hashes) and [slice152-gs-async.json](inputs/slice152-gs-async.json)
+(launcher). CMake refuses any other port or shader directory on the performance
+profile. Owner command: `python scripts/play_performance.py --assets-root . --mode gs-async`.
+`GT4_GS_SYNC=1` in the environment restores the synchronous GS path for A/B.

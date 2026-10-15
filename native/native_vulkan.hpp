@@ -7,9 +7,12 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #include <vulkan/vulkan.h>
 
+#include "gs_submit_ring.hpp"
+
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <vector>
 
 namespace gt4::vulkan {
@@ -35,10 +38,32 @@ struct Dispatch {
   std::uint32_t pipeline, x, y, parameter;
 };
 
-// One queue and completed submissions keep host writes and buffer lifetimes
-// explicit.
+// One GS submission: per-slot uploads, dispatches, and an optional presentation
+// of an RGBA source buffer.
+struct Submission {
+  const std::uint8_t *arena = nullptr;
+  std::uint64_t arena_bytes = 0;
+  const std::uint8_t *parameters = nullptr;
+  std::uint64_t parameter_bytes = 0;
+  const Dispatch *commands = nullptr;
+  std::size_t command_count = 0;
+  // Null presents nothing; otherwise the source is copied and blitted to the
+  // swapchain as part of this submission.
+  Buffer *present_source = nullptr;
+  std::uint32_t present_width = 0, present_height = 0;
+  // execute() uses the buffers bound at indices 2 and 3 instead of slot uploads.
+  bool use_bound_buffers = false;
+};
+
+// Submissions are recorded into a ring of slots and chained on one timeline
+// semaphore. The CPU waits only when a slot is still in use, when it must read
+// GPU results, and at resize, state transfer and shutdown.
 class Context {
 public:
+  static constexpr std::uint32_t kSlotCount = 3;
+  // At most this many presentations may be pending in the presentation engine.
+  static constexpr std::uint32_t kMaxPresentsInFlight = 2;
+
   ~Context();
   void initialize(const std::filesystem::path &shaders);
   Buffer *create_buffer(std::uint64_t bytes);
@@ -47,14 +72,27 @@ public:
              std::uint64_t bytes);
   void read(Buffer *buffer, std::uint64_t offset, void *destination,
             std::uint64_t bytes);
+  // Binds the shared resources (indices 0, 1, 4-7). Indices 2 (parameters) and
+  // 3 (arena data) are used only by execute(); submit() uploads into ring slots.
   void bind_buffers(const std::array<Buffer *, 8> &buffers);
+  // Submits dispatches without uploads or presentation.
   void execute(const Dispatch *commands, std::size_t count);
+  // Records and submits one submission and returns its timeline id, or zero
+  // when there was nothing to submit. `presented` reports whether a swapchain
+  // image was presented.
+  std::uint64_t submit(const Submission &submission, bool *presented = nullptr);
+  // Id that the next submission will receive.
+  std::uint64_t next_submission() const { return ring_->next_id(); }
+  // Last submission known to have completed (non-blocking query).
+  std::uint64_t completed_submission();
+  // Blocks until every submitted GPU operation has completed.
+  void wait_submissions();
   void wait_idle();
   void attach_window(HWND window, std::uint32_t width, std::uint32_t height);
   void resize(std::uint32_t width, std::uint32_t height);
   void set_aspect(Aspect aspect) { aspect_ = aspect; }
-  bool present(Buffer *rgba, std::uint32_t width, std::uint32_t height);
   bool has_window() const { return window_ != nullptr; }
+  bool synchronous() const { return synchronous_; }
   // Device maximum workgroup count for axis 0 (x) or 1 (y).
   std::uint32_t max_workgroup_count(int axis) const {
     return limits_.maxComputeWorkGroupCount[axis];
@@ -62,16 +100,40 @@ public:
   std::uint64_t presentations() const { return presentations_; }
 
 private:
-  void begin_commands();
-  void finish_commands(VkSemaphore wait = VK_NULL_HANDLE,
-                       VkSemaphore signal = VK_NULL_HANDLE);
-  void memory_barrier(VkPipelineStageFlags source,
+  struct Slot {
+    VkCommandBuffer command = VK_NULL_HANDLE;
+    VkDescriptorSet descriptors = VK_NULL_HANDLE;
+    Buffer *data = nullptr;
+    Buffer *parameters = nullptr;
+    VkSemaphore acquired = VK_NULL_HANDLE;
+    VkSemaphore rendered = VK_NULL_HANDLE;
+    VkFence present_fence = VK_NULL_HANDLE;
+    bool presented = false;
+  };
+
+  void ensure_slot_capacity(Slot &slot, std::uint64_t arena_bytes,
+                            std::uint64_t parameter_bytes);
+  void update_descriptors(const Slot &slot, bool bound_buffers);
+  void validate_dispatches(const Dispatch *commands, std::size_t count,
+                           std::uint64_t parameter_capacity) const;
+  void record_dispatches(VkCommandBuffer command, VkDescriptorSet descriptors,
+                         const Dispatch *commands, std::size_t count);
+  void wait_timeline(std::uint64_t value);
+  void wait_presentation(Slot &slot);
+  void wait_all_presentations();
+  bool acquire_image(Slot &slot, const Submission &submission,
+                     VkImage &target, std::uint32_t &image);
+  void record_presentation(VkCommandBuffer command, const Submission &submission,
+                           VkImage target);
+  void ensure_display_image(std::uint32_t width, std::uint32_t height);
+  void memory_barrier(VkCommandBuffer command, VkPipelineStageFlags source,
                       VkPipelineStageFlags destination, VkAccessFlags writes,
                       VkAccessFlags reads);
   void rebuild_swapchain();
   void destroy_image();
-  void image_barrier(VkImage image, VkImageLayout old_layout,
-                     VkImageLayout new_layout, VkPipelineStageFlags source,
+  void image_barrier(VkCommandBuffer command, VkImage image,
+                     VkImageLayout old_layout, VkImageLayout new_layout,
+                     VkPipelineStageFlags source,
                      VkPipelineStageFlags destination, VkAccessFlags writes,
                      VkAccessFlags reads);
 
@@ -84,20 +146,19 @@ private:
   VkPhysicalDeviceMemoryProperties memory_properties_{};
   VkPhysicalDeviceLimits limits_{};
   std::vector<Buffer *> buffers_;
-  std::uint64_t parameter_bytes_ = 0;
+  std::array<Buffer *, 8> shared_{};
   VkCommandPool command_pool_ = VK_NULL_HANDLE;
-  VkCommandBuffer command_ = VK_NULL_HANDLE;
-  VkFence fence_ = VK_NULL_HANDLE;
   VkDescriptorSetLayout descriptor_layout_ = VK_NULL_HANDLE;
   VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
   VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
-  VkDescriptorSet descriptor_set_ = VK_NULL_HANDLE;
   std::array<VkPipeline, 9> pipelines_{};
+  VkSemaphore timeline_ = VK_NULL_HANDLE;
+  std::array<Slot, kSlotCount> slots_{};
+  std::unique_ptr<SubmitRing> ring_;
+  bool synchronous_ = false;
   HWND window_ = nullptr;
   VkSurfaceKHR surface_ = VK_NULL_HANDLE;
   VkSwapchainKHR swapchain_ = VK_NULL_HANDLE;
-  VkSemaphore acquired_ = VK_NULL_HANDLE, rendered_ = VK_NULL_HANDLE;
-  VkFence present_fence_ = VK_NULL_HANDLE;
   VkImage display_image_ = VK_NULL_HANDLE;
   VkDeviceMemory display_memory_ = VK_NULL_HANDLE;
   std::uint32_t image_width_ = 0, image_height_ = 0;
