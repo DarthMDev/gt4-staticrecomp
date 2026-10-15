@@ -41,3 +41,5 @@ then they are binding for the implementation.
 | IN-46 | M13 MTBA | MTBA "32-bit formats" = CT32 and CT24. Level n starts after the block count of level n - 1, where the block count of level k is max(1, blocks0 / 4^k). This follows the 01.5 vector (1024, 1280, 1344) and overrides the prose "previous count / 4". TH is taken equal to TW, as the formula does. TBW = max(1, bw0 >> n). | to confirm |
 | IN-47 | M13 LOD | Nearest mip level is round half up, floor(lod + 0.5) (V-01-11 Hypothesis, synthetic test only; owner comparison is open question Q-09). | Hypothesis |
 | IN-48 | M13 LOD | Clamp bounds and coordinates are shifted right by the base level (integer) or divided by 2^base (float); the base level is clamped to [0, min(MXL, 6)]. | to confirm |
+| IN-07 | M3/M16 vs M5 | AEM zero test differs between libraries: texels use 01.5 (RGB zero), CLUT entries use 07.5 (whole 16-bit value zero) in M3; M16 uses whole-value for both. Spec chapters disagree; must be unified before M4. | CONFLICT, to resolve |
+| IN-08 | M3 frontend | TEST_1/TEST_2 at 0x47/0x48; PRMODECONT.AC resets to 1; 16-bit CLUT index wraps mod 512; CSM2 base TEX0.CBP width TEXCLUT.CBW. | to confirm |
