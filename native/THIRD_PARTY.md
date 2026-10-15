@@ -121,3 +121,21 @@ Notes:
   across calls reads past the caller's buffer, and a call shorter than NREG never terminates. Each changed
   line carries a `GT4Recomp patch` comment; configure fails if an anchor is missing or repeated. The patch
   is not pushed upstream. The modified file stays under LGPL-3.0-or-later.
+## HWR texture replacement core (TASK-027, M16/M18)
+
+Vendored under `native/hw_gs/replace/third_party/`, unmodified:
+
+- **xxHash 0.8.3** (`xxhash.h`), XXH3-64 with seed 0 for the replacement keys
+  (chapters 11.2 and 11.3 of the TASK-026 specification). Upstream
+  <https://github.com/Cyan4973/xxHash> tag `v0.8.3`, file SHA-256
+  `17973c0dc49d9854ca26caa191f0e12f7a424b68858d9a78de3860d959d85e4b`.
+  Licence: BSD-2-Clause, Copyright (C) 2012-2023 Yann Collet (notice in the header).
+- **stb_image v2.30** (`stb_image.h`), PNG decoder only (`STBI_ONLY_PNG`, no stdio).
+  Upstream <https://github.com/nothings/stb> master, file SHA-256
+  `594c2fe35d49488b4382dbfaec8f98366defca819d916ac95becf3e75f4200b3`.
+  Licence: public domain (header statement "public domain image loader").
+
+Original code under `native/hw_gs/replace/` (MIT) is written from the TASK-026
+specification only (decision 0069). The test fixtures under
+`native/hw_gs/replace/tests/` (reference GS memory, PNG writer) are original
+code for CTest and are not linked into the game.
