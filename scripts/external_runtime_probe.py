@@ -52,7 +52,13 @@ PERF_PROFILES = {
 }
 # Internal-resolution candidate (slice176, TASK-028). Not a performance profile: PS2_SCALE is passed
 # through from the scale argument (1 to 4); scale 1 is the default and the qualified output.
-UPSCALE_MANIFEST = 'slice176-donor-upscale.json'
+UPSCALE_MANIFEST = 'slice182-coregs11.json'
+# CoreGS 1.1 presentation options (slice182): environment names and their accepted values.
+COREGS11_OPTIONS = {
+    'GT4_DEINTERLACE': ('auto', 'off', 'weave', 'bob', 'blend', 'adaptive'),
+    'GT4_AA': ('off', 'fxaa'),
+    'GT4_PRESENT_FILTER': ('nearest', 'linear', 'fsr'),
+}
 UPSCALE_SCALES = (1, 2, 3, 4)
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -206,7 +212,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              scale=1):
+              scale=1, coregs11=None):
     workspace = workspace.resolve()
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
@@ -361,6 +367,15 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if is_upscale_manifest:
         environment['PS2_SCALE'] = str(scale)
         result['internal_scale'] = scale
+        if coregs11:
+            for name, value in coregs11.items():
+                if name == 'GT4_FSR_SHARPNESS':
+                    if not (0.0 <= float(value) <= 2.0):
+                        raise ValueError('GT4_FSR_SHARPNESS must be from 0 to 2')
+                elif name not in COREGS11_OPTIONS or value not in COREGS11_OPTIONS[name]:
+                    raise ValueError(f'{name} must be one of {", ".join(COREGS11_OPTIONS.get(name, ()))}')
+                environment[name] = str(value)
+            result['coregs11_environment'] = {name: str(value) for name, value in coregs11.items()}
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))

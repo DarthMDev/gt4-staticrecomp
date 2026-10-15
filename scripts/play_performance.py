@@ -52,7 +52,7 @@ import argparse
 import sys
 from pathlib import Path
 from play_external_runtime import ROOT, play
-from external_runtime_probe import PERF_PROFILES, UPSCALE_MANIFEST, UPSCALE_SCALES, VU1_RECORD_MANIFEST
+from external_runtime_probe import COREGS11_OPTIONS, PERF_PROFILES, UPSCALE_MANIFEST, UPSCALE_SCALES, VU1_RECORD_MANIFEST
 
 MODES = tuple(PERF_PROFILES) + ('vu1-record', 'upscale')
 
@@ -71,6 +71,14 @@ def main():
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     parser.add_argument('--scale', type=int, default=1, metavar='N',
                         help='internal resolution 1 to 4 (PS2_SCALE); only with --mode upscale')
+    parser.add_argument('--deinterlace', choices=COREGS11_OPTIONS['GT4_DEINTERLACE'], metavar='MODE',
+                        help='CoreGS 1.1 deinterlace: auto (default), off, weave, bob, blend or adaptive; only with --mode upscale')
+    parser.add_argument('--aa', choices=COREGS11_OPTIONS['GT4_AA'], metavar='MODE',
+                        help='CoreGS 1.1 anti-aliasing: off (default) or fxaa; only with --mode upscale')
+    parser.add_argument('--present-filter', choices=COREGS11_OPTIONS['GT4_PRESENT_FILTER'], metavar='FILTER',
+                        help='final scaling to the window: nearest, linear or fsr (FSR 1.0); only with --mode upscale')
+    parser.add_argument('--fsr-sharpness', type=float, metavar='STOPS',
+                        help='FSR RCAS sharpness in stops, 0 (sharpest) to 2 (softest), default 0.2; only with --mode upscale')
     args = parser.parse_args()
     try:
         if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main'):
@@ -85,11 +93,18 @@ def main():
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main or upscale')
         if args.scale != 1 and args.mode != 'upscale':
             raise ValueError('--scale requires --mode upscale')
+        coregs11_arguments = {'GT4_DEINTERLACE': args.deinterlace, 'GT4_AA': args.aa,
+                              'GT4_PRESENT_FILTER': args.present_filter}
+        coregs11 = {name: value for name, value in coregs11_arguments.items() if value is not None}
+        if args.fsr_sharpness is not None:
+            coregs11['GT4_FSR_SHARPNESS'] = str(args.fsr_sharpness)
+        if coregs11 and args.mode != 'upscale':
+            raise ValueError('--deinterlace, --aa, --present-filter and --fsr-sharpness require --mode upscale')
         if args.mode == 'upscale':
             if args.scale not in UPSCALE_SCALES:
                 raise ValueError(f'--scale must be one of {", ".join(str(item) for item in UPSCALE_SCALES)}')
             play(args.assets_root, ROOT / 'docs/inputs' / UPSCALE_MANIFEST, performance=False,
-                 force_480p=args.force_480p, scale=args.scale)
+                 force_480p=args.force_480p, scale=args.scale, coregs11=coregs11 or None)
             return 0
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,

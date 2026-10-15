@@ -59,11 +59,32 @@ class PerformanceLauncherTests(unittest.TestCase):
             with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'upscale', '--scale', '3', '--force-480p']):
                 self.assertEqual(performance.main(), 0)
             play.assert_called_once_with(root, root / 'docs/inputs' / UPSCALE_MANIFEST,
-                                         performance=False, force_480p=True, scale=3)
+                                         performance=False, force_480p=True, scale=3, coregs11=None)
             # The default is the qualified scale 1, and upscale is not a performance profile.
             with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'upscale']):
                 self.assertEqual(performance.main(), 0)
-            self.assertEqual(play.call_args.kwargs, {'performance': False, 'force_480p': False, 'scale': 1})
+            self.assertEqual(play.call_args.kwargs, {'performance': False, 'force_480p': False, 'scale': 1, 'coregs11': None})
+
+    def test_coregs11_options_reach_the_upscale_launch_only(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            arguments = ['perf', '--assets-root', str(root), '--mode', 'upscale', '--scale', '2', '--deinterlace', 'bob',
+                         '--aa', 'fxaa', '--present-filter', 'fsr', '--fsr-sharpness', '0.5']
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', arguments):
+                self.assertEqual(performance.main(), 0)
+            self.assertEqual(play.call_args.kwargs['coregs11'],
+                             {'GT4_DEINTERLACE': 'bob', 'GT4_AA': 'fxaa', 'GT4_PRESENT_FILTER': 'fsr', 'GT4_FSR_SHARPNESS': '0.5'})
+            # Defaults are not sent: the game keeps automatic deinterlace, AA off and the scale-based filter.
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'upscale']):
+                self.assertEqual(performance.main(), 0)
+            self.assertIsNone(play.call_args.kwargs['coregs11'])
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'main', '--aa', 'fxaa']):
+                self.assertEqual(performance.main(), 1)
+            play.assert_not_called()
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'upscale', '--present-filter', 'bicubic']):
+                with self.assertRaises(SystemExit):
+                    performance.main()
+            play.assert_not_called()
 
     def test_scale_is_refused_outside_upscale_and_out_of_range(self):
         with tempfile.TemporaryDirectory() as folder:
