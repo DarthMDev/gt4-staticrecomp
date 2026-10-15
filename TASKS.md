@@ -62,7 +62,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust + Slint) and NSIS per-user installer | 🔄 Design and plan done (branch `task/019-launcher`) |
 | TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 📋 Planned |
-| TASK‑026 | Own hardware renderer, part 1: clean-room specification of the PCSX2 hardware renderer (study) | 🔄 In progress |
+| TASK‑026 | Own hardware renderer, part 1: clean-room specification of the PCSX2 hardware renderer (study) | 🧪 Spec complete (chapters 00-15), ready for owner review |
 | TASK‑027 | Own hardware renderer, part 2: MIT implementation from the specification (3x-6x, texture packs) | 📋 Planned |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
@@ -209,6 +209,11 @@ post-processing, validation scenes and test cases, and an implementation plan
 with milestones for TASK-027. No PCSX2 code or code-like translation in the
 specification. Sizes and coupling overview: `docs/GSDX-STUDY.md` on branch
 `task/012-parallel-gs`.
+
+State (2026-10-15): specification complete in `docs/hw-renderer-spec/`
+(README index, chapters 00-15; chapter 15 holds milestones M0-M19 for TASK-027,
+~94 implementer-days, risks and 13 open owner questions). Ready for owner review;
+TASK-027 starts after approval and the answers to Q-01 to Q-03.
 
 ### TASK-027 — Own hardware renderer: implementation
 MIT implementation written only from the TASK-026 specification, behind our GS
