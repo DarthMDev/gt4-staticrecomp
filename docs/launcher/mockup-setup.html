@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GT4Recomp Setup Mockup</title>
+<style>
+:root{
+  --asphalt:#07090c; --graphite:#0f1318; --panel:#131820; --panel-2:#18202a;
+  --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.14);
+  --chrome:#eef2f7; --text:#c9d1db; --muted:#7f8a99; --faint:#4b5563;
+  --accent:#2f7bff; --accent-hi:#79acff; --accent-glow:rgba(47,123,255,.45);
+  --amber:#ffb020; --red:#ff4545; --ok:#35d07f;
+  --slot:#ff3df2;
+  --head:"Bahnschrift","DIN Alternate","Barlow Condensed","Arial Narrow",sans-serif;
+  --body:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#030405;color:var(--text);font-family:var(--body);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+.controls{width:1280px;max-width:100%;display:flex;gap:18px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:12px;flex-wrap:wrap}
+.controls b{color:var(--chrome);font-family:var(--head);letter-spacing:.08em;text-transform:uppercase;font-weight:600}
+.controls label{cursor:pointer;padding:5px 10px;border:1px solid var(--line-2);border-radius:999px}
+input.st{position:absolute;opacity:0;pointer-events:none}
+#s-verify:checked ~ .controls label[for=s-verify],#s-reject:checked ~ .controls label[for=s-reject],#s-ready:checked ~ .controls label[for=s-ready],#slots:checked ~ .controls label[for=slots]{background:var(--accent);border-color:var(--accent);color:#fff}
+.viewport{width:100%;overflow-x:auto;display:flex;justify-content:center}
+.frame{position:relative;width:1280px;height:720px;flex:none;background:var(--asphalt);border-radius:10px;overflow:hidden;box-shadow:0 40px 120px rgba(0,0,0,.7),0 0 0 1px var(--line)}
+
+/* title bar */
+.titlebar{position:absolute;inset:0 0 auto 0;height:36px;display:flex;align-items:center;padding:0 0 0 14px;gap:10px;z-index:5;font-size:12px;color:var(--muted)}
+.emblem{width:18px;height:18px;border-radius:4px;background:linear-gradient(135deg,#1d2633,#0c1016);border:1px solid var(--line-2);display:grid;place-items:center;font:700 8px var(--head);color:var(--chrome)}
+.winbtns{margin-left:auto;display:flex;height:100%}
+.winbtns span{width:46px;display:grid;place-items:center;color:var(--muted)}
+
+/* left: cover */
+.cover-side{position:absolute;left:0;top:0;bottom:0;width:470px;background:radial-gradient(120% 80% at 30% 20%,#16233a 0%,#0a0e14 55%,#06080b 100%);overflow:hidden}
+.cover-side::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 60%,var(--asphalt) 100%)}
+.cover{position:absolute;left:60px;top:84px;width:330px;height:468px;border-radius:6px;transform:perspective(1200px) rotateY(9deg) rotateX(1deg);transform-origin:left center;
+  background:linear-gradient(160deg,#1b2635 0%,#0b1119 60%,#05070a 100%);box-shadow:30px 40px 80px rgba(0,0,0,.65),0 0 0 1px rgba(255,255,255,.06),inset 0 0 0 1px rgba(255,255,255,.04);overflow:hidden;animation:float 9s ease-in-out infinite}
+@keyframes float{50%{transform:perspective(1200px) rotateY(6deg) rotateX(0deg) translateY(-6px)}}
+.cover .band{position:absolute;left:0;right:0;top:0;height:46px;background:linear-gradient(90deg,#0d0f12,#1c2129);border-bottom:1px solid rgba(255,255,255,.08)}
+.cover .ph-title{position:absolute;left:22px;right:22px;top:70px;font:600 30px/1 var(--head);letter-spacing:.12em;color:rgba(238,242,247,.18);text-transform:uppercase}
+.cover svg{position:absolute;left:-10px;right:-10px;bottom:70px;width:350px}
+.cover .shine{position:absolute;inset:0;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.10) 45%,transparent 55%);animation:shine 7s ease-in-out infinite}
+@keyframes shine{0%,60%{transform:translateX(-120%)}100%{transform:translateX(120%)}}
+.reflection{position:absolute;left:60px;top:560px;width:330px;height:90px;transform:perspective(1200px) rotateY(9deg);transform-origin:left center;background:linear-gradient(180deg,rgba(47,123,255,.10),transparent);filter:blur(8px);border-radius:6px}
+.cover-caption{position:absolute;left:60px;bottom:40px;z-index:2;font-size:12px;color:var(--muted);line-height:1.5}
+.cover-caption b{display:block;font:600 13px var(--head);letter-spacing:.14em;color:var(--chrome);text-transform:uppercase}
+
+/* right: wizard */
+.wizard{position:absolute;left:470px;right:0;top:36px;bottom:0;padding:20px 64px 22px 40px;display:flex;flex-direction:column}
+.logo-slot{height:44px;width:250px;border-radius:4px;display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.logo-ph{font:700 22px/1 var(--head);letter-spacing:.18em;color:var(--chrome);text-transform:uppercase}
+.logo-ph small{display:block;font:500 10px var(--body);letter-spacing:.3em;color:var(--muted);margin-top:5px}
+.eyebrow{font:600 12px var(--head);letter-spacing:.22em;color:var(--accent-hi);text-transform:uppercase}
+h1{font:600 36px/1.05 var(--head);color:var(--chrome);letter-spacing:.01em;margin:8px 0 6px}
+.lede{font-size:14px;color:var(--muted);max-width:620px}
+
+.stepper{display:flex;gap:6px;margin:16px 0 14px}
+.step{flex:1;position:relative;padding-top:12px;font:600 11px var(--head);letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.step::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:2px;background:var(--line-2)}
+.step.done{color:var(--muted)} .step.done::before{background:var(--accent)}
+.step.now{color:var(--chrome)} .step.now::before{background:linear-gradient(90deg,var(--accent) 0 62%,var(--line-2) 62%)}
+.step i{font-style:normal;color:var(--accent-hi);margin-right:6px}
+
+.card{background:linear-gradient(180deg,var(--panel-2),var(--panel));border:1px solid var(--line);border-radius:12px}
+.file{display:flex;align-items:center;gap:14px;padding:11px 16px;margin-bottom:10px}
+.disc{width:38px;height:38px;border-radius:50%;background:conic-gradient(from 40deg,#9aa6b8,#e8edf3,#7d8899,#cfd6e0,#9aa6b8);position:relative;flex:none;animation:spin 6s linear infinite}
+.disc::after{content:"";position:absolute;inset:14px;border-radius:50%;background:var(--panel)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.file .name{font-size:14px;color:var(--chrome);font-weight:600}
+.file .path{font-size:12px;color:var(--muted)}
+.btn{font:600 12px var(--head);letter-spacing:.14em;text-transform:uppercase;padding:10px 16px;border-radius:8px;border:1px solid var(--line-2);color:var(--chrome);background:transparent}
+.file .btn{margin-left:auto}
+
+.checks{display:grid;grid-template-columns:1fr 196px;gap:0 18px;padding:8px 8px 8px 16px}
+.list{list-style:none}
+.list li{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+.list li:last-child{border-bottom:0}
+.list .t{color:var(--chrome)} .list .d{color:var(--muted);font-size:12px} .list .r{font:500 12px var(--head);letter-spacing:.06em;color:var(--muted);font-variant-numeric:tabular-nums}
+.ic{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700}
+.ic.ok{background:rgba(53,208,127,.15);color:var(--ok)}
+.ic.run{border:2px solid var(--accent);border-right-color:transparent;animation:spin 1s linear infinite}
+.ic.wait{border:1.5px solid var(--faint)}
+.ic.bad{background:rgba(255,69,69,.15);color:var(--red)}
+.opt{font:600 10px var(--head);letter-spacing:.14em;color:var(--muted);border:1px solid var(--line-2);padding:2px 6px;border-radius:4px;margin-left:6px}
+
+/* tachometer ring */
+.tach{display:grid;place-items:center;position:relative}
+.tach svg{width:186px;height:186px}
+.tach .arc{stroke-dasharray:0 1000;animation:fill 6s cubic-bezier(.4,0,.2,1) infinite alternate}
+@keyframes fill{from{stroke-dasharray:240 1000}to{stroke-dasharray:300 1000}}
+.tach .num{position:absolute;text-align:center;top:62px;left:0;right:0}
+.tach .num b{display:block;font:600 44px/1 var(--head);color:var(--chrome);font-variant-numeric:tabular-nums}
+.tach .num span{font:500 11px var(--head);letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+
+.note{display:flex;gap:10px;align-items:flex-start;margin-top:12px;font-size:12px;color:var(--muted)}
+.note b{color:var(--text);font-weight:600}
+.note .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:6px;flex:none;box-shadow:0 0 10px var(--accent-glow)}
+.footer{margin-top:auto;display:flex;align-items:center;gap:10px}
+.footer .legal{font-size:11px;color:var(--faint);margin-right:auto}
+.cta{font:700 14px var(--head);letter-spacing:.2em;text-transform:uppercase;padding:13px 26px;border-radius:9px;border:0;color:#fff;background:linear-gradient(180deg,#3d86ff,#1f62e0);box-shadow:0 10px 30px var(--accent-glow),inset 0 1px 0 rgba(255,255,255,.3)}
+.cta[disabled]{background:#1b2431;color:var(--faint);box-shadow:none}
+
+/* states */
+.state{display:none;flex:1;flex-direction:column}
+#s-verify:checked ~ .viewport .st-verify,#s-reject:checked ~ .viewport .st-reject,#s-ready:checked ~ .viewport .st-ready{display:flex}
+.reject{padding:18px 20px;border-color:rgba(255,69,69,.35);background:linear-gradient(180deg,rgba(255,69,69,.08),var(--panel))}
+.reject h3{font:600 20px var(--head);color:var(--chrome);margin-bottom:6px;display:flex;align-items:center;gap:10px}
+.reject p{font-size:13px;color:var(--text);margin-bottom:6px;max-width:640px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;font-size:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.kv span:nth-child(odd){color:var(--muted)} .kv span:nth-child(even){color:var(--chrome);font-family:var(--head);letter-spacing:.04em}
+.kv .x{color:var(--red)!important}
+.ready-hero{padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.tile{border:1px solid var(--line);border-radius:10px;padding:14px;background:rgba(255,255,255,.02)}
+.tile b{display:block;font:600 22px var(--head);color:var(--chrome)}
+.tile span{font-size:12px;color:var(--muted)}
+.gallery{display:flex;gap:8px;margin-top:12px}
+.gallery div{flex:1;height:64px;border-radius:6px;background:linear-gradient(135deg,#253247,#0f141b);position:relative;overflow:hidden}
+.gallery div:nth-child(2){background:linear-gradient(135deg,#3a2a1d,#120d0a)}
+.gallery div:nth-child(3){background:linear-gradient(135deg,#1d3a2b,#0b1410)}
+.gallery div:nth-child(4){background:linear-gradient(135deg,#33213a,#100b13)}
+.gallery div::after{content:"";position:absolute;left:-20%;right:-20%;bottom:10px;height:2px;background:rgba(255,255,255,.18);transform:rotate(-8deg)}
+
+/* asset slot annotations */
+.slot{position:relative}
+#slots:checked ~ .viewport .slot{outline:2px dashed var(--slot);outline-offset:3px}
+#slots:checked ~ .viewport .slot::after{content:attr(data-slot);position:absolute;z-index:20;left:0;top:calc(100% + 6px);white-space:pre;font:600 10px/1.35 var(--body);color:#fff;background:rgba(160,20,150,.92);padding:5px 7px;border-radius:4px;letter-spacing:.02em;pointer-events:none;width:max-content;max-width:330px;white-space:normal}
+#slots:checked ~ .viewport .slot.tag-top::after{top:auto;bottom:calc(100% + 6px)}
+#slots:checked ~ .viewport .slot.tag-right::after{top:0;left:calc(100% + 10px)}
+.legend{width:1280px;max-width:100%;margin-top:14px;font-size:12px;color:var(--muted);line-height:1.6}
+.legend code{color:var(--chrome)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<input class="st" type="radio" name="state" id="s-verify" checked>
+<input class="st" type="radio" name="state" id="s-reject">
+<input class="st" type="radio" name="state" id="s-ready">
+<input class="st" type="checkbox" id="slots" checked>
+<div class="controls">
+  <b>Setup · first run</b>
+  <label for="s-verify">Verifying</label>
+  <label for="s-reject">Rejected disc</label>
+  <label for="s-ready">Ready</label>
+  <span style="flex:1"></span>
+  <label for="slots">Show official asset slots</label>
+</div>
+
+<div class="viewport"><div class="frame">
+  <div class="titlebar">
+    <div class="emblem slot" data-slot="OFFICIAL · launcher.ico (16/20/24/32 px) · branding/official/ · generated from emblem-gt.png (owner-supplied GT emblem master)">GT</div>
+    <span>GT4Recomp</span>
+    <div class="winbtns"><span>&#8212;</span><span>&#9633;</span><span>&#10005;</span></div>
+  </div>
+
+  <aside class="cover-side">
+    <div class="cover slot" data-slot="OFFICIAL · cover-front.png (1200×1700, shown 330×468) · branding/official/ · owner-supplied scan of the NTSC-U box front (not on the disc)">
+      <div class="band"></div>
+      <div class="ph-title">Cover art</div>
+      <svg viewBox="0 0 400 130" aria-hidden="true">
+        <defs><linearGradient id="rim" x1="0" x2="1"><stop offset="0" stop-color="#2f7bff" stop-opacity="0"/><stop offset=".6" stop-color="#79acff"/><stop offset="1" stop-color="#fff" stop-opacity=".6"/></linearGradient></defs>
+        <path d="M18 92 C40 88 70 76 104 62 C140 46 178 38 222 38 C266 38 300 50 330 64 L368 72 C384 75 394 82 396 92 L396 102 L18 104 Z" fill="#0a0d12" stroke="url(#rim)" stroke-width="1.6"/>
+        <path d="M150 48 C180 40 230 40 262 50 L290 64 L136 64 Z" fill="#141c27"/>
+        <circle cx="104" cy="104" r="19" fill="#05070a" stroke="#2a3442"/><circle cx="104" cy="104" r="9" fill="#1a2230"/>
+        <circle cx="330" cy="104" r="19" fill="#05070a" stroke="#2a3442"/><circle cx="330" cy="104" r="9" fill="#1a2230"/>
+      </svg>
+      <div class="shine"></div>
+    </div>
+    <div class="reflection"></div>
+    <div class="cover-caption"><b>Your disc, natively</b>Gran Turismo 4 · NTSC-U · v2.00<br>You need your own copy of the game.</div>
+  </aside>
+
+  <main class="wizard">
+    <div class="logo-slot slot tag-right" data-slot="OFFICIAL · logo-gt4.png (transparent, ~1600 px wide) · branding/official/ · owner-supplied or traced from the cover scan">
+      <div class="logo-ph">GT4 Logo<small>WORDMARK SLOT</small></div>
+    </div>
+
+    <!-- VERIFYING -->
+    <section class="state st-verify">
+      <div class="eyebrow">First run · Step 2 of 4</div>
+      <h1>Checking your disc image</h1>
+      <p class="lede">This happens once. GT4Recomp confirms the exact disc, then prepares the files the game needs. Your ISO stays where it is.</p>
+      <div class="stepper">
+        <div class="step done"><i>01</i>Disc</div>
+        <div class="step now"><i>02</i>Verify</div>
+        <div class="step"><i>03</i>Prepare</div>
+        <div class="step"><i>04</i>Ready</div>
+      </div>
+      <div class="card file">
+        <div class="disc"></div>
+        <div><div class="name">Gran Turismo 4 (USA) (v2.00).iso</div><div class="path">D:\Games\PS2\ · 4.95 GiB</div></div>
+        <button class="btn">Change…</button>
+      </div>
+      <div class="card checks">
+        <ul class="list">
+          <li><span class="ic ok">&#10003;</span><span><span class="t">Disc format</span> <span class="d">ISO 9660 · 2048-byte sectors</span></span><span class="r">0.1 s</span></li>
+          <li><span class="ic ok">&#10003;</span><span><span class="t">Game identity</span> <span class="d">SCUS-97328 · version 2.00 · NTSC</span></span><span class="r">0.2 s</span></li>
+          <li><span class="ic run"></span><span><span class="t">Disc integrity</span> <span class="d">SHA-256 of the whole image</span></span><span class="r">3.1 / 4.9 GB</span></li>
+          <li><span class="ic wait"></span><span><span class="t">Extract CORE.GT4</span></span><span class="r">—</span></li>
+          <li><span class="ic wait"></span><span><span class="t">Rebuild game program (ELF)</span></span><span class="r">—</span></li>
+          <li><span class="ic wait"></span><span><span class="t">Memory card</span> <span class="d">new card, or import a PCSX2 card</span></span><span class="r">—</span></li>
+          <li><span class="ic wait"></span><span><span class="t">Photo gallery</span><span class="opt">OPTIONAL</span></span><span class="r">64 photos</span></li>
+        </ul>
+        <div class="tach">
+          <svg viewBox="0 0 200 200" aria-hidden="true">
+            <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#2f7bff"/><stop offset="1" stop-color="#9cc2ff"/></linearGradient></defs>
+            <g transform="rotate(135 100 100)">
+              <circle cx="100" cy="100" r="78" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="10" stroke-dasharray="368 1000" stroke-linecap="round"/>
+              <circle class="arc" cx="100" cy="100" r="78" fill="none" stroke="url(#g)" stroke-width="10" stroke-linecap="round" style="filter:drop-shadow(0 0 8px rgba(47,123,255,.6))"/>
+            </g>
+            <g stroke="rgba(255,255,255,.25)" stroke-width="2">
+              <line x1="100" y1="8" x2="100" y2="16" transform="rotate(-135 100 100)"/><line x1="100" y1="8" x2="100" y2="16" transform="rotate(-67 100 100)"/>
+              <line x1="100" y1="8" x2="100" y2="16"/><line x1="100" y1="8" x2="100" y2="16" transform="rotate(67 100 100)"/>
+              <line x1="100" y1="8" x2="100" y2="16" transform="rotate(135 100 100)"/>
+            </g>
+          </svg>
+          <div class="num"><b>62%</b><span>412 MB/s · 7 s left</span></div>
+        </div>
+      </div>
+      <div class="note"><span class="dot"></span><span><b>No PS2 BIOS needed.</b> The game streams the rest of the disc while you play, so keep the ISO in this folder or point GT4Recomp to its new place later.</span></div>
+      <div class="footer"><span class="legal">Unofficial fan project · not affiliated with Sony Interactive Entertainment or Polyphony Digital</span><button class="btn">Cancel</button><button class="cta" disabled>Continue</button></div>
+    </section>
+
+    <!-- REJECTED -->
+    <section class="state st-reject">
+      <div class="eyebrow" style="color:var(--red)">First run · Step 2 of 4</div>
+      <h1>This disc isn't supported yet</h1>
+      <p class="lede">GT4Recomp is built for one exact disc. Nothing was changed on your computer.</p>
+      <div class="stepper">
+        <div class="step done"><i>01</i>Disc</div>
+        <div class="step now" style="color:var(--red)"><i>02</i>Verify</div>
+        <div class="step"><i>03</i>Prepare</div>
+        <div class="step"><i>04</i>Ready</div>
+      </div>
+      <div class="card file">
+        <div class="disc" style="animation:none;filter:grayscale(1) brightness(.7)"></div>
+        <div><div class="name">Gran Turismo 4 Spec II v1.10.iso</div><div class="path">C:\Antigravity\gt4-staticrecomp\ · 4.4 GiB</div></div>
+        <button class="btn">Choose another…</button>
+      </div>
+      <div class="card reject">
+        <h3><span class="ic bad">!</span>Gran Turismo 4 Spec II is not supported</h3>
+        <p>Only <b>Gran Turismo 4, USA (NTSC-U), disc version 2.00</b> works right now. PAL, Japanese and Spec II discs need their own recompilation.</p>
+        <p style="color:var(--muted)">If you own the USA v2.00 disc, make a plain .iso copy of it (2048-byte sectors) and choose that file.</p>
+        <div class="kv">
+          <span>Expected</span><span>SCUS-97328 · v2.00 · 5,314,478,080 bytes</span>
+          <span>Found</span><span class="x">Spec II disc · different serial and size</span>
+          <span>Checked in</span><span>0.3 s (no full scan needed)</span>
+        </div>
+      </div>
+      <div class="footer"><span class="legal">Details are in Settings › Saves &amp; files › Logs</span><button class="btn">Copy details</button><button class="cta">Choose another file</button></div>
+    </section>
+
+    <!-- READY -->
+    <section class="state st-ready">
+      <div class="eyebrow" style="color:var(--ok)">First run · Step 4 of 4</div>
+      <h1>You're on the grid.</h1>
+      <p class="lede">Everything checked out. Next time GT4Recomp opens straight to the Play screen.</p>
+      <div class="stepper">
+        <div class="step done"><i>01</i>Disc</div><div class="step done"><i>02</i>Verify</div><div class="step done"><i>03</i>Prepare</div><div class="step done" style="color:var(--chrome)"><i>04</i>Ready</div>
+      </div>
+      <div class="card ready-hero">
+        <div class="tile"><b>Disc verified</b><span>SCUS-97328 v2.00 · matches the known good image</span></div>
+        <div class="tile"><b>New memory card</b><span>GT4 will offer to format it on first save · backed up before every session</span></div>
+        <div class="tile" style="grid-column:1/-1"><b>Gallery ready</b><span>64 in-game photos from your disc will rotate behind the Play screen.</span>
+          <div class="gallery slot tag-top" data-slot="FROM YOUR DISC (never shipped) · GT4.VOL photo/000.JPG…063.JPG · extracted at setup to %LOCALAPPDATA%\GT4Recomp\art\"><div></div><div></div><div></div><div></div><div></div></div>
+        </div>
+      </div>
+      <div class="note"><span class="dot"></span><span><b>Tip:</b> races run in 480p progressive automatically. Set GT4's screen option to 16:9 the first time you play.</span></div>
+      <div class="footer"><span class="legal">Saves: %LOCALAPPDATA%\GT4Recomp\memcards\Mcd001.ps2</span><button class="cta">Go to Play screen</button></div>
+    </section>
+  </main>
+</div></div>
+
+<div class="legend">Magenta dashed outlines mark <b>official asset slots</b>. All official files live in <code>branding/official/</code> and are listed in <code>brand.toml</code>; the de-branded build swaps in <code>branding/neutral/</code>. Fonts: Bahnschrift (headings, ships with Windows) and Segoe UI; the Slint build embeds an OFL condensed face for portability. Motion: cover floats and catches a light sweep every 7 s, the disc spins while working, the tach ring eases between progress values; all disabled under reduced motion.</div>
+</body>
+</html>
