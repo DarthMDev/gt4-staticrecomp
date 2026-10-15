@@ -78,11 +78,18 @@ extern const std::uint32_t kProgramCount = 0u;
 ")
 endif()
 set_source_files_properties("${VU_CORPUS_SOURCE}" PROPERTIES GENERATED TRUE)
-add_executable(gt4_vu1_mismatch_replay "${VU_RECOMP_TESTS}/vu1_mismatch_replay.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" "${VU_CORPUS_SOURCE}")
+# TASK-010: the corpus table is compiled once as an OBJECT library and linked into every executable
+# that replays it (mismatch replay, corpus differential, flag benchmark). Before, each executable
+# compiled its own copy (three times for a 426-file corpus).
+add_library(gt4_vu_corpus_table OBJECT "${VU_CORPUS_SOURCE}")
+target_include_directories(gt4_vu_corpus_table PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
+target_link_libraries(gt4_vu_corpus_table PRIVATE ps2runtime_vulkan gt4_vu_fixtures)
+target_compile_options(gt4_vu_corpus_table PRIVATE /W4 -Wno-unused-label)
+add_executable(gt4_vu1_mismatch_replay "${VU_RECOMP_TESTS}/vu1_mismatch_replay.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" $<TARGET_OBJECTS:gt4_vu_corpus_table>)
 target_include_directories(gt4_vu1_mismatch_replay PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
 target_link_libraries(gt4_vu1_mismatch_replay PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
 target_compile_options(gt4_vu1_mismatch_replay PRIVATE /W4 -Wno-unused-label)
-add_executable(gt4_vu_corpus_differential "${VU_RECOMP_TESTS}/corpus_differential_tests.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" "${VU_CORPUS_SOURCE}")
+add_executable(gt4_vu_corpus_differential "${VU_RECOMP_TESTS}/corpus_differential_tests.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" $<TARGET_OBJECTS:gt4_vu_corpus_table>)
 target_include_directories(gt4_vu_corpus_differential PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
 target_link_libraries(gt4_vu_corpus_differential PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
 target_compile_options(gt4_vu_corpus_differential PRIVATE /W4 -Wno-unused-label)
@@ -99,7 +106,10 @@ if(GT4_VU_CORPUS_DIR)
         DEPENDS gt4_vu_recomp
         VERBATIM)
     set_source_files_properties("${VU_BASELINE_SOURCE}" PROPERTIES GENERATED TRUE)
-    add_executable(gt4_vu1_flag_bench "${VU_RECOMP_TESTS}/vu1_flag_bench.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" "${VU_CORPUS_SOURCE}" "${VU_BASELINE_SOURCE}")
+    # EXCLUDE_FROM_ALL: the baseline table (about 204 CPU-s, serial) is not part of the default build.
+    # Build it on demand: cmake --build <build-dir> --target gt4_vu1_flag_bench
+    # No CTest target depends on this executable.
+    add_executable(gt4_vu1_flag_bench EXCLUDE_FROM_ALL "${VU_RECOMP_TESTS}/vu1_flag_bench.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp" $<TARGET_OBJECTS:gt4_vu_corpus_table> "${VU_BASELINE_SOURCE}")
     target_include_directories(gt4_vu1_flag_bench PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
     target_link_libraries(gt4_vu1_flag_bench PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
     target_compile_options(gt4_vu1_flag_bench PRIVATE /W4 -Wno-unused-label)
