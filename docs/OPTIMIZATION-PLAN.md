@@ -147,6 +147,18 @@ All guest code is C++ produced offline, so the same generators target ARM64
 Win32/WinMM/XInput host layers need platform implementations; Vulkan on
 Android, MoltenVK on iOS (no JIT is also an iOS App Store requirement).
 
+### After O6 — Phase 2: source-like game code
+
+Owner direction (2026-10-14). Once the recompiled port runs fast and as
+natively as possible, apply [gt4-decomp](DECOMP-IDENTITY.md) (byte-identical
+CORE) function by function: translated functions are replaced by readable,
+natively compiled decomp C++ behind a guest-memory/ABI bridge, each swap
+checked against the translated version. Goal: code that reads like original
+source, is moddable and portable to any hardware, and enables an own renderer
+(removing VU/GS models) and physics decoupled from frame rate. This is not a
+speed task. A cheap early step, importing decomp names into generated code,
+may happen at any time.
+
 ## 5. Expected outcome (Hypothesis)
 
 If VU1 AOT reaches the low end of its estimate (~5x → ~5 ms) and asynchronous
