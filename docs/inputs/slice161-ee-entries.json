@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "slice": 161,
+  "task": "TASK-014 EE entry coverage",
+  "seed_sets": {
+    "referenced": {
+      "path": "docs/inputs/slice161-ee-entries-referenced.txt",
+      "size_bytes": 176,
+      "sha256": "9b3432d01e097b7c38bb057ef5b9e2eb2823042d59a5694d34af9f8356b9f7b0",
+      "count": 16,
+      "expected_translator_entries": 135155,
+      "selection": "Guest starts with a lui/addiu or ori constant or a data-word reference in the file-backed image (slice158 plan, section 1). 0x0044EAC8 is excluded because slice 117 already covers it through its own profile.",
+      "method": "Candidate study: decomp function starts (config/symbol_addrs.txt and decomp src/ names) that are not translator entries, with a reference window of 40 words."
+    }
+  },
+  "attribution": "Function-start addresses derive from gt4-decomp (MIT License, Copyright 2026 Gustavo Canepa and contributors). See THIRD_PARTY.md.",
+  "analysis_source": "private/slice158-ee-coverage-plan (study.py, candidates.json, seeds_referenced.txt)"
+}

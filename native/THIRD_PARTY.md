@@ -85,3 +85,34 @@ hardening changes are listed in the file header. The donor header
 `tools/vu_recomp/MIT-LICENSE.txt`. `tools/vu_recomp/src/sha256.cpp` and the
 fixtures in `tools/vu_recomp/tests/` are original code. The emitter output is
 not linked into the game; the provider is a later, separate step.
+
+
+## gt4-decomp (MIT License)
+
+Copyright 2026 Gustavo Canepa and contributors.
+
+The explicit entry seeds in `docs/inputs/slice161-ee-entries-referenced.txt` (and the
+planned all-candidate list) are guest function-start addresses derived from the
+gt4-decomp project's symbol and source names. Only the addresses are used as data
+to ask the translator for entries; no decompiled source is copied into this
+repository. The seed files are pinned in `docs/inputs/slice161-ee-entries.json`.
+
+The MIT License notice of gt4-decomp applies to that derived data:
+
+> Permission is hereby granted, free of charge, to any person obtaining a copy
+> of this software and associated documentation files (the "Software"), to deal
+> in the Software without restriction, including without limitation the rights
+> to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+> copies of the Software, and to permit persons to whom the Software is
+> furnished to do so, subject to the following conditions:
+>
+> The above copyright notice and this permission notice shall be included in all
+> copies or substantial portions of the Software.
+>
+> THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+> IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+> FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+> AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+> LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+> OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+> SOFTWARE.

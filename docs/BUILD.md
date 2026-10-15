@@ -493,3 +493,43 @@ Limits:
    executable is 32.9 MB larger than slice155 (owner-accepted size).
 4. Owner frame measurement is not taken. No speed claim is made. The FlagPipe history limit and the
    `verified` counter limits of slice155 are unchanged.
+
+## Slice161 explicit-seed EE library (TASK-014, 16 referenced entries)
+
+Pins: [slice161-ee-entries.json](inputs/slice161-ee-entries.json) (seed set `referenced`: 16 addresses,
+sha256 9b3432d0...f7b0, `expected_translator_entries` 135155),
+[slice161-ee-libraries.json](inputs/slice161-ee-libraries.json) (profile `entries`), and the launcher pin
+[slice161-ee-coverage.json](inputs/slice161-ee-coverage.json) (mode `ee-coverage`). Production pin
+`c837d13dae...` and the production producer are unchanged. Attribution: [THIRD_PARTY.md](../THIRD_PARTY.md).
+
+Recipe (from a checkout whose assets are in the main checkout, `C:\Antigravity\gt4-staticrecomp`):
+
+1. `scripts\ee_entries.py prepare --assets-root <assets> --output private\slice161-ee-entries-producer`
+   (fresh output; `tools\ee_producer\build_entries.cmd <assets> <producer> referenced entries` runs all stages).
+2. `scripts\ee_entries.py generate --output <producer> --seed-set referenced`: frozen translator with
+   `--entries`; checks seed file hash, executable placement, the translator's `rejected seeds 0` and
+   `entries 135155` line, a non-zero registered id for every seed, zero `stop(c,` sites. Writes
+   `generation-entries.json`.
+3. Library: `cmake --build <producer>\game-build --target ps2game --parallel 4`, then
+   `scripts\ee_entries.py record-library --output <producer> --seed-set referenced --profile entries --observed-compiler-version 22.1.3`.
+4. Native candidate: copy the byte-identical capsules `private/slice153-pacing-port`,
+   `private/slice153-pacing-shaders` and `private/slice157-vu1-all-runtime` into the checkout's private/,
+   then `native\build_ee_coverage.cmd <assets>` (configure, build, CTest).
+5. Owner launch: `python scripts/play_performance.py --assets-root . --mode ee-coverage`
+   (and `--vu1-verify 50` for the verify counters). Not launched by the implementing agent.
+
+Deviations and limits (Confirmed unless marked):
+
+- The qualified clang-cl 23.1.2 is not installed; this library was built with clang-cl 22.1.3. The receipt
+  records the deviation; object-level comparison with the production library is not performed.
+- Producer, library and native build outputs live in the checkout's own private/ (the producer's output
+  protection requires it); the assets checkout is read-only input.
+- The library changes 48 generated units (ids renumber within a unit). Library 68,964,130 bytes,
+  production 68,855,896 (+108,234 bytes), 327 members.
+- CTest 18/18 on `private/slice161-ee-coverage-build/build`. Python discovery 249 OK, 7 skipped, with
+  `GT4_NATIVE_BUILD` on that build.
+- Headless smoke, 4,200 frames, no scripted input (`AGENTS.md` forbids scripted navigation, so the
+  slice153-157 press schedule was not reused): 42 frame dumps identical to a fresh slice157 run, and the
+  slice157 run is deterministic (two runs identical). 0 misses in every run; 0 `no translated code` lines.
+  The 42 frames have 41 distinct digests; the path covers the title flow only.
+- Stage B (all 5,682 candidate seeds) was not built.

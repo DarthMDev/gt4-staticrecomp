@@ -23,6 +23,9 @@ entries generated from the pinned image, not from recordings). Same options and 
 
 VU1 all-entries candidate (--mode vu1-all): vu1-flags with the slice157 static VU1 table, every
 8-byte address of the pinned image (2,048 programs, built as 128 parts). Same options and environment.
+
+EE coverage candidate (--mode ee-coverage, TASK-014): vu1-all with an EE library built from 16 explicit
+translator entry seeds (docs/inputs/slice161-ee-entries.json). Same options and environment.
 """
 import argparse
 import sys
@@ -44,8 +47,8 @@ def main():
                         help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'vu1-all'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full or vu1-all')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'vu1-all', 'ee-coverage'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, vu1-all or ee-coverage')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
