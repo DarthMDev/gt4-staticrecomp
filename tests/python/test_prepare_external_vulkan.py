@@ -135,10 +135,11 @@ class BaselineDerivationTests(unittest.TestCase):
             prepare_external_vulkan.prepare(target, MAIN_CHECKOUT, parallel=True)
             gs_text = (target / 'gs.cpp').read_text(encoding='utf-8')
             self.assertIn('void note_crt_mode(', gs_text)
-            self.assertIn('if (parallel_active()) return;', gs_text)
+            # Slice 174: the hooks call the neutral alt_* routers (native/renderer_routers.inc).
+            self.assertIn('if (alt_active()) return;', gs_text)
             # Slice 167: the display decode of the copied VRAM must build the swizzle tables first.
             self.assertIn('    init(); // swizzle tables for read_pixel', gs_text)
-            self.assertIn('gs::parallel_gif_transfer(path, data, qwc);', (target / 'gif.cpp').read_text(encoding='utf-8'))
+            self.assertIn('gs::alt_gif_transfer(path, data, qwc);', (target / 'gif.cpp').read_text(encoding='utf-8'))
             self.assertIn('gs::note_crt_mode(interlace, mode, field);', (target / 'hw.cpp').read_text(encoding='utf-8'))
         finally:
             shutil.rmtree(target, ignore_errors=True)
