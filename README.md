@@ -212,31 +212,33 @@ GT4Recomp stands on the work of others. Thank you:
 | Project | Author | What it gives this project |
 |---|---|---|
 | [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) (MIT) | snuri00 | The runtime foundation: the EE-to-C++ translator, PS2 hardware/service models, the GS compute renderer and the original VU1 program compiler our `tools/vu_recomp` derives from. GT4 was its first title. |
+| [paraLLEl-GS](https://github.com/Arntzen-Software/parallel-gs) (LGPL-3.0+) | Hans-Kristian Arntzen (Arntzen Software) | The Vulkan compute GS renderer we are integrating as the PC renderer (TASK-012): super-sampled upscaling, deinterlacing and page-tracked readbacks. |
+| [Granite](https://github.com/Themaister/Granite) (MIT) | Hans-Kristian Arntzen | The Vulkan engine paraLLEl-GS is built on. |
 | [gt4-decomp](https://github.com/gustavocanepa/gt4-decomp) (MIT) | gustavocanepa | A matching decompilation of GT4's game code; its CORE.GT4 is byte-identical to ours ([evidence](docs/DECOMP-IDENTITY.md)). Function names, class layouts and engine notes. |
 | [Nenkai's Gran Turismo research](https://github.com/Nenkai) ([gt-modding-hub](https://github.com/Nenkai/gt-modding-hub), [PDTools](https://github.com/Nenkai/PDTools), [GT-File-Specifications-Documentation](https://github.com/Nenkai/GT-File-Specifications-Documentation) and more) | Nenkai | File formats, volume and model structures, and the VU1 microcode encryption scheme that let us find GT4's whole VU1 program image ([details](docs/VU1-MICROCODE-SOURCE.md)). |
 | [GT4FS](https://github.com/Razer2015/GT4FS) | Razer2015 | GT4 volume file-system research. |
-| [PCSX2](https://github.com/PCSX2/pcsx2) (GPL-3.0) | PCSX2 team | Decades of PS2 knowledge; used here as a reference ([lessons](docs/PCSX2-LESSONS.md)) and as the source of Khronos Vulkan headers. |
+| [PCSX2](https://github.com/PCSX2/pcsx2) (GPL-3.0) | PCSX2 team | Decades of PS2 knowledge; used here as a reference ([lessons](docs/PCSX2-LESSONS.md)). Its MTVU design informs our VU1 threading plan. |
+| [ARMSX2](https://github.com/ARMSX2/ARMSX2) (GPL-3.0) | ARMSX2 team | The mobile GS pipeline planned for the Android and iOS phases (without its JIT). |
+| [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) (MIT OR Apache-2.0) | gfx-rs / wgpu contributors | Compiles the donor's WGSL shaders to SPIR-V at build time (`tools/wgsl_spirv`). |
+| [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) (Apache-2.0 OR MIT) | Khronos Group | Vulkan API headers. |
 
 Exact revisions, licenses and imported files are listed in [THIRD_PARTY.md](native/THIRD_PARTY.md).
 
-## Foundations, History, and Documentation
+## Documentation
 
-The active runtime foundation comes from the MIT-licensed [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) donor, adapted to native Windows and Vulkan. Our binary runs directly on Windows without a browser, WebAssembly, or embedded PCSX2. Credits, revisions, and licensing terms are documented in [THIRD_PARTY.md](native/THIRD_PARTY.md).
+Current work:
 
-Development has progressed through boot and menus, Vulkan integration, audio and controls, genuine racing gameplay, and display modes. The `main` branch contains only this native base.
+- [TASKS](TASKS.md): the ordered task list, with states and results.
+- [STATUS](docs/STATUS.md): current state, owner measurements and history.
+- [OPTIMIZATION-PLAN](docs/OPTIMIZATION-PLAN.md): technical background of the performance work.
+- [BUILD](docs/BUILD.md): build environment, candidate recipes and verification.
+- [ARCHITECTURE](docs/ARCHITECTURE.md): how the native runtime is put together.
+- [GS-RENDERER-OPTIONS](docs/GS-RENDERER-OPTIONS.md): paraLLEl-GS, PCSX2 hardware renderer and ARMSX2 compared.
+- [VU1-MICROCODE-SOURCE](docs/VU1-MICROCODE-SOURCE.md) · [VU0-MICROCODE-MAP](docs/VU0-MICROCODE-MAP.md) · [IOP-MAP](docs/IOP-MAP.md): where the PS2 co-processor code comes from and how it runs.
+- [DECOMP-IDENTITY](docs/DECOMP-IDENTITY.md) · [DECOMP-INTEGRATION](docs/DECOMP-INTEGRATION.md): how the gt4-decomp project relates to this build.
+- [PCSX2-LESSONS](docs/PCSX2-LESSONS.md) · [GS-ASYNC-DESIGN](docs/GS-ASYNC-DESIGN.md) · [MENUS-AND-WHEEL](docs/MENUS-AND-WHEEL.md): design notes.
+- [Decisions](docs/decisions/) and the daily [journal](docs/journal/).
 
-- [STATUS](docs/STATUS.md): Confirmed milestones and pending tasks.
-- [HYBRID-PORT-PLAN](docs/HYBRID-PORT-PLAN.md): Active Windows-first no-JIT optimization, GS graphics and future Android/iOS phases.
-- [NATIVE-PORT-PLAN](docs/NATIVE-PORT-PLAN.md): Preserved game-scene renderer and eventual native migration alternative.
-- [AGENT-WORKFLOW](docs/AGENT-WORKFLOW.md): Model routing, task contracts, review and future unattended queue policy.
-- [EE-PRODUCER](docs/EE-PRODUCER.md): Verified CORE/ISO preparation, fresh EE generation and separate library build.
-- [RENDER-CONTRACTS](docs/RENDER-CONTRACTS.md): Initial model/camera mapping, state effects and open coverage gates.
-- [EE-CALLBACK-COVERAGE](docs/EE-CALLBACK-COVERAGE.md): Bounded offline recovery experiment and remaining integration gates.
-- [EE-CANDIDATES](docs/EE-CANDIDATES.md): Separate runtime builds and owner-controlled qualification.
-- [CAR-ASSET-RESEARCH](docs/CAR-ASSET-RESEARCH.md): Bounded volume-index evidence and the one-car extraction contract.
-- [NENKAI-REFERENCES](docs/NENKAI-REFERENCES.md): Pinned local reference environment, format/source map and catalogue research limits.
-- [ROADMAP](docs/ROADMAP.md): Earlier timing analysis and selective migration proposal, retained as technical context.
-- [ARCHITECTURE](docs/ARCHITECTURE.md): Architecture of the current base.
-- [BUILD](docs/BUILD.md): Build environment setup and verification procedures.
+Earlier plans kept as context: [HYBRID-PORT-PLAN](docs/HYBRID-PORT-PLAN.md), [NATIVE-PORT-PLAN](docs/NATIVE-PORT-PLAN.md), [ROADMAP](docs/ROADMAP.md), [EE-PRODUCER](docs/EE-PRODUCER.md), [EE-CANDIDATES](docs/EE-CANDIDATES.md), [EE-CALLBACK-COVERAGE](docs/EE-CALLBACK-COVERAGE.md), [RENDER-CONTRACTS](docs/RENDER-CONTRACTS.md), [CAR-ASSET-RESEARCH](docs/CAR-ASSET-RESEARCH.md), [NENKAI-REFERENCES](docs/NENKAI-REFERENCES.md), [AGENT-WORKFLOW](docs/AGENT-WORKFLOW.md).
 
-Active source code resides in `native/`, with tooling in `scripts/`, automated tests in `tests/`, and technical records in `docs/`. The active development fork is [`moesuito/gt4-staticrecomp`](https://github.com/moesuito/gt4-staticrecomp).
+Source code lives in `native/` (runtime adapter), `tools/` (translators and the VU recompiler), `scripts/` (preparation and launchers) and `tests/`. The binary runs directly on Windows: no browser, no WebAssembly and no embedded PCSX2. The active development fork is [`moesuito/gt4-staticrecomp`](https://github.com/moesuito/gt4-staticrecomp).
