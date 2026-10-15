@@ -826,11 +826,11 @@ Limits:
 are unchanged. Build only the fixture, then run its CTest:
 
 ```
-cmake -S . -B private\slice168-audio-builduild -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+cmake -S . -B private\slice168-audio-build\build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
   -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
   -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp
-cmake --build private\slice168-audio-builduild --target host_io_fixture
-ctest --test-dir private\slice168-audio-builduild -R native_audio_input --output-on-failure
+cmake --build private\slice168-audio-build\build --target host_io_fixture
+ctest --test-dir private\slice168-audio-build\build -R native_audio_input --output-on-failure
 ```
 
 ## Slice 169 - MTVU measurement (TASK-011 step 0)
@@ -1003,3 +1003,49 @@ Python: `$env:GT4_NATIVE_BUILD="C:\Antigravity\gt4-staticrecomp\private\slice172
 Weak-CPU simulation: `play_performance.py --cpu-cores N` (1 to the logical CPU count) limits the game process with
 `SetProcessAffinityMask` after start; distinct physical cores first. Refused outside performance runs. Recorded as
 `cpu_affinity` in `result.json`. See MTVU-PLAN section 12.5 and 12.6 for the owner A/B.
+
+### Slice178 - release 1.0.0 W1: MTVU in `--mode main` (TASK-011)
+
+`--mode main` is the slice172 MTVU runtime with the slice166 main features, pinned as `docs/inputs/slice178-main.json`. The
+runtime capsule is `private/slice178-main-runtime`, derived from the main checkout with the same flags as slice172 (receipt
+ca565bbc... identical, pin `docs/inputs/slice178-main-runtime.json`):
+
+```
+python scripts\prepare_perf_runtime.py C:/Antigravity/gt4-staticrecomp/private/slice178-main-runtime ^
+  --assets-root C:/Antigravity/gt4-staticrecomp --mtvu
+```
+
+Configure and build from the worktree source (fresh build directory in the main checkout's `private/`; no junctions; shader and
+port paths are main-checkout absolute):
+
+```
+cmake -S C:\Antigravity\gt4-wt-011 -B C:\Antigravity\gt4-staticrecomp\private\slice178-main-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice178-main-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-port -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice178-main-build\build
+```
+
+Result: `gt4vulkan.exe` 95,570,944 bytes, sha256 6d71f531e4dc84338cb4163b1aba643b077933f68005cb101391e811e7db1094. CMake
+accepts the capsule name in `native/CMakeLists.txt` (slice178 added to each allowlist).
+
+Checks: `ctest --test-dir C:\Antigravity\gt4-staticrecomp\private\slice178-main-build\build` 27/27. Python: with
+`GT4_NATIVE_BUILD` on that build and `GT4_ASSETS_ROOT` the main checkout, `unittest discover -s tests/python` 281 OK, 12 skipped.
+Headless: `external_runtime_probe.py` with `--runtime-manifest docs/inputs/slice178-main.json`, 4,200 frames, the 12 slice157
+presses; 42/42 frames identical to `private/slice157-smoke/headless-157/frames` for `GT4_MTVU=1` (three runs) and `GT4_MTVU=0`
+(one run), and for the default environment (one run).
+
+Owner commands (PowerShell):
+
+```
+python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode main
+$env:GT4_MTVU="0"; python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode main
+```
+
+`--mode main` holds the race display at 480p (the launcher sets `force_480p`); the hidden opt-out is `GT4_FORCE_480P=0`, which the
+probe records. `--mode mtvu` keeps the slice172 pin and binary. Owner A/B and weak-CPU runs are pending (MTVU-PLAN section 12.6).

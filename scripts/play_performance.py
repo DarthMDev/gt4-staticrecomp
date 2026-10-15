@@ -33,8 +33,11 @@ Quick-fix 2 candidate (--mode quickfix2): vu1-all with the quick fixes of slice1
 interval counters, late_frames with a 1 ms tolerance) and the slice158 CRT table rewrite. Kept as history:
 its build no longer compiles from this tree (native/display_table.* was removed in slice164).
 
-Current main (--mode main, slice166): everything merged to main (all VU1 and VU0 entries compiled, quick
-fixes); accepts --force-480p, --vu0-verify N and the VU1 options. This is the build to play.
+Current main (--mode main, slice178): everything merged to main (all VU1 and VU0 entries compiled, quick
+fixes) plus the MTVU VU1 worker runtime of slice172 (docs/MTVU-PLAN.md section 12). GT4_MTVU=1 is the default
+worker; GT4_MTVU=0 is the single-thread A/B path. The race display is held at 480p progressive by default
+(release 1.0.0 owner decision); the hidden opt-out is GT4_FORCE_480P=0. Accepts --force-480p, --cpu-cores N,
+--vu0-verify N and the VU1 options. This is the build to play.
 
 MTVU measurement (--mode mtvu-measure, slice169, TASK-011 step 0): main plus counters for the VU1 worker
 plan (docs/MTVU-PLAN.md). Each F8 report adds [mtvu-measure] lines: GIF packets per path with their
@@ -50,6 +53,7 @@ entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth gene
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
 """
 import argparse
+import os
 import sys
 from pathlib import Path
 from play_external_runtime import ROOT, play
@@ -63,6 +67,17 @@ def cpu_options(args):
     return {} if args.cpu_cores is None else {'cpu_cores': args.cpu_cores}
 
 
+def force_480p_requested(args):
+    """--force-480p, or the default of --mode main (480p progressive race display).
+
+    Release 1.0.0 owner decision: --mode main holds 480p unless the hidden opt-out GT4_FORCE_480P=0 is set.
+    Only the exact value 0 opts out; other values are passed on and refused by the probe.
+    """
+    if args.force_480p:
+        return True
+    return args.mode == 'main' and os.environ.get('GT4_FORCE_480P') != '0'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--assets-root', type=Path, required=True)
@@ -72,7 +87,7 @@ def main():
     parser.add_argument('--vu1-interpret-only', action='store_true',
                         help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
     parser.add_argument('--force-480p', action='store_true',
-                        help='experimental: hold the race display option at 480p (quickfix3 mode)')
+                        help='hold the race display option at 480p (quickfix3, main, mtvu; main has it by default)')
     parser.add_argument('--cpu-cores', type=int, default=None, metavar='N',
                         help='weak-CPU simulation: limit the game to N logical CPUs (1..logical count), '
                              'one per physical core first; recorded in result.json (docs/MTVU-PLAN.md section 12)')
@@ -100,7 +115,7 @@ def main():
                 options['vu1_verify'] = args.vu1_verify
             if args.vu1_interpret_only:
                 options['vu1_interpret_only'] = True
-            if args.force_480p:
+            if force_480p_requested(args):
                 options['force_480p'] = True
             if args.vu0_verify:
                 options['vu0_verify'] = args.vu0_verify

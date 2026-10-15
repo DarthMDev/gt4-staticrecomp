@@ -105,9 +105,10 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
   the demo-input data appears to arrive wrong or late. Under investigation.
 - **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
   that the new renderer (paraLLEl-GS, TASK-012) is expected to remove.
-- **Weaker CPUs:** VU1 work (5–8 ms per frame) still shares the main CPU core;
-  moving it to its own core (MTVU, TASK-011) is in progress and matters most for
-  older PCs and phones.
+- **Weaker CPUs:** VU1 work now runs on its own worker thread (MTVU, TASK-011),
+  on by default in `--mode main`; `GT4_MTVU=0` restores the single-thread path for
+  A/B. The weak-CPU effect is not measured yet (`--cpu-cores N` is the simulation
+  switch); it matters most for older PCs and phones.
 - Menus are interlaced like the original game (480p applies in races); a
   deinterlacing filter is planned with the new renderer.
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
@@ -137,7 +138,7 @@ in game before it is merged.
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done · 0 interpreted VU1 calls; rally 60, showroom 60, night 59 FPS |
 | TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
 | TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
-| TASK‑011 | MTVU: VU1 on its own thread | 🔄 Measured: 3.5–7.3 ms/frame can move off the main core; implementing |
+| TASK‑011 | MTVU: VU1 on its own thread | ✅ Done · in `--mode main` (on by default, `GT4_MTVU=0` A/B) · headless 42/42 on and off; owner A/B pending |
 | TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs, textures missing (debugging) |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
@@ -193,7 +194,7 @@ For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
 The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. A separate [EE producer](docs/EE-PRODUCER.md) now rebuilds the translator and game library from verified inputs; production still uses its qualified private library while candidate integration and gameplay checks remain pending. A clean end-to-end playable build remains future work.
 
-Once the environment is prepared, the current build starts with `scripts/play_performance.py --mode main --force-480p` (F7 starts a measured interval, F8 reports it); it validates every input against its pin and preserves the existing memory card. The planned launcher (TASK-019) replaces this with an installer and a Play button. Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
+Once the environment is prepared, the current build starts with `scripts/play_performance.py --mode main` (races held at 480p, VU1 on a worker thread; F7 starts a measured interval, F8 reports it); it validates every input against its pin and preserves the existing memory card. The planned launcher (TASK-019) replaces this with an installer and a Play button. Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).
 
 | Key | Action |
 |---|---|
@@ -207,7 +208,7 @@ Once the environment is prepared, the current build starts with `scripts/play_pe
 
 The presentation is fixed at 16:9; there is no 4:3 framing option. Set **Options → Screen → Aspect Ratio** in the game to 16:9. Fullscreen restores the previous windowed size and position when toggled off. Existing memory cards retain saved settings.
 
-`--force-480p` (or `GT4_FORCE_480P=1`) holds the game's race display option at 480p: races render progressive while menus stay 480i as in the original. It becomes the default with the launcher.
+`--mode main` holds the game's race display option at 480p by default (owner decision for release 1.0.0): races render progressive while menus stay 480i as in the original. `--force-480p` (or `GT4_FORCE_480P=1`) does the same in the other modes. Each run records the setting.
 
 ## Credits
 
