@@ -1,0 +1,25 @@
+[package]
+name = "gt4l-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "GT4Recomp launcher application (Slint UI)"
+build = "build.rs"
+
+[[bin]]
+name = "GT4Recomp"
+path = "src/main.rs"
+
+[dependencies]
+gt4l-core.workspace = true
+gt4l-disc.workspace = true
+gt4saves.workspace = true
+gt4controls.workspace = true
+slint = { version = "1.18", default-features = false, features = ["std", "backend-winit", "renderer-femtovg", "compat-1-2"] }
+rfd = "0.17"
+
+[build-dependencies]
+slint-build = "1.18"
+embed-resource = "3"

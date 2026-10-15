@@ -1,0 +1,31 @@
+// Game executable resources (configured by CMake). Icon: launcher/assets/brand/game.ico.
+1 ICON "@GT4_GAME_ICON@"
+
+1 VERSIONINFO
+FILEVERSION @GT4_RC_VERSION_COMMA@
+PRODUCTVERSION @GT4_RC_VERSION_COMMA@
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "GT4Recomp contributors"
+            VALUE "FileDescription", "Gran Turismo 4"
+            VALUE "FileVersion", "@GT4_VERSION@"
+            VALUE "InternalName", "GT4Recomp"
+            VALUE "LegalCopyright", "MIT License. Unofficial fan project; not affiliated with Sony or Polyphony Digital."
+            VALUE "OriginalFilename", "gt4vulkan.exe"
+            VALUE "ProductName", "Gran Turismo 4"
+            VALUE "ProductVersion", "@GT4_VERSION@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

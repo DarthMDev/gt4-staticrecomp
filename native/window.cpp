@@ -23,7 +23,7 @@
 #include <string>
 
 namespace {
-constexpr wchar_t window_title[] = L"GT4Recomp";
+constexpr wchar_t window_title[] = L"Gran Turismo 4";
 HWND game_window = nullptr;
 bool surface_attached = false;
 bool closing = false;
@@ -244,6 +244,8 @@ bool open_window(bool fullscreen) {
   window_class.hInstance = GetModuleHandleW(nullptr);
   window_class.lpszClassName = L"GT4NativeVulkanPilot";
   window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
+  // Icon from the executable resource (gt4vulkan.rc, IDI 1 = game.ico from launcher/assets/brand).
+  window_class.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1));
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
   // The presentation is fixed 16:9: the client area is 960x540.

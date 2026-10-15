@@ -1,0 +1,56 @@
+# Official Gran Turismo 4 assets bundled in the launcher (owner-authorised download).
+# Replace this folder with launcher/assets/brand-neutral/ for a de-branded build.
+# Hashes are of the files in this folder; sources are where they were fetched on the date shown.
+
+[[asset]]
+path = "source/gt4-logo.svg"
+description = "Gran Turismo 4 logo (wordmark with GT emblem), SVG source"
+size_bytes = 16972
+sha256 = "abdc5019f0da29d4d299648838d38719873cbf3ef6daf0ba8a37dff069e6c683"
+source_url = "https://upload.wikimedia.org/wikipedia/commons/e/e0/Gran_Turismo_4_Logo.svg"
+retrieved = "2026-10-15"
+licence_note = "Wikimedia Commons, file page File:Gran_Turismo_4_Logo.svg, licence shown there: Public domain; upstream credit: Sony Computer Entertainment (original SVG, via brandsoftheworld.com). Owner to confirm."
+
+[[asset]]
+path = "source/cover-front.png"
+description = "Gran Turismo 4 (USA, Canada) cover art, 512x725 front"
+size_bytes = 253911
+sha256 = "1991dd90c45eea07f07583e014deef211cc6e03145263a03d747444fb3180b4e"
+source_url = "https://raw.githubusercontent.com/libretro-thumbnails/Sony_-_PlayStation_2/master/Named_Boxarts/Gran%20Turismo%204%20(USA,%20Canada)%20(v1.01).png"
+retrieved = "2026-10-15"
+licence_note = "libretro-thumbnails repository (scan of the NTSC-U box, low resolution). Licence of the artwork is Sony's; the repository terms are not stated per file. Owner to confirm or replace with a 900 px+ scan."
+
+[[asset]]
+path = "logo-gt4.png"
+description = "Logo rendered 1024 px wide from source/gt4-logo.svg (resvg)"
+size_bytes = 30097
+sha256 = "bbf897b15589312ba4fca55392290699528a45bbf9fb580dc96694a7e2d52e74"
+licence_note = "Derived."
+
+[[asset]]
+path = "emblem-gt.png"
+description = "GT emblem cropped from logo-gt4.png"
+size_bytes = 12559
+sha256 = "55f209cb1e5cd4633bba94bc8cb68e5e199907aa7f91eb54c645041be0e4ec30"
+licence_note = "Derived."
+
+[[asset]]
+path = "cover-front.png"
+description = "Copy of source/cover-front.png"
+size_bytes = 253911
+sha256 = "1991dd90c45eea07f07583e014deef211cc6e03145263a03d747444fb3180b4e"
+licence_note = "Derived."
+
+[[asset]]
+path = "game.ico"
+description = "Game executable icon: emblem on dark tile, 10 sizes"
+size_bytes = 16696
+sha256 = "e8f8c1a73bc9dd3840d17f272d70a20fdf223a12e83fb0e6855ba6536a515d42"
+licence_note = "Derived (tools/make_brand.py)."
+
+[[asset]]
+path = "launcher.ico"
+description = "Launcher icon: emblem on carbon with play badge, 10 sizes"
+size_bytes = 18602
+sha256 = "1f38f05825f5dde3ebe4ff4af96528d96d4f1f5ee04218157d227acefde3d60b"
+licence_note = "Derived."

@@ -1,0 +1,11 @@
+[package]
+name = "gt4l-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "GT4Recomp launcher core: settings table, config file, paths, launch plan and exit classification"
+
+[dependencies]
+toml.workspace = true

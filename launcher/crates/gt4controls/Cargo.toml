@@ -1,0 +1,10 @@
+[package]
+name = "gt4controls"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "GT4Recomp controls configuration schema (stub until task/029-input-mapping defines docs/CONTROLS.md)"
+
+[dependencies]

@@ -1,0 +1,10 @@
+[package]
+name = "gt4saves"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "GT4Recomp save and replay manager (stub until TASK-025 lands)"
+
+[dependencies]

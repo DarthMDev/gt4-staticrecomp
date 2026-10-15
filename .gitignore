@@ -17,3 +17,5 @@ CORE.GT4
 CMakeUserPresets.json
 __pycache__/
 *.pyc
+# Launcher build output (Rust workspace).
+/launcher/target/
