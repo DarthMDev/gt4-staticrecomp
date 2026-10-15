@@ -402,7 +402,7 @@ Measurement outputs kept in private directories: `private/slice155-vu1-full-gen-
 Slice156 (TASK-009 quick fixes) is a candidate on the slice155 profile. Owner command, from the
 repository root:
 
-    private	ooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix
 
 Changes: window title `GT4Recomp`; the presentation is fixed 16:9 (F6, the 4:3 option and
 `GT4_ASPECT` / `--aspect` are removed); Alt+Enter and F11 toggle borderless fullscreen on the
@@ -826,9 +826,226 @@ Limits:
 are unchanged. Build only the fixture, then run its CTest:
 
 ```
-cmake -S . -B private\slice168-audio-builduild -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+cmake -S . -B private\slice168-audio-build\build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
   -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
   -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp
-cmake --build private\slice168-audio-builduild --target host_io_fixture
-ctest --test-dir private\slice168-audio-builduild -R native_audio_input --output-on-failure
+cmake --build private\slice168-audio-build\build --target host_io_fixture
+ctest --test-dir private\slice168-audio-build\build -R native_audio_input --output-on-failure
 ```
+
+## Slice 169 - MTVU measurement (TASK-011 step 0)
+
+Counters for the VU1 worker plan ([MTVU-PLAN](MTVU-PLAN.md) section 9). No guest-visible change.
+Built from the `task/011-mtvu` worktree with every private input in the main checkout (no junction):
+`native/CMakeLists.txt` and `tools/vu_recomp/CMakeLists.txt` now qualify capsules, port, shaders, donor and
+VU0 image against `GT4_ASSETS_ROOT` (equal to the source root in the main checkout, so main builds are unchanged).
+
+```
+python scripts\prepare_perf_runtime.py C:/Antigravity/gt4-staticrecomp/private/slice169-mtvu-measure-runtime ^
+  --assets-root C:/Antigravity/gt4-staticrecomp --mtvu-measure
+cmake -S <worktree> -B C:/Antigravity/gt4-staticrecomp/private/slice169-mtvu-measure-build/build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" ^
+  -DGT4_EE_PROFILE=production -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp ^
+  -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice169-mtvu-measure-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-port ^
+  -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus
+cmake --build C:/Antigravity/gt4-staticrecomp/private/slice169-mtvu-measure-build/build
+```
+
+The capsule adds `gif.cpp` (donor `gs/gif.cpp`, sha256 eee761d7...) and `memory.cpp` (c33b9fed...). Without
+`--mtvu-measure` the derivation reproduces the slice160 capsule byte for byte (Python control). Receipt
+sha256 afeeea67...; executable `gt4vulkan.exe` 95,539,712 bytes, sha256
+72fe2ad32ce76477d181e6bf8883644c84fc16c696563fce0a261eafebfc39e2. The compiler on PATH reported
+clang-cl 22.1.3 at configure time (slice166 records 23.1.2; same executable path).
+
+Launcher: `--mode mtvu-measure` (pin `docs/inputs/slice169-mtvu-measure.json`), same options as `main`.
+`GT4_MTVU_MEASURE` (0 or 1, default on) and `GT4_MTVU_MEASURE_EVERY` are validated before any output,
+forwarded and recorded in `result.json`. A worktree without `private/` takes the pinned binaries from
+`--assets-root` (`binary_workspace_for`); `external_runtime_probe.py` gained `--assets-root` for headless runs.
+
+Controls:
+
+- CTest 24/24, including the new `native_mtvu_measure` (GIF scanner with split packets, REGLIST/IMAGE
+  skipping and NREG 0; overlap model with authored timestamps; interval arithmetic; report lines; switch values).
+- Python unittest discover (GT4_NATIVE_BUILD = this build, GT4_ASSETS_ROOT = main checkout): 264 OK, 12 skipped
+  (tests that need `private/` in the source checkout).
+- Headless 4,200 frames, slice157 schedule (`external_runtime_probe.py --assets-root <main> --runtime-manifest
+  docs/inputs/slice169-mtvu-measure.json --card-seed <main>/private/slice113-video/widescreen-seed/card.ps2`
+  plus the 12 presses): 42 dumps identical to a fresh slice166 run and to
+  `private/slice157-smoke/headless-157/frames`, with the counters on and with `GT4_MTVU_MEASURE=0`.
+  Outputs: `private/slice169-smoke/headless-{on,off,166}`.
+
+Owner command (from the worktree or, after merge, the main checkout):
+`python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu-measure --force-480p`
+
+Limits: downloads are counted as TRXDIR=1 writes, not `gs::read_image` calls; EE counts cover the slow
+memory path, which is the only EE path to VU memory in the donor; host timings are only meaningful on an
+idle machine.
+
+## Slice170 - MTVU step 2 (TASK-011): VU1 on a worker thread
+
+Branch `task/011-mtvu`, worktree `C:\Antigravity\gt4-wt-011` (no `private/` junction). Capsule
+`private/slice170-mtvu-runtime`, derived from the main checkout:
+
+```
+python scripts\prepare_perf_runtime.py C:/Antigravity/gt4-staticrecomp/private/slice170-mtvu-runtime ^
+  --assets-root C:/Antigravity/gt4-staticrecomp --mtvu
+```
+
+`--mtvu` implies `--vu0-aot`; its hooks are `prepare_perf_runtime.py` `MTVU_PATCHES`. Without `--mtvu` the
+derivation reproduces slice160 (`system.cpp`, `vif.cpp`, `vu_micro.cpp`, `runtime.json`) and slice169 byte for byte.
+Pin: `docs/inputs/slice170-mtvu-runtime.json` (receipt sha256 4e5f1e4dc2c1287dd73572e083794475dbfd2f6726badfbdffb8303ce4645e20).
+
+Build (clang-cl 22.1.3, Ninja, Release; same pinned inputs as slice169, new runtime capsule):
+
+```
+cmake -S C:\Antigravity\gt4-wt-011 -B C:\Antigravity\gt4-staticrecomp\private\slice170-mtvu-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" ^
+  -DGT4_EE_PROFILE=production -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp ^
+  -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice170-mtvu-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-port ^
+  -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice170-mtvu-build\build
+```
+
+Executable `gt4vulkan.exe` 95,561,728 bytes, sha256 a0b4968b2c59071bb06945b263e195a939ad2bb2c53513590a05244536cd333e.
+Launcher pin: `docs/inputs/slice170-mtvu.json` (mode `mtvu`). Step 1 fixtures (`native_mtvu_ring`,
+`native_mtvu_journal`) are in the same build.
+
+Controls:
+
+- CTest 26/26 on `private/slice170-mtvu-build/build` (includes `native_mtvu_ring`, `native_mtvu_journal`).
+- Headless 4,200 frames, slice157 press schedule (12 presses), frame dumps every 100 frames, compared with
+  `private/slice157-smoke/headless-157/frames`: 42 of 42 identical for `GT4_MTVU=1` (three runs: `on`, `on2`,
+  `on3`), and 42 of 42 identical for `GT4_MTVU=0` (`off`). Outputs `private/slice170-smoke/{on,on2,on3,off}`.
+- `GT4_MTVU_VERIFY=1` headless, on and off (`verify-on`, `verify-off`): 4,200 `[mtvu-verify]` lines each, 0 VIF1
+  shadow/worker mismatches, and the per-frame GS render hash identical in all 4,200 frames (4,196 frames carry GS
+  renders). Frame dumps of both runs identical to the reference (42 of 42).
+- Python: 264 OK, 12 skipped (`GT4_NATIVE_BUILD` on this build, `GT4_ASSETS_ROOT` main checkout).
+
+Owner A/B (showroom, night race, rally; one F7/F8 interval each; the `mtvu` mode is the same for both):
+
+```
+set GT4_MTVU=0
+python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+set GT4_MTVU=1
+python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+```
+
+`GT4_MTVU` unset means 1. Add `GT4_MTVU_VERIFY=1` for a stream check (the per-frame `[mtvu-verify]` lines; MTVU
+on and off must print the same `gs` hashes). Known limit: F8 is not per-thread yet (MTVU-PLAN section 11.5), so
+the owner's F8 under MTVU is flagged invalid by the probe until step 3.
+
+### Slice171 - MTVU step 3 (per-thread F8)
+
+Same runtime capsule as slice170 (`private/slice170-mtvu-runtime`, unchanged). Build `private/slice171-mtvu-build`
+(same CMake recipe as slice170, with `-DGT4_PERF_RUNTIME_SOURCE=.../slice170-mtvu-runtime`). `gt4vulkan.exe`
+95,569,920 bytes, sha256 6e60fe72bc870c25d6252cb79b276fbbd870b857dc10343855854cb0ee37269d. Launcher pin
+`docs/inputs/slice171-mtvu.json`; mode `mtvu` now points to it.
+
+Owner A/B (PowerShell, from the worktree or the main checkout; `GT4_MTVU` unset means 1):
+
+```
+$env:GT4_MTVU="0"; C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+$env:GT4_MTVU="1"; C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p
+```
+
+Compare, per scene (showroom, night race, rally, Nordschleife TT 480p), the F8 lines `frame ms` (median, p95,
+p99, max), `VBlanks/s`, the `exclusive wall ms/frame` line (`vu1_aot`, `vu1_interpret`, `ee_dispatch`, `gs_execute`),
+and with GT4_MTVU=1 the `[mtvu]` lines: `EE wait ms/frame` (by reason; `mtvu_wait_vblank` should be small),
+`EE gs_drain`, `worker ms/frame` (vu1_program, output_path12, busy, idle), and `overlap achieved`.
+Acceptance (MTVU-PLAN step 5): median and p99 equal or better in each scene; `vu1_aot` on the EE thread near 0 with
+MTVU on (the worker's time appears in the `[mtvu]` worker line). F8 under MTVU is valid (no INVALID line).
+Headless identity check: `GT4_MTVU_REPORT_EVERY=500 external_runtime_probe.py ... --runtime-manifest docs\inputs\slice171-mtvu.json`
+(42 frames compared with slice157).
+
+### Slice172 - MTVU step 4 (EE-side signals) and step 6 (`--cpu-cores`) (TASK-011)
+
+Runtime capsule `private/slice172-mtvu-runtime`, derived from the main checkout (the same derivation as slice170 with the
+step 4 `gif.cpp` hook; `runtime.json` profile `step4-runtime-v2`):
+
+```
+python scripts\prepare_perf_runtime.py C:/Antigravity/gt4-staticrecomp/private/slice172-mtvu-runtime --assets-root C:/Antigravity/gt4-staticrecomp --mtvu
+```
+
+Pin: `docs/inputs/slice172-mtvu-runtime.json` (receipt sha256 ca565bbcd75214074fc333aed3cafda6b580e1b078ea221ad4519b8028fc0d29).
+Configure and build (fresh dir; the worktree is the source, the build dir is in the main checkout's `private/`):
+
+```
+cmake -S C:\Antigravity\gt4-wt-011 -B C:\Antigravity\gt4-staticrecomp\private\slice172-mtvu-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice172-mtvu-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-port -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice172-mtvu-build\build
+```
+
+Result: `gt4vulkan.exe` 95,570,944 bytes, sha256 47df308fbbb3f555ea54749dae94ee249023e93cc315a721491d7a6661c50b0c.
+Launcher pin `docs/inputs/slice172-mtvu.json`; launcher mode `mtvu` now uses it (`mtvu-slice171` keeps slice171).
+Tests: `ctest --test-dir C:\Antigravity\gt4-staticrecomp\private\slice172-mtvu-build\build --output-on-failure` (27 tests);
+Python: `$env:GT4_NATIVE_BUILD="C:\Antigravity\gt4-staticrecomp\private\slice172-mtvu-build\build"` then
+`private\tooling-venv\Scripts\python.exe -m unittest discover -s tests/python`.
+
+Weak-CPU simulation: `play_performance.py --cpu-cores N` (1 to the logical CPU count) limits the game process with
+`SetProcessAffinityMask` after start; distinct physical cores first. Refused outside performance runs. Recorded as
+`cpu_affinity` in `result.json`. See MTVU-PLAN section 12.5 and 12.6 for the owner A/B.
+
+### Slice178 - release 1.0.0 W1: MTVU in `--mode main` (TASK-011)
+
+`--mode main` is the slice172 MTVU runtime with the slice166 main features, pinned as `docs/inputs/slice178-main.json`. The
+runtime capsule is `private/slice178-main-runtime`, derived from the main checkout with the same flags as slice172 (receipt
+ca565bbc... identical, pin `docs/inputs/slice178-main-runtime.json`):
+
+```
+python scripts\prepare_perf_runtime.py C:/Antigravity/gt4-staticrecomp/private/slice178-main-runtime ^
+  --assets-root C:/Antigravity/gt4-staticrecomp --mtvu
+```
+
+Configure and build from the worktree source (fresh build directory in the main checkout's `private/`; no junctions; shader and
+port paths are main-checkout absolute):
+
+```
+cmake -S C:\Antigravity\gt4-wt-011 -B C:\Antigravity\gt4-staticrecomp\private\slice178-main-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice178-main-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-port -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice178-main-build\build
+```
+
+Result: `gt4vulkan.exe` 95,570,944 bytes, sha256 6d71f531e4dc84338cb4163b1aba643b077933f68005cb101391e811e7db1094. CMake
+accepts the capsule name in `native/CMakeLists.txt` (slice178 added to each allowlist).
+
+Checks: `ctest --test-dir C:\Antigravity\gt4-staticrecomp\private\slice178-main-build\build` 27/27. Python: with
+`GT4_NATIVE_BUILD` on that build and `GT4_ASSETS_ROOT` the main checkout, `unittest discover -s tests/python` 281 OK, 12 skipped.
+Headless: `external_runtime_probe.py` with `--runtime-manifest docs/inputs/slice178-main.json`, 4,200 frames, the 12 slice157
+presses; 42/42 frames identical to `private/slice157-smoke/headless-157/frames` for `GT4_MTVU=1` (three runs) and `GT4_MTVU=0`
+(one run), and for the default environment (one run).
+
+Owner commands (PowerShell):
+
+```
+python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode main
+$env:GT4_MTVU="0"; python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode main
+```
+
+`--mode main` holds the race display at 480p (the launcher sets `force_480p`); the hidden opt-out is `GT4_FORCE_480P=0`, which the
+probe records. `--mode mtvu` keeps the slice172 pin and binary. Owner A/B and weak-CPU runs are pending (MTVU-PLAN section 12.6).

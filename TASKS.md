@@ -52,18 +52,20 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done |
 | TASK‑009 | Quick fixes: title, fixed 16:9, fullscreen, interval counters, races in 480p | ✅ Done |
 | TASK‑010 | Build pipeline: faster builds and build tuning (parallel, cache, lld-link, fp-contract off, x86-64-v3 variant, LTO, PGO) | ✅ Done (tuning measurements pending) |
-| TASK‑011 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
-| TASK‑012 | paraLLEl-GS as the PC renderer: integration, upscaling, deinterlacing, readbacks, extras, GT4 validation | 🔄 In progress |
+| TASK‑011 | MTVU: VU1 on its own thread, on by default | ✅ Done · in `--mode main` (slice178), `GT4_MTVU=0` A/B |
+| TASK‑012 | paraLLEl-GS as an optional PC renderer: integration, super-sampling, high-resolution output | 🔄 Plays (night race 60 FPS); quality capped at 2x; kept as an option |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
-| TASK‑017 | License-test crash | 📋 Planned |
+| TASK‑017 | License-test crash | 🔄 In progress (EE FPU rounding lead) |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust + Slint) and NSIS per-user installer | 🔄 Design and plan done (branch `task/019-launcher`) |
-| TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 📋 Planned |
-| TASK‑026 | Own hardware renderer, part 1: clean-room specification of the PCSX2 hardware renderer (study) | 🧪 Spec complete (chapters 00-15), ready for owner review |
-| TASK‑027 | Own hardware renderer, part 2: MIT implementation from the specification (3x-6x, texture packs) | 📋 Planned |
+| TASK‑019 | Launcher 1.0.0 (Rust + Slint) and NSIS per-user installer | 🔄 In progress (branch `task/019-launcher`) |
+| TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 🔄 In progress |
+| TASK‑028 | CoreGS 1.1: upscaling up to 3x (4x available), interlaced-only deinterlace, FXAA-class AA, FSR 1.0 viewport scaling | 🔄 Upscaler done (1x-4x); filters in progress |
+| TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | 🔄 In progress |
+| TASK‑026 | CoreGS 2.0, part 1: clean-room specification of the PCSX2 hardware renderer | ✅ Done (docs/hw-renderer-spec, PR #17) |
+| TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (owner, 2026-10-15) · pure libraries done on task/027-hw-renderer |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 
@@ -140,6 +142,7 @@ Run VU1 programs on a worker thread (donor `start_vu_thread` exists), on by
 default with an env switch to disable; exact sync points wherever the EE observes
 VU1 results. Acceptance: identical headless frames, verify 0 mismatches, owner
 showroom/night/race frametime equal or better.
+State: ✅ Done (release 1.0.0 W1, branch `task/011-mtvu`). Plan in docs/MTVU-PLAN.md; step 0 (slice169 measurement), steps 1-4 (ring and journal, slice170 worker, slice171 per-thread F8, slice172 EE-side signals) and step 6 (`--cpu-cores N`) are in. Release W1 (slice178): MTVU is part of `--mode main`, on by default (`GT4_MTVU=0` is the A/B switch), and `--mode main` holds 480p by default. Checks: CTest 27/27, Python 281 OK (12 skipped), headless 4,200 frames: 42/42 identical to slice157 with MTVU on (three runs) and off (one run), and with the default environment. The PR into `main` is not opened yet (ready for review); the merge waits for owner approval. Owner A/B (MTVU-PLAN section 12.6) still pending. Details: BUILD.md "Slice178".
 
 ### TASK-012 — paraLLEl-GS as the PC renderer
 One large task, delivered in verified steps on its own branch:
@@ -211,6 +214,20 @@ owner approval) and no headless frame or no-save card-byte run was made; Recycle
 replay directory names and the `.psu` 1024-byte padding are hypotheses until checked with owner
 data. A rebuilt card matches the owner's saves and file bytes, not its exact block layout.
 
+### TASK-028 — CoreGS 1.1
+Our current Vulkan compute GS renderer (CoreGS 1.x, donor lineage, MIT) gains:
+internal resolution scale 1x-4x (`--mode upscale --scale N`, PS2_SCALE; 3x is
+the release target), a deinterlace filter active only for interlaced output
+(behaviour from our clean-room description in docs/hw-renderer-spec chapter 13,
+no GPL/LGPL code copied), an FXAA-class AA pass and AMD FSR 1.0 (MIT) for
+viewport scaling. Branch `task/028-donor-upscale`. Part of release 1.0.0
+(docs/RELEASE-1.0.0-PLAN.md).
+
+### TASK-029 — Controller and keyboard mapping
+Binding table in the runtime (XInput auto-map, LT/RT as L2/R2 pressure,
+keyboard remap, deadzones/curves) read from a controls file the launcher
+writes; schema in docs/CONTROLS.md. Branch `task/029-input-mapping`.
+
 ### TASK-026 — Own hardware renderer: clean-room specification
 Study only (decision 0069). The specification team reads the PCSX2 hardware GS
 renderer (pinned source) and public GS documentation and writes a behavioral
@@ -229,7 +246,19 @@ State (2026-10-15): specification complete in `docs/hw-renderer-spec/`
 ~94 implementer-days, risks and 13 open owner questions). Ready for owner review;
 TASK-027 starts after approval and the answers to Q-01 to Q-03.
 
-### TASK-027 — Own hardware renderer: implementation
+### TASK-027 — Own hardware renderer (CoreGS 2.0): implementation
+**Paused by the owner on 2026-10-15** to focus on release 1.0.0. State on the
+integration branch `task/027-hw-renderer`: CPU-verified pure libraries for GS
+memory/swizzle (M2), GIF front end and CLUT (M3), exact pixel arithmetic (M5),
+display/deinterlace/LOD, texture-replacement keys and pack loading, surface
+cache bookkeeping with an authority fuzz (M7 core), per-draw decisions, the
+shader toolchain with GPU shaders bit-exact against the CPU reference (42.5 M
+blend cases), a CPU reference renderer that replays real GT4 captures (menus
+mostly match the donor; garage frame and a 2-line field offset open as
+IN-315/IN-316), the M1 comparison tools, and the game hookup (GT4_RENDERER=hw,
+black output). WIP branches: task/027-m4-gpuref (GPU write-back path) and
+task/027-cpuref. Interpretations awaiting confirmation:
+`docs/hw-renderer-spec/IMPLEMENTATION-NOTES.md` on the integration branch.
 MIT implementation written only from the TASK-026 specification, behind our GS
 front end next to paraLLEl-GS and the donor renderer. Implementers never open
 PCSX2 GS sources. Milestones and acceptance come from the specification.

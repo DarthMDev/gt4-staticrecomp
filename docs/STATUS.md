@@ -7,6 +7,9 @@
 pipeline (slice 159) and TASK-009 slice 164 `--mode quickfix3 --force-480p` (title,
 16:9, fullscreen, races held at 480p; owner approved). In flight: TASK-012 paraLLEl-GS
 (step 5 headless, textures missing), TASK-013 VU0 AOT (owner test), TASK-014 stage A.
+TASK-011 MTVU (branch `task/011-mtvu`, release 1.0.0 W1): slice 178 `--mode main` runs the VU1 worker
+(slice 172 runtime, `GT4_MTVU` default on, `GT4_MTVU=0` is the A/B switch) and holds 480p by default.
+Headless 42/42 identical with MTVU on (three runs), off (one run) and default. PR ready for review; owner A/B and approval pending.
 
 **Earlier:** slice 154 `--mode vu1-flags` (executable `800da980`) adds VU1 flag
 elision: showroom 59.14 VBlanks/s (was 44.79), 5-AI race 60.00 at 480p. Next:
@@ -60,6 +63,12 @@ experiment, then O3 (VU0 AOT, EE entry coverage, IOP review, build tuning).
 [menus and wheel](MENUS-AND-WHEEL.md), [online notes](ONLINE-NOTES.md).
 
 ## History (newest first)
+
+2026-10-15 — Slice 178, release 1.0.0 W1 (candidate, not owner-measured): `--mode main` is the build of main with the
+MTVU worker runtime (slice 172 capsule, byte-identical; `GT4_MTVU` default 1, 0 is the single-thread path) and holds the race
+display at 480p by default (hidden opt-out `GT4_FORCE_480P=0`). Build `private/slice178-main-build` (pin `docs/inputs/slice178-main.json`),
+CTest 27/27, Python 281 OK (12 skipped), headless 4,200 frames 42/42 identical to slice157 in four runs (on x3, off x1) plus one
+default-environment run. `--mode mtvu` keeps slice 172. Details: BUILD.md "Slice178", MTVU-PLAN section 12.
 
 2026-10-15 — Slice 153, O4 frame pacing (candidate, not owner-measured): `--mode pacing` (VU1 AOT plus asynchronous GS, as slice 152) with one 60 Hz wall-clock guest VBlank grid, non-blocking audio (16 x 256-frame buffers, 60 ms target, +-0.5 % resample control), and `GT4_PACING=audio` for the old blocking clock. FIFO stays default; `GT4_PRESENT_MODE` for experiments. Local checks: pacing and paced-device fixtures, CTest 18/18, Python 217 OK, 42 identical headless frames versus slice 152. Owner measurement pending. Read [journal 2026-10-15](journal/2026-10-15.md) and [BUILD](BUILD.md).
 
