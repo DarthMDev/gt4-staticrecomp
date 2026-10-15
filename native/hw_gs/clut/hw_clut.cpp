@@ -143,11 +143,16 @@ uint32_t ExpandRgb16(uint16_t value, const TexaState& texa, bool wholeValueRule)
     const uint32_t r = (static_cast<uint32_t>(value) & 0x1Fu) << 3;
     const uint32_t g = ((static_cast<uint32_t>(value) >> 5) & 0x1Fu) << 3;
     const uint32_t b = ((static_cast<uint32_t>(value) >> 10) & 0x1Fu) << 3;
-    uint32_t a = (value & 0x8000u) ? texa.ta1 : texa.ta0;
-    const bool zero = wholeValueRule ? (value == 0u) : (r == 0u && g == 0u && b == 0u);
-    if (texa.aem && zero) {
+    // IN-07 single rule (also used by pixel/): the A bit selects TA1 first; otherwise AEM with
+    // RGB = 0 gives alpha 0, else TA0. With the A bit clear, "RGB = 0" equals "whole value = 0",
+    // so wholeValueRule no longer changes the result (it is kept for the existing call sites).
+    uint32_t a = texa.ta0;
+    if ((value & 0x8000u) != 0) {
+        a = texa.ta1;
+    } else if (texa.aem && r == 0u && g == 0u && b == 0u) {
         a = 0;
     }
+    (void)wholeValueRule;
     return r | (g << 8) | (b << 16) | (a << 24);
 }
 

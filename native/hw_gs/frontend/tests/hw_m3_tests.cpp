@@ -932,10 +932,11 @@ void TestClutLoad() {
     CHECK_EQ(clut::ExpandRgb16(0x7FFF, texa, false), 0x40F8F8F8u);
     texa.aem = true;
     CHECK_EQ(clut::ExpandRgb16(0x0000, texa, true), 0u);
-    // The two AEM tests differ for 0x8000: the texel rule (RGB zero) zeroes alpha,
-    // the CLUT rule (whole value zero) keeps TA1.
-    CHECK_EQ(clut::ExpandRgb16(0x8000, texa, false) >> 24, 0u);
+    // IN-07 (resolved): the A bit is checked first, so 0x8000 keeps TA1 under AEM whichever
+    // flag the caller passes, and both forms agree for every value.
+    CHECK_EQ(clut::ExpandRgb16(0x8000, texa, false) >> 24, 0x80u);
     CHECK_EQ(clut::ExpandRgb16(0x8000, texa, true) >> 24, 0x80u);
+    CHECK_EQ(clut::ExpandRgb16(0x0000, texa, false) >> 24, 0u);
 
     // CLD sequence (chapter 07.2 table). Loads report whether the buffer was rewritten.
     CounterSet counters;
