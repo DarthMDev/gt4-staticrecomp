@@ -1,0 +1,12 @@
+[package]
+name = "gt4saves"
+version = "0.1.0"
+description = "PS2 memory card images, folder cards and GT4 save import/export (TASK-025)"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+# No external dependencies: the card format is small and fully specified by tests.
+
+[dependencies]

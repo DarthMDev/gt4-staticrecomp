@@ -261,6 +261,12 @@ bool open_window(bool fullscreen) {
   return true;
 }
 
+#ifdef GT4_MEMCARD_FLUSH_OVERLAY
+namespace ps2::iop::sio2 {
+void flush_cards_now(); // derived sio2.cpp (scripts/prepare_memcard_flush.py)
+}
+#endif
+
 int run_window(const std::function<int()> &emulate) {
   ControllerInput input;
   controller = &input;
@@ -365,6 +371,10 @@ int run_window(const std::function<int()> &emulate) {
       ps2::set_audio_sink({});
       throw;
     }
+    // Exit path (TASK-025 Part A): a save made less than 50 VBlanks before the window closed.
+#ifdef GT4_MEMCARD_FLUSH_OVERLAY
+    ps2::iop::sio2::flush_cards_now();
+#endif
     ps2::set_audio_sink({});
     audio.close(!closing && result == 0);
     audio_output = nullptr;
