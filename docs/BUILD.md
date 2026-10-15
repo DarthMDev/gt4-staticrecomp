@@ -899,3 +899,65 @@ Limits:
 2. Window presentation at 2x and 3x is accepted by the control (`check_presentation`), not viewed in the owner's window.
 3. A scaled frame's `decode` skip (donor `rendered` guard) changes texture decoding; not separately validated against the 1x path beyond the image comparison.
 4. No fullscreen, FSR, FXAA or deinterlace: see the CoreGS 1.1 workstream entry in the journal.
+
+## Slice 182 - CoreGS 1.1 present pass (TASK-028, workstream W2)
+
+CoreGS 1.1 is the donor Vulkan compute GS renderer (CoreGS 1.x lineage) with an internal-resolution
+scale of 1 to 4 (slice 176), and a present-path post pass for the final image (this slice): deinterlace,
+FXAA-class anti-aliasing and AMD FidelityFX FSR 1.0 scaling to the 16:9 window rectangle. Scale 1 and the
+defaults keep the headless frames: 42 of 42 dumps identical to `private/slice157-smoke/headless-157/frames`.
+
+Options (all default to the game's own choice; set only through the launcher or the environment):
+
+| Environment | Values | Default | Meaning |
+|---|---|---|---|
+| `PS2_SCALE` | 1, 2, 3, 4 | 1 | internal resolution: GS pixel = SCALE x SCALE sub-samples |
+| `GT4_DEINTERLACE` | auto, off, weave, bob, blend, adaptive | auto | runs only when the frame is really interlaced (donor halved read); auto = adaptive then, off for progressive output (480p untouched) |
+| `GT4_AA` | off, fxaa | off | edge-only FXAA-class pass before scaling |
+| `GT4_PRESENT_FILTER` | nearest, linear, fsr | automatic | final scaling to the window: automatic is nearest at scale 1 and linear when scaled; fsr = FSR 1.0 EASU then RCAS to the 16:9 rectangle (the blit is then 1:1) |
+| `GT4_FSR_SHARPNESS` | 0 to 2 (stops) | 0.2 | RCAS sharpness; 0 is the sharpest |
+| `GT4_DUMP_NATIVE_SIZE` | 1 | unset | headless frame dumps at the scaled size (default: 1x box average) |
+
+Launcher (after task/028 is merged, from the main checkout; `--mode upscale` only):
+
+```powershell
+C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root . --mode upscale --scale 2 --force-480p
+C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root . --mode upscale --scale 3 --force-480p
+C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root . --mode upscale --scale 3 --force-480p --present-filter fsr --aa fxaa --deinterlace auto --fsr-sharpness 0.2
+```
+
+Build (fresh directories, main checkout private/; run from the worktree root):
+
+1. Shader tool: `cargo build --release --manifest-path tools\wgsl_spirv\Cargo.toml --target-dir C:\Antigravity\gt4-staticrecomp\private\slice176-wgsl-target`.
+2. Donor shaders for each scale (`gs.wgsl`, entries upload..decode, scale N) and the post pass
+   (`native\post\present.wgsl`, entry `post`, arguments `<shader> <dir> 1 post`) into
+   `private\slice182-coregs11-shaders` (scale 1) and `-s2`, `-s3`, `-s4`.
+3. Port: `python scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice182-coregs11-port --assets-root C:\Antigravity\gt4-staticrecomp`.
+4. Pins: `docs/inputs/slice182-coregs11-runtime.json` (PORT and SHADERS sha256 of steps 2 and 3, checked by CMake).
+   Recompute them whenever the port or a shader changes; the launcher run manifest
+   `docs/inputs/slice182-coregs11.json` pins the executable and the scale shaders.
+5. Configure `private\slice182-coregs11-build\build` as slice 176 but with the slice182 port and shader directories.
+6. Controls: `ctest --test-dir private\slice182-coregs11-build\build --output-on-failure`: 28 of 28, including
+   `native_post_passes` (deinterlace weave/bob/blend/adaptive exact against the CPU reference over 8 interlaced
+   frames; automatic = adaptive; progressive untouched; FXAA within one level; FSR EASU+RCAS within one level at
+   32x24, 48x36 and 40x30) and `native_upscale_scale1..4`.
+
+Results (Confirmed locally; no owner window check; no performance claim):
+
+- Scale 1 headless: 42 of 42 identical to slice157. Scale 2 and 3: exit 0, 42 dumps each.
+- `post_fixture` and the Python suite (264 tests, 12 skipped as before) pass.
+- Samples from the headless frame 2100 (garage, scale 1, 640x448), in `private/slice182-coregs11-samples`:
+  `none.png`, `fxaa.png`, `adaptive-interlaced.png` (640x448) and `fsr-960x540.png` (FSR 1.0 to the 960x540 window).
+
+Limits:
+
+1. The field parity is taken from the presentation count (no VBlank field from the donor), so adaptive's
+   field alternation follows presents; the spec's VBlank field is not yet wired into the present path.
+2. The donor's halved display read repeats each field line on both rows of a pair; weave and adaptive therefore
+   operate on that frame, and their gain on real interlaced races is not measured.
+3. FSR's RCAS runs on the 8-bit EASU output; the header's float path is not used between the two stages.
+4. FSR output must fit the scratch buffer (`g_copy_words` pixels, 4,194,304 at scale 1): windows up to about
+   2560x1600 with the default buffers. Larger windows raise an error at present.
+5. FSR and FXAA are not validated against AMD's compiled header or NVIDIA's FXAA binary; the CPU references are
+   transcriptions (see `native/THIRD_PARTY.md`).
+6. Save states across scales, owner gameplay and window quality are not checked by these controls.

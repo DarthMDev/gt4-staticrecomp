@@ -377,6 +377,11 @@ add_executable(post_fixture post_fixture.cpp post/post_reference.cpp post/fsr_re
 target_include_directories(post_fixture PRIVATE "${PORT}" "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(post_fixture PRIVATE ps2runtime_vulkan user32)
 target_compile_options(post_fixture PRIVATE /W4)
+# slice182: still-image tool for the owner samples (not a CTest control).
+add_executable(post_still post_still.cpp post/post_reference.cpp post/fsr_reference.cpp)
+target_include_directories(post_still PRIVATE "${PORT}" "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(post_still PRIVATE ps2runtime_vulkan user32)
+target_compile_options(post_still PRIVATE /W4)
 target_compile_options(gt4vulkan PRIVATE /W4)
 target_compile_options(vulkan_fixture PRIVATE /W4)
 add_executable(pacing_fixture pacing_fixture.cpp)
