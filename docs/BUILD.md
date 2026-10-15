@@ -604,3 +604,63 @@ Limits:
 3. `--mode quickfix` (slice156) still runs the SetGsCrt rewrite and keeps its owner result.
 4. A `--load-state` save restores RAM after the boot hook, so a state saved without the hook keeps its table.
 5. Owner gameplay, frame timing and the window (half-height) path are not checked here.
+
+Slice164 (TASK-009, race display index) replaces the slice158 CRT table rewrite, which did not change the
+request that reaches the GS. The owner decision: races always 480p; menus keep the original interlaced
+behaviour. Owner command, from the repository root (`quickfix`, `quickfix2` and their pins are kept as history):
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix3 --force-480p
+
+Confirmed (from the pinned `private/reconstructed/SCUS_973.28.elf`, text offset = vaddr - 0xFF000; words
+decoded by a scratch MIPS reader, checked in `tests/python/test_race_display.py`):
+
+| Guest word | Meaning | Evidence |
+|---|---|---|
+| 0x622F4C | owner pointer | `func_001103E0`: `lui v0,0x62; lw a0,0x2F4C(v0)`; `func_0043A490` stores it |
+| owner + 0x38CB0 | race option object | `func_001103E0`: `lui at,0x3; ori at,0x8CB0; addu a0,at,a0`, passed to `func_00436740` |
+| object + 0x16B0 | race display index (0 normal, 1 480p, 2 1080i) | `func_00436640` 0x43665C `lw v1,0x16B0(s1)`; `func_004363A0` 0x436598 `sw zero,0x16B0(s0)` |
+| 0x622DF0 | names table: "normal", "480p", "1080i" | `func_00437380` and `func_004373F0` read it by index |
+
+`func_00436640` (race start) selects the setting by the index: index 1 calls `func_001074D0(&D_006184D0,2,6,640,448)`
+(row id 6, the 480p row), index 0 the default row. The index is zero after `setDefault` (0x436598).
+
+Design:
+
+- `native/race_display.*`: pure helpers `race_display_index_address` (owner pointer to index address, 64-bit sum,
+  refused outside guest RAM; null owner refused), `should_force_480p_index` (only 0 changes), and
+  `force_race_480p_at_vblank` (one guest VBlank: writes 1 at the index when it is 0, counts writes, logs the first).
+- Host hook: `native/window.cpp` `on_vblank`, after `pump_messages`, when `GT4_FORCE_480P=1`. No donor source is
+  changed: the capsule `private/slice164-quickfix3-runtime` is the slice157 derivation (system.cpp, vu_micro.cpp and
+  vif.cpp byte-identical to slice157). The F8 report prints `race display index writes N` when forced.
+- Removed: `native/display_override.*` (SetGsCrt rewrite), `native/display_table.*` and
+  `display_table_fixture.cpp` (CRT table), the `--gs-crt-override` and `--display-table-override` options of
+  `prepare_perf_runtime.py` with their tests, and the CTest `native_display_table`. A build of the slice156 or
+  slice158 capsule no longer compiles from this tree; their pins and executables remain as history.
+- Fixture: `native/race_display_fixture.cpp` (CTest `native_race_display`): environment parsing, address chain
+  (including refused edge owners), write decision, one write then none at 480p, 1080i kept, invalid owner ignored.
+- Launcher: `--mode quickfix3` (`docs/inputs/slice164-quickfix3.json`, runtime
+  `private/slice164-quickfix3-build/build/gt4vulkan.exe`); `--force-480p` is accepted by `quickfix3`.
+- Pins: [slice164-quickfix3-runtime.json](inputs/slice164-quickfix3-runtime.json) (capsule receipt and sources).
+
+Steps:
+
+1. `private\tooling-venv\Scripts\python.exe scripts\prepare_perf_runtime.py private\slice164-quickfix3-runtime --vu1-aot`
+   (done in this slice; the derivation is the slice157 one).
+2. Configure as slice157 with `GT4_PERF_RUNTIME_SOURCE=private/slice164-quickfix3-runtime`,
+   `GT4_VU1_GENERATED_DIR=private/slice157-vu1-all-gen`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to the slice153
+   directories, then build. The launcher pin is filled after the link (sha256 and size).
+
+Status: the capsule is derived and its pin written. Not yet done in this run: the build, CTest, the Python run with
+`GT4_NATIVE_BUILD`, the headless smoke and the launcher pin. The build was blocked for this run (see the journal).
+
+Limits:
+
+1. GT4_FORCE_480P does not change the GS, the table or any SetGsCrt request. It writes the game's race option index.
+   Whether the race output is 480p on the owner's display is the owner's check; the headless path does not present.
+2. The write also happens while the index is 0 outside races (menus, options). A user who chooses "normal" in the
+   options menu is moved back to 480p at the next VBlank; the menu may therefore show 480p while the race uses it.
+3. The index is forced only when it reads 0; a user choosing 1080i keeps it. The check runs at every VBlank, so a
+   reset to 0 by `setDefault` is undone within one frame.
+4. The race path (func_00436640) is confirmed from the ELF only by the words above, not by a traced race start.
+   The headless schedule may not reach a race; the smoke says so when it does not.
+5. No performance claim is made. Owner gameplay is not measured here.

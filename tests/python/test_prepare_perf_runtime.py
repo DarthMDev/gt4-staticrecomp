@@ -121,59 +121,6 @@ class DefaultDerivationPinTests(unittest.TestCase):
             self.assertTrue(text.strip(), name)
 
 
-class GsCrtOverrideTests(unittest.TestCase):
-    """Slice156 hw.cpp hook: one anchored hook in gs_set_crt; default derivations unchanged."""
-    DONOR_HW = ('void other() {}\n'
-                'void gs_set_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field) {\n'
-                '    g_crt[0] = interlace;\n'
-                '}\n')
-
-    def test_hook_is_added_only_to_gs_set_crt_and_reverses_exactly(self):
-        derived = producer.derive_crt(self.DONOR_HW)
-        self.assertTrue(derived.startswith(producer.CRT_PREFIX))
-        body = derived[len(producer.CRT_PREFIX):]
-        self.assertEqual(body.count('apply_crt_override'), 1)
-        self.assertEqual(body.replace(producer.CRT_REPLACEMENT, producer.CRT_ANCHOR), self.DONOR_HW)
-
-    def test_missing_or_duplicate_anchor_is_rejected(self):
-        with self.assertRaisesRegex(ValueError, 'one qualified'):
-            producer.derive_crt('no gs_set_crt here')
-        with self.assertRaisesRegex(ValueError, 'one qualified'):
-            producer.derive_crt(self.DONOR_HW + self.DONOR_HW)
-
-    def test_override_capsule_adds_hw_and_default_capsule_does_not(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder).resolve()
-            donor, pins = PerformanceDerivationTests().fixture(root)
-            (donor / 'hw.cpp').write_bytes(self.DONOR_HW.encode())
-            crt_pins = {'hw.cpp': hashlib.sha256(self.DONOR_HW.encode()).hexdigest()}
-            with patch.object(producer, 'ROOT', root), patch.object(producer, 'PINS', pins), \
-                    patch.object(producer, 'CRT_PINS', crt_pins):
-                default = producer.prepare(root / 'private/default')
-                self.assertNotIn('hw.cpp', {p.name for p in (root / 'private/default').iterdir()})
-                self.assertNotIn('gs_crt_override_profile', default)
-                receipt = producer.prepare(root / 'private/crt', gs_crt_override=True)
-            self.assertEqual({p.name for p in (root / 'private/crt').iterdir()},
-                             {'system.cpp', 'vu_micro.cpp', 'vif.cpp', 'hw.cpp', 'runtime.json'})
-            self.assertEqual(receipt['gs_crt_override_profile'], 'overlay-v1')
-            self.assertEqual(receipt['source_sha256']['hw.cpp'],
-                             hashlib.sha256((root / 'private/crt/hw.cpp').read_bytes()).hexdigest())
-            for name in ('system.cpp', 'vu_micro.cpp', 'vif.cpp'):
-                self.assertEqual((root / 'private/crt' / name).read_bytes(),
-                                 (root / 'private/default' / name).read_bytes())
-
-    def test_changed_hw_source_is_rejected_without_output(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder).resolve()
-            donor, pins = PerformanceDerivationTests().fixture(root)
-            (donor / 'hw.cpp').write_bytes(b'mutated hw')
-            with patch.object(producer, 'ROOT', root), patch.object(producer, 'PINS', pins), \
-                    patch.object(producer, 'CRT_PINS', {'hw.cpp': hashlib.sha256(self.DONOR_HW.encode()).hexdigest()}):
-                with self.assertRaisesRegex(ValueError, 'differs'):
-                    producer.prepare(root / 'private/crt', gs_crt_override=True)
-            self.assertFalse((root / 'private/crt').exists())
-
-
 class Slice156CapsuleTests(unittest.TestCase):
     """Real-file controls; skipped when the private capsules or donor are not present."""
 

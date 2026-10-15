@@ -4,11 +4,10 @@ Options:
   --split-vu  attribute VU interpreter time per unit (vu_interpreter_category).
   --vu1-aot   also overlay the VU1 AOT registry (scripts/vu1_aot_overlay.inc). Implies
               --split-vu. Default and --split-vu derivations are unchanged by this option.
-  --gs-crt-override  also derive hw.cpp with the GT4_FORCE_480P hook in gs_set_crt (slice156).
-              Without it hw.cpp is not part of the capsule, so earlier capsules are unchanged.
-              Superseded by --display-table-override, which slice158 uses.
-  --display-table-override  also derive system.cpp with a boot-time hook (slice158) that applies
-              GT4_FORCE_480P to the guest CRT mode table after the ELF is loaded (native/display_table.*).
+
+Slices 156 and 158 used --gs-crt-override and --display-table-override. Both hooks were removed in slice164
+(the 480p switch is a host-side guest RAM write, native/race_display.*). Their capsules stay pinned in
+docs/inputs and are not re-derivable from this script.
 """
 import argparse
 import hashlib
@@ -44,25 +43,6 @@ OVERLAY_ANCHORS = {
     'run_gate': ('before', '    if (unit == 1 && !interpret_only) {\n'),
 }
 PREFIX = '// Measurement-only MIT donor derivation; see native/THIRD_PARTY.md.\n#include "perf_probe.hpp"\n'
-# Slice156 GS CRT override: one hook at the top of the donor gs_set_crt (hw.cpp).
-CRT_PINS = {
-    'hw.cpp': '3fefa5a15284b7f4780c49820bc3d007746e84bae4cb74dec883269d759ce944',
-}
-CRT_ANCHOR = 'void gs_set_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field) {\n'
-CRT_HOOK = ('    // Slice156 overlay: GT4_FORCE_480P=1 rewrites the default NTSC 480i request to 480p.\n'
-            '    const gt4::display::CrtRequest request = gt4::display::apply_crt_override({interlace, mode});\n'
-            '    interlace = request.interlace;\n'
-            '    mode = request.mode;\n')
-CRT_REPLACEMENT = CRT_ANCHOR + CRT_HOOK
-CRT_PREFIX = '// Experimental GS CRT override (slice156) in the donor hw.cpp; see native/THIRD_PARTY.md.\n#include "display_override.hpp"\n'
-
-
-# Slice158 CRT table override: the boot hook in the donor system.cpp boot(), after load_elf().
-TABLE_ANCHOR = '    kernel::start_main_thread(entry, 0, static_cast<std::uint32_t>(guest_args.size()), argv);\n'
-TABLE_HOOK = ('    // Slice158 overlay: GT4_FORCE_480P=1 rewrites the guest CRT mode table after the ELF is loaded.\n'
-              '    gt4::display::apply_force_480p_table(g_ram, kRamSize);\n')
-TABLE_INCLUDE = '#include "display_table.hpp"\n'
-
 
 def overlay_sections(text):
     sections, name, lines = {}, None, []
@@ -107,28 +87,6 @@ def apply_vu1_aot(source):
     return result
 
 
-def derive_crt(source):
-    """Adds the GT4_FORCE_480P hook to gs_set_crt; checks that removing it restores the input."""
-    if source.count(CRT_ANCHOR) != 1:
-        raise ValueError('Expected one qualified GS CRT anchor in hw.cpp')
-    derived = source.replace(CRT_ANCHOR, CRT_REPLACEMENT)
-    if derived.replace(CRT_REPLACEMENT, CRT_ANCHOR) != source:
-        raise ValueError('Unexpected GS CRT override reversal')
-    return CRT_PREFIX + derived
-
-
-def derive_table(derived):
-    """Adds the slice158 boot hook to a derived system.cpp; checks that removing it restores the input."""
-    if not derived.startswith(PREFIX):
-        raise ValueError('Unexpected derived system.cpp prefix')
-    if derived.count(TABLE_ANCHOR) != 1:
-        raise ValueError('Expected one qualified boot anchor in system.cpp')
-    hooked = derived.replace(TABLE_ANCHOR, TABLE_HOOK + TABLE_ANCHOR)
-    if hooked.replace(TABLE_HOOK, '') != derived:
-        raise ValueError('Unexpected CRT table hook reversal')
-    return PREFIX + TABLE_INCLUDE + hooked[len(PREFIX):]
-
-
 def derive(name, source, *, split_vu=False, vu1_aot=False):
     original = source
     patches = [(before, after.replace('gt4::perf::Category::vu_interpret',
@@ -150,8 +108,7 @@ def derive(name, source, *, split_vu=False, vu1_aot=False):
     return PREFIX + source
 
 
-def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, gs_crt_override=False,
-            display_table_override=False):
+def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False):
     if vu1_aot:
         split_vu = True
     output = Path(output).absolute()
@@ -161,18 +118,12 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, gs_crt_o
         raise ValueError('Preserve existing output; choose a fresh runtime capsule')
     donor = Path(assets_root or ROOT) / 'private/references/ps2-web-recomp/runtime/src'
     sources = {}
-    pins = dict(PINS, **(CRT_PINS if gs_crt_override else {}))
-    for name, expected in pins.items():
+    for name, expected in PINS.items():
         data = (donor / name).read_bytes()
         if hashlib.sha256(data).hexdigest() != expected:
             raise ValueError(f'Qualified donor source differs: {name}')
         text = data.decode('utf-8').replace('\r\n', '\n')
-        if name == 'hw.cpp':
-            sources[name] = derive_crt(text)
-        else:
-            sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot)
-            if name == 'system.cpp' and display_table_override:
-                sources[name] = derive_table(sources[name])
+        sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot)
     output.mkdir()
     receipt = {'donor_revision': '1b4808793a12c45125262fd2d5f50a9ec9f7c020',
                'donor_sha256': PINS, 'source_sha256': {}}
@@ -183,10 +134,6 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, gs_crt_o
         # Hashed with LF line endings: a checkout with core.autocrlf stores the overlay with CRLF, and the
         # pinned value (slice 154) is the LF text that the derivation parses.
         receipt['vu1_aot_overlay_sha256'] = hashlib.sha256(OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
-    if gs_crt_override:
-        receipt['gs_crt_override_profile'] = 'overlay-v1'
-    if display_table_override:
-        receipt['display_table_override_profile'] = 'overlay-v1'
     for name, text in sources.items():
         path = output / name
         path.write_text(text, encoding='utf-8', newline='\n')
@@ -201,8 +148,5 @@ if __name__ == '__main__':
     parser.add_argument('--assets-root', type=Path)
     parser.add_argument('--split-vu', action='store_true')
     parser.add_argument('--vu1-aot', action='store_true')
-    parser.add_argument('--gs-crt-override', action='store_true')
-    parser.add_argument('--display-table-override', action='store_true')
     args = parser.parse_args()
-    prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot,
-            gs_crt_override=args.gs_crt_override, display_table_override=args.display_table_override)
+    prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot)

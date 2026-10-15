@@ -42,16 +42,18 @@ PERF_PROFILES = {
     'vu1-all': ('slice157-vu1-all.json', 'private/slice157-vu1-all-build/build/gt4vulkan.exe'),
     # TASK-009 candidate: vu1-all with the quick fixes and the 480p CRT table rewrite (GT4_FORCE_480P=1).
     'quickfix2': ('slice158-quickfix2.json', 'private/slice158-quickfix2-build/build/gt4vulkan.exe'),
+    # TASK-009 candidate (slice164): vu1-all with the quick fixes; GT4_FORCE_480P=1 holds the race display index at 480p.
+    'quickfix3': ('slice164-quickfix3.json', 'private/slice164-quickfix3-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
-                     'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json')
+                     'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
-# GT4_FORCE_480P (slice156): experimental request rewrite; unset means off. Forwarded and recorded.
+# GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
@@ -105,7 +107,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -403,7 +405,7 @@ def main():
     parser.add_argument('--capture-audio', action='store_true', help='Record guest PCM in private audio.wav')
     parser.add_argument('--interactive', action='store_true', help='Manual window play without scripted input or captures')
     parser.add_argument('--force-480p', action='store_true',
-                        help='Experimental: rewrite the default 480i request to 480p progressive (GT4_FORCE_480P=1)')
+                        help='Experimental: hold the race display index at 480p (GT4_FORCE_480P=1)')
     options = parser.parse_args()
     try:
         result = run_probe(ROOT, options.run_directory, options.frames, options.timeout,

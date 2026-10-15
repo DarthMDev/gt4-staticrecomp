@@ -1,5 +1,5 @@
 #include "window.hpp"
-#include "display_override.hpp"
+#include "race_display.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
 #include "host_io.hpp"
@@ -39,6 +39,9 @@ std::unique_ptr<gt4::pacing::FramePacer> frame_pacer;
 gt4::pacing::Diagnostics pacing_diagnostics;
 // Session totals at the last F7 start or F8 report; the next report prints the difference.
 gt4::pacing::Counters counters_at_last_report;
+// GT4_FORCE_480P (slice164): set at window start; counts guest VBlank writes of the race display index.
+bool force_480p_enabled = false;
+gt4::display::Force480pState force_480p_state;
 AudioOutput *audio_output = nullptr;
 
 void apply_pad(const PadState &pad) {
@@ -187,6 +190,8 @@ void on_vblank() {
   GT4_PERF_SCOPE(gt4::perf::Category::host_vblank);
   if (!pump_messages())
     return;
+  if (force_480p_enabled)
+    gt4::display::force_race_480p_at_vblank(ps2::g_ram, ps2::kRamSize, force_480p_state);
 #ifdef GT4_SHAPE_CAPTURE
   if (capture)
     capture->service();
@@ -282,7 +287,11 @@ int run_window(const std::function<int()> &emulate) {
     game_window = nullptr;
   };
   try {
-    gt4::display::validate_environment();
+    force_480p_enabled = gt4::display::parse_force_480p(std::getenv("GT4_FORCE_480P"));
+    force_480p_state = {};
+    if (force_480p_enabled)
+      std::fprintf(stderr, "[display] GT4_FORCE_480P=1: race display index held at 480p (guest VBlank)
+");
     pacing_mode = gt4::pacing::parse_mode(std::getenv("GT4_PACING"));
     frame_clock = std::make_unique<FrameClock>();
     frame_pacer = std::make_unique<gt4::pacing::FramePacer>(
@@ -337,6 +346,10 @@ int run_window(const std::function<int()> &emulate) {
       const gt4::pacing::Counters session = pacing_counters();
       pacing_diagnostics.format(output, pacing_mode,
                                 session.since(counters_at_last_report), session);
+      if (force_480p_enabled)
+        std::fprintf(output, "[display] GT4_FORCE_480P: race display index writes %llu
+",
+                     static_cast<unsigned long long>(force_480p_state.writes));
       counters_at_last_report = session;
       pacing_diagnostics.reset();
     });
