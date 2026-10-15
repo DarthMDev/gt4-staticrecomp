@@ -125,10 +125,11 @@ in game before it is merged.
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
-| TASK‑017 | Decompilation names in the generated code | 📋 Planned |
-| TASK‑018 | License-test crash | 📋 Planned |
-| TASK‑019 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑020 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
+| TASK‑017 | License-test crash | 📋 Planned |
+| TASK‑018 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑019 | Launcher (Rust): renderer, resolution, video, controls | 📋 Planned |
+| 🚀 | **First stable release on GitHub** | 📋 Planned |
+| TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS
 
