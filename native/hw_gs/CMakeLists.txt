@@ -39,3 +39,6 @@ target_include_directories(hw_gs_smoke PRIVATE "${GT4_HW_VULKAN_SDK}/Include")
 target_link_libraries(hw_gs_smoke PRIVATE gt4_hw_backend user32)
 target_compile_options(hw_gs_smoke PRIVATE /W4)
 target_compile_definitions(hw_gs_smoke PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+# HWR shader toolchain and GPU pixel exactness fixture (TASK-027, M4). Pinned glslang, IN-201.
+add_subdirectory(shaders)

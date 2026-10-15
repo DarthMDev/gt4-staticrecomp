@@ -139,3 +139,15 @@ Original code under `native/hw_gs/replace/` (MIT) is written from the TASK-026
 specification only (decision 0069). The test fixtures under
 `native/hw_gs/replace/tests/` (reference GS memory, PNG writer) are original
 code for CTest and are not linked into the game.
+
+## HWR shader compiler (TASK-027, M4)
+
+- **glslangValidator 16.2.0** (glslang project, Khronos), taken from the Vulkan SDK 1.4.341.1 at
+  `$VULKAN_SDK/Bin/glslangValidator.exe`. File SHA-256
+  `db832826d73049193882d5572ad76e14fcb7b1cdfc1a6b892ac25217b850b6bc`, pinned in
+  `native/hw_gs/shaders/CMakeLists.txt` (`GT4_HW_GLSLANG_SHA256`). Build tool only: it is not
+  linked or shipped, and the SPIR-V it emits from our own GLSL is embedded in the build output.
+  The glslang licence (BSD-style) is not vendored here; check the upstream licence before
+  redistributing the binary itself. Implementation note IN-201.
+- Our own HWR GLSL (`native/hw_gs/shaders/*.glsl`, `.vert`, `.frag`, `.comp`) is MIT, written from
+  `docs/hw-renderer-spec` only (decision 0069). No third-party shader source is vendored.
