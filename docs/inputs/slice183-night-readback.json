@@ -60,7 +60,7 @@
   "date": "2026-10-15",
   "baseline_commit": "task/028-donor-upscale dbac2e8 (slice176 adapter) + TASK-030 page-tracked readbacks",
   "branch": "task/030-night-readback",
-  "measurement_mode": "main",
+  "measurement_mode": "readback",
   "vu_scope_profile": "unit_split_run_fast_only",
   "classification": "TASK-030 candidate (slice183): the slice166 main profile (slice160 VU0 AOT capsule, all VU1 and VU0 entries, quick fixes) on the slice176 donor GS adapter (PS2_SCALE 1 here) with page-tracked GS readbacks: a scale-1 readback waits only for the submissions that wrote the bytes it reads (GT4_GS_READBACK=full restores the whole-queue wait).",
   "runtime": {
