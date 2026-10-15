@@ -138,18 +138,20 @@ in game before it is merged.
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done · 0 interpreted VU1 calls; rally 60, showroom 60, night 59 FPS |
 | TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
 | TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
-| TASK‑011 | MTVU: VU1 on its own thread | ✅ Done · in `--mode main` (on by default, `GT4_MTVU=0` A/B) · headless 42/42 on and off; owner A/B pending |
-| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs, textures missing (debugging) |
+| TASK‑011 | MTVU: VU1 on its own thread | ✅ Done · in `--mode main` (on by default, `GT4_MTVU=0` A/B) · 5–6 ms/frame off the main core, headless 42/42 on and off |
+| TASK‑012 | paraLLEl-GS as an optional renderer | 🔄 Plays · night race 60 FPS; high-res output capped at 2x |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
-| TASK‑016 | IOP per-module cost review | 📋 Planned |
-| TASK‑017 | License-test crash | 📋 Planned |
+| TASK‑016 | IOP per-module cost review | ⏸️ Deferred |
+| TASK‑017 | License-test crash | 🔄 In progress |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design done |
-| TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 📋 Planned |
-| TASK‑026 | Own hardware renderer (MIT, clean room): specification | 🔄 In progress |
-| TASK‑027 | Own hardware renderer: implementation, 3x-6x resolution and texture packs | 📋 Planned |
+| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 In progress |
+| TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 🔄 In progress |
+| TASK‑028 | CoreGS 1.1: up to 3x internal resolution, deinterlace, FXAA, FSR 1.0 | 🔄 Upscaler done · filters in progress |
+| TASK‑029 | Controller and keyboard mapping with a launcher menu | 🔄 In progress |
+| TASK‑026 | CoreGS 2.0 (our own MIT hardware renderer, clean room): specification | ✅ Done |
+| TASK‑027 | CoreGS 2.0: implementation, 3x-6x resolution and texture packs | ⏸️ Paused · core libraries done, resumes after 1.0.0 |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 
