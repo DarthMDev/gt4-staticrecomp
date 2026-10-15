@@ -46,17 +46,18 @@ PERF_PROFILES = {
     'quickfix3': ('slice164-quickfix3.json', 'private/slice164-quickfix3-build/build/gt4vulkan.exe'),
     # TASK-013 candidate: vu1-all plus the VU0 AOT overlay with the 14 VCALLMS entries (slice 160).
     'vu0-aot': ('slice160-vu0-aot.json', 'private/slice160-vu0-build/build/gt4vulkan.exe'),
-    # Current main (slice165): vu0-aot built from main after TASK-008/009/010/013; accepts --force-480p.
-    'main': ('slice165-main.json', 'private/slice165-vu0-main-build/build/gt4vulkan.exe'),
+    # Current main (slice166): vu0-aot built from main after TASK-008/009/010/013; accepts --force-480p.
+    # (slice165 baked a worktree junction shader path and does not start; kept as history only.)
+    'main': ('slice166-main.json', 'private/slice166-main-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
-                     'slice160-vu0-aot.json', 'slice165-main.json')
+                     'slice160-vu0-aot.json', 'slice166-main.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
-VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice165-main.json')
+VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
