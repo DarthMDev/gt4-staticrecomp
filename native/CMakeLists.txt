@@ -369,6 +369,8 @@ add_executable(shape_observer_fixture shape_observer_fixture.cpp shape_observer.
 target_compile_options(shape_observer_fixture PRIVATE /W4)
 add_executable(perf_accounting_fixture perf_accounting_fixture.cpp)
 target_compile_options(perf_accounting_fixture PRIVATE /W4)
+add_executable(fpu_chop_fixture fpu_chop_fixture.cpp)
+target_compile_options(fpu_chop_fixture PRIVATE /W4)
 add_executable(quickfix_fixture quickfix_fixture.cpp)
 add_executable(race_display_fixture race_display_fixture.cpp)
 target_link_libraries(race_display_fixture PRIVATE gt4_quickfix)

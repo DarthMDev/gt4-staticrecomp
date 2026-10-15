@@ -39,6 +39,7 @@ add_test(NAME native_vulkan_pixels_sync COMMAND $<TARGET_FILE:vulkan_fixture>)
 set_tests_properties(native_vulkan_pixels_sync PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_GS_SYNC=1")
 add_test(NAME native_gs_submit_ring COMMAND $<TARGET_FILE:gs_submit_ring_fixture>)
+add_test(NAME native_fpu_chop COMMAND $<TARGET_FILE:fpu_chop_fixture>)
 add_test(NAME native_vulkan_async_stress_async
     COMMAND $<TARGET_FILE:vulkan_async_stress> "${CMAKE_BINARY_DIR}/async-stress-async.bin")
 add_test(NAME native_vulkan_async_stress_sync

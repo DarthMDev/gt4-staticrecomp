@@ -179,6 +179,10 @@ Pre-existing; traced to `RaceSolitaire::loadDemoInputs` (0x3EAD18) →
 `AutomobileControlRecord::Manager::load` (0x346BB8) reading a bad record count.
 Env-gated logging there and in the PS2ZIP loader for `replay/license/` files,
 plus a CDVD read trace; one owner reproduction; fix the cause.
+State (2026-10-15, branch task/017-license-crash): FPU rounding lead checked. Donor mul/div/sqrt equal an exact
+chop reference; add/sub truncate the smaller operand (one-ulp, magnitude-larger). Not the crash cause by itself
+(Hypothesis). The failing record-size words (0xFF80FF80 / 0x80FF80FF at offset 0x14F8, every file) look like a
+decode or layout error in the triage parser, not FP results (Hypothesis, to verify with the owner trace).
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
