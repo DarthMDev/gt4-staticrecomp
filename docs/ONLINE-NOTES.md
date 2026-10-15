@@ -24,3 +24,15 @@ socket calls on Winsock for the LAN path, located through decomp names;
 (b) model DEV9/SMAP plus an IP stack on the IOP side; (c) a custom server after
 the online protocol is understood through decompilation. First prove the retail
 LAN path works end to end (for example in PCSX2) before porting it.
+
+## Owner idea: online launcher (future)
+
+A launcher in the style of Assetto Corsa's Content Manager: choose offline
+(normal boot with Arcade/GT mode) or online. Online opens a lobby with server
+list and server data (track, settings); the player picks a car and joins, and
+the game goes straight to the track without the full boot and menus. Likely
+building blocks: the retail LAN battle path as transport, a launcher-side
+lobby/server protocol, and a direct race entry implemented through the game's
+own race setup (the menus are Adhoc scripts, so a script or decomp-identified
+setup call may start a LAN race directly). Needs decompilation knowledge of race
+setup and the LAN session flow; not scheduled.
