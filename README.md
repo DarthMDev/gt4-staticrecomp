@@ -19,6 +19,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
+![License](https://img.shields.io/badge/license-MIT-blue)
 ![Tasks](https://img.shields.io/badge/tasks%20done-12%20of%2024-2ea44f)
 
 </div>
@@ -223,6 +224,15 @@ GT4Recomp stands on the work of others. Thank you:
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) (Apache-2.0 OR MIT) | Khronos Group | Vulkan API headers. |
 
 Exact revisions, licenses and imported files are listed in [THIRD_PARTY.md](native/THIRD_PARTY.md).
+
+## License
+
+The project's own code is [MIT](LICENSE). Third-party components keep their own
+licenses ([THIRD_PARTY.md](native/THIRD_PARTY.md)); paraLLEl-GS is LGPL-3.0+.
+Gran Turismo, Gran Turismo 4 and their logos and artwork are trademarks or property
+of Sony Interactive Entertainment and Polyphony Digital. GT4Recomp is an unofficial
+fan project, not affiliated with or endorsed by them; it does not include the game,
+and you need your own copy.
 
 ## Documentation
 

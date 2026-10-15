@@ -1,6 +1,7 @@
 # 0066 — GPL-3.0 code reuse is accepted
 
-Date: 2026-10-14. Status: Accepted (owner decision, slice 151).
+Date: 2026-10-14. Status: Accepted (owner decision, slice 151); constrained by
+[0067](0067-mit-license-and-release-model.md) for the prebuilt release executable.
 
 The owner accepts distributing the project under GPL-3.0-compatible terms; the
 project will be open source. Reusing PCSX2 code (for example the GS hardware

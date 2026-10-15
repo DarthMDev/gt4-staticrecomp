@@ -182,10 +182,12 @@ Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
 
 ### First stable release
-After TASK-019: a tagged GitHub release of the source and launcher, with the
-build guide and known issues (no game assets or binaries derived from the
-game). TASK-020 is deliberately after it, to give the gt4-decomp project more
-time to progress before its names are imported.
+After TASK-019: a tagged GitHub Release of this repository with the NSIS
+installer (prebuilt executables, launcher, official branding with a trademark
+notice; the user supplies their own disc), under the MIT license
+([decision 0067](docs/decisions/0067-mit-license-and-release-model.md)). TASK-020
+is deliberately after it, to give the gt4-decomp project more time to progress
+before its names are imported.
 
 ### TASK-020 — Decomp names in generated code
 Label comments in generated units with identical object code.
