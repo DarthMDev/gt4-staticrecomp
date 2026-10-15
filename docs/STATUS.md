@@ -6,7 +6,8 @@
 58.9, rally 59.9, showroom 60.0 VBlanks/s, 0 interpreted VU1 calls), TASK-010 build
 pipeline (slice 159) and TASK-009 slice 164 `--mode quickfix3 --force-480p` (title,
 16:9, fullscreen, races held at 480p; owner approved). In flight: TASK-012 paraLLEl-GS
-(step 5 headless, textures missing), TASK-013 VU0 AOT (owner test), TASK-014 stage A.
+(slice 169: `--mode parallel` with window output, owner night race 60 FPS at 1x; `--ssaa N --hires`
+high-resolution output ready for the owner test), TASK-013 VU0 AOT (owner test), TASK-014 stage A.
 
 **Earlier:** slice 154 `--mode vu1-flags` (executable `800da980`) adds VU1 flag
 elision: showroom 59.14 VBlanks/s (was 44.79), 5-AI race 60.00 at 480p. Next:

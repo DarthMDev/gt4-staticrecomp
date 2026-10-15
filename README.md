@@ -138,7 +138,7 @@ in game before it is merged.
 | TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
 | TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
 | TASK‑011 | MTVU: VU1 on its own thread | 🔄 Measured: 3.5–7.3 ms/frame can move off the main core; implementing |
-| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs, textures missing (debugging) |
+| TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · `--mode parallel` plays (night race 60 FPS); super-sampling and `--hires` in owner test |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |

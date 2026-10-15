@@ -14,6 +14,70 @@ SOURCE_PINS = {
     'runtime/src/gs/gpu/gs.wgsl': 'a6ed68e9ca53ea9b6c90307d3ffeb2b74b15c5f0a20dd776f51bc243ef80d4a5',
 }
 
+# Slice 163 paraLLEl-GS hooks: (anchor, replacement) per donor file. Each anchor must occur exactly
+# once. The gs.cpp replacement may contain @FRONTEND@, which becomes native/parallel_gs_frontend.inc.
+PARALLEL_HOOKS = {
+    'gs.cpp': [
+        ('#include "gif.hpp"\n',
+         '#include "gif.hpp"\n#include "gs_video_mode.hpp"\n#include "pacing.hpp"\n#include "parallel_gs_backend.hpp"\n'),
+        ('void init() {\n', '@FRONTEND@\nvoid init() {\n'),
+        ('#ifdef PS2_GPU\n    const char *backend = std::getenv("PS2_GS");',
+         '#ifdef PS2_GPU\n    if (parallel_active()) return;\n    const char *backend = std::getenv("PS2_GS");'),
+        ('void render_reset() {\n#ifdef PS2_GPU\n',
+         'void render_reset() {\n    if (parallel_active()) {\n        parallel_reset();\n        return;\n    }\n#ifdef PS2_GPU\n'),
+        ('void write_privileged(std::uint32_t address, std::uint64_t value) {\n    switch',
+         'void write_privileged(std::uint32_t address, std::uint64_t value) {\n'
+         '    if (parallel_active()) parallel_mirror_privileged(address, value);\n    switch'),
+        ('void read_image(std::uint8_t *data, std::uint32_t qwords) {\n    if (!queue::active()) {',
+         'void read_image(std::uint8_t *data, std::uint32_t qwords) {\n    if (parallel_active()) {\n'
+         '        parallel_read_image(data, qwords);\n        return;\n    }\n    if (!queue::active()) {'),
+        ('        g_odd_field = !g_odd_field;\n        raise(8);\n',
+         '        g_odd_field = !g_odd_field;\n        raise(8);\n        if (parallel_active()) parallel_vblank();\n'),
+        ('bool display(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n',
+         'bool display(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n'
+         '    if (parallel_active() && parallel_dump_scanout()) return parallel_scanout_frame(rgba, width, height);\n'
+         '    if (parallel_active()) parallel_sync_memory();\n'),
+        ('bool present(const DisplayRegs &r) {\n',
+         'bool present(const DisplayRegs &r) {\n'
+         '    if (parallel_active()) return parallel_present(); // slice 168: Granite WSI window output\n'),
+        ('bool attach_window(int kind, void *display, std::uint64_t window, void *surface, const char *selector, std::uint32_t width, std::uint32_t height) {\n',
+         'bool attach_window(int kind, void *display, std::uint64_t window, void *surface, const char *selector, std::uint32_t width, std::uint32_t height) {\n'
+         '    if (parallel_active()) return kind == 3 && parallel_attach_window(window, width, height); // 3 = Win32\n'),
+        ('void resize_window(std::uint32_t width, std::uint32_t height) {\n',
+         'void resize_window(std::uint32_t width, std::uint32_t height) {\n'
+         '    if (parallel_active()) {\n        parallel_resize_window(width, height);\n        return;\n    }\n'),
+        ('void flush_and_wait() {\n',
+         'void flush_and_wait() {\n    if (parallel_active()) {\n        parallel_wait();\n        return;\n    }\n'),
+        ('void start_thread() { queue::render().start(32u << 20); }',
+         'void start_thread() {\n    if (parallel_active()) return;\n    queue::render().start(32u << 20);\n}'),
+        ('void state(ps2::state::Stream &s) {\n    s.tag("gs");',
+         'void state(ps2::state::Stream &s) {\n'
+         '    if (parallel_active()) throw std::runtime_error("save states are not supported with GT4_RENDERER=parallel");\n'
+         '    s.tag("gs");'),
+    ],
+    'gif.cpp': [
+        ('namespace ps2::gif {\n\nnamespace {',
+         'namespace ps2::gs {\nbool parallel_active();\n'
+         'void parallel_gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc);\n'
+         'void parallel_reset_gif();\nbool parallel_gif_busy(int path);\n}\n\nnamespace ps2::gif {\n\nnamespace {'),
+        ('void transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {\n',
+         'void transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {\n'
+         '    if (gs::parallel_active()) {\n        gs::parallel_gif_transfer(path, data, qwc);\n        return;\n    }\n'),
+        ('void reset() {\n    g_stat = 0;\n',
+         'void reset() {\n    g_stat = 0;\n    if (gs::parallel_active()) gs::parallel_reset_gif();\n'),
+        ('bool busy(int path) { return g_paths[path].active; }',
+         'bool busy(int path) {\n    if (gs::parallel_active()) return gs::parallel_gif_busy(path);\n'
+         '    return g_paths[path].active;\n}'),
+    ],
+    'hw.cpp': [
+        ('namespace ps2::hw {\n\nnamespace {',
+         'namespace ps2::gs {\nvoid note_crt_mode(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field);\n}\n\n'
+         'namespace ps2::hw {\n\nnamespace {'),
+        ('    if (!g_options.rate_forced) g_options.pal = mode == 3u;\n',
+         '    gs::note_crt_mode(interlace, mode, field);\n    if (!g_options.rate_forced) g_options.pal = mode == 3u;\n'),
+    ],
+}
+
 
 def replace_section(source, start, end, replacement):
     first = source.index(start)
@@ -21,11 +85,20 @@ def replace_section(source, start, end, replacement):
     return source[:first] + replacement + '\n\n' + source[last:]
 
 
-def prepare(output, assets_root=None):
+def apply_hooks(name, source, frontend=''):
+    for anchor, replacement in PARALLEL_HOOKS[name]:
+        if source.count(anchor) != 1:
+            raise ValueError(f'Anchor changed in donor {name}: {anchor[:50]!r}')
+        source = source.replace(anchor, replacement.replace('@FRONTEND@', frontend))
+    return source
+
+
+def prepare(output, assets_root=None, parallel=False):
     output = output.resolve()
-    if not output.is_relative_to(ROOT / 'private') or output == ROOT / 'private':
-        raise ValueError('Derived donor code must stay inside private/')
     assets_root = Path(assets_root or ROOT).resolve()
+    allowed_roots = [ROOT / 'private', assets_root / 'private']
+    if not any(output.is_relative_to(root) and output != root for root in allowed_roots):
+        raise ValueError('Derived donor code must stay inside private/')
     donor = assets_root / 'private/references/ps2-web-recomp/runtime/src/gs/gpu'
     donor_root = donor.parents[3]
     if output.is_relative_to(donor_root) or donor_root.is_relative_to(output):
@@ -81,6 +154,13 @@ std::uint32_t g_decoded_used = 0;'''
     graphics_source = graphics.read_text(encoding='utf-8')
     graphics_source = graphics_source.replace('"../hw.hpp"', '"hw.hpp"')
     graphics_source = graphics_source.replace('"gpu/gpu.hpp"', '"gpu.hpp"')
+    if parallel:
+        frontend = (ROOT / 'native' / 'parallel_gs_frontend.inc').read_text(encoding='utf-8')
+        graphics_source = apply_hooks('gs.cpp', graphics_source, frontend)
+        donor_gif = (donor.parent / 'gif.cpp').read_text(encoding='utf-8')
+        donor_hw = (donor.parents[1] / 'hw.cpp').read_text(encoding='utf-8')
+        (output / 'gif.cpp').write_text(apply_hooks('gif.cpp', donor_gif), encoding='utf-8')
+        (output / 'hw.cpp').write_text(apply_hooks('hw.cpp', donor_hw), encoding='utf-8')
     (output / 'gs.cpp').write_text(graphics_source, encoding='utf-8')
     host = donor.parents[3] / 'host/main.cpp'
     host_source = host.read_text(encoding='utf-8')
@@ -94,5 +174,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
     parser.add_argument('--assets-root', type=Path)
+    parser.add_argument('--parallel-hooks', action='store_true',
+                        help='Splice the slice 163 paraLLEl-GS front end (also writes gif.cpp and hw.cpp)')
     options = parser.parse_args()
-    prepare(options.output, options.assets_root)
+    prepare(options.output, options.assets_root, options.parallel_hooks)

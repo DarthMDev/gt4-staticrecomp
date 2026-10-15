@@ -54,6 +54,8 @@
 2. **Light/mobile renderer:** stay with the PCSX2 hardware renderer plan
    (`docs/HW-RENDERER-PLAN.md`), borrowing ARMSX2's driver profiles and pass
    scheduler; paraLLEl-GS is unproven on mobile.
-3. **Licensing:** LGPL-3.0+, MIT and GPL-3.0(+) are all compatible with the
-   project's GPL direction; keep notices and record provenance in
-   `native/THIRD_PARTY.md`.
+3. **Licensing (updated 2026-10-15):** the project is MIT and its release
+   executable contains translated game code (decision 0067). LGPL-3.0+ code
+   (paraLLEl-GS) ships as a replaceable DLL. GPL-3.0 code (PCSX2 hardware
+   renderer, ARMSX2) cannot go into that executable. Keep notices and record
+   provenance in `native/THIRD_PARTY.md`.
