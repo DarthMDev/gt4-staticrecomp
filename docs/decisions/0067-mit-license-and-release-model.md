@@ -1,5 +1,7 @@
 # 0067 — MIT license and release model
 
+Amended by [decision 0070](0070-pcsx2-gs-separate-process.md): paraLLEl-GS is no longer shipped as a DLL; the PCSX2 GS runs in a separate process.
+
 Date: 2026-10-15. Status: Accepted (owner decision).
 
 - **License:** the project's own code is MIT (`LICENSE`). Third-party code keeps
