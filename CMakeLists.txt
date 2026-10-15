@@ -13,6 +13,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
+# Build tuning candidates (TASK-010). Defaults keep the qualified code generation unchanged.
+# Each option applies to every target of this tree (runtime, generated VU1 code, tests) so the
+# executables and the tables they link agree. Pinned EE game library (ps2game.lib) is not affected.
+option(GT4_FP_CONTRACT_OFF "Build with -ffp-contract=off (control: no fused multiply-add)" OFF)
+option(GT4_X86_64_V3 "Build for x86-64-v3 (AVX2, FMA); implies GT4_FP_CONTRACT_OFF" OFF)
+if(GT4_FP_CONTRACT_OFF OR GT4_X86_64_V3)
+    add_compile_options(/clang:-ffp-contract=off)
+endif()
+if(GT4_X86_64_V3)
+    add_compile_options(/clang:-march=x86-64-v3)
+endif()
 add_subdirectory(native)
 add_subdirectory(tools/vu_recomp)
 

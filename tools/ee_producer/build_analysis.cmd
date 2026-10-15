@@ -15,7 +15,7 @@ if errorlevel 1 exit /b %errorlevel%
 chcp 65001 >nul
 cmake -S tools\ee_producer -B "%GT4_PRODUCER%\tool-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DCMAKE_MAKE_PROGRAM="C:/PROGRA~2/MICROS~2/2022/BUILDT~1/Common7/IDE/COMMON~1/MICROS~1/CMake/Ninja/ninja.exe" -DGT4_DONOR="%GT4_ASSETS%/private/references/ps2-web-recomp" -DGT4_PYTHON="%GT4_PYTHON%" -DGT4_ANALYSIS_CONTROLS=ON
 if errorlevel 1 exit /b %errorlevel%
-cmake --build "%GT4_PRODUCER%\tool-build" --parallel 1
+cmake --build "%GT4_PRODUCER%\tool-build"
 if errorlevel 1 exit /b %errorlevel%
 ctest --test-dir "%GT4_PRODUCER%\tool-build" --output-on-failure
 exit /b %errorlevel%
