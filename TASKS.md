@@ -68,6 +68,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (owner, 2026-10-15) · pure libraries done on task/027-hw-renderer |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
+| TASK‑031 | High frame rate (120-144 FPS) with game physics untouched: GS primitive interpolation, native render-rate study | 🔬 Study and offline prototype |
 
 ## Phase 2 — Android
 
@@ -287,6 +288,22 @@ ARM64 build, iOS host layers, signing/installation on iPhone 15 Pro Max and
 LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
 settings menus, Spec II as a second target or data source (docs/SPEC2-STUDY.md).
 
-A decompilation-based source port (native renderer, physics decoupled from frame
-rate, ultrawide, remaster) is out of scope for this repository and would be a
-separate project, possibly a fork.
+A decompilation-based source port (native renderer, changing the game's physics
+timing, ultrawide, remaster) is out of scope for this repository and would be a
+separate project, possibly a fork. Presenting more than 60 FPS with the game's
+fixed 1/60 s physics untouched is in scope (TASK-031, owner 2026-10-15).
+
+### TASK-031 — High frame rate (physics untouched)
+Goal: present 120-144 FPS while the game's physics keeps its fixed 1/60 s step
+(`RaceBase__updateRace` uses a constant dt; read-only study, 2026-10-15).
+Approaches: (A) GS primitive interpolation between two guest frames, with real
+rasterised in-between frames and no optical flow or frame generation. It costs
+about half a guest frame of latency, and an extrapolation variant is measured
+alongside. (B/C) A native render rate: re-run the game's render path (EE scene
+submission and VU1) with interpolated car and camera transforms, via decomp
+hooks. Step 1: an offline oracle that builds frame N from captured frames N-1
+and N+1 (and an extrapolated frame from N-2 and N-1) and compares it with the
+real frame N; kill if fewer than 95% of primitives match or race PSNR is below
+32 dB. In parallel, a read-only study of the native render-rate path: main
+loop, update/render split, transforms and render cost. Input-latency trims
+(submit ring depth, present mode) are measured with the prototype.
