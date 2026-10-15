@@ -23,6 +23,10 @@ entries generated from the pinned image, not from recordings). Same options and 
 
 VU1 all-entries candidate (--mode vu1-all): vu1-flags with the slice157 static VU1 table, every
 8-byte address of the pinned image (2,048 programs, built as 128 parts). Same options and environment.
+
+VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
+entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
+exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
 """
 import argparse
 import sys
@@ -42,10 +46,14 @@ def main():
                         help='sample every Nth generated VU1 call and compare (vu1-aot, gs-async, pacing and vu1-flags)')
     parser.add_argument('--vu1-interpret-only', action='store_true',
                         help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
+    parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
+                        help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'vu1-all'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full or vu1-all')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'vu1-all', 'vu0-aot'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, vu1-all or vu0-aot')
+        if args.vu0_verify and args.mode != 'vu0-aot':
+            raise ValueError('--vu0-verify requires --mode vu0-aot')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
@@ -60,6 +68,8 @@ def main():
                 options['vu1_verify'] = args.vu1_verify
             if args.vu1_interpret_only:
                 options['vu1_interpret_only'] = True
+            if args.vu0_verify:
+                options['vu0_verify'] = args.vu0_verify
             play(args.aspect, args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

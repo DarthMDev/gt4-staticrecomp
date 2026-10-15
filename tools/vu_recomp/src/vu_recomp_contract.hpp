@@ -44,7 +44,13 @@ enum class RunStatus : std::uint32_t {
 struct RunContext {
     std::uint32_t budget = 0;
     std::uint32_t resume_pc = 0;
+    // VU0 only (slice 160): exact interpreter hand-off, run(0, pc) with the AOT gate off. The
+    // caller (runtime overlay) sets it; VU1 programs never call it.
+    void (*exact_run)(std::uint32_t pc) = nullptr;
 };
+
+// VU0 data memory is 4 KiB: qword index masked to 256 qwords (donor unit_of(0): data_qwords - 1).
+inline std::uint8_t *qword_vu0(std::uint8_t *memory, std::uint32_t index) { return memory + (index & 255u) * 16u; }
 
 using ProgramFunction = RunStatus (*)(ps2::Vu0Regs &regs, std::uint8_t *vu_memory, RunContext &context);
 

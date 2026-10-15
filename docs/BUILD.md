@@ -577,3 +577,64 @@ Limits:
 2. Frame identity is shown for one 4,200-frame headless schedule, not for owner gameplay. No speed claim.
 3. PGO, ThinLTO, the dispatch divide change and the sccache option are not implemented or measured.
 4. No candidate pin or launcher mode was added: T0 and T1 are build variants only, not playable candidates.
+
+## Slice 160 (TASK-013): VU0 microcode AOT
+
+The 14 `VCALLMS` entries of the pinned VU0 image (docs/VU0-MICROCODE-MAP.md) run compiled. The
+VU0 emitter profile is `gt4_vu_recomp --unit 0`; the VU1 profile is unchanged (its table
+`vu1_generated.cpp` and manifest hashes equal slice157: 3eed39d6... and 07ae2077...). Pins:
+[slice160-vu0-image.json](inputs/slice160-vu0-image.json) (static image),
+[slice160-vu0-runtime.json](inputs/slice160-vu0-runtime.json) (runtime capsule, VU1 and VU0 overlays)
+and [slice160-vu0-aot.json](inputs/slice160-vu0-aot.json) (launcher).
+
+Steps, from the repository root. Outputs go to fresh private directories:
+
+1. `vu0_image.py build --elf private\reconstructed\SCUS_973.28.elf --out private\slice160-vu0-image`
+   reads the 2,688-byte upload at file offset 0x5D4280 (vaddr 0x6D3280) and pads it with zeros to
+   4096 bytes. Upload sha256 6ee4bdde...; image sha256 2d7b2653.... `vu0_image.py entries` writes the
+   14 addresses (sha256 2f5ac510...). The list includes 0x308 and 0x478, which the slice-158 plan
+   counted as fall-through suffixes; both are kept so every listed VCALLMS target runs compiled.
+2. Emitter: `gt4_vu_recomp --unit 0 --namespace gt4::vugen::vu0 --entry-policy vcallms --image
+   private\slice160-vu0-image\vu0_image.bin --entries private\slice160-vu0-image\entries-vcallms.txt
+   private\slice160-vu0-gen-r3`. Output `vu0_generated.cpp` (14 programs, 0 refused) and manifest.json
+   (`"unit": 0`, `identity_tag` GT4-VU0-PROGRAM-IDENTITY-1).
+3. Runtime capsule: `prepare_perf_runtime.py private\slice160-vu0-runtime --vu0-aot` (implies
+   `--vu1-aot`). The VU1 overlay hash stays 171b07c3...; VU0 overlay 9e5fee2b....
+4. Build: configure with `GT4_PERF_RUNTIME_SOURCE` = the capsule, `GT4_VU1_GENERATED_DIR`
+   = `private\slice157-vu1-all-gen` and `GT4_VU0_GENERATED_DIR` = the VU0 directory. Build directory
+   `private\slice160-vu0-build\build`. The executable has `GT4_VU0_AOT` defined; the VU0 counters
+   are in the F8 report.
+5. Controls (CTest 21/21): `vu0_emitter` (20 checks), `vu0_aot_registry` (14 of 14 entries; 87 checks),
+   `vu0_aot_differential` (below), plus the existing VU1 suites.
+
+Owner command (from the repository root): `python scripts\play_performance.py --assets-root . --mode vu0-aot`.
+Verify: add `--vu0-verify 50` (samples every 50th VU0 call against the exact interpreter path).
+`--vu1-verify` and `--vu1-interpret-only` also apply in this mode.
+
+Numbers (local controls only; no owner session):
+
+- Differential, `gt4_vu0_differential_tests`: 14 entries, 1000 finite and 1000 raw-bit seeds each
+  (28,000 comparisons over every Vu0Regs field and the 4 KiB data memory), 896 budget-resume runs with
+  budgets 1 to 24, 0 failures. Negative control: `interpret(0, pc)` (run_fast) differs from `run(0, pc)`
+  in MAC or status in 768 states, which is why hand-offs use the exact path.
+- Registry, `gt4_vu0_aot_registry_test`: 14 of 14 entries found, changed reachable word not registered,
+  padding change keeps the hit, `code_changed(0)` invalidates, VF0 not normalized takes the interpreter.
+- Headless smoke, 4200 frames, the slice157 schedule (12 presses), no window: 42 frame dumps identical
+  to `private/slice157-smoke/headless-157/frames`. `[perf] vu0_aot compiled_calls=1256000
+  interpreted_calls=0 budget_resumes=0 handoffs=0 identity_rejects=0`.
+- Headless verify, `GT4_VU0_VERIFY=1`, same schedule: 42 frame dumps identical; `verified=1255999
+  verify_mismatches=0`.
+- Python: unittest discover with `GT4_NATIVE_BUILD` on this build: 246 OK, 1 skipped (pre-existing).
+- Executable `gt4vulkan.exe` 95,529,984 bytes, sha256 a0206c16... (after the merge of task/010-build-pipeline).
+
+Limits:
+
+1. The VCALLMS list is the 14 entries of the VU0 map. The EE call-site scan was not run (the donor has
+   no VCALLMS decoder), so an EE call to another address is counted as `interpreted_calls`.
+2. Only the headless schedule was run. Owner scenes are not verified.
+3. Hand-offs inside generated code (a JR to a return site outside the table's static set, or a budget
+   resume) run `run(0, pc)` and are counted as `handoffs`, not `interpreted_calls`.
+4. VU0 uses the donor exact `fp::` arithmetic (the `run(0)` path). VU1 keeps its `run_fast` SIMD path.
+   The VU1 SIMD `vitof`/`vftoi` helpers are not bit-identical to the donor per-lane conversion. VU1
+   output is unchanged (byte-identical control), so this is an open finding for VU1, not investigated.
+5. `private/` in the worktree is a directory junction to the main checkout (see the report).

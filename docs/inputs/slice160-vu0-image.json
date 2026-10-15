@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "slice": 160,
+  "date": "2026-10-15",
+  "purpose": "Static VU0 microcode image of GT4 USA v2.00: the 2,688-byte EE upload from file offset 0x5D4280 (vaddr 0x6D3280), padded with zeros to the 4 KiB VU0 code memory (scripts/vu0_image.py, docs/VU0-MICROCODE-MAP.md).",
+  "elf": {
+    "path": "private/reconstructed/SCUS_973.28.elf",
+    "sha256": "10f82e2231a51404b95682ed3ea81171100a1af2fefdeed3391943016c7c935c",
+    "pin": "docs/inputs/usa-v2.00-native.json native_elf_sha256",
+    "file_offset": 6111872,
+    "vaddr": 7156352,
+    "upload_bytes": 2688
+  },
+  "upload_sha256": "6ee4bdde81d98d0cf0cfdf65f5bb64697b4fd4bfee408d4d6125e39d8d602690",
+  "image": {
+    "path": "private/slice160-vu0-image/vu0_image.bin",
+    "bytes": 4096,
+    "sha256": "2d7b26535008f1b3402ba70e8365cae749e64079eb32381d6853612abc896d44",
+    "padding": "zeros from 0x0A80 to 0x0FFF"
+  },
+  "entry_list": {
+    "path": "private/slice160-vu0-image/entries-vcallms.txt",
+    "entries": 14,
+    "sha256": "2f5ac510cda32588c706b550a2ef1181537296d258039709180d7909a251471e",
+    "addresses": ["0058", "0078", "00B8", "00F8", "02E8", "0308", "0460", "0478", "0548", "0678", "0700", "0858", "0900", "0930"]
+  },
+  "tool": "scripts/vu0_image.py (build, check, entries)"
+}

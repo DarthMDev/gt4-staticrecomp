@@ -123,3 +123,24 @@ if(GT4_VU1_GENERATED_DIR)
     target_link_libraries(gt4_vu1_aot_registry_test PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
     target_compile_options(gt4_vu1_aot_registry_test PRIVATE /W4 -Wno-unused-label)
 endif()
+
+# VU0 emitter controls (slice 160): synthetic images, no capsule needed.
+add_executable(gt4_vu0_emitter_tests "${VU_RECOMP_TESTS}/vu0_emitter_tests.cpp")
+target_include_directories(gt4_vu0_emitter_tests PRIVATE "${VU_RECOMP_SRC}")
+target_link_libraries(gt4_vu0_emitter_tests PRIVATE gt4_vu_recomp_core)
+target_compile_options(gt4_vu0_emitter_tests PRIVATE /W4)
+
+# VU0 AOT controls (slice 160): only with the VU0 capsule (GT4_VU0_GENERATED_DIR), which provides the
+# overlay and the VU0 table. The pinned image is read at run time (GT4_VU0_IMAGE_FILE, read only).
+set(GT4_VU0_IMAGE_FILE "${CMAKE_SOURCE_DIR}/private/slice160-vu0-image/vu0_image.bin" CACHE FILEPATH
+    "Pinned VU0 image (scripts/vu0_image.py build) for the VU0 AOT controls, read only")
+if(GT4_VU0_GENERATED_DIR)
+    add_executable(gt4_vu0_differential_tests "${VU_RECOMP_TESTS}/vu0_differential_tests.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp")
+    target_include_directories(gt4_vu0_differential_tests PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
+    target_link_libraries(gt4_vu0_differential_tests PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
+    target_compile_options(gt4_vu0_differential_tests PRIVATE /W4 -Wno-unused-label)
+    add_executable(gt4_vu0_aot_registry_test "${VU_RECOMP_TESTS}/vu0_aot_registry_test.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp")
+    target_include_directories(gt4_vu0_aot_registry_test PRIVATE "${VU_RECOMP_SRC}" "${VU_RECOMP_TESTS}")
+    target_link_libraries(gt4_vu0_aot_registry_test PRIVATE gt4_vu_fixtures ps2runtime_vulkan user32)
+    target_compile_options(gt4_vu0_aot_registry_test PRIVATE /W4 -Wno-unused-label)
+endif()

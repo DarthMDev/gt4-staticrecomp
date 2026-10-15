@@ -33,6 +33,26 @@
 namespace fs = std::filesystem;
 
 namespace gt4::vurecomp {
+
+// Emitter profiles. Unit 1 reproduces the VU1 output of slices 151-157 exactly.
+const UnitProfile &unit_profile(int unit) {
+    static const UnitProfile vu1{};
+    static const UnitProfile vu0 = [] {
+        UnitProfile profile;
+        profile.unit = 0;
+        profile.image_bytes = 4096;
+        profile.uploaded_bytes = 0xA80;
+        profile.data_qwords = 256;
+        profile.xgkick_allowed = false;
+        profile.exact_flags = true;
+        profile.file_prefix = "vu0_generated";
+        profile.function_prefix = "vu0_";
+        profile.identity_tag = "GT4-VU0-PROGRAM-IDENTITY-1";
+        return profile;
+    }();
+    return unit == 0 ? vu0 : vu1;
+}
+
 namespace {
 
 constexpr std::uint32_t kMask = kCodeMask;
@@ -44,9 +64,10 @@ constexpr std::uint32_t kImmediateBit = 0x80000000u;
 
 std::uint32_t word(const std::vector<std::uint8_t> &code, std::uint32_t at) {
     std::uint32_t v;
-    std::memcpy(&v, code.data() + (at & kMask), 4);
+    std::memcpy(&v, code.data() + (at & (code.size() - 1)), 4);
     return v;
 }
+
 
 std::string label(std::uint32_t pc) { return std::format("L_{:04X}", pc); }
 
@@ -101,7 +122,10 @@ std::string mac_update(const std::string &value, unsigned d, const FlagUse &use)
     return s + "} ";
 }
 
-Upper upper(std::uint32_t hi, const FlagUse &use) {
+// donor_exact selects the donor exact interpreter arithmetic of run(0, pc) (VU0): per-lane fp::add,
+// fp::sub, fp::mul, fp::from_fixed and fp::to_fixed with input flushing, in scalar lane code. VU1 keeps
+// the SIMD helpers of run_fast (unchanged output).
+Upper upper(std::uint32_t hi, const FlagUse &use, bool donor_exact = false) {
     Upper u;
     if ((hi & 0x3FFFFFFFu) == kVnopUpperWithoutFlags) return u;  // VNOP, known no-op encoding
     const unsigned dest = (hi >> 21) & 15u, ft = (hi >> 16) & 31u, fs = (hi >> 11) & 31u, fd = (hi >> 6) & 31u, bc = hi & 3u;
@@ -213,14 +237,15 @@ Upper upper(std::uint32_t hi, const FlagUse &use) {
         }
     };
     const std::string dst = target == kAcc ? "r.acc" : std::format("r.vf[{}]", target);
-    const bool vector = kind == Add || kind == Sub || kind == Mul || kind == Madd || kind == Msub || kind == Max || kind == Min || kind == Abs || kind == Ftoi || kind == Itof;
+    const bool vector = !donor_exact && (kind == Add || kind == Sub || kind == Mul || kind == Madd || kind == Msub || kind == Max ||
+                                         kind == Min || kind == Abs || kind == Ftoi || kind == Itof);
     const bool arithmetic = kind == Add || kind == Sub || kind == Mul || kind == Madd || kind == Msub;
     if (target != 0) {
         u.target = target;
         u.mask = d;
         u.normalized = vector && arithmetic;
     }
-    if (arithmetic) {
+    if (arithmetic && !donor_exact) {
         const auto operand = [&](unsigned reg) -> std::string {
             if (!reg) return vreg(0);
             u.shadow_reads.push_back(static_cast<int>(reg));
@@ -278,15 +303,20 @@ Upper upper(std::uint32_t hi, const FlagUse &use) {
         if (flags) u.post += mac_update(dst, d, use);
         return u;
     }
+    const char *fp_prefix = donor_exact ? "fp::" : "";
     for (int i = 0; i < 4; ++i) {
         if (!lane(d, i)) continue;
         std::string e;
         switch (kind) {
-        case Add: e = std::format("add({}, {})", vf(fs, i), b(i)); break;
-        case Sub: e = std::format("sub({}, {})", vf(fs, i), b(i)); break;
-        case Mul: e = std::format("mul({}, {})", vf(fs, i), b(i)); break;
-        case Madd: e = std::format("madd(r.acc.w[{}], {}, {})", i, vf(fs, i), b(i)); break;
-        case Msub: e = std::format("msub(r.acc.w[{}], {}, {})", i, vf(fs, i), b(i)); break;
+        case Add: e = std::format("{}add({}, {})", fp_prefix, vf(fs, i), b(i)); break;
+        case Sub: e = std::format("{}sub({}, {})", fp_prefix, vf(fs, i), b(i)); break;
+        case Mul: e = std::format("{}mul({}, {})", fp_prefix, vf(fs, i), b(i)); break;
+        case Madd:
+            e = donor_exact ? std::format("fp::add(r.acc.w[{}], fp::mul({}, {}))", i, vf(fs, i), b(i)) : std::format("madd(r.acc.w[{}], {}, {})", i, vf(fs, i), b(i));
+            break;
+        case Msub:
+            e = donor_exact ? std::format("fp::sub(r.acc.w[{}], fp::mul({}, {}))", i, vf(fs, i), b(i)) : std::format("msub(r.acc.w[{}], {}, {})", i, vf(fs, i), b(i));
+            break;
         case Max: e = std::format("max({}, {})", vf(fs, i), b(i)); break;
         case Min: e = std::format("min({}, {})", vf(fs, i), b(i)); break;
         case Abs: e = std::format("({} & 0x7FFFFFFFu)", vf(fs, i)); break;
@@ -294,12 +324,13 @@ Upper upper(std::uint32_t hi, const FlagUse &use) {
         case Itof: e = std::format("fp::from_fixed(r.vf[{}].sw[{}], {})", fs, i, frac); break;
         case Opmula: {
             static const int a[3] = {1, 2, 0}, c[3] = {2, 0, 1};
-            e = std::format("mul({}, {})", vf(fs, a[i]), vf(ft, c[i]));
+            e = donor_exact ? std::format("fp::mul({}, {})", vf(fs, a[i]), vf(ft, c[i])) : std::format("mul({}, {})", vf(fs, a[i]), vf(ft, c[i]));
             break;
         }
         case Opmsub: {
             static const int a[3] = {1, 2, 0}, c[3] = {2, 0, 1};
-            e = std::format("msub(r.acc.w[{}], {}, {})", i, vf(fs, a[i]), vf(ft, c[i]));
+            e = donor_exact ? std::format("fp::sub(r.acc.w[{}], fp::mul({}, {}))", i, vf(fs, a[i]), vf(ft, c[i]))
+                            : std::format("msub(r.acc.w[{}], {}, {})", i, vf(fs, a[i]), vf(ft, c[i]));
             break;
         }
         default: break;
@@ -347,11 +378,12 @@ struct Lower {
     int writes = -1;
     bool reads_flags = false, reads_status = false, reads_clip = false;
     bool branch = false, jump = false;
+    bool kick = false;  // XGKICK (refused for VU0)
     std::uint32_t target = 0;
     bool supported = true;
 };
 
-Lower lower(std::uint32_t w, std::uint32_t pc) {
+Lower lower(std::uint32_t w, std::uint32_t pc, std::uint32_t mask) {
     Lower l;
     const unsigned dest = (w >> 21) & 15u, it = (w >> 16) & 15u, is = (w >> 11) & 15u, id = (w >> 6) & 15u;
     const unsigned ft = (w >> 16) & 31u, fs = (w >> 11) & 31u;
@@ -446,7 +478,7 @@ Lower lower(std::uint32_t w, std::uint32_t pc) {
             if (ft) for (int i = 0; i < 4; ++i) if (lane(dest, i)) c += std::format("r.vf[{}].w[{}] = r.p; ", ft, i); break;
         case 0x68: c = std::format("set_vi(r, {}, vu::top()); ", it); break;
         case 0x69: c = std::format("set_vi(r, {}, vu::itop()); ", it); break;
-        case 0x6C: c = std::format("vu::kick(1, r.vi[{}]); ", is); break;
+        case 0x6C: c = std::format("vu::kick(1, r.vi[{}]); ", is); l.kick = true; break;
         case 0x70: case 0x71: case 0x72: case 0x73: case 0x74: case 0x75: case 0x76: case 0x78: case 0x79: case 0x7A: case 0x7C: case 0x7D: case 0x7E:
             c = std::format("efu(r, {}u, {}u, {}u); ", index, fs, fsf);
             break;
@@ -457,7 +489,7 @@ Lower lower(std::uint32_t w, std::uint32_t pc) {
     }
     const std::uint32_t imm15 = ((w >> 10) & 0x7800u) | (w & 0x7FFu);
     const std::uint32_t imm12 = ((w >> 10) & 0x800u) | (w & 0x7FFu);
-    const std::uint32_t target = (pc + 8u + static_cast<std::uint32_t>(imm11) * 8u) & kMask;
+    const std::uint32_t target = (pc + 8u + static_cast<std::uint32_t>(imm11) * 8u) & mask;
     switch (w >> 25) {
     case 0x00:
         if (ft) l.writes = static_cast<int>(ft);
@@ -496,8 +528,8 @@ Lower lower(std::uint32_t w, std::uint32_t pc) {
     case 0x1C: c = std::format("set_vi(r, {}, fl.clip() & 0xFFFu); ", it); l.reads_clip = true; break;
     case 0x20: c = "pend = true; "; l.branch = true; l.target = target; break;
     case 0x21: c = std::format("set_vi(r, {}, {}u); pend = true; ", it, (pc + 16u) / 8u); l.branch = true; l.target = target; break;
-    case 0x24: c = std::format("jpc = (static_cast<std::uint32_t>(r.vi[{}]) * 8u) & {}u; pendj = true; ", is, kMask); l.jump = true; break;
-    case 0x25: c = std::format("jpc = (static_cast<std::uint32_t>(r.vi[{}]) * 8u) & {}u; set_vi(r, {}, {}u); pendj = true; ", is, kMask, it, (pc + 16u) / 8u); l.jump = true; break;
+    case 0x24: c = std::format("jpc = (static_cast<std::uint32_t>(r.vi[{}]) * 8u) & {}u; pendj = true; ", is, mask); l.jump = true; break;
+    case 0x25: c = std::format("jpc = (static_cast<std::uint32_t>(r.vi[{}]) * 8u) & {}u; set_vi(r, {}, {}u); pendj = true; ", is, mask, it, (pc + 16u) / 8u); l.jump = true; break;
     case 0x28: c = std::format("pend = r.vi[{}] == r.vi[{}]; ", is, it); l.branch = true; l.target = target; break;
     case 0x29: c = std::format("pend = r.vi[{}] != r.vi[{}]; ", is, it); l.branch = true; l.target = target; break;
     case 0x2C: c = std::format("pend = static_cast<std::int16_t>(r.vi[{}]) < 0; ", is); l.branch = true; l.target = target; break;
@@ -564,10 +596,10 @@ struct Observed {
 // its branch. A successor of -1 marks an exit.
 class FunctionGenerator {
 public:
-    explicit FunctionGenerator(ProgramRecord &record) : record_(record), code_(record.image.data()) {}
+    explicit FunctionGenerator(ProgramRecord &record) : record_(record), code_(record.image.data()), profile_(unit_profile(record.unit)), mask_(profile_.code_mask()) {}
 
     std::string run() {
-        pcs_ = ps2::vu::reachable(code_, kMask, record_.entry);
+        pcs_ = ps2::vu::reachable(code_, mask_, record_.entry);
         in_.insert(pcs_.begin(), pcs_.end());
         analyze();
         record_.fallback_sites = fallback_count_;
@@ -579,17 +611,21 @@ public:
             record_.function_name.clear();
             return {};
         }
-        record_.function_name = std::format("vu1_{:016X}", record_.key);
+        record_.function_name = std::format("{}{:016X}", profile_.function_prefix, record_.key);
         std::string text = generate();
         // Every interpreter hand-off (lower exit, unknown successor, dispatch, end) is a call here.
-        for (std::size_t at = text.find("ps2::vu::interpret("); at != std::string::npos; at = text.find("ps2::vu::interpret(", at + 1)) ++record_.interpreter_calls;
+        const std::string handoff_token = profile_.unit == 1 ? "ps2::vu::interpret(" : "ctx.exact_run(";
+        for (std::size_t at = text.find(handoff_token); at != std::string::npos; at = text.find(handoff_token, at + 1)) ++record_.interpreter_calls;
         return text;
     }
 
 private:
     ProgramRecord &record_;
     const std::uint8_t *code_;
+    const UnitProfile &profile_;
+    const std::uint32_t mask_;
     std::vector<std::uint32_t> pcs_;
+    std::set<std::uint32_t> dispatch_targets_;  // VU0: static return sites of jump-register dispatch
     std::set<std::uint32_t> in_;
     std::map<std::uint32_t, Lower> lowers_;
     std::map<std::uint32_t, Upper> uppers_;
@@ -610,8 +646,8 @@ private:
     std::uint32_t hi(std::uint32_t pc) const { return word(record_.image, pc + 4); }
 
     std::vector<std::int64_t> successors(std::uint32_t pc) const {
-        std::vector<std::int64_t> out{static_cast<std::int64_t>((pc + 8u) & kMask)};
-        const std::uint32_t prev = (pc - 8u) & kMask;
+        std::vector<std::int64_t> out{static_cast<std::int64_t>((pc + 8u) & mask_)};
+        const std::uint32_t prev = (pc - 8u) & mask_;
         if (in_.count(prev)) {
             const Lower &previous = lowers_.at(prev);
             const std::uint32_t previous_hi = hi(prev);
@@ -633,20 +669,20 @@ private:
     // cannot carry a pending delay branch or an end-of-program bit from the
     // previous instruction, so such programs are refused, not emitted.
     bool fallback_hazard(std::uint32_t pc) const {
-        const std::uint32_t prev = (pc - 8u) & kMask;
+        const std::uint32_t prev = (pc - 8u) & mask_;
         if (!in_.count(prev)) return false;
         return lowers_.at(prev).branch || lowers_.at(prev).jump || (hi(prev) & kEndBit);
     }
 
     void analyze() {
-        stamps_.assign(static_cast<std::size_t>(kCodeMask + 1u) / 8u * kStateSlots, 0u);
+        stamps_.assign(static_cast<std::size_t>(profile_.image_bytes) / 8u * kStateSlots, 0u);
         // Pass 1 decodes every instruction so later passes can look at neighbours.
         for (std::uint32_t pc : pcs_) {
             const std::uint32_t lower_word = lo(pc), upper_word = hi(pc);
             Lower lower_info;
-            if (!(upper_word & kImmediateBit)) lower_info = lower(lower_word, pc);
+            if (!(upper_word & kImmediateBit)) lower_info = lower(lower_word, pc, mask_);
             lowers_[pc] = lower_info;
-            uppers_[pc] = upper(upper_word, FlagUse{});
+            uppers_[pc] = upper(upper_word, FlagUse{}, profile_.unit == 0);
             // A lower clip write (0x11) is visible at once and is not modelled by the
             // window analysis, so a program that has one keeps every clip write.
             if (!(upper_word & kImmediateBit) && (lower_word >> 25) == 0x11u) clip_all_live_ = true;
@@ -654,6 +690,12 @@ private:
         // Pass 2 counts interpreter exits and refuses hazardous ones.
         for (std::uint32_t pc : pcs_) {
             if (!uppers_.at(pc).known) ++upper_nop_count_;
+            // VU0 (exact policy): code past the EE upload is not in the uploaded image, and XGKICK is not
+            // supported (its DMA chain would bypass the exact hand-off). Both refusals are recorded in the manifest.
+            if (refusal_.empty() && pc >= profile_.uploaded_bytes)
+                refusal_ = std::format("reachable instruction at 0x{:04X} is beyond the 0x{:04X} uploaded code", pc, profile_.uploaded_bytes);
+            if (refusal_.empty() && !profile_.xgkick_allowed && !(hi(pc) & kImmediateBit) && lowers_.at(pc).kick)
+                refusal_ = std::format("XGKICK at 0x{:04X} is not supported for unit {}", pc, profile_.unit);
             if (!lower_exit(pc)) continue;
             ++fallback_count_;
             exit_pcs_.push_back(pc);
@@ -663,11 +705,12 @@ private:
         // An end bit on a branch or jump delay slot: the donor runs the branch target once more
         // and then ends, while the emitted code would continue past the end. Refused, not emitted.
         for (std::uint32_t pc : pcs_) {
-            const std::uint32_t prev = (pc - 8u) & kMask;
+            const std::uint32_t prev = (pc - 8u) & mask_;
             if (!(hi(pc) & kEndBit) || !in_.count(prev) || !refusal_.empty()) continue;
             if (lowers_.at(prev).branch || lowers_.at(prev).jump)
                 refusal_ = std::format("end bit at 0x{:04X} sits in the delay slot of a branch or jump", pc);
         }
+        collect_dispatch_targets();
         select_flag_uses();
         for (std::uint32_t pc : pcs_)
             for (int reg : uppers_.at(pc).shadow_reads) shadowed_.insert(reg);
@@ -679,12 +722,51 @@ private:
     // Decides, for every reachable instruction, which of its flag results must be
     // computed, and fills the site counters. Full keeps everything; Observed asks
     // observe() for each write.
+    // Static return sites of jump-register dispatch (VU0). A link value (BAL or JALR) that lands on a
+    // reachable instruction is a candidate; its predecessor must not be a branch, jump or end bit,
+    // because the label is entered without executing that predecessor.
+    void collect_dispatch_targets() {
+        for (std::uint32_t pc : pcs_) {
+            if (hi(pc) & kImmediateBit) continue;
+            const std::uint32_t op = lo(pc) >> 25;
+            if (op != 0x21 && op != 0x25) continue;
+            const std::uint32_t target = (pc + 16u) & mask_;
+            if (!in_.count(target)) continue;
+            const std::uint32_t prev = (target - 8u) & mask_;
+            if (in_.count(prev) && (lowers_.at(prev).branch || lowers_.at(prev).jump || (hi(prev) & kEndBit))) continue;
+            dispatch_targets_.insert(target);
+        }
+    }
+
+    // Exit to the interpreter for a pc expression: VU1 uses the donor interpreter (unchanged text), VU0 the
+    // exact run(0, pc) hand-off from the runtime context.
+    std::string exit_call(const std::string &pc_text) const {
+        return profile_.unit == 1 ? "ps2::vu::interpret(1, " + pc_text + ")" : "ctx.exact_run(" + pc_text + ")";
+    }
+
+    // The jump-register dispatch. VU1 is unchanged. VU0 switches on the jump target: a static return site
+    // continues compiled code (budget charged as for any entry), any other target takes the exact hand-off.
+    std::string dispatch_text() {
+        if (profile_.unit == 1) return "dispatch:\n    VUGEN_SYNC; ps2::vu::interpret(1, jpc); return RunStatus::Completed;\n";
+        std::string o = "dispatch:\n    switch (jpc) {\n";
+        for (std::uint32_t target : dispatch_targets_) {
+            o += std::format("    case {}u:\n    ", target);
+            o += charge(target);
+            o += std::format("goto {};\n", label(target));
+        }
+        o += "    default: break;\n    }\n";
+        o += "    VUGEN_SYNC; " + exit_call("jpc") + "; return RunStatus::Completed;\n";
+        return o;
+    }
+
     void select_flag_uses() {
-        if (!record_.image_flags_used) mac_mode_ = MacMode::None;
+        // VU0 keeps MAC, status and clip exact at every write (EE reads them with CFC2): full flags, no elision.
+        if (profile_.exact_flags) mac_mode_ = MacMode::Full;
+        else if (!record_.image_flags_used) mac_mode_ = MacMode::None;
         else if (flag_elision() && !record_.image_status_used) mac_mode_ = MacMode::Observed;
         else mac_mode_ = MacMode::Full;
         record_.mac_mode = mac_mode_ == MacMode::None ? "none" : mac_mode_ == MacMode::Full ? "full" : "observed";
-        const bool clip_all = clip_all_live_ || !flag_elision();
+        const bool clip_all = clip_all_live_ || !flag_elision() || profile_.exact_flags;
         for (std::uint32_t pc : pcs_) {
             const Upper &analysis = uppers_.at(pc);
             FlagUse use;
@@ -807,9 +889,11 @@ private:
         o += "    " + charge(record_.entry);
         o += std::format("goto {};\n", label(record_.entry));
         for (std::uint32_t pc : pcs_) o += block(pc);
-        if (uses_dispatch_) o += "dispatch:\n    VUGEN_SYNC; ps2::vu::interpret(1, jpc); return RunStatus::Completed;\n";
+        if (uses_dispatch_) o += dispatch_text();
         if (uses_exhausted_) o += "vugen_exhausted:\n    VUGEN_SYNC; return RunStatus::BudgetExhausted;\n";
         o += "}\n\n";
+        // VU0 data memory is 4 KiB: the emitted qword accesses use the 256-qword mask.
+        if (profile_.unit == 0) replace_all(o, "qword(mem, ", "qword_vu0(mem, ");
         std::string exit_sync = "r.clip = last_clip; ";
         if (mac_mode_ == MacMode::Observed) exit_sync = "r.mac = last_mac; " + exit_sync;
         return localize_vi(o, exit_sync);
@@ -821,9 +905,9 @@ private:
         const Lower &l = lowers_[pc];
         std::string o;
         if (lower_exit(pc)) {
-            o += std::format("{}: {{ VUGEN_SYNC; ps2::vu::interpret(1, {}u); return RunStatus::Completed; }}\n", label(pc), pc);
+            o += std::format("{}: {{ VUGEN_SYNC; {}; return RunStatus::Completed; }}\n", label(pc), exit_call(std::format("{}u", pc)));
         } else {
-            const Upper refreshed = upper(upper_word, use_.at(pc));
+            const Upper refreshed = upper(upper_word, use_.at(pc), profile_.unit == 0);
             o +=std::format("{}: {{ ++fl.t; ", label(pc));
             o += refreshed.pre;
             if (immediate) o += std::format("r.i = {}u; ", lower_word);
@@ -839,11 +923,11 @@ private:
             if (upper_word & kEndBit) o += "ending = true; ";
             o += "}\n";
         }
-        const std::uint32_t prev = (pc - 8u) & kMask;
+        const std::uint32_t prev = (pc - 8u) & mask_;
         if (in_.count(prev)) {
             const Lower &previous = lowers_[prev];
             const std::uint32_t previous_hi = hi(prev);
-            if (previous_hi & kEndBit) o += std::format("    if (ending) {{ VUGEN_SYNC; r.tpc = {}u; return RunStatus::Completed; }}\n", (pc + 8u) & kMask);
+            if (previous_hi & kEndBit) o += std::format("    if (ending) {{ VUGEN_SYNC; r.tpc = {}u; return RunStatus::Completed; }}\n", (pc + 8u) & mask_);
             if (previous.branch) {
                 const std::uint32_t target = previous.target;
                 o += "    if (pend) { pend = false; ";
@@ -855,9 +939,9 @@ private:
                 o += "    if (pendj) { pendj = false; goto dispatch; }\n";
             }
         }
-        const std::uint32_t next = (pc + 8u) & kMask;
+        const std::uint32_t next = (pc + 8u) & mask_;
         if (!in_.count(next)) {
-            o += std::format("    VUGEN_SYNC; ps2::vu::interpret(1, {}u); return RunStatus::Completed;\n", next);
+            o += std::format("    VUGEN_SYNC; {}; return RunStatus::Completed;\n", exit_call(std::format("{}u", next)));
         } else if (next <= pc) {
             o += "    " + charge(next);
             o += std::format("goto {};\n", label(next));
@@ -912,15 +996,15 @@ bool parse_input_file_name(const std::string &name, std::uint64_t &key, std::uin
     return true;
 }
 
-bool read_input_image(const fs::path &path, std::vector<std::uint8_t> &image, std::string &error) {
+bool read_input_image(const fs::path &path, std::vector<std::uint8_t> &image, std::string &error, std::size_t image_bytes) {
     std::error_code size_error;
     const std::uintmax_t size = fs::file_size(path, size_error);
     if (size_error) {
         error = std::format("cannot stat {}: {}", path.filename().string(), size_error.message());
         return false;
     }
-    if (size != kImageBytes) {
-        error = std::format("{}: size {} is not {} bytes", path.filename().string(), static_cast<unsigned long long>(size), kImageBytes);
+    if (size != image_bytes) {
+        error = std::format("{}: size {} is not {} bytes", path.filename().string(), static_cast<unsigned long long>(size), image_bytes);
         return false;
     }
     std::ifstream file(path, std::ios::binary);
@@ -928,9 +1012,9 @@ bool read_input_image(const fs::path &path, std::vector<std::uint8_t> &image, st
         error = std::format("cannot open {}", path.filename().string());
         return false;
     }
-    image.assign(kImageBytes, 0);
+    image.assign(image_bytes, 0);
     file.read(reinterpret_cast<char *>(image.data()), static_cast<std::streamsize>(image.size()));
-    if (file.gcount() != static_cast<std::streamsize>(kImageBytes) || file.bad()) {
+    if (file.gcount() != static_cast<std::streamsize>(image_bytes) || file.bad()) {
         error = std::format("{}: short read", path.filename().string());
         return false;
     }
@@ -944,8 +1028,9 @@ bool g_flag_elision = true;
 void set_flag_elision(bool enabled) { g_flag_elision = enabled; }
 bool flag_elision() { return g_flag_elision; }
 
-std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used, bool status_used) {
-    return program_identity_digest(image.data(), reachable, entry, flags_used, status_used);
+std::string program_digest(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &reachable, std::uint32_t entry, bool flags_used, bool status_used,
+                          const std::string &tag) {
+    return program_identity_digest(image.data(), reachable, entry, flags_used, status_used, tag);
 }
 
 bool add_program_record(std::vector<ProgramRecord> &records, ProgramRecord candidate, std::string &error) {
@@ -1034,7 +1119,7 @@ bool collect_program_records(const fs::path &input_dir, std::vector<ProgramRecor
     return true;
 }
 
-bool read_entry_list(const fs::path &path, std::vector<std::uint32_t> &entries, std::string &error) {
+bool read_entry_list(const fs::path &path, std::vector<std::uint32_t> &entries, std::string &error, std::uint32_t code_mask) {
     std::ifstream file(path);
     if (!file) {
         error = "cannot open entry list";
@@ -1052,7 +1137,7 @@ bool read_entry_list(const fs::path &path, std::vector<std::uint32_t> &entries, 
             error = std::format("entry list line {} is not a 4-digit uppercase hex address: {}", line_number, line);
             return false;
         }
-        if (value > kCodeMask || (value & 7u) != 0) {
+        if (value > code_mask || (value & 7u) != 0) {
             error = std::format("entry list line {} must be an 8-byte aligned address below 0x4000: {}", line_number, line);
             return false;
         }
@@ -1071,27 +1156,32 @@ bool read_entry_list(const fs::path &path, std::vector<std::uint32_t> &entries, 
 }
 
 bool collect_explicit_program_records(const std::vector<std::uint8_t> &image, const std::vector<std::uint32_t> &entries,
-                                      std::vector<ProgramRecord> &records, std::string &error) {
-    if (image.size() != kImageBytes) {
-        error = "image must be 16384 bytes";
+                                      std::vector<ProgramRecord> &records, std::string &error, const UnitProfile &profile) {
+    if (image.size() != profile.image_bytes) {
+        error = std::format("image must be {} bytes", profile.image_bytes);
         return false;
     }
-    // Image-wide flag and status use is computed once: it is part of every entry's identity.
-    const bool flags_used = image_flags_used(image.data(), kImageBytes);
-    const bool status_used = image_status_used(image.data(), kImageBytes);
+    // Image-wide flag and status use is computed once: it is part of every entry's identity. VU0 forces both on.
+    const bool flags_used = profile.exact_flags || image_flags_used(image.data(), profile.image_bytes);
+    const bool status_used = profile.exact_flags || image_status_used(image.data(), profile.image_bytes);
     const std::string image_sha256 = sha256_hex(image);
     for (std::uint32_t entry : entries) {
+        if (entry >= profile.image_bytes) {
+            error = std::format("entry 0x{:04X} is outside the {}-byte image", entry, profile.image_bytes);
+            return false;
+        }
         ProgramRecord record;
         record.image = image;
         record.entry = entry;
-        record.reachable = ps2::vu::reachable(record.image.data(), kMask, entry);
+        record.unit = profile.unit;
+        record.reachable = ps2::vu::reachable(record.image.data(), profile.code_mask(), entry);
         record.key = ps2::vu::program_key(record.image.data(), record.reachable, entry);
         record.origin = "explicit";
         record.source_name = "image";
         record.source_sha256 = image_sha256;
         record.image_flags_used = flags_used;
         record.image_status_used = status_used;
-        record.digest_sha256 = program_digest(record.image, record.reachable, entry, flags_used, status_used);
+        record.digest_sha256 = program_digest(record.image, record.reachable, entry, flags_used, status_used, profile.identity_tag);
         if (!add_program_record(records, std::move(record), error)) return false;
     }
     std::sort(records.begin(), records.end(), [](const ProgramRecord &a, const ProgramRecord &b) { return a.key < b.key; });
@@ -1170,10 +1260,11 @@ std::string emit_generated_split(std::vector<ProgramRecord> &records, std::size_
     }
     const std::size_t chunk = programs_per_file == 0 ? (bodies.empty() ? 1 : bodies.size()) : programs_per_file;
     parts.clear();
+    const std::string file_prefix = unit_profile(records.empty() ? 1 : records.front().unit).file_prefix;
     for (std::size_t first = 0; first < bodies.size(); first += chunk) {
         const std::size_t last = std::min(bodies.size(), first + chunk);
         GeneratedPart part;
-        part.file_name = std::format("vu1_generated_{:03}.cpp", parts.size());
+        part.file_name = std::format("{}_{:03}.cpp", file_prefix, parts.size());
         part.programs = last - first;
         part.text = header;
         for (std::size_t i = first; i < last; ++i) part.text += std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx);\n", names[i]);
@@ -1213,6 +1304,9 @@ std::string manifest_json(const std::vector<ProgramRecord> &records, const std::
                                 i + 1 < input.parts.size() ? "," : "");
         }
         json += "  ],\n";
+    }
+    if (input.unit != 1) {
+        json += std::format("  \"unit\": {},\n  \"identity_tag\": \"{}\",\n", input.unit, unit_profile(input.unit).identity_tag);
     }
     json += std::format("  \"instruction_budget\": {},\n  \"programs\": [\n", 1000000u);
     for (std::size_t i = 0; i < records.size(); ++i) {
