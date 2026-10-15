@@ -27,6 +27,7 @@ Task IDs are stable; the overview lists tasks in execution order.
 | TASK-010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
 | TASK-019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
 | TASK-011 | Upscaling 1x-6x on the Vulkan (GS) renderer | 📋 Planned |
+| TASK-030 | Vulkan (GS) renderer features: census, post-processing, dithering, deinterlacing, texture options | 📋 Planned |
 | TASK-012 | Night races: remove the GS readback wait | 📋 Planned |
 | TASK-013 | License-test crash | 📋 Planned |
 | TASK-014 | VU0 microcode compiled ahead of time | 📋 Planned |
@@ -113,6 +114,24 @@ Internal scale selected by environment variable until the launcher exists, from
 memory: GS memory buffers grow with scale², 36x at 6x). Use the donor resolve
 pass before CPU readbacks. Acceptance: 1x identical to TASK-010; owner visual
 check and frame rate at 2x/3x/4x/6x.
+
+### TASK-030 — Vulkan (GS) renderer features (runs after TASK-011)
+Bring PCSX2 renderer features that fit our accurate compute renderer, before the
+Custom renderer. With every feature off, output stays pixel-identical. Each step
+gets an env switch until the launcher exists; shader changes need a fresh SPIR-V
+pin. Study findings: the renderer has **no dithering** (DTHE/DIMX stored, never
+applied), **no mipmapping** (MIPTBP/MXL unused), presentation duplicates field
+lines with a nearest blit and no field selection, and the donor's temporal field
+blend (`blit.wgsl`) is unused.
+- T0 census (`GT4_GS_CENSUS=1`): per-frame use of mipmaps, dithering, field and
+  interlace registers, 16-bit targets. Decides T2/T4.
+- T1 presentation chain: output filter nearest/sharp bilinear, integer scaling,
+  CAS sharpening, FXAA, ShadeBoost (PCSX2 shaders, GPL-3.0 accepted).
+- T2 dithering: off / scaled / unscaled / force 32-bit (if GT4 uses DTHE).
+- T3 field-correct deinterlacing: weave, bob, blend, adaptive, automatic, with
+  correct field order (CSR field bit); for interlaced menus.
+- T4 texture filtering override and mipmapping (only if the census shows mips).
+- T5 texture dump and replacement packs (after TASK-011 upscaling).
 
 ### TASK-012 — Night race GS readback wait
 Count GS→host readbacks per frame by scene (lens flare suspected), then copy only

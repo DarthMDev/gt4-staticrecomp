@@ -17,7 +17,7 @@
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
-![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2028-2ea44f)
+![Tasks](https://img.shields.io/badge/tasks%20done-7%20of%2029-2ea44f)
 
 </div>
 
@@ -114,6 +114,7 @@ in game before it is merged.
 | TASK-010 | MTVU: VU1 on its own thread | 📋 Planned |
 | TASK-019 | Build tuning (CPU variants, LTO, PGO) | 📋 Planned |
 | TASK-011 | Upscaling 1x–6x on the accurate GS renderer | 📋 Planned |
+| TASK-030 | Accurate renderer features: deinterlacing filters, dithering control, sharpening, texture options | 📋 Planned |
 | TASK-012 | Night races: remove the GPU readback wait | 📋 Planned |
 | TASK-013 | License-test crash | 📋 Planned |
 | TASK-014 | VU0 microcode compiled ahead of time | 📋 Planned |
