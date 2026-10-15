@@ -128,29 +128,45 @@ fn one_hundred_and_1080i_map_as_documented() {
 fn parallel_gs_options_only_when_that_renderer_is_selected() {
     let mut settings = Settings::default();
     settings.set("super_sampling", "4").unwrap();
-    settings.set("high_resolution_output", "on").unwrap();
+    settings.set("high_resolution_output", "4").unwrap();
     // CoreGS 1.1 (default): none of the paraLLEl-GS variables are sent.
     assert!(!env_map(&launch::game_environment(&settings)).keys().any(|name| name.starts_with("GT4_PGS_")));
 
     settings.set("renderer", "parallel").unwrap();
     let environment = env_map(&launch::game_environment(&settings));
     assert_eq!(environment["GT4_RENDERER"], "parallel");
-    assert_eq!(environment["GT4_PGS_SSAA"], "4");
-    assert_eq!(environment["GT4_PGS_HIRES"], "1");
     let pgs: Vec<&String> = environment.keys().filter(|name| name.starts_with("GT4_PGS_")).collect();
     assert_eq!(pgs.len(), 2, "only SSAA and HIRES exist in the paraLLEl-GS build: {pgs:?}");
 }
 
 #[test]
-fn high_resolution_output_is_not_sent_below_four_times_super_sampling() {
+fn high_resolution_output_maps_to_the_hires_option_of_the_build() {
     let mut settings = Settings::default();
     settings.set("renderer", "parallel").unwrap();
     settings.set("super_sampling", "2").unwrap();
-    settings.set("high_resolution_output", "on").unwrap();
-    let environment = env_map(&launch::game_environment(&settings));
-    assert_eq!(environment["GT4_PGS_SSAA"], "2");
-    assert!(!environment.contains_key("GT4_PGS_HIRES"));
-    assert!(!settings.is_active("high_resolution_output"));
+
+    // Off: the super-sampling choice is the only SSAA value and HIRES is not sent.
+    let off = env_map(&launch::game_environment(&settings));
+    assert_eq!(off["GT4_PGS_SSAA"], "2");
+    assert!(!off.contains_key("GT4_PGS_HIRES"));
+
+    // 2x and 4x: HIRES carries the factor and SSAA is 16, whatever super-sampling says.
+    for factor in ["2", "4"] {
+        settings.set("high_resolution_output", factor).unwrap();
+        let environment = env_map(&launch::game_environment(&settings));
+        assert_eq!(environment["GT4_PGS_HIRES"], factor);
+        assert_eq!(environment["GT4_PGS_SSAA"], "16");
+    }
+    assert!(settings.set("high_resolution_output", "8").is_err());
+    assert!(settings.set("high_resolution_output", "on").is_err());
+}
+
+#[test]
+fn high_resolution_output_is_only_shown_for_parallel_gs() {
+    let mut settings = Settings::default();
+    assert!(!settings.applies("high_resolution_output"));
+    settings.set("renderer", "parallel").unwrap();
+    assert!(settings.is_active("high_resolution_output"));
 }
 
 #[test]
@@ -187,17 +203,19 @@ fn present_filter_maps_nearest_linear_and_fsr() {
 }
 
 #[test]
-fn fsr_sharpness_is_sent_only_with_the_fsr_filter() {
+fn fsr_sharpness_is_a_percentage_sent_only_with_the_fsr_filter() {
     let mut settings = Settings::default();
+    assert_eq!(settings.get("fsr_sharpness"), "50", "default 50 %");
     settings.set("fsr_sharpness", "0").unwrap();
     assert!(!env_map(&launch::game_environment(&settings)).contains_key("GT4_FSR_SHARPNESS"));
     assert!(!settings.applies("fsr_sharpness"));
     settings.set("present_filter", "fsr").unwrap();
     assert!(settings.is_active("fsr_sharpness"));
     assert_eq!(env_map(&launch::game_environment(&settings))["GT4_FSR_SHARPNESS"], "0");
-    settings.set("fsr_sharpness", "0.2").unwrap();
-    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_FSR_SHARPNESS"], "0.2");
-    assert!(settings.set("fsr_sharpness", "3").is_err());
+    settings.set("fsr_sharpness", "100").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_FSR_SHARPNESS"], "100");
+    assert!(settings.set("fsr_sharpness", "101").is_err());
+    assert!(settings.set("fsr_sharpness", "0.2").is_err(), "stops are no longer accepted");
 }
 
 #[test]

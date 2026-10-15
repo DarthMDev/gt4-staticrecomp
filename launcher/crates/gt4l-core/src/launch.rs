@@ -49,7 +49,7 @@ pub struct LaunchPlan {
 /// CoreGS 1.1 only (the other renderers get `PS2_SCALE=1` and none of these):
 /// - `internal_scale` -> `PS2_SCALE=1|2|3` (internal resolution).
 /// - `present_filter` -> `GT4_PRESENT_FILTER=nearest|linear|fsr`; `auto` sends nothing.
-/// - `fsr_sharpness` -> `GT4_FSR_SHARPNESS=<stops>`, only with the FSR filter.
+/// - `fsr_sharpness` -> `GT4_FSR_SHARPNESS=<percent 0-100>` (the game's own scale), only with the FSR filter.
 /// - `deinterlacing` -> `GT4_DEINTERLACE=auto|off|weave|bob|blend|adaptive`.
 /// - `anti_aliasing` -> `GT4_AA=off|fxaa`.
 /// - `fullscreen` -> `GT4_FULLSCREEN` (1/0).
@@ -57,7 +57,8 @@ pub struct LaunchPlan {
 /// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
 /// - `performance_report` on -> `GT4_PERF=1`.
 /// - `check_vu_code` 100 / 1000 -> `GT4_VU1_VERIFY=N` and `GT4_VU0_VERIFY=N`.
-/// - paraLLEl-GS: `GT4_PGS_SSAA=<factor>` and `GT4_PGS_HIRES=1|0` (high-resolution output, only at 4x and up).
+/// - paraLLEl-GS: `GT4_PGS_SSAA=<factor>`. High-resolution output `2` or `4` sets `GT4_PGS_HIRES=2|4` and
+///   `GT4_PGS_SSAA=16`, as the build's `--hires 2|4` option does (`off` sends `GT4_PGS_SSAA` from super-sampling).
 ///
 /// Options marked `connected: false` in the table emit nothing.
 pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
@@ -125,9 +126,14 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
     }
 
     if renderer == settings::PARALLEL_GS {
-        variables.insert("GT4_PGS_SSAA", settings.super_sampling_factor().to_string());
-        if settings.is_active("high_resolution_output") && settings.is_on("high_resolution_output") {
-            variables.insert("GT4_PGS_HIRES", "1".to_string());
+        match settings.get("high_resolution_output") {
+            "2" | "4" => {
+                variables.insert("GT4_PGS_SSAA", "16".to_string());
+                variables.insert("GT4_PGS_HIRES", settings.get("high_resolution_output").to_string());
+            }
+            _ => {
+                variables.insert("GT4_PGS_SSAA", settings.super_sampling_factor().to_string());
+            }
         }
     }
 

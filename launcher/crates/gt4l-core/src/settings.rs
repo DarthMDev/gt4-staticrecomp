@@ -31,8 +31,12 @@ pub struct Choice {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
+    /// One of a fixed list of values, shown as a dropdown or a segmented control.
     Choice(&'static [Choice]),
+    /// `on` or `off`.
     Toggle,
+    /// A whole percentage from 0 to 100, shown as a slider. Stored as decimal text, e.g. `50`.
+    Percent,
 }
 
 /// One row of a Settings page.
@@ -81,14 +85,16 @@ const PRESENT_FILTER_CHOICES: &[Choice] = &[
     Choice { value: "fsr", label: "FSR 1.0", selectable: true },
 ];
 
-/// Values are RCAS stops: 0 is the sharpest, 2 the softest.
-const SHARPNESS_CHOICES: &[Choice] = &[
-    Choice { value: "0", label: "0 (sharpest)", selectable: true },
-    Choice { value: "0.2", label: "0.2 (default)", selectable: true },
-    Choice { value: "0.5", label: "0.5", selectable: true },
-    Choice { value: "1", label: "1", selectable: true },
-    Choice { value: "2", label: "2 (softest)", selectable: true },
+/// Values of the paraLLEl-GS high-resolution output. `off` sends nothing; `2` and `4` set
+/// `GT4_PGS_HIRES` (see `launch::game_environment`).
+const HIRES_CHOICES: &[Choice] = &[
+    Choice { value: "off", label: "Off", selectable: true },
+    Choice { value: "2", label: "2x", selectable: true },
+    Choice { value: "4", label: "4x", selectable: true },
 ];
+
+/// FSR sharpness is a percentage: 0 is the softest, 100 the sharpest. The game takes the same number.
+pub const FSR_SHARPNESS_DEFAULT: &str = "50";
 
 const DEINTERLACE_CHOICES: &[Choice] = &[
     Choice { value: "off", label: "Off", selectable: true },
@@ -177,9 +183,9 @@ pub const SETTINGS: &[SettingDef] = &[
         page: Page::Graphics,
         group: "CoreGS 1.1",
         title: "FSR sharpness",
-        info: "How much edge detail FSR 1.0 adds. Only used with the FSR scaling filter.",
-        kind: Kind::Choice(SHARPNESS_CHOICES),
-        default: "0.2",
+        info: "How much edge detail FSR 1.0 adds: 0% is softest, 100% sharpest. Only used with the FSR scaling filter.",
+        kind: Kind::Percent,
+        default: FSR_SHARPNESS_DEFAULT,
         connected: true,
     },
     SettingDef {
@@ -219,10 +225,9 @@ pub const SETTINGS: &[SettingDef] = &[
         page: Page::Graphics,
         group: "paraLLEl-GS",
         title: "High-resolution output",
-        info: "Uses the extra samples to output a sharper, higher-resolution image. Available with \
-               super-sampling at 4x or more.",
-        kind: TOGGLE,
-        default: "on",
+        info: "Outputs the picture at 2x or 4x the game's resolution. While it is on, super-sampling is 16x,                as with the --hires option of the build.",
+        kind: Kind::Choice(HIRES_CHOICES),
+        default: "off",
         connected: true,
     },
     SettingDef {
@@ -303,41 +308,45 @@ impl fmt::Display for SettingError {
 impl std::error::Error for SettingError {}
 
 /// Checks one value against its definition. Choices must be selectable; toggles are `on`/`off`.
-pub fn validate(definition: &SettingDef, value: &str) -> Result<&'static str, SettingError> {
+pub fn validate(definition: &SettingDef, value: &str) -> Result<String, SettingError> {
     let invalid = || SettingError::InvalidValue { id: definition.id.to_string(), value: value.to_string() };
     match definition.kind {
         Kind::Toggle => match value {
-            "on" => Ok("on"),
-            "off" => Ok("off"),
+            "on" | "off" => Ok(value.to_string()),
             _ => Err(invalid()),
         },
         Kind::Choice(choices) => choices
             .iter()
             .find(|choice| choice.selectable && choice.value == value)
-            .map(|choice| choice.value)
+            .map(|choice| choice.value.to_string())
             .ok_or_else(invalid),
+        Kind::Percent => match value.parse::<u8>() {
+            Ok(percent) if percent <= 100 => Ok(percent.to_string()),
+            _ => Err(invalid()),
+        },
     }
 }
 
 /// Validated values for every setting. Always holds one entry per definition.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
-    values: BTreeMap<&'static str, &'static str>,
+    values: BTreeMap<&'static str, String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        let values = SETTINGS.iter().map(|definition| (definition.id, definition.default)).collect();
+        let values = SETTINGS.iter().map(|definition| (definition.id, definition.default.to_string())).collect();
         Settings { values }
     }
 }
 
 impl Settings {
     /// The value of a setting. Every definition has a value, so this never fails for a known id.
-    pub fn get(&self, id: &str) -> &'static str {
-        self.values.get(id).copied().unwrap_or_else(|| {
-            definition(id).map(|definition| definition.default).unwrap_or("off")
-        })
+    pub fn get(&self, id: &str) -> &str {
+        match self.values.get(id) {
+            Some(value) => value.as_str(),
+            None => definition(id).map(|definition| definition.default).unwrap_or("off"),
+        }
     }
 
     pub fn is_on(&self, id: &str) -> bool {
@@ -358,7 +367,7 @@ impl Settings {
             Ok(()) => None,
             Err(error) => {
                 if let Some(definition) = definition(id) {
-                    self.values.insert(definition.id, definition.default);
+                    self.values.insert(definition.id, definition.default.to_string());
                 }
                 Some(format!("{error}; using the default"))
             }
@@ -377,15 +386,14 @@ impl Settings {
         }
     }
 
-    /// Whether a shown row can be changed now: it is connected to the game, it applies to the selected
-    /// renderer, and high-resolution output needs at least 4x super-sampling.
+    /// Whether a shown row can be changed now: it is connected to the game and it applies to the
+    /// selected renderer.
     pub fn is_active(&self, id: &str) -> bool {
         let connected = definition(id).map(|definition| definition.connected).unwrap_or(false);
         if !connected || !self.applies(id) {
             return false;
         }
         match id {
-            "high_resolution_output" => self.super_sampling_factor() >= 4,
             _ => true,
         }
     }

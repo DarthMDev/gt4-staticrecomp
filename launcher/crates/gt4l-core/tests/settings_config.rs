@@ -33,6 +33,7 @@ fn unknown_ids_and_bad_toggle_values_are_refused() {
     assert!(matches!(settings.set("gamma", "2"), Err(SettingError::UnknownSetting(_))));
     assert!(settings.set("fullscreen", "yes").is_err());
     assert!(settings.set("super_sampling", "3").is_err());
+    assert!(settings.set("high_resolution_output", "on").is_err());
 }
 
 #[test]
@@ -46,6 +47,8 @@ fn config_round_trip_keeps_values_and_paths() {
     config.settings.set("vsync", "fast").unwrap();
     config.settings.set("renderer", "parallel").unwrap();
     config.settings.set("super_sampling", "8").unwrap();
+    config.settings.set("high_resolution_output", "2").unwrap();
+    config.settings.set("fsr_sharpness", "30").unwrap();
     config.settings.set("internal_scale", "3").unwrap();
     config.disc_path = Some(r#"D:\Games\Gran Turismo 4 "quoted" (USA).iso"#.into());
     config.dev_game_dir = Some(r"C:\Antigravity\build\game".into());
