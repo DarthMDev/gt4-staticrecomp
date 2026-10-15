@@ -147,6 +147,7 @@ in game before it is merged.
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design done |
 | TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 📋 Planned |
+| TASK‑026 | PCSX2 hardware renderer option: 3x-6x resolution and texture packs | 📋 Planned |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 

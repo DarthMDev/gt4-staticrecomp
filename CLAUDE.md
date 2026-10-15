@@ -31,12 +31,16 @@ claim zero emulation or full PS2 fidelity.
   original game running natively, optimized and as faithful as possible.
 - **Renderer focus now:** integrate paraLLEl-GS (TASK-012).
 - **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
-- **Graphics:** PC renderer = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+); the
-  current donor compute GS renderer is an experimental fallback/reference only
+- **Graphics:** PC renderers = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+) and,
+  planned, the **PCSX2 hardware GS renderer** (TASK-026, GPL, for 3x-6x and
+  texture packs); the current donor compute GS renderer is an experimental fallback/reference only
   (no new features). Mobile = **ARMSX2 GS pipeline** (Vulkan on Android, Metal on
   iOS) without ARMSX2's JIT. See `docs/GS-RENDERER-OPTIONS.md`.
 - GPL-3.0 reuse (e.g. PCSX2 GS) is accepted (decision 0066): pin sources, keep
   notices, record provenance in `native/THIRD_PARTY.md`. Never import PCSX2 JITs.
+- **Distribution (decision 0068):** the game code is generated and compiled on
+  the user's PC from their own disc by the launcher; releases never contain
+  translated game code. Our code is MIT (`LICENSE`).
 - The launcher (TASK-019) and racing wheels (TASK-018) are planned tasks;
   LAN/online launcher, in-game settings menus and Spec II are recorded ideas.
 
