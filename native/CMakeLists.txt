@@ -335,3 +335,9 @@ if(GT4_SHAPE_RUNTIME_SOURCE)
     target_compile_definitions(shape_runtime_control PRIVATE GT4_OBSERVER_CONTROL)
     target_link_options(shape_runtime_fixture PRIVATE "/MAP:${CMAKE_BINARY_DIR}/shape-runtime.map" /VERBOSE:LIB)
 endif()
+
+# TASK-012 / slice 162: paraLLEl-GS backend and fixtures. Default OFF; the donor path is unchanged.
+option(GT4_PARALLEL_GS "Build the paraLLEl-GS library, headless backend and fixtures" OFF)
+if(GT4_PARALLEL_GS)
+    include(parallel_gs.cmake)
+endif()

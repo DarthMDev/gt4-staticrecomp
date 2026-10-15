@@ -493,3 +493,51 @@ Limits:
    executable is 32.9 MB larger than slice155 (owner-accepted size).
 4. Owner frame measurement is not taken. No speed claim is made. The FlagPipe history limit and the
    `verified` counter limits of slice155 are unchanged.
+
+## paraLLEl-GS library (slice162, TASK-012 steps 1-4)
+
+Off by default. `GT4_PARALLEL_GS=OFF` leaves the default `build.ninja` and CTest files unchanged
+(after path normalisation the only difference is CMake's backtrace line numbers). The donor renderer
+and the production launcher do not use this library yet.
+
+Fetch the pinned sources into a fresh directory (about 4.5 min, network; `--verify-only` checks an
+existing tree in seconds):
+
+    private\tooling-venv\Scripts\python.exe scripts\fetch_parallel_gs.py --dest C:\Antigravity\gt4-staticrecomp\private\references\parallel-gs
+
+The pin is [parallel-gs-pin.json](inputs/parallel-gs-pin.json). It initialises only paraLLEl-GS,
+`Granite`, `Granite/third_party/khronos/vulkan-headers` and `Granite/third_party/volk`.
+
+Configure and build a separate candidate build directory (fresh path, never an existing slice directory;
+`-DGT4_ASSETS_ROOT` names the main checkout that holds the private inputs):
+
+    cmake -S . -B C:\Antigravity\gt4-staticrecomp\private\slice162-parallel-on\build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe -DGT4_PARALLEL_GS=ON
+    cmake --build C:\Antigravity\gt4-staticrecomp\private\slice162-parallel-on\build --target parallel_gs_fixture gs_video_mode_fixture
+    ctest --test-dir C:\Antigravity\gt4-staticrecomp\private\slice162-parallel-on\build -R "native_parallel_gs|native_gs_video_mode" --output-on-failure
+
+Targets and tests:
+
+- `gt4_parallel_gs` (`native/parallel_gs_backend.cpp`, the only unit that includes Granite headers), `parallel_gs_fixture`
+  (CTest `native_parallel_gs`, 17 checks on a Vulkan device, exit 77 = skipped when paraLLEl-GS cannot run).
+- `gt4_gs_video_mode` and `gs_video_mode_fixture` (CTest `native_gs_video_mode`, 27 checks, no GPU).
+- Vendor targets (`parallel-gs`, `granite-vulkan`, `granite-util`, `granite-math`, `granite-volk`) are built
+  with `-w`. `EXCLUDE_FROM_ALL` keeps the Granite tools, the vendor analog/dump/sandbox directories and the
+  renderer out of the build.
+- `python_native_contracts` now includes `tests/python/test_fetch_parallel_gs.py` (10 offline tests on a
+  fake upstream, about 42 s on Windows).
+
+Worktree prerequisites (a `git worktree` has no ignored `private/`). CMake requires two inputs under the
+source tree, so copy them from the main checkout (they are never written):
+
+    copy C:\Antigravity\gt4-staticrecomp\private\slice114-native-base\port  →  <worktree>\private\slice114-native-base\port
+    copy C:\Antigravity\gt4-staticrecomp\private\references\ps2-web-recomp\runtime\include\ps2\vu_ops.hpp  →  <worktree>\private\references\ps2-web-recomp\runtime\include\ps2\
+
+The `port` copy is 124 KB; `vu_ops.hpp` is a single header that satisfies the `vu_recomp` check. Copies are used
+instead of junctions so that deleting a worktree cannot follow a link into the main checkout.
+
+Measured on this machine (RX 9060 XT, clang-cl 22.1.3, CMake 4.3.1, Ninja): ON configure 12.3 s; fixture
+build from clean 61 steps, 41.5 s, 0 errors and 0 warnings from our units.
+
+Limits: no window presentation (step 6), no GS front-end hook (step 5), no state save (step 10). The SMODE1
+values come from `gs_video_mode.cpp`; the FFMD choice and the VGA mode range are hypotheses recorded in
+[PARALLEL-GS-PLAN.md](PARALLEL-GS-PLAN.md) section 7.

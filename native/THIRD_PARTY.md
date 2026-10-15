@@ -85,3 +85,32 @@ hardening changes are listed in the file header. The donor header
 `tools/vu_recomp/MIT-LICENSE.txt`. `tools/vu_recomp/src/sha256.cpp` and the
 fixtures in `tools/vu_recomp/tests/` are original code. The emitter output is
 not linked into the game; the provider is a later, separate step.
+
+## paraLLEl-GS and Granite (slice 162, TASK-012)
+
+Off by default (`GT4_PARALLEL_GS=OFF`). When enabled, `native/parallel_gs.cmake` builds these
+pinned sources from `private/references/parallel-gs` (fetched by `scripts/fetch_parallel_gs.py`,
+verified against [parallel-gs-pin.json](../docs/inputs/parallel-gs-pin.json)). No vendor file is
+modified; GT4Recomp's own code is in `parallel_gs_backend.*`, `gs_video_mode.*` and the fixtures.
+
+| Component | Commit | License | Use |
+|---|---|---|---|
+| paraLLEl-GS (Arntzen Software AS, Hans-Kristian Arntzen, Runar Heyer) | `cc6184af7e0c03da603045ca371ffa5dae9b0655` | LGPL-3.0-or-later (`COPYING.LGPLv3` in the checkout) | GS renderer library, linked statically |
+| Granite (Hans-Kristian Arntzen) | `16e7395f6a4858c1783dbf6f521f90b9d5f82ac5` | MIT | Device, allocator, timelines: `granite-vulkan`, `granite-util`, `granite-math` are built; renderer, shader compiler, SDL, tools and DXGI are off |
+| volk (Arseny Kapoulkine) | `47cddf7ed97b94118a08aacb548a411188e016cc` | MIT | Vulkan function loading inside Granite |
+| Vulkan-Headers (Khronos) | `11d6898377797e07dbd543aaaa367e4465074597` | Apache-2.0 OR MIT | Vulkan headers used by Granite; not the PCSX2-tree headers |
+
+Notes:
+
+- The paraLLEl-GS shader header `gs/shaders/slangmosh.hpp` is prebuilt SPIR-V (sha256 of the LF blob
+  9f9cf941...). No GLSL compiler is built or used.
+- Vendor targets are compiled with `-w` so their diagnostics do not reach the GT4Recomp logs; our
+  targets keep `/W4` (`/W3` for the backend unit, which includes Granite headers).
+- The vendor CMake forces `/MT` unless `CMAKE_MSVC_RUNTIME_LIBRARY` is set first; the build sets
+  `/MD` (CMP0091 NEW) to match the rest of GT4Recomp.
+- LGPL obligations: paraLLEl-GS is linked statically into the renderer. Any distributed binary
+  with this option needs the object files or full corresponding source and build scripts so users
+  can relink, as LGPL-3.0 section 4 requires. No binary is distributed by this slice. The plan
+  ([PARALLEL-GS-PLAN.md](../docs/PARALLEL-GS-PLAN.md)) requires an owner decision on distribution
+  before any public binary; none is recorded yet.
+- Local patches to paraLLEl-GS, if any, will be kept as documented patch files here, not pushed upstream.
