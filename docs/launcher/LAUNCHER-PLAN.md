@@ -34,6 +34,9 @@ Labels: **Confirmed** (read in code/data or measured), **High confidence**, **Hy
    visible but locked below 4× super-sampling; public official GT4 images and logos are bundled in
    the launcher with a trademark/IP notice (section 8); a Saves page with a save manager
    (section 13, separate task TASK-025).
+6. **Owner additions (rounds 4–6):** generic slot names with date only; a Replays page; the PCSX2-style
+   folder memory card. After studying the runtime (raw SIO2-level card emulation), the chosen model is
+   a folder card in user data that the launcher turns into a card image around Play (section 13.2).
 5. **Owner decisions (2026-10-15):** MIT license for our own code (LICENSE added on main by the
    coordinator; third-party parts keep their licenses, paraLLEl-GS LGPL in its DLL); installers are
    GitHub Releases of `moesuito/gt4-staticrecomp` and the launcher source lives in the same
@@ -141,8 +144,8 @@ If the ISO later moves, the home screen shows "Disc image not found — Locate�
 
 A missing card file is presented to the game as a **new, unformatted** 8,650,752-byte card and is
 written on save; GT4 then offers to format it. So the launcher does not need any seed card (the pinned
-seeds stay private evidence). Setup creates nothing and asks nothing. On the first Play, the active slot is slot 01 (no file yet).
-The slot appears in the Saves page when the game first creates its save. Storage, backups and the Saves page are the
+seeds stay private evidence). Setup creates nothing and asks nothing. The first Play gets a freshly built blank card image. Once
+the game creates its save, the save is harvested into the folder card as "Save 01" (section 13.2). Storage, backups and the Saves page are the
 save manager's (section 13). **Import** of an existing PCSX2 8 MB `.ps2`
 card (same size and raw page+ECC layout, **High confidence**; validate size and the
 `Sony PS2 Memory Card Format` superblock magic) is part of the save manager (section 13), never part of setup. Hold the card lock (same byte-lock design as `session.lock`) while the game runs.
@@ -367,7 +370,7 @@ launcher contains no reference to the official branding or bundled payload.
 | What | Where |
 |---|---|
 | Program (installer-owned, replaced on update) | `%LOCALAPPDATA%\Programs\GT4Recomp\` → `GT4Recomp.exe`, `game\gt4recomp-game.exe`, `game\gt4_parallel_gs.dll`, `game\shaders\*.spv`, `branding\`, `licenses\`, `release-manifest.json`, `uninstall.exe` |
-| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `saves\` (slot cards, backups, `slots.toml`; section 13), `art\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20), `cache\` (Vulkan pipeline cache) |
+| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `memcard\` (folder card: active save + all replays), `saves\` (inactive saves), `runtime\card.ps2` (section 13), `art\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20), `cache\` (Vulkan pipeline cache) |
 
 `%LOCALAPPDATA%` (not Roaming) avoids syncing 8 MB cards and 6 MB ELFs through roaming profiles/
 OneDrive. A "Portable mode" (a `portable.txt` next to the exe redirects data to `.\data`) is cheap to
@@ -376,10 +379,10 @@ add and handy for testing.
 ### 7.5 Launch, supervision, crash report
 
 - Single instance: named mutex `Local\GT4Recomp.Launcher`; a second start activates the first window.
-  Game lock: byte lock on `saves\session.lock` (same design as today) so two games never share a card.
+  Game lock: the runtime's exclusive `<card>.lock` plus a launcher byte lock so two games never share a card.
 - Launch: verify payload (fast), cheap disc recheck, back up card, create session folder, write
   `launch.json`, `CreateProcessW(game\gt4recomp-game.exe, "prepared\SCUS_973.28 --ntsc --disc <iso>
-  --frames 0 --memcard saves\slot-NNNN.ps2 (active slot) --misses <session>\misses.txt --window")`, cwd = session,
+  --frames 0 --memcard runtime\card.ps2 (built from the folder card) --misses <session>\misses.txt --window")`, cwd = session,
   stdout/stderr to `<session>\game.log`, process in a Job Object (so "Stop game" works and children die
   with it). The ELF is passed in place (`prepared\SCUS_973.28`, the name argv0 needs) instead of
   copying it per session.
@@ -487,7 +490,7 @@ Then `enable_language(RC)` (llvm-rc with clang-cl).
 | M7 | NSIS installer/uninstaller + release packaging + license bundle | Install/uninstall as a standard (non-admin) user in Windows Sandbox; non-ASCII user name; OneDrive-redirected Desktop; upgrade over previous version keeps data; uninstall keeps saves by default | 2-3 |
 | M8 | End-to-end QA + owner test | Clean machine: install → select ISO → play → save → exit → relaunch skips setup → crash path (forced) produces a report; owner plays the reference scene from the launcher | 2 |
 | M9 | Release candidate: CHANGELOG, known issues, GitHub Release on `moesuito/gt4-staticrecomp` | Owner approval → tag | 0.5 |
-| — | **Dependency: TASK-025 save manager** (section 13): slot storage and the Saves page; the launcher's v1 can fall back to a single slot if it slips | see 13.6 | 10-13 (cut 8-10) |
+| — | **Dependency: TASK-025 save manager** (section 13): slot storage and the Saves page; the launcher's v1 can fall back to a single slot if it slips | see 13.6 | 14.5-17.5 (cut 12-14.5) |
 | M10 (insurance, optional) | Option B spike: freestanding game-code DLL + bundled clang-cl/lld-link build on a test VM | Game DLL built on a clean VM from the ISO; frames identical; F8 shows the DLL boundary cost; first-run time measured on 4 and 16 threads | 5-8 |
 
 Total for A: about **22-28 agent-days** (M0-M9), plus owner review/testing time. M2 depends on
@@ -591,7 +594,7 @@ Components make no platform calls. The Windows shell (title bar, file dialog, pr
 
 - **Setup:** cover art on the left. On the right: logo, "Set up your game", "This only happens once.", four step rows and one primary button. For a wrong disc: one red status, a two-line explanation and "Choose another file".
 - **Home:** full-bleed disc photo, logo at bottom-left, Play under it, a Settings gear at top-right. While the game runs, Play becomes "Running · Stop". Nothing else: no cards, no news, no hints, no footer.
-- **Settings:** a nav column (Back, logo, Graphics, Display, Saves, Advanced, About, version). Option rows carry no helper text; an "i" next to each title opens a hover card (one state shown open in the mockup). High-resolution output is dimmed and locked below 4× (both states rendered). Each page has a title, the single line "Changes apply the next time you play." and its option rows. About holds licenses, disc and game files, repair and log access.
+- **Settings:** a nav column (Back, logo, Graphics, Display, Saves, Replays, Advanced, About, version). Option rows carry no helper text; an "i" next to each title opens a hover card (one state shown open in the mockup). High-resolution output is dimmed and locked below 4× (both states rendered). Each page has a title, the single line "Changes apply the next time you play." and its option rows. About holds licenses, disc and game files, repair and log access.
 - **Motion:**
   - background cross-fade of 1 s every 15 s;
   - button hover 150 ms, toggle 150 ms;
@@ -604,8 +607,8 @@ Components make no platform calls. The Windows shell (title bar, file dialog, pr
 ## 13. Save manager (separate task; the launcher depends on it)
 
 Proposed as **TASK-025: Save manager** (appended after the phase 2/3 numbers, per the TASKS.md rule).
-- **Dependency:** the TASK-019 Saves page and the slot-based launch need its core. The launcher can ship v1 with one slot only if TASK-025 slips.
-- **Effort:** about 10–13 agent-days for v1 (table in 13.6).
+- **Dependency:** the TASK-019 Saves and Replays pages and the folder-card launch need its core. The launcher can ship v1 with one slot only if TASK-025 slips.
+- **Effort:** about 14.5–17.5 agent-days for v1 (table in 13.6).
 
 ### 13.1 How saves are stored today (study)
 
@@ -618,8 +621,8 @@ All findings come from read-only inspection of `private/manual-play/card.ps2` an
 | This is the same file format as PCSX2's 8 MB file memory cards (`.ps2`). `.mcd` images from other tools use the same raw layout. Some dumps omit the ECC bytes (8,388,608 bytes); those need ECC added on import. | Format match; PCSX2 behaviour from knowledge | High confidence |
 | The runtime has **one card, slot 1 only**. SIO2 port 2 goes to `memory_card()`; no slot 2 exists. | `sio2.cpp:269-270` | Confirmed |
 | The runtime opens it via `--memcard <path>`. It reads up to 8,650,752 bytes into memory; a missing file becomes an **unformatted** card (all 0xFF); a shorter file is padded with 0xFF. | `sio2.cpp:173-179`, `host/main.cpp:51` | Confirmed |
-| Writes rewrite the **whole file in place** (`ofstream` truncate) once 50 polls pass without new card writes. This is not atomic: a crash or power loss mid-write can corrupt the card. | `sio2.cpp:322-333` | Confirmed |
-| Whether the game's ECC bytes on our cards are valid (if PCSX2 checks them, it might reject our cards). | Not checked | Unknown |
+| Writes rewrite the **whole file in place** (`ofstream` truncate) once 50 VBlanks pass without new card writes. This is not atomic: a crash or power loss mid-write can corrupt the card. | `sio2.cpp:322-333` | Confirmed |
+| ECC bytes on our cards are written by GT4's own MCMAN module (the runtime stores the spare bytes as sent; 13.2), so they should be valid for PCSX2. Not yet verified by recomputing them. | 13.2 study | High confidence |
 | **Contents:** one root entry, directory `BASCUS-97328GAMEDATA`, holding `garage` 1,280,064 B, `BASCUS-97328GAMEDATA` 237,760 B, `icon0.ico` 9,796 B and `icon.sys` 964 B (title "ＧＲＡＮ　ＴＵＲＩＳＭＯ　４ / Ｇａｍｅ　ｄａｔａ"). Total 1,528,584 B. Free space 6,635 KiB. | Directory walk | Confirmed |
 | **Only one GT4 game save fits per card in practice.** The directory name is fixed (`BASCUS-97328GAMEDATA`), so a second save would overwrite the first, even though about 5 × 1.5 MB would physically fit. | Fixed name seen on 3 cards; GT4 behaviour | High confidence |
 | GT4 also writes replay and photo saves to other directories. The disc has save icons for them: `GT4.VOL icon/GT4_Rep_*.ico`, `GT4_photo_*.ico`, `GT4_film_*.ico`. Their exact directory names and sizes are not yet known. | Disc catalogue | Confirmed (icons); Unknown (names) |
@@ -628,74 +631,157 @@ All findings come from read-only inspection of `private/manual-play/card.ps2` an
 | **Single-save formats:** `.psu` (uLaunchELF/EMS: uncompressed, 512-byte header per entry); `.max` (Action Replay MAX: `Ps2PowerSave` header, LZARI-compressed); `.cbs` (CodeBreaker: `CFU` header, RC4-style encryption + zlib); `.xps`/`.sps` (X-Port/SharkPort: `SharkPortSave` header, uncompressed); a raw directory (folder containing `icon.sys` and the files). We implement all of them from format facts. mymcplus is GPL-3.0, so its code is not copied into MIT code. | Public format documentation | High confidence |
 | **Readable progress:** Nenkai PDTools (MIT, commit `ffe0bb2`, `PDTools.SaveFile.GT4.GT4Save.Load(directory)`) decrypts GT4 saves. GT4SaveEditor shows the profile name, credits (`GarageFile.Money`) and the calendar day from them. Porting that decryption to Rust could give "Day N · Cr X" per slot. **Not in v1** (owner, round 4): kept as a later optional step, after our own reverse-engineering review. Caveat (from its README): some garage cars do not decrypt exactly because of PS2 float behaviour; that does not affect name, money or day. | Private clones `private/slice151-research/nenkai/{PDTools,GT4SaveEditor}` | High confidence (feasible); deferred, not v1 |
 
-### 13.2 Storage model: one 8 MB card image per slot
+### 13.2 Storage model (round 6): a folder memory card in user data, materialized to a card image around Play
+
+#### How our runtime emulates the memory card (study)
+
+| Finding | Evidence | Label |
+|---|---|---|
+| **The card is emulated at the raw SIO2 / flash-page level, not at the file level.** `memory_card()` implements the PS2 card's wire commands. `0x21/0x22/0x23` set the page address; `0x42` writes raw bytes, including the 16 spare (ECC) bytes the IOP sends; `0x43` reads raw bytes with an XOR checksum; `0x82` erases a 16-page block to 0xFF; `0x26` reports the card geometry (page size 0x200, 16 pages per block, 0x4000 pages = 8 MB); `0x27/0x28` handle the terminator and status. | Donor `runtime/src/iop/sio2.cpp:182-258` | Confirmed |
+| **The PS2 filesystem (superblock, FAT, directories, `icon.sys`, ECC) is maintained by GT4's own IOP modules** `MCMAN`/`MCSERV`/`SIO2MAN`/`SIO2D`, loaded from `cdrom0:\IRX\` and **interpreted** on the IOP (`register_hle_module` has no caller). There is no HLE of `mcman`/`mcserv`/`libmc` RPC calls (open/read/write/getdir/mkdir/delete) anywhere in the donor or in `native/`. | `docs/IOP-MAP.md` (slice 151 study); grep of `runtime/src`, `runtime/include`, `native/` for mcman/mcserv/sceMc finds nothing | Confirmed |
+| Consequence: ECC bytes and the directory/FAT layout on our cards are written by the real Sony `MCMAN` code, so cards produced by our runtime should be valid for PCSX2 and real hardware. | Previous row | High confidence |
+| The backing store is one 8,650,752-byte vector loaded from `--memcard` at IOP reset; a missing file becomes a blank (0xFF) card. | `sio2.cpp:47-48`, `173-179` | Confirmed |
+| `flush_cards()` runs once per VBlank (`system.cpp:132`). It rewrites the whole file in place (`ofstream` truncate) once 50 VBlanks (~0.83 s) pass with no card write. It is **not atomic**, and the donor has **no flush on exit**: closing the window less than ~0.8 s after a save could lose that save. | `sio2.cpp:322-333`, `system.cpp:127-133`; no other caller found | Confirmed (code); data-loss window is Hypothesis until tested |
+| Our native host only adds an exclusive `<memcard>.lock` file. | `native/window.cpp:317-324` | Confirmed |
+| The game always sees an **8 MB card** (geometry fixed by the `0x26` reply). About 6.6 MB is free next to one game save, so the number of replays visible **in-game at once** is limited whatever the host-side storage model. Presenting a larger card is untested with GT4's MCMAN. | `sio2.cpp:216-221`; card walk in 13.1 | Confirmed (8 MB); Unknown (larger cards) |
+
+#### Options compared
+
+| | (a1) Folder card **in the runtime**, at the raw-page layer | (a2) Folder card via **HLE of MCMAN/MCSERV** (file-level RPC) | **(b) Folder in user data + one raw card image built by the launcher** | (c) One raw card per save slot (previous plan) |
+|---|---|---|---|---|
+| How | On load, synthesize a full 8 MB FAT image (superblock, FAT, directories, ECC) from host folders. On flush, parse the FAT back and write changed files and directories to the host. Same idea as PCSX2's FolderMemoryCard, designed from behaviour only (no GPL code). | Replace GT4's disc IRX `MCMAN`/`MCSERV` with native handlers for every `sceMc*` RPC (Open, Read, Write, Seek, GetDir, Mkdir, Delete, Format, GetInfo, ChDir, SetFileInfo, …) that map onto host files. | The user-data folder holds every PS2 directory as a separate item. Before Play the launcher writes a fresh card image (the active game save + the chosen replays and playlists); after exit it reads the card back and updates the folder. The runtime is unchanged. | Each slot is its own 8 MB card file. |
+| Runtime change | Yes: `sio2.cpp` backing store | Yes, large: new IOP HLE module and a stop on loading the disc IRX | **None** (only the recommended atomic-flush and exit-flush fixes) | None |
+| Effort | 10–15 agent-days | 15–25 agent-days | **3–4 on top of `gt4l-mcfs`** | Already planned |
+| Fidelity risk | High: mid-write FAT states, free-space accounting, directory timestamps, `icon.sys` and mode bits, erase-block semantics, write-back ordering | High: must match the exact RPC semantics and timings GT4 expects; leaves the real Sony module path | **Low**: the game still talks to real MCMAN on a real-format card | Low |
+| Crash safety | Two representations kept live during play; hard to make atomic | Per-file writes; partial saves possible | Card image is the only live state during play. The folder changes only after exit, through temp dirs and renames. The previous card image is kept as backup. | Card image per slot |
+| PCSX2 import/export | Folder layout similar to PCSX2's | Same | Import `.ps2`/`.mcd`/folder cards/single saves; export `.ps2`, `.psu`, or a folder of save directories | `.ps2` per slot |
+| Android reuse | C++ runtime code (portable) | C++ (portable) | **Rust crate, UI-independent** (portable) | Same |
+| Owner's folder model | Yes | Yes | **Yes, from the user's point of view** (the folder is the truth) | No |
+
+#### Recommendation: (b)
+
+It gives the owner the folder-card model he uses in PCSX2: every save and replay is a separate item in a folder, all replays kept, one game save active. It adds no emulation risk, because GT4's real `MCMAN` keeps writing a real card. It also keeps one simple crash-safety story. (a1)/(a2) can stay a later option if live folder sync during play is ever needed.
+
+Two small runtime fixes go with it, as one overlay capsule with a CTest fixture: an **atomic flush** (temp file + `ReplaceFileW`) and a **final flush on exit**.
+
+#### Layout
 
 ```
-%LOCALAPPDATA%\GT4Recomp\saves\
-  slots.toml                 # schema_version, active_slot, [[slot]] id, label, created, source, last_played, cached summary
-  slot-0001.ps2              # standard 8,650,752-byte card (format 1.2.0.0 with ECC), slot 1 of the PS2
-  slot-0002.ps2
-  backups\slot-0001\slot-0001-YYYYMMDD-HHMMSS.ps2   # copy before each session, keep the last 5 per slot
-  session.lock               # byte lock while a game runs
+%LOCALAPPDATA%\GT4Recomp\
+  memcard\                         # the folder card: what the game sees next Play
+    BASCUS-97328GAMEDATA\          #   the active game save (exactly one, or none)
+      BASCUS-97328GAMEDATA  garage  icon.sys  icon0.ico
+    BASCUS-97328R0001\ …           #   every replay (all kept here, unlimited)
+    BASCUS-97328LSTRPLAY\ …        #   playlists etc. (game state, kept as-is)
+    _meta.toml                     #   per-item: modes, created/modified timestamps, attributes, content hash, on_card flag
+  saves\
+    Save 02\BASCUS-97328GAMEDATA\ …   # inactive game saves, one folder per slot (ids only grow)
+    Save 03\…
+  runtime\card.ps2                 # the 8 MB image built for the current/last Play (+ card.ps2.prev backup)
 ```
 
-Why one card file per slot instead of folder cards:
-- the runtime already mounts exactly this format (no native change);
-- GT4 allows one game save per card anyway;
-- each slot is self-contained, so export, delete and backup are plain file operations;
-- PCSX2 can open the files directly.
+Directory names inside `memcard\` and `saves\` are the real PS2 names, so a user can copy a save folder to or from a PCSX2 folder card by hand. The PS2 timestamps and modes are kept in `_meta.toml` because NTFS cannot store them exactly.
 
-Cost: 8.25 MB per slot (100 slots ≈ 825 MB, acceptable). Slot ids only grow (never reused). Names are generic and fixed in v1: "Save 01", "Save 02", … taken from the slot number. The only other data shown is the saved date and time: the `modified` timestamp of the `BASCUS-97328GAMEDATA` directory entry on that card (Confirmed field in the directory entry), falling back to the file's last-write time.
+#### Play cycle
 
-**Launching with a slot:** the launcher reads `active_slot` and passes `--memcard saves\slot-NNNN.ps2`. An empty slot has no file, so the runtime presents an unformatted card and GT4 offers to format it. Backup before launch; lock while running. The Saves page is read-only while the game runs. Card writes stay where the game puts them.
+1. **Harvest first** (at launcher start, then after every game exit): read `runtime\card.ps2` with `gt4l-mcfs`.
+   - Every directory on the card that differs from the folder (by content hash) is written into `memcard\` (temp dir + rename).
+   - New replays become new items; the game save replaces the active one, after a copy of the old one goes to `memcard\.backup\`.
+   - Nothing in the folder is deleted because it is missing from the card. A replay deleted in-game stays in the folder, flagged `on_card = false`.
+2. **Switch active save** (Saves page radio): move `memcard\BASCUS-97328GAMEDATA` into its own `saves\Save NN\` and move the chosen slot's directory into `memcard\`. Same-volume renames, logged, never while the game runs.
+3. **Build** (on Play): format a fresh card image (superblock, FAT, ECC) and write the active game save, the playlists, then the replays flagged `on_card`. If they do not fit, Play is blocked with one line asking to uncheck replays. The image is written to `card.ps2.tmp`, verified by reading it back, and renamed into place; the previous image is kept as `card.ps2.prev`.
+4. **Play** with `--memcard runtime\card.ps2`. The runtime's exclusive `.lock` prevents a second writer.
 
-**Native change recommended (small):** make the runtime's card flush atomic: write `slot.ps2.tmp`, flush, then `ReplaceFileW`/rename. This is an overlay capsule on `sio2.cpp`, tested by a CTest fixture.
+Never lose a save or replay:
+- harvest always runs before any build;
+- the folder is changed only through renames;
+- each previous card image and each replaced game save are kept as backups;
+- user deletes go to the Recycle Bin.
+
+### 13.2b Replay directories (study, round 5)
+
+Method: static reading of the pinned reconstructed ELF (read-only), using a throwaway string/xref scanner and a tiny MIPS disassembler in the scratchpad (vaddr = file offset + 0xFF000). Class names from gt4-decomp. The owner's cards hold no replay yet.
+
+| Finding | Evidence | Label |
+|---|---|---|
+| GT4's card layer `GT4MC` has distinct file kinds: `FileGT4GameData`, `FileGT4Replay` (`…Full`, `…Best`, `…Demo`), `FileGT4ReplayList`, `FileGT4PhotoData` (`…Film`, `…Picture`), `FileGT4PlayList`, `FileGT4SlideShowList`, `FileGT4PatchData`. Menu modes include `MODE_SAVE_FULL_REPLAY`, `MODE_SAVE_BESTLAP_REPLAY`, `MODE_LOAD_*_REPLAY`, `MODE_SAVE_PHOTO_FILM/PICTURE`. | Type strings, ELF 0x595f90–0x5962a8, 0x58de48–0x592390 | Confirmed |
+| Game data directory = product code + `"GAMEDATA"`: `FileGT4GameData::setupFilename` at 0x1cda48 builds `BASCUS-97328` then appends the string at 0x694e20. | Disassembly | Confirmed |
+| Replay type letters: full `'R'`, best lap `'B'` (virtuals at 0x1d0358 / 0x1d03e0). Icons `GT4_Rep_to_race.ico`, `GT4_Rep_to_license.ico`, `GT4_Rep_tt1.ico`; titles "FileReplayFull" / "FileReplayBest" / "FileReplayLicense". | Disassembly; pointer table 0x618d28 | Confirmed |
+| Replay directory names follow `BASCUS-97328` + type letter + 4 digits (e.g. `BASCUS-97328R0001`). This mirrors the photo names, whose `F%04d` (film) and `P%04d` (picture) format calls are Confirmed at 0x1d06d8 / 0x1d0b6c. | Analogy | Hypothesis (confirm with one owner replay save) |
+| Playlists use the fixed suffixes `LSTRPLAY` and `LSTSLIDE`. Every replay/photo directory has `icon.sys`, `icon0.ico` and `thumbnail`. | Strings 0x6951c8/0x6951f8, 0x595e80, 0x596318 | High confidence |
+| The in-game load menus list the card's root directory (`"/%s/*"`, `GT4MC::Device::getdir`) and recognise GT4 entries by name. So any correctly named directory on the slot-1 card appears in game. | Strings, class structure | High confidence |
+| GT4 also knows the GT3 and GT4 Prologue save names (`BASCUS-97102GAMEDATA`, `BESCES-50294GAMEDATA`, `BISCPS-15009GAMEDATA`, …), probably for old-game bonuses. They are ignored by the launcher. | Strings 0x596450–0x5964d8 | Confirmed (strings) |
+| Replay size, and so how many replays fit next to the 1.5 MB save in about 6.6 MB free (roughly 4–20 at 0.3–1.5 MB each). | Not measured | Unknown / Hypothesis |
 
 ### 13.3 Operations
 
-- **Select:** a radio button per slot. The active slot shows a "Next play" tag. Only one is active.
-- **Import save** opens one file picker accepting `.ps2 .mcd .bin` (card images), `.psu .max .cbs .xps .sps`, or a folder.
-  - **Single save** (a GT4 `BASCUS-97328*` directory): imported directly.
-  - **Card image or PCSX2 folder card:** opened read-only. Its saves are listed in a dialog, grouped by directory, with GT4 game data, GT4 replays and "Not a Gran Turismo 4 save" (greyed, not selectable). The user ticks what to import.
-  - **Destination rule:** import **always creates a new slot** and never overwrites one. The new card is formatted fresh by our `gt4l-mcfs` writer (superblock, FAT, ECC). Selected directories are copied in with their timestamps, modes and `icon.sys`. One GT4 game-data directory per new slot; ticked replays from the same source go into that slot. Two game-data saves (from two sources) become two slots.
-  - **Validation before writing:** sizes, directory names and a read-back of the written card through our own reader.
-- **Export** (row action): "Memory card image (.ps2)", copying the slot file, or "Single save (.psu)" of the GT4 directory.
-- **Delete** (row action): a confirm dialog naming the slot and its summary. The file goes to the Windows Recycle Bin (`IFileOperation` with `FOFX_RECYCLEONDELETE`), so it can be undone; its backups stay until the user empties them in About › Game files.
-- **List:** at least 10 rows always visible, the used slots first, then empty rows, scrolling, no upper limit.
-  - Each filled row shows: radio, number, "Save NN" (plus the "Next play" tag when active), the saved date and time, and two **icon buttons**: Export (an "upload / send out" arrow from a tray) and Delete (trash can).
-  - The icons are always visible on filled rows, drawn dimmed (40% opacity) at rest; each goes to full brightness on hover or focus, and Delete turns red.
+**Saves page (game saves only)**
+
+- **List:** at least 10 rows always visible, used slots first, then empty rows; scrolls with no upper limit.
+  - A filled row shows a radio, the number, "Save NN" (plus a "Next play" tag when active), the saved date and time (the PS2 directory `modified` timestamp), and two icon buttons: Export (arrow out of a tray) and Delete (trash).
+  - The icons are always visible on filled rows, dimmed to 40% at rest; each goes to full brightness on hover or focus, and Delete turns red.
   - Empty rows show "Empty" and no icons.
-- **Empty state (first install):** no slot has data. The page shows only "No saves yet / Your first save appears here after you save in the game." The Import save button stays in the header.
-- **First save:** the launcher passes `saves\slot-0001.ps2` for the first Play. When the runtime writes that card and it contains `BASCUS-97328GAMEDATA`, slot 01 appears as "Save 01", active, with its date. The launcher detects this after the game exits, or live by watching the folder (read-only, debounced). A card that GT4 has only formatted, with no game data yet, still counts as empty.
-- **Owner migration (dev builds only):** a one-time offer to import `private/manual-play/card.ps2`.
+- **Select (radio):** switches the active game save (13.2, step 2). Only one is active; the active save is the one inside `memcard\`.
+- **Import save:** one picker accepts `.ps2 .mcd .bin` card images, PCSX2 folder cards (a folder), `.psu .max .cbs .xps .sps`, or a raw save folder.
+  - A single save is imported directly.
+  - A card image or folder card is opened read-only and its entries are listed. GT4 game data can be ticked; replays are greyed with "Import it from Replays"; other games' saves are greyed with "Not a Gran Turismo 4 save".
+  - Each ticked game save **becomes a new slot** (`saves\Save NN\`). Import never overwrites, and the active save does not change.
+- **Export:** a single save (`.psu`), or a PS2 card image (`.ps2`) built with that save plus all on-card replays.
+- **Delete:** confirm, then the folder goes to the Recycle Bin. Deleting the active save leaves no active save: the next Play starts with no game data, and GT4 creates a new one.
+- **First install:** "No saves yet / Your first save appears here after you save in the game." The Import button stays in the header. After the first Play, harvest finds `BASCUS-97328GAMEDATA` on the card, and slot 01 appears as "Save 01", active, with its date.
+- **Owner migration (dev builds only):** a one-time import of `private/manual-play/card.ps2`.
+
+**Replays page (replays only; filtered by directory type `R`/`B`)**
+
+- **Same list:** "Replay NN", date and time, the same dimmed export/trash icons, 10 visible rows plus scrolling, and an "Import replay" button.
+- **Checkbox instead of radio:** "On card" means the replay is written onto the game's 8 MB card for the next Play. All replays stay in `memcard\` regardless. New replays harvested after a session are checked automatically. One small line shows the card space used by checked replays.
+- **Import replay:** same picker. Replays are listed and ticked; game data is greyed with "Import it from Saves". Import always adds new items and deduplicates by content hash.
+- **Export** `.psu`; **Delete** confirm, then the Recycle Bin. A replay removed in-game stays in the folder, unchecked.
+- **First install:** "No replays yet / Replays you save in the game appear here."
 
 ### 13.4 Crates
 
-- `gt4l-mcfs`: PS2 card filesystem reader/writer with ECC, plus the importers for psu/max/cbs/xps/sps, folder cards and raw directories, and the psu exporter.
-- `gt4l-gt4save` (later, not v1): port of the PDTools GT4 decryption to Rust, read-only summary (day, credits).
+- `gt4l-mcfs`: PS2 card filesystem reader and writer with ECC; the card-image builder and harvester; importers for psu/max/cbs/xps/sps, folder cards and raw directories; psu export.
+- `gt4l-memcard`: the folder model (`memcard\`, `saves\`, `_meta.toml`), the switch/build/harvest cycle, and the backups.
+- `gt4l-gt4save` (later, not v1): port of the PDTools GT4 decryption, for a read-only summary (day, credits).
 
-Both crates have no UI, so the Android build can reuse them. Fixtures are synthetic cards and saves built by our own writer. Private parity tests use the owner's card (read-only) and must match the PDTools output for name, money and day.
+All three are UI-free, so Android can reuse them.
+
+Fixtures:
+- synthetic cards from our own writer;
+- round-trip tests (folder → card → folder must be byte- and timestamp-identical);
+- crash tests: kill between any two steps, then the next harvest recovers with no loss;
+- private parity tests on the owner's card (read-only).
 
 ### 13.5 Mockups
 
-`mockup-settings.html`:
-- **Saves:** 5 filled slots and empty rows; dimmed export/delete icons on every filled row (row 02's delete shown in its hover state).
-- **No saves (first run):** the empty state.
-- **After first save:** slot 01 filled and active, the rest empty.
-- **Import dialog:** a card image listing its saves (date only).
+`mockup-settings.html` states:
+- **Saves**: list, first run, after the first save, import dialog;
+- **Replays**: list with "On card" checkboxes, empty, import dialog.
 
-Renders: `settings-saves.png`, `settings-saves-first-run.png`, `settings-saves-after-first-save.png`, `settings-saves-import.png`. Dates and the replay row are sample values.
+Renders in `shots\`:
+- `settings-saves.png`
+- `settings-saves-first-run.png`
+- `settings-saves-after-first-save.png`
+- `settings-saves-import.png`
+- `settings-replays.png`
+- `settings-replays-empty.png`
+- `settings-replays-import.png`
 
-### 13.6 Effort
+Dates and items shown are sample values.
+
+### 13.6 Effort (TASK-025)
 
 | Part | Agent-days |
 |---|---|
-| `gt4l-mcfs` reader/writer + ECC + fixtures | 4–5 |
-| Importers: card images (with/without ECC), raw dir, folder card, `.psu` | 2 |
+| `gt4l-mcfs` reader/writer + ECC + card builder/harvester + fixtures | 4–5 |
+| Folder model, switch/build/harvest cycle, backups, crash tests | 3–4 |
+| Importers: card images (with/without ECC), raw dir, PCSX2 folder card, `.psu` | 2 |
 | Importers: `.max` (LZARI), `.cbs` (RC4 + zlib), `.xps`/`.sps` | 2–3 |
-| `gt4l-gt4save` (PDTools decryption port, summary only) + parity tests — **later, not v1** | (3–4) |
-| Slots storage, backups, Recycle Bin delete, launch integration, atomic-flush overlay | 2 |
-| Saves page + import dialog (Slint) | 1–2 |
-| **v1 total** (names "Save NN" + date only; all importers) | **≈ 10–13** |
-| v1 cut without `.max`/`.cbs`/`.xps` | ≈ 8–10 |
+| Confirm replay directory names and sizes from one owner replay save | 0.5 |
+| Runtime overlay: atomic flush + flush on exit + CTest fixture | 1 |
+| Saves + Replays pages and import dialogs (Slint, shared components) | 2 |
+| **v1 total** | **≈ 14.5–17.5** |
+| v1 cut without `.max`/`.cbs`/`.xps` | ≈ 12–14.5 |
 | Later: decrypted day/credits summary | +3–4 |
+| Not recommended: runtime folder card (a1) / MCMAN HLE (a2) | 10–15 / 15–25 |
