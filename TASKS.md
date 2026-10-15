@@ -70,7 +70,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑031 | High frame rate (120-144 FPS) with game physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS (study docs on `task/031-high-fps`) |
 | TASK‑032 | Decision 0070 docs: PCSX2 GS in a separate process, clean-room wording, renderer docs | ✅ Done (this PR) |
 | TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | 📋 Planned |
-| TASK‑034 | Proof of concept: replay our `.gscap` capture through the PCSX2 GS and compare images | 🔄 In progress · go/no-go gate with the owner before TASK-035/036 |
+| TASK‑034 | Proof of concept: replay our `.gscap` capture through the PCSX2 GS and compare images | 🧪 Waiting for owner review of the side-by-side images · [report](docs/GS-PCSX2-POC.md) |
 | TASK‑035 | MIT GS stream protocol, shared-memory IPC and renderer seam on main | 📋 Planned (after the gate) |
 | TASK‑036 | Live `gt4-gs.exe` MVP: the game drives the PCSX2 GS over IPC | 📋 Planned (after the gate) |
 | TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
@@ -478,3 +478,13 @@ real frame N; kill if fewer than 95% of primitives match or race PSNR is below
 32 dB. In parallel, a read-only study of the native render-rate path: main
 loop, update/render split, transforms and render cost. Input-latency trims
 (submit ring depth, present mode) are measured with the prototype.
+
+### TASK-034 — PCSX2 GS proof of concept (offline replay)
+Branch `task/034-gs-replay-compare`. Goal: prove that the PCSX2 GS (decision 0070, separate GPL process) renders
+GT4 correctly from our GS stream, offline. Done: `tools/gscap_to_gsdump/` converts the menu capture to a `.gs`
+dump (23 unit tests); stock `pcsx2-gsrunner` built from PCSX2 `685637d` replays it at 1x and 3x without errors
+(1,100 frames each); the GameDB fixes for SCUS-97328 apply from the serial. Frames 300 and 700 match the reference
+exactly; frames 900 and 1100 do not, and the PCSX2 output is 480 rows against the references' 448.
+Recommendation: GO for TASK-033 and TASK-035; conditional GO for TASK-036 (open: the vertical scale, the 900/1100
+differences, a freeze state). Details and numbers: [docs/GS-PCSX2-POC.md](docs/GS-PCSX2-POC.md). Clean room:
+PCSX2-tainted work, not touching CoreGS 2.0. Owner review: the side-by-side images and frames 900 and 1100.

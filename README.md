@@ -158,7 +158,7 @@ in game before it is merged.
 | TASK‑031 | 120-144 FPS with the game's physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS |
 | TASK‑032 | Decision 0070: PCSX2 GS in a separate process (docs) | ✅ Done (this PR) |
 | TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | 📋 Planned |
-| TASK‑034 | Proof of concept: our capture through the PCSX2 GS, image comparison | 🔄 In progress · owner go/no-go gate after it |
+| TASK‑034 | Proof of concept: our capture through the PCSX2 GS, image comparison | 🧪 Offline replay done: GO for the fork and protocol, conditional GO for the live MVP · [report](docs/GS-PCSX2-POC.md) |
 | TASK‑035 | MIT GS stream protocol, shared-memory IPC, renderer seam | 📋 Planned (after the gate) |
 | TASK‑036 | Live `gt4-gs.exe` MVP | 📋 Planned (after the gate) |
 | TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
