@@ -57,7 +57,7 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
-| TASK‑016 | IOP per-module cost counters and review | 📋 Planned |
+| TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | 📋 Planned |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust + Slint) and NSIS per-user installer | 🔄 Design and plan done (branch `task/019-launcher`) |
