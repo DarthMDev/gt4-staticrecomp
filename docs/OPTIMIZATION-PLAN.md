@@ -155,6 +155,7 @@ and a VBlank-interval histogram control (mean 60 ± 0.1 Hz, p95 < 18 ms).
 | Decomp names in generated code (comments, identical object code) | any time | [DECOMP-INTEGRATION](DECOMP-INTEGRATION.md) |
 | Boot directly in 480p (game boots 480i): locate the video-mode setting via decomp names and set it at startup, as a launcher option. Menus stay interlaced (owner check: Spec II in PCSX2 is also interlaced in menus, 480p only in races); menu flicker is handled by a deinterlacing filter in the renderer (O5), not by forcing 480p menus | any time, small | owner request |
 | Future custom PC build reusing Spec II data (car sounds etc.) on the retail executable: per-file format/reference compatibility (Adhoc 7 vs 5, SpecDB GT4_PREMIUM_US2560 vs GT4_US2560), volume rebuild tooling, permission and credit from the Spec II authors | after phase 1 | owner idea, [SPEC2-STUDY](SPEC2-STUDY.md) |
+| Mobile renderer case study: ARMSX2 (PCSX2 fork for Android and iOS, with a Metal renderer on iOS). Owner fork checkout at `C:\Antigravityrmsx2`, upstream `ARMSX2/ARMSX2` fetched at `cd6e8fcbb0` (2026-10-14); study its GS/Vulkan/Metal mobile changes before the O6 renderer port | O5/O6 | owner request |
 | EE build flags: -ffp-contract=off control, x86-64-v3 on runtime, dispatch divide removal, ThinLTO, PGO | O3 | EE build study |
 
 ### O5 — Graphics (later, not part of the speed work)
