@@ -2,8 +2,8 @@ use std::{env, error::Error, fs, path::Path};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<String> = env::args().collect();
-    if arguments.len() != 3 && arguments.len() != 4 {
-        return Err("usage: gt4-wgsl-spirv <gs.wgsl> <output-directory> [scale 1-4]".into());
+    if arguments.len() < 3 || arguments.len() > 5 {
+        return Err("usage: gt4-wgsl-spirv <shader.wgsl> <output-directory> [scale 1-4] [entry,entry,...]".into());
     }
     // The SCALE override is folded into the SPIR-V (Naga has no runtime override here), so each
     // internal resolution has its own shader directory. Scale 1 is the qualified default.
@@ -24,18 +24,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     )
     .validate(&module)?;
     let mut constants = naga::back::PipelineConstants::default();
-    constants.insert("SCALE".to_string(), scale as f64);
-    for entry in [
-        "upload",
-        "copy_read",
-        "copy_write",
-        "load_clut",
-        "display",
-        "raster",
-        "resolve",
-        "snapshot",
-        "decode",
-    ] {
+    // Modules without a SCALE override (the present post pass) take no constant.
+    if module.overrides.iter().any(|(_, value)| value.name.as_deref() == Some("SCALE")) {
+        constants.insert("SCALE".to_string(), scale as f64);
+    }
+    // Default: the donor GS entry points. A fourth argument lists other compute entry points
+    // (for example the present post pass in native/post/present.wgsl).
+    let default_entries = "upload,copy_read,copy_write,load_clut,display,raster,resolve,snapshot,decode";
+    let entry_list: String = match arguments.get(4) {
+        Some(list) => list.clone(),
+        None => default_entries.to_string(),
+    };
+    for entry in entry_list.split(',') {
         let (resolved_module, resolved_information) =
             naga::back::pipeline_constants::process_overrides(
                 &module,
@@ -45,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             )?;
         let mut options = naga::back::spv::Options::default();
         options.fake_missing_bindings = false;
-        for binding in 0..8 {
+        for binding in 0..10 {
             options.binding_map.insert(
                 naga::ResourceBinding { group: 0, binding },
                 naga::back::spv::BindingInfo {

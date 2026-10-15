@@ -76,7 +76,7 @@ public:
             std::uint64_t bytes);
   // Binds the shared resources (indices 0, 1, 4-7). Indices 2 (parameters) and
   // 3 (arena data) are used only by execute(); submit() uploads into ring slots.
-  void bind_buffers(const std::array<Buffer *, 8> &buffers);
+  void bind_buffers(const std::array<Buffer *, 10> &buffers);
   // Submits dispatches without uploads or presentation.
   void execute(const Dispatch *commands, std::size_t count);
   // Records and submits one submission and returns its timeline id, or zero
@@ -150,12 +150,12 @@ private:
   VkPhysicalDeviceMemoryProperties memory_properties_{};
   VkPhysicalDeviceLimits limits_{};
   std::vector<Buffer *> buffers_;
-  std::array<Buffer *, 8> shared_{};
+  std::array<Buffer *, 10> shared_{};
   VkCommandPool command_pool_ = VK_NULL_HANDLE;
   VkDescriptorSetLayout descriptor_layout_ = VK_NULL_HANDLE;
   VkPipelineLayout pipeline_layout_ = VK_NULL_HANDLE;
   VkDescriptorPool descriptor_pool_ = VK_NULL_HANDLE;
-  std::array<VkPipeline, 9> pipelines_{};
+  std::array<VkPipeline, 10> pipelines_{};
   VkSemaphore timeline_ = VK_NULL_HANDLE;
   std::array<Slot, kSlotCount> slots_{};
   std::unique_ptr<SubmitRing> ring_;

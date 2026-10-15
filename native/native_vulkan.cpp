@@ -252,7 +252,7 @@ void Context::initialize(const std::filesystem::path &shaders) {
   vkGetPhysicalDeviceProperties(physical_, &properties);
   limits_ = properties.limits;
   if (properties.apiVersion < VK_API_VERSION_1_2 ||
-      properties.limits.maxPerStageDescriptorStorageBuffers < 7 ||
+      properties.limits.maxPerStageDescriptorStorageBuffers < 9 ||
       properties.limits.maxComputeWorkGroupInvocations < 256 ||
       256 % properties.limits.minUniformBufferOffsetAlignment != 0)
     throw std::runtime_error("GPU limits do not support the GS compute layout");
@@ -365,7 +365,7 @@ void Context::initialize(const std::filesystem::path &shaders) {
                         &slots_[index].present_fence),
           "presentation fence");
   }
-  std::array<VkDescriptorSetLayoutBinding, 8> bindings{};
+  std::array<VkDescriptorSetLayoutBinding, 10> bindings{};
   for (std::uint32_t index = 0; index < bindings.size(); ++index) {
     bindings[index].binding = index;
     bindings[index].descriptorCount = 1;
@@ -389,7 +389,7 @@ void Context::initialize(const std::filesystem::path &shaders) {
                                &pipeline_layout_),
         "pipeline layout");
   VkDescriptorPoolSize sizes[] = {
-      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7 * kSlotCount},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 9 * kSlotCount},
       {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, kSlotCount}};
   VkDescriptorPoolCreateInfo descriptors{};
   descriptors.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -413,7 +413,8 @@ void Context::initialize(const std::filesystem::path &shaders) {
     slots_[index].descriptors = sets[index];
   const char *entries[] = {"upload",    "copy_read", "copy_write",
                            "load_clut", "display",   "raster",
-                           "resolve",   "snapshot",  "decode"};
+                           "resolve",   "snapshot",  "decode",
+                           "post"};
   for (std::size_t index = 0; index < pipelines_.size(); ++index) {
     std::ifstream input(shaders / (std::string(entries[index]) + ".spv"),
                         std::ios::binary | std::ios::ate);
@@ -540,7 +541,7 @@ void Context::read(Buffer *buffer, std::uint64_t offset, void *destination,
 #endif
 }
 
-void Context::bind_buffers(const std::array<Buffer *, 8> &buffers) {
+void Context::bind_buffers(const std::array<Buffer *, 10> &buffers) {
   for (std::uint32_t index = 0; index < buffers.size(); ++index) {
     // Indices 2 and 3 may be null: submit() never reads them.
     if (!buffers[index] && (index == 2 || index == 3)) {
@@ -549,7 +550,7 @@ void Context::bind_buffers(const std::array<Buffer *, 8> &buffers) {
     }
     if (!buffers[index] || buffers[index]->size < 256 ||
         buffers[index]->size > limits_.maxStorageBufferRange)
-      throw std::runtime_error("GS descriptor buffer exceeds Vulkan limits");
+      throw std::runtime_error("GS descriptor buffer " + std::to_string(index) + " size " + std::to_string(buffers[index] ? buffers[index]->size : 0) + " outside Vulkan limits");
     shared_[index] = buffers[index];
   }
 }
@@ -623,8 +624,8 @@ void Context::ensure_slot_capacity(Slot &slot, std::uint64_t arena_bytes,
 }
 
 void Context::update_descriptors(const Slot &slot, bool bound_buffers) {
-  std::array<VkDescriptorBufferInfo, 8> information{};
-  std::array<VkWriteDescriptorSet, 8> writes{};
+  std::array<VkDescriptorBufferInfo, 10> information{};
+  std::array<VkWriteDescriptorSet, 10> writes{};
   for (std::uint32_t index = 0; index < writes.size(); ++index) {
     Buffer *buffer = index == 2   ? (bound_buffers ? shared_[2] : slot.parameters)
                      : index == 3 ? (bound_buffers ? shared_[3] : slot.data)
@@ -632,7 +633,7 @@ void Context::update_descriptors(const Slot &slot, bool bound_buffers) {
     if (!buffer)
       throw std::runtime_error("GS descriptor buffer is not bound");
     if (index != 2 && buffer->size > limits_.maxStorageBufferRange)
-      throw std::runtime_error("GS descriptor buffer exceeds Vulkan limits");
+      throw std::runtime_error("GS descriptor buffer " + std::to_string(index) + " exceeds Vulkan limits");
     information[index].buffer = buffer->handle;
     information[index].range = index == 2 ? 256 : buffer->size;
     writes[index].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

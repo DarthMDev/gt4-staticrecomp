@@ -17,14 +17,54 @@ std::filesystem::path shader_directory_for_scale(std::uint32_t scale) {
     return base.parent_path() / (base.filename().string() + "-s" + std::to_string(scale));
 }
 
-// Presentation of a scaled image: linear filtering by default when scaled, nearest at scale 1.
-// GT4_PRESENT_FILTER=nearest|linear overrides for both.
-bool parse_linear_present(std::uint32_t scale) {
-    const char* filter = std::getenv("GT4_PRESENT_FILTER");
-    if (!filter) return scale > 1;
-    if (std::strcmp(filter, "linear") == 0) return true;
-    if (std::strcmp(filter, "nearest") == 0) return false;
-    throw std::runtime_error(std::string("GT4_PRESENT_FILTER must be linear or nearest, got: ") + filter);
+// CoreGS 1.1 presentation options (launcher and env table in docs/BUILD.md, slice 182).
+// Deinterlace is active only when the source is really interlaced (the donor's halved read); auto = adaptive
+// then, off for progressive output. The filter is nearest at scale 1 and linear when scaled, unless set.
+PostSettings g_post_settings;
+
+PostDeinterlace parse_deinterlace(const char* text) {
+    if (!text) return PostDeinterlace::automatic;
+    const std::string value(text);
+    if (value == "auto") return PostDeinterlace::automatic;
+    if (value == "off") return PostDeinterlace::off;
+    if (value == "weave") return PostDeinterlace::weave;
+    if (value == "bob") return PostDeinterlace::bob;
+    if (value == "blend") return PostDeinterlace::blend;
+    if (value == "adaptive") return PostDeinterlace::adaptive;
+    throw std::runtime_error("GT4_DEINTERLACE must be auto, off, weave, bob, blend or adaptive, got: " + value);
+}
+
+PostFilter parse_present_filter(const char* text) {
+    if (!text) return PostFilter::automatic;
+    const std::string value(text);
+    if (value == "nearest") return PostFilter::nearest;
+    if (value == "linear") return PostFilter::linear;
+    if (value == "fsr") return PostFilter::fsr;
+    throw std::runtime_error("GT4_PRESENT_FILTER must be nearest, linear or fsr, got: " + value);
+}
+
+PostSettings read_post_settings() {
+    PostSettings settings;
+    settings.deinterlace = parse_deinterlace(std::getenv("GT4_DEINTERLACE"));
+    const char* aa = std::getenv("GT4_AA");
+    if (aa && std::strcmp(aa, "fxaa") == 0) settings.fxaa = true;
+    else if (aa && std::strcmp(aa, "off") != 0) throw std::runtime_error(std::string("GT4_AA must be off or fxaa, got: ") + aa);
+    settings.filter = parse_present_filter(std::getenv("GT4_PRESENT_FILTER"));
+    if (const char* sharpness = std::getenv("GT4_FSR_SHARPNESS")) {
+        char* end = nullptr;
+        const float value = std::strtof(sharpness, &end);
+        if (end == sharpness || *end || value < 0.0f || value > 2.0f)
+            throw std::runtime_error(std::string("GT4_FSR_SHARPNESS must be a number from 0 to 2, got: ") + sharpness);
+        settings.sharpness = value;
+    }
+    return settings;
+}
+
+// Linear sampling of the presented image: automatic is linear only when scaled. FSR presents 1:1 (nearest).
+bool present_linear(const PostSettings& settings, std::uint32_t scale) {
+    if (settings.filter == PostFilter::linear) return true;
+    if (settings.filter == PostFilter::automatic) return scale > 1;
+    return false;
 }
 
 bool init(Mode requested) {
@@ -35,7 +75,13 @@ bool init(Mode requested) {
     g_copy_words = 2048u * 2048u * samples;
     g_field_words = (1u << 19) * samples;
     g_vulkan.initialize(shader_directory_for_scale(g_scale));
-    g_vulkan.set_linear_present(parse_linear_present(g_scale));
+    g_post_settings = read_post_settings();
+    g_vulkan.set_linear_present(present_linear(g_post_settings, g_scale));
+    // Post-pass buffers start small and grow with the first presentation that needs them (see gpu_tail.inc).
+    g_post_history = g_vulkan.create_buffer(256);
+    g_post_temp = g_vulkan.create_buffer(256);
+    g_post_history_words = 1;
+    g_post_temp_words = 1;
     g_tiles_per_row = static_cast<int>((2048u * g_scale + 15u) / 16u);
     g_tile_count.assign(static_cast<std::size_t>(g_tiles_per_row) * g_tiles_per_row, 0);
     g_tile_fill.assign(static_cast<std::size_t>(g_tiles_per_row) * g_tiles_per_row, 0);

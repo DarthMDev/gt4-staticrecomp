@@ -39,7 +39,7 @@ def prepare(output, assets_root=None):
         raise ValueError('Donor GPU source differs from the qualified version')
     source = gpu_bytes.decode('utf-8').replace('\r\n', '\n')
     source = replace_section(source, '#include <webgpu/', '#include <algorithm>',
-                             '#include "native_vulkan.hpp"\n#include <stdexcept>')
+                             '#include "native_vulkan.hpp"\n#include "post/post_settings.hpp"\n#include <stdexcept>')
     source = source.replace('extern const char kGsShader[];\nextern const char kBlitShader[];\n', '')
     globals_text = '''gt4::vulkan::Context g_vulkan;
 gt4::vulkan::Buffer *g_vram = nullptr, *g_tables = nullptr;
@@ -47,8 +47,16 @@ gt4::vulkan::Buffer *g_clut = nullptr, *g_scratch = nullptr, *g_decoded = nullpt
 std::uint32_t g_scale = 1, g_copy_words = 2048u * 2048u, g_field_words = 1u << 19;
 bool g_rendered[512] = {};
 bool g_decode = true;
-std::uint32_t g_decoded_used = 0;'''
+std::uint32_t g_decoded_used = 0;
+gt4::vulkan::Buffer *g_post_history = nullptr, *g_post_temp = nullptr;
+std::uint32_t g_post_history_words = 0, g_post_temp_words = 0;'''
     source = replace_section(source, 'WGPUInstance g_instance', 'struct Command {', globals_text)
+    # CoreGS 1.1 present pass: one more pipeline ("post") after the donor's nine entry points.
+    for old, new in (('kSnapshot, kDecode, kPipelines };', 'kSnapshot, kDecode, kPost, kPipelines };'),
+                     ('"snapshot", "decode"};', '"snapshot", "decode", "post"};')):
+        if source.count(old) != 1:
+            raise ValueError(f'Donor pipeline table changed: {old}')
+        source = source.replace(old, new)
     source = replace_section(source, 'struct CommandInfo {', 'std::vector<Command> g_commands;', '')
     source = source.replace('WGPUStringView view(const char *s) { return WGPUStringView{s, WGPU_STRLEN}; }\n', '')
     source = source.replace('WGPUBuffer g_cache = nullptr;', 'gt4::vulkan::Buffer* g_cache = nullptr;')

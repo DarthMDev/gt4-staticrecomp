@@ -1,11 +1,14 @@
 // Shared resources are bound once; per-slot uploads are bound by the adapter on each submission.
 void rebuild_group() {
-    g_vulkan.bind_buffers({g_vram, g_tables, nullptr, nullptr, g_clut, g_scratch, g_cache, g_decoded});
+    g_vulkan.bind_buffers({g_vram, g_tables, nullptr, nullptr, g_clut, g_scratch, g_cache, g_decoded,
+                           g_post_history, g_post_temp});
 }
 
 // Submits the pending batch without waiting for it. A non-zero size presents the
 // RGBA result in g_scratch in the same submission. Returns true when an image was presented.
-bool submit(std::uint32_t present_width = 0, std::uint32_t present_height = 0) {
+// `present_buffer` selects the RGBA source of the presentation (scratch by default; the post passes write temp).
+bool submit(std::uint32_t present_width = 0, std::uint32_t present_height = 0,
+            gt4::vulkan::Buffer* present_buffer = nullptr) {
     if (g_commands.empty()) return false;
     std::vector<gt4::vulkan::Dispatch> commands;
     commands.reserve(g_commands.size());
@@ -21,7 +24,7 @@ bool submit(std::uint32_t present_width = 0, std::uint32_t present_height = 0) {
     submission.commands = commands.data();
     submission.command_count = commands.size();
     if (present_width && present_height) {
-        submission.present_source = g_scratch;
+        submission.present_source = present_buffer ? present_buffer : g_scratch;
         submission.present_width = present_width;
         submission.present_height = present_height;
     }

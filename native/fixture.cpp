@@ -95,7 +95,7 @@ int main() {
     {
       gt4::vulkan::Context context;
       context.initialize(GT4_VULKAN_SHADER_DIR);
-      std::array<gt4::vulkan::Buffer *, 8> buffers{};
+      std::array<gt4::vulkan::Buffer *, 10> buffers{};
       for (auto &buffer : buffers)
         buffer = context.create_buffer(256);
       context.bind_buffers(buffers);
@@ -108,7 +108,7 @@ int main() {
       context.read(buffers[0], 0, &result, sizeof(result));
       if (result != sentinel)
         throw std::runtime_error("Zero-work dispatch changed VRAM");
-      std::vector<gt4::vulkan::Dispatch> invalid = {{9, 0, 0, 0},
+      std::vector<gt4::vulkan::Dispatch> invalid = {{10, 0, 0, 0},
                                                     {5, 0, 0, 1}};
       // Oversized workgroup counts are only invalid above the device limit;
       // some drivers report UINT32_MAX as the maximum on an axis.
