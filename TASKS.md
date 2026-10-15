@@ -15,7 +15,9 @@ journals and commits use the previous numbers: 018→010, 010→011, 031→012,
 020→019, 019→020, phase 2/3 tasks 022-025→021-024; the in-game 16:9 task was
 dropped (the owner's game already boots in 16:9). Earlier IDs 011, 012, 019, 029
 were merged into the new 010/012; the pre-donor cleanup was done outside the
-list (private repository `moesuito/gt4-staticrecomp-legacy`).
+list (private repository `moesuito/gt4-staticrecomp-legacy`). Third renumbering
+(2026-10-15, owner): 018→017 (license crash), 019→018 (wheels), 020→019
+(launcher), 017→020 (decomp names, last in phase 1, after the first stable release).
 
 ## Phases
 
@@ -52,10 +54,11 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity fix | 📋 Planned |
 | TASK‑016 | IOP per-module cost counters and review | 📋 Planned |
-| TASK‑017 | Decomp names in generated EE code | 📋 Planned |
-| TASK‑018 | License-test crash (later; optimization first) | 📋 Planned |
-| TASK‑019 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑020 | Launcher (Rust + egui/GPUI) | 📋 Planned |
+| TASK‑017 | License-test crash | 📋 Planned |
+| TASK‑018 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑019 | Launcher (Rust + egui/GPUI) | 📋 Planned |
+| 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
+| TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 
 ## Phase 2 — Android
 
@@ -162,22 +165,28 @@ generated units for lone LWR uses.
 Per-module instruction counters and per-library HLE call counts in F8; decide
 whether the sound modules need native HLE (docs/IOP-MAP.md).
 
-### TASK-017 — Decomp names in generated code
-Label comments in generated units with identical object code.
-
-### TASK-018 — License-test crash
+### TASK-017 — License-test crash
 Pre-existing; traced to `RaceSolitaire::loadDemoInputs` (0x3EAD18) →
 `AutomobileControlRecord::Manager::load` (0x346BB8) reading a bad record count.
 Env-gated logging there and in the PS2ZIP loader for `replay/license/` files,
 plus a CDVD read trace; one owner reproduction; fix the cause.
 
-### TASK-019 — Racing wheels
+### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md).
 
-### TASK-020 — Launcher
+### TASK-019 — Launcher
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
+
+### First stable release
+After TASK-019: a tagged GitHub release of the source and launcher, with the
+build guide and known issues (no game assets or binaries derived from the
+game). TASK-020 is deliberately after it, to give the gt4-decomp project more
+time to progress before its names are imported.
+
+### TASK-020 — Decomp names in generated code
+Label comments in generated units with identical object code.
 
 ## Phase 2 — Android details
 
