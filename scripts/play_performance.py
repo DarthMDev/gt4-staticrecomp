@@ -33,7 +33,7 @@ Quick-fix 2 candidate (--mode quickfix2): vu1-all with the quick fixes of slice1
 interval counters, late_frames with a 1 ms tolerance) and the slice158 CRT table rewrite. Kept as history:
 its build no longer compiles from this tree (native/display_table.* was removed in slice164).
 
-Current main (--mode main, slice165): everything merged to main (all VU1 and VU0 entries compiled, quick
+Current main (--mode main, slice166): everything merged to main (all VU1 and VU0 entries compiled, quick
 fixes); accepts --force-480p, --vu0-verify N and the VU1 options. This is the build to play.
 
 Quick-fix 3 candidate (--mode quickfix3, slice164): vu1-all with the quick fixes. --force-480p (GT4_FORCE_480P=1,
