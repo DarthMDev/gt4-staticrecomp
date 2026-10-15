@@ -60,9 +60,13 @@ delegated to OpenCode; Codex prepared docs/OPENCODE-PERFORMANCE-HANDOFF.md.
 Preserve that task's scope/checkout. The owner now requests the separate hybrid
 optimization plan above; later tasks use its bounded measurement/verification
 contracts. Input correction is separately authorized for Codex/Luna.
-No Computer Use, GUI automation, simulated input or scripted game navigation:
-the owner controls gameplay. Launching a tested candidate is authorized; preserve
-their card/backups/locks and do not interfere with an existing session.
+Owner update 2026-10-14: the agent may launch tested candidates and drive the
+game itself through Computer Use (screen, keyboard, mouse) to test and measure.
+Keyboard: arrows = D-pad, Z = Cross/accelerate, A = Square/brake, S = Triangle,
+X = Circle, Enter = Start. Reference scene: Time Trial, Nordschleife, Toyota
+Supra Wood One (last Toyota in the list), game video set to 480p (boots 480i).
+Preserve the owner's card/backups/locks; never interfere with a session the
+owner is using; close the game normally.
 
 Future goals:144FPS/monitor refresh independent of physics at100% game speed,
 progressive-only output, internal1080p/1440p/4K and setup launcher; later effects,
