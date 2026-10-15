@@ -144,5 +144,56 @@ class PinnedControlTests(unittest.TestCase):
             self.assertEqual(f"0x{image_tool.program_key_of(image, program['entry']):016X}", program['key'])
 
 
+def manifest_with(programs):
+    return {'programs': programs}
+
+
+def program_row(entry, key='0x0000000000000001', digest='ab'):
+    return {'entry': entry, 'key': key, 'digest_sha256': digest, 'image_flags_used': True, 'image_status_used': False,
+            'mac_mode': 'observed', 'mac_writers': 1, 'mac_sites': 1, 'mac_reader_sites': 0, 'clip_writers': 0,
+            'clip_sites': 0, 'clip_reader_sites': 0, 'fallback_sites': 0, 'upper_nop_sites': 0, 'budget_heads': 1,
+            'reachable_instructions': 4, 'exit_pcs': [], 'status': 'emitted', 'function': f'vu1_{entry:04X}'}
+
+
+class PolicyTests(unittest.TestCase):
+    def test_targeted_rows_inside_full_table_compare_equal(self):
+        full = manifest_with([program_row(0), program_row(8), program_row(16)])
+        targeted = manifest_with([program_row(8), program_row(16)])
+        checked, problems = image_tool.compare_tables(targeted, full)
+        self.assertEqual((checked, problems), (2, []))
+
+    def test_differing_digest_or_missing_entry_is_reported(self):
+        full = manifest_with([program_row(0), program_row(8, digest='cd')])
+        targeted = manifest_with([program_row(8), program_row(16)])
+        _, problems = image_tool.compare_tables(targeted, full)
+        self.assertEqual(len(problems), 2)
+        self.assertTrue(any('digest_sha256' in problem for problem in problems))
+        self.assertTrue(any('entry 16 missing' in problem for problem in problems))
+
+    def test_flag_elision_counts_of_a_table(self):
+        full = manifest_with([program_row(0), program_row(8)])
+        counts = image_tool.elision_counts(full)
+        self.assertEqual((counts['programs'], counts['emitted'], counts['image_flags_used'], counts['interpreter_exit_sites']), (2, 2, 2, 0))
+
+    def test_all_policy_is_every_eight_byte_address(self):
+        entries = image_tool.all_entries()
+        self.assertEqual(len(entries), 2048)
+        self.assertEqual(entries[:3], [0, 8, 16])
+        self.assertEqual(entries[-1], 16376)
+
+    def test_split_table_covers_all_entries_when_present(self):
+        # Private control for slice157: the 2,048-row table, its policy label and the 128 parts it records.
+        path = ROOT / 'private/slice157-vu1-all-gen/manifest.json'
+        if not path.exists():
+            self.skipTest('private slice157 table not present')
+        manifest = json.loads(path.read_text(encoding='utf-8'))
+        self.assertEqual(manifest['entry_policy'], 'all')
+        self.assertEqual(manifest['programs_per_file'], 16)
+        self.assertEqual(sorted(p['entry'] for p in manifest['programs']), image_tool.all_entries())
+        self.assertEqual(len(manifest['generated_parts']), 128)
+        self.assertEqual(sum(part['programs'] for part in manifest['generated_parts']), 2048)
+        self.assertTrue(all(p['status'] == 'emitted' and p['image_flags_used'] for p in manifest['programs']))
+
+
 if __name__ == '__main__':
     unittest.main()

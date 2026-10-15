@@ -12,6 +12,7 @@
 #include "vurecomp.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -44,6 +45,10 @@ int main(int argc, char **argv) {
     // --image and --entries select explicit-entry mode.
     std::string name_space = "gt4::vugen::generated";
     std::string image_argument, entries_argument;
+    // --entry-policy LABEL is recorded in the manifest (vu1_image.py writes the label with the entry list).
+    // --programs-per-file N splits the functions into vu1_generated_NNN.cpp parts (0: one file).
+    std::string entry_policy = "unspecified";
+    std::size_t programs_per_file = 0;
     int first = 1;
     while (first < argc && argv[first][0] == '-') {
         const std::string option = argv[first];
@@ -59,6 +64,12 @@ int main(int argc, char **argv) {
         } else if (option == "--entries" && first + 1 < argc) {
             entries_argument = argv[first + 1];
             first += 2;
+        } else if (option == "--entry-policy" && first + 1 < argc) {
+            entry_policy = argv[first + 1];
+            first += 2;
+        } else if (option == "--programs-per-file" && first + 1 < argc) {
+            programs_per_file = std::strtoull(argv[first + 1], nullptr, 10);
+            first += 2;
         } else {
             std::fprintf(stderr, "gt4_vu_recomp: unknown option %s\n", option.c_str());
             return 2;
@@ -69,8 +80,8 @@ int main(int argc, char **argv) {
     const bool usage_ok = explicit_mode ? (!image_argument.empty() && !entries_argument.empty() && positional == 1) : positional == 2;
     if (!usage_ok) {
         std::fprintf(stderr,
-                     "usage: gt4_vu_recomp [--no-flag-elision] [--namespace NAME] <input_dir> <fresh_output_dir>\n"
-                     "       gt4_vu_recomp [--no-flag-elision] [--namespace NAME] --image FILE --entries FILE <fresh_output_dir>\n");
+                     "usage: gt4_vu_recomp [--no-flag-elision] [--namespace NAME] [--programs-per-file N] <input_dir> <fresh_output_dir>\n"
+                     "       gt4_vu_recomp [--no-flag-elision] [--namespace NAME] [--programs-per-file N] [--entry-policy LABEL] --image FILE --entries FILE <fresh_output_dir>\n");
         return 2;
     }
     const std::filesystem::path output_dir = argv[argc - 1];
@@ -106,14 +117,29 @@ int main(int argc, char **argv) {
         input_description = input_dir.string();
     }
     const std::string generated_name = "vu1_generated.cpp";
-    const std::string source = gt4::vurecomp::emit_generated_source(records, name_space);
+    manifest_input.entry_policy = entry_policy;
+    manifest_input.programs_per_file = programs_per_file;
+    std::string source;
+    if (programs_per_file == 0) {
+        source = gt4::vurecomp::emit_generated_source(records, name_space);
+        manifest_input.generated_bytes = source.size();
+    } else {
+        source = gt4::vurecomp::emit_generated_split(records, programs_per_file, manifest_input.parts, name_space);
+        manifest_input.generated_bytes = source.size();
+        for (const auto &part : manifest_input.parts) manifest_input.generated_bytes += part.text.size();
+    }
     const std::string source_sha256 = gt4::vurecomp::sha256_hex(
         reinterpret_cast<const std::uint8_t *>(source.data()), source.size());
-    manifest_input.generated_bytes = source.size();
     if (!write_text(output_dir / generated_name, source) ||
         !write_text(output_dir / "manifest.json", gt4::vurecomp::manifest_json(records, generated_name, source_sha256, manifest_input))) {
         std::fprintf(stderr, "gt4_vu_recomp: cannot write outputs\n");
         return 1;
+    }
+    for (const auto &part : manifest_input.parts) {
+        if (!write_text(output_dir / part.file_name, part.text)) {
+            std::fprintf(stderr, "gt4_vu_recomp: cannot write %s\n", part.file_name.c_str());
+            return 1;
+        }
     }
     std::size_t emitted = 0, refused = 0;
     for (const auto &record : records) (record.refused ? refused : emitted) += 1;

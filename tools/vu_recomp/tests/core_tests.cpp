@@ -248,7 +248,47 @@ void check_explicit_mode() {
 
 }
 
+// Split output (slice 157): every emitted function is defined exactly once, in record order, in
+// parts of at most programs_per_file functions; the table file declares and registers all of them.
+void check_split_emission() {
+    // A zero image with five entries: every entry emits a program (refusals are excluded from the parts).
+    std::vector<std::uint8_t> image(16384, 0);
+    std::vector<std::uint32_t> entries = {0x0000u, 0x0008u, 0x0010u, 0x0018u, 0x0020u};
+    std::vector<ProgramRecord> records;
+    std::string error;
+    if (!collect_explicit_program_records(image, entries, records, error)) {
+        expect(false, "split emission records: " + error);
+        return;
+    }
+    std::vector<GeneratedPart> parts;
+    const std::string table = emit_generated_split(records, 2, parts);
+    std::size_t emitted = 0;
+    for (const ProgramRecord &record : records) emitted += record.refused ? 0 : 1;
+    expect(emitted > 0, "the zero image emits at least one program");
+    expect(parts.size() == (emitted + 1) / 2, "emitted programs in parts of two (ceiling division)");
+    std::size_t definitions = 0;
+    for (const GeneratedPart &part : parts) {
+        expect(part.programs <= 2, "a part holds at most programs_per_file functions");
+        for (const ProgramRecord &record : records) {
+            const std::string definition = std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx) {{", record.function_name);
+            if (!record.refused && part.text.find(definition) != std::string::npos) ++definitions;
+        }
+    }
+    expect(definitions == emitted, std::format("each function is defined once across the parts ({} of {})", definitions, emitted));
+    expect(table.find("kPrograms[]") != std::string::npos && table.find(std::format("kProgramCount = {}u;", emitted)) != std::string::npos,
+           "table file registers the emitted programs");
+    for (const ProgramRecord &record : records) {
+        if (record.refused) continue;
+        expect(table.find(std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx);", record.function_name)) != std::string::npos,
+               "table file declares " + record.function_name);
+        expect(table.find(std::format("RunStatus {}(Vu0Regs &r, std::uint8_t *mem, RunContext &ctx) {{", record.function_name)) == std::string::npos,
+               "table file does not define " + record.function_name);
+    }
+    expect(!parts.empty() && parts.front().file_name == "vu1_generated_000.cpp", "part names are numbered from zero");
+}
+
 int main() {
+    check_split_emission();
     check_sha256();
     check_names();
     check_image_sizes();

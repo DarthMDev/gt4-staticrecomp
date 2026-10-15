@@ -25,6 +25,9 @@ Quick-fix candidate (--mode quickfix): vu1-full with the 16:9 presentation fixed
 fullscreen on Alt+Enter or F11, per-interval pacing counters in the F8 report, and the
 experimental 480p request rewrite. --force-480p (GT4_FORCE_480P=1) enables the rewrite;
 without it the guest request is passed through unchanged.
+
+VU1 all-entries candidate (--mode vu1-all): vu1-flags with the slice157 static VU1 table, every
+8-byte address of the pinned image (2,048 programs, built as 128 parts). Same options and environment.
 """
 import argparse
 import sys
@@ -47,8 +50,8 @@ def main():
                         help='experimental: rewrite the default 480i request to 480p progressive (quickfix mode)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full or quickfix')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix or vu1-all')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
