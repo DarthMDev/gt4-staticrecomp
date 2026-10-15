@@ -15,8 +15,8 @@ retrieval date, size and SHA-256 in `launcher/assets/brand/brand.toml`.
 
 - `source/gt4-logo.svg`: Gran Turismo 4 logo (Wikimedia Commons; the page lists it as public domain,
   credit Sony Computer Entertainment). Owner to confirm.
-- `source/cover-front.png`: Gran Turismo 4 (USA, Canada) cover, 512x725 (libretro-thumbnails). Owner to
-  confirm the licence or replace it with a higher-resolution scan.
+- `source/cover-front.jpeg`: Gran Turismo 4 front cover, 1000x1500, supplied by the project owner
+  (2026-10-15). Owner to confirm the licence of the artwork.
 - The derived files `logo-gt4.png`, `emblem-gt.png`, `cover-front.png`, `game.ico` and `launcher.ico`.
 
 A de-branded build replaces that folder with `launcher/assets/brand-neutral/`.

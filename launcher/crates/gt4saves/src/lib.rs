@@ -1,65 +1,51 @@
-//! Save and replay manager interface (TASK-025, W4 in docs/RELEASE-1.0.0-PLAN.md).
+//! gt4saves: PS2 memory card images, GT4 save folders and card import/export (TASK-025).
 //!
-//! This is a stub: the launcher calls it so the Saves and Replays pages and the card preparation have
-//! a fixed place to plug in. The real implementation (folder model, card image build and harvest,
-//! importers) lives in task/025-save-manager and replaces [`NullSaveManager`].
+//! * [`ecc`]: the 12 ECC bytes of each 512-byte page (fitted to MCMAN-written cards).
+//! * [`card`]: read and build 8 MB card images (superblock, FAT, directories, files).
+//! * [`psu`]: single-save `.psu` files.
+//! * [`folder`]: the folder form of an item (save or replay) in the user data folder.
+//! * [`library`]: memcard/, saves/ and backups/ with import, export, activate, build and harvest.
 
-use std::path::Path;
+pub mod card;
+pub mod ecc;
+pub mod folder;
+pub mod library;
+pub mod psu;
 
-/// One game save or replay as listed on the Saves or Replays page.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SaveSlot {
-    pub number: u32,
-    pub label: String,
-    /// The save used the next time the game starts (game saves only).
-    pub active: bool,
-    /// Unix seconds of the last change, when known.
-    pub modified_unix_seconds: Option<u64>,
+pub use card::{Card, CardError, DirEntry, Node};
+pub use library::{Library, LibraryError, Report};
+
+/// Current UTC time as (year, month, day, hour, minute, second).
+fn utc_now() -> (i64, i64, i64, i64, i64, i64) {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0) as i64;
+    let days = seconds.div_euclid(86_400);
+    let secs_of_day = seconds.rem_euclid(86_400);
+    // Civil date from a day count (Howard Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    (year, month, day, secs_of_day / 3600, secs_of_day / 60 % 60, secs_of_day % 60)
 }
 
-pub trait SaveManager {
-    /// Game saves, one row per slot, in slot order.
-    fn saves(&self) -> Vec<SaveSlot>;
-    /// Replays, all kept; `on_card` marks the ones written to the game's card for the next start.
-    fn replays(&self) -> Vec<SaveSlot>;
-    /// Builds the card image the game reads before a start. Called with the card path from the launcher.
-    fn prepare_card(&self, card: &Path) -> Result<(), String>;
-    /// Reads the card back after a session (harvest). Called after the game exits.
-    fn harvest_card(&self, card: &Path) -> Result<(), String>;
+/// UTC timestamp `YYYYMMDD-HHMMSS` for backup and replaced-item names.
+pub fn timestamp() -> String {
+    let (year, month, day, hour, minute, second) = utc_now();
+    format!("{year:04}{month:02}{day:02}-{hour:02}{minute:02}{second:02}")
 }
 
-/// Placeholder used until the save manager lands: no slots, and the card is left to the game
-/// (a missing card file is a blank card, created by the game on the first save).
-#[derive(Clone, Copy, Debug, Default)]
-pub struct NullSaveManager;
-
-impl SaveManager for NullSaveManager {
-    fn saves(&self) -> Vec<SaveSlot> {
-        Vec::new()
-    }
-
-    fn replays(&self) -> Vec<SaveSlot> {
-        Vec::new()
-    }
-
-    fn prepare_card(&self, _card: &Path) -> Result<(), String> {
-        Ok(())
-    }
-
-    fn harvest_card(&self, _card: &Path) -> Result<(), String> {
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_placeholder_lists_nothing_and_touches_no_file() {
-        let manager = NullSaveManager;
-        assert!(manager.saves().is_empty());
-        assert!(manager.replays().is_empty());
-        assert!(manager.prepare_card(Path::new("does-not-exist.ps2")).is_ok());
-    }
+/// Current time in the card's 8-byte timestamp form: unused, second, minute, hour, day,
+/// month, year (u16 little endian).
+pub fn card_time_now() -> [u8; 8] {
+    let (year, month, day, hour, minute, second) = utc_now();
+    let year = (year as u16).to_le_bytes();
+    [0, second as u8, minute as u8, hour as u8, day as u8, month as u8, year[0], year[1]]
 }

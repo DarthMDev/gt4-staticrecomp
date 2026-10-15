@@ -153,12 +153,35 @@ mod tests {
     }
 
     #[test]
-    fn rows_not_yet_connected_are_greyed_out() {
+    fn display_page_lists_only_options_the_game_reads() {
         let rows = rows_for_page(&Settings::default(), Page::Display);
-        let overscan = rows.iter().find(|row| row.id == "show_overscan").unwrap();
-        assert!(!overscan.enabled);
+        let ids: Vec<&str> = rows.iter().map(|row| row.id).collect();
+        assert_eq!(ids, vec!["fullscreen", "vsync"]);
         let fullscreen = rows.iter().find(|row| row.id == "fullscreen").unwrap();
         assert!(fullscreen.enabled && fullscreen.toggle_on);
+    }
+
+    #[test]
+    fn fsr_sharpness_is_listed_only_with_the_fsr_filter() {
+        let mut settings = Settings::default();
+        let ids: Vec<&str> = rows_for_page(&settings, Page::Graphics).iter().map(|row| row.id).collect();
+        assert!(!ids.contains(&"fsr_sharpness"));
+        settings.set("present_filter", "fsr").unwrap();
+        let rows = rows_for_page(&settings, Page::Graphics);
+        let sharpness = rows.iter().find(|row| row.id == "fsr_sharpness").unwrap();
+        assert!(sharpness.enabled);
+    }
+
+    #[test]
+    fn every_enabled_row_is_wired_to_the_game() {
+        for page in [Page::Graphics, Page::Display, Page::Advanced] {
+            let mut settings = Settings::default();
+            settings.set("present_filter", "fsr").unwrap();
+            for row in rows_for_page(&settings, page).iter().filter(|row| row.enabled) {
+                let definition = settings::definition(row.id).unwrap();
+                assert!(definition.connected, "{} is enabled but not connected", row.id);
+            }
+        }
     }
 
     #[test]

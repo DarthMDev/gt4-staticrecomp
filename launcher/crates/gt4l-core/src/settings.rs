@@ -71,19 +71,23 @@ const INTERNAL_SCALE_CHOICES: &[Choice] = &[
     Choice { value: "1", label: "1x", selectable: true },
     Choice { value: "2", label: "2x", selectable: true },
     Choice { value: "3", label: "3x", selectable: true },
-    Choice { value: "4", label: "4x", selectable: true },
 ];
 
+/// `auto` sends no variable: the game picks nearest at 1x and linear when scaled.
 const PRESENT_FILTER_CHOICES: &[Choice] = &[
+    Choice { value: "auto", label: "Automatic", selectable: true },
     Choice { value: "nearest", label: "Nearest", selectable: true },
     Choice { value: "linear", label: "Linear", selectable: true },
-    Choice { value: "fsr", label: "FSR 1.0 (coming soon)", selectable: false },
+    Choice { value: "fsr", label: "FSR 1.0", selectable: true },
 ];
 
+/// Values are RCAS stops: 0 is the sharpest, 2 the softest.
 const SHARPNESS_CHOICES: &[Choice] = &[
-    Choice { value: "0", label: "Softest", selectable: true },
-    Choice { value: "1", label: "Medium", selectable: true },
-    Choice { value: "2", label: "Sharpest", selectable: true },
+    Choice { value: "0", label: "0 (sharpest)", selectable: true },
+    Choice { value: "0.2", label: "0.2 (default)", selectable: true },
+    Choice { value: "0.5", label: "0.5", selectable: true },
+    Choice { value: "1", label: "1", selectable: true },
+    Choice { value: "2", label: "2 (softest)", selectable: true },
 ];
 
 const DEINTERLACE_CHOICES: &[Choice] = &[
@@ -155,7 +159,7 @@ pub const SETTINGS: &[SettingDef] = &[
                sharper and need a faster GPU.",
         kind: Kind::Choice(INTERNAL_SCALE_CHOICES),
         default: "1",
-        connected: false,
+        connected: true,
     },
     SettingDef {
         id: "present_filter",
@@ -165,8 +169,8 @@ pub const SETTINGS: &[SettingDef] = &[
         info: "How the picture is enlarged to your screen. Nearest keeps pixels sharp; Linear smooths them. \
                FSR 1.0 is a higher-quality upscaler with a sharpness control.",
         kind: Kind::Choice(PRESENT_FILTER_CHOICES),
-        default: "linear",
-        connected: false,
+        default: "auto",
+        connected: true,
     },
     SettingDef {
         id: "fsr_sharpness",
@@ -175,8 +179,8 @@ pub const SETTINGS: &[SettingDef] = &[
         title: "FSR sharpness",
         info: "How much edge detail FSR 1.0 adds. Only used with the FSR scaling filter.",
         kind: Kind::Choice(SHARPNESS_CHOICES),
-        default: "1",
-        connected: false,
+        default: "0.2",
+        connected: true,
     },
     SettingDef {
         id: "deinterlacing",
@@ -188,7 +192,7 @@ pub const SETTINGS: &[SettingDef] = &[
                pictures are not changed.",
         kind: Kind::Choice(DEINTERLACE_CHOICES),
         default: "auto",
-        connected: false,
+        connected: true,
     },
     SettingDef {
         id: "anti_aliasing",
@@ -198,7 +202,7 @@ pub const SETTINGS: &[SettingDef] = &[
         info: "Smooths jagged edges after the picture is drawn. FXAA is fast and softens fine detail a little.",
         kind: Kind::Choice(ANTI_ALIASING_CHOICES),
         default: "off",
-        connected: false,
+        connected: true,
     },
     SettingDef {
         id: "super_sampling",
@@ -241,46 +245,6 @@ pub const SETTINGS: &[SettingDef] = &[
         kind: Kind::Choice(VSYNC_CHOICES),
         default: "on",
         connected: true,
-    },
-    SettingDef {
-        id: "show_overscan",
-        page: Page::Display,
-        group: "Picture",
-        title: "Show overscan",
-        info: "Includes the border area a TV would hide.",
-        kind: TOGGLE,
-        default: "off",
-        connected: false,
-    },
-    SettingDef {
-        id: "use_game_screen_offsets",
-        page: Page::Display,
-        group: "Picture",
-        title: "Use the game's screen offsets",
-        info: "Applies the game's own picture position. Can add thin black borders.",
-        kind: TOGGLE,
-        default: "off",
-        connected: false,
-    },
-    SettingDef {
-        id: "match_horizontal_resolution",
-        page: Page::Display,
-        group: "Picture",
-        title: "Match the game's horizontal resolution",
-        info: "Avoids an extra blur when the game uses a narrower picture.",
-        kind: TOGGLE,
-        default: "on",
-        connected: false,
-    },
-    SettingDef {
-        id: "direct_scanout",
-        page: Page::Display,
-        group: "Picture",
-        title: "Direct scanout",
-        info: "Skips the final merge step when the game uses a single output.",
-        kind: TOGGLE,
-        default: "off",
-        connected: false,
     },
     SettingDef {
         id: "async_gs",
@@ -405,9 +369,9 @@ impl Settings {
     pub fn applies(&self, id: &str) -> bool {
         let renderer = self.get("renderer");
         match id {
-            "internal_scale" | "present_filter" | "fsr_sharpness" | "deinterlacing" | "anti_aliasing" => {
-                renderer == CORE_GS_11
-            }
+            "internal_scale" | "present_filter" | "deinterlacing" | "anti_aliasing" => renderer == CORE_GS_11,
+            // Only the FSR filter has a sharpness control.
+            "fsr_sharpness" => renderer == CORE_GS_11 && self.get("present_filter") == "fsr",
             "super_sampling" | "high_resolution_output" => renderer == PARALLEL_GS,
             _ => true,
         }
@@ -422,7 +386,6 @@ impl Settings {
         }
         match id {
             "high_resolution_output" => self.super_sampling_factor() >= 4,
-            "fsr_sharpness" => self.get("present_filter") == "fsr",
             _ => true,
         }
     }

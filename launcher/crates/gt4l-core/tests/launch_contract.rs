@@ -34,7 +34,10 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     assert!(!environment.contains_key("GT4_GS_SYNC"));
     // Nothing paraLLEl-GS specific for CoreGS 1.1.
     assert!(!environment.keys().any(|name| name.starts_with("GT4_PGS_")));
-    assert_eq!(environment.len(), 6);
+    // CoreGS 1.1 defaults also send deinterlacing (auto) and anti-aliasing (off).
+    assert_eq!(environment["GT4_DEINTERLACE"], "auto");
+    assert_eq!(environment["GT4_AA"], "off");
+    assert_eq!(environment.len(), 8);
 }
 
 #[test]
@@ -151,13 +154,66 @@ fn high_resolution_output_is_not_sent_below_four_times_super_sampling() {
 }
 
 #[test]
-fn options_not_yet_in_the_build_are_not_sent() {
-    let mut settings = Settings::default();
-    settings.set("internal_scale", "2").unwrap();
-    settings.set("present_filter", "linear").unwrap();
-    settings.set("deinterlacing", "weave").unwrap();
-    let environment = env_map(&launch::game_environment(&settings));
+fn coregs11_defaults_send_the_documented_variables() {
+    let environment = env_map(&launch::game_environment(&Settings::default()));
     assert_eq!(environment["PS2_SCALE"], "1");
-    assert!(!environment.contains_key("GT4_PRESENT_FILTER"));
+    assert!(!environment.contains_key("GT4_PRESENT_FILTER"), "automatic sends no filter");
+    assert!(!environment.contains_key("GT4_FSR_SHARPNESS"));
+    assert_eq!(environment["GT4_DEINTERLACE"], "auto");
+    assert_eq!(environment["GT4_AA"], "off");
+}
+
+#[test]
+fn internal_scale_maps_to_ps2_scale_for_coregs11_only() {
+    let mut settings = Settings::default();
+    settings.set("internal_scale", "3").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["PS2_SCALE"], "3");
+    assert!(settings.is_active("internal_scale"));
+    settings.set("renderer", "parallel").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["PS2_SCALE"], "1");
     assert!(!settings.is_active("internal_scale"));
+}
+
+#[test]
+fn present_filter_maps_nearest_linear_and_fsr() {
+    let mut settings = Settings::default();
+    settings.set("present_filter", "nearest").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_PRESENT_FILTER"], "nearest");
+    settings.set("present_filter", "linear").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_PRESENT_FILTER"], "linear");
+    settings.set("present_filter", "fsr").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_PRESENT_FILTER"], "fsr");
+    assert!(settings.set("present_filter", "bicubic").is_err());
+}
+
+#[test]
+fn fsr_sharpness_is_sent_only_with_the_fsr_filter() {
+    let mut settings = Settings::default();
+    settings.set("fsr_sharpness", "0").unwrap();
+    assert!(!env_map(&launch::game_environment(&settings)).contains_key("GT4_FSR_SHARPNESS"));
+    assert!(!settings.applies("fsr_sharpness"));
+    settings.set("present_filter", "fsr").unwrap();
+    assert!(settings.is_active("fsr_sharpness"));
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_FSR_SHARPNESS"], "0");
+    settings.set("fsr_sharpness", "0.2").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_FSR_SHARPNESS"], "0.2");
+    assert!(settings.set("fsr_sharpness", "3").is_err());
+}
+
+#[test]
+fn deinterlacing_maps_every_documented_value() {
+    let mut settings = Settings::default();
+    for value in ["off", "weave", "bob", "blend", "adaptive", "auto"] {
+        settings.set("deinterlacing", value).unwrap();
+        assert_eq!(env_map(&launch::game_environment(&settings))["GT4_DEINTERLACE"], value);
+    }
+    assert!(settings.set("deinterlacing", "yadif").is_err());
+}
+
+#[test]
+fn anti_aliasing_maps_off_and_fxaa() {
+    let mut settings = Settings::default();
+    settings.set("anti_aliasing", "fxaa").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_AA"], "fxaa");
+    assert!(settings.set("anti_aliasing", "smaa").is_err());
 }

@@ -1,0 +1,206 @@
+// Round trips and library rules for TASK-025. The owner-card tests read a copy of the owner's
+// card (never the original) and skip when the copy is missing.
+
+use gt4saves::card::{Node, DirEntry, GAME_SAVE_NAME, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
+use gt4saves::library::slot_name;
+use gt4saves::{folder, psu, Card, CardError, Library};
+use std::fs;
+use std::path::PathBuf;
+
+const STAMP: [u8; 8] = [0, 39, 50, 7, 12, 10, 0xEA, 0x07];
+const REPLAY: &str = "BASCUS-97328R0001";
+
+fn scratch(name: &str) -> PathBuf {
+    let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
+    let _ = fs::remove_dir_all(&path);
+    fs::create_dir_all(&path).unwrap();
+    path
+}
+
+fn pattern(len: usize, seed: u8) -> Vec<u8> {
+    (0..len).map(|i| (i as u8).wrapping_mul(31).wrapping_add(seed)).collect()
+}
+
+fn file(name: &str, data: Vec<u8>) -> Node {
+    let entry = DirEntry::new(name, MODE_FILE_DEFAULT, STAMP, STAMP).unwrap();
+    Node::file(entry, data)
+}
+
+fn directory(name: &str, children: Vec<Node>) -> Node {
+    let entry = DirEntry::new(name, MODE_DIR_DEFAULT, STAMP, STAMP).unwrap();
+    Node::dir(entry, children)
+}
+
+fn game_save(garage_seed: u8) -> Node {
+    directory(
+        GAME_SAVE_NAME,
+        vec![
+            file("icon.sys", pattern(964, 1)),
+            file("icon0.ico", pattern(9796, 2)),
+            file("garage", pattern(1_280_064, garage_seed)),
+        ],
+    )
+}
+
+fn replay() -> Node {
+    directory(REPLAY, vec![file("icon.sys", pattern(964, 3)), file("replay.rep", pattern(400_001, 4))])
+}
+
+fn owner_card() -> Option<Vec<u8>> {
+    let path = std::env::var("GT4SAVES_TEST_CARD")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("C:/Antigravity/gt4-staticrecomp/private/slice180-saves-owner-copy/card-copy.ps2"));
+    fs::read(path).ok()
+}
+
+#[test]
+fn folder_card_round_trips_through_a_built_card() {
+    let lib = Library::open(&scratch("folder-card")).unwrap();
+    let card_bytes = Card::build(&[game_save(7), replay()]).unwrap().to_image();
+    let report = lib.import_card_image(&card_bytes).unwrap();
+    assert_eq!(report.added, vec![slot_name(1), REPLAY.to_string()]);
+    lib.activate_slot("Save 01").unwrap();
+    assert_eq!(lib.active_save().unwrap().as_deref(), Some(GAME_SAVE_NAME));
+
+    let rebuilt = lib.build_card(&[REPLAY.to_string()]).unwrap();
+    let back = Card::from_image(&rebuilt).unwrap();
+    assert!(back.ecc_ok());
+    assert!(gt4saves::card::same_contents(
+        &back.root().unwrap(),
+        &[game_save(7), replay()]
+    ));
+}
+
+#[test]
+fn psu_round_trip_keeps_every_file() {
+    let save = game_save(9);
+    let bytes = psu::write(&save).unwrap();
+    assert_eq!(bytes.len() % 512, 0, "psu is a whole number of 512-byte entries");
+    let back = psu::read(&bytes).unwrap();
+    assert!(gt4saves::card::same_contents(std::slice::from_ref(&back), std::slice::from_ref(&save)));
+}
+
+#[test]
+fn psu_import_into_a_second_library_and_export_again() {
+    let first = Library::open(&scratch("psu-first")).unwrap();
+    let psu_bytes = psu::write(&game_save(11)).unwrap();
+    assert_eq!(first.import_psu(&psu_bytes).unwrap().added, vec![slot_name(1)]);
+    let exported = first.export_psu("Save 01").unwrap();
+    assert_eq!(exported, psu_bytes, "export of an imported save reproduces the psu bytes");
+}
+
+#[test]
+fn harvest_replaces_a_changed_save_and_never_deletes() {
+    let lib = Library::open(&scratch("harvest")).unwrap();
+    let before = Card::build(&[game_save(20), replay()]).unwrap().to_image();
+    lib.import_card_image(&before).unwrap();
+    lib.activate_slot("Save 01").unwrap();
+    lib.harvest(&before).unwrap();
+
+    // The game wrote a new garage file; the replay was deleted in game (absent from the card).
+    let after = Card::build(&[game_save(21)]).unwrap().to_image();
+    let report = lib.harvest(&after).unwrap();
+    assert!(report.replaced_active);
+    let kept = folder::import_item(&lib.memcard_dir().join(GAME_SAVE_NAME)).unwrap();
+    assert!(gt4saves::card::same_contents(std::slice::from_ref(&kept), std::slice::from_ref(&game_save(21))));
+    let backup_dirs: Vec<_> = fs::read_dir(lib.memcard_dir().join(".backup")).unwrap().collect();
+    assert_eq!(backup_dirs.len(), 1, "the previous save was copied to .backup");
+    assert!(lib.memcard_dir().join(REPLAY).is_dir(), "a replay missing from the card is kept, not deleted");
+}
+
+#[test]
+fn import_dedupes_identical_saves_and_skips_other_games() {
+    let lib = Library::open(&scratch("dedupe")).unwrap();
+    let foreign = directory("SLPS-00000GAMEDATA", vec![file("x.bin", pattern(10, 5))]);
+    let card = Card::build(&[game_save(30), foreign]).unwrap().to_image();
+    let first = lib.import_card_image(&card).unwrap();
+    assert_eq!(first.added, vec![slot_name(1)]);
+    assert_eq!(first.skipped.len(), 1, "the other game is refused: {:?}", first.skipped);
+    let second = lib.import_card_image(&card).unwrap();
+    assert!(second.added.is_empty(), "import never adds a duplicate slot");
+    assert_eq!(lib.slots().unwrap(), vec![slot_name(1)]);
+}
+
+#[test]
+fn owner_card_copy_lists_rebuilds_and_matches_byte_for_byte() {
+    let Some(bytes) = owner_card() else {
+        eprintln!("owner card copy not present; skipping");
+        return;
+    };
+    let lib = Library::open(&scratch("owner")).unwrap();
+    let report = lib.import_card_image(&bytes).unwrap();
+    assert_eq!(report.added, vec![slot_name(1)]);
+    assert_eq!(lib.slots().unwrap(), vec![slot_name(1)]);
+    // Importing the same card again adds nothing.
+    assert!(lib.import_card_image(&bytes).unwrap().added.is_empty());
+
+    lib.activate_slot("Save 01").unwrap();
+    let rebuilt = lib.build_card(&[]).unwrap();
+    let original = Card::from_image(&bytes).unwrap().root().unwrap();
+    let copy = Card::from_image(&rebuilt).unwrap().root().unwrap();
+    assert!(gt4saves::card::same_contents(&copy, &original));
+    // Each file of the game save is identical byte for byte.
+    let game_original = original.iter().find(|n| n.name() == GAME_SAVE_NAME).unwrap();
+    let game_copy = copy.iter().find(|n| n.name() == GAME_SAVE_NAME).unwrap();
+    for file_original in &game_original.children {
+        let file_copy = game_copy.children.iter().find(|f| f.name() == file_original.name()).unwrap();
+        assert_eq!(file_copy.data, file_original.data, "{} differs", file_original.name());
+    }
+}
+
+#[test]
+fn write_card_image_keeps_the_previous_card_as_a_backup() {
+    let lib = Library::open(&scratch("backups")).unwrap();
+    let target = scratch("backups-target").join("card.ps2");
+    fs::write(&target, b"previous").unwrap();
+    lib.write_card_image(&target, &Card::blank().to_image()).unwrap();
+    assert!(Card::from_image(&fs::read(&target).unwrap()).is_ok());
+    let backups: Vec<_> = fs::read_dir(lib.memcard_dir().parent().unwrap().join("backups")).unwrap().collect();
+    assert_eq!(backups.len(), 1);
+}
+
+#[test]
+fn full_card_is_refused_and_bad_images_are_rejected() {
+    let big: Vec<Node> = (0..6).map(|i| directory(&format!("BASCUS-97328R{:04}", i + 1), vec![file("replay.rep", pattern(1_500_000, i))])).collect();
+    assert_eq!(Card::build(&big).unwrap_err(), CardError::Full);
+    assert_eq!(Card::from_image(&[0u8; 100]).unwrap_err(), CardError::BadSize(100));
+    assert_eq!(Card::from_image(&vec![0u8; 8_388_608]).unwrap_err(), CardError::NotACard);
+}
+
+#[test]
+fn folder_export_and_import_keep_nested_directories() {
+    let root = scratch("nested");
+    let item = directory(REPLAY, vec![file("a.bin", pattern(3000, 6)), directory("sub", vec![file("b.bin", pattern(5, 7))])]);
+    let exported = folder::export_item(&root, &item).unwrap();
+    assert!(exported.join("sub").join("b.bin").is_file());
+    let back = folder::import_item(&exported).unwrap();
+    assert!(gt4saves::card::same_contents(std::slice::from_ref(&back), std::slice::from_ref(&item)));
+}
+
+#[test]
+fn slot_names_and_timestamps() {
+    assert_eq!(slot_name(1), "Save 01");
+    assert_eq!(slot_name(12), "Save 12");
+    let stamp = gt4saves::timestamp();
+    assert_eq!(stamp.len(), 15);
+    assert_eq!(stamp.as_bytes()[8], b'-');
+}
+
+#[test]
+fn owner_card_data_only_dump_round_trips() {
+    let Some(bytes) = owner_card() else {
+        return;
+    };
+    let card = Card::from_image(&bytes).unwrap();
+    let raw = card.to_image_without_ecc();
+    let reloaded = Card::from_image(&raw).unwrap();
+    assert_eq!(reloaded.to_image_without_ecc(), raw);
+    assert!(gt4saves::card::same_contents(&reloaded.root().unwrap(), &card.root().unwrap()));
+}
+
+#[test]
+fn library_refuses_unknown_names() {
+    let lib = Library::open(&scratch("unknown")).unwrap();
+    assert!(matches!(lib.export_psu("Save 09"), Err(gt4saves::LibraryError::NotFound(_))));
+    assert!(matches!(lib.activate_slot("Save 09"), Err(gt4saves::LibraryError::NotFound(_))));
+}

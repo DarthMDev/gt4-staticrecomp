@@ -2,7 +2,7 @@
 
 Inputs (already fetched, recorded in brand.toml with URL, date, size and SHA-256):
   brand/source/gt4-logo.svg      Commons "Gran Turismo 4 Logo.svg" (wordmark with the GT emblem)
-  brand/source/cover-front.png   libretro-thumbnails "Gran Turismo 4 (USA, Canada) (v1.01).png"
+  brand/source/cover-front.jpeg  cover supplied by the project owner (1000x1500 JPEG)
 
 Outputs: logo-gt4.png, emblem-gt.png, cover-front.png, game.ico, launcher.ico, and brand.toml.
 
@@ -73,7 +73,7 @@ def main() -> int:
     logo.save(BRAND / "logo-gt4.png", optimize=True)
     emblem = logo.crop(EMBLEM_BOX)
     emblem.save(BRAND / "emblem-gt.png", optimize=True)
-    shutil.copyfile(SOURCE / "cover-front.png", BRAND / "cover-front.png")
+    Image.open(SOURCE / "cover-front.jpeg").convert("RGB").save(BRAND / "cover-front.png", optimize=True)
     write_ico(BRAND / "game.ico", emblem, INK, badge=False)
     write_ico(BRAND / "launcher.ico", emblem, CARBON, badge=True)
 
@@ -89,14 +89,12 @@ def main() -> int:
          "https://upload.wikimedia.org/wikipedia/commons/e/e0/Gran_Turismo_4_Logo.svg",
          "Wikimedia Commons, file page File:Gran_Turismo_4_Logo.svg, licence shown there: Public domain; "
          "upstream credit: Sony Computer Entertainment (original SVG, via brandsoftheworld.com). Owner to confirm."),
-        ("source/cover-front.png", "Gran Turismo 4 (USA, Canada) cover art, 512x725 front",
-         "https://raw.githubusercontent.com/libretro-thumbnails/Sony_-_PlayStation_2/master/Named_Boxarts/"
-         "Gran%20Turismo%204%20(USA,%20Canada)%20(v1.01).png",
-         "libretro-thumbnails repository (scan of the NTSC-U box, low resolution). Licence of the artwork is "
-         "Sony's; the repository terms are not stated per file. Owner to confirm or replace with a 900 px+ scan."),
+        ("source/cover-front.jpeg", "Gran Turismo 4 front cover, 1000x1500 JPEG, supplied by the project owner",
+         "supplied by the project owner",
+         "Supplied by the project owner on 2026-10-15. Artwork licence: Sony's; owner to confirm use."),
         ("logo-gt4.png", "Logo rendered 1024 px wide from source/gt4-logo.svg (resvg)", None, "Derived."),
         ("emblem-gt.png", "GT emblem cropped from logo-gt4.png", None, "Derived."),
-        ("cover-front.png", "Copy of source/cover-front.png", None, "Derived."),
+        ("cover-front.png", "Converted to PNG (RGB) from source/cover-front.jpeg", None, "Derived."),
         ("game.ico", "Game executable icon: emblem on dark tile, 10 sizes", None, "Derived (tools/make_brand.py)."),
         ("launcher.ico", "Launcher icon: emblem on carbon with play badge, 10 sizes", None, "Derived."),
     ]

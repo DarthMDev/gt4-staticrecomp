@@ -23,6 +23,12 @@ export struct SettingRow {
     enabled: bool,
 }
 
+export struct SaveRow {
+    name: string,
+    label: string,
+    active: bool,
+}
+
 component PrimaryButton inherits Rectangle {
     in property <string> label;
     in property <bool> enabled: true;
@@ -188,6 +194,71 @@ component OptionRow inherits Rectangle {
     }
 }
 
+component ListButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 120px;
+    height: 32px;
+    border-width: 1px;
+    border-color: Palette.dim;
+    background: touch.has-hover && root.enabled ? Palette.graphite : transparent;
+    opacity: root.enabled ? 1 : 0.5;
+    Text {
+        text: root.label;
+        color: Palette.silver;
+        font-size: 13px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component SaveLine inherits Rectangle {
+    in property <SaveRow> entry;
+    in property <bool> can-activate: false;
+    callback activate-clicked();
+    callback delete-clicked();
+    height: 52px;
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        width: parent.width;
+        background: Palette.hair;
+    }
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 12px;
+        alignment: space-between;
+        Text {
+            text: root.entry.label;
+            color: root.entry.active ? Palette.white : Palette.silver;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            if root.can-activate && !root.entry.active : ListButton {
+                label: "Make active";
+                width: 130px;
+                clicked => { root.activate-clicked(); }
+            }
+            if !root.entry.active : ListButton {
+                label: "Delete";
+                width: 90px;
+                clicked => { root.delete-clicked(); }
+            }
+        }
+    }
+}
+
 component NavItem inherits Rectangle {
     in property <string> label;
     in property <bool> current: false;
@@ -251,6 +322,9 @@ export component AppWindow inherits Window {
     in property <float> r2-deadzone: 0.1176;
     in property <int> r2-curve: 0;
     in property <string> r2-deadzone-text;
+    in property <[SaveRow]> save-rows;
+    in property <[SaveRow]> replay-rows;
+    in property <string> library-message;
 
     callback choose-disc();
     callback start-setup();
@@ -270,6 +344,9 @@ export component AppWindow inherits Window {
     callback controls-cancel-capture();
     callback controls-reset();
     callback trigger-changed(int, float, int);
+    callback import-saves();
+    callback activate-save(string);
+    callback delete-item(string);
 
     // Key capture for rebinding: forwards key presses only while a binding is waiting for a key.
     capture-scope := FocusScope {
@@ -546,22 +623,50 @@ export component AppWindow inherits Window {
                         }
                     }
                 }
-                if root.settings-page == 2 || root.settings-page == 3 : Rectangle {
-                    VerticalLayout {
-                        alignment: center;
-                        spacing: 8px;
-                        Text {
-                            text: root.settings-page == 2 ? "No saves yet." : "No replays yet.";
-                            color: Palette.silver;
-                            font-size: 16px;
-                            horizontal-alignment: center;
+                if root.settings-page == 2 || root.settings-page == 3 : VerticalLayout {
+                    spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        ListButton {
+                            label: "Import file...";
+                            width: 150px;
+                            clicked => { root.import-saves(); }
                         }
                         Text {
-                            text: "The save manager arrives in this release. Your game saves stay on your memory card until then.";
+                            text: root.library-message;
                             color: Palette.dim;
                             font-size: 13px;
-                            wrap: word-wrap;
-                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                    if root.settings-page == 2 && root.save-rows.length == 0 : Text {
+                        text: "No saves yet. Your save appears here after you play, or when you import a save file (.psu or memory card image).";
+                        color: Palette.dim;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                    }
+                    if root.settings-page == 3 && root.replay-rows.length == 0 : Text {
+                        text: "No replays yet. Replays saved in the game appear here once you play.";
+                        color: Palette.dim;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                    }
+                    ScrollView {
+                        if root.settings-page == 2 : VerticalLayout {
+                            for entry in root.save-rows : SaveLine {
+                                entry: entry;
+                                can-activate: true;
+                                activate-clicked => { root.activate-save(entry.name); }
+                                delete-clicked => { root.delete-item(entry.name); }
+                            }
+                        }
+                        if root.settings-page == 3 : VerticalLayout {
+                            for entry in root.replay-rows : SaveLine {
+                                entry: entry;
+                                can-activate: false;
+                                delete-clicked => { root.delete-item(entry.name); }
+                            }
                         }
                     }
                 }

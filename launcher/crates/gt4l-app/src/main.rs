@@ -3,7 +3,9 @@
 //! worker threads and report back through `slint::invoke_from_event_loop`.
 
 mod game;
+mod recycle;
 mod rows;
+mod saves;
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -19,7 +21,7 @@ use gt4l_core::paths::{self, DataDirs, GAME_EXECUTABLE};
 use gt4l_core::LAUNCHER_VERSION;
 use gt4l_disc::setup::{self as disc_setup, SetupError, SetupRequest, Stage};
 use gt4l_disc::Pins;
-use gt4saves::{NullSaveManager, SaveManager};
+use gt4saves::library::Library;
 use slint::{ModelRc, SharedString, VecModel};
 
 slint::include_modules!();
@@ -44,6 +46,10 @@ struct App {
     setup_cancel: Arc<AtomicBool>,
     settings_page: i32,
     page_rows: Vec<rows::RowData>,
+    library_root: PathBuf,
+    library: Library,
+    /// Result of the last import, delete or activate, shown on the Saves and Replays pages.
+    saves_status: String,
 }
 
 type Shared = Arc<Mutex<App>>;
@@ -65,6 +71,8 @@ fn main() -> Result<(), slint::PlatformError> {
             Controls::default()
         }
     };
+    let (library_root, library) =
+        saves::open(dirs.root()).expect("the save library folder can be created under the data folder");
     let pins = Pins::embedded().expect("embedded pins are valid (build error otherwise)");
     let program_dir = std::env::current_exe()
         .ok()
@@ -90,6 +98,9 @@ fn main() -> Result<(), slint::PlatformError> {
         setup_cancel: Arc::new(AtomicBool::new(false)),
         settings_page: 0,
         page_rows: Vec::new(),
+        library_root,
+        library,
+        saves_status: String::new(),
     }));
 
     let ui = AppWindow::new()?;
@@ -105,7 +116,59 @@ fn main() -> Result<(), slint::PlatformError> {
     ]));
     refresh_settings(&ui, &app);
     refresh_controls(&ui, &app);
+    refresh_saves(&ui, &app);
 
+    {
+        let (weak, app) = (ui.as_weak(), app.clone());
+        ui.on_import_saves(move || {
+            let Some(ui) = weak.upgrade() else { return };
+            let picked = rfd::FileDialog::new()
+                .set_title("Choose a save or memory card file")
+                .add_filter("Save or card", &["psu", "ps2", "mcd", "bin", "card"])
+                .pick_file();
+            if let Some(path) = picked {
+                let status = {
+                    let state = lock(&app);
+                    match saves::import_path(&state.library, &path) {
+                        Ok(report) => import_summary(&report),
+                        Err(error) => format!("Not imported: {error}"),
+                    }
+                };
+                set_saves_status(&app, &status);
+                refresh_saves(&ui, &app);
+            }
+        });
+    }
+    {
+        let (weak, app) = (ui.as_weak(), app.clone());
+        ui.on_activate_save(move |name| {
+            let Some(ui) = weak.upgrade() else { return };
+            let status = match saves::activate(&lock(&app).library, &name) {
+                Ok(()) => "The chosen save will be used the next time you play.".to_string(),
+                Err(error) => format!("Not changed: {error}"),
+            };
+            set_saves_status(&app, &status);
+            refresh_saves(&ui, &app);
+        });
+    }
+    {
+        let (weak, app) = (ui.as_weak(), app.clone());
+        ui.on_delete_item(move |name| {
+            let Some(ui) = weak.upgrade() else { return };
+            let status = {
+                let state = lock(&app);
+                match find_item(&state.library, &name) {
+                    Some(item) => match saves::delete(&state.library_root, &item) {
+                        Ok(()) => format!("{} moved to the Recycle Bin.", item.label),
+                        Err(error) => error,
+                    },
+                    None => "That item is not in the library any more.".to_string(),
+                }
+            };
+            set_saves_status(&app, &status);
+            refresh_saves(&ui, &app);
+        });
+    }
     {
         let (weak, app) = (ui.as_weak(), app.clone());
         ui.on_choose_disc(move || {
@@ -342,6 +405,53 @@ fn steps_model(steps: &[(&str, &str, i32)]) -> ModelRc<SetupStep> {
         })
         .collect();
     ModelRc::new(VecModel::from(items))
+}
+
+fn set_saves_status(app: &Shared, status: &str) {
+    lock(app).saves_status = status.to_string();
+}
+
+/// Short sentence about what an import did, for the Saves and Replays pages.
+fn import_summary(report: &gt4saves::library::Report) -> String {
+    let mut parts = Vec::new();
+    if !report.added.is_empty() {
+        parts.push(format!("Added {}.", report.added.join(", ")));
+    }
+    if !report.unchanged.is_empty() {
+        parts.push("Already in the library.".to_string());
+    }
+    if !report.skipped.is_empty() {
+        parts.push(format!("Skipped: {}.", report.skipped.join("; ")));
+    }
+    if parts.is_empty() {
+        parts.push("Nothing to import.".to_string());
+    }
+    parts.join(" ")
+}
+
+/// Finds a library item by its name, among game saves first.
+fn find_item(library: &Library, name: &str) -> Option<saves::Item> {
+    let all = saves::saves(library).ok()?.into_iter().chain(saves::replays(library).ok()?);
+    all.into_iter().find(|item| item.name == name)
+}
+
+fn save_rows(items: &[saves::Item]) -> ModelRc<SaveRow> {
+    let rows: Vec<SaveRow> = items
+        .iter()
+        .map(|item| SaveRow { name: item.name.clone().into(), label: item.label.clone().into(), active: item.active })
+        .collect();
+    ModelRc::new(VecModel::from(rows))
+}
+
+fn refresh_saves(ui: &AppWindow, app: &Shared) {
+    let state = lock(app);
+    let saves_list = saves::saves(&state.library).unwrap_or_default();
+    let replay_list = saves::replays(&state.library).unwrap_or_default();
+    let status = state.saves_status.clone();
+    drop(state);
+    ui.set_save_rows(save_rows(&saves_list));
+    ui.set_replay_rows(save_rows(&replay_list));
+    ui.set_library_message(status.into());
 }
 
 fn refresh_settings(ui: &AppWindow, app: &Shared) {
@@ -674,7 +784,11 @@ fn play(ui: &AppWindow, app: &Shared) {
         extra.push(("GT4_CONTROLS_FILE".into(), controls_path.display().to_string()));
     }
     let card = dirs.runtime_card();
-    let _ = NullSaveManager.prepare_card(&card);
+    let prepared = saves::prepare_card(&lock(app).library, &card);
+    if let Err(message) = prepared {
+        set_home_error(ui, app, &message);
+        return;
+    }
     let running = match game::start(
         &dirs,
         &executable,
@@ -698,7 +812,10 @@ fn play(ui: &AppWindow, app: &Shared) {
     let app = app.clone();
     std::thread::spawn(move || {
         let outcome = game::wait_for_exit(&running);
-        let _ = NullSaveManager.harvest_card(&card);
+        match saves::harvest_card(&lock(&app).library, &card) {
+            Ok(report) => log(&lock(&app).dirs, &format!("card harvested: {report:?}")),
+            Err(error) => log(&lock(&app).dirs, &format!("card not harvested: {error}")),
+        }
         let log_path = running.log_path.clone();
         drop(running);
         {
@@ -710,9 +827,11 @@ fn play(ui: &AppWindow, app: &Shared) {
             Outcome::NormalClose => String::new(),
             Outcome::Crashed { .. } => exit::user_message(&outcome),
         };
+        let refresh_app = app.clone();
         let _ = slint::invoke_from_event_loop(move || {
             let Some(ui) = weak.upgrade() else { return };
             ui.set_game_running(false);
+            refresh_saves(&ui, &refresh_app);
             if !message.is_empty() {
                 ui.set_home_message(message.into());
             }

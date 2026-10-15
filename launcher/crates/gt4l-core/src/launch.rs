@@ -46,8 +46,12 @@ pub struct LaunchPlan {
 /// - `renderer`: `GT4_RENDERER=donor` (CoreGS 1.1) or `parallel` (paraLLEl-GS), always sent.
 /// - `input_resolution`: 480p -> `GT4_FORCE_480P=1`; Native 480i -> `GT4_FORCE_480P=0`;
 ///   1080i -> `GT4_FORCE_480P=0` and `GT4_RACE_DISPLAY=1080i` (the current build does not read it yet).
-/// - `internal_scale` (CoreGS 1.1, when connected) -> `PS2_SCALE`; otherwise `PS2_SCALE=1`.
-/// - `present_filter` (CoreGS 1.1, when connected) -> `GT4_PRESENT_FILTER=nearest|linear`.
+/// CoreGS 1.1 only (the other renderers get `PS2_SCALE=1` and none of these):
+/// - `internal_scale` -> `PS2_SCALE=1|2|3` (internal resolution).
+/// - `present_filter` -> `GT4_PRESENT_FILTER=nearest|linear|fsr`; `auto` sends nothing.
+/// - `fsr_sharpness` -> `GT4_FSR_SHARPNESS=<stops>`, only with the FSR filter.
+/// - `deinterlacing` -> `GT4_DEINTERLACE=auto|off|weave|bob|blend|adaptive`.
+/// - `anti_aliasing` -> `GT4_AA=off|fxaa`.
 /// - `fullscreen` -> `GT4_FULLSCREEN` (1/0).
 /// - `vsync` -> `GT4_PRESENT_MODE` (on = fifo, fast = mailbox, off = immediate).
 /// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
@@ -55,8 +59,7 @@ pub struct LaunchPlan {
 /// - `check_vu_code` 100 / 1000 -> `GT4_VU1_VERIFY=N` and `GT4_VU0_VERIFY=N`.
 /// - paraLLEl-GS: `GT4_PGS_SSAA=<factor>` and `GT4_PGS_HIRES=1|0` (high-resolution output, only at 4x and up).
 ///
-/// Options marked `connected: false` in the table (FSR, deinterlace, anti-aliasing, ...) emit nothing,
-/// so the game keeps its own defaults until their variables exist in the build.
+/// Options marked `connected: false` in the table emit nothing.
 pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
     let mut variables: BTreeMap<&'static str, String> = BTreeMap::new();
     let renderer = settings.get("renderer");
@@ -65,7 +68,8 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
         if renderer == settings::PARALLEL_GS { "parallel" } else { "donor" }.to_string(),
     );
     variables.insert("PS2_GS", "gpu".to_string());
-    variables.insert("PS2_SCALE", connected_value(settings, "internal_scale", "1"));
+    let core = renderer == settings::CORE_GS_11;
+    variables.insert("PS2_SCALE", if core { settings.get("internal_scale") } else { "1" }.to_string());
 
     match settings.get("input_resolution") {
         "480p" => {
@@ -80,8 +84,16 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
         }
     }
 
-    if renderer == settings::CORE_GS_11 && settings::definition("present_filter").map_or(false, |d| d.connected) {
-        variables.insert("GT4_PRESENT_FILTER", settings.get("present_filter").to_string());
+    if core {
+        let filter = settings.get("present_filter");
+        if filter != "auto" {
+            variables.insert("GT4_PRESENT_FILTER", filter.to_string());
+        }
+        if filter == "fsr" {
+            variables.insert("GT4_FSR_SHARPNESS", settings.get("fsr_sharpness").to_string());
+        }
+        variables.insert("GT4_DEINTERLACE", settings.get("deinterlacing").to_string());
+        variables.insert("GT4_AA", settings.get("anti_aliasing").to_string());
     }
 
     variables.insert("GT4_FULLSCREEN", flag(settings.is_on("fullscreen")));
@@ -120,12 +132,6 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
     }
 
     variables.into_iter().map(|(name, value)| (name.to_string(), value)).collect()
-}
-
-/// The stored value when the option is connected, otherwise the value the game uses by default.
-fn connected_value(settings: &Settings, id: &str, fallback: &str) -> String {
-    let connected = settings::definition(id).map_or(false, |definition| definition.connected);
-    if connected { settings.get(id) } else { fallback }.to_string()
 }
 
 fn flag(on: bool) -> String {

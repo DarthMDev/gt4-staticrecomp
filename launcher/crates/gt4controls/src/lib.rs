@@ -2,8 +2,8 @@
 //! (task/029-input-mapping). The launcher writes the file and validates it before Play; the game's C++
 //! reader applies the full rules. Changes here must follow that document.
 //!
-//! Until task/029 merges, `docs/CONTROLS.md` only exists in that branch's worktree, so this crate
-//! carries the same tables. Keep them in sync when the document changes.
+//! The mirrored tables below follow `docs/CONTROLS.md`. `tests/docs_match.rs` fails when they drift from
+//! the document or from `docs/controls/*.toml`.
 
 use std::collections::BTreeMap;
 use std::fmt;

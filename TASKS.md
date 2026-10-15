@@ -196,6 +196,20 @@ saves) and from PCSX2 folder cards; import always creates a new slot and never
 overwrites one. Export, delete to Recycle Bin, backups. Optional slot summary
 (day, credits) from Nenkai's PDTools save format. Atomic card writes in the
 runtime. Design: `docs/launcher/LAUNCHER-PLAN.md` on branch `task/019-launcher`.
+State (2026-10-15, branch `task/025-save-manager`, not yet owner-approved): Part A and Part B
+written, Part B tested. Done: `native/memcard_store.*` (atomic card write: temporary file, flush,
+rename; CTest-style fixture `memcard_store_fixture` covers a crash mid-write and before the rename);
+`scripts/prepare_memcard_flush.py` derives the pinned donor `sio2.cpp` with an atomic flush and
+`flush_cards_now()` for exit (reversible overlay, syntax-checked against the donor headers; the
+exit call in `native/window.cpp` is gated by `GT4_MEMCARD_FLUSH_OVERLAY`, off by default);
+`launcher/crates/gt4saves` (no dependencies): card read/build with ECC fitted to the owner card
+(all 16384 pages match), folder card with harvest that never deletes, `.psu` import/export,
+card-image import, PCSX2 raw folder import, slots, activate, backups. 19 tests pass.
+Not done: Part A is not wired into a candidate build (needs a new runtime capsule and slice with
+owner approval) and no headless frame or no-save card-byte run was made; Recycle Bin deletes;
+`.max/.cbs/.xps` importers; PCSX2 folder-card export; playlists; GT4 save summary (deferred);
+replay directory names and the `.psu` 1024-byte padding are hypotheses until checked with owner
+data. A rebuilt card matches the owner's saves and file bytes, not its exact block layout.
 
 ### TASK-026 — Own hardware renderer: clean-room specification
 Study only (decision 0069). The specification team reads the PCSX2 hardware GS

@@ -12,13 +12,13 @@ retrieved = "2026-10-15"
 licence_note = "Wikimedia Commons, file page File:Gran_Turismo_4_Logo.svg, licence shown there: Public domain; upstream credit: Sony Computer Entertainment (original SVG, via brandsoftheworld.com). Owner to confirm."
 
 [[asset]]
-path = "source/cover-front.png"
-description = "Gran Turismo 4 (USA, Canada) cover art, 512x725 front"
-size_bytes = 253911
-sha256 = "1991dd90c45eea07f07583e014deef211cc6e03145263a03d747444fb3180b4e"
-source_url = "https://raw.githubusercontent.com/libretro-thumbnails/Sony_-_PlayStation_2/master/Named_Boxarts/Gran%20Turismo%204%20(USA,%20Canada)%20(v1.01).png"
+path = "source/cover-front.jpeg"
+description = "Gran Turismo 4 front cover, 1000x1500 JPEG, supplied by the project owner"
+size_bytes = 88933
+sha256 = "6fcaed70185cdc14ab64e4c9e9ef23ecde5b91992ea39d4f1500730e2f514fa8"
+source_url = "supplied by the project owner"
 retrieved = "2026-10-15"
-licence_note = "libretro-thumbnails repository (scan of the NTSC-U box, low resolution). Licence of the artwork is Sony's; the repository terms are not stated per file. Owner to confirm or replace with a 900 px+ scan."
+licence_note = "Supplied by the project owner on 2026-10-15. Artwork licence: Sony's; owner to confirm use."
 
 [[asset]]
 path = "logo-gt4.png"
@@ -36,9 +36,9 @@ licence_note = "Derived."
 
 [[asset]]
 path = "cover-front.png"
-description = "Copy of source/cover-front.png"
-size_bytes = 253911
-sha256 = "1991dd90c45eea07f07583e014deef211cc6e03145263a03d747444fb3180b4e"
+description = "Converted to PNG (RGB) from source/cover-front.jpeg"
+size_bytes = 464496
+sha256 = "a590a884ae7a7bd8e37f7cf6b80ee04d90c17659ec9a58101cbd9b7d1894554d"
 licence_note = "Derived."
 
 [[asset]]
