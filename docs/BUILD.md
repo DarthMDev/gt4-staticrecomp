@@ -1004,3 +1004,45 @@ Limits:
    The VU1 SIMD `vitof`/`vftoi` helpers are not bit-identical to the donor per-lane conversion. VU1
    output is unchanged (byte-identical control), so this is an open finding for VU1, not investigated.
 5. `private/` in the worktree is a directory junction to the main checkout (see the report).
+
+## paraLLEl-GS 2x and 4x scanout candidate (slice185, TASK-012)
+
+Slice185 = slice169 with the slice176 build-tree patch (the 3x path is not exposed; owner decision) and a
+scanout-sized window. Only `gs.cpp` of the port differs from slice169 (frontend parsing of `GT4_PGS_HIRES` 2|4).
+Details: PARALLEL-GS-PLAN.md section 13.
+
+Derive the port and shaders (from the repository root):
+
+    private\tooling-venv\Scripts\python.exe scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice185-parallel-port --assets-root C:\Antigravity\gt4-staticrecomp --parallel-hooks
+    (copy private\slice153-pacing-shaders\*.spv to private\slice185-parallel-shaders)
+
+Configure and build as slice169, with `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to the slice185 directories and the build
+directory `C:\Antigravity\gt4-staticrecomp\private\slice185-parallel-build\build`. Pins:
+[slice185-parallel-runtime.json](inputs/slice185-parallel-runtime.json) and
+[slice185-parallel.json](inputs/slice185-parallel.json) (`--mode parallel-hires`). Executable 97,078,272 bytes,
+sha256 6ade81c3...; clang-cl 22.1.3, ninja, CMake 4.3.1 (VS 2022 BuildTools x64).
+
+Owner launch (`--force-480p` is needed: without it the game boots 480i, and 4x falls back to 2x in field-aware frames):
+
+    C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode parallel-hires --hires 2 --force-480p
+    C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode parallel-hires --hires 4 --force-480p
+
+`--hires` takes 2 or 4 only and implies `--ssaa 16` (`GT4_PGS_SSAA=16`), and it is refused with `--renderer donor`.
+`--mode parallel` is unchanged (`--hires` alone is the slice169 2x option). Run from the worktree or from the main
+checkout: the launcher reads the pins in `docs/inputs` of the checkout it runs from and the binary from the assets
+checkout's `private/`, which must hold the build (the worktree's `private/` holds copies of the pinned binary and
+shaders, checked by sha256). Each run writes `result.json` with `GT4_PGS_HIRES` and `GT4_PGS_SSAA` in
+`renderer_environment`.
+
+Measured:
+- Build: 0 errors. CTest 25 of 25 (`native_quickfix` covers the window size and centring; `native_parallel_gs` the
+  scanout sizes including 2x and 4x).
+- Python: `unittest discover` with `GT4_NATIVE_BUILD` on this build: 302 run, OK, 10 skipped (pre-existing skips).
+- Headless 4,200 frames, slice157 schedule, no window, exit 0 in both runs: `GT4_PGS_HIRES=2` 42 of 42 dumps, 767 s;
+  `GT4_PGS_HIRES=4` 42 of 42 dumps, 817 s. Both dump 1280x447 (480i menus): the 4x request falls back to 2x for
+  field-aware frames, so the frames are identical (42 of 42). The 480p-forced runs (`GT4_FORCE_480P=1`) stayed
+  interlaced in the menus; no progressive frame was reached headless, so no 2x vs 4x crop was saved.
+- Donor path and slice169 `--mode parallel` are unchanged; their pins and CTest entries are the same.
+
+Limits: no windowed run by the agent; race scenes at 2x and 4x are not verified; timings are wall-clock with no GPU
+timestamps and are not a cost measurement.

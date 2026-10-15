@@ -49,6 +49,11 @@ compiled, quick fixes) with the paraLLEl-GS renderer and window output. --render
 sets paraLLEl-GS super-sampling (experimental); --hires (with --ssaa 4, 8 or 16) presents paraLLEl-GS's
 high-resolution scanout (2x horizontal; 2x vertical in 480p, full-frame 448 lines from the 224-line fields in
 480i menus). Accepts --force-480p, --vu0-verify N and the VU1 options.
+High-resolution candidate (--mode parallel-hires, slice185, TASK-012): the paraLLEl-GS renderer with a 2x or 4x
+scanout. --hires N (2 or 4) is required and sets GT4_PGS_HIRES=N and GT4_PGS_SSAA=16 (the 4x4 ordered grid); 2 is
+the donor 2x quadrant average, 4 is one super sample per output pixel. The window opens at 16:9 with height 448 * N,
+clamped to the primary work area and centred. The 3x path is not exposed (owner decision).
+--mode parallel keeps the slice169 build: --hires without a value there is the old 2x option (GT4_PGS_HIRES=1).
 The build lives in the assets checkout's private/ even when this launcher runs from a git worktree.
 """
 import argparse
@@ -76,26 +81,33 @@ def main():
                         help='parallel mode only: GS renderer of the same binary (default parallel)')
     parser.add_argument('--ssaa', type=int, default=1, metavar='N',
                         help='parallel mode with the parallel renderer: super-sampling 1, 2, 4, 8 or 16 (experimental)')
-    parser.add_argument('--hires', action='store_true',
-                        help='parallel mode: high-resolution scanout (needs --ssaa 4, 8 or 16)')
+    parser.add_argument('--hires', type=int, nargs='?', const=1, metavar='N',
+                        help='high-resolution scanout. parallel: no value (2x, needs --ssaa 4, 8 or 16). '
+                             'parallel-hires: N = 2 or 4 with GT4_PGS_SSAA=16')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot, main or parallel')
-        if args.vu0_verify and args.mode not in ('vu0-aot', 'main', 'parallel'):
-            raise ValueError('--vu0-verify requires --mode vu0-aot, main or parallel')
-        if args.renderer and args.mode != 'parallel':
-            raise ValueError('--renderer requires --mode parallel')
-        if args.ssaa != 1 and (args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (2, 4, 8, 16)):
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel', 'parallel-hires'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot, main, parallel or parallel-hires')
+        if args.vu0_verify and args.mode not in ('vu0-aot', 'main', 'parallel', 'parallel-hires'):
+            raise ValueError('--vu0-verify requires --mode vu0-aot, main, parallel or parallel-hires')
+        if args.renderer and args.mode not in ('parallel', 'parallel-hires'):
+            raise ValueError('--renderer requires --mode parallel or parallel-hires')
+        if args.ssaa != 1 and (args.mode not in ('parallel', 'parallel-hires') or args.renderer == 'donor' or args.ssaa not in (2, 4, 8, 16)):
             raise ValueError('--ssaa takes 1, 2, 4, 8 or 16 and requires --mode parallel with the parallel renderer')
-        if args.hires and (args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (4, 8, 16)):
-            raise ValueError('--hires requires --mode parallel with the parallel renderer and --ssaa 4, 8 or 16')
+        if args.mode == 'parallel-hires':
+            if args.hires not in (2, 4):
+                raise ValueError('--mode parallel-hires needs --hires 2 or 4')
+            if args.renderer == 'donor' or args.ssaa not in (1, 16):
+                raise ValueError('--mode parallel-hires is the paraLLEl-GS scanout: no --renderer donor, and --ssaa is 16 (set by --hires)')
+        elif args.hires is not None:
+            if args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (4, 8, 16) or args.hires != 1:
+                raise ValueError('--hires without a value requires --mode parallel with the parallel renderer and --ssaa 4, 8 or 16; use --mode parallel-hires for --hires 2 or 4')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'parallel'):
-            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main or parallel')
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'parallel', 'parallel-hires'):
+            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, parallel or parallel-hires')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True)
@@ -117,6 +129,9 @@ def main():
                     options['super_sampling'] = args.ssaa
                 if args.hires:
                     options['high_resolution'] = True
+            if args.mode == 'parallel-hires':
+                options['super_sampling'] = 16
+                options['high_resolution'] = args.hires
             play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

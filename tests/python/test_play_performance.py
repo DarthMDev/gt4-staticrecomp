@@ -18,10 +18,14 @@ class PerformanceLauncherTests(unittest.TestCase):
             for mode in PERF_PROFILES:
                 arguments = ['perf', '--assets-root', str(root)]
                 if mode != 'detailed': arguments.extend(['--mode', mode])
+                # parallel-hires needs its scale (--hires 2 or 4); the wrapper then sets the 16x grid.
+                options = {'super_sampling': 16, 'high_resolution': 2} if mode == 'parallel-hires' else {}
+                if options: arguments.extend(['--hires', '2'])
                 with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
                      patch.object(sys, 'argv', arguments):
                     self.assertEqual(performance.main(), 0)
-                play.assert_called_once_with(root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True)
+                play.assert_called_once_with(root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True,
+                                             **options)
 
     def test_lock_failure_and_profile_rejection_preserve_card(self):
         with tempfile.TemporaryDirectory() as folder:

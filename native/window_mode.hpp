@@ -27,6 +27,21 @@ inline constexpr std::uint32_t popup_style = 0x80000000u;
 // Style for borderless fullscreen: frame bits removed, popup added, all other bits kept.
 std::uint32_t fullscreen_style(std::uint32_t windowed_style);
 
+struct Size {
+  std::int32_t width, height;
+};
+
+struct Point {
+  std::int32_t x, y;
+};
+
+// Client size of the window for a high-resolution scanout (slice 185, GT4_PGS_HIRES=2 or 4): 16:9 with
+// height 448 * scale, reduced to fit `work` (the monitor work area) and keeping 16:9. Other scales keep 960x540.
+Size high_resolution_client_size(std::uint32_t scale, Size work);
+
+// Top-left corner that centres an outer window of `outer` size inside `work`.
+Point centred_origin(Size outer, Rect work);
+
 // Remembers the windowed placement while fullscreen is active.
 class ToggleState {
 public:

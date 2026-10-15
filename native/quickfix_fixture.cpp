@@ -27,6 +27,24 @@ bool refused(const char *value) {
   return false;
 }
 
+// Slice 185: the window of the 2x and 4x high-resolution scanout (16:9, 448 * scale lines), clamped and centred.
+void test_high_resolution_window() {
+  require(high_resolution_client_size(2, {1920, 1080}).width == 1593 &&
+              high_resolution_client_size(2, {1920, 1080}).height == 896,
+          "2x window is 1593x896 on a 1920x1080 work area");
+  require(high_resolution_client_size(4, {1920, 1080}).width == 1920 &&
+              high_resolution_client_size(4, {1920, 1080}).height == 1080,
+          "4x window is clamped to 1920x1080 on a 1920x1080 work area");
+  require(high_resolution_client_size(4, {3840, 2160}).width == 3186 &&
+              high_resolution_client_size(4, {3840, 2160}).height == 1792,
+          "4x window is 3186x1792 when it fits");
+  require(high_resolution_client_size(3, {3840, 2160}).width == 960 &&
+              high_resolution_client_size(3, {3840, 2160}).height == 540,
+          "scales other than 2 and 4 keep the 960x540 window");
+  const Point origin = centred_origin({1000, 500}, {0, 0, 1920, 1080});
+  require(origin.x == 460 && origin.y == 290, "a 1000x500 window is centred on 1920x1080");
+}
+
 void test_toggle_restores_windowed_placement() {
   ToggleState state;
   const Placement windowed{{100, 80, 1060, 620}, 0x16CF0000u};
@@ -75,6 +93,7 @@ void test_environment_values_are_strict() {
 int main() {
   try {
     test_toggle_restores_windowed_placement();
+    test_high_resolution_window();
     test_fullscreen_style_mask();
     test_environment_values_are_strict();
     std::puts("quickfix fixture PASS");

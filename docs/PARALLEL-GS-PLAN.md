@@ -690,3 +690,72 @@ for progressive frames with the 16x ordered grid (4x and 3x, prototype below); 4
 
 **Owner test (after a candidate is pinned):** `GT4_PGS_HIRES=4 GT4_PGS_SSAA=16` (or 3) with the parallel renderer,
 races at 480p; compare with `GT4_PGS_HIRES=1 GT4_PGS_SSAA=16`. Report the visual result and F8 (no perf claim yet).
+
+## 13. Progress (slice 185, branch task/012-pgs-upscale): 2x and 4x candidate, and the 6x study
+
+Labels as in section 0. Owner decisions of 2026-10-15: 3x is dropped (no exposure in the launcher, no
+candidate; the 3x code of section 12 stays in the build-tree patch but is not reachable from `--hires`), so the
+3x3 grid study is cancelled. 4x is the target; 2x is the existing donor-style scale. This section studies 6x only.
+
+**Slice 185 (game candidate, Confirmed by the build and the controls below):**
+- `--mode parallel-hires --hires 2|4` sets `GT4_PGS_HIRES=2|4` and `GT4_PGS_SSAA=16`; both values are recorded in
+  `result.json` (`renderer_environment`). `--mode parallel` is unchanged (slice169, `--hires` without a value = 2x
+  with `--ssaa 4|8|16`).
+- The window opens at 16:9 with client height 448 x scale (896 for 2x, 1792 for 4x), clamped to the primary work
+  area and centred (`gt4::window_mode::high_resolution_client_size` and `centred_origin`, pure, CTest
+  `native_quickfix`). Other scales keep 960x540.
+- Only `native/parallel_gs_frontend.inc`, `window.cpp` and the pure helpers changed in code; the port differs from
+  slice169 only in `gs.cpp` (sha256 9f3a8809...).
+
+**6x study (Confirmed = read in the pinned source cc6184a or computed; Hypothesis = reasoning, not measured):**
+
+1. A 6x6 grid is not a sampling rate of this renderer (Confirmed). `GSInterface::set_super_sampling_rate`
+   (`gs/gs_interface.cpp:65-117`) builds a power-of-two grid, `2^x` by `2^y` per PS2 pixel, from the enum X1..X16.
+   There is no X6 and no X36. 6x per axis needs 36 samples per pixel, which the enum cannot express.
+2. Sample memory (Confirmed for the formula, computed for 36): `GSRenderer::init_vram` allocates
+   `vram_size * (1 + 1 + S)` bytes with S the enum value (`gs/gs_renderer.cpp:367-370`) and `vram_size` 4 MiB
+   (`gs/gs_interface.hpp:203`). 16 samples: 18 x 4 MiB = 72 MiB. 36 samples with the same formula: 38 x 4 MiB =
+   152 MiB. VRAM is not the limit on a 16 GB RX 9060 XT. Pipeline and recycled super-sampled image pools
+   (`super_sampled_recycled_image_pool`) grow with the sample count too.
+3. Shader changes (Confirmed that the layout is power-of-two; Hypothesis for the work): `ubershader.comp` takes
+   `NUM_SAMPLES_X_LOG2`/`Y_LOG2` as specialization constants (lines 22-40), derives tile indices from `NUM_SAMPLES_X`
+   (lines 160-226) and `SPARSE_PATTERN_SIZE_LOG2 = Y_LOG2 - X_LOG2`, and maps a sample to a slice with bit
+   interleaving (`sample_index = (sy&1) + 2(sx&1) + 4(sy>>1) + 8(sx>>1)` for 16). A 6-wide grid breaks the
+   interleave and the tile arithmetic, so the rasterizer, copy, resolve and circuit paths would all need a
+   non-power-of-two layout. Our own scanout shader (`native/parallel_gs_scale/sample_circuit_scaled.frag`) reads one
+   sample per output pixel and would need six grid positions per PS2 pixel. This is a change to the upstream
+   renderer, not a patch: large, and a new GPU/VRAM mapping to verify against the donor.
+4. Output size (Confirmed arithmetic from the 448-line 480p frame, 640 PS2 pixels wide): 2x 1280x896 (1.15 Mpx),
+   4x 2560x1792 (4.6 Mpx), 6x 3840x2688 (10.3 Mpx). The 6x width matches 4K (3840) but the height (2688) is taller
+   than 2160, so a 6x window would be clamped to 2160 lines at 16:9 (about 0.80 of the 6x scale). 4x fits 4K
+   (1792 < 2160).
+5. GPU cost on the RX 9060 XT (Hypothesis, not measured): the rasterizer and resolve work scales with the sample
+   count, so 36 samples is 2.25 times the sample work of 16 (36/16), and the scanout pixel count is 2.25 times
+   4x (10.3 / 4.6). The measured headless times below do not isolate this; they cannot show it.
+6. Is "6x render with less super-sampling" meaningful in this model? Confirmed for the model: each scanout pixel is
+   one grid sample, so output resolution equals the grid density per PS2 pixel. "Less super-sampling" at 6x means
+   each of the 36 output pixels takes a sample from a coarser grid (nearest, as 3x does from 4x), which adds no
+   information beyond the 4x grid; the only gain is edge sharpness from a larger output lattice, not texture detail
+   (textures stay at native rate, see section 12). It is meaningful only as an explicit nearest upscale of the 4x
+   grid, and then it is not a 6x render. A real 6x render needs the 36-sample grid of item 3.
+
+**Recommendation (Hypothesis, for the owner):** keep 4x as the top scanout. A 6x nearest upscale of the 4x grid is
+cheap to add later (same path as the 3x nearest sample of section 12), but it is not new detail. A true 6x needs an
+upstream-level change to the sample layout (items 1 and 3): a separate, large task, outside slice 185.
+
+**Measured (Confirmed: wall-clock of headless runs, no GPU timestamps):**
+- Headless 4,200 frames, slice157 schedule, `GT4_RENDERER=parallel GT4_PGS_SSAA=16 GT4_PGS_DUMP_SOURCE=scanout`,
+  `GT4_PGS_HIRES=2`: exit 0, 42 of 42 dumps, 767 s. `GT4_PGS_HIRES=4`: exit 0, 42 of 42 dumps, 817 s.
+- The dumps are 1280x447 (480i menus) in both runs. The 4x request falls back to 2x for field-aware frames (section
+  12), so the two runs produce byte-identical frames: 42 of 42 `frame_*.ppm` equal. This headless run therefore
+  does not exercise 4x at all.
+- The same schedule with `GT4_FORCE_480P=1`: the menus stay interlaced (`SetGsCrt interlace 1`), 2x run exit 0,
+  42 dumps, 759 s; the 4x 480p run was stopped after 15 dumps (no progressive frame reached; redundant).
+- Cost comparison 2x vs 4x: not measured. The two headless runs use the same 16-sample rasterization, and the only
+  difference (scanout size) was not active. The 767 s / 817 s difference is not a 4x cost (runs were not isolated).
+
+**Not verified (honest limits):**
+1. No 4x frame from GT4 exists in this session: the headless menu schedule never reaches a progressive frame, so no
+   2x vs 4x crop was saved (the owner's race test is the check).
+2. The 6x numbers are arithmetic and source reading; no 6x build or run exists.
+3. Race scenes at 4x are unverified (owner test pending on the slice185 candidate).

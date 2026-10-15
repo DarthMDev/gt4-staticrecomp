@@ -53,6 +53,9 @@ PERF_PROFILES = {
     # optional high-resolution scanout. GT4_RENDERER is set by the launcher (--renderer parallel by default,
     # donor for A/B in the same binary). slice168-parallel.json (first window build) is kept as history.
     'parallel': ('slice169-parallel.json', 'private/slice169-parallel-build/build/gt4vulkan.exe'),
+    # TASK-012 candidate (slice185): the parallel mode with a true 3x and 4x scanout (--hires N, GT4_PGS_HIRES=N,
+    # GT4_PGS_SSAA=16) and a window scaled to the chosen factor. --mode parallel keeps the slice169 build.
+    'parallel-hires': ('slice185-parallel.json', 'private/slice185-parallel-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -60,14 +63,16 @@ PACING_MANIFEST = 'slice153-pacing.json'
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json',
-                     'slice169-parallel.json')
+                     'slice169-parallel.json', 'slice185-parallel.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
-VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json', 'slice169-parallel.json')
+VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json', 'slice169-parallel.json',
+                     'slice185-parallel.json')
 # Manifests whose binaries contain both renderers (slice168+): GT4_RENDERER selects one per run.
-RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json')
-# Manifests whose binaries accept GT4_PGS_HIRES (paraLLEl-GS high-resolution scanout, slice169).
-HIGH_RESOLUTION_MANIFESTS = ('slice169-parallel.json',)
-HIGH_RESOLUTION_FACTORS = (4, 8, 16)
+RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json', 'slice185-parallel.json')
+# GT4_PGS_HIRES values accepted per manifest. slice169: 1 (2x, GT4_PGS_SSAA 4, 8 or 16). slice185: 2 or 4 (GT4_PGS_SSAA 16
+# only; 2 is the donor 2x quadrant average, 4 is one super sample per output pixel). The 3x path of slice 176 is not exposed.
+HIGH_RESOLUTION_SCALES = {'slice169-parallel.json': (1,), 'slice185-parallel.json': (2, 4)}
+HIGH_RESOLUTION_SUPER_SAMPLING = {'slice169-parallel.json': (4, 8, 16), 'slice185-parallel.json': (16,)}
 RENDERERS = ('parallel', 'donor')
 # paraLLEl-GS super-sampling factors accepted by the binary (GT4_PGS_SSAA); 1 is the default.
 SUPER_SAMPLING_FACTORS = (1, 2, 4, 8, 16)
@@ -129,7 +134,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel', 'parallel-hires') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -216,7 +221,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              renderer=None, super_sampling=1, artifact_workspace=None, high_resolution=False):
+              renderer=None, super_sampling=1, artifact_workspace=None, high_resolution=0):
     workspace = workspace.resolve()
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
@@ -284,10 +289,15 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('--renderer needs the parallel manifest and one of: ' + ', '.join(RENDERERS))
     if super_sampling not in SUPER_SAMPLING_FACTORS or (super_sampling != 1 and renderer != 'parallel'):
         raise ValueError('--ssaa takes 1, 2, 4, 8 or 16 and needs the parallel renderer')
-    is_high_resolution_manifest = runtime_manifest in {
-        (runtime_workspace / 'docs/inputs' / name).resolve() for name in HIGH_RESOLUTION_MANIFESTS}
-    if high_resolution and (not is_high_resolution_manifest or super_sampling not in HIGH_RESOLUTION_FACTORS):
-        raise ValueError('--hires needs the slice169 parallel manifest and --ssaa 4, 8 or 16')
+    # high_resolution is the GT4_PGS_HIRES value (0 = off). True is accepted as 1 (slice169 --hires).
+    high_resolution = int(high_resolution)
+    high_resolution_manifest = next((name for name in HIGH_RESOLUTION_SCALES
+                                     if runtime_manifest == (runtime_workspace / 'docs/inputs' / name).resolve()), None)
+    if high_resolution and (high_resolution_manifest is None or high_resolution not in HIGH_RESOLUTION_SCALES[high_resolution_manifest]
+                            or super_sampling not in HIGH_RESOLUTION_SUPER_SAMPLING[high_resolution_manifest]):
+        raise ValueError('--hires needs a high-resolution manifest and a scale and --ssaa it accepts: '
+                         + '; '.join(f'{name}: scales {scales}, --ssaa {HIGH_RESOLUTION_SUPER_SAMPLING[name]}'
+                                     for name, scales in HIGH_RESOLUTION_SCALES.items()))
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
         dependency_path = (artifact_workspace / dependency['path']).resolve()
@@ -411,8 +421,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
             environment['GT4_PGS_SSAA'] = str(super_sampling)
             renderer_environment['GT4_PGS_SSAA'] = str(super_sampling)
         if high_resolution:
-            environment['GT4_PGS_HIRES'] = '1'
-            renderer_environment['GT4_PGS_HIRES'] = '1'
+            environment['GT4_PGS_HIRES'] = str(high_resolution)
+            renderer_environment['GT4_PGS_HIRES'] = str(high_resolution)
         result['renderer_environment'] = renderer_environment
     with log_path.open('wb') as output:
         try:

@@ -23,6 +23,10 @@ MAIN_CHECKOUT = Path('C:/Antigravity/gt4-staticrecomp')
 PARALLEL_RUNTIME = 'private/slice169-parallel-build/build/gt4vulkan.exe'
 PARALLEL_MANIFEST = 'slice169-parallel.json'
 PARALLEL_SOURCE = 'slice169-parallel-runtime.json'
+# Slice 185: parallel-hires is the 2x and 4x scanout build (--hires 2 or 4, GT4_PGS_SSAA=16); --mode parallel stays.
+HIRES_RUNTIME = 'private/slice185-parallel-build/build/gt4vulkan.exe'
+HIRES_MANIFEST = 'slice185-parallel.json'
+HIRES_SOURCE = 'slice185-parallel-runtime.json'
 
 
 class ParallelProfileTests(unittest.TestCase):
@@ -31,8 +35,8 @@ class ParallelProfileTests(unittest.TestCase):
         self.assertIn('parallel', performance.MODES)
         self.assertIn(PARALLEL_MANIFEST, probe.VU1_AOT_MANIFESTS)
         self.assertIn(PARALLEL_MANIFEST, probe.VU0_AOT_MANIFESTS)
-        self.assertEqual(probe.RENDERER_MANIFESTS, ('slice168-parallel.json', PARALLEL_MANIFEST))
-        self.assertEqual(probe.HIGH_RESOLUTION_MANIFESTS, (PARALLEL_MANIFEST,))
+        self.assertEqual(probe.RENDERER_MANIFESTS, ('slice168-parallel.json', PARALLEL_MANIFEST, HIRES_MANIFEST))
+        self.assertEqual(probe.HIGH_RESOLUTION_SCALES[PARALLEL_MANIFEST], (1,))
 
     def test_scrub_removes_inherited_renderer_choices(self):
         environment = {'GT4_RENDERER': 'donor', 'GT4_PGS_SSAA': '16', 'GT4_PGS_CAPTURE': 'x', 'PATH': '/bin'}
@@ -109,9 +113,9 @@ class ParallelProbeTests(unittest.TestCase):
     make_workspace = probe_tests.ProbeTests.make_workspace
     performance_manifest = probe_tests.ProbeTests.performance_manifest
 
-    def launch(self, root, **options):
+    def launch(self, root, mode='parallel', **options):
         self.make_workspace(root)
-        manifest, _ = self.performance_manifest(root, 'parallel')
+        manifest, _ = self.performance_manifest(root, mode)
         seen = {}
 
         def execute(arguments, **kwargs):
@@ -189,6 +193,65 @@ class ParallelProbeTests(unittest.TestCase):
             self.assertEqual(seen['executable'], assets / evidence['runtime']['path'])
 
 
+class HiresWrapperTests(unittest.TestCase):
+    run_wrapper = ParallelWrapperTests.run_wrapper
+
+    def test_parallel_hires_forwards_the_scale_with_16x_super_sampling(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for scale in (2, 4):
+                code, play = self.run_wrapper(['--mode', 'parallel-hires', '--hires', str(scale)], root)
+                self.assertEqual(code, 0)
+                play.assert_called_once_with(root, root / 'docs/inputs' / HIRES_MANIFEST, performance=True,
+                                             super_sampling=16, high_resolution=scale)
+
+    def test_parallel_hires_refuses_other_scales_and_options(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for arguments in (['--mode', 'parallel-hires'], ['--mode', 'parallel-hires', '--hires', '1'],
+                              ['--mode', 'parallel-hires', '--hires', '3'],
+                              ['--mode', 'parallel-hires', '--hires', '8'],
+                              ['--mode', 'parallel-hires', '--hires', '2', '--ssaa', '4'],
+                              ['--mode', 'parallel-hires', '--hires', '2', '--renderer', 'donor'],
+                              ['--mode', 'parallel', '--hires', '2'],
+                              ['--mode', 'parallel', '--ssaa', '16', '--hires', '4']):
+                with self.subTest(arguments=arguments):
+                    code, play = self.run_wrapper(arguments, root)
+                    self.assertEqual(code, 1)
+                    play.assert_not_called()
+
+    def test_hires_manifest_pins_the_scanout_build(self):
+        self.assertEqual(probe.PERF_PROFILES['parallel-hires'], (HIRES_MANIFEST, HIRES_RUNTIME))
+        self.assertEqual(probe.HIGH_RESOLUTION_SCALES[HIRES_MANIFEST], (2, 4))
+        self.assertEqual(probe.HIGH_RESOLUTION_SUPER_SAMPLING[HIRES_MANIFEST], (16,))
+        self.assertIn(HIRES_MANIFEST, probe.RENDERER_MANIFESTS)
+        self.assertIn(HIRES_MANIFEST, probe.VU1_AOT_MANIFESTS)
+        self.assertIn(HIRES_MANIFEST, probe.VU0_AOT_MANIFESTS)
+
+
+class HiresProbeTests(ParallelProbeTests):
+    def test_hires_sets_gt4_pgs_hires_and_16x_super_sampling(self):
+        for scale in (2, 4):
+            with self.subTest(scale=scale), tempfile.TemporaryDirectory() as folder:
+                result, seen = self.launch(Path(folder), mode='parallel-hires', super_sampling=16,
+                                           high_resolution=scale)
+                self.assertEqual(seen['environment']['GT4_PGS_HIRES'], str(scale))
+                self.assertEqual(seen['environment']['GT4_PGS_SSAA'], '16')
+                self.assertEqual(result['renderer_environment'],
+                                 {'GT4_RENDERER': 'parallel', 'GT4_PGS_SSAA': '16', 'GT4_PGS_HIRES': str(scale)})
+                self.assertEqual(result['measurement_mode'], 'parallel-hires')
+
+    def test_hires_refuses_unpinned_scales_before_output(self):
+        for options in ({'super_sampling': 16, 'high_resolution': 3}, {'super_sampling': 4, 'high_resolution': 4},
+                        {'super_sampling': 16, 'high_resolution': 1},
+                        {'super_sampling': 16, 'renderer': 'donor', 'high_resolution': 2}):
+            with self.subTest(options=options), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                with self.assertRaisesRegex(ValueError, 'renderer|ssaa|hires'):
+                    self.launch(root, mode='parallel-hires', **options)
+                self.assertFalse((root / 'private/run').exists())
+
+
 class ParallelManifestTests(unittest.TestCase):
     def test_launcher_manifest_pins_the_parallel_runtime_and_shaders(self):
         manifest = json.loads((ROOT / 'docs/inputs' / PARALLEL_MANIFEST).read_text(encoding='utf-8'))
@@ -210,6 +273,32 @@ class ParallelManifestTests(unittest.TestCase):
             data = path.read_bytes()
             self.assertEqual(len(data), entry['size_bytes'], entry['path'])
             self.assertEqual(hashlib.sha256(data).hexdigest(), entry['sha256'], entry['path'])
+
+    def test_hires_launcher_manifest_pins_the_build_and_shaders(self):
+        manifest = json.loads((ROOT / 'docs/inputs' / HIRES_MANIFEST).read_text(encoding='utf-8'))
+        self.assertEqual(manifest['measurement_mode'], 'parallel-hires')
+        self.assertEqual(manifest['runtime']['path'], HIRES_RUNTIME)
+        self.assertEqual(manifest['source_manifest'], HIRES_SOURCE)
+        self.assertEqual(manifest['vu_scope_profile'], 'unit_split_run_fast_only')
+        self.assertEqual(len(manifest['runtime_dependencies']), 9)
+        for dependency in manifest['runtime_dependencies']:
+            self.assertTrue(dependency['path'].startswith('private/slice185-parallel-shaders/'))
+        for entry in [manifest['runtime']] + manifest['runtime_dependencies']:
+            path = next((root / entry['path'] for root in (ROOT, MAIN_CHECKOUT) if (root / entry['path']).exists()),
+                        ROOT / entry['path'])
+            if not path.exists():
+                self.skipTest(f'Local build output not present: {entry["path"]}')
+            data = path.read_bytes()
+            self.assertEqual(len(data), entry['size_bytes'], entry['path'])
+            self.assertEqual(hashlib.sha256(data).hexdigest(), entry['sha256'], entry['path'])
+
+    def test_hires_runtime_source_pins_the_port(self):
+        manifest = json.loads((ROOT / 'docs/inputs' / HIRES_SOURCE).read_text(encoding='utf-8'))
+        self.assertEqual(manifest['slice'], 185)
+        self.assertEqual(set(manifest['inputs']['PORT']),
+                         {'gif.cpp', 'gpu.cpp', 'gpu.hpp', 'gs.cpp', 'hw.cpp', 'main.cpp'})
+        self.assertEqual(len(manifest['inputs']['SHADERS']), 9)
+        self.assertEqual(manifest['source_capsule'], 'private/slice160-vu0-runtime')
 
     def test_runtime_source_manifest_pins_the_parallel_port(self):
         manifest = json.loads((ROOT / 'docs/inputs' / PARALLEL_SOURCE).read_text(encoding='utf-8'))

@@ -66,8 +66,9 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
             if renderer is None and manifest.name in RENDERER_MANIFESTS:
                 renderer = 'parallel'  # the probe applies the same default
             if renderer == 'parallel':
+                scanout = f'{high_resolution}x' if high_resolution else 'off'
                 print(f'Renderer: paraLLEl-GS (GT4_RENDERER=parallel, {super_sampling}x super-sampling, '
-                      f'high-resolution scanout {"on" if high_resolution else "off"}).', flush=True)
+                      f'high-resolution scanout {scanout}).', flush=True)
             elif renderer == 'donor':
                 print('Renderer: donor GS renderer (GT4_RENDERER=donor), same binary, for A/B.', flush=True)
             result = run_probe(workspace, run_directory, 0, 43200, [], seed,

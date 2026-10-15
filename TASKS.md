@@ -149,6 +149,8 @@ One large task, delivered in verified steps on its own branch:
 5. Extras where paraLLEl-GS allows: post-processing (sharpening, FXAA, filters),
    dithering/texture options, texture dump/replacement feasibility.
 Replaces the former donor-renderer upscaling, readback-wait and renderer-feature tasks.
+Slice 185 (task/012-pgs-upscale, not merged): `--mode parallel-hires --hires 2|4` candidate (4x target; 3x dropped by
+owner decision). Owner gameplay test pending; the 6x study is in PARALLEL-GS-PLAN.md section 13.
 
 ### TASK-014 — EE entry coverage
 Add translator entries for decomp functions without one, starting with the 15
