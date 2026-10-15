@@ -71,6 +71,9 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
   never rewrite history.
 - Update README (progress, scene results, known issues), STATUS and the journal
   as part of each task.
+- **Every PR updates `TASKS.md` and `README.md`** in the PR itself to mark the
+  task or tasks it completes (state, result, date), so `main` never lags behind
+  what was merged.
 - Ask the owner only for decisions and gameplay tests, not code review.
 
 ## Testing the game
