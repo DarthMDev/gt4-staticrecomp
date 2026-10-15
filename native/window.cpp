@@ -1,4 +1,6 @@
 #include "window.hpp"
+#include "coregs_options.hpp"
+#include "window_geometry.hpp"
 #include "race_display.hpp"
 #include "ps2/memory.hpp"
 #include "gpu.hpp"
@@ -246,15 +248,35 @@ bool open_window(bool fullscreen) {
   window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
-  // The presentation is fixed 16:9: the client area is 960x540.
-  RECT window_bounds{0, 0, 960, 540};
-  if (!AdjustWindowRectEx(&window_bounds, WS_OVERLAPPEDWINDOW, FALSE, 0))
+  // The client area follows PS2_SCALE (the same parser as the GS adapter): 960x540 at scale 1,
+  // otherwise 16:9 at 448 x scale, clamped to the work area of the monitor under the cursor.
+  const std::uint32_t scale = gt4::coregs::parse_scale(std::getenv("PS2_SCALE"));
+  RECT frame_only{0, 0, 0, 0};
+  if (!AdjustWindowRectEx(&frame_only, WS_OVERLAPPEDWINDOW, FALSE, 0))
     throw std::runtime_error("Cannot size native game window");
+  const std::int32_t frame_width = frame_only.right - frame_only.left;
+  const std::int32_t frame_height = frame_only.bottom - frame_only.top;
+  POINT cursor{0, 0};
+  GetCursorPos(&cursor);
+  MONITORINFO monitor{};
+  monitor.cbSize = sizeof monitor;
+  if (!GetMonitorInfoW(MonitorFromPoint(cursor, MONITOR_DEFAULTTOPRIMARY), &monitor))
+    throw std::runtime_error("Cannot read the monitor work area for the native game window");
+  const gt4::window_geometry::Rect work_area{monitor.rcWork.left, monitor.rcWork.top, monitor.rcWork.right,
+                                             monitor.rcWork.bottom};
+  const gt4::window_geometry::Size client = gt4::window_geometry::client_size(scale, work_area, frame_width, frame_height);
+  const std::int32_t outer_width = client.width + frame_width;
+  const std::int32_t outer_height = client.height + frame_height;
+  // Scale 1 keeps the original placement (CW_USEDEFAULT); larger scales centre the window in the work area.
+  int x = CW_USEDEFAULT, y = CW_USEDEFAULT;
+  if (scale > 1) {
+    const gt4::window_geometry::Rect place = gt4::window_geometry::centred_rect(work_area, outer_width, outer_height);
+    x = place.left;
+    y = place.top;
+  }
   game_window = CreateWindowExW(
       0, window_class.lpszClassName, window_title,
-      WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-      window_bounds.right - window_bounds.left,
-      window_bounds.bottom - window_bounds.top, nullptr, nullptr,
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE, x, y, outer_width, outer_height, nullptr, nullptr,
       window_class.hInstance, nullptr);
   if (!game_window)
     throw std::runtime_error("Cannot create native game window");

@@ -77,8 +77,8 @@ def main():
                         help='CoreGS 1.1 anti-aliasing: off (default) or fxaa; only with --mode upscale')
     parser.add_argument('--present-filter', choices=COREGS11_OPTIONS['GT4_PRESENT_FILTER'], metavar='FILTER',
                         help='final scaling to the window: nearest, linear or fsr (FSR 1.0); only with --mode upscale')
-    parser.add_argument('--fsr-sharpness', type=float, metavar='STOPS',
-                        help='FSR RCAS sharpness in stops, 0 (sharpest) to 2 (softest), default 0.2; only with --mode upscale')
+    parser.add_argument('--fsr-sharpness', type=float, metavar='PERCENT',
+                        help='FSR RCAS sharpness, 0 (softest) to 100 (sharpest), default 50; only with --mode upscale')
     args = parser.parse_args()
     try:
         if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main'):
@@ -97,7 +97,9 @@ def main():
                               'GT4_PRESENT_FILTER': args.present_filter}
         coregs11 = {name: value for name, value in coregs11_arguments.items() if value is not None}
         if args.fsr_sharpness is not None:
-            coregs11['GT4_FSR_SHARPNESS'] = str(args.fsr_sharpness)
+            if not 0.0 <= args.fsr_sharpness <= 100.0:
+                raise ValueError('--fsr-sharpness must be a percentage from 0 (softest) to 100 (sharpest)')
+            coregs11['GT4_FSR_SHARPNESS'] = f'{args.fsr_sharpness:g}'
         if coregs11 and args.mode != 'upscale':
             raise ValueError('--deinterlace, --aa, --present-filter and --fsr-sharpness require --mode upscale')
         if args.mode == 'upscale':

@@ -67,6 +67,7 @@ set_tests_properties(native_quickfix native_race_display native_vulkan_pixels na
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
 # slice176 (TASK-028): VRAM round trip and sprite counts at each internal scale; the scale is the argument.
 add_test(NAME native_post_passes COMMAND $<TARGET_FILE:post_fixture>)
+add_test(NAME native_window_geometry COMMAND $<TARGET_FILE:window_geometry_fixture>)
 set_tests_properties(native_post_passes PROPERTIES RUN_SERIAL TRUE TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 foreach(upscale_scale IN ITEMS 1 2 3 4)
     add_test(NAME native_upscale_scale${upscale_scale} COMMAND $<TARGET_FILE:upscale_fixture> ${upscale_scale})

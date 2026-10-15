@@ -961,3 +961,71 @@ Limits:
 5. FSR and FXAA are not validated against AMD's compiled header or NVIDIA's FXAA binary; the CPU references are
    transcriptions (see `native/THIRD_PARTY.md`).
 6. Save states across scales, owner gameplay and window quality are not checked by these controls.
+
+## Slice 184 - window at the scaled size, FSR sharpness as a percentage (TASK-028)
+
+Owner report on slice 182: at `--mode upscale --scale 3` the window looked like a blurry upscale of 640x448. The
+window was fixed at 960x540, so the 1920x1344 scaled image was downsampled before presentation.
+
+Changes (Confirmed by build and CTest; owner window check pending):
+
+1. Window size (`native/window.cpp`, `native/window_geometry.hpp`). Scale 1 keeps the 960x540 client and CW_USEDEFAULT.
+   Scales 2 to 4 use 1593x896, 2389x1344, 3185x1792 (16:9 at 448 x scale lines). If the outer window (client plus
+   AdjustWindowRectEx frame) does not fit the work area (rcWork) of the monitor under the cursor, the client becomes the
+   largest 16:9 that fits (width = floor(16 x height / 9)). The window is centred in the work area. Alt+Enter and F11
+   restore the saved windowed rectangle, so they return to this size.
+2. One scale parser (`native/coregs_options.hpp`). `PS2_SCALE` is read by the same `parse_scale` in the window host and
+   in the GS adapter (`gpu_init.inc`). The window reads it at open, before `init_graphics`, so it cannot use the
+   adapter's value; both call one function.
+3. FSR sharpness as a percentage. `GT4_FSR_SHARPNESS` is 0 (softest) to 100 (sharpest); stops = 2 x (1 - percent / 100):
+   100 gives 0 stops, 50 gives 1.0 (default when unset), 0 gives 2.0. Values outside 0 to 100 are refused with
+   `GT4_FSR_SHARPNESS must be a percentage from 0 to 100`. `play_performance.py --fsr-sharpness` takes 0 to 100.
+   FSR still runs from the scaled internal image (640x448 x SCALE) to the 16:9 rectangle.
+4. The donor shaders are unchanged; `scripts/prepare_external_vulkan.py` adds `#include "coregs_options.hpp"` to the spliced
+   `gpu.cpp`. Pins: `docs/inputs/slice184-coregs11-runtime.json` and the launcher manifest
+   `docs/inputs/slice184-coregs11.json` (executable sha256 ce047ad4...). `UPSCALE_MANIFEST` now names the slice 184 pin.
+
+Build (fresh directories in the main checkout `private/`; the worktree has copies of every pinned input):
+
+- Port: `python scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice184-coregs11-port --assets-root C:\Antigravity\gt4-staticrecomp`
+- Shaders: `private\slice184-coregs11-shaders` and `-s2`, `-s3`, `-s4` are byte copies of the slice 182 SPIR-V
+  (the donor `gs.wgsl` and `native/post/present.wgsl` are unchanged; tools/wgsl_spirv was not rerun).
+- Configure `private\slice184-coregs11-build\build` with the slice182 variables, source = this worktree; CMake recognises
+  the slice184 port and shader paths (native/CMakeLists.txt).
+
+Controls (Confirmed locally):
+
+- CTest 29 of 29 on the slice184 build, including `native_window_geometry` (scales 1 to 4 on a 1920x1080 and a 4K
+  work area; clamps by height and by width; 16:9 within one pixel; centring; `parse_scale` refusals) and `native_post_passes`
+  with the FSR percentage mapping (100, 50, 0, unset, refusals).
+- Python `unittest discover` with `GT4_NATIVE_BUILD` on the slice184 build: 264 tests, 12 skipped (as before).
+- Headless, 4,200 frames, the slice157 schedule, `PS2_SCALE` 1: 42 of 42 dumps byte-identical to
+  `private/slice157-smoke/headless-157/frames`.
+- Headless, scale 3, `GT4_DUMP_NATIVE_SIZE=1`: 42 dumps at 1920x1344, byte-identical to the slice182 scale 3 native dumps.
+
+3x detail check (the lead in the owner report). Confirmed for the headless schedule: the lead is not the cause here.
+
+| Run (slice182 binary unless noted) | Result |
+|---|---|
+| 3x native, decode on vs `PS2_DECODE=0` | 42 of 42 dumps byte-identical (the 3x decode dispatch count 32,396 changes nothing in these frames) |
+| 3x native, 3x3 blocks with unequal samples | frames 100 and 700: 2.2% and 0.4% (flat menus); frames 1300 to 3700 (3D): 55.5% |
+| slice184 3x native vs slice182 3x native | 42 of 42 identical |
+
+The per-draw count of textured draws that read a GS-rendered page (decoded, resolve or direct path) was not
+instrumented; the A/B above answers the question for the headless schedule. Samples (nearest-neighbour enlarged 1x beside
+3x native, same region): `private/slice184-upscale-samples/frame_01300-crop-center-1x-vs-3x.png`. The region is flat and
+low contrast; the 3D frames carry detail that this crop does not show. The owner's window is the next check.
+
+Owner command (PowerShell, from the worktree; its `private/` holds copies of the pinned inputs):
+
+```powershell
+python scripts\play_performance.py --assets-root . --mode upscale --scale 3 --force-480p --present-filter fsr --aa fxaa --deinterlace auto --fsr-sharpness 50
+```
+
+Limits:
+
+1. Not verified in a window: the 2x, 3x and 4x window sizes and the centring on the owner's monitor, and the look of FSR at
+   percent 50 versus the slice 182 default of 0.2 stops (now 1.0 stop).
+2. The 2x, 3x and 4x sizes come from the owner's table; 2x and 4x are not exact 16:9 (within one pixel).
+3. The lead's per-draw path counts are not measured; the decode-on/off identity is for the headless schedule only.
+4. Save states and fullscreen at the scaled size are not exercised.

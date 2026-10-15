@@ -9,6 +9,7 @@
 #include "post/post_reference.hpp"
 #include "post/post_settings.hpp"
 #include "post/post_test.hpp"
+#include "coregs_options.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -149,18 +150,30 @@ int main() {
             gpu::post_reset_for_test();
             PostSettings fsr_settings;
             fsr_settings.filter = gpu::PostFilter::fsr;
-            fsr_settings.sharpness = 0.2f;
+            fsr_settings.sharpness = gt4::coregs::fsr_sharpness_stops(50.0f);
             for (std::uint32_t index = 0; index < 3; ++index) {
                 const auto frame = make_frame(index);
                 std::vector<std::uint32_t> gpu_frame;
                 gpu::post_frame_for_test(frame, kWidth, kHeight, false, 0, fsr_settings, target.first, target.second, gpu_frame);
-                const auto cpu_frame = post_reference::fsr_reference(frame, kWidth, kHeight, target.first, target.second, 0.2f);
+                const auto cpu_frame = post_reference::fsr_reference(frame, kWidth, kHeight, target.first, target.second, gt4::coregs::fsr_sharpness_stops(50.0f));
                 require(gpu_frame.size() == cpu_frame.size(), "FSR output size");
                 compare_near(gpu_frame, cpu_frame, "fsr " + std::to_string(target.first) + "x" + std::to_string(target.second) +
                                                        " frame " + std::to_string(index));
             }
         }
         std::fprintf(stderr, "[post] FSR 1.0 EASU and RCAS within one level of the reference at three sizes\n");
+        // GT4_FSR_SHARPNESS is a percentage: 100 sharpest (0 stops), 50 default (1 stop), 0 softest (2 stops).
+        require(gt4::coregs::fsr_sharpness_stops(100.0f) == 0.0f, "FSR sharpness 100% is 0 stops");
+        require(gt4::coregs::fsr_sharpness_stops(50.0f) == 1.0f, "FSR sharpness 50% is 1 stop");
+        require(gt4::coregs::fsr_sharpness_stops(0.0f) == 2.0f, "FSR sharpness 0% is 2 stops");
+        require(gt4::coregs::parse_fsr_sharpness_stops(nullptr) == 1.0f, "FSR sharpness unset is 50%");
+        require(gt4::coregs::parse_fsr_sharpness_stops("100") == 0.0f, "FSR sharpness parses 100");
+        for (const char *refused : {"-1", "101", "fast", ""}) {
+            bool threw = false;
+            try { gt4::coregs::parse_fsr_sharpness_stops(refused); } catch (const std::runtime_error &) { threw = true; }
+            require(threw, std::string("FSR sharpness refuses ") + refused);
+        }
+        std::fprintf(stderr, "[post] GT4_FSR_SHARPNESS percentage mapping and refusals hold\n");
         std::fprintf(stderr, "[post] PASS\n");
         return 0;
     } catch (const std::exception &error) {

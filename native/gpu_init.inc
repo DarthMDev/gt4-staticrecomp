@@ -1,15 +1,10 @@
 // PS2_SCALE selects internal resolution: each pixel holds SCALE x SCALE GS sub-samples.
+// The parser is shared with the window host (native/coregs_options.hpp), so both read it the same way.
 // The SCALE override is folded into the SPIR-V (tools/wgsl_spirv), so each scale has its own
 // shader directory: scale 1 is the base directory, scale N is a sibling "<base>-sN".
-// Supported values: 1 to kMaxScale.
-constexpr std::uint32_t kMaxScale = 4;
+constexpr std::uint32_t kMaxScale = gt4::coregs::kMaxScale;
 
-std::uint32_t parse_scale(const char* text) {
-    if (!text) return 1;
-    if (!text[0] || text[1] || text[0] < '1' || text[0] > '0' + static_cast<char>(kMaxScale))
-        throw std::runtime_error(std::string("Native Vulkan supports PS2_SCALE 1 to ") + std::to_string(kMaxScale) + ", got: " + text);
-    return static_cast<std::uint32_t>(text[0] - '0');
-}
+std::uint32_t parse_scale(const char* text) { return gt4::coregs::parse_scale(text); }
 
 std::filesystem::path shader_directory_for_scale(std::uint32_t scale) {
     const std::filesystem::path base(GT4_VULKAN_SHADER_DIR);
@@ -50,13 +45,7 @@ PostSettings read_post_settings() {
     if (aa && std::strcmp(aa, "fxaa") == 0) settings.fxaa = true;
     else if (aa && std::strcmp(aa, "off") != 0) throw std::runtime_error(std::string("GT4_AA must be off or fxaa, got: ") + aa);
     settings.filter = parse_present_filter(std::getenv("GT4_PRESENT_FILTER"));
-    if (const char* sharpness = std::getenv("GT4_FSR_SHARPNESS")) {
-        char* end = nullptr;
-        const float value = std::strtof(sharpness, &end);
-        if (end == sharpness || *end || value < 0.0f || value > 2.0f)
-            throw std::runtime_error(std::string("GT4_FSR_SHARPNESS must be a number from 0 to 2, got: ") + sharpness);
-        settings.sharpness = value;
-    }
+    settings.sharpness = gt4::coregs::parse_fsr_sharpness_stops(std::getenv("GT4_FSR_SHARPNESS"));
     return settings;
 }
 

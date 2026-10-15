@@ -52,7 +52,7 @@ PERF_PROFILES = {
 }
 # Internal-resolution candidate (slice176, TASK-028). Not a performance profile: PS2_SCALE is passed
 # through from the scale argument (1 to 4); scale 1 is the default and the qualified output.
-UPSCALE_MANIFEST = 'slice182-coregs11.json'
+UPSCALE_MANIFEST = 'slice184-coregs11.json'
 # CoreGS 1.1 presentation options (slice182): environment names and their accepted values.
 COREGS11_OPTIONS = {
     'GT4_DEINTERLACE': ('auto', 'off', 'weave', 'bob', 'blend', 'adaptive'),
@@ -370,8 +370,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         if coregs11:
             for name, value in coregs11.items():
                 if name == 'GT4_FSR_SHARPNESS':
-                    if not (0.0 <= float(value) <= 2.0):
-                        raise ValueError('GT4_FSR_SHARPNESS must be from 0 to 2')
+                    if not (0.0 <= float(value) <= 100.0):
+                        raise ValueError('GT4_FSR_SHARPNESS must be a percentage from 0 to 100')
                 elif name not in COREGS11_OPTIONS or value not in COREGS11_OPTIONS[name]:
                     raise ValueError(f'{name} must be one of {", ".join(COREGS11_OPTIONS.get(name, ()))}')
                 environment[name] = str(value)

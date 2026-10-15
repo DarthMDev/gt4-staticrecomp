@@ -188,6 +188,12 @@ High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
 
+### TASK-028 — Internal-resolution upscale and CoreGS 1.1 (slice 176 to 184)
+🧪 Waiting for owner test. Branch `task/028-donor-upscale` (worktree `gt4-wt-028-donor-upscale`), not merged.
+Slice 184: window opens at the scaled 16:9 size (clamped to the work area, centred), `GT4_FSR_SHARPNESS` as a
+percentage (50 default). Headless scale 1 identical to slice157. Owner window check at 2x and 3x pending. Details: docs/BUILD.md
+(slice 176, 182, 184).
+
 ### TASK-025 — Save manager
 One standard 8 MB PS2 card image per slot under the user data folder; the
 launcher passes the active slot's card to the game. Import from single-save files

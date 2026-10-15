@@ -79,7 +79,7 @@ std::uint32_t g_post_history_words = 0, g_post_temp_words = 0;'''
     source = source[:source.index('void flush() {')] + (replacements / 'gpu_tail.inc').read_text() + '\n}\n'
     if 'wgpu' in source.lower() or 'WGPU' in source:
         raise ValueError('Unexpected WebGPU reference remains after the native port')
-    source = '// MIT donor batching, derived from pinned ps2-web-recomp gpu.cpp; see THIRD_PARTY.md.\n' + source
+    source = '// MIT donor batching, derived from pinned ps2-web-recomp gpu.cpp; see THIRD_PARTY.md.\n#include \"coregs_options.hpp\"\n' + source
     header = (donor / 'gpu.hpp').read_text().replace('../gs.hpp', 'gs.hpp')
     header = header.replace('enum Kind { X11, Wayland, Canvas }', 'enum Kind { X11, Wayland, Canvas, Win32 }')
     header = header.replace('bool has_surface();', 'bool has_surface();\nvoid set_widescreen(bool enabled);')

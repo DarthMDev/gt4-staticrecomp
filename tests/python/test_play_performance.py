@@ -69,11 +69,11 @@ class PerformanceLauncherTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             arguments = ['perf', '--assets-root', str(root), '--mode', 'upscale', '--scale', '2', '--deinterlace', 'bob',
-                         '--aa', 'fxaa', '--present-filter', 'fsr', '--fsr-sharpness', '0.5']
+                         '--aa', 'fxaa', '--present-filter', 'fsr', '--fsr-sharpness', '75']
             with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', arguments):
                 self.assertEqual(performance.main(), 0)
             self.assertEqual(play.call_args.kwargs['coregs11'],
-                             {'GT4_DEINTERLACE': 'bob', 'GT4_AA': 'fxaa', 'GT4_PRESENT_FILTER': 'fsr', 'GT4_FSR_SHARPNESS': '0.5'})
+                             {'GT4_DEINTERLACE': 'bob', 'GT4_AA': 'fxaa', 'GT4_PRESENT_FILTER': 'fsr', 'GT4_FSR_SHARPNESS': '75'})
             # Defaults are not sent: the game keeps automatic deinterlace, AA off and the scale-based filter.
             with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'upscale']):
                 self.assertEqual(performance.main(), 0)

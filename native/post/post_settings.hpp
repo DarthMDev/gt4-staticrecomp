@@ -11,7 +11,7 @@ struct PostSettings {
     PostDeinterlace deinterlace = PostDeinterlace::automatic;
     bool fxaa = false;
     PostFilter filter = PostFilter::automatic;
-    float sharpness = 0.2f; // FSR RCAS in stops: 0 is the sharpest, 2 the softest.
+    float sharpness = 1.0f; // FSR RCAS in stops (GT4_FSR_SHARPNESS 50%): 0 is the sharpest, 2 the softest.
 };
 
 } // namespace ps2::gs::gpu
