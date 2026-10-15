@@ -93,6 +93,8 @@ public:
   void attach_window(HWND window, std::uint32_t width, std::uint32_t height);
   void resize(std::uint32_t width, std::uint32_t height);
   void set_aspect(Aspect aspect) { aspect_ = aspect; }
+  // Linear filtering when the presented image is scaled (PS2_SCALE > 1); nearest otherwise.
+  void set_linear_present(bool linear) { linear_present_ = linear; }
   bool has_window() const { return window_ != nullptr; }
   bool synchronous() const { return synchronous_; }
   // Device maximum workgroup count for axis 0 (x) or 1 (y).
@@ -169,6 +171,7 @@ private:
   std::uint32_t window_width_ = 0, window_height_ = 0;
   VkExtent2D extent_{};
   Aspect aspect_ = Aspect::widescreen;
+  bool linear_present_ = false;
   bool resized_ = false;
   std::uint64_t presentations_ = 0;
   std::uint64_t zero_dispatches_ = 0;

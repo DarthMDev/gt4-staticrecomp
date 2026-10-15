@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'scripts'))
 import play_performance as performance
 import play_external_runtime as launcher
-from external_runtime_probe import PERF_MANIFEST, PERF_RUNTIME, PERF_PROFILES, VU1_RECORD_MANIFEST, VU1_RECORD_RUNTIME
+from external_runtime_probe import PERF_MANIFEST, PERF_RUNTIME, PERF_PROFILES, UPSCALE_MANIFEST, VU1_RECORD_MANIFEST, VU1_RECORD_RUNTIME
 
 
 class PerformanceLauncherTests(unittest.TestCase):
@@ -52,6 +52,27 @@ class PerformanceLauncherTests(unittest.TestCase):
                     launcher.play(root, manifest, performance=True)
             self.assertEqual(card.read_bytes(), b'c' * 8650752)
             self.assertFalse(any(directory.glob('session-*')))
+
+    def test_upscale_mode_passes_scale_and_is_not_a_performance_launch(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'upscale', '--scale', '3', '--force-480p']):
+                self.assertEqual(performance.main(), 0)
+            play.assert_called_once_with(root, root / 'docs/inputs' / UPSCALE_MANIFEST,
+                                         performance=False, force_480p=True, scale=3)
+            # The default is the qualified scale 1, and upscale is not a performance profile.
+            with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                  patch.object(sys, 'argv', ['perf', '--assets-root', str(root), '--mode', 'upscale']):
+                self.assertEqual(performance.main(), 0)
+            self.assertEqual(play.call_args.kwargs, {'performance': False, 'force_480p': False, 'scale': 1})
+
+    def test_scale_is_refused_outside_upscale_and_out_of_range(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for arguments in (['--mode', 'main', '--scale', '2'], ['--mode', 'upscale', '--scale', '5'],
+                              ['--mode', 'upscale', '--scale', '0'], ['--scale', '2']):
+                with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play,                      patch.object(sys, 'argv', ['perf', '--assets-root', str(root)] + arguments):
+                    self.assertEqual(performance.main(), 1, arguments)
+                play.assert_not_called()
 
     def test_vu1_record_mode_selects_only_its_pinned_manifest(self):
         with tempfile.TemporaryDirectory() as folder:

@@ -50,6 +50,10 @@ PERF_PROFILES = {
     # (slice165 baked a worktree junction shader path and does not start; kept as history only.)
     'main': ('slice166-main.json', 'private/slice166-main-build/build/gt4vulkan.exe'),
 }
+# Internal-resolution candidate (slice176, TASK-028). Not a performance profile: PS2_SCALE is passed
+# through from the scale argument (1 to 4); scale 1 is the default and the qualified output.
+UPSCALE_MANIFEST = 'slice176-donor-upscale.json'
+UPSCALE_SCALES = (1, 2, 3, 4)
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
 # Manifests whose binaries accept the VU1 AOT verification and interpreter options.
@@ -201,7 +205,8 @@ def summarize_vu1_corpus(corpus):
 def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, card_seed=None,
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
-              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
+              performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
+              scale=1):
     workspace = workspace.resolve()
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
@@ -259,6 +264,13 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     is_vu0_manifest = runtime_manifest in {(runtime_workspace / 'docs/inputs' / name).resolve() for name in VU0_AOT_MANIFESTS}
     if vu0_verify < 0 or (vu0_verify and not (performance and is_vu0_manifest)):
         raise ValueError('VU0 AOT verification needs a positive sample period and the vu0-aot manifest')
+    is_upscale_manifest = runtime_manifest == (runtime_workspace / 'docs/inputs' / UPSCALE_MANIFEST).resolve()
+    if scale not in UPSCALE_SCALES:
+        raise ValueError(f'--scale must be one of {", ".join(str(item) for item in UPSCALE_SCALES)}')
+    if scale != 1 and not is_upscale_manifest:
+        raise ValueError('An internal scale above 1 requires the slice176 upscale manifest')
+    if is_upscale_manifest and performance:
+        raise ValueError('The upscale manifest is not a performance profile')
     executable_pin = runtime_evidence['runtime']
     for dependency in runtime_evidence.get('runtime_dependencies', []):
         dependency_path = (runtime_workspace / dependency['path']).resolve()
@@ -346,6 +358,9 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         result['measurement_mode'] = runtime_evidence.get('measurement_mode', 'detailed')
         result['vulkan_loader_environment'] = {
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
+    if is_upscale_manifest:
+        environment['PS2_SCALE'] = str(scale)
+        result['internal_scale'] = scale
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))

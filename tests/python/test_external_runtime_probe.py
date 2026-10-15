@@ -19,6 +19,19 @@ def file_pin(path):
 
 
 class ProbeTests(unittest.TestCase):
+    def test_internal_scale_requires_the_upscale_manifest(self):
+        # Refused before any output directory or executable is touched.
+        run_directory = probe.ROOT / 'private' / 'slice176-scale-gate-unused'
+        self.assertFalse(run_directory.exists())
+        with patch.dict('os.environ', {'GT4_FORCE_480P': '0'}):
+            with self.assertRaisesRegex(ValueError, 'upscale manifest'):
+                probe.run_probe(probe.ROOT, run_directory, 1, 60, [], runtime_manifest=probe.ROOT / 'docs/inputs' / 'slice166-main.json',
+                                scale=2, runtime_workspace=probe.ROOT)
+            with self.assertRaisesRegex(ValueError, 'must be one of'):
+                probe.run_probe(probe.ROOT, run_directory, 1, 60, [], runtime_manifest=probe.ROOT / 'docs/inputs' / probe.UPSCALE_MANIFEST,
+                                scale=5, runtime_workspace=probe.ROOT)
+        self.assertFalse(run_directory.exists())
+
     def performance_manifest(self, root, mode=None):
         evidence = json.loads((root / 'docs/inputs/slice114-native-base.json').read_text())
         name, runtime_path = probe.PERF_PROFILES[mode] if mode else (probe.PERF_MANIFEST, probe.PERF_RUNTIME)

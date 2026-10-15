@@ -23,9 +23,10 @@ def replace_section(source, start, end, replacement):
 
 def prepare(output, assets_root=None):
     output = output.resolve()
-    if not output.is_relative_to(ROOT / 'private') or output == ROOT / 'private':
-        raise ValueError('Derived donor code must stay inside private/')
     assets_root = Path(assets_root or ROOT).resolve()
+    # Outputs go under the assets checkout's private/ (fresh capsules are kept with the owner's inputs).
+    if not output.is_relative_to(assets_root / 'private') or output == assets_root / 'private':
+        raise ValueError('Derived donor code must stay inside private/')
     donor = assets_root / 'private/references/ps2-web-recomp/runtime/src/gs/gpu'
     donor_root = donor.parents[3]
     if output.is_relative_to(donor_root) or donor_root.is_relative_to(output):

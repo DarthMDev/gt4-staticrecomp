@@ -29,7 +29,7 @@ add_subdirectory(native)
 add_subdirectory(tools/vu_recomp)
 
 enable_testing()
-set(GT4_PYTHON "${CMAKE_SOURCE_DIR}/private/tooling-venv/Scripts/python.exe"
+set(GT4_PYTHON "${GT4_ASSETS_ROOT}/private/tooling-venv/Scripts/python.exe"
     CACHE FILEPATH "Python environment with scripts/requirements.txt installed")
 if(NOT EXISTS "${GT4_PYTHON}")
     message(FATAL_ERROR "Missing GT4_PYTHON environment; see docs/BUILD.md")
@@ -65,6 +65,12 @@ add_test(NAME python_native_contracts
 set_tests_properties(native_quickfix native_race_display native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
+# slice176 (TASK-028): VRAM round trip and sprite counts at each internal scale; the scale is the argument.
+foreach(upscale_scale IN ITEMS 1 2 3 4)
+    add_test(NAME native_upscale_scale${upscale_scale} COMMAND $<TARGET_FILE:upscale_fixture> ${upscale_scale})
+    set_tests_properties(native_upscale_scale${upscale_scale} PROPERTIES RUN_SERIAL TRUE TIMEOUT 300
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+endforeach()
 if(TARGET shape_runtime_fixture)
     add_test(NAME native_shape_runtime COMMAND $<TARGET_FILE:shape_runtime_fixture>)
     set_tests_properties(native_shape_runtime PROPERTIES RUN_SERIAL TRUE TIMEOUT 120

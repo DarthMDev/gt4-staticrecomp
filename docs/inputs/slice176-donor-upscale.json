@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "runtime_source_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "card_seeds": [
+    {
+      "path": "private/slice113-video/widescreen-seed/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+    },
+    {
+      "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+    },
+    {
+      "path": "private/slice113-video/mode480-save14/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "239d4c4d9e83e64c30d619af8bacc3b2ddf4d2b70efad8f9996b597de4039574"
+    },
+    {
+      "path": "private/slice113-video/mode1080-save16/card.ps2",
+      "size_bytes": 8650752,
+      "sha256": "492a2d800e638ceb4adcb686f625e3fc854f90889508f4f2e91455e876afe0af"
+    }
+  ],
+  "default_card_seed": {
+    "path": "private/slice113-video/widescreen-seed/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "b757feff1f6e2fd07ea34276edc1f996d1b7ac72cfc33fea5510502d9e3609e6"
+  },
+  "standard_card_seed": {
+    "path": "private/slice110-menu-pilot/name-control4/card.ps2",
+    "size_bytes": 8650752,
+    "sha256": "bb10a96fd78e45d648023f9962739c09f152ce01ae45c3fea1d998a71d5e3072"
+  },
+  "frozen_game_library": {
+    "path": "private/reference-acceleration-study/runtime-build/ps2game.lib",
+    "size_bytes": 68855896,
+    "sha256": "c837d13dae027f377aecdb0c39834ede2e9463eabf7f767fda6a3c5a0762de1f"
+  },
+  "profile": "upscale",
+  "toolchain": {
+    "compiler": "clang-cl23.1.2",
+    "language": "C++20",
+    "build": "CMake/Ninja VS2022 x64 ABI Windows SDK10.0.26100.0",
+    "cmake": "4.3.3",
+    "ninja": "1.12.1"
+  },
+  "slice": 176,
+  "date": "2026-10-15",
+  "baseline_commit": "task/028-donor-upscale from main 4245932",
+  "branch": "task/028-donor-upscale",
+  "measurement_mode": "upscale",
+  "vu_scope_profile": "unit_split_run_fast_only",
+  "classification": "Internal-resolution candidate (TASK-028): the slice166 main build (slice160 VU0 AOT capsule, 2,048 VU1 entries, 14 VU0 entries) with the donor GS adapter extended to PS2_SCALE 1-4. Scale 1 is the qualified default. Not a performance profile: no frame-time claim.",
+  "runtime": {
+    "path": "private/slice176-donor-upscale-build/build/gt4vulkan.exe",
+    "size_bytes": 95540736,
+    "sha256": "930161145dc097a678cdd2bf964825c89ec79ae98a6db7a987dad6cf036cce9c"
+  },
+  "source_capsule": "private/slice160-vu0-runtime",
+  "source_manifest": "slice160-vu0-runtime.json",
+  "port_capsule": "private/slice176-donor-upscale-port",
+  "shader_capsule": "private/slice176-donor-upscale-shaders (scale 1); private/slice176-donor-upscale-shaders-s2, -s3, -s4",
+  "internal_scale": {
+    "environment": "PS2_SCALE",
+    "values": [
+      1,
+      2,
+      3,
+      4
+    ],
+    "default": 1,
+    "presentation_filter": "linear when scaled; GT4_PRESENT_FILTER=nearest|linear overrides",
+    "frame_dumps": "1x box-average by default; GT4_DUMP_NATIVE_SIZE=1 writes the scaled image"
+  },
+  "vu1_aot": {
+    "generated_dir": "private/slice157-vu1-all-gen",
+    "generated_source_sha256": "3eed39d69ffa12520237afb2ff44e248d19afa63995a2dcf6c578585784a2266",
+    "generated_manifest_sha256": "07ae2077817e074e2ef68106592191c1449a0557983c34d05d3643ebb68a18d0",
+    "programs": 2048,
+    "parts": 128,
+    "programs_per_file": 16,
+    "entry_policy": "all: 2048 static entries of the pinned image",
+    "image": "private/slice155-vu1-image/vu1_image.bin",
+    "image_sha256": "9e5bc86098904fa8a4bd82fdea0872d5b1d8220269471014dd4630c46796cdff",
+    "entry_list_sha256": "284330f8d4587af4e4f57db29199f22e01c918a1c6cb259359be2e89f5d6c798",
+    "corpus": "private/slice155-vu1-full-corpus (426 recorded-layout files; the 2,048 corpus is not built into CTest)",
+    "overlay_sha256": "171b07c36fbe54be2579a84f579e06e4796b93648ca9f1d13b429d8abad0cd32",
+    "flag_elision": true
+  },
+  "vu0_aot": {
+    "generated_dir": "private/slice160-vu0-gen-r3",
+    "programs": 14,
+    "entry_policy": "vcallms: 14 entries (docs/VU0-MICROCODE-MAP.md; vu0_image.py entries)",
+    "image": "private/slice160-vu0-image/vu0_image.bin",
+    "image_sha256": "2d7b26535008f1b3402ba70e8365cae749e64079eb32381d6853612abc896d44",
+    "entry_list_sha256": "2f5ac510cda32588c706b550a2ef1181537296d258039709180d7909a251471e",
+    "table_sha256": "ef59e476e957679e9894ce8613302ec3e1b52ebeed2567e17b9470d503de340c",
+    "manifest_sha256": "eb027ffaf69674c1ac171f6982f738dcb80a53d838d22747da8a86377d8390ae",
+    "overlay_sha256": "9e5fee2b08ad87bbeeba08adb426ee927f499df20fce9b44134ae87733bad25b",
+    "vu1_table": "private/slice157-vu1-all-gen (unchanged, regeneration byte-identical)"
+  },
+  "runtime_dependencies": [
+    {
+      "path": "private/slice176-donor-upscale-shaders/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "b7ebe576bb96d554d225c11ce08a84f3b059cadebb71249bd29cd6b07c2dd1d6"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "00a9f2b3bb3565d5a715a7ae4c78f839703dba1583c138428e4c70931e6cb23c"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "df24d5e26904964d2dc1782aba006b125d5b1d4b54c735b0bdda7c03d0c38856"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/display.spv",
+      "size_bytes": 9028,
+      "sha256": "d575ad4e572c7cc47ddb93d0f6980072d972f8048dfb08d544f0e4ec300ff6e2"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "a24f033fcf886084a3cf36c3c024b86893343761e6fa969b7e6366ba4f91cec9"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/raster.spv",
+      "size_bytes": 50520,
+      "sha256": "1d81e698dabc4102558e4df7b8f41d440c995d0a4f2c5286a2a974b8e4677f20"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "4e68027a902068135e8aef939363c72bb936f0d1bdba51090cd5c44f13be55d3"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "bfcd7fd98d4999670f82de4cb824079bb021639a6d80dd08e82e2b04d3d0ffe7"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "4e0ef1e4aaf00ad6c63e068b33886b56e4cb310df17904b0037e951c2070a72c"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "44c81cb4c2a0b82388e20f2713de335e59785209f21b759bc1e29d30748d7548"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "2b0e674d6e198fd662c494a8c63ddad19a76871ca8d0f05a02bea5fb541b5803"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "1e51954e65bf8d4a0f5f2b1b512207cd5e574d2facf9e8194c24898b75046a48"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/display.spv",
+      "size_bytes": 9028,
+      "sha256": "6a695b6777dfcb0bdb00a3709a6557e212fb452b1edbdc04bef795f73c8648c2"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "0d257e8a199e8d084cd5c0bcef729a74af7b2596d20b3be565ba80465948f27d"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/raster.spv",
+      "size_bytes": 50536,
+      "sha256": "71ddfa971cb3a52c9fe8e393942a1d2d95fa9cccf90caf060356a817748b3b57"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "a81c1deb1a989b399023edaebb0ac87c02db98bd8e9abb7978ad48d3c6acb9cf"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "b7dc351f0e1cdf533ddb1c6e201511354291caf9766380225fd8748195b3bb74"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s2/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "2f5080b2ab23b096ddec58142fecf863c9dd4caea169d2fef760ecb569d2d263"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/copy_read.spv",
+      "size_bytes": 7888,
+      "sha256": "519d561e440f755838ec330476d685c19bfa5319b632db7c5ab684f3feee7754"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/copy_write.spv",
+      "size_bytes": 8908,
+      "sha256": "cfa5a67a318a20afc4c7c93df6ab9821f5cb41c999a8ef77c4af84cc64baacb8"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "69564250d8ef53a91e4328de6a3c57f9ac260097318238754b5e61d8037b7d8c"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/display.spv",
+      "size_bytes": 9028,
+      "sha256": "13ff455d7de589774d805daba58cd62c7d6dd834969f2ce56f8f8555b153f78b"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "97ff98a689eff5b5be627c24a3bc9975f2defaba634997670f82071b778f1ccb"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/raster.spv",
+      "size_bytes": 50536,
+      "sha256": "d8d4e61311d8bd82cc00a98dfb230686cada26cb80cf0a5eb11f9ec0fb7c93d2"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/resolve.spv",
+      "size_bytes": 2336,
+      "sha256": "9b9356b9078deaa50000ecfbf88d92f84e3fe6fc2ca6c89e4e71d2b8f9240e0c"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/snapshot.spv",
+      "size_bytes": 2344,
+      "sha256": "687b9844d9d047d4dd0712b98a946f923c93d4382245ce70b3bdfd1816c6e29b"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s3/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "54bd7b27f486cd1ec76df3adcc4773bf338f7a0e97d61cedc707a90f4564e201"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/copy_read.spv",
+      "size_bytes": 7872,
+      "sha256": "6136913f7fe463197f3ae91ac08d590f9c9e83439eeeae4cd20a6211b044b10b"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/copy_write.spv",
+      "size_bytes": 8892,
+      "sha256": "d35489f6459142047676c76c57ac97e502f88065153ff3c924bca1bfeea2ff20"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/decode.spv",
+      "size_bytes": 13780,
+      "sha256": "a6145ebc8b47a2e1671175e6e6bf10584134884f98f3dd17f7c575ff727c724a"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/display.spv",
+      "size_bytes": 9028,
+      "sha256": "fc115e50828c65c98f4e50a77319404099aeae9f00fde431911351045310de42"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/load_clut.spv",
+      "size_bytes": 10416,
+      "sha256": "da01cb437476c3468ed84de09c2c855a7a1f3268ad3875552e2c6f02c99f8603"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/raster.spv",
+      "size_bytes": 50536,
+      "sha256": "8efebc4bad5996cd3060f510c000f3dcb4a8d5add303e15435fc6692121b09e7"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/resolve.spv",
+      "size_bytes": 2320,
+      "sha256": "3629fa62a25d20dd4dbdfd96d37be35c0799226e67b787fd01cdc481601d7f9a"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/snapshot.spv",
+      "size_bytes": 2328,
+      "sha256": "8dfb051cf51c46f7c42f10dc57c1b73f39c8c049b1101c1523b9cce55dbd1d2d"
+    },
+    {
+      "path": "private/slice176-donor-upscale-shaders-s4/upload.spv",
+      "size_bytes": 12336,
+      "sha256": "22a22733cbed495cda5b82d48ec9de0cae07a0bf786232396a3b692840121401"
+    }
+  ],
+  "purpose": "Owner test of internal-resolution upscaling in the donor Vulkan compute GS renderer (TASK-028).",
+  "status": "candidate: headless controls only (scale 1 identical, scales 2 and 3 complete); owner window check pending",
+  "review": {
+    "status": "pending",
+    "note": "Worktree task/028-donor-upscale; not merged."
+  },
+  "controls": {
+    "headless_scale1": "slice157 schedule, 4,200 frames: 42 of 42 frame dumps byte-identical to private/slice157-smoke/headless-157/frames",
+    "headless_scale2_scale3": "4,200 frames each, exit 0, 42 dumps each; PSNR against scale 1 in private/slice176-donor-upscale-smoke/"
+  },
+  "owner_launch": {
+    "play_2x": "python scripts/play_performance.py --assets-root . --mode upscale --scale 2 --force-480p",
+    "play_3x": "python scripts/play_performance.py --assets-root . --mode upscale --scale 3 --force-480p"
+  }
+}

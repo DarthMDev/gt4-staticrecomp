@@ -2,7 +2,7 @@
 # after native/, which provides ps2runtime_vulkan for the differential test.
 # Tests are registered by the root CMakeLists.txt so CTest sees them.
 
-set(GT4_VU_DONOR "${CMAKE_SOURCE_DIR}/private/references/ps2-web-recomp")
+set(GT4_VU_DONOR "${GT4_ASSETS_ROOT}/private/references/ps2-web-recomp")
 if(NOT EXISTS "${GT4_VU_DONOR}/runtime/include/ps2/vu_ops.hpp")
     message(FATAL_ERROR "vu_recomp requires the pinned donor checkout under private/references")
 endif()
@@ -132,7 +132,7 @@ target_compile_options(gt4_vu0_emitter_tests PRIVATE /W4)
 
 # VU0 AOT controls (slice 160): only with the VU0 capsule (GT4_VU0_GENERATED_DIR), which provides the
 # overlay and the VU0 table. The pinned image is read at run time (GT4_VU0_IMAGE_FILE, read only).
-set(GT4_VU0_IMAGE_FILE "${CMAKE_SOURCE_DIR}/private/slice160-vu0-image/vu0_image.bin" CACHE FILEPATH
+set(GT4_VU0_IMAGE_FILE "${GT4_ASSETS_ROOT}/private/slice160-vu0-image/vu0_image.bin" CACHE FILEPATH
     "Pinned VU0 image (scripts/vu0_image.py build) for the VU0 AOT controls, read only")
 if(GT4_VU0_GENERATED_DIR)
     add_executable(gt4_vu0_differential_tests "${VU_RECOMP_TESTS}/vu0_differential_tests.cpp" "${VU_RECOMP_TESTS}/gif_capture.cpp")

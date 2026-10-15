@@ -39,6 +39,11 @@ fixes); accepts --force-480p, --vu0-verify N and the VU1 options. This is the bu
 Quick-fix 3 candidate (--mode quickfix3, slice164): vu1-all with the quick fixes. --force-480p (GT4_FORCE_480P=1,
 default off) holds the game's race display option at 480p progressive: at each guest VBlank, when the option
 index is 0 (normal) it is written 1 (480p). Indices 1 and 2 are never changed.
+Internal-resolution candidate (--mode upscale, slice176, TASK-028): not a performance profile. --scale N
+(1 to 4, default 1) sets PS2_SCALE: each GS pixel is rendered as N x N sub-samples and the window shows
+the scaled image (linear filter when N > 1; GT4_PRESENT_FILTER=nearest|linear overrides). Game logic and
+the guest-visible readbacks are unchanged. Accepts --force-480p. Requires the merged slice176 build under
+private/slice176-donor-upscale-build.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
@@ -47,9 +52,9 @@ import argparse
 import sys
 from pathlib import Path
 from play_external_runtime import ROOT, play
-from external_runtime_probe import PERF_PROFILES, VU1_RECORD_MANIFEST
+from external_runtime_probe import PERF_PROFILES, UPSCALE_MANIFEST, UPSCALE_SCALES, VU1_RECORD_MANIFEST
 
-MODES = tuple(PERF_PROFILES) + ('vu1-record',)
+MODES = tuple(PERF_PROFILES) + ('vu1-record', 'upscale')
 
 
 def main():
@@ -64,6 +69,8 @@ def main():
                         help='experimental: hold the race display option at 480p (quickfix3 mode)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
+    parser.add_argument('--scale', type=int, default=1, metavar='N',
+                        help='internal resolution 1 to 4 (PS2_SCALE); only with --mode upscale')
     args = parser.parse_args()
     try:
         if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main'):
@@ -74,8 +81,16 @@ def main():
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main'):
-            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3 or main')
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'upscale'):
+            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main or upscale')
+        if args.scale != 1 and args.mode != 'upscale':
+            raise ValueError('--scale requires --mode upscale')
+        if args.mode == 'upscale':
+            if args.scale not in UPSCALE_SCALES:
+                raise ValueError(f'--scale must be one of {", ".join(str(item) for item in UPSCALE_SCALES)}')
+            play(args.assets_root, ROOT / 'docs/inputs' / UPSCALE_MANIFEST, performance=False,
+                 force_480p=args.force_480p, scale=args.scale)
+            return 0
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True)

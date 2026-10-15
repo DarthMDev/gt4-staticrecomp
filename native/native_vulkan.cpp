@@ -258,7 +258,7 @@ void Context::initialize(const std::filesystem::path &shaders) {
     throw std::runtime_error("GPU limits do not support the GS compute layout");
   std::fprintf(
       stderr,
-      "[vulkan] device=%s api=%u.%u.%u; direct compute, scale=1\n",
+      "[vulkan] device=%s api=%u.%u.%u; direct compute\n",
       properties.deviceName, VK_VERSION_MAJOR(properties.apiVersion),
       VK_VERSION_MINOR(properties.apiVersion),
       VK_VERSION_PATCH(properties.apiVersion));
@@ -971,7 +971,7 @@ void Context::record_presentation(VkCommandBuffer command,
                         1};
   vkCmdBlitImage(command, display_image_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
-                 VK_FILTER_NEAREST);
+                 linear_present_ ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
   // The rendered semaphore signals at ALL_COMMANDS, so presentation follows this transition.
   image_barrier(command, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT,

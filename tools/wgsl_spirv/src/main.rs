@@ -2,8 +2,17 @@ use std::{env, error::Error, fs, path::Path};
 
 fn main() -> Result<(), Box<dyn Error>> {
     let arguments: Vec<String> = env::args().collect();
-    if arguments.len() != 3 {
-        return Err("usage: gt4-wgsl-spirv <gs.wgsl> <output-directory>".into());
+    if arguments.len() != 3 && arguments.len() != 4 {
+        return Err("usage: gt4-wgsl-spirv <gs.wgsl> <output-directory> [scale 1-4]".into());
+    }
+    // The SCALE override is folded into the SPIR-V (Naga has no runtime override here), so each
+    // internal resolution has its own shader directory. Scale 1 is the qualified default.
+    let scale: u32 = match arguments.get(3) {
+        Some(text) => text.parse()?,
+        None => 1,
+    };
+    if !(1..=4).contains(&scale) {
+        return Err("scale must be 1, 2, 3 or 4".into());
     }
     let source = fs::read_to_string(&arguments[1])?;
     let output = Path::new(&arguments[2]);
@@ -15,7 +24,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     )
     .validate(&module)?;
     let mut constants = naga::back::PipelineConstants::default();
-    constants.insert("SCALE".to_string(), 1.0);
+    constants.insert("SCALE".to_string(), scale as f64);
     for entry in [
         "upload",
         "copy_read",

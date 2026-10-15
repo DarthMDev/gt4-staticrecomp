@@ -832,3 +832,70 @@ cmake -S . -B private\slice168-audio-builduild -G Ninja -DCMAKE_BUILD_TYPE=Rele
 cmake --build private\slice168-audio-builduild --target host_io_fixture
 ctest --test-dir private\slice168-audio-builduild -R native_audio_input --output-on-failure
 ```
+
+## Slice 176 - internal-resolution upscaling (TASK-028)
+
+`PS2_SCALE` = 1 to 4 renders each GS pixel as SCALE x SCALE sub-samples in the donor Vulkan compute
+renderer (CoreGS 1.x). Scale 1 is the default and is the qualified output: 42 of 42 headless frame dumps
+are byte-identical to `private/slice157-smoke/headless-157/frames`. Scales 2 and 3 complete the same
+4,200-frame schedule with exit 0.
+
+Why it was off: the donor scales the GS VRAM, copy and field buffers and folds `SCALE` into the SPIR-V,
+but the native adapter (`native/gpu_init.inc`) rejected any value except 1, and its readback, display and
+checkpoint paths assumed 1. The changes are: scaled buffer sizes and tile grid; per-scale shader
+directories (`tools/wgsl_spirv <gs.wgsl> <out> <scale>`; scale 1 is byte-identical to slice153);
+`download` and `read_state`/`write_state` resolve or replicate sub-samples; display and present dispatches
+cover `width x SCALE` by `height x SCALE`; the swapchain blit uses a linear filter when scaled
+(`GT4_PRESENT_FILTER=nearest|linear` overrides).
+
+Frame dumps: `display()` returns the 1x image, each pixel the rounded average of its SCALE x SCALE
+samples. `GT4_DUMP_NATIVE_SIZE=1` returns the scaled image instead.
+
+Steps (fresh private directories in the main checkout; run from the worktree root):
+
+1. Shader tool: `cargo build --release --manifest-path tools\wgsl_spirv\Cargo.toml --target-dir C:\Antigravity\gt4-staticrecomp\private\slice176-wgsl-target`.
+   Shaders: `gt4-wgsl-spirv.exe <donor>\gs.wgsl C:\...\private\slice176-donor-upscale-shaders 1`, then the same with
+   `...-shaders-s2`, `-s3`, `-s4` and scale 2, 3, 4.
+2. Port: `python scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice176-donor-upscale-port --assets-root C:\Antigravity\gt4-staticrecomp`.
+3. Configure `private\slice176-donor-upscale-builduild` with `GT4_ASSETS_ROOT`, `GT4_PERF_RUNTIME_SOURCE`
+   = `slice160-vu0-runtime`, `GT4_VU1_GENERATED_DIR` = `slice157-vu1-all-gen`, `GT4_VU0_GENERATED_DIR` =
+   `slice160-vu0-gen-r3`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` = the slice176 directories (all absolute, main checkout).
+   Pins: [slice176-donor-upscale-runtime.json](inputs/slice176-donor-upscale-runtime.json) (capsule inputs) and
+   [slice176-donor-upscale.json](inputs/slice176-donor-upscale.json) (launcher run manifest, runtime and scale shaders).
+4. Controls: `ctest --test-dir ... `: 23 tests of slice 166 plus `native_upscale_scale1..4` (VRAM
+   write_state/download/read_state round trip, integer-aligned sprite counts in VRAM and in the 1x frame,
+   and presentation at each scale). Python: `tests/python` includes `test_compare_frame_dumps.py` and the scale gate tests.
+5. Headless (no window), the slice157 schedule, PS2_SCALE set in the environment; the arguments are those the
+   probe builds (`--ntsc --disc <iso> --frames 4200 --memcard <card> --misses <file> --frames-dir <dir>
+   --frame-every 100 --trace-syscalls` plus the 12 `--press` entries).
+6. Compare: `python scripts\compare_frame_dumps.py <ref-frames> <candidate-frames> --scale N --json <out>`.
+
+Results (Confirmed, local headless; not owner gameplay; no performance claim):
+
+| Run | Dumps | Notes |
+|---|---|---|
+| scale 1 vs slice157 | 42 of 42 identical | psnr-1x-vs-157.json |
+| scale 2 vs scale 1 | exit 0; mean 30.9 dB, min 26.1 dB | identical only on one frame |
+| scale 3 vs scale 1 | exit 0; mean 29.8 dB, min 25.0 dB | native-size dumps give the same PSNR |
+
+The PSNR is a distance from the 1x image, not a quality score: the scaled image has finer edges and text
+(the 3x native frame `private/slice176-donor-upscale-smoke/png/3x-native-frame_02100.png` against
+`1x-frame_02100.png`). Guest traces (system calls, VIF, GIF, counters) match scale 1 except the
+`card`/path lines and the `[vulkan]` counter lines. The `decode` dispatch count drops from 192,307 to 32,396 at
+scale 2 and 3 (donor `rendered` guard, active only when scale > 1); `resolve` is 0 in the headless schedule
+because no guest readback runs there, so the readback path is covered only by the `upscale_fixture` control.
+
+Owner commands (PowerShell, from the main checkout after task/028 is merged; the launcher reads its runtime and
+pins from the checkout it runs in):
+
+```powershell
+C:\Antigravity\gt4-staticrecomp\private	ooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root . --mode upscale --scale 2 --force-480p
+C:\Antigravity\gt4-staticrecomp\private	ooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root . --mode upscale --scale 3 --force-480p
+```
+
+Limits:
+
+1. Save states across scales are converted by word replication; not exercised in the headless schedule.
+2. Window presentation at 2x and 3x is accepted by the control (`check_presentation`), not viewed in the owner's window.
+3. A scaled frame's `decode` skip (donor `rendered` guard) changes texture decoding; not separately validated against the 1x path beyond the image comparison.
+4. No fullscreen, FSR, FXAA or deinterlace: see the CoreGS 1.1 workstream entry in the journal.
