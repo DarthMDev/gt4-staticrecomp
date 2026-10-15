@@ -1,0 +1,32 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main-window",
+  "description": "The launcher window may listen to the launcher's own events and call only the launcher's commands. No shell, no file system access from the page: pickers run in Rust.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:default",
+    "allow-app-state",
+    "allow-settings-rows",
+    "allow-settings-set",
+    "allow-setup-choose-disc",
+    "allow-setup-start",
+    "allow-setup-cancel",
+    "allow-play",
+    "allow-stop-game",
+    "allow-saves-list",
+    "allow-saves-import",
+    "allow-saves-activate",
+    "allow-saves-delete",
+    "allow-replays-list",
+    "allow-replays-import",
+    "allow-replays-delete",
+    "allow-controls-list",
+    "allow-controls-capture-start",
+    "allow-controls-capture-cancel",
+    "allow-controls-bind-key",
+    "allow-controls-reset",
+    "allow-controls-set-trigger",
+    "allow-about-info",
+    "allow-open-log-folder"
+  ]
+}

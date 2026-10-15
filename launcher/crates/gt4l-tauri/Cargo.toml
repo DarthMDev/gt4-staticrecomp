@@ -1,0 +1,32 @@
+[package]
+name = "gt4l-tauri"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "GT4Recomp launcher: Tauri 2 shell with the approved HTML design (produces GT4Recomp.exe)"
+build = "build.rs"
+
+[[bin]]
+name = "GT4Recomp"
+path = "src/main.rs"
+
+[features]
+# Development only: GT4RECOMP_VISUAL_PAGE, GT4RECOMP_VISUAL_READY and GT4RECOMP_VISUAL_SEED set the
+# page, a ready-looking home and a synthetic save library for screenshots. Not in release builds.
+visual-check = []
+
+[dependencies]
+gt4l-core.workspace = true
+gt4l-disc.workspace = true
+gt4saves.workspace = true
+gt4controls.workspace = true
+gt4l-platform.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = "2.11"
+tauri-plugin-dialog = "2.8"
+
+[build-dependencies]
+tauri-build = "2.6"
