@@ -1,6 +1,6 @@
 # 0068 — Build the game code on the user's PC; add the PCSX2 hardware GS renderer
 
-Date: 2026-10-15. Status: Accepted (owner decision). Amends
+Date: 2026-10-15. Status: **Superseded** by [0069](0069-own-hardware-renderer-clean-room.md) the same day. Amends
 [0067](0067-mit-license-and-release-model.md).
 
 **Context.** paraLLEl-GS (TASK-012) runs GT4 at full speed (night race 60 FPS),

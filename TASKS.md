@@ -27,12 +27,13 @@ list (private repository `moesuito/gt4-staticrecomp-legacy`). Third renumbering
 | **Phase 2** | Android | ARM64 build with the ARMSX2 mobile GS pipeline (Vulkan) |
 | **Phase 3** | iOS | ARM64 build with the ARMSX2 Metal GS pipeline |
 
-**Renderer decision (2026-10-15, amended by [decision 0068](docs/decisions/0068-build-on-user-pc-and-pcsx2-gs.md)):**
-PC offers **paraLLEl-GS** (Vulkan compute, LGPL-3.0+) and, planned, the **PCSX2
-hardware GS renderer** (TASK-026: 3x-6x internal resolution, texture packs). The
-game code is compiled on the user's PC from their own disc, so the GPL renderer
-can be linked into that local build. The donor compute GS renderer stays only as
-an experimental fallback and comparison reference; it gets no new features.
+**Renderer decision (2026-10-15, [decision 0069](docs/decisions/0069-own-hardware-renderer-clean-room.md)):**
+PC offers **paraLLEl-GS** (Vulkan compute, LGPL-3.0+) and, planned, **our own MIT
+hardware GS renderer** written by clean room from a specification of the PCSX2
+hardware renderer's behavior (TASK-026 specification, TASK-027 implementation:
+internal resolution 1x-6x, texture packs). The release ships the prebuilt game
+executable. The donor compute GS renderer stays only as an experimental fallback
+and comparison reference; it gets no new features.
 Mobile uses the **ARMSX2 GS pipeline** (PCSX2 hardware renderer adapted for
 Android Vulkan and iOS Metal, with GPU driver profiles and a tile-friendly pass
 scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
@@ -61,7 +62,8 @@ scheduler). See [GS renderer options](docs/GS-RENDERER-OPTIONS.md).
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust + Slint) and NSIS per-user installer | 🔄 Design and plan done (branch `task/019-launcher`) |
 | TASK‑025 | Save manager: memory card slots, import/export (launcher depends on it) | 📋 Planned |
-| TASK‑026 | PCSX2 hardware GS renderer as a renderer option: 3x-6x internal resolution, texture packs | 📋 Planned |
+| TASK‑026 | Own hardware renderer, part 1: clean-room specification of the PCSX2 hardware renderer (study) | 🔄 In progress |
+| TASK‑027 | Own hardware renderer, part 2: MIT implementation from the specification (3x-6x, texture packs) | 📋 Planned |
 | 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 
@@ -195,21 +197,28 @@ overwrites one. Export, delete to Recycle Bin, backups. Optional slot summary
 (day, credits) from Nenkai's PDTools save format. Atomic card writes in the
 runtime. Design: `docs/launcher/LAUNCHER-PLAN.md` on branch `task/019-launcher`.
 
-### TASK-026 — PCSX2 hardware GS renderer (GSdx lineage)
-Extract the minimum PCSX2 hardware renderer (HW + Vulkan + Common, about 45-55k
-lines; no software renderer, which generates code at run time) behind our GS
-front end, next to paraLLEl-GS; stub PCSX2 Host/MTGS/config; GT4 GameDB fixes
-(half-pixel offset, Polyphony hacks); internal resolution 1x-6x; texture
-replacement (PCSX2 pack layout); launcher options. GPL-3.0+: linked only into the
-executable built on the user's PC (decision 0068). Study and estimates:
-`docs/GSDX-STUDY.md` on branch `task/012-parallel-gs`. Depends on the
-build-on-user-PC pipeline (TASK-019).
+### TASK-026 — Own hardware renderer: clean-room specification
+Study only (decision 0069). The specification team reads the PCSX2 hardware GS
+renderer (pinned source) and public GS documentation and writes a behavioral
+specification in plain English under `docs/hw-renderer-spec/` (branch
+`task/026-hw-renderer-spec`): architecture and data flow, GS state to GPU draw
+translation, texture cache and render-target management, upscaling (internal
+resolution multiplier and its fixes), CLUT, readbacks, blending and channel
+shuffles, texture dumping/replacement and pack format, GT4-specific fixes,
+post-processing, validation scenes and test cases, and an implementation plan
+with milestones for TASK-027. No PCSX2 code or code-like translation in the
+specification. Sizes and coupling overview: `docs/GSDX-STUDY.md` on branch
+`task/012-parallel-gs`.
+
+### TASK-027 — Own hardware renderer: implementation
+MIT implementation written only from the TASK-026 specification, behind our GS
+front end next to paraLLEl-GS and the donor renderer. Implementers never open
+PCSX2 GS sources. Milestones and acceptance come from the specification.
 
 ### First stable release
 After TASK-019: a tagged GitHub Release of this repository with the NSIS
-installer (runtime, translators, toolchain and launcher; the game code is built
-on the user's PC from their own disc, decision 0068; official branding with a
-trademark notice), under the MIT license
+installer (prebuilt game executable and launcher; the user supplies their own
+disc; official branding with a trademark notice; decision 0069), under the MIT license
 ([decision 0067](docs/decisions/0067-mit-license-and-release-model.md)). TASK-020
 is deliberately after it, to give the gt4-decomp project more time to progress
 before its names are imported.

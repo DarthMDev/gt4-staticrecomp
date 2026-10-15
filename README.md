@@ -119,7 +119,7 @@ in game before it is merged.
 
 | Phase | Platform | Renderer |
 |---|---|---|
-| **Phase 1** (current) | Windows PC | paraLLEl-GS (Vulkan compute); current renderer kept as experimental fallback |
+| **Phase 1** (current) | Windows PC | paraLLEl-GS (Vulkan compute) and our own MIT hardware renderer (planned, 3x-6x); current renderer kept as experimental fallback |
 | **Phase 2** | Android | ARMSX2 GS pipeline (Vulkan) |
 | **Phase 3** | iOS | ARMSX2 GS pipeline (Metal) |
 
@@ -137,7 +137,7 @@ in game before it is merged.
 | TASK‑008 | Full static VU1 entry coverage (all 2,048 entries) | ✅ Done · 0 interpreted VU1 calls; rally 60, showroom 60, night 59 FPS |
 | TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
 | TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
-| TASK‑011 | MTVU: VU1 on its own thread | 🔄 Plan done · step 0 (measurement) in progress |
+| TASK‑011 | MTVU: VU1 on its own thread | 🔄 Measured: 3.5–7.3 ms/frame can move off the main core; implementing |
 | TASK‑012 | paraLLEl-GS as the PC renderer: upscaling, deinterlacing, readbacks, extras | 🔄 In progress · runs, textures missing (debugging) |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
@@ -147,7 +147,8 @@ in game before it is merged.
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design done |
 | TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 📋 Planned |
-| TASK‑026 | PCSX2 hardware renderer option: 3x-6x resolution and texture packs | 📋 Planned |
+| TASK‑026 | Own hardware renderer (MIT, clean room): specification | 🔄 In progress |
+| TASK‑027 | Own hardware renderer: implementation, 3x-6x resolution and texture packs | 📋 Planned |
 | 🚀 | **First stable release on GitHub** | 📋 Planned |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 
