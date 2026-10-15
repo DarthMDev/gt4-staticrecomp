@@ -420,3 +420,7 @@ if(GT4_SHAPE_RUNTIME_SOURCE)
     target_compile_definitions(shape_runtime_control PRIVATE GT4_OBSERVER_CONTROL)
     target_link_options(shape_runtime_fixture PRIVATE "/MAP:${CMAKE_BINARY_DIR}/shape-runtime.map" /VERBOSE:LIB)
 endif()
+
+if(GT4_HW_GS)
+    add_subdirectory(hw_gs)
+endif()
