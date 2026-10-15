@@ -64,7 +64,7 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                 print(f'VU0 verify: every {vu0_verify}th generated VU0 call is compared with the exact interpreter; '
                       'mismatches go to the session log.', flush=True)
             if renderer is None and manifest.name in RENDERER_MANIFESTS:
-                renderer = 'hw' if manifest.name == 'slice174-hw.json' else 'parallel'  # the probe applies the same default
+                renderer = 'hw' if manifest.name == 'slice175-hw.json' else 'parallel'  # the probe applies the same default
             if renderer == 'parallel':
                 print(f'Renderer: paraLLEl-GS (GT4_RENDERER=parallel, {super_sampling}x super-sampling, '
                       f'high-resolution scanout {"on" if high_resolution else "off"}).', flush=True)

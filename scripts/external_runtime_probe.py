@@ -55,7 +55,7 @@ PERF_PROFILES = {
     'parallel': ('slice169-parallel.json', 'private/slice169-parallel-build/build/gt4vulkan.exe'),
     # TASK-027 M0b (slice174): one binary with the donor, paraLLEl-GS and HWR renderers (GT4_RENDERER). The hw
     # mode runs HWR, which presents black at M0 (GS data path stubbed); --renderer donor|parallel A/B the same binary.
-    'hw': ('slice174-hw.json', 'private/slice174-hw-build/build/gt4vulkan.exe'),
+    'hw': ('slice175-hw.json', 'private/slice175-hw-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -63,14 +63,14 @@ PACING_MANIFEST = 'slice153-pacing.json'
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json',
-                     'slice169-parallel.json', 'slice174-hw.json')
+                     'slice169-parallel.json', 'slice175-hw.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice168-parallel.json', 'slice169-parallel.json',
-                     'slice174-hw.json')
+                     'slice175-hw.json')
 # Manifests whose binaries contain the renderers (slice168+): GT4_RENDERER selects one per run.
-RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json', 'slice174-hw.json')
+RENDERER_MANIFESTS = ('slice168-parallel.json', 'slice169-parallel.json', 'slice175-hw.json')
 # The hw manifest (slice174) is the only one whose binary carries HWR; its launcher default is hw.
-HW_MANIFEST = 'slice174-hw.json'
+HW_MANIFEST = 'slice175-hw.json'
 # Manifests whose binaries accept GT4_PGS_HIRES (paraLLEl-GS high-resolution scanout, slice169).
 HIGH_RESOLUTION_MANIFESTS = ('slice169-parallel.json',)
 HIGH_RESOLUTION_FACTORS = (4, 8, 16)

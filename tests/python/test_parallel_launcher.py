@@ -24,7 +24,7 @@ PARALLEL_RUNTIME = 'private/slice169-parallel-build/build/gt4vulkan.exe'
 PARALLEL_MANIFEST = 'slice169-parallel.json'
 PARALLEL_SOURCE = 'slice169-parallel-runtime.json'
 # Slice 174 (M0b): the single renderer dispatch build; GT4_RENDERER=hw selects HWR.
-HW_MANIFEST = 'slice174-hw.json'
+HW_MANIFEST = 'slice175-hw.json'
 
 
 class ParallelProfileTests(unittest.TestCase):
