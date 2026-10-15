@@ -28,6 +28,11 @@ without it the guest request is passed through unchanged.
 
 VU1 all-entries candidate (--mode vu1-all): vu1-flags with the slice157 static VU1 table, every
 8-byte address of the pinned image (2,048 programs, built as 128 parts). Same options and environment.
+
+Quick-fix 2 candidate (--mode quickfix2): vu1-all with the quick fixes of slice156 (16:9, fullscreen,
+interval counters, late_frames with a 1 ms tolerance). --force-480p (GT4_FORCE_480P=1, default off) rewrites
+the guest CRT mode table after the ELF is loaded: the 480i row and its fallback become 480p progressive.
+The slice156 SetGsCrt rewrite is not used by this mode.
 """
 import argparse
 import sys
@@ -50,14 +55,14 @@ def main():
                         help='experimental: rewrite the default 480i request to 480p progressive (quickfix mode)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix or vu1-all')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all or quickfix2')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode != 'quickfix':
-            raise ValueError('--force-480p requires --mode quickfix')
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2'):
+            raise ValueError('--force-480p requires --mode quickfix or quickfix2')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True)

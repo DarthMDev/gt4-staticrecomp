@@ -71,7 +71,8 @@ std::int64_t FramePacer::remaining(std::int64_t now) const {
 bool FramePacer::release(std::int64_t now) {
   if (!anchored_)
     anchor(now);
-  const bool late = now > deadline();
+  // A release within one millisecond of its deadline is scheduling jitter, not a late frame.
+  const bool late = now > deadline() + static_cast<std::int64_t>(frequency_ / late_tolerance_divisor);
   if (late)
     ++late_frames_;
   // One period in scaled units is exactly frequency_ (period = frequency / rate).

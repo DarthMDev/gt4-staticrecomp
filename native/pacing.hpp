@@ -40,6 +40,9 @@ const char *present_mode_name(PresentMode mode);
 // so 10,000 frames accumulate no drift.
 class FramePacer {
 public:
+  // Lateness tolerance: frequency / late_tolerance_divisor ticks (1 ms).
+  static constexpr std::uint64_t late_tolerance_divisor = 1000;
+
   FramePacer(std::uint64_t frequency, std::uint64_t rate);
 
   // Starts the grid: the first frame is due at `now`.
@@ -50,10 +53,11 @@ public:
   // Ticks until the deadline, zero when the frame is due.
   std::int64_t remaining(std::int64_t now) const;
   // Records a release at `now` and advances to the next grid point. A frame
-  // released after its deadline counts as late. If the host is behind by a
-  // full period or more, the grid restarts one period after `now`: missed
-  // frames are not replayed, so the guest never runs faster than the clock.
-  // Returns true when the release was late.
+  // released more than one millisecond after its deadline counts as late
+  // (late_frames); smaller lateness is jitter and is not counted. If the host
+  // is behind by a full period or more, the grid restarts one period after
+  // `now`: missed frames are not replayed, so the guest never runs faster than
+  // the clock. Returns true when the release was late.
   bool release(std::int64_t now);
   std::uint64_t late_frames() const { return late_frames_; }
   std::uint64_t resyncs() const { return resyncs_; }

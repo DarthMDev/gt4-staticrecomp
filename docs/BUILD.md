@@ -540,3 +540,67 @@ Limits:
    executable is 32.9 MB larger than slice155 (owner-accepted size).
 4. Owner frame measurement is not taken. No speed claim is made. The FlagPipe history limit and the
    `verified` counter limits of slice155 are unchanged.
+
+
+Slice158 (TASK-009 quick fixes, second candidate) is built on the slice157 all-entries VU1 capsule with the
+slice156 quick fixes. Owner command, from the repository root (the slice156 `quickfix` mode and its pins are
+kept as history):
+
+    private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix2
+
+`--force-480p` (GT4_FORCE_480P=1, default off) is accepted by `quickfix2`. The name `quickfix2` is new so that
+`quickfix` still reproduces the slice156 binary the owner tested; the two candidates keep separate pins.
+
+Changes:
+
+- 480p through the guest CRT mode table, not SetGsCrt. The table D_00618648 (ELF .data at 0x618648) holds 8
+  rows of {id, interlace, mode, field}. `func_001060A0(interlace, mode, field)` returns the id of the first
+  matching row (0 when none), and `func_00106058(id)` returns the matching row, or row 8 (the fallback) when
+  none matches. When GT4_FORCE_480P=1 the boot hook (donor `system.cpp` `boot()`, after `load_elf`, before the
+  main thread starts) checks the pinned bytes and rewrites row id 1 and the fallback row to {0, 0x50, 1}.
+  Any other bytes refuse the rewrite with exit status 2. Code: `native/display_table.*`, fixture
+  `native/display_table_fixture.cpp` (CTest `native_display_table`), prepare option `--display-table-override`.
+- The slice156 `hw.cpp` SetGsCrt rewrite is not part of this capsule (`--gs-crt-override` still derives slice156).
+- `late_frames` counts a release only when it is more than 1 ms (frequency / 1000 ticks) after its deadline
+  (`native/pacing.*`, fixture `pacing_fixture`). Lateness within the tolerance is not counted.
+
+Pins: [slice158-quickfix2-runtime.json](inputs/slice158-quickfix2-runtime.json) (capsule; `vu_micro.cpp` and
+`vif.cpp` byte-identical to slice157, `system.cpp` adds the boot hook) and
+[slice158-quickfix2.json](inputs/slice158-quickfix2.json) (launcher; runtime
+`private/slice158-quickfix2-build/build/gt4vulkan.exe`, 95,128,576 bytes, sha256 0f498bfc...b6e3b9).
+Directories: capsule `private/slice158-quickfix2-runtime`, build `private/slice158-quickfix2-build/build`, table
+`private/slice157-vu1-all-gen` (reused), smoke `private/slice158-smoke`.
+
+Steps:
+
+1. `private\tooling-venv\Scripts\python.exe scripts\prepare_perf_runtime.py private\slice158-quickfix2-runtime --vu1-aot --display-table-override`
+2. Configure as slice157 with `GT4_PERF_RUNTIME_SOURCE=private/slice158-quickfix2-runtime` and
+   `GT4_VU1_GENERATED_DIR=private/slice157-vu1-all-gen`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to the slice153
+   directories, then build.
+
+Results (candidate, not owner-measured):
+
+- CTest 20/20 on the slice158 build (includes `native_display_table` and `native_pacing`).
+- Python: 251 OK, 1 skipped (pre-existing), with `GT4_NATIVE_BUILD` on the slice158 build. New tests in
+  `tests/python/test_display_table.py`: the pinned ELF rows (skipped when the ELF is absent), the lookup model,
+  the boot hook derivation and reversal, and the slice158 pins.
+- Headless smoke, 4,200 frames, the slice157 press schedule, no window. `GT4_FORCE_480P` unset: 42 frame dumps
+  identical to the slice157 build run with the same script. `GT4_FORCE_480P=1`: the log has
+  `[display] GT4_FORCE_480P=1: CRT table rows id 1 and fallback set to interlace 0 mode 0x50 field 1`, the
+  frames are identical to the unset run (0 of 42 differ), and the only SetGsCrt line is still
+  `[gs] SetGsCrt interlace 1 mode 0x2 field 1`.
+
+Finding, which blocks the 480p claim: the rewritten table does not change the request that reaches the GS.
+The boot issues one SetGsCrt (480i) through syscall 0x02 (`kernel.cpp`, stub 0x5ad8a0), called by the GS display
+wrappers 0x57fd08 and 0x57fe00, which 0x4a03c0 reaches through a function table (no direct `jal` found). The
+table lookups (`func_001060A0` at 0x107640, `func_00106058` at 0x10754C) are a separate path that the headless
+boot did not show to change that request. The slice156 SetGsCrt rewrite changed only the syscall argument, and
+the owner did not see 480p.
+
+Limits:
+
+1. GT4_FORCE_480P=1 is not a verified 480p switch. Do not test it as 480p until the request path is traced.
+2. The fallback row is also rewritten, so unlisted CRT requests resolve to 480p while the switch is on.
+3. `--mode quickfix` (slice156) still runs the SetGsCrt rewrite and keeps its owner result.
+4. A `--load-state` save restores RAM after the boot hook, so a state saved without the hook keeps its table.
+5. Owner gameplay, frame timing and the window (half-height) path are not checked here.

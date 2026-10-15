@@ -69,15 +69,22 @@ void test_remaining_and_late_frames() {
   require(pacer.remaining(0) == 0, "first frame due immediately");
   pacer.release(0);
   require(pacer.remaining(0) == 166666, "remaining before the second deadline");
-  // Each frame finishes 1 ms late but within a period: the grid is kept.
+  // Lateness within the 1 ms tolerance is jitter: released on time, not counted.
+  const std::int64_t half_millisecond = 5000;
+  const std::int64_t one_millisecond = 10000;
+  for (int frame = 1; frame <= 3; ++frame)
+    require(!pacer.release(pacer.deadline() + half_millisecond), "half a millisecond late is not late");
+  require(!pacer.release(pacer.deadline() + one_millisecond), "exactly the tolerance is not late");
+  require(pacer.late_frames() == 0, "jitter within the tolerance is not counted");
+  // Beyond the tolerance each frame is counted late; the grid is kept (less than a period).
   for (int frame = 1; frame <= 5; ++frame) {
-    const std::int64_t late_by = 10000;
-    require(pacer.release(pacer.deadline() + late_by), "release after deadline is late");
+    const std::int64_t late_by = 20000;
+    require(pacer.release(pacer.deadline() + late_by), "release 2 ms after deadline is late");
   }
-  require(pacer.late_frames() == 5, "late frames counted");
+  require(pacer.late_frames() == 5, "late frames counted beyond the tolerance");
   require(pacer.resyncs() == 0, "small lateness does not restart the grid");
-  require(pacer.deadline() == static_cast<std::int64_t>(6 * frequency / 60),
-          "grid continues from the scheduled deadline");
+  require(pacer.deadline() == static_cast<std::int64_t>(10 * frequency / 60),
+          "grid continues from the scheduled deadline after nine releases");
 }
 
 // A stall of several periods restarts the grid one period after the release:
