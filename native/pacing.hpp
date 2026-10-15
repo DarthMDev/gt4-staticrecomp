@@ -172,11 +172,14 @@ private:
   std::size_t next_ = 0;
 };
 
-// Counters owned by the host and printed with the histogram.
+// Session-cumulative counters owned by the host. The F8 report prints the
+// difference since the previous F7 (or report) next to the session totals.
 struct Counters {
   std::uint64_t late_frames = 0;
   std::uint64_t audio_underruns = 0;
   std::uint64_t ring_overflow_frames = 0;
+  // Counts accrued after `earlier`; each field of `earlier` must not exceed this one.
+  Counters since(const Counters &earlier) const;
 };
 
 // Diagnostics for the F8 and periodic report. Print with format(), then reset().
@@ -186,7 +189,9 @@ public:
   void record_release(std::int64_t ticks, std::uint64_t frequency);
   void record_queue_frames(std::uint64_t frames);
   void record_ratio(double ratio);
-  void format(std::FILE *output, Mode mode, const Counters &counters) const;
+  // `interval` is the counter difference for this report; `session` the totals.
+  void format(std::FILE *output, Mode mode, const Counters &interval,
+              const Counters &session) const;
   void reset();
 
 private:

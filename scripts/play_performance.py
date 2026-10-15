@@ -20,6 +20,11 @@ same pacing environment variables; the VU1 status word is not kept (no image ins
 
 VU1 full-entry candidate (--mode vu1-full): vu1-flags with the slice155 static VU1 table (426
 entries generated from the pinned image, not from recordings). Same options and environment.
+
+Quick-fix candidate (--mode quickfix): vu1-full with the 16:9 presentation fixed, borderless
+fullscreen on Alt+Enter or F11, per-interval pacing counters in the F8 report, and the
+experimental 480p request rewrite. --force-480p (GT4_FORCE_480P=1) enables the rewrite;
+without it the guest request is passed through unchanged.
 """
 import argparse
 import sys
@@ -33,22 +38,25 @@ MODES = tuple(PERF_PROFILES) + ('vu1-record',)
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--assets-root', type=Path, required=True)
-    parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9')
     parser.add_argument('--mode', choices=MODES, default='detailed')
     parser.add_argument('--vu1-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU1 call and compare (vu1-aot, gs-async, pacing and vu1-flags)')
     parser.add_argument('--vu1-interpret-only', action='store_true',
                         help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
+    parser.add_argument('--force-480p', action='store_true',
+                        help='experimental: rewrite the default 480i request to 480p progressive (quickfix mode)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags or vu1-full')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full or quickfix')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
+        if args.force_480p and args.mode != 'quickfix':
+            raise ValueError('--force-480p requires --mode quickfix')
         if args.mode == 'vu1-record':
-            play(args.aspect, args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
+            play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True)
         else:
             manifest, _ = PERF_PROFILES[args.mode]
@@ -57,7 +65,9 @@ def main():
                 options['vu1_verify'] = args.vu1_verify
             if args.vu1_interpret_only:
                 options['vu1_interpret_only'] = True
-            play(args.aspect, args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
+            if args.force_480p:
+                options['force_480p'] = True
+            play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:
         print(f'FAIL: {error}', file=sys.stderr)

@@ -11,11 +11,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', choices=('baseline', 'recovered'), default='baseline')
     parser.add_argument('--assets-root', type=Path, required=True)
-    parser.add_argument('--aspect', choices=('16:9', '4:3'), default='16:9')
     options = parser.parse_args()
     manifest = ROOT / f'docs/inputs/slice118-ee-{options.profile}.json'
     try:
-        play(options.aspect, options.assets_root, manifest)
+        play(options.assets_root, manifest)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:
         print(f'FAIL: {error}', file=sys.stderr)

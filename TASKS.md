@@ -23,7 +23,7 @@ Task IDs are stable; the overview lists tasks in execution order.
 | TASK‑007 | VU1 per-program flag elision | ✅ Done |
 | TASK‑008 | Full static VU1 entry coverage | 🔄 In progress |
 | TASK‑030 | Repository cleanup: pre-donor material moved to a private backup | 🔄 In progress |
-| TASK‑009 | Quick fixes: window title, fixed 16:9, fullscreen toggle, per-interval counters, 480p boot and 16:9 option (if the study shows it is small) | ⏭️ Next |
+| TASK‑009 | Quick fixes: window title, fixed 16:9, fullscreen toggle, per-interval counters, 480p boot and 16:9 option (if the study shows it is small) | 🧪 Candidate ready (slice 156), owner test pending |
 | TASK‑018 | Faster builds (parallel jobs, compiler cache, lld-link) | 📋 Planned |
 | TASK‑010 | MTVU: VU1 on its own thread, on by default | 📋 Planned |
 | TASK‑019 | EE/runtime build tuning (fp-contract off, x86-64-v3 variant, LTO, PGO) | 📋 Planned |
@@ -104,6 +104,9 @@ donor-era `codex/*` branches; all are in the backup.
 ## Planned
 
 ### TASK-009 — Quick fixes
+**Status: candidate ready (slice 156, `--mode quickfix`), owner test pending.** Headless
+and local checks are recorded in BUILD.md (slice156) and the 2026-10-15 journal; the
+owner checks title, fullscreen, 16:9, F8 interval counters and the optional 480p switch.
 - Window title becomes just "GT4Recomp".
 - Fixed 16:9: remove F6 and the 4:3 framing option (launcher `--aspect`).
 - Fullscreen toggle: Alt+Enter (Windows convention) and F11, borderless

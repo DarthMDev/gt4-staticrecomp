@@ -398,3 +398,55 @@ Limits:
 Measurement outputs kept in private directories: `private/slice155-vu1-full-gen-all` (policy a,
 51.5 MB, not used), `private/slice155-vu1-full-gen-targeted` (same content as the candidate table),
 `private/slice155-smoke/*`.
+
+Slice156 (TASK-009 quick fixes) is a candidate on the slice155 profile. Owner command, from the
+repository root:
+
+    private	ooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode quickfix
+
+Changes: window title `GT4Recomp`; the presentation is fixed 16:9 (F6, the 4:3 option and
+`GT4_ASPECT` / `--aspect` are removed); Alt+Enter and F11 toggle borderless fullscreen on the
+window's monitor and restore the windowed frame (`native/window_mode.*`, fixture
+`native/quickfix_fixture.cpp`, CTest `native_quickfix`); the F8 report prints `interval` counter
+differences since the last F7 or report next to `session` totals (`Counters::since`, pacing
+fixture); `GT4_FORCE_480P=1` (`--force-480p`, default off) rewrites the guest default NTSC request
+(SetGsCrt interlace 1, mode 0x2) to 480p progressive (interlace 0, mode 0x50); other modes are
+unchanged (`native/display_override.*`; hook in the donor `hw.cpp` `gs_set_crt`).
+
+Pins: [slice156-quickfix-runtime.json](inputs/slice156-quickfix-runtime.json) (capsule receipt;
+system, vu_micro and vif sources byte-identical to slice155, `hw.cpp` is the only new source) and
+[slice156-quickfix.json](inputs/slice156-quickfix.json) (launcher). Build directory
+`private/slice156-quickfix-build/build`; capsule `private/slice156-quickfix-runtime`. The VU1
+table `private/slice155-vu1-full-gen`, the adapter and shaders `private/slice153-pacing-port` and
+`private/slice153-pacing-shaders` are reused unchanged.
+
+Steps:
+
+1. `scripts\prepare_perf_runtime.py private\slice156-quickfix-runtime --vu1-aot --gs-crt-override`
+2. Configure with `GT4_PERF_RUNTIME_SOURCE=private/slice156-quickfix-runtime`,
+   `GT4_VU1_GENERATED_DIR=private/slice155-vu1-full-gen`, `GT4_PORT_DIR` and `GT4_SHADER_DIR` set to
+   the slice153 directories (the adapter check requires them), then build with `--parallel 1`.
+
+Controls (candidate, not owner-measured): CTest 19/19 on the slice156 build, including
+`native_quickfix` and `python_native_contracts` (GT4_NATIVE_BUILD on this build). Headless smoke,
+4,200 frames, the slice153-156 schedule (12 presses, `--press 600:start:30` then cross/start/down
+every 300 frames to 3900, card seed `private/slice113-video/widescreen-seed/card.ps2`):
+GT4_FORCE_480P unset gives 42 frame dumps identical to `private/slice155-smoke/headless-155/frames.sha256`.
+With `GT4_FORCE_480P=1` the frames are also identical (0 of 42 differ), and `probe.log` has one
+line `[display] GT4_FORCE_480P: SetGsCrt interlace 1 mode 0x2 rewritten to interlace 0 mode 0x50`
+followed by `[gs] SetGsCrt interlace 0 mode 0x50 field 1`. The headless path does not present to a
+window, so these frames say nothing about the displayed image; no correctness claim is made.
+
+Limits:
+
+1. The pinned slice153 adapter still exports `set_widescreen(false)` (4:3 presentation). The
+   host never calls it; removing it needs a new adapter pin.
+2. `GT4_FORCE_480P` is validated at window start (`validate_environment`) and per SetGsCrt request;
+   the headless path does not print the startup line.
+3. The 480p rewrite changes only the CRT request. Whether the GS output and the menus follow it is
+   the owner's check.
+4. Fullscreen uses a WS_POPUP window over the monitor, not exclusive mode; the swapchain follows
+   through the existing WM_SIZE path. Owner visual check pending.
+5. Alt+Enter is consumed by the host and Enter is not read as Start while Alt is held.
+6. Owner gameplay and frame timing are not measured.
+

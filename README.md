@@ -171,9 +171,11 @@ Once the environment is prepared, `Jogar-GT4.cmd` launches the game, validates r
 | S | Triangle / Back |
 | X | Circle |
 | Arrow Keys | Navigate / Steer |
-| F6 | Toggle 16:9 / 4:3 Window Framing |
+| Alt+Enter, F11 | Toggle borderless fullscreen on the current monitor |
 
-F6 toggles the window framing. Match this setting under in-game **Options → Screen → Aspect Ratio** to correct the camera aspect ratio and HUD positioning. `Jogar-GT4.cmd --aspect 4:3` boots using 4:3 framing. Existing memory cards retain saved settings. 480p and 1080i modes must be verified during races; menus can use the standard display mode.
+The presentation is fixed at 16:9; there is no 4:3 framing option. Set **Options → Screen → Aspect Ratio** in the game to 16:9. Fullscreen restores the previous windowed size and position when toggled off. Existing memory cards retain saved settings.
+
+Experimental: `scripts/play_performance.py --mode quickfix --force-480p` (or `GT4_FORCE_480P=1`) rewrites the default 480i display request to 480p progressive. Without the switch the guest request is passed through unchanged. The switch is off by default and must be verified in menus and races.
 
 ## Credits
 
