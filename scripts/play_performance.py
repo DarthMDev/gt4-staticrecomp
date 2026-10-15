@@ -36,6 +36,12 @@ its build no longer compiles from this tree (native/display_table.* was removed 
 Current main (--mode main, slice166): everything merged to main (all VU1 and VU0 entries compiled, quick
 fixes); accepts --force-480p, --vu0-verify N and the VU1 options. This is the build to play.
 
+MTVU measurement (--mode mtvu-measure, slice169, TASK-011 step 0): main plus counters for the VU1 worker
+plan (docs/MTVU-PLAN.md). Each F8 report adds [mtvu-measure] lines: GIF packets per path with their
+SIGNAL/FINISH/LABEL/TRXDIR writes, VIF1 register access, EE access to VU1 memory, VU1 time split into
+program and PATH1 GS front end, and a worker overlap model. GT4_MTVU_MEASURE=0 disables the counters.
+Same options as main.
+
 Quick-fix 3 candidate (--mode quickfix3, slice164): vu1-all with the quick fixes. --force-480p (GT4_FORCE_480P=1,
 default off) holds the game's race display option at 480p progressive: at each guest VBlank, when the option
 index is 0 (normal) it is written 1 (480p). Indices 1 and 2 are never changed.
@@ -66,16 +72,16 @@ def main():
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot or main')
-        if args.vu0_verify and args.mode not in ('vu0-aot', 'main'):
-            raise ValueError('--vu0-verify requires --mode vu0-aot or main')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot, main or mtvu-measure')
+        if args.vu0_verify and args.mode not in ('vu0-aot', 'main', 'mtvu-measure'):
+            raise ValueError('--vu0-verify requires --mode vu0-aot, main or mtvu-measure')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main'):
-            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3 or main')
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure'):
+            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main or mtvu-measure')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True)

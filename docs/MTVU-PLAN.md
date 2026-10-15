@@ -352,3 +352,45 @@ Total: about 9-13 agent-days plus two owner sessions.
   VU1 sides longer, and their sum is what MTVU removes from the critical path [Hy].
 - No JIT is involved: the worker runs the same AOT C++ VU1 programs (clang vector
   extensions compile to NEON), so iOS rules are unaffected.
+
+## 9. Step 0 results (slice 169, 2026-10-15)
+
+Measurement build `--mode mtvu-measure` (pins `docs/inputs/slice169-mtvu-measure*.json`). Counters
+only: `native/mtvu_measure.*` plus hooks added by `scripts/prepare_perf_runtime.py --mtvu-measure` in
+`system.cpp` (VBlank, end-of-run totals), `vif.cpp` (VIF1 transfers, VU calls, VIF1 register reads and
+writes), `gs/gif.cpp` (every GIF transfer: per-path packets, tags, PACKED A+D SIGNAL/FINISH/LABEL/TRXDIR,
+GS front-end host time) and `memory.cpp` (EE slow-path access to VU memory). F8 adds `[mtvu-measure]`
+lines; `GT4_MTVU_MEASURE=0` disables the counters; `GT4_MTVU_MEASURE_EVERY=N` prints an interval every N
+VBlanks (headless).
+
+Overlap model (section 5): each VU1 call is posted at the EE time it ran; its time minus the PATH1 GS
+front end inside it moves to one in-order worker; at the guest VBlank (before the host present) the EE
+waits until the worker is idle. Reported per frame: program time moved, VBlank wait, saving
+(moved minus wait), share of frames that wait, first post after the VBlank and last post before it. The
+VBlank point is conservative: the host pacing wait after it is not counted as overlap.
+
+Headless, 4,200 frames, slice157 schedule (menus only; no compiler was running at the start or the end of
+the runs):
+
+| Result | Value | Label |
+|---|---|---|
+| Frames vs slice166 (fresh rerun) and the slice157 reference, counters on and `GT4_MTVU_MEASURE=0` | 42/42 identical | Confirmed |
+| PATH1 SIGNAL/FINISH/LABEL writes | 0 | Confirmed (menus only) |
+| SIGNAL/FINISH/LABEL on PATH2/PATH3 | 0 | Confirmed (menus only) |
+| TRXDIR downloads (GS to host) on any path | 0 | Confirmed (menus only) |
+| TRXDIR uploads | PATH2 179,760, PATH3 166,326 | Confirmed |
+| EE accesses to VU0/VU1 memory | 0 | Confirmed (menus only) |
+| VIF1 transfers (jobs a worker would receive) | 645.7/frame, 4,744 qwords/frame | Confirmed |
+| VIF1 STAT reads / FBRST writes by the EE | 74,570 / 70,374 (about 17.8 / 16.8 per frame) | Confirmed |
+| VU1 calls | 1.0/frame (7.2/frame in the first 600 frames, 0 afterwards) | Confirmed |
+| PATH1 / PATH2 / PATH3 transfers | 2.0 / 287 / 95 per frame | Confirmed |
+| VU1 time, overlap model | below 0.01 ms/frame | Not meaningful: the menu schedule runs almost no VU1 |
+
+Reading: the menu schedule cannot answer the timing questions (VU1 is idle there). It confirms that the
+hooks change nothing guest-visible, that the FBRST/STAT traffic matches the VIF1 i-bit handler at
+`0x4AB548` (one STC per stall), and that the menus need no hard sync besides VBlank. The go/no-go needs
+owner F7/F8 intervals in: car showroom (rotating car), night race, rally (Grand Canyon), Nordschleife
+Time Trial (Supra Wood One, 480p), plus one menu interval. Gate: `path1_signal_writes=0` in every scene;
+`downloads` per frame (expected non-zero in the night race); `overlap_model saving` close to
+`program_moved` with low `frames_waiting`. Timings from a session that overlaps another agent's build are
+contaminated and decide nothing.

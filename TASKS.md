@@ -133,6 +133,8 @@ Run VU1 programs on a worker thread (donor `start_vu_thread` exists), on by
 default with an env switch to disable; exact sync points wherever the EE observes
 VU1 results. Acceptance: identical headless frames, verify 0 mismatches, owner
 showroom/night/race frametime equal or better.
+State: plan in docs/MTVU-PLAN.md; step 0 (measurement build slice169, `--mode mtvu-measure`) done on
+branch `task/011-mtvu`; owner F7/F8 scenes pending before the go/no-go.
 
 ### TASK-012 — paraLLEl-GS as the PC renderer
 One large task, delivered in verified steps on its own branch:
