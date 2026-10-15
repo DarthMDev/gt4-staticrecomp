@@ -1084,7 +1084,8 @@ Pins: [slice188-parallel-runtime.json](inputs/slice188-parallel-runtime.json) an
 [slice188-parallel.json](inputs/slice188-parallel.json). Executable 97,085,952 bytes, sha256 7a51936a...; shaders checked
 against the runtime pin.
 
-Owner commands (use a fresh session each time; F10 writes into the session folder):
+Owner commands. Run them from the worktree `C:\Antigravity\gt4-wt-012-upscale`: the launcher reads the pins of the
+checkout it runs from, and the slice188 pins exist only on this branch until it is merged (F10 writes into the session folder):
 
     C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode parallel-hires --hires 2 --force-480p
     C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode parallel-hires --hires 4 --force-480p
