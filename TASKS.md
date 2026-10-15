@@ -136,7 +136,7 @@ showroom/night/race frametime equal or better.
 State: plan in docs/MTVU-PLAN.md; step 0 (measurement build slice169, `--mode mtvu-measure`) done on
 branch `task/011-mtvu`; owner verdict go (section 10). Step 1 (SPSC ring and ordered journal, CTest
 `native_mtvu_ring`, `native_mtvu_journal`) committed. Step 2 (runtime capsule slice170, `--mode mtvu`,
-`GT4_MTVU`) implemented; step 3 (per-thread F8, slice171, `[mtvu]` section) done; owner A/B pending (MTVU-PLAN section 11.7 and BUILD Slice171).
+`GT4_MTVU`) implemented; step 3 (per-thread F8, slice171, `[mtvu]` section) done; step 4 (slice172: PATH2/PATH3 SIGNAL/FINISH/LABEL applied on the EE at acceptance, the night-race "other" EE wait; reasons split in F8) done, headless 42/42 with MTVU on and off, verify 0 mismatches (MTVU-PLAN section 12). Step 6 (`--cpu-cores N` weak-CPU simulation on the launcher) implemented; owner A/B pending (MTVU-PLAN section 12.6, BUILD Slice172).
 
 ### TASK-012 — paraLLEl-GS as the PC renderer
 One large task, delivered in verified steps on its own branch:

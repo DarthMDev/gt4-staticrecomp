@@ -218,6 +218,47 @@ void check_switch() {
   require(!parse_switch("", enabled) && !enabled, "empty is refused");
 }
 
+Qword signal_entry(std::uint64_t value, std::uint8_t address) {
+  Qword q;
+  q.lo = value;                     // A+D data: the value
+  q.hi = static_cast<std::uint64_t>(address);  // A+D address in byte 8
+  return q;
+}
+
+// Section 12 ordering rule: SIGNAL/FINISH/LABEL of PATH2/PATH3 are applied at packet acceptance, in stream order.
+// The scanner must report every such write in order, across chunk boundaries, with the donor's address byte.
+void check_signal_order() {
+  GifScanner scanner;
+  PathCounts counts;
+  std::vector<SignalWrite> writes;
+  // PACKED tag, 3 entries, each an A+D register (0xE): SIGNAL 0x60 with 0x11, FINISH 0x61 with 0x33, then the byte
+  // 0xE0 (not a signal address for the donor: write() dispatches on the full byte).
+  Qword tag_word = tag(3, 0, 3, 0xEull | (0xEull << 4) | (0xEull << 8));
+  std::vector<Qword> first{tag_word, signal_entry(0x11, 0x60)};
+  scanner.scan(reinterpret_cast<const std::uint8_t *>(first.data()), 2, counts, &writes);
+  require(writes.size() == 1 && writes[0].reg == 0x60 && writes[0].value == 0x11,
+          "first chunk reports SIGNAL 0x11 at 0x60");
+  // The packet state carries across the chunk: FINISH 0x33, then address byte 0xE0 (not a signal).
+  std::vector<Qword> second{signal_entry(0x33, 0x61), signal_entry(0x44, 0xE0)};
+  scanner.scan(reinterpret_cast<const std::uint8_t *>(second.data()), 2, counts, &writes);
+  require(writes.size() == 2 && writes[1].reg == 0x61 && writes[1].value == 0x33,
+          "second chunk reports FINISH 0x33 at 0x61 in order");
+  require(writes.size() == 2, "the 0xE0 address byte is not a signal (donor address is the full byte)");
+  require(counts.finish == 1 && counts.label == 0, "counters still count FINISH with the list in use");
+
+  // Without the list the counters still count (no behavior change for the measure build).
+  GifScanner plain;
+  PathCounts plain_counts;
+  plain.scan(reinterpret_cast<const std::uint8_t *>(first.data()), 2, plain_counts);
+  require(plain_counts.signal == 1, "scan without a list counts SIGNAL");
+
+  // Predicate: only PATH2/PATH3 pre-apply, only addresses 0x60-0x62.
+  require(pre_applies_signal(2, 0x60) && pre_applies_signal(2, 0x62) && pre_applies_signal(3, 0x61),
+          "PATH2 and PATH3 signals are pre-applied");
+  require(!pre_applies_signal(1, 0x60), "PATH1 signals are not pre-applied");
+  require(!pre_applies_signal(2, 0x5F) && !pre_applies_signal(3, 0x63), "other addresses are not pre-applied");
+}
+
 }  // namespace
 
 int main() {
@@ -226,6 +267,7 @@ int main() {
     check_overlap_model();
     check_measure();
     check_switch();
+    check_signal_order();
   } catch (const std::exception &error) {
     std::fprintf(stderr, "native_mtvu_measure FAILED: %s\n", error.what());
     return 1;

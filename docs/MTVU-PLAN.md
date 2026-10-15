@@ -556,3 +556,99 @@ Verification (slice171, headless 4,200 frames, slice157 schedule, dumps every 10
   `[mtvu]` section; with MTVU off, the same legacy lines and no `[mtvu]` section.
 - Sample (on1, interval at frame 1000): EE gs_drain 0.09-0.16 ms/frame, worker output 0.02-0.07 ms/frame,
   worker idle 7-73 ms/frame, overlap 0.007-0.069 ms/frame, jobs 52-1372 per frame.
+
+## 12. Step 4 (night-race EE wait) and step 6 (weak-CPU simulation), slice 172
+
+Build `private/slice172-mtvu-build/build`; `gt4vulkan.exe` 95,570,944 bytes, sha256
+47df308fbbb3f555ea54749dae94ee249023e93cc315a721491d7a6661c50b0c. Runtime capsule
+`private/slice172-mtvu-runtime` (pin `docs/inputs/slice172-mtvu-runtime.json`, profile `step4-runtime-v2`, receipt
+sha256 ca565bbcd75214074fc333aed3cafda6b580e1b078ea221ad4519b8028fc0d29). Launcher pin `docs/inputs/slice172-mtvu.json`
+(mode `mtvu` now points here; slice171 stays as mode `mtvu-slice171`). Slice170 and slice171 pins are unchanged.
+
+### 12.1 Cause of the night-race "other" wait [H]
+
+- Before slice172, every SIGNAL/FINISH/LABEL write on PATH2 or PATH3 forced a blocking sync. A PATH2 DIRECT packet
+  with a signal called `sync("direct_signal")` in `shadow_direct`; a PATH3 transfer with a signal called
+  `sync("signal")` in `gif_transfer`. Both reasons were counted under `mtvu_wait_other`, the only EE wait category
+  that the owner night-race F8 showed (1.613 ms/frame).
+- The sync drains the journal and waits for the worker job of the packet just posted: the VU1 program of that packet
+  plus its GIF output. That is why overlap was only 2.04 ms of 3.67 ms worker busy.
+- Step 0 (section 9) counted one PATH2 FINISH per frame in the night race, so one such wait happens per frame. The
+  owner F8 reported `download=0` and `gs_privileged=0.016`, so the TRXDIR download per frame did not produce a
+  measured EE wait in that run.
+- Label: **High confidence** that the 1.6 ms is the FINISH sync (code path plus step 0 count). Not yet measured per
+  reason; slice172 splits the reasons (12.3) so the next owner F8 shows it directly.
+
+### 12.2 The fix: apply the signal at acceptance, in stream order [C for the code, H for exactness]
+
+- SIGNAL/FINISH/LABEL change only SIGLBLID, CSR and the GS interrupt request. They do not depend on pixels drawn by
+  earlier packets. The single-thread path applies them at the packet's program point (inside `gif::render`); the EE
+  reads them at that point and the interrupt is raised there.
+- slice172 applies them on the EE when the packet is accepted: `GifScanner::scan` (new optional list) returns every
+  PACKED A+D write to 0x60-0x62 in stream order with the donor's address byte (`qword[8]`, the same byte `gs::write`
+  dispatches on), and `apply_accepted_signals` calls `gs::signal` for each one. Same EE program position as before.
+- The drained render (PATH2/PATH3 only) skips those writes: the capsule `gif.cpp` hook calls
+  `gt4::mtvu::signal_pre_applied` before `gs::write_packed`. PATH1 is never pre-applied; its signals keep the render
+  time application and the PATH1 invariant count (section 5.3).
+- No wait for the worker job. Downloads, VU1 memory access, GS privileged writes, VBlank, GIF/VIF/VU resets and state
+  save keep their blocking syncs (section 5.3).
+- Side effect, reviewed: the donor's `gs::write` bumps `g_setup_generation` for registers 64 and above. The skipped
+  signal writes no longer bump it. The generation keys the GPU vertex-setup cache, and signal writes change no draw
+  state, so the cache result is unchanged [H]; the identical headless frames are the check.
+- Strict and verify modes are unchanged; `GT4_MTVU_VERIFY=1` still compares the shadow and worker VIF1 state and the
+  per-frame GS stream hash.
+
+### 12.3 Reasons in the F8 `[mtvu]` lines
+
+- `EE wait ms/frame` now lists `vblank, download, gs_privileged, vu_memory, gif_reset, reset (VIF/VU/HW resets),
+  state (save/load and shutdown), other, total`. The former `other` split is visible; any remaining `other` is a
+  reason that the runtime does not yet name.
+- `[mtvu] signals applied on the EE at accept N` counts the SIGNAL/FINISH/LABEL writes applied at acceptance (the
+  replacement for the old per-frame FINISH wait). `[mtvu] sync <reason> N` lines keep their counts.
+
+### 12.4 Verification (slice172)
+
+| Check | Result | Label |
+|---|---|---|
+| Build | `cmake --build` finished, exit 0 (255 steps) | Confirmed |
+| CTest | 27/27 (`native_mtvu_measure` now includes `check_signal_order`: ordered list across chunks, donor address byte, PATH1/PATH2/PATH3 predicate; `native_mtvu_ring`, `native_mtvu_journal`, `native_mtvu_perf`; `python_native_contracts` passes) | Confirmed |
+| Python `unittest discover` | 279 tests, OK, 12 skipped (new `tests/python/test_cpu_affinity.py`: 15 tests) | Confirmed |
+| Headless 4,200 frames, slice157 schedule (42 dumps), `GT4_MTVU=1`, three runs (on1, on2, on3) | 42/42 identical to the slice171 `GT4_MTVU=0` dumps (= slice157) in each run | Confirmed |
+| Headless 4,200 frames, `GT4_MTVU=0`, one run (off1) | 42/42 identical | Confirmed |
+| `GT4_MTVU=1` with `GT4_MTVU_VERIFY=1` (verify1) | 4,200 verify lines, 0 mismatches (shadow vs worker VIF1 state); 42/42 dumps identical | Confirmed |
+| `signals applied on the EE at accept` in menus | 0 (menus have no SIGNAL/FINISH/LABEL on PATH2/PATH3) | Confirmed (menus only) |
+| `[mtvu] sync` in menus | gif_reset 1, gs_privileged 20,984 (about 5 per frame), shutdown 1, vblank 4,200 | Confirmed |
+
+### 12.5 Weak-CPU simulation: `--cpu-cores N` (step 6) [C for the code, not measured]
+
+- `play_performance.py --cpu-cores N` limits the game process to N logical CPUs. `scripts/cpu_affinity.py` picks one
+  logical CPU per physical core first (lowest index of each core), then SMT siblings; it reads the topology with
+  `GetLogicalProcessorInformation` (fallback: one core per logical CPU). The mask is applied with
+  `SetProcessAffinityMask` after the process starts, so the first milliseconds of startup may use all CPUs; the
+  record says so (`method`).
+- Validated: integer, 1 to the logical CPU count (16 on the owner machine). Refused outside performance runs
+  (`run_probe(performance=False)`). Recorded in `result.json` as `cpu_affinity` (requested, logical, physical cores,
+  CPU list, mask, applied, method).
+- Unit tests (`test_cpu_affinity.py`): selection order on an 8-core SMT topology (2 cores -> CPUs 0 and 2; 10 cores ->
+  8 first threads plus two siblings), mask bits, range and type checks, refusal before launch.
+- Not verified on hardware in this step: the affinity call runs only on the owner's Windows machine.
+
+### 12.6 Owner A/B commands
+
+Run from the worktree or the main checkout as needed; PowerShell. `GT4_MTVU=0` is the single-thread path, `1` the worker.
+
+```
+$env:GT4_MTVU="0"; C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p --cpu-cores 2
+$env:GT4_MTVU="1"; C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode mtvu --force-480p --cpu-cores 2
+```
+
+Use `--cpu-cores 1` for the one-core case; omit `--cpu-cores` for the full machine. Scenes: showroom, night race, rally
+(reference scene per CLAUDE.md is Time Trial; the owner's F8 scenes are the ones listed here). Night race re-check
+without a limit: `$env:GT4_MTVU="1"; ...play_performance.py ... --mode mtvu --force-480p` and read the `[mtvu] EE wait`
+line; expected: `other` near 0, `signals applied on the EE at accept` nonzero.
+
+### 12.7 Limits
+
+- Headless evidence is menus only (no FINISH on PATH2/PATH3 there, so the 12.2 change is not exercised headless) (no race scene headless); the night-race effect is shown by the code path and the
+  reason split, to be confirmed by the owner F8.
+- The `--cpu-cores` A/B has no performance claim here; it is a simulation of a weaker CPU, not a model of one.

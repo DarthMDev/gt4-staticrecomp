@@ -38,7 +38,8 @@ PathCounts path_difference(const PathCounts &a, const PathCounts &b) {
 
 }  // namespace
 
-void GifScanner::scan(const std::uint8_t *data, std::uint32_t qwc, PathCounts &counts) {
+void GifScanner::scan(const std::uint8_t *data, std::uint32_t qwc, PathCounts &counts,
+                      std::vector<SignalWrite> *signals) {
   ++counts.transfers;
   counts.qwords += qwc;
   std::uint32_t index = 0;
@@ -65,6 +66,8 @@ void GifScanner::scan(const std::uint8_t *data, std::uint32_t qwc, PathCounts &c
       if (descriptor == 0xEu) {
         const std::uint8_t address = qword[8] & 0x7Fu;
         const std::uint64_t value = load64(qword);
+        if (signals && (qword[8] == kGsSignal || qword[8] == kGsFinish || qword[8] == kGsLabel))
+          signals->push_back(SignalWrite{qword[8], value});
         if (address == kGsSignal) ++counts.signal;
         else if (address == kGsFinish) ++counts.finish;
         else if (address == kGsLabel) ++counts.label;

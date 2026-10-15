@@ -58,6 +58,11 @@ from external_runtime_probe import PERF_PROFILES, VU1_RECORD_MANIFEST
 MODES = tuple(PERF_PROFILES) + ('vu1-record',)
 
 
+def cpu_options(args):
+    """--cpu-cores as a play() option; absent when not requested."""
+    return {} if args.cpu_cores is None else {'cpu_cores': args.cpu_cores}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--assets-root', type=Path, required=True)
@@ -68,6 +73,9 @@ def main():
                         help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
     parser.add_argument('--force-480p', action='store_true',
                         help='experimental: hold the race display option at 480p (quickfix3 mode)')
+    parser.add_argument('--cpu-cores', type=int, default=None, metavar='N',
+                        help='weak-CPU simulation: limit the game to N logical CPUs (1..logical count), '
+                             'one per physical core first; recorded in result.json (docs/MTVU-PLAN.md section 12)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()
@@ -84,7 +92,7 @@ def main():
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure or mtvu')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
-                 performance=True, vu1_record=True)
+                 performance=True, vu1_record=True, **cpu_options(args))
         else:
             manifest, _ = PERF_PROFILES[args.mode]
             options = {}
@@ -96,6 +104,7 @@ def main():
                 options['force_480p'] = True
             if args.vu0_verify:
                 options['vu0_verify'] = args.vu0_verify
+            options.update(cpu_options(args))
             play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

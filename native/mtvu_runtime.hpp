@@ -34,6 +34,8 @@ struct Donor {
   void (*render_gs)(int path, const std::uint8_t *data, std::uint32_t qwc);
   // Hash of the VIF1 state: the worker side (true) or the EE shadow (false). Called on the EE after a sync.
   std::uint64_t (*vif1_state_hash)(bool worker_side);
+  // gs::signal (SIGNAL/FINISH/LABEL), applied on the EE when a PATH2/PATH3 packet is accepted (docs section 12).
+  void (*apply_signal)(std::uint32_t reg, std::uint64_t value);
 };
 
 // Starts the worker when settings.enabled (EE thread, before emulation). Verify hashing works either way.
@@ -56,6 +58,9 @@ void gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc);
 void shadow_direct(int path, const std::uint8_t *data, std::uint32_t qwc);
 // GIF reset: synchronous drain, then the EE scanners restart.
 void gif_reset();
+// True when a PATH2/PATH3 PACKED A+D write to `address` (0x60-0x62) was already applied on the EE by gif_transfer or
+// shadow_direct, so the drained render must skip it. PATH1 is never pre-applied (its signals stay at render time).
+bool signal_pre_applied(int path, std::uint32_t address);
 // Every GS render (EE thread, journal or direct) passes here for the verify stream hash.
 void note_render(int path, const std::uint8_t *data, std::uint32_t qwc);
 

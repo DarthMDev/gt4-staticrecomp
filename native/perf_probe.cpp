@@ -49,7 +49,7 @@ constexpr const char *names[] = {
 #endif
 #ifdef GT4_MTVU_RUNTIME
     , "mtvu_wait_vblank", "mtvu_wait_download", "mtvu_wait_gs_privileged", "mtvu_wait_vu_memory",
-    "mtvu_wait_other", "gs_drain", "mtvu_output"
+    "mtvu_wait_gif_reset", "mtvu_wait_reset", "mtvu_wait_state", "mtvu_wait_other", "gs_drain", "mtvu_output"
 #endif
     };
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));

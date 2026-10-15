@@ -76,8 +76,10 @@ struct Runtime {
   std::uint64_t worker_job = 0;     // worker thread only
   GifScanner worker_scanners[4];    // worker thread only: PATH1 invariant check
   GifScanner ee_scanners[4];        // EE thread only: signal detection before journaling
+  std::vector<SignalWrite> signal_scratch;  // EE thread only: signals of the packet being accepted
 
   std::uint64_t next_job = 1;  // EE thread only
+  std::uint64_t signals_applied = 0;  // EE thread only: SIGNAL/FINISH/LABEL applied at accept
   std::uint64_t vif_packets = 0, vif_writes = 0, ee_transfers = 0, direct_transfers = 0, gs_renders = 0;
   std::map<std::string, std::uint64_t> syncs;
   std::atomic<std::uint64_t> path1_signals{0};
@@ -226,15 +228,21 @@ void report_interval(std::FILE *file, const gt4::perf::IntervalTime &ee, std::ui
   const double wait_download = ee_ms(gt4::perf::Category::mtvu_wait_download);
   const double wait_privileged = ee_ms(gt4::perf::Category::mtvu_wait_gs_privileged);
   const double wait_vu_memory = ee_ms(gt4::perf::Category::mtvu_wait_vu_memory);
+  const double wait_gif_reset = ee_ms(gt4::perf::Category::mtvu_wait_gif_reset);
+  const double wait_reset = ee_ms(gt4::perf::Category::mtvu_wait_reset);
+  const double wait_state = ee_ms(gt4::perf::Category::mtvu_wait_state);
   const double wait_other = ee_ms(gt4::perf::Category::mtvu_wait_other);
-  const double wait_total = wait_vblank + wait_download + wait_privileged + wait_vu_memory + wait_other;
+  const double wait_total = wait_vblank + wait_download + wait_privileged + wait_vu_memory + wait_gif_reset +
+                            wait_reset + wait_state + wait_other;
   const double vu1 = (now.vu1_us - r.baseline.vu1_us) / scale;
   const double output = (now.output_us - r.baseline.output_us) / scale;
   const double idle = (now.idle_us - r.baseline.idle_us) / scale;
   const double busy = vu1 + output;
   const double overlap = busy > wait_total ? busy - wait_total : 0.0;
-  std::fprintf(file, "[mtvu] EE wait ms/frame: vblank=%.3f download=%.3f gs_privileged=%.3f vu_memory=%.3f other=%.3f total=%.3f\n",
-               wait_vblank, wait_download, wait_privileged, wait_vu_memory, wait_other, wait_total);
+  std::fprintf(file, "[mtvu] EE wait ms/frame: vblank=%.3f download=%.3f gs_privileged=%.3f vu_memory=%.3f "
+               "gif_reset=%.3f reset=%.3f state=%.3f other=%.3f total=%.3f\n",
+               wait_vblank, wait_download, wait_privileged, wait_vu_memory, wait_gif_reset, wait_reset, wait_state,
+               wait_other, wait_total);
   std::fprintf(file, "[mtvu] EE gs_drain ms/frame=%.3f (journal GS front end on the EE thread)\n",
                ee_ms(gt4::perf::Category::gs_drain));
   std::fprintf(file, "[mtvu] worker ms/frame: vu1_program=%.3f output_path12=%.3f busy=%.3f idle=%.3f jobs/frame=%.1f\n",
@@ -256,7 +264,7 @@ void start(const Settings &settings, const Donor &donor) {
   r.donor = donor;
   if (!settings.enabled) return;
   if (!donor.worker_vif_packet || !donor.worker_vif_write || !donor.worker_vu_reset || !donor.render_gs ||
-      !donor.vif1_state_hash) {
+      !donor.vif1_state_hash || !donor.apply_signal) {
     throw std::logic_error("mtvu needs every donor callback");
   }
   r.input = std::make_unique<SpscByteRing>(kInputBytes, r.bell);
@@ -298,6 +306,21 @@ void post_vif_write(std::uint32_t reg, std::uint32_t value) {
   rethrow_worker_error();
 }
 
+// Applies the signals of the packet being accepted, in stream order. SIGNAL/FINISH/LABEL change only SIGLBLID, CSR
+// and the GS interrupt request, never the drawing. The single-thread path applies them at this same EE program
+// position, so applying them now keeps the EE-observable order and removes the wait for the packet's worker job.
+void apply_accepted_signals(Runtime &r) {
+  for (const SignalWrite &write : r.signal_scratch) {
+    ++r.signals_applied;
+    r.donor.apply_signal(write.reg, write.value);
+  }
+  r.signal_scratch.clear();
+}
+
+bool signal_pre_applied(int path, std::uint32_t address) {
+  return enabled() && pre_applies_signal(path, address);
+}
+
 void gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {
   Runtime &r = rt();
   if (path < 0 || path > 3) throw std::logic_error("mtvu GIF path out of range");
@@ -307,14 +330,16 @@ void gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {
   }
   ++r.ee_transfers;
   PathCounts counts;
-  r.ee_scanners[path].scan(data, qwc, counts);
-  if (counts.signal + counts.finish + counts.label != 0) {
-    // Signals raise interrupts on the EE: apply them at this point, after every earlier operation.
-    sync("signal");
+  r.signal_scratch.clear();
+  r.ee_scanners[path].scan(data, qwc, counts, &r.signal_scratch);
+  if (path == 1 && !r.signal_scratch.empty()) {
+    // PATH1 signals are an invariant violation (section 5.3): keep the single-thread order for them.
+    sync("path1_signal");
     ++r.gs_renders;
     r.donor.render_gs(path, data, qwc);
     return;
   }
+  apply_accepted_signals(r);
   if (qwc == 0) return;
   if (r.journal->can_execute_now()) {
     ++r.gs_renders;
@@ -332,9 +357,10 @@ void shadow_direct(int path, const std::uint8_t *data, std::uint32_t qwc) {
   if (!enabled()) return;
   ++r.direct_transfers;
   PathCounts counts;
-  r.ee_scanners[path].scan(data, qwc, counts);
-  // The worker has this packet as a job already; the drain waits for its outputs, which the EE then renders.
-  if (counts.signal + counts.finish + counts.label != 0) sync("direct_signal");
+  r.signal_scratch.clear();
+  r.ee_scanners[path].scan(data, qwc, counts, &r.signal_scratch);
+  // The worker renders this packet later; its signals are applied here, at the packet's program position.
+  apply_accepted_signals(r);
 }
 
 void gif_reset() {
@@ -361,6 +387,9 @@ void sync(const char *reason) {
                       : why == "download" ? Category::mtvu_wait_download
                       : why == "gs_privileged" ? Category::mtvu_wait_gs_privileged
                       : why == "vu_memory" ? Category::mtvu_wait_vu_memory
+                      : why == "gif_reset" ? Category::mtvu_wait_gif_reset
+                      : (why == "vif_reset" || why == "vu_reset" || why == "hw_reset") ? Category::mtvu_wait_reset
+                      : (why == "state" || why == "shutdown") ? Category::mtvu_wait_state
                       : Category::mtvu_wait_other;
   gt4::perf::Scope waiting(wait);
   r.journal->drain(true);
@@ -446,6 +475,8 @@ void report(std::FILE *output) {
   std::fprintf(output, "[mtvu] path1_signal %llu\n", static_cast<unsigned long long>(r.path1_signals.load()));
   for (const auto &[reason, count] : r.syncs)
     std::fprintf(output, "[mtvu] sync %s %llu\n", reason.c_str(), static_cast<unsigned long long>(count));
+  std::fprintf(output, "[mtvu] signals applied on the EE at accept %llu\n",
+               static_cast<unsigned long long>(r.signals_applied));
   if (r.settings.verify)
     std::fprintf(output, "[mtvu] verify frames %llu mismatches %llu\n", static_cast<unsigned long long>(r.verify_frames),
                  static_cast<unsigned long long>(r.verify_mismatches));

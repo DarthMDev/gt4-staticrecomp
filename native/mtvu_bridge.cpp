@@ -3,6 +3,7 @@
 #include "mtvu_runtime.hpp"
 
 #include "gs/gif.hpp"
+#include "gs/gs.hpp"
 #include "vif.hpp"
 #include "vu_micro.hpp"
 
@@ -25,6 +26,8 @@ void worker_vu_reset() {
 
 void render_gs(int path, const std::uint8_t *data, std::uint32_t qwc) { ps2::gif::render(path, data, qwc); }
 
+void apply_signal(std::uint32_t reg, std::uint64_t value) { ps2::gs::signal(reg, value); }
+
 std::uint64_t vif1_state_hash(bool worker_side) { return ps2::vif::verify_hash(worker_side); }
 
 }  // namespace
@@ -36,6 +39,7 @@ void start_with_donor(const Settings &settings) {
   donor.worker_vu_reset = worker_vu_reset;
   donor.render_gs = render_gs;
   donor.vif1_state_hash = vif1_state_hash;
+  donor.apply_signal = apply_signal;
   start(settings, donor);
 }
 

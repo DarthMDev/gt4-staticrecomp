@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <vector>
 
 namespace gt4::mtvu {
 
@@ -18,6 +19,18 @@ constexpr std::uint8_t kGsTrxDir = 0x53;
 constexpr std::uint8_t kGsSignal = 0x60;
 constexpr std::uint8_t kGsFinish = 0x61;
 constexpr std::uint8_t kGsLabel = 0x62;
+
+// True when a PATH2/PATH3 SIGNAL/FINISH/LABEL write (address 0x60-0x62) is applied on the EE at packet acceptance
+// (section 12). PATH1 is never pre-applied: its signals stay at render time, under the PATH1 invariant.
+inline bool pre_applies_signal(int path, std::uint32_t address) {
+  return (path == 2 || path == 3) && address >= 0x60u && address <= 0x62u;
+}
+
+// One signal write as the donor GS applies it: gs::signal(reg, value), reg = the A+D address byte.
+struct SignalWrite {
+  std::uint32_t reg;
+  std::uint64_t value;
+};
 
 struct PathCounts {
   std::uint64_t transfers = 0;  // gif::transfer calls
@@ -33,7 +46,9 @@ struct PathCounts {
 // can address SIGNAL/FINISH/LABEL/TRXDIR; REGLIST and IMAGE data are skipped.
 class GifScanner {
 public:
-  void scan(const std::uint8_t *data, std::uint32_t qwc, PathCounts &counts);
+  // signals (optional): every SIGNAL/FINISH/LABEL write in stream order, with the donor register and value.
+  void scan(const std::uint8_t *data, std::uint32_t qwc, PathCounts &counts,
+            std::vector<SignalWrite> *signals = nullptr);
   bool inside_packet() const { return active_; }
 
 private:

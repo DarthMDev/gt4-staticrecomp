@@ -20,7 +20,8 @@ enum class Category : std::size_t {
 #ifdef GT4_MTVU_RUNTIME
   // TASK-011 step 3 (slice171): EE waits for the VU1 worker, by sync reason; GS front end executed from the journal;
   // worker-side GIF output (PATH1/PATH2 bytes). Reported only in the [mtvu] section, never in the legacy lines.
-  mtvu_wait_vblank, mtvu_wait_download, mtvu_wait_gs_privileged, mtvu_wait_vu_memory, mtvu_wait_other,
+  mtvu_wait_vblank, mtvu_wait_download, mtvu_wait_gs_privileged, mtvu_wait_vu_memory,
+  mtvu_wait_gif_reset, mtvu_wait_reset, mtvu_wait_state, mtvu_wait_other,
   gs_drain, mtvu_output,
 #endif
   count

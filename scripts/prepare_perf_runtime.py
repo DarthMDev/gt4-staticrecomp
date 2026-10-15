@@ -184,6 +184,10 @@ MTVU_PATCHES.update({
         ('void render(int path, const std::uint8_t *data, std::uint32_t qwc) {\n    GsSink sink{path};',
          'void render(int path, const std::uint8_t *data, std::uint32_t qwc) {\n'
          '    gt4::mtvu::note_render(path, data, qwc);\n    GsSink sink{path};'),
+        ('    void packed(std::uint32_t reg, const Reg128 &q) { gs::write_packed(reg, q); }\n',
+         '    void packed(std::uint32_t reg, const Reg128 &q) {\n'
+         '        if (reg == 0xEu && gt4::mtvu::signal_pre_applied(path, static_cast<std::uint32_t>(q.d[1] & 0xFFu))) return;\n'
+         '        gs::write_packed(reg, q);\n    }\n'),
         ('void scan_signals(int path, const std::uint8_t *data, std::uint32_t qwc) { scan(g_scan[path], data, qwc); }',
          'void scan_signals(int path, const std::uint8_t *data, std::uint32_t qwc) {\n'
          '    gt4::mtvu::shadow_direct(path, data, qwc);\n}'),
@@ -404,7 +408,7 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
         receipt['mtvu_measure_profile'] = 'step0-counters-v1'
         receipt['mtvu_measure_donor_sha256'] = {name: expected for name, (_, expected) in MTVU_MEASURE_SOURCES.items()}
     if mtvu:
-        receipt['mtvu_runtime_profile'] = 'step2-runtime-v1'
+        receipt['mtvu_runtime_profile'] = 'step4-runtime-v2'
         receipt['mtvu_runtime_donor_sha256'] = {name: expected for name, (_, expected) in MTVU_RUNTIME_SOURCES.items()}
     for name, text in sources.items():
         path = output / name

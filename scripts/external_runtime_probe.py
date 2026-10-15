@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import time
 
+from cpu_affinity import apply_process_affinity, plan_affinity
 from gt4disc import fingerprint
 
 
@@ -54,7 +55,9 @@ PERF_PROFILES = {
     'mtvu-measure': ('slice169-mtvu-measure.json', 'private/slice169-mtvu-measure-build/build/gt4vulkan.exe'),
     # TASK-011 step 2 (slice170): VU1 worker thread. GT4_MTVU (default on) selects the worker; 0 is the main path.
     # slice171 (TASK-011 step 3): the slice170 worker runtime with per-thread accounting ([mtvu] F8 lines).
-    'mtvu': ('slice171-mtvu.json', 'private/slice171-mtvu-build/build/gt4vulkan.exe'),
+    # slice172 (TASK-011 step 4): SIGNAL/FINISH/LABEL applied at acceptance; the launcher mode mtvu points here.
+    'mtvu': ('slice172-mtvu.json', 'private/slice172-mtvu-build/build/gt4vulkan.exe'),
+    'mtvu-slice171': ('slice171-mtvu.json', 'private/slice171-mtvu-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -62,10 +65,10 @@ PACING_MANIFEST = 'slice153-pacing.json'
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
-                     'slice171-mtvu.json')
+                     'slice171-mtvu.json', 'slice172-mtvu.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
-                     'slice171-mtvu.json')
+                     'slice171-mtvu.json', 'slice172-mtvu.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -223,8 +226,11 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              binary_workspace=None):
+              binary_workspace=None, cpu_cores=None):
     workspace = workspace.resolve()
+    if cpu_cores is not None and not performance:
+        raise ValueError('--cpu-cores is refused outside performance modes')
+    affinity_plan = plan_affinity(cpu_cores) if cpu_cores is not None else None
     if performance and (not interactive or capture_shapes):
         raise ValueError('Performance play must be owner-controlled without shape capture')
     runtime_workspace = Path(runtime_workspace or workspace).resolve()
@@ -414,9 +420,28 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         result['vu1_interpret_environment'] = {'PS2_VU_INTERPRET': '1'}
     with log_path.open('wb') as output:
         try:
-            process = subprocess.run(arguments, cwd=run_directory, stdout=output,
-                                     stderr=subprocess.STDOUT, timeout=timeout_seconds, env=environment)
-            exit_code, timed_out = process.returncode, False
+            if affinity_plan is None:
+                process = subprocess.run(arguments, cwd=run_directory, stdout=output,
+                                         stderr=subprocess.STDOUT, timeout=timeout_seconds, env=environment)
+                exit_code, timed_out = process.returncode, False
+            else:
+                # Affinity: start, then set the mask on the running process (see scripts/cpu_affinity.py).
+                process = subprocess.Popen(arguments, cwd=run_directory, stdout=output,
+                                           stderr=subprocess.STDOUT, env=environment)
+                try:
+                    apply_process_affinity(process.pid, affinity_plan['mask'])
+                except OSError:
+                    process.kill()
+                    process.wait()
+                    raise
+                result['cpu_affinity'] = dict(affinity_plan, applied=True, mask=hex(affinity_plan['mask']),
+                                              method='SetProcessAffinityMask after process start')
+                try:
+                    exit_code, timed_out = process.wait(timeout=timeout_seconds), False
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                    raise
         except subprocess.TimeoutExpired:
             exit_code, timed_out = None, True
     result.update(summarize_exit(log_path.read_text(encoding='utf-8', errors='replace'),
