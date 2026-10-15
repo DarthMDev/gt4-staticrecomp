@@ -33,7 +33,7 @@ Task IDs are stable; the overview lists tasks in execution order.
 | TASK-015 | EE entry coverage from the decomp function list | 📋 Planned |
 | TASK-016 | LWR sign-extension fidelity fix | 📋 Planned |
 | TASK-017 | IOP per-module cost counters and review | 📋 Planned |
-| TASK-020 | 480p boot and 16:9 option (only if not done in TASK-009) | 📋 Planned |
+| TASK-020 | In-game 16:9 option by default (guest hook); 480p via guest hook if the TASK-009 switch fails | 📋 Planned |
 | TASK-021 | Merged into TASK-009 | — |
 | TASK-022 | Decomp names in generated EE code | 📋 Planned |
 | TASK-023 | Launcher (Rust + egui/GPUI): video, controls, game image | 📋 Planned |
@@ -90,8 +90,15 @@ Branch: `feat/vu1-entry-coverage`.
 - Fullscreen toggle: Alt+Enter (Windows convention) and F11, borderless
   fullscreen on the current monitor.
 - Per-interval perf counters (`late_frames`, `audio_underruns`; was TASK-021).
-- 480p by default at boot and the in-game screen ratio kept at 16:9, if the
-  feasibility study shows it is small; otherwise it stays TASK-020.
+- 480p by default (experimental switch, default on only after the owner check):
+  the game applies the saved option at race start through `SetGsCrt`
+  (480p = interlace 0 / mode 0x50, 480i = interlace 1 / mode 0x51; menus use
+  mode 0x2 and are untouched). The host rewrites 0x51 → 0x50 in the `SetGsCrt`
+  syscall (donor `kernel.cpp:474` / `hw.cpp:165`) when the switch is on. Risk:
+  the game still prepares 480i field buffers, so the owner must confirm the race
+  image; otherwise this moves back to TASK-020 with a guest-side hook.
+  Study: `RaceDisplay` state at object +0x16B0, table `D_00618648`
+  (`MOption::applyRaceDisplayMode`).
 Owner check: title, fullscreen in menus/race, 16:9 image, F8 counters.
 
 ### TASK-010 — MTVU
@@ -143,9 +150,11 @@ speeds up every later task.
 `-ffp-contract=off` control, x86-64-v3 runtime variant chosen by the launcher,
 dispatch divide removal, ThinLTO, PGO; one variable per candidate.
 
-### TASK-020 — 480p boot and 16:9 option
-Locate the video-mode and screen-ratio settings via decomp names and set them at
-startup (launcher options).
+### TASK-020 — In-game 16:9 option by default
+The wide flag is set through `MOption get_wide_mode` (0x180108) →
+`func_00437110` (flag at object +0x14); forcing it needs a guest-side hook after
+the save loads (MOption instance address still to confirm). Also the fallback
+for 480p if the TASK-009 `SetGsCrt` switch is not acceptable.
 
 ### TASK-021 — Merged into TASK-009
 
