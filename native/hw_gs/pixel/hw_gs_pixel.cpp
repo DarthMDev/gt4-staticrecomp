@@ -141,9 +141,15 @@ Colour expand_texel16(std::uint16_t texel, std::uint8_t ta0, std::uint8_t ta1, b
     out.r = (texel & 0x1F) << 3;
     out.g = ((texel >> 5) & 0x1F) << 3;
     out.b = ((texel >> 10) & 0x1F) << 3;
-    out.a = (texel & 0x8000u) != 0 ? ta1 : ta0;
-    if (aem && out.r == 0 && out.g == 0 && out.b == 0) {
-        out.a = 0;
+    // IN-07 single rule: the A bit selects TA1 first; otherwise AEM with RGB = 0 gives 0,
+    // else TA0. For A bit clear this equals the whole-value form (the CLUT rule of 07.5).
+    if ((texel & 0x8000u) != 0) {
+        out.a = ta1;
+    } else {
+        out.a = ta0;
+        if (aem && out.r == 0 && out.g == 0 && out.b == 0) {
+            out.a = 0;
+        }
     }
     return out;
 }

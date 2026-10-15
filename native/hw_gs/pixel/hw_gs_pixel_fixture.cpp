@@ -177,7 +177,8 @@ void test_texa_sweep() {
         const Colour out = expand_texel16(static_cast<std::uint16_t>(texel), 0x21, 0xC3, aem);
         const bool black = (texel & 0x7FFFu) == 0;
         std::int32_t alpha = (texel & 0x8000u) != 0 ? 0xC3 : 0x21;
-        if (aem && black) {
+        // IN-07: the A bit wins over AEM; AEM only zeroes black texels with the A bit clear.
+        if (aem && black && (texel & 0x8000u) == 0) {
             alpha = 0;
         }
         if (out.r != static_cast<std::int32_t>((texel & 0x1F) * 8) ||
