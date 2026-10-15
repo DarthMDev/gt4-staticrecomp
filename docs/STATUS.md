@@ -1,5 +1,12 @@
 # Current Status
 
+2026-10-14 — Slice 151, owner replanning: [Optimization Plan](OPTIMIZATION-PLAN.md)
+and [decision 0065](decisions/0065-aot-all-guest-code-no-jit.md) set the order of work:
+VU1 AOT first (donor recording + `vurecomp` flow never activated for GT4; all VU1
+calls hit the interpreter), then asynchronous GS submission, then VU0-micro/IOP AOT
+and EE build tuning. Read-only source review; no build, run or code change.
+Branch `codex/optimization-plan-151` from slice 150.
+
 2026-10-14 — Slice 150, owner split report identifies VU1 interpreted wall cost.
 Playable base remains slice114; slice143 includes slice136's keyboard correction.
 Active track: `codex/hybrid-no-jit-port-plan-141`; slice143 based on5c7ab92.
