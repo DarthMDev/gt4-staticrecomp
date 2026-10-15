@@ -394,3 +394,27 @@ Time Trial (Supra Wood One, 480p), plus one menu interval. Gate: `path1_signal_w
 `downloads` per frame (expected non-zero in the night race); `overlap_model saving` close to
 `program_moved` with low `frames_waiting`. Timings from a session that overlaps another agent's build are
 contaminated and decide nothing.
+
+## 10. Step 0 owner results (2026-10-15)
+
+Owner session `session-20261015-111421-142089`, `--mode mtvu-measure`, one F7/F8
+interval per scene, idle CPU. Host timings include the measurement overhead
+(per-call timing of about 1,000-2,000 VU1 calls per frame lowers FPS to 51-58 in
+this mode only).
+
+| Scene | VU1 call ms/frame | of which PATH1 GS front end | VU1 program (movable) | Overlap model VBlank wait | Saving | PATH1 SIGNAL/FINISH/LABEL | Downloads (hard syncs) |
+|---|---|---|---|---|---|---|---|
+| Showroom | 12.45 | 5.20 | **7.26** | 0.00 | **7.26** | 0 | 0 |
+| Night race | 5.97 | 2.52 | **3.45** | 0.00 | **3.45** | 0 | 1 per frame (PATH2 FINISH + download) |
+| Rally | 8.39 | 3.47 | **4.93** | 0.00 | **4.93** | 0 | 0 |
+
+- PATH1 signal invariant holds in all three race/showroom scenes (Confirmed):
+  exact MTVU as designed is possible.
+- EE accesses to VU memory: 0 in all scenes (Confirmed).
+- Overlap model: the worker always finishes before the VBlank sync (0% frames
+  waiting). The night race's one download per frame is a hard sync the model
+  does not yet charge; its real saving may be lower (Hypothesis).
+- The PATH1 GS front-end share (2.5-5.2 ms) stays on the EE thread in this
+  design; a later GS-thread step could move it.
+
+**Verdict: go** for steps 1-2.
