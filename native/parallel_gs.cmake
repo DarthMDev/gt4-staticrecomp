@@ -63,8 +63,8 @@ gt4_silence_vendor_targets("${GT4_PARALLEL_GS_SOURCE}")
 # and replaces gs_interface.cpp in the vendor target. Reason (Confirmed by source reading and by the
 # headless smoke, docs/PARALLEL-GS-PLAN.md section 9): GSInterface::gif_transfer sizes the optimized
 # PACKED handler run with `size / nreg`, where `size` is the whole transfer, not the qwords left
-# after index `i`. Our front end delivers GIF data per DMA chunk (path 3), per VIF DIRECT (path 2)
-# and per XGKICK (path 1), so a GIF packet often spans several calls; the handler then reads past
+# after index `i`. Our front end delivers GIF data per DMA chunk (path 3) and per VIF DIRECT (path 2);
+# XGKICK (path 1) passes whole packets. A path 2/3 packet can span calls; the handler then reads past
 # the caller's buffer and advances NLOOP too far. With fewer than NREG qwords left it would never
 # advance. The patch counts the remaining qwords and sends a partial loop down the generic
 # per-register path. Each anchor must occur exactly once in the pinned source.

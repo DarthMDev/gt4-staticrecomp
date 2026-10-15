@@ -17,6 +17,10 @@
 #include <utility>
 #include <vector>
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+
 namespace {
 
 using gt4::parallel_gs::Backend;
@@ -235,6 +239,63 @@ bool has_non_zero_pixel(const ScanoutImage &image) {
     return false;
 }
 
+// Window presentation (slice 168, step 6) on a hidden test window: no game, nothing shown. Checks that
+// the Granite WSI swapchain is created on an HWND, that present() succeeds frame after frame, that a
+// resize and a zero-sized (minimised) client are handled, and that the 16:9 rectangle matches the
+// donor presenter's arithmetic.
+void check_window_presentation(Backend &backend) {
+    using gt4::parallel_gs::widescreen_rect;
+    constexpr auto full = widescreen_rect(960, 540);
+    constexpr auto tall = widescreen_rect(1920, 1200);
+    constexpr auto wide = widescreen_rect(2560, 1080);
+    expect(full.left == 0 && full.top == 0 && full.width == 960 && full.height == 540, "16:9 rect fills a 960x540 client");
+    expect(tall.left == 0 && tall.top == 60 && tall.width == 1920 && tall.height == 1080, "16:9 rect letterboxes 1920x1200");
+    expect(wide.left == 320 && wide.top == 0 && wide.width == 1920 && wide.height == 1080, "16:9 rect pillarboxes 2560x1080");
+    expect(widescreen_rect(0, 0).width == 0, "zero-sized client gives an empty rect");
+
+    WNDCLASSW window_class{};
+    window_class.lpfnWndProc = DefWindowProcW;
+    window_class.hInstance = GetModuleHandleW(nullptr);
+    window_class.lpszClassName = L"GT4ParallelGsFixture";
+    RegisterClassW(&window_class);
+    HWND window = CreateWindowExW(0, window_class.lpszClassName, L"paraLLEl-GS fixture", WS_OVERLAPPEDWINDOW, 0, 0, 960, 540,
+                                  nullptr, nullptr, window_class.hInstance, nullptr);
+    expect(window != nullptr, "hidden test window created");
+    if (!window)
+        return;
+    gt4::parallel_gs::WindowTarget target;
+    target.window = window;
+    target.width = 960;
+    target.height = 540;
+    // FIFO, as the game window uses unless GT4_PRESENT_MODE says otherwise.
+    target.mode = gt4::parallel_gs::PresentMode::fifo;
+    std::string error;
+    const bool attached = backend.attach_window(target, error);
+    if (!attached)
+        std::printf("       attach_window: %s\n", error.c_str());
+    expect(attached && backend.has_window(), "Granite WSI swapchain created on the window (FIFO, UNORM)");
+    std::string second_error;
+    expect(!backend.attach_window(target, second_error), "a second attach_window is refused");
+    if (attached) {
+        GifStream gif;
+        build_scene(gif, 1);
+        backend.gif_transfer(3, gif.data(), gif.bytes());
+        bool all_presented = true;
+        for (std::uint32_t frame = 0; frame < 6; ++frame)
+            all_presented = backend.present(frame & 1) && all_presented;
+        expect(all_presented, "six consecutive presents with a scanout image");
+        backend.resize_window(640, 360);
+        expect(backend.present(0), "present after a resize to 640x360 rebuilds the swapchain");
+        backend.resize_window(0, 0);
+        expect(!backend.present(1), "a zero-sized (minimised) client presents nothing");
+        backend.resize_window(960, 540);
+        expect(backend.present(1), "present resumes after the client is restored");
+    }
+    backend.wait_idle();
+    // The swapchain stays with the backend (never destroyed while the process runs, as in the game);
+    // the window outlives it until process exit.
+}
+
 } // namespace
 
 int main() {
@@ -345,6 +406,11 @@ int main() {
            "4x SSAA high-resolution scanout is 1280x896");
     backend.next_frame();
     backend.wait_idle();
+
+    // Back to 1x and the GT4 frame-mode registers before the window checks.
+    expect(backend.set_super_sampling(1), "1x super-sampling restored");
+    set_display_ntsc_interlaced_frame(backend, 1);
+    check_window_presentation(backend);
 
     std::printf("failures: %d\n", failures);
     return failures ? 1 : 0;

@@ -444,7 +444,7 @@ word: one colour per page, shown as 64x64 blocks in the 448-line dumps. Evidence
 **GIF transfer split bug in paraLLEl-GS (Confirmed in source and fixture; no visible effect on this
 schedule).** `GSInterface::gif_transfer` sizes the optimized PACKED handler run with `size / nreg`, where
 `size` is the whole call, not the qwords left after index `i`. A GIF packet that spans calls (our DMA
-chunks, VIF DIRECT and XGKICK deliver one call each) makes the handler read past the caller's buffer and
+chunks and VIF DIRECT deliver one call each; XGKICK passes whole packets) makes the handler read past the caller's buffer and
 advance NLOOP too far; a call with fewer than NREG qwords left at a loop boundary never advances (infinite
 loop). Fix: a build-tree copy of `gs_interface.cpp` with two anchored replacements
 (`native/parallel_gs.cmake`, documented in `native/THIRD_PARTY.md`); the pinned checkout stays clean.
@@ -502,3 +502,77 @@ frames only; no race, night or rally scene is in this schedule.
 3. Scenes outside the headless schedule (races, night lens flares, rally, replays, brightness/fade channel
    shuffles) are not compared. The capture tool makes offline replays of those streams possible.
 4. The GIF split patch is local; whether upstream has changed `gif_transfer` since `cc6184a` is Unknown.
+
+## 10. Progress (slice 168, branch task/012-parallel-gs): step 6 window output and launcher mode
+
+Labels as in section 0. Build `C:\Antigravity\gt4-staticrecomp\private\slice168-parallel-build\build` (fresh
+configure from the worktree with main-checkout absolute paths only; the executable contains one baked path,
+`C:/Antigravity/gt4-staticrecomp/private/slice168-parallel-shaders`, and no worktree path: Confirmed by a byte
+search). The agent did not launch the windowed game; the owner tests it.
+
+**Route: Granite WSI on Granite's own device (decision).** paraLLEl-GS renders on a Granite `Device`;
+our `native_vulkan` presenter owns a different `VkDevice` (not created at all in parallel mode). Handing the
+`ScanoutResult` image to `native_vulkan` would need external-memory interop between two devices, or a CPU
+round trip of the scanout every VBlank (1.1 MB at 1x, 4.6 MB at 4x, plus a synchronous GPU wait), which would
+undo the page-tracked readbacks that motivate TASK-012. Granite's `WSI` with a small `Win32Platform`
+(surface on the existing HWND, size from WM_SIZE) keeps the scanout on the GPU, owns acquire/present
+semaphores and frame contexts, and rebuilds the swapchain on resize. The donor presenter, window code, input,
+audio and pacing are untouched: `window.cpp` still calls `ps2::gs::present()` once per guest VBlank after
+`release_frame()`.
+
+**What the window path does (per VBlank):** `gs.flush()`, `WSI::begin_frame()` (advances the frame context;
+the headless path keeps calling `next_frame()` in the VBlank hook instead), `vsync()` at 1x with
+`phase` = donor CSR.FIELD (`g_odd_field`), `force_progressive` and `anti_blur` on, high-resolution scanout off;
+then clear the swapchain image to black and blit the scanout with nearest filtering into the same 16:9
+rectangle the donor presenter uses (`widescreen_rect`, same arithmetic as `presentation_rect`), present.
+UNORM backbuffer (no sRGB double encoding), FIFO unless `GT4_PRESENT_MODE` selects mailbox or immediate.
+
+**Findings:**
+- Confirmed (fixture): the first present deadlocked until `gs.flush()` was moved before `begin_frame()`.
+  paraLLEl-GS keeps a requested command buffer open; Granite's frame-context advance waits for every
+  requested command buffer to be submitted.
+- Confirmed (fixture): FIFO presentation also completes on a hidden window, so `native_parallel_gs` now
+  presents six frames, a resize, a zero-sized (minimised) client and a restore on a hidden test window
+  (the fixture now has 35 checks, 12 new in this slice). With `VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation` (layer load
+  confirmed with `VK_LOADER_DEBUG=layer`) the fixture prints no validation message. The hidden window's
+  surface keeps its size, so the resize check does not prove a real swapchain rebuild (owner check).
+- Confirmed (headless, `GT4_PGS_DUMP_SOURCE=scanout`): the scanout of GT4's 224-line frame-mode (FFMD=1)
+  fields is 640x448 at 1x. The 1280x447 high-resolution size from slice 167 does not apply at 1x.
+- Confirmed (every-frame scanout dumps, frames 980-1000 of a static menu): consecutive VBlanks are
+  identical; a one-line shift would differ in 7.4 percent of pixels. GT4 renders its two fields with a
+  half-line XYOFFSET difference (1936.5 / 1936.75), and the phase from CSR.FIELD cancels it, so the picture
+  does not bob. High confidence that the phase is right; the owner confirms on a real display.
+- Scanout vs donor dumps (report only): PSNR 26.6 to 50.7 dB. The donor dump line-doubles one field; the
+  paraLLEl-GS deinterlacer places the field with its half-line offset, so differences sit on horizontal
+  edges, one line apart (Confirmed by a difference map at frame 1000).
+- SetGsCrt now writes SMODE2 on every call, as the BIOS call programs it (GT4 also writes SMODE2 itself
+  every frame). The `game_wrote_smode2` exception is gone.
+- `GT4_PGS_SSAA=1|2|4|8|16` (default 1) sets super-sampling; experimental, not measured, high-resolution
+  scanout stays off. `GT4_PGS_DUMP_SOURCE=vram|scanout` selects the headless dump source.
+
+**Launcher mode `parallel`** (`docs/inputs/slice168-parallel.json`, runtime pin
+`slice168-parallel-runtime.json`): the slice166 main feature set (slice160 VU0+VU1 capsule, VU1 table
+slice157, VU0 table slice160-gen-r3, quick fixes, `--force-480p`) with both renderers in one binary.
+`--renderer parallel` (default) or `--renderer donor` for A/B; `--ssaa N` (parallel only). Inherited
+`GT4_RENDERER` and `GT4_PGS_*` values are removed; the chosen values are recorded in `result.json`
+(`renderer_environment`). Pinned executables now resolve under the assets checkout (`--assets-root`) even
+when the launcher runs from a git worktree (`artifact_workspace`); when both are the same checkout nothing
+changes.
+
+**Headless evidence (slice168 build, 4,200 frames, slice157 schedule):** donor 42 of 42 sha256-identical to
+slice157; parallel VRAM dumps 42 of 42 identical to slice167 (table in section 9); parallel run-to-run
+identical; scanout dumps 640x448. A 1,000-frame parallel run with the validation layer printed no message.
+CTest 25/25; Python 288 run, OK, 12 skipped.
+
+**Owner checks (not done by the agent):** menus (480i), Time Trial Nordschleife Supra 480p with
+`--force-480p`, night race, rally, showroom; F7/F8 intervals per scene with both renderers.
+
+**Upstream:** the gif_transfer bug is drafted in `docs/upstream/parallel-gs-gif-transfer-split.md`.
+Upstream has GitHub issues disabled and accepts no external contributions; sending it is an owner decision.
+
+**Open issues after slice 168:**
+1. Owner gameplay test of the window path (image, pacing, resize/fullscreen, 480p switch in races).
+2. Pacing differs in kind: Granite WSI waits on present completion with latency 1 (present-wait), the donor
+   ring allows two presents in flight. Measure F8 with both renderers before any claim.
+3. Deinterlacing options, high-resolution scanout and SSAA are not qualified.
+4. Save states refuse in parallel mode.

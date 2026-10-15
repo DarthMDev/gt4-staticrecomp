@@ -42,6 +42,12 @@ index is 0 (normal) it is written 1 (480p). Indices 1 and 2 are never changed.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
+
+paraLLEl-GS candidate (--mode parallel, slice168, TASK-012): the main feature set (all VU1 and VU0 entries
+compiled, quick fixes) with the paraLLEl-GS renderer and window output. --renderer parallel (default) or
+--renderer donor runs the same binary with either renderer for A/B. --ssaa N (1, 2, 4, 8 or 16, default 1)
+sets paraLLEl-GS super-sampling (experimental). Accepts --force-480p, --vu0-verify N and the VU1 options.
+The build lives in the assets checkout's private/ even when this launcher runs from a git worktree.
 """
 import argparse
 import sys
@@ -64,18 +70,26 @@ def main():
                         help='experimental: hold the race display option at 480p (quickfix3 mode)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
+    parser.add_argument('--renderer', choices=('parallel', 'donor'),
+                        help='parallel mode only: GS renderer of the same binary (default parallel)')
+    parser.add_argument('--ssaa', type=int, default=1, metavar='N',
+                        help='parallel mode with the parallel renderer: super-sampling 1, 2, 4, 8 or 16 (experimental)')
     args = parser.parse_args()
     try:
-        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main'):
-            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot or main')
-        if args.vu0_verify and args.mode not in ('vu0-aot', 'main'):
-            raise ValueError('--vu0-verify requires --mode vu0-aot or main')
+        if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'parallel'):
+            raise ValueError('--vu1-verify and --vu1-interpret-only require --mode vu1-aot, gs-async, pacing, vu1-flags, vu1-full, quickfix, vu1-all, quickfix2, quickfix3, vu0-aot, main or parallel')
+        if args.vu0_verify and args.mode not in ('vu0-aot', 'main', 'parallel'):
+            raise ValueError('--vu0-verify requires --mode vu0-aot, main or parallel')
+        if args.renderer and args.mode != 'parallel':
+            raise ValueError('--renderer requires --mode parallel')
+        if args.ssaa != 1 and (args.mode != 'parallel' or args.renderer == 'donor' or args.ssaa not in (2, 4, 8, 16)):
+            raise ValueError('--ssaa takes 1, 2, 4, 8 or 16 and requires --mode parallel with the parallel renderer')
         if args.vu1_verify < 0:
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main'):
-            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3 or main')
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'parallel'):
+            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main or parallel')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True)
@@ -90,6 +104,11 @@ def main():
                 options['force_480p'] = True
             if args.vu0_verify:
                 options['vu0_verify'] = args.vu0_verify
+            if args.renderer:
+                options['renderer'] = args.renderer
+            if args.mode == 'parallel':
+                if args.ssaa != 1:
+                    options['super_sampling'] = args.ssaa
             play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

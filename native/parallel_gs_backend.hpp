@@ -35,6 +35,36 @@ struct ScanoutRequest {
     bool high_resolution = false;
 };
 
+// Window presentation (slice 168, step 6). The swapchain belongs to Granite's device: paraLLEl-GS
+// renders on that device, so its scanout image can be blitted to the swapchain without leaving the GPU.
+enum class PresentMode { fifo, mailbox, immediate };
+
+struct WindowTarget {
+    void *window = nullptr; // HWND of the existing game window
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    PresentMode mode = PresentMode::fifo;
+};
+
+struct PresentationRect {
+    std::uint32_t left = 0, top = 0, width = 0, height = 0;
+};
+
+// Largest centred 16:9 rectangle inside a width x height surface, with the same arithmetic as
+// gt4::vulkan::presentation_rect (native_vulkan.cpp, Aspect::widescreen) so both renderers place the
+// image identically. Zero-sized surfaces give an empty rectangle.
+constexpr PresentationRect widescreen_rect(std::uint32_t width, std::uint32_t height) {
+    if (!width || !height)
+        return {};
+    const std::uint64_t by_height = std::uint64_t(height) * 16 / 9;
+    const std::uint64_t by_width = std::uint64_t(width) * 9 / 16;
+    const std::uint64_t fitted_width_wide = by_height < width ? by_height : width;
+    const std::uint64_t fitted_height_wide = by_width < height ? by_width : height;
+    const std::uint32_t fitted_width = static_cast<std::uint32_t>(fitted_width_wide ? fitted_width_wide : 1);
+    const std::uint32_t fitted_height = static_cast<std::uint32_t>(fitted_height_wide ? fitted_height_wide : 1);
+    return {(width - fitted_width) / 2, (height - fitted_height) / 2, fitted_width, fitted_height};
+}
+
 struct ScanoutImage {
     // False when paraLLEl-GS produced no image, for example for SMODE1 = 0 ("Unknown video format").
     bool valid = false;
@@ -96,6 +126,18 @@ public:
 
     // Builds the scanout image from the mirrored privileged registers and copies it to host memory.
     ScanoutImage scanout(const ScanoutRequest &request);
+
+    // Creates a Granite WSI swapchain on the window (FIFO unless `mode` says otherwise, UNORM,
+    // transfer-destination images). Returns false and explains why in `error`.
+    bool attach_window(const WindowTarget &target, std::string &error);
+    bool has_window() const;
+    // Records the new client size; the swapchain is rebuilt before the next present.
+    void resize_window(std::uint32_t width, std::uint32_t height);
+    // One presentation per guest VBlank: acquires a swapchain image (this also advances the Granite
+    // frame context), builds the 1x scanout for `phase`, clears the image to black and blits the
+    // scanout into the 16:9 rectangle with nearest filtering, then presents. Returns false when
+    // nothing was presented (no window, zero-sized window, or no scanout image this frame).
+    bool present(std::uint32_t phase);
 
 private:
     struct Impl;

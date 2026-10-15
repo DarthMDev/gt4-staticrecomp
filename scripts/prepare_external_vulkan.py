@@ -19,7 +19,7 @@ SOURCE_PINS = {
 PARALLEL_HOOKS = {
     'gs.cpp': [
         ('#include "gif.hpp"\n',
-         '#include "gif.hpp"\n#include "gs_video_mode.hpp"\n#include "parallel_gs_backend.hpp"\n'),
+         '#include "gif.hpp"\n#include "gs_video_mode.hpp"\n#include "pacing.hpp"\n#include "parallel_gs_backend.hpp"\n'),
         ('void init() {\n', '@FRONTEND@\nvoid init() {\n'),
         ('#ifdef PS2_GPU\n    const char *backend = std::getenv("PS2_GS");',
          '#ifdef PS2_GPU\n    if (parallel_active()) return;\n    const char *backend = std::getenv("PS2_GS");'),
@@ -35,10 +35,17 @@ PARALLEL_HOOKS = {
          '        g_odd_field = !g_odd_field;\n        raise(8);\n        if (parallel_active()) parallel_vblank();\n'),
         ('bool display(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n',
          'bool display(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n'
+         '    if (parallel_active() && parallel_dump_scanout()) return parallel_scanout_frame(rgba, width, height);\n'
          '    if (parallel_active()) parallel_sync_memory();\n'),
         ('bool present(const DisplayRegs &r) {\n',
          'bool present(const DisplayRegs &r) {\n'
-         '    if (parallel_active()) return false; // window output arrives in slice 163 step 6\n'),
+         '    if (parallel_active()) return parallel_present(); // slice 168: Granite WSI window output\n'),
+        ('bool attach_window(int kind, void *display, std::uint64_t window, void *surface, const char *selector, std::uint32_t width, std::uint32_t height) {\n',
+         'bool attach_window(int kind, void *display, std::uint64_t window, void *surface, const char *selector, std::uint32_t width, std::uint32_t height) {\n'
+         '    if (parallel_active()) return kind == 3 && parallel_attach_window(window, width, height); // 3 = Win32\n'),
+        ('void resize_window(std::uint32_t width, std::uint32_t height) {\n',
+         'void resize_window(std::uint32_t width, std::uint32_t height) {\n'
+         '    if (parallel_active()) {\n        parallel_resize_window(width, height);\n        return;\n    }\n'),
         ('void flush_and_wait() {\n',
          'void flush_and_wait() {\n    if (parallel_active()) {\n        parallel_wait();\n        return;\n    }\n'),
         ('void start_thread() { queue::render().start(32u << 20); }',

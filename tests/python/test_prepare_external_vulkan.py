@@ -33,6 +33,8 @@ def donor_text(name):
             '        g_odd_field = !g_odd_field;\n        raise(8);\n',
             'bool display(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n',
             'bool present(const DisplayRegs &r) {\n',
+            'bool attach_window(int kind, void *display, std::uint64_t window, void *surface, const char *selector, std::uint32_t width, std::uint32_t height) {\n',
+            'void resize_window(std::uint32_t width, std::uint32_t height) {\n',
             'void flush_and_wait() {\n',
             'void start_thread() { queue::render().start(32u << 20); }',
             'void state(ps2::state::Stream &s) {\n    s.tag("gs");',
@@ -65,6 +67,16 @@ class HookSpliceTests(unittest.TestCase):
         self.assertIn('if (parallel_active()) parallel_mirror_privileged(address, value);', spliced)
         self.assertIn('if (parallel_active()) return;\n    queue::render().start', spliced)
         self.assertNotIn('@FRONTEND@', spliced)
+
+    def test_window_hooks_route_to_the_parallel_presenter(self):
+        # Slice 168 (step 6): the window, resize, present and scanout-dump paths reach the front end.
+        spliced = prepare_external_vulkan.apply_hooks('gs.cpp', donor_text('gs.cpp'), 'BLOCK_MARKER\n')
+        self.assertIn('if (parallel_active()) return kind == 3 && parallel_attach_window(window, width, height);', spliced)
+        self.assertIn('if (parallel_active()) {\n        parallel_resize_window(width, height);\n        return;\n    }', spliced)
+        self.assertIn('if (parallel_active()) return parallel_present();', spliced)
+        self.assertIn('if (parallel_active() && parallel_dump_scanout()) return parallel_scanout_frame(rgba, width, height);',
+                      spliced)
+        self.assertIn('#include "pacing.hpp"\n', spliced)
 
     def test_gif_and_hw_hooks_route_to_the_front_end(self):
         gif = prepare_external_vulkan.apply_hooks('gif.cpp', donor_text('gif.cpp'))
