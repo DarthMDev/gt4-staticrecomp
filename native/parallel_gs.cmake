@@ -59,6 +59,44 @@ function(gt4_silence_vendor_targets directory)
 endfunction()
 gt4_silence_vendor_targets("${GT4_PARALLEL_GS_SOURCE}")
 
+# Slice 167 local patch. The pinned checkout stays clean; the patched copy lives in the build tree
+# and replaces gs_interface.cpp in the vendor target. Reason (Confirmed by source reading and by the
+# headless smoke, docs/PARALLEL-GS-PLAN.md section 9): GSInterface::gif_transfer sizes the optimized
+# PACKED handler run with `size / nreg`, where `size` is the whole transfer, not the qwords left
+# after index `i`. Our front end delivers GIF data per DMA chunk (path 3), per VIF DIRECT (path 2)
+# and per XGKICK (path 1), so a GIF packet often spans several calls; the handler then reads past
+# the caller's buffer and advances NLOOP too far. With fewer than NREG qwords left it would never
+# advance. The patch counts the remaining qwords and sends a partial loop down the generic
+# per-register path. Each anchor must occur exactly once in the pinned source.
+function(gt4_replace_once text_var anchor replacement)
+    string(FIND "${${text_var}}" "${anchor}" first_hit)
+    string(FIND "${${text_var}}" "${anchor}" last_hit REVERSE)
+    if(first_hit EQUAL -1 OR NOT first_hit EQUAL last_hit)
+        message(FATAL_ERROR "paraLLEl-GS patch anchor not found exactly once: ${anchor}")
+    endif()
+    string(REPLACE "${anchor}" "${replacement}" patched "${${text_var}}")
+    set(${text_var} "${patched}" PARENT_SCOPE)
+endfunction()
+set(GT4_PARALLEL_GS_VENDOR_INTERFACE "${GT4_PARALLEL_GS_SOURCE}/gs/gs_interface.cpp")
+set(GT4_PARALLEL_GS_PATCHED "${CMAKE_CURRENT_BINARY_DIR}/parallel-gs-patched/gs_interface.cpp")
+file(READ "${GT4_PARALLEL_GS_VENDOR_INTERFACE}" parallel_gs_interface_text)
+gt4_replace_once(parallel_gs_interface_text
+    "if (path.reg == 0 && optimized_draw_handler[path_index])"
+    "if (path.reg == 0 && optimized_draw_handler[path_index] && size - i >= nreg) // GT4Recomp patch")
+gt4_replace_once(parallel_gs_interface_text
+    "std::min<uint32_t>(size / nreg, path.tag.NLOOP - path.loop)"
+    "std::min<uint32_t>(uint32_t((size - i) / nreg), path.tag.NLOOP - path.loop) /* GT4Recomp patch */")
+file(WRITE "${GT4_PARALLEL_GS_PATCHED}.new" "${parallel_gs_interface_text}")
+file(COPY_FILE "${GT4_PARALLEL_GS_PATCHED}.new" "${GT4_PARALLEL_GS_PATCHED}" ONLY_IF_DIFFERENT)
+file(REMOVE "${GT4_PARALLEL_GS_PATCHED}.new")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_PARALLEL_GS_VENDOR_INTERFACE}")
+get_target_property(parallel_gs_sources parallel-gs SOURCES)
+list(TRANSFORM parallel_gs_sources REPLACE "^gs_interface\\.cpp$" "${GT4_PARALLEL_GS_PATCHED}")
+if(NOT "${GT4_PARALLEL_GS_PATCHED}" IN_LIST parallel_gs_sources)
+    message(FATAL_ERROR "paraLLEl-GS target no longer lists gs_interface.cpp; review the slice 167 patch")
+endif()
+set_property(TARGET parallel-gs PROPERTY SOURCES ${parallel_gs_sources})
+
 # Granite's Vulkan headers differ from the PCSX2-tree headers used by ps2runtime_vulkan. Only this
 # library and its fixture see them, through the backend translation unit.
 add_library(gt4_parallel_gs STATIC parallel_gs_backend.cpp)

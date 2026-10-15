@@ -851,7 +851,41 @@ candidate build.
 
 Limits: parallel frames show flat blocks where the donor shows text and textures (see PARALLEL-GS-PLAN.md section 8,
 open issue 1). Similarity figures are report-only. Step 6 (window), the launcher mode and save states in parallel
-mode (refused, not implemented) are not done.
+mode (refused, not implemented) are not done. The flat blocks are fixed in slice167 (next section).
+
+## paraLLEl-GS headless image fix (slice167, TASK-012)
+
+Slice167 = slice163 plus three fixes (PARALLEL-GS-PLAN.md section 9): the display decode builds the donor swizzle
+tables before decoding the copied VRAM (the flat-block cause), a build-tree patch of paraLLEl-GS
+`gs_interface.cpp` for GIF packets split across calls, and the SetGsCrt FFMD mapping (field 1 = frame mode).
+Only `gs.cpp` of the port differs from slice163. The donor path is unchanged.
+
+Derive the port and copy the shaders (fresh directories; from the worktree or repository root):
+
+    private\tooling-venv\Scripts\python.exe scripts\prepare_external_vulkan.py C:\Antigravity\gt4-staticrecomp\private\slice167-parallel-port --assets-root C:\Antigravity\gt4-staticrecomp --parallel-hooks
+    (copy private\slice163-parallel-shaders\*.spv to private\slice167-parallel-shaders)
+
+Pin: [slice167-parallel-runtime.json](inputs/slice167-parallel-runtime.json) (gs.cpp sha256 0624608b...; other
+port files and shaders as slice163). Configure a fresh build directory as slice163, with
+`-DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice167-parallel-port` and
+`-DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice167-parallel-shaders`. Configure writes the patched
+vendor copy to `<build>/native/parallel-gs-patched/gs_interface.cpp` and fails if a patch anchor is missing.
+
+Debug switches of the backend (off by default): `GT4_PGS_CAPTURE=<file>` with optional
+`GT4_PGS_CAPTURE_FRAMES=first:last` (raw GS stream), `GT4_PGS_VRAM_DUMP=<dir>` (4 MiB VRAM per frame dump).
+
+Measured (candidate `private/slice167-parallel-cand/build/gt4vulkan.exe`, 96,509,952 bytes, sha256 85fad171...,
+clang-cl 22.1.3; the machine was shared with other agents, so no timing here is a measurement):
+
+- Configure and build after the merge of main (0cc3730): 0 errors. CTest 23/23. Python: 273 run, OK,
+  12 skipped, with `GT4_NATIVE_BUILD` on the candidate build.
+- Headless 4,200 frames, slice157 schedule: donor 42 of 42 sha256-identical to slice157; parallel two runs
+  identical to each other; parallel vs slice157: frames 100-600 identical, 800-4200 at most 0.18 percent of
+  pixels with a channel delta above 8, PSNR 47.6 to 58.1 dB (table in PARALLEL-GS-PLAN.md section 9).
+
+Limits: no window output (step 6) and no launcher mode or launcher pin. Only the menu frames of the headless
+schedule are compared.
+
 ## Slice 160 (TASK-013): VU0 microcode AOT
 
 The 14 `VCALLMS` entries of the pinned VU0 image (docs/VU0-MICROCODE-MAP.md) run compiled. The

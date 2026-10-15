@@ -420,3 +420,85 @@ are the next work, after the texture path is fixed or bounded.
    wins once written. Check against owner logs before step 6.
 3. The launcher mode `--mode parallel-gs` is not added; it would be a black window until step 6.
 4. CTest and the Python suite run on the slice163 build (see BUILD.md slice163). No owner gameplay run.
+
+## 9. Progress (slice 167, branch task/012-parallel-gs)
+
+Goal of the slice: correct parallel-path headless frames at 1x. Done; step 6 (window output) is not started.
+Labels as in section 0. Build: `private/slice167-parallel-cand/build` (fresh configure after the merge of
+main 0cc3730; slice167 port and pin, see BUILD.md "slice167"). Machine shared with other agents: no timing
+in this section is a measurement.
+
+**Root cause of the flat blocks (Confirmed).** The defect was in our display decode, not in paraLLEl-GS.
+`parallel_sync_memory` copies the 4 MiB VRAM into the donor memory image and decodes it with the donor
+`read_pixel`, which needs the swizzle tables built by `gs::init()`. The donor builds them on its
+`render_reset` path; the slice163 hook skips that path in parallel mode, and a headless run never calls
+`init_graphics()`. With all-zero tables every pixel of a 64x32 PSMCT32/24 page read the page's first
+word: one colour per page, shown as 64x64 blocks in the 448-line dumps. Evidence:
+- A raw VRAM dump at frame 1000 (`GT4_PGS_VRAM_DUMP`, decoded offline with the GS swizzle) shows both
+  display buffers (FBP 0x00 and 0x8C, FBW 10, PSMCT24, 640x224 per field) with the correct garage menu,
+  text and textures (Confirmed). The paraLLEl-GS image was right; only our decode was wrong.
+- After the fix (`init()` at the top of `parallel_sync_memory`), frames 100 to 600 are bit-identical to
+  slice157 and frames 800 to 4200 differ in at most 0.18 percent of pixels (table below).
+- Early frames looked "almost right" before the fix because they are near-uniform (black, white, logo).
+
+**GIF transfer split bug in paraLLEl-GS (Confirmed in source and fixture; no visible effect on this
+schedule).** `GSInterface::gif_transfer` sizes the optimized PACKED handler run with `size / nreg`, where
+`size` is the whole call, not the qwords left after index `i`. A GIF packet that spans calls (our DMA
+chunks, VIF DIRECT and XGKICK deliver one call each) makes the handler read past the caller's buffer and
+advance NLOOP too far; a call with fewer than NREG qwords left at a loop boundary never advances (infinite
+loop). Fix: a build-tree copy of `gs_interface.cpp` with two anchored replacements
+(`native/parallel_gs.cmake`, documented in `native/THIRD_PARTY.md`); the pinned checkout stays clean.
+- Fixture `native_parallel_gs`: the test scene (A+D, IMAGE, sprites, Gouraud triangle, a PACKED
+  ST/RGBAQ/XYZ2 sprite that uses the optimized handler) is sent in 1-, 2-, 5- and 7-qword pieces, each in a
+  private buffer padded with poison; the frame buffer must equal the one-call result. Patched: 23 of 23 checks PASS (was 17).
+  Unpatched (negative control, same fixture linked against the slice167 first-build libraries): did not
+  terminate within 5 minutes and was killed (Confirmed: hang, as the source predicts).
+- The parallel headless frames with the patch alone (slice163 port) are byte-identical to the slice163
+  frames (42 of 42): GT4's packets on this schedule did not hit the bug visibly. Kept because the hang and
+  the over-read are real for split packets (Hypothesis: race scenes with long path 3 chains may hit it).
+
+**SetGsCrt FFMD was inverted (High confidence, corrected).** The third SetGsCrt argument is the SDK's
+FFMD selector (0 = field, 1 = frame). GT4 requests `interlace 1 mode 0x2 field 1` and then writes
+SMODE2 = 0x3 (INT=1, FFMD=1) itself from vblank 5 (Confirmed, register log). The slice162 table mapped
+field 1 to FFMD = 0. `gs_video_mode` now maps FFMD = field; the synthesized SMODE2 is 0x3 and agrees with
+the game's own value from the first vblank. Dumps are unaffected (they use the donor's register copy).
+- Finding for step 6 (Confirmed, fixture): with FFMD = 1 the 4x high-resolution scanout of a 448-line
+  full-frame buffer is 1280x447, because frame mode expects one 224-line buffer per field. The fixture's
+  4x check now uses field mode for its 448-line scene; GT4's real 224-line field buffers must be checked
+  in the window step.
+
+**Debug tooling added to the backend (environment, off by default):**
+- `GT4_PGS_CAPTURE=<file>` and `GT4_PGS_CAPTURE_FRAMES=first:last`: raw stream of GIF transfers ('G' path,
+  bytes, data), privileged writes ('P'), FIFO reads ('R') and frame marks ('V'). Frames 995-1001 of the
+  schedule are 4.6 MB. A malformed frame range stops the process.
+- `GT4_PGS_VRAM_DUMP=<dir>`: each whole-VRAM map (the dump path) is written as `vram_<frame>.bin`.
+- Stream finding (Confirmed, frames 995-1001): GT4's menu uploads a 640x480 PSMT8 background with path 3
+  (`BITBLTBUF DBP 0x1A40 DBW 10 DPSM 0x13`, 19,200 qwords in one IMAGE) and draws it with path 2 REGLIST
+  ST/RGBAQ/XYZF2 quads (TEX0 PSM T8, TW 10, TH 9, CLUT CBP 0x1EA8 loaded through TEX2 CLD 1), into
+  224-line field buffers at FBP 0x00 / 0x8C (PSMCT24, XYOFFSET 1728.5/1936.75).
+
+**Similarity, parallel vs slice157 donor, 4,200 frames, slice157 schedule, 1x** (full table:
+`private/slice167-parallel-smoke/similarity.txt`; side-by-side PNGs in `preview/`, not committed):
+
+| Frames | Pixels with max channel delta > 8 | Max delta | PSNR |
+|---|---|---|---|
+| 100, 200, 300, 400, 500, 600 | 0 | 0 | identical (inf) |
+| 700 (black) | 0 | 2 | 83.8 dB |
+| 800 | 0.039 % | 19 | 58.1 dB |
+| 900 (L's Home) | 0.178 % | 15 | 47.6 dB |
+| 1000 to 4200 (garage menus, 33 dumps) | 0.027 to 0.029 % | 12 to 14 | 50.7 dB |
+
+Before (slice163): 58 to 82 percent and 9.0 to 12.6 dB from frame 900. Calibration: parallel vs parallel
+(two runs) 42 of 42 identical; donor path 42 of 42 sha256-identical to slice157. The remaining differences
+are small (most differing pixels are off by 1 to 2 levels) and scattered over textured areas
+(Hypothesis: bilinear and blend rounding; paraLLEl-GS is not bit-exact on interpolation). These are menu
+frames only; no race, night or rally scene is in this schedule.
+
+**Open issues after slice 167:**
+1. Step 6 (window): Granite WSI on the existing HWND, FIFO, UNORM, blit with the 4:3/16:9 rect. Needs an
+   owner session to verify (the windowed game cannot be launched headless). Check the frame-mode
+   high-resolution size (1280x447 finding) with GT4's 224-line fields.
+2. No launcher mode: `--mode parallel-gs` would still be a black window until step 6.
+3. Scenes outside the headless schedule (races, night lens flares, rally, replays, brightness/fade channel
+   shuffles) are not compared. The capture tool makes offline replays of those streams possible.
+4. The GIF split patch is local; whether upstream has changed `gif_transfer` since `cc6184a` is Unknown.

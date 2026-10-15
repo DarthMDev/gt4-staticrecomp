@@ -89,8 +89,9 @@ not linked into the game; the provider is a later, separate step.
 
 Off by default (`GT4_PARALLEL_GS=OFF`). When enabled, `native/parallel_gs.cmake` builds these
 pinned sources from `private/references/parallel-gs` (fetched by `scripts/fetch_parallel_gs.py`,
-verified against [parallel-gs-pin.json](../docs/inputs/parallel-gs-pin.json)). No vendor file is
-modified; GT4Recomp's own code is in `parallel_gs_backend.*`, `gs_video_mode.*` and the fixtures.
+verified against [parallel-gs-pin.json](../docs/inputs/parallel-gs-pin.json)). The pinned checkout is
+never modified; one vendor file is compiled from a patched copy in the build tree (see the slice 167 note
+below). GT4Recomp's own code is in `parallel_gs_backend.*`, `gs_video_mode.*` and the fixtures.
 
 | Component | Commit | License | Use |
 |---|---|---|---|
@@ -112,4 +113,11 @@ Notes:
   can relink, as LGPL-3.0 section 4 requires. No binary is distributed by this slice. The plan
   ([PARALLEL-GS-PLAN.md](../docs/PARALLEL-GS-PLAN.md)) requires an owner decision on distribution
   before any public binary; none is recorded yet.
-- Local patches to paraLLEl-GS, if any, will be kept as documented patch files here, not pushed upstream.
+- Local patch (slice 167): `native/parallel_gs.cmake` copies `gs/gs_interface.cpp` into the build tree
+  (`<build>/native/parallel-gs-patched/`), applies two anchored text replacements in
+  `GSInterface::gif_transfer`, and compiles the copy instead of the original. The optimized PACKED
+  handler run is sized from the qwords left in the call (`(size - i) / nreg`) instead of the whole call
+  (`size / nreg`), and a partial loop takes the generic per-register path. Without it, a GIF packet split
+  across calls reads past the caller's buffer, and a call shorter than NREG never terminates. Each changed
+  line carries a `GT4Recomp patch` comment; configure fails if an anchor is missing or repeated. The patch
+  is not pushed upstream. The modified file stays under LGPL-3.0-or-later.

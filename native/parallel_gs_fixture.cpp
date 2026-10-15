@@ -9,6 +9,7 @@
 #include "gs_video_mode.hpp"
 #include "parallel_gs_backend.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -166,6 +167,20 @@ void build_scene(GifStream &gif, std::uint32_t frame_index) {
         gif.raw(v[0] | (std::uint64_t(v[1]) << 32), v[2] | (std::uint64_t(0x80) << 32));
         gif.raw((v[3] << 4) | (std::uint64_t(v[4] << 4) << 32), 0);
     }
+    // PACKED ST, RGBAQ, XYZ2 sprite (paraLLEl-GS's optimized STQRGBAXYZ handler): 64x64 at (300, 20),
+    // texture coordinates 0..1 with Q = 1, so pixel (300 + x, 20 + y) samples texel (x, y).
+    gif.tag(2, true, 0, 3, 0x512, true, 6 | (1 << 4));
+    const float st_corners[2] = {0.0f, 1.0f};
+    const std::uint32_t xy_corners[2][2] = {{300, 20}, {364, 84}};
+    for (int v = 0; v < 2; ++v) {
+        std::uint32_t s_bits, q_bits;
+        const float q = 1.0f;
+        std::memcpy(&s_bits, &st_corners[v], 4);
+        std::memcpy(&q_bits, &q, 4);
+        gif.raw(s_bits | (std::uint64_t(s_bits) << 32), q_bits);
+        gif.raw(0x80 | (std::uint64_t(0x80) << 32), 0x80 | (std::uint64_t(0x80) << 32));
+        gif.raw((xy_corners[v][0] << 4) | (std::uint64_t(xy_corners[v][1] << 4) << 32), 0);
+    }
     address_data_packet(gif, {
                                  {0x60, 0xFFFFFFFF00000000ull | (0x1234u + frame_index)}, // SIGNAL id, mask
                                  {0x61, 0},                                                // FINISH
@@ -190,9 +205,10 @@ std::vector<std::uint32_t> read_frame_rect(Backend &backend, std::uint32_t x, st
 }
 
 // Mirrors the NTSC interlaced frame registers. SMODE1/SMODE2 come from the SetGsCrt mapping,
-// as the front end synthesises them for the donor's HLE SetGsCrt (slice 162 step 4).
-void set_display_ntsc_interlaced_frame(Backend &backend) {
-    const auto video = gt4::gs::map_set_gs_crt({1, 0x02, 1});
+// as the front end synthesises them for the donor's HLE SetGsCrt (slice 162 step 4). `field` is the
+// SetGsCrt FFMD argument: 1 = frame mode (GT4's request), 0 = field mode.
+void set_display_ntsc_interlaced_frame(Backend &backend, std::uint32_t field) {
+    const auto video = gt4::gs::map_set_gs_crt({1, 0x02, field});
     if (video.status != gt4::gs::CrtMappingStatus::ok) {
         std::printf("[FAIL] SetGsCrt mapping for NTSC refused: %s\n", gt4::gs::describe(video.status));
         ++failures;
@@ -237,7 +253,7 @@ int main() {
     expect(!backend.write_privileged(0x11000000u, 1) && backend.read_privileged(0x11000000u) == 0,
            "privileged writes outside 0x12000000-0x12001FFF are refused");
 
-    set_display_ntsc_interlaced_frame(backend);
+    set_display_ntsc_interlaced_frame(backend, 1);
     const std::uint64_t pmode = backend.read_privileged(kPmode);
     const std::uint64_t display = backend.read_privileged(kDisplay1);
     expect((pmode & 1) == 1 && ((pmode >> 2) & 1) == 1 && ((display >> 32) & 0xFFF) == kFrameWidth * 4 - 1,
@@ -256,6 +272,11 @@ int main() {
     expect(textured[0] == 0x800000FFu, "textured sprite sampled the uploaded IMAGE data (texel 0,0 = red)");
     const auto textured_white = read_frame_rect(backend, 116, 100, 4, 1);
     expect(textured_white[0] == 0x80FFFFFFu, "2x scaled checker: x=116 maps to texel 8 (white)");
+
+    const auto st_red = read_frame_rect(backend, 300, 20, 4, 1);
+    const auto st_white = read_frame_rect(backend, 308, 20, 4, 1);
+    expect(st_red[0] == 0x800000FFu && st_white[0] == 0x80FFFFFFu,
+           "PACKED ST/RGBAQ/XYZ2 sprite (optimized handler) samples texels 0 and 8");
 
     const auto *vram = static_cast<const std::uint8_t *>(backend.map_vram(kTextureBlock * 256, 64 * 64 * 4));
     std::uint32_t first_texel = 0;
@@ -279,8 +300,36 @@ int main() {
     backend.flush();
     const ScanoutImage unknown = backend.scanout(request);
     expect(!unknown.valid, "SMODE1=0 yields no scanout image");
-    set_display_ntsc_interlaced_frame(backend);
+    // The scene is one 448-line buffer read on alternate lines, a field-mode layout. In frame mode
+    // (GT4's FFMD=1) paraLLEl-GS expects one 224-line buffer per field and its 4x high-resolution
+    // scanout of this buffer is 1280x447 (slice 167), so the 4x check uses field mode.
+    set_display_ntsc_interlaced_frame(backend, 0);
     backend.next_frame();
+
+    // The front end delivers GIF data per DMA chunk, VIF DIRECT or XGKICK, so packets span calls.
+    // The same scene sent in 1-, 2-, 5- and 7-qword pieces must give the same frame buffer as one call.
+    gif.clear();
+    build_scene(gif, 0);
+    backend.clear_vram();
+    backend.gif_transfer(3, gif.data(), gif.bytes());
+    const auto whole_frame = read_frame_rect(backend, 0, 0, kFrameWidth, kFrameHeight);
+    for (const std::size_t piece_qwords : {std::size_t(1), std::size_t(2), std::size_t(5), std::size_t(7)}) {
+        backend.clear_vram();
+        const auto *bytes = static_cast<const std::uint8_t *>(gif.data());
+        for (std::size_t offset = 0; offset < gif.bytes(); offset += piece_qwords * sizeof(Qword)) {
+            const std::size_t piece_bytes = std::min(piece_qwords * sizeof(Qword), gif.bytes() - offset);
+            // A private copy, so a reader that runs past the piece sees poison, not the next piece.
+            std::vector<std::uint8_t> piece(bytes + offset, bytes + offset + piece_bytes);
+            piece.resize(piece_bytes + 64 * sizeof(Qword), 0xCD);
+            backend.gif_transfer(3, piece.data(), piece_bytes);
+        }
+        const auto split_frame = read_frame_rect(backend, 0, 0, kFrameWidth, kFrameHeight);
+        char what[96];
+        std::snprintf(what, sizeof what, "GIF packets split into %zu-qword transfers give the one-call frame buffer",
+                      piece_qwords);
+        expect(split_frame == whole_frame, what);
+    }
+    expect(!backend.gif_busy(3), "path 3 is idle after the last split packet");
 
     expect(backend.set_super_sampling(4), "4x super-sampling accepted");
     gif.clear();

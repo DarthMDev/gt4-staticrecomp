@@ -124,6 +124,8 @@ class BaselineDerivationTests(unittest.TestCase):
             gs_text = (target / 'gs.cpp').read_text(encoding='utf-8')
             self.assertIn('void note_crt_mode(', gs_text)
             self.assertIn('if (parallel_active()) return;', gs_text)
+            # Slice 167: the display decode of the copied VRAM must build the swizzle tables first.
+            self.assertIn('    init(); // swizzle tables for read_pixel', gs_text)
             self.assertIn('gs::parallel_gif_transfer(path, data, qwc);', (target / 'gif.cpp').read_text(encoding='utf-8'))
             self.assertIn('gs::note_crt_mode(interlace, mode, field);', (target / 'hw.cpp').read_text(encoding='utf-8'))
         finally:

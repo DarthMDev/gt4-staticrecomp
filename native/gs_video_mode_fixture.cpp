@@ -53,17 +53,18 @@ void expect_refused(const CrtRequest &request, CrtMappingStatus status, const ch
 
 int main() {
     // Owner-log rows (confirmed by the SetGsCrt lines in private/manual-play/session-*/probe.log).
-    // NTSC 480i: CMOD=NTSC(2) LC_ANALOG(32); INT=1, field 1 means field mode (FFMD=0).
-    expect_mapping({1, 0x02, 1}, 2, 32, 0x1, "owner log 'interlace 1 mode 0x2 field 1' -> NTSC interlaced");
+    // NTSC 480i: CMOD=NTSC(2) LC_ANALOG(32); INT=1, field 1 means frame mode (FFMD=1). GT4 writes the
+    // same SMODE2 = 0x3 itself from vblank 5 (slice 167 register log).
+    expect_mapping({1, 0x02, 1}, 2, 32, 0x3, "owner log 'interlace 1 mode 0x2 field 1' -> NTSC interlaced");
     // 480p after the GT4_FORCE_480P rewrite: CMOD progressive, LC_ANALOG, INT=0.
     expect_mapping({0, 0x50, 1}, 0, 32, 0x0, "owner log 'interlace 0 mode 0x50 field 1' -> 480p");
     // 1080i: CMOD progressive, LC_HDTV(22), INT=1.
-    expect_mapping({1, 0x51, 1}, 0, 22, 0x1, "owner log 'interlace 1 mode 0x51 field 1' -> 1080i");
+    expect_mapping({1, 0x51, 1}, 0, 22, 0x3, "owner log 'interlace 1 mode 0x51 field 1' -> 1080i");
 
-    // Other rows of the table [Hyp]. Frame mode (field 0) sets FFMD.
-    expect_mapping({1, 0x02, 0}, 2, 32, 0x3, "NTSC interlaced with field 0 -> frame mode FFMD=1");
+    // Other rows of the table [Hyp]. Field mode (field 0) leaves FFMD clear.
+    expect_mapping({1, 0x02, 0}, 2, 32, 0x1, "NTSC interlaced with field 0 -> field mode FFMD=0");
     expect_mapping({0, 0x03, 0}, 3, 32, 0x0, "PAL progressive setting");
-    expect_mapping({1, 0x03, 1}, 3, 32, 0x1, "PAL interlaced, field 1");
+    expect_mapping({1, 0x03, 1}, 3, 32, 0x3, "PAL interlaced, field 1 (frame mode)");
     expect_mapping({0, 0x52, 1}, 0, 22, 0x0, "720p -> CMOD progressive, LC_HDTV, INT=0");
     expect_mapping({0, 0x1A, 1}, 0, 15, 0x0, "VGA range start -> LC_VGA");
     expect_mapping({0, 0x3B, 1}, 0, 15, 0x0, "VGA range end -> LC_VGA");

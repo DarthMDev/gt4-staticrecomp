@@ -11,8 +11,10 @@
 //   INT=0 selects the NTSC-timed progressive frame. Confirmed from source.
 // - Mode numbers other than 0x02, 0x50, 0x51 and the VGA range, and the VGA range itself, are
 //   [Hyp]: taken from the plan's table and not yet checked against a PS2 SDK header or a log.
-// - SMODE2 FFMD is [Hyp]: field 1 (all owner logs) maps to field mode FFMD=0, which the spike
-//   scanned out successfully; field 0 maps to frame mode FFMD=1.
+// - SMODE2 FFMD = the SetGsCrt field argument (slice 167, High confidence; corrected from the slice 162
+//   guess, which had it inverted). The third SetGsCrt argument is the SDK's FFMD selector (0 = field,
+//   1 = frame), and GT4 itself writes SMODE2 = 0x3 (INT=1, FFMD=1) from vblank 5 after requesting
+//   "interlace 1 mode 0x2 field 1" (Confirmed, private/slice163-parallel-smoke/parallel/game-regs.log).
 
 #include "gs_video_mode.hpp"
 
@@ -57,8 +59,8 @@ VideoRegisters encode(std::uint64_t cmod, std::uint64_t lc, const CrtRequest &re
     std::uint64_t smode2 = 0;
     if (request.interlace == 1) {
         smode2 |= kSmode2IntBit;
-        if (request.field == 0)
-            smode2 |= kSmode2FfmdBit; // frame mode; field 1 keeps field mode (FFMD = 0)
+        if (request.field == 1)
+            smode2 |= kSmode2FfmdBit; // frame mode (FFMD = 1); field 0 keeps field mode (FFMD = 0)
     }
     registers.smode2 = smode2;
     return registers;

@@ -124,7 +124,11 @@ void parallel_mirror_privileged(std::uint32_t address, std::uint64_t value) {
 
 // Copies the paraLLEl-GS VRAM into the donor memory image so the donor's display decode (the
 // same read_pixel path as the donor renderer) produces comparable frames.
+// Slice 167: read_pixel needs the swizzle tables built by init(). The donor builds them on its
+// render_reset path, which parallel mode skips, and a headless run never calls init_graphics(), so
+// without this call every 64x32 page decoded from its first word (flat blocks in the dumps).
 void parallel_sync_memory() {
+    init(); // swizzle tables for read_pixel; builds once, then returns
     gt4::parallel_gs::Backend &backend = parallel().backend;
     backend.flush();
     const void *vram = backend.map_vram(0, kMemorySize);
