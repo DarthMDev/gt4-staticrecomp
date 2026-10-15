@@ -66,6 +66,7 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(stats.coveredPixels),
                 static_cast<unsigned long long>(stats.framePixelsWritten),
                 static_cast<unsigned long long>(stats.depthPixelsWritten));
+    std::printf("textured_primitives=%llu skipped_texture=%llu rejected_gif=%llu unhandled_privileged=%llu\n", static_cast<unsigned long long>(stats.primitivesTextured), static_cast<unsigned long long>(stats.primitivesSkippedTexture), static_cast<unsigned long long>(renderer.rejectedGifPaths), static_cast<unsigned long long>(renderer.unhandledPrivileged));
     if (!ok) {
         std::fprintf(stderr, "hw_cpuref_replay: %s\n", error.c_str());
         return 1;
