@@ -5,11 +5,14 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
+#include "install_paths.hpp"
 #include "pacing.hpp"
 
 namespace gt4::vulkan {
@@ -189,7 +192,10 @@ Context::~Context() {
     FreeLibrary(loader_);
 }
 
-void Context::initialize(const std::filesystem::path &shaders) {
+void Context::initialize(const std::filesystem::path &build_time_shaders) {
+  // TASK-059: <executable folder>\shaders when installed, else the build-time folder (install_paths.cpp).
+  const std::filesystem::path shaders = gt4::install::choose_shader_directory(build_time_shaders);
+  std::fprintf(stderr, "[vulkan] shader folder: %s\n", shaders.string().c_str());
   aspect_ = Aspect::widescreen;
   // Unknown names throw here; support on this surface is checked at swapchain creation.
   present_mode_ = gt4::pacing::parse_present_mode(std::getenv("GT4_PRESENT_MODE"));

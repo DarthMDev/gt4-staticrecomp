@@ -642,3 +642,8 @@ Top-right, PCSX2 OSD font and margins, updated about twice per second:
   on a cold cache in a race, the overlay on a 1080p or 4K screen and its numbers against F8, GPU usage on other GPU
   vendors and drivers, the PDH counters on a PC where the GPU Engine counter set is missing (the overlay then shows
   `GPU (game) ...`).
+
+### 11.6 Owner test and slice202
+
+Owner test 2026-10-16 (slice201): overlay, cursor auto-hide and the shader notice OK; approved. slice202 merges main
+(TASK-058/059) and pins the same gt4-gs 1.0.0 ([BUILD](BUILD.md) slice202). Known issue: gt4-gs 1.0.0 writes under `Documents\PCSX2`: `VMManager::Internal::LoadStartupSettings()` runs before `[GT4GS] DataRoot` is applied, so it rewrites `Documents\PCSX2\logs\emulog.txt` every session (Confirmed: before/after snapshot of the folder) and creates the PCSX2 user folders there (bios, memcards, logs, ...) on a PC that has none (High confidence, `EmuFolders::EnsureFoldersExist`). The log line "MemoryCards Directory: ...Documents\PCSX2\memcards" is that early pass; the session itself uses DataRoot. Fix on fork branch `gt4gs/datadir` (commit `b30870fe8`, version 1.0.1, NOT released): the call moves after the stream folders; checked: 0 changes under `Documents\PCSX2`, emulog in DataRoot\logs.

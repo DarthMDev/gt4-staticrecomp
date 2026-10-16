@@ -93,9 +93,11 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑055 | Mod creator tools: dump workspace, package as mod | 📋 Planned for 1.1.0 |
 | TASK‑056 | Live texture reload in gt4-gs | 📋 Planned for 1.1.0 |
 | TASK‑057 | Study: other mod kinds (GS presets, VOL overlay, data patches) | 📋 Planned for 1.1.0 |
-| TASK‑060 | Mouse cursor auto-hide over the picture (fullscreen and windowed, game and gt4-gs agree) | 🔄 Built · slice201, `task/060-062-osd`; visible fixture passes; owner test pending |
-| TASK‑061 | "Compiling shaders…" notice in gt4-gs (real compiles only) | 🔄 Built · slice201, gt4-gs 1.0.0; cold/warm cache replays checked; owner test pending |
-| TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | 🔄 Built · slice201, protocol 1.2 OSD_STATS; overhead +0.02 ms GS thread; owner test pending |
+| TASK‑058 | Crash-safe memory card in the real build: atomic writer, dirty retry, exit flush (GS-loss path too) | ✅ Done · owner test 2026-10-16; kill test 25/25; card flush on exit and after a GS loss (slice200; in slice202) |
+| TASK‑059 | Distribution executable: installed-folder shaders and GS package, no repo paths, `--portable-check`, `scripts/make_distribution.py` | ✅ Done · owner test 2026-10-16; distribution folder smoke 42/42 and 41/41 (slice200; slice202: also from `private/slice202-dist`) |
+| TASK‑060 | Mouse cursor auto-hide over the picture (fullscreen and windowed, game and gt4-gs agree) | ✅ Done · owner test 2026-10-16 (fullscreen and windowed); slice201, in slice202 |
+| TASK‑061 | "Compiling shaders…" notice in gt4-gs (real compiles only) | ✅ Done · owner test 2026-10-16; gt4-gs 1.0.0 (cold cache 238 compiles shown, warm cache none) |
+| TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
@@ -524,6 +526,9 @@ Repos: both. Haiku, 1-2 sessions.
 Goal: fork release `gt4-gs v1.0.0` (notes: upstream commit, our patch list, license, source); main: README
 renderer section, `native/THIRD_PARTY.md`, RELEASE-1.0.0-PLAN renderer table and W8, known issues.
 Acceptance: release assets complete; links valid; owner approval.
+Note (2026-10-16): `gt4gs-v1.0.0` is published (stable) and pinned in slice202. Known issue for the release notes: gt4-gs 1.0.0 writes under `Documents\PCSX2`: `VMManager::Internal::LoadStartupSettings()` runs before `[GT4GS] DataRoot` is applied, so it rewrites `Documents\PCSX2\logs\emulog.txt` every session (Confirmed: before/after snapshot of the folder) and creates the PCSX2 user folders there (bios, memcards, logs, ...) on a PC that has none (High confidence, `EmuFolders::EnsureFoldersExist`). The log line "MemoryCards Directory: ...Documents\PCSX2\memcards" is that early pass; the session itself uses DataRoot. Fix on fork branch `gt4gs/datadir` (commit `b30870fe8`, version 1.0.1, NOT released): the call moves after the stream folders; checked: 0 changes under `Documents\PCSX2`, emulog in DataRoot\logs.
+Decide whether release 1.0.0 ships gt4-gs 1.0.1 (release it from `gt4gs/datadir` with `release-local.ps1 -Release`,
+repin) or 1.0.0 with this note.
 
 ### TASK-045 — High frame rate on the PCSX2 GS
 Repos: both. Opus, 10-14 sessions, after release 1.0.0.
@@ -535,6 +540,17 @@ race PSNR < 32 dB) (2-3 sessions). (3) In engine: the game holds frame N+1, gene
 side effects (readbacks and signals stripped; targets overwritten by N+1); present scheduler for 120/144 Hz;
 +1 frame latency measured (6-10 sessions).
 Risks: texture-cache pollution by auxiliary frames, page alternation (HIGH-FPS 9.3), HUD.
+
+### TASK-058 — Crash-safe memory card in the real build
+Repo: worktree `C:\Antigravity\gt4-wt-058-harden`, branch `task/058-059-release-hardening` (from main `3b5334d`). Release 1.0.0 hardening, game side. One writer.
+Goal: the runtime writes the card through the atomic writer of TASK-025 Part A (temporary file, flush, rename), keeps a failed write dirty and retries, and flushes a pending save on exit, including the pcsx2-mode GS-process loss path after its grace VSYNCs.
+Result (slice200, docs/BUILD.md): TASK-025 Part A was on `task/025-save-manager`, not on main, and is imported; memcard capsule `private/slice200-memcard-runtime` (derived `iop/sio2.cpp`, pinned by `runtime.json`); CMake `GT4_MEMCARD_RUNTIME_SOURCE`; `flush_cards_now()` after `emulate()`. CTest 29/29 (`native_memcard_store`), Python kill test (25 kills of a copy: old or new image, never torn). The headless menus schedule never saves: the card of the donor and pcsx2 runs equals the seed, so the byte comparison of a saved card is not available headless; the in-game save check is the owner's test.
+
+### TASK-059 — Distribution executable
+Repo: same worktree and branch as TASK-058. Haiku, 1 session.
+Goal: an install folder that runs with no repository path: `<exe folder>\shaders` when present (else the build-time folder), the gt4-gs package at `<exe folder>\gs\gt4-gs.exe` or `GT4_GS_PROCESS`, no build path embedded except the development fallback, a `--portable-check` self-test, and `scripts/make_distribution.py` for the folder (no gt4-gs package, no game data; GPL kept separate, decision 0070).
+Result (slice200, docs/DISTRIBUTION.md): the shader change of `task/019-launcher` ported (its printf string repaired); `native/install_paths.*`; port `private/slice200-port` with `--portable-check`; `make_distribution.py` wrote `private/slice200-dist` (16 files, 93 MB); the exe holds one build path (the build-time shader fallback). Smoke from that folder, headless: donor 42/42 frames identical to slice157; pcsx2 41/41 identical to slice199 (gt4-gs 0.4.0 via `GT4_GS_PROCESS`, ACG on). Tests: `test_portable_install.py`, `test_make_distribution.py`.
+Open: the release build should drop the build-time shader fallback; `--mode main` is not rebuilt (its build is not shared); the owner's disc is not copied into the worktree.
 
 ### TASK-047 — PCSX2 GS 480i deinterlace
 Repos: both, branches `task/047-gs-deinterlace` (main, from `6806f78`) and `gt4gs/deinterlace` (fork). Opus, 1 session.
@@ -673,7 +689,7 @@ Goal: hide the mouse cursor after about 3 s without movement, in fullscreen and 
 show it on any movement; never touch it elsewhere; the game window and the gt4-gs child window (another process) agree.
 `GT4_CURSOR_AUTOHIDE=0` switch (default on) and an Advanced-page row.
 Acceptance: CTest of the rule; a visible tiny fixture with the real child (move, hold, assert visibility); owner check.
-State (2026-10-16, slice201): built; owner test pending, no PR.
+State: ✅ done, owner test 2026-10-16 (fullscreen and windowed); merged with main as slice202.
 - `native/cursor_autohide.*` (pure rule, CTest `native_cursor_autohide`), used by `window.cpp`; protocol 1.2 CONTROL
   cursor carries the policy to gt4-gs 1.0.0, whose window thread applies the same rule and answers `WM_SETCURSOR`.
 - `tools/gs_live_check --cursor-check` (visible, about 1.7 s) passes; details [GS-LIVE](docs/GS-LIVE.md) section 11.1.
@@ -682,7 +698,7 @@ State (2026-10-16, slice201): built; owner test pending, no PR.
 Repos: fork (`gt4gs/osd`) and main (settings row). Same session.
 Goal: plain text "Compiling shaders…" bottom-left while the PCSX2 GS really compiles shaders or pipelines (not cache
 loads), gone when compiling stops; reuse PCSX2's compile signal; on by default with an Advanced-page row.
-State (2026-10-16, gt4-gs 1.0.0): built; owner test pending. `GSShaderCompileIndicator` plus a real-compile timestamp;
+State: ✅ done, owner test 2026-10-16 (gt4-gs 1.0.0). `GSShaderCompileIndicator` plus a real-compile timestamp;
 pipelines from the driver cache are excluded with `VK_EXT_pipeline_creation_feedback`; shown until 0.5 s after the last
 compile. Cold cache 238 compiles (notice drawn), warm cache 0 compiles and 138 cache hits (no notice). [GS-LIVE](docs/GS-LIVE.md) 11.2.
 
@@ -691,7 +707,7 @@ Repos: both. Same session.
 Goal: PCSX2-OSD-like overlay, top-right, each item switchable: FPS, frame time, CPU and GPU usage of the game only (game
 process plus gt4-gs), output and internal resolution, per-part ms per frame and the headroom against 16.67 ms (the F8
 summary, live, about twice per second); off by default; negligible overhead (measured).
-State (2026-10-16, slice201): built; owner test pending. Game numbers in protocol 1.2 OSD_STATS records (sent only when
+State: ✅ done, owner test 2026-10-16. Game numbers in protocol 1.2 OSD_STATS records (sent only when
 READY asks for them); CPU via GetProcessTimes of both processes, GPU via PDH "GPU Engine" counters of both pids; drawn
 with the PCSX2 ImGui OSD. Overhead: 0.35 us/frame on the EE thread, 12-15 us/frame of ImGui text and +0.02 ms/frame of GS
 thread time. Rows `perf_overlay` (master) and one per item. [GS-LIVE](docs/GS-LIVE.md) 11.3.

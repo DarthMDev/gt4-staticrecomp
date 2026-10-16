@@ -115,10 +115,12 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
 - Menus are interlaced like the original game (480p applies in races). With the
   PCSX2 GS (`--mode pcsx2`, gt4-gs 0.3.2 and later) they are deinterlaced (TASK-047; the
   stream lacked SYNCV and presented the wrong field). CoreGS 1.1 shows them as before.
-- With `--mode pcsx2` (slice201, gt4-gs 1.0.0) the mouse cursor hides over the picture
+- With `--mode pcsx2` (slice202, gt4-gs 1.0.0) the mouse cursor hides over the picture
   after 3 s without movement (`GT4_CURSOR_AUTOHIDE=0` keeps it), a small "Compiling
   shaders…" text shows while shaders compile, and `--gs-setting perf_overlay=true` shows
-  a performance overlay. Not yet checked by the owner in the game window.
+  a performance overlay (owner test 2026-10-16).
+- gt4-gs 1.0.0 still writes its log to `Documents\PCSX2\logs\emulog.txt` (and would create
+  the PCSX2 user folders there on a PC without PCSX2); fixed for 1.0.1 (not released yet).
 - gt4-gs 0.4.0 (`--mode pcsx2`, TASK-042) turns on Windows Arbitrary Code Guard (no
   dynamic code in the GS process). It is checked with the owner's AMD driver only; a
   driver that needs dynamic code there would fail to start the GS (`--mode
@@ -183,10 +185,12 @@ in game before it is merged.
 | TASK‑046 | "Prepare shaders": warm the PCSX2 GS pipeline cache before the first race | 📋 Planned (study done) |
 | TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | ✅ Done · owner test 2026-10-16: sharp, steady 480i menus (SYNCV + display field, gt4-gs 0.3.2) ([live](docs/GS-LIVE.md#8-480i-deinterlacing-task-047-slice196-gt4-gs-032)) |
 | TASK‑049 | GS settings curation for the launcher (Graphics and Advanced pages, reset to defaults) | ✅ Done · default gt4-gs.ini unchanged; 58-row table ([settings](docs/GS-SETTINGS.md)) |
-| TASK‑060 | Mouse cursor hides over the picture after 3 s (fullscreen and windowed) | 🔄 Built (slice201) · owner test pending ([live](docs/GS-LIVE.md)) |
-| TASK‑061 | "Compiling shaders…" notice while the PCSX2 GS compiles | 🔄 Built (gt4-gs 1.0.0) · owner test pending |
-| TASK‑062 | Performance overlay: FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom | 🔄 Built (slice201) · off by default (`--gs-setting perf_overlay=true`); owner test pending |
-| 🧩 | **gt4-gs 1.0.0: first stable renderer release** | ✅ Published 2026-10-16 ([fork](docs/GS-FORK.md)) |
+| TASK‑058 | Crash-safe memory card in the real build (atomic write, retry, exit flush) | ✅ Done · owner test 2026-10-16; kill test 25/25, card flushed on exit and after a GS loss (slice200, in slice202) |
+| TASK‑059 | Installed game folder: shaders and GS package next to the exe, `--portable-check`, `make_distribution.py` | ✅ Done · owner test 2026-10-16; headless smoke from the folder 42/42 and 41/41 ([distribution](docs/DISTRIBUTION.md)) |
+| TASK‑060 | Mouse cursor hides over the picture after 3 s (fullscreen and windowed) | ✅ Done · owner test 2026-10-16: hides in fullscreen and over the picture only in a window (`GT4_CURSOR_AUTOHIDE=0` keeps it) ([live](docs/GS-LIVE.md)) |
+| TASK‑061 | "Compiling shaders…" notice while the PCSX2 GS compiles | ✅ Done · owner test 2026-10-16; only real compiles (cache hits excluded), gt4-gs 1.0.0 |
+| TASK‑062 | Performance overlay: FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom | ✅ Done · owner test 2026-10-16; off by default (`--gs-setting perf_overlay=true`), +0.02 ms/frame GS thread |
+| 🧩 | **gt4-gs 1.0.0: first stable renderer release** | ✅ Published 2026-10-16, pinned in slice202 (`--mode pcsx2`) ([fork](docs/GS-FORK.md)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS

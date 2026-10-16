@@ -72,7 +72,7 @@ class Slice199PinTests(unittest.TestCase):
         return json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
 
     def test_mode_pcsx2_slice199_keeps_the_slice198_game_build(self):
-        # Since slice201 (TASK-060/061/062) --mode pcsx2 points at slice201; slice199 stays selectable for A/B.
+        # Since slice200 --mode pcsx2 moved on (slice202 now: TASK-058/059 plus TASK-060/062); slice199 stays for A/B.
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice199'], ('slice199-pcsx2.json', EXECUTABLE))
         self.assertIn('pcsx2-slice199', performance.MODES)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice198'], (MANIFEST, EXECUTABLE))
