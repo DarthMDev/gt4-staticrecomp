@@ -2,6 +2,12 @@
 
 ## Current state (2026-10-16)
 
+**slice203 (TASK-044, branch `task/044-gs-101`):** the slice202 game executable (same hash) with the stable gt4-gs 1.0.1
+(tag `gt4gs-v1.0.1`, fork PR #7 merged as `d90c0f111`), which no longer writes under `Documents\PCSX2`. `--mode pcsx2` = slice203;
+`pcsx2-slice202` kept. Checks: Python 472 run (18 skipped), CTest 29/30 (`python_native_contracts` uses the stale slice202 build path),
+donor 42/42 = slice202, pcsx2 4200 frames 41/41 = slice202 (1x), no-JIT check of the 1.0.1 package passed, `Documents\PCSX2`
+unchanged. [BUILD](BUILD.md) slice 203.
+
 TASK-039 tooling follow-up (external contribution by Gustavo Canepa, PR #36, `fix/duplicate-gs-json-settings`): duplicate JSON setting ids now
 raise the same error as duplicate CLI assignments. The 58 GS settings module tests pass, including
 unchanged default INI output; no native build or gameplay validation was performed for this change.
@@ -9,8 +15,7 @@ unchanged default INI output; no native build or gameplay validation was perform
 **slice202 (main `b955235` merged into `task/060-062-osd`):** one candidate with the owner-approved TASK-058/059 (crash-safe
 memory card, installed-folder paths, `--portable-check`, `make_distribution.py`) and TASK-060/061/062 (cursor, shader
 notice, overlay) on the stable gt4-gs 1.0.0. CTest 30/30, Python 469 OK, donor 42/42, pcsx2 41/41 = slice201, the same
-from the distribution folder, `--portable-check` ok. `--mode pcsx2` = slice202. Known issue: gt4-gs 1.0.0 rewrites
-`Documents\PCSX2\logs\emulog.txt` (fix ready on fork `gt4gs/datadir`, 1.0.1, not released; TASK-044). [BUILD](BUILD.md) slice202.
+from the distribution folder, `--portable-check` ok. `--mode pcsx2` was slice202 until slice203 (gt4-gs 1.0.1). [BUILD](BUILD.md) slice202.
 
 **slice201 (TASK-060/061/062, branch `task/060-062-osd`, fork `gt4gs/osd`, `gt4gs-v1.0.0` stable):** the mouse cursor
 hides over the picture after 3 s without movement in fullscreen and windowed mode (game window and gt4-gs child agree

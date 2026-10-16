@@ -1453,6 +1453,30 @@ Checks: CTest 30/30; Python 455 OK, 25 skipped (`GT4_NATIVE_BUILD` = the slice20
 slice157; pcsx2 1x 41/41 identical to slice199; no-JIT static check passes on the published package (23 modules).
 Details: [GS-LIVE](GS-LIVE.md) section 11.
 
+## Slice203 - gt4-gs 1.0.1 (TASK-044: no writes under Documents\PCSX2)
+
+Game executable `private/slice203-build/build/gt4vulkan.exe` (copied from the slice202 build, same hash `d4cb6de6...`,
+95,685,120 bytes). Package: the stable gt4-gs 1.0.1 release (see [GS-FORK](GS-FORK.md)), extracted to
+`private/slice203-gt4gs-release-pkg` (tree `55939b2b...`). Pin `docs/inputs/slice203-pcsx2.json` (slice202 fields with the
+1.0.1 `gs_stream` and `runtime_dependencies`, written as a new file); `--mode pcsx2` = slice203, `pcsx2-slice202` kept.
+The test `tests/python/test_gs_slice203_pin.py` checks the pin, the release values and the copied files.
+
+Checks: Python suite 472 run, 18 skipped (`GT4_NATIVE_BUILD` = the slice202 build). CTest 29/30: `python_native_contracts`
+discovers tests in the stale path `C:/Antigravity/gt4-wt-060-osd`, which does not exist any more (the slice202 build config),
+so it finds nothing; it passes from the worktree (472 tests). Donor headless 4200 frames: 42/42 identical to slice202.
+pcsx2 headless 4200 frames with `GT4_GS_SCALE=1 GT4_GS_ASPECT=auto` (the slice202 settings): 41/41 gs-frames identical to
+slice202. no-JIT check of the 1.0.1 package: passed (`check-nojit.json` from the release script).
+
+Documents\PCSX2: a `Documents\PCSX2` snapshot (path, size, mtime) before and after a live headless run and after an
+offline `--replay-gscap` run: no changes. The offline replay stops after VM initialization with exit code -16843010, the same
+point as the 1.0.0 logs (a limit of the replay test, not investigated). Not done: a clean-profile run with a redirected
+USERPROFILE; the PCSX2 folder location comes from the known-folder API, so a redirect is not a reliable test.
+
+Runs: the headless runs used the main checkout as assets root, with the slice203 build and package copied into
+`private/slice203-build` and `private/slice203-gt4gs-release-pkg` there (new directories; the worktree copies are the same
+files, hashes verified). The probe also reads the main checkout's own `private/fingerprint-check/CORE.GT4` and
+`private/reconstructed/SCUS_973.28.elf` (not copied).
+
 ## Slice202 - TASK-058/059 and TASK-060/061/062 together, gt4-gs 1.0.0
 
 `task/060-062-osd` merged with main `b955235` (TASK-058/059, PR #35); conflicts resolved keeping both sides

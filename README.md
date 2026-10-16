@@ -115,12 +115,12 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
 - Menus are interlaced like the original game (480p applies in races). With the
   PCSX2 GS (`--mode pcsx2`, gt4-gs 0.3.2 and later) they are deinterlaced (TASK-047; the
   stream lacked SYNCV and presented the wrong field). CoreGS 1.1 shows them as before.
-- With `--mode pcsx2` (slice202, gt4-gs 1.0.0) the mouse cursor hides over the picture
+- With `--mode pcsx2` (slice203, gt4-gs 1.0.1) the mouse cursor hides over the picture
   after 3 s without movement (`GT4_CURSOR_AUTOHIDE=0` keeps it), a small "Compiling
   shaders…" text shows while shaders compile, and `--gs-setting perf_overlay=true` shows
   a performance overlay (owner test 2026-10-16).
-- gt4-gs 1.0.0 still writes its log to `Documents\PCSX2\logs\emulog.txt` (and would create
-  the PCSX2 user folders there on a PC without PCSX2); fixed for 1.0.1 (not released yet).
+- Fixed in gt4-gs 1.0.1 (slice203, TASK-044): gt4-gs no longer writes its log to `Documents\PCSX2\logs\emulog.txt` or
+  creates the PCSX2 user folders there. A live run and an offline replay left the `Documents\PCSX2` snapshot unchanged.
 - gt4-gs 0.4.0 (`--mode pcsx2`, TASK-042) turns on Windows Arbitrary Code Guard (no
   dynamic code in the GS process). It is checked with the owner's AMD driver only; a
   driver that needs dynamic code there would fail to start the GS (`--mode
@@ -191,6 +191,7 @@ in game before it is merged.
 | TASK‑061 | "Compiling shaders…" notice while the PCSX2 GS compiles | ✅ Done · owner test 2026-10-16; only real compiles (cache hits excluded), gt4-gs 1.0.0 |
 | TASK‑062 | Performance overlay: FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom | ✅ Done · owner test 2026-10-16; off by default (`--gs-setting perf_overlay=true`), +0.02 ms/frame GS thread |
 | 🧩 | **gt4-gs 1.0.0: first stable renderer release** | ✅ Published 2026-10-16, pinned in slice202 (`--mode pcsx2`) ([fork](docs/GS-FORK.md)) |
+| 🧩 | **gt4-gs 1.0.1: stable, no writes under `Documents\PCSX2`** | ✅ Published 2026-10-16 (`gt4gs-v1.0.1`), pinned in slice203 (`--mode pcsx2`) ([fork](docs/GS-FORK.md)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS

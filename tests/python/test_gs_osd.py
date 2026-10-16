@@ -41,7 +41,9 @@ class Slice201PinTests(unittest.TestCase):
     def test_mode_pcsx2_slice201_stays_and_pcsx2_selects_slice202(self):
         # slice202 combines slice200 (TASK-058/059) and slice201 (TASK-060/062) with the same gt4-gs 1.0.0 package.
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice201'], (MANIFEST, EXECUTABLE))
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'))
+        # slice203 (TASK-044) is the mode pcsx2 pin now; slice202 stays as pcsx2-slice202 (gt4-gs 1.0.0).
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice202'], ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice200'], ('slice200-pcsx2.json', 'private/slice200-build/build/gt4vulkan.exe'))
         combined = manifest('slice202-pcsx2.json')
         self.assertEqual(combined['gs_stream'], manifest()['gs_stream'])
