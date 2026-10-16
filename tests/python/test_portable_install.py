@@ -21,7 +21,7 @@ SHADER_NAMES = ('upload', 'copy_read', 'copy_write', 'load_clut', 'display', 'ra
 
 
 def pinned_shader_dir():
-    manifest = json.loads((ROOT / 'docs/inputs/slice200-pcsx2.json').read_text(encoding='utf-8'))
+    manifest = json.loads((ROOT / 'docs/inputs/slice202-pcsx2.json').read_text(encoding='utf-8'))
     return ASSETS / manifest['shader_capsule']
 
 

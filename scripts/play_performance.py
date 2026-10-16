@@ -71,6 +71,9 @@ from external_runtime_probe import GS_SETTINGS_ENV, PERF_PROFILES, VU1_RECORD_MA
 import gs_settings
 
 MODES = tuple(PERF_PROFILES) + ('vu1-record',)
+# TASK-060/061/062 (owner decision 2026-10-16): the internal-resolution presets of the settings table (upscale row),
+# as multipliers; --gs-resolution X is the same as --gs-scale N.
+GS_RESOLUTIONS = {name: multiplier for name, multiplier, _ in gs_settings.upscale_presets(gs_settings.load_table())}
 
 
 def cpu_options(args):
@@ -105,6 +108,9 @@ def main():
                              'one per physical core first; recorded in result.json (docs/MTVU-PLAN.md section 12)')
     parser.add_argument('--gs-scale', type=int, default=None, metavar='N',
                         help='pcsx2 only: GS internal resolution multiplier 1..12 (default 3; GT4_GS_SCALE)')
+    parser.add_argument('--gs-resolution', choices=GS_RESOLUTIONS, default=None,
+                        help='pcsx2 only: internal resolution preset (480p = 1x, 720p = 2x, 1080p = 3x, 1440p = 4x, '
+                             '4K = 6x, 8K = 12x; the same as --gs-scale N)')
     parser.add_argument('--gs-setting', action='append', default=[], metavar='ID=VALUE',
                         help='pcsx2 only: set a GS option from docs/launcher/gs-settings.toml (repeatable; '
                              'checked against the table; docs/GS-SETTINGS.md)')
@@ -125,6 +131,12 @@ def main():
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
         if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu', 'pcsx2'):
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure, mtvu or pcsx2')
+        if args.gs_resolution is not None:
+            if args.mode != 'pcsx2':
+                raise ValueError('--gs-resolution requires --mode pcsx2')
+            if args.gs_scale is not None:
+                raise ValueError('--gs-resolution and --gs-scale both set the internal resolution')
+            args.gs_scale = GS_RESOLUTIONS[args.gs_resolution]
         if args.gs_scale is not None:
             if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 12:
                 raise ValueError('--gs-scale takes 1..12 and requires --mode pcsx2')
@@ -135,7 +147,8 @@ def main():
                 raise ValueError('--gs-setting requires --mode pcsx2')
             settings = gs_settings.settings_from_assignments(args.gs_setting, gs_settings.load_table())
             if args.gs_scale is not None and 'upscale' in settings:
-                raise ValueError('--gs-scale and --gs-setting upscale=... both set the internal resolution')
+                raise ValueError('--gs-scale (or --gs-resolution) and --gs-setting upscale=... both set the internal '
+                                 'resolution')
             if args.gs_readback is not None and 'hw_download_mode' in settings:
                 raise ValueError('--gs-readback and --gs-setting hw_download_mode=... both set the readback mode')
             os.environ[GS_SETTINGS_ENV] = gs_settings.settings_to_json(settings)

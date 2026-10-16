@@ -1,4 +1,4 @@
-# GS stream protocol, version 1.1 (normative)
+# GS stream protocol, version 1.2 (normative)
 
 Status: implemented in TASK-035 (slice191, branch `task/035-gs-stream`), 2026-10-15. Decision
 [0070](decisions/0070-pcsx2-gs-separate-process.md), plan [GSDX-PLAN](GSDX-PLAN.md) section C.
@@ -14,7 +14,14 @@ TASK-034 converter's file-format notes. No PCSX2 or paraLLEl-GS code was read or
 Version 1.1 (TASK-047, 2026-10-16) changes only the meaning of VSYNC `field` (section 6.1) and adds SYNCV to the
 SetGsCrt writes (section 7); layouts are unchanged and a 1.0 producer of this repository sent the same field values.
 The 1.1 text was written by a PCSX2-tainted agent of the GS fork task; it states PS2 hardware behavior and our own
-producer's timing, and contains no PCSX2 code. History: 1.0 (TASK-035, slice191), 1.1 (TASK-047, slice196).
+producer's timing, and contains no PCSX2 code. History: 1.0 (TASK-035, slice191), 1.1 (TASK-047, slice196), 1.2
+(TASK-060/062, slice201).
+
+Version 1.2 (TASK-060 and TASK-062, 2026-10-16) adds, without changing any existing layout or meaning: CONTROL kind 6
+`cursor` (section 6.1), the record type 11 `OSD_STATS` (section 6.5) and the READY flag 8 `kReadyFlagOsdStats`
+(section 6.2). A producer sends them only to a consumer whose READY `version_minor` is 2 or more, so a 1.2 producer
+works with a 1.1 consumer (gt4-gs 0.4.0) and a 1.2 consumer with a 1.1 producer (the slice199 game). The 1.2 text
+was written by a PCSX2-tainted agent of the GS fork task; it describes our own records only and contains no PCSX2 code.
 
 ## 1. Scope
 
@@ -63,7 +70,7 @@ Ring capacities MUST be multiples of 4,096 bytes. The response capacity MUST be 
 | Offset | Field | Writer | Notes |
 |---|---|---|---|
 | 0 | `magic` u32 = `0x54535347` ("GSST") | producer | |
-| 4 | `version_major` u16 = 1, `version_minor` u16 = 0 | producer | |
+| 4 | `version_major` u16 = 1, `version_minor` u16 (2 since version 1.2) | producer | |
 | 8 | `control_block_bytes` u32 = 4096, `record_header_bytes` u32 = 16 | producer | layout check |
 | 16 | `producer_pid`, `consumer_pid` u32 | each side | consumer writes its pid at the handshake |
 | 24 | `state` u32 (atomic bits) | both | 1 producer ready, 2 consumer ready, 4 fatal, 8 exiting |
@@ -136,8 +143,9 @@ timeout error.
 | VSYNC | 3 | `VsyncPayload {u64 frame; u8 field; u8 reserved[3]; u32 flags}` | Start of a vertical blank: every earlier record belongs to the frame that ends here. `frame` counts from 0. When `flags` bit 0 is set, `field` is the **display field** of the frame that ends here: the CSR FIELD bit (bit 13, 1 = odd) a consumer MUST use when it presents that frame, i.e. the field the game prepared that frame's display for. The consumer uses it as is (no shift by one VSYNC). Without bit 0 the consumer alternates the field. (1.0 described it as "the CSR FIELD bit the producer reports to the EE after this VSync"; see section 7 for why both are the same value for our producer.) |
 | READ_FIFO | 4 | `ReadFifoPayload {u32 qwords; u32 reserved; u64 request_id}` | Local-to-host transfer read (the TRXDIR = 1 setup came earlier in the stream). Section 6.4. |
 | RESET | 5 | `ResetPayload {u32 kind; u32 path_mask; u64 reserved}` | kind 1: GS hard reset (power-on state, local memory cleared); kind 2: GIF path parsers in `path_mask` (bit N = path N) return to "waiting for a tag". |
-| CONTROL | 6 | `ControlPayload {u32 kind; u32 reserved; u64 args[3]}` | kind 1 shutdown; 2 attach_window (native parent window handle, width, height); 3 resize (width, height); 4 reload_config; 5 snapshot (id, width, height; 0 = native). |
-| STATE_SAVE, STATE_LOAD, AUX_FRAME_BEGIN, AUX_FRAME_END | 7-10 | reserved | Not used in 1.0 or 1.1. A consumer answers ERROR `unsupported_record` (not fatal) and ignores them. |
+| CONTROL | 6 | `ControlPayload {u32 kind; u32 reserved; u64 args[3]}` | kind 1 shutdown; 2 attach_window (native parent window handle, width, height); 3 resize (width, height); 4 reload_config; 5 snapshot (id, width, height; 0 = native); 6 cursor (version 1.2: flags, hide delay in ms 1..60000, 0; flag bit 0 `kCursorFlagAutoHide`): the mouse cursor policy for the consumer's window over the picture (section 6.6). |
+| STATE_SAVE, STATE_LOAD, AUX_FRAME_BEGIN, AUX_FRAME_END | 7-10 | reserved | Not used in 1.0 to 1.2. A consumer answers ERROR `unsupported_record` (not fatal) and ignores them. |
+| OSD_STATS | 11 | `OsdStatsPayload` (64 bytes, section 6.5) | Version 1.2: producer performance numbers for the consumer's on-screen display. Sent only to a consumer that set `kReadyFlagOsdStats`. Not GS traffic: it never changes the picture and is never written to a `.gscap` file. A payload larger than 64 bytes (a later minor version) keeps the 64-byte layout at its start. |
 
 Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record` and exits.
 
@@ -145,7 +153,7 @@ Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record
 
 | Type | Value | Payload |
 |---|---|---|
-| READY | 0x81 | `ReadyPayload {u16 version_major, version_minor; u32 consumer_pid; u32 flags; u32 reserved; char consumer[32]; char renderer[32]; char version[64]}`. Flags: 1 readbacks are zero-filled (no VRAM), 2 the consumer presents frames, 4 the consumer records the stream. |
+| READY | 0x81 | `ReadyPayload {u16 version_major, version_minor; u32 consumer_pid; u32 flags; u32 reserved; char consumer[32]; char renderer[32]; char version[64]}`. Flags: 1 readbacks are zero-filled (no VRAM), 2 the consumer presents frames, 4 the consumer records the stream, 8 (version 1.2) the consumer draws a performance overlay and wants OSD_STATS records. |
 | STATS | 0x82 | `StatsPayload {u64 vsyncs, records, bytes, readbacks, readbacks_zero_filled, busy_us, wait_us, reserved}`, cumulative since READY; posted at least every 500 VSYNCs and at shutdown. |
 | ERROR | 0x83 | `ErrorPayload {u32 code; u32 fatal; char text[248]}`; codes 1 version mismatch, 2 layout mismatch, 3 bad record, 4 unsupported record, 5 device failure, 6 internal. |
 | SNAPSHOT_DONE | 0x84 | `SnapshotDonePayload {u64 id; u32 width, height; u64 response_offset; u64 bytes}` (RGBA8 in the response area). |
@@ -168,6 +176,36 @@ Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record
    `readback_done = id` and wakes the producer.
 3. The producer copies the reply. A request larger than the response area MUST be split by the producer into
    several READ_FIFO records (the game splits at `response_capacity / 16` qwords).
+
+### 6.5 OSD_STATS (version 1.2)
+
+`OsdStatsPayload` (all u32 unless noted; times in microseconds; per-frame values are averages over the interval):
+
+| Offset | Field | Meaning |
+|---|---|---|
+| 0 | `valid` | bits: 1 frame times, 2 main thread CPU, 4 worker busy, 8 stream costs, 16 worker wait, 32 critical path |
+| 4 | `frames` | VSYNCs in the interval |
+| 8 | `interval_us` (u64) | wall time of the interval |
+| 16, 20 | `frame_time_avg_us`, `frame_time_max_us` | mean and longest time between two VSYNC posts |
+| 24 | `main_thread_cpu_us` | CPU time of the producer thread that posts the stream (for the game: the EE thread) |
+| 28 | `worker_busy_us` | busy time of a producer worker thread whose output the main thread waits for (the game: VU1 worker) |
+| 32, 36, 40 | `stream_write_us`, `readback_wait_us`, `backpressure_us` | main thread time writing records, waiting for READ_FIFO replies, waiting for ring space or frames in flight |
+| 44 | `worker_wait_us` | main thread time waiting for the worker |
+| 48, 52 | `critical_path_us`, `frame_budget_us` | main thread CPU plus every wait above; the frame period the producer paces to |
+| 56 | reserved (2 x u32) | zero |
+
+A field is meaningful only when its `valid` bit is set. The producer posts one record about every 0.5 s of wall time,
+right after a VSYNC record, so a consumer updates its display about twice per second. The records go to the command
+ring only (not to a capture file, not to the stream hash), with their own sequence number like every record.
+
+### 6.6 Cursor (version 1.2)
+
+The producer owns the top-level window; a consumer's child window covers its client area (the picture). Mouse
+messages over the picture go to the consumer's window thread, so only the consumer can change the cursor there.
+CONTROL `cursor` hands it the producer's policy: with `kCursorFlagAutoHide` the consumer hides the cursor while it is
+over its window and has not moved for the delay, shows it again on any movement, and never changes it anywhere else;
+without the flag (or without the record) it never changes the cursor. The producer applies the same rule to its own
+client area, so the two processes agree.
 
 ## 7. Producer rules (the game, `native/gs_stream/gs_stream_client.cpp`)
 
@@ -202,6 +240,13 @@ Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record
 - Presentation: none in the game; the consumer presents. CONTROL attach_window and resize carry the game window.
 - Shutdown: at the end of the run the producer posts CONTROL shutdown, waits up to 3 s for the consumer to exit,
   then ends it through the job.
+- Version 1.2 (slice201): after CONTROL attach_window, the game posts CONTROL cursor with its `GT4_CURSOR_AUTOHIDE`
+  policy (default on, 3,000 ms) when the consumer's READY minor is 2 or more. When READY also has `kReadyFlagOsdStats`,
+  the game posts OSD_STATS every 0.5 s after a VSYNC: EE thread CPU (GetThreadTimes), VU1 worker busy time (MTVU
+  worker accounting), and from the performance accounting (on in every launcher run, `GT4_PERF=1`) the exclusive
+  times of `gs_ipc_write`, `gs_ipc_readback_wait`, `gs_ipc_backpressure` and the MTVU waits; the critical path is the
+  F8 summary formula (EE CPU plus those waits). Cost on the EE thread (measured, slice201): 0.3 us per VSYNC and
+  2-3 us per record.
 
 ## 8. Consumer rules
 
@@ -211,7 +256,8 @@ Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record
    usable, and exit with a non-zero code.
 2. Open the producer process for SYNCHRONIZE and use it as the peer of every wait.
 3. Write `consumer_pid`, set the consumer-ready state bit, post READY.
-4. Process records in order (sections 6.1-6.4); release each record after its payload is no longer needed.
+4. Process records in order (sections 6.1-6.6); release each record after its payload is no longer needed. A
+   consumer that does not draw an overlay never sets `kReadyFlagOsdStats` and therefore never receives OSD_STATS.
 5. On CONTROL shutdown: post STATS, set the exiting bit, post EXITING, exit 0. On producer death: exit (the game is
    gone).
 
@@ -246,7 +292,8 @@ dump. Version 1 (`GT4_PGS_CAPTURE`, task/012) has no header and single-letter re
   different major.
 - New record types, new flag bits and new control kinds bump `kVersionMinor`. A consumer that sees an unknown
   type below 0x80 answers ERROR `unsupported_record` and skips it only if the type is in the reserved list;
-  otherwise the stream is malformed.
+  otherwise the stream is malformed. A producer therefore sends a newer record type or control kind only to a
+  consumer whose READY minor version has it (1.2: CONTROL cursor and OSD_STATS).
 - `.gscap` files carry the protocol version of their records.
 
 ## 12. Implementation and tests (slice191)
@@ -258,7 +305,7 @@ dump. Version 1 (`GT4_PGS_CAPTURE`, task/012) has no header and single-letter re
 | `.gscap` v2 writer/reader | `native/gs_stream/gs_stream_file.{hpp,cpp}` |
 | Game-side client and hooks | `native/gs_stream/gs_stream_client.{hpp,cpp}`; splices in `scripts/prepare_external_vulkan.py --gs-stream-hooks` (gs.cpp) and `scripts/prepare_perf_runtime.py --gs-stream` (gif.cpp, hw.cpp) |
 | Test consumer (recorder / null consumer) | `tools/gs_stream_record` |
-| CTest | `native_gs_stream_ipc` (10^6 random records, wrap, back-pressure, split, readback, frames in flight, spurious wakes, fatal flag, child-process handshake, handshake timeout, peer death both ways); `native_gs_stream_client` (donor capture == pcsx2 capture == recorder file, refusals, consumer death) |
+| CTest | `native_gs_stream_ipc` (10^6 random records, wrap, back-pressure, split, readback, frames in flight, spurious wakes, fatal flag, child-process handshake, handshake timeout, peer death both ways); `native_gs_stream_client` (donor capture == pcsx2 capture == recorder file, refusals, consumer death; 1.2: OSD_STATS values, a 1.2 consumer that asks for them receives about two per second and the CONTROL cursor policy, and the capture holds no OSD_STATS) |
 | Python | `tests/python/test_gs_stream.py`, version 2 cases in `tests/python/test_gscap_to_gsdump.py` |
 
 ## 13. Open points for the consumer side (TASK-036)

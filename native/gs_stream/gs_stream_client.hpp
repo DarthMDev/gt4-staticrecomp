@@ -27,6 +27,8 @@
 #include <cstdio>
 #include <string>
 
+#include "gs_stream/gs_stream_protocol.h"
+
 namespace gt4::gs_stream {
 
 enum class Renderer { donor, pcsx2 };
@@ -78,6 +80,13 @@ void on_gif_reset();
 void on_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field);
 // Window: the GS process renders into a child of this window (CONTROL attach_window / resize).
 bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t height);
+// TASK-060 (protocol 1.2): the mouse cursor policy the game window uses (GT4_CURSOR_AUTOHIDE, native/cursor_autohide.hpp).
+// Call before attach_window; attach_window then sends CONTROL cursor to a 1.2 consumer, so the GS child window hides the
+// cursor over the picture with the same rule. Default: auto-hide on, 3000 ms.
+void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms);
+// TASK-062 (protocol 1.2): cumulative busy time of the VU1 worker in microseconds (installed by the MTVU bridge in
+// pcsx2 mode); read for the OSD_STATS records. Null: the worker field is not sent.
+void set_worker_busy_source(std::uint64_t (*worker_busy_us)());
 void resize_window(std::uint32_t width, std::uint32_t height);
 // Called when the GS process dies, with a reason (the spliced gs.cpp passes ps2::halt).
 void set_halt_handler(void (*halt)(const char *reason));
@@ -97,6 +106,22 @@ struct FrameCosts {
   double budget_ms = 1000.0 / 59.94;
 };
 std::string format_frame_summary(const FrameCosts &costs);
+
+// TASK-062 (protocol 1.2): OSD_STATS for a consumer that asked for them (READY kReadyFlagOsdStats). The client sends one
+// record about every kOsdStatsIntervalUs of wall time, right after a VSYNC. OsdSample holds cumulative counters taken at
+// the VSYNC; make_osd_stats turns two samples into the record (times per frame, microseconds; pure, tested by the
+// client fixture).
+constexpr std::uint64_t kOsdStatsIntervalUs = 500000;
+struct OsdSample {
+  std::uint64_t wall_us = 0;
+  std::uint64_t vsyncs = 0;
+  std::uint64_t main_cpu_us = UINT64_MAX;     // EE thread CPU; UINT64_MAX: unknown
+  std::uint64_t worker_busy_us = UINT64_MAX;  // VU1 worker busy; UINT64_MAX: unknown
+  bool accounting = false;  // the perf accounting (GT4_PERF=1 or F7) is on: the four waits below are measured
+  std::uint64_t stream_write_us = 0, readback_wait_us = 0, backpressure_us = 0, worker_wait_us = 0;
+};
+::gs_stream::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &end, std::uint64_t max_frame_us,
+                                            double budget_ms = 1000.0 / 59.94);
 
 // SHA-256 of a file as 64 lowercase hex digits (Windows CNG). Used for the GS process pin (GT4_GS_PROCESS_SHA256).
 bool file_sha256(const std::wstring &path, std::string &hex, std::string &error);

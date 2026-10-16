@@ -1422,3 +1422,56 @@ data.
 Worktree copies: the pinned `private/` inputs of slice200 were copied (files, no links) into `C:\Antigravity\gt4-wt-058-harden\private`
 and checked by size and SHA-256 (16 checks; the 140-file gt4-gs package tree `e9402cf2...`). The disc image
 (`Gran Turismo 4 (USA) (v2.00).iso`, 5.3 GB) is not copied: the probe checks it at the checkout root.
+
+## Slice201 - cursor, shader notice, performance overlay, stable gt4-gs 1.0.0 (TASK-060/061/062)
+
+Branch `task/060-062-osd` (worktree `C:\Antigravity\gt4-wt-060-osd`, from main `3b5334d`), fork branch `gt4gs/osd`
+(worktree `C:\Antigravity\gt4recomp-gs-osd`, commit `3b9aae399`, tag `gt4gs-v1.0.0`). Same capsules, shaders, EE library
+and VU tables as slice198/199; native changes only. Scripts in `private/slice201-scripts`:
+
+- game: `build-game-201.bat [targets]` (source = the worktree, build dir `private/slice201-osd-build/build`, assets root the
+  main checkout); `guard.ps1` / `guarded.sh <log> <command>` wait until no ninja, cl, clang-cl or link process runs;
+- gt4-gs iteration build: `build-gt4gs-201.bat` (`GT4GS_ONLY=ON`, `private/slice201-gt4gs-build`), packaged by copying the
+  new `gt4-gs.exe` over the 0.4.0 package into `private/slice201-gt4gs-devpkg` (not pinned);
+- release: `release-100.sh` = `gt4gs/release-local.ps1 -Tag gt4gs-v1.0.0 -Build private\slice201-gt4gs-release-build -Deps
+  private\slice193-gt4gs-deps\root\deps -OutDir private\slice201-gt4gs-release -Release` (log
+  `private/slice201-release-1.0.0.log`); downloaded back to `private/slice201-gt4gs-download` and extracted to
+  `private/slice201-gt4gs-release-pkg`;
+- pin: `make_manifest.py <worktree> <assets root> private/slice201-gt4gs-release-pkg slice201-pcsx2.json <zip> <url>`;
+  `copy_pins.py <worktree> <main checkout> slice201-pcsx2.json slice199-pcsx2.json` copies (never links) every pinned
+  file, both package trees and the GS cache and data folders into the worktree's `private/` and checks them;
+- checks: `headless-201.sh <run> [env]` (slice157 schedule, outputs in `private/slice201-smoke`), `cmp201.py`,
+  `overhead.sh <runs>` (hidden-window overlay A/B with `tools/gs_live_check`), `ctest-201.bat`; commit hygiene
+  `normalize_eol.py` (each file keeps its blob's line endings) and `check_blobs.py` (no CR CR LF, no mixed blobs).
+
+Pins `docs/inputs/slice201-pcsx2.json` (`gt4vulkan.exe` 95,672,320 bytes, sha256 `f4737af4...`; gt4-gs 1.0.0 package tree
+`c95edf1c...`); `--mode pcsx2` points here, `--mode pcsx2-slice199` keeps slice199. Fixtures (`tools/gs_live_check`):
+`--cursor-check` and `--overlay-shot <bmp>` are VISIBLE (about 1-2 s, small window at a screen corner, topmost while they
+run; they stop as inconclusive when another window covers them or the mouse moves); `--osd` posts synthetic OSD_STATS.
+
+Checks: CTest 30/30; Python 455 OK, 25 skipped (`GT4_NATIVE_BUILD` = the slice201 build); donor 42/42 identical to
+slice157; pcsx2 1x 41/41 identical to slice199; no-JIT static check passes on the published package (23 modules).
+Details: [GS-LIVE](GS-LIVE.md) section 11.
+
+## Slice202 - TASK-058/059 and TASK-060/061/062 together, gt4-gs 1.0.0
+
+`task/060-062-osd` merged with main `b955235` (TASK-058/059, PR #35); conflicts resolved keeping both sides
+(`private/slice201-scripts/resolve_merge.py`). One game build with the slice200 recipe (port `private/slice200-port`, memcard
+capsule `private/slice200-memcard-runtime`, `-DGT4_MEMCARD_RUNTIME_SOURCE`) and this source: `private/slice202-scripts/
+build-game-202.bat` into `private/slice202-build/build` (`gt4vulkan.exe` 95,685,120 bytes, sha256 `d4cb6de6...`). The GS
+package is the stable gt4-gs 1.0.0 of slice201 (`private/slice201-gt4gs-release-pkg`, tree `c95edf1c...`).
+
+Pins `docs/inputs/slice202-pcsx2.json` (slice200 fields plus the slice201 `gs_stream` and runtime dependencies, written by
+`private/slice202-scripts/make_manifest.py`); `--mode pcsx2` = slice202, `--mode pcsx2-slice201`, `pcsx2-slice200` and
+`pcsx2-slice199` kept. The worktree holds file copies of the slice202 and slice200 pins (`copy_pins.py`, 32 checks).
+Distribution: `scripts/make_distribution.py C:/Antigravity/gt4-staticrecomp/private/slice202-dist ... --exe
+.../slice202-build/build/gt4vulkan.exe --runtime-manifest docs/inputs/slice202-pcsx2.json` (16 files); `--portable-check`
+ok (9 of 9 shaders installed); headless smoke from the folder (`private/slice202-scripts/smoke_dist.py`).
+
+Checks (2026-10-16): CTest 30/30; Python 469 OK, 17 skipped (`GT4_NATIVE_BUILD` = the slice202 build, `GT4_ASSETS_ROOT` =
+the main checkout); headless from the worktree: donor 42/42 identical to slice157, pcsx2 1x 41/41 identical to slice201
+(overlay off); from `private/slice202-dist`: donor 42/42, pcsx2 41/41 (gt4-gs pin matched, ACG on, 0 executable non-image
+regions); no-JIT check of the 1.0.0 package as slice201.
+
+gt4-gs and `Documents\PCSX2` (TASK-044 note): gt4-gs 1.0.0 writes under `Documents\PCSX2`: `VMManager::Internal::LoadStartupSettings()` runs before `[GT4GS] DataRoot` is applied, so it rewrites `Documents\PCSX2\logs\emulog.txt` every session (Confirmed: before/after snapshot of the folder) and creates the PCSX2 user folders there (bios, memcards, logs, ...) on a PC that has none (High confidence, `EmuFolders::EnsureFoldersExist`). The log line "MemoryCards Directory: ...Documents\PCSX2\memcards" is that early pass; the session itself uses DataRoot. Fix on fork branch `gt4gs/datadir` (commit `b30870fe8`, version 1.0.1, NOT released): the call moves after the stream folders; checked: 0 changes under `Documents\PCSX2`, emulog in DataRoot\logs. Check script:
+`private/slice202-scripts/docs_check.ps1` (offline replay) and two headless live runs with a folder snapshot.
