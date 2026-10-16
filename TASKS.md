@@ -69,7 +69,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑031 | High frame rate (120-144 FPS) with game physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS (study docs on `task/031-high-fps`) |
 | TASK‑032 | Decision 0070 docs: PCSX2 GS in a separate process, clean-room wording, renderer docs | ✅ Done (this PR) |
-| TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | 📋 Planned |
+| TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | 🧪 Waiting for owner review · PoC release `gt4gs-v0.1.0-poc` published; smoke test not run |
 | TASK‑034 | Proof of concept: replay our `.gscap` capture through the PCSX2 GS and compare images | 🔄 In progress · go/no-go gate with the owner before TASK-035/036 |
 | TASK‑035 | MIT GS stream protocol, shared-memory IPC and renderer seam on main | 📋 Planned (after the gate) |
 | TASK‑036 | Live `gt4-gs.exe` MVP: the game drives the PCSX2 GS over IPC | 📋 Planned (after the gate) |
@@ -291,8 +291,20 @@ Acceptance: owner answers to GSDX-PLAN section G recorded; links valid; Python s
 Parallel: none needed; first.
 
 ### TASK-033 — Fork, reproducible build, CI releases
-Repo: fork `moesuito/gt4recomp-gs` (GitHub fork of PCSX2/pcsx2), branch `gt4gs/main` from the pinned
-upstream commit. Haiku, Opus if the dependency build stalls; 2-3 sessions.
+Repo: standalone public repository `moesuito/gt4recomp-gs` (not a GitHub fork: the account already has a fork in
+the PCSX2 network, ARMSX2, and GitHub allows one per network). Full PCSX2 history at tag `v2.8.2`
+(`fd9d310c`); branch `gt4gs/main` is the default. Haiku, Opus if the dependency build stalls; 2-3 sessions.
+
+**Result (2026-10-15, 3 CI runs, 1 fix).** Details and run URLs in [docs/GS-FORK.md](docs/GS-FORK.md).
+- Fork: `gt4gs/main` at `70a0aa66f`; `gt4gs/` docs, trimmed dependency script (Qt removed), packaging script,
+  `gt4gs-windows.yml`; upstream workflows set to `workflow_dispatch` only (no file deleted).
+- Release `gt4gs-v0.1.0-poc` (prerelease, tag on `3fd7faba8`): zip 18,202,463 bytes, source archive 24,954,987
+  bytes, `SHA256SUMS`. Checksums verified after download.
+- Deviation: MSVC (VS 18, MSVC 14.51, CMake 4.4.4, Ninja 1.13.2) instead of clang-cl; upstream's CI matrix
+  also builds CMake with MSVC.
+- Not done: GSRunner smoke with `-renderer null` (no dump in the repo, and game data must not be committed);
+  bit-identical local rebuild; build provenance attestation. The first run failed on the VS locator and is kept
+  in the run history.
 Goal: CMake + Ninja + clang-cl build of the unmodified `pcsx2-gsrunner` (`-DENABLE_QT_UI=OFF
 -DENABLE_GSRUNNER=ON`, Vulkan/D3D11/D3D12), dependency script trimmed of Qt and cached, `gt4gs/BUILD.md`,
 NOTICE, third-party license list, a release workflow that publishes `gt4-gs-<ver>-win64.zip`, its SHA-256,
