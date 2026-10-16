@@ -255,6 +255,19 @@ class IniTests(unittest.TestCase):
         with self.assertRaisesRegex(gs_settings.SettingsError, 'upscale must be one of'):
             gs_settings.settings_from_json('{"upscale": 13}', rows())
 
+    def test_json_settings_refuse_duplicate_ids(self):
+        for text in ('{"upscale": 2, "upscale": 6}',
+                     '{"upscale": 2, "upscale": 2}',
+                     '{"upscale": 13, "upscale": 2}',
+                     r'{"upscale": 2, "\u0075pscale": 6}'):
+            with self.subTest(text=text), self.assertRaisesRegex(
+                    gs_settings.SettingsError, 'upscale is given twice'):
+                gs_settings.settings_from_json(text, rows())
+
+    def test_duplicate_json_settings_do_not_reach_the_ini(self):
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'fxaa is given twice'):
+            probe.gs_config_text({'GT4_GS_SETTINGS': '{"fxaa": false, "fxaa": true}'})
+
 
 class AtomicWriteTests(unittest.TestCase):
     def test_write_replaces_the_file_and_leaves_no_temporary(self):
