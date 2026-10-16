@@ -266,8 +266,16 @@ def settings_to_json(settings):
 
 def settings_from_json(text, rows):
     """Reads a settings dict from JSON (the GT4_GS_SETTINGS environment variable) and checks it."""
+    def unique_settings(pairs):
+        settings = {}
+        for identifier, value in pairs:
+            if identifier in settings:
+                raise SettingsError(f'{identifier} is given twice')
+            settings[identifier] = value
+        return settings
+
     try:
-        decoded = json.loads(text)
+        decoded = json.loads(text, object_pairs_hook=unique_settings)
     except json.JSONDecodeError as error:
         raise SettingsError(f'GT4_GS_SETTINGS is not JSON: {error}') from error
     if not isinstance(decoded, dict):

@@ -18,7 +18,9 @@ setting: launcher id, label, help, `page`, `order`, `control`, INI section and k
 - `load_table()` validates the table: schema version, unique ids and INI keys, pages, orders, controls, types,
   statuses and ranges. A broken table is refused with every error listed.
 - `settings_from_assignments()` and `settings_from_json()` check user values. Unknown ids, unknown choices, values out
-  of range, non-settable rows and launcher-only rows are refused, with an error that names the row.
+  of range, duplicate setting ids, non-settable rows and launcher-only rows are refused, with an error that names the
+  row. JSON duplicates are rejected before conversion to a dictionary, so later values cannot silently replace
+  earlier ones (including ids written with JSON Unicode escapes).
 - `reset_to_defaults()` returns the `gt4-defaults` profile: the GT4 default of every settable row.
   `render_ini(rows, reset_to_defaults())` is the default gt4-gs.ini, byte for byte (tests prove it).
 - `render_ini()` writes gt4-gs.ini text. Sections come in a fixed order (`EmuCore/GS`, `EmuCore`, `Folders`,

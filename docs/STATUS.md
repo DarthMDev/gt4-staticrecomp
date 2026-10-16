@@ -2,6 +2,10 @@
 
 ## Current state (2026-10-16)
 
+TASK-039 tooling follow-up (external contribution by Gustavo Canepa, PR #36, `fix/duplicate-gs-json-settings`): duplicate JSON setting ids now
+raise the same error as duplicate CLI assignments. The 58 GS settings module tests pass, including
+unchanged default INI output; no native build or gameplay validation was performed for this change.
+
 **slice202 (main `b955235` merged into `task/060-062-osd`):** one candidate with the owner-approved TASK-058/059 (crash-safe
 memory card, installed-folder paths, `--portable-check`, `make_distribution.py`) and TASK-060/061/062 (cursor, shader
 notice, overlay) on the stable gt4-gs 1.0.0. CTest 30/30, Python 469 OK, donor 42/42, pcsx2 41/41 = slice201, the same
