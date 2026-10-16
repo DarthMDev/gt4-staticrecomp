@@ -172,7 +172,7 @@ in game before it is merged.
 | TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | "Prepare shaders": warm the PCSX2 GS pipeline cache before the first race | 📋 Planned (study done) |
-| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | 🔄 Built (slice196, gt4-gs 0.3.2): full-resolution, steady 480i menus headless; owner check pending ([live](docs/GS-LIVE.md#8-480i-deinterlacing-task-047-slice196-gt4-gs-032)) |
+| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | ✅ Done · owner test 2026-10-16: sharp, steady 480i menus (SYNCV + display field, gt4-gs 0.3.2) ([live](docs/GS-LIVE.md#8-480i-deinterlacing-task-047-slice196-gt4-gs-032)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS
