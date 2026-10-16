@@ -1,4 +1,4 @@
-# GS stream protocol, version 1.0 (normative)
+# GS stream protocol, version 1.1 (normative)
 
 Status: implemented in TASK-035 (slice191, branch `task/035-gs-stream`), 2026-10-15. Decision
 [0070](decisions/0070-pcsx2-gs-separate-process.md), plan [GSDX-PLAN](GSDX-PLAN.md) section C.
@@ -10,6 +10,11 @@ reference for every struct; this document describes the rules around it. Where t
 
 Clean-room note: written from the PlayStation 2 GS register map, our own `.gscap` capture format and the
 TASK-034 converter's file-format notes. No PCSX2 or paraLLEl-GS code was read or copied for it.
+
+Version 1.1 (TASK-047, 2026-10-16) changes only the meaning of VSYNC `field` (section 6.1) and adds SYNCV to the
+SetGsCrt writes (section 7); layouts are unchanged and a 1.0 producer of this repository sent the same field values.
+The 1.1 text was written by a PCSX2-tainted agent of the GS fork task; it states PS2 hardware behavior and our own
+producer's timing, and contains no PCSX2 code. History: 1.0 (TASK-035, slice191), 1.1 (TASK-047, slice196).
 
 ## 1. Scope
 
@@ -120,11 +125,11 @@ timeout error.
 |---|---|---|---|
 | GIF | 1 | `GifPayload {u8 path; u8 reserved[3]; u32 flags; u32 bytes; u32 reserved}` + `bytes` of GIF data (multiple of 16) | One accepted GIF transfer chunk of one path. The bytes are exactly what the GIF received on that path (tags and data). The consumer keeps one GIF tag parser per path. `flags` bit 0 `kGifFlagSignalsApplied`: the producer already applied SIGNAL/FINISH/LABEL to its own CSR/SIGLBLID copy. |
 | PRIV | 2 | `PrivPayload {u32 address; u32 reserved; u64 value}` | 64-bit write to a privileged register, address 8-byte aligned in `0x12000000-0x12001FF8`. The consumer stores it in its own 8 KiB block. CSR bit 9 (RESET) is a GS reset request; CSR bits 0-4 written as 1 clear interrupt flags. |
-| VSYNC | 3 | `VsyncPayload {u64 frame; u8 field; u8 reserved[3]; u32 flags}` | Start of a vertical blank: every earlier record belongs to the frame that ends here. `frame` counts from 0. `field` is the CSR FIELD bit (bit 13) the producer reports to the EE after this VSync (1 = odd) when `flags` bit 0 is set. |
+| VSYNC | 3 | `VsyncPayload {u64 frame; u8 field; u8 reserved[3]; u32 flags}` | Start of a vertical blank: every earlier record belongs to the frame that ends here. `frame` counts from 0. When `flags` bit 0 is set, `field` is the **display field** of the frame that ends here: the CSR FIELD bit (bit 13, 1 = odd) a consumer MUST use when it presents that frame, i.e. the field the game prepared that frame's display for. The consumer uses it as is (no shift by one VSYNC). Without bit 0 the consumer alternates the field. (1.0 described it as "the CSR FIELD bit the producer reports to the EE after this VSync"; see section 7 for why both are the same value for our producer.) |
 | READ_FIFO | 4 | `ReadFifoPayload {u32 qwords; u32 reserved; u64 request_id}` | Local-to-host transfer read (the TRXDIR = 1 setup came earlier in the stream). Section 6.4. |
 | RESET | 5 | `ResetPayload {u32 kind; u32 path_mask; u64 reserved}` | kind 1: GS hard reset (power-on state, local memory cleared); kind 2: GIF path parsers in `path_mask` (bit N = path N) return to "waiting for a tag". |
 | CONTROL | 6 | `ControlPayload {u32 kind; u32 reserved; u64 args[3]}` | kind 1 shutdown; 2 attach_window (native parent window handle, width, height); 3 resize (width, height); 4 reload_config; 5 snapshot (id, width, height; 0 = native). |
-| STATE_SAVE, STATE_LOAD, AUX_FRAME_BEGIN, AUX_FRAME_END | 7-10 | reserved | Not used in 1.0. A consumer answers ERROR `unsupported_record` (not fatal) and ignores them. |
+| STATE_SAVE, STATE_LOAD, AUX_FRAME_BEGIN, AUX_FRAME_END | 7-10 | reserved | Not used in 1.0 or 1.1. A consumer answers ERROR `unsupported_record` (not fatal) and ignores them. |
 
 Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record` and exits.
 
@@ -166,9 +171,20 @@ Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record
 - SIGNAL/FINISH/LABEL, CSR, IMR and SIGLBLID stay in the game process: PATH2/PATH3 signals are applied on the EE at
   acceptance (slice172); PATH1 signals at the render point. EE reads of CSR/IMR/SIGLBLID are answered locally.
 - PRIV: every privileged write is posted after the donor stored its own copy (writes are blocking MTVU syncs, so
-  earlier GIF data is already in the ring). SetGsCrt posts the SMODE1/SMODE2 values the BIOS would write.
+  earlier GIF data is already in the ring). SetGsCrt posts the SMODE1 and SMODE2 values the BIOS would write and,
+  for the analog modes NTSC (0x02) and PAL (0x03), SYNCV with the GS User's Manual vertical timings (NTSC
+  `0x00C7800601A01801`: VS 6, VDP 480, VBPE 6, VBP 26, VFPE 6, VFP 1; PAL `0x00A9000502101401`: VS 5, VDP 576,
+  VBPE 5, VBP 33, VFPE 5, VFP 1), in the order SMODE1, SYNCV, SMODE2 (version 1.1). A GS uses SYNCV VFP bit 0
+  together with a non-zero SMODE1 CMOD to know that the output really alternates fields; without it a 480i
+  field-mode picture is shown one field at a time, without deinterlacing. Other modes post no SYNCV (unchanged).
 - VSYNC: posted at the start of the vertical blank, after the producer toggled its field bit; `field` = the new
-  CSR FIELD value.
+  CSR FIELD value. On a PS2 the FIELD bit flips about 3.5 scanlines after the vertical blank starts, so a game's
+  INTC VBLANK_S handler still reads the field that was just displayed. The donor runtime flips it at the same moment
+  it raises VBLANK_S, so the game's VBLANK_S handler (GT4: `0x004AB430`, registered with AddIntcHandler cause 2,
+  reads CSR bit 13) already reads the next field, one field earlier than on hardware. The frame the game then
+  prepares (DISPFB, half-line offset) is shown at the next VSYNC; on hardware the field displayed at that point is
+  the opposite of what the handler read, which is the field the donor reports at that next VSYNC. The new field
+  value is therefore also the display field of the frame that ends at this VSYNC (section 6.1, version 1.1).
 - READ_FIFO: posted from `gs::read_image` (FIFO read or GIF DMA channel 1 reverse transfer), after the MTVU download
   sync; the EE waits for the reply.
 - RESET: kind 1 at the donor GS reset, kind 2 (paths 1-3) at a GIF reset.
@@ -239,8 +255,8 @@ dump. Version 1 (`GT4_PGS_CAPTURE`, task/012) has no header and single-letter re
 - The GS dump replayer path mapping: the TASK-034 converter writes every GIF chunk with the dump's path byte 3; a
   live consumer has the real path in each record and SHOULD feed PATH1/2/3 to the matching GIF path of its GS.
 - Readbacks: answer READ_FIFO from the GS's own transfer FIFO after executing every earlier record (TASK-037).
-- CSR handling on the consumer: the producer owns CSR for the EE; the consumer's copy only needs FIELD (it can use
-  the VSYNC `field`) and the RESET bit.
+- CSR handling on the consumer: the producer owns CSR for the EE; the consumer's copy only needs FIELD (the VSYNC
+  `field`, the display field since version 1.1) and the RESET bit.
 - Window: CONTROL attach_window gives the parent HWND; the consumer creates a child window and posts WINDOW events.
 - Snapshot replies use the response area; the game side does not request snapshots yet (headless frame dumps in
   pcsx2 mode are a TASK-036 item).
