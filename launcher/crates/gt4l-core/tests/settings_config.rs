@@ -17,14 +17,14 @@ fn every_definition_id_is_unique_and_has_a_valid_default() {
 }
 
 #[test]
-fn renderer_defaults_to_coregs_1_1_and_coregs_2_0_cannot_be_selected() {
+fn renderer_defaults_to_pcsx2_gs_and_coregs_2_0_cannot_be_selected() {
     let mut settings = Settings::default();
-    assert_eq!(settings.get("renderer"), "coregs11");
+    assert_eq!(settings.get("renderer"), "pcsx2");
     assert_eq!(
         settings.set("renderer", "coregs20"),
         Err(SettingError::InvalidValue { id: "renderer".into(), value: "coregs20".into() })
     );
-    assert_eq!(settings.get("renderer"), "coregs11", "a refused value leaves the state unchanged");
+    assert_eq!(settings.get("renderer"), "pcsx2", "a refused value leaves the state unchanged");
 }
 
 #[test]
@@ -45,11 +45,11 @@ fn input_resolution_defaults_to_480p() {
 fn config_round_trip_keeps_values_and_paths() {
     let mut config = ConfigFile::default();
     config.settings.set("vsync", "fast").unwrap();
-    config.settings.set("renderer", "parallel").unwrap();
-    config.settings.set("super_sampling", "8").unwrap();
-    config.settings.set("high_resolution_output", "2").unwrap();
+    config.settings.set("renderer", "coregs11").unwrap();
     config.settings.set("fsr_sharpness", "30").unwrap();
     config.settings.set("internal_scale", "3").unwrap();
+    config.settings.set_gs("upscale", "2").unwrap();
+    config.settings.set_gs("hw_download_mode", "unsynchronized").unwrap();
     config.disc_path = Some(r#"D:\Games\Gran Turismo 4 "quoted" (USA).iso"#.into());
     config.dev_game_dir = Some(r"C:\Antigravity\build\game".into());
     let text = config::render(&config);

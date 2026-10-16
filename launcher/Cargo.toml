@@ -6,6 +6,7 @@ members = [
     "crates/gt4saves",
     "crates/gt4controls",
     "crates/gt4l-platform",
+    "crates/gt4l-tauri",
 ]
 
 [workspace.package]

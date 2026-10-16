@@ -55,13 +55,16 @@ pub struct SettingDef {
     pub connected: bool,
 }
 
+/// The PCSX2 GS in its own process (downloaded, default when installed). Decision 0070.
+pub const PCSX2_GS: &str = "pcsx2";
+/// Built-in renderer (the donor lineage, MIT). Secondary: its upscale, FSR, FXAA and deinterlace options are hidden.
 pub const CORE_GS_11: &str = "coregs11";
-pub const PARALLEL_GS: &str = "parallel";
+/// Our own hardware renderer, not built yet ("coming soon").
 pub const CORE_GS_20: &str = "coregs20";
 
 const RENDERER_CHOICES: &[Choice] = &[
+    Choice { value: PCSX2_GS, label: "PCSX2 GS", selectable: true },
     Choice { value: CORE_GS_11, label: "CoreGS 1.1", selectable: true },
-    Choice { value: PARALLEL_GS, label: "paraLLEl-GS", selectable: true },
     Choice { value: CORE_GS_20, label: "CoreGS 2.0 (coming soon)", selectable: false },
 ];
 
@@ -85,14 +88,6 @@ const PRESENT_FILTER_CHOICES: &[Choice] = &[
     Choice { value: "fsr", label: "FSR 1.0", selectable: true },
 ];
 
-/// Values of the paraLLEl-GS high-resolution output. `off` sends nothing; `2` and `4` set
-/// `GT4_PGS_HIRES` (see `launch::game_environment`).
-const HIRES_CHOICES: &[Choice] = &[
-    Choice { value: "off", label: "Off", selectable: true },
-    Choice { value: "2", label: "2x", selectable: true },
-    Choice { value: "4", label: "4x", selectable: true },
-];
-
 /// FSR sharpness is a percentage: 0 is the softest, 100 the sharpest. The game takes the same number.
 pub const FSR_SHARPNESS_DEFAULT: &str = "50";
 
@@ -108,14 +103,6 @@ const DEINTERLACE_CHOICES: &[Choice] = &[
 const ANTI_ALIASING_CHOICES: &[Choice] = &[
     Choice { value: "off", label: "Off", selectable: true },
     Choice { value: "fxaa", label: "FXAA", selectable: true },
-];
-
-const SUPER_SAMPLING_CHOICES: &[Choice] = &[
-    Choice { value: "1", label: "Off", selectable: true },
-    Choice { value: "2", label: "2x", selectable: true },
-    Choice { value: "4", label: "4x", selectable: true },
-    Choice { value: "8", label: "8x", selectable: true },
-    Choice { value: "16", label: "16x", selectable: true },
 ];
 
 const VSYNC_CHOICES: &[Choice] = &[
@@ -142,7 +129,7 @@ pub const SETTINGS: &[SettingDef] = &[
         info: "CoreGS 1.1 is our renderer, built on the GPU. paraLLEl-GS is an alternative renderer from the \
                paraLLEl-GS project (LGPL). CoreGS 2.0 is in development.",
         kind: Kind::Choice(RENDERER_CHOICES),
-        default: CORE_GS_11,
+        default: PCSX2_GS,
         connected: true,
     },
     SettingDef {
@@ -207,26 +194,6 @@ pub const SETTINGS: &[SettingDef] = &[
         title: "Anti-aliasing",
         info: "Smooths jagged edges after the picture is drawn. FXAA is fast and softens fine detail a little.",
         kind: Kind::Choice(ANTI_ALIASING_CHOICES),
-        default: "off",
-        connected: true,
-    },
-    SettingDef {
-        id: "super_sampling",
-        page: Page::Graphics,
-        group: "paraLLEl-GS",
-        title: "Super-sampling",
-        info: "Renders each pixel several times for smoother edges. Higher values need a faster GPU.",
-        kind: Kind::Choice(SUPER_SAMPLING_CHOICES),
-        default: "1",
-        connected: true,
-    },
-    SettingDef {
-        id: "high_resolution_output",
-        page: Page::Graphics,
-        group: "paraLLEl-GS",
-        title: "High-resolution output",
-        info: "Outputs the picture at 2x or 4x the game's resolution. While it is on, super-sampling is 16x,                as with the --hires option of the build.",
-        kind: Kind::Choice(HIRES_CHOICES),
         default: "off",
         connected: true,
     },
@@ -331,12 +298,13 @@ pub fn validate(definition: &SettingDef, value: &str) -> Result<String, SettingE
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Settings {
     values: BTreeMap<&'static str, String>,
+    gs: BTreeMap<String, String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         let values = SETTINGS.iter().map(|definition| (definition.id, definition.default.to_string())).collect();
-        Settings { values }
+        Settings { values, gs: BTreeMap::new() }
     }
 }
 
@@ -374,16 +342,11 @@ impl Settings {
         }
     }
 
-    /// Whether a setting belongs to the selected renderer. Other rows are hidden, not greyed.
+    /// Whether a setting is shown. Rows of the built-in renderer's upscale, FSR, anti-aliasing and deinterlace
+    /// options are hidden (decision 0070): they keep their defaults and are still sent to CoreGS 1.1.
+    /// The PCSX2 GS options come from the table in `gs_table`, not from this list.
     pub fn applies(&self, id: &str) -> bool {
-        let renderer = self.get("renderer");
-        match id {
-            "internal_scale" | "present_filter" | "deinterlacing" | "anti_aliasing" => renderer == CORE_GS_11,
-            // Only the FSR filter has a sharpness control.
-            "fsr_sharpness" => renderer == CORE_GS_11 && self.get("present_filter") == "fsr",
-            "super_sampling" | "high_resolution_output" => renderer == PARALLEL_GS,
-            _ => true,
-        }
+        !matches!(id, "internal_scale" | "present_filter" | "fsr_sharpness" | "deinterlacing" | "anti_aliasing")
     }
 
     /// Whether a shown row can be changed now: it is connected to the game and it applies to the
@@ -398,7 +361,28 @@ impl Settings {
         }
     }
 
-    pub fn super_sampling_factor(&self) -> u32 {
-        self.get("super_sampling").parse().unwrap_or(1)
+    /// A PCSX2 GS table value (`gs_table`), or its table default when the user has not set it.
+    pub fn gs_value(&self, id: &str) -> String {
+        match self.gs.get(id) {
+            Some(value) => value.clone(),
+            None => crate::gs_table::default_value(id).unwrap_or_default(),
+        }
+    }
+
+    /// Sets a PCSX2 GS table value after the table's own check (range, choice, status).
+    pub fn set_gs(&mut self, id: &str, value: &str) -> Result<(), String> {
+        let normalized = crate::gs_table::check_user_value(id, value)?;
+        self.gs.insert(id.to_string(), normalized);
+        Ok(())
+    }
+
+    /// Drops every PCSX2 GS value the user set, so each table row is back at its default.
+    pub fn clear_gs(&mut self) {
+        self.gs.clear();
+    }
+
+    /// The PCSX2 GS values the user has set (only these are stored in `settings.toml`).
+    pub fn gs_overrides(&self) -> &BTreeMap<String, String> {
+        &self.gs
     }
 }

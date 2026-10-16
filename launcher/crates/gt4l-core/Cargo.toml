@@ -9,3 +9,8 @@ description = "GT4Recomp launcher core: settings table, config file, paths, laun
 
 [dependencies]
 toml.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+ureq = "3"
+zip = { version = "2", default-features = false, features = ["deflate"] }

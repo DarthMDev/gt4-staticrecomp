@@ -79,6 +79,18 @@ pub fn parse(text: &str) -> Result<(ConfigFile, Vec<String>), ConfigError> {
             }
         }
     }
+    if let Some(section) = table.get("gs").and_then(|value| value.as_table()) {
+        for (key, value) in section {
+            match value.as_str() {
+                None => warnings.push(format!("gs setting '{key}' is not text; using the default")),
+                Some(text) => {
+                    if let Err(error) = config.settings.set_gs(key, text) {
+                        warnings.push(format!("{error}; using the default"));
+                    }
+                }
+            }
+        }
+    }
     config.disc_path = table
         .get("install")
         .and_then(|value| value.as_table())
@@ -102,6 +114,13 @@ pub fn render(config: &ConfigFile) -> String {
     text.push_str(&format!("schema_version = {SCHEMA_VERSION}\n\n[settings]\n"));
     for definition in settings::SETTINGS {
         text.push_str(&format!("{} = {}\n", definition.id, quote(config.settings.get(definition.id))));
+    }
+    if !config.settings.gs_overrides().is_empty() {
+        // PCSX2 GS table values (decision 0070): only the values the user set are stored.
+        text.push_str("\n[gs]\n");
+        for (key, value) in config.settings.gs_overrides() {
+            text.push_str(&format!("{key} = {}\n", quote(value)));
+        }
     }
     text.push_str("\n[install]\n");
     if let Some(path) = &config.disc_path {

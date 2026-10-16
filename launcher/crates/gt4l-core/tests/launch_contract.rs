@@ -9,10 +9,10 @@
 //! `GT4_PERF` is only set when the Performance report is on (default off), and `GT4_FULLSCREEN` and
 //! `GT4_PRESENT_MODE` are always stated. Those two differences are asserted explicitly below.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use gt4l_core::launch::{self, LaunchInputs};
-use gt4l_core::settings::Settings;
+use gt4l_core::settings::{self, Settings};
 
 fn env_map(pairs: &[(String, String)]) -> std::collections::BTreeMap<String, String> {
     pairs.iter().cloned().collect()
@@ -125,53 +125,18 @@ fn one_hundred_and_1080i_map_as_documented() {
 }
 
 #[test]
-fn parallel_gs_options_only_when_that_renderer_is_selected() {
+fn removed_parallel_gs_renderer_and_its_options_are_refused() {
     let mut settings = Settings::default();
-    settings.set("super_sampling", "4").unwrap();
-    settings.set("high_resolution_output", "4").unwrap();
-    // CoreGS 1.1 (default): none of the paraLLEl-GS variables are sent.
+    assert!(settings.set("renderer", "parallel").is_err(), "paraLLEl-GS is dropped (decision 0070)");
+    assert!(settings::definition("super_sampling").is_none());
+    assert!(settings::definition("high_resolution_output").is_none());
     assert!(!env_map(&launch::game_environment(&settings)).keys().any(|name| name.starts_with("GT4_PGS_")));
-
-    settings.set("renderer", "parallel").unwrap();
-    let environment = env_map(&launch::game_environment(&settings));
-    assert_eq!(environment["GT4_RENDERER"], "parallel");
-    let pgs: Vec<&String> = environment.keys().filter(|name| name.starts_with("GT4_PGS_")).collect();
-    assert_eq!(pgs.len(), 2, "only SSAA and HIRES exist in the paraLLEl-GS build: {pgs:?}");
-}
-
-#[test]
-fn high_resolution_output_maps_to_the_hires_option_of_the_build() {
-    let mut settings = Settings::default();
-    settings.set("renderer", "parallel").unwrap();
-    settings.set("super_sampling", "2").unwrap();
-
-    // Off: the super-sampling choice is the only SSAA value and HIRES is not sent.
-    let off = env_map(&launch::game_environment(&settings));
-    assert_eq!(off["GT4_PGS_SSAA"], "2");
-    assert!(!off.contains_key("GT4_PGS_HIRES"));
-
-    // 2x and 4x: HIRES carries the factor and SSAA is 16, whatever super-sampling says.
-    for factor in ["2", "4"] {
-        settings.set("high_resolution_output", factor).unwrap();
-        let environment = env_map(&launch::game_environment(&settings));
-        assert_eq!(environment["GT4_PGS_HIRES"], factor);
-        assert_eq!(environment["GT4_PGS_SSAA"], "16");
-    }
-    assert!(settings.set("high_resolution_output", "8").is_err());
-    assert!(settings.set("high_resolution_output", "on").is_err());
-}
-
-#[test]
-fn high_resolution_output_is_only_shown_for_parallel_gs() {
-    let mut settings = Settings::default();
-    assert!(!settings.applies("high_resolution_output"));
-    settings.set("renderer", "parallel").unwrap();
-    assert!(settings.is_active("high_resolution_output"));
 }
 
 #[test]
 fn coregs11_defaults_send_the_documented_variables() {
     let environment = env_map(&launch::game_environment(&Settings::default()));
+    assert_eq!(environment["GT4_RENDERER"], "donor");
     assert_eq!(environment["PS2_SCALE"], "1");
     assert!(!environment.contains_key("GT4_PRESENT_FILTER"), "automatic sends no filter");
     assert!(!environment.contains_key("GT4_FSR_SHARPNESS"));
@@ -180,14 +145,20 @@ fn coregs11_defaults_send_the_documented_variables() {
 }
 
 #[test]
-fn internal_scale_maps_to_ps2_scale_for_coregs11_only() {
+fn coregs11_upscale_fsr_aa_and_deinterlace_options_are_hidden() {
+    let settings = Settings::default();
+    for id in ["internal_scale", "present_filter", "fsr_sharpness", "deinterlacing", "anti_aliasing"] {
+        assert!(!settings.applies(id), "{id} is hidden (decision 0070)");
+        assert!(!settings.is_active(id), "{id} cannot be changed");
+    }
+    assert!(settings.applies("vsync"));
+}
+
+#[test]
+fn internal_scale_still_maps_to_ps2_scale_as_a_default() {
     let mut settings = Settings::default();
     settings.set("internal_scale", "3").unwrap();
     assert_eq!(env_map(&launch::game_environment(&settings))["PS2_SCALE"], "3");
-    assert!(settings.is_active("internal_scale"));
-    settings.set("renderer", "parallel").unwrap();
-    assert_eq!(env_map(&launch::game_environment(&settings))["PS2_SCALE"], "1");
-    assert!(!settings.is_active("internal_scale"));
 }
 
 #[test]
@@ -208,9 +179,7 @@ fn fsr_sharpness_is_a_percentage_sent_only_with_the_fsr_filter() {
     assert_eq!(settings.get("fsr_sharpness"), "50", "default 50 %");
     settings.set("fsr_sharpness", "0").unwrap();
     assert!(!env_map(&launch::game_environment(&settings)).contains_key("GT4_FSR_SHARPNESS"));
-    assert!(!settings.applies("fsr_sharpness"));
     settings.set("present_filter", "fsr").unwrap();
-    assert!(settings.is_active("fsr_sharpness"));
     assert_eq!(env_map(&launch::game_environment(&settings))["GT4_FSR_SHARPNESS"], "0");
     settings.set("fsr_sharpness", "100").unwrap();
     assert_eq!(env_map(&launch::game_environment(&settings))["GT4_FSR_SHARPNESS"], "100");
@@ -234,4 +203,88 @@ fn anti_aliasing_maps_off_and_fxaa() {
     settings.set("anti_aliasing", "fxaa").unwrap();
     assert_eq!(env_map(&launch::game_environment(&settings))["GT4_AA"], "fxaa");
     assert!(settings.set("anti_aliasing", "smaa").is_err());
+}
+
+#[test]
+fn renderer_choice_is_pcsx2_when_installed_and_coregs11_otherwise() {
+    let mut settings = Settings::default();
+    assert_eq!(settings.get("renderer"), "pcsx2", "PCSX2 GS is the default when installed");
+    assert_eq!(
+        launch::choose_renderer(&settings, None),
+        launch::RendererChoice::CoreGs11 {
+            reason: Some("PCSX2 GS is not installed yet; this session uses CoreGS 1.1.".to_string())
+        }
+    );
+    let installed = installed_fixture();
+    assert_eq!(launch::choose_renderer(&settings, Some(&installed)), launch::RendererChoice::Pcsx2);
+    settings.set("renderer", "coregs11").unwrap();
+    assert_eq!(launch::choose_renderer(&settings, Some(&installed)), launch::RendererChoice::CoreGs11 { reason: None });
+    assert!(settings.set("renderer", "coregs20").is_err(), "coming soon is not selectable");
+}
+
+#[test]
+fn pcsx2_environment_carries_the_process_pin_config_and_480p() {
+    let paths = pcsx2_paths();
+    let environment = env_map(&launch::pcsx2_environment(&Settings::default(), &paths));
+    assert_eq!(environment["GT4_RENDERER"], "pcsx2");
+    assert_eq!(environment["GT4_GS_PROCESS"], paths.executable.display().to_string());
+    assert_eq!(environment["GT4_GS_PROCESS_SHA256"], paths.executable_sha256);
+    assert_eq!(environment["GT4_GS_CONFIG"], paths.config.display().to_string());
+    assert_eq!(environment["GT4_FORCE_480P"], "1", "480p by default");
+    assert_eq!(environment["GT4_PRESENT_MODE"], "fifo");
+    assert!(!environment.contains_key("GT4_GS_READBACK"), "readback is written in the INI");
+    assert!(!environment.contains_key("PS2_SCALE"), "CoreGS 1.1 variables are not sent to PCSX2 GS");
+}
+
+#[test]
+fn pcsx2_plan_keeps_the_probe_argument_list_and_scrubs_inherited_names() {
+    let paths = pcsx2_paths();
+    let inherited = vec!["GT4_GS_PROCESS".to_string(), "PATH".to_string(), "PS2_SCALE".to_string()];
+    let plan = launch::plan_pcsx2_launch(&inputs(), &Settings::default(), &paths, &inherited);
+    assert_eq!(plan.arguments.last().unwrap(), "--window");
+    assert_eq!(plan.arguments[0], "C:/work/SCUS_973.28");
+    assert_eq!(plan.removed_inherited, vec!["GT4_GS_PROCESS".to_string(), "PS2_SCALE".to_string()]);
+}
+
+#[test]
+fn session_ini_matches_the_python_writer_for_the_default_settings() {
+    let paths = pcsx2_paths();
+    let text = launch::gs_config_text(&Settings::default(), &paths).unwrap();
+    let bytes = gt4l_core::gs_table::ini_file_bytes(&text);
+    let expected = include_bytes!("fixtures/gs/default-session.ini");
+    assert_eq!(bytes.as_slice(), expected.as_slice(), "Rust gt4-gs.ini differs from scripts/gs_settings.py");
+}
+
+#[test]
+fn restart_marker_is_detected_in_the_game_log() {
+    assert!(launch::restart_requested(&format!("boot\n{}\nmore\n", launch::GS_RESTART_MARKER)));
+    assert!(!launch::restart_requested("[gs-ipc] restart requested: renderer pcsx2\n"));
+}
+
+fn installed_fixture() -> gt4l_core::gs_release::Installed {
+    gt4l_core::gs_release::Installed {
+        version: gt4l_core::gs_release::Version(0, 3, 2),
+        executable: PathBuf::from("C:/Users/x/AppData/Local/GT4Recomp/gs/0.3.2/gt4-gs.exe"),
+        executable_sha256: "f".repeat(64),
+    }
+}
+
+fn pcsx2_paths() -> launch::Pcsx2Paths {
+    launch::Pcsx2Paths {
+        executable: PathBuf::from("C:/gs/0.3.2/gt4-gs.exe"),
+        executable_sha256: "a".repeat(64),
+        config: PathBuf::from("C:/session/gt4-gs.ini"),
+        cache: PathBuf::from("C:/gs/cache"),
+        data_root: PathBuf::from("C:/gs/data"),
+    }
+}
+
+fn inputs() -> LaunchInputs<'static> {
+    LaunchInputs {
+        game_executable: Path::new("C:/game/gt4vulkan.exe"),
+        elf: Path::new("C:/work/SCUS_973.28"),
+        disc: Path::new("C:/disc/game.iso"),
+        card: Path::new("C:/cards/card.ps2"),
+        session_dir: Path::new("C:/session"),
+    }
 }

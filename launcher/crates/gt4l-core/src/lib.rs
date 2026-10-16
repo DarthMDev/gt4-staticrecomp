@@ -3,6 +3,8 @@
 
 pub mod config;
 pub mod exit;
+pub mod gs_release;
+pub mod gs_table;
 pub mod launch;
 pub mod lock;
 pub mod paths;
