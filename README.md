@@ -9,7 +9,7 @@
 ![VU1 micro](https://img.shields.io/badge/VU1%20micro-AOT%20%C2%B7%20all%202%2C048%20entries-2ea44f)
 ![VU0 micro](https://img.shields.io/badge/VU0%20micro-AOT%20%C2%B7%2014%2F14%20entries-2ea44f)
 ![IOP](https://img.shields.io/badge/IOP-HLE%20%2B%20interpreter-orange)
-![GS](https://img.shields.io/badge/GS-Vulkan%20compute%20%C2%B7%20paraLLEl--GS%20in%20progress-blue)
+![GS](https://img.shields.io/badge/GS-PCSX2%20GS%20in%20a%20separate%20process-blue)
 
 ![Race](https://img.shields.io/badge/race-60%20FPS%20%C2%B7%20100%25%20speed-2ea44f)
 ![Showroom](https://img.shields.io/badge/showroom-60%20FPS-2ea44f)
@@ -39,7 +39,7 @@ AI races, rally and the car showroom all hold 60 FPS, and night races run at
 about 59 (Ryzen 7 5700X + RX 9060 XT). Every PS2 vector-unit program the game
 uses (all VU1 and VU0 microcode) now runs as precompiled native code, with no
 interpreter on the normal path. Races render in **480p progressive**, the window
-is **16:9** with borderless fullscreen. Next: the **paraLLEl-GS** renderer
+is **16:9** with borderless fullscreen. Next: the **PCSX2 GS** renderer in a separate process (`gt4-gs.exe`, decision 0070)
 (upscaling, sharper image), VU1 on its own CPU core for weaker CPUs and phones,
 and a one-click **launcher and installer** for the first stable release.
 **License tests still crash** while loading their demo run.
@@ -59,7 +59,7 @@ interpreted at run time:
 | **VU1 microcode** | Vertex transform, lighting, clipping (the "vertex shader") | Whole microcode image recovered from the executable; all 2,048 entry points compiled ahead of time | **100%** · 0 interpreted calls in day/night races, rally, showroom |
 | **VU0 microcode** | Small helper programs | All 14 entry points compiled ahead of time with exact flags | **100%** · 0 interpreted calls |
 | **IOP** (I/O CPU) | Sound, disc, memory card, USB | System libraries replaced by native code; 23 game modules interpreted | **System libraries native** · game modules later |
-| **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | paraLLEl-GS integration in progress (runs; image not correct yet) |
+| **GS** (graphics chip) | Rasterization | Faithful GS emulation in Vulkan compute shaders, asynchronous submission | PCSX2 GS in a separate process (TASK-032..044); CoreGS 1.1 built in as fallback |
 
 ## Performance journey
 
@@ -93,7 +93,7 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
 | Time Trial, Nordschleife, Supra (480p) | **60.0** | **100%** | 99.6% of frames within 16–17 ms |
 | Arcade race, Nordschleife, 5 AI cars | **60.0** | **100%** | After VU1 flag elision (was 58.0) |
 | Replay of that race | 59.1 | 98.5% | |
-| Night race with AI cars | 58.9 | 98% | Remaining cost is a ~4 ms GPU readback wait, targeted by paraLLEl-GS (TASK-012) |
+| Night race with AI cars | 58.9 | 98% | Remaining cost is a ~4 ms GPU readback wait, targeted by the PCSX2 GS (TASK-037) |
 | Rally, Grand Canyon, 1 AI car | 59.9 | 99.8% | All VU1 entries compiled (was 53.9) |
 | Car showroom (rotating car) | **60.0** | **100%** | Steady on the main build (was 44.8); short dips to 58 with some cars |
 
@@ -104,13 +104,15 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
   `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`;
   the demo-input data appears to arrive wrong or late. Under investigation.
 - **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
-  that the new renderer (paraLLEl-GS, TASK-012) is expected to remove.
+  that the PCSX2 GS (TASK-037) is expected to remove.
 - **Weaker CPUs:** VU1 work now runs on its own worker thread (MTVU, TASK-011),
   on by default in `--mode main`; `GT4_MTVU=0` restores the single-thread path for
   A/B. The weak-CPU effect is not measured yet (`--cpu-cores N` is the simulation
   switch); it matters most for older PCs and phones.
-- Menus are interlaced like the original game (480p applies in races); a
-  deinterlacing filter is planned with the new renderer.
+- Menus are interlaced like the original game (480p applies in races). With the
+  PCSX2 GS, slice196 (`--mode pcsx2`, gt4-gs 0.3.2) deinterlaces them (TASK-047; the
+  stream lacked SYNCV and presented the wrong field); owner check pending. CoreGS 1.1
+  shows them as before.
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
 
 ## Roadmap
@@ -120,7 +122,7 @@ in game before it is merged.
 
 | Phase | Platform | Renderer |
 |---|---|---|
-| **Phase 1** (current) | Windows PC | paraLLEl-GS (Vulkan compute) and our own MIT hardware renderer (planned, 3x-6x); current renderer kept as experimental fallback |
+| **Phase 1** (current) | Windows PC | PCSX2 GS in a separate GPL process (`gt4-gs.exe`, decision 0070), downloaded by the launcher; CoreGS 1.1 (MIT) built in as fallback; CoreGS 2.0 planned |
 | **Phase 2** | Android | ARMSX2 GS pipeline (Vulkan) |
 | **Phase 3** | iOS | ARMSX2 GS pipeline (Metal) |
 
@@ -139,21 +141,39 @@ in game before it is merged.
 | TASK‑009 | Title, fixed 16:9, fullscreen, races in 480p | ✅ Done · races forced to 480p, menus 480i as original |
 | TASK‑010 | Build pipeline: faster builds and tuning (CPU variants, LTO, PGO) | ✅ Done · full build 3,942 → ~1,700 CPU-s |
 | TASK‑011 | MTVU: VU1 on its own thread | ✅ Done · in `--mode main` (on by default, `GT4_MTVU=0` A/B) · 5–6 ms/frame off the main core, headless 42/42 on and off |
-| TASK‑012 | paraLLEl-GS as an optional renderer | 🔄 Plays · night race 60 FPS; high-res output capped at 2x |
+| TASK‑012 | paraLLEl-GS as an optional renderer | ❌ Dropped (decision 0070); branch kept as history |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done · 14/14 entries, 0 interpreted calls, 28k differential checks |
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
 | TASK‑016 | IOP per-module cost review | ⏸️ Deferred |
-| TASK‑017 | License-test crash | 🔄 In progress |
+| TASK‑017 | License-test crash | 🔄 In progress · waiting for the owner's FSV trace test |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 In progress |
-| TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 🔄 In progress |
-| TASK‑028 | CoreGS 1.1: up to 3x internal resolution, deinterlace, FXAA, FSR 1.0 | 🔄 Upscaler done · filters in progress |
-| TASK‑029 | Controller and keyboard mapping with a launcher menu | 🔄 In progress |
-| TASK‑026 | CoreGS 2.0 (our own MIT hardware renderer, clean room): specification | ✅ Done |
-| TASK‑027 | CoreGS 2.0: implementation, 3x-6x resolution and texture packs | ⏸️ Paused · core libraries done, resumes after 1.0.0 |
-| 🚀 | **First stable release on GitHub** | 📋 Planned |
+| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
+| TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | ✅ Code done in `task/019-launcher`; ships with the launcher (owner test pending) |
+| TASK‑026 | CoreGS 2.0 (our own MIT hardware renderer, clean room): specification | ✅ Done |
+| TASK‑027 | CoreGS 2.0: implementation, 3x-6x resolution and texture packs | ⏸️ Paused · core libraries done |
+| TASK‑028 | CoreGS 1.1: up to 3x internal resolution, deinterlace, FXAA, FSR 1.0 | ⏸️ Paused by the owner: 3x shows native-size aliasing on 3D models; stays the built-in fallback |
+| TASK‑029 | Controller and keyboard mapping with a launcher menu | ✅ Code done in `task/019-launcher`; ships with the launcher (owner test pending) |
+| TASK‑030 | Night-race readback wait (CoreGS 1.1) | ⏸️ Paused · owner test 59.07 FPS; the 4.3 ms wait is unchanged |
+| TASK‑031 | 120-144 FPS with the game's physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS |
+| TASK‑032 | Decision 0070: PCSX2 GS in a separate process (docs) | ✅ Done · decision 0070 (PR #24) |
+| TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | ✅ Done · release `gt4gs-v0.1.0-poc` ([fork](docs/GS-FORK.md)) |
+| TASK‑034 | Proof of concept: our capture through the PCSX2 GS, image comparison | ✅ Done · owner approved the images (2026-10-16) ([report](docs/GS-PCSX2-POC.md)) |
+| TASK‑035 | MIT GS stream protocol, shared-memory IPC, renderer seam | ✅ Done · slice191, stream identical in both renderer modes ([spec](docs/GS-STREAM-PROTOCOL.md)) |
+| TASK‑036 | Live `gt4-gs.exe` MVP | ✅ Done · owner test 2026-10-16 at 3x: Nordschleife 59.98 FPS, night race 59.89 FPS ([live](docs/GS-LIVE.md)) |
+| TASK‑037 | PCSX2 GS readbacks and the night race | ✅ Done · night race 59.97 FPS, 69 late frames (was 213); accurate readbacks by default ([live](docs/GS-LIVE.md)) |
+| TASK‑038 | GS window, fullscreen, focus, input, crash handling | ✅ Done · fullscreen, focus and click fix (gt4-gs 0.3.1), crash handling with CoreGS 1.1 fallback |
+| TASK‑039 | GS settings table and `gt4-gs.ini` generator | ✅ Done · 51-row settings table generates `gt4-gs.ini`; fork allow-list enforcement pending ([settings](docs/GS-SETTINGS.md)) |
+| TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
+| TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 📋 Planned |
+| TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | 📋 Planned |
+| TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019) |
+| TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |
+| TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
+| TASK‑046 | "Prepare shaders": warm the PCSX2 GS pipeline cache before the first race | 📋 Planned (study done) |
+| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | ✅ Done · owner test 2026-10-16: sharp, steady 480i menus (SYNCV + display field, gt4-gs 0.3.2) ([live](docs/GS-LIVE.md#8-480i-deinterlacing-task-047-slice196-gt4-gs-032)) |
+| 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS
 
@@ -170,7 +190,7 @@ Details: [TASKS.md](TASKS.md) · [GS renderer options](docs/GS-RENDERER-OPTIONS.
 
 - **Correct speed, smooth 60 FPS** on ordinary PCs, then on phones.
 - **Configurable internal resolution** (1080p, 1440p, 4K) with real internal upscaling.
-- **Clean image options:** paraLLEl-GS super-sampling, deinterlaced menus, post-processing.
+- **Clean image options:** PCSX2 GS upscaling and texture packs, deinterlaced menus, post-processing.
 - **Racing wheels** with force feedback.
 - **Faithful first:** the original game, as accurate as possible, just faster and sharper.
 
@@ -219,12 +239,12 @@ GT4Recomp stands on the work of others. Thank you:
 | Project | Author | What it gives this project |
 |---|---|---|
 | [ps2-web-recomp](https://github.com/snuri00/ps2-web-recomp) (MIT) | snuri00 | The runtime foundation: the EE-to-C++ translator, PS2 hardware/service models, the GS compute renderer and the original VU1 program compiler our `tools/vu_recomp` derives from. GT4 was its first title. |
-| [paraLLEl-GS](https://github.com/Arntzen-Software/parallel-gs) (LGPL-3.0+) | Hans-Kristian Arntzen (Arntzen Software) | The Vulkan compute GS renderer we are integrating as the PC renderer (TASK-012): super-sampled upscaling, deinterlacing and page-tracked readbacks. |
-| [Granite](https://github.com/Themaister/Granite) (MIT) | Hans-Kristian Arntzen | The Vulkan engine paraLLEl-GS is built on. |
+| [paraLLEl-GS](https://github.com/Arntzen-Software/parallel-gs) (LGPL-3.0+) | Hans-Kristian Arntzen (Arntzen Software) | Dropped from the release (decision 0070). Its MIT renderer seam and capture code are reused. |
+| [Granite](https://github.com/Themaister/Granite) (MIT) | Hans-Kristian Arntzen | The Vulkan engine of paraLLEl-GS (dropped, decision 0070). |
 | [gt4-decomp](https://github.com/gustavocanepa/gt4-decomp) (MIT) | gustavocanepa | A matching decompilation of GT4's game code; its CORE.GT4 is byte-identical to ours ([evidence](docs/DECOMP-IDENTITY.md)). Function names, class layouts and engine notes. |
 | [Nenkai's Gran Turismo research](https://github.com/Nenkai) ([gt-modding-hub](https://github.com/Nenkai/gt-modding-hub), [PDTools](https://github.com/Nenkai/PDTools), [GT-File-Specifications-Documentation](https://github.com/Nenkai/GT-File-Specifications-Documentation) and more) | Nenkai | File formats, volume and model structures, and the VU1 microcode encryption scheme that let us find GT4's whole VU1 program image ([details](docs/VU1-MICROCODE-SOURCE.md)). |
 | [GT4FS](https://github.com/Razer2015/GT4FS) | Razer2015 | GT4 volume file-system research. |
-| [PCSX2](https://github.com/PCSX2/pcsx2) (GPL-3.0) | PCSX2 team | Decades of PS2 knowledge; used here as a reference ([lessons](docs/PCSX2-LESSONS.md)). Its MTVU design informs our VU1 threading plan. |
+| [PCSX2](https://github.com/PCSX2/pcsx2) (GPL-3.0) | PCSX2 team | Decades of PS2 knowledge. Its GS renderer runs only in the separate `gt4-gs.exe` (decision 0070) ([lessons](docs/PCSX2-LESSONS.md)). Its MTVU design informs our VU1 threading plan. |
 | [ARMSX2](https://github.com/ARMSX2/ARMSX2) (GPL-3.0) | ARMSX2 team | The mobile GS pipeline planned for the Android and iOS phases (without its JIT). |
 | [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) (MIT OR Apache-2.0) | gfx-rs / wgpu contributors | Compiles the donor's WGSL shaders to SPIR-V at build time (`tools/wgsl_spirv`). |
 | [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) (Apache-2.0 OR MIT) | Khronos Group | Vulkan API headers. |
@@ -234,7 +254,7 @@ Exact revisions, licenses and imported files are listed in [THIRD_PARTY.md](nati
 ## License
 
 The project's own code is [MIT](LICENSE). Third-party components keep their own
-licenses ([THIRD_PARTY.md](native/THIRD_PARTY.md)); paraLLEl-GS is LGPL-3.0+.
+licenses ([THIRD_PARTY.md](native/THIRD_PARTY.md)); PCSX2 GS (GPL-3.0+) runs only in the separate `gt4-gs.exe` (decision 0070).
 Gran Turismo, Gran Turismo 4 and their logos and artwork are trademarks or property
 of Sony Interactive Entertainment and Polyphony Digital. GT4Recomp is an unofficial
 fan project, not affiliated with or endorsed by them; it does not include the game,
@@ -249,7 +269,7 @@ Current work:
 - [OPTIMIZATION-PLAN](docs/OPTIMIZATION-PLAN.md): technical background of the performance work.
 - [BUILD](docs/BUILD.md): build environment, candidate recipes and verification.
 - [ARCHITECTURE](docs/ARCHITECTURE.md): how the native runtime is put together.
-- [GS-RENDERER-OPTIONS](docs/GS-RENDERER-OPTIONS.md): paraLLEl-GS, PCSX2 hardware renderer and ARMSX2 compared.
+- [GS-RENDERER-OPTIONS](docs/GS-RENDERER-OPTIONS.md): paraLLEl-GS (dropped), PCSX2 hardware renderer and ARMSX2 compared; decision 0070 is the current choice.
 - [VU1-MICROCODE-SOURCE](docs/VU1-MICROCODE-SOURCE.md) · [VU0-MICROCODE-MAP](docs/VU0-MICROCODE-MAP.md) · [IOP-MAP](docs/IOP-MAP.md): where the PS2 co-processor code comes from and how it runs.
 - [DECOMP-IDENTITY](docs/DECOMP-IDENTITY.md) · [DECOMP-INTEGRATION](docs/DECOMP-INTEGRATION.md): how the gt4-decomp project relates to this build.
 - [PCSX2-LESSONS](docs/PCSX2-LESSONS.md) · [GS-ASYNC-DESIGN](docs/GS-ASYNC-DESIGN.md) · [MENUS-AND-WHEEL](docs/MENUS-AND-WHEEL.md): design notes.

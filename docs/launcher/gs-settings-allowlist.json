@@ -1,0 +1,207 @@
+{
+  "schema_version": 1,
+  "source": "docs/launcher/gs-settings.toml",
+  "note": "INI section/key pairs gt4-gs.exe may accept (fork enforcement pending, TASK-037/038 agent)",
+  "entries": [
+    {
+      "section": "EmuCore",
+      "key": "EnableGameFixes"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "Adapter"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "AspectRatio"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "CASMode"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "CASSharpness"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "DisableMailboxPresentation"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "DisableShaderCache"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "DumpReplaceableMipmaps"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "DumpReplaceableTextures"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "DumpTexturesWithFMVActive"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "FMVAspectRatioSwitch"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "HWDownloadMode"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "IntegerScaling"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "LoadTextureReplacements"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "LoadTextureReplacementsAsync"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "MaxAnisotropy"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "OsdMessagesPos"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "OsdScale"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "OsdShowFPS"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "OsdShowGPU"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "OsdShowResolution"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "PrecacheTextureReplacements"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "Renderer"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Brightness"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Contrast"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Gamma"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Saturation"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "TVShader"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "TriFilter"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "UserHacks"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "VsyncEnable"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "accurate_blending_unit"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "deinterlace_mode"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "dithering_ps2"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "filter"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "fxaa"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "linear_present_mode"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "mipmap"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "pcrtc_antiblur"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "pcrtc_offsets"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "pcrtc_overscan"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "texture_preloading"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "upscale_multiplier"
+    },
+    {
+      "section": "Folders",
+      "key": "Cache"
+    },
+    {
+      "section": "GT4GS",
+      "key": "DataRoot"
+    },
+    {
+      "section": "GT4GS",
+      "key": "DeferSwapChainAcquire"
+    },
+    {
+      "section": "GT4GS",
+      "key": "DumpDir"
+    },
+    {
+      "section": "GT4GS",
+      "key": "DumpEvery"
+    },
+    {
+      "section": "GT4GS",
+      "key": "Surfaceless"
+    }
+  ]
+}

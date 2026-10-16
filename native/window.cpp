@@ -10,6 +10,9 @@
 #include "frame_clock.hpp"
 #include "pacing.hpp"
 #include "window_mode.hpp"
+#ifdef GT4_GS_STREAM_CLIENT
+#include "gs_stream/gs_stream_client.hpp"
+#endif
 #ifdef GT4_MTVU_MEASURE
 #include "mtvu_measure.hpp"
 #endif
@@ -136,6 +139,16 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
   }
 #endif
   if (message == WM_CLOSE) {
+#ifdef GT4_GS_STREAM_CLIENT
+    // TASK-038: with GT4_RENDERER=pcsx2 the GS process draws into a child of this window, and DestroyWindow waits for
+    // that process's window thread (a stalled GS window thread would freeze the close). Halt the guest instead; the
+    // window is destroyed in cleanup(), after gs_stream::finish() has shut the GS process down (or ended it).
+    if (gt4::gs_stream::stream_renderer()) {
+      closing = true;
+      ps2::halt("window closed");
+      return 0;
+    }
+#endif
     DestroyWindow(window);
     return 0;
   }
@@ -152,6 +165,15 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     PostQuitMessage(0);
     return 0;
   }
+#ifdef GT4_GS_STREAM_CLIENT
+  // TASK-038 (slice195): with GT4_RENDERER=pcsx2 the picture is a child window of another process. Whenever this
+  // window is activated (also when gt4-gs.exe gives the foreground back after a click on the picture), the keyboard
+  // focus goes to this window, never to the child.
+  if (message == WM_ACTIVATE && LOWORD(first) != WA_INACTIVE && gt4::gs_stream::stream_renderer()) {
+    SetFocus(window);
+    return 0;
+  }
+#endif
   if (message == WM_KILLFOCUS && controller) {
     controller->stop();
     if (ps2::g_options.presses.empty())

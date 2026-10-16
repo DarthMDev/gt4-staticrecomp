@@ -1,6 +1,37 @@
 # Current Status
 
-## Current state (2026-10-15)
+## Current state (2026-10-16)
+
+**slice196 (TASK-047, branch `task/047-gs-deinterlace`, fork `gt4gs/deinterlace`, `gt4gs-v0.3.2`):** 480i menus in the
+PCSX2 GS mode. Cause: the stream had no SYNCV (PCSX2 never deinterlaced; fields line-doubled and bouncing) and,
+once SYNCV is sent, gt4-gs 0.3.1 used the previous VSYNC's field (wrong order, combing). Fix: SetGsCrt posts SYNCV;
+protocol 1.1 VSYNC field = display field; gt4-gs 0.3.2 uses it. Garage menu: comb 0.50 -> 0.57 with flicker 3.23 ->
+0; progressive unchanged. CTest 29/29, Python 410 OK, donor 42/42. `--mode pcsx2` = slice196. Owner menu check
+pending. [GS-LIVE](GS-LIVE.md) section 8.
+
+**slice195 (TASK-038 click fix):** owner night race with slice194: accurate 59.97 FPS, 69 late frames (was 213),
+unsynchronized 60.00 FPS but headlight flares missing; accurate stays the default. A click on the picture deactivated
+the game window; gt4-gs 0.3.1 gives the foreground back (visible click fixture passes). `--mode pcsx2` = slice195.
+
+**TASK-037/038 (slice194, branch `task/037-038-gs-window`, fork `gt4gs/window`, tag `gt4gs-v0.3.0`):** night-race late
+frames explained (one readback per frame removes the GS buffering, so shader/pipeline compiles and GS-thread spikes
+land in the game frame; the shader cache was in `Documents\PCSX2`, not in our folder). Readback modes
+`--gs-readback accurate|unsynchronized`, F8 readback histograms, our own cache/data folders, deferred swap chain
+acquire, window hardening (detached input queues, minimize, close while the GS window hangs) and crash handling
+(card flush grace, restart offer). CTest 29/29, Python 350 OK, donor 42/42, pcsx2 41/41. Owner windowed test pending.
+[GS-LIVE](GS-LIVE.md) section 6.
+
+**TASK-036 (slice193, branch `task/036-gs-live`, fork `gt4gs/live`, 2026-10-16):** the live PCSX2 GS process
+`gt4-gs.exe` runs the game's GS stream (`--mode pcsx2`, `--gs-scale N`). Headless: CTest 29/29, Python 335 OK,
+donor frames 42/42, live frames 41/41 identical to the offline `--replay-gscap` frames and frames 300/700 identical
+to the TASK-034 PoC; a killed GS process halts the game cleanly. Owner windowed test at 1x and 3x pending.
+[GS-LIVE](GS-LIVE.md).
+
+## Earlier state (2026-10-15)
+
+**Current renderer plan (2026-10-15, [decision 0070](decisions/0070-pcsx2-gs-separate-process.md)):** TASK-032 (decision docs) is done in its PR; TASK-034 (PCSX2 GS proof of concept) is in progress, with an owner go/no-go gate before TASK-035/036. paraLLEl-GS (TASK-012) is dropped; CoreGS 1.1 stays the built-in fallback. Plan: [GSDX-PLAN](GSDX-PLAN.md).
+
+**TASK-035 (slice191, branch `task/035-gs-stream`, 2026-10-15):** the MIT GS stream protocol ([spec](GS-STREAM-PROTOCOL.md)), shared-memory transport and the `GT4_RENDERER=pcsx2` seam are built and checked headless (CTest 29/29, Python 321 OK; donor frames 42/42 identical; the stream is byte-identical in donor mode, pcsx2 mode and in the recorder process; the converted stream equals the TASK-034 PoC dump and replays to identical GSRunner frames). The consumer is a test recorder, so `--mode pcsx2-stream` shows no image until TASK-036. Owner review pending.
 
 **Latest (merged to main):** TASK-008 slice 157 (all 2,048 VU1 entries, owner: night
 58.9, rally 59.9, showroom 60.0 VBlanks/s, 0 interpreted VU1 calls), TASK-010 build

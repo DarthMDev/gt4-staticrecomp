@@ -1,5 +1,7 @@
 # 0066 — GPL-3.0 code reuse is accepted
 
+Limited by [decision 0070](0070-pcsx2-gs-separate-process.md): PCSX2 GS code is used only in the separate `gt4-gs.exe`, never in the game executable.
+
 Date: 2026-10-14. Status: Accepted (owner decision, slice 151); constrained by
 [0067](0067-mit-license-and-release-model.md) for the prebuilt release executable.
 

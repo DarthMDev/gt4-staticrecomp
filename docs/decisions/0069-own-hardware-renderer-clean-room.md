@@ -1,5 +1,7 @@
 # 0069 — Own MIT hardware GS renderer by clean room; prebuilt release again
 
+Amended by [decision 0070](0070-pcsx2-gs-separate-process.md): renderer options (see that decision).
+
 Date: 2026-10-15. Status: Accepted (owner decision). Supersedes
 [0068](0068-build-on-user-pc-and-pcsx2-gs.md); restores the release model of
 [0067](0067-mit-license-and-release-model.md).

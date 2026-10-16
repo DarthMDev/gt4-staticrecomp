@@ -26,20 +26,35 @@ claim zero emulation or full PS2 fidelity.
 - **Phase 1 (current):** fast, stable recompiled port: 60 FPS at 100% game speed,
   smooth frametime, no interpreter on the normal path.
 - **Out of scope here:** a decompilation-based source port, a native (non-GS)
-  renderer, physics decoupled from frame rate, ultrawide and remaster features
+  renderer, changes to the game's physics timing, ultrawide and remaster features
   will be a separate project, possibly a fork. This repository's goal is the
   original game running natively, optimized and as faithful as possible.
-- **Renderer focus now:** integrate paraLLEl-GS (TASK-012).
+  Presenting more than 60 FPS while the game's fixed 1/60 s physics stays
+  untouched is in scope (TASK-045 on the PCSX2 GS, after 1.0.0; TASK-031 study;
+  owner, 2026-10-15).
+- **Renderer focus now:** TASK-032..044 (PCSX2 GS in a separate process, decision
+  0070; CoreGS 1.1 built in as the fallback).
 - **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
-- **Graphics:** PC renderers = **paraLLEl-GS** (Vulkan compute, LGPL-3.0+) and,
-  planned, **our own MIT hardware GS renderer** (TASK-026 clean-room spec,
-  TASK-027 implementation; 3x-6x and texture packs); the current donor compute GS renderer is an experimental fallback/reference only
-  (no new features). Mobile = **ARMSX2 GS pipeline** (Vulkan on Android, Metal on
-  iOS) without ARMSX2's JIT. See `docs/GS-RENDERER-OPTIONS.md`.
-- **No GPL code in the release executable** (it contains game code): decision
-  0066 is limited by 0067/0069. PCSX2 is a reference only. For the own renderer,
-  PCSX2 GS sources are read only by TASK-026 specification agents; TASK-027
-  implementation agents must never open them (clean room). Never import PCSX2 JITs.
+- **Graphics:** PC renderers = the **PCSX2 GS** in a separate GPL process
+  (`gt4-gs.exe`, built from our fork `moesuito/gt4recomp-gs`, downloaded by the
+  launcher) plus **CoreGS 1.1** built in (MIT, fallback and offline default), with
+  **CoreGS 2.0** planned (our own MIT hardware GS renderer, TASK-026 clean-room
+  spec, TASK-027 implementation; 3x-6x and texture packs). Mobile = **ARMSX2 GS
+  pipeline** (Vulkan on Android, Metal on iOS) without ARMSX2's JIT. See
+  `docs/GS-RENDERER-OPTIONS.md` and `docs/GSDX-PLAN.md`.
+- **No GPL code in the release executable** (it contains game code): the game
+  executable never contains or links GPL code; the PCSX2 GS lives only in the
+  separate `gt4-gs.exe` (decision 0070, which limits 0066, 0067 and 0069). PCSX2 is
+  a reference only. TASK-027 implementation agents must never open PCSX2 sources
+  or the fork (clean room). Never import PCSX2 JITs.
+- **Clean room, PCSX2-tainted agents (decision 0070, GSDX-PLAN E.3).** Agents that
+  read PCSX2 sources, the `gt4recomp-gs` fork, `private/tooling/pcsx2-*` or
+  `private/slice189-pcsx2-ref` are *PCSX2-tainted*. Tainted agents never work on
+  TASK-027, never edit `native/hw_gs/` or `task/027-*` branches, and never answer
+  TASK-027 questions except through the TASK-026 specification team in prose.
+  TASK-027 agents never open those sources or the fork; they may use `gt4-gs.exe`
+  final frame images only, as a black-box reference (never its debug dumps or
+  logs). The task brief states the agent's status.
 - **Distribution (decision 0069):** the installer ships the prebuilt game
   executable; the user supplies their own disc. Our code is MIT (`LICENSE`).
 - The launcher (TASK-019) and racing wheels (TASK-018) are planned tasks;
