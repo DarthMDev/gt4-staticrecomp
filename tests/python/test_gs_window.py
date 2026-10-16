@@ -163,8 +163,10 @@ class PinTests(unittest.TestCase):
     def manifest(self):
         return json.loads((ROOT / 'docs/inputs' / MANIFEST).read_text(encoding='utf-8'))
 
-    def test_mode_pcsx2_selects_slice195(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], (MANIFEST, EXECUTABLE))
+    def test_mode_pcsx2_slice195_stays_selectable(self):
+        # Since slice196 (TASK-047) --mode pcsx2 points at slice196; slice195 stays selectable.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice195'], (MANIFEST, EXECUTABLE))
+        self.assertIn('pcsx2-slice195', performance.MODES)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice194'],
                          ('slice194-pcsx2.json', 'private/slice194-gs-window-build/build/gt4vulkan.exe'))
         self.assertIn('slice194-pcsx2.json', probe.VU1_AOT_MANIFESTS)
