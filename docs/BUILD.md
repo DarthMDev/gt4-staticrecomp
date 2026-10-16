@@ -1222,7 +1222,9 @@ gs_live_check.exe ... 3100 <ini> --soak 3000
 slice194 plus `native/window.cpp` (keyboard focus on activation in pcsx2 mode) and gt4-gs 0.3.1 (fork commit
 `0099d77e1`, tag `gt4gs-v0.3.1`). Fresh directories: `private/slice195-gs-window-build` (game,
 `private/slice194-gt4gs-scripts/build-game-195.bat`), `private/slice195-gt4gs-build` (gt4-gs, `build-gt4gs-195.bat`),
-`private/slice195-gt4gs-dist` (`gt4-gs-0.3.1-windows-x64.zip`, 13,394,990 bytes, sha256 `473ee53d...`, local build,
-pinned), `private/slice195-gt4gs-pkg` (140 files, tree sha256 `db553a47...`). Pins `docs/inputs/slice195-pcsx2.json`
+`private/slice195-gt4gs-dist` (iteration package, not pinned). The pinned package is the PUBLISHED release
+`gt4gs-v0.3.1`, built by `gt4gs/release-local.ps1` from the tag checkout (`private/slice195-gt4gs-release-build`),
+downloaded back to `private/slice195-gt4gs-download` (sha256 `e24dd2b8...`, checked with SHA256SUMS) and extracted to
+`private/slice195-gt4gs-release-pkg` (140 files, tree sha256 `243fa487...`). Pins `docs/inputs/slice195-pcsx2.json`
 (`gt4vulkan.exe` sha256 `afaa1e44...`); `--mode pcsx2` points here, `--mode pcsx2-slice194` keeps slice194. Checks:
 CTest 29/29, Python 350 OK, donor 42/42, pcsx2 1x 41/41, `gs_live_check --click-check` and `--stall-check` pass.

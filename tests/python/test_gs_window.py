@@ -23,7 +23,7 @@ import play_performance as performance  # noqa: E402
 ASSETS = Path(os.environ.get('GT4_ASSETS_ROOT', ROOT))
 MANIFEST = 'slice195-pcsx2.json'
 EXECUTABLE = 'private/slice195-gs-window-build/build/gt4vulkan.exe'
-PACKAGE = 'private/slice195-gt4gs-pkg'
+PACKAGE = 'private/slice195-gt4gs-release-pkg'
 GS_PROCESS = PACKAGE + '/gt4-gs.exe'
 
 

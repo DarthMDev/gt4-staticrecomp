@@ -23,7 +23,14 @@ Changes from upstream are kept to `gt4gs/` (README, BUILD, NOTICE), the trimmed 
 - Recipe: [gt4gs/BUILD.md](https://github.com/moesuito/gt4recomp-gs/blob/gt4gs/main/gt4gs/BUILD.md) in the fork.
   Summary: Windows Server 2025 runner, MSVC (VS 2022), Ninja, `ENABLE_QT_UI=OFF ENABLE_GSRUNNER=ON`,
   dependencies from the trimmed script (Qt removed), cached by script hash.
-- Workflow: `.github/workflows/gt4gs-windows.yml` (`workflow_dispatch` and tags `gt4gs-v*`).
+- Workflow: `.github/workflows/gt4gs-windows.yml`, `workflow_dispatch` only since 2026-10-16 (a manual fallback; it
+  had a `gt4gs-v*` tag trigger until 0.3.0).
+- **Release flow (owner decision 2026-10-16): local.** Releases from `gt4gs-v0.3.1` on are built, packaged and
+  published from the owner's PC with `gt4gs/release-local.ps1` (clean tree and tag checked out; local recipe of
+  `gt4gs/BUILD.md`; same zip layout as CI plus compiler, CMake, Ninja and dependency-script hash in `SOURCE.txt`;
+  `git archive` source archive; `SHA256SUMS`; `gh release create`). GitHub Actions took 27 minutes per release;
+  the local build takes minutes. The game pins the published zip after downloading it back. Anyone can still rebuild
+  any release from its tag with `gt4gs/BUILD.md`.
 - CI runs (all on `moesuito/gt4recomp-gs`):
   - [38818516056](https://github.com/moesuito/gt4recomp-gs/actions/runs/38818516056): `workflow_dispatch`, failed
     at configure. `vswhere -version "[17,18)"` found no VS on `windows-2025`, which has Visual Studio 18
@@ -80,3 +87,15 @@ No build provenance attestation is published yet. It can be added once the relea
 - The fork holds no game code, game data, BIOS, keys, disc images or GT4Recomp private content.
 - GT4Recomp's MIT code does not go into the fork. The MIT protocol header is vendored later by hash (TASK-035).
 - Agents that work on the fork are PCSX2-tainted and never work on TASK-027 (CoreGS 2.0).
+
+### gt4gs-v0.3.1: first local release (2026-10-16)
+
+Built from the tag checkout with `gt4gs/release-local.ps1` (fork commit `3834dbf57` of the script; tag commit
+`0099d77e1`), MSVC cl 19.44.35222 (VS 2022 Build Tools), CMake 4.3.1, Ninja 1.13.2, no LTO, dependencies of
+`private/slice193-gt4gs-deps` (dependency script sha256 `005368ff...`). Release:
+https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v0.3.1 (prerelease):
+  - `gt4-gs-0.3.1-windows-x64.zip`, 13,395,329 bytes, SHA-256 `e24dd2b894d2f6e68b96735df83a62da7a7c3e6c449ad9a8743a6a01dd45546f`
+  - `gt4recomp-gs-0.3.1-source.zip`, SHA-256 `2046bcbc5493346c6b62e6458c3a57beb29678356e7baca95cd2e5bd23f9a61f`
+  - `SHA256SUMS`
+The zip was downloaded back, checked with `sha256sum -c SHA256SUMS` (both OK) and is the package slice195 pins.
+The tag's CI run was cancelled before publishing (the tag trigger was removed afterwards; the workflow is manual only).

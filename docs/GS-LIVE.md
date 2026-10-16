@@ -252,3 +252,8 @@ its title bar, then one on the picture; cursor restored): 0.2.0 passes, 0.3.0 fa
 (foreground and keyboard focus stay on the parent). The stall check still passes with 0.3.1 (longest answer 18 ms).
 slice195: CTest 29/29, Python 350 OK (14 skipped), donor 42/42, pcsx2 1x 41/41 identical to slice194.
 Not verified: the click with the real game window (owner).
+
+Release flow (2026-10-16, owner decision): gt4-gs releases are built and published from the owner's PC with
+`gt4gs/release-local.ps1`; GitHub Actions is a manual fallback. slice195 pins the published `gt4gs-v0.3.1` zip
+(downloaded back and checked, `private/slice195-gt4gs-release-pkg`, tree sha256 `243fa487...`, `gt4-gs.exe` sha256
+`9650ff3c...`). With it: click check and stall check pass, headless pcsx2 1x 41/41 identical, Python 350 OK.
