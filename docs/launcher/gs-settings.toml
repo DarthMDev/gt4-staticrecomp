@@ -17,7 +17,9 @@
 #   type        bool, int, float, enum, string, path (path = folder supplied by the launcher)
 #   min, max    range for int and float
 #   choices     enum values: { name = launcher name, ini = INI value, status = ok | resolved | pending-TASK-NNN,
-#               label = optional display text }
+#               label = optional display text, offered = false for a value that is settable (command line) but not
+#               shown by the launcher, height = output height in lines (upscale presets only) }
+#   accept_ini  enum rows: true when the INI value is also accepted as input (upscale: --gs-setting upscale=3 = 1080p)
 #   default     GT4 default (launcher name for enums, "true" or "false" for bool, "" for an empty string)
 #   written     always (in every generated INI), when-set (only when the value differs from the default),
 #               launcher (only when the launcher supplies it), never (launcher-only, not in the INI)
@@ -82,19 +84,32 @@ notes = "GSRendererType (pcsx2/Config.h:271-281): VK = 14, DX12 = 15, DX11 = 3. 
 [[setting]]
 id = "upscale"
 label = "Internal resolution"
-help = "GS internal resolution, 1x to 12x. The launcher clamps it to the GPU limit (see notes)."
+help = "GS internal resolution preset: 480p (1x) to 8K (12x). The launcher picks it from the monitor height (see notes)."
 page = "basic"
 order = 2
-control = "slider"
+control = "dropdown"
 section = "EmuCore/GS"
 key = "upscale_multiplier"
-type = "int"
-min = 1
-max = 12
-default = "3"
+type = "enum"
+default = "1080p"
 written = "always"
 status = "ok"
-notes = "D.1 range, widened by owner decision 6 (2026-10-16). The loader accepts 1 to 12 (pcsx2/Pcsx2Config.cpp:1045). PCSX2 clamps any value above GSGetMaxUpscaleMultiplier = max(max texture size / 1280, 1) (pcsx2/GS/GS.cpp:677-681) with an OSD warning (pcsx2/GS/GS.cpp:225-240). A 16384-texel GPU allows 12x; 8192 allows 6x. READY carries no max-upscale field: ReadyPayload (3rdparty/gt4recomp-gs-stream/gs_stream_protocol.h:177-187) has only a reserved u32. Until gt4-gs reports the limit, the launcher offers 1 to 12 and PCSX2 clamps. ExtendedUpscalingMultipliers is NOT required up to 12x (see extended_upscale). --gs-scale N sets this row (GT4_GS_SCALE)."
+accept_ini = true
+choices = [
+  { name = "480p", ini = "1", status = "ok", label = "480p (1x)", height = 480 },
+  { name = "720p", ini = "2", status = "ok", label = "720p (2x)", height = 720 },
+  { name = "1080p", ini = "3", status = "ok", label = "1080p (3x)", height = 1080 },
+  { name = "1440p", ini = "4", status = "ok", label = "1440p (4x)", height = 1440 },
+  { name = "4K", ini = "6", status = "ok", label = "4K (6x)", height = 2160 },
+  { name = "8K", ini = "12", status = "ok", label = "8K (12x)", height = 4320 },
+  { name = "5x", ini = "5", status = "ok", offered = false },
+  { name = "7x", ini = "7", status = "ok", offered = false },
+  { name = "8x", ini = "8", status = "ok", offered = false },
+  { name = "9x", ini = "9", status = "ok", offered = false },
+  { name = "10x", ini = "10", status = "ok", offered = false },
+  { name = "11x", ini = "11", status = "ok", offered = false },
+]
+notes = "Owner decision 2026-10-16 (TASK-060/061/062 request): the launcher shows ONLY the six presets 480p (1x), 720p (2x), 1080p (3x), 1440p (4x), 4K (6x) and 8K (12x), with PCSX2's width-based mapping (640 x scale >= the target width: 1280, 1920, 2560, 3840, 7680). Default 1080p (3x) in the table; the launcher (TASK-019) will pick the smallest preset whose height is at least the monitor's VERTICAL resolution (unknown monitor: 1080p; scripts/gs_settings.py upscale_preset_for_monitor) and grey out presets above the GPU limit max(max texture size / 1280, 1) (upscale_presets_within_texture_limit). The other multipliers (5x, 7x to 11x) stay settable from the command line (play_performance.py --gs-scale N keeps 1 to 12) but are not offered. Range history: D.1, widened by owner decision 6 (2026-10-16). The loader accepts 1 to 12 (pcsx2/Pcsx2Config.cpp:1045). PCSX2 clamps any value above GSGetMaxUpscaleMultiplier = max(max texture size / 1280, 1) (pcsx2/GS/GS.cpp:677-681) with an OSD warning (pcsx2/GS/GS.cpp:225-240). A 16384-texel GPU allows 12x; 8192 allows 6x. READY carries no max-upscale field: ReadyPayload (3rdparty/gt4recomp-gs-stream/gs_stream_protocol.h:177-187) has only a reserved u32. Until gt4-gs reports the limit, the launcher offers 1 to 12 and PCSX2 clamps. ExtendedUpscalingMultipliers is NOT required up to 12x (see extended_upscale). --gs-scale N sets this row (GT4_GS_SCALE)."
 
 [[setting]]
 id = "blending"
@@ -807,6 +822,142 @@ status = "ok"
 notes = "D.1 default Off. Hidden: the launcher keeps the cache folder. Loader pcsx2/Pcsx2Config.cpp:960."
 
 [[setting]]
+id = "cursor_autohide"
+label = "Hide the mouse cursor"
+help = "Hide the mouse cursor over the picture after 3 s without movement (fullscreen and windowed). On by default."
+page = "advanced"
+order = 37
+control = "toggle"
+section = ""
+key = ""
+type = "bool"
+default = "true"
+written = "never"
+status = "ok"
+env = "GT4_CURSOR_AUTOHIDE"
+notes = "TASK-060. Launcher-only: the game reads GT4_CURSOR_AUTOHIDE (unset or 1 = on, 0 = off; native/cursor_autohide.hpp) and sends the policy to gt4-gs as protocol 1.2 CONTROL cursor, so the game window and the GS child window (another process) apply the same rule. Outside the picture the cursor is never touched. Never written to gt4-gs.ini."
+
+[[setting]]
+id = "shader_compile_notice"
+label = "Show \"Compiling shaders\" notice"
+help = "Small text in the bottom-left corner while the PCSX2 GS compiles shaders or pipelines (not when they come from the cache)."
+page = "advanced"
+order = 38
+control = "toggle"
+section = "GT4GS"
+key = "ShaderCompileNotice"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "TASK-061, gt4-gs 1.0.0 key. Uses PCSX2's shader compile signal (pcsx2/GS/GSShaderCompileIndicator.h, CompileTimer in VKShaderCache.cpp and VKBuilders.cpp); a pipeline that the driver takes from the pipeline cache (VK_EXT_pipeline_creation_feedback cache-hit bit) is not counted. Shown while a compile happened in the last 0.5 s. Written only as false."
+
+[[setting]]
+id = "perf_overlay"
+label = "Performance overlay"
+help = "Show performance numbers in the top-right corner (the items below). Off by default."
+page = "advanced"
+order = 39
+control = "toggle"
+section = "GT4GS"
+key = "PerfOverlay"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "ok"
+notes = "TASK-062, gt4-gs 1.0.0 key. Master switch of the gt4-gs performance overlay (drawn with the PCSX2 ImGui OSD font). With it on, gt4-gs sets READY kReadyFlagOsdStats and the game sends protocol 1.2 OSD_STATS records every 0.5 s. The items below select the lines."
+
+[[setting]]
+id = "perf_overlay_fps"
+label = "Overlay: FPS"
+help = "Frames per second of the game (VSYNCs per second)."
+page = "advanced"
+order = 40
+control = "toggle"
+section = "GT4GS"
+key = "PerfOverlayFPS"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "TASK-062. From the game's OSD_STATS (frames / interval); gt4-gs's own present rate when no record arrived yet."
+
+[[setting]]
+id = "perf_overlay_frame_time"
+label = "Overlay: frame time"
+help = "Mean and longest frame time in milliseconds."
+page = "advanced"
+order = 41
+control = "toggle"
+section = "GT4GS"
+key = "PerfOverlayFrameTime"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "TASK-062. OSD_STATS frame_time_avg_us and frame_time_max_us (time between two VSYNC posts of the game)."
+
+[[setting]]
+id = "perf_overlay_cpu"
+label = "Overlay: CPU usage of the game"
+help = "CPU usage of the game process plus the gt4-gs process (not the whole PC)."
+page = "advanced"
+order = 42
+control = "toggle"
+section = "GT4GS"
+key = "PerfOverlayCPU"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "TASK-062. GetProcessTimes of both processes every 0.5 s on a gt4-gs sampler thread: percent of all logical processors (as Task Manager) and the number of busy cores."
+
+[[setting]]
+id = "perf_overlay_gpu"
+label = "Overlay: GPU usage of the game"
+help = "GPU usage of the game process plus the gt4-gs process (Windows per-process GPU counters)."
+page = "advanced"
+order = 43
+control = "toggle"
+section = "GT4GS"
+key = "PerfOverlayGPU"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "TASK-062. PDH counter \\GPU Engine(*)\\Utilization Percentage, instances of the two pids, summed per engine; the busiest engine is shown (as Task Manager). Sampled every 0.5 s on the gt4-gs sampler thread."
+
+[[setting]]
+id = "perf_overlay_resolution"
+label = "Overlay: resolutions"
+help = "Output (window) resolution and the GS internal render resolution."
+page = "advanced"
+order = 44
+control = "toggle"
+section = "GT4GS"
+key = "PerfOverlayResolution"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "TASK-062. Output = the swap chain size; internal = PCSX2 GSgetInternalResolution and the upscale multiplier."
+
+[[setting]]
+id = "perf_overlay_breakdown"
+label = "Overlay: frame cost breakdown"
+help = "Milliseconds per frame of EE game logic, VU1 worker, GS stream write, readbacks and GS thread, and the headroom."
+page = "advanced"
+order = 45
+control = "toggle"
+section = "GT4GS"
+key = "PerfOverlayBreakdown"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "TASK-062. The F8 [gs-ipc] summary line, live: EE thread CPU, VU1 worker busy, GS stream write, readback waits (game OSD_STATS; the breakdown needs the game's performance accounting, GT4_PERF=1, which every launcher run sets) and the PCSX2 GS thread time; headroom = 16.68 ms budget minus the EE critical path."
+
+[[setting]]
 id = "texture_load"
 label = "Load texture replacements"
 help = "Load texture packs from the GT4Recomp texture folder. Mods page (TASK-048)."
@@ -1047,3 +1198,69 @@ default = "100"
 written = "launcher"
 status = "ok"
 notes = "GT4 fork key. TASK-036 uses 100. The range is a launcher limit, not a plan value."
+
+[[setting]]
+id = "spin_us"
+label = "GS transport spin"
+help = "Microseconds the gt4-gs transport spins before it sleeps (0 = the transport default, 30 us)."
+page = "hidden"
+order = 11
+control = "slider"
+section = "GT4GS"
+key = "SpinUs"
+type = "int"
+min = 0
+max = 2000
+default = "0"
+written = "when-set"
+status = "resolved"
+notes = "GT4 fork key (gt4-gs 0.3.0 and later; TASK-041 measured no gain). Listed so gt4-gs 1.0.0 accepts it (allow-list); never written by the launcher."
+
+[[setting]]
+id = "prohibit_dynamic_code"
+label = "Arbitrary Code Guard"
+help = "Windows Arbitrary Code Guard for gt4-gs (no dynamic code). On."
+page = "hidden"
+order = 12
+control = "toggle"
+section = "GT4GS"
+key = "ProhibitDynamicCode"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "resolved"
+notes = "GT4 fork key (gt4-gs 0.4.0 and later, TASK-042). false switches only the OS enforcement off, for a graphics driver that needs dynamic code. Listed for the allow-list; never written by the launcher."
+
+[[setting]]
+id = "debug_stall_window_ms"
+label = "Test: stall the GS window thread"
+help = "Test only (tools/gs_live_check --stall-check): the gt4-gs window thread stops pumping for this many ms."
+page = "hidden"
+order = 13
+control = "slider"
+section = "GT4GS"
+key = "DebugStallWindowMs"
+type = "int"
+min = 0
+max = 60000
+default = "0"
+written = "when-set"
+status = "resolved"
+notes = "GT4 fork test key (gt4-gs 0.3.0 and later, TASK-038). Listed for the allow-list; never written by the launcher."
+
+[[setting]]
+id = "debug_stall_after_ms"
+label = "Test: delay before the stall"
+help = "Test only: delay from attach_window to the window thread stall."
+page = "hidden"
+order = 14
+control = "slider"
+section = "GT4GS"
+key = "DebugStallAfterMs"
+type = "int"
+min = 0
+max = 600000
+default = "0"
+written = "when-set"
+status = "resolved"
+notes = "GT4 fork test key (gt4-gs 0.3.0 and later, TASK-038). Listed for the allow-list; never written by the launcher."

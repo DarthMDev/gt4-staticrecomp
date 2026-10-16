@@ -1,14 +1,16 @@
 # GS settings table, launcher pages and gt4-gs.ini (TASK-039, curated by TASK-049)
 
-Status (2026-10-16, TASK-049): the table is curated for the launcher (owner decisions 1 to 6). Source: PCSX2 v2.8.2
-(tag `v2.8.2` = commit `fd9d310c`). Design source: [GSDX-PLAN](GSDX-PLAN.md) sections D.1 and D.2 (see "Corrections").
-Fork allow-list enforcement in `gt4-gs.exe` is still pending (TASK-037/038 agent).
+Status (2026-10-16, TASK-049; TASK-060/061/062): the table is curated for the launcher (owner decisions 1 to 6) and
+since slice201 holds the internal-resolution presets, the cursor, shader-notice and performance-overlay rows. Source:
+PCSX2 v2.8.2 (tag `v2.8.2` = commit `fd9d310c`). Design source: [GSDX-PLAN](GSDX-PLAN.md) sections D.1 and D.2 (see
+"Corrections"). **The allow-list is enforced by `gt4-gs.exe` 1.0.0** (section "Allow-list in gt4-gs"): a key or value
+outside it is ignored with one warning line; gt4-gs never refuses to start because of the INI.
 
 ## What it is
 
 `docs/launcher/gs-settings.toml` is the single source for the PCSX2 GS options that GT4Recomp exposes. Each row is one
 setting: launcher id, label, help, `page`, `order`, `control`, INI section and key, type, range or choices, GT4 default,
-`written`, `status`, `env` (launcher-only rows), notes and sources (file:line at v2.8.2). The table has 58 rows and one
+`written`, `status`, `env` (launcher-only rows), notes and sources (file:line at v2.8.2). The table has 71 rows and one
 `[[profile]]`, `gt4-defaults`.
 
 `scripts/gs_settings.py` (stdlib and `tomllib`, Python 3.11 or newer) does these things:
@@ -29,8 +31,12 @@ setting: launcher id, label, help, `page`, `order`, `control`, INI section and k
   old file in place and removes the temporary.
 - `offered()` lists the rows the launcher may show, in page and order.
 
-`allowlist()` emits the INI section and key pairs as `docs/launcher/gs-settings-allowlist.json`. Every row with a key is
-included, whatever its status. Launcher-only rows and rows without a key are not.
+`allowlist()` emits the INI section and key pairs with their accepted values as
+`docs/launcher/gs-settings-allowlist.json`: `type`, and `values` (bool and enum: every choice's INI value, whatever its
+status) or `min`/`max` (int and float); string and path rows take any single-line text. Every row with a key is
+included, whatever its status. Launcher-only rows and rows without a key are not. `upscale_presets()`,
+`upscale_preset_for_monitor()` and `upscale_presets_within_texture_limit()` are the launcher helpers for the resolution
+presets (section "Internal resolution presets").
 
 ## Columns
 
@@ -43,7 +49,8 @@ included, whatever its status. Launcher-only rows and rows without a key are not
 | `label`, `help` | the name and one-line help shown to the owner |
 | `section`, `key` | INI section and key (empty for launcher-only rows) |
 | `type` | `bool`, `int`, `float`, `enum`, `string`, or `path` (a folder the launcher supplies) |
-| `min`, `max`, `choices` | range for numbers; `{name, ini, status, label}` entries for enums |
+| `min`, `max`, `choices` | range for numbers; `{name, ini, status, label}` entries for enums; a choice may add `offered = false` (settable from the command line, not shown) and `height` (upscale presets) |
+| `accept_ini` | enum rows: the INI value is accepted as input too (`upscale`: `3` = `1080p`) |
 | `default` | GT4 default (launcher name for enums; `true` or `false` for bool) |
 | `written` | `always`, `when-set`, `launcher` (supplied by the launcher), or `never` (launcher-only) |
 | `status` | `ok` (settable), `resolved` (confirmed in the sources, not settable until the owner checks it in game), `pending-TASK-NNN` |
@@ -60,7 +67,7 @@ A value is settable only when its row and its choice both have status `ok`. The 
 | Order | Row | Control | GT4 default | Status | Why it is here |
 |---|---|---|---|---|---|
 | 1 | `gs_engine` "Renderer" | dropdown | PCSX2 GS | ok (launcher-only) | Decision 1: PCSX2 GS, or CoreGS 1.1 as the secondary renderer. Not written to the INI. |
-| 2 | `upscale` "Internal resolution" | slider 1 to 12 | 3x | ok | Decisions 1 and 6. Biggest visual effect. Cannot break the renderer. |
+| 2 | `upscale` "Internal resolution" | dropdown: 480p (1x), 720p (2x), 1080p (3x), 1440p (4x), 4K (6x), 8K (12x) | 1080p (3x) | ok | Decisions 1 and 6; presets since slice201 (owner, 2026-10-16). Biggest visual effect. Cannot break the renderer. |
 | 3 | `aspect` "Aspect ratio" | dropdown | 16:9 | ok | Visible and safe. Moved here from Display: 16:9 is the GT4 setting (TASK-009). |
 | 4 | `fxaa` "Anti-aliasing (FXAA)" | toggle | off | ok | Decision 1. |
 | 5 | `cas_mode` "Sharpening (CAS)" | dropdown | off | resolved | Decision 1: FidelityFX CAS mode. Settable after the owner checks it in game. |
@@ -72,7 +79,7 @@ Today the launcher offers four Graphics rows (`gs_engine`, `upscale`, `aspect`, 
 CoreGS 1.1 options (upscale, FSR, FXAA, deinterlace) are hidden for now (decision 5). They are CoreGS controls, not rows of
 this table. Only the renderer choice `coregs-1.1` remains.
 
-### ADVANCED page (`page = advanced`, 36 rows, 15 offered today)
+### ADVANCED page (`page = advanced`, 45 rows, 24 offered today)
 
 Pre-configured to the GT4 ideal. Groups in order:
 
@@ -89,6 +96,14 @@ Pre-configured to the GT4 ideal. Groups in order:
 - OSD: `osd_fps`, `osd_gpu`, `osd_resolution` (off), `osd_messages_pos` (top left), `osd_performance_pos` (top right),
   `osd_scale` (100 percent).
 - Other: `disable_shader_cache` (off).
+- TASK-060/061/062 (slice201, gt4-gs 1.0.0): `cursor_autohide` "Hide the mouse cursor" (on; launcher-only, the game
+  reads `GT4_CURSOR_AUTOHIDE`), `shader_compile_notice` "Show Compiling shaders notice" (`[GT4GS] ShaderCompileNotice`,
+  on), `perf_overlay` "Performance overlay" (`[GT4GS] PerfOverlay`, off; the master switch) and one row per overlay
+  item, on by default so the master switch alone shows everything: `perf_overlay_fps` (`PerfOverlayFPS`),
+  `perf_overlay_frame_time` (`PerfOverlayFrameTime`), `perf_overlay_cpu` (`PerfOverlayCPU`), `perf_overlay_gpu`
+  (`PerfOverlayGPU`), `perf_overlay_resolution` (`PerfOverlayResolution`), `perf_overlay_breakdown`
+  (`PerfOverlayBreakdown`). All `when-set`: the default gt4-gs.ini is unchanged. What each item shows:
+  [GS-LIVE](GS-LIVE.md) section 11.
 
 Rows marked `resolved` (for example `filter`, `trilinear`, `dithering`, `texture_preloading`, `linear_present`,
 `tv_shader`, the shade-boost levels) are on the page but not offered until the owner checks them in game.
@@ -102,7 +117,7 @@ Texture replacement and dumping: `texture_load`, `texture_load_async`, `texture_
 `texture_dump_mipmaps`, `texture_dump_fmv`. Decision 4: they are on neither page. The future mod manager (TASK-048,
 Content Manager style) manages them. Status stays `pending-TASK-040`.
 
-### HIDDEN (`page = hidden`, 10 rows)
+### HIDDEN (`page = hidden`, 14 rows)
 
 Never shown to the owner:
 
@@ -112,6 +127,9 @@ Never shown to the owner:
 - `extended_upscale` (`ExtendedUpscalingMultipliers`, off): not needed up to 12x (section 12x below). Never written.
 - `cache_folder`, `data_root`, `defer_swap_chain_acquire`, `headless_surfaceless`, `headless_dump_dir`,
   `headless_dump_every`: supplied by the launcher or the headless checks, not by the owner.
+- `spin_us` (`SpinUs`), `prohibit_dynamic_code` (`ProhibitDynamicCode`), `debug_stall_window_ms`
+  (`DebugStallWindowMs`), `debug_stall_after_ms` (`DebugStallAfterMs`): fork keys of tuning and test tools (status
+  `resolved`, never written by the launcher), listed so the gt4-gs 1.0.0 allow-list accepts them.
 
 ## Reset to defaults
 
@@ -120,6 +138,40 @@ Never shown to the owner:
 The launcher writes the reset file with `write_ini_atomic(path, render_ini(rows, reset_to_defaults(rows)))`.
 `tests/python/test_gs_settings.py` (`ResetToDefaultsTests`) proves that this reproduces the default gt4-gs.ini
 byte for byte.
+
+## Internal resolution presets (owner decision 2026-10-16, slice201)
+
+The `upscale` row is a dropdown with ONLY these presets, using PCSX2's width-based mapping (640 x scale is at least the
+target width): **480p (1x)**, **720p (2x)** (640 x 2 = 1280), **1080p (3x)** (1920), **1440p (4x)** (2560),
+**4K (6x)** (3840) and **8K (12x)** (7680). The table default stays 1080p (3x), so the default gt4-gs.ini still writes
+`upscale_multiplier = 3`. The other multipliers (5x, 7x to 11x) are choices with `offered = false`: settable from the
+command line, never shown.
+
+For the launcher (TASK-019/043; not implemented here):
+
+- **Initial preset from the monitor**: the smallest preset whose height is at least the monitor's VERTICAL resolution
+  (480, 720, 1080, 1440, 2160, 4320 lines); a taller monitor gets 8K; an unknown monitor gets 1080p.
+  `gs_settings.upscale_preset_for_monitor(rows, height)` is the reference (tests: 768 lines gives 1080p, 1200 gives
+  1440p, 1600 gives 4K).
+- **GPU limit**: presets above `max(max texture size / 1280, 1)` (PCSX2 `GSGetMaxUpscaleMultiplier`) are greyed out:
+  16384-texel GPUs allow every preset, 8192 up to 4K, 4096 up to 1080p.
+  `gs_settings.upscale_presets_within_texture_limit(rows, max_texture_size)` is the reference.
+- **Fullscreen by default** is a launcher setting (the game's Alt+Enter/F11 borderless fullscreen, TASK-009/038): the
+  launcher starts the game window and toggles it to fullscreen; it is not a gt4-gs.ini key.
+
+Command line: `play_performance.py --gs-scale N` stays numeric (1 to 12); `--gs-resolution 480p|720p|1080p|1440p|4K|8K`
+is the same as `--gs-scale 1|2|3|4|6|12`; `--gs-setting upscale=4K` (or `upscale=6`) sets the row. Two of them together
+are refused.
+
+## Allow-list in gt4-gs (gt4-gs 1.0.0)
+
+`gt4-gs.exe` 1.0.0 embeds `docs/launcher/gs-settings-allowlist.json` (vendored by hash in the fork,
+`3rdparty/gt4recomp-gs-stream/`, and turned into a C++ table at configure time). Every key of `--config` is checked:
+a key that is not listed, or a value outside its rule, is **ignored** with one line in the session log, for example
+`gt4-gs: ignoring [EmuCore/GS] upscale_multiplier = 13 in <file> (allowed values: 1|2|3|4|6|12|5|7|8|9|10|11)`, then
+`gt4-gs: N setting(s) of <file> ignored; the session starts with the others`. gt4-gs never refuses to start because of
+the INI; the ignored key keeps its built-in default. `[EmuCore]` keys of the list (`EnableGameFixes`) are now applied
+too. A table change that adds or changes a key therefore needs a new gt4-gs build (the allow-list is part of it).
 
 ## 12x internal resolution (decision 6)
 
@@ -258,7 +310,11 @@ Readback mapping for the launcher: `--gs-readback` (`GT4_GS_READBACK`) is a shor
 
 Launcher (dev script now, TASK-019/043 later): `scripts/play_performance.py --mode pcsx2`
 
-- `--gs-scale N` sets the upscale row (1 to 12, default 3; the same as `GT4_GS_SCALE`).
+- `--gs-scale N` sets the upscale row (1 to 12, default 3; the same as `GT4_GS_SCALE`); `--gs-resolution 1080p` sets a
+  preset (480p, 720p, 1080p, 1440p, 4K, 8K).
+- `--gs-setting perf_overlay=true` turns the performance overlay on (every item); `--gs-setting perf_overlay_gpu=false`
+  hides one item; `--gs-setting shader_compile_notice=false` hides the "Compiling shaders" notice.
+- `GT4_CURSOR_AUTOHIDE=0` (environment) keeps the mouse cursor visible (row `cursor_autohide`, launcher-only).
 - `--gs-setting ID=VALUE` (repeatable) sets any other settable row, for example `--gs-setting fxaa=true`.
   Only with `--mode pcsx2`. The values go to the probe as `GT4_GS_SETTINGS` (JSON). The probe checks them again.
   Resolved rows are refused with "not settable yet" until the owner checks them in game.
@@ -283,7 +339,7 @@ python scripts/gs_settings.py ini --set upscale=12 --out <file>
 
 ## Open items
 
-- Fork enforcement: `gt4-gs.exe` must refuse keys outside the allow-list (TASK-037/038 agent).
+- Fork enforcement: done in gt4-gs 1.0.0 (ignored with a warning, never refused; owner decision 2026-10-16).
 - READY max-upscale field: gt4-gs must report the device limit (a protocol change in the fork), so the launcher can clamp
   the slider to it. Until then PCSX2 clamps (see 12x).
 - Owner in-game checks to turn `resolved` rows into `ok`: CAS mode and sharpness (decision 1), texture filtering,

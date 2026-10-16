@@ -82,12 +82,17 @@ PERF_PROFILES = {
     # TASK-042 (slice197): the JIT-free gt4-gs 0.4.0 (no recompilers, no GS software JIT, no executable memory,
     # Arbitrary Code Guard). Same game runtime as slice196.
     'pcsx2-slice197': ('slice197-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
-    # TASK-041 (slice199): candidate: the slice198 game runtime with the JIT-free gt4-gs 0.4.0 (no recompilers,
-    # no GS software JIT); the perf changes of slice198 run with the 0.4.0 package. Mode pcsx2-slice199 keeps it.
-    # TASK-058/059 (slice200): the slice199 candidate with the crash-safe memory card (memcard capsule), the installed-folder
-    # paths and --portable-check (port slice200-port). Mode pcsx2 points here.
+    # TASK-041 (slice199): the slice198 game runtime with the JIT-free gt4-gs 0.4.0 (no recompilers, no GS software JIT).
     'pcsx2-slice199': ('slice199-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
-    'pcsx2': ('slice200-pcsx2.json', 'private/slice200-build/build/gt4vulkan.exe'),
+    # TASK-058/059 (slice200): the slice199 candidate with the crash-safe memory card (memcard capsule), the installed-folder
+    # paths and --portable-check (port slice200-port).
+    'pcsx2-slice200': ('slice200-pcsx2.json', 'private/slice200-build/build/gt4vulkan.exe'),
+    # TASK-060/061/062 (slice201): cursor auto-hide, protocol 1.2 OSD_STATS for the performance overlay, and the stable
+    # gt4-gs 1.0.0 ("Compiling shaders" notice, overlay, settings allow-list).
+    'pcsx2-slice201': ('slice201-pcsx2.json', 'private/slice201-osd-build/build/gt4vulkan.exe'),
+    # slice202: one candidate with both: the slice200 game-side changes (TASK-058/059) and the slice201 ones
+    # (TASK-060/062), with the stable gt4-gs 1.0.0 package of slice201. Mode pcsx2 points here.
+    'pcsx2': ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -97,15 +102,20 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
-                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json')
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
+                     'slice201-pcsx2.json', 'slice202-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
-                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json')
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
+                     'slice201-pcsx2.json', 'slice202-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
+# TASK-060: GT4_CURSOR_AUTOHIDE (unset or 1 = hide the cursor over the picture after 3 s, 0 = never). Forwarded and
+# recorded; the settings table row cursor_autohide (launcher-only) names it.
+CURSOR_AUTOHIDE_VALUES = ('0', '1')
 # GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
@@ -467,6 +477,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     # Refused before any output: the window is fixed 16:9, and unknown GT4_FORCE_480P values stop the run.
     if os.environ.get('GT4_FORCE_480P', '0') not in FORCE_480P_VALUES:
         raise ValueError('GT4_FORCE_480P must be 0 or 1')
+    if os.environ.get('GT4_CURSOR_AUTOHIDE', '1') not in CURSOR_AUTOHIDE_VALUES:
+        raise ValueError('GT4_CURSOR_AUTOHIDE must be 0 or 1')
     if os.environ.get('GT4_MTVU_MEASURE', '1') not in MTVU_MEASURE_VALUES:
         raise ValueError('GT4_MTVU_MEASURE must be 0 or 1')
     if not os.environ.get('GT4_MTVU_MEASURE_EVERY', '0').isdigit():
@@ -610,6 +622,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
+    if 'GT4_CURSOR_AUTOHIDE' in environment:
+        if environment['GT4_CURSOR_AUTOHIDE'] not in CURSOR_AUTOHIDE_VALUES:
+            raise ValueError('GT4_CURSOR_AUTOHIDE must be 0 or 1')
+        result['cursor_environment'] = {'GT4_CURSOR_AUTOHIDE': environment['GT4_CURSOR_AUTOHIDE']}
     result.update(gs_stream_environment(environment, runtime_evidence, binary_workspace, performance,
                                         run_directory=run_directory, headless=not window,
                                         renderer_override=renderer_override))

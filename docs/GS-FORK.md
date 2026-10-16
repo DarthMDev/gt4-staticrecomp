@@ -114,3 +114,21 @@ Downloaded back, `sha256sum -c SHA256SUMS` OK, byte-identical to the local zip; 
 `1c4c45da...`), the package slice197 pins. No FFmpeg or x264 DLLs (not needed: gt4-gs.exe does not import them; checked
 by running every replay with the package as shipped). What `GT4GS_ONLY` removes and how it is enforced: [GS-LIVE](GS-LIVE.md)
 section 9.
+
+### gt4gs-v1.0.0: first stable release (tasks 060, 061, 062; 2026-10-16)
+
+Branch `gt4gs/osd` (from `gt4gs/main` `0e40edc92`), commit `3b9aae399`, annotated tag `gt4gs-v1.0.0`. Built from the tag
+checkout with `gt4gs/release-local.ps1 -Release` into a fresh build folder (`private/slice201-gt4gs-release-build`;
+MSVC cl 19.44.35222, CMake 4.3.1, Ninja 1.13.2, no LTO, `GT4GS_ONLY=ON`, deps of `private/slice193-gt4gs-deps`, dependency
+script sha256 `735c239e...`); `gt4gs/check-nojit.ps1` passed on the package before zipping. **Published as a stable
+release (not a prerelease)**: https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v1.0.0
+  - `gt4-gs-1.0.0-windows-x64.zip`, 13,022,143 bytes, SHA-256 `2e8780196e9cb1ab134aabed464fa156a1a824db8e762304f4025c04f6f3c5a2`
+  - `gt4recomp-gs-1.0.0-source.zip`, 25,129,124 bytes, SHA-256 `e7c0a26426a2a475c61d2a92fe99e330d70fac25f654e5e05ef03103011c7724`
+  - `SHA256SUMS`
+Downloaded back, `sha256sum -c SHA256SUMS` OK, byte-identical to the local zip; extracted to
+`private/slice201-gt4gs-release-pkg` (140 files, tree sha256 `c95edf1c...`, `gt4-gs.exe` 8,955,392 bytes, sha256
+`53464022...`), the package slice201 pins. Changes: GS stream protocol 1.2 (vendored header of main `c8661bb`): cursor
+auto-hide policy on the child window, "Compiling shaders…" notice (real compiles only, `VK_EXT_pipeline_creation_feedback`),
+performance overlay fed by OSD_STATS, and the settings allow-list of main `c8661bb` embedded at configure time (keys and
+values outside it are ignored with a warning). Details: [GS-LIVE](GS-LIVE.md) section 11. 1.0.0 is the version the
+launcher (TASK-043) pins first; later fixes are 1.0.x on the same release flow.

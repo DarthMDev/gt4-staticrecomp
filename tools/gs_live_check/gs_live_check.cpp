@@ -38,6 +38,16 @@
 //   --aspect-check   TASK-038 / TASK-009: snapshots for window sizes 1280x720 and 960x720. The drawn rectangle must be
 //                    the whole 1280x720 window and 960x540 (16:9) in the 960x720 window, the same rectangles as the
 //                    built-in renderer's presentation (native_vulkan.cpp presentation_rect): no stretch, no crop.
+//   --cursor-check   TASK-060 (protocol 1.2): VISIBLE test, about 1.7 s. CONTROL cursor (auto-hide, 300 ms delay) is
+//                    posted after attach_window; after the replay the parent is shown (336x228, top-left corner) and
+//                    the cursor is put on the GS child: visible at first, hidden after the delay without movement,
+//                    visible again after a 3-pixel move, never hidden over the parent's title bar or outside the
+//                    window. The cursor position is restored and the window hidden again. Needs a 1.2 consumer.
+//   --overlay-shot F TASK-061/062: VISIBLE, about 1 s, cursor untouched. At the end the parent is shown topmost with a
+//                    480x270 client area, 30 more VSYNCs re-present the last frame, and the client area is copied from
+//                    the screen into the 24-bit BMP F (the overlay and notice are drawn on the presented frames only).
+//   --osd            TASK-062 (protocol 1.2): when READY asks for OSD_STATS (kReadyFlagOsdStats), post a synthetic
+//                    OSD_STATS record every 30 VSYNCs (the owner's night-race numbers), like the game does every 0.5 s.
 #include "gs_stream_file.hpp"
 #include "gs_stream_ipc.hpp"
 
@@ -265,7 +275,18 @@ struct Options {
   bool aspect_check = false;
   std::uint64_t destroy_at = 0;
   bool click_check = false;
+  bool cursor_check = false;
+  bool osd = false;
+  std::wstring overlay_shot;  // BMP path
 };
+
+// TASK-060: true while the system cursor is hidden (no cursor shape, or not showing).
+bool cursor_hidden() {
+  CURSORINFO info{};
+  info.cbSize = sizeof info;
+  if (!GetCursorInfo(&info)) return false;
+  return (info.flags & CURSOR_SHOWING) == 0 || info.hCursor == nullptr;
+}
 
 // Left click at a screen position with SendInput (absolute coordinates on the virtual desktop).
 void click_at(int x, int y) {
@@ -344,6 +365,162 @@ void click_check(HWND parent, HWND child) {
   require(foreground == parent, "a click in the GS child keeps the parent as the foreground window");
   require(focus == parent, "a click in the GS child keeps the keyboard focus on the parent");
   std::puts("[check] click check passed");
+}
+
+// TASK-061/062: VISIBLE, about 1 s. The parent is shown topmost with a 480x270 client area (CONTROL resize), 30 more
+// VSYNCs re-present the last frame with the overlay, then the client area is copied from the screen into a 24-bit BMP.
+// The cursor is not moved. The window is hidden again afterwards.
+void overlay_shot(ipc::Session &session, HWND parent, const VsyncPayload &last_vsync, const std::wstring &path) {
+  RECT bounds{0, 0, 480, 270};
+  AdjustWindowRect(&bounds, WS_OVERLAPPEDWINDOW, FALSE);
+  SetWindowPos(parent, HWND_TOPMOST, 40, 40, bounds.right - bounds.left, bounds.bottom - bounds.top,
+               SWP_SHOWWINDOW | SWP_NOACTIVATE);
+  const ControlPayload resize{static_cast<std::uint32_t>(ControlKind::resize), 0, {480, 270, 0}};
+  session.post(RecordType::control, 0, &resize, sizeof resize);
+  VsyncPayload vsync = last_vsync;
+  for (int i = 0; i < 30; ++i) {
+    ++vsync.frame;
+    vsync.field ^= 1;
+    session.post_vsync(vsync);
+    pump_for(16);
+  }
+  pump_for(200);
+  POINT origin{0, 0};
+  ClientToScreen(parent, &origin);
+  // Another application's window may still be above this one (for example after it was clicked): then the copy would
+  // show that window, so the check stops as inconclusive and writes nothing.
+  const POINT middle{origin.x + 240, origin.y + 135};
+  if (GetAncestor(WindowFromPoint(middle), GA_ROOT) != parent) {
+    SetWindowPos(parent, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    ShowWindow(parent, SW_HIDE);
+    require(false, "overlay shot inconclusive: another window covers the test window");
+  }
+  HDC screen = GetDC(nullptr);
+  HDC memory = CreateCompatibleDC(screen);
+  BITMAPINFO info{};
+  info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  info.bmiHeader.biWidth = 480;
+  info.bmiHeader.biHeight = 270;  // bottom-up, as BMP files store it
+  info.bmiHeader.biPlanes = 1;
+  info.bmiHeader.biBitCount = 24;
+  info.bmiHeader.biCompression = BI_RGB;
+  void *bits = nullptr;
+  HBITMAP bitmap = CreateDIBSection(screen, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+  HGDIOBJ previous = SelectObject(memory, bitmap);
+  const bool copied = BitBlt(memory, 0, 0, 480, 270, screen, origin.x, origin.y, SRCCOPY) != FALSE;
+  GdiFlush();
+  const DWORD row = (480 * 3 + 3) & ~3u, image_bytes = row * 270;
+  BITMAPFILEHEADER file{};
+  file.bfType = 0x4D42;
+  file.bfOffBits = sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER);
+  file.bfSize = file.bfOffBits + image_bytes;
+  HANDLE out = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+  DWORD written = 0;
+  bool saved = out != INVALID_HANDLE_VALUE;
+  if (saved) {
+    saved = WriteFile(out, &file, sizeof file, &written, nullptr) && WriteFile(out, &info.bmiHeader, sizeof info.bmiHeader, &written, nullptr) &&
+            WriteFile(out, bits, image_bytes, &written, nullptr);
+    CloseHandle(out);
+  }
+  SelectObject(memory, previous);
+  DeleteObject(bitmap);
+  DeleteDC(memory);
+  ReleaseDC(nullptr, screen);
+  SetWindowPos(parent, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  ShowWindow(parent, SW_HIDE);
+  pump_for(50);
+  std::printf("[check] overlay shot: client area at %ld,%ld copied %s, saved %s\n", origin.x, origin.y, copied ? "yes" : "NO",
+              saved ? "yes" : "NO");
+  require(copied && saved, "overlay shot written");
+}
+
+// TASK-060: the GS child hides the cursor over the picture after the CONTROL cursor delay (300 ms here) and nowhere else.
+void cursor_check(HWND parent, HWND child) {
+  POINT saved{};
+  GetCursorPos(&saved);
+  // Topmost while the check runs (no activation, no click). Another application's topmost window may still cover a
+  // corner of the screen, so the window goes to the first corner of the primary screen where the picture is on top.
+  const int screen_width = GetSystemMetrics(SM_CXSCREEN), screen_height = GetSystemMetrics(SM_CYSCREEN);
+  const POINT corners[] = {{40, 40}, {screen_width - 376, 40}, {40, screen_height - 308}, {screen_width - 376, screen_height - 308}};
+  RECT frame{}, child_rect{};
+  POINT picture{};
+  bool on_top = false;
+  for (const POINT &corner : corners) {
+    SetWindowPos(parent, HWND_TOPMOST, corner.x, corner.y, 336, 228, SWP_SHOWWINDOW | SWP_NOACTIVATE);
+    pump_for(100);
+    GetWindowRect(parent, &frame);
+    GetWindowRect(child, &child_rect);
+    // The middle of the parent's client area, which the GS child covers (the child starts at the client origin and may
+    // be larger than this small window).
+    RECT client{};
+    GetClientRect(parent, &client);
+    picture = {client.right / 2, client.bottom / 2};
+    ClientToScreen(parent, &picture);
+    if (WindowFromPoint(picture) == child && WindowFromPoint({frame.left + (frame.right - frame.left) / 3, frame.top + 12}) == parent) {
+      on_top = true;
+      break;
+    }
+  }
+  {
+    const POINT title{frame.left + (frame.right - frame.left) / 3, frame.top + 12};
+    wchar_t name[128] = {};
+    GetClassNameW(GetAncestor(WindowFromPoint(title), GA_ROOT), name, 127);
+    std::printf("[check] cursor check: window at %ld,%ld (%s); parent visible %d topmost %d; root window under the title "
+                "bar: class %ls\n",
+                frame.left, frame.top, on_top ? "the picture is on top there" : "covered by another window in every corner",
+                IsWindowVisible(parent), (GetWindowLongW(parent, GWL_EXSTYLE) & WS_EX_TOPMOST) != 0, name);
+  }
+  if (!on_top) {
+    // Inconclusive: the cursor would land on another application's window. The cursor is not moved at all.
+    SetWindowPos(parent, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    ShowWindow(parent, SW_HIDE);
+    require(false, "cursor check inconclusive: another window covers the test window in every corner of the primary screen");
+  }
+  SetCursorPos(picture.x, picture.y);
+  pump_for(100);
+  const bool visible_on_arrival = !cursor_hidden();
+  pump_for(450);
+  const bool hidden_after_rest = cursor_hidden();
+  POINT rest{};
+  GetCursorPos(&rest);
+  const bool mouse_still = rest.x == picture.x && rest.y == picture.y;
+  SetCursorPos(picture.x + 3, picture.y);
+  pump_for(100);
+  const bool visible_after_move = !cursor_hidden();
+  SetCursorPos(frame.left + (frame.right - frame.left) / 3, frame.top + 12);  // the parent's title bar
+  pump_for(450);
+  const bool visible_on_title = !cursor_hidden();
+  SetCursorPos(frame.right + 60, frame.top + 60);  // outside the window
+  pump_for(450);
+  const bool visible_outside = !cursor_hidden();
+  const HWND under_picture = WindowFromPoint(picture);
+  {
+    wchar_t name[128] = {};
+    DWORD pid = 0;
+    GetClassNameW(under_picture, name, 127);
+    GetWindowThreadProcessId(under_picture, &pid);
+    std::printf("[check] cursor check: window under the picture class %ls pid %lu (parent 0x%p, child visible %d)\n", name,
+                static_cast<unsigned long>(pid), static_cast<void *>(parent), IsWindowVisible(child));
+  }
+  SetCursorPos(saved.x, saved.y);
+  SetWindowPos(parent, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+  ShowWindow(parent, SW_HIDE);
+  pump_for(50);
+  std::printf("[check] cursor check: on the picture visible %s, after 450 ms at rest hidden %s, after a move visible %s; on "
+              "the title bar after 450 ms visible %s; outside the window visible %s (window under the picture 0x%p, child "
+              "0x%p)\n",
+              visible_on_arrival ? "yes" : "NO", hidden_after_rest ? "yes" : "NO", visible_after_move ? "yes" : "NO",
+              visible_on_title ? "yes" : "NO", visible_outside ? "yes" : "NO", static_cast<void *>(under_picture),
+              static_cast<void *>(child));
+  require(visible_on_arrival, "the cursor is visible when it arrives on the picture");
+  std::printf("[check] cursor check: the mouse %s while the cursor rested on the picture (at %ld,%ld, expected %ld,%ld)\n",
+              mouse_still ? "did not move" : "MOVED", rest.x, rest.y, picture.x, picture.y);
+  require(mouse_still, "cursor check inconclusive: the mouse moved during the rest (someone uses the PC)");
+  require(hidden_after_rest, "the cursor is hidden over the picture after the delay without movement");
+  require(visible_after_move, "any movement shows the cursor again");
+  require(visible_on_title, "the cursor is never hidden over the title bar");
+  require(visible_outside, "the cursor is never hidden outside the window");
+  std::puts("[check] cursor check passed");
 }
 
 // CONTROL snapshot for a window size; returns the RGBA8 pixels of the drawn rectangle.
@@ -464,6 +641,16 @@ int run(const std::wstring &gs_process, const std::string &capture, std::uint64_
   const ControlPayload attach{static_cast<std::uint32_t>(ControlKind::attach_window), 0,
                               {reinterpret_cast<std::uint64_t>(parent), 960, 540}};
   session->post(RecordType::control, 0, &attach, sizeof attach);
+  if (options.cursor_check) {
+    require(ready.version_minor >= 2, "--cursor-check needs a protocol 1.2 consumer");
+    const ControlPayload cursor{static_cast<std::uint32_t>(ControlKind::cursor), 0, {kCursorFlagAutoHide, 300, 0}};
+    session->post(RecordType::control, 0, &cursor, sizeof cursor);
+  }
+  const bool send_osd = options.osd && ready.version_minor >= 2 && (ready.flags & kReadyFlagOsdStats) != 0;
+  std::printf("[check] READY protocol %u.%u flags 0x%x; OSD_STATS %s\n", ready.version_major, ready.version_minor,
+              ready.flags, send_osd ? "sent every 30 VSYNCs" : "not sent");
+  std::uint64_t osd_records = 0;
+  VsyncPayload last_vsync{};
 
   // Stall check: a watcher thread measures how long the parent window takes to answer a sent message.
   std::atomic<bool> watching{options.stall_check};
@@ -559,7 +746,27 @@ int run(const std::wstring &gs_process, const std::string &capture, std::uint64_
       VsyncPayload vsync;
       std::memcpy(&vsync, data.data(), sizeof vsync);
       session->post_vsync(vsync);
+      last_vsync = vsync;
       ++vsyncs;
+      if (send_osd && vsyncs % 30 == 0) {
+        // The owner's slice194 night-race F8 numbers per frame (as in the client fixture).
+        OsdStatsPayload stats{};
+        stats.valid = kOsdStatFrameTimes | kOsdStatMainThreadCpu | kOsdStatWorkerBusy | kOsdStatStreamCosts |
+                      kOsdStatWorkerWait | kOsdStatCriticalPath;
+        stats.frames = 30;
+        stats.interval_us = 30 * 16683;
+        stats.frame_time_avg_us = 16683;
+        stats.frame_time_max_us = 17100;
+        stats.main_thread_cpu_us = 8761;
+        stats.worker_busy_us = 6100;
+        stats.stream_write_us = 590;
+        stats.readback_wait_us = 776;
+        stats.worker_wait_us = 3481;
+        stats.critical_path_us = 8761 + 3481 + 776;
+        stats.frame_budget_us = 16683;
+        session->post(RecordType::osd_stats, 0, &stats, sizeof stats);
+        ++osd_records;
+      }
       pump();  // like the game: window messages once per VSYNC
       drain_events(*session);
       if (!resized && vsyncs == frames / 2 && !options.soak && !options.stall_check) {
@@ -618,6 +825,7 @@ int run(const std::wstring &gs_process, const std::string &capture, std::uint64_
   std::printf("[check] %llu VSYNCs in %.1f s (%.1f per second)%s\n", static_cast<unsigned long long>(vsyncs), seconds,
               vsyncs / seconds, options.pace ? ", paced at 60 Hz" : "");
   readback_waits.print("readback waits (producer side)");
+  if (send_osd) std::printf("[check] OSD_STATS records posted: %llu\n", static_cast<unsigned long long>(osd_records));
   if (options.soak) std::printf("[check] soak: %llu resize cycles\n", static_cast<unsigned long long>(soak_cycles));
 
   if (options.stall_check) {
@@ -639,6 +847,7 @@ int run(const std::wstring &gs_process, const std::string &capture, std::uint64_
   require(search.found != nullptr, "the GS window is a child of the parent window");
 
   if (options.click_check) click_check(parent, search.found);
+  if (options.cursor_check) cursor_check(parent, search.found);
   if (options.aspect_check) aspect_check(*session);
 
   if (!options.readback_check.empty()) {
@@ -665,6 +874,11 @@ int run(const std::wstring &gs_process, const std::string &capture, std::uint64_
   require((GetWindowLongW(search.found, GWL_STYLE) & WS_CHILD) != 0, "WS_CHILD style");
   drain_events(*session);
   require(g_errors == 0, "no ERROR records from the GS process");
+  if (!options.overlay_shot.empty()) {
+    overlay_shot(*session, parent, last_vsync, options.overlay_shot);
+    drain_events(*session);
+    require(g_errors == 0, "no ERROR records from the GS process after the overlay shot");
+  }
 
   const ControlPayload shutdown{static_cast<std::uint32_t>(ControlKind::shutdown), 0, {0, 0, 0}};
   session->post(RecordType::control, 0, &shutdown, sizeof shutdown);
@@ -693,7 +907,7 @@ int wmain(int argc, wchar_t **argv) {
   try {
     if (argc < 5) {
       std::fputs("usage: gs_live_check <gs process exe> <file.gscap> <frames> <config.ini> [--kill-at N] [--pace] "
-                 "[--readbacks] [--readback-check accurate|unsynchronized] [--stall-check] [--soak N] [--destroy-at N] [--click-check] [--aspect-check]\n",
+                 "[--readbacks] [--readback-check accurate|unsynchronized] [--stall-check] [--soak N] [--destroy-at N] [--click-check] [--cursor-check] [--osd] [--overlay-shot file.bmp] [--aspect-check]\n",
                  stderr);
       return 2;
     }
@@ -716,6 +930,12 @@ int wmain(int argc, wchar_t **argv) {
         options.destroy_at = std::wcstoull(argv[++i], nullptr, 10);
       else if (arg == L"--click-check")
         options.click_check = true;
+      else if (arg == L"--cursor-check")
+        options.cursor_check = true;
+      else if (arg == L"--overlay-shot" && i + 1 < argc)
+        options.overlay_shot = argv[++i];
+      else if (arg == L"--osd")
+        options.osd = true;
       else if (arg == L"--aspect-check")
         options.aspect_check = true;
       else

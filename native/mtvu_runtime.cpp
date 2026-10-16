@@ -295,6 +295,11 @@ void start(const Settings &settings, const Donor &donor) {
 
 bool enabled() { return rt().running.load(std::memory_order_acquire); }
 
+std::uint64_t worker_busy_us() {
+  const WorkerTotals totals = published_totals(rt());
+  return totals.vu1_us + totals.output_us;
+}
+
 void set_ordered_privileged_consumer(void (*post)(std::uint32_t address, std::uint64_t value)) {
   Runtime &r = rt();
   r.ordered_privileged = post;

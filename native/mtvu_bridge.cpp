@@ -50,6 +50,8 @@ void start_with_donor(const Settings &settings) {
   if (gt4::gs_stream::stream_renderer()) {
     set_ordered_privileged_consumer(&gt4::gs_stream::post_privileged_now);
     gt4::gs_stream::set_privileged_ordering({&queue_privileged, &take_privileged_wait_us, &privileged_async});
+    // TASK-062: the VU1 worker busy time for the GS process's performance overlay (OSD_STATS).
+    gt4::gs_stream::set_worker_busy_source(&worker_busy_us);
   }
 #endif
   start(settings, donor);
