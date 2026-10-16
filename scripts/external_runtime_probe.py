@@ -111,7 +111,7 @@ GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_C
 # docs/launcher/gs-settings.toml; the gt4-gs.ini writer is gs_config_text below (scripts/gs_settings.py).
 GS_SETTINGS_ENV = 'GT4_GS_SETTINGS'
 # TASK-036 (slice193): the minimal gt4-gs.ini values, kept as the names the launcher and tests use.
-GS_SCALES = tuple(str(n) for n in range(1, 9))
+GS_SCALES = tuple(str(n) for n in range(1, 13))
 GS_DEFAULT_SCALE = '3'
 # GT4_GS_ASPECT: display aspect of the GS output. 16:9 is the game's setting (widescreen card); auto is PCSX2's
 # "Auto 4:3/3:2" (used to compare with the TASK-034 proof-of-concept images).
@@ -211,14 +211,14 @@ def gs_settings_from_environment(environment, rows):
     """The checked GS settings of a pcsx2 run, from the table (docs/GS-SETTINGS.md).
 
     GT4_GS_SETTINGS (JSON from play_performance.py --gs-setting ID=VALUE) holds the user settings. The shortcuts
-    GT4_GS_SCALE (upscale, default 3), GT4_GS_ASPECT (aspect) and GT4_GS_READBACK (hw_download_mode, default accurate)
+    GT4_GS_SCALE (upscale, 1 to 12, default 3), GT4_GS_ASPECT (aspect) and GT4_GS_READBACK (hw_download_mode, default accurate)
     set the same rows; a shortcut and a JSON setting for the same row conflict.
     """
     settings = {}
     if environment.get(GS_SETTINGS_ENV):
         settings = gs_settings.settings_from_json(environment[GS_SETTINGS_ENV], rows)
     index = gs_settings.rows_by_id(rows)
-    shortcuts = (('GT4_GS_SCALE', 'upscale', 'GT4_GS_SCALE must be an integer from 1 to 8'),
+    shortcuts = (('GT4_GS_SCALE', 'upscale', 'GT4_GS_SCALE must be an integer from 1 to 12'),
                  ('GT4_GS_ASPECT', 'aspect', 'GT4_GS_ASPECT must be one of ' + ', '.join(
                      gs_settings.offered_choices(index['aspect']))),
                  ('GT4_GS_READBACK', 'hw_download_mode', 'GT4_GS_READBACK must be one of ' + ', '.join(

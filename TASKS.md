@@ -83,6 +83,8 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
 | TASK‑047 | PCSX2 GS deinterlacing in the 480i menus (field and interlace state in the stream) | ✅ Done · owner test 2026-10-16: 480i menus clean on Automatic; root cause missing SYNCV and a one-field-early VSYNC field (protocol 1.1, gt4-gs 0.3.2) |
+| TASK‑048 | Mod manager (texture packs etc.), Content Manager style: browse, install, enable and order mods | 📋 Planned (planning running) |
+| TASK‑049 | GS settings curation for the launcher: Graphics and Advanced pages, reset to defaults, 12x, widescreen finding | ✅ Done · decisions 2026-10-16; default gt4-gs.ini unchanged; 58-row table ([settings](docs/GS-SETTINGS.md)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ## Phase 2 — Android
@@ -509,6 +511,20 @@ State (2026-10-16, slice196): built; owner check pending, no PR.
 - Static Garage menu, frames 1000-1199: slice195 comb 0.50, flicker 3.23; SYNCV with the old field comb 1.00
   (combing); slice196 comb 0.57, flicker 0. Progressive control identical. Samples:
   `private/slice196-deinterlace-samples`; details [GS-LIVE](docs/GS-LIVE.md) section 8.
+
+### TASK-048 - Mod manager (texture packs etc.)
+Planned (planning running, 2026-10-16). Content Manager style: browse, install, enable, order and remove mods (texture
+packs first, then other mods). Texture replacement and dumping leave the GS settings pages and live here (TASK-049
+rows `page = "mods"`). Depends on TASK-040 (texture folder layout) and TASK-019/043 (launcher).
+
+### TASK-049 - GS settings curation for the launcher
+Done (2026-10-16). Owner decisions applied to `docs/launcher/gs-settings.toml` (58 rows, `page`, `order`, `control`,
+`gt4-defaults` profile): Graphics page = renderer choice (PCSX2 GS or CoreGS 1.1), internal resolution slider 1 to 12,
+aspect, FXAA, CAS mode and sharpness; Advanced page = 36 rows pre-configured to the GT4 ideal; texture rows on `mods`.
+Findings (PCSX2 v2.8.2, [GS-SETTINGS](docs/GS-SETTINGS.md)): FSR 1.0 does not exist in v2.8.2 (CAS only);
+12x needs no `ExtendedUpscalingMultipliers` (the device limit is `max texture size / 1280`); READY does not carry the
+device limit yet; widescreen patches are pnach EE patches and are not exposed. `reset_to_defaults()` reproduces the
+default gt4-gs.ini byte for byte. Default gt4-gs.ini unchanged. The `mipmap` key is now `hw_mipmap`.
 
 ## Phase 2 — Android details
 
