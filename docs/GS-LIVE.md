@@ -67,7 +67,10 @@ hard reset instead (no error). Confirmed for the boot-to-menus schedule.
   tree digest (`tree_sha256` over "path, size, sha256" of all 140 files). The package is the **local build** of fork
   commit `acf4f986e` (zip `gt4-gs-0.2.0-live-windows-x64.zip`, sha256 `b32d7f8d...`), recorded in the manifest's
   `gs_package.source`. The CI prerelease `gt4gs-v0.2.0-live` is built from the same commit with another compiler and
-  LTO, so its binary is not the pinned one.
+  LTO, so its binary is not the pinned one. CI run 38908248101 (27 min, dependencies rebuilt because the script
+  changed) published https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v0.2.0-live: `gt4-gs-0.2.0-live-windows-x64.zip`
+  18,227,848 bytes, sha256 `369192e9f3bab26b41fbe428c144f8d9b4d811547e55557201654c5c44362ba9` (includes the FFmpeg DLLs), source zip sha256
+  `47b4dc1485a9a4babfdaf8c7874a51fca1d6a5b56fd215da0fee254a03bb9127`.
 - Each pcsx2 run writes `gt4-gs.ini` into the session folder (minimal settings; TASK-039 owns the full table):
   `Renderer = 14` (Vulkan), `upscale_multiplier` from `GT4_GS_SCALE` / `--gs-scale` (1..8, default 3),
   `accurate_blending_unit = 3` (High), `deinterlace_mode = 0` (Automatic), `AspectRatio` from `GT4_GS_ASPECT`
