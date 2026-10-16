@@ -110,9 +110,12 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
   A/B. The weak-CPU effect is not measured yet (`--cpu-cores N` is the simulation
   switch); it matters most for older PCs and phones.
 - Menus are interlaced like the original game (480p applies in races). With the
-  PCSX2 GS, slice196 (`--mode pcsx2`, gt4-gs 0.3.2) deinterlaces them (TASK-047; the
-  stream lacked SYNCV and presented the wrong field); owner check pending. CoreGS 1.1
-  shows them as before.
+  PCSX2 GS (`--mode pcsx2`, gt4-gs 0.3.2 and later) they are deinterlaced (TASK-047; the
+  stream lacked SYNCV and presented the wrong field). CoreGS 1.1 shows them as before.
+- gt4-gs 0.4.0 (`--mode pcsx2`, TASK-042) turns on Windows Arbitrary Code Guard (no
+  dynamic code in the GS process). It is checked with the owner's AMD driver only; a
+  driver that needs dynamic code there would fail to start the GS (`--mode
+  pcsx2-slice196` keeps 0.3.2).
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
 
 ## Roadmap
@@ -167,7 +170,7 @@ in game before it is merged.
 | TASK‑039 | GS settings table and `gt4-gs.ini` generator | ✅ Done · 51-row settings table generates `gt4-gs.ini`; fork allow-list enforcement pending ([settings](docs/GS-SETTINGS.md)) |
 | TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
 | TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 📋 Planned |
-| TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | 📋 Planned |
+| TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | 🔄 In progress · gt4-gs 0.4.0 has no recompilers, no software JIT and no executable memory; Arbitrary Code Guard on; frames identical to 0.3.2; owner check pending ([live](docs/GS-LIVE.md#9-no-jit-task-042-slice197-gt4-gs-040)) |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019) |
 | TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |

@@ -99,3 +99,18 @@ https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v0.3.1 (prerelease):
   - `SHA256SUMS`
 The zip was downloaded back, checked with `sha256sum -c SHA256SUMS` (both OK) and is the package slice195 pins.
 The tag's CI run was cancelled before publishing (the tag trigger was removed afterwards; the workflow is manual only).
+
+### gt4gs-v0.4.0: JIT-free (task 042, 2026-10-16)
+
+Branch `gt4gs/nojit` (from `gt4gs/main` `660017bb1`), commit `4c8b63a6e`, built with `GT4GS_ONLY=ON` by
+`gt4gs/release-local.ps1` (MSVC cl 19.44.35222, CMake 4.3.1, Ninja 1.13.2, no LTO, deps of `private/slice193-gt4gs-deps`;
+`gt4gs/check-nojit.ps1` passed on the package before zipping). Release:
+https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v0.4.0 (prerelease):
+  - `gt4-gs-0.4.0-windows-x64.zip`, 13,008,479 bytes, SHA-256 `5c92ad003cf26237c3e859a82da6b400132a318479935b60a1ece5382fe1f44d`
+  - `gt4recomp-gs-0.4.0-source.zip`, SHA-256 `95f6a96e3106006a7f694f9ab4b95cb9ce0ad7da34e0bd9f0764fdecc4eed5a0`
+  - `SHA256SUMS`
+Downloaded back, `sha256sum -c SHA256SUMS` OK, byte-identical to the local zip; extracted to
+`private/slice197-gt4gs-release-pkg` (140 files, tree sha256 `e9402cf2...`, `gt4-gs.exe` 8,928,256 bytes, sha256
+`1c4c45da...`), the package slice197 pins. No FFmpeg or x264 DLLs (not needed: gt4-gs.exe does not import them; checked
+by running every replay with the package as shipped). What `GT4GS_ONLY` removes and how it is enforced: [GS-LIVE](GS-LIVE.md)
+section 9.

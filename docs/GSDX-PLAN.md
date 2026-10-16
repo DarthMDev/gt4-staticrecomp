@@ -136,7 +136,8 @@ Stage 1 (MVP, small diff; all GPL, all in the fork):
    handshake (`SCUS-97328`).
 4. `gt4gs/` docs, NOTICE, build scripts, CI. The MIT protocol header is vendored by hash.
 
-Stage 2 (hardening before release, TASK-042): a `GT4GS_ONLY` build that does not compile or reserve the
+Stage 2 (hardening before release, TASK-042; **done 2026-10-16**, `gt4gs-v0.4.0`, slice197: [GS-LIVE](GS-LIVE.md) section 9,
+decision 0070 follow-up): a `GT4GS_ONLY` build that does not compile or reserve the
 EE/IOP/VU recompilers, never maps RWX memory, and forces `CDrawScanline` (or refuses CPU sprite/CLUT render
 settings), so `gt4-gs.exe` contains no JIT code at all. Effort [H] 3-5 sessions; the diff grows to
 CMake source lists plus `#if` around `InitializeCPUProviders`, `Memory.cpp` code mapping and the rec cpu

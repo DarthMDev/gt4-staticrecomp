@@ -461,12 +461,24 @@ reference scene: CoreGS 1.1 vs PCSX2 GS at 1x and 3x, 60 FPS, flat frametime, no
 Parallel: after 037.
 
 ### TASK-042 — JIT-free `gt4-gs.exe`
-Repo: fork, branch `gt4gs/no-jit`. Opus, 3-5 sessions.
+Repos: both, branches `gt4gs/nojit` (fork, from `gt4gs/main` `660017bb1`) and `task/042-gs-nojit` (main, from `a1a06a4`).
+Opus, 1 session.
 Goal: `GT4GS_ONLY` build without EE/IOP/VU recompilers, without RWX code mapping, with the C draw-scanline
 path or CPU sprite/CLUT render refused.
 Acceptance: binary scan finds no recompiler symbols; a VirtualAlloc/VirtualProtect audit shows no executable
 private memory; PoC and live frames unchanged; GSRunner tests still pass.
 Parallel: with 037-041 (fork-only).
+State (2026-10-16, slice197): built and published (`gt4gs-v0.4.0`, zip sha256 `5c92ad00...`); owner windowed check
+pending, no PR.
+- Fork option `GT4GS_ONLY`: no EE/IOP/VU/VIF recompilers, no x86 emitter, no GS software JIT (C rasterizer for CPU
+  sprite/CLUT render and the software renderer; no setting refused), no code area, executable protections refused;
+  Windows Arbitrary Code Guard on at start (works with the AMD Vulkan driver); executable-memory audit in the log.
+- Static check `tools/gs_nojit_check/check-nojit.ps1` (fork `gt4gs/check-nojit.ps1`, run by the release script): 0.4.0
+  passes, 0.3.2 shows 22 markers; `tests/python/test_gs_nojit.py` repeats it on the pinned package.
+- Offline menus replays (slice191 and slice196 streams, 1x and 3x): frames byte-identical to 0.3.2; also with CPU
+  sprite and CLUT render on. Live headless pcsx2 1x 41/41 = slice196; donor 42/42. GS thread time unchanged within
+  noise. `--mode pcsx2` = slice197 (same game runtime as slice196), `--mode pcsx2-slice196` kept.
+  Details [GS-LIVE](docs/GS-LIVE.md) section 9.
 
 ### TASK-043 — Launcher integration
 Repo: main, branch `task/019-launcher` (when the launcher resumes). Haiku, 2-3 sessions.
