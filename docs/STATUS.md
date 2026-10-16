@@ -2,6 +2,13 @@
 
 ## Current state (2026-10-16)
 
+**slice197 (TASK-042, branch `task/042-gs-nojit`, fork `gt4gs/nojit`, `gt4gs-v0.4.0`):** JIT-free `gt4-gs.exe`. Build
+option `GT4GS_ONLY`: no EE/IOP/VU/VIF recompilers, no x86 emitter, no GS software JIT (C rasterizer), no executable
+memory; Windows Arbitrary Code Guard on at start (works with the AMD Vulkan driver). Static check passes (0.3.2: 22
+markers); replayed menu frames byte-identical to 0.3.2 at 1x and 3x; GS thread time unchanged within noise. CTest
+29/29, Python 414 OK, donor 42/42, live pcsx2 41/41 = slice196. `--mode pcsx2` = slice197 (same game runtime). Owner
+windowed check pending. [GS-LIVE](GS-LIVE.md) section 9.
+
 **slice196 (TASK-047, branch `task/047-gs-deinterlace`, fork `gt4gs/deinterlace`, `gt4gs-v0.3.2`):** 480i menus in the
 PCSX2 GS mode. Cause: the stream had no SYNCV (PCSX2 never deinterlaced; fields line-doubled and bouncing) and,
 once SYNCV is sent, gt4-gs 0.3.1 used the previous VSYNC's field (wrong order, combing). Fix: SetGsCrt posts SYNCV;

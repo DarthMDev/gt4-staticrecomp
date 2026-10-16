@@ -67,3 +67,15 @@ protocol are the usual arm's-length arguments, but they are arguments, not a gua
 pair built for one game could still be viewed as one combined work. The owner accepts this risk as with
 0067. Keep GT4-specific logic out of the protocol and never copy PCSX2 code into MIT files. iOS cannot
 spawn executables, so this model does not carry to phase 3 as is.
+
+## Follow-up: JIT-free `gt4-gs.exe` (TASK-042, 2026-10-16)
+
+Since `gt4gs-v0.4.0` (slice197) `gt4-gs.exe` contains and runs no JIT. It is built with the fork option `GT4GS_ONLY`:
+the EE/IOP recompilers, microVU, the VIF unpack recompilers, the x86 emitter and the GS software JIT (xbyak) are not
+compiled; no recompiler code area is mapped and executable page protections are refused; the software rasterizer (CPU
+sprite and CLUT render, software renderer) runs PCSX2's C functions. Enforcement: (1) the static check
+`tools/gs_nojit_check/check-nojit.ps1` (fork `gt4gs/check-nojit.ps1`), run by the fork's release script and repeated by
+`tests/python/test_gs_nojit.py` on the pinned package; (2) Windows Arbitrary Code Guard (`ProhibitDynamicCode`) enabled by
+`gt4-gs.exe` at start, so any dynamic code in the process fails at the OS; (3) an executable-memory audit in the log at
+the end of the stream and at exit. GPU driver shader compilation stays allowed; the AMD driver works under the guard.
+Replayed frames are byte-identical to 0.3.2. Evidence: [GS-LIVE](../GS-LIVE.md) section 9.

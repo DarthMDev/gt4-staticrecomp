@@ -29,8 +29,10 @@ class Slice196PinTests(unittest.TestCase):
     def manifest(self):
         return json.loads((ROOT / 'docs/inputs' / MANIFEST).read_text(encoding='utf-8'))
 
-    def test_mode_pcsx2_selects_slice196(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], (MANIFEST, EXECUTABLE))
+    def test_mode_pcsx2_slice196_stays_selectable(self):
+        # Since slice197 (TASK-042) --mode pcsx2 points at slice197 (same game runtime); slice196 stays selectable.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice196'], (MANIFEST, EXECUTABLE))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'][1], EXECUTABLE)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice195'],
                          ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'))
         self.assertIn(MANIFEST, probe.VU1_AOT_MANIFESTS)

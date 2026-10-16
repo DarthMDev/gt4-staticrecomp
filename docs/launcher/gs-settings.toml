@@ -77,7 +77,7 @@ choices = [
   { name = "d3d12", ini = "15", status = "resolved" },
   { name = "d3d11", ini = "3", status = "resolved" },
 ]
-notes = "GSRendererType (pcsx2/Config.h:271-281): VK = 14, DX12 = 15, DX11 = 3. Loader pcsx2/Pcsx2Config.cpp:1044 (key Renderer). UI values pcsx2/ImGui/FullscreenUI_Settings.cpp:2774-2790. D3D11 and D3D12 are resolved but not offered: the GT4 build is checked on Vulkan only."
+notes = "GSRendererType (pcsx2/Config.h:271-281): VK = 14, DX12 = 15, DX11 = 3. Loader pcsx2/Pcsx2Config.cpp:1044 (key Renderer). UI values pcsx2/ImGui/FullscreenUI_Settings.cpp:2774-2790. D3D11 and D3D12 are resolved but not offered: the GT4 build is checked on Vulkan only. The software renderer (SW = 13) is not offered; in the JIT-free gt4-gs 0.4.0 (TASK-042) it would run the C rasterizer (no software JIT), which is slow and not checked for GT4."
 
 [[setting]]
 id = "upscale"
@@ -924,7 +924,7 @@ type = "bool"
 default = "false"
 written = "when-set"
 status = "pending-TASK-043"
-notes = "Names resolved; hidden and not offered. One row per key comes with the launcher task (TASK-043). Names from pcsx2/Pcsx2Config.cpp:992-1079: UserHacks_align_sprite_X, UserHacks_AutoFlushLevel, UserHacks_CPU_FB_Conversion, UserHacks_ReadTCOnClose, UserHacks_DisableDepthSupport, UserHacks_DisablePartialInvalidation, UserHacks_Disable_Safe_Features, UserHacks_DisableRenderFixes, UserHacks_merge_pp_sprite, UserHacks_ForceEvenSpritePosition, UserHacks_BilinearHack, UserHacks_NativePaletteDraw, UserHacks_TextureInsideRt, UserHacks_Limit24BitDepth, UserHacks_EstimateTextureRegion, UserHacks_DrawBuffering, UserHacks_HalfPixelOffset, UserHacks_round_sprite_offset, UserHacks_native_scaling, UserHacks_TCOffsetX, UserHacks_TCOffsetY, UserHacks_CPUSpriteRenderBW, UserHacks_CPUSpriteRenderLevel, UserHacks_CPUCLUTRender, UserHacks_GPUTargetCLUTMode, UserHacks_SkipDraw_Start, UserHacks_SkipDraw_End. They take effect only with UserHacks = true."
+notes = "Names resolved; hidden and not offered. One row per key comes with the launcher task (TASK-043). Names from pcsx2/Pcsx2Config.cpp:992-1079: UserHacks_align_sprite_X, UserHacks_AutoFlushLevel, UserHacks_CPU_FB_Conversion, UserHacks_ReadTCOnClose, UserHacks_DisableDepthSupport, UserHacks_DisablePartialInvalidation, UserHacks_Disable_Safe_Features, UserHacks_DisableRenderFixes, UserHacks_merge_pp_sprite, UserHacks_ForceEvenSpritePosition, UserHacks_BilinearHack, UserHacks_NativePaletteDraw, UserHacks_TextureInsideRt, UserHacks_Limit24BitDepth, UserHacks_EstimateTextureRegion, UserHacks_DrawBuffering, UserHacks_HalfPixelOffset, UserHacks_round_sprite_offset, UserHacks_native_scaling, UserHacks_TCOffsetX, UserHacks_TCOffsetY, UserHacks_CPUSpriteRenderBW, UserHacks_CPUSpriteRenderLevel, UserHacks_CPUCLUTRender, UserHacks_GPUTargetCLUTMode, UserHacks_SkipDraw_Start, UserHacks_SkipDraw_End. They take effect only with UserHacks = true. JIT-free gt4-gs 0.4.0 (TASK-042): CPU sprite render (UserHacks_CPUSpriteRenderBW/Level) and CPU CLUT render (UserHacks_CPUCLUTRender) run the C rasterizer instead of the software JIT; frames are byte-identical to 0.3.2 on the menus stream, the GS thread is slower (6.5 against 5.4 ms/frame with both on). No setting needs the JIT, so none is refused; GT4 uses neither by default."
 
 [[setting]]
 id = "game_fixes"
