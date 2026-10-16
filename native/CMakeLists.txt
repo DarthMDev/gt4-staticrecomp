@@ -33,7 +33,9 @@ if(GT4_PERF_RUNTIME_SOURCE)
     set(GT4_PERF_ASYNC_PORT OFF)
     set(GT4_PERF_PACING_PORT OFF)
     set(GT4_GS_STREAM_PORT OFF)
-    if(PORT STREQUAL "${GT4_PRIVATE_BASE}/private/slice191-gs-stream-port" AND
+    # slice200-port is the slice191 adapter with a --portable-check entry point (main.cpp only).
+    if((PORT STREQUAL "${GT4_PRIVATE_BASE}/private/slice191-gs-stream-port" OR
+        PORT STREQUAL "${GT4_PRIVATE_BASE}/private/slice200-port") AND
        SHADERS STREQUAL "${GT4_PRIVATE_BASE}/private/slice153-pacing-shaders")
         # TASK-035 (slice191): the slice153 pacing port with the GS stream seam in gs.cpp
         # (prepare_external_vulkan.py --gs-stream-hooks); needs the slice191 runtime capsule.
@@ -117,6 +119,29 @@ foreach(source IN ITEMS ipu/ipu gs/gif gs/queue gs/raster
                         iop/io iop/cdvd iop/sif iop/cdvdfsv)
     list(APPEND RUNTIME_FILES "${DONOR}/runtime/src/${source}.cpp")
 endforeach()
+# TASK-058 (slice200): crash-safe memory card. A memcard capsule (scripts/prepare_memcard_flush.py) replaces the donor
+# iop/sio2.cpp with the derived source whose flush writes through native/memcard_store.cpp (temporary file, flush,
+# rename) and flushes a pending save on exit. The manifest pins the derived file's SHA-256.
+set(GT4_MEMCARD_RUNTIME_SOURCE "" CACHE PATH "Verified memory card capsule: derived sio2.cpp and runtime.json")
+set(GT4_MEMCARD_FLUSH_ENABLED OFF)
+if(GT4_MEMCARD_RUNTIME_SOURCE)
+    get_filename_component(memcard_capsule "${GT4_MEMCARD_RUNTIME_SOURCE}" ABSOLUTE)
+    if(NOT EXISTS "${memcard_capsule}/sio2.cpp" OR NOT EXISTS "${memcard_capsule}/runtime.json")
+        message(FATAL_ERROR "The memory card capsule needs sio2.cpp and runtime.json")
+    endif()
+    file(READ "${memcard_capsule}/runtime.json" memcard_manifest)
+    string(JSON memcard_expected GET "${memcard_manifest}" sio2_sha256)
+    file(SHA256 "${memcard_capsule}/sio2.cpp" memcard_actual)
+    if(NOT memcard_actual STREQUAL memcard_expected)
+        message(FATAL_ERROR "Memory card sio2.cpp differs from its runtime.json pin")
+    endif()
+    list(FILTER RUNTIME_FILES EXCLUDE REGEX "/iop/sio2\\.cpp$")
+    list(APPEND RUNTIME_FILES "${memcard_capsule}/sio2.cpp")
+    # The donor sio2.cpp includes its own folder (sio2.hpp): keep that include path for the derived file.
+    set_source_files_properties("${memcard_capsule}/sio2.cpp" PROPERTIES INCLUDE_DIRECTORIES "${DONOR}/runtime/src/iop")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${memcard_capsule}/sio2.cpp")
+    set(GT4_MEMCARD_FLUSH_ENABLED ON)
+endif()
 add_library(ps2runtime_vulkan STATIC ${RUNTIME_FILES} "${PORT}/gs.cpp" "${PORT}/gpu.cpp" native_vulkan.cpp)
 # Pure pacing types (present mode names, rate control) shared by the host and the Vulkan adapter.
 add_library(gt4_pacing STATIC pacing.cpp)
@@ -124,7 +149,22 @@ target_compile_options(gt4_pacing PRIVATE /W4)
 # Pure window-mode state and the GT4_FORCE_480P race display index (slice164).
 add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp)
 target_compile_options(gt4_quickfix PRIVATE /W4)
-target_link_libraries(ps2runtime_vulkan PUBLIC gt4_pacing gt4_quickfix)
+target_link_libraries(ps2runtime_vulkan PUBLIC gt4_pacing gt4_quickfix gt4_install_paths)
+# TASK-059 (slice200): installed-folder paths (<exe folder>\shaders, <exe folder>\gs\gt4-gs.exe) and --portable-check.
+add_library(gt4_install_paths STATIC install_paths.cpp)
+target_compile_options(gt4_install_paths PRIVATE /W4)
+target_compile_definitions(gt4_install_paths PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_include_directories(gt4_install_paths PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+# TASK-025 Part A / TASK-058: atomic memory card writer, used by the memcard capsule's sio2.cpp.
+add_library(gt4_memcard STATIC memcard_store.cpp)
+target_compile_options(gt4_memcard PRIVATE /W4)
+if(GT4_MEMCARD_FLUSH_ENABLED)
+    target_link_libraries(ps2runtime_vulkan PUBLIC gt4_memcard)
+endif()
+add_executable(memcard_store_fixture memcard_store_fixture.cpp)
+target_link_libraries(memcard_store_fixture PRIVATE gt4_memcard)
+target_compile_options(memcard_store_fixture PRIVATE /W4)
+add_test(NAME native_memcard_store COMMAND $<TARGET_FILE:memcard_store_fixture> "${CMAKE_CURRENT_BINARY_DIR}/memcard_store_work")
 add_library(gt4_perf_probe STATIC perf_probe.cpp)
 # TASK-011 step 0 counters (linked into the runtime only with the slice169 capsule).
 add_library(gt4_mtvu_measure STATIC mtvu_measure.cpp)
@@ -155,7 +195,7 @@ add_library(gt4_gs_stream STATIC gs_stream/gs_stream_ipc.cpp gs_stream/gs_stream
 target_include_directories(gt4_gs_stream PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/gs_stream")
 target_compile_options(gt4_gs_stream PRIVATE /W4)
 add_library(gt4_gs_stream_client STATIC gs_stream/gs_stream_client.cpp)
-target_link_libraries(gt4_gs_stream_client PUBLIC gt4_gs_stream gt4_perf_probe)
+target_link_libraries(gt4_gs_stream_client PUBLIC gt4_gs_stream gt4_perf_probe gt4_install_paths)
 target_include_directories(gt4_gs_stream_client PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(gt4_gs_stream_client PRIVATE _CRT_SECURE_NO_WARNINGS)
 target_compile_options(gt4_gs_stream_client PRIVATE /W4)
@@ -333,6 +373,10 @@ if(GT4_PERF_RUNTIME_SOURCE)
             endif()
         endif()
     endif()
+    # TASK-059 (slice200): the --portable-check port (slice200-port) pins its own main.cpp.
+    if(PORT STREQUAL "${GT4_PRIVATE_BASE}/private/slice200-port")
+        set(perf_manifest_path "${GT4_ROOT}/docs/inputs/slice200-gs-stream-runtime.json")
+    endif()
     file(READ "${perf_manifest_path}" perf_manifest)
     execute_process(COMMAND git -C "${DONOR}" rev-parse HEAD OUTPUT_VARIABLE perf_donor_head
         OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE perf_git_result)
@@ -473,6 +517,11 @@ target_compile_options(native_host_io PRIVATE /W4)
 add_executable(gt4vulkan "${PORT}/main.cpp" window.cpp)
 target_include_directories(gt4vulkan PRIVATE "${PORT}")
 target_compile_definitions(gt4vulkan PRIVATE PS2_WINDOW)
+target_include_directories(gt4vulkan PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+if(GT4_MEMCARD_FLUSH_ENABLED)
+    # window.cpp calls the capsule's flush_cards_now() on exit (TASK-025 Part A / TASK-058).
+    target_compile_definitions(gt4vulkan PRIVATE GT4_MEMCARD_FLUSH_OVERLAY)
+endif()
 target_link_libraries(gt4vulkan PRIVATE
     "${GAME_LIBRARY}"
     ps2runtime_vulkan native_host_io user32)

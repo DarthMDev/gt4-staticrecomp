@@ -1351,3 +1351,74 @@ python scripts\external_runtime_probe.py C:/Antigravity/gt4-staticrecomp/private
 
 Add `GT4_RENDERER=pcsx2 GT4_GS_SCALE=1 GT4_GS_ASPECT=auto` for the pcsx2 runs (`GT4_MTVU_REPORT_EVERY=500` for the F8 lines).
 Details: [GS-LIVE](GS-LIVE.md) section 10.5.
+
+## Slice200 - release 1.0.0 hardening (TASK-058 crash-safe card, TASK-059 installed folder)
+
+Branch `task/058-059-release-hardening` (worktree `C:\Antigravity\gt4-wt-058-harden`, from main `3b5334d`). The game
+build changes: the executable, a new port (`private/slice200-port`, `main.cpp` only) and a new memory card capsule
+(`private/slice200-memcard-runtime`). The GS package stays gt4-gs 0.4.0 (`private/slice197-gt4gs-release-pkg`).
+
+- TASK-058, memory card: the atomic writer of TASK-025 Part A (`native/memcard_store.*`, `memcard_store_fixture.cpp`,
+  `scripts/prepare_memcard_flush.py`, `tests/python/test_memcard_flush.py`) was on `task/025-save-manager` (commit
+  `c9e90bd`), not on main; it is imported here with its CMake and `window.cpp` hunks. The memcard capsule is derived by
+  `scripts/prepare_memcard_flush.py --assets-root <main checkout>` into `private/slice200-memcard-runtime` (`sio2.cpp`,
+  `runtime.json` with its SHA-256 `8e3bf667...`). CMake option `GT4_MEMCARD_RUNTIME_SOURCE` replaces the donor
+  `iop/sio2.cpp`, links `gt4_memcard` and defines `GT4_MEMCARD_FLUSH_OVERLAY` for `gt4vulkan` (window.cpp calls
+  `flush_cards_now()` after `emulate()` returns, which covers the halt after the GS-process grace VSYNCs as well).
+  A failed write keeps the card dirty and retries after 50 VBlanks.
+- TASK-059, installed folder: `native/install_paths.*` (shaders in `<exe folder>\shaders`, else the build-time folder;
+  GS process `GT4_GS_PROCESS`, else `<exe folder>\gs\gt4-gs.exe`), used by `native_vulkan.cpp` and `gs_stream_client.cpp`;
+  `--portable-check` and the headless exit flush (`flush_cards_now()` after `emulate()`) in the port `main.cpp`. The TASK-019 branch version of the shader change had a broken `printf`
+  string (a literal line break) and was rewritten here.
+- Pins: `docs/inputs/slice200-pcsx2.json` (new; `--mode pcsx2` = slice200; `--mode pcsx2-slice199` keeps the slice199
+  runtime) and `docs/inputs/slice200-gs-stream-runtime.json` (new port manifest: the slice191 manifest with the new
+  `main.cpp` hash). slice199 and slice191 pins are not edited.
+- `--mode main` (slice178) is not rebuilt: its build is not shared with slice200, so it keeps the old card flush and no
+  `--portable-check`. A slice200 main build would need its own pin.
+
+Build (fresh directories in the main checkout; `cmd /c` with the VS x64 environment, same cache as slice198 except the
+new capsules):
+
+```
+cmake -S C:\Antigravity\gt4-wt-058-harden -B C:\Antigravity\gt4-staticrecomp\private\slice200-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=<main>/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=<main>/private/slice191-gs-stream-runtime -DGT4_PORT_DIR=<main>/private/slice200-port ^
+  -DGT4_SHADER_DIR=<main>/private/slice153-pacing-shaders -DGT4_VU1_GENERATED_DIR=<main>/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=<main>/private/slice160-vu0-gen-r3 -DGT4_VU0_IMAGE_FILE=<main>/private/slice160-vu0-image/vu0_image.bin ^
+  -DGT4_VU_CORPUS_DIR=<main>/private/slice155-vu1-full-corpus -DGT4_MEMCARD_RUNTIME_SOURCE=<main>/private/slice200-memcard-runtime
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice200-build\build
+```
+
+Result: `gt4vulkan.exe` 95,680,000 bytes, sha256 `256c883b...` (the slice198 build was 95,667,712 bytes).
+
+Checks (2026-10-16, build `private/slice200-build/build`):
+
+- CTest 29/29 (new: `native_memcard_store`, the atomic writer with the crash-injection cases).
+- Crash-safe card, kill test (`tests/python/test_memcard_kill.py`): the fixture `memcard_store_fixture --writer <card> 0`
+  rewrites a copy in two alternating complete images; the test kills it 25 times at random moments (TerminateProcess) and
+  requires the card to be byte-identical to one of the two images. Passed.
+- Installed paths (`tests/python/test_portable_install.py`): installed shaders and GS package found next to the
+  executable; missing shader fails (exit 1); `GT4_GS_PROCESS` override reported; build-time fallback. Passed.
+- Distribution (`tests/python/test_make_distribution.py`): folder content, no GS package, no game data, changed exe
+  refused, output outside `private/` refused. Passed.
+- Donor headless, `--mode`-equivalent command from the distribution folder (`private/slice200-dist`, see
+  [DISTRIBUTION](DISTRIBUTION.md)): 42/42 frames identical to `private/slice157-smoke/headless-157/frames`, and to the
+  slice199 donor run.
+- pcsx2 headless from the distribution folder (`GT4_GS_PROCESS` = slice197 gt4-gs 0.4.0): 41/41 PNG dumps identical to
+  the slice199 pcsx2 run; Arbitrary Code Guard on.
+- Card in those runs: the menus schedule (4,200 frames, the slice157 presses) never saves. The `card.ps2` of the donor
+  and pcsx2 runs is byte-identical to the seed (`b757feff...`), as is the slice199 donor run. So the headless byte
+  comparison of a saved card is not available for this schedule; the save path is covered by the fixture, the kill test
+  and the build. An in-game save check is the owner's test.
+
+Path audit (`gt4vulkan.exe`): one build-machine string remains, `C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders`
+(the build-time shader fallback, kept for development builds). No pdb path, no user name. Details: [DISTRIBUTION](DISTRIBUTION.md).
+
+Distribution: `scripts/make_distribution.py` wrote `private/slice200-dist` (16 files: `gt4vulkan.exe`, `shaders/*.spv`,
+`vcruntime140.dll`, `msvcp140.dll`, `msvcp140_atomic_wait.dll`, `licenses/`, `MANIFEST.json`). No gt4-gs package, no game
+data.
+
+Worktree copies: the pinned `private/` inputs of slice200 were copied (files, no links) into `C:\Antigravity\gt4-wt-058-harden\private`
+and checked by size and SHA-256 (16 checks; the 140-file gt4-gs package tree `e9402cf2...`). The disc image
+(`Gran Turismo 4 (USA) (v2.00).iso`, 5.3 GB) is not copied: the probe checks it at the checkout root.

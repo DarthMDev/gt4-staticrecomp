@@ -5,6 +5,7 @@
 #include "gs_stream_file.hpp"
 #include "gs_stream_ipc.hpp"
 #include "perf_probe.hpp"
+#include "../install_paths.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -17,6 +18,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <filesystem>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -184,6 +187,13 @@ std::string ascii(const char *text, std::size_t size) {
   std::size_t length = 0;
   while (length < size && text[length]) ++length;
   return std::string(text, length);
+}
+
+// TASK-059: the GS process path. GT4_GS_PROCESS wins; otherwise <executable folder>\gs\gt4-gs.exe (install_paths.cpp)
+// is used when that file exists. Returns an empty string when neither is available.
+std::string gs_process_path() {
+  if (const char *value = std::getenv("GT4_GS_PROCESS"); value && *value) return value;
+  return gt4::install::installed_gs_process().string();
 }
 
 class Client {
@@ -400,8 +410,11 @@ class Client {
   }
 
   void start_process() {
-    const char *process = std::getenv("GT4_GS_PROCESS");
-    if (!process || !*process) refuse("GT4_RENDERER=pcsx2 needs GT4_GS_PROCESS=<path of the GS process>");
+    // TASK-059: GT4_GS_PROCESS names the GS process; an installed game without it uses <game folder>\gs\gt4-gs.exe.
+    const std::string process_path = gs_process_path();
+    const char *process = process_path.c_str();
+    if (process_path.empty())
+      refuse("GT4_RENDERER=pcsx2 needs GT4_GS_PROCESS=<path of the GS process> or <game folder>\\gs\\gt4-gs.exe");
     handshake_timeout_ms_ = environment_number("GT4_GS_HANDSHAKE_TIMEOUT_MS", kHandshakeTimeoutMs, kHandshakeTimeoutMinMs,
                                                kHandshakeTimeoutMaxMs);
     lost_grace_frames_ = environment_number("GT4_GS_LOST_GRACE_FRAMES", kLostGraceFrames, 0, kLostGraceMaxFrames);
