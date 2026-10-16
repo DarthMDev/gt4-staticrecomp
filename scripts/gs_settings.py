@@ -29,7 +29,7 @@ PAGES = ('Graphics', 'Display', 'Advanced')
 TYPES = ('bool', 'int', 'float', 'enum', 'string', 'path')
 VISIBILITIES = ('basic', 'advanced', 'hidden')
 WRITTEN = ('always', 'when-set', 'launcher', 'never')
-STATUS_PATTERN = re.compile(r'ok|TBD-fork|pending-TASK-\d{3}')
+STATUS_PATTERN = re.compile(r'ok|resolved|TBD-fork|pending-TASK-\d{3}')
 ID_PATTERN = re.compile(r'[a-z][a-z0-9_]*')
 ENV_PATTERN = re.compile(r'GT4_[A-Z0-9_]+')
 SECTION_ORDER = ('EmuCore/GS', 'EmuCore', 'Folders', 'GT4GS')
@@ -95,7 +95,7 @@ def _row_errors(row):
     if row['written'] not in WRITTEN:
         errors.append(f'{name}: written must be one of {", ".join(WRITTEN)}')
     if not STATUS_PATTERN.fullmatch(row['status']):
-        errors.append(f'{name}: status must be ok, TBD-fork or pending-TASK-NNN')
+        errors.append(f'{name}: status must be ok, resolved, TBD-fork or pending-TASK-NNN')
     if row['section'] and row['section'] not in SECTION_ORDER:
         errors.append(f'{name}: section must be one of {", ".join(SECTION_ORDER)}')
     if row['written'] == 'never':

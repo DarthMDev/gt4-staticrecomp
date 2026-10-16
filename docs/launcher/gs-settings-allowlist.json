@@ -33,10 +33,6 @@
     },
     {
       "section": "EmuCore/GS",
-      "key": "Dithering"
-    },
-    {
-      "section": "EmuCore/GS",
       "key": "DumpReplaceableMipmaps"
     },
     {
@@ -53,15 +49,7 @@
     },
     {
       "section": "EmuCore/GS",
-      "key": "FXAA"
-    },
-    {
-      "section": "EmuCore/GS",
       "key": "HWDownloadMode"
-    },
-    {
-      "section": "EmuCore/GS",
-      "key": "HWMipmap"
     },
     {
       "section": "EmuCore/GS",
@@ -74,10 +62,6 @@
     {
       "section": "EmuCore/GS",
       "key": "LoadTextureReplacementsAsync"
-    },
-    {
-      "section": "EmuCore/GS",
-      "key": "ManualUserHacks"
     },
     {
       "section": "EmuCore/GS",
@@ -105,18 +89,6 @@
     },
     {
       "section": "EmuCore/GS",
-      "key": "PCRTCAntiBlur"
-    },
-    {
-      "section": "EmuCore/GS",
-      "key": "PCRTCOffsets"
-    },
-    {
-      "section": "EmuCore/GS",
-      "key": "PCRTCOverscan"
-    },
-    {
-      "section": "EmuCore/GS",
       "key": "PrecacheTextureReplacements"
     },
     {
@@ -125,11 +97,35 @@
     },
     {
       "section": "EmuCore/GS",
+      "key": "ShadeBoost"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Brightness"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Contrast"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Gamma"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "ShadeBoost_Saturation"
+    },
+    {
+      "section": "EmuCore/GS",
       "key": "TVShader"
     },
     {
       "section": "EmuCore/GS",
       "key": "TriFilter"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "UserHacks"
     },
     {
       "section": "EmuCore/GS",
@@ -145,11 +141,35 @@
     },
     {
       "section": "EmuCore/GS",
+      "key": "dithering_ps2"
+    },
+    {
+      "section": "EmuCore/GS",
       "key": "filter"
     },
     {
       "section": "EmuCore/GS",
+      "key": "fxaa"
+    },
+    {
+      "section": "EmuCore/GS",
       "key": "linear_present_mode"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "mipmap"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "pcrtc_antiblur"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "pcrtc_offsets"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "pcrtc_overscan"
     },
     {
       "section": "EmuCore/GS",

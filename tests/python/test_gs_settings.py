@@ -45,8 +45,8 @@ def by_id():
 class TableSchemaTests(unittest.TestCase):
     def test_table_loads_and_has_one_row_per_setting(self):
         table = rows()
-        self.assertEqual(len(table), 46)
-        self.assertEqual(len({row['id'] for row in table}), 46)
+        self.assertEqual(len(table), 50)
+        self.assertEqual(len({row['id'] for row in table}), 50)
 
     def test_every_row_has_the_documented_columns(self):
         for row in rows():
@@ -196,7 +196,7 @@ class IniTests(unittest.TestCase):
         self.assertEqual(text.splitlines(), [
             gs_settings.INI_HEADER, '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 6',
             'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 4:3', 'VsyncEnable = true',
-            'DisableMailboxPresentation = true', 'FXAA = true'])
+            'DisableMailboxPresentation = true', 'fxaa = true'])
 
     def test_sections_follow_the_fixed_order(self):
         settings = {'game_fixes': 'true', 'upscale': '2'}
@@ -314,7 +314,7 @@ class ProbeEnvironmentTests(unittest.TestCase):
         text = probe.gs_config_text({'GT4_GS_SETTINGS': json.dumps({'upscale': 2, 'fxaa': True})})
         self.assertIn('upscale_multiplier = 2\n', text)
         self.assertIn('[EmuCore/GS]\n', text)
-        self.assertIn('FXAA = true\n', text)
+        self.assertIn('fxaa = true\n', text)
 
     def test_shortcut_and_json_conflicts_are_refused(self):
         with self.assertRaisesRegex(ValueError, 'both set upscale'):
@@ -331,6 +331,129 @@ class ProbeEnvironmentTests(unittest.TestCase):
     def test_present_mode_maps_to_vsync_and_mailbox(self):
         self.assertIn('VsyncEnable = false\n', probe.gs_config_text({'GT4_PRESENT_MODE': 'immediate'}))
         self.assertIn('DisableMailboxPresentation = false\n', probe.gs_config_text({'GT4_PRESENT_MODE': 'mailbox'}))
+
+
+# Value checks for the rows resolved from the PCSX2 v2.8.2 sources (commit fd9d310c; citations in the table notes).
+# Each entry: launcher id -> (INI key, {launcher name: INI value}, default launcher name).
+ENUM_EXPECTED = {
+    'renderer': ('Renderer', {'vulkan': '14', 'd3d12': '15', 'd3d11': '3'}, 'vulkan'),
+    'filter': ('filter', {'nearest': '0', 'bilinear-forced': '1', 'bilinear-ps2': '2',
+                          'bilinear-forced-sprite-excluded': '3'}, 'bilinear-ps2'),
+    'trilinear': ('TriFilter', {'automatic': '-1', 'off': '0', 'ps2': '1', 'forced': '2'}, 'automatic'),
+    'anisotropic': ('MaxAnisotropy', {'off': '0', '2x': '2', '4x': '4', '8x': '8', '16x': '16'}, 'off'),
+    'blending': ('accurate_blending_unit', {'minimum': '0', 'basic': '1', 'medium': '2', 'high': '3',
+                                           'full': '4', 'maximum': '5'}, 'high'),
+    'dithering': ('dithering_ps2', {'off': '0', 'scaled': '1', 'unscaled': '2', 'force-32bit': '3'}, 'unscaled'),
+    'texture_preloading': ('texture_preloading', {'none': '0', 'partial': '1', 'full': '2'}, 'full'),
+    'deinterlace': ('deinterlace_mode', {'automatic': '0', 'off': '1', 'weave-tff': '2', 'weave-bff': '3',
+                                         'bob-tff': '4', 'bob-bff': '5', 'blend-tff': '6', 'blend-bff': '7',
+                                         'adaptive-tff': '8', 'adaptive-bff': '9'}, 'automatic'),
+    'fmv_aspect': ('FMVAspectRatioSwitch', {'off': 'Off', 'auto': 'Auto 4:3/3:2', '4:3': '4:3', '16:9': '16:9',
+                                            '10:7': '10:7'}, 'off'),
+    'linear_present': ('linear_present_mode', {'off': '0', 'smooth': '1', 'sharp': '2'}, 'smooth'),
+    'cas_mode': ('CASMode', {'off': '0', 'sharpen-only': '1', 'sharpen-and-resize': '2'}, 'off'),
+    'tv_shader': ('TVShader', {'none': '0', 'scanline': '1', 'diagonal': '2', 'triangular': '3', 'wave': '4',
+                               'lottes-crt': '5', 'rgss-4x': '6', 'agss-nx': '7'}, 'none'),
+    'hw_download_mode': ('HWDownloadMode', {'enabled': '0', 'enabled-force-full': '1', 'no-readbacks': '2',
+                                            'unsynchronized': '3', 'disabled': '4'}, 'enabled'),
+    'osd_messages_pos': ('OsdMessagesPos', {'none': '0', 'top-left': '1', 'top-center': '2', 'top-right': '3',
+                                            'center-left': '4', 'center': '5', 'center-right': '6',
+                                            'bottom-left': '7', 'bottom-center': '8', 'bottom-right': '9'},
+                         'top-left'),
+}
+
+# Integer rows: id -> (INI key, min, max, default).
+NUMBER_EXPECTED = {
+    'cas_sharpness': ('CASSharpness', 0, 100, '50'),
+    'osd_scale': ('OsdScale', 25, 500, '100'),
+    'shade_boost_brightness': ('ShadeBoost_Brightness', 1, 100, '50'),
+    'shade_boost_contrast': ('ShadeBoost_Contrast', 1, 100, '50'),
+    'shade_boost_gamma': ('ShadeBoost_Gamma', 1, 100, '50'),
+    'shade_boost_saturation': ('ShadeBoost_Saturation', 1, 100, '50'),
+}
+
+# Keys corrected in TASK-039 (the loader names, pcsx2/Pcsx2Config.cpp).
+KEY_EXPECTED = {
+    'fxaa': 'fxaa',
+    'manual_hacks': 'UserHacks',
+    'mipmap': 'mipmap',
+    'antiblur': 'pcrtc_antiblur',
+    'offsets': 'pcrtc_offsets',
+    'overscan': 'pcrtc_overscan',
+    'shade_boost': 'ShadeBoost',
+    'adapter': 'Adapter',
+    'game_fixes': 'EnableGameFixes',
+}
+
+
+class ResolvedValueTests(unittest.TestCase):
+    def test_no_row_is_left_unresolved_except_pending_tasks(self):
+        statuses = {row['id']: row['status'] for row in rows()}
+        self.assertNotIn('TBD-fork', statuses.values())
+        self.assertEqual({identifier for identifier, status in statuses.items() if status.startswith('pending')},
+                         {'gt4_readback', 'texture_load', 'texture_load_async', 'texture_precache', 'texture_dump',
+                          'texture_dump_mipmaps', 'texture_dump_fmv', 'user_hacks'})
+
+    def test_enum_keys_names_and_ini_values(self):
+        for identifier, (key, expected, default) in ENUM_EXPECTED.items():
+            row = by_id()[identifier]
+            self.assertEqual(row['key'], key, identifier)
+            self.assertEqual({choice['name']: choice['ini'] for choice in row['choices']}, expected, identifier)
+            self.assertEqual(row['default'], default, identifier)
+            self.assertIn(default, expected, identifier)
+
+    def test_number_rows_keys_and_ranges(self):
+        for identifier, (key, minimum, maximum, default) in NUMBER_EXPECTED.items():
+            row = by_id()[identifier]
+            self.assertEqual((row['key'], row['min'], row['max'], row['default']), (key, minimum, maximum, default),
+                             identifier)
+
+    def test_shade_boost_switch_is_a_bool(self):
+        row = by_id()['shade_boost']
+        self.assertEqual((row['type'], row['key'], row['default']), ('bool', 'ShadeBoost', 'false'))
+
+    def test_corrected_keys_match_the_loader(self):
+        for identifier, key in KEY_EXPECTED.items():
+            self.assertEqual(by_id()[identifier]['key'], key, identifier)
+        self.assertEqual(by_id()['adapter']['default'], '')
+
+    def test_hardware_readback_mapping(self):
+        choices = {choice['name']: choice for choice in by_id()['hw_download_mode']['choices']}
+        self.assertEqual(choices['enabled']['ini'], '0')
+        self.assertEqual(choices['unsynchronized']['ini'], '3')
+        self.assertEqual(choices['unsynchronized']['status'], 'pending-TASK-037')
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet'):
+            gs_settings.parse_value(by_id()['hw_download_mode'], 'unsynchronized')
+
+    def test_resolved_rows_are_not_settable_or_offered(self):
+        offered_ids = {row['id'] for row in gs_settings.offered(rows())}
+        for row in rows():
+            if row['status'] != 'resolved':
+                continue
+            self.assertNotIn(row['id'], offered_ids, row['id'])
+            value = str(row['min']) if row['type'] == 'int' else row['default']
+            with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet', msg=row['id']):
+                gs_settings.parse_value(row, value)
+        self.assertEqual(gs_settings.offered_choices(by_id()['deinterlace']), ['automatic'])
+        self.assertEqual(gs_settings.offered_choices(by_id()['blending']), ['high'])
+        self.assertEqual(gs_settings.offered_choices(by_id()['renderer']), ['vulkan'])
+
+    def test_resolved_values_stay_out_of_the_default_ini(self):
+        text = gs_settings.render_ini(rows())
+        for key in ('filter', 'dithering_ps2', 'UserHacks', 'ShadeBoost', 'TVShader', 'Adapter'):
+            self.assertNotIn(key + ' =', text)
+
+    def test_allow_list_has_every_keyed_row(self):
+        entries = {(entry['section'], entry['key']) for entry in
+                   json.loads(gs_settings.allowlist_text(rows()))['entries']}
+        for row in rows():
+            if row['section'] and row['key']:
+                self.assertIn((row['section'], row['key']), entries, row['id'])
+        self.assertIn(('EmuCore/GS', 'dithering_ps2'), entries)
+        self.assertNotIn(('EmuCore/GS', 'Dithering'), entries)
+        self.assertNotIn(('EmuCore/GS', 'ManualUserHacks'), entries)
+        self.assertNotIn(('EmuCore/GS', 'HWMipmap'), entries)
+        self.assertNotIn(('EmuCore/GS', 'FXAA'), entries)
 
 
 if __name__ == '__main__':
