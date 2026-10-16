@@ -2,6 +2,18 @@
 
 ## Current state (2026-10-16)
 
+**slice195 (TASK-038 click fix):** owner night race with slice194: accurate 59.97 FPS, 69 late frames (was 213),
+unsynchronized 60.00 FPS but headlight flares missing; accurate stays the default. A click on the picture deactivated
+the game window; gt4-gs 0.3.1 gives the foreground back (visible click fixture passes). `--mode pcsx2` = slice195.
+
+**TASK-037/038 (slice194, branch `task/037-038-gs-window`, fork `gt4gs/window`, tag `gt4gs-v0.3.0`):** night-race late
+frames explained (one readback per frame removes the GS buffering, so shader/pipeline compiles and GS-thread spikes
+land in the game frame; the shader cache was in `Documents\PCSX2`, not in our folder). Readback modes
+`--gs-readback accurate|unsynchronized`, F8 readback histograms, our own cache/data folders, deferred swap chain
+acquire, window hardening (detached input queues, minimize, close while the GS window hangs) and crash handling
+(card flush grace, restart offer). CTest 29/29, Python 350 OK, donor 42/42, pcsx2 41/41. Owner windowed test pending.
+[GS-LIVE](GS-LIVE.md) section 6.
+
 **TASK-036 (slice193, branch `task/036-gs-live`, fork `gt4gs/live`, 2026-10-16):** the live PCSX2 GS process
 `gt4-gs.exe` runs the game's GS stream (`--mode pcsx2`, `--gs-scale N`). Headless: CTest 29/29, Python 335 OK,
 donor frames 42/42, live frames 41/41 identical to the offline `--replay-gscap` frames and frames 300/700 identical

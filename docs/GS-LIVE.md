@@ -147,3 +147,113 @@ the owner test and TASK-041.
 - First-run shader compile stutter with the persistent cache (`private/slice193-gt4gs-cache`).
 - Behaviour when the game window thread stalls while `gt4-gs.exe` attaches (TASK-038 hardening).
 - The CI prerelease binary was not run locally (only its build and publication are checked).
+
+## 6. TASK-037/038: readbacks, cache, window and crash handling (slice194)
+
+Status: **built and checked headless; owner windowed test pending** (2026-10-16). Branch `task/037-038-gs-window`
+(main) and `gt4gs/window` in the fork (commit `10851476b`, tag `gt4gs-v0.3.0`). `--mode pcsx2` now selects
+[`slice194-pcsx2.json`](inputs/slice194-pcsx2.json); `--mode pcsx2-slice193` keeps the TASK-036 build.
+
+### 6.1 Night race late frames (owner run 2026-10-16, 3x): cause
+
+Owner F8 (7,467 VBlanks, 59.89/s, 213 late frames): `gs_ipc_readback_wait` 0.934 ms/frame with exactly 1 readback
+per frame (7,869 readbacks, 8,442 ms in total = 1.07 ms each), `gs_ipc_write` 0.59 ms/frame, 4.1 MB/frame, MTVU
+`gs_privileged` EE wait 3.38 ms/frame, measured EE CPU 8.6 ms/frame. Frame-time buckets: 20 frames of 25 ms or more,
+88 frames of 17-25 ms, the rest of the late count is the catch-up after them. The Nordschleife run (6 late frames)
+had a **larger** stream (4.8 MB/frame, `gs_ipc_write` 0.70 ms) but only 0.2 readbacks per frame and an MTVU
+`gs_privileged` wait of 0.67 ms.
+
+- **Readbacks remove the GS buffering** (High confidence). Without readbacks the game runs up to 2 frames ahead of
+  the GS process, so a GS-thread spike is absorbed. A READ_FIFO waits until the GS process has executed every earlier
+  record and the GPU has finished, so each GS-thread spike lands in the game frame of that readback. In the night race
+  there is one per frame.
+- **The spikes are shader and pipeline compiles** (Confirmed for the mechanism, headless): the hidden-window check
+  with one 2 KiB readback per frame (like the night race) paced at 60 Hz, 3x, gives a mean wait of 1.07 ms (the owner's
+  value) with a cold cache and 10 readbacks of 16 ms or more (max 144 ms); with the cache warm the mean is 0.69 ms and
+  2 readbacks reach 16-17 ms. The owner's PCSX2 GS-thread time rose to 5.7-7.2 ms/frame at race start
+  (vsync 2,500-3,500) and the session had 5 frames-in-flight waits of 26 ms each.
+- **The shader cache was not where we put it** (Confirmed): `gt4-gs.exe` 0.2.0 ignored `[Folders] Cache` and used the
+  PCSX2 user folder `Documents\PCSX2\cache` (the owner's log: "Read 274 entries from ...Documents\PCSX2\cache"). It
+  persisted there, so the hitches were compiles of pipelines not yet seen.
+- **Headroom**: the MTVU privileged-register sync (3.4 ms/frame, the EE waits for the VU1 worker when it writes CSR
+  after a FINISH) is the largest EE wait in the night race; it is an MTVU property (TASK-011), not a GS process cost
+  (High confidence). With it, the EE frame is about 13 ms of 16.7 ms, so a 4-5 ms readback spike makes a frame late.
+- **Not the cause**: stream size and IPC write (smaller than at Nordschleife); `GS records started inside another
+  path's packet` is 0 in every run.
+- **Unknown**: whether FIFO presentation blocked the GS thread in the owner run (the early swap chain acquire after a
+  present blocks until the display refresh; with hidden windows it never blocks). slice194 defers that acquire and
+  reports the acquire time, so the next owner F8 shows it.
+
+### 6.2 Changes
+
+| Area | Change |
+|---|---|
+| Readback mode | `GT4_GS_READBACK=accurate` (default, PCSX2 `HWDownloadMode` 0 Enabled) or `unsynchronized` (3): `play_performance.py --gs-readback ...`; written to `gt4-gs.ini`, recorded in `result.json` (`gs_readback_mode`). Unsynchronized answers on the GS process CPU thread from the GS local memory copy, without waiting for the GS thread or the GPU; `gt4-gs.exe` captures BITBLTBUF/TRXPOS/TRXREG with a GIF tag scanner for it. |
+| Readback timing | Game F8: `[gs-ipc] interval readback waits: count, mean, max, buckets(ms)` and a session line. `gt4-gs.exe`: readback service times every 500 vsyncs and at exit, swap chain acquire time, GS thread frame times. |
+| Folders | `[GT4GS] DataRoot` and `[Folders]` applied before the GS opens: dev runs use `private/slice193-gt4gs-cache` and `private/slice193-gt4gs-data` (of the worktree the launcher runs from; the worktree cache was seeded once from the owner's `Documents\PCSX2\cache`, 365 entries). Default without a config: `%LOCALAPPDATA%\GT4Recomp\gt4-gs`. PCSX2's pipeline cache (`vulkan_pipelines.bin`) is on (written at exit). SPU2 now uses the Null backend (0.2.0 opened a WASAPI stream with an MMCSS thread). |
+| Presentation | Deferred swap chain acquire in live mode (`GT4_GS_EAGER_ACQUIRE=1` is the A/B switch). |
+| Spin | `[GT4GS] SpinUs` (transport spin before sleeping); default unchanged (30 us), not needed by the measurements. |
+| Window | Input queues detached after `SetParent` (log: `input queues detached`); a click on the picture brings the game window forward; zero-size resizes (minimized window) ignored on both sides; in pcsx2 mode `WM_CLOSE` halts the game and the window is destroyed after the GS process was shut down (DestroyWindow of the parent waited 994 ms for a stalled GS window thread). |
+| Crash | GS process death: the guest runs 180 more VSYNCs (records dropped, readbacks zeros) so a changed memory card is written by the runtime (50 quiet VSYNCs), then halts; the message box asks "Restart with the built-in renderer (CoreGS 1.1)?"; on yes the launcher starts a new session of the same build with `GT4_RENDERER=donor`. Handshake failures show the same box in a windowed run; the timeout message names the likely causes. |
+| Display | Checked, no change needed: at `AspectRatio = 16:9` the drawn rectangle is the whole 1280x720 window and 960x540 at y 90 in a 960x720 window, the same rectangles as the built-in renderer's `presentation_rect` (TASK-009): no stretch, no crop. "Auto 4:3" (640x480) is only used for the PoC comparison. |
+
+### 6.3 Checks (2026-10-16)
+
+- CTest 29/29 on `private/slice194-gs-window-build/build`; `native_gs_stream_client` adds handshake timeout (refused
+  after 1.5 s, silent GS process ended by the job), game killed (the job ends a GS process that ignores the game) and
+  the grace VSYNCs before the halt. Python 350 OK, 14 skipped (`tests/python/test_gs_window.py` new).
+- Headless slice157 schedule: donor 42/42 identical to slice157; pcsx2 1x (`GT4_GS_ASPECT=auto`) 41/41 PNGs identical
+  to the slice193 offline `--replay-gscap` frames; GS process killed: `the game halts after 180 more VSYNCs`, then
+  `[ee] halted: GS process exited`.
+- `tools/gs_live_check` (hidden parent window, 3x, FIFO, menus capture, paced 60 Hz, one 2 KiB readback per frame):
+
+| Run | Readback wait (game side) | Notes |
+|---|---|---|
+| accurate, cold cache | mean 1.12 ms, p99 6.8, max 143.8; 10 of 1,096 at 8 ms or more | readback check: sprite 512/512 pixels and upload 2,048/2,048 bytes exact |
+| accurate, warm cache | mean 0.69 ms, p99 1.55, max 17.4; 2 at 8 ms or more | same |
+| accurate, eager acquire | mean 0.71 ms, p99 1.57, max 16.6 | no difference with hidden windows |
+| unsynchronized | mean 0.11 ms, p99 0.26, max 0.49 | sprite 0/512 (zeros), upload 8/2,048: stale data, as documented by PCSX2 |
+
+- Window: `--stall-check` (GS window thread stalled 3 s): 450 WM_NULL answered by the parent, longest 17 ms, longest
+  pump 0.2 ms, SetWindowPos 1.4 ms; `--soak 3000` (1,000 x 1920x1080, 960x540 and 0x0): no hang, no ERROR, child keeps
+  its size; `--aspect-check` passed; attach/resize/snapshot/shutdown as before.
+- Shader cache, offline `--replay-gscap` of the 4,200-frame menus stream at 3x twice with a fresh cache folder: GS
+  thread frame times cold max 84.2 ms, 4 frames over 16.7 ms; warm max 6.3 ms, none over 16.7 ms.
+
+### 6.4 Not verified
+
+The visible window (fullscreen toggle, Alt+Tab, minimize/restore, focus after a click, RTSS), whether detaching the
+input queues holds with real input, the message boxes, the restart flow, the night race with slice194 (late frames,
+lens flare and night lighting with each readback mode), FIFO acquire blocking on a visible window, race scenes
+headless (no race capture exists).
+
+## 7. Owner test of slice194 and the click fix (slice195)
+
+Owner night race, 5 AI, 3x (2026-10-16): **accurate** 59.97 FPS, 69 late frames (213 with slice193), readback wait
+mean 0.78 ms; **unsynchronized** 60.00 FPS, 1 late frame, but the car headlight flares do not render and some elements
+never reach the screen. GPU power and clock were the same. The owner chose **accurate** as the default; unsynchronized
+stays an option labelled "faster, may drop effects".
+
+Bug found by the owner: a click inside the picture deactivated the game window (F11, keyboard and controller stopped
+until the title bar was clicked). Cause (Confirmed with a visible fixture): with the input queues detached (slice194),
+the click makes the gt4-gs window thread the foreground thread; that thread has no active window, so the foreground
+became NULL. `HTTRANSPARENT` only forwards to windows of the same thread, so across processes it just discarded the
+click. A disabled child (`WS_DISABLED`) was tried first and gives the same NULL foreground. With slice193 (queues
+attached) the check passes.
+
+Fix (gt4-gs 0.3.1, fork commit `0099d77e1`, tag `gt4gs-v0.3.1`; slice195): every button-down and `WM_MOUSEACTIVATE`
+on the child posts a message to the gt4-gs window thread, which gives the foreground back to the game window (allowed:
+that thread received the click); the child returns `MA_NOACTIVATE` and no longer answers `HTTRANSPARENT`; the input
+queues stay detached. The game sets the keyboard focus to its own window on every activation in pcsx2 mode
+(`WM_ACTIVATE`, `native/window.cpp`).
+
+Check: `gs_live_check --click-check` (VISIBLE, about 1 s: a 336x228 parent at the top-left corner, a SendInput click on
+its title bar, then one on the picture; cursor restored): 0.2.0 passes, 0.3.0 fails (foreground NULL), 0.3.1 passes
+(foreground and keyboard focus stay on the parent). The stall check still passes with 0.3.1 (longest answer 18 ms).
+slice195: CTest 29/29, Python 350 OK (14 skipped), donor 42/42, pcsx2 1x 41/41 identical to slice194.
+Not verified: the click with the real game window (owner).
+
+Release flow (2026-10-16, owner decision): gt4-gs releases are built and published from the owner's PC with
+`gt4gs/release-local.ps1`; GitHub Actions is a manual fallback. slice195 pins the published `gt4gs-v0.3.1` zip
+(downloaded back and checked, `private/slice195-gt4gs-release-pkg`, tree sha256 `243fa487...`, `gt4-gs.exe` sha256
+`9650ff3c...`). With it: click check and stall check pass, headless pcsx2 1x 41/41 identical, Python 350 OK.

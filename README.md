@@ -161,8 +161,8 @@ in game before it is merged.
 | TASK‑034 | Proof of concept: our capture through the PCSX2 GS, image comparison | ✅ Done · owner approved the images (2026-10-16) ([report](docs/GS-PCSX2-POC.md)) |
 | TASK‑035 | MIT GS stream protocol, shared-memory IPC, renderer seam | ✅ Done · slice191, stream identical in both renderer modes ([spec](docs/GS-STREAM-PROTOCOL.md)) |
 | TASK‑036 | Live `gt4-gs.exe` MVP | ✅ Done · owner test 2026-10-16 at 3x: Nordschleife 59.98 FPS, night race 59.89 FPS ([live](docs/GS-LIVE.md)) |
-| TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
-| TASK‑038 | GS window, fullscreen, focus, input, crash handling | 📋 Planned |
+| TASK‑037 | PCSX2 GS readbacks and the night race | 🧪 Owner test slice194: night race 59.97 FPS, 69 late frames (was 213); accurate stays default ([live](docs/GS-LIVE.md)) |
+| TASK‑038 | GS window, fullscreen, focus, input, crash handling | 🧪 slice195: click-in-picture focus bug fixed (gt4-gs 0.3.1); owner check pending |
 | TASK‑039 | GS settings table and `gt4-gs.ini` | 📋 Planned |
 | TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
 | TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 📋 Planned |

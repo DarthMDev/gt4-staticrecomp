@@ -64,7 +64,13 @@ PERF_PROFILES = {
     'pcsx2-stream': ('slice191-pcsx2-stream.json', 'private/slice191-gs-stream-build/build/gt4vulkan.exe'),
     # TASK-036 (slice193): the live PCSX2 GS process. The manifest's gs_stream block pins the gt4-gs package
     # (private/slice193-gt4gs-pkg, GPL fork moesuito/gt4recomp-gs); the GS process renders into the game window.
-    'pcsx2': ('slice193-pcsx2.json', 'private/slice193-gs-live-build/build/gt4vulkan.exe'),
+    'pcsx2-slice193': ('slice193-pcsx2.json', 'private/slice193-gs-live-build/build/gt4vulkan.exe'),
+    # TASK-037/038 (slice194): readback modes and timing, own gt4-gs data and cache folders, deferred swap chain
+    # acquire, window hardening and crash handling (gt4-gs 0.3.0, private/slice194-gt4gs-pkg).
+    'pcsx2-slice194': ('slice194-pcsx2.json', 'private/slice194-gs-window-build/build/gt4vulkan.exe'),
+    # slice195: slice194 plus the click fix (gt4-gs 0.3.1 gives the foreground back to the game window after a click on
+    # the picture; the game keeps the keyboard focus on activation). Mode pcsx2 points here.
+    'pcsx2': ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -73,11 +79,11 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -91,11 +97,13 @@ MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'
 MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
 # TASK-035 (slice191): GS stream settings (native/gs_stream/gs_stream_client.hpp, tools/gs_stream_record).
 GS_STREAM_RENDERERS = ('donor', 'pcsx2')
-# GS display settings an owner run keeps from the caller (play_performance.py --gs-scale sets GT4_GS_SCALE).
-GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT')
+# GS settings an owner run keeps from the caller (play_performance.py --gs-scale sets GT4_GS_SCALE, --gs-readback sets
+# GT4_GS_READBACK; GT4_GS_EAGER_ACQUIRE=1 is the A/B switch for the deferred swap chain acquire of slice194).
+GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE')
 GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_CAPTURE_FRAMES', 'GT4_GS_FRAMES_IN_FLIGHT',
                    'GT4_GS_RECORD_OUTPUT', 'GT4_GS_RECORD_FRAMES', 'GT4_GS_PROCESS_SHA256', 'GT4_GS_CONFIG',
-                   'GT4_GS_SCALE', 'GT4_GS_ASPECT')
+                   'GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE',
+                   'GT4_GS_HANDSHAKE_TIMEOUT_MS', 'GT4_GS_LOST_GRACE_FRAMES')
 # TASK-036 (slice193): minimal gt4-gs.ini settings (the full settings table is TASK-039).
 GS_SCALES = tuple(str(n) for n in range(1, 9))
 GS_DEFAULT_SCALE = '3'
@@ -107,7 +115,17 @@ GS_DEFAULT_ASPECT = '16:9'
 GS_RENDERER_VULKAN = 14
 GS_BLENDING_HIGH = 3
 GS_DEINTERLACE_AUTOMATIC = 0
+# TASK-037: GT4_GS_READBACK, the PCSX2 hardware download mode (HWDownloadMode, GSHardwareDownloadMode in PCSX2's
+# Config.h): accurate = Enabled (0, the default: the reply waits for the GS thread and the GPU), unsynchronized =
+# Unsynchronized (3: answered from the GS local memory copy without waiting; faster, may be stale).
+GS_READBACK_MODES = {'accurate': 0, 'unsynchronized': 3}
+GS_DEFAULT_READBACK = 'accurate'
+# The shader/pipeline cache and the gt4-gs data folder persist between sessions and candidates (same PCSX2 version);
+# before slice194 gt4-gs.exe ignored them and used the PCSX2 user folder (Documents\PCSX2).
 GS_SHADER_CACHE = 'private/slice193-gt4gs-cache'
+GS_DATA_ROOT = 'private/slice193-gt4gs-data'
+# Printed by the game when the player chose "restart with the built-in renderer" after a GS process failure.
+GS_RESTART_MARKER = '[gs-ipc] restart requested: renderer donor (CoreGS 1.1)'
 GS_HEADLESS_DUMP_EVERY = 100
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
@@ -182,13 +200,14 @@ def package_tree_digest(directory):
     return hashlib.sha256(''.join(lines).encode('utf-8')).hexdigest(), len(lines)
 
 
-def gs_config_text(environment, headless_dump_directory=None, shader_cache=None):
+def gs_config_text(environment, headless_dump_directory=None, shader_cache=None, data_root=None):
     """The minimal gt4-gs.ini of a pcsx2 run (PCSX2 INI syntax; TASK-039 owns the full settings table).
 
     GT4_GS_SCALE (1..8, default 3) sets the internal resolution; GT4_PRESENT_MODE maps to the GS vsync
-    (fifo/unset: vsync on; mailbox: vsync on, mailbox allowed; immediate: vsync off); GT4_GS_ASPECT (16:9 default).
-    Blending accuracy High and deinterlace Automatic are fixed GT4 defaults. Headless runs add [GT4GS] Surfaceless and
-    PNG frame dumps every 100 vsyncs.
+    (fifo/unset: vsync on; mailbox: vsync on, mailbox allowed; immediate: vsync off); GT4_GS_ASPECT (16:9 default);
+    GT4_GS_READBACK (accurate default, unsynchronized) maps to HWDownloadMode; GT4_GS_EAGER_ACQUIRE=1 turns the
+    deferred swap chain acquire off. Blending accuracy High and deinterlace Automatic are fixed GT4 defaults. Headless
+    runs add [GT4GS] Surfaceless and PNG frame dumps every 100 vsyncs.
     """
     scale = environment.get('GT4_GS_SCALE', GS_DEFAULT_SCALE)
     if scale not in GS_SCALES:
@@ -199,6 +218,12 @@ def gs_config_text(environment, headless_dump_directory=None, shader_cache=None)
     present = environment.get('GT4_PRESENT_MODE', 'fifo')
     if present not in PACING_OVERRIDES['GT4_PRESENT_MODE']:
         raise ValueError('GT4_PRESENT_MODE must be one of fifo, mailbox, immediate')
+    readback = environment.get('GT4_GS_READBACK', GS_DEFAULT_READBACK)
+    if readback not in GS_READBACK_MODES:
+        raise ValueError('GT4_GS_READBACK must be accurate or unsynchronized')
+    eager = environment.get('GT4_GS_EAGER_ACQUIRE', '0')
+    if eager not in ('0', '1'):
+        raise ValueError('GT4_GS_EAGER_ACQUIRE must be 0 or 1')
     vsync = 'false' if present == 'immediate' else 'true'
     mailbox_off = 'false' if present == 'mailbox' else 'true'
     lines = ['; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)',
@@ -209,23 +234,31 @@ def gs_config_text(environment, headless_dump_directory=None, shader_cache=None)
              f'deinterlace_mode = {GS_DEINTERLACE_AUTOMATIC}',
              f'AspectRatio = {GS_ASPECTS[aspect]}',
              f'VsyncEnable = {vsync}',
-             f'DisableMailboxPresentation = {mailbox_off}']
+             f'DisableMailboxPresentation = {mailbox_off}',
+             f'HWDownloadMode = {GS_READBACK_MODES[readback]}']
     if shader_cache:
         lines += ['', '[Folders]', f'Cache = {shader_cache}']
+    gt4gs = []
+    if data_root:
+        gt4gs.append(f'DataRoot = {data_root}')
+    if eager == '1':
+        gt4gs.append('DeferSwapChainAcquire = false')
     if headless_dump_directory:
-        lines += ['', '[GT4GS]', 'Surfaceless = true', f'DumpDir = {headless_dump_directory}',
-                  f'DumpEvery = {GS_HEADLESS_DUMP_EVERY}']
+        gt4gs += ['Surfaceless = true', f'DumpDir = {headless_dump_directory}', f'DumpEvery = {GS_HEADLESS_DUMP_EVERY}']
+    if gt4gs:
+        lines += ['', '[GT4GS]'] + gt4gs
     return '\n'.join(lines) + '\n'
 
 
 def gs_stream_environment(environment, runtime_evidence, binary_workspace, performance, run_directory=None,
-                          headless=False):
+                          headless=False, renderer_override=None):
     """TASK-035: sets the GS stream variables for a run (in place) and returns the values to record.
 
     Manifests without a gs_stream block never pass GT4_RENDERER or GT4_GS_* to their binary (removed). With the
     block (slice191), a performance run uses the manifest's renderer and its pinned GS process; a headless run
     keeps the caller's GT4_RENDERER (donor when unset) and, for pcsx2, defaults GT4_GS_PROCESS to the pinned
-    process. The GS process must be one of the manifest's pinned runtime dependencies.
+    process. The GS process must be one of the manifest's pinned runtime dependencies. renderer_override='donor' is the
+    owner's restart with the built-in renderer (CoreGS 1.1) after a GS process failure (TASK-038).
     """
     stream = runtime_evidence.get('gs_stream')
     if not stream:
@@ -242,6 +275,12 @@ def gs_stream_environment(environment, runtime_evidence, binary_workspace, perfo
             if name not in GS_USER_SETTINGS:
                 environment.pop(name, None)
         environment['GT4_RENDERER'] = stream['renderer']
+    if renderer_override is not None:
+        if renderer_override != 'donor':
+            raise ValueError('only the built-in renderer (donor) can replace the manifest renderer')
+        environment['GT4_RENDERER'] = renderer_override
+        for name in GS_USER_SETTINGS:
+            environment.pop(name, None)
     renderer = environment.get('GT4_RENDERER', 'donor')
     if renderer not in GS_STREAM_RENDERERS:
         raise ValueError('GT4_RENDERER must be donor or pcsx2')
@@ -263,14 +302,20 @@ def gs_stream_environment(environment, runtime_evidence, binary_workspace, perfo
         if run_directory is not None and not environment.get('GT4_GS_CONFIG'):
             cache = (Path(binary_workspace) / GS_SHADER_CACHE).resolve()
             cache.mkdir(parents=True, exist_ok=True)
+            data_root = (Path(binary_workspace) / GS_DATA_ROOT).resolve() if package.get('data_root', False) else None
+            if data_root is not None:
+                data_root.mkdir(parents=True, exist_ok=True)
             dumps = (Path(run_directory) / 'gs-frames') if headless else None
             config = Path(run_directory) / 'gt4-gs.ini'
-            config.write_text(gs_config_text(environment, dumps, cache), encoding='utf-8')
+            config.write_text(gs_config_text(environment, dumps, cache, data_root), encoding='utf-8')
             environment['GT4_GS_CONFIG'] = str(config)
         extra['gs_package'] = {'directory': package['directory'], 'tree_sha256': digest, 'files': files,
                                'source': package.get('source')}
+        extra['gs_readback_mode'] = environment.get('GT4_GS_READBACK', GS_DEFAULT_READBACK)
+        if extra['gs_readback_mode'] not in GS_READBACK_MODES:
+            raise ValueError('GT4_GS_READBACK must be accurate or unsynchronized')
     elif renderer == 'pcsx2':
-        for name in ('GT4_GS_SCALE', 'GT4_GS_ASPECT'):
+        for name in ('GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE'):
             if name in environment:
                 raise ValueError(f'{name} needs a manifest with a gt4-gs package (--mode pcsx2)')
     recorded = {name: environment[name] for name in GS_STREAM_NAMES if name in environment}
@@ -364,7 +409,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              binary_workspace=None, cpu_cores=None):
+              binary_workspace=None, cpu_cores=None, renderer_override=None):
     workspace = workspace.resolve()
     if cpu_cores is not None and not performance:
         raise ValueError('--cpu-cores is refused outside performance modes')
@@ -526,7 +571,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
     result.update(gs_stream_environment(environment, runtime_evidence, binary_workspace, performance,
-                                        run_directory=run_directory, headless=not window))
+                                        run_directory=run_directory, headless=not window,
+                                        renderer_override=renderer_override))
+    if renderer_override is not None:
+        result['gs_renderer_override'] = renderer_override
     if force_480p:
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:
@@ -584,8 +632,13 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
                     raise
         except subprocess.TimeoutExpired:
             exit_code, timed_out = None, True
-    result.update(summarize_exit(log_path.read_text(encoding='utf-8', errors='replace'),
-                                 frame_count, exit_code, timed_out))
+    log_text = log_path.read_text(encoding='utf-8', errors='replace')
+    result.update(summarize_exit(log_text, frame_count, exit_code, timed_out))
+    # TASK-038: GS process failures and the player's restart choice (message box) are recorded for the launcher.
+    if '[gs-ipc] GS renderer stopped' in log_text:
+        result['gs_process_stopped'] = True
+    if GS_RESTART_MARKER in log_text:
+        result['gs_restart_requested'] = 'donor'
     if corpus is not None:
         corpus_summary = summarize_vu1_corpus(corpus)
         (run_directory / VU1_CORPUS_SUMMARY).write_text(json.dumps(corpus_summary, indent=2) + '\n', encoding='utf-8')

@@ -1180,3 +1180,51 @@ Offline replay and window check:
 private\slice193-gt4gs-pkg\gt4-gs.exe -dumpdir <dir> [--config <ini>] --replay-gscap private\slice191-smoke\streams-final\pcsx2-recorded.gscap
 private\slice193-gs-live-build\build\gs_live_check.exe private\slice193-gt4gs-pkg\gt4-gs.exe <capture.gscap> 1100 <gt4-gs.ini> [--kill-at 300]
 ```
+
+## Slice194 - readbacks, cache, window and crash handling (TASK-037/038)
+
+Branch `task/037-038-gs-window` (worktree `C:\Antigravity\gt4-wt-037-gs`, from main `5cb714e`), fork branch
+`gt4gs/window` (`C:\Antigravity\gt4recomp-gs`, commit `10851476b`, tag `gt4gs-v0.3.0`). Design and results:
+[GS-LIVE](GS-LIVE.md) section 6.
+
+Game build (same capsules as slice191/193; changed: `native/gs_stream/gs_stream_client.cpp`, `native/window.cpp`,
+`native/CMakeLists.txt`, `tools/gs_live_check`), script `private/slice194-gt4gs-scripts/build-game.bat`:
+
+```
+cmake -S C:\Antigravity\gt4-wt-037-gs -B C:\Antigravity\gt4-staticrecomp\private\slice194-gs-window-build\build -G Ninja ^
+  (the slice193 options, unchanged)
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice194-gs-window-build\build
+```
+
+`gt4-gs.exe` 0.3.0, local build (`private/slice194-gt4gs-scripts/build-gt4gs.bat`, dependencies of
+`private/slice193-gt4gs-deps`, fresh build directory `private/slice194-gt4gs-build`), packaged with
+`package-gt4gs.ps1 -Version 0.3.0` into `private/slice194-gt4gs-dist` (`gt4-gs-0.3.0-windows-x64.zip`, 13,394,973 bytes,
+sha256 `3dbacd9b...`) and extracted to `private/slice194-gt4gs-pkg` (140 files). The CI prerelease `gt4gs-v0.3.0` is
+built from the same commit (another compiler, LTO) and is not the pinned binary.
+
+Pins: `docs/inputs/slice194-pcsx2.json` (mode `pcsx2`): `gt4vulkan.exe` 95,655,936 bytes sha256 `e81d7e57...`, package
+tree sha256 `ec8c12dd...` (140 files). The worktree holds copies (files, not links) of every pinned `private/` file the
+launcher needs, checked by hash.
+
+Checks: CTest 29/29; Python 350 OK, 14 skipped; donor 42/42 identical to slice157; pcsx2 1x 41/41 PNGs identical to the
+slice193 offline replay; GS kill halts after the grace VSYNCs. Headless script:
+`private/slice194-gt4gs-scripts/headless.sh <run> [GT4_RENDERER=pcsx2 GT4_GS_SCALE=1 GT4_GS_ASPECT=auto]`; outputs in
+`private/slice194-smoke`. Window and readback checks:
+
+```
+gs_live_check.exe <pkg>\gt4-gs.exe private\slice191-smoke\streams-final\pcsx2-recorded.gscap 1100 <ini> --pace --readbacks --readback-check accurate --aspect-check
+gs_live_check.exe ... 900 <ini with [GT4GS] DebugStallWindowMs = 3000, DebugStallAfterMs = 4000> --pace --stall-check
+gs_live_check.exe ... 3100 <ini> --soak 3000
+```
+
+## Slice195 - click fix (TASK-038)
+
+slice194 plus `native/window.cpp` (keyboard focus on activation in pcsx2 mode) and gt4-gs 0.3.1 (fork commit
+`0099d77e1`, tag `gt4gs-v0.3.1`). Fresh directories: `private/slice195-gs-window-build` (game,
+`private/slice194-gt4gs-scripts/build-game-195.bat`), `private/slice195-gt4gs-build` (gt4-gs, `build-gt4gs-195.bat`),
+`private/slice195-gt4gs-dist` (iteration package, not pinned). The pinned package is the PUBLISHED release
+`gt4gs-v0.3.1`, built by `gt4gs/release-local.ps1` from the tag checkout (`private/slice195-gt4gs-release-build`),
+downloaded back to `private/slice195-gt4gs-download` (sha256 `e24dd2b8...`, checked with SHA256SUMS) and extracted to
+`private/slice195-gt4gs-release-pkg` (140 files, tree sha256 `243fa487...`). Pins `docs/inputs/slice195-pcsx2.json`
+(`gt4vulkan.exe` sha256 `afaa1e44...`); `--mode pcsx2` points here, `--mode pcsx2-slice194` keeps slice194. Checks:
+CTest 29/29, Python 350 OK, donor 42/42, pcsx2 1x 41/41, `gs_live_check --click-check` and `--stall-check` pass.

@@ -11,7 +11,12 @@
 //   bad-renderer   GT4_RENDERER=bogus is refused (exit code 1).
 //   no-process     GT4_RENDERER=pcsx2 without GT4_GS_PROCESS is refused.
 //   early-exit     the GS process exits during the handshake: refused with a message.
-//   peer-death     the GS process dies mid-stream: the halt handler runs once, later hooks are harmless.
+//   peer-death     the GS process dies mid-stream: the guest keeps running GT4_GS_LOST_GRACE_FRAMES (3 here) VSYNCs
+//                  so the runtime can flush a changed memory card, then the halt handler runs once (TASK-038).
+//   handshake-timeout  the GS process never posts READY: refused after GT4_GS_HANDSHAKE_TIMEOUT_MS (1.5 s here) with a
+//                  clear message; the silent process is ended by the kill-on-close job when the game exits (TASK-038).
+//   game-killed    the game process is terminated while its GS process ignores the game: the job ends the GS process
+//                  (TASK-038).
 //   pin-mismatch   GT4_GS_PROCESS_SHA256 differs from the GS process file: refused before the spawn (TASK-036).
 //   bad-config     GT4_GS_CONFIG names a missing file: refused (TASK-036).
 // The pcsx2 scenario also sets the correct GT4_GS_PROCESS_SHA256 and a GT4_GS_CONFIG file (passed as --config).
@@ -44,9 +49,12 @@ void require(bool value, const char *message) {
 }
 
 int g_halts = 0;
+std::uint32_t g_frame = 0;  // frame of run_script at the time of the hook call
+std::uint32_t g_halt_frame = 0;
 void count_halt(const char *reason) {
   ++g_halts;
-  std::printf("[fixture] halt: %s\n", reason);
+  g_halt_frame = g_frame;
+  std::printf("[fixture] halt at frame %u: %s\n", g_frame, reason);
 }
 
 std::vector<std::uint8_t> qwords_of(std::size_t qwords, std::uint8_t seed) {
@@ -63,6 +71,7 @@ void run_script(std::uint32_t frames) {
   client::on_set_gs_crt(1, 0x02, 1);
   std::vector<std::uint8_t> reply(512 * 16);
   for (std::uint32_t frame = 0; frame < frames; ++frame) {
+    g_frame = frame;
     const auto path3 = qwords_of(3, static_cast<std::uint8_t>(frame));
     const auto path1 = qwords_of(64, static_cast<std::uint8_t>(frame + 1));
     const auto path2 = qwords_of(5, static_cast<std::uint8_t>(frame + 2));
@@ -102,14 +111,27 @@ int scenario_main(const std::string &scenario, std::uint32_t frames) {
     gt4::gs_stream::finish(stdout);
     return 0;
   }
+  if (scenario == "game-killed") {
+    const auto data = qwords_of(1, 1);
+    gt4::gs_stream::on_gif_render(3, data.data(), 1);  // starts the GS process (handshake)
+    std::puts("[fixture] game-killed: GS process ready, waiting to be terminated");
+    std::fflush(stdout);
+    Sleep(60000);
+    return 8;
+  }
   if (scenario == "early-exit" || scenario == "no-process" || scenario == "bad-renderer" || scenario == "pin-mismatch" ||
-      scenario == "bad-config") {
+      scenario == "bad-config" || scenario == "handshake-timeout") {
     const auto data = qwords_of(1, 1);
     gt4::gs_stream::on_gif_render(3, data.data(), 1);  // refuses (exits) on first use
     return 0;
   }
   run_script(frames);
-  if (scenario == "peer-death") return g_halts == 1 ? 0 : 5;
+  if (scenario == "peer-death") {
+    // The fake GS process dies after 20 records (frame 1-2); the frames-in-flight wait sees it at the latest two VSYNCs
+    // later, and the halt follows 3 VSYNCs after that.
+    std::printf("[fixture] peer-death: %d halt(s), at frame %u\n", g_halts, g_halt_frame);
+    return (g_halts == 1 && g_halt_frame >= 3 && g_halt_frame <= 8) ? 0 : 5;
+  }
   return g_halts == 0 ? 0 : 6;
 }
 
@@ -129,7 +151,8 @@ struct Env {
 std::uint32_t run_scenario(const std::string &scenario, const std::vector<Env> &env, std::uint32_t frames = 10) {
   for (const char *name : {"GT4_RENDERER", "GT4_GS_PROCESS", "GT4_GS_CAPTURE", "GT4_GS_RECORD_OUTPUT",
                            "GT4_GS_CAPTURE_FRAMES", "GT4_GS_FRAMES_IN_FLIGHT", "GT4_FIXTURE_CHILD",
-                           "GT4_GS_PROCESS_SHA256", "GT4_GS_CONFIG"})
+                           "GT4_GS_PROCESS_SHA256", "GT4_GS_CONFIG", "GT4_GS_HANDSHAKE_TIMEOUT_MS",
+                           "GT4_GS_LOST_GRACE_FRAMES", "GT4_FIXTURE_PID_FILE"})
     _putenv_s(name, "");
   for (const Env &item : env) _putenv_s(item.name, item.value.c_str());
   std::printf("[fixture] scenario %s\n", scenario.c_str());
@@ -149,6 +172,23 @@ std::vector<char> read_all(const std::string &path) {
 }
 
 bool exists(const std::string &path) { return GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES; }
+
+// The pid a fake GS process wrote to its pid file (0 if none yet).
+DWORD read_pid(const std::string &path) {
+  std::ifstream file(path);
+  unsigned long pid = 0;
+  file >> pid;
+  return static_cast<DWORD>(pid);
+}
+
+// True when process `pid` ends within `timeout_ms` (or is already gone).
+bool process_ends(DWORD pid, DWORD timeout_ms) {
+  HANDLE process = OpenProcess(SYNCHRONIZE, FALSE, pid);
+  if (!process) return true;
+  const bool ended = WaitForSingleObject(process, timeout_ms) == WAIT_OBJECT_0;
+  CloseHandle(process);
+  return ended;
+}
 
 void check_stream_file(const std::string &path, std::uint32_t frames) {
   FileReader reader;
@@ -221,7 +261,24 @@ int main(int argc, char **argv) {
       // after 20 records (peer-death).
       const char *mode = std::getenv("GT4_FIXTURE_CHILD");
       if (!mode || !*mode) return 7;
+      if (const char *pid_file = std::getenv("GT4_FIXTURE_PID_FILE"); pid_file && *pid_file) {
+        std::ofstream out(pid_file);
+        out << GetCurrentProcessId();
+      }
+      if (std::string(mode) == "silent") {
+        Sleep(30000);  // never answers the handshake; the game's job ends this process
+        return 10;
+      }
       auto session = ipc::Session::open_consumer(argv[2]);
+      if (std::string(mode) == "hang") {
+        // Posts READY, then ignores the game (no peer waits): only the kill-on-close job can end it.
+        ReadyPayload hang_ready{};
+        hang_ready.version_major = kVersionMajor;
+        hang_ready.consumer_pid = ipc::current_process_id();
+        session->post_event(RecordType::ready, &hang_ready, sizeof hang_ready);
+        Sleep(60000);
+        return 11;
+      }
       ReadyPayload ready{};
       ready.version_major = kVersionMajor;
       ready.consumer_pid = ipc::current_process_id();
@@ -285,9 +342,49 @@ int main(int argc, char **argv) {
     // early-exit: GT4_GS_PROCESS points at a program that exits at once (this fixture with an unknown argument list).
     require(run_scenario("early-exit", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", self}}) == 1,
             "GS process exiting during the handshake is refused");
-    require(run_scenario("peer-death", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", self}, {"GT4_FIXTURE_CHILD", "1"}},
+    require(run_scenario("peer-death", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", self}, {"GT4_FIXTURE_CHILD", "1"},
+                                        {"GT4_GS_LOST_GRACE_FRAMES", "3"}},
                          10) == 0,
-            "GS process death mid-stream halts once");
+            "GS process death mid-stream halts once, after the grace VSYNCs");
+
+    // TASK-038: handshake timeout with a clear message, and the job ends the silent GS process with the game.
+    const std::string silent_pid = scratch + "\\silent.pid";
+    DeleteFileA(silent_pid.c_str());
+    const DWORD timeout_start = GetTickCount();
+    require(run_scenario("handshake-timeout", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", self},
+                                               {"GT4_FIXTURE_CHILD", "silent"}, {"GT4_GS_HANDSHAKE_TIMEOUT_MS", "1500"},
+                                               {"GT4_FIXTURE_PID_FILE", silent_pid}}) == 1,
+            "GS process without READY is refused");
+    const DWORD timeout_elapsed = GetTickCount() - timeout_start;
+    std::printf("[fixture] handshake-timeout refused after %lu ms\n", static_cast<unsigned long>(timeout_elapsed));
+    require(timeout_elapsed >= 1400 && timeout_elapsed < 15000, "refused after the configured handshake timeout");
+    const DWORD silent = read_pid(silent_pid);
+    require(silent != 0, "the silent GS process wrote its pid");
+    require(process_ends(silent, 3000), "the job ended the silent GS process with the game");
+    std::puts("[fixture] handshake timeout: refused, silent GS process ended by the job");
+
+    // TASK-038: the game is killed; the GS process ignores the game, so only the kill-on-close job can end it.
+    const std::string hang_pid = scratch + "\\hang.pid";
+    DeleteFileA(hang_pid.c_str());
+    for (const char *name : {"GT4_GS_PROCESS", "GT4_FIXTURE_CHILD", "GT4_FIXTURE_PID_FILE", "GT4_RENDERER"}) _putenv_s(name, "");
+    _putenv_s("GT4_RENDERER", "pcsx2");
+    _putenv_s("GT4_GS_PROCESS", self.c_str());
+    _putenv_s("GT4_FIXTURE_CHILD", "hang");
+    _putenv_s("GT4_FIXTURE_PID_FILE", hang_pid.c_str());
+    {
+      gs_stream::ipc::ChildProcess game = gs_stream::ipc::ChildProcess::spawn(this_executable(), L"--scenario game-killed 1");
+      DWORD hung = 0;
+      for (int tries = 0; tries < 200 && !(hung = read_pid(hang_pid)); ++tries) Sleep(50);
+      require(hung != 0, "the hanging GS process started");
+      Sleep(500);  // the game finishes its handshake
+      require(!process_ends(hung, 0), "the hanging GS process runs while the game runs");
+      TerminateProcess(game.process(), 1);
+      std::uint32_t code = 0;
+      require(game.wait_exit(5000, &code), "the game process ended");
+      require(process_ends(hung, 3000), "the job ended the GS process after the game was killed");
+    }
+    for (const char *name : {"GT4_GS_PROCESS", "GT4_FIXTURE_CHILD", "GT4_FIXTURE_PID_FILE", "GT4_RENDERER"}) _putenv_s(name, "");
+    std::puts("[fixture] game killed: GS process ended by the job");
     std::puts("[fixture] all checks passed");
     return 0;
   } catch (const std::exception &error) {
