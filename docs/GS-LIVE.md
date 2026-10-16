@@ -1,7 +1,7 @@
 # Live PCSX2 GS process (TASK-036)
 
 Status: **built and checked headless; owner windowed test pending** (2026-10-16). Performance of this path: section 9
-(TASK-041, slice198). Branch `task/036-gs-live` (main
+(TASK-041, slice198; on gt4-gs 0.4.0 from slice199, section 10.5). JIT-free package: section 10. Branch `task/036-gs-live` (main
 repo, MIT) and `gt4gs/live` in the GPL fork [moesuito/gt4recomp-gs](https://github.com/moesuito/gt4recomp-gs).
 Decision [0070](decisions/0070-pcsx2-gs-separate-process.md), plan [GSDX-PLAN](GSDX-PLAN.md) sections B.3 and C,
 protocol [GS-STREAM-PROTOCOL](GS-STREAM-PROTOCOL.md). Labels: **Confirmed**, **High confidence**, **Hypothesis**,
@@ -336,9 +336,11 @@ only).
 
 ## 9. Performance of the PCSX2 GS path (TASK-041, slice198)
 
-Status: **built and checked headless; owner night-race A/B pending** (2026-10-16). Branch `task/041-gs-perf` (main
-repo only; the fork is unchanged, slice198 pins the same `gt4gs-v0.3.2` package as slice196). `--mode pcsx2` now
-selects [`slice198-pcsx2.json`](inputs/slice198-pcsx2.json); `--mode pcsx2-slice196` keeps TASK-047.
+Status: **owner tested on gt4-gs 0.3.2** (slice198, 2026-10-16 night race with 5 AI: 59.97 FPS, 53 late frames, was 69;
+EE critical path 11.81 of 16.68 ms). Branch `task/041-gs-perf` (main repo only; the fork is unchanged). slice198 pins the
+`gt4gs-v0.3.2` package as slice196; **slice199 runs the same changes on the JIT-free gt4-gs 0.4.0** (section 10.5, pin
+[`slice199-pcsx2.json`](inputs/slice199-pcsx2.json)). `--mode pcsx2` now selects slice199; `--mode pcsx2-slice198` and
+`--mode pcsx2-slice197` keep the A/B pins; `--mode pcsx2-slice196` keeps TASK-047.
 
 ### 9.1 A headless race
 
@@ -456,3 +458,83 @@ the menus; both are small next to the 6.4 ms of EE game code). Races are the own
 - Not verified: the owner's night race (paced, 3x, visible window): whether the late frames change, the new F8 lines
   with real values, and whether wake batching changes GS-thread smoothness at 60 Hz. The headless race is a day track
   at 1x.
+
+## 10. No JIT (TASK-042, slice197, gt4-gs 0.4.0)
+
+Status: **built, published and checked headless; owner windowed check pending** (2026-10-16). Branch
+`task/042-gs-nojit` (main) and `gt4gs/nojit` in the fork (commit `4c8b63a6e`, prerelease `gt4gs-v0.4.0`). `--mode pcsx2`
+now selects [`slice197-pcsx2.json`](inputs/slice197-pcsx2.json); `--mode pcsx2-slice196` keeps 0.3.2. The game runtime
+is the slice196 build, unchanged (same file and hash); only the GS package changes. Project rule: no JIT ever
+(GPU driver shader compilation is allowed).
+
+### 10.1 Audit of 0.3.2 (fork sources and the 0.3.2 binary; PCSX2-tainted reading, no code copied here)
+
+| Site | 0.3.2 | Run in our replay mode (0.3.2) | 0.4.0 |
+|---|---|---|---|
+| EE recompiler (`pcsx2/x86/ix86-32/*`, `iR5900*`), `recCpu.Reserve` | compiled in | reserved at start (tables and code pointers, no code emitted; High confidence); never executed (the stream replayer is the CPU) | not compiled |
+| IOP recompiler (`iR3000A*`), `psxRec.Reserve` | compiled in | reserved, never executed | not compiled |
+| microVU VU0/VU1 (`pcsx2/x86/microVU*`) | compiled in | reserved (and opens the MTVU thread), never executed (VU interpreters selected) | not compiled; MTVU thread opened as on ARM64 |
+| VIF unpack recompilers (`Vif_UnpackSSE`, `Vif_Dynarec`) | compiled in | **code generated at start** (`VifUnpackSSE_Init`), never called (no VIF in a GS stream) | not compiled; interpreter loops |
+| x86 emitter (`common/emitter/*`) | compiled in | used by the generators above | not compiled |
+| Recompiler code area (`Memory.cpp`, `PageAccess_Any`) | 305 MB mapped `PAGE_EXECUTE_READWRITE` at start | yes, always | not reserved; `HostSys` refuses executable protections (`pxFailRel`) |
+| GS software JIT (xbyak: `GSDrawScanlineCodeGenerator`, `GSSetupPrimCodeGenerator`, 3 ISAs) | compiled in | only with CPU sprite render, CPU CLUT render or the software renderer: none of them in GT4's defaults (0 of 13 runs logged `SW JIT generated`); with both hacks on, 30,523 bytes generated | not compiled; C rasterizer (`CSetupPrim`, `CDrawScanline`, `CDrawEdge`) |
+| GS vertex trace, MultiISA templates | compiled | ahead-of-time code per ISA, not a code generator | unchanged |
+| Bundled DLLs (SDL3, shaderc, FreeType, HarfBuzz, libpng, libjpeg, libwebp, zstd, lz4, ryml, PlutoSVG) | no code generator markers, no writable and executable sections | shaderc compiles GLSL to SPIR-V (data) | unchanged; no FFmpeg or x264 DLLs (local deps without FFmpeg since 0.3.1) |
+| GPU driver (AMD Vulkan, system DLLs) | outside the package | compiles shaders and pipelines (allowed) | unchanged; works under Arbitrary Code Guard |
+
+### 10.2 What changed (fork)
+
+The CMake option `GT4GS_ONLY` (macro `GT4GS_NO_JIT`; details in the fork's `gt4gs/BUILD.md`, section "No JIT") leaves out
+the recompilers, the x86 emitter, the GS JIT generators and the xbyak include path; selects the interpreters as PCSX2's
+ARM64 build does; maps no code area; refuses executable page protections; forces the C rasterizer; and writes the
+recompiler settings off. `gt4-gs.exe` enables Windows **Arbitrary Code Guard** (`ProcessDynamicCodePolicy`,
+`ProhibitDynamicCode`) before its window, threads and GS device exist, proves it with a probe allocation that must fail,
+and walks its address space at the end of the stream and at exit. The log shows:
+
+```
+GT4GS no-JIT: Arbitrary Code Guard on (ProhibitDynamicCode=1); probe RWX allocation refused, error 1655
+GT4GS no-JIT audit (end of stream, GS device open): 1438 regions, 0 executable non-image regions
+```
+
+`[GT4GS] ProhibitDynamicCode = false` switches only the OS enforcement off (for a graphics driver that needs dynamic
+code inside our process); the launcher does not write it. No GS setting needs the JIT, so none is refused: CPU sprite and
+CLUT render and the software renderer run the C rasterizer (notes in `docs/launcher/gs-settings.toml`).
+
+### 10.3 Evidence (2026-10-16)
+
+- **Static** (`tools/gs_nojit_check/check-nojit.ps1`, copy of the fork's `gt4gs/check-nojit.ps1`; `dumpbin` 14.44):
+  0.4.0 package: 23 modules, 0 code generator markers, 0 writable and executable sections, NX on, `gt4-gs.exe` imports
+  `SetProcessMitigationPolicy`. Positive control 0.3.2: 22 markers in `gt4-gs.exe` (xbyak RTTI, JIT classes and
+  messages, microVU/EE/IOP/VIF recompiler names, `Recompiler Cache`, emitter and `pcsx2\x86` source paths). The
+  Python test `tests/python/test_gs_nojit.py` repeats the marker scan. `release-local.ps1` refuses a package that fails
+  the check. Confirmed.
+- **Runtime, ACG**: works with the AMD Vulkan driver of this PC (RX 9060 XT): every replay and the live headless run
+  completed with ACG on, also with an empty shader cache (shaders compiled by shaderc, pipelines by the driver); the
+  probe allocation is refused with `ERROR_DYNAMIC_CODE_BLOCKED` (1655); 0 executable non-image regions in every audit.
+  Other drivers: Unknown.
+- **Image parity** (offline `--replay-gscap`, 4,200 vsyncs, deinterlace Automatic, 16:9, the GT4 defaults): the slice191
+  menus stream (no SYNCV; re-captured with slice195, sha256 `e651bba3...`, identical to the TASK-035 capture) and the
+  slice196 stream (SYNCV, sha256 `4ff3993d...`): 1x every 5th frame 837/837 and 3x every 25th frame 167/167 PNGs
+  **byte-identical** to 0.3.2, for the iteration build and the published zip. With an empty shader cache, 3x: 41/41
+  identical. With CPU sprite render (BW 10, level 2) and CPU CLUT render on (0.3.2 generated 30,523 bytes of JIT code):
+  167/167 identical, so the C rasterizer matches the JIT here. Live headless game (slice157 schedule, pcsx2 1x, auto
+  aspect): 41/41 frames identical to slice196 live; GS process exit 0; donor 42/42 identical to slice157. Confirmed.
+- **Performance** (PCSX2 "Average GS Thread Time", offline replay of the slice196 stream without frame dumps,
+  unthrottled, interleaved runs, no compiler running; another process used about one core throughout): 1x 0.42 ms/frame
+  (0.3.2, 3 runs) and 0.42 (0.4.0, 3 runs); 3x 0.49 (0.3.2, 9 runs, 0.36-0.64) and 0.56 (0.4.0, 9 runs, 0.45-0.63),
+  ACG on or off the same (0.57-0.59). The 3x difference is within the run-to-run spread (Hypothesis: noise; the replay
+  path does not touch the removed code). With CPU sprite and CLUT render on: 5.4 (JIT) against 6.5 ms/frame (C).
+
+### 10.4 Not verified
+
+The visible window and owner play with 0.4.0; races and the night race (no race capture); D3D11/D3D12 under ACG;
+other GPU vendors' drivers under ACG; the software renderer (`Renderer = 13`) with the C rasterizer.
+
+### 10.5 TASK-041 perf changes on gt4-gs 0.4.0 (slice199)
+
+slice199 keeps the slice198 game build (same file and hash) and pins the JIT-free `gt4-gs.exe` 0.4.0 of slice197
+(`gs_package` tree `e9402cf2...`, 140 files; exe sha256 `1c4c45da...`). The privileged-write journal, wake batching
+(`GT4_GS_WAKE_BYTES`), F8 `[gs-ipc]` lines and critical-path summary of section 9 therefore run with 0.4.0. The owner
+night-race numbers of section 9 were measured with 0.3.2; the 0.4.0 night race and F8 A/B (`GT4_MTVU_PRIV_ASYNC` 1 vs 0)
+are pending. Checks (2026-10-16, headless, slice157 menus schedule): donor 42/42 identical to slice157; pcsx2 1x gs-frames 41/41 identical to slice198 (gt4-gs 0.3.2); Python 438 OK, 20 skipped; CTest 29/29; static no-JIT check passes (23 modules).
+

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 
@@ -36,7 +37,7 @@ LEGACY_CACHE = LEGACY_DEFAULT + '\n[Folders]\nCache = C:/cache\n'
 LEGACY_RUN = LEGACY_CACHE + '\n[GT4GS]\nDataRoot = C:/data\n'
 LEGACY_HEADLESS = (LEGACY_DEFAULT + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:/run/gs-frames\n'
                    'DumpEvery = 100\n')
-REQUIRED = ('id', 'label', 'help', 'page', 'section', 'key', 'type', 'default', 'visibility', 'written', 'status')
+REQUIRED = ('id', 'label', 'help', 'page', 'order', 'control', 'section', 'key', 'type', 'default', 'written', 'status')
 
 
 def rows():
@@ -50,8 +51,8 @@ def by_id():
 class TableSchemaTests(unittest.TestCase):
     def test_table_loads_and_has_one_row_per_setting(self):
         table = rows()
-        self.assertEqual(len(table), 51)
-        self.assertEqual(len({row['id'] for row in table}), 51)
+        self.assertEqual(len(table), 58)
+        self.assertEqual(len({row['id'] for row in table}), 58)
 
     def test_every_row_has_the_documented_columns(self):
         for row in rows():
@@ -59,7 +60,7 @@ class TableSchemaTests(unittest.TestCase):
                 self.assertIn(field, row, row['id'])
             self.assertIn(row['page'], gs_settings.PAGES)
             self.assertIn(row['type'], gs_settings.TYPES)
-            self.assertIn(row['visibility'], gs_settings.VISIBILITIES)
+            self.assertIn(row['control'], gs_settings.CONTROLS)
             self.assertIn(row['written'], gs_settings.WRITTEN)
             self.assertRegex(row['status'], gs_settings.STATUS_PATTERN.pattern)
 
@@ -82,25 +83,39 @@ class TableSchemaTests(unittest.TestCase):
         self.assertNotIn('gt4_readback', by_id())
 
     def test_validator_refuses_bad_tables(self):
-        good = {'schema_version': 1, 'setting': copy.deepcopy(rows())}
+        with gs_settings.TABLE_PATH.open('rb') as handle:
+            good = tomllib.load(handle)
         self.assertEqual(gs_settings.table_errors(good), [])
+
+        def row(data, identifier):
+            return next(item for item in data['setting'] if item['id'] == identifier)
+
+        def duplicate(data):
+            data['setting'].append(copy.deepcopy(data['setting'][0]))
+
         cases = {
             'wrong schema': lambda data: data.update(schema_version=2),
-            'duplicate id': lambda data: data['setting'].append(copy.deepcopy(data['setting'][0])),
-            'bad page': lambda data: data['setting'][0].update(page='Audio'),
-            'bad type': lambda data: data['setting'][0].update(type='double'),
-            'bad status': lambda data: data['setting'][0].update(status='maybe'),
-            'settable row without key': lambda data: data['setting'][0].update(key=''),
-            'duplicate INI key': lambda data: data['setting'][1].update(
-                section=data['setting'][0]['section'], key=data['setting'][0]['key']),
-            'int range inverted': lambda data: data['setting'][1].update(min=9, max=8),
-            'default outside range': lambda data: data['setting'][1].update(default='9'),
-            'always row not ok': lambda data: data['setting'][2].update(written='always'),
-            'path row set by user': lambda data: next(
-                row.update(written='when-set') for row in data['setting'] if row['type'] == 'path'),
-            'bool default': lambda data: next(
-                row.update(default='yes') for row in data['setting'] if row['type'] == 'bool'),
-            'launcher-only with an INI key': lambda data: data['setting'][1].update(written='never', env='GT4_X'),
+            'no defaults profile': lambda data: data.update(profile=[]),
+            'duplicate id': duplicate,
+            'bad page': lambda data: row(data, 'renderer').update(page='Graphics'),
+            'mods row on a page': lambda data: row(data, 'texture_load').update(page='advanced'),
+            'bad type': lambda data: row(data, 'renderer').update(type='double'),
+            'bad status': lambda data: row(data, 'renderer').update(status='maybe'),
+            'bad order': lambda data: row(data, 'fxaa').update(order=0),
+            'order used twice on a page': lambda data: row(data, 'fxaa').update(order=row(data, 'upscale')['order']),
+            'bad control': lambda data: row(data, 'fxaa').update(control='knob'),
+            'control does not fit the type': lambda data: row(data, 'fxaa').update(control='slider'),
+            'launcher row with a control': lambda data: row(data, 'cache_folder').update(control='dropdown'),
+            'settable row without key': lambda data: row(data, 'renderer').update(key=''),
+            'duplicate INI key': lambda data: row(data, 'upscale').update(
+                section=row(data, 'renderer')['section'], key=row(data, 'renderer')['key']),
+            'int range inverted': lambda data: row(data, 'upscale').update(min=13, max=12),
+            'default outside range': lambda data: row(data, 'upscale').update(default='13'),
+            'always row not ok': lambda data: row(data, 'filter').update(written='always'),
+            'path row set by user': lambda data: row(data, 'cache_folder').update(written='when-set'),
+            'bool default': lambda data: row(data, 'fxaa').update(default='yes'),
+            'launcher-only with an INI key': lambda data: row(data, 'gs_engine').update(
+                section='EmuCore/GS', key='Renderer'),
         }
         for name, break_table in cases.items():
             data = copy.deepcopy(good)
@@ -155,7 +170,8 @@ class ValueTests(unittest.TestCase):
         upscale = by_id()['upscale']
         self.assertEqual(gs_settings.parse_value(upscale, '1'), '1')
         self.assertEqual(gs_settings.parse_value(upscale, '08'), '8')
-        for value in ('0', '9', '1.5', 'x', ' 3', ''):
+        self.assertEqual(gs_settings.parse_value(upscale, '12'), '12')
+        for value in ('0', '13', '1.5', 'x', ' 3', ''):
             with self.assertRaises(gs_settings.SettingsError, msg=value):
                 gs_settings.parse_value(upscale, value)
 
@@ -207,10 +223,10 @@ class IniTests(unittest.TestCase):
         self.assertEqual(text.splitlines(), [
             gs_settings.INI_HEADER, '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 6',
             'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 4:3', 'VsyncEnable = true',
-            'DisableMailboxPresentation = true', 'fxaa = true', 'HWDownloadMode = 0'])
+            'DisableMailboxPresentation = true', 'HWDownloadMode = 0', 'fxaa = true'])
 
     def test_sections_follow_the_fixed_order(self):
-        settings = {'game_fixes': 'true', 'upscale': '2'}
+        settings = {'game_fixes': 'false', 'upscale': '2'}
         text = gs_settings.render_ini(rows(), settings, {'cache_folder': 'C:/cache'})
         headers = [line for line in text.splitlines() if line.startswith('[')]
         self.assertEqual(headers, ['[EmuCore/GS]', '[EmuCore]', '[Folders]'])
@@ -223,8 +239,8 @@ class IniTests(unittest.TestCase):
             gs_settings.settings_from_json('{', rows())
         with self.assertRaisesRegex(gs_settings.SettingsError, 'JSON object'):
             gs_settings.settings_from_json('[1]', rows())
-        with self.assertRaisesRegex(gs_settings.SettingsError, 'must be from 1 to 8'):
-            gs_settings.settings_from_json('{"upscale": 9}', rows())
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'must be from 1 to 12'):
+            gs_settings.settings_from_json('{"upscale": 13}', rows())
 
 
 class AtomicWriteTests(unittest.TestCase):
@@ -302,7 +318,7 @@ class PlayPerformanceTests(unittest.TestCase):
     def test_gs_setting_refusals(self):
         for arguments in (['--mode', 'main', '--gs-setting', 'upscale=2'],
                           ['--mode', 'pcsx2', '--gs-setting', 'nope=1'],
-                          ['--mode', 'pcsx2', '--gs-setting', 'upscale=9'],
+                          ['--mode', 'pcsx2', '--gs-setting', 'upscale=13'],
                           ['--mode', 'pcsx2', '--gs-setting', 'renderer=d3d12'],
                           ['--mode', 'pcsx2', '--gs-setting', 'gt4_readback=accurate'],
                           ['--mode', 'pcsx2', '--gs-setting', 'hw_download_mode=accurate', '--gs-readback', 'unsynchronized'],
@@ -335,8 +351,8 @@ class ProbeEnvironmentTests(unittest.TestCase):
             probe.gs_config_text({'GT4_PRESENT_MODE': 'mailbox', 'GT4_GS_SETTINGS': '{"vsync": false}'})
         with self.assertRaisesRegex(ValueError, 'GT4_GS_ASPECT must be one of'):
             probe.gs_config_text({'GT4_GS_ASPECT': 'wide'})
-        with self.assertRaisesRegex(ValueError, 'GT4_GS_SCALE must be an integer from 1 to 8'):
-            probe.gs_config_text({'GT4_GS_SCALE': '9'})
+        with self.assertRaisesRegex(ValueError, 'GT4_GS_SCALE must be an integer from 1 to 12'):
+            probe.gs_config_text({'GT4_GS_SCALE': '13'})
         with self.assertRaisesRegex(ValueError, 'GT4_PRESENT_MODE must be one of'):
             probe.gs_config_text({'GT4_PRESENT_MODE': 'adaptive'})
 
@@ -398,7 +414,7 @@ NUMBER_EXPECTED = {
 KEY_EXPECTED = {
     'fxaa': 'fxaa',
     'manual_hacks': 'UserHacks',
-    'mipmap': 'mipmap',
+    'mipmap': 'hw_mipmap',
     'antiblur': 'pcrtc_antiblur',
     'offsets': 'pcrtc_offsets',
     'overscan': 'pcrtc_overscan',
@@ -477,6 +493,84 @@ class ResolvedValueTests(unittest.TestCase):
         self.assertNotIn(('EmuCore/GS', 'ManualUserHacks'), entries)
         self.assertNotIn(('EmuCore/GS', 'HWMipmap'), entries)
         self.assertNotIn(('EmuCore/GS', 'FXAA'), entries)
+
+
+class PageLayoutTests(unittest.TestCase):
+    def test_graphics_page_is_basic_only(self):
+        basic = [row['id'] for row in rows() if row['page'] == 'basic']
+        self.assertEqual(basic, ['gs_engine', 'upscale', 'aspect', 'fxaa', 'cas_mode', 'cas_sharpness'])
+        self.assertEqual(by_id()['upscale']['control'], 'slider')
+        self.assertEqual((by_id()['upscale']['min'], by_id()['upscale']['max']), (1, 12))
+
+    def test_advanced_page_holds_the_rest_of_the_user_options(self):
+        advanced = [row for row in rows() if row['page'] == 'advanced']
+        self.assertEqual(len(advanced), 36)
+        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 37)))
+        self.assertTrue({'renderer', 'deinterlace', 'shade_boost', 'linear_present', 'tv_shader', 'osd_fps',
+                         'hw_download_mode', 'filter', 'trilinear', 'anisotropic'} <= {row['id'] for row in advanced})
+
+    def test_orders_are_unique_per_page(self):
+        seen = set()
+        for row in rows():
+            self.assertNotIn((row['page'], row['order']), seen, row['id'])
+            seen.add((row['page'], row['order']))
+
+    def test_mods_and_hidden_rows_are_on_neither_page(self):
+        offered_ids = {row['id'] for row in gs_settings.offered(rows())}
+        for row in rows():
+            if row['page'] in ('mods', 'hidden'):
+                self.assertNotIn(row['id'], offered_ids, row['id'])
+        self.assertEqual(sorted(row['id'] for row in rows() if row['page'] == 'mods'),
+                         sorted(['texture_load', 'texture_load_async', 'texture_precache', 'texture_dump',
+                                 'texture_dump_mipmaps', 'texture_dump_fmv']))
+
+    def test_renderer_choice_is_the_only_coregs_option(self):
+        choices = [choice['name'] for choice in by_id()['gs_engine']['choices']]
+        self.assertEqual(choices, ['pcsx2', 'coregs-1.1'])
+        self.assertEqual(by_id()['gs_engine']['written'], 'never')
+        self.assertIn('gs_engine', {row['id'] for row in gs_settings.offered(rows())})
+        self.assertNotIn('gs_engine', gs_settings.render_ini(rows()))
+
+    def test_no_fsr_row(self):
+        self.assertFalse(any('fsr' in row['id'] for row in rows()))
+        self.assertIn('cas_mode', by_id())
+
+
+class ResetToDefaultsTests(unittest.TestCase):
+    def test_reset_gives_the_exact_default_ini(self):
+        settings = gs_settings.reset_to_defaults(rows())
+        self.assertEqual(gs_settings.render_ini(rows(), settings), LEGACY_DEFAULT)
+
+    def test_reset_holds_only_settable_user_rows(self):
+        settings = gs_settings.reset_to_defaults(rows())
+        self.assertEqual(settings['upscale'], '3')
+        self.assertEqual(settings['renderer'], 'vulkan')
+        for identifier in settings:
+            row = by_id()[identifier]
+            self.assertEqual(row['status'], 'ok', identifier)
+            self.assertNotIn(row['written'], ('never', 'launcher'), identifier)
+        for identifier in ('gs_engine', 'cache_folder', 'data_root', 'filter', 'texture_load'):
+            self.assertNotIn(identifier, settings)
+
+    def test_defaults_profile_is_in_the_table(self):
+        with gs_settings.TABLE_PATH.open('rb') as handle:
+            profiles = tomllib.load(handle)['profile']
+        self.assertEqual([profile['name'] for profile in profiles], ['gt4-defaults'])
+
+    def test_when_set_row_equal_to_its_default_is_not_written(self):
+        text = gs_settings.render_ini(rows(), {'fxaa': 'false', 'antiblur': 'true', 'upscale': '3'})
+        self.assertEqual(text, LEGACY_DEFAULT)
+
+    def test_twelve_x_needs_no_extended_key(self):
+        text = gs_settings.render_ini(rows(), gs_settings.settings_from_assignments(['upscale=12'], rows()))
+        self.assertIn('upscale_multiplier = 12\n', text)
+        self.assertNotIn('ExtendedUpscalingMultipliers', text)
+        self.assertEqual(by_id()['extended_upscale']['page'], 'hidden')
+        self.assertEqual(by_id()['extended_upscale']['written'], 'when-set')
+
+    def test_mipmap_uses_the_hardware_key(self):
+        self.assertEqual(by_id()['mipmap']['key'], 'hw_mipmap')
+
 
 
 if __name__ == '__main__':

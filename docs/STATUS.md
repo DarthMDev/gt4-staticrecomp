@@ -2,6 +2,8 @@
 
 ## Current state (2026-10-16)
 
+**slice199 (TASK-041 on the JIT-free gt4-gs 0.4.0, branch `task/041-gs-perf`, fork `gt4gs/nojit`, `gt4gs-v0.4.0`):** the slice198 game build (same file and hash) with the JIT-free gt4-gs 0.4.0 package of slice197. `--mode pcsx2` = slice199; `--mode pcsx2-slice198` and `--mode pcsx2-slice197` stay for A/B. Owner test of slice198 (gt4-gs 0.3.2) on 2026-10-16, night race with 5 AI: 59.97 FPS, 53 late frames (69 before), EE waits for the VU1 worker 2.99 ms (3.48 before), readback 0.69 ms, EE critical path 11.81 of 16.68 ms (71%), headroom 4.87 ms, no frametime spikes once the shader cache was warm. CTest 29/29, Python 438 OK, 20 skipped; donor 42/42 identical to slice157; pcsx2 1x 41/41 identical to slice198; no-JIT static check passes on the package. [GS-LIVE](GS-LIVE.md) sections 9 and 10. Owner night-race check on 0.4.0 pending.
+
 **slice198 (TASK-041, branch `task/041-gs-perf`, fork unchanged, `gt4gs-v0.3.2`):** performance of the PCSX2 GS path.
 A headless race schedule (El Capitan, 5 AI) reproduces the night-race privileged-write pattern: the 3.48 ms/frame
 `gs_privileged` wait is the EE waiting for the frame's VU1 work at the CSR write right before the flare readback.
@@ -10,7 +12,15 @@ gs_privileged wait is 0 but moves to the readback's download sync (no net gain e
 readbacks are pipeline compiles (cold cache max 58 ms, warm 2.7 ms; TASK-046). Wake batching (`GT4_GS_WAKE_BYTES`)
 cuts GS wake-ups from 322 to about 12 per frame and `gs_ipc_write` by about 30% per MB. F8 `[gs-ipc]` gains
 per-register lines and an EE critical path summary. CTest 29/29, Python 416 OK, donor 42/42, pcsx2 41/41.
-`--mode pcsx2` = slice198. Owner night-race A/B pending. [GS-LIVE](GS-LIVE.md) section 9.
+Owner test 2026-10-16 (see slice199 above). `--mode pcsx2` was slice198 until slice199. [GS-LIVE](GS-LIVE.md) section 9.
+
+**slice197 (TASK-042, branch `task/042-gs-nojit`, fork `gt4gs/nojit`, `gt4gs-v0.4.0`):** JIT-free `gt4-gs.exe`. Build
+option `GT4GS_ONLY`: no EE/IOP/VU/VIF recompilers, no x86 emitter, no GS software JIT (C rasterizer), no executable
+memory; Windows Arbitrary Code Guard on at start (works with the AMD Vulkan driver). Static check passes (0.3.2: 22
+markers); replayed menu frames byte-identical to 0.3.2 at 1x and 3x; GS thread time unchanged within noise. CTest
+29/29, Python 414 OK, donor 42/42, live pcsx2 41/41 = slice196. `--mode pcsx2` was slice197 until slice199 (same game runtime). Owner
+windowed check pending. [GS-LIVE](GS-LIVE.md) section 10.
+
 
 **slice196 (TASK-047, branch `task/047-gs-deinterlace`, fork `gt4gs/deinterlace`, `gt4gs-v0.3.2`):** 480i menus in the
 PCSX2 GS mode. Cause: the stream had no SYNCV (PCSX2 never deinterlaced; fields line-doubled and bouncing) and,

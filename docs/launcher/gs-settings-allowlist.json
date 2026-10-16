@@ -45,11 +45,27 @@
     },
     {
       "section": "EmuCore/GS",
+      "key": "ExtendedUpscalingMultipliers"
+    },
+    {
+      "section": "EmuCore/GS",
       "key": "FMVAspectRatioSwitch"
     },
     {
       "section": "EmuCore/GS",
+      "key": "HWAA1"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "HWAccurateAlphaTest"
+    },
+    {
+      "section": "EmuCore/GS",
       "key": "HWDownloadMode"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "HWROV"
     },
     {
       "section": "EmuCore/GS",
@@ -70,6 +86,10 @@
     {
       "section": "EmuCore/GS",
       "key": "OsdMessagesPos"
+    },
+    {
+      "section": "EmuCore/GS",
+      "key": "OsdPerformancePos"
     },
     {
       "section": "EmuCore/GS",
@@ -141,6 +161,10 @@
     },
     {
       "section": "EmuCore/GS",
+      "key": "disable_interlace_offset"
+    },
+    {
+      "section": "EmuCore/GS",
       "key": "dithering_ps2"
     },
     {
@@ -153,11 +177,11 @@
     },
     {
       "section": "EmuCore/GS",
-      "key": "linear_present_mode"
+      "key": "hw_mipmap"
     },
     {
       "section": "EmuCore/GS",
-      "key": "mipmap"
+      "key": "linear_present_mode"
     },
     {
       "section": "EmuCore/GS",

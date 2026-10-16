@@ -77,8 +77,14 @@ PERF_PROFILES = {
     'pcsx2-slice196': ('slice196-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
     # TASK-041 (slice198): privileged GS writes queued in the MTVU journal instead of draining the VU1 worker
     # (GT4_MTVU_PRIV_ASYNC, default 1), one copy less per worker GIF record, F8 [gs-ipc] per-register lines and the EE
-    # critical path summary. Same gt4-gs 0.3.2 package as slice196. Mode pcsx2 points here.
-    'pcsx2': ('slice198-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
+    # critical path summary. Same gt4-gs 0.3.2 package as slice196.
+    'pcsx2-slice198': ('slice198-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
+    # TASK-042 (slice197): the JIT-free gt4-gs 0.4.0 (no recompilers, no GS software JIT, no executable memory,
+    # Arbitrary Code Guard). Same game runtime as slice196.
+    'pcsx2-slice197': ('slice197-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
+    # TASK-041 (slice199): candidate: the slice198 game runtime with the JIT-free gt4-gs 0.4.0 (no recompilers,
+    # no GS software JIT); the perf changes of slice198 run with the 0.4.0 package. Mode pcsx2 points here.
+    'pcsx2': ('slice199-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -88,12 +94,12 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
-                     'slice198-pcsx2.json')
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
-                     'slice198-pcsx2.json')
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -121,7 +127,7 @@ GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_C
 # docs/launcher/gs-settings.toml; the gt4-gs.ini writer is gs_config_text below (scripts/gs_settings.py).
 GS_SETTINGS_ENV = 'GT4_GS_SETTINGS'
 # TASK-036 (slice193): the minimal gt4-gs.ini values, kept as the names the launcher and tests use.
-GS_SCALES = tuple(str(n) for n in range(1, 9))
+GS_SCALES = tuple(str(n) for n in range(1, 13))
 GS_DEFAULT_SCALE = '3'
 # GT4_GS_ASPECT: display aspect of the GS output. 16:9 is the game's setting (widescreen card); auto is PCSX2's
 # "Auto 4:3/3:2" (used to compare with the TASK-034 proof-of-concept images).
@@ -221,14 +227,14 @@ def gs_settings_from_environment(environment, rows):
     """The checked GS settings of a pcsx2 run, from the table (docs/GS-SETTINGS.md).
 
     GT4_GS_SETTINGS (JSON from play_performance.py --gs-setting ID=VALUE) holds the user settings. The shortcuts
-    GT4_GS_SCALE (upscale, default 3), GT4_GS_ASPECT (aspect) and GT4_GS_READBACK (hw_download_mode, default accurate)
+    GT4_GS_SCALE (upscale, 1 to 12, default 3), GT4_GS_ASPECT (aspect) and GT4_GS_READBACK (hw_download_mode, default accurate)
     set the same rows; a shortcut and a JSON setting for the same row conflict.
     """
     settings = {}
     if environment.get(GS_SETTINGS_ENV):
         settings = gs_settings.settings_from_json(environment[GS_SETTINGS_ENV], rows)
     index = gs_settings.rows_by_id(rows)
-    shortcuts = (('GT4_GS_SCALE', 'upscale', 'GT4_GS_SCALE must be an integer from 1 to 8'),
+    shortcuts = (('GT4_GS_SCALE', 'upscale', 'GT4_GS_SCALE must be an integer from 1 to 12'),
                  ('GT4_GS_ASPECT', 'aspect', 'GT4_GS_ASPECT must be one of ' + ', '.join(
                      gs_settings.offered_choices(index['aspect']))),
                  ('GT4_GS_READBACK', 'hw_download_mode', 'GT4_GS_READBACK must be one of ' + ', '.join(

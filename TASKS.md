@@ -75,14 +75,24 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑037 | PCSX2 GS readbacks and the night race | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 69 late frames (was 213); accurate readbacks are the default, unsynchronized optional (drops headlight flares) |
 | TASK‑038 | GS window, fullscreen, focus, input and crash handling | ✅ Done · owner test 2026-10-16: fullscreen, Alt+Tab and the click-in-picture focus fix (gt4-gs 0.3.1); crash grace frames and CoreGS 1.1 restart offer |
 | TASK‑039 | GS settings table and `gt4-gs.ini` | ✅ Done (main-repo part): 51-row table drives `gt4-gs.ini`; fork allow-list enforcement pending |
-| TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
-| TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | 🔧 slice198 built (`task/041-gs-perf`); owner night-race A/B pending |
-| TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | 📋 Planned |
+| TASK‑040 | Texture dumping and replacement packs | ➡️ Folded into TASK-050 (mod manager, release 1.1.0) |
+| TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes |
+| TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
 | TASK‑047 | PCSX2 GS deinterlacing in the 480i menus (field and interlace state in the stream) | ✅ Done · owner test 2026-10-16: 480i menus clean on Automatic; root cause missing SYNCV and a one-field-early VSYNC field (protocol 1.1, gt4-gs 0.3.2) |
+| TASK‑048 | Mod manager in the launcher (umbrella): texture packs first, Content Manager style | 📋 Planned for 1.1.0 (umbrella; owner decisions 2026-10-16) |
+| TASK‑049 | GS settings curation for the launcher: Graphics and Advanced pages, reset to defaults, 12x, widescreen finding | ✅ Done · decisions 2026-10-16; default gt4-gs.ini unchanged; 58-row table ([settings](docs/GS-SETTINGS.md)) |
+| TASK‑050 | Texture replacement contract and headless dump/replace round trip (absorbs TASK-040) | 📋 Planned for 1.1.0 |
+| TASK‑051 | `gt4mods` core: manifest, pack detection, validation, import, store | 📋 Planned for 1.1.0 |
+| TASK‑052 | Mods active view (hardlinks), priority, conflicts, uninstall, `gt4mods` CLI | 📋 Planned for 1.1.0 |
+| TASK‑053 | GS settings and dev launcher wiring for mods (texture rows off Graphics, `[Folders] Textures`) | 📋 Planned for 1.1.0 |
+| TASK‑054 | Launcher Mods page (mockup, then Tauri) | 📋 Planned for 1.1.0 |
+| TASK‑055 | Mod creator tools: dump workspace, package as mod | 📋 Planned for 1.1.0 |
+| TASK‑056 | Live texture reload in gt4-gs | 📋 Planned for 1.1.0 |
+| TASK‑057 | Study: other mod kinds (GS presets, VOL overlay, data patches) | 📋 Planned for 1.1.0 |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ## Phase 2 — Android
@@ -443,7 +453,7 @@ deinterlace in menus.
 Parallel: with 037/038.
 State: ✅ Done (main-repo part); fork allow-list enforcement pending (TASK-037/038 agent). All rows resolved. Branch `task/039-gs-settings` (2026-10-16). Details: [GS-SETTINGS](docs/GS-SETTINGS.md).
 
-### TASK-040 — Texture dumping and replacement
+### TASK-040 — Texture dumping and replacement (folded into TASK-050, release 1.1.0)
 Repos: fork `gt4gs/textures`, main docs. Haiku, 1-2 sessions.
 Goal: folder layout `...\gs\textures\SCUS-97328\{replacements,dumps}` and `.zip` packs; dump, load, async,
 precache options; user documentation.
@@ -478,12 +488,24 @@ owner night-race A/B pending, no PR.
   Details: [GS-LIVE](docs/GS-LIVE.md) section 9.
 
 ### TASK-042 — JIT-free `gt4-gs.exe`
-Repo: fork, branch `gt4gs/no-jit`. Opus, 3-5 sessions.
+Repos: both, branches `gt4gs/nojit` (fork, from `gt4gs/main` `660017bb1`) and `task/042-gs-nojit` (main, from `a1a06a4`).
+Opus, 1 session.
 Goal: `GT4GS_ONLY` build without EE/IOP/VU recompilers, without RWX code mapping, with the C draw-scanline
 path or CPU sprite/CLUT render refused.
 Acceptance: binary scan finds no recompiler symbols; a VirtualAlloc/VirtualProtect audit shows no executable
 private memory; PoC and live frames unchanged; GSRunner tests still pass.
 Parallel: with 037-041 (fork-only).
+State (2026-10-16, slice197): built and published (`gt4gs-v0.4.0`, zip sha256 `5c92ad00...`); owner windowed check
+pending, no PR.
+- Fork option `GT4GS_ONLY`: no EE/IOP/VU/VIF recompilers, no x86 emitter, no GS software JIT (C rasterizer for CPU
+  sprite/CLUT render and the software renderer; no setting refused), no code area, executable protections refused;
+  Windows Arbitrary Code Guard on at start (works with the AMD Vulkan driver); executable-memory audit in the log.
+- Static check `tools/gs_nojit_check/check-nojit.ps1` (fork `gt4gs/check-nojit.ps1`, run by the release script): 0.4.0
+  passes, 0.3.2 shows 22 markers; `tests/python/test_gs_nojit.py` repeats it on the pinned package.
+- Offline menus replays (slice191 and slice196 streams, 1x and 3x): frames byte-identical to 0.3.2; also with CPU
+  sprite and CLUT render on. Live headless pcsx2 1x 41/41 = slice196; donor 42/42. GS thread time unchanged within
+  noise. `--mode pcsx2` = slice197 (same game runtime as slice196), `--mode pcsx2-slice196` kept.
+  Details [GS-LIVE](docs/GS-LIVE.md) section 9.
 
 ### TASK-043 — Launcher integration
 Repo: main, branch `task/019-launcher` (when the launcher resumes). Haiku, 2-3 sessions.
@@ -526,6 +548,128 @@ State (2026-10-16, slice196): built; owner check pending, no PR.
 - Static Garage menu, frames 1000-1199: slice195 comb 0.50, flicker 3.23; SYNCV with the old field comb 1.00
   (combing); slice196 comb 0.57, flicker 0. Progressive control identical. Samples:
   `private/slice196-deinterlace-samples`; details [GS-LIVE](docs/GS-LIVE.md) section 8.
+
+### TASK-048 — Mod manager in the launcher (umbrella)
+Plan: [MOD-MANAGER-PLAN](docs/launcher/MOD-MANAGER-PLAN.md).
+Goal: a Mods page where users install, enable, order and remove mods; texture packs for the PCSX2 GS first.
+Texture replacement is not a graphics setting: the launcher writes the GS keys from the enabled mods.
+Children: TASK-050..057. Legal: users bring their own packs; we never host or download packs.
+State: plan written 2026-10-16; owner answered all ten questions the same day (see below); release 1.1.0.
+
+### TASK-050 — Texture replacement contract and headless round trip
+Repos: main, branch `task/050-texture-contract` (from `main`); fork `gt4gs/textures` only if a summary log line is
+needed. Haiku, 1-2 sessions. PCSX2-tainted agent (never TASK-027).
+Goal: confirm the PCSX2 v2.8.2 replacement contract on our stream and correct GSDX-PLAN D.3 (no zip packs;
+duplicates resolved by enumeration order; PNG only 8-bit RGB/RGBA; `-mipN` files ignored; `[Folders] Textures`
+relative to `DataRoot`). Measure map scan time, RAM (with and without precache) and VRAM on a synthetic
+10,000-file pack.
+Acceptance:
+- Python test (skipped without the private capture): replay twice with dumping on, identical dump name sets;
+  solid-magenta replacement of a texture used in frame K appears in frame K (`Async = false`) and within 2 vsyncs
+  with `Async = true`; one-digit-changed name, `-mip1` name and empty view leave frames byte-identical to the
+  baseline; duplicate-key rule recorded.
+- Name-parser fixture built from real dump names (all parse; round trip name → key → name).
+- Measurements recorded in GS-LIVE or a new `docs/GS-TEXTURES.md`; D.3 corrected; `gs-settings.toml` texture rows
+  get their sources.
+- Optional: name-set overlap ≥ 95% against a PCSX2 v2.8.2 dump of the same menu scene; owner tries a community
+  pack if available.
+Risks: hash-relevant settings (`HWMipmap`, `TriFilter`, `UserHacks_EstimateTextureRegion`) differ from a pack
+author's; the capture may not contain the texture chosen (pick from the dump set itself).
+
+### TASK-051 — `gt4mods` core: manifest, detection, validation, import, store
+Repo: main, branch `task/051-mods-core` cut from `task/019-launcher` (the launcher workspace lives there); new
+UI-free crate `launcher/crates/gt4mods`. Haiku, 3 sessions; Opus reviews the validation code (plan 5.2).
+Goal: `gt4mod.toml` schema 1 and `files.lock.json`; import from zip or folder with or without a manifest;
+detection of raw PCSX2 layouts (`SCUS-97328/replacements`, bare `replacements`, name-majority folders); texture
+key parser (all five name forms); PNG/DDS validation; staging and atomic commit into `mods\store\<id>\`;
+registry `mods.toml` written with temp + `ReplaceFileW`; operation journal and recovery at start.
+Acceptance: Rust tests with synthetic zips: zip-slip (`..`, absolute, drive, ADS, device names, case
+collisions), zip bomb (ratio, total, entries, lying headers), symlink and encrypted entries refused; PNG 16-bit,
+paletted and interlaced detected; DDS block-size and truncated data detected; within-pack duplicate rule; kill
+between steps leaves a recoverable state; update of an installed id keeps enabled state and order.
+Risks: very large packs (streaming hash and extraction, progress and cancel); non-ASCII and long paths.
+
+### TASK-052 — Active view, priority, conflicts, uninstall, CLI
+Repo: main, branch `task/052-mods-view` (after TASK-051, same base). Haiku, 2 sessions.
+Goal: build `mods\active\textures\SCUS-97328\replacements\` with one hardlink per winning texture key (top of
+the list wins), copy fallback when hardlinks fail; view digest; atomic swap (`active.new` → `active`); conflict
+report per mod; enable/disable/move without reinstall; uninstall to the Recycle Bin with the quota check; a
+`gt4mods` CLI (`list`, `import`, `enable`, `disable`, `move`, `remove`, `build-view`, `report`) for tests and
+the dev launcher.
+Acceptance: Rust tests: each key exactly once in the view; priority changes switch the winner; identical-content
+collisions not reported; view rebuilt only when the digest changes; refused while the game lock is held;
+tampered view detected and rebuilt; copy fallback on a non-NTFS temp volume (or simulated failure); Recycle Bin
+path covered by a fake platform layer. Manual: 10,000-file view build time recorded.
+Risks: hardlink limits (1,023 links per file, irrelevant here); antivirus scanning many new links.
+
+### TASK-053 — GS settings and dev launcher wiring for mods
+Repo: main, branch `task/053-mods-gs-wiring` (from `main`). Haiku, 1 session.
+Goal: in `docs/launcher/gs-settings.toml` move `texture_load`, `texture_load_async`, `texture_precache` off the
+Graphics page (`page = "Mods"`, `visibility = "hidden"`, `written = "launcher"`), move the dump rows to a creator
+group, add `textures_folder` (`[Folders] Textures`, `path`, launcher, absolute); `scripts/gs_settings.py`
+accepts the new page; `external_runtime_probe.py` / `play_performance.py --textures-root <dir>` writes the
+folder and `LoadTextureReplacements = true` when the folder has files; `result.json` records the folder digest.
+Acceptance: Python tests: golden INI unchanged without the option; with the option, the three keys and the
+folder appear; relative paths refused; UTF-8 path with non-ASCII characters round trips; allow-list regenerated;
+pins regenerated where the probe changes. Owner: one in-game run with a synthetic or community pack.
+Risks: gt4-gs pin and allow-list drift (TASK-037/038 enforcement).
+
+### TASK-054 — Launcher Mods page
+Repo: launcher branch after TASK-019 resumes (Tauri 2). Haiku, 2-3 sessions.
+Goal: `mockup-mods.html` (states: empty, list, details, import progress, conflict, remove confirm, wrong
+renderer) for owner approval, then the Tauri page and commands (`mods_list`, `mods_import`, `mods_set_enabled`,
+`mods_move`, `mods_remove`, `mods_details`, progress and cancel events); drag and drop of zips; Inbox folder
+import at start; controller navigation (D-pad focus, Cross toggle, Triangle details, L1/R1 priority, Square
+remove, Start install help, Circle back); the view is rebuilt before Play and its digest written to `launch.json`.
+Acceptance: owner approves the mockup; Rust command tests; UI test of keyboard and XInput focus order; owner
+installs, reorders and removes a pack end to end.
+Risks: WebView file drop and CSP; long imports must not block the UI thread.
+
+### TASK-055 — Mod creator tools
+Repos: launcher branch (UI and packaging), main docs. Haiku, 1-2 sessions.
+Goal: collapsed "Creator" section: "Dump textures" for the next Play (folder `mods\creator\textures`, dump keys
+written by the launcher, FMV off), open dumps and work folders, "Package as mod" (zip with `gt4mod.toml`,
+validated by the TASK-051 importer), "Clear dumps" (Recycle Bin); `docs/MODDING.md` for pack authors (names,
+formats, alpha scale, BC7 with mips advice, hash-relevant settings).
+Acceptance: a dump session produces PNGs in the creator folder only; a packaged work folder re-imports cleanly;
+docs reviewed by the owner.
+Risks: dumping cost in races (documented banner).
+
+### TASK-056 — Live texture reload in gt4-gs (after 1.0.0)
+Repos: fork `gt4gs/texture-reload`, main. Haiku, 1-2 sessions.
+Goal: a control message (`reload_textures`) that calls the replacement map reload on the GS thread, and a game
+window key that sends it, so creators see edits without restarting.
+Acceptance: headless test: replacement added during a replay appears after the message; no leak across reloads.
+Risks: protocol version bump; reload stalls (sync worker thread wait).
+
+### TASK-057 — Study: other mod kinds (after 1.0.0)
+Repo: main docs only. Opus, 1 session.
+Goal: decide on `gs-preset` mods (bundles of `gs-settings.toml` rows), a read-only `GT4.VOL` overlay for data mods
+(cars, tracks, menus; Spec II idea), and RAM data patches; code patches stay out (AOT EE).
+Acceptance: a decision record with risks and effort; no code.
+
+Release: 1.1.0. Owner decisions (2026-10-16)
+
+1. The mod manager is **not in release 1.0.0**; it is planned for **1.1.0**. It is tracked in TASKS.md only
+   (not in the README task table). The launcher's Mods tab stays hidden in 1.0.0.
+2. Priority: the mod higher in the list wins a texture conflict.
+3. TASK-040 is folded into TASK-050.
+4. The "precache all textures" toggle is hidden (off by default; RAM risk).
+5. PAL-version packs are allowed with a warning.
+6. PNGs in an unsupported format: the launcher shows a warning and asks whether to convert them to 8-bit.
+7. Third-party pack catalogue: not now, but planned later (we never host packs ourselves).
+8. Limits: 20 GiB per pack; zip and loose-folder import.
+9. Creator texture dumps are taken with mods off, from a creator option in the Advanced settings.
+10. A pack too big for the Recycle Bin: ask clearly, then delete permanently only after on-screen confirmation.
+
+### TASK-049 - GS settings curation for the launcher
+Done (2026-10-16). Owner decisions applied to `docs/launcher/gs-settings.toml` (58 rows, `page`, `order`, `control`,
+`gt4-defaults` profile): Graphics page = renderer choice (PCSX2 GS or CoreGS 1.1), internal resolution slider 1 to 12,
+aspect, FXAA, CAS mode and sharpness; Advanced page = 36 rows pre-configured to the GT4 ideal; texture rows on `mods`.
+Findings (PCSX2 v2.8.2, [GS-SETTINGS](docs/GS-SETTINGS.md)): FSR 1.0 does not exist in v2.8.2 (CAS only);
+12x needs no `ExtendedUpscalingMultipliers` (the device limit is `max texture size / 1280`); READY does not carry the
+device limit yet; widescreen patches are pnach EE patches and are not exposed. `reset_to_defaults()` reproduces the
+default gt4-gs.ini byte for byte. Default gt4-gs.ini unchanged. The `mipmap` key is now `hw_mipmap`.
 
 ## Phase 2 — Android details
 

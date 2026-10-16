@@ -35,14 +35,16 @@ class Slice198PinTests(unittest.TestCase):
     def manifest(self, name=MANIFEST):
         return json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
 
-    def test_mode_pcsx2_selects_slice198_and_slice196_stays(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], (MANIFEST, EXECUTABLE))
+    def test_mode_pcsx2_slice198_stays_selectable_and_slice196_stays(self):
+        # Since slice199 --mode pcsx2 points at slice199 (same game build, gt4-gs 0.4.0); slice198 is kept for A/B.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice198'], (MANIFEST, EXECUTABLE))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice196'],
                          ('slice196-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'))
         self.assertIn(MANIFEST, probe.VU1_AOT_MANIFESTS)
         self.assertIn(MANIFEST, probe.VU0_AOT_MANIFESTS)
-        self.assertIn('pcsx2', performance.MODES)
+        self.assertIn('pcsx2-slice198', performance.MODES)
         self.assertIn('pcsx2-slice196', performance.MODES)
+
 
     def test_launcher_pin_keeps_the_slice196_inputs(self):
         manifest, previous = self.manifest(), self.manifest('slice196-pcsx2.json')
@@ -64,6 +66,39 @@ class Slice198PinTests(unittest.TestCase):
             path = ASSETS / entry['path']
             self.assertEqual((path.stat().st_size, sha256(path)), (entry['size_bytes'], entry['sha256']), entry['path'])
 
+
+class Slice199PinTests(unittest.TestCase):
+    def manifest(self, name='slice199-pcsx2.json'):
+        return json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
+
+    def test_mode_pcsx2_selects_slice199_with_the_slice198_game_build(self):
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice199-pcsx2.json', EXECUTABLE))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice198'], (MANIFEST, EXECUTABLE))
+        self.assertIn('slice199-pcsx2.json', probe.VU1_AOT_MANIFESTS)
+        self.assertIn('slice199-pcsx2.json', probe.VU0_AOT_MANIFESTS)
+        self.assertIn('pcsx2', performance.MODES)
+        self.assertIn('pcsx2-slice198', performance.MODES)
+        self.assertIn('pcsx2-slice197', performance.MODES)
+
+    def test_slice199_differs_from_slice198_only_in_the_gs_package(self):
+        manifest, previous = self.manifest(), self.manifest(MANIFEST)
+        self.assertEqual(manifest['slice'], 199)
+        self.assertEqual(manifest['measurement_mode'], 'pcsx2')
+        self.assertEqual(manifest['runtime'], previous['runtime'])
+        for key in ('source_capsule', 'port_capsule', 'shader_capsule', 'vu1_aot', 'vu0_aot', 'card_seeds',
+                    'frozen_game_library', 'environment', 'toolchain'):
+            self.assertEqual(manifest[key], previous[key], key)
+        self.assertEqual(manifest['gs_stream']['gs_process'], 'private/slice197-gt4gs-release-pkg/gt4-gs.exe')
+        self.assertEqual(manifest['gs_stream']['gs_package']['zip']['name'], 'gt4-gs-0.4.0-windows-x64.zip')
+        self.assertEqual(manifest['gs_stream']['gs_package']['tree_sha256'],
+                         'e9402cf27a2aab468ff66be0dcf289d1c40868f68eba5033ccbb1de40835f223')
+        others = [item for item in manifest['runtime_dependencies'] if 'gt4-gs' not in item['path']]
+        self.assertEqual(others, [item for item in previous['runtime_dependencies'] if 'gt4-gs' not in item['path']])
+        gs_pin = [item for item in manifest['runtime_dependencies'] if item['path'].endswith('gt4-gs.exe')]
+        self.assertEqual(gs_pin, [{'path': 'private/slice197-gt4gs-release-pkg/gt4-gs.exe', 'size_bytes': 8928256,
+                                   'sha256': '1c4c45daf478a44ec49b3f5fffdd09373406c7ac3d8ea9b82b6e2f34c96fb4f1'}])
+        self.assertIn('GT4_MTVU_PRIV_ASYNC', manifest['classification'])
+        self.assertIn('GT4GS_ONLY', manifest['gs_stream']['gs_package']['source'])
 
 class SwitchTests(unittest.TestCase):
     def test_privileged_async_switch_default_matches_the_native_default(self):
