@@ -59,7 +59,7 @@
   "date": "2026-10-15",
   "baseline_commit": "main baf3459",
   "branch": "task/017-license-crash (diagnostic, not merged)",
-  "measurement_mode": "main",
+  "measurement_mode": "license-trace",
   "vu_scope_profile": "unit_split_run_fast_only",
   "classification": "TASK-017 license-trace candidate: the slice166 main build (same runtime capsule family, VU1 all entries plus VU0 AOT) with the FSV read trace in iop/cdvdfsv.cpp. Diagnostic only: GT4_FSV_TRACE=1 logs one [fsv] line per guest disc read (lsn, sectors, dst, bytes, crc32). Not a performance candidate; no measurement claim.",
   "runtime": {
