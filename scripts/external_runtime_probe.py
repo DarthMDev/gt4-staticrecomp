@@ -52,6 +52,10 @@ PERF_PROFILES = {
     # TASK-017 diagnostic candidate (slice181): the slice166 profile plus the FSV read trace (GT4_FSV_TRACE=1
     # writes one [fsv] line per guest disc read to stderr). Not a performance candidate.
     'license-trace': ('slice181-license-trace.json', 'private/slice181-license-build/build/gt4vulkan.exe'),
+    # TASK-017 halt-dump candidate (slice204): the slice181 license-trace profile plus the halt forensic dump in kernel.cpp.
+    # The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; [halt-dump] lines go to stderr at the halt.
+    # Diagnostic only; not a performance candidate.
+    'license-halt': ('slice204-halt-trace.json', 'private/slice204-halt-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -347,6 +351,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment.update(GT4_PERF='1', PS2_SCALE='1', PS2_GS='gpu')
         result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu'}
         result['measurement_mode'] = runtime_evidence.get('measurement_mode', 'detailed')
+        if runtime_evidence.get('measurement_mode') == 'license-halt':
+            # TASK-017 (slice204): the halt dump and the FSV read trace are both on for this diagnostic mode.
+            environment.update(GT4_FSV_TRACE='1', GT4_HALT_DUMP='1')
+            result['halt_dump_environment'] = {'GT4_FSV_TRACE': '1', 'GT4_HALT_DUMP': '1'}
         result['vulkan_loader_environment'] = {
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
     if 'GT4_GS_SYNC' in environment:

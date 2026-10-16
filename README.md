@@ -143,7 +143,7 @@ in game before it is merged.
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
 | TASK‑016 | IOP per-module cost review | 📋 Planned |
-| TASK‑017 | License-test crash | 📋 Planned |
+| TASK‑017 | License-test crash | In progress: halt-dump build ready (slice 204), owner run pending |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | 🔄 Design done |
 | TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | 📋 Planned |

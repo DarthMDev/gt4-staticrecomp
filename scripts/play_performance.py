@@ -47,6 +47,10 @@ License trace (--mode license-trace, slice181, TASK-017): the slice166 profile w
 Set GT4_FSV_TRACE=1 before launching; each guest disc read is logged to stderr as "[fsv] read ...".
 Diagnostic only: the run is not a performance measurement. Compare the log with the disc using
 scripts/compare_fsv_trace.py <log> <iso>.
+
+License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profile with the halt forensic dump.
+The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
+Diagnostic only: the run is not a performance measurement.
 """
 import argparse
 import sys
