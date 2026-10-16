@@ -10,18 +10,21 @@ use std::time::Duration;
 
 use gt4controls::{self as controls_file, default_bindings};
 use gt4l_core::exit::{self, Outcome};
+use gt4l_core::gs_release;
+use gt4l_core::launch;
 use gt4l_core::paths::{self, DataDirs, GAME_EXECUTABLE};
+use gt4l_core::settings;
 use gt4l_core::{Settings, LAUNCHER_VERSION};
 use gt4l_disc::setup as disc_setup;
 use gt4l_disc::Pins;
 use gt4l_platform::{game, pad};
 use gt4saves::library::Report;
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 
-use crate::model::{self, ControlDto, RowDto, TriggerDto};
+use crate::model;
 use crate::saves::{self, Item};
 use crate::state::{self, lock, AppState, Shared};
 
@@ -40,8 +43,7 @@ pub struct Snapshot {
     pub visual_page: Option<String>,
 }
 
-#[tauri::command]
-pub fn app_state(shared: State<'_, Shared>) -> Result<Snapshot, String> {
+fn snapshot_of(shared: State<'_, Shared>) -> Result<Snapshot, String> {
     let state = lock(shared.inner());
     let ready = state.home_ready();
     let disc_name = state
@@ -58,6 +60,30 @@ pub fn app_state(shared: State<'_, Shared>) -> Result<Snapshot, String> {
         setup_busy: state.setup_busy,
         visual_page: visual_page(),
     })
+}
+
+/// `app_state()`: `{setup: {state, step, progress, disc_name, problem}, game_running}` (ui/dev/README.md).
+/// Progress is 0 until the setup pipeline reports it (open item).
+#[tauri::command]
+pub fn app_state(shared: State<'_, Shared>) -> Result<Value, String> {
+    let snapshot = snapshot_of(shared)?;
+    let (state, step) = if snapshot.screen == "home" {
+        ("done", "checking")
+    } else if snapshot.setup_busy {
+        ("checking", "preparing")
+    } else {
+        ("needed", "checking")
+    };
+    Ok(json!({
+        "setup": {
+            "state": state,
+            "step": step,
+            "progress": 0.0,
+            "disc_name": snapshot.disc_name,
+            "problem": snapshot.home_message,
+        },
+        "game_running": snapshot.game_running,
+    }))
 }
 
 #[cfg(feature = "visual-check")]
@@ -82,21 +108,56 @@ fn visual_ready() -> bool {
 
 // Settings ------------------------------------------------------------------------------------
 
-/// Rows of one Settings tab (`graphics`, `display` or `advanced`), generated from the settings table.
+/// `get_settings_table()`: `{max_upscale, rows}`, the rows of ui/dev/README.md (see `model::settings_table`).
 #[tauri::command]
-pub fn settings_rows(page: String, shared: State<'_, Shared>) -> Result<Vec<RowDto>, String> {
-    let page = model::page_for_key(&page).ok_or_else(|| format!("unknown settings page '{page}'"))?;
+pub fn get_settings_table(shared: State<'_, Shared>) -> Result<Value, String> {
     let state = lock(shared.inner());
-    Ok(model::rows_for_page(&state.config.settings, page))
+    Ok(model::settings_table(&state.config.settings, &state.controls))
 }
 
-/// Sets one value. Refused values leave the setting unchanged and return the reason.
+/// `set_setting({id, value})`: a launcher row, a PCSX2 GS table row or a trigger row (`l2_deadzone`, `r2_curve`, ...).
+/// A refused value leaves the setting unchanged and returns the reason.
 #[tauri::command]
-pub fn settings_set(id: String, value: String, shared: State<'_, Shared>) -> Result<(), String> {
+pub fn set_setting(id: String, value: Value, shared: State<'_, Shared>) -> Result<(), String> {
     let mut state = lock(shared.inner());
-    state.config.settings.set(&id, &value).map_err(|error| error.to_string())?;
+    if let Some(definition) = settings::definition(&id) {
+        let text = model::value_text(&value, definition.kind == settings::Kind::Toggle)
+            .ok_or_else(|| format!("'{id}' needs a plain value"))?;
+        state.config.settings.set(&id, &text).map_err(|error| error.to_string())?;
+    } else if let Some((trigger, field)) = id.split_once('_').filter(|(name, _)| ["l2", "r2"].contains(name)) {
+        let current = state.controls.trigger_tuning(trigger);
+        let (deadzone, curve) = match field {
+            "deadzone" => (
+                value.as_f64().ok_or_else(|| format!("'{id}' needs a number"))? as f32,
+                current.curve.as_str().to_string(),
+            ),
+            "curve" => (
+                current.deadzone * 100.0,
+                value.as_str().ok_or_else(|| format!("'{id}' needs a curve name"))?.to_string(),
+            ),
+            _ => return Err(format!("unknown setting '{id}'")),
+        };
+        let tuning = model::trigger_tuning(deadzone, &curve)?;
+        state.controls.set_trigger_tuning(trigger, tuning).map_err(|error| error.to_string())?;
+        state.save_controls();
+        return Ok(());
+    } else if model::pcsx2_table_rows().iter().any(|row| row.id == id) {
+        let text = model::value_text(&value, false).ok_or_else(|| format!("'{id}' needs a plain value"))?;
+        state.config.settings.set_gs(&id, &text).map_err(|error| error.to_string())?;
+    } else {
+        return Err(format!("unknown setting '{id}'"));
+    }
     state.save_config();
     Ok(())
+}
+
+/// `reset_gs_settings_to_defaults()`: every PCSX2 GS table row back to its default. Returns the new table.
+#[tauri::command]
+pub fn reset_gs_settings_to_defaults(shared: State<'_, Shared>) -> Result<Value, String> {
+    let mut state = lock(shared.inner());
+    state.config.settings.clear_gs();
+    state.save_config();
+    Ok(model::settings_table(&state.config.settings, &state.controls))
 }
 
 // Play ------------------------------------------------------------------------------------------
@@ -139,17 +200,49 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     }
     let card = dirs.runtime_card();
     saves::prepare_card(&lock(&shared).library, &card)?;
-    let running = game::start(&dirs, &executable, &dirs.prepared().join(disc_setup::ELF_FILE), &disc, &settings, &extra)?;
+    // Decision 0070: PCSX2 GS when it is installed and selected; otherwise CoreGS 1.1 with a message.
+    let renderer_root = dirs.root().join("gs");
+    let installed = gs_release::installed(&renderer_root);
+    let (pcsx2, notice) = match launch::choose_renderer(&settings, installed.as_ref()) {
+        launch::RendererChoice::Pcsx2 => (installed.clone(), None),
+        launch::RendererChoice::CoreGs11 { reason } => (None, reason),
+    };
+    let elf = dirs.prepared().join(disc_setup::ELF_FILE);
+    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), &extra)?;
     {
         let mut state = lock(&shared);
         state.game_child = Some(running.child.clone());
-        state.home_message.clear();
+        state.home_message = notice.unwrap_or_default();
     }
     state::log(&dirs, &format!("game started, session {}", running.session_dir.display()));
     let _ = app.emit("game-state", json!({ "running": true, "message": "" }));
 
+    let mut pcsx2_used = pcsx2.is_some();
     std::thread::spawn(move || {
-        let outcome = game::wait_for_exit(&running);
+        let mut running = running;
+        let outcome = loop {
+            let outcome = game::wait_for_exit(&running);
+            let log_text = fs::read_to_string(&running.log_path).unwrap_or_default();
+            if !(pcsx2_used && launch::restart_requested(&log_text)) {
+                break outcome;
+            }
+            // The player chose "restart with the built-in renderer" after a PCSX2 GS failure (TASK-038).
+            state::log(&dirs, "PCSX2 GS asked for a restart; starting CoreGS 1.1");
+            drop(running);
+            match game::start(&dirs, &executable, &elf, &disc, &settings, None, &extra) {
+                Ok(next) => {
+                    lock(&shared).game_child = Some(next.child.clone());
+                    running = next;
+                    pcsx2_used = false;
+                }
+                Err(message) => {
+                    lock(&shared).game_child = None;
+                    lock(&shared).home_message = message.clone();
+                    let _ = app.emit("game-state", json!({ "running": false, "message": message }));
+                    return;
+                }
+            }
+        };
         match saves::harvest_card(&lock(&shared).library, &card) {
             Ok(report) => state::log(&dirs, &format!("card harvested: {report:?}")),
             Err(error) => state::log(&dirs, &format!("card not harvested: {error}")),
@@ -198,28 +291,27 @@ fn disc_present(path: &Path, pins: &Pins) -> bool {
 
 // Controls ----------------------------------------------------------------------------------------
 
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ControlsView {
-    pub controls: Vec<ControlDto>,
-    pub triggers: Vec<TriggerDto>,
-    pub status: String,
-    /// The input being captured, if a capture is running.
-    pub capturing: Option<String>,
-}
+// Controls ---------------------------------------------------------------------------------------
 
-fn controls_view(state: &AppState) -> ControlsView {
-    ControlsView {
-        controls: model::control_rows(&state.controls),
-        triggers: model::trigger_rows(&state.controls),
-        status: state.controls_status.clone(),
-        capturing: state.capturing.clone(),
-    }
-}
-
+/// `get_controls()`: `{controls: [{id, name, binding}], triggers: [row]}`. Triggers use the settings row shape.
 #[tauri::command]
-pub fn controls_list(shared: State<'_, Shared>) -> Result<ControlsView, String> {
-    Ok(controls_view(&lock(shared.inner())))
+pub fn get_controls(shared: State<'_, Shared>) -> Result<Value, String> {
+    let state = lock(shared.inner());
+    let controls: Vec<Value> = model::control_rows(&state.controls)
+        .into_iter()
+        .map(|row| json!({ "id": row.input, "name": row.ps2_name, "binding": row.short }))
+        .collect();
+    let table = model::settings_table(&state.config.settings, &state.controls);
+    let triggers: Vec<Value> = table["rows"]
+        .as_array()
+        .map(|rows| {
+            rows.iter()
+                .filter(|row| row["id"].as_str().is_some_and(|id| id.starts_with("l2_") || id.starts_with("r2_")))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(json!({ "controls": controls, "triggers": triggers }))
 }
 
 /// Replaces the sources of one kind (`key:` or `xinput:`) of an input and keeps the other kind.
@@ -239,17 +331,12 @@ fn bind_source(state: &mut AppState, input: &str, prefix: &str, source: String) 
     Ok(())
 }
 
-/// Starts waiting for a newly pressed controller control for `input`. The XInput poll runs on its
-/// own thread (`gt4l-platform`); the page hears the result through the `controls-capture` event.
-/// A button already held when the capture starts does not bind.
+/// `capture_binding({control})`: waits for the next newly pressed controller button and binds it. Resolves with
+/// `{control, binding}`. `cancel_capture` ends the wait with an error. A button held when the wait starts does not bind.
 #[tauri::command]
-pub fn controls_capture_start(
-    input: String,
-    app: AppHandle,
-    shared: State<'_, Shared>,
-) -> Result<(), String> {
-    if !model::bindable(&input) {
-        return Err(format!("'{input}' cannot be rebound"));
+pub async fn capture_binding(control: String, shared: State<'_, Shared>) -> Result<Value, String> {
+    if !model::bindable(&control) {
+        return Err(format!("'{control}' cannot be rebound"));
     }
     let shared: Shared = shared.inner().clone();
     let cancel = Arc::new(AtomicBool::new(false));
@@ -258,98 +345,64 @@ pub fn controls_capture_start(
         if let Some(previous) = state.capture_cancel.take() {
             previous.store(true, Ordering::Relaxed);
         }
-        state.capturing = Some(input.clone());
+        state.capturing = Some(control.clone());
         state.capture_cancel = Some(cancel.clone());
-        state.controls_status = format!("Press a controller button for {}. Esc cancels.", model::ps2_name(&input));
+        state.controls_status = format!("Press a controller button for {}. Esc cancels.", model::ps2_name(&control));
     }
-    let baseline = pad::read_first_connected().unwrap_or_default();
-    std::thread::spawn(move || loop {
-        if cancel.load(Ordering::Relaxed) {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(15));
-        let Some(now) = pad::read_first_connected() else {
-            continue;
-        };
-        let Some(source) = pad::captured_source(&baseline, &now, pad::Target::Button) else {
-            continue;
-        };
-        let mut state = lock(&shared);
-        if cancel.load(Ordering::Relaxed) || state.capturing.as_deref() != Some(input.as_str()) {
-            return;
-        }
-        state.capturing = None;
-        state.capture_cancel = None;
-        let result = bind_source(&mut state, &input, "xinput:", source);
-        let payload = match result {
-            Ok(()) => json!({ "input": input, "state": "bound", "message": state.controls_status }),
-            Err(message) => {
-                state.controls_status = message.clone();
-                json!({ "input": input, "state": "error", "message": message })
+    tauri::async_runtime::spawn_blocking(move || {
+        let baseline = pad::read_first_connected().unwrap_or_default();
+        loop {
+            if cancel.load(Ordering::Relaxed) {
+                return Err("capture cancelled".to_string());
             }
-        };
-        drop(state);
-        let _ = app.emit("controls-capture", payload);
-        return;
-    });
-    Ok(())
+            std::thread::sleep(Duration::from_millis(15));
+            let Some(now) = pad::read_first_connected() else {
+                continue;
+            };
+            let Some(source) = pad::captured_source(&baseline, &now, pad::Target::Button) else {
+                continue;
+            };
+            let mut state = lock(&shared);
+            if cancel.load(Ordering::Relaxed) || state.capturing.as_deref() != Some(control.as_str()) {
+                return Err("capture cancelled".to_string());
+            }
+            state.capturing = None;
+            state.capture_cancel = None;
+            bind_source(&mut state, &control, "xinput:", source)?;
+            let binding = model::control_rows(&state.controls)
+                .into_iter()
+                .find(|row| row.input == control)
+                .map(|row| row.short)
+                .unwrap_or_default();
+            return Ok(json!({ "control": control, "binding": binding }));
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
-/// Ends a running capture without binding anything.
+/// `cancel_capture()`: ends a running capture without binding anything.
 #[tauri::command]
-pub fn controls_capture_cancel(shared: State<'_, Shared>) -> Result<ControlsView, String> {
+pub fn cancel_capture(shared: State<'_, Shared>) -> Result<(), String> {
     let mut state = lock(shared.inner());
     if let Some(cancel) = state.capture_cancel.take() {
         cancel.store(true, Ordering::Relaxed);
     }
     state.capturing = None;
     state.controls_status.clear();
-    Ok(controls_view(&state))
+    Ok(())
 }
 
-/// Binds a key the page captured (keyboard capture runs in the page, the result goes here).
+/// `reset_binding({control})`: restores the built-in sources of one input.
 #[tauri::command]
-pub fn controls_bind_key(input: String, key: String, shared: State<'_, Shared>) -> Result<ControlsView, String> {
-    if !model::bindable(&input) {
-        return Err(format!("'{input}' cannot be rebound"));
-    }
-    let mut state = lock(shared.inner());
-    if let Some(cancel) = state.capture_cancel.take() {
-        cancel.store(true, Ordering::Relaxed);
-    }
-    state.capturing = None;
-    match model::key_name(&key) {
-        Some(name) => bind_source(&mut state, &input, "key:", format!("key:{name}"))?,
-        None => state.controls_status = "That key cannot be used. Try a letter, a number, an arrow or Enter.".into(),
-    }
-    Ok(controls_view(&state))
-}
-
-/// Restores the built-in sources of one input.
-#[tauri::command]
-pub fn controls_reset(input: String, shared: State<'_, Shared>) -> Result<ControlsView, String> {
+pub fn reset_binding(control: String, shared: State<'_, Shared>) -> Result<(), String> {
     let mut state = lock(shared.inner());
     let defaults = default_bindings();
-    let sources = defaults.get(&input).cloned().ok_or_else(|| format!("unknown input '{input}'"))?;
-    state.controls.set_sources(&input, sources).map_err(|error| error.to_string())?;
+    let sources = defaults.get(&control).cloned().ok_or_else(|| format!("unknown input '{control}'"))?;
+    state.controls.set_sources(&control, sources).map_err(|error| error.to_string())?;
     state.save_controls();
-    state.controls_status = format!("{} is back to its built-in binding.", model::ps2_name(&input));
-    Ok(controls_view(&state))
-}
-
-/// Sets the deadzone (percent) and curve of L2 or R2.
-#[tauri::command]
-pub fn controls_set_trigger(
-    id: String,
-    deadzone: f32,
-    curve: String,
-    shared: State<'_, Shared>,
-) -> Result<ControlsView, String> {
-    let tuning = model::trigger_tuning(deadzone, &curve)?;
-    let mut state = lock(shared.inner());
-    state.controls.set_trigger_tuning(&id, tuning).map_err(|error| error.to_string())?;
-    state.save_controls();
-    Ok(controls_view(&state))
+    state.controls_status = format!("{} is back to its built-in binding.", model::ps2_name(&control));
+    Ok(())
 }
 
 // Saves and replays --------------------------------------------------------------------------------
@@ -444,7 +497,8 @@ fn summary_of(report: &Report) -> String {
 
 /// Makes a save the one the next start uses. The save that was active moves to a new slot.
 #[tauri::command]
-pub fn saves_activate(name: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+pub fn saves_activate(id: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    let name = id;
     let mut state = lock(shared.inner());
     let slot = saves::saves(&state.library)?
         .into_iter()
@@ -461,12 +515,14 @@ pub fn saves_activate(name: String, shared: State<'_, Shared>) -> Result<Library
 
 /// Sends a save or replay to the Recycle Bin.
 #[tauri::command]
-pub fn saves_delete(name: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+pub fn saves_delete(id: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    let name = id;
     delete_item(&name, shared.inner(), Kind::Saves)
 }
 
 #[tauri::command]
-pub fn replays_delete(name: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+pub fn replays_delete(id: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    let name = id;
     delete_item(&name, shared.inner(), Kind::Replays)
 }
 

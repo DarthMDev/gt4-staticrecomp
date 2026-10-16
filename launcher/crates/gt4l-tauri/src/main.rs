@@ -5,6 +5,8 @@
 #![cfg_attr(all(not(debug_assertions), windows), windows_subsystem = "windows")]
 
 mod commands;
+#[cfg(test)]
+mod contract;
 mod model;
 mod saves;
 mod setup;
@@ -47,8 +49,9 @@ fn main() {
         .manage(shared)
         .invoke_handler(tauri::generate_handler![
             commands::app_state,
-            commands::settings_rows,
-            commands::settings_set,
+            commands::get_settings_table,
+            commands::set_setting,
+            commands::reset_gs_settings_to_defaults,
             setup::setup_choose_disc,
             setup::setup_start,
             setup::setup_cancel,
@@ -61,12 +64,10 @@ fn main() {
             commands::replays_list,
             commands::replays_import,
             commands::replays_delete,
-            commands::controls_list,
-            commands::controls_capture_start,
-            commands::controls_capture_cancel,
-            commands::controls_bind_key,
-            commands::controls_reset,
-            commands::controls_set_trigger,
+            commands::get_controls,
+            commands::capture_binding,
+            commands::cancel_capture,
+            commands::reset_binding,
             commands::about_info,
             commands::open_log_folder,
         ])

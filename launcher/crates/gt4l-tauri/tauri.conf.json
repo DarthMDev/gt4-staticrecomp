@@ -25,6 +25,17 @@
   },
   "bundle": {
     "active": false,
-    "icon": ["../../assets/brand/launcher.ico"]
+    "icon": [
+      "../../assets/brand/launcher.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

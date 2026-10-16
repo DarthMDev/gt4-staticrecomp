@@ -5,6 +5,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
+use gt4l_core::gs_release;
 use gt4l_core::LAUNCHER_VERSION;
 use gt4l_disc::setup::{self as disc_setup, SetupRequest, Stage};
 use serde::Serialize;
@@ -77,6 +78,18 @@ pub fn setup_start(app: AppHandle, shared: State<'_, Shared>) -> Result<(), Stri
         state.setup_cancel.store(false, Ordering::Relaxed);
         (disc, state.pins.clone(), state.dirs.clone(), state.setup_cancel.clone())
     };
+    // TASK-043: the PCSX2 GS renderer is downloaded with the setup (decision 0070). A failure is logged and the
+    // home message says CoreGS 1.1 is used instead; the disc setup is not affected.
+    let gs_root = dirs.root().join("gs");
+    let gs_dirs = dirs.clone();
+    let gs_shared = shared.clone();
+    std::thread::spawn(move || match gs_release::install_latest(&gs_release::GithubSource, &gs_root) {
+        Ok(outcome) => state::log(&gs_dirs, &format!("PCSX2 GS ready: {outcome:?}")),
+        Err(message) => {
+            state::log(&gs_dirs, &format!("PCSX2 GS not installed: {message}"));
+            lock(&gs_shared).home_message = format!("PCSX2 GS could not be installed ({message}). CoreGS 1.1 will be used.");
+        }
+    });
     std::thread::spawn(move || {
         let prepared = dirs.prepared();
         let staging = dirs.prepared_staging();

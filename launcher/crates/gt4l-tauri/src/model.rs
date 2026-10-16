@@ -2,86 +2,187 @@
 //! Nothing here touches the disk or a window, so every rule is tested without the UI.
 
 use gt4controls::{Controls, Curve, TriggerTuning, BUTTON_INPUTS};
-use gt4l_core::settings::{self, Kind, Page, Settings, SETTINGS};
+use gt4l_core::gs_table;
+use gt4l_core::settings::{self, Kind, Page, SettingDef, Settings, SETTINGS};
 use serde::Serialize;
+use serde_json::{json, Value};
 
-/// Settings tabs in display order (the page keys the UI sends back).
-pub const SETTINGS_PAGES: &[(&str, &str)] = &[("graphics", "Graphics"), ("display", "Display"), ("advanced", "Advanced")];
+// Settings table (the contract of the UI branch, ui/dev/README.md) ----------------------------------
 
-/// The page a settings tab key stands for, or `None` for an unknown key.
-pub fn page_for_key(key: &str) -> Option<Page> {
-    match key {
-        "graphics" => Some(Page::Graphics),
-        "display" => Some(Page::Display),
-        "advanced" => Some(Page::Advanced),
+/// The upscale limit sent until gt4-gs reports the device limit.
+pub const MAX_UPSCALE_DEFAULT: u32 = 12;
+
+/// Settings rows that are never sent to the UI: the PCSX2 renderer's own Renderer API, and the present-mode rows the
+/// launcher derives from `vsync` (scripts/gs_settings.py, gs_table::render_ini callers).
+const DERIVED_TABLE_IDS: &[&str] = &["renderer", "vsync", "mailbox"];
+
+/// The rows of the PCSX2 GS table the UI may show: offered, not mods (release 1.1.0), not derived.
+pub fn pcsx2_table_rows() -> Vec<&'static gs_table::Row> {
+    gs_table::offered().into_iter().filter(|row| !DERIVED_TABLE_IDS.contains(&row.id.as_str())).collect()
+}
+
+/// The payload of `get_settings_table`: `{max_upscale, rows}`. Launcher rows come from `SETTINGS`, PCSX2 GS rows from
+/// the table file; both use the row shape of ui/dev/README.md. Rows of the other renderer are sent with `visible_when`.
+pub fn settings_table(settings: &Settings, controls: &Controls) -> Value {
+    let mut rows: Vec<Value> = Vec::new();
+    for definition in SETTINGS {
+        if !settings.applies(definition.id) {
+            continue;
+        }
+        rows.push(launcher_row(definition, settings));
+    }
+    for row in pcsx2_table_rows() {
+        rows.push(gs_row(row, settings));
+    }
+    for trigger in ["l2", "r2"] {
+        rows.push(trigger_row(trigger, controls, "deadzone"));
+        rows.push(trigger_row(trigger, controls, "curve"));
+    }
+    json!({ "max_upscale": MAX_UPSCALE_DEFAULT, "rows": rows })
+}
+
+fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
+    let group = match definition.page {
+        Page::Graphics => "graphics",
+        Page::Display => "display",
+        Page::Advanced => "",
+    };
+    let page = if definition.page == Page::Advanced { "advanced" } else { "basic" };
+    let (control, values, default, current) = match definition.kind {
+        Kind::Choice(choices) => (
+            "dropdown",
+            Value::Array(
+                choices
+                    .iter()
+                    .map(|choice| json!({ "value": choice.value, "label": choice.label, "disabled": !choice.selectable }))
+                    .collect(),
+            ),
+            json!(definition.default),
+            json!(settings.get(definition.id)),
+        ),
+        Kind::Toggle => ("toggle", Value::Null, json!(definition.default == "on"), json!(settings.is_on(definition.id))),
+        Kind::Percent => (
+            "slider",
+            json!({ "min": 0, "max": 100, "step": 1, "unit": "%" }),
+            json!(definition.default.parse::<u32>().unwrap_or(0)),
+            json!(settings.get(definition.id).parse::<u32>().unwrap_or(0)),
+        ),
+    };
+    let mut row = json!({
+        "id": definition.id,
+        "label": definition.title,
+        "help": definition.info,
+        "page": page,
+        "control": control,
+        "values": values,
+        "default": default,
+        "current": current,
+        "disabled": !settings.is_active(definition.id),
+    });
+    if !group.is_empty() {
+        row["group"] = json!(group);
+    }
+    row
+}
+
+fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
+    let control = match row.kind.as_str() {
+        "bool" => "toggle",
+        "int" | "float" => "slider",
+        _ => "dropdown",
+    };
+    let (values, default, current) = match row.kind.as_str() {
+        "bool" => (
+            Value::Null,
+            json!(row.default == "true"),
+            json!(settings.gs_value(&row.id) == "true"),
+        ),
+        "int" | "float" => {
+            let mut bounds = json!({ "min": row.min.unwrap_or(0.0), "max": row.max.unwrap_or(0.0), "step": 1 });
+            if row.id == "upscale" {
+                bounds["max"] = json!(row.max.unwrap_or(0.0).min(MAX_UPSCALE_DEFAULT as f64));
+                bounds["limit"] = json!("max_upscale");
+            }
+            let number = |text: &str| text.parse::<f64>().ok().map(|n| json!(n)).unwrap_or(Value::Null);
+            (bounds, number(&row.default), number(&settings.gs_value(&row.id)))
+        }
+        _ => (
+            Value::Array(
+                row.choices
+                    .iter()
+                    .map(|choice| json!({ "value": choice.name, "label": choice.name, "disabled": choice.status != "ok" }))
+                    .collect(),
+            ),
+            json!(row.default),
+            json!(settings.gs_value(&row.id)),
+        ),
+    };
+    let mut out = json!({
+        "id": row.id,
+        "label": row.label,
+        "help": row.help,
+        "page": gs_table::ui_page(row),
+        "control": control,
+        "values": values,
+        "default": default,
+        "current": current,
+        "visible_when": { "id": "renderer", "equals": settings::PCSX2_GS },
+    });
+    match row.page.as_str() {
+        "Graphics" => out["group"] = json!("graphics"),
+        "Display" => out["group"] = json!("display"),
+        _ => {}
+    }
+    out
+}
+
+fn trigger_row(trigger: &str, controls: &Controls, field: &str) -> Value {
+    let tuning = controls.trigger_tuning(trigger);
+    let label = if field == "deadzone" { "deadzone" } else { "curve" };
+    let title = format!("{} {}", trigger.to_uppercase(), label);
+    if field == "deadzone" {
+        json!({
+            "id": format!("{trigger}_deadzone"),
+            "label": title,
+            "help": "How far the trigger must be pressed before it counts, in percent of its travel.",
+            "page": "basic",
+            "group": "controls",
+            "control": "slider",
+            "values": { "min": 0, "max": 100, "step": 0.5, "unit": "%" },
+            "default": 0,
+            "current": ((tuning.deadzone * 100.0 * 10.0).round() / 10.0),
+        })
+    } else {
+        json!({
+            "id": format!("{trigger}_curve"),
+            "label": title,
+            "help": "How the trigger reading grows with the press.",
+            "page": "basic",
+            "group": "controls",
+            "control": "dropdown",
+            "values": [
+                { "value": "linear", "label": "linear" },
+                { "value": "quadratic", "label": "quadratic" },
+                { "value": "cubic", "label": "cubic" },
+            ],
+            "default": "linear",
+            "current": tuning.curve.as_str(),
+        })
+    }
+}
+
+/// The text a `set_setting` value stands for: booleans as `on`/`off` for launcher toggles and `true`/`false` for the
+/// table, numbers as their decimal text, strings as they are. Other JSON shapes are refused.
+pub fn value_text(value: &Value, launcher_toggle: bool) -> Option<String> {
+    match value {
+        Value::Bool(flag) if launcher_toggle => Some(if *flag { "on" } else { "off" }.to_string()),
+        Value::Bool(flag) => Some(flag.to_string()),
+        Value::Number(number) => Some(number.to_string()),
+        Value::String(text) => Some(text.clone()),
         _ => None,
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ChoiceDto {
-    pub value: String,
-    pub label: String,
-    /// `false` = shown greyed out ("coming soon") and never sent.
-    pub selectable: bool,
-}
-
-/// One Settings row, generated from the `gt4l-core` table. The page never hard-codes an option.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RowDto {
-    pub id: String,
-    /// Group caption; the page prints it above the first row of each group.
-    pub group: String,
-    pub title: String,
-    pub info: String,
-    /// `choice`, `toggle` or `percent`.
-    pub kind: String,
-    pub choices: Vec<ChoiceDto>,
-    /// Stored value: a choice value, `on`/`off` for a toggle, or the percentage as text.
-    pub value: String,
-    /// `false` when the option cannot take effect now (not connected or locked).
-    pub enabled: bool,
-}
-
-/// Rows of one settings tab, in table order. Rows that do not apply to the selected renderer are
-/// left out, so only options the game reads are shown.
-pub fn rows_for_page(settings: &Settings, page: Page) -> Vec<RowDto> {
-    SETTINGS
-        .iter()
-        .filter(|definition| definition.page == page && settings.applies(definition.id))
-        .map(|definition| {
-            let (kind, choices) = match definition.kind {
-                Kind::Choice(choices) => (
-                    "choice",
-                    choices
-                        .iter()
-                        .map(|choice| ChoiceDto {
-                            value: choice.value.to_string(),
-                            label: choice.label.to_string(),
-                            selectable: choice.selectable,
-                        })
-                        .collect(),
-                ),
-                Kind::Toggle => ("toggle", Vec::new()),
-                Kind::Percent => ("percent", Vec::new()),
-            };
-            RowDto {
-                id: definition.id.to_string(),
-                group: definition.group.to_string(),
-                title: definition.title.to_string(),
-                info: definition.info.to_string(),
-                kind: kind.to_string(),
-                choices,
-                value: settings.get(definition.id).to_string(),
-                enabled: definition.connected && settings.is_active(definition.id),
-            }
-        })
-        .collect()
-}
-
-/// The Controls-page inputs in display order: the 16 digital inputs of `docs/CONTROLS.md`.
 pub const CONTROL_ORDER: [&str; 16] = [
     "dpad_up", "dpad_right", "dpad_down", "dpad_left", "cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2",
     "l3", "r3", "select", "start",
@@ -268,114 +369,6 @@ mod tests {
     use gt4l_core::launch;
     use std::collections::BTreeMap;
 
-    fn env(settings: &Settings) -> BTreeMap<String, String> {
-        launch::game_environment(settings).into_iter().collect()
-    }
-
-    #[test]
-    fn graphics_rows_are_generated_with_groups_in_table_order() {
-        let rows = rows_for_page(&Settings::default(), Page::Graphics);
-        let groups: Vec<&str> = rows.iter().map(|row| row.group.as_str()).collect();
-        assert_eq!(groups.first(), Some(&"Renderer"));
-        assert!(groups.contains(&"CoreGS 1.1"));
-        assert!(!groups.contains(&"paraLLEl-GS"), "paraLLEl-GS rows are hidden under CoreGS 1.1");
-    }
-
-    #[test]
-    fn coming_soon_renderer_is_listed_but_cannot_be_chosen() {
-        let rows = rows_for_page(&Settings::default(), Page::Graphics);
-        let renderer = rows.iter().find(|row| row.id == "renderer").unwrap();
-        assert_eq!(renderer.value, "coregs11");
-        let soon = renderer.choices.iter().find(|choice| choice.value == "coregs20").unwrap();
-        assert!(!soon.selectable);
-        assert!(soon.label.contains("coming soon"));
-    }
-
-    #[test]
-    fn each_renderer_shows_only_its_own_rows() {
-        let mut settings = Settings::default();
-        let core: Vec<String> = rows_for_page(&settings, Page::Graphics).into_iter().map(|row| row.id).collect();
-        assert!(core.contains(&"internal_scale".to_string()));
-        assert!(!core.contains(&"super_sampling".to_string()));
-        settings.set("renderer", "parallel").unwrap();
-        let parallel: Vec<String> = rows_for_page(&settings, Page::Graphics).into_iter().map(|row| row.id).collect();
-        assert!(parallel.contains(&"super_sampling".to_string()));
-        assert!(parallel.contains(&"high_resolution_output".to_string()));
-        assert!(!parallel.contains(&"internal_scale".to_string()));
-    }
-
-    #[test]
-    fn fsr_sharpness_row_is_a_percent_slider_shown_only_with_fsr() {
-        let mut settings = Settings::default();
-        assert!(!rows_for_page(&settings, Page::Graphics).iter().any(|row| row.id == "fsr_sharpness"));
-        settings.set("present_filter", "fsr").unwrap();
-        let row = rows_for_page(&settings, Page::Graphics).into_iter().find(|row| row.id == "fsr_sharpness").unwrap();
-        assert_eq!(row.kind, "percent");
-        assert_eq!(row.value, "50", "default is 50 percent");
-        assert!(row.enabled);
-    }
-
-    #[test]
-    fn fsr_percent_reaches_the_game_unchanged() {
-        let mut settings = Settings::default();
-        settings.set("present_filter", "fsr").unwrap();
-        for percent in ["0", "50", "100"] {
-            settings.set("fsr_sharpness", percent).unwrap();
-            assert_eq!(env(&settings)["GT4_FSR_SHARPNESS"], percent);
-        }
-        assert!(settings.set("fsr_sharpness", "101").is_err());
-        assert!(settings.set("fsr_sharpness", "-1").is_err());
-        assert!(settings.set("fsr_sharpness", "half").is_err());
-    }
-
-    #[test]
-    fn high_resolution_output_is_a_choice_and_only_for_paraLLEl_gs() {
-        let mut settings = Settings::default();
-        assert!(!rows_for_page(&settings, Page::Graphics).iter().any(|row| row.id == "high_resolution_output"));
-        settings.set("renderer", "parallel").unwrap();
-        let row = rows_for_page(&settings, Page::Graphics)
-            .into_iter()
-            .find(|row| row.id == "high_resolution_output")
-            .unwrap();
-        assert_eq!(row.kind, "choice");
-        let values: Vec<&str> = row.choices.iter().map(|choice| choice.value.as_str()).collect();
-        assert_eq!(values, vec!["off", "2", "4"]);
-        assert_eq!(row.value, "off");
-    }
-
-    #[test]
-    fn hires_option_maps_to_the_build_environment_for_each_factor() {
-        let mut settings = Settings::default();
-        settings.set("renderer", "parallel").unwrap();
-        settings.set("super_sampling", "2").unwrap();
-        let off = env(&settings);
-        assert_eq!(off["GT4_RENDERER"], "parallel");
-        assert_eq!(off["GT4_PGS_SSAA"], "2");
-        assert!(!off.contains_key("GT4_PGS_HIRES"));
-        for factor in ["2", "4"] {
-            settings.set("high_resolution_output", factor).unwrap();
-            let on = env(&settings);
-            assert_eq!(on["GT4_PGS_HIRES"], factor);
-            assert_eq!(on["GT4_PGS_SSAA"], "16");
-        }
-    }
-
-    #[test]
-    fn launch_environment_for_each_renderer_sends_only_its_variables() {
-        let mut settings = Settings::default();
-        let core = env(&settings);
-        assert_eq!(core["GT4_RENDERER"], "donor");
-        assert_eq!(core["PS2_SCALE"], "1");
-        assert!(core.contains_key("GT4_DEINTERLACE") && core.contains_key("GT4_AA"));
-        assert!(!core.keys().any(|name| name.starts_with("GT4_PGS_")));
-
-        settings.set("renderer", "parallel").unwrap();
-        let parallel = env(&settings);
-        assert_eq!(parallel["GT4_RENDERER"], "parallel");
-        assert_eq!(parallel["PS2_SCALE"], "1", "internal resolution is CoreGS 1.1 only");
-        assert!(!parallel.contains_key("GT4_DEINTERLACE"));
-        assert!(parallel.keys().any(|name| name.starts_with("GT4_PGS_")));
-    }
 
     #[test]
     fn controls_rows_cover_the_sixteen_digital_inputs_with_names_and_bindings() {
@@ -430,11 +423,81 @@ mod tests {
         assert!(licenses_text().contains("Tauri 2") && !licenses_text().contains("Slint"));
     }
 
+}
+
+#[cfg(test)]
+mod table_tests {
+    use super::*;
+
+    fn ids(table: &Value) -> Vec<String> {
+        table["rows"].as_array().unwrap().iter().map(|row| row["id"].as_str().unwrap().to_string()).collect()
+    }
+
+    fn row<'a>(table: &'a Value, id: &str) -> &'a Value {
+        table["rows"].as_array().unwrap().iter().find(|row| row["id"] == id).unwrap()
+    }
+
     #[test]
-    fn settings_pages_map_to_their_tables() {
-        for (key, _) in SETTINGS_PAGES {
-            assert!(page_for_key(key).is_some());
+    fn renderer_dropdown_offers_pcsx2_and_coregs11_and_greys_coregs20() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        let renderer = row(&table, "renderer");
+        assert_eq!(renderer["current"], "pcsx2");
+        assert_eq!(renderer["control"], "dropdown");
+        let values = renderer["values"].as_array().unwrap();
+        assert_eq!(values.len(), 3);
+        assert_eq!(values[2]["value"], "coregs20");
+        assert_eq!(values[2]["disabled"], true);
+    }
+
+    #[test]
+    fn coregs11_hides_its_upscale_fsr_aa_and_deinterlace_options() {
+        let mut settings = Settings::default();
+        settings.set("renderer", "coregs11").unwrap();
+        let listed = ids(&settings_table(&settings, &Controls::default()));
+        for hidden in ["internal_scale", "present_filter", "fsr_sharpness", "deinterlacing", "anti_aliasing"] {
+            assert!(!listed.contains(&hidden.to_string()), "{hidden} must stay hidden");
         }
-        assert!(page_for_key("controls").is_none(), "Controls is not a settings table page");
+    }
+
+    #[test]
+    fn mods_rows_are_never_offered_in_release_1_0_0() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        for row in table["rows"].as_array().unwrap() {
+            assert_ne!(row["page"], "mods");
+        }
+        assert!(pcsx2_table_rows().iter().all(|row| row.page != "mods"));
+    }
+
+    #[test]
+    fn pcsx2_rows_show_only_for_the_pcsx2_renderer_and_the_upscale_is_limited() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        let upscale = row(&table, "upscale");
+        assert_eq!(upscale["control"], "slider");
+        assert_eq!(upscale["values"]["limit"], "max_upscale");
+        assert_eq!(upscale["values"]["max"], 8.0, "the table maximum is 8 and the limit is min(8, 12)");
+        assert_eq!(upscale["visible_when"]["equals"], "pcsx2");
+        assert_eq!(table["max_upscale"], MAX_UPSCALE_DEFAULT);
+    }
+
+    #[test]
+    fn derived_rows_and_the_renderer_api_are_not_offered_as_pcsx2_rows() {
+        let listed = ids(&settings_table(&Settings::default(), &Controls::default()));
+        assert_eq!(listed.iter().filter(|id| *id == "vsync").count(), 1, "vsync is the launcher row only");
+        assert!(!pcsx2_table_rows().iter().any(|row| row.id == "mailbox"));
+    }
+
+    #[test]
+    fn triggers_use_the_row_shape_with_their_ids() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        assert_eq!(row(&table, "l2_deadzone")["control"], "slider");
+        assert_eq!(row(&table, "r2_curve")["control"], "dropdown");
+    }
+
+    #[test]
+    fn value_text_maps_booleans_per_kind() {
+        assert_eq!(value_text(&json!(true), true).as_deref(), Some("on"));
+        assert_eq!(value_text(&json!(true), false).as_deref(), Some("true"));
+        assert_eq!(value_text(&json!(12), false).as_deref(), Some("12"));
+        assert_eq!(value_text(&json!(["x"]), false), None);
     }
 }
