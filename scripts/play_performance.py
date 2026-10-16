@@ -54,7 +54,7 @@ privileged writes, VSYNC and readbacks over shared memory (docs/GS-STREAM-PROTOC
 device, so the window stays black. For TASK-036 development only, not for owner play; F8 adds a [gs-ipc] section.
 Live PCSX2 GS (--mode pcsx2, slice193, TASK-036): the GS stream build with the pinned gt4-gs.exe package (GPL fork
 moesuito/gt4recomp-gs, private/slice193-gt4gs-pkg). The PCSX2 GS renders into the game window (Vulkan); pacing,
-input, audio, F7/F8 and the memory card stay in the game. --gs-scale N (1..8, default 3) sets the internal
+input, audio, F7/F8 and the memory card stay in the game. --gs-scale N (1..12, default 3) sets the internal
 resolution; GT4_PRESENT_MODE sets the GS vsync. --gs-setting ID=VALUE (repeatable) sets any other GS option from
 docs/launcher/gs-settings.toml and is checked against that table (docs/GS-SETTINGS.md). F8 adds a [gs-ipc] section
 with the GS process STATS.
@@ -104,7 +104,7 @@ def main():
                         help='weak-CPU simulation: limit the game to N logical CPUs (1..logical count), '
                              'one per physical core first; recorded in result.json (docs/MTVU-PLAN.md section 12)')
     parser.add_argument('--gs-scale', type=int, default=None, metavar='N',
-                        help='pcsx2 only: GS internal resolution multiplier 1..8 (default 3; GT4_GS_SCALE)')
+                        help='pcsx2 only: GS internal resolution multiplier 1..12 (default 3; GT4_GS_SCALE)')
     parser.add_argument('--gs-setting', action='append', default=[], metavar='ID=VALUE',
                         help='pcsx2 only: set a GS option from docs/launcher/gs-settings.toml (repeatable; '
                              'checked against the table; docs/GS-SETTINGS.md)')
@@ -126,8 +126,8 @@ def main():
         if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu', 'pcsx2'):
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure, mtvu or pcsx2')
         if args.gs_scale is not None:
-            if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 8:
-                raise ValueError('--gs-scale takes 1..8 and requires --mode pcsx2')
+            if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 12:
+                raise ValueError('--gs-scale takes 1..12 and requires --mode pcsx2')
             os.environ['GT4_GS_SCALE'] = str(args.gs_scale)
         os.environ.pop(GS_SETTINGS_ENV, None)
         if args.gs_setting:

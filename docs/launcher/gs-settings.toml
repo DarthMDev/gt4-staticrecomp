@@ -1,45 +1,75 @@
-# GT4Recomp GS settings table (TASK-039, docs/GS-SETTINGS.md).
+# GT4Recomp GS settings table (TASK-039, curated by TASK-049, docs/GS-SETTINGS.md).
 #
-# One row per setting. Read by scripts/gs_settings.py (validation, gt4-gs.ini generation, allow-list) and, later, by
+# One row per setting. Read by scripts/gs_settings.py (validation, gt4-gs.ini generation, allow-list, reset) and by
 # the launcher (TASK-019/043). Key names and value numbers are interface facts from the PCSX2 v2.8.2 sources
-# (commit fd9d310c). Each note cites file:line at that commit. No code is copied; only names and numbers.
+# (tag v2.8.2 = commit fd9d310c). Each note cites file:line at that commit. No code is copied; only names and numbers.
 #
 # Columns:
 #   id          launcher identifier (lowercase; play_performance.py --gs-setting ID=VALUE uses it)
 #   label       name shown to the owner
 #   help        one-line help text
-#   page        Graphics, Display or Advanced
+#   page        basic (the launcher's GRAPHICS page), advanced (ADVANCED page), mods (a future mod manager, TASK-048;
+#               shown on neither page), hidden (never shown: launcher or GT4 internal)
+#   order       position within the page (1 is first); unique per page
+#   control     slider (int range), toggle (bool), dropdown (enum), text (string), none (launcher-supplied, path)
 #   section     INI section (empty for launcher-only rows)
 #   key         INI key (empty for launcher-only rows, or when one row stands for several keys)
 #   type        bool, int, float, enum, string, path (path = folder supplied by the launcher)
 #   min, max    range for int and float
-#   choices     enum values: { name = launcher name, ini = INI value, status = ok | resolved | pending-TASK-0NN }
+#   choices     enum values: { name = launcher name, ini = INI value, status = ok | resolved | pending-TASK-NNN,
+#               label = optional display text }
 #   default     GT4 default (launcher name for enums, "true" or "false" for bool, "" for an empty string)
-#   visibility  basic, advanced or hidden (the launcher offers only basic and advanced rows with status ok)
-#   written     always (in every generated INI), when-set (only when a user sets it), launcher (only when the
-#               launcher supplies it), never (launcher-only, not in the INI)
+#   written     always (in every generated INI), when-set (only when the value differs from the default),
+#               launcher (only when the launcher supplies it), never (launcher-only, not in the INI)
 #   status      ok        settable: key and values confirmed in the sources, and the owner accepts the row
 #               resolved  key and values confirmed in the PCSX2 v2.8.2 sources; not settable until the owner
 #                         checks it in the game (then it becomes ok)
-#               pending-TASK-0NN  depends on another task (a value, a reader or a launcher decision waits for it)
-#   env         launcher-only rows: the environment variable the game reads
+#               pending-TASK-0NN  depends on another task
+#   env         launcher-only rows: the environment variable the launcher reads
 #   notes       sources and open points
 #
 # Rule: a value is settable only when its row and its choice have status ok. Anything else is refused.
 # The allow-list (gs-settings-allowlist.json) lists every row with a section and key, whatever its status.
+# [[profile]] gt4-defaults: Reset to defaults = the default of every settable row (scripts/gs_settings.py
+# reset_to_defaults()). render_ini(reset) reproduces the default gt4-gs.ini byte for byte.
 
 schema_version = 1
 
+[[profile]]
+name = "gt4-defaults"
+description = "Reset to defaults: GT4 default for every settable row (owner decisions, 2026-10-16)."
+
+[[setting]]
+id = "gs_engine"
+label = "Renderer"
+help = "Which renderer draws the game: the PCSX2 GS (default) or CoreGS 1.1 (secondary)."
+page = "basic"
+order = 1
+control = "dropdown"
+section = ""
+key = ""
+type = "enum"
+default = "pcsx2"
+written = "never"
+status = "ok"
+env = "GT4_GS_ENGINE"
+choices = [
+  { name = "pcsx2", ini = "", status = "ok", label = "PCSX2 GS" },
+  { name = "coregs-1.1", ini = "", status = "ok", label = "CoreGS 1.1 (secondary)" },
+]
+notes = "Owner decision 2026-10-16 (TASK-049, item 1). Launcher-only: pcsx2 = gt4-gs.exe (`--mode pcsx2`); coregs-1.1 = the built-in CoreGS 1.1 fallback (`--mode main`). Its upscale, FSR, FXAA and deinterlace options are hidden (owner decision 5). The launcher reads GT4_GS_ENGINE (TASK-019/043); it is never written to gt4-gs.ini."
+
 [[setting]]
 id = "renderer"
-label = "Renderer API"
-help = "Graphics API for the PCSX2 GS. Vulkan is the release renderer."
-page = "Graphics"
+label = "Graphics API (PCSX2 GS)"
+help = "Graphics API for the PCSX2 GS. Vulkan is the GT4 renderer; D3D12 and D3D11 show after the owner checks them."
+page = "advanced"
+order = 1
+control = "dropdown"
 section = "EmuCore/GS"
 key = "Renderer"
 type = "enum"
 default = "vulkan"
-visibility = "basic"
 written = "always"
 status = "ok"
 choices = [
@@ -52,90 +82,31 @@ notes = "GSRendererType (pcsx2/Config.h:271-281): VK = 14, DX12 = 15, DX11 = 3. 
 [[setting]]
 id = "upscale"
 label = "Internal resolution"
-help = "GS internal resolution multiplier (1x to 8x). Default 3x."
-page = "Graphics"
+help = "GS internal resolution, 1x to 12x. The launcher clamps it to the GPU limit (see notes)."
+page = "basic"
+order = 2
+control = "slider"
 section = "EmuCore/GS"
 key = "upscale_multiplier"
 type = "int"
 min = 1
-max = 8
+max = 12
 default = "3"
-visibility = "basic"
 written = "always"
 status = "ok"
-notes = "D.1: 1x-8x. The PCSX2 UI lists up to 25x (pcsx2/ImGui/FullscreenUI_Settings.cpp:2809-2861); above 8 needs ExtendedUpscalingMultipliers (not in the table). Loader pcsx2/Pcsx2Config.cpp:1045. --gs-scale N sets this row (GT4_GS_SCALE)."
-
-[[setting]]
-id = "filter"
-label = "Texture filtering"
-help = "Texture sampling filter. Default follows the PS2 (bilinear)."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "filter"
-type = "enum"
-default = "bilinear-ps2"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "nearest", ini = "0", status = "resolved" },
-  { name = "bilinear-forced", ini = "1", status = "resolved" },
-  { name = "bilinear-ps2", ini = "2", status = "resolved" },
-  { name = "bilinear-forced-sprite-excluded", ini = "3", status = "resolved" },
-]
-notes = "BiFiltering (pcsx2/Config.h:314-319: Nearest, Forced, PS2, Forced_But_Sprite). Loader pcsx2/Pcsx2Config.cpp:1055. Default PS2 = 2 (pcsx2/Config.h:727). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2863-2868."
-
-[[setting]]
-id = "trilinear"
-label = "Trilinear filtering"
-help = "Trilinear mipmap filtering mode."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "TriFilter"
-type = "enum"
-default = "automatic"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "automatic", ini = "-1", status = "resolved" },
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "ps2", ini = "1", status = "resolved" },
-  { name = "forced", ini = "2", status = "resolved" },
-]
-notes = "TriFiltering (pcsx2/Config.h:322-327, signed: Automatic = -1). Loader pcsx2/Pcsx2Config.cpp:1079. Default Automatic (pcsx2/Config.h:728). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2869-2874."
-
-[[setting]]
-id = "anisotropic"
-label = "Anisotropic filtering"
-help = "Anisotropic filtering level (off by default)."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "MaxAnisotropy"
-type = "enum"
-default = "off"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "2x", ini = "2", status = "resolved" },
-  { name = "4x", ini = "4", status = "resolved" },
-  { name = "8x", ini = "8", status = "resolved" },
-  { name = "16x", ini = "16", status = "resolved" },
-]
-notes = "Stored as the plain number (pcsx2/Config.h:874, u8, default 0). Loader pcsx2/Pcsx2Config.cpp:1062. The UI offers only 0, 2, 4, 8, 16 (pcsx2/ImGui/FullscreenUI_Settings.cpp:2889-2901). Other numbers are not offered."
+notes = "D.1 range, widened by owner decision 6 (2026-10-16). The loader accepts 1 to 12 (pcsx2/Pcsx2Config.cpp:1045). PCSX2 clamps any value above GSGetMaxUpscaleMultiplier = max(max texture size / 1280, 1) (pcsx2/GS/GS.cpp:677-681) with an OSD warning (pcsx2/GS/GS.cpp:225-240). A 16384-texel GPU allows 12x; 8192 allows 6x. READY carries no max-upscale field: ReadyPayload (3rdparty/gt4recomp-gs-stream/gs_stream_protocol.h:177-187) has only a reserved u32. Until gt4-gs reports the limit, the launcher offers 1 to 12 and PCSX2 clamps. ExtendedUpscalingMultipliers is NOT required up to 12x (see extended_upscale). --gs-scale N sets this row (GT4_GS_SCALE)."
 
 [[setting]]
 id = "blending"
 label = "Blending accuracy"
 help = "Accuracy of the GS blending unit emulation. High is the GT4 default."
-page = "Advanced"
+page = "advanced"
+order = 18
+control = "dropdown"
 section = "EmuCore/GS"
 key = "accurate_blending_unit"
 type = "enum"
 default = "high"
-visibility = "advanced"
 written = "always"
 status = "ok"
 choices = [
@@ -149,68 +120,16 @@ choices = [
 notes = "AccBlendLevel (pcsx2/Config.h:330-337, Minimum = 0 to Maximum = 5). Loader pcsx2/Pcsx2Config.cpp:1054. PCSX2 default is Basic (pcsx2/Config.h:726); the owner keeps High (3). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2881-2888. Full and Maximum are slow (UI text)."
 
 [[setting]]
-id = "dithering"
-label = "Dithering"
-help = "Dithering applied by the GS."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "dithering_ps2"
-type = "enum"
-default = "unscaled"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "scaled", ini = "1", status = "resolved" },
-  { name = "unscaled", ini = "2", status = "resolved" },
-  { name = "force-32bit", ini = "3", status = "resolved" },
-]
-notes = "Key dithering_ps2 (loader pcsx2/Pcsx2Config.cpp:1061, not Dithering). Stored as u8 (pcsx2/Config.h:873, default 2 = Unscaled). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2875-2880, default set at line 3083. Owner checks dithering in menus (TASK-039 acceptance)."
-
-[[setting]]
-id = "mipmap"
-label = "Hardware mipmapping"
-help = "Use GS hardware mipmapping."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "mipmap"
-type = "bool"
-default = "true"
-visibility = "advanced"
-written = "when-set"
-status = "ok"
-notes = "Key corrected in TASK-039: the loader key is mipmap (pcsx2/Pcsx2Config.cpp:990, field Mipmap, default true), not HWMipmap. D.1 default On. Bool range from D.1."
-
-[[setting]]
-id = "texture_preloading"
-label = "Texture preloading"
-help = "How much texture data the GS preloads."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "texture_preloading"
-type = "enum"
-default = "full"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "none", ini = "0", status = "resolved" },
-  { name = "partial", ini = "1", status = "resolved" },
-  { name = "full", ini = "2", status = "resolved" },
-]
-notes = "TexturePreloadingLevel (pcsx2/Config.h:355-359: Off, Partial, Full). Loader pcsx2/Pcsx2Config.cpp:1056. Default Full (pcsx2/Config.h:869). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2903-2907."
-
-[[setting]]
 id = "deinterlace"
 label = "Deinterlace"
-help = "Deinterlace mode for interlaced output (the game boots 480i; menus stay interlaced)."
-page = "Display"
+help = "Deinterlace mode for interlaced output. Automatic is the GT4 default (480i menus; TASK-047)."
+page = "advanced"
+order = 7
+control = "dropdown"
 section = "EmuCore/GS"
 key = "deinterlace_mode"
 type = "enum"
 default = "automatic"
-visibility = "advanced"
 written = "always"
 status = "ok"
 choices = [
@@ -230,13 +149,14 @@ notes = "GSInterlaceMode (pcsx2/Config.h:291-302: Automatic = 0 ... AdaptiveBFF 
 [[setting]]
 id = "aspect"
 label = "Aspect ratio"
-help = "Display aspect of the GS output. 16:9 is the game's widescreen setting."
-page = "Display"
+help = "Display aspect ratio. 16:9 is the game widescreen setting (TASK-009)."
+page = "basic"
+order = 3
+control = "dropdown"
 section = "EmuCore/GS"
 key = "AspectRatio"
 type = "enum"
 default = "16:9"
-visibility = "basic"
 written = "always"
 status = "ok"
 choices = [
@@ -247,15 +167,230 @@ choices = [
 notes = "Names and INI values from TASK-036 (GT4_GS_ASPECT). Confirmed at pcsx2/Pcsx2Config.cpp:639-645 (Stretch and 10:7 exist there and are not offered). auto is PCSX2's 4:3/3:2 output used for comparisons (docs/GS-LIVE.md). Loader pcsx2/Pcsx2Config.cpp:938."
 
 [[setting]]
+id = "vsync"
+label = "VSync"
+help = "Wait for vertical blank when presenting. The launcher sets it from GT4_PRESENT_MODE."
+page = "advanced"
+order = 3
+control = "toggle"
+section = "EmuCore/GS"
+key = "VsyncEnable"
+type = "bool"
+default = "true"
+written = "always"
+status = "ok"
+notes = "fifo and mailbox = true, immediate = false (TASK-036). --gs-setting vsync=... is refused when GT4_PRESENT_MODE is set. Loader pcsx2/Pcsx2Config.cpp:929."
+
+[[setting]]
+id = "mailbox"
+label = "Disable mailbox presentation"
+help = "Off lets the present queue use mailbox mode (GT4_PRESENT_MODE=mailbox)."
+page = "advanced"
+order = 4
+control = "toggle"
+section = "EmuCore/GS"
+key = "DisableMailboxPresentation"
+type = "bool"
+default = "true"
+written = "always"
+status = "ok"
+notes = "true for fifo and immediate, false for mailbox (TASK-036). Loader pcsx2/Pcsx2Config.cpp:930."
+
+[[setting]]
+id = "hw_download_mode"
+label = "Readbacks"
+help = "How the GS reads back GPU data. Accurate (default) is exact. Unsynchronized is faster and may drop effects."
+page = "advanced"
+order = 21
+control = "dropdown"
+section = "EmuCore/GS"
+key = "HWDownloadMode"
+type = "enum"
+default = "accurate"
+written = "always"
+status = "ok"
+choices = [
+  { name = "accurate", ini = "0", status = "ok", label = "Accurate (default)" },
+  { name = "enabled-force-full", ini = "1", status = "resolved" },
+  { name = "no-readbacks", ini = "2", status = "resolved" },
+  { name = "unsynchronized", ini = "3", status = "ok", label = "Unsynchronized (faster, may drop effects)" },
+  { name = "disabled", ini = "4", status = "resolved" },
+]
+notes = "GSHardwareDownloadMode (pcsx2/Config.h:399-405: Enabled = 0, EnabledForceFull = 1, NoReadbacks = 2, Unsynchronized = 3, Disabled = 4). Loader pcsx2/Pcsx2Config.cpp:1058, default Enabled (pcsx2/Config.h:871); the launcher default is accurate (Enabled, 0). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2913-2919. Owner decision: accurate by default, Unsynchronized as speed option. Unsynchronized is settable since TASK-037 (game-side reader in slice194)."
+
+[[setting]]
+id = "fxaa"
+label = "Anti-aliasing (FXAA)"
+help = "Fast approximate anti-aliasing applied to the output. Off by default."
+page = "basic"
+order = 4
+control = "toggle"
+section = "EmuCore/GS"
+key = "fxaa"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "ok"
+notes = "Key corrected in TASK-039: lower case fxaa (pcsx2/Pcsx2Config.cpp:1008; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3316). Default Off. Owner decision: FXAA is offered."
+
+[[setting]]
+id = "cas_mode"
+label = "Sharpening (CAS)"
+help = "FidelityFX Contrast Adaptive Sharpening (CAS) mode. Off by default."
+page = "basic"
+order = 5
+control = "dropdown"
+section = "EmuCore/GS"
+key = "CASMode"
+type = "enum"
+default = "off"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "off", ini = "0", status = "resolved" },
+  { name = "sharpen-only", ini = "1", status = "resolved" },
+  { name = "sharpen-and-resize", ini = "2", status = "resolved" },
+]
+notes = "GSCASMode (pcsx2/Config.h:408-412). Loader pcsx2/Pcsx2Config.cpp:1059. Default Disabled (pcsx2/Config.h:723). UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3309-3313. FidelityFX CAS is the only sharpening filter in v2.8.2: FSR 1.0 is NOT in v2.8.2 (no FSR code or shader; the only \"FSR\" match is the MIPS QFSRV opcode). Owner decision: shown on Graphics; it becomes settable after the owner checks it in game."
+
+[[setting]]
+id = "cas_sharpness"
+label = "Sharpening amount"
+help = "Strength of CAS sharpening (0 to 100). Used with CAS on."
+page = "basic"
+order = 6
+control = "slider"
+section = "EmuCore/GS"
+key = "CASSharpness"
+type = "int"
+min = 0
+max = 100
+default = "50"
+written = "when-set"
+status = "resolved"
+notes = "Stored as u8 (pcsx2/Config.h:899, default 50). Loader pcsx2/Pcsx2Config.cpp:1060. UI range 0 to 100 in steps of 1 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3319-3321)."
+
+[[setting]]
+id = "adapter"
+label = "Graphics adapter"
+help = "GPU used for rendering. Empty is the system default."
+page = "advanced"
+order = 2
+control = "text"
+section = "EmuCore/GS"
+key = "Adapter"
+type = "string"
+default = ""
+written = "when-set"
+status = "resolved"
+notes = "std::string Adapter (pcsx2/Config.h:932; loader pcsx2/Pcsx2Config.cpp:1107). Empty = default adapter. A non-empty value must equal one name returned by GSGetAdapterInfo for the active renderer (pcsx2/ImGui/FullscreenUI_Settings.cpp:2945-2960). The names exist only at run time, so the launcher cannot list them yet; string rows cannot be ok until that list exists (TASK-043). Not offered."
+
+[[setting]]
+id = "linear_present"
+label = "Present filter"
+help = "Filter used when presenting the image to the window."
+page = "advanced"
+order = 5
+control = "dropdown"
+section = "EmuCore/GS"
+key = "linear_present_mode"
+type = "enum"
+default = "smooth"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "off", ini = "0", status = "resolved" },
+  { name = "smooth", ini = "1", status = "resolved" },
+  { name = "sharp", ini = "2", status = "resolved" },
+]
+notes = "GSPostBilinearMode (pcsx2/Config.h:306-310: Off, BilinearSmooth = 1, BilinearSharp = 2). Loader pcsx2/Pcsx2Config.cpp:1035. Default Smooth = 1 (pcsx2/Pcsx2Config.cpp:719). The UI shows Sharp as its default (pcsx2/ImGui/FullscreenUI_Settings.cpp:3052), which disagrees with SetDefaults; the table keeps Smooth (D.1)."
+
+[[setting]]
+id = "integer_scaling"
+label = "Integer scaling"
+help = "Scale the output by whole multiples only."
+page = "advanced"
+order = 6
+control = "toggle"
+section = "EmuCore/GS"
+key = "IntegerScaling"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "ok"
+notes = "D.1 default Off. Loader pcsx2/Pcsx2Config.cpp:957."
+
+[[setting]]
+id = "disable_interlace_offset"
+label = "Disable interlace offset"
+help = "Skip the PCRTC interlace offset on interlaced output."
+page = "advanced"
+order = 8
+control = "toggle"
+section = "EmuCore/GS"
+key = "disable_interlace_offset"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "resolved"
+notes = "Key pcsx2/Pcsx2Config.cpp:954 (SettingsWrapBitBoolEx). Default false (pcsx2/Pcsx2Config.cpp:715). UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3027. GT4 keeps the PCSX2 default; the TASK-047 comb metric is the check (owner in-game check pending)."
+
+[[setting]]
+id = "antiblur"
+label = "Anti-blur"
+help = "PCRTC anti-blur filter (blends the two fields). On by default."
+page = "advanced"
+order = 9
+control = "toggle"
+section = "EmuCore/GS"
+key = "pcrtc_antiblur"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "Key corrected in TASK-039: pcrtc_antiblur (pcsx2/Pcsx2Config.cpp:953). D.1 default On."
+
+[[setting]]
+id = "offsets"
+label = "Screen offsets"
+help = "Apply the PCRTC display offsets that the game requests."
+page = "advanced"
+order = 10
+control = "toggle"
+section = "EmuCore/GS"
+key = "pcrtc_offsets"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "ok"
+notes = "Key corrected in TASK-039: pcrtc_offsets (pcsx2/Pcsx2Config.cpp:955). D.1 default Off."
+
+[[setting]]
+id = "overscan"
+label = "Show overscan"
+help = "Apply the PCRTC overscan crop."
+page = "advanced"
+order = 11
+control = "toggle"
+section = "EmuCore/GS"
+key = "pcrtc_overscan"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "ok"
+notes = "Key corrected in TASK-039: pcrtc_overscan (pcsx2/Pcsx2Config.cpp:956). D.1 default Off."
+
+[[setting]]
 id = "fmv_aspect"
 label = "FMV aspect switch"
 help = "Aspect ratio used during full-motion videos (off keeps the normal aspect)."
-page = "Display"
+page = "advanced"
+order = 12
+control = "dropdown"
 section = "EmuCore/GS"
 key = "FMVAspectRatioSwitch"
 type = "enum"
 default = "off"
-visibility = "advanced"
 written = "when-set"
 status = "resolved"
 choices = [
@@ -268,167 +403,16 @@ choices = [
 notes = "Corrected in TASK-039: an enum of aspect names, not a bool. The loader reads a name (pcsx2/Pcsx2Config.cpp:939; names at pcsx2/Pcsx2Config.cpp:647-653; enum pcsx2/Config.h:234-240). Default Off (D.1)."
 
 [[setting]]
-id = "antiblur"
-label = "Anti-blur"
-help = "PCRTC anti-blur filter (blends the two fields)."
-page = "Display"
-section = "EmuCore/GS"
-key = "pcrtc_antiblur"
-type = "bool"
-default = "true"
-visibility = "advanced"
-written = "when-set"
-status = "ok"
-notes = "Key corrected in TASK-039: pcrtc_antiblur (pcsx2/Pcsx2Config.cpp:953). D.1 default On."
-
-[[setting]]
-id = "offsets"
-label = "PCRTC offsets"
-help = "Apply the PCRTC display offsets of the game."
-page = "Display"
-section = "EmuCore/GS"
-key = "pcrtc_offsets"
-type = "bool"
-default = "false"
-visibility = "advanced"
-written = "when-set"
-status = "ok"
-notes = "Key corrected in TASK-039: pcrtc_offsets (pcsx2/Pcsx2Config.cpp:955). D.1 default Off."
-
-[[setting]]
-id = "overscan"
-label = "PCRTC overscan"
-help = "Apply the PCRTC overscan crop."
-page = "Display"
-section = "EmuCore/GS"
-key = "pcrtc_overscan"
-type = "bool"
-default = "false"
-visibility = "advanced"
-written = "when-set"
-status = "ok"
-notes = "Key corrected in TASK-039: pcrtc_overscan (pcsx2/Pcsx2Config.cpp:956). D.1 default Off."
-
-[[setting]]
-id = "vsync"
-label = "VSync"
-help = "Wait for vertical blank when presenting. The launcher sets it from GT4_PRESENT_MODE."
-page = "Display"
-section = "EmuCore/GS"
-key = "VsyncEnable"
-type = "bool"
-default = "true"
-visibility = "basic"
-written = "always"
-status = "ok"
-notes = "fifo and mailbox = true, immediate = false (TASK-036). --gs-setting vsync=... is refused when GT4_PRESENT_MODE is set. Loader pcsx2/Pcsx2Config.cpp:929."
-
-[[setting]]
-id = "mailbox"
-label = "Disable mailbox presentation"
-help = "Off lets the present queue use mailbox mode (GT4_PRESENT_MODE=mailbox)."
-page = "Display"
-section = "EmuCore/GS"
-key = "DisableMailboxPresentation"
-type = "bool"
-default = "true"
-visibility = "advanced"
-written = "always"
-status = "ok"
-notes = "true for fifo and immediate, false for mailbox (TASK-036). Loader pcsx2/Pcsx2Config.cpp:930."
-
-[[setting]]
-id = "fxaa"
-label = "FXAA"
-help = "Fast approximate anti-aliasing applied to the output."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "fxaa"
-type = "bool"
-default = "false"
-visibility = "basic"
-written = "when-set"
-status = "ok"
-notes = "Key corrected in TASK-039: lower case fxaa (pcsx2/Pcsx2Config.cpp:1008; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3316). Default Off. Owner decision: FXAA is offered."
-
-[[setting]]
-id = "integer_scaling"
-label = "Integer scaling"
-help = "Scale the output by whole multiples only."
-page = "Display"
-section = "EmuCore/GS"
-key = "IntegerScaling"
-type = "bool"
-default = "false"
-visibility = "advanced"
-written = "when-set"
-status = "ok"
-notes = "D.1 default Off. Loader pcsx2/Pcsx2Config.cpp:957."
-
-[[setting]]
-id = "linear_present"
-label = "Present filter"
-help = "Filter used when presenting the image to the window."
-page = "Display"
-section = "EmuCore/GS"
-key = "linear_present_mode"
-type = "enum"
-default = "smooth"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "smooth", ini = "1", status = "resolved" },
-  { name = "sharp", ini = "2", status = "resolved" },
-]
-notes = "GSPostBilinearMode (pcsx2/Config.h:306-310: Off, BilinearSmooth = 1, BilinearSharp = 2). Loader pcsx2/Pcsx2Config.cpp:1035. Default Smooth = 1 (pcsx2/Pcsx2Config.cpp:719). The UI shows Sharp as its default (pcsx2/ImGui/FullscreenUI_Settings.cpp:3052), which disagrees with SetDefaults; the table keeps Smooth (D.1)."
-
-[[setting]]
-id = "cas_mode"
-label = "CAS sharpening"
-help = "Contrast-adaptive sharpening mode (off by default)."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "CASMode"
-type = "enum"
-default = "off"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "sharpen-only", ini = "1", status = "resolved" },
-  { name = "sharpen-and-resize", ini = "2", status = "resolved" },
-]
-notes = "GSCASMode (pcsx2/Config.h:408-412: Disabled = 0, SharpenOnly = 1, SharpenAndResize = 2). Loader pcsx2/Pcsx2Config.cpp:1059. Default Disabled (pcsx2/Config.h:723). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:3309-3313. Owner decision: CAS is offered once the list is verified (in game)."
-
-[[setting]]
-id = "cas_sharpness"
-label = "CAS sharpness"
-help = "Strength of CAS sharpening."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "CASSharpness"
-type = "int"
-min = 0
-max = 100
-default = "50"
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-notes = "Stored as u8 (pcsx2/Config.h:899, default 50). Loader pcsx2/Pcsx2Config.cpp:1060. UI range 0 to 100 in steps of 1 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3319-3321)."
-
-[[setting]]
 id = "tv_shader"
 label = "TV shader"
 help = "Simulated CRT or TV shader applied to the output."
-page = "Advanced"
+page = "advanced"
+order = 13
+control = "dropdown"
 section = "EmuCore/GS"
 key = "TVShader"
 type = "enum"
 default = "none"
-visibility = "advanced"
 written = "when-set"
 status = "resolved"
 choices = [
@@ -444,15 +428,181 @@ choices = [
 notes = "Stored as a u8 index (pcsx2/Config.h:875, default 0). Loader pcsx2/Pcsx2Config.cpp:1065. The list is the UI order at pcsx2/ImGui/FullscreenUI_Settings.cpp:3339-3351 (index = INI value)."
 
 [[setting]]
+id = "filter"
+label = "Texture filtering"
+help = "Texture sampling filter. Default follows the PS2 (bilinear)."
+page = "advanced"
+order = 14
+control = "dropdown"
+section = "EmuCore/GS"
+key = "filter"
+type = "enum"
+default = "bilinear-ps2"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "nearest", ini = "0", status = "resolved" },
+  { name = "bilinear-forced", ini = "1", status = "resolved" },
+  { name = "bilinear-ps2", ini = "2", status = "resolved" },
+  { name = "bilinear-forced-sprite-excluded", ini = "3", status = "resolved" },
+]
+notes = "BiFiltering (pcsx2/Config.h:314-319: Nearest, Forced, PS2, Forced_But_Sprite). Loader pcsx2/Pcsx2Config.cpp:1055. Default PS2 = 2 (pcsx2/Config.h:727). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2863-2868."
+
+[[setting]]
+id = "trilinear"
+label = "Trilinear filtering"
+help = "Trilinear mipmap filtering mode."
+page = "advanced"
+order = 15
+control = "dropdown"
+section = "EmuCore/GS"
+key = "TriFilter"
+type = "enum"
+default = "automatic"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "automatic", ini = "-1", status = "resolved" },
+  { name = "off", ini = "0", status = "resolved" },
+  { name = "ps2", ini = "1", status = "resolved" },
+  { name = "forced", ini = "2", status = "resolved" },
+]
+notes = "TriFiltering (pcsx2/Config.h:322-327, signed: Automatic = -1). Loader pcsx2/Pcsx2Config.cpp:1079. Default Automatic (pcsx2/Config.h:728). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2869-2874."
+
+[[setting]]
+id = "anisotropic"
+label = "Anisotropic filtering"
+help = "Anisotropic filtering level. Off keeps the GT4 60 FPS budget; 16x is the sharpest."
+page = "advanced"
+order = 16
+control = "dropdown"
+section = "EmuCore/GS"
+key = "MaxAnisotropy"
+type = "enum"
+default = "off"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "off", ini = "0", status = "resolved" },
+  { name = "2x", ini = "2", status = "resolved" },
+  { name = "4x", ini = "4", status = "resolved" },
+  { name = "8x", ini = "8", status = "resolved" },
+  { name = "16x", ini = "16", status = "resolved" },
+]
+notes = "Stored as the plain number (pcsx2/Config.h:874, u8, default 0). Loader pcsx2/Pcsx2Config.cpp:1062. The UI offers only 0, 2, 4, 8, 16 (pcsx2/ImGui/FullscreenUI_Settings.cpp:2889-2901). GT4 default Off (PCSX2 default): anisotropic filtering costs fill rate, and the 60 FPS target comes first. The owner may test 16x in game."
+
+[[setting]]
+id = "mipmap"
+label = "Mipmapping"
+help = "Use GS hardware mipmapping (on by default)."
+page = "advanced"
+order = 17
+control = "toggle"
+section = "EmuCore/GS"
+key = "hw_mipmap"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "ok"
+notes = "Key corrected 2026-10-16 (TASK-049): the hardware renderer reads hw_mipmap (loader pcsx2/Pcsx2Config.cpp:1047, field HWMipmap; GS.cpp:888; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3093). The key mipmap (Pcsx2Config.cpp:990) is the software renderer toggle (UI line 3110) and is not written. Default true (pcsx2/Pcsx2Config.cpp:754-755). TASK-039 had this wrong."
+
+[[setting]]
+id = "dithering"
+label = "Dithering"
+help = "Dithering applied by the GS (unscaled, as the PS2)."
+page = "advanced"
+order = 19
+control = "dropdown"
+section = "EmuCore/GS"
+key = "dithering_ps2"
+type = "enum"
+default = "unscaled"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "off", ini = "0", status = "resolved" },
+  { name = "scaled", ini = "1", status = "resolved" },
+  { name = "unscaled", ini = "2", status = "resolved" },
+  { name = "force-32bit", ini = "3", status = "resolved" },
+]
+notes = "Key dithering_ps2 (loader pcsx2/Pcsx2Config.cpp:1061, not Dithering). Stored as u8 (pcsx2/Config.h:873, default 2 = Unscaled). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2875-2880, default set at line 3083. Owner checks dithering in menus (TASK-039 acceptance)."
+
+[[setting]]
+id = "texture_preloading"
+label = "Texture preloading"
+help = "How much texture data the GS preloads. Full is the GT4 default."
+page = "advanced"
+order = 20
+control = "dropdown"
+section = "EmuCore/GS"
+key = "texture_preloading"
+type = "enum"
+default = "full"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "none", ini = "0", status = "resolved" },
+  { name = "partial", ini = "1", status = "resolved" },
+  { name = "full", ini = "2", status = "resolved" },
+]
+notes = "TexturePreloadingLevel (pcsx2/Config.h:355-359: Off, Partial, Full). Loader pcsx2/Pcsx2Config.cpp:1056. Default Full (pcsx2/Config.h:869). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2903-2907."
+
+[[setting]]
+id = "accurate_alpha_test"
+label = "Accurate alpha test"
+help = "Emulate the GS alpha test exactly; some games need it, at a speed cost."
+page = "advanced"
+order = 22
+control = "toggle"
+section = "EmuCore/GS"
+key = "HWAccurateAlphaTest"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "resolved"
+notes = "Pcsx2Config.cpp:1048; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3089. Default false. Kept off: a per-draw cost against the 60 FPS target; the owner may test it in game."
+
+[[setting]]
+id = "aa1"
+label = "AA1 (edge anti-aliasing)"
+help = "Emulate the GS's edge anti-aliasing (AA1). Off by default."
+page = "advanced"
+order = 23
+control = "toggle"
+section = "EmuCore/GS"
+key = "HWAA1"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "resolved"
+notes = "Pcsx2Config.cpp:1049; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3087. Default false. The GT4 anti-aliasing choice is FXAA on Graphics; AA1 is the PS2 edge feature and stays off unless the owner tests it."
+
+[[setting]]
+id = "rov"
+label = "Rasterizer ordered view (ROV)"
+help = "Experimental feedback-loop path in the Vulkan renderer. Off."
+page = "advanced"
+order = 24
+control = "toggle"
+section = "EmuCore/GS"
+key = "HWROV"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "resolved"
+notes = "Pcsx2Config.cpp:1051; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3096 (hardware renderers only). Default false. Experimental: not offered until the owner tests it."
+
+[[setting]]
 id = "shade_boost"
 label = "Shade boost"
 help = "Colour correction (brightness, contrast, gamma, saturation). Off by default."
-page = "Advanced"
+page = "advanced"
+order = 25
+control = "toggle"
 section = "EmuCore/GS"
 key = "ShadeBoost"
 type = "bool"
 default = "false"
-visibility = "advanced"
 written = "when-set"
 status = "resolved"
 notes = "Corrected in TASK-039: the switch is the bool key ShadeBoost (loader pcsx2/Pcsx2Config.cpp:1009; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3326-3330). The four levels are separate rows below. Default off."
@@ -461,14 +611,15 @@ notes = "Corrected in TASK-039: the switch is the bool key ShadeBoost (loader pc
 id = "shade_boost_brightness"
 label = "Shade boost brightness"
 help = "Brightness for shade boost (50 is normal)."
-page = "Advanced"
+page = "advanced"
+order = 26
+control = "slider"
 section = "EmuCore/GS"
 key = "ShadeBoost_Brightness"
 type = "int"
 min = 1
 max = 100
 default = "50"
-visibility = "advanced"
 written = "when-set"
 status = "resolved"
 notes = "Stored as u8 (pcsx2/Config.h:900, default 50). Loader pcsx2/Pcsx2Config.cpp:1083. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3331)."
@@ -477,14 +628,15 @@ notes = "Stored as u8 (pcsx2/Config.h:900, default 50). Loader pcsx2/Pcsx2Config
 id = "shade_boost_contrast"
 label = "Shade boost contrast"
 help = "Contrast for shade boost (50 is normal)."
-page = "Advanced"
+page = "advanced"
+order = 27
+control = "slider"
 section = "EmuCore/GS"
 key = "ShadeBoost_Contrast"
 type = "int"
 min = 1
 max = 100
 default = "50"
-visibility = "advanced"
 written = "when-set"
 status = "resolved"
 notes = "Stored as u8 (pcsx2/Config.h:901, default 50). Loader pcsx2/Pcsx2Config.cpp:1084. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3333)."
@@ -493,14 +645,15 @@ notes = "Stored as u8 (pcsx2/Config.h:901, default 50). Loader pcsx2/Pcsx2Config
 id = "shade_boost_gamma"
 label = "Shade boost gamma"
 help = "Gamma for shade boost (50 is normal)."
-page = "Advanced"
+page = "advanced"
+order = 28
+control = "slider"
 section = "EmuCore/GS"
 key = "ShadeBoost_Gamma"
 type = "int"
 min = 1
 max = 100
 default = "50"
-visibility = "advanced"
 written = "when-set"
 status = "resolved"
 notes = "Stored as u8 (pcsx2/Config.h:903, default 50). Loader pcsx2/Pcsx2Config.cpp:1086. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3335)."
@@ -509,133 +662,30 @@ notes = "Stored as u8 (pcsx2/Config.h:903, default 50). Loader pcsx2/Pcsx2Config
 id = "shade_boost_saturation"
 label = "Shade boost saturation"
 help = "Saturation for shade boost (50 is normal)."
-page = "Advanced"
+page = "advanced"
+order = 29
+control = "slider"
 section = "EmuCore/GS"
 key = "ShadeBoost_Saturation"
 type = "int"
 min = 1
 max = 100
 default = "50"
-visibility = "advanced"
 written = "when-set"
 status = "resolved"
 notes = "Stored as u8 (pcsx2/Config.h:902, default 50). Loader pcsx2/Pcsx2Config.cpp:1085. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3337)."
 
 [[setting]]
-id = "hw_download_mode"
-label = "Readbacks"
-help = "How the GS reads back GPU data. Accurate reads back exactly (default). Unsynchronized is faster and may show small errors. The launcher shortcut is --gs-readback (GT4_GS_READBACK)."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "HWDownloadMode"
-type = "enum"
-default = "accurate"
-visibility = "basic"
-written = "always"
-status = "ok"
-choices = [
-  { name = "accurate", ini = "0", status = "ok" },
-  { name = "enabled-force-full", ini = "1", status = "resolved" },
-  { name = "no-readbacks", ini = "2", status = "resolved" },
-  { name = "unsynchronized", ini = "3", status = "ok" },
-  { name = "disabled", ini = "4", status = "resolved" },
-]
-notes = "GSHardwareDownloadMode (pcsx2/Config.h:399-405: Enabled = 0, EnabledForceFull = 1, NoReadbacks = 2, Unsynchronized = 3, Disabled = 4). Loader pcsx2/Pcsx2Config.cpp:1058, default Enabled (pcsx2/Config.h:871); the launcher default is accurate (Enabled, 0). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2913-2919. Owner decision: accurate by default, Unsynchronized as speed option. Unsynchronized is settable since TASK-037 (game-side reader in slice194)."
-
-[[setting]]
-id = "texture_load"
-label = "Load texture replacements"
-help = "Load texture packs from the GT4Recomp texture folder."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "LoadTextureReplacements"
-type = "bool"
-default = "false"
-visibility = "advanced"
-written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 default Off. Folder layout in D.3; verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1026."
-
-[[setting]]
-id = "texture_load_async"
-label = "Load replacements asynchronously"
-help = "Load texture replacements on a background thread."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "LoadTextureReplacementsAsync"
-type = "bool"
-default = "true"
-visibility = "advanced"
-written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 default On. Verified in TASK-040."
-
-[[setting]]
-id = "texture_precache"
-label = "Precache replacements"
-help = "Load all texture replacements before the game starts."
-page = "Graphics"
-section = "EmuCore/GS"
-key = "PrecacheTextureReplacements"
-type = "bool"
-default = "false"
-visibility = "advanced"
-written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 default Off. Verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1028."
-
-[[setting]]
-id = "texture_dump"
-label = "Dump textures"
-help = "Write the textures the game uses to the dumps folder."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "DumpReplaceableTextures"
-type = "bool"
-default = "false"
-visibility = "hidden"
-written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 default Off. Verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1021."
-
-[[setting]]
-id = "texture_dump_mipmaps"
-label = "Dump mipmaps"
-help = "Also dump the mipmap levels when dumping textures."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "DumpReplaceableMipmaps"
-type = "bool"
-default = "false"
-visibility = "hidden"
-written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 lists it with the texture dump options; default Off. Verified in TASK-040."
-
-[[setting]]
-id = "texture_dump_fmv"
-label = "Dump textures during FMV"
-help = "Dump textures while full-motion videos are active."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "DumpTexturesWithFMVActive"
-type = "bool"
-default = "false"
-visibility = "hidden"
-written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 default Off. Verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1023."
-
-[[setting]]
 id = "osd_fps"
 label = "Show FPS"
-help = "Show the GS frame rate on screen."
-page = "Advanced"
+help = "Show the GS frame rate on screen. Off by default."
+page = "advanced"
+order = 30
+control = "toggle"
 section = "EmuCore/GS"
 key = "OsdShowFPS"
 type = "bool"
 default = "false"
-visibility = "advanced"
 written = "when-set"
 status = "ok"
 notes = "D.1 OSD row: default shows messages only, so FPS is Off. Loader pcsx2/Pcsx2Config.cpp:965."
@@ -643,13 +693,14 @@ notes = "D.1 OSD row: default shows messages only, so FPS is Off. Loader pcsx2/P
 [[setting]]
 id = "osd_gpu"
 label = "Show GPU name"
-help = "Show the GPU name on screen."
-page = "Advanced"
+help = "Show the GPU name on screen. Off by default."
+page = "advanced"
+order = 31
+control = "toggle"
 section = "EmuCore/GS"
 key = "OsdShowGPU"
 type = "bool"
 default = "false"
-visibility = "advanced"
 written = "when-set"
 status = "ok"
 notes = "D.1 OSD row: messages only by default. Loader pcsx2/Pcsx2Config.cpp:968."
@@ -657,13 +708,14 @@ notes = "D.1 OSD row: messages only by default. Loader pcsx2/Pcsx2Config.cpp:968
 [[setting]]
 id = "osd_resolution"
 label = "Show resolution"
-help = "Show the internal resolution on screen."
-page = "Advanced"
+help = "Show the internal resolution on screen. Off by default."
+page = "advanced"
+order = 32
+control = "toggle"
 section = "EmuCore/GS"
 key = "OsdShowResolution"
 type = "bool"
 default = "false"
-visibility = "advanced"
 written = "when-set"
 status = "ok"
 notes = "D.1 OSD row: messages only by default. Loader pcsx2/Pcsx2Config.cpp:971."
@@ -671,13 +723,14 @@ notes = "D.1 OSD row: messages only by default. Loader pcsx2/Pcsx2Config.cpp:971
 [[setting]]
 id = "osd_messages_pos"
 label = "OSD message position"
-help = "Where OSD messages appear."
-page = "Advanced"
+help = "Where OSD messages appear. Top left is the default."
+page = "advanced"
+order = 33
+control = "dropdown"
 section = "EmuCore/GS"
 key = "OsdMessagesPos"
 type = "enum"
 default = "top-left"
-visibility = "hidden"
 written = "when-set"
 status = "resolved"
 choices = [
@@ -695,31 +748,165 @@ choices = [
 notes = "OsdOverlayPos (pcsx2/Config.h:341-351: None = 0, TopLeft = 1 ... BottomRight = 9). Loader pcsx2/Pcsx2Config.cpp:1041. Default TopLeft (pcsx2/Config.h:732). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:3437-3455. The performance position is a separate key, OsdPerformancePos (default TopRight, pcsx2/Config.h:733), not in the table."
 
 [[setting]]
+id = "osd_performance_pos"
+label = "OSD performance position"
+help = "Where the performance overlay (FPS, speed) appears."
+page = "advanced"
+order = 34
+control = "dropdown"
+section = "EmuCore/GS"
+key = "OsdPerformancePos"
+type = "enum"
+default = "top-right"
+written = "when-set"
+status = "resolved"
+choices = [
+  { name = "none", ini = "0", status = "resolved" },
+  { name = "top-left", ini = "1", status = "resolved" },
+  { name = "top-center", ini = "2", status = "resolved" },
+  { name = "top-right", ini = "3", status = "resolved" },
+  { name = "center-left", ini = "4", status = "resolved" },
+  { name = "center", ini = "5", status = "resolved" },
+  { name = "center-right", ini = "6", status = "resolved" },
+  { name = "bottom-left", ini = "7", status = "resolved" },
+  { name = "bottom-center", ini = "8", status = "resolved" },
+  { name = "bottom-right", ini = "9", status = "resolved" },
+]
+notes = "OsdPerformancePos (pcsx2/Config.h:341-351); loader pcsx2/Pcsx2Config.cpp:1042. Default TopRight (pcsx2/Pcsx2Config.cpp:727). UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3455."
+
+[[setting]]
 id = "osd_scale"
 label = "OSD scale"
 help = "Size of OSD text (percent)."
-page = "Advanced"
+page = "advanced"
+order = 35
+control = "slider"
 section = "EmuCore/GS"
 key = "OsdScale"
 type = "int"
 min = 25
 max = 500
 default = "100"
-visibility = "hidden"
 written = "when-set"
 status = "resolved"
 notes = "Stored as a float (pcsx2/Config.h:858, default 100). Loader pcsx2/Pcsx2Config.cpp:1038. UI range 25 to 500 in steps of 1, shown as percent (pcsx2/ImGui/FullscreenUI_Settings.cpp:3432)."
 
 [[setting]]
+id = "disable_shader_cache"
+label = "Disable shader cache"
+help = "Turn off the GS shader cache (debugging only). Off."
+page = "advanced"
+order = 36
+control = "toggle"
+section = "EmuCore/GS"
+key = "DisableShaderCache"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "ok"
+notes = "D.1 default Off. Hidden: the launcher keeps the cache folder. Loader pcsx2/Pcsx2Config.cpp:960."
+
+[[setting]]
+id = "texture_load"
+label = "Load texture replacements"
+help = "Load texture packs from the GT4Recomp texture folder. Mods page (TASK-048)."
+page = "mods"
+order = 1
+control = "toggle"
+section = "EmuCore/GS"
+key = "LoadTextureReplacements"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "pending-TASK-040"
+notes = "D.1 default Off. Folder layout in D.3; verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1026."
+
+[[setting]]
+id = "texture_load_async"
+label = "Load replacements asynchronously"
+help = "Load texture replacements on a background thread. Mods page (TASK-048)."
+page = "mods"
+order = 2
+control = "toggle"
+section = "EmuCore/GS"
+key = "LoadTextureReplacementsAsync"
+type = "bool"
+default = "true"
+written = "when-set"
+status = "pending-TASK-040"
+notes = "D.1 default On. Verified in TASK-040."
+
+[[setting]]
+id = "texture_precache"
+label = "Precache replacements"
+help = "Load all texture replacements before the game starts. Mods page (TASK-048)."
+page = "mods"
+order = 3
+control = "toggle"
+section = "EmuCore/GS"
+key = "PrecacheTextureReplacements"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "pending-TASK-040"
+notes = "D.1 default Off. Verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1028."
+
+[[setting]]
+id = "texture_dump"
+label = "Dump textures"
+help = "Write the textures the game uses to the dumps folder. Mods page (TASK-048)."
+page = "mods"
+order = 4
+control = "toggle"
+section = "EmuCore/GS"
+key = "DumpReplaceableTextures"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "pending-TASK-040"
+notes = "D.1 default Off. Verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1021."
+
+[[setting]]
+id = "texture_dump_mipmaps"
+label = "Dump mipmaps"
+help = "Also dump the mipmap levels when dumping textures. Mods page (TASK-048)."
+page = "mods"
+order = 5
+control = "toggle"
+section = "EmuCore/GS"
+key = "DumpReplaceableMipmaps"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "pending-TASK-040"
+notes = "D.1 lists it with the texture dump options; default Off. Verified in TASK-040."
+
+[[setting]]
+id = "texture_dump_fmv"
+label = "Dump textures during FMV"
+help = "Dump textures while full-motion videos are active. Mods page (TASK-048)."
+page = "mods"
+order = 6
+control = "toggle"
+section = "EmuCore/GS"
+key = "DumpTexturesWithFMVActive"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "pending-TASK-040"
+notes = "D.1 default Off. Verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1023."
+
+[[setting]]
 id = "manual_hacks"
 label = "Manual hardware fixes"
 help = "Enables the UserHacks_* options. Off keeps the GameDB fixes for GT4."
-page = "Advanced"
+page = "hidden"
+order = 1
+control = "toggle"
 section = "EmuCore/GS"
 key = "UserHacks"
 type = "bool"
 default = "false"
-visibility = "hidden"
 written = "when-set"
 status = "ok"
 notes = "Key corrected in TASK-039: UserHacks (pcsx2/Pcsx2Config.cpp:991, field ManualUserHacks), not ManualUserHacks. Default Off (pcsx2/Pcsx2Config.cpp:763). Hidden: enabling it would bypass the GT4 GameDB fixes (pcsx2/GameDatabase.cpp:705)."
@@ -728,68 +915,58 @@ notes = "Key corrected in TASK-039: UserHacks (pcsx2/Pcsx2Config.cpp:991, field 
 id = "user_hacks"
 label = "Manual hardware fixes (individual)"
 help = "Individual UserHacks_* switches (only with manual_hacks)."
-page = "Advanced"
+page = "hidden"
+order = 2
+control = "toggle"
 section = "EmuCore/GS"
 key = ""
 type = "bool"
 default = "false"
-visibility = "hidden"
 written = "when-set"
 status = "pending-TASK-043"
 notes = "Names resolved; hidden and not offered. One row per key comes with the launcher task (TASK-043). Names from pcsx2/Pcsx2Config.cpp:992-1079: UserHacks_align_sprite_X, UserHacks_AutoFlushLevel, UserHacks_CPU_FB_Conversion, UserHacks_ReadTCOnClose, UserHacks_DisableDepthSupport, UserHacks_DisablePartialInvalidation, UserHacks_Disable_Safe_Features, UserHacks_DisableRenderFixes, UserHacks_merge_pp_sprite, UserHacks_ForceEvenSpritePosition, UserHacks_BilinearHack, UserHacks_NativePaletteDraw, UserHacks_TextureInsideRt, UserHacks_Limit24BitDepth, UserHacks_EstimateTextureRegion, UserHacks_DrawBuffering, UserHacks_HalfPixelOffset, UserHacks_round_sprite_offset, UserHacks_native_scaling, UserHacks_TCOffsetX, UserHacks_TCOffsetY, UserHacks_CPUSpriteRenderBW, UserHacks_CPUSpriteRenderLevel, UserHacks_CPUCLUTRender, UserHacks_GPUTargetCLUTMode, UserHacks_SkipDraw_Start, UserHacks_SkipDraw_End. They take effect only with UserHacks = true. JIT-free gt4-gs 0.4.0 (TASK-042): CPU sprite render (UserHacks_CPUSpriteRenderBW/Level) and CPU CLUT render (UserHacks_CPUCLUTRender) run the C rasterizer instead of the software JIT; frames are byte-identical to 0.3.2 on the menus stream, the GS thread is slower (6.5 against 5.4 ms/frame with both on). No setting needs the JIT, so none is refused; GT4 uses neither by default."
 
 [[setting]]
-id = "adapter"
-label = "Graphics adapter"
-help = "GPU used for rendering. Empty is the system default."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "Adapter"
-type = "string"
-default = ""
-visibility = "advanced"
-written = "when-set"
-status = "resolved"
-notes = "std::string Adapter (pcsx2/Config.h:932; loader pcsx2/Pcsx2Config.cpp:1107). Empty = default adapter. A non-empty value must equal one name returned by GSGetAdapterInfo for the active renderer (pcsx2/ImGui/FullscreenUI_Settings.cpp:2945-2960). The names exist only at run time, so the launcher cannot list them yet; string rows cannot be ok until that list exists (TASK-043). Not offered."
-
-[[setting]]
-id = "disable_shader_cache"
-label = "Disable shader cache"
-help = "Turn off the GS shader cache (debugging only)."
-page = "Advanced"
-section = "EmuCore/GS"
-key = "DisableShaderCache"
-type = "bool"
-default = "false"
-visibility = "hidden"
-written = "when-set"
-status = "ok"
-notes = "D.1 default Off. Hidden: the launcher keeps the cache folder. Loader pcsx2/Pcsx2Config.cpp:960."
-
-[[setting]]
 id = "game_fixes"
 label = "Game fixes"
 help = "Apply the GameDB fixes for the running game."
-page = "Advanced"
+page = "hidden"
+order = 3
+control = "toggle"
 section = "EmuCore"
 key = "EnableGameFixes"
 type = "bool"
 default = "true"
-visibility = "hidden"
 written = "when-set"
 status = "ok"
 notes = "D.2 writes [EmuCore] EnableGameFixes=true. Confirmed at pcsx2/Pcsx2Config.cpp:1993 (pcsx2/Config.h:1360). Not written by default so the default INI stays byte-identical to TASK-036. Decide in TASK-043."
 
 [[setting]]
+id = "extended_upscale"
+label = "Extended upscaling multipliers"
+help = "Raises the PCSX2 UI and hotkey cap from 12x to 25x."
+page = "hidden"
+order = 4
+control = "toggle"
+section = "EmuCore/GS"
+key = "ExtendedUpscalingMultipliers"
+type = "bool"
+default = "false"
+written = "when-set"
+status = "resolved"
+notes = "Pcsx2Config.cpp:931 (bit wrap). NOT needed for 1x to 12x: the loader accepts those values; the device limit is GSClampUpscaleMultiplier (pcsx2/GS/GS.cpp:225-240). This flag only lifts the PCSX2 UI list and the hotkey cap above 12 (pcsx2/GS/GS.cpp:1176; pcsx2/ImGui/FullscreenUI_Settings.cpp:2975). Never written by the launcher; hidden."
+
+[[setting]]
 id = "cache_folder"
 label = "Shader cache folder"
 help = "Shader cache folder, set by the launcher."
-page = "Advanced"
+page = "hidden"
+order = 5
+control = "none"
 section = "Folders"
 key = "Cache"
 type = "path"
 default = ""
-visibility = "hidden"
 written = "launcher"
 status = "ok"
 notes = "Written only when the launcher supplies a folder (the probe passes the pinned cache directory). D.2 also names Textures and Snapshots; not added yet."
@@ -798,12 +975,13 @@ notes = "Written only when the launcher supplies a folder (the probe passes the 
 id = "data_root"
 label = "GS data folder"
 help = "Data folder of the gt4-gs process, set by the launcher (private/slice193-gt4gs-data)."
-page = "Advanced"
+page = "hidden"
+order = 6
+control = "none"
 section = "GT4GS"
 key = "DataRoot"
 type = "path"
 default = ""
-visibility = "hidden"
 written = "launcher"
 status = "ok"
 notes = "GT4 fork key (gt4-gs 0.3.0 and later). Written only when the launcher supplies the folder (package data_root = true in the pin)."
@@ -812,12 +990,13 @@ notes = "GT4 fork key (gt4-gs 0.3.0 and later). Written only when the launcher s
 id = "defer_swap_chain_acquire"
 label = "Defer swap chain acquire"
 help = "Acquire the swap chain image late. The launcher writes false only for GT4_GS_EAGER_ACQUIRE=1 (A/B switch)."
-page = "Advanced"
+page = "hidden"
+order = 7
+control = "none"
 section = "GT4GS"
 key = "DeferSwapChainAcquire"
 type = "bool"
 default = "true"
-visibility = "hidden"
 written = "launcher"
 status = "ok"
 notes = "GT4 fork key (gt4-gs 0.3.0 and later, slice194). Written as false only when GT4_GS_EAGER_ACQUIRE=1; otherwise absent and the GS uses its deferred acquire."
@@ -826,12 +1005,13 @@ notes = "GT4 fork key (gt4-gs 0.3.0 and later, slice194). Written as false only 
 id = "headless_surfaceless"
 label = "Headless surfaceless"
 help = "Run without a window (headless check runs only)."
-page = "Advanced"
+page = "hidden"
+order = 8
+control = "none"
 section = "GT4GS"
 key = "Surfaceless"
 type = "bool"
 default = "false"
-visibility = "hidden"
 written = "launcher"
 status = "ok"
 notes = "GT4 fork key. Written only by headless probe runs."
@@ -840,12 +1020,13 @@ notes = "GT4 fork key. Written only by headless probe runs."
 id = "headless_dump_dir"
 label = "Headless frame dump folder"
 help = "Folder for PNG frame dumps of headless runs."
-page = "Advanced"
+page = "hidden"
+order = 9
+control = "none"
 section = "GT4GS"
 key = "DumpDir"
 type = "path"
 default = ""
-visibility = "hidden"
 written = "launcher"
 status = "ok"
 notes = "GT4 fork key. Written only by headless probe runs."
@@ -854,14 +1035,15 @@ notes = "GT4 fork key. Written only by headless probe runs."
 id = "headless_dump_every"
 label = "Headless frame dump interval"
 help = "Write a PNG every N vsyncs in headless runs."
-page = "Advanced"
+page = "hidden"
+order = 10
+control = "none"
 section = "GT4GS"
 key = "DumpEvery"
 type = "int"
 min = 1
 max = 100000
 default = "100"
-visibility = "hidden"
 written = "launcher"
 status = "ok"
 notes = "GT4 fork key. TASK-036 uses 100. The range is a launcher limit, not a plan value."

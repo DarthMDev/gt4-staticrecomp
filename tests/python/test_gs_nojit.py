@@ -134,11 +134,18 @@ class NoJitMarkerTests(unittest.TestCase):
         self.assertNotIn(b'GT4GS no-JIT', (package / 'gt4-gs.exe').read_bytes())
 
 
+def setting_row(text, setting_id):
+    """The [[setting]] block of one row, from its id to the next row (rows are not in a fixed order)."""
+    start = text.index(f'id = "{setting_id}"')
+    end = text.find('[[setting]]', start)
+    return text[start:] if end == -1 else text[start:end]
+
+
 class SettingsTableTests(unittest.TestCase):
     def test_software_raster_rows_name_the_c_rasterizer(self):
         text = (ROOT / 'docs/launcher/gs-settings.toml').read_text(encoding='utf-8')
-        renderer = text[text.index('id = "renderer"'):text.index('id = "upscale"')]
-        hacks = text[text.index('id = "user_hacks"'):text.index('id = "adapter"')]
+        renderer = setting_row(text, 'renderer')
+        hacks = setting_row(text, 'user_hacks')
         for row in (renderer, hacks):
             self.assertIn('C rasterizer', row)
             self.assertIn('0.4.0', row)

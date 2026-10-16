@@ -168,14 +168,14 @@ in game before it is merged.
 | TASK‑037 | PCSX2 GS readbacks and the night race | ✅ Done · night race 59.97 FPS, 69 late frames (was 213); accurate readbacks by default ([live](docs/GS-LIVE.md)) |
 | TASK‑038 | GS window, fullscreen, focus, input, crash handling | ✅ Done · fullscreen, focus and click fix (gt4-gs 0.3.1), crash handling with CoreGS 1.1 fallback |
 | TASK‑039 | GS settings table and `gt4-gs.ini` generator | ✅ Done · 51-row settings table generates `gt4-gs.ini`; fork allow-list enforcement pending ([settings](docs/GS-SETTINGS.md)) |
-| TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
-| TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 📋 Planned |
-| TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | 🔄 In progress · gt4-gs 0.4.0 has no recompilers, no software JIT and no executable memory; Arbitrary Code Guard on; frames identical to 0.3.2; owner check pending ([live](docs/GS-LIVE.md#9-no-jit-task-042-slice197-gt4-gs-040)) |
+| TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 🔄 In progress |
+| TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019) |
 | TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | "Prepare shaders": warm the PCSX2 GS pipeline cache before the first race | 📋 Planned (study done) |
 | TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | ✅ Done · owner test 2026-10-16: sharp, steady 480i menus (SYNCV + display field, gt4-gs 0.3.2) ([live](docs/GS-LIVE.md#8-480i-deinterlacing-task-047-slice196-gt4-gs-032)) |
+| TASK‑049 | GS settings curation for the launcher (Graphics and Advanced pages, reset to defaults) | ✅ Done · default gt4-gs.ini unchanged; 58-row table ([settings](docs/GS-SETTINGS.md)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS
