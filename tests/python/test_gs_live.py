@@ -60,7 +60,7 @@ class ConfigTests(unittest.TestCase):
         self.assertIn('DumpEvery = 100\n', text)
 
     def test_bad_values_are_refused(self):
-        for name, value in (('GT4_GS_SCALE', '0'), ('GT4_GS_SCALE', '9'), ('GT4_GS_SCALE', '1.5'),
+        for name, value in (('GT4_GS_SCALE', '0'), ('GT4_GS_SCALE', '13'), ('GT4_GS_SCALE', '1.5'),
                             ('GT4_GS_ASPECT', 'wide'), ('GT4_PRESENT_MODE', 'adaptive')):
             with self.assertRaises(ValueError, msg=f'{name}={value}'):
                 probe.gs_config_text({name: value})
@@ -148,7 +148,7 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(os.environ['GT4_GS_SCALE'], '1')
             play.assert_called_once()
         with patch.object(performance, 'play') as play:
-            for arguments in (['--mode', 'main', '--gs-scale', '2'], ['--mode', 'pcsx2', '--gs-scale', '9']):
+            for arguments in (['--mode', 'main', '--gs-scale', '2'], ['--mode', 'pcsx2', '--gs-scale', '13']):
                 with patch.object(sys, 'argv', ['play_performance.py', '--assets-root', str(root)] + arguments):
                     self.assertEqual(performance.main(), 1)
             play.assert_not_called()

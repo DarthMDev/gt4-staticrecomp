@@ -25,16 +25,19 @@ ROOT = Path(__file__).resolve().parents[1]
 TABLE_PATH = ROOT / 'docs/launcher/gs-settings.toml'
 ALLOWLIST_PATH = ROOT / 'docs/launcher/gs-settings-allowlist.json'
 SCHEMA_VERSION = 1
-PAGES = ('Graphics', 'Display', 'Advanced')
+PAGES = ('basic', 'advanced', 'mods', 'hidden')
 TYPES = ('bool', 'int', 'float', 'enum', 'string', 'path')
-VISIBILITIES = ('basic', 'advanced', 'hidden')
+CONTROLS = ('slider', 'toggle', 'dropdown', 'text', 'none')
+CONTROL_FOR_TYPE = {'bool': 'toggle', 'int': 'slider', 'float': 'slider', 'enum': 'dropdown', 'string': 'text',
+                    'path': 'none'}
 WRITTEN = ('always', 'when-set', 'launcher', 'never')
 STATUS_PATTERN = re.compile(r'ok|resolved|TBD-fork|pending-TASK-\d{3}')
 ID_PATTERN = re.compile(r'[a-z][a-z0-9_]*')
 ENV_PATTERN = re.compile(r'GT4_[A-Z0-9_]+')
 SECTION_ORDER = ('EmuCore/GS', 'EmuCore', 'Folders', 'GT4GS')
-REQUIRED_FIELDS = ('id', 'label', 'help', 'page', 'section', 'key', 'type', 'default', 'visibility', 'written',
+REQUIRED_FIELDS = ('id', 'label', 'help', 'page', 'order', 'control', 'section', 'key', 'type', 'default', 'written',
                    'status')
+PROFILE_DEFAULTS = 'gt4-defaults'
 # First line of the default INI. Kept verbatim: the default output must stay byte-identical to TASK-036.
 INI_HEADER = '; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)'
 
@@ -60,6 +63,13 @@ def table_errors(data):
     rows = data.get('setting')
     if not isinstance(rows, list) or not rows:
         return errors + ['no [[setting]] rows']
+    profiles = data.get('profile', [])
+    profile_names = [profile.get('name') for profile in profiles]
+    if PROFILE_DEFAULTS not in profile_names:
+        errors.append(f'missing [[profile]] {PROFILE_DEFAULTS}')
+    if len(set(profile_names)) != len(profile_names):
+        errors.append('duplicate [[profile]] name')
+    orders = {}
     seen_ids = set()
     seen_keys = set()
     for row in rows:
@@ -75,6 +85,11 @@ def table_errors(data):
         if any(field not in row for field in REQUIRED_FIELDS):
             continue
         errors += _row_errors(row)
+        if 'order' in row and 'page' in row:
+            slot = (row['page'], row['order'])
+            if slot in orders:
+                errors.append(f'{name}: order {row["order"]} is already used on page {row["page"]}')
+            orders[slot] = name
         if row['section'] and row['key']:
             pair = (row['section'], row['key'])
             if pair in seen_keys:
@@ -90,8 +105,15 @@ def _row_errors(row):
         errors.append(f'{name}: page must be one of {", ".join(PAGES)}')
     if row['type'] not in TYPES:
         errors.append(f'{name}: type must be one of {", ".join(TYPES)}')
-    if row['visibility'] not in VISIBILITIES:
-        errors.append(f'{name}: visibility must be one of {", ".join(VISIBILITIES)}')
+    if not isinstance(row['order'], int) or row['order'] < 1:
+        errors.append(f'{name}: order must be an integer from 1')
+    if row['control'] not in CONTROLS:
+        errors.append(f'{name}: control must be one of {", ".join(CONTROLS)}')
+    elif row['written'] == 'launcher':
+        if row['control'] != 'none':
+            errors.append(f'{name}: launcher-supplied rows have control none')
+    elif row['type'] in CONTROL_FOR_TYPE and row['control'] != CONTROL_FOR_TYPE[row['type']]:
+        errors.append(f'{name}: a {row["type"]} row needs control {CONTROL_FOR_TYPE[row["type"]]}')
     if row['written'] not in WRITTEN:
         errors.append(f'{name}: written must be one of {", ".join(WRITTEN)}')
     if not STATUS_PATTERN.fullmatch(row['status']):
@@ -142,6 +164,8 @@ def _choice_errors(row):
             errors.append(f'{name}: choice without name')
         if not STATUS_PATTERN.fullmatch(choice.get('status', '')):
             errors.append(f'{name}: choice {choice.get("name")} needs a status')
+        if 'label' in choice and not isinstance(choice['label'], str):
+            errors.append(f'{name}: choice {choice.get("name")} label must be text')
         if choice.get('status') == 'ok' and row['written'] != 'never' and not choice.get('ini'):
             errors.append(f'{name}: ok choice {choice.get("name")} needs an ini value')
     if row['status'] == 'ok' and not any(choice.get('status') == 'ok' for choice in choices):
@@ -244,6 +268,21 @@ def _json_text(value):
     return str(value)
 
 
+def reset_to_defaults(rows=None):
+    """The GT4 default settings dict (profile gt4-defaults): the default of every settable row.
+
+    Launcher-supplied and launcher-only rows are left out. render_ini(rows, reset_to_defaults(rows)) is the default
+    gt4-gs.ini, byte for byte (tests/python/test_gs_settings.py).
+    """
+    rows = load_table() if rows is None else rows
+    settings = {}
+    for row in rows:
+        if row['status'] != 'ok' or row['written'] not in ('always', 'when-set') or row['type'] == 'path':
+            continue
+        settings[row['id']] = row['default']
+    return settings
+
+
 def render_ini(rows, settings=None, launcher=None, header=INI_HEADER):
     """The gt4-gs.ini text. settings: user values by id; launcher: values the launcher supplies (folders, headless).
 
@@ -270,7 +309,7 @@ def render_ini(rows, settings=None, launcher=None, header=INI_HEADER):
             continue
         if row['written'] == 'always':
             value = settings.get(identifier, row['default'])
-        elif row['written'] == 'when-set' and identifier in settings:
+        elif row['written'] == 'when-set' and identifier in settings and                 parse_value(row, settings[identifier]) != parse_value(row, row['default']):
             value = settings[identifier]
         elif row['written'] == 'launcher' and identifier in launcher:
             value = launcher[identifier]
@@ -324,15 +363,18 @@ def allowlist_text(rows):
 
 
 def offered(rows):
-    """Rows the launcher may show: basic or advanced, settable, and with at least one settable value."""
+    """Rows the launcher may show: page basic or advanced, settable, and with at least one settable value.
+
+    Launcher-only rows (written = never) such as gs_engine are offered; launcher-supplied rows are not.
+    """
     result = []
     for row in rows:
-        if row['visibility'] == 'hidden' or row['status'] != 'ok' or row['written'] in ('never', 'launcher'):
+        if row['page'] not in ('basic', 'advanced') or row['status'] != 'ok' or row['written'] == 'launcher':
             continue
         if row['type'] == 'enum' and not any(choice['status'] == 'ok' for choice in row['choices']):
             continue
         result.append(row)
-    return result
+    return sorted(result, key=lambda row: (PAGES.index(row['page']), row['order']))
 
 
 def offered_choices(row):
