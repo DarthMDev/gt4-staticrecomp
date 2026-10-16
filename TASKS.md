@@ -417,6 +417,7 @@ Acceptance: Python tests (table schema, generated INI golden file, refusal of un
 values); `gt4-gs.exe` reports effective settings in READY; owner checks 1x/3x/6x, FXAA, CAS, dithering,
 deinterlace in menus.
 Parallel: with 037/038.
+State: main-repo part done (branch `task/039-gs-settings`, 2026-10-16): table, generator, `--gs-setting`, tests and docs in place; fork allow-list enforcement pending (TASK-037/038 agent). Details: [GS-SETTINGS](docs/GS-SETTINGS.md).
 
 ### TASK-040 — Texture dumping and replacement
 Repos: fork `gt4gs/textures`, main docs. Haiku, 1-2 sessions.

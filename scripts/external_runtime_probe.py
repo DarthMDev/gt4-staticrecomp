@@ -11,6 +11,7 @@ import subprocess
 import time
 
 from cpu_affinity import apply_process_affinity, plan_affinity
+import gs_settings
 from gt4disc import fingerprint
 
 
@@ -91,23 +92,15 @@ MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'
 MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
 # TASK-035 (slice191): GS stream settings (native/gs_stream/gs_stream_client.hpp, tools/gs_stream_record).
 GS_STREAM_RENDERERS = ('donor', 'pcsx2')
-# GS display settings an owner run keeps from the caller (play_performance.py --gs-scale sets GT4_GS_SCALE).
-GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT')
+# GS display settings an owner run keeps from the caller (play_performance.py --gs-scale, --gs-setting).
+GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_SETTINGS')
 GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_CAPTURE_FRAMES', 'GT4_GS_FRAMES_IN_FLIGHT',
                    'GT4_GS_RECORD_OUTPUT', 'GT4_GS_RECORD_FRAMES', 'GT4_GS_PROCESS_SHA256', 'GT4_GS_CONFIG',
-                   'GT4_GS_SCALE', 'GT4_GS_ASPECT')
-# TASK-036 (slice193): minimal gt4-gs.ini settings (the full settings table is TASK-039).
-GS_SCALES = tuple(str(n) for n in range(1, 9))
-GS_DEFAULT_SCALE = '3'
-# GT4_GS_ASPECT: display aspect of the GS output. 16:9 is the game's setting (widescreen card); auto is PCSX2's
-# "Auto 4:3/3:2" (used to compare with the TASK-034 proof-of-concept images).
-GS_ASPECTS = {'16:9': '16:9', '4:3': '4:3', 'auto': 'Auto 4:3/3:2'}
-GS_DEFAULT_ASPECT = '16:9'
-# PCSX2 enum values written to the ini: GSRendererType::VK, AccBlendLevel::High, GSInterlaceMode::Automatic.
-GS_RENDERER_VULKAN = 14
-GS_BLENDING_HIGH = 3
-GS_DEINTERLACE_AUTOMATIC = 0
+                   'GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_SETTINGS')
+# TASK-039: user GS settings as JSON (play_performance.py --gs-setting ID=VALUE). The table: docs/launcher/gs-settings.toml.
+GS_SETTINGS_ENV = 'GT4_GS_SETTINGS'
 GS_SHADER_CACHE = 'private/slice193-gt4gs-cache'
+# Headless runs write a PNG every N vsyncs (the table's DumpEvery row).
 GS_HEADLESS_DUMP_EVERY = 100
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
@@ -182,40 +175,58 @@ def package_tree_digest(directory):
     return hashlib.sha256(''.join(lines).encode('utf-8')).hexdigest(), len(lines)
 
 
-def gs_config_text(environment, headless_dump_directory=None, shader_cache=None):
-    """The minimal gt4-gs.ini of a pcsx2 run (PCSX2 INI syntax; TASK-039 owns the full settings table).
+def gs_settings_from_environment(environment, rows):
+    """The checked settings of a pcsx2 run, from the table (docs/GS-SETTINGS.md).
 
-    GT4_GS_SCALE (1..8, default 3) sets the internal resolution; GT4_PRESENT_MODE maps to the GS vsync
-    (fifo/unset: vsync on; mailbox: vsync on, mailbox allowed; immediate: vsync off); GT4_GS_ASPECT (16:9 default).
-    Blending accuracy High and deinterlace Automatic are fixed GT4 defaults. Headless runs add [GT4GS] Surfaceless and
-    PNG frame dumps every 100 vsyncs.
+    GT4_GS_SETTINGS (JSON from play_performance.py --gs-setting ID=VALUE) holds the user settings. The shortcuts
+    GT4_GS_SCALE (upscale, default 3), GT4_GS_ASPECT (aspect) and GT4_PRESENT_MODE (vsync and mailbox) set the same
+    rows; a shortcut and a JSON setting for the same row conflict.
     """
-    scale = environment.get('GT4_GS_SCALE', GS_DEFAULT_SCALE)
-    if scale not in GS_SCALES:
-        raise ValueError('GT4_GS_SCALE must be an integer from 1 to 8')
-    aspect = environment.get('GT4_GS_ASPECT', GS_DEFAULT_ASPECT)
-    if aspect not in GS_ASPECTS:
-        raise ValueError('GT4_GS_ASPECT must be one of ' + ', '.join(GS_ASPECTS))
+    settings = {}
+    if environment.get(GS_SETTINGS_ENV):
+        settings = gs_settings.settings_from_json(environment[GS_SETTINGS_ENV], rows)
+    index = gs_settings.rows_by_id(rows)
+    shortcuts = (('GT4_GS_SCALE', 'upscale', 'GT4_GS_SCALE must be an integer from 1 to 8'),
+                 ('GT4_GS_ASPECT', 'aspect', 'GT4_GS_ASPECT must be one of ' + ', '.join(
+                     gs_settings.offered_choices(index['aspect']))))
+    for variable, identifier, message in shortcuts:
+        if variable not in environment:
+            continue
+        if identifier in settings:
+            raise ValueError(f'{variable} and {GS_SETTINGS_ENV} both set {identifier}')
+        try:
+            settings[identifier] = gs_settings.parse_value(index[identifier], environment[variable])
+        except gs_settings.SettingsError as error:
+            raise ValueError(message) from error
     present = environment.get('GT4_PRESENT_MODE', 'fifo')
     if present not in PACING_OVERRIDES['GT4_PRESENT_MODE']:
         raise ValueError('GT4_PRESENT_MODE must be one of fifo, mailbox, immediate')
-    vsync = 'false' if present == 'immediate' else 'true'
-    mailbox_off = 'false' if present == 'mailbox' else 'true'
-    lines = ['; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)',
-             '[EmuCore/GS]',
-             f'Renderer = {GS_RENDERER_VULKAN}',
-             f'upscale_multiplier = {scale}',
-             f'accurate_blending_unit = {GS_BLENDING_HIGH}',
-             f'deinterlace_mode = {GS_DEINTERLACE_AUTOMATIC}',
-             f'AspectRatio = {GS_ASPECTS[aspect]}',
-             f'VsyncEnable = {vsync}',
-             f'DisableMailboxPresentation = {mailbox_off}']
+    if 'vsync' in settings or 'mailbox' in settings:
+        if present != 'fifo':
+            raise ValueError(f'GT4_PRESENT_MODE={present} and {GS_SETTINGS_ENV} both set vsync or mailbox')
+    else:
+        settings['vsync'] = 'false' if present == 'immediate' else 'true'
+        settings['mailbox'] = 'false' if present == 'mailbox' else 'true'
+    return settings
+
+
+def gs_config_text(environment, headless_dump_directory=None, shader_cache=None):
+    """The gt4-gs.ini of a pcsx2 run, generated from docs/launcher/gs-settings.toml (TASK-039, docs/GS-SETTINGS.md).
+
+    With no settings the text is the TASK-036 default (Vulkan, 3x, blending High, deinterlace Automatic, 16:9, vsync).
+    Headless runs pass headless_dump_directory ([GT4GS] Surfaceless and PNG dumps every 100 vsyncs); shader_cache
+    passes the [Folders] Cache folder.
+    """
+    rows = gs_settings.load_table()
+    settings = gs_settings_from_environment(environment, rows)
+    launcher = {}
     if shader_cache:
-        lines += ['', '[Folders]', f'Cache = {shader_cache}']
+        launcher['cache_folder'] = str(shader_cache)
     if headless_dump_directory:
-        lines += ['', '[GT4GS]', 'Surfaceless = true', f'DumpDir = {headless_dump_directory}',
-                  f'DumpEvery = {GS_HEADLESS_DUMP_EVERY}']
-    return '\n'.join(lines) + '\n'
+        launcher['headless_surfaceless'] = 'true'
+        launcher['headless_dump_dir'] = str(headless_dump_directory)
+        launcher['headless_dump_every'] = str(GS_HEADLESS_DUMP_EVERY)
+    return gs_settings.render_ini(rows, settings, launcher)
 
 
 def gs_stream_environment(environment, runtime_evidence, binary_workspace, performance, run_directory=None,
@@ -265,12 +276,12 @@ def gs_stream_environment(environment, runtime_evidence, binary_workspace, perfo
             cache.mkdir(parents=True, exist_ok=True)
             dumps = (Path(run_directory) / 'gs-frames') if headless else None
             config = Path(run_directory) / 'gt4-gs.ini'
-            config.write_text(gs_config_text(environment, dumps, cache), encoding='utf-8')
+            gs_settings.write_ini_atomic(config, gs_config_text(environment, dumps, cache))
             environment['GT4_GS_CONFIG'] = str(config)
         extra['gs_package'] = {'directory': package['directory'], 'tree_sha256': digest, 'files': files,
                                'source': package.get('source')}
     elif renderer == 'pcsx2':
-        for name in ('GT4_GS_SCALE', 'GT4_GS_ASPECT'):
+        for name in ('GT4_GS_SCALE', 'GT4_GS_ASPECT', GS_SETTINGS_ENV):
             if name in environment:
                 raise ValueError(f'{name} needs a manifest with a gt4-gs package (--mode pcsx2)')
     recorded = {name: environment[name] for name in GS_STREAM_NAMES if name in environment}

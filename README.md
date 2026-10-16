@@ -163,6 +163,7 @@ in game before it is merged.
 | TASK‑036 | Live `gt4-gs.exe` MVP | ✅ Done · owner test 2026-10-16 at 3x: Nordschleife 59.98 FPS, night race 59.89 FPS ([live](docs/GS-LIVE.md)) |
 | TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
 | TASK‑038 | GS window, fullscreen, focus, input, crash handling | 📋 Planned |
+| TASK‑039 | GS settings table and `gt4-gs.ini` generator | 🔄 Main-repo part done · fork allow-list enforcement pending (TASK-037/038 agent) ([settings](docs/GS-SETTINGS.md)) |
 | TASK‑039 | GS settings table and `gt4-gs.ini` | 📋 Planned |
 | TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
 | TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 📋 Planned |
