@@ -76,14 +76,15 @@ def cpu_options(args):
 
 
 def force_480p_requested(args):
-    """--force-480p, or the default of --mode main (480p progressive race display).
+    """--force-480p, or the default of --mode main and --mode pcsx2 (480p progressive race display).
 
     Release 1.0.0 owner decision: --mode main holds 480p unless the hidden opt-out GT4_FORCE_480P=0 is set.
+    The owner extended the default to --mode pcsx2 (2026-10-16, TASK-036 windowed test).
     Only the exact value 0 opts out; other values are passed on and refused by the probe.
     """
     if args.force_480p:
         return True
-    return args.mode == 'main' and os.environ.get('GT4_FORCE_480P') != '0'
+    return args.mode in ('main', 'pcsx2') and os.environ.get('GT4_FORCE_480P') != '0'
 
 
 def main():
@@ -95,7 +96,7 @@ def main():
     parser.add_argument('--vu1-interpret-only', action='store_true',
                         help='force the interpreter in the vu1-aot, gs-async, pacing and vu1-flags binaries')
     parser.add_argument('--force-480p', action='store_true',
-                        help='hold the race display option at 480p (quickfix3, main, mtvu; main has it by default)')
+                        help='hold the race display option at 480p (quickfix3, main, mtvu, pcsx2; main and pcsx2 have it by default)')
     parser.add_argument('--cpu-cores', type=int, default=None, metavar='N',
                         help='weak-CPU simulation: limit the game to N logical CPUs (1..logical count), '
                              'one per physical core first; recorded in result.json (docs/MTVU-PLAN.md section 12)')
@@ -113,8 +114,8 @@ def main():
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu'):
-            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure or mtvu')
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu', 'pcsx2'):
+            raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure, mtvu or pcsx2')
         if args.gs_scale is not None:
             if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 8:
                 raise ValueError('--gs-scale takes 1..8 and requires --mode pcsx2')
