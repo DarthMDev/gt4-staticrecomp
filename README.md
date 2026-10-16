@@ -189,6 +189,8 @@ in game before it is merged.
 | TASK‑022 | Android app: touch controls, Bluetooth controllers | 📋 Planned |
 | TASK‑023 | ARMSX2 Metal GS for iOS | 📋 Planned |
 | TASK‑024 | iOS app | 📋 Planned |
+| TASK‑058 | Crash-safe memory card in the real build (atomic write, retry, exit flush) | ✅ Code and checks done on slice200 (CTest, kill test); in-game save test pending |
+| TASK‑059 | Installed game folder: shaders and GS package next to the exe, `--portable-check`, `make_distribution.py` | ✅ Code and headless smoke done on slice200 (`docs/DISTRIBUTION.md`); owner test pending |
 
 Details: [TASKS.md](TASKS.md) · [GS renderer options](docs/GS-RENDERER-OPTIONS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md).
 
