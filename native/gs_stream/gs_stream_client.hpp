@@ -46,11 +46,14 @@ void on_privileged_write(std::uint32_t address, std::uint64_t value);
 // where the capture only records the request and the donor serves the data.
 bool read_fifo(std::uint8_t *data, std::uint32_t qwords);
 // Start of the vertical blank, after the donor toggled the field: odd_field is the CSR FIELD bit the EE now reads.
+// The donor toggles the field together with INTC VBLANK_S, before the game's VBLANK_S handler runs, so this is also
+// the display field of the frame that ends here (protocol 1.1 VSYNC.field; docs/GS-STREAM-PROTOCOL.md 6.1).
 void on_vsync(bool odd_field);
 // GS hard reset (donor render_reset) and GIF path reset.
 void on_gs_reset();
 void on_gif_reset();
-// BIOS SetGsCrt: posts the SMODE1/SMODE2 writes the BIOS performs (the donor HLE only records the arguments).
+// BIOS SetGsCrt: posts the SMODE1/SMODE2 writes the BIOS performs, and SYNCV for the analog NTSC/PAL modes (the
+// donor HLE only records the arguments).
 void on_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field);
 // Window: the GS process renders into a child of this window (CONTROL attach_window / resize).
 bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t height);
@@ -67,5 +70,11 @@ bool file_sha256(const std::wstring &path, std::string &hex, std::string &error)
 // Same table as the TASK-012 seam (native/gs_video_mode.cpp on task/012-parallel-gs).
 bool map_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field, std::uint64_t &smode1,
                     std::uint64_t &smode2);
+
+// SetGsCrt mode to the SYNCV value (GS privileged register 0x12000060) of the analog modes: NTSC (0x02) and PAL
+// (0x03); false for the other modes (no SYNCV posted). The values are the vertical timings of the GS User's Manual
+// (NTSC: VS 6, VDP 480, VBPE 6, VBP 26, VFPE 6, VFP 1; PAL: VS 5, VDP 576, VBPE 5, VBP 33, VFPE 5, VFP 1). A consumer
+// needs them: SYNCV VFP bit 0 with a non-zero SMODE1 CMOD is how a GS knows the output really alternates fields.
+bool map_set_gs_crt_syncv(std::uint32_t mode, std::uint64_t &syncv);
 
 }  // namespace gt4::gs_stream

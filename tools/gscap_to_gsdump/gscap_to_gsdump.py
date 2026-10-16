@@ -75,7 +75,7 @@ class GsCapRecord:
     value: int = 0
     qwords: int = 0
     frame: int = 0
-    field: Optional[int] = None  # version 2 VSYNC: the producer's CSR FIELD bit after this VSync
+    field: Optional[int] = None  # version 2 VSYNC: the display field of the frame ending here (protocol 1.1)
 
 
 # --- .gscap version 2 (TASK-035): the GS stream protocol written to a file --------------------------------

@@ -198,6 +198,7 @@ void check_stream_file(const std::string &path, std::uint32_t frames) {
   RecordHeader header;
   std::vector<std::uint8_t> payload;
   std::uint64_t sequence = 0, gif = 0, more = 0, priv = 0, vsync = 0, fifo = 0, resets = 0, controls = 0;
+  std::uint64_t syncv_writes = 0;
   while (reader.next(header, payload)) {
     require(header.sequence == ++sequence, "file sequence numbers are consecutive");
     switch (static_cast<RecordType>(header.type)) {
@@ -209,7 +210,16 @@ void check_stream_file(const std::string &path, std::uint32_t frames) {
         require(g.path >= 1 && g.path <= 3 && g.bytes + sizeof g == payload.size(), "GIF payload");
         break;
       }
-      case RecordType::priv: ++priv; break;
+      case RecordType::priv: {
+        ++priv;
+        PrivPayload p;
+        std::memcpy(&p, payload.data(), sizeof p);
+        if (p.address == 0x12000060u) {
+          require(p.value == 0x00C7800601A01801ull, "SetGsCrt NTSC posts the NTSC SYNCV");
+          ++syncv_writes;
+        }
+        break;
+      }
       case RecordType::vsync: {
         VsyncPayload v;
         std::memcpy(&v, payload.data(), sizeof v);
@@ -229,9 +239,11 @@ void check_stream_file(const std::string &path, std::uint32_t frames) {
       default: throw std::runtime_error("unexpected record type in the file");
     }
   }
-  // Per frame: 3 GIF, 2 PRIV, 1 VSYNC; plus the split chunk (2 records), 2 SetGsCrt PRIV, 1 READ_FIFO, 2 RESET.
+  // Per frame: 3 GIF, 2 PRIV, 1 VSYNC; plus the split chunk (2 records), 3 SetGsCrt PRIV (SMODE1, SYNCV, SMODE2),
+  // 1 READ_FIFO, 2 RESET.
   require(gif == 3ull * frames + 2 && more == 1, "GIF record count and split");
-  require(priv == 2ull * frames + 2 && vsync == frames && fifo == 1 && resets == 2, "record counts");
+  require(syncv_writes == 1, "one SYNCV write from SetGsCrt");
+  require(priv == 2ull * frames + 3 && vsync == frames && fifo == 1 && resets == 2, "record counts");
   // The pcsx2 run also carries CONTROL shutdown at the end; the donor capture does not.
   require(controls <= 1, "control records");
   std::printf("[fixture] %s: %llu records ok\n", path.c_str(), static_cast<unsigned long long>(sequence));
@@ -248,6 +260,14 @@ void check_crt_table() {
   require(!gt4::gs_stream::map_set_gs_crt(0, 0x51, 1, smode1, smode2), "1080i must be interlaced");
   require(!gt4::gs_stream::map_set_gs_crt(1, 0x77, 0, smode1, smode2), "unknown mode refused");
   require(!gt4::gs_stream::map_set_gs_crt(1, 0x02, 2, smode1, smode2), "bad field refused");
+  std::uint64_t syncv = 0;
+  require(gt4::gs_stream::map_set_gs_crt_syncv(0x02, syncv) && syncv == 0x00C7800601A01801ull && (syncv & 1),
+          "NTSC SYNCV (VFP odd)");
+  require(gt4::gs_stream::map_set_gs_crt_syncv(0x03, syncv) && syncv == 0x00A9000502101401ull && (syncv & 1),
+          "PAL SYNCV (VFP odd)");
+  require(!gt4::gs_stream::map_set_gs_crt_syncv(0x50, syncv) && !gt4::gs_stream::map_set_gs_crt_syncv(0x51, syncv) &&
+              !gt4::gs_stream::map_set_gs_crt_syncv(0x1A, syncv),
+          "no SYNCV for the progressive, HDTV and VESA modes");
   std::puts("[fixture] SetGsCrt table ok");
 }
 

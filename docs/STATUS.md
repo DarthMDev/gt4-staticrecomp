@@ -2,6 +2,13 @@
 
 ## Current state (2026-10-16)
 
+**slice196 (TASK-047, branch `task/047-gs-deinterlace`, fork `gt4gs/deinterlace`, `gt4gs-v0.3.2`):** 480i menus in the
+PCSX2 GS mode. Cause: the stream had no SYNCV (PCSX2 never deinterlaced; fields line-doubled and bouncing) and,
+once SYNCV is sent, gt4-gs 0.3.1 used the previous VSYNC's field (wrong order, combing). Fix: SetGsCrt posts SYNCV;
+protocol 1.1 VSYNC field = display field; gt4-gs 0.3.2 uses it. Garage menu: comb 0.50 -> 0.57 with flicker 3.23 ->
+0; progressive unchanged. CTest 29/29, Python 410 OK, donor 42/42. `--mode pcsx2` = slice196. Owner menu check
+pending. [GS-LIVE](GS-LIVE.md) section 8.
+
 **slice195 (TASK-038 click fix):** owner night race with slice194: accurate 59.97 FPS, 69 late frames (was 213),
 unsynchronized 60.00 FPS but headlight flares missing; accurate stays the default. A click on the picture deactivated
 the game window; gt4-gs 0.3.1 gives the foreground back (visible click fixture passes). `--mode pcsx2` = slice195.

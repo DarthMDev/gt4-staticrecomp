@@ -109,8 +109,10 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
   on by default in `--mode main`; `GT4_MTVU=0` restores the single-thread path for
   A/B. The weak-CPU effect is not measured yet (`--cpu-cores N` is the simulation
   switch); it matters most for older PCs and phones.
-- Menus are interlaced like the original game (480p applies in races); a
-  deinterlacing filter is planned with the new renderer.
+- Menus are interlaced like the original game (480p applies in races). With the
+  PCSX2 GS, slice196 (`--mode pcsx2`, gt4-gs 0.3.2) deinterlaces them (TASK-047; the
+  stream lacked SYNCV and presented the wrong field); owner check pending. CoreGS 1.1
+  shows them as before.
 - Physical gamepads, racing wheels and long sessions are not fully qualified yet.
 
 ## Roadmap
@@ -170,7 +172,7 @@ in game before it is merged.
 | TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | "Prepare shaders": warm the PCSX2 GS pipeline cache before the first race | 📋 Planned (study done) |
-| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | 🔄 In progress |
+| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | ✅ Done · owner test 2026-10-16: sharp, steady 480i menus (SYNCV + display field, gt4-gs 0.3.2) ([live](docs/GS-LIVE.md#8-480i-deinterlacing-task-047-slice196-gt4-gs-032)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS

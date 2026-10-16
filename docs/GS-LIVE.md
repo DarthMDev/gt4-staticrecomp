@@ -50,10 +50,11 @@ Summary; details in the fork's `gt4gs/README.md` and `gt4gs/BUILD.md`.
 | `3rdparty/gt4recomp-gs-stream/` | our MIT protocol header, transport and `.gscap` reader, copied unchanged from `57d1fa5`; `SHA256SUMS` (LF form) checked at configure; built with exceptions in a separate library behind a no-throw adapter. |
 | VMManager, GSDumpReplayer, Console | a prepared stream boots like a dump (no BIOS, no disc), its serial selects the GameDB entry; console text also reaches redirected handles, so `gt4-gs.exe` lines land in the game's session log. |
 
-Field timing: PCSX2's EE posts the vsync and swaps CSR FIELD about 3.5 scanlines later, so its GS sees the field of
-the frame that just ended. Our VSYNC record carries the field after the toggle, so the consumer applies the
-previous record's field. High confidence from the code; the menus do not depend on it (TASK-034 control), and
-interlaced races are not checked yet.
+Field timing (superseded by TASK-047, section 8): until gt4-gs 0.3.1 the consumer applied the previous VSYNC
+record's field, reasoning that PCSX2's EE swaps CSR FIELD about 3.5 scanlines after posting the vsync. That reasoning
+missed that the donor flips the field before the game's VBLANK_S handler reads it, and the menus seemed not to depend
+on it only because the stream had no SYNCV, so PCSX2 never deinterlaced. Since slice196 / gt4-gs 0.3.2 the consumer
+presents each frame with its own VSYNC record's field (protocol 1.1).
 
 Start without a freeze state: the dump replayer with an empty state reports `Failed to load GS state` and keeps the
 state the GS had at open time. The stream always starts at the game's power-on, so `gt4-gs.exe` does an explicit GS
@@ -257,3 +258,77 @@ Release flow (2026-10-16, owner decision): gt4-gs releases are built and publish
 `gt4gs/release-local.ps1`; GitHub Actions is a manual fallback. slice195 pins the published `gt4gs-v0.3.1` zip
 (downloaded back and checked, `private/slice195-gt4gs-release-pkg`, tree sha256 `243fa487...`, `gt4-gs.exe` sha256
 `9650ff3c...`). With it: click check and stall check pass, headless pcsx2 1x 41/41 identical, Python 350 OK.
+
+## 8. 480i deinterlacing (TASK-047, slice196, gt4-gs 0.3.2)
+
+Owner report (2026-10-16): the 480i menus look poor in the PCSX2 GS mode (soft, flickering); races (480p held) are
+fine; in real PCSX2 with deinterlace Automatic the menus are perfect. `gt4-gs.ini` already had Automatic.
+
+### 8.1 How PCSX2 v2.8.2 decides (fork sources, PCSX2-tainted reading; no code copied here)
+
+- The GS treats the output as really interlaced only when SMODE1 CMOD is non-zero **and SYNCV VFP bit 0 is set**;
+  otherwise it never deinterlaces and never applies the field offset. Confirmed (GS state code).
+- With Automatic, field mode (SMODE2 INT=1, FFMD=1: each field is its own half-height picture) selects the
+  motion-adaptive weave; frame mode without per-field tricks selects no deinterlacing. Confirmed.
+- The field the GS uses for a presented frame is the CSR FIELD bit copied at the EE's vsync post, inverted
+  (`field = FIELD ? 0 : 1`). The EE flips FIELD about 3.5 scanlines later, so the GS sees the field that was being
+  displayed when the vsync started. Confirmed.
+
+### 8.2 What our stream gave it (slice191 menus recording, `pcsx2-recorded.gscap`)
+
+- SetGsCrt(1, NTSC, 1) posted SMODE1 `0x4100` (CMOD 2) and SMODE2 `0x3` (INT, FFMD) only. **SYNCV was never written**
+  (the BIOS writes it; the donor HLE does not), so PCSX2's GS saw a non-interlaced output: each half-height field was
+  stretched to 448 lines and the next field, rendered half a line lower (XYOFFSET y .25 / .75 alternate per frame),
+  bounced by one line. Confirmed (register scan of the stream and replay).
+- GT4's VBLANK_S handler (`0x004AB430`, AddIntcHandler cause 2, registered at `0x004A0508`) samples CSR FIELD and
+  stores it. The donor flips the field when it raises VBLANK_S, so the handler reads the next field, one field
+  earlier than on a PS2 or PCSX2 (where it still reads the old one). DISPFB is written first thing after each
+  VSYNC (the buffer drawn in the previous interval). The 0.3.1 consumer used the previous VSYNC's field; with SYNCV
+  present that weaves the fields in the wrong order. Confirmed by replay (below); the handler timing reasoning is
+  High confidence (translated code read, not traced at run time).
+
+### 8.3 Fix
+
+- Game (MIT, `native/gs_stream/gs_stream_client.cpp`): SetGsCrt also posts SYNCV for NTSC and PAL (GS User's
+  Manual timings, VFP 1), between SMODE1 and SMODE2. Progressive, HDTV and VESA modes are unchanged.
+- Protocol 1.1 (`docs/GS-STREAM-PROTOCOL.md` 6.1, 7): VSYNC `field` is the display field of the frame that ends at
+  that VSYNC. Our producer's values are unchanged (the field after the donor's flip is exactly that), so this only
+  fixes the meaning.
+- gt4-gs 0.3.2 (fork `gt4gs/deinterlace`, commit `08d394a87`, prerelease `gt4gs-v0.3.2`): CSR FIELD at the vsync post
+  = the record's own field (no one-VSYNC shift).
+
+### 8.4 Evidence (headless, `gt4-gs.exe --replay-gscap`, 1x, deinterlace Automatic)
+
+Streams: the first 1,500 frames of the slice191 recording, unchanged (`before`), with SYNCV inserted after SMODE1
+(what slice196 sends), and with SYNCV plus inverted fields (equivalent to the 0.3.2 field handling). Metrics:
+`tools/gs_frame_metrics` on the static Garage menu, frames 1000-1199 (luma; comb = mean adjacent-line difference /
+mean same-field-line difference; flicker = mean frame-to-frame difference).
+
+| Case | comb | flicker (mean/max) | Look |
+|---|---|---|---|
+| slice195 (0.3.1, no SYNCV) | 0.499 | 3.226 / 3.226 | line-doubled, one-line bounce every frame |
+| SYNCV only, old field (0.3.1) | 0.999 | 0.000 / 0.000 | steady but combed (fields in the wrong order) |
+| **slice196 (0.3.2, SYNCV)** | **0.567** | **0.000 / 0.000** | full 448-line picture, steady |
+| GSRunner `.gs` dump path (converter `--field-from-stream`, SYNCV) | 0.547 | 0.000 / 0.000 | same as slice196 |
+| GSRunner `.gs` dump path (no SYNCV) | 0.524 | 3.061 / 3.061 | same as slice195 |
+
+- 0.3.2 with the SYNCV stream gives frames pixel-identical to 0.3.1 with SYNCV and inverted fields: 1,486/1,486.
+- 0.3.2 with the old stream (no SYNCV) is pixel-identical to 0.3.1: 1,486/1,486 (field unused without SYNCV).
+- Progressive control: the same stream turned into 480p (SMODE1 CMOD 0, SMODE2 0, no SYNCV), 0.3.1 vs 0.3.2:
+  1,186/1,186 pixel-identical.
+- The published 0.3.2 zip replays pixel-identical to the iteration build (1,486/1,486).
+- The GSRunner `.gs` path differs in pixels from the stream replay (its own default settings) but agrees on the
+  metrics: the dump's CSR FIELD from the record (`--field-from-stream`) is the right order.
+- Samples (before/after PNG pairs, zoom sheet, metric JSON): `private/slice196-deinterlace-samples`.
+- Live game (slice196 headless schedule, pcsx2 1x, auto aspect): frames 100-1400 are pixel-identical to the offline
+  0.3.2 replay of the SYNCV stream with the same settings (14/14), so the game really sends SYNCV and the fields as
+  measured above; slice195 live equals the offline 0.3.1 replay of the old stream (14/14). 40 of the 41 live frames
+  differ from slice195. Frame 400 (a flat grey fade) shows a 1-2 luma step between the fields: the fade moved between
+  the two fields and the difference is below the motion detector's threshold (Hypothesis: a property of the
+  deinterlacer, not of the field order; static frames show no such step).
+
+### 8.5 Not verified
+
+The visible window (owner), interlaced races (480i held, no race capture), PAL and 1080i, the FastMAD look at 3x
+and the menu transitions with motion (the metric covers a static menu; 840-880 transitions were checked by eye
+only).

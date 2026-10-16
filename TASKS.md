@@ -82,7 +82,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
-| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus (field and interlace state in the stream) | 🔄 In progress (branch `task/047-gs-deinterlace`) |
+| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus (field and interlace state in the stream) | ✅ Done · owner test 2026-10-16: 480i menus clean on Automatic; root cause missing SYNCV and a one-field-early VSYNC field (protocol 1.1, gt4-gs 0.3.2) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ## Phase 2 — Android
@@ -492,6 +492,23 @@ race PSNR < 32 dB) (2-3 sessions). (3) In engine: the game holds frame N+1, gene
 side effects (readbacks and signals stripped; targets overwritten by N+1); present scheduler for 120/144 Hz;
 +1 frame latency measured (6-10 sessions).
 Risks: texture-cache pollution by auxiliary frames, page alternation (HIGH-FPS 9.3), HUD.
+
+### TASK-047 — PCSX2 GS 480i deinterlace
+Repos: both, branches `task/047-gs-deinterlace` (main, from `6806f78`) and `gt4gs/deinterlace` (fork). Opus, 1 session.
+Goal: the 480i menus look like real PCSX2 with deinterlace Automatic (owner report 2026-10-16: soft and flickering
+in gt4-gs; races at 480p fine).
+Acceptance: root cause with evidence; headless before/after menu frames with a comb and flicker metric; progressive
+output unchanged; CTest, Python, donor 42/42; published `gt4gs-v0.3.2` pinned; owner check of the menus.
+State (2026-10-16, slice196): built; owner check pending, no PR.
+- Cause (Confirmed): the stream never carried SYNCV (the BIOS writes it; the donor's SetGsCrt HLE does not), so
+  PCSX2's GS treated the 480i output as not interlaced and showed each half-height field line-doubled, bouncing one
+  line per frame. With SYNCV alone the fields were woven in the wrong order: gt4-gs used the previous VSYNC's field,
+  but the donor flips FIELD before GT4's VBLANK_S handler (`0x004AB430`) reads it, one field earlier than hardware.
+- Fix: SetGsCrt posts SYNCV for NTSC/PAL; protocol 1.1 defines VSYNC `field` as the display field (same values);
+  gt4-gs 0.3.2 presents with the record's own field. `--mode pcsx2` = slice196, `--mode pcsx2-slice195` kept.
+- Static Garage menu, frames 1000-1199: slice195 comb 0.50, flicker 3.23; SYNCV with the old field comb 1.00
+  (combing); slice196 comb 0.57, flicker 0. Progressive control identical. Samples:
+  `private/slice196-deinterlace-samples`; details [GS-LIVE](docs/GS-LIVE.md) section 8.
 
 ## Phase 2 — Android details
 

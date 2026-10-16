@@ -1228,3 +1228,31 @@ downloaded back to `private/slice195-gt4gs-download` (sha256 `e24dd2b8...`, chec
 `private/slice195-gt4gs-release-pkg` (140 files, tree sha256 `243fa487...`). Pins `docs/inputs/slice195-pcsx2.json`
 (`gt4vulkan.exe` sha256 `afaa1e44...`); `--mode pcsx2` points here, `--mode pcsx2-slice194` keeps slice194. Checks:
 CTest 29/29, Python 350 OK, donor 42/42, pcsx2 1x 41/41, `gs_live_check --click-check` and `--stall-check` pass.
+
+## Slice196 - 480i deinterlace (TASK-047)
+
+slice195 plus `native/gs_stream/gs_stream_client.cpp` (SetGsCrt posts SYNCV for NTSC/PAL), protocol 1.1
+(`native/gs_stream/gs_stream_protocol.h`) and gt4-gs 0.3.2 (fork branch `gt4gs/deinterlace`, commit `08d394a87`, tag
+`gt4gs-v0.3.2`). Same capsules as slice191-195. Scripts in `private/slice196-scripts`:
+
+- game: `build-game-196.bat` (source = this checkout, fresh build dir `private/slice196-gs-deinterlace-build/build`);
+- gt4-gs iteration build: `build-gt4gs-196.bat` (`private/slice196-gt4gs-build`), packaged with
+  `package-gt4gs.ps1 -Version 0.3.2-dev` into `private/slice196-gt4gs-dist` (not pinned);
+- release: `gt4gs/release-local.ps1 -Tag gt4gs-v0.3.2 -Build private\slice196-gt4gs-release-build -Deps
+  private\slice193-gt4gs-deps\root\deps -OutDir private\slice196-gt4gs-release` (log `release-0.3.2.log`), published as
+  the prerelease `gt4gs-v0.3.2`, downloaded back to `private/slice196-gt4gs-download` (zip sha256 `239030d9...`,
+  SHA256SUMS OK, byte-identical to the local zip) and extracted with Expand-Archive to
+  `private/slice196-gt4gs-release-pkg` (140 files, tree sha256 `4a62262a...`, `gt4-gs.exe` sha256 `95d89607...`).
+
+Pins `docs/inputs/slice196-pcsx2.json` (`gt4vulkan.exe` 95,655,936 bytes, sha256 `f09489df...`); `--mode pcsx2` points
+here, `--mode pcsx2-slice195` keeps slice195. Headless: `private/slice196-scripts/headless-196.sh <run> [env]`, outputs
+in `private/slice196-smoke`. Deinterlace evidence: `tools/gs_frame_metrics/gs_frame_metrics.py <dir> --pattern
+NAME_frame{:05d}.png --first N --last M`; work files `private/slice196-deinterlace-work`, samples
+`private/slice196-deinterlace-samples`; [GS-LIVE](GS-LIVE.md) section 8. Offline replays need a writable data root,
+`[GT4GS] DataRoot = <dir>` in the `--config` file (without it `gt4-gs.exe` exits with code 2 when
+`%LOCALAPPDATA%\GT4Recomp` cannot be created, for example in a sandbox).
+
+Checks: CTest 29/29 (the stream client fixture checks the SYNCV values and the SMODE1, SYNCV, SMODE2 order); Python
+410 OK, 6 skipped; donor 42/42 identical to slice195; pcsx2 1x live 41 frames: 40 differ from slice195 (the 480i
+frames are now deinterlaced), and frames 100-1400 are pixel-identical to the offline 0.3.2 replay of the SYNCV
+stream with the live settings (slice195 live = offline 0.3.1 replay of the old stream, same method).

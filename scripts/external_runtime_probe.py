@@ -70,8 +70,11 @@ PERF_PROFILES = {
     # acquire, window hardening and crash handling (gt4-gs 0.3.0, private/slice194-gt4gs-pkg).
     'pcsx2-slice194': ('slice194-pcsx2.json', 'private/slice194-gs-window-build/build/gt4vulkan.exe'),
     # slice195: slice194 plus the click fix (gt4-gs 0.3.1 gives the foreground back to the game window after a click on
-    # the picture; the game keeps the keyboard focus on activation). Mode pcsx2 points here.
-    'pcsx2': ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'),
+    # the picture; the game keeps the keyboard focus on activation).
+    'pcsx2-slice195': ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'),
+    # TASK-047 (slice196): 480i deinterlacing (SetGsCrt posts SYNCV; gt4-gs 0.3.2 presents with the VSYNC display
+    # field, protocol 1.1). Mode pcsx2 points here.
+    'pcsx2': ('slice196-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -80,11 +83,11 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}

@@ -688,6 +688,23 @@ bool map_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t f
   return true;
 }
 
+bool map_set_gs_crt_syncv(std::uint32_t mode, std::uint64_t &syncv) {
+  // SYNCV fields: VFP bits 0-9, VFPE 10-19, VBP 20-31, VBPE 32-41, VDP 42-52, VS 53-63.
+  const auto pack = [](std::uint64_t vs, std::uint64_t vdp, std::uint64_t vbpe, std::uint64_t vbp, std::uint64_t vfpe,
+                       std::uint64_t vfp) {
+    return (vs << 53) | (vdp << 42) | (vbpe << 32) | (vbp << 20) | (vfpe << 10) | vfp;
+  };
+  if (mode == 0x02) {
+    syncv = pack(6, 480, 6, 26, 6, 1);  // 0x00C7800601A01801
+    return true;
+  }
+  if (mode == 0x03) {
+    syncv = pack(5, 576, 5, 33, 5, 1);  // 0x00A9000502101401
+    return true;
+  }
+  return false;
+}
+
 Renderer renderer() {
   static const Renderer mode = parse_renderer();
   return mode;
@@ -733,6 +750,8 @@ void on_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t fi
     return;
   }
   c->privileged(0x12000010u, smode1);
+  std::uint64_t syncv = 0;
+  if (map_set_gs_crt_syncv(mode, syncv)) c->privileged(0x12000060u, syncv);
   c->privileged(0x12000020u, smode2);
 }
 
