@@ -33,6 +33,14 @@ using proto::RecordType;
 // per-game settings (a GS renderer's game database); it never changes the meaning of a record.
 constexpr const char *kGameSerial = "SCUS-97328";
 constexpr std::uint32_t kHandshakeTimeoutMs = 20000;
+// GT4_GS_HANDSHAKE_TIMEOUT_MS (tests): 1000..60000, default kHandshakeTimeoutMs.
+constexpr std::uint32_t kHandshakeTimeoutMinMs = 1000, kHandshakeTimeoutMaxMs = 60000;
+// After the GS process died the guest keeps running this many VSYNCs (records are dropped, readbacks answered with
+// zeros) before it halts: the runtime writes a changed memory card after 50 quiet VSYNCs, so a save in progress is
+// finished and flushed first (TASK-038). GT4_GS_LOST_GRACE_FRAMES (tests): 0..600.
+constexpr std::uint32_t kLostGraceFrames = 180, kLostGraceMaxFrames = 600;
+// Printed when the player asked for a restart with the built-in renderer; the launcher looks for this line.
+constexpr const char *kRestartMarker = "[gs-ipc] restart requested: renderer donor (CoreGS 1.1)";
 constexpr std::uint32_t kShutdownTimeoutMs = 3000;
 // GIF data per record and qwords per READ_FIFO: fixed by the default region sizes, so the in-process capture and a
 // recorder process split the same chunks the same way (byte-identical files).
@@ -45,10 +53,92 @@ struct Counters {
                 readback_bytes = 0, controls = 0, resets = 0;
 };
 
+// A visible top-level window of this process (the game window exists before the GS process starts), or null.
+HWND visible_game_window() {
+  struct Search {
+    DWORD pid;
+    HWND found;
+  } search{GetCurrentProcessId(), nullptr};
+  EnumWindows(
+      [](HWND window, LPARAM parameter) -> BOOL {
+        auto *s = reinterpret_cast<Search *>(parameter);
+        DWORD pid = 0;
+        GetWindowThreadProcessId(window, &pid);
+        if (pid == s->pid && IsWindowVisible(window) && !GetWindow(window, GW_OWNER)) {
+          s->found = window;
+          return FALSE;
+        }
+        return TRUE;
+      },
+      reinterpret_cast<LPARAM>(&search));
+  return search.found;
+}
+
+std::wstring wide_text(const std::string &text) { return std::wstring(text.begin(), text.end()); }
+
+// Asks the player whether to restart with the built-in renderer; prints the launcher marker on yes.
+void offer_restart(HWND window, const std::wstring &what) {
+  const std::wstring text = what + L"\n\nDetails are in the game log.\n\nRestart the game with the built-in renderer "
+                                   L"(CoreGS 1.1)?";
+  const int answer = MessageBoxW(window, text.c_str(), L"GT4Recomp: GS renderer", MB_YESNO | MB_ICONERROR | MB_SETFOREGROUND);
+  if (answer == IDYES) {
+    std::fprintf(stderr, "%s\n", kRestartMarker);
+    std::fflush(stderr);
+  }
+}
+
 [[noreturn]] void refuse(const std::string &message) {
   std::fprintf(stderr, "[gs-ipc] %s; refusing to start\n", message.c_str());
   std::fflush(stderr);
+  // The game window is already open in a windowed run: say why it closes (headless runs have no window).
+  if (HWND window = visible_game_window())
+    offer_restart(window, L"The GS renderer (gt4-gs.exe) could not start:\n" + wide_text(message) + L".");
   std::exit(EXIT_FAILURE);
+}
+
+std::uint32_t environment_number(const char *name, std::uint32_t fallback, std::uint32_t low, std::uint32_t high) {
+  const char *value = std::getenv(name);
+  if (!value || !*value) return fallback;
+  char *end = nullptr;
+  const unsigned long parsed = std::strtoul(value, &end, 10);
+  if (*end || parsed < low || parsed > high)
+    refuse(std::string(name) + "=\"" + value + "\" is not a number from " + std::to_string(low) + " to " + std::to_string(high));
+  return static_cast<std::uint32_t>(parsed);
+}
+
+// Readback wait times of one F8 interval or of the session (EE wait for each READ_FIFO reply).
+struct ReadbackWaits {
+  static constexpr int kBuckets = 8;  // <0.25, <0.5, <1, <2, <4, <8, <16, >=16 ms
+  std::uint64_t count = 0, total_us = 0, max_us = 0;
+  std::uint64_t buckets[kBuckets] = {};
+
+  void add(std::uint64_t us) {
+    ++count;
+    total_us += us;
+    max_us = std::max(max_us, us);
+    int bucket = 0;
+    for (std::uint64_t limit = 250; bucket < kBuckets - 1 && us >= limit; limit *= 2) ++bucket;
+    ++buckets[bucket];
+  }
+
+  void print(std::FILE *output, const char *label) const {
+    std::fprintf(output,
+                 "[gs-ipc] %s readback waits: %llu, mean %.3f ms, max %.3f ms, buckets(ms) <0.25=%llu 0.25-0.5=%llu "
+                 "0.5-1=%llu 1-2=%llu 2-4=%llu 4-8=%llu 8-16=%llu >=16=%llu\n",
+                 label, static_cast<unsigned long long>(count), count ? total_us / 1000.0 / count : 0.0, max_us / 1000.0,
+                 static_cast<unsigned long long>(buckets[0]), static_cast<unsigned long long>(buckets[1]),
+                 static_cast<unsigned long long>(buckets[2]), static_cast<unsigned long long>(buckets[3]),
+                 static_cast<unsigned long long>(buckets[4]), static_cast<unsigned long long>(buckets[5]),
+                 static_cast<unsigned long long>(buckets[6]), static_cast<unsigned long long>(buckets[7]));
+  }
+};
+
+std::uint64_t now_us() {
+  LARGE_INTEGER counter, frequency;
+  QueryPerformanceCounter(&counter);
+  QueryPerformanceFrequency(&frequency);
+  return static_cast<std::uint64_t>(counter.QuadPart / frequency.QuadPart * 1000000 +
+                                    counter.QuadPart % frequency.QuadPart * 1000000 / frequency.QuadPart);
 }
 
 std::string ascii(const char *text, std::size_t size) {
@@ -107,6 +197,7 @@ class Client {
           std::memset(out, 0, std::size_t(part) * 16);
         } else {
           gt4::perf::Scope wait(gt4::perf::Category::gs_ipc_readback_wait);
+          const std::uint64_t start = now_us();
           try {
             const std::uint32_t status = session_->read_fifo(part, out);
             if (status == proto::kReadbackZeroFilled) ++zero_filled_;
@@ -114,6 +205,9 @@ class Client {
             lost(error.what());
             std::memset(out, 0, std::size_t(part) * 16);
           }
+          const std::uint64_t waited = now_us() - start;
+          readback_interval_.add(waited);
+          readback_session_.add(waited);
         }
       }
       done += part;
@@ -137,6 +231,10 @@ class Client {
       }
     }
     ++frame_;
+    if (dead_ && !halted_ && frames_since_lost_++ >= lost_grace_frames_) {
+      halted_ = true;
+      if (halt_) halt_("GS process exited");
+    }
     if (capture_.is_open() && frame_ > capture_last_) {
       capture_.close();
       std::fprintf(stderr, "[gs-ipc] capture closed after frame %llu\n", static_cast<unsigned long long>(capture_last_));
@@ -167,6 +265,8 @@ class Client {
   }
 
   void request_resize(std::uint32_t width, std::uint32_t height) {
+    // A minimized window reports a 0x0 client area: keep the GS swap chain as it is until the window is restored.
+    if (width == 0 || height == 0) return;
     // Bit 63 marks a pending request; the window thread may call this between VSYNCs.
     pending_resize_.store((std::uint64_t(1) << 63) | (std::uint64_t(width & 0x7FFFFFFFu) << 32) | height);
   }
@@ -208,18 +308,16 @@ class Client {
                    static_cast<unsigned long long>(w.space_waits), w.space_wait_us / 1000.0,
                    static_cast<unsigned long long>(w.frames_waits), w.frames_wait_us / 1000.0, w.response_wait_us / 1000.0);
     }
+    if (readback_session_.count) readback_session_.print(output, "session");
     if (has_stats_) print_consumer_stats(output, last_stats_);
     std::fflush(output);
     if (dead_ && window_) {
-      // The player sees a window that stopped updating: say why. The memory card was flushed by the normal exit
-      // path before this point (the guest halted through ps2::halt).
-      const std::wstring text = L"The GS renderer process (gt4-gs.exe) stopped" +
-                                (exit_known_ ? L" with exit code " + std::to_wstring(exit_code_) : std::wstring()) +
-                                L".\n\nThe game will now close. Your memory card was saved.\n\n"
-                                L"Details are in the game log. To play without it, start the game with the built-in "
-                                L"renderer (CoreGS 1.1).";
-      MessageBoxW(reinterpret_cast<HWND>(static_cast<std::uintptr_t>(window_)), text.c_str(), L"GT4Recomp: GS renderer stopped",
-                  MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+      // The player sees a window that stopped updating: say why. The guest ran on for the grace VSYNCs after the GS
+      // process died, so a changed memory card was written by the runtime (50 quiet VSYNCs) before the halt.
+      offer_restart(reinterpret_cast<HWND>(static_cast<std::uintptr_t>(window_)),
+                    L"The GS renderer process (gt4-gs.exe) stopped" +
+                        (exit_known_ ? L" with exit code " + std::to_wstring(exit_code_) : std::wstring()) +
+                        L".\nThe game will now close. Your memory card was saved.");
     }
   }
 
@@ -244,6 +342,9 @@ class Client {
   void start_process() {
     const char *process = std::getenv("GT4_GS_PROCESS");
     if (!process || !*process) refuse("GT4_RENDERER=pcsx2 needs GT4_GS_PROCESS=<path of the GS process>");
+    handshake_timeout_ms_ = environment_number("GT4_GS_HANDSHAKE_TIMEOUT_MS", kHandshakeTimeoutMs, kHandshakeTimeoutMinMs,
+                                               kHandshakeTimeoutMaxMs);
+    lost_grace_frames_ = environment_number("GT4_GS_LOST_GRACE_FRAMES", kLostGraceFrames, 0, kLostGraceMaxFrames);
     std::uint32_t frames_in_flight = 2;
     if (const char *value = std::getenv("GT4_GS_FRAMES_IN_FLIGHT")) {
       if (std::strcmp(value, "1") && std::strcmp(value, "2") && std::strcmp(value, "3"))
@@ -281,14 +382,17 @@ class Client {
     ipc::RecordView event;
     bool ready = false;
     try {
-      ready = session_->wait_event(event, kHandshakeTimeoutMs);
+      ready = session_->wait_event(event, handshake_timeout_ms_);
     } catch (const ipc::PeerExited &) {
       std::uint32_t code = 0;
       child_.wait_exit(1000, &code);
       drain_errors();
       refuse(std::string("the GS process ") + process + " exited during the handshake (code " + std::to_string(code) + ")");
     }
-    if (!ready) refuse(std::string("the GS process ") + process + " did not answer within 20 s (no READY)");
+    if (!ready)
+      refuse(std::string("the GS process ") + process + " did not answer within " +
+             std::to_string(handshake_timeout_ms_ / 1000.0).substr(0, 4) + " s (no READY record; the GS device or its "
+             "shader cache may be stuck, or the process is not a GS stream consumer)");
     if (event.header->type == static_cast<std::uint16_t>(RecordType::error)) {
       proto::ErrorPayload payload{};
       std::memcpy(&payload, event.payload, std::min<std::size_t>(sizeof payload, event.header->payload_bytes));
@@ -301,6 +405,8 @@ class Client {
     session_->events_in().release(event);
     if (ready_.version_major != proto::kVersionMajor) refuse("the GS process implements another protocol major version");
     session_->set_wait_hooks({&Client::wait_begin, &Client::wait_end});
+    if (const char *mode = std::getenv("GT4_GS_READBACK"); mode && *mode)
+      std::fprintf(stderr, "[gs-ipc] readback mode %s (GT4_GS_READBACK, applied by the GS process configuration)\n", mode);
     std::fprintf(stderr,
                  "[gs-ipc] GT4_RENDERER=pcsx2: donor Vulkan renderer not created; GS process %s pid %u ready "
                  "(consumer %s, renderer %s, version %s, protocol %u.%u, flags 0x%x, frames in flight %u)\n",
@@ -347,8 +453,13 @@ class Client {
       std::fprintf(stderr, "[gs-ipc] GS renderer stopped (exit code %u): %s\n", code, what);
     else
       std::fprintf(stderr, "[gs-ipc] GS renderer stopped: %s\n", what);
+    std::fprintf(stderr, "[gs-ipc] the game halts after %u more VSYNCs (memory card flush)\n", lost_grace_frames_);
     std::fflush(stderr);
-    if (halt_) halt_("GS process exited");
+    frames_since_lost_ = 0;
+    if (lost_grace_frames_ == 0 && !halted_) {
+      halted_ = true;
+      if (halt_) halt_("GS process exited");
+    }
   }
 
   void drain_errors() {
@@ -413,6 +524,7 @@ class Client {
                  "readbacks=%.3f readback_bytes=%.0f (vsyncs %llu)\n",
                  d.bytes / f, d.records / f, d.gif_records / f, d.gif_bytes / f, d.priv / f, d.readbacks / f,
                  d.readback_bytes / f, static_cast<unsigned long long>(d.vsyncs));
+    if (readback_interval_.count) readback_interval_.print(file, "interval");
     if (has_stats_) print_consumer_stats(file, last_stats_);
   }
 
@@ -424,6 +536,7 @@ class Client {
  public:
   Counters counters_;
   Counters baseline_;
+  ReadbackWaits readback_interval_;  // since the last F7/F8 (or periodic) report
   gt4::perf::Accounting::Token wait_token_ = 0;
 
  private:
@@ -446,6 +559,11 @@ class Client {
   std::uint64_t window_ = 0;  // game window handle after attach_window (0: headless)
   bool exit_known_ = false;
   std::uint32_t exit_code_ = 0;
+  ReadbackWaits readback_session_;
+  std::uint32_t handshake_timeout_ms_ = kHandshakeTimeoutMs;
+  std::uint32_t lost_grace_frames_ = kLostGraceFrames;
+  std::uint32_t frames_since_lost_ = 0;
+  bool halted_ = false;
 };
 
 Renderer parse_renderer() {
@@ -474,7 +592,10 @@ void Client::report_interval_hook(std::FILE *file, const gt4::perf::IntervalTime
 }
 
 void Client::reset_interval_hook() {
-  if (Client *c = client()) c->baseline_ = c->counters_;
+  if (Client *c = client()) {
+    c->baseline_ = c->counters_;
+    c->readback_interval_ = {};
+  }
 }
 
 void Client::wait_begin(ipc::Wake which) {

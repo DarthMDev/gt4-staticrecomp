@@ -388,7 +388,7 @@ State (2026-10-16, slice193): built; owner windowed test pending, no PR.
   (Auto 4:3 gives 480 rows). Not verified: windowed image, races, 480i, readbacks, GPU time.
 
 ### TASK-037 — Readbacks and night race
-Repos: both, branches `task/037-gs-readback`, `gt4gs/readback`. Opus, 2-3 sessions.
+Repos: both, branches `task/037-038-gs-window` (main, shared with TASK-038), `gt4gs/window`. Opus, 2-3 sessions.
 Goal: READ_FIFO round trip through `MTGS::InitAndReadFIFO`; `HWDownloadMode` and readback spin options
 exposed; F8 counts and wait time; Unsynchronized mode served without draining the ring (if the owner allows).
 Acceptance: CTest/fixture with a scripted stream (draw, TRXDIR=1, read) compared with the donor bytes;
@@ -396,9 +396,17 @@ headless frames unchanged; owner night race at 60 FPS with `gs_ipc_readback_wait
 night lighting correct versus CoreGS 1.1.
 Risks: GPU sync cost at high upscale.
 Parallel: with 038/039.
+State (2026-10-16, slice194): built; owner night-race test pending, no PR.
+- Cause of the TASK-036 night-race late frames (213/7,467): one readback per frame (1.07 ms each) removes the GS
+  buffering, so GS-thread spikes (pipeline compiles at race start) land in the game frame; the shader cache was in
+  `Documents\PCSX2`; the MTVU `gs_privileged` wait (3.4 ms/frame) leaves about 3.7 ms of headroom.
+- `GT4_GS_READBACK=accurate|unsynchronized` (`--gs-readback`), F8 readback histograms, `gt4-gs.exe` readback and
+  acquire timing, own cache/data folders, deferred swap chain acquire (A/B `GT4_GS_EAGER_ACQUIRE=1`).
+- Checks: readback fixture exact in accurate mode (drawn sprite and uploaded bytes); headless frames unchanged;
+  cold vs warm cache replay (max GS frame 84 ms -> 6 ms). Not verified: owner night race, lens flare per mode.
 
 ### TASK-038 — Window, fullscreen, focus, input, lifecycle
-Repos: both, branches `task/038-gs-window`, `gt4gs/window`. Opus, 3-4 sessions.
+Repos: both, branches `task/037-038-gs-window` (main, shared with TASK-037), `gt4gs/window`. Opus, 3-4 sessions.
 Goal: child window hardening (own pump thread, `HTTRANSPARENT`, `MA_NOACTIVATE`), Alt+Enter/F11 borderless,
 resize, minimize, DPI, multi-monitor, focus loss; GS hotkeys forwarded (screenshot, OSD toggle); fallback
 option 2 (GS-owned window, keyboard forwarding) behind a switch.
@@ -407,6 +415,14 @@ cycles) with no hang; a GS-thread stall test does not freeze our window beyond t
 visible; owner checklist (fullscreen, alt-tab, minimize, controller and keyboard).
 Risks: attached input queues; DWM latency in child windows.
 Parallel: with 037/039.
+State (2026-10-16, slice194): built; owner checklist pending, no PR.
+- Input queues detached after SetParent; click on the picture brings the game forward; minimized (0x0) resizes
+  ignored; WM_CLOSE in pcsx2 mode halts before the window is destroyed; GS death: 180 grace VSYNCs (card flush),
+  restart offer with CoreGS 1.1 (launcher relaunches with `GT4_RENDERER=donor`); handshake timeout message.
+- Checks: stall fixture (3 s GS window stall, parent answers within 17 ms), soak 3,000 resizes, aspect check (same
+  rectangles as TASK-009), CTest handshake-timeout / game-killed / grace scenarios.
+- Not done: own pump thread for the child (the main thread only pumps), GS hotkeys, fallback option 2, DPI and
+  multi-monitor checks, RTSS.
 
 ### TASK-039 — Settings table and `gt4-gs.ini`
 Repos: main `task/039-gs-settings`, fork `gt4gs/config`. Haiku, 2-3 sessions.
