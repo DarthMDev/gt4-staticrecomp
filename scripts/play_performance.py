@@ -55,7 +55,9 @@ device, so the window stays black. For TASK-036 development only, not for owner 
 Live PCSX2 GS (--mode pcsx2, slice193, TASK-036): the GS stream build with the pinned gt4-gs.exe package (GPL fork
 moesuito/gt4recomp-gs, private/slice193-gt4gs-pkg). The PCSX2 GS renders into the game window (Vulkan); pacing,
 input, audio, F7/F8 and the memory card stay in the game. --gs-scale N (1..8, default 3) sets the internal
-resolution; GT4_PRESENT_MODE sets the GS vsync. F8 adds a [gs-ipc] section with the GS process STATS.
+resolution; GT4_PRESENT_MODE sets the GS vsync. --gs-setting ID=VALUE (repeatable) sets any other GS option from
+docs/launcher/gs-settings.toml and is checked against that table (docs/GS-SETTINGS.md). F8 adds a [gs-ipc] section
+with the GS process STATS.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
@@ -65,7 +67,8 @@ import os
 import sys
 from pathlib import Path
 from play_external_runtime import ROOT, play
-from external_runtime_probe import PERF_PROFILES, VU1_RECORD_MANIFEST
+from external_runtime_probe import GS_SETTINGS_ENV, PERF_PROFILES, VU1_RECORD_MANIFEST
+import gs_settings
 
 MODES = tuple(PERF_PROFILES) + ('vu1-record',)
 
@@ -102,6 +105,9 @@ def main():
                              'one per physical core first; recorded in result.json (docs/MTVU-PLAN.md section 12)')
     parser.add_argument('--gs-scale', type=int, default=None, metavar='N',
                         help='pcsx2 only: GS internal resolution multiplier 1..8 (default 3; GT4_GS_SCALE)')
+    parser.add_argument('--gs-setting', action='append', default=[], metavar='ID=VALUE',
+                        help='pcsx2 only: set a GS option from docs/launcher/gs-settings.toml (repeatable; '
+                             'checked against the table; docs/GS-SETTINGS.md)')
     parser.add_argument('--gs-readback', choices=('accurate', 'unsynchronized'), default=None,
                         help='pcsx2 only: GS readback mode. accurate (default, owner choice 2026-10-16); unsynchronized: '
                              'faster, may drop effects (night race: headlight flares missing; GT4_GS_READBACK)')
@@ -123,6 +129,16 @@ def main():
             if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 8:
                 raise ValueError('--gs-scale takes 1..8 and requires --mode pcsx2')
             os.environ['GT4_GS_SCALE'] = str(args.gs_scale)
+        os.environ.pop(GS_SETTINGS_ENV, None)
+        if args.gs_setting:
+            if args.mode != 'pcsx2':
+                raise ValueError('--gs-setting requires --mode pcsx2')
+            settings = gs_settings.settings_from_assignments(args.gs_setting, gs_settings.load_table())
+            if args.gs_scale is not None and 'upscale' in settings:
+                raise ValueError('--gs-scale and --gs-setting upscale=... both set the internal resolution')
+            if args.gs_readback is not None and 'hw_download_mode' in settings:
+                raise ValueError('--gs-readback and --gs-setting hw_download_mode=... both set the readback mode')
+            os.environ[GS_SETTINGS_ENV] = gs_settings.settings_to_json(settings)
         if args.gs_readback is not None:
             if args.mode != 'pcsx2':
                 raise ValueError('--gs-readback requires --mode pcsx2')
