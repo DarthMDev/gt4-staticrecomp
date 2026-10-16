@@ -1116,3 +1116,67 @@ python scripts\external_runtime_probe.py C:/Antigravity/gt4-staticrecomp/private
   --press 600:start:30 ... --card-seed C:/Antigravity/gt4-staticrecomp/private/slice113-video/widescreen-seed/card.ps2 `
   --runtime-manifest docs/inputs/slice191-pcsx2-stream.json --assets-root C:/Antigravity/gt4-staticrecomp
 ```
+
+
+## Slice193 - live PCSX2 GS process `gt4-gs.exe` (TASK-036)
+
+Branch `task/036-gs-live` (worktree `C:\Antigravity\gt4-wt-036-live`, from main `57d1fa5`), fork branch `gt4gs/live`
+(`C:\Antigravity\gt4recomp-gs`). Design and results: [GS-LIVE](GS-LIVE.md).
+
+Game build: the slice191 runtime capsule, port and shaders are reused unchanged (CMake accepts the pair as before);
+only `native/gs_stream/gs_stream_client.*` (GS process pin, `--config`, `WS_CLIPCHILDREN`, crash message),
+`tools/gs_stream_record` (accepts `--config`) and the new `tools/gs_live_check` changed.
+
+```
+cmake -S C:\Antigravity\gt4-wt-036-live -B C:\Antigravity\gt4-staticrecomp\private\slice193-gs-live-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice191-gs-stream-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice191-gs-stream-port -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice193-gs-live-build\build
+```
+
+`gt4-gs.exe` (fork commit `acf4f986e`, local build): dependencies with the fork's
+`build-dependencies-gt4gs.bat` (`DEBUG=0 BUILD_FFMPEG=0`) into `private/slice193-gt4gs-deps/root/deps`, then (VS 2022
+Build Tools, `vcvars64.bat`):
+
+```
+cmake -S C:\Antigravity\gt4recomp-gs -B C:\Antigravity\gt4-staticrecomp\private\slice193-gt4gs-build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl -DENABLE_QT_UI=OFF -DENABLE_GSRUNNER=OFF -DENABLE_GT4GS=ON -DENABLE_TESTS=OFF ^
+  -DDISABLE_ADVANCE_SIMD=ON -DCMAKE_PREFIX_PATH=C:\Antigravity\gt4-staticrecomp\private\slice193-gt4gs-deps\root\deps
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice193-gt4gs-build --target pcsx2-gt4gs
+powershell -File .github\workflows\scripts\windows\package-gt4gs.ps1 -Version 0.2.0-live -Build <build> -Deps <deps> -OutDir private\slice193-gt4gs-dist
+```
+
+The zip (`gt4-gs-0.2.0-live-windows-x64.zip`, 13,390,625 bytes, sha256 b32d7f8d...) is extracted to
+`private/slice193-gt4gs-pkg` (140 files). Scripts: `private/slice193-gt4gs-deps/{build-deps,build-gt4gs,build-game}.bat`.
+
+Pins: `docs/inputs/slice193-pcsx2.json` (mode `pcsx2`): `gt4vulkan.exe` sha256 d15913f2..., `gt4-gs.exe` sha256
+1508c6d9... (runtime dependency), package tree sha256 45da0a68... (140 files) in `gs_stream.gs_package`.
+
+Checks (2026-10-16): CTest 29/29; Python 335 OK, 13 skipped; headless donor 42/42 identical to slice157; headless
+pcsx2 1x (`GT4_GS_SCALE=1 GT4_GS_ASPECT=auto`): 41/41 live PNGs identical to the offline `--replay-gscap` PNGs, frames
+300 and 700 identical to the TASK-034 PoC; pcsx2 3x completes; GS process killed mid-run halts the game; hidden-window
+check passes (attach, resize, snapshot, shutdown; kill). Outputs: `private/slice193-smoke`, `private/slice193-gt4gs-run`,
+`private/slice193-compare`.
+
+Headless pcsx2 command (PowerShell, from the worktree):
+
+```
+$env:GT4_RENDERER="pcsx2"; $env:GT4_GS_SCALE="1"; $env:GT4_GS_ASPECT="auto"; $env:GT4_MTVU_REPORT_EVERY="500"
+C:\Antigravity\gt4-staticrecomp\private\tooling-venv\Scripts\python.exe scripts\external_runtime_probe.py `
+  C:/Antigravity/gt4-staticrecomp/private/slice193-smoke/<run> --frames 4200 --timeout 2400 --press 600:start:30 ... `
+  --card-seed C:/Antigravity/gt4-staticrecomp/private/slice113-video/widescreen-seed/card.ps2 `
+  --runtime-manifest docs/inputs/slice193-pcsx2.json --assets-root C:/Antigravity/gt4-staticrecomp
+```
+
+Offline replay and window check:
+
+```
+private\slice193-gt4gs-pkg\gt4-gs.exe -dumpdir <dir> [--config <ini>] --replay-gscap private\slice191-smoke\streams-final\pcsx2-recorded.gscap
+private\slice193-gs-live-build\build\gs_live_check.exe private\slice193-gt4gs-pkg\gt4-gs.exe <capture.gscap> 1100 <gt4-gs.ini> [--kill-at 300]
+```

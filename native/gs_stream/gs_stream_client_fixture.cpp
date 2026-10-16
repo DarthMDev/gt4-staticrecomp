@@ -12,6 +12,9 @@
 //   no-process     GT4_RENDERER=pcsx2 without GT4_GS_PROCESS is refused.
 //   early-exit     the GS process exits during the handshake: refused with a message.
 //   peer-death     the GS process dies mid-stream: the halt handler runs once, later hooks are harmless.
+//   pin-mismatch   GT4_GS_PROCESS_SHA256 differs from the GS process file: refused before the spawn (TASK-036).
+//   bad-config     GT4_GS_CONFIG names a missing file: refused (TASK-036).
+// The pcsx2 scenario also sets the correct GT4_GS_PROCESS_SHA256 and a GT4_GS_CONFIG file (passed as --config).
 // Checks: the three stream files (donor capture, pcsx2 in-process capture, recorder output) are byte-identical; the
 // file parses back with the expected record counts, MORE split and VSYNC fields; the SetGsCrt table.
 #include "gs_stream_client.hpp"
@@ -99,7 +102,8 @@ int scenario_main(const std::string &scenario, std::uint32_t frames) {
     gt4::gs_stream::finish(stdout);
     return 0;
   }
-  if (scenario == "early-exit" || scenario == "no-process" || scenario == "bad-renderer") {
+  if (scenario == "early-exit" || scenario == "no-process" || scenario == "bad-renderer" || scenario == "pin-mismatch" ||
+      scenario == "bad-config") {
     const auto data = qwords_of(1, 1);
     gt4::gs_stream::on_gif_render(3, data.data(), 1);  // refuses (exits) on first use
     return 0;
@@ -124,7 +128,8 @@ struct Env {
 
 std::uint32_t run_scenario(const std::string &scenario, const std::vector<Env> &env, std::uint32_t frames = 10) {
   for (const char *name : {"GT4_RENDERER", "GT4_GS_PROCESS", "GT4_GS_CAPTURE", "GT4_GS_RECORD_OUTPUT",
-                           "GT4_GS_CAPTURE_FRAMES", "GT4_GS_FRAMES_IN_FLIGHT", "GT4_FIXTURE_CHILD"})
+                           "GT4_GS_CAPTURE_FRAMES", "GT4_GS_FRAMES_IN_FLIGHT", "GT4_FIXTURE_CHILD",
+                           "GT4_GS_PROCESS_SHA256", "GT4_GS_CONFIG"})
     _putenv_s(name, "");
   for (const Env &item : env) _putenv_s(item.name, item.value.c_str());
   std::printf("[fixture] scenario %s\n", scenario.c_str());
@@ -245,9 +250,18 @@ int main(int argc, char **argv) {
     require(!exists(donor_file), "donor without capture writes nothing");
     require(run_scenario("donor-capture", {{"GT4_RENDERER", "donor"}, {"GT4_GS_CAPTURE", donor_file}}) == 0,
             "donor capture scenario");
+    std::string recorder_sha, hash_error;
+    require(gt4::gs_stream::file_sha256(gs_stream::ipc::widen(recorder), recorder_sha, hash_error) && recorder_sha.size() == 64,
+            "SHA-256 of the recorder");
+    const std::string config = scratch + "\\gt4-gs.ini";
+    {
+      std::ofstream ini(config, std::ios::binary);
+      ini << "[EmuCore/GS]\nupscale_multiplier = 1\n";
+    }
     require(run_scenario("pcsx2", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", recorder},
-                                   {"GT4_GS_RECORD_OUTPUT", recorded}, {"GT4_GS_CAPTURE", pcsx2_capture}}) == 0,
-            "pcsx2 scenario");
+                                   {"GT4_GS_RECORD_OUTPUT", recorded}, {"GT4_GS_CAPTURE", pcsx2_capture},
+                                   {"GT4_GS_PROCESS_SHA256", recorder_sha}, {"GT4_GS_CONFIG", config}}) == 0,
+            "pcsx2 scenario (pinned process, --config)");
     check_stream_file(donor_file, 10);
     check_stream_file(pcsx2_capture, 10);
     // The recorder's file also holds the CONTROL shutdown posted by finish() after the in-process capture closed.
@@ -261,6 +275,12 @@ int main(int argc, char **argv) {
 
     require(run_scenario("bad-renderer", {{"GT4_RENDERER", "bogus"}}) == 1, "unknown renderer refused");
     require(run_scenario("no-process", {{"GT4_RENDERER", "pcsx2"}}) == 1, "missing GT4_GS_PROCESS refused");
+    require(run_scenario("pin-mismatch", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", recorder},
+                                          {"GT4_GS_PROCESS_SHA256", std::string(64, '0')}}) == 1,
+            "GS process with another SHA-256 refused");
+    require(run_scenario("bad-config", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", recorder},
+                                        {"GT4_GS_CONFIG", scratch + "\\missing.ini"}}) == 1,
+            "missing GT4_GS_CONFIG file refused");
     const std::string self(argv[0]);
     // early-exit: GT4_GS_PROCESS points at a program that exits at once (this fixture with an unknown argument list).
     require(run_scenario("early-exit", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", self}}) == 1,

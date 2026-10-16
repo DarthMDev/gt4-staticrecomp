@@ -72,7 +72,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | ✅ Done · standalone repo, CI green, prerelease `gt4gs-v0.1.0-poc` (docs/GS-FORK.md) |
 | TASK‑034 | Proof of concept: replay our `.gscap` capture through the PCSX2 GS and compare images | ✅ Done · owner approved the images on 2026-10-16; gate passed (docs/GS-PCSX2-POC.md) |
 | TASK‑035 | MIT GS stream protocol, shared-memory IPC and renderer seam on main | ✅ Done · slice191: CTest 29/29, Python 321 OK, donor 42/42, stream converts to the PoC dump byte for byte (docs/GS-STREAM-PROTOCOL.md) |
-| TASK‑036 | Live `gt4-gs.exe` MVP: the game drives the PCSX2 GS over IPC | 📋 Planned (after the gate) |
+| TASK‑036 | Live `gt4-gs.exe` MVP: the game drives the PCSX2 GS over IPC | ✅ Done · owner test 2026-10-16 at 3x (sharp, fullscreen OK): Nordschleife 59.98 FPS, night race with 5 AI 59.89 FPS, readback wait 0.93 ms; `--mode pcsx2` holds 480p by default |
 | TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
 | TASK‑038 | GS window, fullscreen, focus, input and crash handling | 📋 Planned |
 | TASK‑039 | GS settings table and `gt4-gs.ini` | 📋 Planned |
@@ -375,6 +375,17 @@ boot to menus, Time Trial, race at 1x and 3x; GS crash (killed) ends the game cl
 flushed card; protocol-version mismatch refused; owner plays the reference scene.
 Risks: VMManager boot without BIOS in stream mode; first-run shader compile stutter.
 Parallel: 037/038/039 start once the MVP boots.
+State (2026-10-16, slice193): built; owner windowed test pending, no PR.
+- Fork `gt4gs/live` (commits `0b51d4c3c`, `acf4f986e`; tag `gt4gs-v0.2.0-live`): `pcsx2/GSStreamReplayer`, frontend
+  `pcsx2-gt4gs` (`gt4-gs.exe`: `--ipc/--parent/--config`, `--replay-gscap`, GSRunner dump mode), child window,
+  vendored protocol files checked by SHA-256. Launcher mode is `--mode pcsx2` (not `pcsx2-gs`), with `--gs-scale N`.
+- Main: GS process SHA-256 pin (`GT4_GS_PROCESS_SHA256`), `GT4_GS_CONFIG`, `WS_CLIPCHILDREN`, crash message box;
+  minimal `gt4-gs.ini` from the launcher; slice193 pins; `tools/gs_live_check`.
+- Headless frame dumps come from `gt4-gs.exe` itself (`[GT4GS] DumpDir`), so the game port is unchanged; CONTROL
+  snapshot is implemented in `gt4-gs.exe` and used by the window check.
+- Checks: CTest 29/29, Python 335 OK; donor 42/42; live 41/41 PNGs = offline replay, 300/700 = PoC; GS kill halts
+  the game; hidden-window attach/resize/snapshot/shutdown. The PoC vertical-scale question is the aspect ratio
+  (Auto 4:3 gives 480 rows). Not verified: windowed image, races, 480i, readbacks, GPU time.
 
 ### TASK-037 — Readbacks and night race
 Repos: both, branches `task/037-gs-readback`, `gt4gs/readback`. Opus, 2-3 sessions.

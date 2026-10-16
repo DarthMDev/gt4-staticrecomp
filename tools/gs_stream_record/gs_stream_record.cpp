@@ -2,6 +2,7 @@
 // gs_stream_record: a GS stream consumer for tests (TASK-035). It runs no renderer.
 //
 //   gs_stream_record --ipc <session name> --parent <producer pid> [--output <file.gscap>] [--frames first:last]
+//                    [--config <ini>]   (accepted and ignored, like the GS process settings file)
 //
 // The game starts it through GT4_GS_PROCESS. It opens the session, validates the control block (magic, protocol
 // major version, struct sizes, region layout, a non-empty serial), posts READY and then consumes every command record.
@@ -174,6 +175,7 @@ int main(int argc, char **argv) {
     else if (arg == "--parent" && i + 1 < argc) parent_pid = std::strtoul(argv[++i], nullptr, 10);
     else if (arg == "--output" && i + 1 < argc) output_path = argv[++i];
     else if (arg == "--frames" && i + 1 < argc) frames = argv[++i];
+    else if (arg == "--config" && i + 1 < argc) ++i;  // a GS renderer's settings file (TASK-036); not used by the recorder
     else return usage();
   }
   if (name.empty() || !parent_pid) return usage();

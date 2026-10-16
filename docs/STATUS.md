@@ -1,6 +1,14 @@
 # Current Status
 
-## Current state (2026-10-15)
+## Current state (2026-10-16)
+
+**TASK-036 (slice193, branch `task/036-gs-live`, fork `gt4gs/live`, 2026-10-16):** the live PCSX2 GS process
+`gt4-gs.exe` runs the game's GS stream (`--mode pcsx2`, `--gs-scale N`). Headless: CTest 29/29, Python 335 OK,
+donor frames 42/42, live frames 41/41 identical to the offline `--replay-gscap` frames and frames 300/700 identical
+to the TASK-034 PoC; a killed GS process halts the game cleanly. Owner windowed test at 1x and 3x pending.
+[GS-LIVE](GS-LIVE.md).
+
+## Earlier state (2026-10-15)
 
 **Current renderer plan (2026-10-15, [decision 0070](decisions/0070-pcsx2-gs-separate-process.md)):** TASK-032 (decision docs) is done in its PR; TASK-034 (PCSX2 GS proof of concept) is in progress, with an owner go/no-go gate before TASK-035/036. paraLLEl-GS (TASK-012) is dropped; CoreGS 1.1 stays the built-in fallback. Plan: [GSDX-PLAN](GSDX-PLAN.md).
 
