@@ -157,9 +157,9 @@ in game before it is merged.
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 | TASK‑031 | 120-144 FPS with the game's physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS |
 | TASK‑032 | Decision 0070: PCSX2 GS in a separate process (docs) | ✅ Done (this PR) |
-| TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | ✅ Done · release `gt4gs-v0.1.0-poc` ([fork](docs/GS-FORK.md)) |
-| TASK‑034 | Proof of concept: our capture through the PCSX2 GS, image comparison | ✅ Done · owner approved the images (2026-10-16) ([report](docs/GS-PCSX2-POC.md)) |
-| TASK‑035 | MIT GS stream protocol, shared-memory IPC, renderer seam | ✅ Done · slice191, stream identical in both renderer modes ([spec](docs/GS-STREAM-PROTOCOL.md)) |
+| TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | ✅ Done · release `gt4gs-v0.1.0-poc` ([fork](docs/GS-FORK.md)) |
+| TASK‑034 | Proof of concept: our capture through the PCSX2 GS, image comparison | ✅ Done · owner approved the images (2026-10-16) ([report](docs/GS-PCSX2-POC.md)) |
+| TASK‑035 | MIT GS stream protocol, shared-memory IPC, renderer seam | ✅ Done · slice191, stream identical in both renderer modes ([spec](docs/GS-STREAM-PROTOCOL.md)) |
 | TASK‑036 | Live `gt4-gs.exe` MVP | 📋 Planned (after the gate) |
 | TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
 | TASK‑038 | GS window, fullscreen, focus, input, crash handling | 📋 Planned |
