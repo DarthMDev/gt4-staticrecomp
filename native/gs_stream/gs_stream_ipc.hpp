@@ -122,6 +122,8 @@ struct WaitTotals {
   std::uint64_t frames_wait_us = 0, frames_waits = 0;
   std::uint64_t response_wait_us = 0;
   std::uint64_t data_wait_us = 0;
+  // TASK-041: events signalled to a sleeping peer (one SetEvent each), indexed by Wake.
+  std::uint64_t wakes_signalled[4] = {};
 };
 
 class Session {
@@ -145,6 +147,12 @@ class Session {
   void set_peer(NativeHandle process) { peer_ = process; }
   // Spin time before a sleep, in microseconds (default 30).
   void set_spin_us(std::uint32_t spin_us) { spin_us_ = spin_us; }
+  // TASK-041: producer wake batching. A sleeping consumer is woken after `bytes` of GIF/PRIV records since the last
+  // wake-up, at once for every other record type (VSYNC, READ_FIFO, RESET, CONTROL), and before the producer waits
+  // itself (ring space). 0 wakes it for every record (slice191-196 behaviour). Default kDefaultDataWakeBytes.
+  static constexpr std::uint64_t kDefaultDataWakeBytes = 256u << 10;
+  void set_data_wake_bytes(std::uint64_t bytes) { data_wake_bytes_ = bytes; }
+  std::uint64_t data_wake_bytes() const { return data_wake_bytes_; }
   const WaitTotals &wait_totals() const { return waits_; }
   void set_wait_hooks(WaitHooks hooks) { hooks_ = hooks; }
 
@@ -195,6 +203,8 @@ class Session {
   NativeHandle events_[4] = {};
   NativeHandle peer_ = nullptr;
   std::uint32_t spin_us_ = 30;
+  std::uint64_t data_wake_bytes_ = kDefaultDataWakeBytes;
+  std::uint64_t bytes_since_data_wake_ = 0;  // producer: record bytes posted since the last data wake-up check
   RingWriter writer_;
   RingReader reader_;
   WaitTotals waits_;

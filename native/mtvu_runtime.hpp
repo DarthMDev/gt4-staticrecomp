@@ -19,12 +19,32 @@ struct Settings {
   bool strict = false;  // GT4_MTVU_STRICT: abort on a violated invariant (PATH1 signal, verify mismatch)
   // GT4_MTVU_REPORT_EVERY (slice171): print the F8-equivalent probe report every N VBlanks (headless; 0 = off).
   std::uint64_t report_every = 0;
+  // GT4_MTVU_PRIV_ASYNC (TASK-041, slice198): privileged GS writes do not wait for the worker when an ordered
+  // consumer is registered (the GS stream in pcsx2 mode); they are queued in the journal behind the outstanding
+  // worker output instead. No effect in donor mode (no consumer registered).
+  bool privileged_async = kPrivilegedAsyncDefault;
+
+  static constexpr bool kPrivilegedAsyncDefault = true;
 };
 
 // Each switch accepts unset, "0" or "1"; GT4_MTVU_REPORT_EVERY accepts unset or a VBlank count. Any other value
 // throws std::invalid_argument naming the variable.
-Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every);
+Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every,
+                        const char *privileged_async = nullptr);
 Settings settings_from_environment();
+
+// TASK-041: ordered privileged GS writes. The GS stream (GT4_RENDERER=pcsx2) needs privileged writes only in stream
+// order with the GIF output; the EE keeps its own CSR/IMR/SIGLBLID copy at the program point. The consumer registers
+// the function that posts a write; with GT4_MTVU_PRIV_ASYNC=1, sync("gs_privileged") then returns without waiting and
+// the consumer calls queue_privileged for each write.
+void set_ordered_privileged_consumer(void (*post)(std::uint32_t address, std::uint64_t value));
+// True when GT4_MTVU_PRIV_ASYNC is on, the worker runs and a consumer is registered.
+bool privileged_async();
+// EE thread: true when the write was queued behind journal entries (the drain posts it in order through the
+// consumer); false when the journal is empty or the mode is off, and the caller posts it now.
+bool queue_privileged(std::uint32_t address, std::uint64_t value);
+// EE wait of the last blocking gs_privileged sync in microseconds, then 0 (per-register accounting).
+std::uint64_t take_privileged_wait_us();
 
 // Donor operations. The worker callbacks run on the worker thread; render_gs runs on the EE thread.
 struct Donor {

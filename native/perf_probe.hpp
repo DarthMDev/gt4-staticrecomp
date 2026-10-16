@@ -51,6 +51,9 @@ public:
   bool valid() const noexcept;
   std::uint64_t frames() const noexcept { return frames_; }
   const IntervalTime &interval() const noexcept { return accounting_.interval(); }
+  // TASK-041: measured EE-thread CPU ms/frame of the report being printed (negative when Unknown); the report hooks
+  // ([mtvu], [gs-ipc]) read it while print() runs.
+  double report_cpu_ms_per_frame() const noexcept { return report_cpu_ms_; }
 
 private:
   bool owner() noexcept;
@@ -71,6 +74,7 @@ private:
   std::function<void(std::FILE *)> report_section_;
   std::uint64_t last_us_ = 0, last_frame_us_ = 0, cpu_start_ = 0;
   std::uint64_t cpu_at_boundary_ = UINT64_MAX;
+  double report_cpu_ms_ = -1.0;
   std::uint64_t frames_ = 0, guest_cycles_ = 0, primitives_ = 0, vu_calls_ = 0;
   GuestSample last_guest_{};
   std::uint64_t read_bytes_ = 0, write_bytes_ = 0, rgba_bytes_ = 0;

@@ -104,7 +104,10 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
   `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`;
   the demo-input data appears to arrive wrong or late. Under investigation.
 - **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
-  that the PCSX2 GS (TASK-037) is expected to remove.
+  that the PCSX2 GS (TASK-037) is expected to remove. With the PCSX2 GS (accurate
+  readbacks) the night race holds 59.97 FPS; its remaining late frames come from the
+  flare readback waiting for the VU1 worker and, at race start, from pipeline compiles
+  (TASK-041 analysis; TASK-046 "prepare shaders" targets the compiles).
 - **Weaker CPUs:** VU1 work now runs on its own worker thread (MTVU, TASK-011),
   on by default in `--mode main`; `GT4_MTVU=0` restores the single-thread path for
   A/B. The weak-CPU effect is not measured yet (`--cpu-cores N` is the simulation
@@ -168,7 +171,7 @@ in game before it is merged.
 | TASK‑037 | PCSX2 GS readbacks and the night race | ✅ Done · night race 59.97 FPS, 69 late frames (was 213); accurate readbacks by default ([live](docs/GS-LIVE.md)) |
 | TASK‑038 | GS window, fullscreen, focus, input, crash handling | ✅ Done · fullscreen, focus and click fix (gt4-gs 0.3.1), crash handling with CoreGS 1.1 fallback |
 | TASK‑039 | GS settings table and `gt4-gs.ini` generator | ✅ Done · 51-row settings table generates `gt4-gs.ini`; fork allow-list enforcement pending ([settings](docs/GS-SETTINGS.md)) |
-| TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 🔄 In progress |
+| TASK‑041 | GS process performance (`[gs-ipc]`), tuning | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes ([live](docs/GS-LIVE.md#9-performance-of-the-pcsx2-gs-path-task-041-slice198)) |
 | TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019) |
 | TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |

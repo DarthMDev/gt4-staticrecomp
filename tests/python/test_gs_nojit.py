@@ -52,8 +52,10 @@ class Slice197PinTests(unittest.TestCase):
     def manifest(self):
         return json.loads((ROOT / 'docs/inputs' / MANIFEST).read_text(encoding='utf-8'))
 
-    def test_mode_pcsx2_selects_slice197_and_keeps_slice196(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], (MANIFEST, EXECUTABLE))
+    def test_mode_pcsx2_slice197_stays_selectable_and_keeps_slice196(self):
+        # Since slice199 --mode pcsx2 points at slice199; slice197 stays selectable for A/B.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice197'], (MANIFEST, EXECUTABLE))
+        self.assertIn('pcsx2-slice197', performance.MODES)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice196'], ('slice196-pcsx2.json', EXECUTABLE))
         self.assertIn(MANIFEST, probe.VU1_AOT_MANIFESTS)
         self.assertIn(MANIFEST, probe.VU0_AOT_MANIFESTS)

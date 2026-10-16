@@ -76,7 +76,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑038 | GS window, fullscreen, focus, input and crash handling | ✅ Done · owner test 2026-10-16: fullscreen, Alt+Tab and the click-in-picture focus fix (gt4-gs 0.3.1); crash grace frames and CoreGS 1.1 restart offer |
 | TASK‑039 | GS settings table and `gt4-gs.ini` | ✅ Done (main-repo part): 51-row table drives `gt4-gs.ini`; fork allow-list enforcement pending |
 | TASK‑040 | Texture dumping and replacement packs | ➡️ Folded into TASK-050 (mod manager, release 1.1.0) |
-| TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | 🔄 In progress |
+| TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes |
 | TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | 📋 Planned |
@@ -469,6 +469,23 @@ ring size, direct GS-thread feed; `--cpu-cores 2` check.
 Acceptance: `perf_probe_fixture` covers the new categories; owner A/B in showroom, night race, rally,
 reference scene: CoreGS 1.1 vs PCSX2 GS at 1x and 3x, 60 FPS, flat frametime, no measurements while builds run.
 Parallel: after 037.
+State (2026-10-16, slice198, branch `task/041-gs-perf`; fork unchanged, `gt4gs-v0.3.2`): built and checked headless;
+owner night-race A/B pending, no PR.
+- Headless race schedule added (Arcade, El Capitan, 5 AI, 16,000 frames): readbacks with the night-race pattern.
+- Night-race `gs_privileged` wait (3.48 ms/frame): 8 privileged writes per frame = 5 at the VBlank (PMODE, SMODE2,
+  DISPFB2, DISPLAY2, BGCOLOR) + CSR and BUSDIR x2 per readback; the wait sits before the CSR write (the EE waits for
+  the frame's VU1 work right before the flare readback). `GT4_MTVU_PRIV_ASYNC` (default 1) queues privileged writes
+  in the MTVU journal: stream bytes identical (menus captures, race stream hash with 588 queued writes), frames
+  identical; the gs_privileged wait becomes 0 but moves to the download sync of the readback (no net gain expected
+  in the night race).
+- Readback tail: long waits are pipeline compiles (cold cache: 12 of 294 at 8 ms or more, max 58 ms; warm: none, max
+  2.7 ms); a GS-side spin does not help (fork unchanged); fix is TASK-046.
+- Stream: 322 GS wake-ups per frame -> 11-14 with `GT4_GS_WAKE_BYTES` (default 256 KiB); `gs_ipc_write` about -30%
+  per MB; one copy less per worker GIF record in the MTVU journal.
+- F8 `[gs-ipc]`: privileged writes and MTVU waits by register, GS wake-ups, GS CPU thread per interval, one-line EE
+  critical path summary against the 16.68 ms budget.
+- Menus, same build: EE CPU donor 7.6 vs pcsx2 7.2 ms/frame. CTest 29/29, Python 416 OK, donor 42/42, pcsx2 41/41.
+  Details: [GS-LIVE](docs/GS-LIVE.md) section 9.
 
 ### TASK-042 — JIT-free `gt4-gs.exe`
 Repos: both, branches `gt4gs/nojit` (fork, from `gt4gs/main` `660017bb1`) and `task/042-gs-nojit` (main, from `a1a06a4`).

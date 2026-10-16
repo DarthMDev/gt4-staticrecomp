@@ -1257,6 +1257,38 @@ Checks: CTest 29/29 (the stream client fixture checks the SYNCV values and the S
 frames are now deinterlaced), and frames 100-1400 are pixel-identical to the offline 0.3.2 replay of the SYNCV
 stream with the live settings (slice195 live = offline 0.3.1 replay of the old stream, same method).
 
+## Slice198 - PCSX2 GS path performance (TASK-041)
+
+Branch `task/041-gs-perf` (from main `a1a06a4`). Same capsules, shaders, VU tables and gt4-gs package (`gt4gs-v0.3.2`,
+`private/slice196-gt4gs-release-pkg`) as slice196; native game-side changes only (`native/mtvu_*`,
+`native/gs_stream/gs_stream_client.*`, `gs_stream_ipc.*`, `perf_probe.*`). Scripts in `private/slice198-scripts`:
+
+- game: `build-game-198.bat` (source = worktree `C:\Antigravity\gt4-wt-041-perf`, build dir
+  `private/slice198-gs-perf-build/build`, assets root the main checkout); `guard.ps1` waits until no ninja, cl,
+  clang-cl or link process runs (another task builds in parallel);
+- pin: `make_manifest.py <worktree> <assets root>` writes `docs/inputs/slice198-pcsx2.json` from slice196 with the
+  new runtime pin;
+- headless: `headless-198.sh <run> [env]` (slice157 menus schedule), `headless-race.sh` / `race-run.sh <run> [env]`
+  (race schedule, 16,000 frames, keeps `probe-nosys.log`: the syscall trace makes the full log about 1 GB),
+  `analyze.py <first report> <runs>` (averages of the F8-equivalent reports), timing sets `timing-set1.sh`
+  (slice196 vs slice198, privileged sync on/off, wake batching off), `timing-set2.sh` (cold/warm cache, GS spin),
+  `timing-set3.sh` (donor vs pcsx2 menus); outputs in `private/slice198-smoke`, race route exploration
+  `explore.sh`.
+
+Pins `docs/inputs/slice198-pcsx2.json` (`gt4vulkan.exe` 95,667,712 bytes, sha256 `8658cffa...`); `--mode pcsx2` points
+here, `--mode pcsx2-slice196` keeps slice196. The worktree holds file copies (no links) of every pinned file of both
+modes plus the gt4-gs package, cache and data folders (`private/slice198-gs-perf-build`, `slice196-gs-deinterlace-build`,
+`slice153-pacing-shaders`, `slice196-gt4gs-release-pkg`, `slice193-gt4gs-cache`, `slice193-gt4gs-data`; hashes and the
+package tree digest checked), so `--mode pcsx2` runs from the worktree.
+
+Switches: `GT4_MTVU_PRIV_ASYNC` (default 1; 0 = slice196 privileged sync), `GT4_GS_WAKE_BYTES` (default 262144; 0 =
+wake on every record), `GT4_GS_STREAM_HASH=1` (test aid: F8 and session stream hash).
+
+Checks: CTest 29/29; Python 416 OK, 16 skipped; donor 42/42 identical to slice157 (two runs); pcsx2 1x 41/41 identical
+to slice196 (two runs); menus `.gscap` donor/pcsx2 slice198 = pcsx2 slice196 (`4ff3993d...`); race stream hash with the
+privileged sync on and off identical (`9b88c23e984ff940`, 588 queued writes), race frames 159/159 identical.
+Details and timings: [GS-LIVE](GS-LIVE.md) section 9.
+
 ## Slice197 - JIT-free gt4-gs (TASK-042)
 
 Branch `task/042-gs-nojit` (worktree `C:\Antigravity\gt4-wt-042-nojit`, from main `a1a06a4`), fork branch `gt4gs/nojit`
@@ -1287,4 +1319,35 @@ Checks: CTest 29/29 (slice196 build); Python 414 OK, 15 skipped (`GT4_NATIVE_BUI
 `tests/python/test_gs_nojit.py`); static check pass (0.3.2 fails it with 22 markers); offline 1x/3x frames byte-identical to
 0.3.2 on both menu streams; headless game from the worktree: donor 42/42 identical to slice157, pcsx2 1x 41/41 identical to
 slice196 live, GS process exit 0, ACG on and 0 executable non-image regions in the log. Details: [GS-LIVE](GS-LIVE.md)
-section 9.
+section 10.
+
+
+## Slice199 - TASK-041 on the JIT-free gt4-gs 0.4.0
+
+Branch `task/041-gs-perf` (worktree `C:\Antigravity\gt4-wt-041-perf`), merged with main `ecda378` (TASK-042 merged,
+PR #33). No game change: the game build is slice198 (`private/slice198-gs-perf-build/build/gt4vulkan.exe`, 95,667,712
+bytes, sha256 `8658cffa...`, the same file as slice198), so no new executable and no CMake run. The GS package is the
+published `gt4gs-v0.4.0` of slice197 (`private/slice197-gt4gs-release-pkg`, 140 files, tree `e9402cf2...`, zip sha256
+`5c92ad00...`, `gt4-gs.exe` 8,928,256 bytes, sha256 `1c4c45da...`).
+
+Pins: `docs/inputs/slice199-pcsx2.json` (new; slice198 and slice197 pins are not edited). `--mode pcsx2` = slice199;
+`--mode pcsx2-slice198` (gt4-gs 0.3.2) and `--mode pcsx2-slice197` (game build of slice196, gt4-gs 0.4.0) stay for A/B.
+The worktree holds file copies (no links) of every pinned input of slice199, copied from the main checkout and checked by
+size and sha256 (18 files plus the 140-file package tree digest).
+
+Checks (2026-10-16): CTest 29/29 on `private/slice198-gs-perf-build/build`; Python `GT4_NATIVE_BUILD` = that build:
+438 tests OK, 20 skipped (missing data only); no-JIT static check `tools/gs_nojit_check` on the slice199 package: 23
+modules, no code generator markers, no writable+executable sections; headless (slice157 menus schedule, 4,200 frames):
+donor 42/42 identical to slice157; pcsx2 1x 41/41 identical to slice198 (gt4-gs 0.3.2); gt4-gs 0.4.0 log: Arbitrary Code Guard on, 0 executable non-image regions.
+
+Headless (PowerShell, from the worktree; outputs in the main checkout's `private/slice199-smoke`, the probe refuses
+outputs outside `private/`):
+
+```
+python scripts\external_runtime_probe.py C:/Antigravity/gt4-staticrecomp/private/slice199-smoke/<run> --frames 4200 --timeout 2400 `
+  --press 600:start:30 ... --card-seed C:/Antigravity/gt4-staticrecomp/private/slice113-video/widescreen-seed/card.ps2 `
+  --runtime-manifest docs/inputs/slice199-pcsx2.json --assets-root C:/Antigravity/gt4-staticrecomp
+```
+
+Add `GT4_RENDERER=pcsx2 GT4_GS_SCALE=1 GT4_GS_ASPECT=auto` for the pcsx2 runs (`GT4_MTVU_REPORT_EVERY=500` for the F8 lines).
+Details: [GS-LIVE](GS-LIVE.md) section 10.5.

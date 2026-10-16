@@ -33,6 +33,7 @@ thread_local bool t_on_worker = false;
 class DonorSink final : public GsSink {
  public:
   explicit DonorSink(void (*render)(int, const std::uint8_t *, std::uint32_t)) : render_(render) {}
+  void set_privileged_consumer(void (*post)(std::uint32_t, std::uint64_t)) { privileged_ = post; }
   void gif_transfer(std::uint8_t path, const std::uint8_t *data, std::size_t bytes) override {
     gt4::perf::Scope drain(gt4::perf::Category::gs_drain);
     render_(path, data, static_cast<std::uint32_t>(bytes / 16));
@@ -41,9 +42,15 @@ class DonorSink final : public GsSink {
   void gif_reset() override { throw std::logic_error("mtvu journal GIF reset is not used"); }
   void vertex_reset() override { throw std::logic_error("mtvu journal vertex reset is not used"); }
   void vblank_flush() override { throw std::logic_error("mtvu journal VBlank flush is not used"); }
+  // TASK-041: a queued privileged write reaches its ordered consumer (the GS stream) after the earlier GIF output.
+  void privileged_write(std::uint32_t address, std::uint64_t value) override {
+    if (!privileged_) throw std::logic_error("mtvu journal privileged write without an ordered consumer");
+    privileged_(address, value);
+  }
 
  private:
   void (*render_)(int, const std::uint8_t *, std::uint32_t);
+  void (*privileged_)(std::uint32_t, std::uint64_t) = nullptr;
 };
 
 // Cumulative worker totals, published by the worker after each job (before its JobDone). The EE reads them only
@@ -79,6 +86,10 @@ struct Runtime {
   std::vector<SignalWrite> signal_scratch;  // EE thread only: signals of the packet being accepted
 
   std::uint64_t next_job = 1;  // EE thread only
+  // TASK-041: ordered privileged writes (EE thread only).
+  void (*ordered_privileged)(std::uint32_t, std::uint64_t) = nullptr;
+  std::uint64_t privileged_queued = 0;   // writes queued behind journal entries
+  std::uint64_t privileged_wait_us = 0;  // wait of the last blocking gs_privileged sync, taken by the consumer
   std::uint64_t signals_applied = 0;  // EE thread only: SIGNAL/FINISH/LABEL applied at accept
   std::uint64_t vif_packets = 0, vif_writes = 0, ee_transfers = 0, direct_transfers = 0, gs_renders = 0;
   std::map<std::string, std::uint64_t> syncs;
@@ -186,11 +197,13 @@ void worker_main() {
 
 }  // namespace
 
-Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every) {
+Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every,
+                        const char *privileged_async) {
   Settings settings;
   settings.enabled = parse_flag("GT4_MTVU", mtvu, true);
   settings.verify = parse_flag("GT4_MTVU_VERIFY", verify, false);
   settings.strict = parse_flag("GT4_MTVU_STRICT", strict, false);
+  settings.privileged_async = parse_flag("GT4_MTVU_PRIV_ASYNC", privileged_async, Settings::kPrivilegedAsyncDefault);
   if (report_every != nullptr) {
     const std::string_view digits(report_every);
     if (digits.empty() || digits.find_first_not_of("0123456789") != std::string_view::npos)
@@ -202,7 +215,7 @@ Settings parse_settings(const char *mtvu, const char *verify, const char *strict
 
 Settings settings_from_environment() {
   return parse_settings(std::getenv("GT4_MTVU"), std::getenv("GT4_MTVU_VERIFY"), std::getenv("GT4_MTVU_STRICT"),
-                        std::getenv("GT4_MTVU_REPORT_EVERY"));
+                        std::getenv("GT4_MTVU_REPORT_EVERY"), std::getenv("GT4_MTVU_PRIV_ASYNC"));
 }
 
 WorkerTotals published_totals(const Runtime &r) {
@@ -270,6 +283,7 @@ void start(const Settings &settings, const Donor &donor) {
   r.input = std::make_unique<SpscByteRing>(kInputBytes, r.bell);
   r.output = std::make_unique<SpscByteRing>(kOutputBytes, r.bell);
   r.sink = std::make_unique<DonorSink>(donor.render_gs);
+  r.sink->set_privileged_consumer(r.ordered_privileged);
   r.journal = std::make_unique<EeJournal>(*r.input, *r.output, r.bell, *r.sink);
   r.worker_end = std::make_unique<WorkerEnd>(*r.input, *r.output, r.bell);
   r.worker_accounting = gt4::perf::Accounting(gt4::perf::Probe::shared().enabled());
@@ -280,6 +294,32 @@ void start(const Settings &settings, const Donor &donor) {
 }
 
 bool enabled() { return rt().running.load(std::memory_order_acquire); }
+
+void set_ordered_privileged_consumer(void (*post)(std::uint32_t address, std::uint64_t value)) {
+  Runtime &r = rt();
+  r.ordered_privileged = post;
+  if (r.sink) r.sink->set_privileged_consumer(post);
+}
+
+bool privileged_async() {
+  const Runtime &r = rt();
+  return r.settings.privileged_async && r.ordered_privileged != nullptr && enabled();
+}
+
+bool queue_privileged(std::uint32_t address, std::uint64_t value) {
+  Runtime &r = rt();
+  if (t_on_worker || !privileged_async() || r.journal->can_execute_now()) return false;
+  r.journal->append_privileged(address, value);
+  ++r.privileged_queued;
+  return true;
+}
+
+std::uint64_t take_privileged_wait_us() {
+  Runtime &r = rt();
+  const std::uint64_t waited = r.privileged_wait_us;
+  r.privileged_wait_us = 0;
+  return waited;
+}
 
 bool on_worker() { return t_on_worker; }
 
@@ -380,8 +420,16 @@ void note_render(int path, const std::uint8_t *data, std::uint32_t qwc) {
 void sync(const char *reason) {
   Runtime &r = rt();
   if (!enabled() || t_on_worker) return;
-  ++r.syncs[reason];
   const std::string_view why(reason);
+  const bool privileged = why == "gs_privileged";
+  if (privileged && privileged_async()) {
+    // TASK-041: the write that follows is queued behind the journal by its ordered consumer (queue_privileged), so
+    // the stream order is kept without waiting for the worker. The EE-side register copy is written at this point.
+    ++r.syncs["gs_privileged_ordered"];
+    r.privileged_wait_us = 0;
+    return;
+  }
+  ++r.syncs[reason];
   using gt4::perf::Category;
   const Category wait = why == "vblank" ? Category::mtvu_wait_vblank
                       : why == "download" ? Category::mtvu_wait_download
@@ -391,8 +439,12 @@ void sync(const char *reason) {
                       : (why == "vif_reset" || why == "vu_reset" || why == "hw_reset") ? Category::mtvu_wait_reset
                       : (why == "state" || why == "shutdown") ? Category::mtvu_wait_state
                       : Category::mtvu_wait_other;
-  gt4::perf::Scope waiting(wait);
-  r.journal->drain(true);
+  const std::uint64_t start = privileged ? wall_us() : 0;
+  {
+    gt4::perf::Scope waiting(wait);
+    r.journal->drain(true);
+  }
+  if (privileged) r.privileged_wait_us = wall_us() - start;
   rethrow_worker_error();
 }
 
@@ -477,6 +529,9 @@ void report(std::FILE *output) {
     std::fprintf(output, "[mtvu] sync %s %llu\n", reason.c_str(), static_cast<unsigned long long>(count));
   std::fprintf(output, "[mtvu] signals applied on the EE at accept %llu\n",
                static_cast<unsigned long long>(r.signals_applied));
+  std::fprintf(output, "[mtvu] privileged writes: async %d (GT4_MTVU_PRIV_ASYNC %d, ordered consumer %s); queued "
+               "behind worker output %llu\n", privileged_async() ? 1 : 0, r.settings.privileged_async ? 1 : 0,
+               r.ordered_privileged ? "registered" : "none", static_cast<unsigned long long>(r.privileged_queued));
   if (r.settings.verify)
     std::fprintf(output, "[mtvu] verify frames %llu mismatches %llu\n", static_cast<unsigned long long>(r.verify_frames),
                  static_cast<unsigned long long>(r.verify_mismatches));

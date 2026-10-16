@@ -30,9 +30,9 @@ class Slice196PinTests(unittest.TestCase):
         return json.loads((ROOT / 'docs/inputs' / MANIFEST).read_text(encoding='utf-8'))
 
     def test_mode_pcsx2_slice196_stays_selectable(self):
-        # Since slice197 (TASK-042) --mode pcsx2 points at slice197 (same game runtime); slice196 stays selectable.
+        # Since slice199 (TASK-041 on gt4-gs 0.4.0) --mode pcsx2 points at slice199; slice196 stays selectable.
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice196'], (MANIFEST, EXECUTABLE))
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'][1], EXECUTABLE)
+        self.assertIn('pcsx2-slice196', performance.MODES)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice195'],
                          ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'))
         self.assertIn(MANIFEST, probe.VU1_AOT_MANIFESTS)

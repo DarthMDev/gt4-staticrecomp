@@ -107,6 +107,14 @@ void EeJournal::append_vblank_flush() {
   journal_.push_back(std::move(entry));
 }
 
+void EeJournal::append_privileged(std::uint32_t address, std::uint64_t value) {
+  JournalEntry entry;
+  entry.kind = EntryKind::Privileged;
+  entry.address = address;
+  entry.job = value;
+  journal_.push_back(std::move(entry));
+}
+
 bool EeJournal::drain(bool blocking) {
   for (;;) {
     const std::uint32_t seen = bell_.snapshot();
@@ -145,6 +153,17 @@ void EeJournal::pump_output() {
   std::vector<std::uint8_t> chunk;
   while (output_.try_pop(header, chunk)) {
     if (header.kind == static_cast<std::uint16_t>(RecordKind::Gif)) {
+      if (partial_gif_.empty() && (header.flags & kFlagMore) == 0) {
+        // TASK-041: a whole record in one chunk (the usual case) moves into the queue without a second copy.
+        CompletedEntry entry;
+        entry.job_done = false;
+        entry.path = header.path;
+        entry.job = header.job;
+        entry.bytes = std::move(chunk);
+        chunk = {};
+        completed_.push_back(std::move(entry));
+        continue;
+      }
       partial_gif_.insert(partial_gif_.end(), chunk.begin(), chunk.end());
       partial_path_ = header.path;
       partial_job_ = header.job;
@@ -185,6 +204,9 @@ bool EeJournal::execute_ready() {
         break;
       case EntryKind::VblankFlush:
         sink_.vblank_flush();
+        break;
+      case EntryKind::Privileged:
+        sink_.privileged_write(entry.address, entry.job);
         break;
       case EntryKind::Placeholder:
         if (!consume_job(entry.job)) return false;

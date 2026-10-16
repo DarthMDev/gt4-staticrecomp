@@ -245,9 +245,12 @@ void Probe::print(const char *reason) noexcept {
         guest_cycles_ / 294912000.0 / seconds * 100.0, primitives_ / frames, vu_calls_ / frames);
   else std::fputs("[perf] guest counters reset: guest speed/count deltas Unknown\n", output_);
   const auto cpu_now = cpu_at_boundary_;
-  if (cpu_valid_ && cpu_now != UINT64_MAX && cpu_now >= cpu_start_)
+  report_cpu_ms_ = -1.0;
+  if (cpu_valid_ && cpu_now != UINT64_MAX && cpu_now >= cpu_start_) {
+    report_cpu_ms_ = (cpu_now - cpu_start_) / 1000.0 / frames;
     std::fprintf(output_, "[perf] measured_thread_cpu_ms/frame=%.3f; occupancy=%.1f%%\n",
-        (cpu_now - cpu_start_) / 1000.0 / frames, double(cpu_now - cpu_start_) / elapsed * 100);
+        report_cpu_ms_, double(cpu_now - cpu_start_) / elapsed * 100);
+  }
   else std::fputs("[perf] measured_thread_cpu=Unknown\n", output_);
   if (report_section_)
     report_section_(output_);
