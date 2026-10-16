@@ -63,6 +63,30 @@ using PrivilegedSlots = std::array<PrivilegedSlot, kPrivilegedRegisterSlots>;
 
 // Installed by the MTVU bridge in pcsx2 mode; empty otherwise (every write is posted at once, as before).
 PrivilegedOrdering g_privileged_ordering;
+// TASK-062: cumulative VU1 worker busy time (MTVU bridge, pcsx2 mode); null: unknown.
+std::uint64_t (*g_worker_busy_us)() = nullptr;
+// TASK-060: cursor policy of the game window, sent to a 1.2 consumer after attach_window (set by window.cpp).
+bool g_cursor_auto_hide = true;
+std::uint32_t g_cursor_hide_delay_ms = 3000;
+
+// CPU time of the calling thread in microseconds (UINT64_MAX when unavailable).
+std::uint64_t thread_cpu_us() {
+  FILETIME created{}, exited{}, kernel{}, user{};
+  if (!GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user)) return UINT64_MAX;
+  const auto ticks = [](FILETIME value) { return (std::uint64_t(value.dwHighDateTime) << 32) | value.dwLowDateTime; };
+  return ticks(kernel) / 10 + ticks(user) / 10;
+}
+
+// Nanoseconds between two QueryPerformanceCounter values.
+std::uint64_t elapsed_ns(LARGE_INTEGER from, LARGE_INTEGER to) {
+  static const std::uint64_t frequency = [] {
+    LARGE_INTEGER value;
+    QueryPerformanceFrequency(&value);
+    return static_cast<std::uint64_t>(value.QuadPart);
+  }();
+  const std::uint64_t ticks = static_cast<std::uint64_t>(to.QuadPart - from.QuadPart);
+  return ticks / frequency * 1000000000ull + ticks % frequency * 1000000000ull / frequency;
+}
 
 constexpr const char *kPrivilegedNames[kPrivilegedRegisterSlots] = {
     "PMODE", "SMODE1", "SMODE2", "SRFSH", "SYNCH1", "SYNCH2", "SYNCV", "DISPFB1", "DISPLAY1", "DISPFB2",
@@ -291,6 +315,7 @@ class Client {
       std::fprintf(stderr, "[gs-ipc] capture closed after frame %llu\n", static_cast<unsigned long long>(capture_last_));
     }
     poll_events();
+    if (osd_wanted_) osd_after_vsync();
     const std::uint64_t resize = pending_resize_.exchange(0);
     if ((resize >> 63) && stream()) control(proto::ControlKind::resize, (resize >> 32) & 0x7FFFFFFFu, resize & 0xFFFFFFFFu, 0);
   }
@@ -313,6 +338,10 @@ class Client {
     SetWindowLongPtrW(parent, GWL_STYLE, GetWindowLongPtrW(parent, GWL_STYLE) | WS_CLIPCHILDREN);
     window_ = window;
     control(proto::ControlKind::attach_window, window, width, height);
+    // TASK-060 (protocol 1.2): the GS child window applies the same cursor rule as this window. An older consumer
+    // would answer an unknown CONTROL kind with an error, so it is not sent there (that consumer never hides it).
+    if (session_ && ready_.version_minor >= 2)
+      control(proto::ControlKind::cursor, g_cursor_auto_hide ? proto::kCursorFlagAutoHide : 0, g_cursor_hide_delay_ms, 0);
   }
 
   void request_resize(std::uint32_t width, std::uint32_t height) {
@@ -364,6 +393,13 @@ class Client {
       std::fprintf(output, "[gs-ipc] session stream hash (GT4_GS_STREAM_HASH): records %llu hash %016llx\n",
                    static_cast<unsigned long long>(stream_hash_.records), static_cast<unsigned long long>(stream_hash_.value));
     if (has_stats_) print_consumer_stats(output, last_stats_);
+    if (osd_wanted_)
+      std::fprintf(output, "[gs-ipc] OSD_STATS records sent: %llu (every %.1f s); EE thread cost: record build and post "
+                   "mean %.2f us, max %.2f us; per-VSYNC tick mean %.3f us\n",
+                   static_cast<unsigned long long>(osd_records_), kOsdStatsIntervalUs / 1e6,
+                   osd_records_ ? osd_post_ns_total_ / 1000.0 / static_cast<double>(osd_records_) : 0.0,
+                   osd_post_ns_max_ / 1000.0,
+                   osd_ticks_ ? osd_tick_ns_total_ / 1000.0 / static_cast<double>(osd_ticks_) : 0.0);
     std::fflush(output);
     if (dead_ && window_) {
       // The player sees a window that stopped updating: say why. The guest ran on for the grace VSYNCs after the GS
@@ -469,6 +505,11 @@ class Client {
     session_->events_in().release(event);
     if (ready_.version_major != proto::kVersionMajor) refuse("the GS process implements another protocol major version");
     session_->set_wait_hooks({&Client::wait_begin, &Client::wait_end});
+    // TASK-062 (protocol 1.2): a consumer that draws a performance overlay asks for OSD_STATS in READY.
+    osd_wanted_ = ready_.version_minor >= 2 && (ready_.flags & proto::kReadyFlagOsdStats) != 0;
+    if (osd_wanted_)
+      std::fprintf(stderr, "[gs-ipc] the GS process draws a performance overlay: OSD_STATS every %.1f s\n",
+                   kOsdStatsIntervalUs / 1e6);
     if (const char *mode = std::getenv("GT4_GS_READBACK"); mode && *mode)
       std::fprintf(stderr, "[gs-ipc] readback mode %s (GT4_GS_READBACK, applied by the GS process configuration)\n", mode);
     std::fprintf(stderr,
@@ -478,6 +519,64 @@ class Client {
                  process, ready_.consumer_pid, ascii(ready_.consumer, 32).c_str(), ascii(ready_.renderer, 32).c_str(),
                  ascii(ready_.version, 64).c_str(), ready_.version_major, ready_.version_minor, ready_.flags,
                  frames_in_flight, static_cast<unsigned>(session_->data_wake_bytes()));
+  }
+
+  // TASK-062: cumulative counters at this VSYNC (EE thread).
+  OsdSample osd_sample(std::uint64_t now) const {
+    OsdSample sample;
+    sample.wall_us = now;
+    sample.vsyncs = counters_.vsyncs;
+    sample.main_cpu_us = thread_cpu_us();
+    if (g_worker_busy_us) sample.worker_busy_us = g_worker_busy_us();
+    gt4::perf::Probe &probe = gt4::perf::Probe::shared();
+    sample.accounting = probe.enabled();
+    if (sample.accounting) {
+      sample.stream_write_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_write);
+      sample.readback_wait_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_readback_wait);
+      sample.backpressure_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_backpressure);
+      for (gt4::perf::Category wait : {gt4::perf::Category::mtvu_wait_vblank, gt4::perf::Category::mtvu_wait_download,
+                                       gt4::perf::Category::mtvu_wait_gs_privileged, gt4::perf::Category::mtvu_wait_vu_memory,
+                                       gt4::perf::Category::mtvu_wait_gif_reset, gt4::perf::Category::mtvu_wait_reset,
+                                       gt4::perf::Category::mtvu_wait_state, gt4::perf::Category::mtvu_wait_other})
+        sample.worker_wait_us += probe.cumulative_exclusive_us(wait);
+    }
+    return sample;
+  }
+
+  // TASK-062: after each VSYNC record: the frame time of this VSYNC, and every kOsdStatsIntervalUs one OSD_STATS record.
+  // Cost per VSYNC: QueryPerformanceCounter calls; per record: GetThreadTimes, the probe sums and one ring write. The
+  // record goes to the GS process only (not to the .gscap capture or the stream hash: it is not GS traffic).
+  void osd_after_vsync() {
+    if (dead_ || !session_) return;
+    LARGE_INTEGER tick_start;
+    QueryPerformanceCounter(&tick_start);
+    const std::uint64_t now = now_us();
+    if (osd_last_vsync_us_) osd_max_frame_us_ = std::max(osd_max_frame_us_, now - osd_last_vsync_us_);
+    osd_last_vsync_us_ = now;
+    if (!osd_begin_.wall_us) {
+      osd_begin_ = osd_sample(now);
+      osd_max_frame_us_ = 0;
+    } else if (now - osd_begin_.wall_us >= kOsdStatsIntervalUs) {
+      const OsdSample end = osd_sample(now);
+      const proto::OsdStatsPayload payload = make_osd_stats(osd_begin_, end, osd_max_frame_us_);
+      try {
+        session_->post(RecordType::osd_stats, 0, &payload, sizeof payload);
+      } catch (const ipc::IpcError &error) {
+        lost(error.what());
+      }
+      osd_begin_ = end;
+      osd_max_frame_us_ = 0;
+      ++osd_records_;
+      LARGE_INTEGER done;
+      QueryPerformanceCounter(&done);
+      const std::uint64_t ns = elapsed_ns(tick_start, done);
+      osd_post_ns_total_ += ns;
+      osd_post_ns_max_ = std::max(osd_post_ns_max_, ns);
+    }
+    LARGE_INTEGER tick_end;
+    QueryPerformanceCounter(&tick_end);
+    osd_tick_ns_total_ += elapsed_ns(tick_start, tick_end);
+    ++osd_ticks_;
   }
 
   void write_capture(RecordType type, std::uint16_t flags, const void *first, std::size_t first_bytes,
@@ -698,6 +797,11 @@ class Client {
   std::uint32_t lost_grace_frames_ = kLostGraceFrames;
   std::uint32_t frames_since_lost_ = 0;
   bool halted_ = false;
+  // TASK-062: OSD_STATS state (EE thread).
+  bool osd_wanted_ = false;
+  OsdSample osd_begin_{};
+  std::uint64_t osd_last_vsync_us_ = 0, osd_max_frame_us_ = 0;
+  std::uint64_t osd_records_ = 0, osd_ticks_ = 0, osd_tick_ns_total_ = 0, osd_post_ns_total_ = 0, osd_post_ns_max_ = 0;
 };
 
 Renderer parse_renderer() {
@@ -950,6 +1054,58 @@ bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t heig
 void resize_window(std::uint32_t width, std::uint32_t height) {
   Client *c = client();
   if (c && c->stream()) c->request_resize(width, height);
+}
+
+void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms) {
+  g_cursor_auto_hide = auto_hide;
+  g_cursor_hide_delay_ms = std::clamp<std::uint32_t>(hide_delay_ms, 1, 60000);
+}
+
+void set_worker_busy_source(std::uint64_t (*worker_busy_us)()) { g_worker_busy_us = worker_busy_us; }
+
+proto::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &end, std::uint64_t max_frame_us,
+                                      double budget_ms) {
+  proto::OsdStatsPayload payload{};
+  const std::uint64_t frames = end.vsyncs > begin.vsyncs ? end.vsyncs - begin.vsyncs : 0;
+  const std::uint64_t interval = end.wall_us > begin.wall_us ? end.wall_us - begin.wall_us : 0;
+  if (!frames || !interval) return payload;  // valid = 0: nothing to show yet
+  const auto clamp32 = [](std::uint64_t value) {
+    return static_cast<std::uint32_t>(std::min<std::uint64_t>(value, UINT32_MAX));
+  };
+  const auto per_frame = [frames, clamp32](std::uint64_t first, std::uint64_t last) {
+    return clamp32(last > first ? (last - first) / frames : 0);
+  };
+  payload.frames = clamp32(frames);
+  payload.interval_us = interval;
+  payload.frame_time_avg_us = clamp32(interval / frames);
+  payload.frame_time_max_us = clamp32(max_frame_us);
+  payload.valid = proto::kOsdStatFrameTimes;
+  const bool cpu_known =
+      begin.main_cpu_us != UINT64_MAX && end.main_cpu_us != UINT64_MAX && end.main_cpu_us >= begin.main_cpu_us;
+  if (cpu_known) {
+    payload.main_thread_cpu_us = per_frame(begin.main_cpu_us, end.main_cpu_us);
+    payload.valid |= proto::kOsdStatMainThreadCpu;
+  }
+  // The worker publishes its busy time only while the accounting is on (GT4_PERF=1 in every launcher run).
+  if (begin.worker_busy_us != UINT64_MAX && end.worker_busy_us != UINT64_MAX && begin.accounting && end.accounting) {
+    payload.worker_busy_us = per_frame(begin.worker_busy_us, end.worker_busy_us);
+    payload.valid |= proto::kOsdStatWorkerBusy;
+  }
+  if (begin.accounting && end.accounting) {
+    payload.stream_write_us = per_frame(begin.stream_write_us, end.stream_write_us);
+    payload.readback_wait_us = per_frame(begin.readback_wait_us, end.readback_wait_us);
+    payload.backpressure_us = per_frame(begin.backpressure_us, end.backpressure_us);
+    payload.worker_wait_us = per_frame(begin.worker_wait_us, end.worker_wait_us);
+    payload.valid |= proto::kOsdStatStreamCosts | proto::kOsdStatWorkerWait;
+    if (cpu_known) {
+      // The F8 summary formula (format_frame_summary): EE CPU plus the EE waits for the worker, readbacks and the GS.
+      payload.critical_path_us = payload.main_thread_cpu_us + payload.worker_wait_us + payload.readback_wait_us +
+                                 payload.backpressure_us;
+      payload.frame_budget_us = static_cast<std::uint32_t>(budget_ms * 1000.0 + 0.5);
+      payload.valid |= proto::kOsdStatCriticalPath;
+    }
+  }
+  return payload;
 }
 
 void set_halt_handler(void (*halt)(const char *reason)) {

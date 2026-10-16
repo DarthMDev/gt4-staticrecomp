@@ -103,6 +103,9 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mt
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
+# TASK-060: GT4_CURSOR_AUTOHIDE (unset or 1 = hide the cursor over the picture after 3 s, 0 = never). Forwarded and
+# recorded; the settings table row cursor_autohide (launcher-only) names it.
+CURSOR_AUTOHIDE_VALUES = ('0', '1')
 # GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
@@ -607,6 +610,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
+    if 'GT4_CURSOR_AUTOHIDE' in environment:
+        if environment['GT4_CURSOR_AUTOHIDE'] not in CURSOR_AUTOHIDE_VALUES:
+            raise ValueError('GT4_CURSOR_AUTOHIDE must be 0 or 1')
+        result['cursor_environment'] = {'GT4_CURSOR_AUTOHIDE': environment['GT4_CURSOR_AUTOHIDE']}
     result.update(gs_stream_environment(environment, runtime_evidence, binary_workspace, performance,
                                         run_directory=run_directory, headless=not window,
                                         renderer_override=renderer_override))

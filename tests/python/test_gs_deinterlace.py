@@ -81,9 +81,10 @@ class Slice196PinTests(unittest.TestCase):
 
 
 class ProtocolStatementTests(unittest.TestCase):
-    def test_header_is_version_1_1_with_the_display_field(self):
+    def test_header_keeps_the_display_field(self):
+        # Version 1.2 (TASK-060/062) adds CONTROL cursor and OSD_STATS; the 1.1 VSYNC display field is unchanged.
         header = (ROOT / 'native/gs_stream/gs_stream_protocol.h').read_text(encoding='utf-8')
-        self.assertRegex(header, r'kVersionMinor = 1;')
+        self.assertRegex(header, r'kVersionMinor = 2;')
         self.assertIn('display', header[header.index('--- VSYNC'):header.index('struct VsyncPayload')])
 
     def test_set_gs_crt_posts_syncv_for_the_analog_modes(self):

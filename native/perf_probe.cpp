@@ -143,6 +143,11 @@ void Probe::audio(std::uint64_t produced, std::uint64_t completed,
 }
 
 void Probe::reset(std::uint64_t now, GuestSample guest) noexcept {
+  // TASK-062: keep the time of the finished interval for cumulative_exclusive_us() (checkpoint first, so the time up to
+  // `now` belongs to the interval that ends here).
+  accounting_.checkpoint(now);
+  for (std::size_t index = 0; index < carried_exclusive_us_.size(); ++index)
+    carried_exclusive_us_[index] += accounting_.interval().categories[index].exclusive_us;
   accounting_.restart(now);
   if (g_mtvu_reset)
     g_mtvu_reset();
@@ -296,6 +301,13 @@ void Probe::print(const char *reason) noexcept {
   if (g_gs_ipc_report)
     g_gs_ipc_report(output_, accounting_.interval(), frames_);
   std::fflush(output_);
+}
+
+std::uint64_t Probe::cumulative_exclusive_us(Category category) const noexcept {
+  const auto index = static_cast<std::size_t>(category);
+  if (index >= carried_exclusive_us_.size())
+    return 0;
+  return carried_exclusive_us_[index] + accounting_.interval().categories[index].exclusive_us;
 }
 
 void Probe::set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept {

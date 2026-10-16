@@ -68,6 +68,9 @@ void start_with_donor(const Settings &settings);
 bool enabled();
 // True on the VU1 worker thread.
 bool on_worker();
+// TASK-062: cumulative busy time of the VU1 worker (VU1 programs plus its PATH1/PATH2 GIF output) in microseconds, as
+// published after each job; 0 when the worker never ran or the performance accounting is off. Any thread.
+std::uint64_t worker_busy_us();
 
 // EE entry points (no-ops when not enabled, except gif_transfer which renders directly).
 void post_vif_packet(const std::uint8_t *data, std::uint32_t qwc);
