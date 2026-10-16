@@ -874,3 +874,39 @@ Settings to add to the HTML design when it resumes:
 
 Effort estimate (Hypothesis): port the three mockups into Tauri pages and wire the commands in about 2-3
 agent sessions. The Rust core needs no rewrite.
+
+### 15.1 Status (2026-10-16, branch `task/019-launcher`, Haiku)
+
+Resumed for TASK-043 (decision 0070). Done in this branch:
+- Renderers: PCSX2 GS (default when installed), CoreGS 1.1 (upscale, FSR, FXAA and deinterlace rows hidden),
+  CoreGS 2.0 ("coming soon"). paraLLEl-GS and its `--hires` row are removed.
+- Settings: `docs/launcher/gs-settings.toml` is compiled into `gt4l-core` (`gs_table`); `page` and `control`
+  columns are read with the fallbacks (advanced, dropdown); `page = mods` rows are never offered in 1.0.0 and
+  get their defaults only. `gt4-gs.ini` is written by the same rules as `scripts/gs_settings.py`; golden test
+  `gs_golden.rs` compares bytes (CRLF on Windows, as the Python text write).
+- Reset: `reset_gs_settings_to_defaults`.
+- Download (TASK-043): `gt4l-core::gs_release`, stable releases of `moesuito/gt4recomp-gs`, minimum 0.3.2,
+  `SHA256SUMS` check, `%LOCALAPPDATA%\GT4Recomp\gs\<version>\`, previous version kept, fallback to CoreGS 1.1.
+  Started from `setup_start`.
+- Launch: `GT4_RENDERER=pcsx2`, `GT4_GS_PROCESS` and `GT4_GS_PROCESS_SHA256`, `GT4_GS_CONFIG` (per session),
+  `GT4_FORCE_480P=1` by default; readback accurate by default (INI `HWDownloadMode`). On the restart marker
+  (`[gs-ipc] restart requested: renderer donor (CoreGS 1.1)`) the game starts again with CoreGS 1.1.
+- WebView2: `downloadBootstrapper` (owner choice); NSIS per-user (`installMode: currentUser`).
+- Workspace: `gt4l-tauri` is a workspace member. Tests: `cargo test --workspace` green.
+
+Open: the UI merge (`task/019-launcher-ui`, not edited here); `ui/dev/` is still inside `frontendDist` (Tauri
+has no exclude; needs a staging copy step); gamepad event; setup progress events (`app_state` reports progress 0);
+launch environment golden against the Python probe (the INI is golden, the env is not yet); live GitHub download;
+the PCSX2 GS update offer on startup; `gt4l-app` (the old Slint crate, not in the workspace) still calls the old
+`game::start` signature.
+
+### 15.2 Command list (contract with `task/019-launcher-ui`, `ui/dev/README.md`)
+
+Registered in `src/main.rs`; the test `src/contract.rs` fails when this list and the registration differ.
+
+- App and setup: `app_state`, `setup_start`, `setup_choose_disc`, `setup_cancel`, `play`, `stop_game`
+- Settings: `get_settings_table` -> `{max_upscale, rows}`, `set_setting({id, value})`, `reset_gs_settings_to_defaults`
+- Controls: `get_controls` -> `{controls, triggers}`, `capture_binding({control})`, `cancel_capture`, `reset_binding({control})`
+- Saves: `saves_list`, `saves_import`, `saves_activate({id})`, `saves_delete({id})`
+- Replays: `replays_list`, `replays_import`, `replays_delete({id})`
+- About: `about_info`, `open_log_folder`

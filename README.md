@@ -148,7 +148,7 @@ in game before it is merged.
 | TASK‑016 | IOP per-module cost review | ⏸️ Deferred |
 | TASK‑017 | License-test crash | 🔄 In progress · waiting for the owner's FSV trace test |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 |
+| TASK‑019 | Launcher (Rust + Tauri 2) + per-user installer: pick your ISO once, then Play | 🔄 In progress (`task/019-launcher`): PCSX2 GS table, renderer download, launch and command contract done; UI merge and installer test open |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import saves from PCSX2 cards and save files | ✅ Code done in `task/019-launcher`; ships with the launcher (owner test pending) |
 | TASK‑026 | CoreGS 2.0 (our own MIT hardware renderer, clean room): specification | ✅ Done |
@@ -168,7 +168,7 @@ in game before it is merged.
 | TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
 | TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 📋 Planned |
 | TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | 📋 Planned |
-| TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019) |
+| TASK‑043 | Launcher: download, verify and update the PCSX2 GS renderer | 🔄 In progress (Rust side and fake-server tests done) |
 | TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | "Prepare shaders": warm the PCSX2 GS pipeline cache before the first race | 📋 Planned (study done) |

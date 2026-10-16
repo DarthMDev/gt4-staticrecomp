@@ -58,7 +58,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | 🔄 In progress: waiting for the owner's FSV trace test |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 (decision 0070) |
+| TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | 🔄 In progress (branch `task/019-launcher`): Rust side matches the UI contract; PCSX2 GS table, launch and download done; UI merge and installer test open |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
 | TASK‑026 | CoreGS 2.0, part 1: clean-room specification of the PCSX2 hardware renderer | ✅ Done (docs/hw-renderer-spec, PR #17) |
@@ -78,7 +78,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
 | TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | 📋 Planned |
 | TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | 📋 Planned |
-| TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
+| TASK‑043 | Launcher: download, verify and update the PCSX2 GS renderer | 🔄 In progress (in `task/019-launcher`; Rust side and fake-server tests done, live GitHub download not yet tested) |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
@@ -208,9 +208,13 @@ High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md).
 
 ### TASK-019 — Launcher
-Paused (owner, 2026-10-15; Tauri 2 WIP). Resumes for TASK-043 (decision 0070).
-Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
-upscaling, video mode, controls; CPU feature detection for build variants.
+Resumed 2026-10-16 for TASK-043 (decision 0070). Branch `task/019-launcher`, not yet owner-approved.
+State: Tauri 2 shell (`launcher/crates/gt4l-tauri`) with the command names of the UI branch
+(`task/019-launcher-ui`, `ui/dev/README.md`); contract test in `contract.rs`. Renderers: PCSX2 GS (default when
+installed), CoreGS 1.1 (upscale, FSR, FXAA and deinterlace hidden), CoreGS 2.0 (coming soon). paraLLEl-GS and its
+`--hires` row are removed. Settings come from `docs/launcher/gs-settings.toml` (compiled in); the Rust
+`gt4-gs.ini` writer matches `scripts/gs_settings.py` byte for byte (golden test). Open: UI merge, `ui/dev/` exclusion
+from the release bundle, gamepad event, setup progress events, installer test, env golden against the Python probe.
 
 ### TASK-025 — Save manager
 One standard 8 MB PS2 card image per slot under the user data folder; the
@@ -469,7 +473,14 @@ private memory; PoC and live frames unchanged; GSRunner tests still pass.
 Parallel: with 037-041 (fork-only).
 
 ### TASK-043 — Launcher integration
-Repo: main, branch `task/019-launcher` (when the launcher resumes). Haiku, 2-3 sessions.
+Repo: main, branch `task/019-launcher`. Implemented 2026-10-16 in `gt4l-core::gs_release`: stable releases of
+`moesuito/gt4recomp-gs` only (drafts and prereleases skipped), minimum version 0.3.2, package and `gt4-gs.exe` checked
+against `SHA256SUMS`, staging then `%LOCALAPPDATA%\GT4Recomp\gs\<version>\`, `current.txt` switched only after the
+check, previous version kept until the next upgrade. Any failure keeps the installed version and CoreGS 1.1 starts
+with a message. Started from `setup_start`. Tests use a fake release folder (install, up to date, prerelease ignored,
+upgrade and cleanup, corrupt package, package without program, damaged installed program). Open: progress and resume,
+a live GitHub check, the update offer on startup, the license and source links on the About page.
+Original plan (kept): Haiku, 2-3 sessions.
 Goal: renderer manifest (version, URL, size, SHA-256, protocol version, upstream commit) in the launcher;
 download with progress and resume, verify, unpack to the user data folder, update to newer pinned versions,
 offline fallback to CoreGS 1.1; settings pages generated from the table; license/source links shown.
