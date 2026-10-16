@@ -7,6 +7,10 @@
 //                     process (GT4_GS_PROCESS=<executable>) over shared memory (gs_stream_ipc.hpp)
 // Any other value stops the process before the game starts.
 //
+// TASK-036 (slice193), pcsx2 mode: GT4_GS_PROCESS_SHA256=<hex> refuses a GS process whose SHA-256 differs (the launcher
+// sets it from the pinned manifest); GT4_GS_CONFIG=<ini> is passed to the GS process as --config. A GS process that
+// dies during the session halts the game through the normal exit path; with a window, a message box explains it.
+//
 // GT4_GS_CAPTURE=<file> writes the same records to a .gscap version 2 file in either renderer mode (the donor output is
 // unchanged). GT4_GS_CAPTURE_FRAMES=first:last limits it to VSYNC frames first..last.
 //
@@ -16,6 +20,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <string>
 
 namespace gt4::gs_stream {
 
@@ -49,6 +54,9 @@ void resize_window(std::uint32_t width, std::uint32_t height);
 void set_halt_handler(void (*halt)(const char *reason));
 // End of the run (donor gs::stats): CONTROL shutdown, wait for the GS process, print the session summary.
 void finish(std::FILE *output);
+
+// SHA-256 of a file as 64 lowercase hex digits (Windows CNG). Used for the GS process pin (GT4_GS_PROCESS_SHA256).
+bool file_sha256(const std::wstring &path, std::string &hex, std::string &error);
 
 // SetGsCrt (interlace, mode, field) to the SMODE1/SMODE2 values the BIOS writes; false for an unknown mode.
 // Same table as the TASK-012 seam (native/gs_video_mode.cpp on task/012-parallel-gs).

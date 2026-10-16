@@ -62,6 +62,9 @@ PERF_PROFILES = {
     # TASK-035 (slice191): main plus the GS stream seam. The manifest's gs_stream block makes the launcher run
     # GT4_RENDERER=pcsx2 with the pinned test consumer (tools/gs_stream_record): no image; not for owner play yet.
     'pcsx2-stream': ('slice191-pcsx2-stream.json', 'private/slice191-gs-stream-build/build/gt4vulkan.exe'),
+    # TASK-036 (slice193): the live PCSX2 GS process. The manifest's gs_stream block pins the gt4-gs package
+    # (private/slice193-gt4gs-pkg, GPL fork moesuito/gt4recomp-gs); the GS process renders into the game window.
+    'pcsx2': ('slice193-pcsx2.json', 'private/slice193-gs-live-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -69,10 +72,12 @@ PACING_MANIFEST = 'slice153-pacing.json'
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
-                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json')
+                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
+                     'slice193-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
-                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json')
+                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
+                     'slice193-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -86,8 +91,24 @@ MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'
 MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
 # TASK-035 (slice191): GS stream settings (native/gs_stream/gs_stream_client.hpp, tools/gs_stream_record).
 GS_STREAM_RENDERERS = ('donor', 'pcsx2')
+# GS display settings an owner run keeps from the caller (play_performance.py --gs-scale sets GT4_GS_SCALE).
+GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT')
 GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_CAPTURE_FRAMES', 'GT4_GS_FRAMES_IN_FLIGHT',
-                   'GT4_GS_RECORD_OUTPUT', 'GT4_GS_RECORD_FRAMES')
+                   'GT4_GS_RECORD_OUTPUT', 'GT4_GS_RECORD_FRAMES', 'GT4_GS_PROCESS_SHA256', 'GT4_GS_CONFIG',
+                   'GT4_GS_SCALE', 'GT4_GS_ASPECT')
+# TASK-036 (slice193): minimal gt4-gs.ini settings (the full settings table is TASK-039).
+GS_SCALES = tuple(str(n) for n in range(1, 9))
+GS_DEFAULT_SCALE = '3'
+# GT4_GS_ASPECT: display aspect of the GS output. 16:9 is the game's setting (widescreen card); auto is PCSX2's
+# "Auto 4:3/3:2" (used to compare with the TASK-034 proof-of-concept images).
+GS_ASPECTS = {'16:9': '16:9', '4:3': '4:3', 'auto': 'Auto 4:3/3:2'}
+GS_DEFAULT_ASPECT = '16:9'
+# PCSX2 enum values written to the ini: GSRendererType::VK, AccBlendLevel::High, GSInterlaceMode::Automatic.
+GS_RENDERER_VULKAN = 14
+GS_BLENDING_HIGH = 3
+GS_DEINTERLACE_AUTOMATIC = 0
+GS_SHADER_CACHE = 'private/slice193-gt4gs-cache'
+GS_HEADLESS_DUMP_EVERY = 100
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -140,7 +161,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -149,7 +170,56 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
         raise ValueError('Performance test requires the qualified corrected candidate')
 
 
-def gs_stream_environment(environment, runtime_evidence, binary_workspace, performance):
+def package_tree_digest(directory):
+    """SHA-256 of a package directory: one line "path<TAB>size<TAB>sha256" per file, sorted by POSIX path."""
+    directory = Path(directory)
+    lines = []
+    for path in sorted(directory.rglob('*'), key=lambda item: item.relative_to(directory).as_posix()):
+        if path.is_symlink():
+            raise ValueError(f'GS package must not contain links: {path}')
+        if path.is_file():
+            lines.append(f'{path.relative_to(directory).as_posix()}\t{path.stat().st_size}\t{sha256_file(path)}\n')
+    return hashlib.sha256(''.join(lines).encode('utf-8')).hexdigest(), len(lines)
+
+
+def gs_config_text(environment, headless_dump_directory=None, shader_cache=None):
+    """The minimal gt4-gs.ini of a pcsx2 run (PCSX2 INI syntax; TASK-039 owns the full settings table).
+
+    GT4_GS_SCALE (1..8, default 3) sets the internal resolution; GT4_PRESENT_MODE maps to the GS vsync
+    (fifo/unset: vsync on; mailbox: vsync on, mailbox allowed; immediate: vsync off); GT4_GS_ASPECT (16:9 default).
+    Blending accuracy High and deinterlace Automatic are fixed GT4 defaults. Headless runs add [GT4GS] Surfaceless and
+    PNG frame dumps every 100 vsyncs.
+    """
+    scale = environment.get('GT4_GS_SCALE', GS_DEFAULT_SCALE)
+    if scale not in GS_SCALES:
+        raise ValueError('GT4_GS_SCALE must be an integer from 1 to 8')
+    aspect = environment.get('GT4_GS_ASPECT', GS_DEFAULT_ASPECT)
+    if aspect not in GS_ASPECTS:
+        raise ValueError('GT4_GS_ASPECT must be one of ' + ', '.join(GS_ASPECTS))
+    present = environment.get('GT4_PRESENT_MODE', 'fifo')
+    if present not in PACING_OVERRIDES['GT4_PRESENT_MODE']:
+        raise ValueError('GT4_PRESENT_MODE must be one of fifo, mailbox, immediate')
+    vsync = 'false' if present == 'immediate' else 'true'
+    mailbox_off = 'false' if present == 'mailbox' else 'true'
+    lines = ['; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)',
+             '[EmuCore/GS]',
+             f'Renderer = {GS_RENDERER_VULKAN}',
+             f'upscale_multiplier = {scale}',
+             f'accurate_blending_unit = {GS_BLENDING_HIGH}',
+             f'deinterlace_mode = {GS_DEINTERLACE_AUTOMATIC}',
+             f'AspectRatio = {GS_ASPECTS[aspect]}',
+             f'VsyncEnable = {vsync}',
+             f'DisableMailboxPresentation = {mailbox_off}']
+    if shader_cache:
+        lines += ['', '[Folders]', f'Cache = {shader_cache}']
+    if headless_dump_directory:
+        lines += ['', '[GT4GS]', 'Surfaceless = true', f'DumpDir = {headless_dump_directory}',
+                  f'DumpEvery = {GS_HEADLESS_DUMP_EVERY}']
+    return '\n'.join(lines) + '\n'
+
+
+def gs_stream_environment(environment, runtime_evidence, binary_workspace, performance, run_directory=None,
+                          headless=False):
     """TASK-035: sets the GS stream variables for a run (in place) and returns the values to record.
 
     Manifests without a gs_stream block never pass GT4_RENDERER or GT4_GS_* to their binary (removed). With the
@@ -167,8 +237,10 @@ def gs_stream_environment(environment, runtime_evidence, binary_workspace, perfo
         raise ValueError('GS stream manifest must pin its GS process as a runtime dependency')
     process = (Path(binary_workspace) / stream['gs_process']).resolve()
     if performance:
+        # Owner runs use the manifest's renderer and pinned process; only the GS display settings stay the caller's.
         for name in GS_STREAM_NAMES:
-            environment.pop(name, None)
+            if name not in GS_USER_SETTINGS:
+                environment.pop(name, None)
         environment['GT4_RENDERER'] = stream['renderer']
     renderer = environment.get('GT4_RENDERER', 'donor')
     if renderer not in GS_STREAM_RENDERERS:
@@ -177,8 +249,34 @@ def gs_stream_environment(environment, runtime_evidence, binary_workspace, perfo
         environment['GT4_GS_PROCESS'] = str(process)
     if environment.get('GT4_GS_FRAMES_IN_FLIGHT', '2') not in ('1', '2', '3'):
         raise ValueError('GT4_GS_FRAMES_IN_FLIGHT must be 1, 2 or 3')
+    extra = {}
+    package = stream.get('gs_package')
+    if package and renderer == 'pcsx2':
+        # TASK-036: the pinned gt4-gs package (tree digest), the exe pin for the game's own check, and gt4-gs.ini.
+        directory = (Path(binary_workspace) / package['directory']).resolve()
+        digest, files = package_tree_digest(directory)
+        if (digest, files) != (package['tree_sha256'], package['files']):
+            raise ValueError(f'GS package differs from its pin: {directory} (tree sha256 {digest}, {files} files)')
+        if Path(environment['GT4_GS_PROCESS']).resolve() == process:
+            exe_pin = next(item for item in runtime_evidence['runtime_dependencies'] if item['path'] == stream['gs_process'])
+            environment['GT4_GS_PROCESS_SHA256'] = exe_pin['sha256']
+        if run_directory is not None and not environment.get('GT4_GS_CONFIG'):
+            cache = (Path(binary_workspace) / GS_SHADER_CACHE).resolve()
+            cache.mkdir(parents=True, exist_ok=True)
+            dumps = (Path(run_directory) / 'gs-frames') if headless else None
+            config = Path(run_directory) / 'gt4-gs.ini'
+            config.write_text(gs_config_text(environment, dumps, cache), encoding='utf-8')
+            environment['GT4_GS_CONFIG'] = str(config)
+        extra['gs_package'] = {'directory': package['directory'], 'tree_sha256': digest, 'files': files,
+                               'source': package.get('source')}
+    elif renderer == 'pcsx2':
+        for name in ('GT4_GS_SCALE', 'GT4_GS_ASPECT'):
+            if name in environment:
+                raise ValueError(f'{name} needs a manifest with a gt4-gs package (--mode pcsx2)')
     recorded = {name: environment[name] for name in GS_STREAM_NAMES if name in environment}
-    return {'gs_stream_environment': recorded} if recorded else {}
+    if recorded:
+        extra['gs_stream_environment'] = recorded
+    return extra
 
 
 def verify_manual_capture_profile(manifest, evidence, runtime_workspace):
@@ -427,7 +525,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
-    result.update(gs_stream_environment(environment, runtime_evidence, binary_workspace, performance))
+    result.update(gs_stream_environment(environment, runtime_evidence, binary_workspace, performance,
+                                        run_directory=run_directory, headless=not window))
     if force_480p:
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:

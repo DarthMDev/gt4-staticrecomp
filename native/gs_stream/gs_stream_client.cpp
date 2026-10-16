@@ -6,6 +6,11 @@
 #include "gs_stream_ipc.hpp"
 #include "perf_probe.hpp"
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#include <bcrypt.h>
+
 #include <algorithm>
 #include <atomic>
 #include <cstdlib>
@@ -13,6 +18,9 @@
 #include <exception>
 #include <memory>
 #include <string>
+#include <vector>
+
+#pragma comment(lib, "bcrypt.lib")
 
 namespace gt4::gs_stream {
 namespace {
@@ -150,6 +158,14 @@ class Client {
     ++counters_.controls;
   }
 
+  void attach(std::uint64_t window, std::uint32_t width, std::uint32_t height) {
+    // The GS process draws into a child of our window: the parent must not paint over it.
+    const HWND parent = reinterpret_cast<HWND>(static_cast<std::uintptr_t>(window));
+    SetWindowLongPtrW(parent, GWL_STYLE, GetWindowLongPtrW(parent, GWL_STYLE) | WS_CLIPCHILDREN);
+    window_ = window;
+    control(proto::ControlKind::attach_window, window, width, height);
+  }
+
   void request_resize(std::uint32_t width, std::uint32_t height) {
     // Bit 63 marks a pending request; the window thread may call this between VSYNCs.
     pending_resize_.store((std::uint64_t(1) << 63) | (std::uint64_t(width & 0x7FFFFFFFu) << 32) | height);
@@ -194,6 +210,17 @@ class Client {
     }
     if (has_stats_) print_consumer_stats(output, last_stats_);
     std::fflush(output);
+    if (dead_ && window_) {
+      // The player sees a window that stopped updating: say why. The memory card was flushed by the normal exit
+      // path before this point (the guest halted through ps2::halt).
+      const std::wstring text = L"The GS renderer process (gt4-gs.exe) stopped" +
+                                (exit_known_ ? L" with exit code " + std::to_wstring(exit_code_) : std::wstring()) +
+                                L".\n\nThe game will now close. Your memory card was saved.\n\n"
+                                L"Details are in the game log. To play without it, start the game with the built-in "
+                                L"renderer (CoreGS 1.1).";
+      MessageBoxW(reinterpret_cast<HWND>(static_cast<std::uintptr_t>(window_)), text.c_str(), L"GT4Recomp: GS renderer stopped",
+                  MB_OK | MB_ICONERROR | MB_SETFOREGROUND);
+    }
   }
 
  private:
@@ -223,13 +250,29 @@ class Client {
         refuse(std::string("GT4_GS_FRAMES_IN_FLIGHT=\"") + value + "\" is not 1, 2 or 3");
       frames_in_flight = static_cast<std::uint32_t>(value[0] - '0');
     }
+    // TASK-036: the GS process must match its pin (GT4_GS_PROCESS_SHA256, set by the launcher from the manifest).
+    if (const char *pin = std::getenv("GT4_GS_PROCESS_SHA256"); pin && *pin) {
+      std::string actual, error;
+      if (!file_sha256(ipc::widen(process), actual, error)) refuse(std::string("cannot hash the GS process ") + process + ": " + error);
+      std::string expected(pin);
+      std::transform(expected.begin(), expected.end(), expected.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+      if (actual != expected)
+        refuse(std::string("the GS process ") + process + " has SHA-256 " + actual + ", the pin is " + expected);
+      std::fprintf(stderr, "[gs-ipc] GS process SHA-256 matches its pin (%s)\n", actual.c_str());
+    }
+    std::wstring config_argument;
+    if (const char *config = std::getenv("GT4_GS_CONFIG"); config && *config) {
+      if (GetFileAttributesW(ipc::widen(config).c_str()) == INVALID_FILE_ATTRIBUTES)
+        refuse(std::string("GT4_GS_CONFIG=") + config + " does not exist");
+      config_argument = L" --config \"" + ipc::widen(config) + L"\"";
+    }
     ipc::SessionOptions options;
     options.serial = kGameSerial;
     options.frames_in_flight = frames_in_flight;
     try {
       session_ = ipc::Session::create_producer(options);
       const std::wstring arguments = L"--ipc " + ipc::widen(session_->name()) + L" --parent " +
-                                     std::to_wstring(ipc::current_process_id());
+                                     std::to_wstring(ipc::current_process_id()) + config_argument;
       child_ = ipc::ChildProcess::spawn(ipc::widen(process), arguments);
       session_->set_peer(child_.process());
     } catch (const ipc::IpcError &error) {
@@ -298,6 +341,8 @@ class Client {
     std::uint32_t code = 0;
     const bool exited = child_.wait_exit(1000, &code);
     drain_errors();
+    exit_known_ = exited;
+    exit_code_ = code;
     if (exited)
       std::fprintf(stderr, "[gs-ipc] GS renderer stopped (exit code %u): %s\n", code, what);
     else
@@ -398,6 +443,9 @@ class Client {
   bool finished_ = false;
   std::atomic<std::uint64_t> pending_resize_{0};
   void (*halt_)(const char *) = nullptr;
+  std::uint64_t window_ = 0;  // game window handle after attach_window (0: headless)
+  bool exit_known_ = false;
+  std::uint32_t exit_code_ = 0;
 };
 
 Renderer parse_renderer() {
@@ -449,6 +497,44 @@ constexpr std::uint64_t kCmodProgressive = 0, kCmodNtsc = 2, kCmodPal = 3;
 constexpr std::uint64_t kLcAnalog = 32, kLcHdtv = 22, kLcVga = 15;
 
 }  // namespace
+
+bool file_sha256(const std::wstring &path, std::string &hex, std::string &error) {
+  HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
+  if (file == INVALID_HANDLE_VALUE) {
+    error = "CreateFileW failed (" + std::to_string(GetLastError()) + ")";
+    return false;
+  }
+  BCRYPT_ALG_HANDLE algorithm = nullptr;
+  BCRYPT_HASH_HANDLE hash = nullptr;
+  bool ok = BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) >= 0 &&
+            BCryptCreateHash(algorithm, &hash, nullptr, 0, nullptr, 0, 0) >= 0;
+  std::vector<unsigned char> buffer(1 << 20);
+  while (ok) {
+    DWORD read = 0;
+    if (!ReadFile(file, buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr)) {
+      ok = false;
+      break;
+    }
+    if (read == 0) break;
+    ok = BCryptHashData(hash, buffer.data(), read, 0) >= 0;
+  }
+  unsigned char digest[32] = {};
+  if (ok) ok = BCryptFinishHash(hash, digest, sizeof digest, 0) >= 0;
+  if (hash) BCryptDestroyHash(hash);
+  if (algorithm) BCryptCloseAlgorithmProvider(algorithm, 0);
+  CloseHandle(file);
+  if (!ok) {
+    error = "SHA-256 computation failed";
+    return false;
+  }
+  static const char digits[] = "0123456789abcdef";
+  hex.clear();
+  for (unsigned char byte : digest) {
+    hex.push_back(digits[byte >> 4]);
+    hex.push_back(digits[byte & 15]);
+  }
+  return true;
+}
 
 bool map_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field, std::uint64_t &smode1,
                     std::uint64_t &smode2) {
@@ -532,7 +618,7 @@ void on_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t fi
 bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t height) {
   Client *c = client();
   if (!c || !c->stream()) return false;
-  c->control(::gs_stream::ControlKind::attach_window, window, width, height);
+  c->attach(window, width, height);
   return true;
 }
 

@@ -52,6 +52,10 @@ GS stream candidate (--mode pcsx2-stream, slice191, TASK-035): main plus the GS 
 GT4_RENDERER=pcsx2 with the pinned test consumer tools/gs_stream_record as the GS process: the game sends GIF,
 privileged writes, VSYNC and readbacks over shared memory (docs/GS-STREAM-PROTOCOL.md) and creates no Vulkan
 device, so the window stays black. For TASK-036 development only, not for owner play; F8 adds a [gs-ipc] section.
+Live PCSX2 GS (--mode pcsx2, slice193, TASK-036): the GS stream build with the pinned gt4-gs.exe package (GPL fork
+moesuito/gt4recomp-gs, private/slice193-gt4gs-pkg). The PCSX2 GS renders into the game window (Vulkan); pacing,
+input, audio, F7/F8 and the memory card stay in the game. --gs-scale N (1..8, default 3) sets the internal
+resolution; GT4_PRESENT_MODE sets the GS vsync. F8 adds a [gs-ipc] section with the GS process STATS.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
@@ -95,6 +99,8 @@ def main():
     parser.add_argument('--cpu-cores', type=int, default=None, metavar='N',
                         help='weak-CPU simulation: limit the game to N logical CPUs (1..logical count), '
                              'one per physical core first; recorded in result.json (docs/MTVU-PLAN.md section 12)')
+    parser.add_argument('--gs-scale', type=int, default=None, metavar='N',
+                        help='pcsx2 only: GS internal resolution multiplier 1..8 (default 3; GT4_GS_SCALE)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()
@@ -109,6 +115,10 @@ def main():
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
         if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu'):
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure or mtvu')
+        if args.gs_scale is not None:
+            if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 8:
+                raise ValueError('--gs-scale takes 1..8 and requires --mode pcsx2')
+            os.environ['GT4_GS_SCALE'] = str(args.gs_scale)
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True, **cpu_options(args))

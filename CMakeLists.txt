@@ -28,6 +28,7 @@ endif()
 add_subdirectory(native)
 add_subdirectory(tools/vu_recomp)
 add_subdirectory(tools/gs_stream_record)
+add_subdirectory(tools/gs_live_check)
 
 enable_testing()
 set(GT4_PYTHON "${CMAKE_SOURCE_DIR}/private/tooling-venv/Scripts/python.exe"
