@@ -71,8 +71,10 @@ class Slice199PinTests(unittest.TestCase):
     def manifest(self, name='slice199-pcsx2.json'):
         return json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
 
-    def test_mode_pcsx2_selects_slice199_with_the_slice198_game_build(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice199-pcsx2.json', EXECUTABLE))
+    def test_mode_pcsx2_selects_slice200_and_slice199_stays_as_a_mode(self):
+        # TASK-058/059 (slice200) moved mode pcsx2; slice199 keeps its own mode and the slice198 game build.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice200-pcsx2.json', 'private/slice200-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice199'], ('slice199-pcsx2.json', EXECUTABLE))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice198'], (MANIFEST, EXECUTABLE))
         self.assertIn('slice199-pcsx2.json', probe.VU1_AOT_MANIFESTS)
         self.assertIn('slice199-pcsx2.json', probe.VU0_AOT_MANIFESTS)

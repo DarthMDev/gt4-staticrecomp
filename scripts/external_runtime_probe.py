@@ -83,8 +83,11 @@ PERF_PROFILES = {
     # Arbitrary Code Guard). Same game runtime as slice196.
     'pcsx2-slice197': ('slice197-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
     # TASK-041 (slice199): candidate: the slice198 game runtime with the JIT-free gt4-gs 0.4.0 (no recompilers,
-    # no GS software JIT); the perf changes of slice198 run with the 0.4.0 package. Mode pcsx2 points here.
-    'pcsx2': ('slice199-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
+    # no GS software JIT); the perf changes of slice198 run with the 0.4.0 package. Mode pcsx2-slice199 keeps it.
+    # TASK-058/059 (slice200): the slice199 candidate with the crash-safe memory card (memcard capsule), the installed-folder
+    # paths and --portable-check (port slice200-port). Mode pcsx2 points here.
+    'pcsx2-slice199': ('slice199-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
+    'pcsx2': ('slice200-pcsx2.json', 'private/slice200-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -94,12 +97,12 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
-                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json')
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
-                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json')
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
