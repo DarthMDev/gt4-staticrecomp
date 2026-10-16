@@ -2,6 +2,17 @@
 
 ## Current state (2026-10-16)
 
+**slice201 (TASK-060/061/062, branch `task/060-062-osd`, fork `gt4gs/osd`, `gt4gs-v1.0.0` stable):** the mouse cursor
+hides over the picture after 3 s without movement in fullscreen and windowed mode (game window and gt4-gs child agree
+through protocol 1.2 CONTROL cursor; `GT4_CURSOR_AUTOHIDE=0` keeps it); gt4-gs shows "Compiling shaders…" bottom-left
+while it really compiles (pipeline cache hits excluded); an optional top-right performance overlay (FPS, frame time,
+CPU and GPU usage of the game and gt4-gs, resolutions, EE/VU1/GS write/readback/GS thread ms and the headroom) fed by
+protocol 1.2 OSD_STATS (+0.35 us/frame on the EE thread, +0.02 ms/frame GS thread). Internal resolution presets 480p to
+8K (default 1080p); gt4-gs 1.0.0 ignores INI keys outside the allow-list with a warning and is the **first stable
+gt4-gs release** (zip sha256 `2e878019...`). CTest 30/30, Python 455 OK, donor 42/42, pcsx2 1x 41/41 = slice199,
+no-JIT check passes. `--mode pcsx2` = slice201, `--mode pcsx2-slice199` kept. Owner windowed test pending.
+[GS-LIVE](GS-LIVE.md) section 11.
+
 **slice199 (TASK-041 on the JIT-free gt4-gs 0.4.0, branch `task/041-gs-perf`, fork `gt4gs/nojit`, `gt4gs-v0.4.0`):** the slice198 game build (same file and hash) with the JIT-free gt4-gs 0.4.0 package of slice197. `--mode pcsx2` = slice199; `--mode pcsx2-slice198` and `--mode pcsx2-slice197` stay for A/B. Owner test of slice198 (gt4-gs 0.3.2) on 2026-10-16, night race with 5 AI: 59.97 FPS, 53 late frames (69 before), EE waits for the VU1 worker 2.99 ms (3.48 before), readback 0.69 ms, EE critical path 11.81 of 16.68 ms (71%), headroom 4.87 ms, no frametime spikes once the shader cache was warm. CTest 29/29, Python 438 OK, 20 skipped; donor 42/42 identical to slice157; pcsx2 1x 41/41 identical to slice198; no-JIT static check passes on the package. [GS-LIVE](GS-LIVE.md) sections 9 and 10. Owner night-race check on 0.4.0 pending.
 
 **slice198 (TASK-041, branch `task/041-gs-perf`, fork unchanged, `gt4gs-v0.3.2`):** performance of the PCSX2 GS path.

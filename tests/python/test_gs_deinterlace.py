@@ -98,7 +98,8 @@ class ProtocolStatementTests(unittest.TestCase):
 
     def test_protocol_document_matches(self):
         text = (ROOT / 'docs/GS-STREAM-PROTOCOL.md').read_text(encoding='utf-8')
-        self.assertTrue(text.startswith('# GS stream protocol, version 1.1'))
+        # Version 1.2 (TASK-060/062) keeps the 1.1 display field and the SYNCV values.
+        self.assertTrue(text.startswith('# GS stream protocol, version 1.2'))
         self.assertIn('display field', text)
         self.assertIn('0x00C7800601A01801', text)
 

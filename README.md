@@ -115,6 +115,10 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
 - Menus are interlaced like the original game (480p applies in races). With the
   PCSX2 GS (`--mode pcsx2`, gt4-gs 0.3.2 and later) they are deinterlaced (TASK-047; the
   stream lacked SYNCV and presented the wrong field). CoreGS 1.1 shows them as before.
+- With `--mode pcsx2` (slice201, gt4-gs 1.0.0) the mouse cursor hides over the picture
+  after 3 s without movement (`GT4_CURSOR_AUTOHIDE=0` keeps it), a small "Compiling
+  shaders…" text shows while shaders compile, and `--gs-setting perf_overlay=true` shows
+  a performance overlay. Not yet checked by the owner in the game window.
 - gt4-gs 0.4.0 (`--mode pcsx2`, TASK-042) turns on Windows Arbitrary Code Guard (no
   dynamic code in the GS process). It is checked with the owner's AMD driver only; a
   driver that needs dynamic code there would fail to start the GS (`--mode
@@ -170,7 +174,7 @@ in game before it is merged.
 | TASK‑036 | Live `gt4-gs.exe` MVP | ✅ Done · owner test 2026-10-16 at 3x: Nordschleife 59.98 FPS, night race 59.89 FPS ([live](docs/GS-LIVE.md)) |
 | TASK‑037 | PCSX2 GS readbacks and the night race | ✅ Done · night race 59.97 FPS, 69 late frames (was 213); accurate readbacks by default ([live](docs/GS-LIVE.md)) |
 | TASK‑038 | GS window, fullscreen, focus, input, crash handling | ✅ Done · fullscreen, focus and click fix (gt4-gs 0.3.1), crash handling with CoreGS 1.1 fallback |
-| TASK‑039 | GS settings table and `gt4-gs.ini` generator | ✅ Done · 51-row settings table generates `gt4-gs.ini`; fork allow-list enforcement pending ([settings](docs/GS-SETTINGS.md)) |
+| TASK‑039 | GS settings table and `gt4-gs.ini` generator | ✅ Done · 51-row settings table generates `gt4-gs.ini`; allow-list enforced by gt4-gs 1.0.0 (ignored with a warning) ([settings](docs/GS-SETTINGS.md)) |
 | TASK‑041 | GS process performance (`[gs-ipc]`), tuning | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes ([live](docs/GS-LIVE.md#9-performance-of-the-pcsx2-gs-path-task-041-slice198)) |
 | TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019) |
@@ -179,6 +183,10 @@ in game before it is merged.
 | TASK‑046 | "Prepare shaders": warm the PCSX2 GS pipeline cache before the first race | 📋 Planned (study done) |
 | TASK‑047 | PCSX2 GS deinterlacing in the 480i menus | ✅ Done · owner test 2026-10-16: sharp, steady 480i menus (SYNCV + display field, gt4-gs 0.3.2) ([live](docs/GS-LIVE.md#8-480i-deinterlacing-task-047-slice196-gt4-gs-032)) |
 | TASK‑049 | GS settings curation for the launcher (Graphics and Advanced pages, reset to defaults) | ✅ Done · default gt4-gs.ini unchanged; 58-row table ([settings](docs/GS-SETTINGS.md)) |
+| TASK‑060 | Mouse cursor hides over the picture after 3 s (fullscreen and windowed) | 🔄 Built (slice201) · owner test pending ([live](docs/GS-LIVE.md)) |
+| TASK‑061 | "Compiling shaders…" notice while the PCSX2 GS compiles | 🔄 Built (gt4-gs 1.0.0) · owner test pending |
+| TASK‑062 | Performance overlay: FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom | 🔄 Built (slice201) · off by default (`--gs-setting perf_overlay=true`); owner test pending |
+| 🧩 | **gt4-gs 1.0.0: first stable renderer release** | ✅ Published 2026-10-16 ([fork](docs/GS-FORK.md)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ### Phase 2 — Android · Phase 3 — iOS

@@ -1,7 +1,8 @@
 # Live PCSX2 GS process (TASK-036)
 
 Status: **built and checked headless; owner windowed test pending** (2026-10-16). Performance of this path: section 9
-(TASK-041, slice198; on gt4-gs 0.4.0 from slice199, section 10.5). JIT-free package: section 10. Branch `task/036-gs-live` (main
+(TASK-041, slice198; on gt4-gs 0.4.0 from slice199, section 10.5). JIT-free package: section 10. Cursor auto-hide,
+"Compiling shaders" notice, performance overlay and the stable gt4-gs 1.0.0: section 11 (slice201). Branch `task/036-gs-live` (main
 repo, MIT) and `gt4gs/live` in the GPL fork [moesuito/gt4recomp-gs](https://github.com/moesuito/gt4recomp-gs).
 Decision [0070](decisions/0070-pcsx2-gs-separate-process.md), plan [GSDX-PLAN](GSDX-PLAN.md) sections B.3 and C,
 protocol [GS-STREAM-PROTOCOL](GS-STREAM-PROTOCOL.md). Labels: **Confirmed**, **High confidence**, **Hypothesis**,
@@ -538,3 +539,106 @@ slice199 keeps the slice198 game build (same file and hash) and pins the JIT-fre
 night-race numbers of section 9 were measured with 0.3.2; the 0.4.0 night race and F8 A/B (`GT4_MTVU_PRIV_ASYNC` 1 vs 0)
 are pending. Checks (2026-10-16, headless, slice157 menus schedule): donor 42/42 identical to slice157; pcsx2 1x gs-frames 41/41 identical to slice198 (gt4-gs 0.3.2); Python 438 OK, 20 skipped; CTest 29/29; static no-JIT check passes (23 modules).
 
+## 11. Cursor, "Compiling shaders" notice and performance overlay (TASK-060/061/062, slice201, gt4-gs 1.0.0)
+
+Status: **built, published and checked headless and with short visible fixtures; owner windowed test pending**
+(2026-10-16). Branch `task/060-062-osd` (main, from `3b5334d`) and `gt4gs/osd` in the fork (commit `3b9aae399`, tag
+`gt4gs-v1.0.0`, **the first stable gt4-gs release**, not a prerelease). `--mode pcsx2` selects
+[`slice201-pcsx2.json`](inputs/slice201-pcsx2.json); `--mode pcsx2-slice199` keeps slice199. Protocol 1.2
+([GS-STREAM-PROTOCOL](GS-STREAM-PROTOCOL.md) sections 6.1, 6.2, 6.5, 6.6). The fork side is PCSX2-tainted work; no PCSX2
+code is in this repository.
+
+### 11.1 Cursor auto-hide (TASK-060)
+
+- Rule (both windows, `native/cursor_autohide.*` and the fork's window thread): the cursor is hidden after **3 s without
+  movement while it is over the picture** (the window's client area, and that window is the one under the cursor);
+  any movement shows it at once; outside the picture (title bar, other windows, another monitor) it is never touched.
+  In borderless fullscreen the picture is the whole monitor. `GT4_CURSOR_AUTOHIDE=0` keeps the cursor (default on;
+  other values are refused by the launcher and the game).
+- In pcsx2 mode the picture is the gt4-gs child window (another process, detached input queues), so only gt4-gs can
+  change the cursor there. After CONTROL attach_window the game sends CONTROL cursor (flag, 3,000 ms) to a 1.2
+  consumer; gt4-gs samples the cursor every 100 ms and on mouse moves on its window thread and answers `WM_SETCURSOR`
+  itself while the policy is on (before, `DefWindowProc` asked the game window across processes). The game window
+  applies the same rule to its own client area (donor mode, and before the child is attached). Log lines:
+  `[window] cursor auto-hide on ...`, `gt4-gs: cursor auto-hide over the picture on (3000 ms ...)`, and in gt4-gs one
+  line per hide/show.
+- Checks: CTest `native_cursor_autohide` (the rule: delay, movement, outside the picture, switch off, clock order);
+  `tools/gs_live_check --cursor-check` (VISIBLE, about 1.7 s, 336x228 window at the top-left corner, CONTROL cursor with a
+  300 ms delay): visible on arrival, hidden after the rest, visible after a 3-pixel move, never hidden over the title
+  bar or outside the window; the cursor position is restored. Passed twice with gt4-gs 1.0.0 code. Earlier attempts
+  failed for reasons of the fixture (the check point lay outside the small window; another application's maximized
+  window was above the test window) and once without diagnostics (Hypothesis: the mouse moved during the rest; the
+  fixture now stops as inconclusive when the mouse moved or another window covers it).
+
+### 11.2 "Compiling shaders…" notice (TASK-061)
+
+- gt4-gs reuses PCSX2's compile signal (`GSShaderCompileIndicator`, the `CompileTimer` in `VKShaderCache` and
+  `VKBuilders`) and adds a "real compile" timestamp: a shader compiled to SPIR-V (a shader cache miss), or a pipeline
+  that the driver did **not** take from the pipeline cache. The second part uses `VK_EXT_pipeline_creation_feedback`
+  (cache-hit bit), enabled when the device has it (the AMD RX 9060 XT driver does: log `VK_EXT_pipeline_creation_feedback
+  is supported`); without it every pipeline creation counts.
+- Shown as plain white text with PCSX2's OSD shadow, bottom-left, no background, no animation, no count, while a real
+  compile happened in the last 0.5 s (PCSX2 compiles on the GS thread, so a notice is visible only on frames presented
+  shortly after a compile). `[GT4GS] ShaderCompileNotice = false` hides it (row `shader_compile_notice`).
+- Checks (hidden-window replay of the slice199 menus capture, 3x): empty cache: 238 real compiles, notice drawn in
+  1,100 of 1,100 frames (unthrottled); same cache again: 0 real compiles, 138 pipelines from the driver cache, notice in
+  0 frames. The session log ends with a `gt4-gs overlay:` line with these counts.
+
+### 11.3 Performance overlay (TASK-062)
+
+Off by default; `--gs-setting perf_overlay=true` turns on every item (rows `perf_overlay_*` switch single items off).
+Top-right, PCSX2 OSD font and margins, updated about twice per second:
+
+| Line | Source |
+|---|---|
+| `FPS 59.94` | game OSD_STATS: VSYNCs / interval (gt4-gs's own rate until the first record) |
+| `Frame 16.68 ms (max 17.10 ms)` | game: mean and longest time between two VSYNC posts |
+| `CPU (game) 14.2% (2.27 cores)` | gt4-gs sampler thread: GetProcessTimes of the game process plus gt4-gs, percent of all logical processors (as Task Manager) and busy cores |
+| `GPU (game) 23.5%` | sampler: PDH `\GPU Engine(*)\Utilization Percentage` instances of the two pids, summed per engine, busiest engine (as Task Manager) |
+| `Output 1920x1080 \| Internal 1920x1344 (3x)` | swap chain size; PCSX2 `GSgetInternalResolution` and the multiplier |
+| `EE 8.76 \| VU1 6.10 \| GS write 0.59 ms` | game: EE thread CPU, VU1 worker busy (MTVU accounting), `gs_ipc_write` |
+| `Readback 0.78 \| GS thread 1.17 ms` | game: `gs_ipc_readback_wait`; gt4-gs: PCSX2 GS thread time |
+| `Critical path 13.02 of 16.68 ms, headroom 3.66 ms` | the F8 summary formula, live (EE CPU + waits for the VU1 worker, readbacks and back-pressure); red when negative |
+
+- The game sends OSD_STATS only when READY asks for them (`kReadyFlagOsdStats`, set by gt4-gs while the overlay is on),
+  every 0.5 s right after a VSYNC, from cumulative counters: `perf_probe` keeps each category's exclusive time across
+  F7/F8/periodic interval resets (`cumulative_exclusive_us`), so the overlay never disturbs the F8 report. The
+  breakdown needs the performance accounting (`GT4_PERF=1`, set by every launcher run); without it the overlay shows
+  FPS, frame time and EE CPU only. No EE/VU emulation statistics are shown.
+- Overhead (measured): game EE thread 0.28 us per VSYNC and 2.05 us per record (mean, max 4.3 us; headless 4,200
+  frames, 65 records), about 0.35 us per frame. gt4-gs GS thread: ImGui text 12-15 us per frame; PCSX2 GS thread time
+  with the overlay off 0.385/0.385/0.403/0.413 ms/frame and on 0.410/0.412/0.426/0.428 (interleaved hidden-window
+  replays, 3x, quiet machine): +0.02 ms/frame; with the machine busy (release package, 3 runs each) no difference
+  (0.79 against 0.79). Sampler thread (below normal priority, not on the GS thread): 1.0-1.5 ms per 0.5 s tick.
+- Picture check: `tools/gs_live_check --overlay-shot` (VISIBLE, about 1 s, 480x270 client, cursor untouched) copied the
+  presented overlay from the screen: every line drawn with the synthetic night-race numbers; the breakdown line was too
+  wide for 480 pixels and was split into two lines before the release (the split was not re-shot: the second attempt
+  found another application's window above the test window and the copy was discarded).
+
+### 11.4 Stable gt4-gs 1.0.0 and the settings allow-list
+
+- `gt4-gs.exe` 1.0.0 embeds the allow-list of the settings table and ignores, with one warning line each, INI keys and
+  values outside it ([GS-SETTINGS](GS-SETTINGS.md) "Allow-list in gt4-gs"); checked with an INI holding an unknown key,
+  an unknown section, `upscale_multiplier = 13`, `PerfOverlay = yes` and `SpinUs = 5000`: five lines, session started.
+- Internal resolution presets 480p to 8K on the Graphics page; `--gs-resolution`; launcher rules for the monitor height
+  and the GPU limit ([GS-SETTINGS](GS-SETTINGS.md) "Internal resolution presets").
+- Release `gt4gs-v1.0.0` (stable): `gt4-gs-1.0.0-windows-x64.zip` 13,022,143 bytes, sha256
+  `2e8780196e9cb1ab134aabed464fa156a1a824db8e762304f4025c04f6f3c5a2`; source zip sha256
+  `e7c0a26426a2a475c61d2a92fe99e330d70fac25f654e5e05ef03103011c7724`; built with `release-local.ps1 -Release`
+  (MSVC cl 19.44.35222, CMake 4.3.1, Ninja 1.13.2, `GT4GS_ONLY=ON`); `check-nojit.ps1` passed (23 modules, no code
+  generator markers, no writable and executable sections). Downloaded back, `SHA256SUMS` OK, identical to the local zip,
+  extracted to `private/slice201-gt4gs-release-pkg` (140 files, tree sha256 `c95edf1c...`, `gt4-gs.exe` 8,955,392 bytes,
+  sha256 `53464022...`).
+
+### 11.5 Checks (2026-10-16) and not verified
+
+- CTest 30/30 (`native_cursor_autohide` new; `native_gs_stream_client` adds the OSD_STATS values and a 1.2 consumer
+  scenario: two records in 1.5 s, CONTROL cursor with the window's policy, no OSD_STATS in the capture); Python 455 OK,
+  25 skipped (`tests/python/test_gs_osd.py` new; settings, presets and allow-list tests in `test_gs_settings.py`).
+- Headless slice157 menus schedule from the worktree with the pinned slice201 files: donor 42/42 identical to slice157;
+  pcsx2 1x 41/41 identical to slice199 (overlay off); with the overlay on (iteration package) also 41/41 (headless runs
+  are surfaceless: nothing is drawn) and 65 OSD_STATS records. gt4-gs log: ACG on, 0 executable non-image regions.
+- Not verified: the game window itself (owner): cursor hiding in fullscreen and windowed with the real game, the notice
+  on a cold cache in a race, the overlay on a 1080p or 4K screen and its numbers against F8, GPU usage on other GPU
+  vendors and drivers, the PDH counters on a PC where the GPU Engine counter set is missing (the overlay then shows
+  `GPU (game) ...`).

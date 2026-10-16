@@ -1351,3 +1351,33 @@ python scripts\external_runtime_probe.py C:/Antigravity/gt4-staticrecomp/private
 
 Add `GT4_RENDERER=pcsx2 GT4_GS_SCALE=1 GT4_GS_ASPECT=auto` for the pcsx2 runs (`GT4_MTVU_REPORT_EVERY=500` for the F8 lines).
 Details: [GS-LIVE](GS-LIVE.md) section 10.5.
+
+## Slice201 - cursor, shader notice, performance overlay, stable gt4-gs 1.0.0 (TASK-060/061/062)
+
+Branch `task/060-062-osd` (worktree `C:\Antigravity\gt4-wt-060-osd`, from main `3b5334d`), fork branch `gt4gs/osd`
+(worktree `C:\Antigravity\gt4recomp-gs-osd`, commit `3b9aae399`, tag `gt4gs-v1.0.0`). Same capsules, shaders, EE library
+and VU tables as slice198/199; native changes only. Scripts in `private/slice201-scripts`:
+
+- game: `build-game-201.bat [targets]` (source = the worktree, build dir `private/slice201-osd-build/build`, assets root the
+  main checkout); `guard.ps1` / `guarded.sh <log> <command>` wait until no ninja, cl, clang-cl or link process runs;
+- gt4-gs iteration build: `build-gt4gs-201.bat` (`GT4GS_ONLY=ON`, `private/slice201-gt4gs-build`), packaged by copying the
+  new `gt4-gs.exe` over the 0.4.0 package into `private/slice201-gt4gs-devpkg` (not pinned);
+- release: `release-100.sh` = `gt4gs/release-local.ps1 -Tag gt4gs-v1.0.0 -Build private\slice201-gt4gs-release-build -Deps
+  private\slice193-gt4gs-deps\root\deps -OutDir private\slice201-gt4gs-release -Release` (log
+  `private/slice201-release-1.0.0.log`); downloaded back to `private/slice201-gt4gs-download` and extracted to
+  `private/slice201-gt4gs-release-pkg`;
+- pin: `make_manifest.py <worktree> <assets root> private/slice201-gt4gs-release-pkg slice201-pcsx2.json <zip> <url>`;
+  `copy_pins.py <worktree> <main checkout> slice201-pcsx2.json slice199-pcsx2.json` copies (never links) every pinned
+  file, both package trees and the GS cache and data folders into the worktree's `private/` and checks them;
+- checks: `headless-201.sh <run> [env]` (slice157 schedule, outputs in `private/slice201-smoke`), `cmp201.py`,
+  `overhead.sh <runs>` (hidden-window overlay A/B with `tools/gs_live_check`), `ctest-201.bat`; commit hygiene
+  `normalize_eol.py` (each file keeps its blob's line endings) and `check_blobs.py` (no CR CR LF, no mixed blobs).
+
+Pins `docs/inputs/slice201-pcsx2.json` (`gt4vulkan.exe` 95,672,320 bytes, sha256 `f4737af4...`; gt4-gs 1.0.0 package tree
+`c95edf1c...`); `--mode pcsx2` points here, `--mode pcsx2-slice199` keeps slice199. Fixtures (`tools/gs_live_check`):
+`--cursor-check` and `--overlay-shot <bmp>` are VISIBLE (about 1-2 s, small window at a screen corner, topmost while they
+run; they stop as inconclusive when another window covers them or the mouse moves); `--osd` posts synthetic OSD_STATS.
+
+Checks: CTest 30/30; Python 455 OK, 25 skipped (`GT4_NATIVE_BUILD` = the slice201 build); donor 42/42 identical to
+slice157; pcsx2 1x 41/41 identical to slice199; no-JIT static check passes on the published package (23 modules).
+Details: [GS-LIVE](GS-LIVE.md) section 11.
