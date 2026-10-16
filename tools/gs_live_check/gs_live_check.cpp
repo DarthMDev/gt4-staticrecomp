@@ -30,6 +30,11 @@
 //   --destroy-at N   TASK-038: destroy the parent window after VSYNC N (with --stall-check: while the GS window thread is
 //                    stalled), measure how long DestroyWindow takes, then shut the GS process down. This is the game's
 //                    close path (WM_CLOSE destroys the window before the GS process is shut down).
+//   --click-check    TASK-038 (slice195): VISIBLE test. After the replay the parent window is shown (small, top-left
+//                    corner of the primary screen), activated by a SendInput click on its title bar, then a SendInput
+//                    click lands in the middle of the GS child window. The parent must stay the foreground window and
+//                    keep the keyboard focus. The cursor is put back and the window hidden again (well under 2 s). Do
+//                    not run it while someone uses the PC.
 //   --aspect-check   TASK-038 / TASK-009: snapshots for window sizes 1280x720 and 960x720. The drawn rectangle must be
 //                    the whole 1280x720 window and 960x540 (16:9) in the 960x720 window, the same rectangles as the
 //                    built-in renderer's presentation (native_vulkan.cpp presentation_rect): no stretch, no crop.
@@ -259,7 +264,87 @@ struct Options {
   std::uint64_t soak = 0;
   bool aspect_check = false;
   std::uint64_t destroy_at = 0;
+  bool click_check = false;
 };
+
+// Left click at a screen position with SendInput (absolute coordinates on the virtual desktop).
+void click_at(int x, int y) {
+  const int left = GetSystemMetrics(SM_XVIRTUALSCREEN), top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+  const int width = GetSystemMetrics(SM_CXVIRTUALSCREEN), height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+  INPUT inputs[3] = {};
+  for (INPUT &input : inputs) {
+    input.type = INPUT_MOUSE;
+    input.mi.dx = static_cast<LONG>((static_cast<long long>(x - left) * 65535) / (width - 1));
+    input.mi.dy = static_cast<LONG>((static_cast<long long>(y - top) * 65535) / (height - 1));
+    input.mi.dwFlags = MOUSEEVENTF_ABSOLUTE | MOUSEEVENTF_VIRTUALDESK | MOUSEEVENTF_MOVE;
+  }
+  inputs[1].mi.dwFlags |= MOUSEEVENTF_LEFTDOWN;
+  inputs[2].mi.dwFlags |= MOUSEEVENTF_LEFTUP;
+  SendInput(3, inputs, sizeof(INPUT));
+}
+
+// Pumps the window messages for `ms` milliseconds.
+void pump_for(int ms) {
+  const auto end = Clock::now() + std::chrono::milliseconds(ms);
+  while (Clock::now() < end) {
+    pump();
+    Sleep(5);
+  }
+}
+
+// TASK-038: a click into the GS child must not take activation or focus from the parent (game) window.
+void click_check(HWND parent, HWND child) {
+  POINT saved{};
+  GetCursorPos(&saved);
+  SetWindowPos(parent, HWND_TOP, 40, 40, 336, 228, SWP_SHOWWINDOW);
+  pump_for(150);
+  RECT frame{}, child_rect{};
+  GetWindowRect(parent, &frame);
+  GetWindowRect(child, &child_rect);
+  // Title bar: 12 pixels below the top edge, a third of the way across (away from the caption buttons).
+  click_at(frame.left + (frame.right - frame.left) / 3, frame.top + 12);
+  pump_for(200);
+  const bool parent_active_before = GetForegroundWindow() == parent;
+  // The middle of the parent's client area, which the GS child covers (it starts at the client origin).
+  RECT client{};
+  GetClientRect(parent, &client);
+  POINT target{client.right / 2, client.bottom / 2};
+  ClientToScreen(parent, &target);
+  require(PtInRect(&child_rect, target) != FALSE, "the click point lies on the GS child window");
+  click_at(target.x, target.y);
+  pump_for(300);
+  const HWND foreground = GetForegroundWindow();
+  const HWND focus = GetFocus();
+  {
+    wchar_t name[128] = {};
+    DWORD pid = 0;
+    if (foreground) {
+      GetClassNameW(foreground, name, 127);
+      GetWindowThreadProcessId(foreground, &pid);
+    }
+    POINT probe_point{};
+    GetCursorPos(&probe_point);
+    const HWND under = WindowFromPoint(probe_point);
+    std::printf("[check] click check: foreground 0x%p class %ls pid %lu (this pid %lu); window under the cursor 0x%p (parent 0x%p, child 0x%p); GS child "
+                "enabled %d style 0x%08lX\n",
+                static_cast<void *>(foreground), name, static_cast<unsigned long>(pid),
+                static_cast<unsigned long>(GetCurrentProcessId()), static_cast<void *>(under), static_cast<void *>(parent),
+                static_cast<void *>(child), IsWindowEnabled(child),
+                static_cast<unsigned long>(GetWindowLongW(child, GWL_STYLE)));
+  }
+  SetCursorPos(saved.x, saved.y);
+  ShowWindow(parent, SW_HIDE);
+  pump_for(50);
+  std::printf("[check] click check: parent foreground before the child click %s; after: foreground %s, keyboard focus %s "
+              "(child rect %ld,%ld-%ld,%ld)\n",
+              parent_active_before ? "yes" : "NO", foreground == parent ? "parent" : (foreground == child ? "GS CHILD" : "other"),
+              focus == parent ? "parent" : (focus == nullptr ? "none on this thread" : "other"), child_rect.left,
+              child_rect.top, child_rect.right, child_rect.bottom);
+  require(parent_active_before, "the parent window became the foreground window (title bar click)");
+  require(foreground == parent, "a click in the GS child keeps the parent as the foreground window");
+  require(focus == parent, "a click in the GS child keeps the keyboard focus on the parent");
+  std::puts("[check] click check passed");
+}
 
 // CONTROL snapshot for a window size; returns the RGBA8 pixels of the drawn rectangle.
 std::vector<std::uint8_t> snapshot(ipc::Session &session, std::uint64_t id, std::uint32_t width, std::uint32_t height,
@@ -553,6 +638,7 @@ int run(const std::wstring &gs_process, const std::string &capture, std::uint64_
   EnumChildWindows(parent, find_child, reinterpret_cast<LPARAM>(&search));
   require(search.found != nullptr, "the GS window is a child of the parent window");
 
+  if (options.click_check) click_check(parent, search.found);
   if (options.aspect_check) aspect_check(*session);
 
   if (!options.readback_check.empty()) {
@@ -607,7 +693,7 @@ int wmain(int argc, wchar_t **argv) {
   try {
     if (argc < 5) {
       std::fputs("usage: gs_live_check <gs process exe> <file.gscap> <frames> <config.ini> [--kill-at N] [--pace] "
-                 "[--readbacks] [--readback-check accurate|unsynchronized] [--stall-check] [--soak N] [--destroy-at N] [--aspect-check]\n",
+                 "[--readbacks] [--readback-check accurate|unsynchronized] [--stall-check] [--soak N] [--destroy-at N] [--click-check] [--aspect-check]\n",
                  stderr);
       return 2;
     }
@@ -628,6 +714,8 @@ int wmain(int argc, wchar_t **argv) {
         options.soak = std::wcstoull(argv[++i], nullptr, 10);
       else if (arg == L"--destroy-at" && i + 1 < argc)
         options.destroy_at = std::wcstoull(argv[++i], nullptr, 10);
+      else if (arg == L"--click-check")
+        options.click_check = true;
       else if (arg == L"--aspect-check")
         options.aspect_check = true;
       else

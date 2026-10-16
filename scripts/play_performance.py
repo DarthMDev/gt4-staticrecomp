@@ -103,8 +103,8 @@ def main():
     parser.add_argument('--gs-scale', type=int, default=None, metavar='N',
                         help='pcsx2 only: GS internal resolution multiplier 1..8 (default 3; GT4_GS_SCALE)')
     parser.add_argument('--gs-readback', choices=('accurate', 'unsynchronized'), default=None,
-                        help='pcsx2 only: GS readback mode (default accurate; unsynchronized is faster and may break '
-                             'effects that read the picture back, such as the night-race lens flare; GT4_GS_READBACK)')
+                        help='pcsx2 only: GS readback mode. accurate (default, owner choice 2026-10-16); unsynchronized: '
+                             'faster, may drop effects (night race: headlight flares missing; GT4_GS_READBACK)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()

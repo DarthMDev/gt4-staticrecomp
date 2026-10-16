@@ -54,6 +54,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                 print('Restart with the built-in renderer (CoreGS 1.1) after the GS process stopped.', flush=True)
             elif video.get('gs_stream', {}).get('renderer') == 'pcsx2':
                 readback = os.environ.get('GT4_GS_READBACK', 'accurate')
+                if readback == 'unsynchronized':
+                    readback += ' (faster, may drop effects)'
                 print(f'GS: PCSX2 GS process, readback mode {readback}, scale {os.environ.get("GT4_GS_SCALE", "3")}x.',
                       flush=True)
             if performance:

@@ -226,3 +226,29 @@ The visible window (fullscreen toggle, Alt+Tab, minimize/restore, focus after a 
 input queues holds with real input, the message boxes, the restart flow, the night race with slice194 (late frames,
 lens flare and night lighting with each readback mode), FIFO acquire blocking on a visible window, race scenes
 headless (no race capture exists).
+
+## 7. Owner test of slice194 and the click fix (slice195)
+
+Owner night race, 5 AI, 3x (2026-10-16): **accurate** 59.97 FPS, 69 late frames (213 with slice193), readback wait
+mean 0.78 ms; **unsynchronized** 60.00 FPS, 1 late frame, but the car headlight flares do not render and some elements
+never reach the screen. GPU power and clock were the same. The owner chose **accurate** as the default; unsynchronized
+stays an option labelled "faster, may drop effects".
+
+Bug found by the owner: a click inside the picture deactivated the game window (F11, keyboard and controller stopped
+until the title bar was clicked). Cause (Confirmed with a visible fixture): with the input queues detached (slice194),
+the click makes the gt4-gs window thread the foreground thread; that thread has no active window, so the foreground
+became NULL. `HTTRANSPARENT` only forwards to windows of the same thread, so across processes it just discarded the
+click. A disabled child (`WS_DISABLED`) was tried first and gives the same NULL foreground. With slice193 (queues
+attached) the check passes.
+
+Fix (gt4-gs 0.3.1, fork commit `0099d77e1`, tag `gt4gs-v0.3.1`; slice195): every button-down and `WM_MOUSEACTIVATE`
+on the child posts a message to the gt4-gs window thread, which gives the foreground back to the game window (allowed:
+that thread received the click); the child returns `MA_NOACTIVATE` and no longer answers `HTTRANSPARENT`; the input
+queues stay detached. The game sets the keyboard focus to its own window on every activation in pcsx2 mode
+(`WM_ACTIVATE`, `native/window.cpp`).
+
+Check: `gs_live_check --click-check` (VISIBLE, about 1 s: a 336x228 parent at the top-left corner, a SendInput click on
+its title bar, then one on the picture; cursor restored): 0.2.0 passes, 0.3.0 fails (foreground NULL), 0.3.1 passes
+(foreground and keyboard focus stay on the parent). The stall check still passes with 0.3.1 (longest answer 18 ms).
+slice195: CTest 29/29, Python 350 OK (14 skipped), donor 42/42, pcsx2 1x 41/41 identical to slice194.
+Not verified: the click with the real game window (owner).

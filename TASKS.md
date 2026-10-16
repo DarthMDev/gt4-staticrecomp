@@ -403,7 +403,10 @@ State (2026-10-16, slice194): built; owner night-race test pending, no PR.
 - `GT4_GS_READBACK=accurate|unsynchronized` (`--gs-readback`), F8 readback histograms, `gt4-gs.exe` readback and
   acquire timing, own cache/data folders, deferred swap chain acquire (A/B `GT4_GS_EAGER_ACQUIRE=1`).
 - Checks: readback fixture exact in accurate mode (drawn sprite and uploaded bytes); headless frames unchanged;
-  cold vs warm cache replay (max GS frame 84 ms -> 6 ms). Not verified: owner night race, lens flare per mode.
+  cold vs warm cache replay (max GS frame 84 ms -> 6 ms).
+- Owner night race (slice194): accurate 59.97 FPS, 69 late frames (was 213), readback mean 0.78 ms; unsynchronized
+  60.00 FPS, 1 late frame, but headlight flares missing. Owner chose accurate as the default; unsynchronized stays
+  an option ("faster, may drop effects").
 
 ### TASK-038 — Window, fullscreen, focus, input, lifecycle
 Repos: both, branches `task/037-038-gs-window` (main, shared with TASK-037), `gt4gs/window`. Opus, 3-4 sessions.
@@ -423,6 +426,9 @@ State (2026-10-16, slice194): built; owner checklist pending, no PR.
   rectangles as TASK-009), CTest handshake-timeout / game-killed / grace scenarios.
 - Not done: own pump thread for the child (the main thread only pumps), GS hotkeys, fallback option 2, DPI and
   multi-monitor checks, RTSS.
+- slice195 (2026-10-16): owner found that a click in the picture deactivated the game window (detached queues make
+  the GS thread the foreground thread). gt4-gs 0.3.1 gives the foreground back after every click; the game keeps the
+  keyboard focus on activation. Visible click fixture passes (0.3.0 fails). Owner click/focus check pending.
 
 ### TASK-039 — Settings table and `gt4-gs.ini`
 Repos: main `task/039-gs-settings`, fork `gt4gs/config`. Haiku, 2-3 sessions.

@@ -161,6 +161,15 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     PostQuitMessage(0);
     return 0;
   }
+#ifdef GT4_GS_STREAM_CLIENT
+  // TASK-038 (slice195): with GT4_RENDERER=pcsx2 the picture is a child window of another process. Whenever this
+  // window is activated (also when gt4-gs.exe gives the foreground back after a click on the picture), the keyboard
+  // focus goes to this window, never to the child.
+  if (message == WM_ACTIVATE && LOWORD(first) != WA_INACTIVE && gt4::gs_stream::stream_renderer()) {
+    SetFocus(window);
+    return 0;
+  }
+#endif
   if (message == WM_KILLFOCUS && controller) {
     controller->stop();
     if (ps2::g_options.presses.empty())

@@ -1,4 +1,4 @@
-"""TASK-037/038 (slice194): readback modes, gt4-gs folders, restart with the built-in renderer, and the slice194 pins.
+"""TASK-037/038 (slice194, slice195 click fix): readback modes, gt4-gs folders, restart with the built-in renderer, and the slice194 pins.
 
 Pure checks run everywhere. Package and binary pin checks use the assets checkout (GT4_ASSETS_ROOT, default this
 checkout) and GT4_NATIVE_BUILD (the slice194 build directory); they are skipped when those files are absent.
@@ -21,9 +21,9 @@ import play_external_runtime as player  # noqa: E402
 import play_performance as performance  # noqa: E402
 
 ASSETS = Path(os.environ.get('GT4_ASSETS_ROOT', ROOT))
-MANIFEST = 'slice194-pcsx2.json'
-EXECUTABLE = 'private/slice194-gs-window-build/build/gt4vulkan.exe'
-PACKAGE = 'private/slice194-gt4gs-pkg'
+MANIFEST = 'slice195-pcsx2.json'
+EXECUTABLE = 'private/slice195-gs-window-build/build/gt4vulkan.exe'
+PACKAGE = 'private/slice195-gt4gs-pkg'
 GS_PROCESS = PACKAGE + '/gt4-gs.exe'
 
 
@@ -163,16 +163,19 @@ class PinTests(unittest.TestCase):
     def manifest(self):
         return json.loads((ROOT / 'docs/inputs' / MANIFEST).read_text(encoding='utf-8'))
 
-    def test_mode_pcsx2_selects_slice194(self):
+    def test_mode_pcsx2_selects_slice195(self):
         self.assertEqual(probe.PERF_PROFILES['pcsx2'], (MANIFEST, EXECUTABLE))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice194'],
+                         ('slice194-pcsx2.json', 'private/slice194-gs-window-build/build/gt4vulkan.exe'))
+        self.assertIn('slice194-pcsx2.json', probe.VU1_AOT_MANIFESTS)
         self.assertIn(MANIFEST, probe.VU1_AOT_MANIFESTS)
         self.assertIn(MANIFEST, probe.VU0_AOT_MANIFESTS)
         self.assertIn('pcsx2', performance.MODES)
 
-    def test_launcher_pin_describes_the_slice194_build(self):
+    def test_launcher_pin_describes_the_slice195_build(self):
         manifest = self.manifest()
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
-        self.assertEqual(manifest['slice'], 194)
+        self.assertEqual(manifest['slice'], 195)
         self.assertEqual(manifest['runtime']['path'], EXECUTABLE)
         stream = manifest['gs_stream']
         self.assertEqual(stream['renderer'], 'pcsx2')
@@ -190,15 +193,15 @@ class PinTests(unittest.TestCase):
         manifest = self.manifest()
         package = ASSETS / manifest['gs_stream']['gs_package']['directory']
         if not package.is_dir():
-            self.skipTest('slice194 gt4-gs package not present')
+            self.skipTest('slice195 gt4-gs package not present')
         digest, files = probe.package_tree_digest(package)
         self.assertEqual((digest, files), (manifest['gs_stream']['gs_package']['tree_sha256'],
                                            manifest['gs_stream']['gs_package']['files']))
 
     def test_executable_pins_match_the_build_under_test(self):
         build = os.environ.get('GT4_NATIVE_BUILD')
-        if not build or Path(build).resolve() != (ASSETS / 'private/slice194-gs-window-build/build').resolve():
-            self.skipTest('GT4_NATIVE_BUILD is not the slice194 build')
+        if not build or Path(build).resolve() != (ASSETS / 'private/slice195-gs-window-build/build').resolve():
+            self.skipTest('GT4_NATIVE_BUILD is not the slice195 build')
         manifest = self.manifest()
         for entry in [manifest['runtime']] + manifest['runtime_dependencies']:
             path = ASSETS / entry['path']
