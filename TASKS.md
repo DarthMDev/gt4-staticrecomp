@@ -59,29 +59,31 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑017 | License-test crash | 🔄 In progress: waiting for the owner's FSV trace test |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 (decision 0070) |
+| TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
 | TASK‑026 | CoreGS 2.0, part 1: clean-room specification of the PCSX2 hardware renderer | ✅ Done (docs/hw-renderer-spec, PR #17) |
 | TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (unchanged) · pure libraries done on `task/027-hw-renderer` |
 | TASK‑028 | CoreGS 1.1: upscaling, interlaced-only deinterlace, FXAA-class AA, FSR 1.0 | ⏸️ Paused by the owner: 3x shows native-size aliasing on 3D models; stays the built-in fallback renderer (`task/028-donor-upscale`, latest slice186) |
 | TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
 | TASK‑030 | Night-race readback wait (CoreGS 1.1) | ⏸️ Paused: owner test 59.07 FPS, wait unchanged at 4.3 ms because the page is drawn the same frame (`task/030-night-readback`) |
-| 🚀 | **First stable release on GitHub** (after TASK‑019) | 📋 Planned |
-| TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑031 | High frame rate (120-144 FPS) with game physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS (study docs on `task/031-high-fps`) |
-| TASK‑032 | Decision 0070 docs: PCSX2 GS in a separate process, clean-room wording, renderer docs | ✅ Done (this PR) |
+| TASK‑032 | Decision 0070 docs: PCSX2 GS in a separate process, clean-room wording, renderer docs | ✅ Done (PR #24) |
 | TASK‑033 | PCSX2 GS fork (`moesuito/gt4recomp-gs`): reproducible build and CI releases | ✅ Done · standalone repo, CI green, prerelease `gt4gs-v0.1.0-poc` (docs/GS-FORK.md) |
 | TASK‑034 | Proof of concept: replay our `.gscap` capture through the PCSX2 GS and compare images | ✅ Done · owner approved the images on 2026-10-16; gate passed (docs/GS-PCSX2-POC.md) |
 | TASK‑035 | MIT GS stream protocol, shared-memory IPC and renderer seam on main | ✅ Done · slice191: CTest 29/29, Python 321 OK, donor 42/42, stream converts to the PoC dump byte for byte (docs/GS-STREAM-PROTOCOL.md) |
 | TASK‑036 | Live `gt4-gs.exe` MVP: the game drives the PCSX2 GS over IPC | ✅ Done · owner test 2026-10-16 at 3x (sharp, fullscreen OK): Nordschleife 59.98 FPS, night race with 5 AI 59.89 FPS, readback wait 0.93 ms; `--mode pcsx2` holds 480p by default |
-| TASK‑037 | PCSX2 GS readbacks and the night race | 📋 Planned |
-| TASK‑038 | GS window, fullscreen, focus, input and crash handling | 📋 Planned |
-| TASK‑039 | GS settings table and `gt4-gs.ini` | ✅ Done (main-repo part); fork allow-list enforcement pending |
+| TASK‑037 | PCSX2 GS readbacks and the night race | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 69 late frames (was 213); accurate readbacks are the default, unsynchronized optional (drops headlight flares) |
+| TASK‑038 | GS window, fullscreen, focus, input and crash handling | ✅ Done · owner test 2026-10-16: fullscreen, Alt+Tab and the click-in-picture focus fix (gt4-gs 0.3.1); crash grace frames and CoreGS 1.1 restart offer |
+| TASK‑039 | GS settings table and `gt4-gs.ini` | ✅ Done (main-repo part): 51-row table drives `gt4-gs.ini`; fork allow-list enforcement pending |
 | TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
 | TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | 📋 Planned |
 | TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | 📋 Planned |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | 📋 Planned |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
+| TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
+| TASK‑047 | PCSX2 GS deinterlacing in the 480i menus (field and interlace state in the stream) | 🔄 In progress (branch `task/047-gs-deinterlace`) |
+| 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
 ## Phase 2 — Android
 
