@@ -23,6 +23,10 @@ enum class Category : std::size_t {
   mtvu_wait_vblank, mtvu_wait_download, mtvu_wait_gs_privileged, mtvu_wait_vu_memory,
   mtvu_wait_gif_reset, mtvu_wait_reset, mtvu_wait_state, mtvu_wait_other,
   gs_drain, mtvu_output,
+  // TASK-035 (slice191): GS stream (GT4_RENDERER=pcsx2) on the EE thread: record writes into the shared ring,
+  // waits for ring space or frames in flight, the VSYNC post, and READ_FIFO round trips. Reported only in the
+  // [gs-ipc] section.
+  gs_ipc_write, gs_ipc_backpressure, gs_ipc_vsync_post, gs_ipc_readback_wait,
 #endif
   count
 };

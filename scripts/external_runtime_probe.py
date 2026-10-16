@@ -59,6 +59,9 @@ PERF_PROFILES = {
     # slice172 (TASK-011 step 4): SIGNAL/FINISH/LABEL applied at acceptance; the launcher mode mtvu points here.
     'mtvu': ('slice172-mtvu.json', 'private/slice172-mtvu-build/build/gt4vulkan.exe'),
     'mtvu-slice171': ('slice171-mtvu.json', 'private/slice171-mtvu-build/build/gt4vulkan.exe'),
+    # TASK-035 (slice191): main plus the GS stream seam. The manifest's gs_stream block makes the launcher run
+    # GT4_RENDERER=pcsx2 with the pinned test consumer (tools/gs_stream_record): no image; not for owner play yet.
+    'pcsx2-stream': ('slice191-pcsx2-stream.json', 'private/slice191-gs-stream-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -66,10 +69,10 @@ PACING_MANIFEST = 'slice153-pacing.json'
 VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST, 'slice154-vu1-flags.json', 'slice155-vu1-full.json',
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
-                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json')
+                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
-                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json')
+                     'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -81,6 +84,10 @@ MTVU_MEASURE_VALUES = ('0', '1')
 MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'}
 # GT4_MTVU_REPORT_EVERY (slice171): VBlank count for the headless [mtvu] F8-equivalent report; unset means off.
 MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
+# TASK-035 (slice191): GS stream settings (native/gs_stream/gs_stream_client.hpp, tools/gs_stream_record).
+GS_STREAM_RENDERERS = ('donor', 'pcsx2')
+GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_CAPTURE_FRAMES', 'GT4_GS_FRAMES_IN_FLIGHT',
+                   'GT4_GS_RECORD_OUTPUT', 'GT4_GS_RECORD_FRAMES')
 # Owner-launched VU1 recording reuses the vu-split binary; only this manifest may record.
 VU1_RECORD_MANIFEST = 'slice151-vu1-record.json'
 VU1_RECORD_RUNTIME = 'private/slice149-vu-split-build/build/gt4vulkan.exe'
@@ -133,13 +140,45 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
             evidence.get('runtime', {}).get('path') != expected_runtime or
             evidence.get('capture_activation_implemented') is not False):
         raise ValueError('Performance test requires the qualified corrected candidate')
+
+
+def gs_stream_environment(environment, runtime_evidence, binary_workspace, performance):
+    """TASK-035: sets the GS stream variables for a run (in place) and returns the values to record.
+
+    Manifests without a gs_stream block never pass GT4_RENDERER or GT4_GS_* to their binary (removed). With the
+    block (slice191), a performance run uses the manifest's renderer and its pinned GS process; a headless run
+    keeps the caller's GT4_RENDERER (donor when unset) and, for pcsx2, defaults GT4_GS_PROCESS to the pinned
+    process. The GS process must be one of the manifest's pinned runtime dependencies.
+    """
+    stream = runtime_evidence.get('gs_stream')
+    if not stream:
+        for name in GS_STREAM_NAMES:
+            environment.pop(name, None)
+        return {}
+    pinned = {item['path'] for item in runtime_evidence.get('runtime_dependencies', [])}
+    if stream.get('gs_process') not in pinned or stream.get('renderer') not in GS_STREAM_RENDERERS:
+        raise ValueError('GS stream manifest must pin its GS process as a runtime dependency')
+    process = (Path(binary_workspace) / stream['gs_process']).resolve()
+    if performance:
+        for name in GS_STREAM_NAMES:
+            environment.pop(name, None)
+        environment['GT4_RENDERER'] = stream['renderer']
+    renderer = environment.get('GT4_RENDERER', 'donor')
+    if renderer not in GS_STREAM_RENDERERS:
+        raise ValueError('GT4_RENDERER must be donor or pcsx2')
+    if renderer == 'pcsx2' and not environment.get('GT4_GS_PROCESS'):
+        environment['GT4_GS_PROCESS'] = str(process)
+    if environment.get('GT4_GS_FRAMES_IN_FLIGHT', '2') not in ('1', '2', '3'):
+        raise ValueError('GT4_GS_FRAMES_IN_FLIGHT must be 1, 2 or 3')
+    recorded = {name: environment[name] for name in GS_STREAM_NAMES if name in environment}
+    return {'gs_stream_environment': recorded} if recorded else {}
 
 
 def verify_manual_capture_profile(manifest, evidence, runtime_workspace):
@@ -388,6 +427,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
+    result.update(gs_stream_environment(environment, runtime_evidence, binary_workspace, performance))
     if force_480p:
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:

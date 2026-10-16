@@ -48,6 +48,10 @@ Same options as main.
 Quick-fix 3 candidate (--mode quickfix3, slice164): vu1-all with the quick fixes. --force-480p (GT4_FORCE_480P=1,
 default off) holds the game's race display option at 480p progressive: at each guest VBlank, when the option
 index is 0 (normal) it is written 1 (480p). Indices 1 and 2 are never changed.
+GS stream candidate (--mode pcsx2-stream, slice191, TASK-035): main plus the GS stream seam. The launcher runs
+GT4_RENDERER=pcsx2 with the pinned test consumer tools/gs_stream_record as the GS process: the game sends GIF,
+privileged writes, VSYNC and readbacks over shared memory (docs/GS-STREAM-PROTOCOL.md) and creates no Vulkan
+device, so the window stays black. For TASK-036 development only, not for owner play; F8 adds a [gs-ipc] section.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.

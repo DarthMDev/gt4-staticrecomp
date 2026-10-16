@@ -32,8 +32,11 @@ int main() {
   try {
     require(gt4::perf::kLegacyCategoryCount == static_cast<std::size_t>(Category::mtvu_wait_vblank),
             "legacy report categories end before the MTVU categories");
-    require(static_cast<std::size_t>(Category::mtvu_output) + 1 == static_cast<std::size_t>(Category::count),
-            "MTVU categories are the last ones");
+    // TASK-035 appends the four GS stream categories after the MTVU ones; both groups stay after the legacy lines.
+    require(static_cast<std::size_t>(Category::mtvu_output) + 1 == static_cast<std::size_t>(Category::gs_ipc_write),
+            "the GS stream categories follow the MTVU categories");
+    require(static_cast<std::size_t>(Category::gs_ipc_readback_wait) + 1 == static_cast<std::size_t>(Category::count),
+            "the GS stream categories are the last ones");
 
     Probe &probe = Probe::shared();
     Accounting worker(true);

@@ -1049,3 +1049,70 @@ $env:GT4_MTVU="0"; python scripts\play_performance.py --assets-root C:\Antigravi
 
 `--mode main` holds the race display at 480p (the launcher sets `force_480p`); the hidden opt-out is `GT4_FORCE_480P=0`, which the
 probe records. `--mode mtvu` keeps the slice172 pin and binary. Owner A/B and weak-CPU runs are pending (MTVU-PLAN section 12.6).
+
+## Slice191 - GS stream protocol and the `GT4_RENDERER=pcsx2` seam (TASK-035)
+
+Branch `task/035-gs-stream`, worktree `C:\Antigravity\gt4-wt-035-stream` (no `private/` junction; derived capsules and
+the build live in the main checkout's `private/`). Spec: [GS-STREAM-PROTOCOL](GS-STREAM-PROTOCOL.md).
+
+Derivations (fresh directories; `<A>` = `C:/Antigravity/gt4-staticrecomp`):
+
+```
+python scripts\prepare_external_vulkan.py <A>/private/slice191-gs-stream-port --assets-root <A> --gs-stream-hooks
+python scripts\prepare_perf_runtime.py <A>/private/slice191-gs-stream-runtime --assets-root <A> --gs-stream
+```
+
+Controls: without `--gs-stream-hooks` the port derivation reproduces `slice153-pacing-port` byte for byte; without
+`--gs-stream` the runtime derivation reproduces `slice178-main-runtime` (checked in `tests/python/test_gs_stream.py`).
+The slice191 runtime changes only `gif.cpp` and `hw.cpp`; the port changes only `gs.cpp`. Pin:
+`docs/inputs/slice191-gs-stream-runtime.json` (receipt sha256 d41d2d689a384efb5b5df116eba9750d43bd67870fb7d162067695ec8eab2326,
+profile `task035-seam-v1`, port `gs.cpp` 12a989e6...). CMake accepts the slice191 port only with the slice191 runtime and
+links `gt4_gs_stream_client` into the runtime for that pair.
+
+Configure and build (clang-cl, Ninja, Release; same EE library, VU1/VU0 tables and slice153 shaders as slice178):
+
+```
+cmake -S C:\Antigravity\gt4-wt-035-stream -B C:\Antigravity\gt4-staticrecomp\private\slice191-gs-stream-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=production ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=C:/Antigravity/gt4-staticrecomp/private/slice191-gs-stream-runtime ^
+  -DGT4_PORT_DIR=C:/Antigravity/gt4-staticrecomp/private/slice191-gs-stream-port -DGT4_SHADER_DIR=C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders ^
+  -DGT4_VU_CORPUS_DIR=C:/Antigravity/gt4-staticrecomp/private/slice155-vu1-full-corpus ^
+  -DGT4_VU1_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=C:/Antigravity/gt4-staticrecomp/private/slice160-vu0-image/vu0_image.bin
+cmake --build C:\Antigravity\gt4-staticrecomp\private\slice191-gs-stream-build\build
+```
+
+Result: `gt4vulkan.exe` 95,634,432 bytes, sha256 03173665d6cbb98c5b3a691158d43cbe212a09bdab9eea0bcda612563f4f6490;
+`gs_stream_record.exe` sha256 b5cf7e2b83f93eac6320f45a79071f3cb145d74853de885b611c2480330a4f41. Launcher pin
+`docs/inputs/slice191-pcsx2-stream.json` (mode `pcsx2-stream`; the manifest's `gs_stream` block pins the recorder as the
+GS process). Not for owner play: in `pcsx2` mode the window stays black (the consumer is not a renderer).
+
+Checks (2026-10-15, idle machine):
+
+- CTest 29/29 (new: `native_gs_stream_ipc`, `native_gs_stream_client`; `native_mtvu_perf` now checks that the four
+  `gs_ipc_*` categories follow the MTVU ones). Python (`GT4_NATIVE_BUILD` on this build, `GT4_ASSETS_ROOT` the main
+  checkout): 321 tests OK, 12 skipped.
+- Headless, 4,200 frames, slice157 schedule (12 presses), `external_runtime_probe.py --runtime-manifest
+  docs/inputs/slice191-pcsx2-stream.json`, outputs `private/slice191-smoke/final-*`:
+  - `GT4_RENDERER` unset: 42/42 frames identical to `private/slice157-smoke/headless-157/frames`.
+  - `GT4_RENDERER=donor GT4_GS_CAPTURE=...`: 42/42 identical; capture 2,599,116,800 bytes, sha256 e651bba3....
+  - `GT4_RENDERER=pcsx2` with the recorder (`GT4_GS_RECORD_OUTPUT`) and `GT4_GS_CAPTURE`: run completes (frame limit
+    reached, no frame dumps in this mode); the in-process capture is byte-identical to the donor capture (e651bba3...),
+    and the recorder's file is the same bytes plus the 48-byte CONTROL shutdown record (sha256 73bee2da...).
+  - Stream: 1,637,885 records, 2.60 GB, 619 KB and 390 records per frame on average (1,612,695 GIF records, 20,986
+    PRIV, 0 READ_FIFO, 3 RESET). Readbacks: 0 in this schedule (menus).
+- Converter and PoC replay: `gscap_to_gsdump.py <recorded> stream-0-1100.gs --max-frames 1101` gives a dump
+  byte-identical to the TASK-034 PoC dump `private/slice190-dump/menu-0-1100.gs`; the PoC `pcsx2-gsrunner.exe`
+  (`private/slice190-run`, 1x, `-surfaceless -renderer vulkan -loop 1 -perf -dumpdir`) produced 1,100 PNGs, all
+  byte-identical to `private/slice190-gsrunner-out/1x/f` (frames 300 and 700 included). Outputs: `private/slice191-gsrunner`.
+
+Headless commands (PowerShell, from the worktree; add the stream variables per case):
+
+```
+$env:GT4_RENDERER="pcsx2"; $env:GT4_GS_RECORD_OUTPUT="C:\...\stream.gscap"; $env:GT4_MTVU_REPORT_EVERY="500"
+python scripts\external_runtime_probe.py C:/Antigravity/gt4-staticrecomp/private/slice191-smoke/<run> --frames 4200 --timeout 2400 `
+  --press 600:start:30 ... --card-seed C:/Antigravity/gt4-staticrecomp/private/slice113-video/widescreen-seed/card.ps2 `
+  --runtime-manifest docs/inputs/slice191-pcsx2-stream.json --assets-root C:/Antigravity/gt4-staticrecomp
+```

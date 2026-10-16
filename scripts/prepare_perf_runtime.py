@@ -17,6 +17,13 @@ Options:
               vif.cpp, vu_micro.cpp (patched), and gif.cpp, memory.cpp, hw.cpp, dmac.cpp (new). Excludes
               --mtvu-measure. Derivations without this option are unchanged.
 
+  --gs-stream TASK-035 (slice191): the GS stream seam (native/gs_stream/gs_stream_client.hpp) on top of --mtvu
+              (implied). gif.cpp: with GT4_RENDERER=pcsx2 the GIF render point posts the bytes to the GS stream and
+              runs the path parser with a signal-only sink (no donor GS front end); a GIF reset is posted.
+              hw.cpp: SetGsCrt posts the SMODE1/SMODE2 writes the BIOS performs. Every hook returns at once when
+              GT4_RENDERER is unset or donor and GT4_GS_CAPTURE is unset. Derivations without this option are
+              unchanged.
+
 Slices 156 and 158 used --gs-crt-override and --display-table-override. Both hooks were removed in slice164
 (the 480p switch is a host-side guest RAM write, native/race_display.*). Their capsules stay pinned in
 docs/inputs and are not re-derivable from this script.
@@ -223,6 +230,64 @@ MTVU_PATCHES.update({
     ],
 })
 
+# TASK-035 (slice191): GS stream hooks, applied on top of the --mtvu derivation of gif.cpp and hw.cpp. Same rules:
+# each anchor is one unique text of the MTVU-derived source and removing the replacements restores it.
+GS_STREAM_PREFIX = '#include "gs_stream_client.hpp"\n'
+GS_STREAM_PATCHES = {
+    'gif.cpp': [
+        ('    void image(const std::uint8_t *data, std::uint32_t qwords) { gs::write_image(data, qwords); }\n};\n',
+         '    void image(const std::uint8_t *data, std::uint32_t qwords) { gs::write_image(data, qwords); }\n};\n'
+         '\n'
+         '// TASK-035 (GT4_RENDERER=pcsx2): the GIF bytes went to the GS stream and the donor GS front end does not run.\n'
+         '// The path parser still runs (busy() and the tag counts), and SIGNAL/FINISH/LABEL writes that were not applied\n'
+         '// at acceptance (PATH1, or every path with GT4_MTVU=0) are applied here, at the render point, as GsSink would.\n'
+         'struct StreamSink {\n'
+         '    int path;\n'
+         '    void tag(const Path &p, const Reg128 &) { ++g_tags[path][p.flg]; }\n'
+         '    void packed(std::uint32_t reg, const Reg128 &q) {\n'
+         '        if (reg != 0xEu) return;\n'
+         '        const std::uint32_t address = static_cast<std::uint32_t>(q.d[1] & 0xFFu);\n'
+         '        if (address < 0x60u || address > 0x62u || gt4::mtvu::signal_pre_applied(path, address)) return;\n'
+         '        gs::signal(address, q.d[0]);\n'
+         '    }\n'
+         '    void reglist(std::uint32_t, std::uint64_t) {}\n'
+         '    void image(const std::uint8_t *, std::uint32_t) {}\n'
+         '};\n'),
+        ('void render_reset() {\n    for (Path &p : g_paths) p = Path{};\n}\n',
+         'void render_reset() {\n    gt4::gs_stream::on_gif_reset();\n    for (Path &p : g_paths) p = Path{};\n}\n'),
+        ('    gt4::mtvu::note_render(path, data, qwc);\n    GsSink sink{path};',
+         '    gt4::mtvu::note_render(path, data, qwc);\n'
+         '    if (gt4::gs_stream::on_gif_render(path, data, qwc)) {\n'
+         '        StreamSink stream_sink{path};\n'
+         '        walk(g_paths[path], data, qwc, stream_sink);\n'
+         '        return;\n'
+         '    }\n'
+         '    GsSink sink{path};'),
+    ],
+    'hw.cpp': [
+        ('    if (!g_options.rate_forced) g_options.pal = mode == 3u;\n',
+         '    gt4::gs_stream::on_set_gs_crt(interlace, mode, field);\n'
+         '    if (!g_options.rate_forced) g_options.pal = mode == 3u;\n'),
+    ],
+}
+
+
+def apply_gs_stream(name, source):
+    """Adds the TASK-035 GS stream hooks to one MTVU-derived source; checks that removing them restores the input."""
+    result = source
+    for before, after in GS_STREAM_PATCHES[name]:
+        if result.count(before) != 1:
+            raise ValueError(f'Expected one qualified GS stream site in {name}')
+        result = result.replace(before, after)
+    inverse = result
+    for before, after in reversed(GS_STREAM_PATCHES[name]):
+        if inverse.count(after) != 1:
+            raise ValueError(f'Unexpected GS stream reversal in {name}')
+        inverse = inverse.replace(after, before)
+    if inverse != source:
+        raise ValueError(f'GS stream hooks do not reverse to the input: {name}')
+    return result
+
 
 def overlay_sections(text, anchors=OVERLAY_ANCHORS):
     sections, name, lines = {}, None, []
@@ -316,9 +381,12 @@ def apply_mtvu_runtime(name, source):
     return result
 
 
-def derive_mtvu_runtime_source(name, source):
+def derive_mtvu_runtime_source(name, source, gs_stream=False):
     """Derives one extra --mtvu source (gif.cpp, memory.cpp, hw.cpp, dmac.cpp): hooks only."""
-    return PREFIX + MTVU_PREFIX + apply_mtvu_runtime(name, source)
+    derived = apply_mtvu_runtime(name, source)
+    if gs_stream and name in GS_STREAM_PATCHES:
+        return PREFIX + MTVU_PREFIX + GS_STREAM_PREFIX + apply_gs_stream(name, derived)
+    return PREFIX + MTVU_PREFIX + derived
 
 
 def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False, mtvu=False):
@@ -352,7 +420,9 @@ def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_m
 
 
 def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False,
-            mtvu=False):
+            mtvu=False, gs_stream=False):
+    if gs_stream:
+        mtvu = True
     if mtvu and mtvu_measure:
         raise ValueError('--mtvu and --mtvu-measure are separate capsules')
     if mtvu:
@@ -390,7 +460,7 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
             data = (donor / donor_path).read_bytes()
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ValueError(f'Qualified donor source differs: {donor_path}')
-            sources[name] = derive_mtvu_runtime_source(name, data.decode('utf-8').replace('\r\n', '\n'))
+            sources[name] = derive_mtvu_runtime_source(name, data.decode('utf-8').replace('\r\n', '\n'), gs_stream)
     output.mkdir()
     receipt = {'donor_revision': '1b4808793a12c45125262fd2d5f50a9ec9f7c020',
                'donor_sha256': PINS, 'source_sha256': {}}
@@ -410,6 +480,9 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
     if mtvu:
         receipt['mtvu_runtime_profile'] = 'step4-runtime-v2'
         receipt['mtvu_runtime_donor_sha256'] = {name: expected for name, (_, expected) in MTVU_RUNTIME_SOURCES.items()}
+    if gs_stream:
+        receipt['gs_stream_profile'] = 'task035-seam-v1'
+        receipt['gs_stream_sources'] = sorted(GS_STREAM_PATCHES)
     for name, text in sources.items():
         path = output / name
         path.write_text(text, encoding='utf-8', newline='\n')
@@ -427,6 +500,7 @@ if __name__ == '__main__':
     parser.add_argument('--vu0-aot', action='store_true')
     parser.add_argument('--mtvu-measure', action='store_true')
     parser.add_argument('--mtvu', action='store_true')
+    parser.add_argument('--gs-stream', action='store_true')
     args = parser.parse_args()
     prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot, vu0_aot=args.vu0_aot,
-            mtvu_measure=args.mtvu_measure, mtvu=args.mtvu)
+            mtvu_measure=args.mtvu_measure, mtvu=args.mtvu, gs_stream=args.gs_stream)

@@ -14,6 +14,74 @@ SOURCE_PINS = {
     'runtime/src/gs/gpu/gs.wgsl': 'a6ed68e9ca53ea9b6c90307d3ffeb2b74b15c5f0a20dd776f51bc243ef80d4a5',
 }
 
+# TASK-035 (slice191) GS stream seam: (anchor, replacement) pairs for the derived gs.cpp, selected at run time by
+# GT4_RENDERER=pcsx2 (native/gs_stream/gs_stream_client.hpp). Each anchor must occur exactly once, and removing the
+# replacements must restore the input. With GT4_RENDERER unset or "donor" and no GT4_GS_CAPTURE every hook returns
+# at once, so the donor renderer output is unchanged. Design salvaged from the task/012 MIT seam
+# (native/parallel_gs_frontend.inc on task/012-parallel-gs); no renderer code is involved.
+GS_STREAM = '::gt4::gs_stream::'
+GS_STREAM_HOOKS = [
+    ('#include "gif.hpp"\n', '#include "gif.hpp"\n#include "gs_stream_client.hpp"\n'),
+    ('void init() {\n    static bool built = false;\n',
+     'void init() {\n    ' + GS_STREAM + 'set_halt_handler(+[](const char *reason) { ps2::halt(reason); });\n'
+     '    static bool built = false;\n'),
+    ('#ifdef PS2_GPU\n    const char *backend = std::getenv("PS2_GS");',
+     '#ifdef PS2_GPU\n    if (' + GS_STREAM + 'stream_renderer()) return; // no donor Vulkan device: the GS process renders\n'
+     '    const char *backend = std::getenv("PS2_GS");'),
+    ('void render_reset() {\n#ifdef PS2_GPU\n', 'void render_reset() {\n    ' + GS_STREAM + 'on_gs_reset();\n#ifdef PS2_GPU\n'),
+    ('void write_privileged(std::uint32_t address, std::uint64_t value) {\n    switch',
+     'void write_privileged(std::uint32_t address, std::uint64_t value) {\n    ' + GS_STREAM +
+     'on_privileged_write(address, value); // the donor keeps CSR/IMR/SIGLBLID for EE reads\n    switch'),
+    ('void read_image(std::uint8_t *data, std::uint32_t qwords) {\n    if (!queue::active()) {',
+     'void read_image(std::uint8_t *data, std::uint32_t qwords) {\n    if (' + GS_STREAM + 'read_fifo(data, qwords)) return;\n'
+     '    if (!queue::active()) {'),
+    ('        g_odd_field = !g_odd_field;\n        raise(8);\n',
+     '        g_odd_field = !g_odd_field;\n        raise(8);\n        ' + GS_STREAM + 'on_vsync(g_odd_field);\n'),
+    ('bool attach_window(int kind, void *display, std::uint64_t window, void *surface, const char *selector, '
+     'std::uint32_t width, std::uint32_t height) {\n',
+     'bool attach_window(int kind, void *display, std::uint64_t window, void *surface, const char *selector, '
+     'std::uint32_t width, std::uint32_t height) {\n'
+     '    if (' + GS_STREAM + 'stream_renderer()) return kind == 3 && ' + GS_STREAM +
+     'attach_window(window, width, height); // 3 = Win32\n'),
+    ('void resize_window(std::uint32_t width, std::uint32_t height) {\n',
+     'void resize_window(std::uint32_t width, std::uint32_t height) {\n    if (' + GS_STREAM + 'stream_renderer()) {\n'
+     '        ' + GS_STREAM + 'resize_window(width, height);\n        return;\n    }\n'),
+    ('double gpu_busy_ms() {\n', 'double gpu_busy_ms() {\n    if (' + GS_STREAM + 'stream_renderer()) return 0.0;\n'),
+    ('bool present(const DisplayRegs &r) {\n',
+     'bool present(const DisplayRegs &r) {\n    if (' + GS_STREAM + 'stream_renderer()) return true; // the GS process presents\n'),
+    ('bool display(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n',
+     'bool display(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n'
+     '    if (' + GS_STREAM + 'stream_renderer()) return false; // no local VRAM: frames come from the GS process\n'),
+    ('bool copy_frame(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n',
+     'bool copy_frame(const DisplayRegs &r, std::vector<std::uint32_t> &rgba, std::uint32_t &width, std::uint32_t &height) {\n'
+     '    if (' + GS_STREAM + 'stream_renderer()) return false;\n'),
+    ('void flush_and_wait() {\n', 'void flush_and_wait() {\n    if (' + GS_STREAM + 'stream_renderer()) return;\n'),
+    ('void stats() {\n    if (const char *spec = std::getenv("PS2_DUMP_VRAM")) dump_region(spec);\n',
+     'void stats() {\n    ' + GS_STREAM + 'finish(stderr);\n    if (' + GS_STREAM + 'stream_renderer()) return;\n'
+     '    if (const char *spec = std::getenv("PS2_DUMP_VRAM")) dump_region(spec);\n'),
+    ('void state(ps2::state::Stream &s) {\n    s.tag("gs");',
+     'void state(ps2::state::Stream &s) {\n    if (' + GS_STREAM + 'stream_renderer())\n'
+     '        throw std::runtime_error("save states are not supported with GT4_RENDERER=pcsx2");\n'
+     '    s.tag("gs");'),
+]
+
+
+def apply_gs_stream_hooks(source):
+    """Splices the TASK-035 GS stream seam into the derived gs.cpp; checks that removing it restores the input."""
+    result = source
+    for anchor, replacement in GS_STREAM_HOOKS:
+        if result.count(anchor) != 1:
+            raise ValueError(f'GS stream anchor changed in donor gs.cpp: {anchor[:60]!r}')
+        result = result.replace(anchor, replacement)
+    inverse = result
+    for anchor, replacement in reversed(GS_STREAM_HOOKS):
+        if inverse.count(replacement) != 1:
+            raise ValueError('Unexpected GS stream hook reversal')
+        inverse = inverse.replace(replacement, anchor)
+    if inverse != source:
+        raise ValueError('GS stream hooks do not reverse to the input')
+    return result
+
 
 def replace_section(source, start, end, replacement):
     first = source.index(start)
@@ -21,11 +89,13 @@ def replace_section(source, start, end, replacement):
     return source[:first] + replacement + '\n\n' + source[last:]
 
 
-def prepare(output, assets_root=None):
+def prepare(output, assets_root=None, gs_stream=False):
     output = output.resolve()
-    if not output.is_relative_to(ROOT / 'private') or output == ROOT / 'private':
-        raise ValueError('Derived donor code must stay inside private/')
     assets_root = Path(assets_root or ROOT).resolve()
+    # A worktree has no private/ of its own: the derived port may live in the assets checkout's private/.
+    allowed_roots = [ROOT / 'private', assets_root / 'private']
+    if not any(output.is_relative_to(root) and output != root for root in allowed_roots):
+        raise ValueError('Derived donor code must stay inside private/')
     donor = assets_root / 'private/references/ps2-web-recomp/runtime/src/gs/gpu'
     donor_root = donor.parents[3]
     if output.is_relative_to(donor_root) or donor_root.is_relative_to(output):
@@ -81,6 +151,8 @@ std::uint32_t g_decoded_used = 0;'''
     graphics_source = graphics.read_text(encoding='utf-8')
     graphics_source = graphics_source.replace('"../hw.hpp"', '"hw.hpp"')
     graphics_source = graphics_source.replace('"gpu/gpu.hpp"', '"gpu.hpp"')
+    if gs_stream:
+        graphics_source = apply_gs_stream_hooks(graphics_source)
     (output / 'gs.cpp').write_text(graphics_source, encoding='utf-8')
     host = donor.parents[3] / 'host/main.cpp'
     host_source = host.read_text(encoding='utf-8')
@@ -94,5 +166,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('output', type=Path)
     parser.add_argument('--assets-root', type=Path)
+    parser.add_argument('--gs-stream-hooks', action='store_true',
+                        help='Splice the TASK-035 GS stream seam into gs.cpp (GT4_RENDERER=pcsx2; slice191)')
     options = parser.parse_args()
-    prepare(options.output, options.assets_root)
+    prepare(options.output, options.assets_root, options.gs_stream_hooks)

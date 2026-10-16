@@ -4,6 +4,8 @@
 
 **Current renderer plan (2026-10-15, [decision 0070](decisions/0070-pcsx2-gs-separate-process.md)):** TASK-032 (decision docs) is done in its PR; TASK-034 (PCSX2 GS proof of concept) is in progress, with an owner go/no-go gate before TASK-035/036. paraLLEl-GS (TASK-012) is dropped; CoreGS 1.1 stays the built-in fallback. Plan: [GSDX-PLAN](GSDX-PLAN.md).
 
+**TASK-035 (slice191, branch `task/035-gs-stream`, 2026-10-15):** the MIT GS stream protocol ([spec](GS-STREAM-PROTOCOL.md)), shared-memory transport and the `GT4_RENDERER=pcsx2` seam are built and checked headless (CTest 29/29, Python 321 OK; donor frames 42/42 identical; the stream is byte-identical in donor mode, pcsx2 mode and in the recorder process; the converted stream equals the TASK-034 PoC dump and replays to identical GSRunner frames). The consumer is a test recorder, so `--mode pcsx2-stream` shows no image until TASK-036. Owner review pending.
+
 **Latest (merged to main):** TASK-008 slice 157 (all 2,048 VU1 entries, owner: night
 58.9, rally 59.9, showroom 60.0 VBlanks/s, 0 interpreted VU1 calls), TASK-010 build
 pipeline (slice 159) and TASK-009 slice 164 `--mode quickfix3 --force-480p` (title,
