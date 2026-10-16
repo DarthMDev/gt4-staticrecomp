@@ -158,7 +158,7 @@ in game before it is merged.
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
 | TASK‑016 | IOP per-module cost review | ⏸️ Deferred |
-| TASK‑017 | License-test crash | 🔄 In progress · waiting for the owner's FSV trace test |
+| TASK‑017 | License-test crash | 🔄 In progress · the license load jumps to a null pointer; analysis running |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
