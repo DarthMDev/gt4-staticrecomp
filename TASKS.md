@@ -529,6 +529,9 @@ Acceptance: release assets complete; links valid; owner approval.
 Note (2026-10-16): `gt4gs-v1.0.0` is published (stable) and pinned in slice202. Known issue for the release notes: gt4-gs 1.0.0 writes under `Documents\PCSX2`: `VMManager::Internal::LoadStartupSettings()` runs before `[GT4GS] DataRoot` is applied, so it rewrites `Documents\PCSX2\logs\emulog.txt` every session (Confirmed: before/after snapshot of the folder) and creates the PCSX2 user folders there (bios, memcards, logs, ...) on a PC that has none (High confidence, `EmuFolders::EnsureFoldersExist`). The log line "MemoryCards Directory: ...Documents\PCSX2\memcards" is that early pass; the session itself uses DataRoot. Fix on fork branch `gt4gs/datadir` (commit `b30870fe8`, version 1.0.1, NOT released): the call moves after the stream folders; checked: 0 changes under `Documents\PCSX2`, emulog in DataRoot\logs.
 Decide whether release 1.0.0 ships gt4-gs 1.0.1 (release it from `gt4gs/datadir` with `release-local.ps1 -Release`,
 repin) or 1.0.0 with this note.
+Note (2026-10-16, TASK-044): gt4-gs 1.0.1 is published (stable, tag `gt4gs-v1.0.1`, fork PR #7 merged) and pinned in
+slice203 (`--mode pcsx2`). The `Documents\PCSX2` known issue is fixed in 1.0.1: no changes in the `Documents\PCSX2` snapshot for a
+live run or an offline replay (slice203, TASK-044). The clean-profile check was not run (see BUILD.md slice 203).
 
 ### TASK-045 — High frame rate on the PCSX2 GS
 Repos: both. Opus, 10-14 sessions, after release 1.0.0.

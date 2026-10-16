@@ -132,3 +132,21 @@ auto-hide policy on the child window, "Compiling shaders…" notice (real compil
 performance overlay fed by OSD_STATS, and the settings allow-list of main `c8661bb` embedded at configure time (keys and
 values outside it are ignored with a warning). Details: [GS-LIVE](GS-LIVE.md) section 11. 1.0.0 is the version the
 launcher (TASK-043) pins first; later fixes are 1.0.x on the same release flow.
+
+### gt4gs-v1.0.1: no writes under Documents\PCSX2 (TASK-044; 2026-10-16)
+
+Branch `gt4gs/datadir` (from `gt4gs/main` `9fc35d717`, the 1.0.0 history), commit `e4b3d6c88` (docs) on top of `b30870fe8`
+(the code fix), annotated tag `gt4gs-v1.0.1`. Merged to `gt4gs/main` as `d90c0f111` (PR #7). **Stable release (not a prerelease)**:
+https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v1.0.1
+  - `gt4-gs-1.0.1-windows-x64.zip`, 13,022,346 bytes, SHA-256 `58f7cfef4842e781a62778a26276434510c6476545b6c6200269c2f1dd7244ca`
+  - `gt4recomp-gs-1.0.1-source.zip`, 25,129,708 bytes, SHA-256 `6baf52f2bc9076906cee4ff390da4d669ef2ea5cec7f595c20c9256043e2be0f`
+  - `SHA256SUMS`
+Built with `gt4gs/release-local.ps1 -Release` (GT4GS_ONLY=ON, deps of `private/slice193-gt4gs-deps`, dependency script
+sha256 `735c239e...`, the same as 1.0.0); `gt4gs/check-nojit.ps1` passed on the package. The zip was downloaded back and
+`sha256sum -c SHA256SUMS` passed; extracted to `private/slice203-gt4gs-release-pkg` (140 files, tree sha256 `55939b2b...`,
+`gt4-gs.exe` 8,955,904 bytes, sha256 `bda98d49...`), the package slice203 pins.
+Change: `pcsx2-gt4gs/Main.cpp` runs `VMManager::Internal::LoadStartupSettings()` only after `[GT4GS] DataRoot` is applied
+(stream modes), or right after the arguments (GSRunner dump replay). 1.0.0 created the PCSX2 user folders and wrote
+`Documents\PCSX2\logs\emulog.txt` on every session. Checked with a `Documents\PCSX2` snapshot: no changes for a live
+run and an offline replay. Version string 1.0.1. The GS stream protocol is unchanged (1.2).
+
