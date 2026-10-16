@@ -1,6 +1,7 @@
 # Live PCSX2 GS process (TASK-036)
 
-Status: **built and checked headless; owner windowed test pending** (2026-10-16). Branch `task/036-gs-live` (main
+Status: **built and checked headless; owner windowed test pending** (2026-10-16). Performance of this path: section 9
+(TASK-041, slice198). Branch `task/036-gs-live` (main
 repo, MIT) and `gt4gs/live` in the GPL fork [moesuito/gt4recomp-gs](https://github.com/moesuito/gt4recomp-gs).
 Decision [0070](decisions/0070-pcsx2-gs-separate-process.md), plan [GSDX-PLAN](GSDX-PLAN.md) sections B.3 and C,
 protocol [GS-STREAM-PROTOCOL](GS-STREAM-PROTOCOL.md). Labels: **Confirmed**, **High confidence**, **Hypothesis**,
@@ -332,3 +333,126 @@ mean same-field-line difference; flicker = mean frame-to-frame difference).
 The visible window (owner), interlaced races (480i held, no race capture), PAL and 1080i, the FastMAD look at 3x
 and the menu transitions with motion (the metric covers a static menu; 840-880 transitions were checked by eye
 only).
+
+## 9. Performance of the PCSX2 GS path (TASK-041, slice198)
+
+Status: **built and checked headless; owner night-race A/B pending** (2026-10-16). Branch `task/041-gs-perf` (main
+repo only; the fork is unchanged, slice198 pins the same `gt4gs-v0.3.2` package as slice196). `--mode pcsx2` now
+selects [`slice198-pcsx2.json`](inputs/slice198-pcsx2.json); `--mode pcsx2-slice196` keeps TASK-047.
+
+### 9.1 A headless race
+
+The slice157 schedule never leaves the menus, so TASK-041 adds a race schedule (`private/slice198-scripts/
+headless-race.sh`, card seed `slice110-menu-pilot/name-control4`): Arcade, Single Race, Original Circuits, El Capitan,
+Ford Ka '01, 5 AI cars, cross held from frame 8800; the race runs from about frame 9000 to 16000 (dumps every 100
+frames show the car on track). It is a day track, but it has readbacks (294 in the run) with the same privileged-write
+pattern as the owner's night race. All timings below are headless, unthrottled and at 1x: they compare variants with
+each other, not with the owner's paced 60 Hz runs.
+
+### 9.2 Privileged writes and the MTVU sync (goal 1)
+
+Per-register counters (new F8 lines, section 9.5) give the night-race pattern (Confirmed):
+
+- every frame, at the VBlank: PMODE, SMODE2, DISPFB2, DISPLAY2, BGCOLOR (5 writes, worker idle, wait 0);
+- per readback: CSR (FINISH clear) and BUSDIR twice (to host before the FIFO read, back after). The owner's night race
+  has one readback per frame: 5 + 3 = **8.00 privileged writes per frame**, exactly the owner F8 value.
+- With the blocking sync, the whole wait sits before the CSR write: in the readback-dense race interval CSR 2.063 of
+  2.067 ms/frame, BUSDIR 0.004. The EE kicks the frame's VIF1 work, then clears CSR for the flare readback while the
+  worker still runs the VU1 programs; the sync waits for all of them.
+
+None of the registers needs the blocking sync in pcsx2 mode: CSR/IMR/SIGLBLID reads are answered from the EE copy,
+which the donor writes at the program point either way, and the GS process only needs the PRIV record at its stream
+position. `GT4_MTVU_PRIV_ASYNC=1` (default in slice198) skips the sync and lets the stream client queue the write in
+the MTVU journal (`EeJournal::append_privileged`) when worker output is outstanding; the journal drain posts it after
+the earlier GIF output (when nothing is outstanding it is posted at once, as before). Donor mode is unchanged (no
+ordered consumer is registered there). `GT4_MTVU_PRIV_ASYNC=0` restores the slice196 path.
+
+Equivalence (Confirmed, headless):
+
+| Check | Result |
+|---|---|
+| Menus, 4,200 frames: `.gscap` of donor slice198, pcsx2 slice198 (async), pcsx2 slice196 | byte-identical, sha256 `4ff3993d...` (0 writes queued in the menus) |
+| Race, 16,000 frames: stream hash (`GT4_GS_STREAM_HASH=1`) async 1 vs 0 | identical, 31,709,575 records, `9b88c23e984ff940`; 588 writes queued (all BUSDIR before a FIFO read) |
+| Race frames (gs-frames every 100), async 1 vs 0 | 159/159 identical |
+| Menus frames, slice198 pcsx2 1x vs slice196 | 41/41 identical (two runs) |
+
+Effect (Confirmed headless, the night race by inference): **the new gs_privileged wait is 0.000 ms/frame, but the wait
+moves to the download sync** a few microseconds later (READ_FIFO must follow the worker's GIF output in the stream,
+in both readback modes). Same race interval: privileged 1.323 -> 0, download 0 -> 1.503 ms/frame; over the race,
+gs_privileged 0.286 (async 0) vs download 0.307 (async 1). So in the night race the EE critical path should not
+change (High confidence); the wait is the readback's dependency on the VU1 worker, not a cost of the sync itself.
+The switch stays on because it is proven byte-equivalent and removes waits where a privileged write is not followed
+by a readback; the owner A/B (`GT4_MTVU_PRIV_ASYNC=0`) checks it on the real night race.
+
+### 9.3 Readback tail (goal 2)
+
+Race schedule twice with a new, empty pipeline cache folder (`[Folders] Cache`), then with a GS-side spin:
+
+| Run | Readback waits (game side) | GS thread frames over 33 ms |
+|---|---|---|
+| cold cache | mean 1.56 ms, max 58.0; 12 of 294 at 8 ms or more (5 at 16 ms or more) | 129 |
+| same cache, warm | mean 0.60 ms, max 2.7; none at 8 ms or more | 125 |
+| warm, `[GT4GS] SpinUs = 300` | mean 0.72 ms, max 3.2 | 128 |
+
+- The long readbacks are pipeline compiles (Confirmed: they disappear on the second run with the cache that the first
+  run filled). The owner's 23 ms tail at race start is the same mechanism; TASK-046 ("prepare shaders") is the fix.
+  The worktree cache shipped with slice198 already holds the El Capitan race pipelines (1x).
+- A longer GS-side spin does not help (mean 0.72 vs 0.60 ms; it only keeps the GS CPU thread awake), so the fork is
+  unchanged. Accurate stays the default.
+- Headless GS-thread frames over 33 ms are mostly loading screens (same in every run).
+
+### 9.4 Stream copies and wake-ups (goal 3)
+
+Profile of `gs_ipc_write` with the new counter: on the race the producer signalled the GS process's data event
+**322 times per frame** (one `SetEvent` system call and one thread wake-up for most GIF records, because the GS CPU
+thread drains the ring and sleeps after its 30 us spin). Changes:
+
+- Wake batching (`GT4_GS_WAKE_BYTES`, default 262,144; 0 = every record as before): GIF/PRIV records wake a sleeping
+  GS process every 256 KiB; VSYNC, READ_FIFO, RESET and CONTROL wake it at once, and the producer wakes it before it
+  waits for ring space ([protocol](GS-STREAM-PROTOCOL.md) section 5). Race: 322 -> 11-14 wake-ups per frame;
+  `gs_ipc_write` 0.169-0.180 -> 0.114-0.126 ms per MB of stream (about -30%; slice196 1.10 ms/frame at 6.1 MB, slice198
+  0.79 ms/frame at 6.3 MB). Readback mean unchanged (0.68 -> 0.61 ms with the privileged sync on).
+- MTVU journal: a worker GIF record that arrives in one chunk (the usual case) is moved into the drain queue instead of
+  copied a second time (`EeJournal::pump_output`); one copy of the worker's GIF bytes less on the EE thread.
+- Not done: writing the worker's GIF data straight into the shared ring. The bytes must wait in the journal for their
+  stream position (EE PATH3 and privileged writes interleave), so one copy into the ring remains.
+
+### 9.5 F8 `[gs-ipc]` section (goal 4)
+
+New lines after the existing ones (ms per frame unless noted):
+
+```
+[gs-ipc] privileged writes/frame (total 8.00): PMODE=1.00 SMODE2=1.00 DISPFB2=1.00 DISPLAY2=1.00 BGCOLOR=1.00 CSR=1.00 BUSDIR=2.00
+[gs-ipc] EE wait for the VU1 worker before privileged writes ms/frame (total ...): ... CSR=... BUSDIR=...
+[gs-ipc] privileged writes queued behind VU1 worker output/frame: 1.00 (GT4_MTVU_PRIV_ASYNC on)
+[gs-ipc] GS process woken from sleep per frame: 12.3 (records posted while its CPU thread slept; one event signal each)
+[gs-ipc] GS process CPU thread (STATS vsyncs 2500-9500): busy ms/frame=0.948 wait ms/frame=15.199 records/frame=... readbacks served ...
+[gs-ipc] summary: EE critical path 13.02 ms/frame of 16.68 budget (78%) = EE CPU 8.76 + waits for the VU1 worker 3.48 + readbacks 0.78 + GS back-pressure 0.00; headroom 3.67 ms; GS process CPU thread 0.95 ms/frame
+```
+
+(Example values: the owner's slice194 night race fed into the summary formula, checked by the client fixture.) The
+GS process CPU thread line is now the interval (difference of the STATS records), not the cumulative value. The GS
+thread and GPU times stay in the `(GSStreamReplayer)` lines every 500 VSYNCs of the same log; carrying them in STATS
+would change the fork and its vendored protocol copy, which TASK-042 is rebuilding, so it is left for later.
+
+### 9.6 Donor versus pcsx2 in the same build (goal 5)
+
+slice157 menus schedule, 4,200 frames, headless, two runs each, totals over the F8-equivalent reports:
+
+| Renderer | EE thread CPU | GS work on the EE | Elapsed |
+|---|---|---|---|
+| donor (CoreGS 1.1) | 7.60 / 7.53 ms/frame | gs_host_copy 0.32 + gs_execute 0.07 + journal GS front end 0.11 | 33.2 / 32.7 s |
+| pcsx2 (1x) | 7.30 / 7.10 ms/frame | gs_ipc_write 0.08 + journal drain 0.04 | 33.6 / 32.8 s |
+
+The GS stream costs the EE about 0.35 ms/frame less than the built-in renderer's front end in the menus (Confirmed for
+the menus; both are small next to the 6.4 ms of EE game code). Races are the owner's A/B.
+
+### 9.7 Checks and not verified
+
+- CTest 29/29 (new: privileged entries in the random journal scripts, `pcsx2-ordered` stream scenario byte-identical
+  to `pcsx2`, register table and summary line, wake batching counts and the back-pressure wake-up); Python 416 OK
+  (16 skipped; new `tests/python/test_gs_perf.py`); donor 42/42 identical to slice157 (two runs); pcsx2 1x 41/41
+  identical to slice196 (two runs); race stream hash and frames as in 9.2.
+- Not verified: the owner's night race (paced, 3x, visible window): whether the late frames change, the new F8 lines
+  with real values, and whether wake batching changes GS-thread smoothness at 60 Hz. The headless race is a day track
+  at 1x.

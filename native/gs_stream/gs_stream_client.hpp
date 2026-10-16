@@ -42,6 +42,27 @@ bool stream_renderer();
 bool on_gif_render(int path, const std::uint8_t *data, std::uint32_t qwc);
 // Privileged GS register write (the donor keeps its own copy for CSR/IMR/SIGLBLID reads).
 void on_privileged_write(std::uint32_t address, std::uint64_t value);
+
+// TASK-041 (slice198): ordering of privileged writes with the VU1 worker (MTVU). The game's privileged writes reach the
+// GS process only through the stream, so they need only their stream position, not an idle worker. The MTVU bridge
+// installs these hooks in pcsx2 mode (native/mtvu_bridge.cpp):
+//   queue        true when the write was queued behind outstanding worker output (the MTVU journal posts it later,
+//                in order, through post_privileged_now); false: the client posts it now. Null: always post now.
+//   take_wait_us the EE wait of the blocking MTVU sync that preceded this write (0 when none); per-register F8 lines.
+//   active       true when privileged writes skip the blocking MTVU sync (GT4_MTVU_PRIV_ASYNC on, worker running).
+struct PrivilegedOrdering {
+  bool (*queue)(std::uint32_t address, std::uint64_t value) = nullptr;
+  std::uint64_t (*take_wait_us)() = nullptr;
+  bool (*active)() = nullptr;
+};
+void set_privileged_ordering(const PrivilegedOrdering &ordering);
+// Posts one privileged write to the stream now (the MTVU journal drain calls it for queued writes).
+void post_privileged_now(std::uint32_t address, std::uint64_t value);
+// Index of a privileged register for the per-register counters: 0-14 = PMODE..BGCOLOR (0x12000000-0x120000E0), 15 CSR,
+// 16 IMR, 17 BUSDIR, 18 SIGLBLID, 19 any other address. privileged_register_name(index) is the GS manual name.
+constexpr int kPrivilegedRegisterSlots = 20;
+int privileged_register_index(std::uint32_t address);
+const char *privileged_register_name(int index);
 // Local-to-host FIFO read. Returns true when the stream renderer answered it (data filled); false in donor mode,
 // where the capture only records the request and the donor serves the data.
 bool read_fifo(std::uint8_t *data, std::uint32_t qwords);
@@ -62,6 +83,20 @@ void resize_window(std::uint32_t width, std::uint32_t height);
 void set_halt_handler(void (*halt)(const char *reason));
 // End of the run (donor gs::stats): CONTROL shutdown, wait for the GS process, print the session summary.
 void finish(std::FILE *output);
+
+// TASK-041: the F8 one-line summary of the EE critical path against the frame budget (all values ms per frame).
+// The EE critical path is the EE thread's measured CPU time plus the time it blocks for the VU1 worker (MTVU syncs),
+// for readback replies and for the GS process (ring space, frames in flight). Spin time inside those waits is also
+// CPU time, so the sum may count a few microseconds twice; the pacer's sleep is in neither.
+struct FrameCosts {
+  double ee_cpu_ms = -1.0;          // measured EE thread CPU; negative: Unknown
+  double vu1_worker_wait_ms = 0.0;  // MTVU syncs, every reason
+  double readback_wait_ms = 0.0;
+  double backpressure_ms = 0.0;     // GS ring space and frames in flight
+  double gs_cpu_thread_ms = -1.0;   // GS process CPU thread (STATS of the interval); negative: Unknown
+  double budget_ms = 1000.0 / 59.94;
+};
+std::string format_frame_summary(const FrameCosts &costs);
 
 // SHA-256 of a file as 64 lowercase hex digits (Windows CNG). Used for the GS process pin (GT4_GS_PROCESS_SHA256).
 bool file_sha256(const std::wstring &path, std::string &hex, std::string &error);

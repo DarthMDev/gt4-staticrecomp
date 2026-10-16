@@ -1256,3 +1256,35 @@ Checks: CTest 29/29 (the stream client fixture checks the SYNCV values and the S
 410 OK, 6 skipped; donor 42/42 identical to slice195; pcsx2 1x live 41 frames: 40 differ from slice195 (the 480i
 frames are now deinterlaced), and frames 100-1400 are pixel-identical to the offline 0.3.2 replay of the SYNCV
 stream with the live settings (slice195 live = offline 0.3.1 replay of the old stream, same method).
+
+## Slice198 - PCSX2 GS path performance (TASK-041)
+
+Branch `task/041-gs-perf` (from main `a1a06a4`). Same capsules, shaders, VU tables and gt4-gs package (`gt4gs-v0.3.2`,
+`private/slice196-gt4gs-release-pkg`) as slice196; native game-side changes only (`native/mtvu_*`,
+`native/gs_stream/gs_stream_client.*`, `gs_stream_ipc.*`, `perf_probe.*`). Scripts in `private/slice198-scripts`:
+
+- game: `build-game-198.bat` (source = worktree `C:\Antigravity\gt4-wt-041-perf`, build dir
+  `private/slice198-gs-perf-build/build`, assets root the main checkout); `guard.ps1` waits until no ninja, cl,
+  clang-cl or link process runs (another task builds in parallel);
+- pin: `make_manifest.py <worktree> <assets root>` writes `docs/inputs/slice198-pcsx2.json` from slice196 with the
+  new runtime pin;
+- headless: `headless-198.sh <run> [env]` (slice157 menus schedule), `headless-race.sh` / `race-run.sh <run> [env]`
+  (race schedule, 16,000 frames, keeps `probe-nosys.log`: the syscall trace makes the full log about 1 GB),
+  `analyze.py <first report> <runs>` (averages of the F8-equivalent reports), timing sets `timing-set1.sh`
+  (slice196 vs slice198, privileged sync on/off, wake batching off), `timing-set2.sh` (cold/warm cache, GS spin),
+  `timing-set3.sh` (donor vs pcsx2 menus); outputs in `private/slice198-smoke`, race route exploration
+  `explore.sh`.
+
+Pins `docs/inputs/slice198-pcsx2.json` (`gt4vulkan.exe` 95,667,712 bytes, sha256 `8658cffa...`); `--mode pcsx2` points
+here, `--mode pcsx2-slice196` keeps slice196. The worktree holds file copies (no links) of every pinned file of both
+modes plus the gt4-gs package, cache and data folders (`private/slice198-gs-perf-build`, `slice196-gs-deinterlace-build`,
+`slice153-pacing-shaders`, `slice196-gt4gs-release-pkg`, `slice193-gt4gs-cache`, `slice193-gt4gs-data`; hashes and the
+package tree digest checked), so `--mode pcsx2` runs from the worktree.
+
+Switches: `GT4_MTVU_PRIV_ASYNC` (default 1; 0 = slice196 privileged sync), `GT4_GS_WAKE_BYTES` (default 262144; 0 =
+wake on every record), `GT4_GS_STREAM_HASH=1` (test aid: F8 and session stream hash).
+
+Checks: CTest 29/29; Python 416 OK, 16 skipped; donor 42/42 identical to slice157 (two runs); pcsx2 1x 41/41 identical
+to slice196 (two runs); menus `.gscap` donor/pcsx2 slice198 = pcsx2 slice196 (`4ff3993d...`); race stream hash with the
+privileged sync on and off identical (`9b88c23e984ff940`, 588 queued writes), race frames 159/159 identical.
+Details and timings: [GS-LIVE](GS-LIVE.md) section 9.

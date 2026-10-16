@@ -73,8 +73,12 @@ PERF_PROFILES = {
     # the picture; the game keeps the keyboard focus on activation).
     'pcsx2-slice195': ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'),
     # TASK-047 (slice196): 480i deinterlacing (SetGsCrt posts SYNCV; gt4-gs 0.3.2 presents with the VSYNC display
-    # field, protocol 1.1). Mode pcsx2 points here.
-    'pcsx2': ('slice196-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
+    # field, protocol 1.1).
+    'pcsx2-slice196': ('slice196-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
+    # TASK-041 (slice198): privileged GS writes queued in the MTVU journal instead of draining the VU1 worker
+    # (GT4_MTVU_PRIV_ASYNC, default 1), one copy less per worker GIF record, F8 [gs-ipc] per-register lines and the EE
+    # critical path summary. Same gt4-gs 0.3.2 package as slice196. Mode pcsx2 points here.
+    'pcsx2': ('slice198-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -83,11 +87,13 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
+                     'slice198-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
+                     'slice198-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -96,17 +102,21 @@ FORCE_480P_VALUES = ('0', '1')
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
 MTVU_MEASURE_VALUES = ('0', '1')
 # TASK-011 step 2 (slice170): worker runtime switches. Unset means the default shown; forwarded and recorded.
-MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'}
+# GT4_MTVU_PRIV_ASYNC (TASK-041, slice198): privileged GS writes queued in the MTVU journal in pcsx2 mode (default on).
+MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0', 'GT4_MTVU_PRIV_ASYNC': '1'}
 # GT4_MTVU_REPORT_EVERY (slice171): VBlank count for the headless [mtvu] F8-equivalent report; unset means off.
 MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
 # TASK-035 (slice191): GS stream settings (native/gs_stream/gs_stream_client.hpp, tools/gs_stream_record).
 GS_STREAM_RENDERERS = ('donor', 'pcsx2')
 # GS display settings an owner run keeps from the caller (play_performance.py --gs-scale, --gs-readback, --gs-setting).
-GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_SETTINGS', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE')
+GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_SETTINGS', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE',
+                    'GT4_GS_WAKE_BYTES')
 GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_CAPTURE_FRAMES', 'GT4_GS_FRAMES_IN_FLIGHT',
                    'GT4_GS_RECORD_OUTPUT', 'GT4_GS_RECORD_FRAMES', 'GT4_GS_PROCESS_SHA256', 'GT4_GS_CONFIG',
                    'GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE',
-                   'GT4_GS_HANDSHAKE_TIMEOUT_MS', 'GT4_GS_LOST_GRACE_FRAMES', 'GT4_GS_SETTINGS')
+                   'GT4_GS_HANDSHAKE_TIMEOUT_MS', 'GT4_GS_LOST_GRACE_FRAMES', 'GT4_GS_SETTINGS',
+                   # TASK-041 (slice198): game-side test and A/B switches (wake batching, stream hash).
+                   'GT4_GS_WAKE_BYTES', 'GT4_GS_STREAM_HASH')
 # TASK-039: user GS settings as JSON (play_performance.py --gs-setting ID=VALUE and the shortcuts). The table:
 # docs/launcher/gs-settings.toml; the gt4-gs.ini writer is gs_config_text below (scripts/gs_settings.py).
 GS_SETTINGS_ENV = 'GT4_GS_SETTINGS'

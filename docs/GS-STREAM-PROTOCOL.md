@@ -113,6 +113,14 @@ A side that must wait:
 The other side, after publishing a position (sequentially consistent store), loads the matching waiter flag and
 signals the event only when it is 1. This Dekker-style pairing loses no wake-up.
 
+Producer wake batching (TASK-041, slice198; no layout or record change, so the version stays 1.1): for GIF and PRIV
+records the producer MAY delay the data wake-up of a sleeping consumer until it has posted a number of record bytes
+since the last wake-up (the game: `GT4_GS_WAKE_BYTES`, default 256 KiB, 0 = every record). It MUST signal at once for
+every other record type (VSYNC, READ_FIFO, RESET, CONTROL) and before it waits itself (ring space). A sleeping
+consumer therefore sees batched records at the latest at the next threshold, VSYNC, readback or space wait; its
+100 ms sleep slice bounds the delay in any case. Measured on the headless race schedule: about 320 event signals
+per frame without batching, 11-14 with it.
+
 Every sleep MUST also wait on the peer **process handle**; when it is signalled the wait ends with an error (the
 peer died). A wait also ends when `state` has the fatal bit. Bounded waits (handshake, shutdown) end with a
 timeout error.
@@ -170,8 +178,11 @@ Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record
   donor GIF path parser still runs (for `busy()` and counters) with a sink that only applies SIGNAL/FINISH/LABEL.
 - SIGNAL/FINISH/LABEL, CSR, IMR and SIGLBLID stay in the game process: PATH2/PATH3 signals are applied on the EE at
   acceptance (slice172); PATH1 signals at the render point. EE reads of CSR/IMR/SIGLBLID are answered locally.
-- PRIV: every privileged write is posted after the donor stored its own copy (writes are blocking MTVU syncs, so
-  earlier GIF data is already in the ring). SetGsCrt posts the SMODE1 and SMODE2 values the BIOS would write and,
+- PRIV: every privileged write is posted after the donor stored its own copy, at the same stream position as on a
+  single thread: with `GT4_MTVU_PRIV_ASYNC=0` the write is a blocking MTVU sync (earlier GIF data is already in the
+  ring); with `GT4_MTVU_PRIV_ASYNC=1` (default since slice198) it is queued in the MTVU journal behind the outstanding
+  VU1 worker output and posted by the journal drain, so the bytes are the same without waiting for the worker
+  (checked: identical stream hashes on the headless menus and race schedules). SetGsCrt posts the SMODE1 and SMODE2 values the BIOS would write and,
   for the analog modes NTSC (0x02) and PAL (0x03), SYNCV with the GS User's Manual vertical timings (NTSC
   `0x00C7800601A01801`: VS 6, VDP 480, VBPE 6, VBP 26, VFPE 6, VFP 1; PAL `0x00A9000502101401`: VS 5, VDP 576,
   VBPE 5, VBP 33, VFPE 5, VFP 1), in the order SMODE1, SYNCV, SMODE2 (version 1.1). A GS uses SYNCV VFP bit 0

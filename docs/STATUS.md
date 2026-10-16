@@ -2,6 +2,16 @@
 
 ## Current state (2026-10-16)
 
+**slice198 (TASK-041, branch `task/041-gs-perf`, fork unchanged, `gt4gs-v0.3.2`):** performance of the PCSX2 GS path.
+A headless race schedule (El Capitan, 5 AI) reproduces the night-race privileged-write pattern: the 3.48 ms/frame
+`gs_privileged` wait is the EE waiting for the frame's VU1 work at the CSR write right before the flare readback.
+`GT4_MTVU_PRIV_ASYNC=1` (default) queues privileged writes in the MTVU journal: byte-identical stream and frames, the
+gs_privileged wait is 0 but moves to the readback's download sync (no net gain expected in the night race). Long
+readbacks are pipeline compiles (cold cache max 58 ms, warm 2.7 ms; TASK-046). Wake batching (`GT4_GS_WAKE_BYTES`)
+cuts GS wake-ups from 322 to about 12 per frame and `gs_ipc_write` by about 30% per MB. F8 `[gs-ipc]` gains
+per-register lines and an EE critical path summary. CTest 29/29, Python 416 OK, donor 42/42, pcsx2 41/41.
+`--mode pcsx2` = slice198. Owner night-race A/B pending. [GS-LIVE](GS-LIVE.md) section 9.
+
 **slice196 (TASK-047, branch `task/047-gs-deinterlace`, fork `gt4gs/deinterlace`, `gt4gs-v0.3.2`):** 480i menus in the
 PCSX2 GS mode. Cause: the stream had no SYNCV (PCSX2 never deinterlaced; fields line-doubled and bouncing) and,
 once SYNCV is sent, gt4-gs 0.3.1 used the previous VSYNC's field (wrong order, combing). Fix: SetGsCrt posts SYNCV;

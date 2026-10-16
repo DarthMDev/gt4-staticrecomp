@@ -12,6 +12,7 @@
 #include <bcrypt.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
@@ -52,6 +53,20 @@ struct Counters {
   std::uint64_t records = 0, bytes = 0, gif_records = 0, gif_bytes = 0, priv = 0, vsyncs = 0, readbacks = 0,
                 readback_bytes = 0, controls = 0, resets = 0;
 };
+
+// TASK-041: privileged writes by register: writes, EE wait of the blocking MTVU sync before them, and writes queued
+// behind outstanding VU1 worker output (GT4_MTVU_PRIV_ASYNC).
+struct PrivilegedSlot {
+  std::uint64_t writes = 0, wait_us = 0, queued = 0;
+};
+using PrivilegedSlots = std::array<PrivilegedSlot, kPrivilegedRegisterSlots>;
+
+// Installed by the MTVU bridge in pcsx2 mode; empty otherwise (every write is posted at once, as before).
+PrivilegedOrdering g_privileged_ordering;
+
+constexpr const char *kPrivilegedNames[kPrivilegedRegisterSlots] = {
+    "PMODE", "SMODE1", "SMODE2", "SRFSH", "SYNCH1", "SYNCH2", "SYNCV", "DISPFB1", "DISPLAY1", "DISPFB2",
+    "DISPLAY2", "EXTBUF", "EXTDATA", "EXTWRITE", "BGCOLOR", "CSR", "IMR", "BUSDIR", "SIGLBLID", "other"};
 
 // A visible top-level window of this process (the game window exists before the GS process starts), or null.
 HWND visible_game_window() {
@@ -133,6 +148,30 @@ struct ReadbackWaits {
   }
 };
 
+// TASK-041: FNV-1a (64-bit) over the records in stream order: type, flags, payload bytes. Equal hashes of two runs
+// mean equal record streams (sequence numbers follow from the order); a test aid, not a security property.
+struct StreamHash {
+  bool enabled = false;
+  std::uint64_t value = 0xCBF29CE484222325ull;
+  std::uint64_t records = 0;
+
+  void bytes(const void *data, std::size_t size) {
+    const auto *at = static_cast<const std::uint8_t *>(data);
+    for (std::size_t i = 0; i < size; ++i) {
+      value ^= at[i];
+      value *= 0x100000001B3ull;
+    }
+  }
+  void add(RecordType type, std::uint16_t flags, const void *first, std::size_t first_bytes, const void *second,
+           std::size_t second_bytes) {
+    const std::uint16_t header[2] = {static_cast<std::uint16_t>(type), flags};
+    bytes(header, sizeof header);
+    if (first_bytes) bytes(first, first_bytes);
+    if (second_bytes) bytes(second, second_bytes);
+    ++records;
+  }
+};
+
 std::uint64_t now_us() {
   LARGE_INTEGER counter, frequency;
   QueryPerformanceCounter(&counter);
@@ -177,6 +216,18 @@ class Client {
 
   void privileged(std::uint32_t address, std::uint64_t value) {
     if (address < proto::kPrivilegedBase || address >= proto::kPrivilegedBase + proto::kPrivilegedBytes) return;
+    PrivilegedSlot &slot = privileged_[static_cast<std::size_t>(privileged_register_index(address))];
+    ++slot.writes;
+    if (g_privileged_ordering.take_wait_us) slot.wait_us += g_privileged_ordering.take_wait_us();
+    // TASK-041: behind outstanding VU1 worker output the write waits in the MTVU journal, which posts it in order.
+    if (g_privileged_ordering.queue && g_privileged_ordering.queue(address, value)) {
+      ++slot.queued;
+      return;
+    }
+    post_privileged(address, value);
+  }
+
+  void post_privileged(std::uint32_t address, std::uint64_t value) {
     const proto::PrivPayload payload{address & ~7u, 0, value};
     emit(RecordType::priv, 0, &payload, sizeof payload);
     ++counters_.priv;
@@ -309,6 +360,9 @@ class Client {
                    static_cast<unsigned long long>(w.frames_waits), w.frames_wait_us / 1000.0, w.response_wait_us / 1000.0);
     }
     if (readback_session_.count) readback_session_.print(output, "session");
+    if (stream_hash_.enabled)
+      std::fprintf(output, "[gs-ipc] session stream hash (GT4_GS_STREAM_HASH): records %llu hash %016llx\n",
+                   static_cast<unsigned long long>(stream_hash_.records), static_cast<unsigned long long>(stream_hash_.value));
     if (has_stats_) print_consumer_stats(output, last_stats_);
     std::fflush(output);
     if (dead_ && window_) {
@@ -323,6 +377,12 @@ class Client {
 
  private:
   void open_capture() {
+    // TASK-041: GT4_GS_STREAM_HASH=1 hashes every record (type, flags, payload) in stream order, so two runs can be
+    // compared without writing multi-GB captures (F8 interval and session lines).
+    if (const char *hash = std::getenv("GT4_GS_STREAM_HASH"); hash && *hash) {
+      if (std::strcmp(hash, "0") != 0 && std::strcmp(hash, "1") != 0) refuse("GT4_GS_STREAM_HASH must be 0 or 1");
+      stream_hash_.enabled = std::strcmp(hash, "1") == 0;
+    }
     const char *path = std::getenv("GT4_GS_CAPTURE");
     if (!path || !*path) return;
     if (const char *range = std::getenv("GT4_GS_CAPTURE_FRAMES")) {
@@ -370,8 +430,12 @@ class Client {
     ipc::SessionOptions options;
     options.serial = kGameSerial;
     options.frames_in_flight = frames_in_flight;
+    // TASK-041: GT4_GS_WAKE_BYTES (0..16 MiB): GIF/PRIV bytes between wake-ups of a sleeping GS process; 0 = every record.
+    const std::uint32_t wake_bytes = environment_number(
+        "GT4_GS_WAKE_BYTES", static_cast<std::uint32_t>(ipc::Session::kDefaultDataWakeBytes), 0, 16u << 20);
     try {
       session_ = ipc::Session::create_producer(options);
+      session_->set_data_wake_bytes(wake_bytes);
       const std::wstring arguments = L"--ipc " + ipc::widen(session_->name()) + L" --parent " +
                                      std::to_wstring(ipc::current_process_id()) + config_argument;
       child_ = ipc::ChildProcess::spawn(ipc::widen(process), arguments);
@@ -409,16 +473,18 @@ class Client {
       std::fprintf(stderr, "[gs-ipc] readback mode %s (GT4_GS_READBACK, applied by the GS process configuration)\n", mode);
     std::fprintf(stderr,
                  "[gs-ipc] GT4_RENDERER=pcsx2: donor Vulkan renderer not created; GS process %s pid %u ready "
-                 "(consumer %s, renderer %s, version %s, protocol %u.%u, flags 0x%x, frames in flight %u)\n",
+                 "(consumer %s, renderer %s, version %s, protocol %u.%u, flags 0x%x, frames in flight %u, wake every %u "
+                 "bytes)\n",
                  process, ready_.consumer_pid, ascii(ready_.consumer, 32).c_str(), ascii(ready_.renderer, 32).c_str(),
                  ascii(ready_.version, 64).c_str(), ready_.version_major, ready_.version_minor, ready_.flags,
-                 frames_in_flight);
+                 frames_in_flight, static_cast<unsigned>(session_->data_wake_bytes()));
   }
 
   void write_capture(RecordType type, std::uint16_t flags, const void *first, std::size_t first_bytes,
                      const void *second = nullptr, std::size_t second_bytes = 0) {
     if (capture_.is_open() && frame_ >= capture_first_)
       capture_.write(type, flags, sequence_ + 1, first, first_bytes, second, second_bytes);
+    if (stream_hash_.enabled) stream_hash_.add(type, flags, first, first_bytes, second, second_bytes);
   }
 
   void count(std::size_t payload_bytes) {
@@ -525,7 +591,70 @@ class Client {
                  d.bytes / f, d.records / f, d.gif_records / f, d.gif_bytes / f, d.priv / f, d.readbacks / f,
                  d.readback_bytes / f, static_cast<unsigned long long>(d.vsyncs));
     if (readback_interval_.count) readback_interval_.print(file, "interval");
-    if (has_stats_) print_consumer_stats(file, last_stats_);
+    if (stream_hash_.enabled)
+      std::fprintf(file, "[gs-ipc] stream hash (GT4_GS_STREAM_HASH) after vsync %llu: records %llu hash %016llx\n",
+                   static_cast<unsigned long long>(frame_), static_cast<unsigned long long>(stream_hash_.records),
+                   static_cast<unsigned long long>(stream_hash_.value));
+    report_privileged(file, f);
+    if (session_) {
+      const ipc::WaitTotals &w = session_->wait_totals();
+      const auto data = static_cast<std::size_t>(ipc::Wake::data);
+      std::fprintf(file, "[gs-ipc] GS process woken from sleep per frame: %.2f (records posted while its CPU thread "
+                   "slept; one event signal each)\n",
+                   (w.wakes_signalled[data] - wakes_baseline_) / f);
+    }
+    // The GS process CPU thread over this interval, from its STATS records (posted every 500 VSYNCs).
+    double gs_cpu_thread_ms = -1.0;
+    if (has_stats_ && has_stats_baseline_ && last_stats_.vsyncs > stats_baseline_.vsyncs) {
+      const proto::StatsPayload &a = stats_baseline_, &b = last_stats_;
+      const double n = static_cast<double>(b.vsyncs - a.vsyncs);
+      gs_cpu_thread_ms = (b.busy_us - a.busy_us) / 1000.0 / n;
+      std::fprintf(file, "[gs-ipc] GS process CPU thread (STATS vsyncs %llu-%llu): busy ms/frame=%.3f wait ms/frame=%.3f "
+                   "records/frame=%.1f readbacks served %llu\n",
+                   static_cast<unsigned long long>(a.vsyncs), static_cast<unsigned long long>(b.vsyncs), gs_cpu_thread_ms,
+                   (b.wait_us - a.wait_us) / 1000.0 / n, (b.records - a.records) / n,
+                   static_cast<unsigned long long>(b.readbacks - a.readbacks));
+    } else if (has_stats_) {
+      print_consumer_stats(file, last_stats_);
+    }
+    if (stream()) {
+      FrameCosts costs;
+      costs.ee_cpu_ms = gt4::perf::Probe::shared().report_cpu_ms_per_frame();
+      for (gt4::perf::Category wait : {gt4::perf::Category::mtvu_wait_vblank, gt4::perf::Category::mtvu_wait_download,
+                                       gt4::perf::Category::mtvu_wait_gs_privileged, gt4::perf::Category::mtvu_wait_vu_memory,
+                                       gt4::perf::Category::mtvu_wait_gif_reset, gt4::perf::Category::mtvu_wait_reset,
+                                       gt4::perf::Category::mtvu_wait_state, gt4::perf::Category::mtvu_wait_other})
+        costs.vu1_worker_wait_ms += ms(wait);
+      costs.readback_wait_ms = ms(gt4::perf::Category::gs_ipc_readback_wait);
+      costs.backpressure_ms = ms(gt4::perf::Category::gs_ipc_backpressure);
+      costs.gs_cpu_thread_ms = gs_cpu_thread_ms;
+      std::fprintf(file, "%s\n", format_frame_summary(costs).c_str());
+    }
+  }
+
+  // Per-register privileged writes of the interval: count, MTVU wait before them, writes queued behind worker output.
+  void report_privileged(std::FILE *file, double f) const {
+    std::string writes, waits;
+    double total_writes = 0.0, total_wait_ms = 0.0, total_queued = 0.0;
+    char item[64];
+    for (std::size_t i = 0; i < privileged_.size(); ++i) {
+      if (privileged_[i].writes == privileged_baseline_[i].writes) continue;
+      const double n = (privileged_[i].writes - privileged_baseline_[i].writes) / f;
+      const double wait_ms = (privileged_[i].wait_us - privileged_baseline_[i].wait_us) / 1000.0 / f;
+      total_writes += n;
+      total_wait_ms += wait_ms;
+      total_queued += (privileged_[i].queued - privileged_baseline_[i].queued) / f;
+      std::snprintf(item, sizeof item, " %s=%.2f", kPrivilegedNames[i], n);
+      writes += item;
+      std::snprintf(item, sizeof item, " %s=%.3f", kPrivilegedNames[i], wait_ms);
+      waits += item;
+    }
+    const bool asynchronous = g_privileged_ordering.active != nullptr && g_privileged_ordering.active();
+    std::fprintf(file, "[gs-ipc] privileged writes/frame (total %.2f):%s\n", total_writes, writes.c_str());
+    std::fprintf(file, "[gs-ipc] EE wait for the VU1 worker before privileged writes ms/frame (total %.3f):%s\n",
+                 total_wait_ms, waits.c_str());
+    std::fprintf(file, "[gs-ipc] privileged writes queued behind VU1 worker output/frame: %.2f (GT4_MTVU_PRIV_ASYNC %s)\n",
+                 total_queued, asynchronous ? "on" : "off");
   }
 
   static void report_interval_hook(std::FILE *file, const gt4::perf::IntervalTime &interval, std::uint64_t frames);
@@ -537,6 +666,10 @@ class Client {
   Counters counters_;
   Counters baseline_;
   ReadbackWaits readback_interval_;  // since the last F7/F8 (or periodic) report
+  PrivilegedSlots privileged_{}, privileged_baseline_{};
+  proto::StatsPayload stats_baseline_{};  // the latest STATS at the last interval reset
+  bool has_stats_baseline_ = false;
+  std::uint64_t wakes_baseline_ = 0;
   gt4::perf::Accounting::Token wait_token_ = 0;
 
  private:
@@ -560,6 +693,7 @@ class Client {
   bool exit_known_ = false;
   std::uint32_t exit_code_ = 0;
   ReadbackWaits readback_session_;
+  StreamHash stream_hash_;
   std::uint32_t handshake_timeout_ms_ = kHandshakeTimeoutMs;
   std::uint32_t lost_grace_frames_ = kLostGraceFrames;
   std::uint32_t frames_since_lost_ = 0;
@@ -595,6 +729,11 @@ void Client::reset_interval_hook() {
   if (Client *c = client()) {
     c->baseline_ = c->counters_;
     c->readback_interval_ = {};
+    c->privileged_baseline_ = c->privileged_;
+    c->stats_baseline_ = c->last_stats_;
+    c->has_stats_baseline_ = c->has_stats_;
+    c->wakes_baseline_ =
+        c->session_ ? c->session_->wait_totals().wakes_signalled[static_cast<std::size_t>(ipc::Wake::data)] : 0;
   }
 }
 
@@ -721,6 +860,52 @@ bool on_gif_render(int path, const std::uint8_t *data, std::uint32_t qwc) {
 
 void on_privileged_write(std::uint32_t address, std::uint64_t value) {
   if (Client *c = client()) c->privileged(address, value);
+}
+
+void set_privileged_ordering(const PrivilegedOrdering &ordering) { g_privileged_ordering = ordering; }
+
+void post_privileged_now(std::uint32_t address, std::uint64_t value) {
+  if (Client *c = client()) c->post_privileged(address, value);
+}
+
+int privileged_register_index(std::uint32_t address) {
+  if (address < ::gs_stream::kPrivilegedBase || address >= ::gs_stream::kPrivilegedBase + ::gs_stream::kPrivilegedBytes)
+    return kPrivilegedRegisterSlots - 1;
+  const std::uint32_t offset = (address - ::gs_stream::kPrivilegedBase) & ~0xFu;
+  if (offset <= 0xE0u) return static_cast<int>(offset >> 4);
+  switch (offset) {
+    case 0x1000u: return 15;  // CSR
+    case 0x1010u: return 16;  // IMR
+    case 0x1040u: return 17;  // BUSDIR
+    case 0x1080u: return 18;  // SIGLBLID
+    default: return kPrivilegedRegisterSlots - 1;
+  }
+}
+
+const char *privileged_register_name(int index) {
+  return index >= 0 && index < kPrivilegedRegisterSlots ? kPrivilegedNames[index] : "invalid";
+}
+
+std::string format_frame_summary(const FrameCosts &costs) {
+  char line[512];
+  const double waits = costs.vu1_worker_wait_ms + costs.readback_wait_ms + costs.backpressure_ms;
+  char gs[96] = "GS process CPU thread Unknown";
+  if (costs.gs_cpu_thread_ms >= 0.0)
+    std::snprintf(gs, sizeof gs, "GS process CPU thread %.2f ms/frame", costs.gs_cpu_thread_ms);
+  if (costs.ee_cpu_ms < 0.0) {
+    std::snprintf(line, sizeof line,
+                  "[gs-ipc] summary: EE critical path Unknown (EE CPU not measured); EE waits %.2f ms/frame (VU1 worker "
+                  "%.2f, readbacks %.2f, GS back-pressure %.2f) of the %.2f ms frame budget; %s",
+                  waits, costs.vu1_worker_wait_ms, costs.readback_wait_ms, costs.backpressure_ms, costs.budget_ms, gs);
+    return line;
+  }
+  const double path = costs.ee_cpu_ms + waits;
+  std::snprintf(line, sizeof line,
+                "[gs-ipc] summary: EE critical path %.2f ms/frame of %.2f budget (%.0f%%) = EE CPU %.2f + waits for the "
+                "VU1 worker %.2f + readbacks %.2f + GS back-pressure %.2f; headroom %.2f ms; %s",
+                path, costs.budget_ms, path / costs.budget_ms * 100.0, costs.ee_cpu_ms, costs.vu1_worker_wait_ms,
+                costs.readback_wait_ms, costs.backpressure_ms, costs.budget_ms - path, gs);
+  return line;
 }
 
 bool read_fifo(std::uint8_t *data, std::uint32_t qwords) {

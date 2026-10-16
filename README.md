@@ -104,7 +104,10 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
   `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`;
   the demo-input data appears to arrive wrong or late. Under investigation.
 - **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
-  that the PCSX2 GS (TASK-037) is expected to remove.
+  that the PCSX2 GS (TASK-037) is expected to remove. With the PCSX2 GS (accurate
+  readbacks) the night race holds 59.97 FPS; its remaining late frames come from the
+  flare readback waiting for the VU1 worker and, at race start, from pipeline compiles
+  (TASK-041 analysis; TASK-046 "prepare shaders" targets the compiles).
 - **Weaker CPUs:** VU1 work now runs on its own worker thread (MTVU, TASK-011),
   on by default in `--mode main`; `GT4_MTVU=0` restores the single-thread path for
   A/B. The weak-CPU effect is not measured yet (`--cpu-cores N` is the simulation
@@ -166,7 +169,7 @@ in game before it is merged.
 | TASK‑038 | GS window, fullscreen, focus, input, crash handling | ✅ Done · fullscreen, focus and click fix (gt4-gs 0.3.1), crash handling with CoreGS 1.1 fallback |
 | TASK‑039 | GS settings table and `gt4-gs.ini` generator | ✅ Done · 51-row settings table generates `gt4-gs.ini`; fork allow-list enforcement pending ([settings](docs/GS-SETTINGS.md)) |
 | TASK‑040 | Texture dumping and replacement packs | 📋 Planned |
-| TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 📋 Planned |
+| TASK‑041 | GS process performance (`[gs-ipc]`), tuning | 🔧 slice198 built: 322 -> 12 GS wake-ups per frame, privileged writes without the VU1 wait, F8 EE critical path summary; owner night-race A/B pending ([live](docs/GS-LIVE.md#9-performance-of-the-pcsx2-gs-path-task-041-slice198)) |
 | TASK‑042 | JIT-free `gt4-gs.exe` (required before 1.0.0) | 📋 Planned |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019) |
 | TASK‑044 | Packaging, release notes, release 1.0.0 plan | 📋 Planned |

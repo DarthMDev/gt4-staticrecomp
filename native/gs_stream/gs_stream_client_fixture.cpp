@@ -19,6 +19,9 @@
 //                  (TASK-038).
 //   pin-mismatch   GT4_GS_PROCESS_SHA256 differs from the GS process file: refused before the spawn (TASK-036).
 //   bad-config     GT4_GS_CONFIG names a missing file: refused (TASK-036).
+//   pcsx2-ordered  TASK-041: as pcsx2, but the PATH1/PATH2 data of each frame is held by a stand-in for the MTVU
+//                  journal and the privileged writes are queued behind it (PrivilegedOrdering hooks); the drain posts
+//                  them in order, so the stream must equal the pcsx2 capture byte for byte.
 // The pcsx2 scenario also sets the correct GT4_GS_PROCESS_SHA256 and a GT4_GS_CONFIG file (passed as --config).
 // Checks: the three stream files (donor capture, pcsx2 in-process capture, recorder output) are byte-identical; the
 // file parses back with the expected record counts, MORE split and VSYNC fields; the SetGsCrt table.
@@ -63,9 +66,49 @@ std::vector<std::uint8_t> qwords_of(std::size_t qwords, std::uint8_t seed) {
   return data;
 }
 
+// TASK-041: a stand-in for the MTVU journal. Worker GIF output and privileged writes queued behind it, in order.
+struct HeldEntry {
+  bool privileged = false;
+  int path = 0;
+  std::vector<std::uint8_t> data;
+  std::uint32_t address = 0;
+  std::uint64_t value = 0;
+};
+std::vector<HeldEntry> g_held;
+bool g_ordered = false;
+
+bool queue_behind_held(std::uint32_t address, std::uint64_t value) {
+  if (g_held.empty()) return false;
+  g_held.push_back(HeldEntry{true, 0, {}, address, value});
+  return true;
+}
+std::uint64_t no_wait_us() { return 0; }
+bool ordered_active() { return true; }
+
+// The "worker" output of the ordered scenario goes to the held list; otherwise straight to the client.
+void render_worker_output(int path, const std::vector<std::uint8_t> &data) {
+  if (g_ordered) {
+    g_held.push_back(HeldEntry{false, path, data, 0, 0});
+    return;
+  }
+  gt4::gs_stream::on_gif_render(path, data.data(), static_cast<std::uint32_t>(data.size() / 16));
+}
+
+// The drain: every held entry in order (GIF to the render hook, privileged writes posted now).
+void drain_held() {
+  for (const HeldEntry &entry : g_held) {
+    if (entry.privileged)
+      gt4::gs_stream::post_privileged_now(entry.address, entry.value);
+    else
+      gt4::gs_stream::on_gif_render(entry.path, entry.data.data(), static_cast<std::uint32_t>(entry.data.size() / 16));
+  }
+  g_held.clear();
+}
+
 // The scripted hook sequence of a short session (deterministic).
 void run_script(std::uint32_t frames) {
   namespace client = gt4::gs_stream;
+  if (g_ordered) client::set_privileged_ordering({&queue_behind_held, &no_wait_us, &ordered_active});
   client::set_halt_handler(count_halt);
   client::on_gs_reset();
   client::on_set_gs_crt(1, 0x02, 1);
@@ -76,10 +119,11 @@ void run_script(std::uint32_t frames) {
     const auto path1 = qwords_of(64, static_cast<std::uint8_t>(frame + 1));
     const auto path2 = qwords_of(5, static_cast<std::uint8_t>(frame + 2));
     client::on_gif_render(3, path3.data(), 3);
-    client::on_gif_render(1, path1.data(), 64);
-    client::on_gif_render(2, path2.data(), 5);
+    render_worker_output(1, path1);
+    render_worker_output(2, path2);
     client::on_privileged_write(0x12000070u, frame);
     client::on_privileged_write(0x12001000u, 8);
+    drain_held();
     if (frame == 4) {
       // Larger than one record: split with kRecordFlagMore (16 MiB of the 32 MiB ring per record).
       const std::size_t qwords = (16u << 20) / 16 + 3;
@@ -125,6 +169,7 @@ int scenario_main(const std::string &scenario, std::uint32_t frames) {
     gt4::gs_stream::on_gif_render(3, data.data(), 1);  // refuses (exits) on first use
     return 0;
   }
+  g_ordered = scenario == "pcsx2-ordered";
   run_script(frames);
   if (scenario == "peer-death") {
     // The fake GS process dies after 20 records (frame 1-2); the frames-in-flight wait sees it at the latest two VSYNCs
@@ -271,6 +316,45 @@ void check_crt_table() {
   std::puts("[fixture] SetGsCrt table ok");
 }
 
+// TASK-041: the privileged register table and the F8 summary line.
+void check_privileged_table_and_summary() {
+  namespace client = gt4::gs_stream;
+  require(client::privileged_register_index(0x12000000u) == 0 && std::string(client::privileged_register_name(0)) == "PMODE",
+          "PMODE");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12000070u))) == "DISPFB1",
+          "DISPFB1");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x120000E0u))) == "BGCOLOR",
+          "BGCOLOR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001000u))) == "CSR", "CSR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001010u))) == "IMR", "IMR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001040u))) == "BUSDIR",
+          "BUSDIR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001080u))) == "SIGLBLID",
+          "SIGLBLID");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x120000F0u))) == "other" &&
+              std::string(client::privileged_register_name(client::privileged_register_index(0x11000000u))) == "other",
+          "unknown addresses");
+  client::FrameCosts costs;
+  costs.ee_cpu_ms = 8.761;
+  costs.vu1_worker_wait_ms = 3.481;
+  costs.readback_wait_ms = 0.776;
+  costs.backpressure_ms = 0.0;
+  costs.gs_cpu_thread_ms = 0.948;
+  const std::string line = client::format_frame_summary(costs);
+  std::printf("[fixture] %s\n", line.c_str());
+  require(line.find("EE critical path 13.02 ms/frame of 16.68 budget (78%)") != std::string::npos &&
+              line.find("headroom 3.67 ms") != std::string::npos &&
+              line.find("GS process CPU thread 0.95 ms/frame") != std::string::npos,
+          "summary of the owner's night-race numbers");
+  costs.ee_cpu_ms = -1.0;
+  costs.gs_cpu_thread_ms = -1.0;
+  const std::string unknown = client::format_frame_summary(costs);
+  require(unknown.find("EE critical path Unknown") != std::string::npos &&
+              unknown.find("GS process CPU thread Unknown") != std::string::npos,
+          "summary without CPU times");
+  std::puts("[fixture] privileged register table and summary ok");
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -315,6 +399,7 @@ int main(int argc, char **argv) {
       return 2;
     }
     check_crt_table();
+    check_privileged_table_and_summary();
     const std::string recorder = argv[1];
     const std::string scratch = argv[2];
     CreateDirectoryA(scratch.c_str(), nullptr);
@@ -349,6 +434,17 @@ int main(int argc, char **argv) {
                 std::equal(capture_bytes.begin(), capture_bytes.end(), recorded_bytes.begin()),
             "recorder file equals the in-process capture plus CONTROL shutdown");
     std::puts("[fixture] donor capture, pcsx2 capture and recorder file are byte-identical");
+    // TASK-041: privileged writes queued behind held worker output reach the stream in the same order.
+    const std::string ordered_capture = scratch + "\\pcsx2-ordered-capture.gscap";
+    const std::string ordered_recorded = scratch + "\\pcsx2-ordered-recorded.gscap";
+    for (const std::string &path : {ordered_capture, ordered_recorded}) DeleteFileA(path.c_str());
+    require(run_scenario("pcsx2-ordered", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", recorder},
+                                           {"GT4_GS_RECORD_OUTPUT", ordered_recorded},
+                                           {"GT4_GS_CAPTURE", ordered_capture}}) == 0,
+            "pcsx2-ordered scenario");
+    require(read_all(ordered_capture) == capture_bytes, "ordered privileged writes: capture equals the pcsx2 capture");
+    require(read_all(ordered_recorded) == recorded_bytes, "ordered privileged writes: recorder file equals the pcsx2 one");
+    std::puts("[fixture] queued privileged writes keep the stream byte-identical");
 
     require(run_scenario("bad-renderer", {{"GT4_RENDERER", "bogus"}}) == 1, "unknown renderer refused");
     require(run_scenario("no-process", {{"GT4_RENDERER", "pcsx2"}}) == 1, "missing GT4_GS_PROCESS refused");
