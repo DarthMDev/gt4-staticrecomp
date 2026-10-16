@@ -220,6 +220,11 @@ For implementation details, see [Architecture](docs/ARCHITECTURE.md).
 
 ## Testing and Development
 
+GS settings validation can be checked without game assets or a native build (Python 3.11+, with
+`scripts/requirements.txt` installed):
+`python -m unittest discover -s tests/python -p test_gs_settings.py`.
+This includes rejecting duplicate setting ids in both CLI assignments and JSON input.
+
 The project currently requires a **development environment with prepared private assets**. This repository does not distribute game assets, ISOs, BIOS dumps, decompiled code, prebuilt binaries, or save files. A separate [EE producer](docs/EE-PRODUCER.md) now rebuilds the translator and game library from verified inputs; production still uses its qualified private library while candidate integration and gameplay checks remain pending. A clean end-to-end playable build remains future work.
 
 Once the environment is prepared, the current build starts with `scripts/play_performance.py --mode main` (races held at 480p, VU1 on a worker thread; F7 starts a measured interval, F8 reports it); it validates every input against its pin and preserves the existing memory card. The planned launcher (TASK-019) replaces this with an installer and a Play button. Requirements and instructions are detailed in the [Build Guide](docs/BUILD.md).

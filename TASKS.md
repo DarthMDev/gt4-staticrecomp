@@ -443,6 +443,8 @@ State (2026-10-16, slice194): built; owner checklist pending, no PR.
   keyboard focus on activation. Visible click fixture passes (0.3.0 fails). Owner click/focus check pending.
 
 ### TASK-039 — Settings table and `gt4-gs.ini`
+Follow-up (2026-10-16, `fix/duplicate-gs-json-settings`): reject duplicate JSON setting ids consistently
+with CLI assignments. Module validation: 58 tests pass; native/gameplay validation not performed.
 Repos: main `task/039-gs-settings`, fork `gt4gs/config`. Haiku, 2-3 sessions.
 Goal: `docs/launcher/gs-settings.toml` (GSDX-PLAN D.1), generator to `gt4-gs.ini` (dev script now, launcher
 later), allow-list validation in `gt4-gs.exe`, folders under the user data directory, `CONTROL

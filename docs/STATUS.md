@@ -2,6 +2,10 @@
 
 ## Current state (2026-10-16)
 
+Proposed TASK-039 tooling follow-up (`fix/duplicate-gs-json-settings`): duplicate JSON setting ids now
+raise the same error as duplicate CLI assignments. The 58 GS settings module tests pass, including
+unchanged default INI output; no native build or gameplay validation was performed for this change.
+
 **slice199 (TASK-041 on the JIT-free gt4-gs 0.4.0, branch `task/041-gs-perf`, fork `gt4gs/nojit`, `gt4gs-v0.4.0`):** the slice198 game build (same file and hash) with the JIT-free gt4-gs 0.4.0 package of slice197. `--mode pcsx2` = slice199; `--mode pcsx2-slice198` and `--mode pcsx2-slice197` stay for A/B. Owner test of slice198 (gt4-gs 0.3.2) on 2026-10-16, night race with 5 AI: 59.97 FPS, 53 late frames (69 before), EE waits for the VU1 worker 2.99 ms (3.48 before), readback 0.69 ms, EE critical path 11.81 of 16.68 ms (71%), headroom 4.87 ms, no frametime spikes once the shader cache was warm. CTest 29/29, Python 438 OK, 20 skipped; donor 42/42 identical to slice157; pcsx2 1x 41/41 identical to slice198; no-JIT static check passes on the package. [GS-LIVE](GS-LIVE.md) sections 9 and 10. Owner night-race check on 0.4.0 pending.
 
 **slice198 (TASK-041, branch `task/041-gs-perf`, fork unchanged, `gt4gs-v0.3.2`):** performance of the PCSX2 GS path.
