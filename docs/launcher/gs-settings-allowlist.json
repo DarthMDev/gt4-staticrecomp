@@ -185,6 +185,14 @@
     },
     {
       "section": "GT4GS",
+      "key": "DataRoot"
+    },
+    {
+      "section": "GT4GS",
+      "key": "DeferSwapChainAcquire"
+    },
+    {
+      "section": "GT4GS",
       "key": "DumpDir"
     },
     {

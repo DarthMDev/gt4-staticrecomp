@@ -523,43 +523,24 @@ notes = "Stored as u8 (pcsx2/Config.h:902, default 50). Loader pcsx2/Pcsx2Config
 
 [[setting]]
 id = "hw_download_mode"
-label = "Readback mode (PCSX2 key)"
-help = "How the GS reads back rendered data. The launcher choice is gt4_readback."
-page = "Advanced"
+label = "Readbacks"
+help = "How the GS reads back GPU data. Accurate reads back exactly (default). Unsynchronized is faster and may show small errors. The launcher shortcut is --gs-readback (GT4_GS_READBACK)."
+page = "Graphics"
 section = "EmuCore/GS"
 key = "HWDownloadMode"
 type = "enum"
-default = "enabled"
-visibility = "hidden"
-written = "when-set"
-status = "resolved"
-choices = [
-  { name = "enabled", ini = "0", status = "resolved" },
-  { name = "enabled-force-full", ini = "1", status = "resolved" },
-  { name = "no-readbacks", ini = "2", status = "resolved" },
-  { name = "unsynchronized", ini = "3", status = "pending-TASK-037" },
-  { name = "disabled", ini = "4", status = "resolved" },
-]
-notes = "GSHardwareDownloadMode (pcsx2/Config.h:399-405: Enabled = 0, EnabledForceFull = 1, NoReadbacks = 2, Unsynchronized = 3, Disabled = 4). Loader pcsx2/Pcsx2Config.cpp:1058, default Enabled (pcsx2/Config.h:871). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2913-2919. Launcher mapping: gt4_readback accurate = enabled (0); unsynchronized = unsynchronized (3). Game-side reader in TASK-037."
-
-[[setting]]
-id = "gt4_readback"
-label = "Readbacks"
-help = "Accurate reads back GPU data exactly (default). Unsynchronized is faster and may show small errors."
-page = "Graphics"
-section = ""
-key = ""
-type = "enum"
 default = "accurate"
 visibility = "basic"
-written = "never"
-status = "pending-TASK-037"
-env = "GT4_GS_READBACK"
+written = "always"
+status = "ok"
 choices = [
-  { name = "accurate", ini = "", status = "ok" },
-  { name = "unsynchronized", ini = "", status = "pending-TASK-037" },
+  { name = "accurate", ini = "0", status = "ok" },
+  { name = "enabled-force-full", ini = "1", status = "resolved" },
+  { name = "no-readbacks", ini = "2", status = "resolved" },
+  { name = "unsynchronized", ini = "3", status = "ok" },
+  { name = "disabled", ini = "4", status = "resolved" },
 ]
-notes = "Launcher-only (not in gt4-gs.ini). Owner decision: accurate by default, Unsynchronized as speed option. Maps to HWDownloadMode in the hw_download_mode row (accurate = 0, unsynchronized = 3). TASK-037 adds the game-side reader, so unsynchronized stays unsettable until then."
+notes = "GSHardwareDownloadMode (pcsx2/Config.h:399-405: Enabled = 0, EnabledForceFull = 1, NoReadbacks = 2, Unsynchronized = 3, Disabled = 4). Loader pcsx2/Pcsx2Config.cpp:1058, default Enabled (pcsx2/Config.h:871); the launcher default is accurate (Enabled, 0). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2913-2919. Owner decision: accurate by default, Unsynchronized as speed option. Unsynchronized is settable since TASK-037 (game-side reader in slice194)."
 
 [[setting]]
 id = "texture_load"
@@ -812,6 +793,34 @@ visibility = "hidden"
 written = "launcher"
 status = "ok"
 notes = "Written only when the launcher supplies a folder (the probe passes the pinned cache directory). D.2 also names Textures and Snapshots; not added yet."
+
+[[setting]]
+id = "data_root"
+label = "GS data folder"
+help = "Data folder of the gt4-gs process, set by the launcher (private/slice193-gt4gs-data)."
+page = "Advanced"
+section = "GT4GS"
+key = "DataRoot"
+type = "path"
+default = ""
+visibility = "hidden"
+written = "launcher"
+status = "ok"
+notes = "GT4 fork key (gt4-gs 0.3.0 and later). Written only when the launcher supplies the folder (package data_root = true in the pin)."
+
+[[setting]]
+id = "defer_swap_chain_acquire"
+label = "Defer swap chain acquire"
+help = "Acquire the swap chain image late. The launcher writes false only for GT4_GS_EAGER_ACQUIRE=1 (A/B switch)."
+page = "Advanced"
+section = "GT4GS"
+key = "DeferSwapChainAcquire"
+type = "bool"
+default = "true"
+visibility = "hidden"
+written = "launcher"
+status = "ok"
+notes = "GT4 fork key (gt4-gs 0.3.0 and later, slice194). Written as false only when GT4_GS_EAGER_ACQUIRE=1; otherwise absent and the GS uses its deferred acquire."
 
 [[setting]]
 id = "headless_surfaceless"

@@ -41,7 +41,8 @@ class ConfigTests(unittest.TestCase):
         text = probe.gs_config_text({})
         self.assertEqual(text.splitlines()[1:], [
             '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 3', 'accurate_blending_unit = 3',
-            'deinterlace_mode = 0', 'AspectRatio = 16:9', 'VsyncEnable = true', 'DisableMailboxPresentation = true'])
+            'deinterlace_mode = 0', 'AspectRatio = 16:9', 'VsyncEnable = true', 'DisableMailboxPresentation = true',
+            'HWDownloadMode = 0'])  # slice194 (TASK-037): readback mode accurate by default
 
     def test_scale_present_mode_and_aspect(self):
         text = probe.gs_config_text({'GT4_GS_SCALE': '1', 'GT4_PRESENT_MODE': 'immediate', 'GT4_GS_ASPECT': 'auto'})
@@ -131,10 +132,11 @@ class PackageTests(unittest.TestCase):
 
 class LauncherTests(unittest.TestCase):
     def test_mode_selects_the_slice193_pin(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], (MANIFEST, EXECUTABLE))
+        # Since slice194 (TASK-037/038) --mode pcsx2 points at slice194; slice193 stays selectable.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice193'], (MANIFEST, EXECUTABLE))
         self.assertIn(MANIFEST, probe.VU1_AOT_MANIFESTS)
         self.assertIn(MANIFEST, probe.VU0_AOT_MANIFESTS)
-        self.assertIn('pcsx2', performance.MODES)
+        self.assertIn('pcsx2-slice193', performance.MODES)
 
     def test_gs_scale_sets_the_environment_for_pcsx2_only(self):
         root = Path('C:/assets')

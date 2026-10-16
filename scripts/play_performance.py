@@ -108,6 +108,9 @@ def main():
     parser.add_argument('--gs-setting', action='append', default=[], metavar='ID=VALUE',
                         help='pcsx2 only: set a GS option from docs/launcher/gs-settings.toml (repeatable; '
                              'checked against the table; docs/GS-SETTINGS.md)')
+    parser.add_argument('--gs-readback', choices=('accurate', 'unsynchronized'), default=None,
+                        help='pcsx2 only: GS readback mode. accurate (default, owner choice 2026-10-16); unsynchronized: '
+                             'faster, may drop effects (night race: headlight flares missing; GT4_GS_READBACK)')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()
@@ -133,7 +136,13 @@ def main():
             settings = gs_settings.settings_from_assignments(args.gs_setting, gs_settings.load_table())
             if args.gs_scale is not None and 'upscale' in settings:
                 raise ValueError('--gs-scale and --gs-setting upscale=... both set the internal resolution')
+            if args.gs_readback is not None and 'hw_download_mode' in settings:
+                raise ValueError('--gs-readback and --gs-setting hw_download_mode=... both set the readback mode')
             os.environ[GS_SETTINGS_ENV] = gs_settings.settings_to_json(settings)
+        if args.gs_readback is not None:
+            if args.mode != 'pcsx2':
+                raise ValueError('--gs-readback requires --mode pcsx2')
+            os.environ['GT4_GS_READBACK'] = args.gs_readback
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True, **cpu_options(args))

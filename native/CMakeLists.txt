@@ -159,6 +159,8 @@ target_link_libraries(gt4_gs_stream_client PUBLIC gt4_gs_stream gt4_perf_probe)
 target_include_directories(gt4_gs_stream_client PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_compile_definitions(gt4_gs_stream_client PRIVATE _CRT_SECURE_NO_WARNINGS)
 target_compile_options(gt4_gs_stream_client PRIVATE /W4)
+# TASK-038: users of the client (window.cpp through ps2runtime_vulkan) see GT4_GS_STREAM_CLIENT.
+target_compile_definitions(gt4_gs_stream_client INTERFACE GT4_GS_STREAM_CLIENT)
 add_executable(gs_stream_ipc_fixture gs_stream/gs_stream_ipc_fixture.cpp)
 target_link_libraries(gs_stream_ipc_fixture PRIVATE gt4_gs_stream)
 target_compile_options(gs_stream_ipc_fixture PRIVATE /W4)

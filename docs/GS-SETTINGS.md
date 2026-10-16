@@ -70,7 +70,7 @@ DisableMailboxPresentation = true
 ```
 
 Owner decisions in the table: 3x default; readbacks accurate by default with Unsynchronized as a speed option
-(`gt4_readback`, launcher-only, pending TASK-037); blending accuracy High; deinterlace Automatic; 16:9; Vulkan; the
+(`hw_download_mode`, shortcut `--gs-readback`, settable since TASK-037); blending accuracy High; deinterlace Automatic; 16:9; Vulkan; the
 launcher shows only options that really work; FXAA is offered; CAS is offered once the owner has checked it in game.
 
 ## Values resolved from PCSX2 v2.8.2
@@ -94,15 +94,16 @@ file:line citations.
 | `tv_shader` | `TVShader` | None 0, Scanline 1, Diagonal 2, Triangular 3, Wave 4, Lottes CRT 5, 4xRGSS 6, NxAGSS 7 | None |
 | `shade_boost` | `ShadeBoost` | bool | off |
 | `shade_boost_*` | `ShadeBoost_Brightness`, `_Contrast`, `_Gamma`, `_Saturation` | 1 to 100 | 50 |
-| `hw_download_mode` | `HWDownloadMode` | Enabled 0, EnabledForceFull 1, NoReadbacks 2, Unsynchronized 3, Disabled 4 | Enabled (0) |
+| `hw_download_mode` | `HWDownloadMode` | Accurate 0 (Enabled), EnabledForceFull 1, NoReadbacks 2, Unsynchronized 3, Disabled 4 | Accurate (0) |
 | `osd_messages_pos` | `OsdMessagesPos` | None 0, Top left 1 ... Bottom right 9 | Top left (1) |
 | `osd_scale` | `OsdScale` | 25 to 500 (percent) | 100 |
 | `fmv_aspect` | `FMVAspectRatioSwitch` | Off, Auto 4:3/3:2, 4:3, 16:9, 10:7 (names, not numbers) | Off |
 | `adapter` | `Adapter` | empty (default) or a name from `GSGetAdapterInfo` | empty |
 | `user_hacks` | `UserHacks_*` (names only) | see the row notes | off |
 
-Readback mapping for the launcher: `gt4_readback` accurate = `HWDownloadMode` Enabled (0); unsynchronized =
-Unsynchronized (3). The unsynchronized value stays pending until the game-side reader exists (TASK-037).
+Readback mapping for the launcher: `--gs-readback` (`GT4_GS_READBACK`) is a shortcut for `hw_download_mode`:
+accurate = `HWDownloadMode` Enabled (0, written by default); unsynchronized = Unsynchronized (3). A shortcut and
+`--gs-setting hw_download_mode=...` for the same row conflict.
 
 Adapter: the launcher cannot list adapter names until the fork exposes them at run time, so `adapter` stays
 `resolved` (string rows cannot be `ok`).
@@ -164,10 +165,10 @@ python scripts/gs_settings.py ini --set upscale=2 --out <file>
 
 - Fork enforcement: `gt4-gs.exe` must refuse keys outside the allow-list (TASK-037/038 agent).
 - Owner in-game checks to turn `resolved` rows into `ok`: texture filtering, trilinear, anisotropic, dithering,
-  texture preloading, present filter, CAS mode and sharpness, TV shader, shade boost, readback mode, OSD position
+  texture preloading, present filter, CAS mode and sharpness, TV shader, shade boost, OSD position
   and scale, deinterlace and blending levels other than Automatic and High, and the D3D renderers (not offered in the
   Vulkan build).
-- Readback unsynchronized waits for TASK-037. Texture replacement and dump rows wait for TASK-040.
+- Texture replacement and dump rows wait for TASK-040.
 - Per-key `UserHacks_*` rows, the adapter name list and the `EnableGameFixes` decision wait for TASK-043. D.2 also
   names the `Textures` and `Snapshots` folders (not in the table yet).
 - Launcher detail: the PCSX2 UI shows Bilinear (Sharp) as the present-filter default, while the loader defaults to

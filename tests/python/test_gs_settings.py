@@ -19,6 +19,8 @@ import play_performance as performance  # noqa: E402
 
 # The TASK-036 default INI (Renderer Vulkan, 3x, blending High, deinterlace Automatic, 16:9, vsync), byte for byte
 # as the pre-TASK-039 writer produced it. Written with the platform newline by the file writer.
+# The default gt4-gs.ini of origin/main (TASK-036 settings plus HWDownloadMode = 0 from TASK-037), byte for byte as
+# scripts/external_runtime_probe.py gs_config_text() produced it there. The table writer must reproduce it.
 LEGACY_DEFAULT = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)\n'
                   '[EmuCore/GS]\n'
                   'Renderer = 14\n'
@@ -27,8 +29,11 @@ LEGACY_DEFAULT = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TA
                   'deinterlace_mode = 0\n'
                   'AspectRatio = 16:9\n'
                   'VsyncEnable = true\n'
-                  'DisableMailboxPresentation = true\n')
+                  'DisableMailboxPresentation = true\n'
+                  'HWDownloadMode = 0\n')
 LEGACY_CACHE = LEGACY_DEFAULT + '\n[Folders]\nCache = C:/cache\n'
+# A real owner run: cache folder and the [GT4GS] DataRoot (package data_root = true).
+LEGACY_RUN = LEGACY_CACHE + '\n[GT4GS]\nDataRoot = C:/data\n'
 LEGACY_HEADLESS = (LEGACY_DEFAULT + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:/run/gs-frames\n'
                    'DumpEvery = 100\n')
 REQUIRED = ('id', 'label', 'help', 'page', 'section', 'key', 'type', 'default', 'visibility', 'written', 'status')
@@ -45,8 +50,8 @@ def by_id():
 class TableSchemaTests(unittest.TestCase):
     def test_table_loads_and_has_one_row_per_setting(self):
         table = rows()
-        self.assertEqual(len(table), 50)
-        self.assertEqual(len({row['id'] for row in table}), 50)
+        self.assertEqual(len(table), 51)
+        self.assertEqual(len({row['id'] for row in table}), 51)
 
     def test_every_row_has_the_documented_columns(self):
         for row in rows():
@@ -67,13 +72,14 @@ class TableSchemaTests(unittest.TestCase):
         pairs = [(row['section'], row['key']) for row in rows() if row['section'] and row['key']]
         self.assertEqual(len(pairs), len(set(pairs)))
 
-    def test_launcher_only_readback_row(self):
-        row = by_id()['gt4_readback']
-        self.assertEqual(row['written'], 'never')
-        self.assertEqual(row['env'], 'GT4_GS_READBACK')
+    def test_readback_row_is_a_written_setting(self):
+        row = by_id()['hw_download_mode']
+        self.assertEqual((row['key'], row['written'], row['status']), ('HWDownloadMode', 'always', 'ok'))
         self.assertEqual(row['default'], 'accurate')
-        self.assertEqual([choice['name'] for choice in row['choices']], ['accurate', 'unsynchronized'])
-        self.assertEqual(row['status'], 'pending-TASK-037')
+        self.assertEqual({choice['name']: choice['status'] for choice in row['choices']
+                          if choice['name'] in ('accurate', 'unsynchronized')},
+                         {'accurate': 'ok', 'unsynchronized': 'ok'})
+        self.assertNotIn('gt4_readback', by_id())
 
     def test_validator_refuses_bad_tables(self):
         good = {'schema_version': 1, 'setting': copy.deepcopy(rows())}
@@ -94,8 +100,7 @@ class TableSchemaTests(unittest.TestCase):
                 row.update(written='when-set') for row in data['setting'] if row['type'] == 'path'),
             'bool default': lambda data: next(
                 row.update(default='yes') for row in data['setting'] if row['type'] == 'bool'),
-            'launcher-only without env': lambda data: next(
-                row.pop('env') for row in data['setting'] if row['written'] == 'never'),
+            'launcher-only with an INI key': lambda data: data['setting'][1].update(written='never', env='GT4_X'),
         }
         for name, break_table in cases.items():
             data = copy.deepcopy(good)
@@ -104,7 +109,7 @@ class TableSchemaTests(unittest.TestCase):
 
 
 class DefaultTests(unittest.TestCase):
-    def test_default_ini_is_the_task_036_text(self):
+    def test_default_ini_is_main_default(self):
         self.assertEqual(gs_settings.render_ini(rows()), LEGACY_DEFAULT)
 
     def test_probe_default_is_unchanged(self):
@@ -124,12 +129,18 @@ class DefaultTests(unittest.TestCase):
                          LEGACY_DEFAULT + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\nSurfaceless = true\n'
                          'DumpDir = C:/run/gs-frames\nDumpEvery = 100\n')
 
-    def test_default_file_bytes_match_the_old_writer(self):
+    def test_run_text_with_data_root_and_eager_switch(self):
+        self.assertEqual(probe.gs_config_text({}, None, 'C:/cache', 'C:/data'), LEGACY_RUN)
+        self.assertEqual(probe.gs_config_text({'GT4_GS_EAGER_ACQUIRE': '1'}, None, None, 'C:/data'),
+                         LEGACY_DEFAULT + '\n[GT4GS]\nDataRoot = C:/data\nDeferSwapChainAcquire = false\n')
+        self.assertNotIn('DeferSwapChainAcquire', probe.gs_config_text({}, None, None, 'C:/data'))
+
+    def test_default_file_bytes_match_the_main_writer(self):
         with tempfile.TemporaryDirectory() as temporary:
             target = Path(temporary) / 'gt4-gs.ini'
-            gs_settings.write_ini_atomic(target, probe.gs_config_text({}, None, 'C:/cache'))
-            # The old writer used Path.write_text, which applies the platform newline (CRLF on Windows).
-            self.assertEqual(target.read_bytes(), (LEGACY_CACHE.replace('\n', os.linesep)).encode('utf-8'))
+            gs_settings.write_ini_atomic(target, probe.gs_config_text({}, None, 'C:/cache', 'C:/data'))
+            # The main writer used Path.write_text, which applies the platform newline (CRLF on Windows).
+            self.assertEqual(target.read_bytes(), (LEGACY_RUN.replace('\n', os.linesep)).encode('utf-8'))
 
 
 class ValueTests(unittest.TestCase):
@@ -162,7 +173,7 @@ class ValueTests(unittest.TestCase):
         with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet'):
             gs_settings.parse_value(by_id()['filter'], 'bilinear-ps2')
         with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet'):
-            gs_settings.parse_value(by_id()['gt4_readback'], 'unsynchronized')
+            gs_settings.parse_value(by_id()['hw_download_mode'], 'enabled-force-full')
 
     def test_path_values_are_single_line(self):
         self.assertEqual(gs_settings.parse_value(by_id()['cache_folder'], 'C:/cache'), 'C:/cache')
@@ -176,7 +187,7 @@ class ValueTests(unittest.TestCase):
             gs_settings.render_ini(rows(), {'nope': '1'})
 
     def test_launcher_rows_are_not_user_settable(self):
-        for identifier in ('gt4_readback', 'cache_folder', 'headless_dump_dir'):
+        for identifier in ('cache_folder', 'data_root', 'defer_swap_chain_acquire', 'headless_dump_dir'):
             with self.assertRaisesRegex(gs_settings.SettingsError, 'set by the launcher'):
                 gs_settings.settings_from_assignments([f'{identifier}=accurate'], rows())
         with self.assertRaisesRegex(gs_settings.SettingsError, 'not a launcher row'):
@@ -196,7 +207,7 @@ class IniTests(unittest.TestCase):
         self.assertEqual(text.splitlines(), [
             gs_settings.INI_HEADER, '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 6',
             'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 4:3', 'VsyncEnable = true',
-            'DisableMailboxPresentation = true', 'fxaa = true'])
+            'DisableMailboxPresentation = true', 'fxaa = true', 'HWDownloadMode = 0'])
 
     def test_sections_follow_the_fixed_order(self):
         settings = {'game_fixes': 'true', 'upscale': '2'}
@@ -257,7 +268,7 @@ class OfferedTests(unittest.TestCase):
     def test_launcher_offers_only_settable_options(self):
         offered = {row['id'] for row in gs_settings.offered(rows())}
         self.assertTrue({'renderer', 'upscale', 'aspect', 'vsync', 'deinterlace', 'blending', 'fxaa'} <= offered)
-        for identifier in ('filter', 'cas_mode', 'cas_sharpness', 'gt4_readback', 'texture_load', 'adapter',
+        for identifier in ('filter', 'cas_mode', 'cas_sharpness', 'texture_load', 'adapter',
                            'cache_folder', 'headless_dump_dir', 'manual_hacks'):
             self.assertNotIn(identifier, offered, identifier)
         for row in gs_settings.offered(rows()):
@@ -294,6 +305,7 @@ class PlayPerformanceTests(unittest.TestCase):
                           ['--mode', 'pcsx2', '--gs-setting', 'upscale=9'],
                           ['--mode', 'pcsx2', '--gs-setting', 'renderer=d3d12'],
                           ['--mode', 'pcsx2', '--gs-setting', 'gt4_readback=accurate'],
+                          ['--mode', 'pcsx2', '--gs-setting', 'hw_download_mode=accurate', '--gs-readback', 'unsynchronized'],
                           ['--mode', 'pcsx2', '--gs-setting', 'upscale=2', '--gs-scale', '3']):
             with patch.dict(os.environ, {}, clear=False):
                 code, play = self.run_main(arguments)
@@ -328,6 +340,16 @@ class ProbeEnvironmentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'GT4_PRESENT_MODE must be one of'):
             probe.gs_config_text({'GT4_PRESENT_MODE': 'adaptive'})
 
+    def test_readback_shortcut_and_json_conflict(self):
+        self.assertIn('HWDownloadMode = 3\n', probe.gs_config_text({'GT4_GS_READBACK': 'unsynchronized'}))
+        self.assertIn('HWDownloadMode = 0\n',
+                      probe.gs_config_text({'GT4_GS_SETTINGS': '{"hw_download_mode": "accurate"}'}))
+        with self.assertRaisesRegex(ValueError, 'both set hw_download_mode'):
+            probe.gs_config_text({'GT4_GS_READBACK': 'accurate',
+                                  'GT4_GS_SETTINGS': '{"hw_download_mode": "unsynchronized"}'})
+        with self.assertRaisesRegex(ValueError, 'GT4_GS_READBACK must be one of'):
+            probe.gs_config_text({'GT4_GS_READBACK': '3'})
+
     def test_present_mode_maps_to_vsync_and_mailbox(self):
         self.assertIn('VsyncEnable = false\n', probe.gs_config_text({'GT4_PRESENT_MODE': 'immediate'}))
         self.assertIn('DisableMailboxPresentation = false\n', probe.gs_config_text({'GT4_PRESENT_MODE': 'mailbox'}))
@@ -354,8 +376,8 @@ ENUM_EXPECTED = {
     'cas_mode': ('CASMode', {'off': '0', 'sharpen-only': '1', 'sharpen-and-resize': '2'}, 'off'),
     'tv_shader': ('TVShader', {'none': '0', 'scanline': '1', 'diagonal': '2', 'triangular': '3', 'wave': '4',
                                'lottes-crt': '5', 'rgss-4x': '6', 'agss-nx': '7'}, 'none'),
-    'hw_download_mode': ('HWDownloadMode', {'enabled': '0', 'enabled-force-full': '1', 'no-readbacks': '2',
-                                            'unsynchronized': '3', 'disabled': '4'}, 'enabled'),
+    'hw_download_mode': ('HWDownloadMode', {'accurate': '0', 'enabled-force-full': '1', 'no-readbacks': '2',
+                                            'unsynchronized': '3', 'disabled': '4'}, 'accurate'),
     'osd_messages_pos': ('OsdMessagesPos', {'none': '0', 'top-left': '1', 'top-center': '2', 'top-right': '3',
                                             'center-left': '4', 'center': '5', 'center-right': '6',
                                             'bottom-left': '7', 'bottom-center': '8', 'bottom-right': '9'},
@@ -391,7 +413,7 @@ class ResolvedValueTests(unittest.TestCase):
         statuses = {row['id']: row['status'] for row in rows()}
         self.assertNotIn('TBD-fork', statuses.values())
         self.assertEqual({identifier for identifier, status in statuses.items() if status.startswith('pending')},
-                         {'gt4_readback', 'texture_load', 'texture_load_async', 'texture_precache', 'texture_dump',
+                         {'texture_load', 'texture_load_async', 'texture_precache', 'texture_dump',
                           'texture_dump_mipmaps', 'texture_dump_fmv', 'user_hacks'})
 
     def test_enum_keys_names_and_ini_values(self):
@@ -419,11 +441,12 @@ class ResolvedValueTests(unittest.TestCase):
 
     def test_hardware_readback_mapping(self):
         choices = {choice['name']: choice for choice in by_id()['hw_download_mode']['choices']}
-        self.assertEqual(choices['enabled']['ini'], '0')
+        self.assertEqual(choices['accurate']['ini'], '0')
         self.assertEqual(choices['unsynchronized']['ini'], '3')
-        self.assertEqual(choices['unsynchronized']['status'], 'pending-TASK-037')
-        with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet'):
-            gs_settings.parse_value(by_id()['hw_download_mode'], 'unsynchronized')
+        self.assertEqual(choices['unsynchronized']['status'], 'ok')
+        self.assertEqual(gs_settings.ini_value(by_id()['hw_download_mode'],
+                                               gs_settings.parse_value(by_id()['hw_download_mode'],
+                                                                       'unsynchronized')), '3')
 
     def test_resolved_rows_are_not_settable_or_offered(self):
         offered_ids = {row['id'] for row in gs_settings.offered(rows())}
