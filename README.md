@@ -27,7 +27,7 @@ No JIT, no emulator window, full speed.
 
 <br>
 
-<img src="docs/images/race-nordschleife-60fps.webp" alt="Toyota Supra on the Nordschleife at 60 FPS" width="100%">
+<img src="docs/images/night-race-hires.webp" alt="Gran Turismo 4 night race at high resolution, 60 FPS" width="100%">
 
 </div>
 
