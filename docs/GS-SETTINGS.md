@@ -1,7 +1,8 @@
 # GS settings table, launcher pages and gt4-gs.ini (TASK-039, curated by TASK-049)
 
 Status (2026-10-16, TASK-049; TASK-060/061/062): the table is curated for the launcher (owner decisions 1 to 6) and
-since slice201 holds the internal-resolution presets, the cursor, shader-notice and performance-overlay rows. Source:
+since slice201 holds the internal-resolution presets, the cursor, shader-notice and performance-overlay rows; since
+TASK-064 (2026-10-17) the Arbitrary Code Guard row is on Advanced, off by default and always written. Source:
 PCSX2 v2.8.2 (tag `v2.8.2` = commit `fd9d310c`). Design source: [GSDX-PLAN](GSDX-PLAN.md) sections D.1 and D.2 (see
 "Corrections"). **The allow-list is enforced by `gt4-gs.exe` 1.0.0** (section "Allow-list in gt4-gs"): a key or value
 outside it is ignored with one warning line; gt4-gs never refuses to start because of the INI.
@@ -79,7 +80,7 @@ Today the launcher offers four Graphics rows (`gs_engine`, `upscale`, `aspect`, 
 CoreGS 1.1 options (upscale, FSR, FXAA, deinterlace) are hidden for now (decision 5). They are CoreGS controls, not rows of
 this table. Only the renderer choice `coregs-1.1` remains.
 
-### ADVANCED page (`page = advanced`, 45 rows, 24 offered today)
+### ADVANCED page (`page = advanced`, 46 rows, 25 offered today)
 
 Pre-configured to the GT4 ideal. Groups in order:
 
@@ -96,6 +97,10 @@ Pre-configured to the GT4 ideal. Groups in order:
 - OSD: `osd_fps`, `osd_gpu`, `osd_resolution` (off), `osd_messages_pos` (top left), `osd_performance_pos` (top right),
   `osd_scale` (100 percent).
 - Other: `disable_shader_cache` (off).
+- Overlays (TASK-064, owner decision 2026-10-17): `prohibit_dynamic_code` "Block third-party overlays (Arbitrary Code
+  Guard)" (`[GT4GS] ProhibitDynamicCode`, order 46, default `false`, always written). Off (default) lets MSI Afterburner /
+  RivaTuner Statistics Server draw their overlay; on turns Windows Arbitrary Code Guard back on for gt4-gs, which blocks
+  that code injection. The no-JIT guarantee does not depend on this switch (GT4GS_ONLY build and `check-nojit.ps1`).
 - TASK-060/061/062 (slice201, gt4-gs 1.0.0): `cursor_autohide` "Hide the mouse cursor" (on; launcher-only, the game
   reads `GT4_CURSOR_AUTOHIDE`), `shader_compile_notice` "Show Compiling shaders notice" (`[GT4GS] ShaderCompileNotice`,
   on), `perf_overlay` "Performance overlay" (`[GT4GS] PerfOverlay`, off; the master switch) and one row per overlay
@@ -127,7 +132,7 @@ Never shown to the owner:
 - `extended_upscale` (`ExtendedUpscalingMultipliers`, off): not needed up to 12x (section 12x below). Never written.
 - `cache_folder`, `data_root`, `defer_swap_chain_acquire`, `headless_surfaceless`, `headless_dump_dir`,
   `headless_dump_every`: supplied by the launcher or the headless checks, not by the owner.
-- `spin_us` (`SpinUs`), `prohibit_dynamic_code` (`ProhibitDynamicCode`), `debug_stall_window_ms`
+- `spin_us` (`SpinUs`), `debug_stall_window_ms`
   (`DebugStallWindowMs`), `debug_stall_after_ms` (`DebugStallAfterMs`): fork keys of tuning and test tools (status
   `resolved`, never written by the launcher), listed so the gt4-gs 1.0.0 allow-list accepts them.
 

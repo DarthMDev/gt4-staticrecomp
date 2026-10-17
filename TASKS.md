@@ -99,6 +99,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑061 | "Compiling shaders…" notice in gt4-gs (real compiles only) | ✅ Done · owner test 2026-10-16; gt4-gs 1.0.0 (cold cache 238 compiles shown, warm cache none) |
 | TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
 | TASK‑063 | Bit-exact R5900 FPU `div.s`/`mul.s` (license demo phase, real-PS2 card replays and ghosts) | 📋 Planned · oracle ready (`scripts/license_demo_oracle.py`); needs hardware vectors |
+| TASK‑064 | Third-party overlays (MSI Afterburner / RivaTuner) with the PCSX2 GS: Arbitrary Code Guard off by default | 🔄 In review · owner test pending (`task/064-overlay-compat`) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -241,6 +242,19 @@ replays and ghosts fail to load (cleanly). The oracle (`scripts/license_demo_ora
 steps are ready; the divider's digit selection is unknown (best model 94.1% per step). Needs targeted hardware div.s
 vectors (or a published design description). Acceptance: 592/592 CRC passes, then an fpu.hpp overlay, a ps2game.lib
 rebuild with new pins, and an F8 physics check.
+
+### TASK-064 — Third-party overlays (MSI Afterburner / RivaTuner) with the PCSX2 GS
+Goal: the RivaTuner Statistics Server on-screen display (MSI Afterburner) appears in game with the default settings.
+Cause (suspected, not confirmed in game): Windows Arbitrary Code Guard (ACG), which gt4-gs enabled by default
+(`[GT4GS] ProhibitDynamicCode`, missing key = true). RTSS injects a hook that needs executable memory, and ACG refuses it.
+Change: ACG is OFF by default. Row `prohibit_dynamic_code` (gs-settings.toml) is on the Advanced page, default `false`,
+written `always`, so gt4-gs.ini carries `ProhibitDynamicCode = false` under `[GT4GS]`; the Advanced page switch turns
+ACG back on. The no-JIT guarantee does not depend on ACG: gt4-gs.exe is built JIT-free (GT4GS_ONLY) and `check-nojit.ps1`
+verifies every release. Tests: `ProhibitDynamicCodeTests` and the default-ini assertions in `test_gs_settings.py` and
+`test_gs_live.py`. README known issue left unchanged until the owner confirms the overlay.
+Acceptance: owner sees the RTSS overlay in game with the default settings.
+State: 🔄 In review, owner test pending. Branch `task/064-overlay-compat` (single writer, from main da1eb95). Python suite
+544 tests OK (38 skipped for missing private files). Not merged: owner approval first.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
