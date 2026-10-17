@@ -69,8 +69,6 @@ to a steady **60 FPS at full speed**.
 
 - **Some license demos and menu backgrounds do not play**; every license test is playable. This matches
   PCSX2 with default settings ([why](docs/LICENSE-DEMO-CIPHER.md)).
-- **The MSI Afterburner / RivaTuner overlay does not show** with the PCSX2 GS (suspected: its Arbitrary
-  Code Guard protection). The built-in performance overlay works.
 - Racing wheels and long sessions are not fully qualified yet.
 
 ## 🗺️ Roadmap

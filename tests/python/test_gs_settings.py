@@ -22,21 +22,24 @@ import play_performance as performance  # noqa: E402
 # as the pre-TASK-039 writer produced it. Written with the platform newline by the file writer.
 # The default gt4-gs.ini of origin/main (TASK-036 settings plus HWDownloadMode = 0 from TASK-037), byte for byte as
 # scripts/external_runtime_probe.py gs_config_text() produced it there. The table writer must reproduce it.
-LEGACY_DEFAULT = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)\n'
-                  '[EmuCore/GS]\n'
-                  'Renderer = 14\n'
-                  'upscale_multiplier = 3\n'
-                  'accurate_blending_unit = 3\n'
-                  'deinterlace_mode = 0\n'
-                  'AspectRatio = 16:9\n'
-                  'VsyncEnable = true\n'
-                  'DisableMailboxPresentation = true\n'
-                  'HWDownloadMode = 0\n')
-LEGACY_CACHE = LEGACY_DEFAULT + '\n[Folders]\nCache = C:/cache\n'
+LEGACY_BASE = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)\n'
+               '[EmuCore/GS]\n'
+               'Renderer = 14\n'
+               'upscale_multiplier = 3\n'
+               'accurate_blending_unit = 3\n'
+               'deinterlace_mode = 0\n'
+               'AspectRatio = 16:9\n'
+               'VsyncEnable = true\n'
+               'DisableMailboxPresentation = true\n'
+               'HWDownloadMode = 0\n')
+# TASK-064: ProhibitDynamicCode is always written; its default is false (overlays work out of the box).
+PROHIBIT_LINE = 'ProhibitDynamicCode = false\n'
+LEGACY_DEFAULT = LEGACY_BASE + '\n[GT4GS]\n' + PROHIBIT_LINE
+LEGACY_CACHE = LEGACY_BASE + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\n' + PROHIBIT_LINE
 # A real owner run: cache folder and the [GT4GS] DataRoot (package data_root = true).
-LEGACY_RUN = LEGACY_CACHE + '\n[GT4GS]\nDataRoot = C:/data\n'
-LEGACY_HEADLESS = (LEGACY_DEFAULT + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:/run/gs-frames\n'
-                   'DumpEvery = 100\n')
+LEGACY_RUN = LEGACY_BASE + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\nDataRoot = C:/data\n' + PROHIBIT_LINE
+LEGACY_HEADLESS = (LEGACY_BASE + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:/run/gs-frames\n'
+                   'DumpEvery = 100\n' + PROHIBIT_LINE)
 REQUIRED = ('id', 'label', 'help', 'page', 'order', 'control', 'section', 'key', 'type', 'default', 'written', 'status')
 
 
@@ -138,19 +141,20 @@ class DefaultTests(unittest.TestCase):
     def test_cache_and_headless_sections_are_unchanged(self):
         self.assertEqual(probe.gs_config_text({}, None, 'C:/cache'), LEGACY_CACHE)
         self.assertEqual(probe.gs_config_text({}, Path('C:/run/gs-frames'), None),
-                         LEGACY_DEFAULT + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:\\run\\gs-frames\n'
-                         'DumpEvery = 100\n')
+                         LEGACY_BASE + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:\\run\\gs-frames\n'
+                         'DumpEvery = 100\n' + PROHIBIT_LINE)
         self.assertEqual(gs_settings.render_ini(rows(), {}, {'cache_folder': 'C:/cache',
                                                              'headless_surfaceless': 'true',
                                                              'headless_dump_dir': 'C:/run/gs-frames',
                                                              'headless_dump_every': '100'}),
-                         LEGACY_DEFAULT + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\nSurfaceless = true\n'
-                         'DumpDir = C:/run/gs-frames\nDumpEvery = 100\n')
+                         LEGACY_BASE + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\nSurfaceless = true\n'
+                         'DumpDir = C:/run/gs-frames\nDumpEvery = 100\n' + PROHIBIT_LINE)
 
     def test_run_text_with_data_root_and_eager_switch(self):
         self.assertEqual(probe.gs_config_text({}, None, 'C:/cache', 'C:/data'), LEGACY_RUN)
         self.assertEqual(probe.gs_config_text({'GT4_GS_EAGER_ACQUIRE': '1'}, None, None, 'C:/data'),
-                         LEGACY_DEFAULT + '\n[GT4GS]\nDataRoot = C:/data\nDeferSwapChainAcquire = false\n')
+                         LEGACY_BASE + '\n[GT4GS]\nDataRoot = C:/data\nDeferSwapChainAcquire = false\n'
+                         + PROHIBIT_LINE)
         self.assertNotIn('DeferSwapChainAcquire', probe.gs_config_text({}, None, None, 'C:/data'))
 
     def test_default_file_bytes_match_the_main_writer(self):
@@ -236,13 +240,14 @@ class IniTests(unittest.TestCase):
         self.assertEqual(text.splitlines(), [
             gs_settings.INI_HEADER, '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 6',
             'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 4:3', 'VsyncEnable = true',
-            'DisableMailboxPresentation = true', 'HWDownloadMode = 0', 'fxaa = true'])
+            'DisableMailboxPresentation = true', 'HWDownloadMode = 0', 'fxaa = true', '', '[GT4GS]',
+            'ProhibitDynamicCode = false'])
 
     def test_sections_follow_the_fixed_order(self):
         settings = {'game_fixes': 'false', 'upscale': '2'}
         text = gs_settings.render_ini(rows(), settings, {'cache_folder': 'C:/cache'})
         headers = [line for line in text.splitlines() if line.startswith('[')]
-        self.assertEqual(headers, ['[EmuCore/GS]', '[EmuCore]', '[Folders]'])
+        self.assertEqual(headers, ['[EmuCore/GS]', '[EmuCore]', '[Folders]', '[GT4GS]'])
 
     def test_json_settings_round_trip_and_are_checked(self):
         settings = gs_settings.settings_from_assignments(['upscale=2', 'fxaa=true'], rows())
@@ -552,8 +557,8 @@ class PageLayoutTests(unittest.TestCase):
 
     def test_advanced_page_holds_the_rest_of_the_user_options(self):
         advanced = [row for row in rows() if row['page'] == 'advanced']
-        self.assertEqual(len(advanced), 45)
-        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 46)))
+        self.assertEqual(len(advanced), 46)  # 45 + prohibit_dynamic_code (TASK-064)
+        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 47)))
         self.assertTrue({'renderer', 'deinterlace', 'shade_boost', 'linear_present', 'tv_shader', 'osd_fps',
                          'hw_download_mode', 'filter', 'trilinear', 'anisotropic'} <= {row['id'] for row in advanced})
 
@@ -640,10 +645,41 @@ class OsdRowTests(unittest.TestCase):
         # Off by default: the default INI has no overlay line; the master switch alone turns every item on.
         self.assertNotIn('PerfOverlay', gs_settings.render_ini(rows()))
         text = gs_settings.render_ini(rows(), gs_settings.settings_from_assignments(['perf_overlay=true'], rows()))
-        self.assertTrue(text.endswith('\n[GT4GS]\nPerfOverlay = true\n'), text)
+        self.assertTrue(text.endswith('\n[GT4GS]\nPerfOverlay = true\n' + PROHIBIT_LINE), text)
         text = gs_settings.render_ini(rows(), gs_settings.settings_from_assignments(
             ['perf_overlay=true', 'perf_overlay_gpu=false'], rows()))
-        self.assertTrue(text.endswith('[GT4GS]\nPerfOverlay = true\nPerfOverlayGPU = false\n'), text)
+        self.assertTrue(text.endswith('[GT4GS]\nPerfOverlay = true\nPerfOverlayGPU = false\n' + PROHIBIT_LINE), text)
+
+
+class ProhibitDynamicCodeTests(unittest.TestCase):
+    """TASK-064: Arbitrary Code Guard is off by default so third-party overlays (RTSS) can hook gt4-gs."""
+
+    def test_row_is_an_advanced_always_written_switch_defaulting_to_false(self):
+        row = by_id()['prohibit_dynamic_code']
+        self.assertEqual((row['page'], row['order'], row['control'], row['type'], row['section'], row['key'],
+                          row['default'], row['written'], row['status']),
+                         ('advanced', 46, 'toggle', 'bool', 'GT4GS', 'ProhibitDynamicCode', 'false', 'always', 'ok'))
+        self.assertEqual(row['label'], 'Block third-party overlays (Arbitrary Code Guard)')
+        self.assertIn('prohibit_dynamic_code', {offered_row['id'] for offered_row in gs_settings.offered(rows())})
+
+    def test_default_ini_always_writes_false(self):
+        self.assertTrue(gs_settings.render_ini(rows()).endswith('\n[GT4GS]\nProhibitDynamicCode = false\n'))
+        self.assertIn('ProhibitDynamicCode = false\n', probe.gs_config_text({}))
+
+    def test_true_is_accepted_and_written(self):
+        settings = gs_settings.settings_from_assignments(['prohibit_dynamic_code=true'], rows())
+        self.assertIn('ProhibitDynamicCode = true\n', gs_settings.render_ini(rows(), settings))
+        text = probe.gs_config_text({'GT4_GS_SETTINGS': json.dumps({'prohibit_dynamic_code': True})})
+        self.assertIn('[GT4GS]\nProhibitDynamicCode = true\n', text)
+        self.assertNotIn('ProhibitDynamicCode = false', text)
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'must be true or false'):
+            gs_settings.parse_value(by_id()['prohibit_dynamic_code'], 'maybe')
+
+    def test_reset_to_defaults_restores_false(self):
+        settings = gs_settings.settings_from_assignments(['prohibit_dynamic_code=true'], rows())
+        self.assertEqual(gs_settings.reset_to_defaults(rows())['prohibit_dynamic_code'], 'false')
+        self.assertIn('ProhibitDynamicCode = false\n', gs_settings.render_ini(rows(), gs_settings.reset_to_defaults(rows())))
+        self.assertIn('ProhibitDynamicCode = true\n', gs_settings.render_ini(rows(), settings))
 
     def test_shader_notice_and_cursor_rows(self):
         notice = by_id()['shader_compile_notice']
