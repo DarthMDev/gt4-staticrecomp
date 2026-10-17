@@ -100,6 +100,15 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
 | TASK‑063 | Bit-exact R5900 FPU `div.s`/`mul.s` (license demo phase, real-PS2 card replays and ghosts) | 📋 Planned · oracle ready (`scripts/license_demo_oracle.py`); needs hardware vectors |
 | TASK‑064 | Third-party overlays (MSI Afterburner / RivaTuner) with the PCSX2 GS: Arbitrary Code Guard off by default | ✅ Done (2026-10-17) · owner test: the RivaTuner/Afterburner overlay shows in game with default settings |
+| TASK‑065 | Native renderer P0: hook layer, scene capture, renderer core, side-by-side viewer | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑066 | Native renderer P1: asset decode and offline 1x redraw of captured frames | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑067 | Native renderer P2: cars in shadow mode (with the per-frame environment map) | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑068 | Native renderer P3: track, sky, fog, billboards in shadow mode | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑069 | Native renderer P4: world-pass effects, then native `render_world` on screen (hybrid) | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑070 | Native renderer P5: high frame rate (interpolation, 120/144 Hz), physics untouched | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑071 | Native renderer P6: ultrawide and any resolution (wider FOV, culling, HUD anchoring) | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑072 | Native renderer P7: replays, photo mode, showroom, split screen, menu 3D cars | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
+| TASK‑073 | Native renderer P8: mobile backends (Metal, Vulkan-mobile, GLES) | 📋 Planned (branch `native-renderer/main`, after 1.0.0; [plan](docs/native-renderer/PLAN.md)) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -255,6 +264,14 @@ verifies every release. Tests: `ProhibitDynamicCodeTests` and the default-ini as
 Acceptance: owner sees the RTSS overlay in game with the default settings.
 State: ✅ Done (2026-10-17). Owner test: the MSI Afterburner / RivaTuner overlay shows in game with the default settings, confirming Arbitrary Code Guard as the cause. Branch `task/064-overlay-compat` (single writer, from main da1eb95). Python suite
 544 tests OK (38 skipped for missing private files). Merged with owner approval (PR #46).
+
+### TASK-065..073 — Native renderer (branch `native-renderer/main`)
+Owner decision 2026-10-17 (decision 0071): a hybrid native renderer (our MIT code) fed at `pgluCallShape`,
+developed on the long-lived branch `native-renderer/main`, not started before release 1.0.0. Menus, 2D, HUD and
+movies stay on the GS; the 3D world moves over piece by piece through shadow mode and image-diff gates. Built
+from the start for high frame rates with untouched physics, ultrawide, any resolution and mobile. Phases,
+effort and acceptance: [docs/native-renderer/PLAN.md](docs/native-renderer/PLAN.md); feasibility study:
+[docs/native-renderer/STUDY.md](docs/native-renderer/STUDY.md). Untainted MIT agents only.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
