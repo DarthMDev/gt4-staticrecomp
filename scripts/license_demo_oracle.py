@@ -281,6 +281,46 @@ DIV_MODELS = {
 }
 
 
+# --- overflow clamping variants (TASK-017 round 3) ---------------------------
+#
+# Modelled from a public prose description only (the PCSX2 wiki lists GT4 "demo races do not work"
+# with the workaround EE/IOP clamping mode "Full"); no emulator source was read. A clamp maps a value
+# whose exponent field is 255 (a large normal number on the R5900, Inf/NaN in IEEE) to the given
+# magnitude with its sign kept. With finite operands and no exponent-255 results, IEEE single
+# precision with round toward zero equals the chop models above (denormal results flush to zero in
+# both cases here), so "IEEE RZ + clamp" is modelled as chop wrapped by these clamps.
+
+MAX_FINITE = 0x7F7FFFFF
+CLAMP_PROFILES = {
+    # name: (operand limit or None, result limit or None)
+    "none": (None, None),
+    "full-7f7f": (MAX_FINITE, MAX_FINITE),
+    "operands-7f7f": (MAX_FINITE, None),
+    "result-7f7f": (None, MAX_FINITE),
+    "full-7fff": (ABS, ABS),
+    "operands-7fff": (ABS, None),
+    "result-7fff": (None, ABS),
+}
+
+
+def clamp_value(x: int, limit) -> int:
+    if limit is None or exponent(x) != 255:
+        return x
+    return (x & SIGN) | limit
+
+
+def with_clamp(operation, profile: str):
+    """Wraps a mul or div model with the operand and result clamps of a CLAMP_PROFILES entry."""
+    operand_limit, result_limit = CLAMP_PROFILES[profile]
+    if operand_limit is None and result_limit is None:
+        return operation
+
+    def clamped(a: int, b: int) -> int:
+        result = operation(clamp_value(a, operand_limit), clamp_value(b, operand_limit))
+        return clamp_value(result, result_limit)
+    return clamped
+
+
 # --- cipher ---------------------------------------------------------------
 
 def keystream_byte(state: int) -> int:
@@ -309,13 +349,13 @@ def crc_ok(plain: bytes, key: int) -> bool:
 
 
 def decrypt(body: bytes, key: int, mul, div) -> bytes:
-    """Decrypts like func_00579E00. Saturated states (exponent field 255) are cached."""
+    """Decrypts like func_00579E00. Saturated or clamped states (exponent field >= 254) are cached."""
     state = initial_state(key)
     out = bytearray(len(body))
     saturated: dict[tuple[int, int], int] = {}
     for index, cipher in enumerate(body):
         out[index] = (cipher ^ keystream_byte(state)) & 0xFF
-        if exponent(state) == 255:
+        if exponent(state) >= 254:  # saturated or clamped states repeat; cache their successors
             cache_key = (cipher, state)
             following = saturated.get(cache_key)
             if following is None:
@@ -490,19 +530,24 @@ def compare_plain(model_plain: bytes, true_plain: bytes) -> dict:
     return {"first_diff": first, "payload_wrong": wrong, "payload_bytes": len(payload)}
 
 
-def evaluate(demos, mul_names, div_names):
+def evaluate(demos, mul_names, div_names, clamp_names=("none",)):
     results = {}
-    for mul_name in mul_names:
-        for div_name in div_names:
-            crc_passed = sane = sane_us = 0
-            for name, key, body in demos:
-                plain = decrypt(body, key, MUL_MODELS[mul_name], DIV_MODELS[div_name])
-                crc_passed += crc_ok(plain, key)
-                if layout_sane(plain):
-                    sane += 1
-                    sane_us += name.startswith(DEMO_PREFIX + "us")
-            results[f"{mul_name}/{div_name}"] = {"crc_passed": crc_passed, "layout_sane": sane,
-                                                 "layout_sane_us": sane_us, "files": len(demos)}
+    for clamp_name in clamp_names:
+        for mul_name in mul_names:
+            for div_name in div_names:
+                mul = with_clamp(MUL_MODELS[mul_name], clamp_name)
+                div = with_clamp(DIV_MODELS[div_name], clamp_name)
+                crc_passed = sane = sane_non_jp = sane_us = 0
+                for name, key, body in demos:
+                    plain = decrypt(body, key, mul, div)
+                    crc_passed += crc_ok(plain, key)
+                    if layout_sane(plain):
+                        sane += 1
+                        sane_non_jp += not name.startswith(DEMO_PREFIX + "jp")
+                        sane_us += name.startswith(DEMO_PREFIX + "us")
+                label = f"{mul_name}/{div_name}" if clamp_name == "none" else f"{mul_name}/{div_name}+{clamp_name}"
+                results[label] = {"crc_passed": crc_passed, "layout_sane": sane, "layout_sane_non_jp": sane_non_jp,
+                                  "layout_sane_us": sane_us, "files": len(demos)}
     return results
 
 
@@ -511,6 +556,8 @@ def main() -> int:
     parser.add_argument("--assets-root", type=Path, default=DEFAULT_ASSETS_ROOT)
     parser.add_argument("--mul", action="append", choices=sorted(MUL_MODELS))
     parser.add_argument("--div", action="append", choices=sorted(DIV_MODELS))
+    parser.add_argument("--clamp", action="append", choices=sorted(CLAMP_PROFILES),
+                        help="Overflow clamp profile(s) applied to every mul/div model (default: none)")
     parser.add_argument("--limit", type=int, default=0, help="Only the first N demos (0 = all)")
     parser.add_argument("--search", type=int, default=0, metavar="BEAM",
                         help="Run the CRC-confirmed beam search with this beam width and score div models")
@@ -522,7 +569,8 @@ def main() -> int:
     if arguments.limit:
         demos = demos[:arguments.limit]
     report = {"demos": len(demos),
-              "models": evaluate(demos, arguments.mul or ["chop"], arguments.div or sorted(DIV_MODELS))}
+              "models": evaluate(demos, arguments.mul or ["chop"], arguments.div or sorted(DIV_MODELS),
+                                 arguments.clamp or ["none"])}
     if arguments.search:
         solved, total = 0, 0
         agree = {name: 0 for name in DIV_MODELS}

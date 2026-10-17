@@ -101,6 +101,36 @@ class CipherTests(unittest.TestCase):
         self.assertGreater(len(states), 200)
 
 
+class ClampTests(unittest.TestCase):
+    """Overflow clamp profiles (round 3): exponent-255 values only, sign kept."""
+
+    def test_clamp_value_touches_only_exponent_255(self):
+        self.assertEqual(oracle.clamp_value(0x7FD69C89, oracle.MAX_FINITE), 0x7F7FFFFF)
+        self.assertEqual(oracle.clamp_value(0xFF800001, oracle.MAX_FINITE), 0xFF7FFFFF)
+        self.assertEqual(oracle.clamp_value(0x7F7FFFFF, oracle.ABS), 0x7F7FFFFF)
+        self.assertEqual(oracle.clamp_value(0x7F800000, oracle.ABS), 0x7FFFFFFF)
+        self.assertEqual(oracle.clamp_value(0x7F800000, None), 0x7F800000)
+
+    def test_profiles_wrap_operands_and_results(self):
+        self.assertIs(oracle.with_clamp(oracle.mul_chop, "none"), oracle.mul_chop)
+        # 0x7F7FFFFF * 2.0 overflows: the donor saturates to 0x7FFFFFFF; a result clamp gives max finite.
+        self.assertEqual(oracle.mul_chop(0x7F7FFFFF, 0x40000000), 0x7FFFFFFF)
+        self.assertEqual(oracle.with_clamp(oracle.mul_chop, "result-7f7f")(0x7F7FFFFF, 0x40000000), 0x7F7FFFFF)
+        # An exponent-255 operand is a large normal number for the donor; an operand clamp replaces it.
+        self.assertEqual(oracle.div_chop(0x7FC00000, 0x40000000), 0x7F400000)
+        self.assertEqual(oracle.with_clamp(oracle.div_chop, "operands-7f7f")(0x7FC00000, 0x40000000), 0x7EFFFFFF)
+        self.assertEqual(oracle.with_clamp(oracle.div_chop, "operands-7fff")(0x7FC00000, 0x40000000), 0x7F7FFFFF)
+        self.assertEqual(oracle.with_clamp(oracle.mul_chop, "full-7fff")(0x7F800000, 0x3F800000), 0x7FFFFFFF)
+
+    def test_saturated_cipher_state_differs_under_clamping(self):
+        plain = bytes(range(256)) * 2
+        key, cipher = oracle.encrypt(plain, oracle.mul_chop, oracle.div_chop)
+        clamped_mul = oracle.with_clamp(oracle.mul_chop, "full-7f7f")
+        clamped_div = oracle.with_clamp(oracle.div_chop, "full-7f7f")
+        self.assertEqual(oracle.decrypt(cipher, key, oracle.mul_chop, oracle.div_chop), plain)
+        self.assertNotEqual(oracle.decrypt(cipher, key, clamped_mul, clamped_div), plain)
+
+
 class LayoutTests(unittest.TestCase):
     @staticmethod
     def body(count=0, frames=0x5BF, size=0x10E, padding=2):
