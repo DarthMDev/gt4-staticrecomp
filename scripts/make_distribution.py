@@ -14,8 +14,8 @@ and any game data (disc image, CORE.GT4, reconstructed ELF, memory cards, caches
 The output must stay inside the assets checkout's private/ folder and must not exist yet (or be empty).
 
 Usage:
-  python scripts/make_distribution.py private/slice202-dist --assets-root C:/Antigravity/gt4-staticrecomp \
-      --exe private/slice202-build/build/gt4vulkan.exe --runtime-manifest docs/inputs/slice202-pcsx2.json
+  python scripts/make_distribution.py private/slice206-dist --assets-root C:/Antigravity/gt4-staticrecomp \
+      --exe private/slice206-build/build/gt4vulkan.exe --runtime-manifest docs/inputs/slice206-pcsx2.json
 """
 
 import argparse

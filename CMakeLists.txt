@@ -25,12 +25,14 @@ endif()
 if(GT4_X86_64_V3)
     add_compile_options(/clang:-march=x86-64-v3)
 endif()
+# enable_testing() comes before the subdirectories so their add_test() calls register (native_memcard_store,
+# native_license_guard).
+enable_testing()
 add_subdirectory(native)
 add_subdirectory(tools/vu_recomp)
 add_subdirectory(tools/gs_stream_record)
 add_subdirectory(tools/gs_live_check)
 
-enable_testing()
 set(GT4_PYTHON "${CMAKE_SOURCE_DIR}/private/tooling-venv/Scripts/python.exe"
     CACHE FILEPATH "Python environment with scripts/requirements.txt installed")
 if(NOT EXISTS "${GT4_PYTHON}")
@@ -41,6 +43,7 @@ add_test(NAME native_vulkan_pixels_sync COMMAND $<TARGET_FILE:vulkan_fixture>)
 set_tests_properties(native_vulkan_pixels_sync PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_GS_SYNC=1")
 add_test(NAME native_gs_submit_ring COMMAND $<TARGET_FILE:gs_submit_ring_fixture>)
+add_test(NAME native_fpu_chop COMMAND $<TARGET_FILE:fpu_chop_fixture>)
 add_test(NAME native_vulkan_async_stress_async
     COMMAND $<TARGET_FILE:vulkan_async_stress> "${CMAKE_BINARY_DIR}/async-stress-async.bin")
 add_test(NAME native_vulkan_async_stress_sync

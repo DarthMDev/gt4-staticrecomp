@@ -94,8 +94,21 @@ PERF_PROFILES = {
     # (TASK-060/062), with the stable gt4-gs 1.0.0 package of slice201.
     'pcsx2-slice202': ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'),
     # slice203 (TASK-044): the slice202 game executable (same hash) with the stable gt4-gs 1.0.1 package (no writes under
-    # Documents\PCSX2). Mode pcsx2 points here.
-    'pcsx2': ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'),
+    # Documents\PCSX2). Kept as pcsx2-slice203 after TASK-017.
+    'pcsx2-slice203': ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'),
+    # TASK-017 (slice206): the slice203 game recipe plus the license demo guard v2 (both demo loaders), gt4-gs 1.0.1. Mode pcsx2
+    # points here. Halt dump and FSV trace are built in and off unless GT4_HALT_DUMP / GT4_FSV_TRACE are set.
+    'pcsx2': ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'),
+    # TASK-017 diagnostic candidate (slice181): the slice166 profile plus the FSV read trace (GT4_FSV_TRACE=1
+    # writes one [fsv] line per guest disc read to stderr). Not a performance candidate.
+    'license-trace': ('slice181-license-trace.json', 'private/slice181-license-build/build/gt4vulkan.exe'),
+    # TASK-017 halt-dump candidate (slice204): the slice181 license-trace profile plus the halt forensic dump in kernel.cpp.
+    # The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; [halt-dump] lines go to stderr at the halt.
+    # Diagnostic only; not a performance candidate.
+    'license-halt': ('slice204-halt-trace.json', 'private/slice204-halt-build/build/gt4vulkan.exe'),
+    # TASK-017 license guard v1 (slice205, owner test 2026-10-16; guards the 0x001100D0 loader only). History.
+    # (private/slice205-license-guard-runtime; halt dump and FSV trace built in, off unless GT4_HALT_DUMP/GT4_FSV_TRACE).
+    'license-guard': ('slice205-license-guard.json', 'private/slice205-license-guard-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -107,14 +120,14 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -220,7 +233,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2', 'license-guard') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -453,6 +466,31 @@ def summarize_vu1_corpus(corpus):
     return summary
 
 
+# The owner's persistent card. --play-card selects another private card and may never name this one.
+OWNER_PLAY_CARD = 'private/manual-play/card.ps2'
+
+
+def separate_play_card(workspace, path):
+    """Validates a --play-card path: an existing file inside private/, never the owner's card. Returns it resolved.
+
+    Relative paths are taken from the assets checkout. The card is never created here: it must already exist, and
+    the usual backup (card-before.ps2 in the session folder) and session lock apply to it.
+    """
+    workspace = Path(workspace).resolve()
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = workspace / candidate
+    resolved = candidate.resolve()
+    private = (workspace / 'private').resolve()
+    if not resolved.is_relative_to(private) or resolved == private:
+        raise ValueError(f'--play-card must be a card file inside private/: {path}')
+    if resolved == (workspace / OWNER_PLAY_CARD).resolve():
+        raise ValueError(f"--play-card must not be the owner's card {OWNER_PLAY_CARD}")
+    if not resolved.is_file():
+        raise ValueError(f'--play-card must name an existing card file (it is never created): {path}')
+    return resolved
+
+
 def binary_workspace_for(runtime_workspace, workspace):
     """Checkout holding the pinned binaries: the runtime checkout, or the assets checkout when the runtime
     checkout is a worktree without private/ (worktrees never link the main private/ directory)."""
@@ -464,7 +502,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              binary_workspace=None, cpu_cores=None, renderer_override=None):
+              binary_workspace=None, cpu_cores=None, renderer_override=None, separate_card=False):
     workspace = workspace.resolve()
     if cpu_cores is not None and not performance:
         raise ValueError('--cpu-cores is refused outside performance modes')
@@ -510,6 +548,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
             raise ValueError('Persistent card has an unexpected size; preserve it for inspection')
         if not play_card.exists() and card_seed is None:
             raise ValueError('First manual play needs a pinned seed card')
+        if separate_card:
+            play_card = separate_play_card(workspace, play_card)
 
     inputs = workspace / 'docs/inputs'
     native = json.loads((inputs / 'usa-v2.00-native.json').read_text(encoding='utf-8'))
@@ -609,6 +649,9 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         with (run_directory / 'card-before.ps2').open('rb') as source:
             result['play_card_before'] = fingerprint(source)
         result['play_card_path'] = str(play_card)
+        if separate_card:
+            # --play-card: a separate test card, not the owner's private/manual-play/card.ps2.
+            result['play_card_option'] = str(play_card)
     start = time.monotonic()
     log_path = run_directory / 'probe.log'
     environment = os.environ.copy()
@@ -622,6 +665,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment.update(GT4_PERF='1', PS2_SCALE='1', PS2_GS='gpu')
         result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu'}
         result['measurement_mode'] = runtime_evidence.get('measurement_mode', 'detailed')
+        if runtime_evidence.get('measurement_mode') == 'license-halt':
+            # TASK-017 (slice204): the halt dump and the FSV read trace are both on for this diagnostic mode.
+            environment.update(GT4_FSV_TRACE='1', GT4_HALT_DUMP='1')
+            result['halt_dump_environment'] = {'GT4_FSV_TRACE': '1', 'GT4_HALT_DUMP': '1'}
         result['vulkan_loader_environment'] = {
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
     if 'GT4_GS_SYNC' in environment:
@@ -640,6 +687,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:
         result['force_480p_environment'] = {'GT4_FORCE_480P': environment['GT4_FORCE_480P']}
+    if 'GT4_FSV_TRACE' in environment:
+        result['fsv_trace_environment'] = {'GT4_FSV_TRACE': environment['GT4_FSV_TRACE']}
+    if 'GT4_HALT_DUMP' in environment and 'halt_dump_environment' not in result:
+        result['halt_dump_environment'] = {'GT4_HALT_DUMP': environment['GT4_HALT_DUMP']}
     mtvu_measure = {name: environment[name] for name in ('GT4_MTVU_MEASURE', 'GT4_MTVU_MEASURE_EVERY') if name in environment}
     if mtvu_measure:
         result['mtvu_measure_environment'] = mtvu_measure
@@ -741,13 +792,18 @@ def main():
                         help='Experimental: hold the race display index at 480p (GT4_FORCE_480P=1)')
     parser.add_argument('--assets-root', type=Path,
                         help='Checkout with private/ and the disc (default: this checkout); outputs go under it')
+    parser.add_argument('--play-card', type=Path,
+                        help='Interactive only: play on this existing card inside private/ (never the owner card '
+                             'private/manual-play/card.ps2); backed up like the owner card and recorded in result.json')
     options = parser.parse_args()
     try:
         assets = (options.assets_root or ROOT).resolve()
+        play_card = separate_play_card(assets, options.play_card) if options.play_card else None
         result = run_probe(assets, options.run_directory, options.frames, options.timeout,
                            options.press, options.card_seed, options.runtime_manifest, options.window,
-                           options.capture_audio, options.interactive, force_480p=options.force_480p,
-                           runtime_workspace=ROOT, binary_workspace=binary_workspace_for(ROOT, assets))
+                           options.capture_audio, options.interactive, play_card=play_card,
+                           force_480p=options.force_480p, runtime_workspace=ROOT,
+                           binary_workspace=binary_workspace_for(ROOT, assets), separate_card=play_card is not None)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')
     print(json.dumps(result, indent=2))

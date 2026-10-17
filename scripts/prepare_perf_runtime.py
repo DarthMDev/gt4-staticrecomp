@@ -23,6 +23,10 @@ Options:
               hw.cpp: SetGsCrt posts the SMODE1/SMODE2 writes the BIOS performs. Every hook returns at once when
               GT4_RENDERER is unset or donor and GT4_GS_CAPTURE is unset. Derivations without this option are
               unchanged.
+  --fsv-trace add the FSV read trace to iop/cdvdfsv.cpp (scripts/fsv_trace_overlay.inc, slice 181).
+              Adds cdvdfsv.cpp to the capsule; without GT4_FSV_TRACE set at run time the game behaves as the donor.
+  --halt-dump add the halt forensic dump to kernel.cpp (scripts/halt_dump_overlay.inc, slice 204). Adds kernel.cpp
+              to the capsule; without GT4_HALT_DUMP set at run time the game behaves as the donor.
 
 Slices 156 and 158 used --gs-crt-override and --display-table-override. Both hooks were removed in slice164
 (the 480p switch is a host-side guest RAM write, native/race_display.*). Their capsules stay pinned in
@@ -51,6 +55,22 @@ PATCHES = {
     'vif.cpp': [
         ('void transfer(int unit, const std::uint8_t *data, std::uint32_t qwc) {\n',
          'void transfer(int unit, const std::uint8_t *data, std::uint32_t qwc) {\n    gt4::perf::Scope perf_vif(gt4::perf::Category::vif_gif);\n')],
+}
+# FSV read trace (slice 181, TASK-017): one donor file, read as bytes (CRLF in the donor, LF in the overlay).
+FSV_PIN = {'iop/cdvdfsv.cpp': 'c313e10af0baaf63d9bd31040c168f38936c979c37fdce45afdf060d11560fbe'}
+FSV_OVERLAY_PATH = ROOT / 'scripts/fsv_trace_overlay.inc'
+FSV_OVERLAY_ANCHORS = {
+    'includes': ('after', '#include <cstdio>\n'),
+    'local_headers': ('replace', '#include "kernel.hpp"\n#include "sif.hpp"\n'),
+    'helpers': ('before', 'void read_to_ee(std::uint32_t sector, std::uint32_t count, std::uint32_t dst) {\n'),
+    'read_trace': ('after', '    std::memcpy(ps2::g_ram + at, data.data(), std::min<std::size_t>(data.size(), ps2::kRamSize - at));\n'),
+}
+# Halt forensic dump (slice 204, TASK-017): one donor file, runtime/src/kernel.cpp, dump() at the halt.
+HALT_PIN = {'kernel.cpp': '003c9e0a0e2c1cb61a6fd8ec846a4798c3027ed933b6825c6377112106f0168a'}
+HALT_OVERLAY_PATH = ROOT / 'scripts/halt_dump_overlay.inc'
+HALT_OVERLAY_ANCHORS = {
+    'helpers': ('before', 'void dump() {\n'),
+    'dump_call': ('after', '        if (!s.waiters.empty()) std::fprintf(stderr, "[sema] %d count %d waiters %zu\\n", id, s.count, s.waiters.size());\n'),
 }
 OVERLAY_PATH = ROOT / 'scripts/vu1_aot_overlay.inc'
 VU0_OVERLAY_PATH = ROOT / 'scripts/vu0_aot_overlay.inc'
@@ -342,6 +362,16 @@ def apply_vu0_aot(source):
     return apply_overlay(source, VU0_OVERLAY_PATH, VU0_OVERLAY_ANCHORS, 'VU0 AOT')
 
 
+def apply_fsv_trace(source):
+    """FSV read trace overlay (slice 181): checks that removing its sections restores the input."""
+    return apply_overlay(source, FSV_OVERLAY_PATH, FSV_OVERLAY_ANCHORS, 'FSV trace')
+
+
+def apply_halt_dump(source):
+    """Halt forensic dump overlay (slice 204): checks that removing its sections restores the input."""
+    return apply_overlay(source, HALT_OVERLAY_PATH, HALT_OVERLAY_ANCHORS, 'halt dump')
+
+
 def apply_mtvu_measure(name, source):
     """Adds the TASK-011 step 0 counting hooks; checks that removing them restores the input."""
     result = source
@@ -420,7 +450,7 @@ def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_m
 
 
 def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False,
-            mtvu=False, gs_stream=False):
+            mtvu=False, gs_stream=False, fsv_trace=False, halt_dump=False):
     if gs_stream:
         mtvu = True
     if mtvu and mtvu_measure:
@@ -461,9 +491,35 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ValueError(f'Qualified donor source differs: {donor_path}')
             sources[name] = derive_mtvu_runtime_source(name, data.decode('utf-8').replace('\r\n', '\n'), gs_stream)
+    fsv_sources = {}
+    if fsv_trace:
+        for name, expected in FSV_PIN.items():
+            data = (donor / name).read_bytes()
+            if hashlib.sha256(data).hexdigest() != expected:
+                raise ValueError(f'Qualified donor source differs: {name}')
+            text = data.decode('utf-8').replace('\r\n', '\n')
+            fsv_sources[Path(name).name] = apply_fsv_trace(text)
+    sources.update(fsv_sources)
+    halt_sources = {}
+    if halt_dump:
+        for name, expected in HALT_PIN.items():
+            data = (donor / name).read_bytes()
+            if hashlib.sha256(data).hexdigest() != expected:
+                raise ValueError(f'Qualified donor source differs: {name}')
+            text = data.decode('utf-8').replace('\r\n', '\n')
+            halt_sources[Path(name).name] = apply_halt_dump(text)
+    sources.update(halt_sources)
     output.mkdir()
     receipt = {'donor_revision': '1b4808793a12c45125262fd2d5f50a9ec9f7c020',
-               'donor_sha256': PINS, 'source_sha256': {}}
+               'donor_sha256': dict(PINS), 'source_sha256': {}}
+    if fsv_trace:
+        receipt['donor_sha256'].update(FSV_PIN)
+        receipt['fsv_trace_profile'] = 'overlay-v1'
+        receipt['fsv_trace_overlay_sha256'] = hashlib.sha256(FSV_OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+    if halt_dump:
+        receipt['donor_sha256'].update(HALT_PIN)
+        receipt['halt_dump_profile'] = 'overlay-v1'
+        receipt['halt_dump_overlay_sha256'] = hashlib.sha256(HALT_OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
     if split_vu:
         receipt['vu_scope_profile'] = 'unit_split_run_fast_only'
     if vu1_aot:
@@ -501,6 +557,9 @@ if __name__ == '__main__':
     parser.add_argument('--mtvu-measure', action='store_true')
     parser.add_argument('--mtvu', action='store_true')
     parser.add_argument('--gs-stream', action='store_true')
+    parser.add_argument('--fsv-trace', action='store_true')
+    parser.add_argument('--halt-dump', action='store_true')
     args = parser.parse_args()
     prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot, vu0_aot=args.vu0_aot,
-            mtvu_measure=args.mtvu_measure, mtvu=args.mtvu, gs_stream=args.gs_stream)
+            mtvu_measure=args.mtvu_measure, mtvu=args.mtvu, gs_stream=args.gs_stream, fsv_trace=args.fsv_trace,
+            halt_dump=args.halt_dump)

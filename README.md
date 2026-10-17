@@ -13,14 +13,13 @@
 
 ![Race](https://img.shields.io/badge/race-60%20FPS%20%C2%B7%20100%25%20speed-2ea44f)
 ![Showroom](https://img.shields.io/badge/showroom-60%20FPS-2ea44f)
-![Night race](https://img.shields.io/badge/night%20race-59%20FPS-yellowgreen)
+![Night race](https://img.shields.io/badge/night%20race-60%20FPS-2ea44f)
 ![Scenes](https://img.shields.io/badge/scenes%20tested-6-informational)
-![Known issues](https://img.shields.io/badge/known%20issues-license%20tests%20crash-red)
 ![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
 ![JIT](https://img.shields.io/badge/guest%20JIT-none-informational)
 ![Platform](https://img.shields.io/badge/platform-Windows%20x64%20%C2%B7%20Vulkan-informational)
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Tasks](https://img.shields.io/badge/tasks%20done-12%20of%2024-2ea44f)
+![Tasks](https://img.shields.io/badge/tasks%20done-34%20of%2063-2ea44f)
 
 </div>
 
@@ -42,7 +41,7 @@ interpreter on the normal path. Races render in **480p progressive**, the window
 is **16:9** with borderless fullscreen. Next: the **PCSX2 GS** renderer in a separate process (`gt4-gs.exe`, decision 0070)
 (upscaling, sharper image), VU1 on its own CPU core for weaker CPUs and phones,
 and a one-click **launcher and installer** for the first stable release.
-**License tests still crash** while loading their demo run.
+License tests are playable (TASK-017); some license demos do not play, as in PCSX2 with default settings.
 See [Scene results](#scene-results) and [Known issues](#known-issues).
 
 [Status](docs/STATUS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Build guide](docs/BUILD.md) · [Credits](#credits)
@@ -99,10 +98,14 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
 
 ## Known issues
 
-- **License tests crash** when the demo run loads (also with every new
-  optimization disabled, so it predates them). The crash is traced to
-  `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`;
-  the demo-input data appears to arrive wrong or late. Under investigation.
+- **Some license demos and backgrounds do not play; the licenses are playable.**
+  This is the same as PCSX2 with default settings. GT4 decrypts the license
+  demos with a cipher built on floating-point results, and our FPU is not
+  bit-exact with the PS2, so about half the demos decrypt wrong. The game's own
+  check fails, and since TASK-017 the build skips such a demo instead of
+  crashing ([details](docs/LICENSE-DEMO-CIPHER.md)). Replays and ghosts saved on
+  a real PS2 card do not load either (a clean load error). The exact FPU fix is
+  TASK-063.
 - **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
   that the PCSX2 GS (TASK-037) is expected to remove. With the PCSX2 GS (accurate
   readbacks) the night race holds 59.97 FPS; its remaining late frames come from the
@@ -158,7 +161,7 @@ in game before it is merged.
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
 | TASK‑016 | IOP per-module cost review | ⏸️ Deferred |
-| TASK‑017 | License-test crash | 🔄 In progress · the license load jumps to a null pointer; analysis running |
+| TASK‑017 | License-test crash | ✅ Done (2026-10-16) · licenses playable; demos that decrypt wrong are skipped (as PCSX2 default) |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
@@ -190,6 +193,7 @@ in game before it is merged.
 | TASK‑060 | Mouse cursor hides over the picture after 3 s (fullscreen and windowed) | ✅ Done · owner test 2026-10-16: hides in fullscreen and over the picture only in a window (`GT4_CURSOR_AUTOHIDE=0` keeps it) ([live](docs/GS-LIVE.md)) |
 | TASK‑061 | "Compiling shaders…" notice while the PCSX2 GS compiles | ✅ Done · owner test 2026-10-16; only real compiles (cache hits excluded), gt4-gs 1.0.0 |
 | TASK‑062 | Performance overlay: FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom | ✅ Done · owner test 2026-10-16; off by default (`--gs-setting perf_overlay=true`), +0.02 ms/frame GS thread |
+| TASK‑063 | Bit-exact PS2 FPU division and multiply (all license demos, real-PS2 card replays) | 📋 Planned · needs hardware test vectors |
 | 🧩 | **gt4-gs 1.0.0: first stable renderer release** | ✅ Published 2026-10-16, pinned in slice202 (`--mode pcsx2`) ([fork](docs/GS-FORK.md)) |
 | 🧩 | **gt4-gs 1.0.1: stable, no writes under `Documents\PCSX2`** | ✅ Published 2026-10-16 (`gt4gs-v1.0.1`), pinned in slice203 (`--mode pcsx2`) ([fork](docs/GS-FORK.md)) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |

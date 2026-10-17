@@ -56,7 +56,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
-| TASK‑017 | License-test crash | 🔄 In progress: owner trace run 2026-10-16 halts with a null call (pc 0x00346D24) and logs no FSV reads; crash analysis running |
+| TASK‑017 | License-test crash | ✅ Done (2026-10-16) · license demo guard on both demo loaders (slice206, `--mode pcsx2`): licenses playable, demos that decrypt wrong are skipped as in PCSX2 default; root cause moved to TASK‑063 |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 (decision 0070) |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
@@ -98,6 +98,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑060 | Mouse cursor auto-hide over the picture (fullscreen and windowed, game and gt4-gs agree) | ✅ Done · owner test 2026-10-16 (fullscreen and windowed); slice201, in slice202 |
 | TASK‑061 | "Compiling shaders…" notice in gt4-gs (real compiles only) | ✅ Done · owner test 2026-10-16; gt4-gs 1.0.0 (cold cache 238 compiles shown, warm cache none) |
 | TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
+| TASK‑063 | Bit-exact R5900 FPU `div.s`/`mul.s` (license demo phase, real-PS2 card replays and ghosts) | 📋 Planned · oracle ready (`scripts/license_demo_oracle.py`); needs hardware vectors |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
 
@@ -218,6 +219,28 @@ Pre-existing; traced to `RaceSolitaire::loadDemoInputs` (0x3EAD18) →
 `AutomobileControlRecord::Manager::load` (0x346BB8) reading a bad record count.
 Env-gated logging there and in the PS2ZIP loader for `replay/license/` files,
 plus a CDVD read trace; one owner reproduction; fix the cause.
+State (2026-10-15, branch task/017-license-crash): FPU rounding lead checked. Donor mul/div/sqrt equal an exact
+chop reference; add/sub truncate the smaller operand (one-ulp, magnitude-larger). Not the crash cause by itself
+(Hypothesis). The failing record-size words (0xFF80FF80 / 0x80FF80FF at offset 0x14F8, every file) look like a
+decode or layout error in the triage parser, not FP results (Hypothesis, to verify with the owner trace).
+
+State (2026-10-16, branch task/017-license-crash, slice 204): halt forensic dump built, not yet run by the owner. `GT4_HALT_DUMP=1` adds `[halt-dump]` lines at the halt (every thread's registers; for a thread whose saved pc is in the record copy loop of `Manager::load` (0x346BB8..0x346EB0), its record base and count, and whether the record window overlaps any thread stack, with the stack of thread 17 at 0x008722C0 as the suspect; the halted thread's stack top). Overlay `scripts/halt_dump_overlay.inc`; capsule `private/slice204-halt-runtime`; build `private/slice204-halt-build`; pins `docs/inputs/slice204-halt-runtime.json` and `slice204-halt-trace.json`. Owner command: `play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode license-halt`. The FSV read trace is on in the same run. Next: decide from the dump whether the copy overruns (Hypothesis) or the record count is wrong (Unknown).
+
+State (2026-10-16, FPU oracle phase 1): cause Confirmed by the owner test (B1, B2, B5 crash; B3, B4 load, as predicted): the demos are decrypted by GT4's FPU-keyed cipher (func_00579E00), which needs bit-exact R5900 mul.s/div.s. `scripts/license_demo_oracle.py` checks the game CRC on all 592 demos; `tests/python/test_license_demo_oracle.py`. No model passes yet (chop/chop 0/592; every model tried 0/592). A CRC-confirmed, model-free beam search recovered exact chains for 528/592 files (52,469 unique div.s steps): the hardware quotient is always chop or chop + 1 ulp; per-step agreement chop 60.9%, nearest 82.8%, radix-2 carry-save SRT candidate 93.1% (best 94.1%). mul.s is a truncated Booth array (hardware vector 1.0 x 0x3FFFFFFF = 0x3FFFFFFE) that equals chop on this data. Next: identify the divider's digit-selection details (Hypothesis: uncorrected radix-2 SRT), then phase 2 (fpu.hpp overlay, ps2game.lib rebuild, new pins).
+
+State (2026-10-17, done): owner approved guard v1 (slice205: B1 no longer crashes, its background movie fades and the demo does not run, the license is playable, as PCSX2 default; B3's demo plays). B5 then crashed through the second loader 0x00110230 (vtbl[57], target 0x003D5F00; session-20261016-235625-870886), which v1 did not see. Guard v2 (capsule `private/slice206-license-guard-runtime`, build slice206) keys on both loaders' call sites; `--mode pcsx2` = slice206 (`docs/inputs/slice206-pcsx2.json`), `pcsx2-slice203` and `license-guard` (slice205) kept. Consumer map: [LICENSE-DEMO-CIPHER](docs/LICENSE-DEMO-CIPHER.md) (memory-card loads check the CRC themselves). PCSX2 with EE clamping Full plays B1's demo but crashes in B3 (owner): another phase coin flip. Follow-up: TASK-063.
+
+State (2026-10-16, round 3, slice205): overflow clamping models (from the public PCSX2 "Full clamping" workaround prose) refuted: every 0x7F7FFFFF profile gives 0 sane layouts and no model passes a CRC; CRC-confirmed chains use exponent-255 states as large normals, as the donor does. Mitigation per owner decision: license demo guard in the runtime's dispatch.cpp (capsule `private/slice205-license-guard-runtime`, ps2game.lib unchanged): when a decrypted demo fails the game CRC and is not the single-Recorder layout, its record count is set to 0xFFFFFFFF so Manager::load copies nothing; one `[license-guard]` line per demo load. Build slice205 on the slice203 recipe (gt4-gs 1.0.1), mode `license-guard`, pins `docs/inputs/slice205-license-guard*.json`. Known issue: those demos and license backgrounds do not play (as in PCSX2). Waiting for the owner license test (B1-B5).
+
+State (2026-10-16, round 2): oracle reports layout sanity per model. The record payload is past the saturation point, so it is all right or all wrong (one key-stream phase); no FPU model gives a sane layout on all files (best 270/592, US best 50/85, every model near a coin flip), so there is no 1.0 candidate among FPU models. Divider fitting: radix-2 SRT carry-save variants plateau at 94.1% of 52,469 confirmed steps; radix-4 -2..2 ruled out; exact rule still Unknown.
+
+### TASK-063 — Bit-exact R5900 FPU div.s/mul.s
+Follow-up of TASK-017. Our `ps2/fpu.hpp` is not bit-exact with the R5900 for the cipher's mul.s/div.s chain: 0 of 592
+license demos pass the game CRC, so demos in the wrong key-stream phase play no demo (guarded) and real-PS2 card
+replays and ghosts fail to load (cleanly). The oracle (`scripts/license_demo_oracle.py`) and 52,469 CRC-confirmed div.s
+steps are ready; the divider's digit selection is unknown (best model 94.1% per step). Needs targeted hardware div.s
+vectors (or a published design description). Acceptance: 592/592 CRC passes, then an fpu.hpp overlay, a ps2game.lib
+rebuild with new pins, and an F8 physics check.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
