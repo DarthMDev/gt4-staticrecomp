@@ -227,15 +227,57 @@ def make_div_srt2(estimate_bits: int, plus_threshold: int, zero_threshold: int):
     return div
 
 
+def make_div_srt2_lookahead(estimate_bits: int, plus_threshold: int, zero_threshold: int):
+    """Radix-2 SRT whose digit estimate reads three unreduced vectors (candidate, not exact).
+
+    The residual is kept as sum + carry + pending (-q d of the previous step, exact two's
+    complement); the estimate adds the truncated top bits of all three, then the three
+    are compressed and the new -q d becomes the pending vector. Same thresholds and
+    no-correction rule as make_div_srt2. Best per-step agreement found in phase 1 (94.1%).
+    """
+    fraction_bits = 25
+    width = fraction_bits + 6
+    mask = (1 << width) - 1
+
+    def signed(value: int, bits: int) -> int:
+        value &= (1 << bits) - 1
+        return value - (1 << bits) if value >> (bits - 1) else value
+
+    def div(a: int, b: int) -> int:
+        sign, special, dividend, divisor, biased_exponent = div_operands(a, b)
+        if special is not None:
+            return special
+        d = divisor << (fraction_bits - 24)
+        sum_vector, carry_vector, pending, quotient = dividend << (fraction_bits - 25), 0, 0, 0
+        estimate_width = 4 + estimate_bits
+        shift = fraction_bits - estimate_bits
+        for _ in range(25):
+            sum_vector, carry_vector, pending = (sum_vector << 1) & mask, (carry_vector << 1) & mask, (pending << 1) & mask
+            y = signed(signed(sum_vector >> shift, estimate_width) + signed(carry_vector >> shift, estimate_width)
+                       + signed(pending >> shift, estimate_width), estimate_width)
+            digit = 1 if y >= plus_threshold else (0 if y >= zero_threshold else -1)
+            sum_vector, carry_vector = ((sum_vector ^ carry_vector ^ pending) & mask,
+                                        (((sum_vector & carry_vector) | (sum_vector & pending)
+                                          | (carry_vector & pending)) << 1) & mask)
+            pending = (-digit * d) & mask
+            quotient = 2 * quotient + digit
+        return finish_quotient(sign, quotient, biased_exponent)
+    return div
+
+
 MUL_MODELS = {
     "chop": mul_chop,
     "booth-t8": make_mul_booth(8),
+    "booth-t12": make_mul_booth(12),
     "booth-t16": make_mul_booth(16),
+    "booth-t20": make_mul_booth(20),
 }
 DIV_MODELS = {
     "chop": div_chop,
     "nearest": div_nearest,
     "srt2-cs-t3": make_div_srt2(3, 2, -3),
+    "srt2-cs-t1": make_div_srt2(1, 0, -1),
+    "srt2-la-t3": make_div_srt2_lookahead(3, 2, -3),
 }
 
 
@@ -412,15 +454,55 @@ def chain_samples(body: bytes, key: int, states: tuple[int, ...]):
         state = following
 
 
+def decrypt_with_states(body: bytes, key: int, states: tuple[int, ...]) -> bytes:
+    """Plaintext of a confirmed chain: the given states first, then the deterministic tail."""
+    state = initial_state(key)
+    out = bytearray(len(body))
+    for index, cipher in enumerate(body):
+        out[index] = (cipher ^ keystream_byte(state)) & 0xFF
+        state = states[index] if index < len(states) else div_chop(mul_chop(FT[cipher], state), divisor_of(state))
+    return bytes(out)
+
+
 # --- command line ------------------------------------------------------------
+
+MANAGER_OFFSET = 0x1AA4  # RaceSolitaire::loadDemoInputs reads the record count n here (body offset)
+
+
+def layout_sane(plain: bytes) -> bool:
+    """True when the Manager stream at +0x1AA4 is the single-Recorder layout the game expects.
+
+    Layout of every CRC-confirmed non-JP demo: u32 n = 0 at +0x1AA4, then a Recorder
+    {u32 frames, u32 size, payload} whose end, 0x1AA8 + size rounded up to 4, is the
+    body end. The loader trusts n; n = 0x7F7F7F7F is the crash.
+    """
+    if len(plain) < MANAGER_OFFSET + 12:
+        return False
+    count, frames, size = struct.unpack_from("<3I", plain, MANAGER_OFFSET)
+    return count == 0 and frames > 0 and MANAGER_OFFSET + 4 + ((size + 3) & ~3) == len(plain)
+
+
+def compare_plain(model_plain: bytes, true_plain: bytes) -> dict:
+    """First differing byte and the share of wrong bytes in the record payload."""
+    first = next((index for index, (x, y) in enumerate(zip(model_plain, true_plain)) if x != y), None)
+    payload = range(MANAGER_OFFSET, len(true_plain))
+    wrong = sum(model_plain[index] != true_plain[index] for index in payload)
+    return {"first_diff": first, "payload_wrong": wrong, "payload_bytes": len(payload)}
+
 
 def evaluate(demos, mul_names, div_names):
     results = {}
     for mul_name in mul_names:
         for div_name in div_names:
-            passed = [name for name, key, body in demos
-                      if crc_ok(decrypt(body, key, MUL_MODELS[mul_name], DIV_MODELS[div_name]), key)]
-            results[f"{mul_name}/{div_name}"] = {"passed": len(passed), "files": len(demos)}
+            crc_passed = sane = sane_us = 0
+            for name, key, body in demos:
+                plain = decrypt(body, key, MUL_MODELS[mul_name], DIV_MODELS[div_name])
+                crc_passed += crc_ok(plain, key)
+                if layout_sane(plain):
+                    sane += 1
+                    sane_us += name.startswith(DEMO_PREFIX + "us")
+            results[f"{mul_name}/{div_name}"] = {"crc_passed": crc_passed, "layout_sane": sane,
+                                                 "layout_sane_us": sane_us, "files": len(demos)}
     return results
 
 
@@ -442,18 +524,32 @@ def main() -> int:
     report = {"demos": len(demos),
               "models": evaluate(demos, arguments.mul or ["chop"], arguments.div or sorted(DIV_MODELS))}
     if arguments.search:
-        solved, agree, total = 0, {name: 0 for name in DIV_MODELS}, 0
+        solved, total = 0, 0
+        agree = {name: 0 for name in DIV_MODELS}
+        versus = {name: {"phase_match": 0, "layout_sane": 0, "payload_wrong": 0, "payload_bytes": 0}
+                  for name in DIV_MODELS}
+        true_sane = 0
         for name, key, body in demos:
             states = search_chain(body, key, arguments.search)
             if states is None:
                 continue
             solved += 1
+            true_plain = decrypt_with_states(body, key, states)
+            true_sane += layout_sane(true_plain)
             for _, _, divisor, product, quotient in chain_samples(body, key, states):
                 total += 1
                 for div_name, div in DIV_MODELS.items():
                     agree[div_name] += div(product, divisor) == quotient
-        report["search"] = {"beam": arguments.search, "solved": solved, "div_steps": total,
-                            "div_model_agreement": agree}
+            for div_name, div in DIV_MODELS.items():
+                model_plain = decrypt(body, key, mul_chop, div)
+                diff = compare_plain(model_plain, true_plain)
+                entry = versus[div_name]
+                entry["phase_match"] += model_plain[-2:] == true_plain[-2:]
+                entry["layout_sane"] += layout_sane(model_plain)
+                entry["payload_wrong"] += diff["payload_wrong"]
+                entry["payload_bytes"] += diff["payload_bytes"]
+        report["search"] = {"beam": arguments.search, "solved": solved, "true_layout_sane": true_sane,
+                            "div_steps": total, "div_model_agreement": agree, "versus_truth": versus}
     print(json.dumps(report, indent=2))
     return 0
 

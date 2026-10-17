@@ -5,6 +5,7 @@ present and skips cleanly otherwise. Nothing here writes game data.
 """
 
 from pathlib import Path
+import struct
 import sys
 import unittest
 import zlib
@@ -98,6 +99,33 @@ class CipherTests(unittest.TestCase):
         for _, _, divisor, product, quotient in oracle.chain_samples(cipher, key, states):
             self.assertEqual(hardware_stand_in(product, divisor), quotient)
         self.assertGreater(len(states), 200)
+
+
+class LayoutTests(unittest.TestCase):
+    @staticmethod
+    def body(count=0, frames=0x5BF, size=0x10E, padding=2):
+        head = bytes(oracle.MANAGER_OFFSET) + struct.pack("<3I", count, frames, size)
+        return head + bytes(size - 8 + padding)
+
+    def test_single_recorder_layout(self):
+        good = self.body()
+        self.assertEqual(len(good), 0x1BB8)  # replay/license/usl0b0001 body size
+        self.assertTrue(oracle.layout_sane(good))
+        self.assertFalse(oracle.layout_sane(self.body(count=0x7F7F7F7F)))
+        self.assertFalse(oracle.layout_sane(self.body(frames=0)))
+        self.assertFalse(oracle.layout_sane(good + bytes(4)))
+        self.assertFalse(oracle.layout_sane(good[:0x1AB0]))
+
+    def test_compare_plain(self):
+        truth = self.body()
+        wrong = bytearray(truth)
+        wrong[5] ^= 1
+        for index in range(oracle.MANAGER_OFFSET + 12, len(wrong)):
+            wrong[index] ^= 0x7F
+        result = oracle.compare_plain(bytes(wrong), truth)
+        self.assertEqual(result["first_diff"], 5)
+        self.assertEqual(result["payload_bytes"], len(truth) - oracle.MANAGER_OFFSET)
+        self.assertEqual(result["payload_wrong"], len(truth) - oracle.MANAGER_OFFSET - 12)
 
 
 ISO = oracle.DEFAULT_ASSETS_ROOT / oracle.ISO_NAME
