@@ -79,7 +79,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes |
 | TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
-| TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | 📋 Planned |
+| TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | ✅ Done (2026-10-17) · release 1.0.0 ships gt4-gs 1.0.1; fork release notes, README, THIRD_PARTY and RELEASE-1.0.0-PLAN updated (docs only) |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
 | TASK‑047 | PCSX2 GS deinterlacing in the 480i menus (field and interlace state in the stream) | ✅ Done · owner test 2026-10-16: 480i menus clean on Automatic; root cause missing SYNCV and a one-field-early VSYNC field (protocol 1.1, gt4-gs 0.3.2) |
@@ -100,7 +100,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
 | TASK‑063 | Bit-exact R5900 FPU `div.s`/`mul.s` (license demo phase, real-PS2 card replays and ghosts) | 📋 Planned · oracle ready (`scripts/license_demo_oracle.py`); needs hardware vectors |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
-| 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044) | 📋 Planned |
+| 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
 ## Phase 2 — Android
 
@@ -552,11 +552,17 @@ Goal: fork release `gt4-gs v1.0.0` (notes: upstream commit, our patch list, lice
 renderer section, `native/THIRD_PARTY.md`, RELEASE-1.0.0-PLAN renderer table and W8, known issues.
 Acceptance: release assets complete; links valid; owner approval.
 Note (2026-10-16): `gt4gs-v1.0.0` is published (stable) and pinned in slice202. Known issue for the release notes: gt4-gs 1.0.0 writes under `Documents\PCSX2`: `VMManager::Internal::LoadStartupSettings()` runs before `[GT4GS] DataRoot` is applied, so it rewrites `Documents\PCSX2\logs\emulog.txt` every session (Confirmed: before/after snapshot of the folder) and creates the PCSX2 user folders there (bios, memcards, logs, ...) on a PC that has none (High confidence, `EmuFolders::EnsureFoldersExist`). The log line "MemoryCards Directory: ...Documents\PCSX2\memcards" is that early pass; the session itself uses DataRoot. Fix on fork branch `gt4gs/datadir` (commit `b30870fe8`, version 1.0.1, NOT released): the call moves after the stream folders; checked: 0 changes under `Documents\PCSX2`, emulog in DataRoot\logs.
-Decide whether release 1.0.0 ships gt4-gs 1.0.1 (release it from `gt4gs/datadir` with `release-local.ps1 -Release`,
-repin) or 1.0.0 with this note.
+Decided (2026-10-17): release 1.0.0 ships gt4-gs 1.0.1 (see Result below).
 Note (2026-10-16, TASK-044): gt4-gs 1.0.1 is published (stable, tag `gt4gs-v1.0.1`, fork PR #7 merged) and pinned in
 slice203 (`--mode pcsx2`). The `Documents\PCSX2` known issue is fixed in 1.0.1: no changes in the `Documents\PCSX2` snapshot for a
 live run or an offline replay (slice203, TASK-044). The clean-profile check was not run (see BUILD.md slice 203).
+Result (2026-10-17, docs only; no build, no game run): **decision: release 1.0.0 ships gt4-gs 1.0.1** (`gt4gs-v1.0.1`,
+pinned in slice203 and slice206, decision 0070). The gt4-gs 1.0.0 release stays as history. The fork release notes of
+`gt4gs-v1.0.1` were edited (upstream base PCSX2 v2.8.2, commit `fd9d310cc`; patch list; GPL-3.0 and source; SHA256SUMS);
+assets unchanged. README renderer section, known issues and legal notes updated; `native/THIRD_PARTY.md` rewritten;
+RELEASE-1.0.0-PLAN renderer table and W8 updated. Release order: this task, then the launcher and installer (TASK-019/043),
+then the owner's end-to-end test, then the v1.0.0 tag and GitHub Release. Mods (TASK-048, 050-057) are release 1.1.0 and
+appear only in this list.
 
 ### TASK-045 — High frame rate on the PCSX2 GS
 Repos: both. Opus, 10-14 sessions, after release 1.0.0.

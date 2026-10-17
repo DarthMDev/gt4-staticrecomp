@@ -1,86 +1,62 @@
-# Active native runtime: third-party boundaries
+# Third-party components and license boundaries
 
-## Planned PCSX2 GS reuse on the hybrid track
+Status: release 1.0.0 (TASK-044, 2026-10-17). This file lists what the game executable and the installed folder
+contain, what the separate renderer program contains, what is used only to build or research, and what is kept out.
+Revisions are exact where the repository records them. Entries marked **not verified** were not checked against the
+component's own license text in this repository and need a check before the release.
 
-Slice141 records owner authorization to reuse selected PCSX2 implementations
-for future GS optimization/features. Research checkout is pinned at
-`aa7ab4306e269075784c7ac3eb4b45e6e6c53445`; inspected GS files specifyGPL3-or-later.
-No implementation is imported/linked and no license changes in this planning
-slice. Any derived integration needs per-file/dependency attribution, compatible
-licenses and corresponding-source/build delivery when required. Personal builds
-and distribution have distinct obligations; game assets/translated game code
-remain private. See [Hybrid Port Plan](../docs/HYBRID-PORT-PLAN.md).
+## 1. Shipped with the game (executable and installed folder)
 
-## Current linked base
+| Component | Revision or source | License | Where it is | Notes |
+|---|---|---|---|---|
+| GT4Recomp runtime and tools (this repository) | `main` | MIT ([LICENSE](../LICENSE)) | `gt4vulkan.exe`, `licenses\LICENSE-GT4Recomp.txt` | Own code: `native/`, `tools/` (except the donor-derived files below), `scripts/`. |
+| ps2-web-recomp (donor runtime) | commit `1b4808793a12c45125262fd2d5f50a9ec9f7c020` | MIT, Copyright (c) 2026 Samir Nuri (donor `LICENSE`) | `gt4vulkan.exe`, `licenses\LICENSE-ps2-web-recomp.txt` | EE-to-C++ runtime, PS2 service and device models, IOP interpreter, CoreGS 1.1 (WGSL compute renderer). Derived files: the private port made by `scripts/prepare_external_vulkan.py`, the capsules from `scripts/prepare_memcard_flush.py` and `scripts/prepare_license_guard.py`, and `tools/vu_recomp/src/vurecomp.cpp` (its header lists the changes; the MIT text is `tools/vu_recomp/MIT-LICENSE.txt`). |
+| Donor WGSL shaders, compiled to SPIR-V | donor shaders at the revision above | MIT (donor) | `shaders\*.spv` (nine files) | Compiled at build time by `tools/wgsl_spirv` (naga, see the next row). |
+| naga 30.0.0 (in `tools/wgsl_spirv`) | `tools/wgsl_spirv/Cargo.lock` | MIT OR Apache-2.0 (as stated by naga) | build time only | Not linked into the executable. Its output, the SPIR-V shaders, is shipped. |
+| Microsoft Visual C++ runtime: `vcruntime140.dll`, `msvcp140.dll`, `msvcp140_atomic_wait.dll` | the local Visual Studio CRT redistributable folder (`scripts/make_distribution.py --crt-dir`) | Microsoft redistributable terms. **Not verified**: the terms were not read in this repository | installed folder root | Imported by `gt4vulkan.exe` (checked with `dumpbin /dependents`, slice200). |
+| GT4Recomp GS stream protocol (1.2) | `native/gs_stream/gs_stream_protocol.h` | MIT | game executable (client) and a vendored copy in the renderer package | The same header is in `3rdparty/gt4recomp-gs-stream/` of the fork, checked by hash. |
+| Translated game code | generated from Gran Turismo 4 (NTSC-U, SCUS-97328) | **not MIT**: the game's code belongs to Sony Interactive Entertainment and Polyphony Digital | `gt4vulkan.exe` and the private game library | Distribution follows decision 0069 (prebuilt executable; the user supplies the disc). No game data is shipped. |
 
-The frozen ps2-web-recomp checkout is MIT licensed, commit
-`1b4808793a12c45125262fd2d5f50a9ec9f7c020`. Its existing CPU runtime,
-batching and WGSL GS algorithms are reused in a separate private build.
-`scripts/prepare_external_vulkan.py` verifies donor source hashes, derives
-the adapter under `private/`, and retains the original checkout unchanged.
-The original MIT copyright/license at the checkout root applies to these
-derived files and must accompany any distribution of the adapter.
+Windows system DLLs (`winmm.dll`, `xinput`, `user32.dll`, the Vulkan loader `vulkan-1.dll`) are used at run time from
+the operating system. They are not shipped.
 
-Naga 30.0.0 converts the donor WGSL to nine SPIR-V compute entrypoints;
-it is MIT OR Apache-2.0 licensed. `tools/wgsl_spirv/Cargo.lock` pins the
-dependency graph and registry checksums. Cargo output stays under `private/`.
+## 2. Separate renderer program (GPL-3.0-or-later)
 
-Khronos Vulkan headers have their own Apache-2.0 OR MIT license. The private
-headers available in the pinned PCSX2 source tree are used only as headers;
-no PCSX2 implementation or PS2Recomp GPL implementation is linked here.
-Vulkan is resolved from the Windows System32 loader and installed driver.
+| Component | Revision or source | License | Where it is | Notes |
+|---|---|---|---|---|
+| `gt4-gs.exe` (PCSX2 GS in a separate process) | fork [`moesuito/gt4recomp-gs`](https://github.com/moesuito/gt4recomp-gs), tag `gt4gs-v1.0.1`, commit `e4b3d6c88bf7210664321beb5bddff2b61cd5159` | GPL-3.0-or-later | `<exe folder>\gs\gt4-gs.exe`, downloaded and pinned by the launcher (TASK-043). It is not in the game executable and not in the folder written by `make_distribution.py`. | Based on PCSX2 `v2.8.2` (upstream commit `fd9d310ccbb6b8b62c976da8886a3c8fd3a10ff3`), with our patches listed in the release notes. Its own zip carries `SOURCE.txt` and `gt4gs/NOTICE`. |
+| DLLs bundled in the gt4-gs zip (SDL3, shaderc, FFmpeg, x264, SVT-AV1, Opus, libvpl, zlib, libpng, libjpeg-turbo, libwebp, FreeType, HarfBuzz and others) | versions in the fork's dependency script | per component (FFmpeg and x264 GPL-2.0-or-later; the others permissive, see `gt4gs/NOTICE`) | inside the gt4-gs zip only | The list and the licenses are in the fork's `gt4gs/NOTICE`. This file does not repeat them. |
 
-The donor IOP interpreter and PS2 device models are still used; native Windows
-does not mean zero emulation. VU1 programs are compiled ahead of time since slice 151; VU0 micro is interpreted.
-This Clang/native path is main's only implementation. Game, BIOS, translated game code, captures, cards, SPIR-V and
-native binaries remain private and ignored. The pinned game's generated static
-library is linked locally; it is not redistributed.
+The game executable never contains or links GPL code. The two processes exchange only the GS stream over shared memory
+(decision 0070; [GS stream protocol](../docs/GS-STREAM-PROTOCOL.md)). Each gt4-gs release has its source attached at its tag.
 
-Slice 119 adds six ignored, unmodified reference clones for offline format
-research only. [Nenkai References](../docs/NENKAI-REFERENCES.md) records exact
-revisions, root license observations and dependency limits. No reference tool,
-package or implementation was built, copied into this runtime or linked. GT4FS
-and the Modding Hub have no root license in the inspected checkouts; their
-format facts are research references, not adopted dependencies. MIT tool/template
-licenses and the separate SharpTriStrip BSD terms remain with their local sources.
+## 3. Used to build the game, not shipped
 
-Slice 120's offline RoFS/PS2ZIP reader is an original implementation using
-referenced format facts, with independent synthetic fixtures. No GT4FS source
-was copied. The private SpecDB probe references MIT PDTools and remains ignored;
-it is not imported into the runtime or distributed as a supported decoder.
-[Volume Reader](../docs/VOLUME-READER.md) and the pinned Nenkai source map record
-the supported subset, attribution and qualification limits.
+| Component | Revision or source | License | Notes |
+|---|---|---|---|
+| Khronos Vulkan headers | the copy in the `3rdparty/vulkan/include` folder of a pinned PCSX2 checkout (`native/CMakeLists.txt`, `VULKAN_HEADERS`) | Apache-2.0 OR MIT (Khronos) | Compile-time headers only. The copy comes from a PCSX2 checkout: a release build should use an upstream Khronos copy (**open item**). |
+| Visual Studio 2022 Build Tools, clang-cl, CMake, Ninja, Rust toolchain | local installs | their own licenses | Toolchains, not distributed. |
+| `pycdlib` 1.20.0 | `scripts/requirements.txt` | LGPL-2.1-only (from the installed package metadata) | Offline ISO tools: `scripts/ee_producer.py`, `gt4disc.py`, `gt4_volume.py`, `compare_fsv_trace.py`. Not in the executable or the folder. |
 
-Slice 121 adds an original offline CAR4/MDLS/Tex1 header probe grounded in the
-same pinned MIT templates and PDTools format facts. No reference implementation
-or dependency is copied or linked. [Model Asset Probe](../docs/MODEL-ASSET-PROBE.md)
-records actual-byte discrepancies, independent review and the header-only boundary.
-Slice122's original fixed-record inventory uses the same pinned MIT format facts.
-No implementation copied or linked; [Model Records](../docs/MODEL-RECORDS.md)
-documents sources and the boundary before VIF, material or pixel semantics.
-Slice123 uses pinned MIT donor and Nenkai format facts for an original conditional
-VIF framing scanner. No source implementation copied or newly linked. Its source
-corrections and unsupported forms are documented in [VIF Framing](../docs/VIF-FRAMING.md).
-Slice125's original raw-lane extraction uses ordinary endian/width facts from
-the same pinned MIT sources, with literal independent controls. No dependency
-or implementation is copied or newly linked. [Raw Lanes](../docs/RAW-CHANNEL-LANES.md)
-keeps numerical inputs separate from game geometry or VU semantics.
+## 4. Research references (not linked, not shipped)
 
-Slice130 prepares private copies of MIT donor dispatch/kernel/system sources at
-the same pinned revision, adding observer-only calls for an optional synthetic
-fixture. Root donor license/attribution remains with the local source checkout;
-no new dependency or GPL implementation is introduced. The default game target
-uses the existing donor sources. [Shape Observation](../docs/SCENE-OBSERVATION.md)
-records exact inverse checks and synthetic qualification limits.
+| Source | Revision | License | Use |
+|---|---|---|---|
+| Nenkai's repositories: PDTools, GT-File-Specifications-Documentation, GTPS2ModelTool, GTSpecDB (MIT roots, as recorded there), gt-modding-hub (no root license found) | see [NENKAI-REFERENCES](../docs/NENKAI-REFERENCES.md) | per repository, as recorded in that document | File-format facts only. No code is copied or linked. |
+| GT4FS (`Razer2015/GT4FS`) | see [NENKAI-REFERENCES](../docs/NENKAI-REFERENCES.md) | no root license found in the inspected checkout | RoFS format reference only; no implementation adopted. |
+| gt4-decomp (`gustavocanepa/gt4-decomp`) | see [DECOMP-IDENTITY](../docs/DECOMP-IDENTITY.md) | MIT | Names, addresses and layouts used as a reference. Nothing is imported; [DECOMP-INTEGRATION](../docs/DECOMP-INTEGRATION.md) is a study. If its source is ever copied in, it is listed here. |
+| PCSX2 source checkout | private, pinned in the research notes | GPL-3.0-or-later | Source of the header copy in section 3 and of research notes ([PCSX2-LESSONS](../docs/PCSX2-LESSONS.md)). No PCSX2 implementation is linked into the game. |
 
-## VU1 recompiler tooling (slice 151)
+## 5. Dropped or planned
 
-`tools/vu_recomp/src/vurecomp.cpp` is derived from `recomp/vurecomp.cpp` of the
-MIT ps2-web-recomp donor, commit `1b4808793a12c45125262fd2d5f50a9ec9f7c020`
-(donor file SHA-256 `07aefe0130e4866973c43467853181edfc31b67b97e71fc9b572ece389381323`,
-Copyright (c) 2026 Samir Nuri). Its decode tables are kept from the donor; the
-hardening changes are listed in the file header. The donor header
-`runtime/include/ps2/vu_ops.hpp` is included unmodified (MIT). The MIT text is in
-`tools/vu_recomp/MIT-LICENSE.txt`. `tools/vu_recomp/src/sha256.cpp` and the
-fixtures in `tools/vu_recomp/tests/` are original code. The emitter output is
-not linked into the game; the provider is a later, separate step.
+- **paraLLEl-GS** (LGPL-3.0-or-later) and **Granite** (MIT): dropped from the release (decision 0070). Nothing from them ships.
+  The MIT renderer seam and capture code kept from that branch are in our own tree (TASK-035).
+- **ARMSX2** (GPL-3.0): the mobile GS pipeline planned for Android and iOS. No code is in this repository. Its JIT is not used.
+- **CoreGS 2.0** (TASK-026, TASK-027): our own MIT renderer, written clean room from a behavioral specification; no
+  PCSX2 implementation may be read by its implementers (decision 0070).
+
+## 6. Open items before the release
+
+- Replace the Khronos header copy from the PCSX2 checkout with an upstream copy (section 3).
+- Read the Microsoft redistributable terms that apply to the copied CRT DLLs (section 1).
+- Keep the release notes of `gt4gs-v1.0.1` and the fork's `gt4gs/NOTICE` in step with each gt4-gs release.
