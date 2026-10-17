@@ -84,11 +84,13 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
   (`gh pr create` / `gh pr merge --merge`) → next task on a new branch. Never
   merge a task the owner has not approved. Commits and pushes are authorized;
   never rewrite history.
-- Update README (progress, scene results, known issues), STATUS and the journal
-  as part of each task.
-- **Every PR updates `TASKS.md` and `README.md`** in the PR itself to mark the
-  task or tasks it completes (state, result, date), so `main` never lags behind
-  what was merged.
+- Update STATUS and the journal as part of each task.
+- **Every PR updates `TASKS.md`** in the PR itself to mark the task or tasks it
+  completes (state, result, date), so `main` never lags behind what was merged.
+- **`README.md` is a short public summary** (owner, 2026-10-17): header badges,
+  where we are, performance, known issues, roadmap phases, credits and legal. It
+  lists no tasks. A PR touches it only when one of those changes (a badge, a
+  headline result, a known issue).
 - Ask the owner only for decisions and gameplay tests, not code review.
 
 ## Testing the game
