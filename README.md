@@ -41,9 +41,10 @@ while the game runs, which is also what makes future **Android and iOS** builds 
 - 🏁 **Locked 60 FPS at 100% game speed** in every scene we test, with a frame every **16.7 ms**.
 - ⚙️ **All game code is precompiled:** the main CPU (EE) and every VU1 and VU0 microprogram run as native
   code, with no interpreter on the normal path.
-- 🎨 **PCSX2 GS renderer** in its own process: internal resolution from 480p up to 8K, deinterlaced menus
-  and a built-in performance overlay. **CoreGS 1.1** is built in as the fallback.
-- 🖥️ **Races in 480p progressive**, 16:9 with borderless fullscreen.
+- 🖥️ **Sharp, high-resolution image:** **1080p** out of the box, with **1440p, 4K and 8K** available. The game
+  is rendered at that resolution, not just stretched, in **16:9** with borderless fullscreen.
+- 🎨 **PCSX2 GS renderer** in its own process: crisp deinterlaced menus, FXAA and sharpening, and a built-in
+  performance overlay. **CoreGS 1.1** is built in as the fallback.
 - 💾 **Crash-safe memory card:** saves survive a crash or a forced close.
 - 🚀 **Next:** a one-click **launcher and installer**, then the first stable release, **1.0.0**.
 
@@ -70,7 +71,6 @@ to a steady **60 FPS at full speed**.
   PCSX2 with default settings ([why](docs/LICENSE-DEMO-CIPHER.md)).
 - **The MSI Afterburner / RivaTuner overlay does not show** with the PCSX2 GS (suspected: its Arbitrary
   Code Guard protection). The built-in performance overlay works.
-- **Menus are interlaced** like the original game (races are 480p); the PCSX2 GS deinterlaces them.
 - Racing wheels and long sessions are not fully qualified yet.
 
 ## 🗺️ Roadmap
