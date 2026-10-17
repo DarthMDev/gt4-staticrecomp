@@ -70,6 +70,13 @@ scripts/compare_fsv_trace.py <log> <iso>.
 License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profile with the halt forensic dump.
 The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
 Diagnostic only: the run is not a performance measurement.
+
+License guard (--mode license-guard, slice205, TASK-017): the pcsx2 mode build (slice202/203 game recipe, gt4-gs 1.0.1)
+plus the license demo guard. A license demo that decrypts wrong (fails the game's CRC and is not the expected layout)
+gets no demo inputs instead of crashing: the license test stays playable, its demo or background replay may not
+play (as in PCSX2). One [license-guard] line per demo load in probe.log. Same options as --mode pcsx2. The halt dump
+and the FSV read trace are in this build but off; set GT4_HALT_DUMP=1 or GT4_FSV_TRACE=1 before launching to turn
+them on.
 """
 import argparse
 import os
@@ -78,6 +85,9 @@ from pathlib import Path
 from play_external_runtime import ROOT, play
 from external_runtime_probe import GS_SETTINGS_ENV, PERF_PROFILES, VU1_RECORD_MANIFEST
 import gs_settings
+
+# Modes that run the live PCSX2 GS package and accept the GS options (TASK-017 license-guard is pcsx2 plus the guard).
+PCSX2_MODES = ('pcsx2', 'license-guard')
 
 MODES = tuple(PERF_PROFILES) + ('vu1-record',)
 # TASK-060/061/062 (owner decision 2026-10-16): the internal-resolution presets of the settings table (upscale row),
@@ -99,7 +109,7 @@ def force_480p_requested(args):
     """
     if args.force_480p:
         return True
-    return args.mode in ('main', 'pcsx2') and os.environ.get('GT4_FORCE_480P') != '0'
+    return args.mode in ('main',) + PCSX2_MODES and os.environ.get('GT4_FORCE_480P') != '0'
 
 
 def main():
@@ -138,21 +148,21 @@ def main():
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu', 'pcsx2'):
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu') + PCSX2_MODES:
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure, mtvu or pcsx2')
         if args.gs_resolution is not None:
-            if args.mode != 'pcsx2':
+            if args.mode not in PCSX2_MODES:
                 raise ValueError('--gs-resolution requires --mode pcsx2')
             if args.gs_scale is not None:
                 raise ValueError('--gs-resolution and --gs-scale both set the internal resolution')
             args.gs_scale = GS_RESOLUTIONS[args.gs_resolution]
         if args.gs_scale is not None:
-            if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 12:
+            if args.mode not in PCSX2_MODES or not 1 <= args.gs_scale <= 12:
                 raise ValueError('--gs-scale takes 1..12 and requires --mode pcsx2')
             os.environ['GT4_GS_SCALE'] = str(args.gs_scale)
         os.environ.pop(GS_SETTINGS_ENV, None)
         if args.gs_setting:
-            if args.mode != 'pcsx2':
+            if args.mode not in PCSX2_MODES:
                 raise ValueError('--gs-setting requires --mode pcsx2')
             settings = gs_settings.settings_from_assignments(args.gs_setting, gs_settings.load_table())
             if args.gs_scale is not None and 'upscale' in settings:
@@ -162,7 +172,7 @@ def main():
                 raise ValueError('--gs-readback and --gs-setting hw_download_mode=... both set the readback mode')
             os.environ[GS_SETTINGS_ENV] = gs_settings.settings_to_json(settings)
         if args.gs_readback is not None:
-            if args.mode != 'pcsx2':
+            if args.mode not in PCSX2_MODES:
                 raise ValueError('--gs-readback requires --mode pcsx2')
             os.environ['GT4_GS_READBACK'] = args.gs_readback
         if args.mode == 'vu1-record':

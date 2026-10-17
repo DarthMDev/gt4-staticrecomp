@@ -56,6 +56,8 @@ set_tests_properties(native_vulkan_async_stress_compare PROPERTIES DEPENDS
     "native_vulkan_async_stress_async;native_vulkan_async_stress_sync")
 add_test(NAME native_audio_input COMMAND $<TARGET_FILE:host_io_fixture>)
 add_test(NAME native_pacing COMMAND $<TARGET_FILE:pacing_fixture>)
+# TASK-017 (slice205): license demo guard rule (sane data kept, insane count with CRC fail guarded, CRC pass kept).
+add_test(NAME native_license_guard COMMAND $<TARGET_FILE:license_guard_fixture>)
 add_test(NAME native_quickfix COMMAND $<TARGET_FILE:quickfix_fixture>)
 add_test(NAME native_race_display COMMAND $<TARGET_FILE:race_display_fixture>)
 add_test(NAME native_cursor_autohide COMMAND $<TARGET_FILE:cursor_autohide_fixture>)

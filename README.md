@@ -42,7 +42,7 @@ interpreter on the normal path. Races render in **480p progressive**, the window
 is **16:9** with borderless fullscreen. Next: the **PCSX2 GS** renderer in a separate process (`gt4-gs.exe`, decision 0070)
 (upscaling, sharper image), VU1 on its own CPU core for weaker CPUs and phones,
 and a one-click **launcher and installer** for the first stable release.
-**License tests still crash** while loading their demo run.
+**License tests crash** while loading some demo runs; a fix candidate (`--mode license-guard`) skips the broken demos.
 See [Scene results](#scene-results) and [Known issues](#known-issues).
 
 [Status](docs/STATUS.md) · [Optimization plan](docs/OPTIMIZATION-PLAN.md) · [Build guide](docs/BUILD.md) · [Credits](#credits)
@@ -99,10 +99,13 @@ all VU1 and VU0 microcode compiled, async GPU), one F7/F8 interval per scene:
 
 ## Known issues
 
-- **License tests crash** when the demo run loads (also with every new
-  optimization disabled, so it predates them). The crash is traced to
-  `RaceSolitaire::loadDemoInputs` → `AutomobileControlRecord::Manager::load`;
-  the demo-input data appears to arrive wrong or late. Under investigation.
+- **License tests crash** on the main build when some demo runs load. Cause
+  (TASK-017): GT4 decrypts the license demos with a cipher built on
+  floating-point results, and our FPU is not bit-exact with the PS2, so about
+  half the demos decrypt wrong and the loader runs away. The candidate build
+  `--mode license-guard` (slice205) skips a demo that fails the game's own
+  check: **licenses stay playable, but the license demo/background replay may
+  not play** (the same happens in PCSX2). The exact FPU fix is still open.
 - **Night races** run at about 59 FPS: the remaining cost is a GPU readback wait
   that the PCSX2 GS (TASK-037) is expected to remove. With the PCSX2 GS (accurate
   readbacks) the night race holds 59.97 FPS; its remaining late frames come from the
@@ -158,7 +161,7 @@ in game before it is merged.
 | TASK‑014 | Full EE entry coverage from the decompilation | 🔄 Stage A done |
 | TASK‑015 | LWR instruction fidelity check | ✅ Done · already matches PCSX2; build audio test now silent |
 | TASK‑016 | IOP per-module cost review | ⏸️ Deferred |
-| TASK‑017 | License-test crash | 🔄 In progress · the license load jumps to a null pointer; analysis running |
+| TASK‑017 | License-test crash | 🧪 Fix candidate (`--mode license-guard`): licenses playable, broken demos skipped; owner test pending |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
 | TASK‑019 | Launcher (Rust) + per-user installer: pick your ISO once, then Play | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 |
 | TASK‑020 | Decompilation names in the generated code | 📋 Planned |
