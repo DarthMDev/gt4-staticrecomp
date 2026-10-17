@@ -1,0 +1,545 @@
+// TASK-011 step 2: VU1 worker thread runtime (see mtvu_runtime.hpp and docs/MTVU-PLAN.md section 11).
+#include "mtvu_runtime.hpp"
+
+#include "mtvu_journal.hpp"
+#include "mtvu_measure.hpp"
+#include "mtvu_ring.hpp"
+#include "perf_probe.hpp"
+
+#include <atomic>
+#include <chrono>
+#include <cstdlib>
+#include <cstring>
+#include <exception>
+#include <map>
+#include <memory>
+#include <stdexcept>
+#include <string_view>
+#include <string>
+#include <thread>
+
+namespace gt4::mtvu {
+namespace {
+
+// Ring sizes from docs/MTVU-PLAN.md section 5.1.
+constexpr std::size_t kInputBytes = 32u << 20;
+constexpr std::size_t kOutputBytes = 8u << 20;
+constexpr std::uint64_t kFnvOffset = 0xCBF29CE484222325ull;
+constexpr std::uint64_t kFnvPrime = 0x100000001B3ull;
+
+thread_local bool t_on_worker = false;
+
+// Executes journal GS operations on the EE thread through the donor renderer.
+class DonorSink final : public GsSink {
+ public:
+  explicit DonorSink(void (*render)(int, const std::uint8_t *, std::uint32_t)) : render_(render) {}
+  void set_privileged_consumer(void (*post)(std::uint32_t, std::uint64_t)) { privileged_ = post; }
+  void gif_transfer(std::uint8_t path, const std::uint8_t *data, std::size_t bytes) override {
+    gt4::perf::Scope drain(gt4::perf::Category::gs_drain);
+    render_(path, data, static_cast<std::uint32_t>(bytes / 16));
+  }
+  // The runtime synchronises GIF, VBlank and privileged operations instead of journaling them (section 5.3).
+  void gif_reset() override { throw std::logic_error("mtvu journal GIF reset is not used"); }
+  void vertex_reset() override { throw std::logic_error("mtvu journal vertex reset is not used"); }
+  void vblank_flush() override { throw std::logic_error("mtvu journal VBlank flush is not used"); }
+  // TASK-041: a queued privileged write reaches its ordered consumer (the GS stream) after the earlier GIF output.
+  void privileged_write(std::uint32_t address, std::uint64_t value) override {
+    if (!privileged_) throw std::logic_error("mtvu journal privileged write without an ordered consumer");
+    privileged_(address, value);
+  }
+
+ private:
+  void (*render_)(int, const std::uint8_t *, std::uint32_t);
+  void (*privileged_)(std::uint32_t, std::uint64_t) = nullptr;
+};
+
+// Cumulative worker totals, published by the worker after each job (before its JobDone). The EE reads them only
+// after a blocking drain, when the worker is idle, so the release/acquire of the ring orders the reads.
+struct WorkerTotals {
+  std::uint64_t idle_us = 0, vu1_us = 0, output_us = 0, jobs = 0;
+};
+
+std::uint64_t wall_us() {
+  return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+struct Runtime {
+  Settings settings;
+  Donor donor{};
+  bool started = false;
+  std::atomic<bool> running{false};  // worker alive and GT4_MTVU on: the EE shadows VIF1
+
+  Doorbell bell;
+  std::unique_ptr<SpscByteRing> input;
+  std::unique_ptr<SpscByteRing> output;
+  std::unique_ptr<DonorSink> sink;
+  std::unique_ptr<EeJournal> journal;     // EE thread only
+  std::unique_ptr<WorkerEnd> worker_end;  // worker thread only
+  std::thread worker;
+
+  std::atomic<bool> worker_failed{false};
+  std::exception_ptr worker_error;  // written by the worker before worker_failed is released
+  std::uint64_t worker_job = 0;     // worker thread only
+  GifScanner worker_scanners[4];    // worker thread only: PATH1 invariant check
+  GifScanner ee_scanners[4];        // EE thread only: signal detection before journaling
+  std::vector<SignalWrite> signal_scratch;  // EE thread only: signals of the packet being accepted
+
+  std::uint64_t next_job = 1;  // EE thread only
+  // TASK-041: ordered privileged writes (EE thread only).
+  void (*ordered_privileged)(std::uint32_t, std::uint64_t) = nullptr;
+  std::uint64_t privileged_queued = 0;   // writes queued behind journal entries
+  std::uint64_t privileged_wait_us = 0;  // wait of the last blocking gs_privileged sync, taken by the consumer
+  std::uint64_t signals_applied = 0;  // EE thread only: SIGNAL/FINISH/LABEL applied at accept
+  std::uint64_t vif_packets = 0, vif_writes = 0, ee_transfers = 0, direct_transfers = 0, gs_renders = 0;
+  std::map<std::string, std::uint64_t> syncs;
+  std::atomic<std::uint64_t> path1_signals{0};
+  std::uint64_t verify_frames = 0, verify_mismatches = 0, report_frames = 0;
+  std::uint64_t frame_hash = kFnvOffset;
+  bool path1_reported = false;
+
+  // TASK-011 step 3 (slice171) per-thread accounting. The worker owns worker_accounting; the EE reads only
+  // `published` (atomics) and `baseline` (EE only).
+  gt4::perf::Accounting worker_accounting{false};
+  std::atomic<std::uint64_t> published_idle_us{0}, published_vu1_us{0}, published_output_us{0}, published_jobs{0};
+  std::uint64_t worker_idle_us = 0, worker_jobs = 0;  // worker thread only
+  WorkerTotals baseline;                              // EE thread only: totals at the last interval reset
+};
+
+Runtime &rt() {
+  static Runtime runtime;
+  return runtime;
+}
+
+bool parse_flag(const char *name, const char *value, bool fallback) {
+  if (value == nullptr) return fallback;
+  if (std::strcmp(value, "0") == 0) return false;
+  if (std::strcmp(value, "1") == 0) return true;
+  throw std::invalid_argument(std::string(name) + " must be unset, 0 or 1");
+}
+
+void fnv_bytes(std::uint64_t &hash, const void *data, std::size_t bytes) {
+  const auto *at = static_cast<const std::uint8_t *>(data);
+  for (std::size_t i = 0; i < bytes; ++i) {
+    hash ^= at[i];
+    hash *= kFnvPrime;
+  }
+}
+
+void rethrow_worker_error() {
+  Runtime &r = rt();
+  if (r.worker_failed.load(std::memory_order_acquire)) std::rethrow_exception(r.worker_error);
+}
+
+void run_job(Runtime &r, RecordKind kind, const std::vector<std::uint8_t> &payload) {
+  switch (kind) {
+    case RecordKind::VifPacket:
+      r.donor.worker_vif_packet(payload.data(), static_cast<std::uint32_t>(payload.size() / 16));
+      break;
+    case RecordKind::VifWrite: {
+      if (payload.size() != 8) throw std::logic_error("mtvu VIF1 write record must carry 8 bytes");
+      std::uint32_t reg = 0, value = 0;
+      std::memcpy(&reg, payload.data(), 4);
+      std::memcpy(&value, payload.data() + 4, 4);
+      r.donor.worker_vif_write(reg, value);
+      break;
+    }
+    case RecordKind::VuReset:
+      r.donor.worker_vu_reset();
+      break;
+    default:
+      throw std::logic_error("mtvu worker received an unexpected job kind");
+  }
+}
+
+// Publishes the worker's cumulative totals. Category times come from the worker's own accounting (its scopes are
+// closed at this point, so the interval is current).
+void publish_worker_totals(Runtime &r) {
+  const auto &categories = r.worker_accounting.interval().categories;
+  std::uint64_t vu1 = categories[static_cast<std::size_t>(gt4::perf::Category::vu1_interpret)].exclusive_us;
+#ifdef GT4_VU1_AOT
+  vu1 += categories[static_cast<std::size_t>(gt4::perf::Category::vu1_aot)].exclusive_us;
+#endif
+  r.published_vu1_us.store(vu1, std::memory_order_relaxed);
+  r.published_output_us.store(categories[static_cast<std::size_t>(gt4::perf::Category::mtvu_output)].exclusive_us,
+                              std::memory_order_relaxed);
+  r.published_idle_us.store(r.worker_idle_us, std::memory_order_relaxed);
+  r.published_jobs.store(r.worker_jobs, std::memory_order_relaxed);
+}
+
+void worker_main() {
+  t_on_worker = true;
+  Runtime &r = rt();
+  gt4::perf::bind_worker(&r.worker_accounting, wall_us);
+  RecordHeader header;
+  std::vector<std::uint8_t> payload;
+  for (;;) {
+    const std::uint64_t idle_start = wall_us();
+    r.worker_end->receive(header, payload);
+    r.worker_idle_us += wall_us() - idle_start;
+    const auto kind = static_cast<RecordKind>(header.kind);
+    if (kind == RecordKind::Stop) return;
+    r.worker_job = header.job;
+    // After a failure the worker only acknowledges jobs, so the EE never waits forever; it rethrows at the next sync.
+    if (!r.worker_failed.load(std::memory_order_acquire)) {
+      try {
+        run_job(r, kind, payload);
+      } catch (...) {
+        r.worker_error = std::current_exception();
+        r.worker_failed.store(true, std::memory_order_release);
+      }
+    }
+    ++r.worker_jobs;
+    publish_worker_totals(r);
+    r.worker_end->emit_job_done(header.job);
+  }
+}
+
+}  // namespace
+
+Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every,
+                        const char *privileged_async) {
+  Settings settings;
+  settings.enabled = parse_flag("GT4_MTVU", mtvu, true);
+  settings.verify = parse_flag("GT4_MTVU_VERIFY", verify, false);
+  settings.strict = parse_flag("GT4_MTVU_STRICT", strict, false);
+  settings.privileged_async = parse_flag("GT4_MTVU_PRIV_ASYNC", privileged_async, Settings::kPrivilegedAsyncDefault);
+  if (report_every != nullptr) {
+    const std::string_view digits(report_every);
+    if (digits.empty() || digits.find_first_not_of("0123456789") != std::string_view::npos)
+      throw std::invalid_argument("GT4_MTVU_REPORT_EVERY must be a VBlank count");
+    settings.report_every = std::stoull(report_every);
+  }
+  return settings;
+}
+
+Settings settings_from_environment() {
+  return parse_settings(std::getenv("GT4_MTVU"), std::getenv("GT4_MTVU_VERIFY"), std::getenv("GT4_MTVU_STRICT"),
+                        std::getenv("GT4_MTVU_REPORT_EVERY"), std::getenv("GT4_MTVU_PRIV_ASYNC"));
+}
+
+WorkerTotals published_totals(const Runtime &r) {
+  WorkerTotals totals;
+  totals.idle_us = r.published_idle_us.load(std::memory_order_relaxed);
+  totals.vu1_us = r.published_vu1_us.load(std::memory_order_relaxed);
+  totals.output_us = r.published_output_us.load(std::memory_order_relaxed);
+  totals.jobs = r.published_jobs.load(std::memory_order_relaxed);
+  return totals;
+}
+
+// Installed as the probe's [mtvu] section (EE thread, at each report). The EE categories come from the probe's own
+// interval; the worker totals are the difference since the last interval reset. Times are ms per VBlank.
+void report_interval(std::FILE *file, const gt4::perf::IntervalTime &ee, std::uint64_t frames) {
+  if (!frames) return;
+  Runtime &r = rt();
+  const WorkerTotals now = published_totals(r);
+  const double scale = static_cast<double>(frames) * 1000.0;
+  const auto ee_ms = [&](gt4::perf::Category category) {
+    return ee.categories[static_cast<std::size_t>(category)].exclusive_us / scale;
+  };
+  const double wait_vblank = ee_ms(gt4::perf::Category::mtvu_wait_vblank);
+  const double wait_download = ee_ms(gt4::perf::Category::mtvu_wait_download);
+  const double wait_privileged = ee_ms(gt4::perf::Category::mtvu_wait_gs_privileged);
+  const double wait_vu_memory = ee_ms(gt4::perf::Category::mtvu_wait_vu_memory);
+  const double wait_gif_reset = ee_ms(gt4::perf::Category::mtvu_wait_gif_reset);
+  const double wait_reset = ee_ms(gt4::perf::Category::mtvu_wait_reset);
+  const double wait_state = ee_ms(gt4::perf::Category::mtvu_wait_state);
+  const double wait_other = ee_ms(gt4::perf::Category::mtvu_wait_other);
+  const double wait_total = wait_vblank + wait_download + wait_privileged + wait_vu_memory + wait_gif_reset +
+                            wait_reset + wait_state + wait_other;
+  const double vu1 = (now.vu1_us - r.baseline.vu1_us) / scale;
+  const double output = (now.output_us - r.baseline.output_us) / scale;
+  const double idle = (now.idle_us - r.baseline.idle_us) / scale;
+  const double busy = vu1 + output;
+  const double overlap = busy > wait_total ? busy - wait_total : 0.0;
+  std::fprintf(file, "[mtvu] EE wait ms/frame: vblank=%.3f download=%.3f gs_privileged=%.3f vu_memory=%.3f "
+               "gif_reset=%.3f reset=%.3f state=%.3f other=%.3f total=%.3f\n",
+               wait_vblank, wait_download, wait_privileged, wait_vu_memory, wait_gif_reset, wait_reset, wait_state,
+               wait_other, wait_total);
+  std::fprintf(file, "[mtvu] EE gs_drain ms/frame=%.3f (journal GS front end on the EE thread)\n",
+               ee_ms(gt4::perf::Category::gs_drain));
+  std::fprintf(file, "[mtvu] worker ms/frame: vu1_program=%.3f output_path12=%.3f busy=%.3f idle=%.3f jobs/frame=%.1f\n",
+               vu1, output, busy, idle, (now.jobs - r.baseline.jobs) / static_cast<double>(frames));
+  std::fprintf(file, "[mtvu] overlap achieved ms/frame=%.3f (worker busy %.3f minus EE wait for the worker %.3f)\n",
+               overlap, busy, wait_total);
+}
+
+void reset_worker_baseline() {
+  Runtime &r = rt();
+  r.baseline = published_totals(r);
+}
+
+void start(const Settings &settings, const Donor &donor) {
+  Runtime &r = rt();
+  if (r.started) throw std::logic_error("mtvu started twice");
+  r.started = true;
+  r.settings = settings;
+  r.donor = donor;
+  if (!settings.enabled) return;
+  if (!donor.worker_vif_packet || !donor.worker_vif_write || !donor.worker_vu_reset || !donor.render_gs ||
+      !donor.vif1_state_hash || !donor.apply_signal) {
+    throw std::logic_error("mtvu needs every donor callback");
+  }
+  r.input = std::make_unique<SpscByteRing>(kInputBytes, r.bell);
+  r.output = std::make_unique<SpscByteRing>(kOutputBytes, r.bell);
+  r.sink = std::make_unique<DonorSink>(donor.render_gs);
+  r.sink->set_privileged_consumer(r.ordered_privileged);
+  r.journal = std::make_unique<EeJournal>(*r.input, *r.output, r.bell, *r.sink);
+  r.worker_end = std::make_unique<WorkerEnd>(*r.input, *r.output, r.bell);
+  r.worker_accounting = gt4::perf::Accounting(gt4::perf::Probe::shared().enabled());
+  r.baseline = WorkerTotals{};
+  gt4::perf::Probe::set_mtvu_hooks(report_interval, reset_worker_baseline);
+  r.running.store(true);
+  r.worker = std::thread(worker_main);
+}
+
+bool enabled() { return rt().running.load(std::memory_order_acquire); }
+
+std::uint64_t worker_busy_us() {
+  const WorkerTotals totals = published_totals(rt());
+  return totals.vu1_us + totals.output_us;
+}
+
+void set_ordered_privileged_consumer(void (*post)(std::uint32_t address, std::uint64_t value)) {
+  Runtime &r = rt();
+  r.ordered_privileged = post;
+  if (r.sink) r.sink->set_privileged_consumer(post);
+}
+
+bool privileged_async() {
+  const Runtime &r = rt();
+  return r.settings.privileged_async && r.ordered_privileged != nullptr && enabled();
+}
+
+bool queue_privileged(std::uint32_t address, std::uint64_t value) {
+  Runtime &r = rt();
+  if (t_on_worker || !privileged_async() || r.journal->can_execute_now()) return false;
+  r.journal->append_privileged(address, value);
+  ++r.privileged_queued;
+  return true;
+}
+
+std::uint64_t take_privileged_wait_us() {
+  Runtime &r = rt();
+  const std::uint64_t waited = r.privileged_wait_us;
+  r.privileged_wait_us = 0;
+  return waited;
+}
+
+bool on_worker() { return t_on_worker; }
+
+void post_vif_packet(const std::uint8_t *data, std::uint32_t qwc) {
+  Runtime &r = rt();
+  if (!enabled()) return;
+  const std::uint64_t job = r.next_job++;
+  ++r.vif_packets;
+  r.journal->post_job(RecordKind::VifPacket, job, data, static_cast<std::size_t>(qwc) * 16);
+  r.journal->drain(false);
+  rethrow_worker_error();
+}
+
+void post_vif_write(std::uint32_t reg, std::uint32_t value) {
+  Runtime &r = rt();
+  if (!enabled()) return;
+  const std::uint64_t job = r.next_job++;
+  ++r.vif_writes;
+  std::uint8_t payload[8];
+  std::memcpy(payload, &reg, 4);
+  std::memcpy(payload + 4, &value, 4);
+  r.journal->post_job(RecordKind::VifWrite, job, payload, sizeof payload);
+  r.journal->drain(false);
+  rethrow_worker_error();
+}
+
+// Applies the signals of the packet being accepted, in stream order. SIGNAL/FINISH/LABEL change only SIGLBLID, CSR
+// and the GS interrupt request, never the drawing. The single-thread path applies them at this same EE program
+// position, so applying them now keeps the EE-observable order and removes the wait for the packet's worker job.
+void apply_accepted_signals(Runtime &r) {
+  for (const SignalWrite &write : r.signal_scratch) {
+    ++r.signals_applied;
+    r.donor.apply_signal(write.reg, write.value);
+  }
+  r.signal_scratch.clear();
+}
+
+bool signal_pre_applied(int path, std::uint32_t address) {
+  return enabled() && pre_applies_signal(path, address);
+}
+
+void gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {
+  Runtime &r = rt();
+  if (path < 0 || path > 3) throw std::logic_error("mtvu GIF path out of range");
+  if (!enabled()) {
+    r.donor.render_gs(path, data, qwc);
+    return;
+  }
+  ++r.ee_transfers;
+  PathCounts counts;
+  r.signal_scratch.clear();
+  r.ee_scanners[path].scan(data, qwc, counts, &r.signal_scratch);
+  if (path == 1 && !r.signal_scratch.empty()) {
+    // PATH1 signals are an invariant violation (section 5.3): keep the single-thread order for them.
+    sync("path1_signal");
+    ++r.gs_renders;
+    r.donor.render_gs(path, data, qwc);
+    return;
+  }
+  apply_accepted_signals(r);
+  if (qwc == 0) return;
+  if (r.journal->can_execute_now()) {
+    ++r.gs_renders;
+    r.donor.render_gs(path, data, qwc);
+    return;
+  }
+  r.journal->append_ee_gif(static_cast<std::uint8_t>(path), data, static_cast<std::size_t>(qwc) * 16);
+  r.journal->drain(false);
+  rethrow_worker_error();
+}
+
+void shadow_direct(int path, const std::uint8_t *data, std::uint32_t qwc) {
+  Runtime &r = rt();
+  if (path < 0 || path > 3) throw std::logic_error("mtvu GIF path out of range");
+  if (!enabled()) return;
+  ++r.direct_transfers;
+  PathCounts counts;
+  r.signal_scratch.clear();
+  r.ee_scanners[path].scan(data, qwc, counts, &r.signal_scratch);
+  // The worker renders this packet later; its signals are applied here, at the packet's program position.
+  apply_accepted_signals(r);
+}
+
+void gif_reset() {
+  Runtime &r = rt();
+  sync("gif_reset");
+  for (GifScanner &scanner : r.ee_scanners) scanner = GifScanner{};
+}
+
+void note_render(int path, const std::uint8_t *data, std::uint32_t qwc) {
+  Runtime &r = rt();
+  if (!r.settings.verify) return;
+  const auto path_byte = static_cast<std::uint8_t>(path);
+  fnv_bytes(r.frame_hash, &path_byte, 1);
+  fnv_bytes(r.frame_hash, data, static_cast<std::size_t>(qwc) * 16);
+}
+
+void sync(const char *reason) {
+  Runtime &r = rt();
+  if (!enabled() || t_on_worker) return;
+  const std::string_view why(reason);
+  const bool privileged = why == "gs_privileged";
+  if (privileged && privileged_async()) {
+    // TASK-041: the write that follows is queued behind the journal by its ordered consumer (queue_privileged), so
+    // the stream order is kept without waiting for the worker. The EE-side register copy is written at this point.
+    ++r.syncs["gs_privileged_ordered"];
+    r.privileged_wait_us = 0;
+    return;
+  }
+  ++r.syncs[reason];
+  using gt4::perf::Category;
+  const Category wait = why == "vblank" ? Category::mtvu_wait_vblank
+                      : why == "download" ? Category::mtvu_wait_download
+                      : why == "gs_privileged" ? Category::mtvu_wait_gs_privileged
+                      : why == "vu_memory" ? Category::mtvu_wait_vu_memory
+                      : why == "gif_reset" ? Category::mtvu_wait_gif_reset
+                      : (why == "vif_reset" || why == "vu_reset" || why == "hw_reset") ? Category::mtvu_wait_reset
+                      : (why == "state" || why == "shutdown") ? Category::mtvu_wait_state
+                      : Category::mtvu_wait_other;
+  const std::uint64_t start = privileged ? wall_us() : 0;
+  {
+    gt4::perf::Scope waiting(wait);
+    r.journal->drain(true);
+  }
+  if (privileged) r.privileged_wait_us = wall_us() - start;
+  rethrow_worker_error();
+}
+
+void pump() {
+  Runtime &r = rt();
+  if (!enabled()) return;
+  r.journal->drain(false);
+  rethrow_worker_error();
+}
+
+void vblank_sync() {
+  Runtime &r = rt();
+  if (!r.started) return;
+  sync("vblank");
+  if (r.settings.report_every) {
+    // Headless runs have no window, so the probe's boundary never runs: drive it here (guest counters are zero).
+    gt4::perf::Probe &probe = gt4::perf::Probe::shared();
+    if (++r.report_frames % r.settings.report_every == 0) probe.request(gt4::perf::Request::report);
+    probe.frame_boundary(gt4::perf::GuestSample{});
+  }
+  if (!r.settings.verify) return;
+  ++r.verify_frames;
+  const std::uint64_t shadow = enabled() ? r.donor.vif1_state_hash(false) : 0;
+  const std::uint64_t worker = enabled() ? r.donor.vif1_state_hash(true) : 0;
+  const bool same = !enabled() || shadow == worker;
+  if (!same) ++r.verify_mismatches;
+  std::fprintf(stderr, "[mtvu-verify] frame %llu gs %016llx vif1 shadow %016llx worker %016llx %s\n",
+               static_cast<unsigned long long>(r.verify_frames), static_cast<unsigned long long>(r.frame_hash),
+               static_cast<unsigned long long>(shadow), static_cast<unsigned long long>(worker), same ? "same" : "MISMATCH");
+  if (!same && r.settings.strict) throw std::runtime_error("mtvu strict: shadow and worker VIF1 state differ");
+  r.frame_hash = kFnvOffset;
+}
+
+void worker_gif(int path, const std::uint8_t *data, std::uint32_t qwc) {
+  Runtime &r = rt();
+  if (!t_on_worker) throw std::logic_error("mtvu worker_gif called off the worker thread");
+  if (qwc == 0) return;
+  if (path == 1) {
+    // Invariant (docs/MTVU-PLAN.md section 5.3): PATH1 never carries SIGNAL/FINISH/LABEL. Count and report.
+    PathCounts counts;
+    r.worker_scanners[1].scan(data, qwc, counts);
+    if (counts.signal + counts.finish + counts.label != 0) {
+      r.path1_signals.fetch_add(1, std::memory_order_relaxed);
+      if (!r.path1_reported) {
+        r.path1_reported = true;
+        std::fprintf(stderr, "[mtvu] PATH1 SIGNAL/FINISH/LABEL in job %llu: IRQ applied late (known divergence)\n",
+                     static_cast<unsigned long long>(r.worker_job));
+      }
+      if (r.settings.strict) throw std::runtime_error("mtvu strict: PATH1 SIGNAL/FINISH/LABEL");
+    }
+  }
+  gt4::perf::Scope output(gt4::perf::Category::mtvu_output);
+  r.worker_end->emit_gif(static_cast<std::uint8_t>(path), r.worker_job, data, static_cast<std::size_t>(qwc) * 16);
+}
+
+void stop() {
+  Runtime &r = rt();
+  if (!r.running.load(std::memory_order_acquire)) return;
+  try {
+    sync("shutdown");
+  } catch (const std::exception &error) {
+    std::fprintf(stderr, "[mtvu] worker failed: %s\n", error.what());
+  }
+  r.running.store(false);
+  r.journal->send_stop();
+  r.worker.join();
+}
+
+void report(std::FILE *output) {
+  Runtime &r = rt();
+  if (!r.started) return;
+  std::fprintf(output, "[mtvu] enabled %d verify %d strict %d worker_failed %d\n", r.settings.enabled ? 1 : 0,
+               r.settings.verify ? 1 : 0, r.settings.strict ? 1 : 0, r.worker_failed.load() ? 1 : 0);
+  if (r.journal) {
+    std::fprintf(output, "[mtvu] jobs %llu vif_packets %llu vif_writes %llu ee_transfers %llu direct_transfers %llu renders %llu\n",
+                 static_cast<unsigned long long>(r.journal->jobs_posted()), static_cast<unsigned long long>(r.vif_packets),
+                 static_cast<unsigned long long>(r.vif_writes), static_cast<unsigned long long>(r.ee_transfers),
+                 static_cast<unsigned long long>(r.direct_transfers), static_cast<unsigned long long>(r.gs_renders));
+  }
+  std::fprintf(output, "[mtvu] path1_signal %llu\n", static_cast<unsigned long long>(r.path1_signals.load()));
+  for (const auto &[reason, count] : r.syncs)
+    std::fprintf(output, "[mtvu] sync %s %llu\n", reason.c_str(), static_cast<unsigned long long>(count));
+  std::fprintf(output, "[mtvu] signals applied on the EE at accept %llu\n",
+               static_cast<unsigned long long>(r.signals_applied));
+  std::fprintf(output, "[mtvu] privileged writes: async %d (GT4_MTVU_PRIV_ASYNC %d, ordered consumer %s); queued "
+               "behind worker output %llu\n", privileged_async() ? 1 : 0, r.settings.privileged_async ? 1 : 0,
+               r.ordered_privileged ? "registered" : "none", static_cast<unsigned long long>(r.privileged_queued));
+  if (r.settings.verify)
+    std::fprintf(output, "[mtvu] verify frames %llu mismatches %llu\n", static_cast<unsigned long long>(r.verify_frames),
+                 static_cast<unsigned long long>(r.verify_mismatches));
+}
+
+}  // namespace gt4::mtvu

@@ -37,6 +37,13 @@ public:
   void audio(std::uint64_t produced, std::uint64_t completed,
              std::uint64_t empty_refills = 0) noexcept;
   void finish() noexcept;
+  // TASK-011 step 3: the [mtvu] report section (after the legacy lines) and the interval reset that goes with it.
+  // Installed by the worker runtime on the EE thread; with no hooks the report is unchanged.
+  using MtvuReport = void (*)(std::FILE *, const IntervalTime &, std::uint64_t);
+  using MtvuReset = void (*)();
+  static void set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept;
+  // TASK-035: the [gs-ipc] section (GS stream counters), printed after the legacy lines; same signatures.
+  static void set_gs_ipc_hooks(MtvuReport report, MtvuReset reset) noexcept;
   // Extra report lines (for example pacing diagnostics) printed after each
   // interval report. An empty function removes the section.
   void set_report_section(std::function<void(std::FILE *)> section);
@@ -44,6 +51,13 @@ public:
   bool valid() const noexcept;
   std::uint64_t frames() const noexcept { return frames_; }
   const IntervalTime &interval() const noexcept { return accounting_.interval(); }
+  // TASK-041: measured EE-thread CPU ms/frame of the report being printed (negative when Unknown); the report hooks
+  // ([mtvu], [gs-ipc]) read it while print() runs.
+  double report_cpu_ms_per_frame() const noexcept { return report_cpu_ms_; }
+  // TASK-062: exclusive time of a category since the probe started, across every interval reset (F7, F8, periodic),
+  // so a live reader (the GS stream OSD statistics) can take differences without disturbing the F8 intervals. Only
+  // the owner thread may call it; 0 for an invalid category.
+  std::uint64_t cumulative_exclusive_us(Category category) const noexcept;
 
 private:
   bool owner() noexcept;
@@ -64,7 +78,10 @@ private:
   std::function<void(std::FILE *)> report_section_;
   std::uint64_t last_us_ = 0, last_frame_us_ = 0, cpu_start_ = 0;
   std::uint64_t cpu_at_boundary_ = UINT64_MAX;
+  double report_cpu_ms_ = -1.0;
   std::uint64_t frames_ = 0, guest_cycles_ = 0, primitives_ = 0, vu_calls_ = 0;
+  // TASK-062: exclusive time of every category in the intervals before the current one (added at each reset).
+  std::array<std::uint64_t, static_cast<std::size_t>(Category::count)> carried_exclusive_us_{};
   GuestSample last_guest_{};
   std::uint64_t read_bytes_ = 0, write_bytes_ = 0, rgba_bytes_ = 0;
   std::uint64_t presentations_ = 0, dispatches_ = 0, workgroups_ = 0;
@@ -80,16 +97,36 @@ public:
   explicit Scope(Category) noexcept {}
 };
 #else
+// TASK-011 step 3 (slice171): a thread that bound a worker accounting (bind_worker) records its scopes there,
+// not in the shared probe. Only that thread touches the accounting; other threads never see it.
+struct WorkerBinding {
+  Accounting *accounting = nullptr;
+  std::uint64_t (*wall_us)() = nullptr;
+};
+inline thread_local WorkerBinding t_worker_binding{};
+void bind_worker(Accounting *accounting, std::uint64_t (*wall_us)()) noexcept;
+
 class Scope {
 public:
-  explicit Scope(Category category) noexcept : probe_(Probe::shared()),
-      token_(probe_.enter(category)) {}
-  ~Scope() { if (token_) probe_.leave(token_); }
+  explicit Scope(Category category) noexcept : worker_(t_worker_binding.accounting) {
+    if (worker_)
+      token_ = worker_->enter(category, t_worker_binding.wall_us());
+    else {
+      probe_ = &Probe::shared();
+      token_ = probe_->enter(category);
+    }
+  }
+  ~Scope() {
+    if (!token_) return;
+    if (worker_) worker_->leave(token_, t_worker_binding.wall_us());
+    else probe_->leave(token_);
+  }
   Scope(const Scope &) = delete;
   Scope &operator=(const Scope &) = delete;
 private:
-  Probe &probe_;
-  Accounting::Token token_;
+  Accounting *worker_ = nullptr;
+  Probe *probe_ = nullptr;
+  Accounting::Token token_ = 0;
 };
 #endif
 } // namespace gt4::perf

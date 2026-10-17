@@ -6,6 +6,23 @@ Options:
               --split-vu. Default and --split-vu derivations are unchanged by this option.
   --vu0-aot   also overlay the VU0 AOT registry (scripts/vu0_aot_overlay.inc, slice 160). Implies
               --vu1-aot (the VU0 capsule keeps the VU1 table) and --split-vu.
+  --mtvu-measure  TASK-011 step 0 (slice 169): also add the counting hooks of native/mtvu_measure.hpp
+              to system.cpp and vif.cpp and derive gif.cpp and memory.cpp. Implies --vu0-aot. Counters
+              only (GT4_MTVU_MEASURE=0 disables them); no guest-visible behavior change. Derivations
+              without this option are unchanged.
+
+  --mtvu      TASK-011 step 2 (slice 170): the VU1 worker runtime (native/mtvu_runtime.hpp). Implies
+              --vu0-aot (and so --vu1-aot, --split-vu). Shadows VIF1 on the EE thread, runs the VIF1 parser
+              and VU1 on the worker, and drains GS operations in journal order. Derived sources: system.cpp,
+              vif.cpp, vu_micro.cpp (patched), and gif.cpp, memory.cpp, hw.cpp, dmac.cpp (new). Excludes
+              --mtvu-measure. Derivations without this option are unchanged.
+
+  --gs-stream TASK-035 (slice191): the GS stream seam (native/gs_stream/gs_stream_client.hpp) on top of --mtvu
+              (implied). gif.cpp: with GT4_RENDERER=pcsx2 the GIF render point posts the bytes to the GS stream and
+              runs the path parser with a signal-only sink (no donor GS front end); a GIF reset is posted.
+              hw.cpp: SetGsCrt posts the SMODE1/SMODE2 writes the BIOS performs. Every hook returns at once when
+              GT4_RENDERER is unset or donor and GT4_GS_CAPTURE is unset. Derivations without this option are
+              unchanged.
   --fsv-trace add the FSV read trace to iop/cdvdfsv.cpp (scripts/fsv_trace_overlay.inc, slice 181).
               Adds cdvdfsv.cpp to the capsule; without GT4_FSV_TRACE set at run time the game behaves as the donor.
   --halt-dump add the halt forensic dump to kernel.cpp (scripts/halt_dump_overlay.inc, slice 204). Adds kernel.cpp
@@ -72,6 +89,224 @@ VU0_OVERLAY_ANCHORS = {
     'run_gate': ('before', '    static const bool exact = std::getenv("PS2_VU_EXACT") != nullptr;\n'),
 }
 PREFIX = '// Measurement-only MIT donor derivation; see native/THIRD_PARTY.md.\n#include "perf_probe.hpp"\n'
+# TASK-011 step 0 (slice 169): counting hooks only. Each site is one unique donor text; a hook adds
+# lines and never changes donor statements, so removing the hooks restores the input (checked).
+MTVU_MEASURE_PREFIX = '#include "mtvu_measure.hpp"\n'
+MTVU_MEASURE_PATCHES = {
+    'system.cpp': [
+        ('void vblank() {\n    ++g_frames;\n',
+         'void vblank() {\n    ++g_frames;\n    gt4::mtvu::on_vblank();\n'),
+        ('    vif::stats();\n',
+         '    vif::stats();\n    gt4::mtvu::final_report(stderr);\n')],
+    'vif.cpp': [
+        ('    vu::run(unit, address);\n}\n',
+         '    {\n        gt4::mtvu::VuCallScope mtvu_call(unit);\n        vu::run(unit, address);\n    }\n}\n'),
+        ('void transfer(int unit, const std::uint8_t *data, std::uint32_t qwc) {\n'
+         '    gt4::perf::Scope perf_vif(gt4::perf::Category::vif_gif);\n',
+         'void transfer(int unit, const std::uint8_t *data, std::uint32_t qwc) {\n'
+         '    gt4::perf::Scope perf_vif(gt4::perf::Category::vif_gif);\n    gt4::mtvu::on_vif_transfer(unit, qwc);\n'),
+        ('std::uint32_t read(int unit, std::uint32_t reg) {\n',
+         'std::uint32_t read(int unit, std::uint32_t reg) {\n    gt4::mtvu::on_vif_read(unit, reg);\n'),
+        ('void write(int unit, std::uint32_t reg, std::uint32_t value) {\n',
+         'void write(int unit, std::uint32_t reg, std::uint32_t value) {\n    gt4::mtvu::on_vif_write(unit, reg);\n')],
+    'gif.cpp': [
+        ('void transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {\n',
+         'void transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {\n'
+         '    gt4::mtvu::GifScope mtvu_gif(path, data, qwc);\n')],
+    'memory.cpp': [
+        ('    const Target t = resolve(a);\n    if (t.host) {\n        T v;\n',
+         '    const Target t = resolve(a);\n    if (t.region == Region::Vu) gt4::mtvu::on_ee_vu_memory(t.address, false);\n'
+         '    if (t.host) {\n        T v;\n'),
+        ('    const Target t = resolve(a);\n    if (t.host) {\n        std::memcpy(t.host, &v, sizeof v);\n',
+         '    const Target t = resolve(a);\n    if (t.region == Region::Vu) gt4::mtvu::on_ee_vu_memory(t.address, true);\n'
+         '    if (t.host) {\n        std::memcpy(t.host, &v, sizeof v);\n'),
+        ('    if (t.host) std::memcpy(&out, t.host, 16);\n',
+         '    if (t.region == Region::Vu) gt4::mtvu::on_ee_vu_memory(t.address, false);\n'
+         '    if (t.host) std::memcpy(&out, t.host, 16);\n'),
+        ('    if (t.host) std::memcpy(t.host, &v, 16);\n',
+         '    if (t.region == Region::Vu) gt4::mtvu::on_ee_vu_memory(t.address, true);\n'
+         '    if (t.host) std::memcpy(t.host, &v, 16);\n')],
+}
+# Extra donor sources derived only with --mtvu-measure: capsule name -> (donor path, pinned donor sha256).
+MTVU_MEASURE_SOURCES = {
+    'gif.cpp': ('gs/gif.cpp', 'eee761d759464b18fa84ca0970dd76fad5da6b7ce594a0b8383905d7016d1884'),
+    'memory.cpp': ('memory.cpp', 'c33b9fedc5727f96bcacffad1c806406b442ce86685e3d60777990a67d11f52e'),
+}
+
+# TASK-011 step 2 (slice 170): the MTVU worker runtime. Each anchor is one unique donor text; the derivation
+# checks that removing the replacements restores the input. The worker-facing glue is native/mtvu_bridge.cpp.
+MTVU_PREFIX = '#include "mtvu_runtime.hpp"\n'
+MTVU_PATCHES = {
+    'system.cpp': [
+        ('    if (g_options.on_vblank) g_options.on_vblank();\n',
+         '    gt4::mtvu::vblank_sync();\n    if (g_options.on_vblank) g_options.on_vblank();\n'),
+        ('void run_due_events() {\n    sync_iop();\n',
+         'void run_due_events() {\n    gt4::mtvu::pump();\n    sync_iop();\n'),
+        ('void sync_vu_thread() {\n    if (!gs::queue::vu_active()) return;\n',
+         'void sync_vu_thread() {\n    gt4::mtvu::sync("state");\n    if (!gs::queue::vu_active()) return;\n'),
+        ('int run() {\n    Cpu &c = g_cpu;\n',
+         'int run() {\n    gt4::mtvu::start_with_donor(gt4::mtvu::settings_from_environment());\n    Cpu &c = g_cpu;\n'),
+        ('    kernel::dump();\n    iop::dump();\n    sif::dump();\n',
+         '    gt4::mtvu::stop();\n    gt4::mtvu::report(stderr);\n    kernel::dump();\n    iop::dump();\n    sif::dump();\n'),
+    ],
+    'vif.cpp': [
+        ('bool on_vu_thread() { return gs::queue::role() == gs::queue::Role::Vu; }\n',
+         'bool on_vu_thread() { return gt4::mtvu::on_worker(); }\n'),
+        ('bool shadow(int unit) { return unit == 1 && gs::queue::vu_active() && !on_vu_thread(); }\n',
+         'bool shadow(int unit) { return unit == 1 && gt4::mtvu::enabled() && !on_vu_thread(); }\n'),
+        ('        if (shadow(unit)) return;\n        vu::set_tops(u.top, u.itop);\n',
+         '        if (shadow(unit)) {\n            vu::set_tops(u.top, u.itop);\n            return;\n        }\n'
+         '        vu::set_tops(u.top, u.itop);\n'),
+        ('    if (shadow(unit)) gs::queue::vu().post(gs::queue::kVif1, qwc, 0, data, qwc * 16);\n',
+         '    if (shadow(unit)) gt4::mtvu::post_vif_packet(data, qwc);\n'),
+        ('    if (shadow(unit)) gs::queue::vu().post(gs::queue::kVif1Write, reg, value, nullptr, 0);\n',
+         '    if (shadow(unit)) gt4::mtvu::post_vif_write(reg, value);\n'),
+        ('void reset() {\n    for (Unit &u : g_units) u = Unit{};\n}\n',
+         'void reset() {\n    gt4::mtvu::sync("vif_reset");\n    for (Unit &u : g_units) u = Unit{};\n    g_vu_side = Unit{};\n}\n'),
+        ('bool stalled(int unit) { return state(unit).stalled; }\n',
+         'bool stalled(int unit) { return state(unit).stalled; }\n'
+         '// Hash of one VIF1 unit (the EE shadow, or the worker side); compared at each VBlank under GT4_MTVU_VERIFY.\n'
+         'std::uint64_t verify_hash(bool worker_side) {\n'
+         '    const Unit &u = worker_side ? g_vu_side : g_units[1];\n'
+         '    std::uint64_t hash = 1469598103934665603ull;\n'
+         '    auto mix = [&hash](const void *data, std::size_t bytes) {\n'
+         '        const auto *at = static_cast<const std::uint8_t *>(data);\n'
+         '        for (std::size_t i = 0; i < bytes; ++i) {\n'
+         '            hash ^= at[i];\n'
+         '            hash *= 1099511628211ull;\n'
+         '        }\n'
+         '    };\n'
+         '    mix(&u.stat, 4);\n    mix(&u.err, 4);\n    mix(&u.mark, 4);\n    mix(&u.cycle, 4);\n    mix(&u.mode, 4);\n'
+         '    mix(&u.num, 4);\n    mix(&u.mask, 4);\n    mix(&u.code, 4);\n    mix(&u.itops, 4);\n    mix(&u.base, 4);\n'
+         '    mix(&u.ofst, 4);\n    mix(&u.tops, 4);\n    mix(&u.itop, 4);\n    mix(&u.top, 4);\n    mix(u.row, 16);\n'
+         '    mix(u.col, 16);\n    mix(&u.dbf, 1);\n    mix(&u.stalled, 1);\n'
+         '    const std::uint64_t pending = u.pending.size();\n    mix(&pending, 8);\n'
+         '    mix(u.pending.data(), u.pending.size() * 4);\n'
+         '    return hash;\n'
+         '}\n'),
+    ],
+    'vu_micro.cpp': [
+        ('std::uint32_t g_top = 0, g_itop = 0;\n',
+         '// Per thread: the EE copy follows the shadow VIF1 (set_tops) for VU0; the worker keeps its own.\n'
+         'thread_local std::uint32_t g_top = 0, g_itop = 0;\n'),
+        ('void reset() {\n    if (gs::queue::vu_active() && gs::queue::role() != gs::queue::Role::Vu) {',
+         'void reset() {\n    gt4::mtvu::sync("vu_reset");\n    if (gs::queue::vu_active() && gs::queue::role() != gs::queue::Role::Vu) {'),
+    ],
+}
+# Extra donor sources of the --mtvu capsule (capsule name -> donor path, pinned donor sha256).
+MTVU_RUNTIME_SOURCES = {
+    'gif.cpp': ('gs/gif.cpp', 'eee761d759464b18fa84ca0970dd76fad5da6b7ce594a0b8383905d7016d1884'),
+    'memory.cpp': ('memory.cpp', 'c33b9fedc5727f96bcacffad1c806406b442ce86685e3d60777990a67d11f52e'),
+    'hw.cpp': ('hw.cpp', '3fefa5a15284b7f4780c49820bc3d007746e84bae4cb74dec883269d759ce944'),
+    'dmac.cpp': ('dmac.cpp', 'f7883686794be6bb00c4a7a87e145da15e5a0a24d7bcbfc564a87a30f5d0b5a7'),
+}
+MTVU_PATCHES.update({
+    'gif.cpp': [
+        ('void transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {\n',
+         'void transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {\n'
+         '    if (gt4::mtvu::on_worker()) {\n        gt4::mtvu::worker_gif(path, data, qwc);\n        return;\n    }\n'
+         '    if (gt4::mtvu::enabled()) {\n        gt4::mtvu::gif_transfer(path, data, qwc);\n        return;\n    }\n'),
+        ('void reset() {\n    g_stat = 0;\n',
+         'void reset() {\n    gt4::mtvu::gif_reset();\n    g_stat = 0;\n'),
+        ('void render(int path, const std::uint8_t *data, std::uint32_t qwc) {\n    GsSink sink{path};',
+         'void render(int path, const std::uint8_t *data, std::uint32_t qwc) {\n'
+         '    gt4::mtvu::note_render(path, data, qwc);\n    GsSink sink{path};'),
+        ('    void packed(std::uint32_t reg, const Reg128 &q) { gs::write_packed(reg, q); }\n',
+         '    void packed(std::uint32_t reg, const Reg128 &q) {\n'
+         '        if (reg == 0xEu && gt4::mtvu::signal_pre_applied(path, static_cast<std::uint32_t>(q.d[1] & 0xFFu))) return;\n'
+         '        gs::write_packed(reg, q);\n    }\n'),
+        ('void scan_signals(int path, const std::uint8_t *data, std::uint32_t qwc) { scan(g_scan[path], data, qwc); }',
+         'void scan_signals(int path, const std::uint8_t *data, std::uint32_t qwc) {\n'
+         '    gt4::mtvu::shadow_direct(path, data, qwc);\n}'),
+    ],
+    'memory.cpp': [
+        ('    const Target t = resolve(a);\n    if (t.host) {\n        T v;\n',
+         '    const Target t = resolve(a);\n    if (t.region == Region::Vu) gt4::mtvu::sync("vu_memory");\n'
+         '    if (t.host) {\n        T v;\n'),
+        ('    const Target t = resolve(a);\n    if (t.host) {\n        std::memcpy(t.host, &v, sizeof v);\n',
+         '    const Target t = resolve(a);\n    if (t.region == Region::Vu) gt4::mtvu::sync("vu_memory");\n'
+         '    if (t.host) {\n        std::memcpy(t.host, &v, sizeof v);\n'),
+        ('    if (t.host) std::memcpy(&out, t.host, 16);\n',
+         '    if (t.region == Region::Vu) gt4::mtvu::sync("vu_memory");\n    if (t.host) std::memcpy(&out, t.host, 16);\n'),
+        ('    if (t.host) std::memcpy(t.host, &v, 16);\n',
+         '    if (t.region == Region::Vu) gt4::mtvu::sync("vu_memory");\n    if (t.host) std::memcpy(t.host, &v, 16);\n'),
+    ],
+    'hw.cpp': [
+        ('void reset() {\n    g_intc_stat = g_intc_mask = g_dmac_stat = 0;\n',
+         'void reset() {\n    gt4::mtvu::sync("hw_reset");\n    g_intc_stat = g_intc_mask = g_dmac_stat = 0;\n'),
+        ('void gs_set_imr(std::uint64_t value) { gs::write_privileged(0x12001010u, value); }',
+         'void gs_set_imr(std::uint64_t value) { gt4::mtvu::sync("gs_privileged"); gs::write_privileged(0x12001010u, value); }'),
+        ('        if (!(a & 4u)) gs::write_privileged(a, v);',
+         '        if (!(a & 4u)) {\n            gt4::mtvu::sync("gs_privileged");\n            gs::write_privileged(a, v);\n        }'),
+        ('    if (a >= 0x12000000u && a < 0x12002000u) {\n        gs::write_privileged(a, v);',
+         '    if (a >= 0x12000000u && a < 0x12002000u) {\n        gt4::mtvu::sync("gs_privileged");\n        gs::write_privileged(a, v);'),
+        ('        gs::read_image(reinterpret_cast<std::uint8_t *>(&out), 1);',
+         '        gt4::mtvu::sync("download");\n        gs::read_image(reinterpret_cast<std::uint8_t *>(&out), 1);'),
+    ],
+    'dmac.cpp': [
+        ('    } else if (ch == 1) {\n        for (std::uint32_t i = 0, n = 1; i < c.qwc; i += n, n = 1) {',
+         '    } else if (ch == 1) {\n        gt4::mtvu::sync("download");\n'
+         '        for (std::uint32_t i = 0, n = 1; i < c.qwc; i += n, n = 1) {'),
+    ],
+})
+
+# TASK-035 (slice191): GS stream hooks, applied on top of the --mtvu derivation of gif.cpp and hw.cpp. Same rules:
+# each anchor is one unique text of the MTVU-derived source and removing the replacements restores it.
+GS_STREAM_PREFIX = '#include "gs_stream_client.hpp"\n'
+GS_STREAM_PATCHES = {
+    'gif.cpp': [
+        ('    void image(const std::uint8_t *data, std::uint32_t qwords) { gs::write_image(data, qwords); }\n};\n',
+         '    void image(const std::uint8_t *data, std::uint32_t qwords) { gs::write_image(data, qwords); }\n};\n'
+         '\n'
+         '// TASK-035 (GT4_RENDERER=pcsx2): the GIF bytes went to the GS stream and the donor GS front end does not run.\n'
+         '// The path parser still runs (busy() and the tag counts), and SIGNAL/FINISH/LABEL writes that were not applied\n'
+         '// at acceptance (PATH1, or every path with GT4_MTVU=0) are applied here, at the render point, as GsSink would.\n'
+         'struct StreamSink {\n'
+         '    int path;\n'
+         '    void tag(const Path &p, const Reg128 &) { ++g_tags[path][p.flg]; }\n'
+         '    void packed(std::uint32_t reg, const Reg128 &q) {\n'
+         '        if (reg != 0xEu) return;\n'
+         '        const std::uint32_t address = static_cast<std::uint32_t>(q.d[1] & 0xFFu);\n'
+         '        if (address < 0x60u || address > 0x62u || gt4::mtvu::signal_pre_applied(path, address)) return;\n'
+         '        gs::signal(address, q.d[0]);\n'
+         '    }\n'
+         '    void reglist(std::uint32_t, std::uint64_t) {}\n'
+         '    void image(const std::uint8_t *, std::uint32_t) {}\n'
+         '};\n'),
+        ('void render_reset() {\n    for (Path &p : g_paths) p = Path{};\n}\n',
+         'void render_reset() {\n    gt4::gs_stream::on_gif_reset();\n    for (Path &p : g_paths) p = Path{};\n}\n'),
+        ('    gt4::mtvu::note_render(path, data, qwc);\n    GsSink sink{path};',
+         '    gt4::mtvu::note_render(path, data, qwc);\n'
+         '    if (gt4::gs_stream::on_gif_render(path, data, qwc)) {\n'
+         '        StreamSink stream_sink{path};\n'
+         '        walk(g_paths[path], data, qwc, stream_sink);\n'
+         '        return;\n'
+         '    }\n'
+         '    GsSink sink{path};'),
+    ],
+    'hw.cpp': [
+        ('    if (!g_options.rate_forced) g_options.pal = mode == 3u;\n',
+         '    gt4::gs_stream::on_set_gs_crt(interlace, mode, field);\n'
+         '    if (!g_options.rate_forced) g_options.pal = mode == 3u;\n'),
+    ],
+}
+
+
+def apply_gs_stream(name, source):
+    """Adds the TASK-035 GS stream hooks to one MTVU-derived source; checks that removing them restores the input."""
+    result = source
+    for before, after in GS_STREAM_PATCHES[name]:
+        if result.count(before) != 1:
+            raise ValueError(f'Expected one qualified GS stream site in {name}')
+        result = result.replace(before, after)
+    inverse = result
+    for before, after in reversed(GS_STREAM_PATCHES[name]):
+        if inverse.count(after) != 1:
+            raise ValueError(f'Unexpected GS stream reversal in {name}')
+        inverse = inverse.replace(after, before)
+    if inverse != source:
+        raise ValueError(f'GS stream hooks do not reverse to the input: {name}')
+    return result
 
 
 def overlay_sections(text, anchors=OVERLAY_ANCHORS):
@@ -137,7 +372,54 @@ def apply_halt_dump(source):
     return apply_overlay(source, HALT_OVERLAY_PATH, HALT_OVERLAY_ANCHORS, 'halt dump')
 
 
-def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False):
+def apply_mtvu_measure(name, source):
+    """Adds the TASK-011 step 0 counting hooks; checks that removing them restores the input."""
+    result = source
+    for before, after in MTVU_MEASURE_PATCHES[name]:
+        if result.count(before) != 1:
+            raise ValueError(f'Expected one qualified MTVU measure site in {name}')
+        result = result.replace(before, after)
+    inverse = result
+    for before, after in reversed(MTVU_MEASURE_PATCHES[name]):
+        if inverse.count(after) != 1:
+            raise ValueError(f'Unexpected MTVU measure reversal in {name}')
+        inverse = inverse.replace(after, before)
+    if inverse != source:
+        raise ValueError(f'MTVU measure hooks do not reverse to the input: {name}')
+    return result
+
+
+def derive_mtvu_source(name, source):
+    """Derives one extra --mtvu-measure source (gif.cpp, memory.cpp): hooks only."""
+    return PREFIX + MTVU_MEASURE_PREFIX + apply_mtvu_measure(name, source)
+
+
+def apply_mtvu_runtime(name, source):
+    """Adds the TASK-011 step 2 MTVU hooks to one donor source; checks that removing them restores the input."""
+    result = source
+    for before, after in MTVU_PATCHES[name]:
+        if result.count(before) != 1:
+            raise ValueError(f'Expected one qualified MTVU runtime site in {name}')
+        result = result.replace(before, after)
+    inverse = result
+    for before, after in reversed(MTVU_PATCHES[name]):
+        if inverse.count(after) != 1:
+            raise ValueError(f'Unexpected MTVU runtime reversal in {name}')
+        inverse = inverse.replace(after, before)
+    if inverse != source:
+        raise ValueError(f'MTVU runtime hooks do not reverse to the input: {name}')
+    return result
+
+
+def derive_mtvu_runtime_source(name, source, gs_stream=False):
+    """Derives one extra --mtvu source (gif.cpp, memory.cpp, hw.cpp, dmac.cpp): hooks only."""
+    derived = apply_mtvu_runtime(name, source)
+    if gs_stream and name in GS_STREAM_PATCHES:
+        return PREFIX + MTVU_PREFIX + GS_STREAM_PREFIX + apply_gs_stream(name, derived)
+    return PREFIX + MTVU_PREFIX + derived
+
+
+def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False, mtvu=False):
     original = source
     patches = [(before, after.replace('gt4::perf::Category::vu_interpret',
                 'gt4::perf::vu_interpreter_category(unit)') if split_vu else after)
@@ -158,16 +440,33 @@ def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False):
         inverse = inverse.replace(after, before)
     if inverse != original:
         raise ValueError('Unexpected patch reversal')
+    if mtvu_measure:
+        if name in MTVU_MEASURE_PATCHES:
+            source = apply_mtvu_measure(name, source)
+        return PREFIX + MTVU_MEASURE_PREFIX + source
+    if mtvu and name in MTVU_PATCHES:
+        return PREFIX + MTVU_PREFIX + apply_mtvu_runtime(name, source)
     return PREFIX + source
 
 
-def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False, fsv_trace=False, halt_dump=False):
+def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False,
+            mtvu=False, gs_stream=False, fsv_trace=False, halt_dump=False):
+    if gs_stream:
+        mtvu = True
+    if mtvu and mtvu_measure:
+        raise ValueError('--mtvu and --mtvu-measure are separate capsules')
+    if mtvu:
+        vu0_aot = True
+    if mtvu_measure:
+        vu0_aot = True
     if vu0_aot:
         vu1_aot = True
     if vu1_aot:
         split_vu = True
     output = Path(output).absolute()
-    if output != output.resolve() or output.parent != (ROOT / 'private').resolve():
+    # The capsule lives in the assets checkout: a worktree has no private/ of its own and must not link it.
+    private_root = (Path(assets_root or ROOT) / 'private').resolve()
+    if output != output.resolve() or output.parent != private_root:
         raise ValueError('Runtime capsule must be an ordinary immediate private child')
     if output.exists():
         raise ValueError('Preserve existing output; choose a fresh runtime capsule')
@@ -178,7 +477,20 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
         if hashlib.sha256(data).hexdigest() != expected:
             raise ValueError(f'Qualified donor source differs: {name}')
         text = data.decode('utf-8').replace('\r\n', '\n')
-        sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot, vu0_aot=vu0_aot)
+        sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot, vu0_aot=vu0_aot,
+                               mtvu_measure=mtvu_measure, mtvu=mtvu)
+    if mtvu_measure:
+        for name, (donor_path, expected) in MTVU_MEASURE_SOURCES.items():
+            data = (donor / donor_path).read_bytes()
+            if hashlib.sha256(data).hexdigest() != expected:
+                raise ValueError(f'Qualified donor source differs: {donor_path}')
+            sources[name] = derive_mtvu_source(name, data.decode('utf-8').replace('\r\n', '\n'))
+    if mtvu:
+        for name, (donor_path, expected) in MTVU_RUNTIME_SOURCES.items():
+            data = (donor / donor_path).read_bytes()
+            if hashlib.sha256(data).hexdigest() != expected:
+                raise ValueError(f'Qualified donor source differs: {donor_path}')
+            sources[name] = derive_mtvu_runtime_source(name, data.decode('utf-8').replace('\r\n', '\n'), gs_stream)
     fsv_sources = {}
     if fsv_trace:
         for name, expected in FSV_PIN.items():
@@ -218,6 +530,15 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
     if vu0_aot:
         receipt['vu0_aot_profile'] = 'overlay-v1'
         receipt['vu0_aot_overlay_sha256'] = hashlib.sha256(VU0_OVERLAY_PATH.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+    if mtvu_measure:
+        receipt['mtvu_measure_profile'] = 'step0-counters-v1'
+        receipt['mtvu_measure_donor_sha256'] = {name: expected for name, (_, expected) in MTVU_MEASURE_SOURCES.items()}
+    if mtvu:
+        receipt['mtvu_runtime_profile'] = 'step4-runtime-v2'
+        receipt['mtvu_runtime_donor_sha256'] = {name: expected for name, (_, expected) in MTVU_RUNTIME_SOURCES.items()}
+    if gs_stream:
+        receipt['gs_stream_profile'] = 'task035-seam-v1'
+        receipt['gs_stream_sources'] = sorted(GS_STREAM_PATCHES)
     for name, text in sources.items():
         path = output / name
         path.write_text(text, encoding='utf-8', newline='\n')
@@ -233,8 +554,12 @@ if __name__ == '__main__':
     parser.add_argument('--split-vu', action='store_true')
     parser.add_argument('--vu1-aot', action='store_true')
     parser.add_argument('--vu0-aot', action='store_true')
+    parser.add_argument('--mtvu-measure', action='store_true')
+    parser.add_argument('--mtvu', action='store_true')
+    parser.add_argument('--gs-stream', action='store_true')
     parser.add_argument('--fsv-trace', action='store_true')
     parser.add_argument('--halt-dump', action='store_true')
     args = parser.parse_args()
     prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot, vu0_aot=args.vu0_aot,
-            fsv_trace=args.fsv_trace, halt_dump=args.halt_dump)
+            mtvu_measure=args.mtvu_measure, mtvu=args.mtvu, gs_stream=args.gs_stream, fsv_trace=args.fsv_trace,
+            halt_dump=args.halt_dump)

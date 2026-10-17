@@ -1,0 +1,140 @@
+// SPDX-License-Identifier: MIT
+// Game-side GS stream backend (TASK-035; docs/GS-STREAM-PROTOCOL.md section 7, docs/GSDX-PLAN.md section C.3).
+//
+// Renderer selection, GT4_RENDERER:
+//   unset or "donor"  the donor GS front end and the native Vulkan renderer (unchanged; every hook returns at once)
+//   "pcsx2"           the GS stream: no donor Vulkan device; GIF, privileged writes, VSYNC and readbacks go to a GS
+//                     process (GT4_GS_PROCESS=<executable>) over shared memory (gs_stream_ipc.hpp)
+// Any other value stops the process before the game starts.
+//
+// TASK-036 (slice193), pcsx2 mode: GT4_GS_PROCESS_SHA256=<hex> refuses a GS process whose SHA-256 differs (the launcher
+// sets it from the pinned manifest); GT4_GS_CONFIG=<ini> is passed to the GS process as --config. A GS process that
+// dies during the session halts the game through the normal exit path; with a window, a message box explains it.
+//
+// TASK-037/038 (slice194): F8 prints the readback wait distribution; a GS process death lets the guest run
+// GT4_GS_LOST_GRACE_FRAMES (default 180) more VSYNCs so the runtime flushes a changed memory card, then halts; with a
+// window, a message box offers a restart with the built-in renderer (the launcher reads the restart line from the log);
+// GT4_GS_HANDSHAKE_TIMEOUT_MS (default 20000) bounds the handshake; 0x0 resizes (minimized window) are not sent.
+//
+// GT4_GS_CAPTURE=<file> writes the same records to a .gscap version 2 file in either renderer mode (the donor output is
+// unchanged). GT4_GS_CAPTURE_FRAMES=first:last limits it to VSYNC frames first..last.
+//
+// The hooks are called by the spliced donor sources (scripts/prepare_external_vulkan.py --gs-stream-hooks for gs.cpp,
+// scripts/prepare_perf_runtime.py --gs-stream for gif.cpp and hw.cpp), always on the EE thread.
+#pragma once
+
+#include <cstdint>
+#include <cstdio>
+#include <string>
+
+#include "gs_stream/gs_stream_protocol.h"
+
+namespace gt4::gs_stream {
+
+enum class Renderer { donor, pcsx2 };
+
+// Parsed once from GT4_RENDERER. An unknown value prints a message and exits with EXIT_FAILURE.
+Renderer renderer();
+// True when GT4_RENDERER=pcsx2: the donor GS front end and Vulkan renderer are not used.
+bool stream_renderer();
+
+// --- hooks (EE thread) ---
+// One accepted GIF chunk of `path`, in acceptance order (the gif render point, after the MTVU journal drain).
+// Returns stream_renderer(): when true the caller does not run the donor GS front end for this chunk.
+bool on_gif_render(int path, const std::uint8_t *data, std::uint32_t qwc);
+// Privileged GS register write (the donor keeps its own copy for CSR/IMR/SIGLBLID reads).
+void on_privileged_write(std::uint32_t address, std::uint64_t value);
+
+// TASK-041 (slice198): ordering of privileged writes with the VU1 worker (MTVU). The game's privileged writes reach the
+// GS process only through the stream, so they need only their stream position, not an idle worker. The MTVU bridge
+// installs these hooks in pcsx2 mode (native/mtvu_bridge.cpp):
+//   queue        true when the write was queued behind outstanding worker output (the MTVU journal posts it later,
+//                in order, through post_privileged_now); false: the client posts it now. Null: always post now.
+//   take_wait_us the EE wait of the blocking MTVU sync that preceded this write (0 when none); per-register F8 lines.
+//   active       true when privileged writes skip the blocking MTVU sync (GT4_MTVU_PRIV_ASYNC on, worker running).
+struct PrivilegedOrdering {
+  bool (*queue)(std::uint32_t address, std::uint64_t value) = nullptr;
+  std::uint64_t (*take_wait_us)() = nullptr;
+  bool (*active)() = nullptr;
+};
+void set_privileged_ordering(const PrivilegedOrdering &ordering);
+// Posts one privileged write to the stream now (the MTVU journal drain calls it for queued writes).
+void post_privileged_now(std::uint32_t address, std::uint64_t value);
+// Index of a privileged register for the per-register counters: 0-14 = PMODE..BGCOLOR (0x12000000-0x120000E0), 15 CSR,
+// 16 IMR, 17 BUSDIR, 18 SIGLBLID, 19 any other address. privileged_register_name(index) is the GS manual name.
+constexpr int kPrivilegedRegisterSlots = 20;
+int privileged_register_index(std::uint32_t address);
+const char *privileged_register_name(int index);
+// Local-to-host FIFO read. Returns true when the stream renderer answered it (data filled); false in donor mode,
+// where the capture only records the request and the donor serves the data.
+bool read_fifo(std::uint8_t *data, std::uint32_t qwords);
+// Start of the vertical blank, after the donor toggled the field: odd_field is the CSR FIELD bit the EE now reads.
+// The donor toggles the field together with INTC VBLANK_S, before the game's VBLANK_S handler runs, so this is also
+// the display field of the frame that ends here (protocol 1.1 VSYNC.field; docs/GS-STREAM-PROTOCOL.md 6.1).
+void on_vsync(bool odd_field);
+// GS hard reset (donor render_reset) and GIF path reset.
+void on_gs_reset();
+void on_gif_reset();
+// BIOS SetGsCrt: posts the SMODE1/SMODE2 writes the BIOS performs, and SYNCV for the analog NTSC/PAL modes (the
+// donor HLE only records the arguments).
+void on_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field);
+// Window: the GS process renders into a child of this window (CONTROL attach_window / resize).
+bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t height);
+// TASK-060 (protocol 1.2): the mouse cursor policy the game window uses (GT4_CURSOR_AUTOHIDE, native/cursor_autohide.hpp).
+// Call before attach_window; attach_window then sends CONTROL cursor to a 1.2 consumer, so the GS child window hides the
+// cursor over the picture with the same rule. Default: auto-hide on, 3000 ms.
+void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms);
+// TASK-062 (protocol 1.2): cumulative busy time of the VU1 worker in microseconds (installed by the MTVU bridge in
+// pcsx2 mode); read for the OSD_STATS records. Null: the worker field is not sent.
+void set_worker_busy_source(std::uint64_t (*worker_busy_us)());
+void resize_window(std::uint32_t width, std::uint32_t height);
+// Called when the GS process dies, with a reason (the spliced gs.cpp passes ps2::halt).
+void set_halt_handler(void (*halt)(const char *reason));
+// End of the run (donor gs::stats): CONTROL shutdown, wait for the GS process, print the session summary.
+void finish(std::FILE *output);
+
+// TASK-041: the F8 one-line summary of the EE critical path against the frame budget (all values ms per frame).
+// The EE critical path is the EE thread's measured CPU time plus the time it blocks for the VU1 worker (MTVU syncs),
+// for readback replies and for the GS process (ring space, frames in flight). Spin time inside those waits is also
+// CPU time, so the sum may count a few microseconds twice; the pacer's sleep is in neither.
+struct FrameCosts {
+  double ee_cpu_ms = -1.0;          // measured EE thread CPU; negative: Unknown
+  double vu1_worker_wait_ms = 0.0;  // MTVU syncs, every reason
+  double readback_wait_ms = 0.0;
+  double backpressure_ms = 0.0;     // GS ring space and frames in flight
+  double gs_cpu_thread_ms = -1.0;   // GS process CPU thread (STATS of the interval); negative: Unknown
+  double budget_ms = 1000.0 / 59.94;
+};
+std::string format_frame_summary(const FrameCosts &costs);
+
+// TASK-062 (protocol 1.2): OSD_STATS for a consumer that asked for them (READY kReadyFlagOsdStats). The client sends one
+// record about every kOsdStatsIntervalUs of wall time, right after a VSYNC. OsdSample holds cumulative counters taken at
+// the VSYNC; make_osd_stats turns two samples into the record (times per frame, microseconds; pure, tested by the
+// client fixture).
+constexpr std::uint64_t kOsdStatsIntervalUs = 500000;
+struct OsdSample {
+  std::uint64_t wall_us = 0;
+  std::uint64_t vsyncs = 0;
+  std::uint64_t main_cpu_us = UINT64_MAX;     // EE thread CPU; UINT64_MAX: unknown
+  std::uint64_t worker_busy_us = UINT64_MAX;  // VU1 worker busy; UINT64_MAX: unknown
+  bool accounting = false;  // the perf accounting (GT4_PERF=1 or F7) is on: the four waits below are measured
+  std::uint64_t stream_write_us = 0, readback_wait_us = 0, backpressure_us = 0, worker_wait_us = 0;
+};
+::gs_stream::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &end, std::uint64_t max_frame_us,
+                                            double budget_ms = 1000.0 / 59.94);
+
+// SHA-256 of a file as 64 lowercase hex digits (Windows CNG). Used for the GS process pin (GT4_GS_PROCESS_SHA256).
+bool file_sha256(const std::wstring &path, std::string &hex, std::string &error);
+
+// SetGsCrt (interlace, mode, field) to the SMODE1/SMODE2 values the BIOS writes; false for an unknown mode.
+// Same table as the TASK-012 seam (native/gs_video_mode.cpp on task/012-parallel-gs).
+bool map_set_gs_crt(std::uint32_t interlace, std::uint32_t mode, std::uint32_t field, std::uint64_t &smode1,
+                    std::uint64_t &smode2);
+
+// SetGsCrt mode to the SYNCV value (GS privileged register 0x12000060) of the analog modes: NTSC (0x02) and PAL
+// (0x03); false for the other modes (no SYNCV posted). The values are the vertical timings of the GS User's Manual
+// (NTSC: VS 6, VDP 480, VBPE 6, VBP 26, VFPE 6, VFP 1; PAL: VS 5, VDP 576, VBPE 5, VBP 33, VFPE 5, VFP 1). A consumer
+// needs them: SYNCV VFP bit 0 with a non-zero SMODE1 CMOD is how a GS knows the output really alternates fields.
+bool map_set_gs_crt_syncv(std::uint32_t mode, std::uint64_t &syncv);
+
+}  // namespace gt4::gs_stream

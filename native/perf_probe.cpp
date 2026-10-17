@@ -19,6 +19,11 @@ __attribute__((weak)) void vu0_aot_report(std::FILE *) {}  // strong definition:
 
 namespace gt4::perf {
 namespace {
+// Installed by the VU1 worker runtime (EE thread): report section and interval reset (TASK-011 step 3).
+Probe::MtvuReport g_mtvu_report = nullptr;
+Probe::MtvuReset g_mtvu_reset = nullptr;
+Probe::MtvuReport g_gs_ipc_report = nullptr;
+Probe::MtvuReset g_gs_ipc_reset = nullptr;
 std::uint64_t wall_us() {
   return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
       std::chrono::steady_clock::now().time_since_epoch()).count());
@@ -43,6 +48,11 @@ constexpr const char *names[] = {
 #endif
 #ifdef GT4_VU0_AOT
     , "vu0_aot"
+#endif
+#ifdef GT4_MTVU_RUNTIME
+    , "mtvu_wait_vblank", "mtvu_wait_download", "mtvu_wait_gs_privileged", "mtvu_wait_vu_memory",
+    "mtvu_wait_gif_reset", "mtvu_wait_reset", "mtvu_wait_state", "mtvu_wait_other", "gs_drain", "mtvu_output",
+    "gs_ipc_write", "gs_ipc_backpressure", "gs_ipc_vsync_post", "gs_ipc_readback_wait"
 #endif
     };
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
@@ -69,7 +79,12 @@ Probe &Probe::shared() {
 #endif
   static Probe probe({wall_us, cpu_us}, [] {
     char value[8]{};
-    return GetEnvironmentVariableA("GT4_PERF", value, sizeof value) == 1 && value[0] == '1';
+    if (GetEnvironmentVariableA("GT4_PERF", value, sizeof value) == 1 && value[0] == '1')
+      return true;
+    // TASK-011 step 3: GT4_MTVU_REPORT_EVERY (headless [mtvu] report) turns the accounting on; "0" or unset does not.
+    char every[32]{};
+    const DWORD length = GetEnvironmentVariableA("GT4_MTVU_REPORT_EVERY", every, sizeof every);
+    return length > 0 && !(length == 1 && every[0] == '0');
   }(), stderr, detailed, split_vu);
   return probe;
 }
@@ -128,7 +143,16 @@ void Probe::audio(std::uint64_t produced, std::uint64_t completed,
 }
 
 void Probe::reset(std::uint64_t now, GuestSample guest) noexcept {
+  // TASK-062: keep the time of the finished interval for cumulative_exclusive_us() (checkpoint first, so the time up to
+  // `now` belongs to the interval that ends here).
+  accounting_.checkpoint(now);
+  for (std::size_t index = 0; index < carried_exclusive_us_.size(); ++index)
+    carried_exclusive_us_[index] += accounting_.interval().categories[index].exclusive_us;
   accounting_.restart(now);
+  if (g_mtvu_reset)
+    g_mtvu_reset();
+  if (g_gs_ipc_reset)
+    g_gs_ipc_reset();
   last_us_ = last_frame_us_ = now;
   last_guest_ = guest;
   frames_ = guest_cycles_ = primitives_ = vu_calls_ = 0;
@@ -226,24 +250,29 @@ void Probe::print(const char *reason) noexcept {
         guest_cycles_ / 294912000.0 / seconds * 100.0, primitives_ / frames, vu_calls_ / frames);
   else std::fputs("[perf] guest counters reset: guest speed/count deltas Unknown\n", output_);
   const auto cpu_now = cpu_at_boundary_;
-  if (cpu_valid_ && cpu_now != UINT64_MAX && cpu_now >= cpu_start_)
+  report_cpu_ms_ = -1.0;
+  if (cpu_valid_ && cpu_now != UINT64_MAX && cpu_now >= cpu_start_) {
+    report_cpu_ms_ = (cpu_now - cpu_start_) / 1000.0 / frames;
     std::fprintf(output_, "[perf] measured_thread_cpu_ms/frame=%.3f; occupancy=%.1f%%\n",
-        (cpu_now - cpu_start_) / 1000.0 / frames, double(cpu_now - cpu_start_) / elapsed * 100);
+        report_cpu_ms_, double(cpu_now - cpu_start_) / elapsed * 100);
+  }
   else std::fputs("[perf] measured_thread_cpu=Unknown\n", output_);
   if (report_section_)
     report_section_(output_);
+  if (g_mtvu_report)
+    g_mtvu_report(output_, accounting_.interval(), frames_);
   if (!detailed_) {
     std::fputs("[perf] subsystem timers/host traffic counters=Unavailable (compiled out); boundary clocks/guest counters remain\n", output_);
     std::fflush(output_);
     return;
   }
   std::fputs("[perf] exclusive wall ms/frame (additive, includes instrumentation/scheduler time):", output_);
-  for (std::size_t index = 0; index < std::size(names); ++index)
+  for (std::size_t index = 0; index < kLegacyCategoryCount; ++index)
     std::fprintf(output_, " %s=%.3f", names[index],
         accounting_.interval().categories[index].exclusive_us / 1000.0 / frames);
   std::fputc('\n', output_);
   std::fputs("[perf] inclusive wall ms/frame (overlapping, DO NOT SUM):", output_);
-  for (std::size_t index = 0; index < std::size(names); ++index)
+  for (std::size_t index = 0; index < kLegacyCategoryCount; ++index)
     std::fprintf(output_, " %s=%.3f", names[index],
         accounting_.interval().categories[index].inclusive_us / 1000.0 / frames);
   std::fprintf(output_, "\n[perf] mapped_write_bytes/frame=%.0f mapped_read_bytes/frame=%.0f presented_RGBA_bytes/frame=%.0f presents/frame=%.2f dispatches/frame=%.1f workgroups/frame=%.0f\n",
@@ -269,7 +298,30 @@ void Probe::print(const char *reason) noexcept {
 #ifdef GT4_VU0_AOT
   ps2::vu::vu0_aot_report(output_);
 #endif
+  if (g_gs_ipc_report)
+    g_gs_ipc_report(output_, accounting_.interval(), frames_);
   std::fflush(output_);
+}
+
+std::uint64_t Probe::cumulative_exclusive_us(Category category) const noexcept {
+  const auto index = static_cast<std::size_t>(category);
+  if (index >= carried_exclusive_us_.size())
+    return 0;
+  return carried_exclusive_us_[index] + accounting_.interval().categories[index].exclusive_us;
+}
+
+void Probe::set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept {
+  g_mtvu_report = report;
+  g_mtvu_reset = reset;
+}
+
+void Probe::set_gs_ipc_hooks(MtvuReport report, MtvuReset reset) noexcept {
+  g_gs_ipc_report = report;
+  g_gs_ipc_reset = reset;
+}
+
+void bind_worker(Accounting *accounting, std::uint64_t (*wall)()) noexcept {
+  t_worker_binding = {accounting, wall};
 }
 
 void Probe::set_report_section(std::function<void(std::FILE *)> section) {

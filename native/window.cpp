@@ -10,6 +10,13 @@
 #include "frame_clock.hpp"
 #include "pacing.hpp"
 #include "window_mode.hpp"
+#include "cursor_autohide.hpp"
+#ifdef GT4_GS_STREAM_CLIENT
+#include "gs_stream/gs_stream_client.hpp"
+#endif
+#ifdef GT4_MTVU_MEASURE
+#include "mtvu_measure.hpp"
+#endif
 #ifdef GT4_SHAPE_CAPTURE
 #include "shape_capture_control.hpp"
 #include "shape_observer_adapter.hpp"
@@ -44,6 +51,34 @@ gt4::pacing::Counters counters_at_last_report;
 bool force_480p_enabled = false;
 gt4::display::Force480pState force_480p_state;
 AudioOutput *audio_output = nullptr;
+// TASK-060: cursor auto-hide over this window's picture (GT4_CURSOR_AUTOHIDE, cursor_autohide.hpp). In pcsx2 mode the
+// picture is the gt4-gs child window (another process), which applies the same rule itself (CONTROL cursor); this
+// window then only owns its own client area, which the child covers.
+gt4::cursor::AutoHide cursor_autohide;
+HCURSOR arrow_cursor = nullptr;
+
+// One cursor sample per VBlank (and per WM_SETCURSOR). The cursor is changed only while it is over this window's own
+// client area and this window is the one under it.
+void update_cursor() {
+  if (!game_window || !cursor_autohide.policy().auto_hide)
+    return;
+  POINT point{};
+  if (!GetCursorPos(&point))
+    return;
+  bool over_picture = WindowFromPoint(point) == game_window;
+  if (over_picture) {
+    POINT local = point;
+    RECT client{};
+    over_picture = ScreenToClient(game_window, &local) && GetClientRect(game_window, &client) &&
+                   PtInRect(&client, local);
+  }
+  const bool was_hidden = cursor_autohide.hidden();
+  const bool hide = cursor_autohide.update(point.x, point.y, GetTickCount64(), over_picture);
+  if (hide && !was_hidden)
+    SetCursor(nullptr);
+  else if (!hide && was_hidden && over_picture)
+    SetCursor(arrow_cursor);
+}
 
 void apply_pad(const PadState &pad) {
   ps2::set_pad_buttons(pad.buttons);
@@ -111,6 +146,10 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
       // The F7/F8 interval starts here: histogram and counter deltas restart.
       counters_at_last_report = pacing_counters();
       pacing_diagnostics.reset();
+#ifdef GT4_MTVU_MEASURE
+      if ((second & (1ll << 30)) == 0)
+        gt4::mtvu::request_interval_reset();
+#endif
     }
     const auto request = first == VK_F7 ? gt4::perf::Request::start :
         first == VK_F8 ? gt4::perf::Request::report : gt4::perf::Request::toggle;
@@ -125,6 +164,16 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
   }
 #endif
   if (message == WM_CLOSE) {
+#ifdef GT4_GS_STREAM_CLIENT
+    // TASK-038: with GT4_RENDERER=pcsx2 the GS process draws into a child of this window, and DestroyWindow waits for
+    // that process's window thread (a stalled GS window thread would freeze the close). Halt the guest instead; the
+    // window is destroyed in cleanup(), after gs_stream::finish() has shut the GS process down (or ended it).
+    if (gt4::gs_stream::stream_renderer()) {
+      closing = true;
+      ps2::halt("window closed");
+      return 0;
+    }
+#endif
     DestroyWindow(window);
     return 0;
   }
@@ -140,6 +189,22 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     closing = true;
     PostQuitMessage(0);
     return 0;
+  }
+#ifdef GT4_GS_STREAM_CLIENT
+  // TASK-038 (slice195): with GT4_RENDERER=pcsx2 the picture is a child window of another process. Whenever this
+  // window is activated (also when gt4-gs.exe gives the foreground back after a click on the picture), the keyboard
+  // focus goes to this window, never to the child.
+  if (message == WM_ACTIVATE && LOWORD(first) != WA_INACTIVE && gt4::gs_stream::stream_renderer()) {
+    SetFocus(window);
+    return 0;
+  }
+#endif
+  // TASK-060: over the client area the cursor follows the auto-hide state; elsewhere (frame, title bar) the default.
+  if (message == WM_SETCURSOR && reinterpret_cast<HWND>(first) == window && LOWORD(second) == HTCLIENT &&
+      cursor_autohide.policy().auto_hide) {
+    update_cursor();
+    SetCursor(cursor_autohide.hidden() ? nullptr : arrow_cursor);
+    return TRUE;
   }
   if (message == WM_KILLFOCUS && controller) {
     controller->stop();
@@ -191,6 +256,7 @@ void on_vblank() {
   GT4_PERF_SCOPE(gt4::perf::Category::host_vblank);
   if (!pump_messages())
     return;
+  update_cursor();
   if (force_480p_enabled)
     gt4::display::force_race_480p_at_vblank(ps2::g_ram, ps2::kRamSize, force_480p_state);
 #ifdef GT4_SHAPE_CAPTURE
@@ -244,6 +310,7 @@ bool open_window(bool fullscreen) {
   window_class.hInstance = GetModuleHandleW(nullptr);
   window_class.lpszClassName = L"GT4NativeVulkanPilot";
   window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
+  arrow_cursor = window_class.hCursor;
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
   // The presentation is fixed 16:9: the client area is 960x540.
@@ -260,6 +327,12 @@ bool open_window(bool fullscreen) {
     throw std::runtime_error("Cannot create native game window");
   return true;
 }
+
+#ifdef GT4_MEMCARD_FLUSH_OVERLAY
+namespace ps2::iop::sio2 {
+void flush_cards_now(); // memcard capsule sio2.cpp (scripts/prepare_memcard_flush.py)
+}
+#endif
 
 int run_window(const std::function<int()> &emulate) {
   ControllerInput input;
@@ -293,6 +366,12 @@ int run_window(const std::function<int()> &emulate) {
     if (force_480p_enabled)
       std::fprintf(stderr, "[display] GT4_FORCE_480P=1: race display index held at 480p (guest VBlank)\n");
     pacing_mode = gt4::pacing::parse_mode(std::getenv("GT4_PACING"));
+    cursor_autohide = gt4::cursor::AutoHide(gt4::cursor::parse_policy(std::getenv("GT4_CURSOR_AUTOHIDE")));
+    std::fprintf(stderr, "[window] cursor auto-hide %s (GT4_CURSOR_AUTOHIDE; %u ms without movement over the picture)\n",
+                 cursor_autohide.policy().auto_hide ? "on" : "off", cursor_autohide.policy().hide_delay_ms);
+#ifdef GT4_GS_STREAM_CLIENT
+    gt4::gs_stream::set_cursor_policy(cursor_autohide.policy().auto_hide, cursor_autohide.policy().hide_delay_ms);
+#endif
     frame_clock = std::make_unique<FrameClock>();
     frame_pacer = std::make_unique<gt4::pacing::FramePacer>(
         frame_clock->frequency(), gt4::pacing::guest_vblank_rate);
@@ -351,6 +430,11 @@ int run_window(const std::function<int()> &emulate) {
                      static_cast<unsigned long long>(force_480p_state.writes));
       counters_at_last_report = session;
       pacing_diagnostics.reset();
+#ifdef GT4_MTVU_MEASURE
+      // TASK-011 step 0: interval counters since the last F7 or report, then a new interval.
+      gt4::mtvu::report(output, "interval");
+      gt4::mtvu::reset_interval();
+#endif
     });
 #endif
     ps2::set_audio_sink(
@@ -365,6 +449,11 @@ int run_window(const std::function<int()> &emulate) {
       ps2::set_audio_sink({});
       throw;
     }
+    // Exit path (TASK-025 Part A / TASK-058): a save made less than 50 VBlanks before the window closed, including the
+    // GS-process loss path, is written now. emulate() returns normally after halt(), so this runs on every exit.
+#ifdef GT4_MEMCARD_FLUSH_OVERLAY
+    ps2::iop::sio2::flush_cards_now();
+#endif
     ps2::set_audio_sink({});
     audio.close(!closing && result == 0);
     audio_output = nullptr;

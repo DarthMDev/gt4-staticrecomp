@@ -1,5 +1,6 @@
 import json
 import msvcrt
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -13,7 +14,8 @@ from external_runtime_probe import PERF_MANIFEST, PERF_RUNTIME, PERF_PROFILES, V
 
 class PerformanceLauncherTests(unittest.TestCase):
     def test_wrapper_selects_qualified_profile(self):
-        with tempfile.TemporaryDirectory() as folder:
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ):
+            os.environ.pop('GT4_FORCE_480P', None)
             root = Path(folder)
             for mode in PERF_PROFILES:
                 arguments = ['perf', '--assets-root', str(root)]
@@ -21,7 +23,32 @@ class PerformanceLauncherTests(unittest.TestCase):
                 with patch.object(performance, 'ROOT', root), patch.object(performance, 'play') as play, \
                      patch.object(sys, 'argv', arguments):
                     self.assertEqual(performance.main(), 0)
-                play.assert_called_once_with(root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True)
+                # Release 1.0.0 W1: --mode main (and, from TASK-036, --mode pcsx2) holds 480p by default;
+                # the other modes keep the donor request.
+                expected = {'force_480p': True} if mode in ('main', 'pcsx2') else {}
+                play.assert_called_once_with(root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True, **expected)
+
+    def test_main_mode_holds_480p_by_default_with_hidden_opt_out(self):
+        with patch.dict(os.environ):
+            os.environ.pop('GT4_FORCE_480P', None)
+            self.assertTrue(performance.force_480p_requested(performance.argparse.Namespace(mode='main', force_480p=False)))
+            os.environ['GT4_FORCE_480P'] = '0'
+            self.assertFalse(performance.force_480p_requested(performance.argparse.Namespace(mode='main', force_480p=False)))
+            os.environ['GT4_FORCE_480P'] = '1'
+            self.assertTrue(performance.force_480p_requested(performance.argparse.Namespace(mode='main', force_480p=False)))
+            os.environ.pop('GT4_FORCE_480P', None)
+            # pcsx2 holds 480p by default with the same opt-out (owner, 2026-10-16).
+            self.assertTrue(performance.force_480p_requested(performance.argparse.Namespace(mode='pcsx2', force_480p=False)))
+            os.environ['GT4_FORCE_480P'] = '0'
+            self.assertFalse(performance.force_480p_requested(performance.argparse.Namespace(mode='pcsx2', force_480p=False)))
+            os.environ.pop('GT4_FORCE_480P', None)
+            # Other modes never default to 480p; --force-480p always does.
+            self.assertFalse(performance.force_480p_requested(performance.argparse.Namespace(mode='mtvu', force_480p=False)))
+            self.assertTrue(performance.force_480p_requested(performance.argparse.Namespace(mode='mtvu', force_480p=True)))
+
+    def test_main_pin_is_slice178_with_mtvu_runtime(self):
+        self.assertEqual(PERF_PROFILES['main'], ('slice178-main.json', 'private/slice178-main-build/build/gt4vulkan.exe'))
+        self.assertEqual(PERF_PROFILES['mtvu'][0], 'slice172-mtvu.json')
 
     def test_lock_failure_and_profile_rejection_preserve_card(self):
         with tempfile.TemporaryDirectory() as folder:

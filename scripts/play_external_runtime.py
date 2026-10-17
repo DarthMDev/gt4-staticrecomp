@@ -3,14 +3,16 @@ from datetime import datetime
 import argparse
 import json
 import msvcrt
+import os
 from pathlib import Path
 import sys
 
-from external_runtime_probe import ROOT, VU1_CORPUS_NAME, run_probe, verify_manual_capture_profile, verify_performance_profile
+from external_runtime_probe import (ROOT, VU1_CORPUS_NAME, binary_workspace_for, run_probe, verify_manual_capture_profile,
+                                    verify_performance_profile)
 
 
 def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0):
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, cpu_cores=None, renderer_override=None):
     workspace = Path(assets_root or ROOT).resolve()
     if performance:
         manifest = Path(runtime_manifest).resolve()
@@ -48,6 +50,14 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
             if capture_shapes:
                 print('Capture starts OFF. Select the scene yourself, then press F8 to start/stop.', flush=True)
                 print(f'One capture per launch, up to 256 records: {run_directory / "shape-capture.json"}', flush=True)
+            if renderer_override == 'donor':
+                print('Restart with the built-in renderer (CoreGS 1.1) after the GS process stopped.', flush=True)
+            elif video.get('gs_stream', {}).get('renderer') == 'pcsx2':
+                readback = os.environ.get('GT4_GS_READBACK', 'accurate')
+                if readback == 'unsynchronized':
+                    readback += ' (faster, may drop effects)'
+                print(f'GS: PCSX2 GS process, readback mode {readback}, scale {os.environ.get("GT4_GS_SCALE", "3")}x.',
+                      flush=True)
             if performance:
                 print(f"Measurement mode: {video.get('measurement_mode', 'detailed')}", flush=True)
                 print('Performance test: F7 starts, F8 reports, F9 toggles diagnostics. Owner controls gameplay.', flush=True)
@@ -67,12 +77,24 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                                window=True, interactive=True, play_card=card,
                                runtime_workspace=ROOT, capture_shapes=capture_shapes, performance=performance,
                                vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
-                               force_480p=force_480p, vu0_verify=vu0_verify)
-            if not result.get('manual_session_closed'):
+                               force_480p=force_480p, vu0_verify=vu0_verify, cpu_cores=cpu_cores,
+                               binary_workspace=binary_workspace_for(ROOT, workspace),
+                               renderer_override=renderer_override)
+            if result.get('gs_restart_requested') == 'donor' and renderer_override is None:
+                restart = True
+            elif not result.get('manual_session_closed'):
                 raise ValueError(f"Game stopped: {result.get('reason', 'see probe.log')}; log: {run_directory}")
+            else:
+                restart = False
         finally:
             lock.seek(0)
             msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+    if restart:
+        # TASK-038: the player answered "yes" in the GS failure message box; same build, built-in renderer.
+        print(f'GS process stopped; restarting with the built-in renderer (CoreGS 1.1). Previous log: {run_directory}',
+              flush=True)
+        play(assets_root, runtime_manifest, capture_shapes, performance, vu1_record, vu1_verify, vu1_interpret_only,
+             force_480p, vu0_verify, cpu_cores, renderer_override='donor')
 
 
 if __name__ == '__main__':

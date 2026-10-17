@@ -27,6 +27,8 @@ if(GT4_X86_64_V3)
 endif()
 add_subdirectory(native)
 add_subdirectory(tools/vu_recomp)
+add_subdirectory(tools/gs_stream_record)
+add_subdirectory(tools/gs_live_check)
 
 enable_testing()
 set(GT4_PYTHON "${CMAKE_SOURCE_DIR}/private/tooling-venv/Scripts/python.exe"
@@ -56,14 +58,27 @@ add_test(NAME native_audio_input COMMAND $<TARGET_FILE:host_io_fixture>)
 add_test(NAME native_pacing COMMAND $<TARGET_FILE:pacing_fixture>)
 add_test(NAME native_quickfix COMMAND $<TARGET_FILE:quickfix_fixture>)
 add_test(NAME native_race_display COMMAND $<TARGET_FILE:race_display_fixture>)
+add_test(NAME native_cursor_autohide COMMAND $<TARGET_FILE:cursor_autohide_fixture>)
 add_test(NAME native_shape_observer COMMAND $<TARGET_FILE:shape_observer_fixture>)
 add_test(NAME native_performance_accounting COMMAND $<TARGET_FILE:perf_accounting_fixture>)
 add_test(NAME native_performance_probe COMMAND $<TARGET_FILE:perf_probe_fixture>)
+# TASK-011 step 0: GIF scanner, worker overlap model, interval counters, report lines, GT4_MTVU_MEASURE switch.
+add_test(NAME native_mtvu_measure COMMAND $<TARGET_FILE:mtvu_measure_fixture>)
+# TASK-011 step 1: SPSC ring and ordered journal (docs/MTVU-PLAN.md section 5).
+add_test(NAME native_mtvu_ring COMMAND $<TARGET_FILE:mtvu_ring_fixture>)
+add_test(NAME native_mtvu_journal COMMAND $<TARGET_FILE:mtvu_journal_fixture>)
+add_test(NAME native_mtvu_perf COMMAND $<TARGET_FILE:mtvu_perf_fixture>)
+# TASK-035: GS stream transport (threads and a child process) and the game-side client end to end with the recorder.
+add_test(NAME native_gs_stream_ipc COMMAND $<TARGET_FILE:gs_stream_ipc_fixture>)
+add_test(NAME native_gs_stream_client
+    COMMAND $<TARGET_FILE:gs_stream_client_fixture> $<TARGET_FILE:gs_stream_record> "${CMAKE_BINARY_DIR}/gs-stream-client-scratch")
+set_tests_properties(native_gs_stream_ipc native_gs_stream_client PROPERTIES RUN_SERIAL TRUE TIMEOUT 300
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 add_test(NAME native_shape_capture_export COMMAND $<TARGET_FILE:shape_capture_export_fixture>)
 add_test(NAME native_shape_capture_control COMMAND $<TARGET_FILE:shape_capture_control_fixture>)
 add_test(NAME python_native_contracts
     COMMAND "${GT4_PYTHON}" -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/python")
-set_tests_properties(native_quickfix native_race_display native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
+set_tests_properties(native_mtvu_measure native_mtvu_ring native_mtvu_journal native_mtvu_perf native_quickfix native_race_display native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
 if(TARGET shape_runtime_fixture)

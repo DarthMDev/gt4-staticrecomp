@@ -1,5 +1,8 @@
 # GS Renderer Options: paraLLEl-GS, PCSX2 Hardware, ARMSX2
 
+Amended by [decision 0070](decisions/0070-pcsx2-gs-separate-process.md): paraLLEl-GS (named here) is dropped
+from the release; the PCSX2 GS runs in a separate process. The text below is the 2026-10-15 research.
+
 2026-10-15. Research only; nothing integrated. Scratch clone of paraLLEl-GS at
 `private/slice157-gs-renderer-study/parallel-gs` (HEAD `cc6184a`).
 [C] = Confirmed, [H] = Hypothesis.
