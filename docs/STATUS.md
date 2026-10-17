@@ -2,6 +2,12 @@
 
 ## Current state (2026-10-17)
 
+**TASK-044 (packaging, docs only, branch `task/044-packaging`):** release 1.0.0 ships gt4-gs 1.0.1 (`gt4gs-v1.0.1`, the
+renderer already pinned for `--mode pcsx2`). The fork's release notes were edited (upstream base PCSX2 v2.8.2, commit
+`fd9d310cc`; patch list; GPL-3.0 and source; SHA256SUMS). README (renderers, known issues, license and legal),
+[THIRD_PARTY](../native/THIRD_PARTY.md) and [RELEASE-1.0.0-PLAN](RELEASE-1.0.0-PLAN.md) are updated. No build, no game run.
+Release order: the launcher and installer (TASK-019, TASK-043), the owner's end-to-end test, then the v1.0.0 tag.
+
 **slice206 (TASK-017 done, branch `task/017-license-crash`, main `ed123ed` merged in):** `--mode pcsx2` = slice206, the
 slice203 game recipe (gt4-gs 1.0.1) plus the license demo guard v2 (capsule `private/slice206-license-guard-runtime`,
 `ps2game.lib` unchanged). License demos that decrypt wrong (our FPU is not bit-exact, so 0 of 592 pass the game CRC; 52
