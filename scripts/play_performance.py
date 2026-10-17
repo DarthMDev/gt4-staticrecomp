@@ -71,8 +71,9 @@ License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profil
 The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
 Diagnostic only: the run is not a performance measurement.
 
-License guard (--mode license-guard, slice205, TASK-017): the pcsx2 mode build (slice202/203 game recipe, gt4-gs 1.0.1)
-plus the license demo guard. A license demo that decrypts wrong (fails the game's CRC and is not the expected layout)
+License guard (TASK-017): --mode pcsx2 runs the slice206 build (slice202/203 game recipe, gt4-gs 1.0.1, plus the license
+demo guard on both demo loaders; --mode pcsx2-slice203 keeps the build without it). --mode license-guard is the slice205
+test build (guard v1, first loader only), kept as history. A license demo that decrypts wrong (fails the game's CRC and is not the expected layout)
 gets no demo inputs instead of crashing: the license test stays playable, its demo or background replay may not
 play (as in PCSX2). One [license-guard] line per demo load in probe.log. Same options as --mode pcsx2. The halt dump
 and the FSV read trace are in this build but off; set GT4_HALT_DUMP=1 or GT4_FSV_TRACE=1 before launching to turn
@@ -136,6 +137,9 @@ def main():
     parser.add_argument('--gs-readback', choices=('accurate', 'unsynchronized'), default=None,
                         help='pcsx2 only: GS readback mode. accurate (default, owner choice 2026-10-16); unsynchronized: '
                              'faster, may drop effects (night race: headlight flares missing; GT4_GS_READBACK)')
+    parser.add_argument('--play-card', type=Path, default=None, metavar='PATH',
+                        help='play on this existing card inside private/ instead of the owner card '
+                             '(never private/manual-play/card.ps2); backed up and locked the same way, recorded in result.json')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()
@@ -175,6 +179,8 @@ def main():
             if args.mode not in PCSX2_MODES:
                 raise ValueError('--gs-readback requires --mode pcsx2')
             os.environ['GT4_GS_READBACK'] = args.gs_readback
+        if args.play_card is not None and args.mode == 'vu1-record':
+            raise ValueError('--play-card is not available with --mode vu1-record')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True, **cpu_options(args))
@@ -190,6 +196,8 @@ def main():
             if args.vu0_verify:
                 options['vu0_verify'] = args.vu0_verify
             options.update(cpu_options(args))
+            if args.play_card is not None:
+                options['play_card'] = args.play_card
             play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

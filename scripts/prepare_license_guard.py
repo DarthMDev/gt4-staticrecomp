@@ -1,11 +1,11 @@
-"""Derive the TASK-017 license guard capsule from pinned MIT donor runtime sources (slice205).
+"""Derive the TASK-017 license guard capsule from pinned MIT donor runtime sources (slice206; slice205 was v1).
 
 The capsule holds three derived donor files that replace their donor originals in the build
 (native/CMakeLists.txt, GT4_LICENSE_GUARD_SOURCE):
   * dispatch.cpp: the license demo guard (scripts/license_guard_overlay.inc, rule in native/license_guard.hpp).
-    Always on: it only acts on the indirect call from the license demo loader (0x001100D0) into
-    RaceSolitaire::loadDemoInputs (0x003EAD18), and only changes guest memory when the decrypted demo fails
-    the game's own CRC and is not the single-Recorder layout.
+    Always on: it only acts on the indirect call from either license demo loader (0x001100D0 -> vtbl[154],
+    0x00110230 -> vtbl[57]) into its demo-input virtual, and only changes guest memory when the decrypted demo
+    fails the game's own CRC and is not the single-Recorder layout. (v1, slice205, covered 0x001100D0 only.)
   * kernel.cpp: the slice204 halt forensic dump (scripts/halt_dump_overlay.inc); silent unless GT4_HALT_DUMP=1.
   * cdvdfsv.cpp: the slice181 FSV read trace (scripts/fsv_trace_overlay.inc); silent unless GT4_FSV_TRACE=1.
 
@@ -75,7 +75,7 @@ def prepare(output, assets_root=None):
         'schema_version': 1,
         'donor_revision': '1b4808793a12c45125262fd2d5f50a9ec9f7c020',
         'donor_sha256': {**DISPATCH_PIN, **perf.HALT_PIN, **perf.FSV_PIN},
-        'license_guard_profile': 'task017-guard-v1',
+        'license_guard_profile': 'task017-guard-v2',
         'license_guard_overlay_sha256': overlay_sha256(GUARD_OVERLAY_PATH),
         'halt_dump_overlay_sha256': overlay_sha256(perf.HALT_OVERLAY_PATH),
         'fsv_trace_overlay_sha256': overlay_sha256(perf.FSV_OVERLAY_PATH),

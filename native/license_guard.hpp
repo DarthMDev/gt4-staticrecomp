@@ -3,14 +3,16 @@
 // TASK-017 license demo guard (slice205). Game-specific, narrow mitigation, not an FPU fix.
 //
 // GT4 decrypts each replay/license demo in place with an FPU-keyed stream cipher (func_00579E00 via
-// func_0044D278) inside the license demo loader at 0x001100D0. The loader ignores the game's own CRC
-// result and calls this->vtbl[154] = RaceSolitaire::loadDemoInputs (0x003EAD18) with arg1 = the
-// decrypted body; that calls AutomobileControlRecord::Manager::load(this + 0xE560, arg1 + 0x1AA4, 1),
-// which trusts the record count n at body + 0x1AA4. Our mul.s/div.s are not bit-exact with the
+// func_0044D278) inside two license demo loaders, 0x001100D0 and 0x00110230 (both build "license/%s").
+// Neither checks the cipher's CRC result. 0x001100D0 then calls this->vtbl[154] (RaceSolitaire::
+// loadDemoInputs 0x003EAD18); 0x00110230 calls this->vtbl[57] (RaceSolitaire::loadReplayInputs 0x003EAD58,
+// RaceNetRallyBattle virtual_56 0x003D5F00, ...). Every one of them passes the decrypted body + 0x1AA4 to
+// AutomobileControlRecord::Manager::load, which trusts the record count n there. Our mul.s/div.s are not bit-exact with the
 // R5900, so about half the US demos decrypt in the wrong key-stream phase, n reads 0x7F7F7F7F and the
 // record copy sweeps 64 KiB slots through RAM (crash). Confirmed: docs/journal/2026-10-16.md.
 //
-// The guard runs at the indirect call from the loader into loadDemoInputs. When the decrypted body
+// The guard runs at the indirect call from either loader into its demo-input virtual (keyed on the call's
+// return address, whatever the target). When the decrypted body
 // fails the game's own CRC and is not the single-Recorder layout, it writes n = 0xFFFFFFFF (negative):
 // Manager::load then takes its own existing path for n < 0 (state 1, the record loop runs zero times),
 // so the demo has no inputs and the license itself stays playable. This mimics the owner's PCSX2
@@ -23,8 +25,14 @@
 namespace gt4::license_guard {
 
 // Guest addresses (Confirmed from the translated units and the gt4-decomp symbols).
-inline constexpr std::uint32_t kLoadDemoInputs = 0x003EAD18u;  // RaceSolitaire::loadDemoInputs (vtbl[154])
-inline constexpr std::uint32_t kLoaderReturn = 0x001101E4u;    // return label after the vtbl[154] call in 0x001100D0
+inline constexpr std::uint32_t kLoadDemoInputs = 0x003EAD18u;    // RaceSolitaire::loadDemoInputs (vtbl[154])
+inline constexpr std::uint32_t kLoaderReturn = 0x001101E4u;      // return label after the vtbl[154] call in 0x001100D0
+inline constexpr std::uint32_t kReplayLoaderReturn = 0x00110344u; // return label after the vtbl[57] call in 0x00110230
+
+// The loader (function entry) whose call returns to `return_address`, or 0 when it is not a guarded call site.
+constexpr std::uint32_t loader_for_return(std::uint32_t return_address) noexcept {
+    return return_address == kLoaderReturn ? 0x001100D0u : return_address == kReplayLoaderReturn ? 0x00110230u : 0u;
+}
 // Demo file layout: header {u32 body offset, u32 body size, u32 unused, u32 key}, body at the offset.
 inline constexpr std::uint32_t kHeaderBytes = 16u;
 inline constexpr std::uint32_t kExpectedBodyOffset = 0x40u;

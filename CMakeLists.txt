@@ -25,12 +25,14 @@ endif()
 if(GT4_X86_64_V3)
     add_compile_options(/clang:-march=x86-64-v3)
 endif()
+# enable_testing() comes before the subdirectories so their add_test() calls register (native_memcard_store,
+# native_license_guard).
+enable_testing()
 add_subdirectory(native)
 add_subdirectory(tools/vu_recomp)
 add_subdirectory(tools/gs_stream_record)
 add_subdirectory(tools/gs_live_check)
 
-enable_testing()
 set(GT4_PYTHON "${CMAKE_SOURCE_DIR}/private/tooling-venv/Scripts/python.exe"
     CACHE FILEPATH "Python environment with scripts/requirements.txt installed")
 if(NOT EXISTS "${GT4_PYTHON}")
@@ -56,8 +58,6 @@ set_tests_properties(native_vulkan_async_stress_compare PROPERTIES DEPENDS
     "native_vulkan_async_stress_async;native_vulkan_async_stress_sync")
 add_test(NAME native_audio_input COMMAND $<TARGET_FILE:host_io_fixture>)
 add_test(NAME native_pacing COMMAND $<TARGET_FILE:pacing_fixture>)
-# TASK-017 (slice205): license demo guard rule (sane data kept, insane count with CRC fail guarded, CRC pass kept).
-add_test(NAME native_license_guard COMMAND $<TARGET_FILE:license_guard_fixture>)
 add_test(NAME native_quickfix COMMAND $<TARGET_FILE:quickfix_fixture>)
 add_test(NAME native_race_display COMMAND $<TARGET_FILE:race_display_fixture>)
 add_test(NAME native_cursor_autohide COMMAND $<TARGET_FILE:cursor_autohide_fixture>)

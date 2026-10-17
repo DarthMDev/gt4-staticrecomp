@@ -1,8 +1,9 @@
-"""TASK-017 license demo guard (slice205): capsule derivation, pins, and the dispatch glue on synthetic guest RAM.
+"""TASK-017 license demo guard (slice206 v2, slice205 v1): capsule derivation, pins, and the dispatch glue on synthetic guest RAM.
 
 The behaviour tests compile the overlay helpers and hook with native/license_guard.cpp and a minimal guest model
 (clang-cl; skipped when it is absent). Scenarios: a sane layout passes unchanged, an insane count with a failing CRC
-is guarded (count set to 0xFFFFFFFF), a passing CRC is never guarded, other callers and odd headers are untouched.
+is guarded (count set to 0xFFFFFFFF) on both demo loaders, a passing CRC is never guarded, other callers, the
+unwinding dispatch of the return label and odd headers are untouched.
 """
 import hashlib
 import json
@@ -22,7 +23,8 @@ import prepare_perf_runtime as perf  # noqa: E402
 CLANG_CL = Path('C:/Program Files/LLVM/bin/clang-cl.exe')
 ASSETS = Path(os.environ.get('GT4_ASSETS_ROOT', 'C:/Antigravity/gt4-staticrecomp'))
 DONOR_SRC = ASSETS / 'private/references/ps2-web-recomp/runtime/src'
-PIN = json.loads((ROOT / 'docs/inputs/slice205-license-guard-runtime.json').read_text(encoding='utf-8'))
+PIN = json.loads((ROOT / 'docs/inputs/slice206-license-guard-runtime.json').read_text(encoding='utf-8'))
+PIN_V1 = json.loads((ROOT / 'docs/inputs/slice205-license-guard-runtime.json').read_text(encoding='utf-8'))
 DONOR_EXCERPT = (
     '#include "ps2/generated.hpp"\n'
     '#include "ps2/system.hpp"\n'
@@ -44,7 +46,7 @@ class LicenseGuardDerivationTests(unittest.TestCase):
 
     def test_overlay_adds_one_hook_after_the_idle_check(self):
         derived = guard.apply_license_guard(DONOR_EXCERPT)
-        hook = '    if (pc == gt4::license_guard::kLoadDemoInputs) [[unlikely]] license_demo_guard(c);\n'
+        hook = '    if (gt4::license_guard::loader_for_return(c.r[31].w[0])) [[unlikely]] license_demo_guard(c);\n'
         self.assertEqual(derived.count(hook), 1)
         self.assertEqual(derived.count('#include "license_guard.hpp"\n'), 1)
         self.assertLess(derived.index('void license_demo_guard(Cpu &c) {'), derived.index('void dispatch(Cpu &c'))
@@ -55,7 +57,8 @@ class LicenseGuardDerivationTests(unittest.TestCase):
         self.assertEqual(PIN['donor_sha256']['dispatch.cpp'], guard.DISPATCH_PIN['dispatch.cpp'])
         self.assertEqual(PIN['donor_sha256']['kernel.cpp'], perf.HALT_PIN['kernel.cpp'])
         self.assertEqual(PIN['donor_sha256']['iop/cdvdfsv.cpp'], perf.FSV_PIN['iop/cdvdfsv.cpp'])
-        self.assertEqual(PIN['license_guard_profile'], 'task017-guard-v1')
+        self.assertEqual(PIN['license_guard_profile'], 'task017-guard-v2')
+        self.assertEqual(PIN_V1['license_guard_profile'], 'task017-guard-v1')
         self.assertEqual(sorted(PIN['source_sha256']), list(guard.CAPSULE_FILES))
         self.assertEqual(PIN['license_guard_overlay_sha256'], guard.overlay_sha256(guard.GUARD_OVERLAY_PATH))
 
@@ -68,22 +71,30 @@ class LicenseGuardDerivationTests(unittest.TestCase):
             for name in ('dispatch.cpp', 'kernel.cpp', 'iop/cdvdfsv.cpp'):
                 (donor / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(DONOR_SRC / name, donor / name)
-            receipt = guard.prepare(root / 'private/slice205-license-guard-runtime', root)
+            receipt = guard.prepare(root / 'private/slice206-license-guard-runtime', root)
             self.assertEqual(receipt['source_sha256'], PIN['source_sha256'])
             with self.assertRaises(ValueError):
-                guard.prepare(root / 'private/slice205-license-guard-runtime', root)
+                guard.prepare(root / 'private/slice206-license-guard-runtime', root)
             with self.assertRaises(ValueError):
                 guard.prepare(root / 'outside', root)
 
-    def test_capsule_files_match_the_pin_when_present(self):
-        capsule = ASSETS / PIN['capsule']
-        if not capsule.exists():
-            self.skipTest('slice205 capsule not present')
-        self.assertEqual(sorted(p.name for p in capsule.iterdir()), ['cdvdfsv.cpp', 'dispatch.cpp', 'kernel.cpp',
-                                                                    'runtime.json'])
-        for name, expected in PIN['source_sha256'].items():
-            self.assertEqual(hashlib.sha256((capsule / name).read_bytes()).hexdigest(), expected, name)
-        self.assertEqual(hashlib.sha256((capsule / 'runtime.json').read_bytes()).hexdigest(), PIN['receipt_sha256'])
+    def test_capsule_files_match_their_pins_when_present(self):
+        for pin in (PIN, PIN_V1):
+            capsule = ASSETS / pin['capsule']
+            if not capsule.exists():
+                continue
+            with self.subTest(capsule=pin['capsule']):
+                self.assertEqual(sorted(p.name for p in capsule.iterdir()),
+                                 ['cdvdfsv.cpp', 'dispatch.cpp', 'kernel.cpp', 'runtime.json'])
+                for name, expected in pin['source_sha256'].items():
+                    self.assertEqual(hashlib.sha256((capsule / name).read_bytes()).hexdigest(), expected, name)
+                self.assertEqual(hashlib.sha256((capsule / 'runtime.json').read_bytes()).hexdigest(),
+                                 pin['receipt_sha256'])
+
+    def test_v2_changes_only_dispatch_cpp(self):
+        self.assertNotEqual(PIN['source_sha256']['dispatch.cpp'], PIN_V1['source_sha256']['dispatch.cpp'])
+        for name in ('kernel.cpp', 'cdvdfsv.cpp'):
+            self.assertEqual(PIN['source_sha256'][name], PIN_V1['source_sha256'][name], name)
 
     def test_halt_dump_and_fsv_files_equal_the_slice204_capsule_derivation(self):
         if not DONOR_SRC.exists():
@@ -96,7 +107,7 @@ class LicenseGuardDerivationTests(unittest.TestCase):
 
 
 class LicenseGuardLauncherPinTests(unittest.TestCase):
-    """The license-guard launcher mode and its pin agree (label, runtime path, capsule hashes, slice203 inputs)."""
+    """Launcher modes and pins agree: pcsx2 = slice206 (guard v2), license-guard = slice205 (guard v1, history)."""
 
     def test_mode_pin_label_runtime_and_capsule(self):
         import external_runtime_probe as probe
@@ -105,18 +116,35 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         self.assertEqual(manifest['measurement_mode'], 'license-guard')
         self.assertEqual(manifest['runtime']['path'], runtime)
         self.assertEqual(manifest['slice'], 205)
+        self.assertEqual(manifest['license_guard_source_sha256'], PIN_V1['source_sha256'])
+        self.assertEqual(manifest['license_guard_receipt_sha256'], PIN_V1['receipt_sha256'])
+        self.assertIn(name, probe.VU1_AOT_MANIFESTS)
+        self.assertIn(name, probe.VU0_AOT_MANIFESTS)
+
+    def test_mode_pcsx2_is_the_slice206_guard_build(self):
+        import external_runtime_probe as probe
+        name, runtime = probe.PERF_PROFILES['pcsx2']
+        self.assertEqual((name, runtime), ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'))
+        manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
+        self.assertEqual(manifest['measurement_mode'], 'pcsx2')
+        self.assertEqual(manifest['runtime']['path'], runtime)
+        self.assertEqual(manifest['slice'], 206)
+        self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice203'],
+                         ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'))
 
     def test_pin_keeps_the_slice203_inputs(self):
         base = json.loads((ROOT / 'docs/inputs/slice203-pcsx2.json').read_text(encoding='utf-8'))
-        manifest = json.loads((ROOT / 'docs/inputs/slice205-license-guard.json').read_text(encoding='utf-8'))
-        for key in ('frozen_game_library', 'card_seeds', 'runtime_dependencies', 'gs_stream', 'vu1_aot', 'vu0_aot',
-                    'source_capsule', 'port_capsule', 'shader_capsule', 'memcard_capsule', 'memcard_capsule_sha256'):
-            self.assertEqual(manifest[key], base[key], key)
-        self.assertNotEqual(manifest['runtime']['sha256'], base['runtime']['sha256'])
+        for pin_name in ('slice205-license-guard.json', 'slice206-pcsx2.json'):
+            manifest = json.loads((ROOT / 'docs/inputs' / pin_name).read_text(encoding='utf-8'))
+            for key in ('frozen_game_library', 'card_seeds', 'runtime_dependencies', 'gs_stream', 'vu1_aot', 'vu0_aot',
+                        'source_capsule', 'port_capsule', 'shader_capsule', 'memcard_capsule', 'memcard_capsule_sha256'):
+                self.assertEqual(manifest[key], base[key], (pin_name, key))
+            self.assertNotEqual(manifest['runtime']['sha256'], base['runtime']['sha256'])
 
 
 @unittest.skipUnless(CLANG_CL.exists(), 'clang-cl is not installed')
@@ -143,7 +171,8 @@ std::uint32_t ld32(std::uint32_t a) { std::uint32_t v; std::memcpy(&v, g_ram + (
 void st32(std::uint32_t a, std::uint32_t v) { std::memcpy(g_ram + (a & (kRamSize - 1)), &v, 4); }
 @HELPERS@
 void dispatch_model(Cpu &c) {
-    const std::uint32_t pc = c.pc;
+    const std::uint32_t pc = c.pc;  // the donor dispatch() local; the hook does not need it
+    (void)pc;
 @HOOK@
 }
 }  // namespace ps2
@@ -166,11 +195,20 @@ int main(int argc, char **argv) {
     st32(buffer + 12u, key);
     Cpu c{};
     c.pc = gt4::license_guard::kLoadDemoInputs;
-    c.r[31].w[0] = scenario == 'o' ? 0x00110344u : gt4::license_guard::kLoaderReturn;
+    c.r[31].w[0] = gt4::license_guard::kLoaderReturn;
+    if (scenario == 'o') c.r[31].w[0] = 0x00110350u;  // another indirect call: not a demo load
+    if (scenario == 'r') {                             // second loader 0x00110230 -> vtbl[57] (owner B5 path)
+        c.pc = 0x003D5F00u;                            // RaceNetRallyBattle virtual_56
+        c.r[31].w[0] = gt4::license_guard::kReplayLoaderReturn;
+        st32(body + 0x1AA4u, 0x7F7F7F7Fu);
+    }
+    if (scenario == 'u') {                             // unwinding: dispatch of the return label itself
+        c.pc = gt4::license_guard::kLoaderReturn;
+        st32(body + 0x1AA4u, 0x7F7F7F7Fu);
+    }
     c.r[17].w[0] = buffer;
     c.r[5].w[0] = body;
     dispatch_model(c);
-    if (scenario == 'n') { c.pc = 0x003EAD1Cu; dispatch_model(c); }
     std::printf("count=0x%08X guarded=%u\n", ld32(body + 0x1AA4u), gt4::license_guard::guarded_count());
     return 0;
 }
@@ -199,7 +237,7 @@ int main(int argc, char **argv) {
     def test_sane_layout_with_crc_fail_passes_unchanged(self):
         result = self.run_harness('s')
         self.assertEqual(result.stdout.strip(), 'count=0x00000000 guarded=0')
-        self.assertIn('[license-guard] demo 0x01D0E540 size 0x1BB8', result.stderr)
+        self.assertIn('[license-guard] loader 0x001100D0 target 0x003EAD18 demo 0x01D0E540 size 0x1BB8', result.stderr)
         self.assertIn('crc=fail layout=ok count=0x00000000 -> unchanged', result.stderr)
 
     def test_insane_count_with_crc_fail_is_guarded(self):
@@ -219,9 +257,16 @@ int main(int argc, char **argv) {
         self.assertEqual(result.stdout.strip(), 'count=0x00000000 guarded=0')
         self.assertEqual(result.stderr, '')
 
-    def test_other_pc_is_silent(self):
-        result = self.run_harness('n')
-        self.assertEqual(result.stderr.count('[license-guard]'), 1)
+    def test_second_loader_insane_count_is_guarded(self):
+        result = self.run_harness('r')
+        self.assertEqual(result.stdout.strip(), 'count=0xFFFFFFFF guarded=1')
+        self.assertIn('[license-guard] loader 0x00110230 target 0x003D5F00 demo 0x01D0E540', result.stderr)
+        self.assertIn('crc=fail layout=bad count=0x7F7F7F7F -> skipped', result.stderr)
+
+    def test_unwinding_dispatch_of_the_return_label_is_silent(self):
+        result = self.run_harness('u')
+        self.assertEqual(result.stdout.strip(), 'count=0x7F7F7F7F guarded=0')
+        self.assertEqual(result.stderr, '')
 
     def test_unexpected_header_is_reported_and_untouched(self):
         result = self.run_harness('h')

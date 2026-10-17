@@ -87,6 +87,11 @@ int main() {
     // Empty body never passes the CRC.
     check(!game_crc_ok(sane.data(), 0, 0u), "empty body: CRC fail");
 
+    // Both license demo loaders are guarded call sites (v2); any other return address is not.
+    check(loader_for_return(kLoaderReturn) == 0x001100D0u, "first loader call site");
+    check(loader_for_return(kReplayLoaderReturn) == 0x00110230u, "second loader call site (owner B5 path)");
+    check(loader_for_return(0x00110350u) == 0u && loader_for_return(0u) == 0u, "other call sites are not guarded");
+
     check(guarded_count() == 0u, "counter starts at 0");
     check(note_guarded() == 1u && note_guarded() == 2u && guarded_count() == 2u, "counter increments");
 

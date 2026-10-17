@@ -142,10 +142,10 @@ if(GT4_MEMCARD_RUNTIME_SOURCE)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${memcard_capsule}/sio2.cpp")
     set(GT4_MEMCARD_FLUSH_ENABLED ON)
 endif()
-# TASK-017 (slice205): license demo guard capsule (scripts/prepare_license_guard.py). Replaces the donor dispatch.cpp
-# (guard at the license loader's call into RaceSolitaire::loadDemoInputs, native/license_guard.*), kernel.cpp (halt
+# TASK-017 (slice205 v1, slice206 v2): license demo guard capsule (scripts/prepare_license_guard.py). Replaces the donor
+# dispatch.cpp (guard at both license loaders' demo-input calls, native/license_guard.*), kernel.cpp (halt
 # dump, off unless GT4_HALT_DUMP=1) and iop/cdvdfsv.cpp (FSV read trace, off unless GT4_FSV_TRACE=1). Every derived
-# file must match both the capsule receipt and the reviewed pin docs/inputs/slice205-license-guard-runtime.json.
+# file must match both the capsule receipt and its reviewed pin docs/inputs/sliceNNN-license-guard-runtime.json.
 set(GT4_LICENSE_GUARD_SOURCE "" CACHE PATH "Verified TASK-017 license guard capsule: dispatch.cpp, kernel.cpp, cdvdfsv.cpp")
 set(GT4_LICENSE_GUARD_ENABLED OFF)
 if(GT4_LICENSE_GUARD_SOURCE)
@@ -156,8 +156,12 @@ if(GT4_LICENSE_GUARD_SOURCE)
         message(FATAL_ERROR "The license guard capsule already carries the slice181 and slice204 overlays")
     endif()
     get_filename_component(guard_capsule "${GT4_LICENSE_GUARD_SOURCE}" ABSOLUTE)
-    if(NOT guard_capsule STREQUAL "${GT4_PRIVATE_BASE}/private/slice205-license-guard-runtime")
-        message(FATAL_ERROR "Unknown license guard capsule; expected private/slice205-license-guard-runtime")
+    if(guard_capsule STREQUAL "${GT4_PRIVATE_BASE}/private/slice205-license-guard-runtime")
+        set(guard_pin_path "${GT4_ROOT}/docs/inputs/slice205-license-guard-runtime.json")
+    elseif(guard_capsule STREQUAL "${GT4_PRIVATE_BASE}/private/slice206-license-guard-runtime")
+        set(guard_pin_path "${GT4_ROOT}/docs/inputs/slice206-license-guard-runtime.json")
+    else()
+        message(FATAL_ERROR "Unknown license guard capsule; expected private/slice205- or slice206-license-guard-runtime")
     endif()
     file(GLOB guard_files RELATIVE "${guard_capsule}" "${guard_capsule}/*")
     list(SORT guard_files)
@@ -165,7 +169,7 @@ if(GT4_LICENSE_GUARD_SOURCE)
         message(FATAL_ERROR "The license guard capsule must contain only cdvdfsv.cpp, dispatch.cpp, kernel.cpp and runtime.json")
     endif()
     file(READ "${guard_capsule}/runtime.json" guard_receipt)
-    file(READ "${GT4_ROOT}/docs/inputs/slice205-license-guard-runtime.json" guard_pin)
+    file(READ "${guard_pin_path}" guard_pin)
     foreach(source IN ITEMS cdvdfsv.cpp dispatch.cpp kernel.cpp)
         string(JSON guard_receipt_hash GET "${guard_receipt}" source_sha256 "${source}")
         string(JSON guard_pin_hash GET "${guard_pin}" source_sha256 "${source}")
@@ -179,7 +183,7 @@ if(GT4_LICENSE_GUARD_SOURCE)
          "${DONOR}/runtime/src/iop/cdvdfsv.cpp")
     list(APPEND RUNTIME_FILES "${guard_capsule}/dispatch.cpp" "${guard_capsule}/kernel.cpp" "${guard_capsule}/cdvdfsv.cpp")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${guard_capsule}/runtime.json"
-        "${GT4_ROOT}/docs/inputs/slice205-license-guard-runtime.json")
+        "${guard_pin_path}")
     set(GT4_LICENSE_GUARD_ENABLED ON)
 endif()
 add_library(ps2runtime_vulkan STATIC ${RUNTIME_FILES} "${PORT}/gs.cpp" "${PORT}/gpu.cpp" native_vulkan.cpp)
@@ -206,7 +210,7 @@ add_executable(memcard_store_fixture memcard_store_fixture.cpp)
 target_link_libraries(memcard_store_fixture PRIVATE gt4_memcard)
 target_compile_options(memcard_store_fixture PRIVATE /W4)
 add_test(NAME native_memcard_store COMMAND $<TARGET_FILE:memcard_store_fixture> "${CMAKE_CURRENT_BINARY_DIR}/memcard_store_work")
-# TASK-017 (slice205): the license demo guard rule (pure; linked into the runtime only with the guard capsule).
+# TASK-017 (slice205/206): the license demo guard rule (pure; linked into the runtime only with the guard capsule).
 add_library(gt4_license_guard STATIC license_guard.cpp)
 target_compile_options(gt4_license_guard PRIVATE /W4)
 target_include_directories(gt4_license_guard PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
@@ -216,7 +220,8 @@ endif()
 add_executable(license_guard_fixture license_guard_fixture.cpp)
 target_link_libraries(license_guard_fixture PRIVATE gt4_license_guard)
 target_compile_options(license_guard_fixture PRIVATE /W4)
-# CTest native_license_guard is registered in the top-level CMakeLists.txt (after enable_testing()).
+# Sane data kept, insane count with CRC fail guarded, CRC pass kept.
+add_test(NAME native_license_guard COMMAND $<TARGET_FILE:license_guard_fixture>)
 add_library(gt4_perf_probe STATIC perf_probe.cpp)
 # TASK-011 step 0 counters (linked into the runtime only with the slice169 capsule).
 add_library(gt4_mtvu_measure STATIC mtvu_measure.cpp)
