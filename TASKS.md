@@ -2,7 +2,7 @@
 
 Single ordered task list. Each task has its own branch, automated checks, an
 in-game test by the owner and an explicit owner approval before its PR is merged
-into `main` (workflow rules in [CLAUDE.md](CLAUDE.md)). Evidence for finished
+into `main` (workflow rules in [AGENTS.md](AGENTS.md)). Evidence for finished
 tasks lives in `docs/journal/` and `docs/inputs/`; background studies are linked
 from [STATUS](docs/STATUS.md).
 
