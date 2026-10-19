@@ -25,7 +25,7 @@ class PerformanceLauncherTests(unittest.TestCase):
                     self.assertEqual(performance.main(), 0)
                 # Release 1.0.0 W1: --mode main (and, from TASK-036, --mode pcsx2) holds 480p by default;
                 # the other modes keep the donor request.
-                expected = {'force_480p': True} if mode in ('main', 'pcsx2') else {}
+                expected = {'force_480p': True} if mode in ('main', 'pcsx2', 'license-guard') else {}
                 play.assert_called_once_with(root, root / 'docs/inputs' / PERF_PROFILES[mode][0], performance=True, **expected)
 
     def test_main_mode_holds_480p_by_default_with_hidden_opt_out(self):
@@ -39,6 +39,7 @@ class PerformanceLauncherTests(unittest.TestCase):
             os.environ.pop('GT4_FORCE_480P', None)
             # pcsx2 holds 480p by default with the same opt-out (owner, 2026-10-16).
             self.assertTrue(performance.force_480p_requested(performance.argparse.Namespace(mode='pcsx2', force_480p=False)))
+            self.assertTrue(performance.force_480p_requested(performance.argparse.Namespace(mode='license-guard', force_480p=False)))
             os.environ['GT4_FORCE_480P'] = '0'
             self.assertFalse(performance.force_480p_requested(performance.argparse.Namespace(mode='pcsx2', force_480p=False)))
             os.environ.pop('GT4_FORCE_480P', None)

@@ -1,6 +1,25 @@
 # Current Status
 
-## Current state (2026-10-16)
+## Current state (2026-10-17)
+
+**TASK-044 (packaging, docs only, branch `task/044-packaging`):** release 1.0.0 ships gt4-gs 1.0.1 (`gt4gs-v1.0.1`, the
+renderer already pinned for `--mode pcsx2`). The fork's release notes were edited (upstream base PCSX2 v2.8.2, commit
+`fd9d310cc`; patch list; GPL-3.0 and source; SHA256SUMS). README (renderers, known issues, license and legal),
+[THIRD_PARTY](../native/THIRD_PARTY.md) and [RELEASE-1.0.0-PLAN](RELEASE-1.0.0-PLAN.md) are updated. No build, no game run.
+Release order: the launcher and installer (TASK-019, TASK-043), the owner's end-to-end test, then the v1.0.0 tag.
+
+**slice206 (TASK-017 done, branch `task/017-license-crash`, main `ed123ed` merged in):** `--mode pcsx2` = slice206, the
+slice203 game recipe (gt4-gs 1.0.1) plus the license demo guard v2 (capsule `private/slice206-license-guard-runtime`,
+`ps2game.lib` unchanged). License demos that decrypt wrong (our FPU is not bit-exact, so 0 of 592 pass the game CRC; 52
+of the 85 US demos land in the wrong phase) get record count 0xFFFFFFFF at both demo loaders (0x001100D0 and 0x00110230),
+so the licenses are playable and those demos do not play, as in PCSX2 default. Memory-card loads check the CRC
+themselves; replays and ghosts from a real PS2 card fail to load cleanly. Consumer map and remaining risk:
+[LICENSE-DEMO-CIPHER](LICENSE-DEMO-CIPHER.md). Halt dump and FSV trace are built in, off unless GT4_HALT_DUMP /
+GT4_FSV_TRACE. New `--play-card PATH` (a separate private test card, never `private/manual-play/card.ps2`). CTest
+33/33 (native_memcard_store and native_license_guard now registered), Python suite with GT4_NATIVE_BUILD = slice206 all
+passing. `pcsx2-slice203` and `license-guard` (slice205, guard v1) kept. Follow-up TASK-063: bit-exact div.s/mul.s.
+
+Earlier (2026-10-16):
 
 **slice203 (TASK-044, branch `task/044-gs-101`):** the slice202 game executable (same hash) with the stable gt4-gs 1.0.1
 (tag `gt4gs-v1.0.1`, fork PR #7 merged as `d90c0f111`), which no longer writes under `Documents\PCSX2`. `--mode pcsx2` = slice203;

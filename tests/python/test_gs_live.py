@@ -42,7 +42,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(text.splitlines()[1:], [
             '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 3', 'accurate_blending_unit = 3',
             'deinterlace_mode = 0', 'AspectRatio = 16:9', 'VsyncEnable = true', 'DisableMailboxPresentation = true',
-            'HWDownloadMode = 0'])  # slice194 (TASK-037): readback mode accurate by default
+            'HWDownloadMode = 0', '', '[GT4GS]', 'ProhibitDynamicCode = false'])  # slice194 (TASK-037): readback mode accurate by default; TASK-064: ACG off
 
     def test_scale_present_mode_and_aspect(self):
         text = probe.gs_config_text({'GT4_GS_SCALE': '1', 'GT4_PRESENT_MODE': 'immediate', 'GT4_GS_ASPECT': 'auto'})
@@ -89,7 +89,8 @@ class PackageTests(unittest.TestCase):
             self.assertEqual(config, run / 'gt4-gs.ini')
             text = config.read_text(encoding='utf-8')
             self.assertIn('upscale_multiplier = 1\n', text)  # --gs-scale survives the owner-run scrub
-            self.assertNotIn('[GT4GS]', text)  # windowed
+            self.assertNotIn('Surfaceless', text)  # windowed: no headless keys
+            self.assertIn('[GT4GS]\nProhibitDynamicCode = false\n', text)  # TASK-064: always written
             self.assertEqual(recorded['gs_package']['tree_sha256'], digest)
             self.assertTrue((workspace / probe.GS_SHADER_CACHE).is_dir())
 

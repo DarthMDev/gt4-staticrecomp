@@ -61,6 +61,23 @@ with the GS process STATS.
 VU0 candidate (--mode vu0-aot, slice 160): vu1-all plus the VU0 AOT overlay, which runs the 14 VCALLMS
 entries of the pinned VU0 image compiled. --vu0-verify N compares every Nth generated VU0 call with the
 exact interpreter path (GT4_VU0_VERIFY); the VU1 options apply as in vu1-all.
+
+License trace (--mode license-trace, slice181, TASK-017): the slice166 profile with the FSV read trace.
+Set GT4_FSV_TRACE=1 before launching; each guest disc read is logged to stderr as "[fsv] read ...".
+Diagnostic only: the run is not a performance measurement. Compare the log with the disc using
+scripts/compare_fsv_trace.py <log> <iso>.
+
+License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profile with the halt forensic dump.
+The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
+Diagnostic only: the run is not a performance measurement.
+
+License guard (TASK-017): --mode pcsx2 runs the slice206 build (slice202/203 game recipe, gt4-gs 1.0.1, plus the license
+demo guard on both demo loaders; --mode pcsx2-slice203 keeps the build without it). --mode license-guard is the slice205
+test build (guard v1, first loader only), kept as history. A license demo that decrypts wrong (fails the game's CRC and is not the expected layout)
+gets no demo inputs instead of crashing: the license test stays playable, its demo or background replay may not
+play (as in PCSX2). One [license-guard] line per demo load in probe.log. Same options as --mode pcsx2. The halt dump
+and the FSV read trace are in this build but off; set GT4_HALT_DUMP=1 or GT4_FSV_TRACE=1 before launching to turn
+them on.
 """
 import argparse
 import os
@@ -69,6 +86,9 @@ from pathlib import Path
 from play_external_runtime import ROOT, play
 from external_runtime_probe import GS_SETTINGS_ENV, PERF_PROFILES, VU1_RECORD_MANIFEST
 import gs_settings
+
+# Modes that run the live PCSX2 GS package and accept the GS options (TASK-017 license-guard is pcsx2 plus the guard).
+PCSX2_MODES = ('pcsx2', 'license-guard')
 
 MODES = tuple(PERF_PROFILES) + ('vu1-record',)
 # TASK-060/061/062 (owner decision 2026-10-16): the internal-resolution presets of the settings table (upscale row),
@@ -90,7 +110,7 @@ def force_480p_requested(args):
     """
     if args.force_480p:
         return True
-    return args.mode in ('main', 'pcsx2') and os.environ.get('GT4_FORCE_480P') != '0'
+    return args.mode in ('main',) + PCSX2_MODES and os.environ.get('GT4_FORCE_480P') != '0'
 
 
 def main():
@@ -117,6 +137,9 @@ def main():
     parser.add_argument('--gs-readback', choices=('accurate', 'unsynchronized'), default=None,
                         help='pcsx2 only: GS readback mode. accurate (default, owner choice 2026-10-16); unsynchronized: '
                              'faster, may drop effects (night race: headlight flares missing; GT4_GS_READBACK)')
+    parser.add_argument('--play-card', type=Path, default=None, metavar='PATH',
+                        help='play on this existing card inside private/ instead of the owner card '
+                             '(never private/manual-play/card.ps2); backed up and locked the same way, recorded in result.json')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
     args = parser.parse_args()
@@ -129,21 +152,21 @@ def main():
             raise ValueError('--vu1-verify takes a positive N')
         if args.vu1_verify and args.vu1_interpret_only:
             raise ValueError('--vu1-verify compares against the AOT path; it cannot be combined with --vu1-interpret-only')
-        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu', 'pcsx2'):
+        if args.force_480p and args.mode not in ('quickfix', 'quickfix2', 'quickfix3', 'main', 'mtvu-measure', 'mtvu') + PCSX2_MODES:
             raise ValueError('--force-480p requires --mode quickfix, quickfix2, quickfix3, main, mtvu-measure, mtvu or pcsx2')
         if args.gs_resolution is not None:
-            if args.mode != 'pcsx2':
+            if args.mode not in PCSX2_MODES:
                 raise ValueError('--gs-resolution requires --mode pcsx2')
             if args.gs_scale is not None:
                 raise ValueError('--gs-resolution and --gs-scale both set the internal resolution')
             args.gs_scale = GS_RESOLUTIONS[args.gs_resolution]
         if args.gs_scale is not None:
-            if args.mode != 'pcsx2' or not 1 <= args.gs_scale <= 12:
+            if args.mode not in PCSX2_MODES or not 1 <= args.gs_scale <= 12:
                 raise ValueError('--gs-scale takes 1..12 and requires --mode pcsx2')
             os.environ['GT4_GS_SCALE'] = str(args.gs_scale)
         os.environ.pop(GS_SETTINGS_ENV, None)
         if args.gs_setting:
-            if args.mode != 'pcsx2':
+            if args.mode not in PCSX2_MODES:
                 raise ValueError('--gs-setting requires --mode pcsx2')
             settings = gs_settings.settings_from_assignments(args.gs_setting, gs_settings.load_table())
             if args.gs_scale is not None and 'upscale' in settings:
@@ -153,9 +176,11 @@ def main():
                 raise ValueError('--gs-readback and --gs-setting hw_download_mode=... both set the readback mode')
             os.environ[GS_SETTINGS_ENV] = gs_settings.settings_to_json(settings)
         if args.gs_readback is not None:
-            if args.mode != 'pcsx2':
+            if args.mode not in PCSX2_MODES:
                 raise ValueError('--gs-readback requires --mode pcsx2')
             os.environ['GT4_GS_READBACK'] = args.gs_readback
+        if args.play_card is not None and args.mode == 'vu1-record':
+            raise ValueError('--play-card is not available with --mode vu1-record')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
                  performance=True, vu1_record=True, **cpu_options(args))
@@ -171,6 +196,8 @@ def main():
             if args.vu0_verify:
                 options['vu0_verify'] = args.vu0_verify
             options.update(cpu_options(args))
+            if args.play_card is not None:
+                options['play_card'] = args.play_card
             play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)
         return 0
     except (OSError, ValueError, KeyError, StopIteration) as error:

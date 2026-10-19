@@ -497,8 +497,10 @@ GT4GS no-JIT: Arbitrary Code Guard on (ProhibitDynamicCode=1); probe RWX allocat
 GT4GS no-JIT audit (end of stream, GS device open): 1438 regions, 0 executable non-image regions
 ```
 
-`[GT4GS] ProhibitDynamicCode = false` switches only the OS enforcement off (for a graphics driver that needs dynamic
-code inside our process); the launcher does not write it. No GS setting needs the JIT, so none is refused: CPU sprite and
+`[GT4GS] ProhibitDynamicCode = false` switches only the OS enforcement off. Since TASK-064 (2026-10-17) the launcher
+writes `false` by default, because Arbitrary Code Guard also blocks overlays such as MSI Afterburner / RivaTuner; the
+Advanced page option "Block third-party overlays" turns it back on. The build stays JIT-free either way (`GT4GS_ONLY`,
+`check-nojit.ps1`), and the audit line above is still printed. No GS setting needs the JIT, so none is refused: CPU sprite and
 CLUT render and the software renderer run the C rasterizer (notes in `docs/launcher/gs-settings.toml`).
 
 ### 10.3 Evidence (2026-10-16)

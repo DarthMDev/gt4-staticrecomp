@@ -34,8 +34,9 @@ def sha256(path):
 
 
 class Slice203PinTests(unittest.TestCase):
-    def test_mode_pcsx2_selects_slice203_and_slice202_stays(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice203-pcsx2.json', EXECUTABLE))
+    def test_mode_pcsx2_slice203_and_slice202_stay(self):
+        # TASK-017: mode pcsx2 moved to slice205 (license guard); slice203 stays as pcsx2-slice203.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice203'], ('slice203-pcsx2.json', EXECUTABLE))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice202'],
                          ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'))
         self.assertIn('pcsx2-slice202', performance.MODES)

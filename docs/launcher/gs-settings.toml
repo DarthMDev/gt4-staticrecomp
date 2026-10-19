@@ -1218,18 +1218,18 @@ notes = "GT4 fork key (gt4-gs 0.3.0 and later; TASK-041 measured no gain). Liste
 
 [[setting]]
 id = "prohibit_dynamic_code"
-label = "Arbitrary Code Guard"
-help = "Windows Arbitrary Code Guard for gt4-gs (no dynamic code). On."
-page = "hidden"
-order = 12
+label = "Block third-party overlays (Arbitrary Code Guard)"
+help = "On blocks code injection into the renderer, which also hides overlays such as MSI Afterburner / RivaTuner. Off (default) lets them work."
+page = "advanced"
+order = 46
 control = "toggle"
 section = "GT4GS"
 key = "ProhibitDynamicCode"
 type = "bool"
-default = "true"
-written = "when-set"
-status = "resolved"
-notes = "GT4 fork key (gt4-gs 0.4.0 and later, TASK-042). false switches only the OS enforcement off, for a graphics driver that needs dynamic code. Listed for the allow-list; never written by the launcher."
+default = "false"
+written = "always"
+status = "ok"
+notes = "GT4 fork key (gt4-gs 0.4.0 and later, TASK-042). Windows Arbitrary Code Guard for gt4-gs. Default changed to false by TASK-064 (owner decision 2026-10-17): the overlays (MSI Afterburner / RivaTuner Statistics Server) need executable memory that ACG refuses. false switches only the OS enforcement off; the no-JIT guarantee is the GT4GS_ONLY build plus check-nojit.ps1, not ACG. A missing key in an older gt4-gs.ini means true; the launcher always writes the key. The Advanced page switch turns ACG back on."
 
 [[setting]]
 id = "debug_stall_window_ms"
