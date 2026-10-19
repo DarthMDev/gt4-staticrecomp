@@ -100,6 +100,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
 | TASK‑063 | Bit-exact R5900 FPU `div.s`/`mul.s` (license demo phase, real-PS2 card replays and ghosts) | 📋 Planned · oracle ready (`scripts/license_demo_oracle.py`); needs hardware vectors |
 | TASK‑064 | Third-party overlays (MSI Afterburner / RivaTuner) with the PCSX2 GS: Arbitrary Code Guard off by default | ✅ Done (2026-10-17) · owner test: the RivaTuner/Afterburner overlay shows in game with default settings |
+| TASK‑074 | Native Linux x86-64 build (SDL3 platform layer, Linux gt4-gs owning the window, Linux packaging) | 📋 Planned (branch `linux/main`; [plan](docs/linux/PLAN.md)) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -255,6 +256,14 @@ verifies every release. Tests: `ProhibitDynamicCodeTests` and the default-ini as
 Acceptance: owner sees the RTSS overlay in game with the default settings.
 State: ✅ Done (2026-10-17). Owner test: the MSI Afterburner / RivaTuner overlay shows in game with the default settings, confirming Arbitrary Code Guard as the cause. Branch `task/064-overlay-compat` (single writer, from main da1eb95). Python suite
 544 tests OK (38 skipped for missing private files). Merged with owner approval (PR #46).
+
+### TASK-074 — Linux build
+Owner request 2026-10-19: a native Linux x86-64 build, planned on the branch `linux/main`, not started yet.
+The game code and donor runtime are already portable C++; only the native adapter (window, input, audio, clock,
+GS stream IPC, paths) and the gt4-gs frontend are Windows-specific. Steps L0-L5 (platform seam, Linux build,
+SDL3 backend, gt4-gs for Linux with gt4-gs owning the window, packaging, owner test; try Proton/Wine first):
+[docs/linux/PLAN.md](docs/linux/PLAN.md). Acceptance: the Windows build is unchanged (headless 42/42, CTest,
+Python); the owner plays the reference scene on real Linux at 60 FPS with the PCSX2 GS and CoreGS 1.1.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
