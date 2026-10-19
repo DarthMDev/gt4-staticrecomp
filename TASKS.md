@@ -334,6 +334,11 @@ before its names are imported.
 ### TASK-020 — Decomp names in generated code
 Label comments in generated units with identical object code.
 
+**Level 1 delivered (2026-10-18, PR #41, not the whole task).** Read-only name table from gt4-decomp `0b54ed5c`:
+`docs/data/ee-names.csv` (11,481 rows: address, name, kind, origin, quality), built by `scripts/ee_symbols.py`; see
+[docs/EE-NAMES.md](docs/EE-NAMES.md). No generated EE file, pin or runtime code changed. Still open: labelling `unit_XXXX.cpp`
+needs the new producer contract described under "Level 1" in [docs/DECOMP-INTEGRATION.md](docs/DECOMP-INTEGRATION.md).
+
 Common rules for TASK-032..045: agents that open PCSX2 sources or the fork are PCSX2-tainted and never
 work on TASK-027. MIT files in this repository never contain PCSX2 code. The fork's own rules: one writer at
 a time, commits as `moesuito`, every release built by CI from a tag.
