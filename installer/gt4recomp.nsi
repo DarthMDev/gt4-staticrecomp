@@ -56,6 +56,12 @@ BrandingText "${APP_NAME} ${VERSION}"
 Var DeleteDataCheckbox
 Var DeleteDataState
 
+; The launcher starts this setup from an update and exits at once. A short pause lets it release GT4Recomp.exe
+; before the files are replaced.
+Function .onInit
+  Sleep 1500
+FunctionEnd
+
 !insertmacro MUI_UNPAGE_WELCOME
 UninstPage custom un.DataPageCreate un.DataPageLeave
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -74,6 +80,13 @@ Section "Install" SecInstall
 
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\uninstall.exe"
+
+  ; version.json (docs/RELEASES.md): the installed GT4Recomp version and the settings schema. The launcher records the
+  ; gt4-gs version in it after its first renderer install, so a fresh install has no renderer yet (null).
+  ; An upgrade rewrites this program file; the installer never touches the data folder.
+  FileOpen $0 "$INSTDIR\version.json" w
+  FileWrite $0 '{"schema": 1, "gt4recomp": "${VERSION}", "gt4gs": null, "settings_schema": 1}$\r$\n'
+  FileClose $0
 
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
   CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\GT4Recomp.exe" "" "$INSTDIR\GT4Recomp.exe" 0
@@ -104,6 +117,7 @@ Section "Uninstall"
   Delete "$INSTDIR\GT4Recomp.exe"
   Delete "$INSTDIR\NOTICE.md"
   Delete "$INSTDIR\LICENSE.txt"
+  Delete "$INSTDIR\version.json"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
 

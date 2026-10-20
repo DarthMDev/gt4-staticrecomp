@@ -25,6 +25,10 @@ pub const UI_COMMANDS: &[&str] = &[
     "replays_delete",
     "about_info",
     "open_log_folder",
+    "check_updates",
+    "apply_update",
+    "skip_update",
+    "confirm_close",
 ];
 
 #[cfg(test)]

@@ -40,6 +40,8 @@
       t.event.listen(eventName, function (event) {
         handler(event.payload);
       });
+    } else if (root.GT4_MOCK && typeof root.GT4_MOCK.listen === "function") {
+      root.GT4_MOCK.listen(eventName, handler);
     }
   }
 

@@ -78,7 +78,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑040 | Texture dumping and replacement packs | ➡️ Folded into TASK-050 (mod manager, release 1.1.0) |
 | TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes |
 | TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
-| TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
+| TASK‑043 | Launcher: download, pin and update the GS renderer | 🟡 In progress on `task/019-launcher` (code done 2026-10-20; owner live test pending) |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | ✅ Done (2026-10-17) · release 1.0.0 ships gt4-gs 1.0.1; fork release notes, README, THIRD_PARTY and RELEASE-1.0.0-PLAN updated (docs only) |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
@@ -273,7 +273,14 @@ has a background slideshow (12 s per image, 1.5 s crossfade, slow pan, reduced-m
 reachable by controller (X Save on Settings, Y secondary action, right-stick scroll, footer hints per
 page), and the glass Play button (idle sheen, solid white when focused). Branch task/019-launcher, not yet
 in a PR. Still open: the owner test of setup, saves, controls and the new touch and pad behaviour;
-greying the presets above the device limit (max_upscale); the installer test (TASK-043).
+greying the presets above the device limit (max_upscale); the installer test and the live update test (TASK-043).
+State (2026-10-20, owner requirements, one writer): SemVer streams (GT4Recomp `vX.Y.Z`, gt4-gs `gt4gs-vX.Y.Z`, minimum
+gt4-gs 1.0.1, asset `gt4-gs-X.Y.Z-windows-x64.zip`), `version.json` (installer writes it, launcher records gt4-gs),
+first gt4-gs install during setup and at launch, a launch-time update check (never blocks Play; popup with Update,
+Not now, Skip this version; updates never automatic), data-folder guard, schema migrations with backups (settings,
+controls, version.json), tray (hidden while the game runs, back on Home when it ends, close asks while it runs), and
+the Graphics table of the UI mock. Docs: `docs/RELEASES.md`, `docs/launcher/MIGRATIONS.md`. Checks: `cargo test
+--workspace` green. Not done here: a real installer build, a live GitHub check and the owner's end-to-end test.
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
 
@@ -571,6 +578,11 @@ pending, no PR.
 
 ### TASK-043 — Launcher integration
 Repo: main, branch `task/019-launcher` (when the launcher resumes). Haiku, 2-3 sessions.
+State (2026-10-20): in progress on `task/019-launcher`. Code: `launcher/crates/gt4l-core/src/{releases,update,version,versions,guard,migrate,gs_release}.rs`
+and `launcher/crates/gt4l-tauri/src/{updates,tray}.rs`. Stable releases only (drafts and prereleases ignored); the
+renderer minimum is gt4-gs 1.0.1; the install is verified against `SHA256SUMS` and staged as before. Checks: fixtures
+for both repositories (no network), SemVer, update decision, version.json, migrations, data-path guard, tray state machine.
+Still open: the owner's live test against GitHub, and a real NSIS build (the installer was edited, not built here).
 Goal: renderer manifest (version, URL, size, SHA-256, protocol version, upstream commit) in the launcher;
 download with progress and resume, verify, unpack to the user data folder, update to newer pinned versions,
 offline fallback to CoreGS 1.1; settings pages generated from the table; license/source links shown.

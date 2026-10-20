@@ -2,7 +2,7 @@
 //! The state lives behind one mutex. Long jobs (setup, the game, controller capture) run on their
 //! own threads and lock the state only to read or write their results.
 
-use std::fs::OpenOptions;
+use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Child;
@@ -43,6 +43,8 @@ pub struct AppState {
     pub saves_status: String,
     /// Result of the last import or delete on the Replays page.
     pub replays_status: String,
+    /// True when the controls file was written by a newer launcher: it is kept as it is (never overwritten).
+    pub controls_locked: bool,
 }
 
 pub type Shared = Arc<Mutex<AppState>>;
@@ -72,11 +74,25 @@ impl AppState {
         for warning in &warnings {
             log(&dirs, &format!("settings: {warning}"));
         }
-        let controls = match controls_file::load(&dirs.root().join(CONTROLS_FILE_NAME)) {
+        let controls_path = dirs.root().join(CONTROLS_FILE_NAME);
+        let mut controls_locked = false;
+        let controls = match controls_file::load(&controls_path) {
             Ok(Some(controls)) => controls,
             Ok(None) => Controls::default(),
             Err(message) => {
-                log(&dirs, &format!("controls: {message}; built-in bindings used"));
+                // A file from a newer launcher is kept as it is. Any other damaged file gets a copy before it is
+                // replaced by the defaults (docs/launcher/MIGRATIONS.md).
+                let text = fs::read_to_string(&controls_path).unwrap_or_default();
+                if controls_schema_is_newer(&text) {
+                    controls_locked = true;
+                    log(&dirs, &format!("controls: {message}; the file is from a newer launcher and is kept"));
+                } else if controls_path.exists() {
+                    let copy = controls_path.with_file_name(format!("{CONTROLS_FILE_NAME}.bak-corrupt-{}", unix_seconds()));
+                    let _ = fs::copy(&controls_path, &copy);
+                    log(&dirs, &format!("controls: {message}; copy kept at {}", copy.display()));
+                } else {
+                    log(&dirs, &format!("controls: {message}; built-in bindings used"));
+                }
                 Controls::default()
             }
         };
@@ -98,6 +114,7 @@ impl AppState {
             controls_status: String::new(),
             saves_status: String::new(),
             replays_status: String::new(),
+            controls_locked,
         })
     }
 
@@ -114,6 +131,10 @@ impl AppState {
     }
 
     pub fn save_controls(&self) {
+        if self.controls_locked {
+            log(&self.dirs, "controls not saved: the file is from a newer launcher");
+            return;
+        }
         let path = self.dirs.root().join(CONTROLS_FILE_NAME);
         if let Err(error) = controls_file::save(&path, &self.controls) {
             log(&self.dirs, &format!("controls not saved: {error}"));
@@ -127,4 +148,16 @@ impl AppState {
     pub fn disc_path(&self) -> Option<&Path> {
         self.config.disc_path.as_deref()
     }
+}
+
+/// Whether a controls file declares a schema above the one this launcher reads (`schema = 1`).
+fn controls_schema_is_newer(text: &str) -> bool {
+    text.parse::<toml::Table>()
+        .ok()
+        .and_then(|table| table.get("schema").and_then(|value| value.as_integer()))
+        .is_some_and(|schema| schema > 1)
+}
+
+fn unix_seconds() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|value| value.as_secs()).unwrap_or(0)
 }

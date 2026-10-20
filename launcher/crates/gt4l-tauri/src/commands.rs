@@ -26,6 +26,7 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::model;
 use crate::saves::{self, Item};
+use crate::updates;
 use crate::state::{self, lock, AppState, Shared};
 
 /// Everything the page needs to pick the screen and show the header of Home.
@@ -216,6 +217,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     }
     state::log(&dirs, &format!("game started, session {}", running.session_dir.display()));
     let _ = app.emit("game-state", json!({ "running": true, "message": "" }));
+    crate::tray::handle(&app, crate::tray::Event::GameStarted);
 
     let mut pcsx2_used = pcsx2.is_some();
     std::thread::spawn(move || {
@@ -238,7 +240,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
                 Err(message) => {
                     lock(&shared).game_child = None;
                     lock(&shared).home_message = message.clone();
-                    let _ = app.emit("game-state", json!({ "running": false, "message": message }));
+                    crate::tray::handle(&app, crate::tray::Event::GameEnded { message });
                     return;
                 }
             }
@@ -256,7 +258,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
             Outcome::Crashed { .. } => exit::user_message(&outcome),
         };
         lock(&shared).home_message = message.clone();
-        let _ = app.emit("game-state", json!({ "running": false, "message": message }));
+        crate::tray::handle(&app, crate::tray::Event::GameEnded { message });
     });
     Ok(())
 }
@@ -558,17 +560,27 @@ pub struct AboutInfo {
     pub text: String,
     pub licenses: String,
     pub disc_path: String,
+    /// The launcher version (GT4Recomp), the same as `gt4recomp`. Kept for the existing pages.
     pub version: String,
+    /// GT4Recomp (launcher, game and installer) version.
+    pub gt4recomp: String,
+    /// The gt4-gs version in use, or `not installed`.
+    pub gt4gs: String,
 }
 
 #[tauri::command]
 pub fn about_info(shared: State<'_, Shared>) -> Result<AboutInfo, String> {
     let state = lock(shared.inner());
+    let renderer = gs_release::installed(&updates::renderer_root(&state.dirs))
+        .map(|installed| installed.version.text())
+        .unwrap_or_else(|| "not installed".to_string());
     Ok(AboutInfo {
         text: model::about_text(LAUNCHER_VERSION),
         licenses: model::licenses_text().to_string(),
         disc_path: state.disc_path().map(|path| path.display().to_string()).unwrap_or_default(),
         version: LAUNCHER_VERSION.to_string(),
+        gt4recomp: LAUNCHER_VERSION.to_string(),
+        gt4gs: renderer,
     })
 }
 

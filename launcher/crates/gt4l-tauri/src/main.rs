@@ -11,10 +11,14 @@ mod model;
 mod saves;
 mod setup;
 mod state;
+mod tray;
+mod updates;
 #[cfg(feature = "visual-check")]
 mod visual;
 
 use std::sync::{Arc, Mutex};
+
+use tauri::Manager;
 
 use gt4l_core::paths::DataDirs;
 use gt4l_core::LAUNCHER_VERSION;
@@ -47,6 +51,23 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(shared)
+        .setup(|app| {
+            tray::install(app)?;
+            // Every launch: version file, first gt4-gs install if needed, and the update check (never blocks Play).
+            let launch_shared = app.state::<state::Shared>().inner().clone();
+            let launch_app = app.handle().clone();
+            std::thread::spawn(move || updates::check_on_launch(launch_app, launch_shared));
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            // The close button ends the launcher, or asks first while the game runs. It never goes to the tray.
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    tray::handle(window.app_handle(), tray::Event::CloseRequested);
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             commands::app_state,
             commands::get_settings_table,
@@ -70,6 +91,10 @@ fn main() {
             commands::reset_binding,
             commands::about_info,
             commands::open_log_folder,
+            updates::check_updates,
+            updates::apply_update,
+            updates::skip_update,
+            tray::confirm_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running GT4Recomp");

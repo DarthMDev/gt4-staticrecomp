@@ -50,6 +50,33 @@
 
   root.addEventListener("hashchange", render);
 
+  // Events from Rust (see ui/dev/README.md): update offers at launch, close confirmation, install progress,
+  // and the end of a game session (the Home page shows the message).
+  GT4.backend.listen("update-available", function (payload) {
+    GT4.updates.offer(payload && payload.offers);
+  });
+  GT4.backend.listen("close-confirm", function (payload) {
+    GT4.updates.confirmClose(payload && payload.message);
+  });
+  GT4.backend.listen("update-finished", function (payload) {
+    GT4.ui.toast(payload && payload.message ? payload.message : "Update finished.", !(payload && payload.ok));
+  });
+  GT4.backend.listen("renderer-progress", function (payload) {
+    if (payload && payload.step === "failed") {
+      GT4.ui.toast("gt4-gs could not be installed. CoreGS 1.1 will be used.", true);
+    } else if (payload && payload.step === "done") {
+      GT4.ui.toast("gt4-gs is ready.");
+    }
+  });
+  GT4.backend.listen("game-state", function (payload) {
+    if (payload && payload.message) {
+      GT4.ui.toast(payload.message, true);
+    }
+    if (payload && payload.running === false && root.location.hash !== "#/home") {
+      GT4.go("#/home");
+    }
+  });
+
   GT4.backend.call("app_state").then(function (appState) {
     var route = parseRoute();
     if (!route.name) {

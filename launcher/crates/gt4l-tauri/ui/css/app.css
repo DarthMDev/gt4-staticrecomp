@@ -469,3 +469,12 @@ body.input-pad .info:focus .tip { display: block; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
   .play::after { display: none; }
 }
+
+/* Update popup (js/updates.js): release notes are text, never HTML. */
+.update-body { text-align: left; }
+.update-body .notes-title { margin: 14px 0 6px; font-size: 1rem; }
+.release-notes { max-height: 40vh; overflow-y: auto; touch-action: pan-y; padding-right: 6px; }
+.release-notes p { margin: 0 0 8px; line-height: 1.4; }
+.release-notes .notes-heading { font-weight: 700; margin-top: 10px; }
+.release-notes ul { margin: 0 0 8px; padding-left: 20px; }
+.release-notes li { margin: 2px 0; line-height: 1.4; }

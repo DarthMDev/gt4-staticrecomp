@@ -461,7 +461,21 @@
   GT4.tabPages.about = function (content) {
     return call("about_info").then(function (info) {
       content.appendChild(h("h1", { text: "About" }));
-      content.appendChild(h("p", { class: "note", text: "GT4Recomp " + (info.version || "") }));
+      content.appendChild(h("p", { class: "note", text: "GT4Recomp " + (info.gt4recomp || info.version || "") }));
+      content.appendChild(h("p", { class: "note", text: "gt4-gs " + (info.gt4gs || "not installed") }));
+      var checkButton = h("button", {
+        class: "btn small",
+        type: "button",
+        on: {
+          click: function () {
+            GT4.updates.checkNow();
+          }
+        }
+      }, "Check for updates");
+      content.appendChild(h("div", { class: "row" }, [
+        h("div", { class: "k", text: "Updates" }),
+        h("div", { class: "ctl" }, [checkButton])
+      ]));
       content.appendChild(h("div", { class: "about-notice" }, [
         h("p", { text: "GT4Recomp is an unofficial fan project. It is not affiliated with, endorsed by or sponsored by Sony Interactive Entertainment or Polyphony Digital." }),
         h("p", { text: "Gran Turismo and the Gran Turismo 4 logo are trademarks of Sony Interactive Entertainment Inc. and Polyphony Digital Inc. They are used here only to identify the game. You need your own copy of the game to play." })

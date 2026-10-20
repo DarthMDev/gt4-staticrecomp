@@ -5,7 +5,6 @@
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
-use gt4l_core::gs_release;
 use gt4l_core::LAUNCHER_VERSION;
 use gt4l_disc::setup::{self as disc_setup, SetupRequest, Stage};
 use serde::Serialize;
@@ -14,6 +13,7 @@ use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::state::{self, lock, Shared};
+use crate::updates;
 
 /// What the page shows after a disc was accepted.
 #[derive(Clone, Debug, Serialize)]
@@ -79,15 +79,21 @@ pub fn setup_start(app: AppHandle, shared: State<'_, Shared>) -> Result<(), Stri
         (disc, state.pins.clone(), state.dirs.clone(), state.setup_cancel.clone())
     };
     // TASK-043: the PCSX2 GS renderer is downloaded with the setup (decision 0070). A failure is logged and the
-    // home message says CoreGS 1.1 is used instead; the disc setup is not affected.
-    let gs_root = dirs.root().join("gs");
-    let gs_dirs = dirs.clone();
-    let gs_shared = shared.clone();
-    std::thread::spawn(move || match gs_release::install_latest(&gs_release::GithubSource, &gs_root) {
-        Ok(outcome) => state::log(&gs_dirs, &format!("PCSX2 GS ready: {outcome:?}")),
-        Err(message) => {
-            state::log(&gs_dirs, &format!("PCSX2 GS not installed: {message}"));
-            lock(&gs_shared).home_message = format!("PCSX2 GS could not be installed ({message}). CoreGS 1.1 will be used.");
+    // home message says CoreGS 1.1 is used instead; the disc setup is not affected. Progress goes to the page as
+    // `renderer-progress` events; the version is recorded in version.json.
+    let renderer_app = app.clone();
+    let renderer_dirs = dirs.clone();
+    let renderer_shared = shared.clone();
+    std::thread::spawn(move || {
+        let progress_app = renderer_app.clone();
+        match updates::install_renderer(&renderer_dirs, &mut |step| updates::emit_progress(&progress_app, updates::step_name(step))) {
+            Ok(_) => updates::emit_progress(&renderer_app, "done"),
+            Err(message) => {
+                state::log(&renderer_dirs, &format!("PCSX2 GS not installed: {message}"));
+                updates::emit_progress(&renderer_app, "failed");
+                lock(&renderer_shared).home_message =
+                    format!("PCSX2 GS could not be installed ({message}). CoreGS 1.1 will be used.");
+            }
         }
     });
     std::thread::spawn(move || {

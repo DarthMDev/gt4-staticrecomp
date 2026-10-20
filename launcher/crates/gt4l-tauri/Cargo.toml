@@ -25,7 +25,8 @@ gt4controls.workspace = true
 gt4l-platform.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tauri = "2.11"
+toml.workspace = true
+tauri = { version = "2.11", features = ["tray-icon"] }
 tauri-plugin-dialog = "2.8"
 
 [build-dependencies]

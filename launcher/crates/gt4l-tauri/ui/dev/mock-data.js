@@ -41,44 +41,39 @@
   // Settings rows, the same shape as the Rust table.
   var DEFAULTS = {};
   var rows = [
-    { id: "renderer", label: "Renderer", help: "PCSX2 GS draws the PS2 graphics chip on your GPU. CoreGS 1.1 is the launcher's own renderer, kept as a secondary option. CoreGS 2.0 is not available yet.",
+    { id: "renderer", label: "Renderer", help: "PCSX2 GS (the default) draws the game on your GPU in its own process. CoreGS 1.1 is the launcher's built-in renderer, a secondary choice. CoreGS 2.0 is in development.",
       page: "basic", group: "graphics", control: "dropdown",
       values: [
         { value: "pcsx2", label: "PCSX2 GS" },
-        { value: "coregs11", label: "CoreGS 1.1 (secondary)" },
-        { value: "coregs20", label: "CoreGS 2.0", disabled: true, note: "Coming soon" }
+        { value: "coregs-1.1", label: "CoreGS 1.1 (secondary)" },
+        { value: "coregs-2.0", label: "CoreGS 2.0 (coming soon)", disabled: true }
       ],
-      default: "pcsx2", current: "coregs11" },
-    { id: "internal_resolution", label: "Internal resolution", help: "Renders the scene at a multiple of the PS2 resolution. Higher values need a faster GPU. Limited to what this GPU can do.",
-      page: "basic", group: "graphics", control: "slider",
-      values: { min: 1, max: 12, step: 1, unit: "\u00d7", limit: "max_upscale" },
-      default: 1, current: 4 },
-    { id: "fxaa", label: "FXAA", help: "Smooths edges with a fast post-process filter. Slightly softens fine detail.",
-      page: "basic", group: "graphics", control: "toggle", values: null, default: false, current: true },
-    { id: "scaling_filter", label: "Scaling filter", help: "How the final image is scaled to the window. FSR adds a sharpening pass.",
+      default: "pcsx2", current: "pcsx2" },
+    { id: "upscale", label: "Internal resolution", help: "The resolution the game is drawn at before it is shown. 480p is the PS2 size; higher presets look sharper and need a faster GPU.",
       page: "basic", group: "graphics", control: "dropdown",
       values: [
-        { value: "automatic", label: "Automatic" },
-        { value: "nearest", label: "Nearest" },
-        { value: "linear", label: "Linear" },
-        { value: "fsr", label: "FSR" }
+        { value: "480p", label: "480p (1x)" },
+        { value: "720p", label: "720p (2x)" },
+        { value: "1080p", label: "1080p (3x)" },
+        { value: "1440p", label: "1440p (4x)" },
+        { value: "4K", label: "4K (6x)" },
+        { value: "8K", label: "8K (12x)" }
       ],
-      default: "automatic", current: "fsr" },
-    { id: "fsr_sharpness", label: "FSR sharpness", help: "How much detail FSR adds. 50 % is the default.",
-      page: "basic", group: "graphics", control: "slider",
-      values: { min: 0, max: 100, step: 1, unit: "%" },
-      default: 50, current: 50, visible_when: { id: "scaling_filter", equals: "fsr" } },
-    { id: "cas_mode", label: "CAS mode", help: "Contrast adaptive sharpening. Off leaves the image as the game drew it.",
+      default: "1080p", current: "1080p" },
+    { id: "fxaa", label: "Anti-aliasing (FXAA)", help: "Smooths jagged edges with a fast filter. It softens fine detail a little. Off by default.",
+      page: "basic", group: "graphics", control: "toggle", values: null, default: false, current: false },
+    { id: "cas_mode", label: "Sharpening (CAS)", help: "FidelityFX Contrast Adaptive Sharpening. Off leaves the picture as the game drew it.",
       page: "basic", group: "graphics", control: "dropdown",
       values: [
         { value: "off", label: "Off" },
-        { value: "cas", label: "Contrast adaptive sharpening" }
+        { value: "sharpen-only", label: "Sharpen only" },
+        { value: "sharpen-and-resize", label: "Sharpen and resize" }
       ],
       default: "off", current: "off" },
-    { id: "cas_sharpness", label: "CAS sharpness", help: "Strength of the CAS sharpening pass.",
+    { id: "cas_sharpness", label: "Sharpening amount", help: "How strong the CAS sharpening is. Used when CAS is on.",
       page: "basic", group: "graphics", control: "slider",
       values: { min: 0, max: 100, step: 1, unit: "%" },
-      default: 50, current: 50, visible_when: { id: "cas_mode", equals: "cas" } },
+      default: 50, current: 50 },
     { id: "fullscreen", label: "Fullscreen", help: "Start in fullscreen. Alt+Enter or F11 switches while playing.",
       page: "basic", group: "display", control: "toggle", values: null, default: false, current: true },
     { id: "vsync", label: "VSync", help: "On keeps motion smooth with no tearing. Off lowers latency and may tear.",
@@ -119,6 +114,15 @@
     return null;
   }
 
+  // Demo offers for the update popup (?update=1). Notes are sample text, not a real release.
+  var DEMO_OFFERS = [
+    { stream: "renderer", installed: "1.0.1", latest: "1.0.2", update: true,
+      package: "gt4-gs-1.0.2-windows-x64.zip",
+      notes: "## gt4-gs 1.0.2\n\n- **Faster** present on VSync Off.\n- Fixes a crash on exit when the game ends first.\n- Sample text for the launcher preview."},
+    { stream: "launcher", installed: "1.0.0", latest: "1.0.1", update: true,
+      package: "GT4Recomp-Setup-1.0.1.exe",
+      notes: "GT4Recomp 1.0.1\n\n* Tray: the launcher comes back when the game ends.\n* Sample text for the launcher preview." }
+  ];
   var controls = [
     { id: "l1", name: "L1", binding: "Pad: LB" },
     { id: "l2", name: "L2", binding: "Pad: LT" },
@@ -269,14 +273,41 @@
       case "about_info":
         return {
           version: "1.0.0",
+          gt4recomp: "1.0.0",
+          gt4gs: "1.0.1",
           disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso"
         };
       case "open_log_folder":
+        return null;
+      case "check_updates":
+        // Demo: ?update=1 offers both streams; otherwise nothing is new.
+        if (query.get("update") === "1") {
+          return {
+            offers: DEMO_OFFERS.map(function (offer) { return JSON.parse(JSON.stringify(offer)); }),
+            errors: [], upToDate: false, launcher: "1.0.0", renderer: "1.0.1"
+          };
+        }
+        return { offers: [], errors: [], upToDate: true, launcher: "1.0.0", renderer: "1.0.1" };
+      case "apply_update":
+        return { ok: true, message: args.stream === "launcher" ? "GT4Recomp setup started." : "gt4-gs 1.0.2 is ready." };
+      case "skip_update":
+      case "confirm_close":
         return null;
       default:
         throw new Error("Mock has no command " + command);
     }
   }
 
-  root.GT4_MOCK = { invoke: invoke };
+  // Events: pages listen through GT4.backend.listen; a demo offer is emitted after load with ?update=1.
+  var eventHandlers = {};
+  function listen(name, handler) {
+    (eventHandlers[name] = eventHandlers[name] || []).push(handler);
+  }
+  function emit(name, payload) {
+    (eventHandlers[name] || []).forEach(function (handler) { handler(payload); });
+  }
+  root.GT4_MOCK = { invoke: invoke, listen: listen, emit: emit };
+  if (query.get("update") === "1") {
+    setTimeout(function () { emit("update-available", { offers: DEMO_OFFERS }); }, 900);
+  }
 })(window);

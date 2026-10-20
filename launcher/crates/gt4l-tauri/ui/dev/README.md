@@ -53,8 +53,12 @@ Arguments are the payload object shown. Errors are strings or Error objects; the
 | `replays_list` | none | `{items: [{id, name, modified}]}` |
 | `replays_import` | none | `{items}` or `null` |
 | `replays_delete` | `{id}` | `{items}` (the UI confirms first) |
-| `about_info` | none | `{version, disc_path}` |
+| `about_info` | none | `{version, gt4recomp, gt4gs, disc_path}`; `gt4gs` is `not installed` until the renderer is there |
 | `open_log_folder` | none | none |
+| `check_updates` | none | `{offers: [offer], errors: [string], upToDate: bool, launcher, renderer}`; offer = `{stream, installed, latest, notes, package, update}` |
+| `apply_update` | `{stream}` (`launcher` or `renderer`) | `{ok, message}`; the renderer installs in place (not while the game runs); the launcher starts its setup and exits |
+| `skip_update` | `{stream, version}` | none; no offer again for exactly that version |
+| `confirm_close` | none | none; the player chose Close launcher in the close confirmation |
 
 `modified` is an ISO 8601 string; the UI formats it.
 
@@ -74,6 +78,18 @@ Settings row (`rows[]` in the table):
 - Controls triggers use the same row shape. Their ids are `l2_deadzone`, `l2_curve`, `r2_deadzone`, `r2_curve`, and they are written with `set_setting`.
 
 Tauri event (optional fallback): `gamepad` with `{button, pressed: true}`, where `button` is one of `a b x y lb rb start up down left right`.
+
+Other Tauri events from Rust (listened to in `js/app.js`, popup code in `js/updates.js`):
+
+| Event | Payload | Meaning |
+|---|---|---|
+| `update-available` | `{offers: [offer]}` | Sent at launch when a stream has a newer stable version that is not skipped. Shows the update popup. |
+| `renderer-progress` | `{step}`: `listing`, `downloading`, `installing`, `downloading-launcher`, `done`, `failed` | Progress of a gt4-gs install (first install or update). |
+| `update-finished` | `{stream, ok, message}` | The end of an `apply_update`. |
+| `game-state` | `{running, message}` | The game ended (`running: false`); a non-empty message is shown and Home is opened. |
+| `close-confirm` | `{message}` | The window close button was pressed while the game runs. The page asks "Close the launcher anyway?". |
+
+The update popup: Update (runs `apply_update`), Not now (closes it; B does the same), Skip this version (runs `skip_update`). The release notes are shown as text (`#` headings, bullets and `**bold**` only).
 
 Commands not in the brief that the UI needs: `cancel_capture`, `reset_binding`, `saves_*` and `replays_*` (names as listed), `open_log_folder`. The Rust side in `src/commands.rs` currently uses other names (`settings_rows`, `settings_set`, `controls_list`, `controls_capture_start`, `controls_bind_key`, `controls_reset`, `setup_*` and so on). The names above are the ones this UI calls.
 

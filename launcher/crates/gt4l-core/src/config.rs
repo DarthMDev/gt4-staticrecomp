@@ -8,8 +8,11 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::migrate::{self, Verdict};
 use crate::settings::{self, Settings};
+use crate::version::Version;
 
+/// Schema of this file (`migrate::SETTINGS`). Files without a schema number are schema 0 and are migrated.
 pub const SCHEMA_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,11 +20,20 @@ pub struct ConfigFile {
     pub settings: Settings,
     pub disc_path: Option<PathBuf>,
     pub dev_game_dir: Option<PathBuf>,
+    /// "Skip this version" choices of the update popup: no offer again for exactly this version.
+    pub skipped_launcher: Option<Version>,
+    pub skipped_renderer: Option<Version>,
 }
 
 impl Default for ConfigFile {
     fn default() -> Self {
-        ConfigFile { settings: Settings::default(), disc_path: None, dev_game_dir: None }
+        ConfigFile {
+            settings: Settings::default(),
+            disc_path: None,
+            dev_game_dir: None,
+            skipped_launcher: None,
+            skipped_renderer: None,
+        }
     }
 }
 
@@ -104,6 +116,11 @@ pub fn parse(text: &str) -> Result<(ConfigFile, Vec<String>), ConfigError> {
         .and_then(|section| section.get("game_dir"))
         .and_then(|value| value.as_str())
         .map(PathBuf::from);
+    if let Some(section) = table.get("updates").and_then(|value| value.as_table()) {
+        let skipped = |key: &str| section.get(key).and_then(|value| value.as_str()).and_then(Version::parse);
+        config.skipped_launcher = skipped("skip_launcher");
+        config.skipped_renderer = skipped("skip_renderer");
+    }
     Ok((config, warnings))
 }
 
@@ -120,6 +137,15 @@ pub fn render(config: &ConfigFile) -> String {
         text.push_str("\n[gs]\n");
         for (key, value) in config.settings.gs_overrides() {
             text.push_str(&format!("{key} = {}\n", quote(value)));
+        }
+    }
+    if config.skipped_launcher.is_some() || config.skipped_renderer.is_some() {
+        text.push_str("\n[updates]\n");
+        if let Some(version) = config.skipped_launcher {
+            text.push_str(&format!("skip_launcher = {}\n", quote(&version.text())));
+        }
+        if let Some(version) = config.skipped_renderer {
+            text.push_str(&format!("skip_renderer = {}\n", quote(&version.text())));
         }
     }
     text.push_str("\n[install]\n");
@@ -157,8 +183,19 @@ pub fn load(path: &Path) -> (ConfigFile, Vec<String>) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return (ConfigFile::default(), Vec::new()),
         Err(error) => return (ConfigFile::default(), vec![format!("settings file unreadable: {error}")]),
     };
+    let (text, mut notes) = match prepare(path, &text) {
+        Ok(prepared) => prepared,
+        Err(message) => {
+            let backup = path.with_extension("toml.bad");
+            let _ = fs::rename(path, &backup);
+            return (ConfigFile::default(), vec![format!("{message}; moved to {}", backup.display())]);
+        }
+    };
     match parse(&text) {
-        Ok(result) => result,
+        Ok((config, warnings)) => {
+            notes.extend(warnings);
+            (config, notes)
+        }
         Err(ConfigError::NewerSchema(version)) => (
             ConfigFile::default(),
             vec![format!("settings file uses schema {version}; defaults used and the file is kept")],
@@ -169,6 +206,43 @@ pub fn load(path: &Path) -> (ConfigFile, Vec<String>) {
             (ConfigFile::default(), vec![format!("{error}; moved to {}", backup.display())])
         }
     }
+}
+
+/// Runs the settings migrations before the file is read. A file of schema 0 (no `schema_version`, from the
+/// earlier dev builds) is copied to `settings.toml.bak-schema0-<time>`, migrated, and written back. A newer file
+/// is left as it is (`parse` refuses it). Returns the text to parse and the notes for the log.
+fn prepare(path: &Path, text: &str) -> Result<(String, Vec<String>), String> {
+    // A file that does not parse as TOML is reported by `parse`; nothing is migrated.
+    let Ok(table) = text.parse::<toml::Table>() else {
+        return Ok((text.to_string(), Vec::new()));
+    };
+    let mut document = serde_json::to_value(&table).map_err(|error| format!("settings file: {error}"))?;
+    match migrate::plan(&migrate::SETTINGS, &document) {
+        Verdict::Current | Verdict::Newer { .. } => Ok((text.to_string(), Vec::new())),
+        Verdict::Corrupt(message) => Err(message),
+        Verdict::Migrate { from } => {
+            let backup = path.with_file_name(migrate::backup_name("settings.toml", from, unix_now()));
+            fs::copy(path, &backup).map_err(|error| format!("settings backup: {error}"))?;
+            migrate::migrate(&migrate::SETTINGS, &mut document)?;
+            let migrated: toml::Table =
+                serde_json::from_value(document).map_err(|error| format!("settings migration: {error}"))?;
+            let migrated_text = toml::to_string(&migrated).map_err(|error| format!("settings migration: {error}"))?;
+            let temporary = path.with_extension("toml.tmp");
+            fs::write(&temporary, &migrated_text).map_err(|error| error.to_string())?;
+            fs::rename(&temporary, path).map_err(|error| error.to_string())?;
+            Ok((
+                migrated_text,
+                vec![format!("settings migrated from schema {from} to {SCHEMA_VERSION}; copy kept at {}", backup.display())],
+            ))
+        }
+    }
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_secs())
+        .unwrap_or(0)
 }
 
 /// Writes the file atomically (temporary file, then rename).
