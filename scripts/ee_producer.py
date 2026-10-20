@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DONOR_COMMIT = '1b4808793a12c45125262fd2d5f50a9ec9f7c020'
 MAX_INFLATED_CORE = 8 * 1024 * 1024
 R5900_FLAGS = 0x20924001
-QUALIFIED_COMPILER = Path('C:/Program Files/LLVM/bin/clang-cl.exe')
+QUALIFIED_COMPILER = Path('C:/Antigravity/gt4-staticrecomp/private/tooling/llvm-23.1.2/bin/clang-cl.exe')
 QUALIFIED_OBJECT_INVENTORY = '8800e261b025f160c56604f06b063573447cd949a3491db58d99942d6b4254aa'
 MANIFEST_PINS = {
     'usa-v2.00.json': '33f10ef008ca800067189fc40624d42b5c6027e3e273418e48d7b2b9c0587a92',
@@ -159,12 +159,13 @@ def reject_link(path):
 
 
 def producer_path(output):
-    reject_link(ROOT / 'private')
+    """Producer outputs are immediate children of an assets checkout's private/ (the checkout that holds the
+    verified donor and the protected evidence). Worktrees pass the main checkout as the assets root."""
+    reject_link(output.parent)
     reject_link(output)
     output = output.resolve()
-    private = (ROOT / 'private').resolve()
-    if output.parent != private:
-        raise ValueError('Producer must be an immediate child of this checkout private/')
+    if output.parent.name != 'private':
+        raise ValueError('Producer must be an immediate child of an assets checkout private/')
     if output.name.lower() in ('references', 'manual-play', 'reference-acceleration-study'):
         raise ValueError('Producer output is a protected asset/evidence directory')
     return output
@@ -172,13 +173,12 @@ def producer_path(output):
 
 def validate_output(output, assets_root):
     output = producer_path(output)
-    reject_link(output.parent)
-    for protected in (ROOT / 'private/references', ROOT / 'private/manual-play',
-                      assets_root / 'private', ROOT / 'private/reference-acceleration-study'):
+    if output.parent != (assets_root / 'private').resolve():
+        raise ValueError('Producer output must sit in the assets checkout private/ it was prepared from')
+    for protected in (assets_root / 'private/references', assets_root / 'private/manual-play',
+                      assets_root / 'private/reference-acceleration-study'):
         protected = protected.resolve()
         if output.is_relative_to(protected) or protected.is_relative_to(output):
-            if protected == assets_root / 'private' and assets_root == ROOT:
-                continue
             raise ValueError('Producer output overlaps protected assets or evidence')
     if output.exists():
         raise ValueError('Producer output already exists; choose a fresh identity')
@@ -225,6 +225,8 @@ def existing_producer(output):
     for name in ('producer.json', 'CORE.GT4', 'SCUS_973.28.elf'):
         reject_link(output / name)
     metadata = read_json(output / 'producer.json')
+    if Path(metadata['assets_root']).resolve() / 'private' != output.parent:
+        raise ValueError('Producer assets root differs from the checkout that holds this producer')
     manifests = trusted_manifests()
     for name, pin in metadata['input_manifests'].items():
         verify_identity(ROOT / 'docs/inputs' / name, pin)

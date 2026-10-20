@@ -32,6 +32,13 @@ are dead code linked into the executable (unused library and engine functions),
 so the crash risk is smaller than the count suggests. The 14 code-built
 addresses are the first candidates for extra entries.
 
+Correction (2026-10-20, TASK-014 stage B; see [EE-ENTRY-LEDGER](EE-ENTRY-LEDGER.md)): the two
+counts above no longer hold. The ledger scan finds 10,672 vtable-style words that point into
+the text (for example 0x00688450 `CameraBase__vtable` holds 0x0044F198 = `CameraBase__virtual_00`),
+so the "only one word" statement is wrong. Against the current translated set (135,806 dispatch
+labels), 7,740 unique decomp function addresses are in the text and 83 of them have no entry, not
+5,676. The 5,676 figure is stale and predates the current generated set.
+
 ## Level 1: names (cheap)
 
 - A read-only `ee_symbols` script builds a canonical name table (aliases and

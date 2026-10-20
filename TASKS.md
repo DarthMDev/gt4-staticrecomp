@@ -211,6 +211,11 @@ candidates: 1,122 (high 1,076, medium 39, low 6, rejected 1), 246 unit windows. 
 of 7,740. The 16 stage A seeds are found by the strict rules (14) and a 40-word window (2). The name table at
 decomp e0b70c4d6 equals the committed one. Open: the generated folder has 135,806 labels but its log says
 135,093; resolve before Phase 2 (extra-entries library A/B, then producer regeneration after owner approval).
+State (2026-10-20, branch task/014-ee-coverage-b, phase 2 candidate built, not merged): 1,105 accepted seeds
+(scripts/ee_entries.py). Library profile coverage: 139,534 dispatch ids (+3,728), 325 of 326 units change. Built with
+the portable clang-cl 23.1.2; the 8-unit object check is identical to production. CTest 33/33, Python 583 OK,
+headless 42/42 identical to slice206. New mode pcsx2-coverage (docs/inputs/slice208-pcsx2.json). Owner play-through
+pending; the 135,806 vs 135,093 gap is the codegen boundary entries (EE-ENTRY-LEDGER).
 
 ### TASK-015 — LWR fidelity
 State: analysis done, no runtime change (branch task/015-lwr-fidelity). The donor helper matches PCSX2:

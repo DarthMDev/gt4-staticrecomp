@@ -111,36 +111,52 @@ committed table was not overwritten.
   it reports 5,676 decomp functions without an entry. Both disagree with this run. The `dataword` scan finds
   10,672 vtable-style words; the check at `0x00688450` (`CameraBase__vtable`) reads
   `0x0044F198` = `CameraBase__virtual_00`. The decomp unentried count is 83 of 7,740 unique addresses now.
-  The older figures predate the current translated set. That document is not edited here.
+  The older figures predate the current translated set. A dated correction is added to
+  [DECOMP-INTEGRATION](DECOMP-INTEGRATION.md).
 - The translated count does not reconcile. The generated folder has 135,806 case labels, but its
   `generation.log` reports `entries 135093`. The 713 difference is unexplained and must be resolved before
   Phase 2 (see below).
 
-## Not ported from stage A
+## Phase 2: accepted seeds and closure (2026-10-20)
 
-Stage A's `scripts/ee_entries.py`, its test, and the slice161 pins are not on this branch. Its pin
-`docs/inputs/slice161-ee-entries.json` records `expected_translator_entries: 135155`, which matches neither
-the log (135,093) nor the labels (135,806). The pins also reference build directories that were never
-created. Phase 2 can restore the generator from `65f24fb` with fresh pins. Stage A's
-`docs/inputs/slice161-ee-entries-referenced.txt` (16 addresses, sha-pinned) is also left out. The seed
-addresses are listed above and in the commit.
+Accepted seeds: 1,105 (high 1,076 plus medium with a decomp name, 29). Pinned by
+`docs/inputs/slice208-ee-entries.txt` (sha256 6cf39fb7...) and `docs/inputs/slice208-ee-entries.json`. Dropped 17:
+10 medium without a name (includes 0x0044EA58, the old callback seed), 6 low, 1 rejected (0x00616F24, word 0xFFFFFFFF).
+The dropped list is in `private/slice207-ee-ledger/slice208-dropped-seeds.json`.
 
-## Phase 2 recommendation
+Translator with the seeds (`eerecomp --entries`, analysis level):
 
-1. Resolve the 135,806 vs 135,093 gap first. Confirm which generated set is the production baseline, and
-   that the seed counts below match the translator's own count.
-2. Sources to trust: `high` new candidates (1,076), and `medium` new candidates with a decomp name. Drop the
-   `rejected` and `low` ones (7). Expected addition: about 1,115 entries, giving about 136,900 translated.
-3. Build approach: an extra-entries library first, as stage A designed it. Pass the accepted seeds through
-   `--entries` to the translator, build a separate `entries` profile, and A/B it against production with
-   the existing pins. The 1,115 seeds touch about 246 unit windows, so the changed-unit check will show the
-   set. Only after owner acceptance, regenerate the production producer.
-4. Qualify the translator's rejected-seed count is zero, as stage A's `validate_stats` already requires.
+| measure | baseline | with 1,105 seeds | change |
+|---|---:|---:|---:|
+| analysis entries (stat line) | 135,093 | 138,813 | +3,720 |
+| code instructions | 1,240,374 | 1,272,453 | +31,879 |
+| functions | 14,660 | 15,907 | +1,247 |
+| rejected seeds | 0 | 0 | 0 |
+| dispatch ids (case labels) | 135,806 | 139,534 | +3,728, none lost |
 
-## Method limits
+Seeds resolve: 1,105 of 1,105 translated, 0 stop sites. Seeds explore their callees, so the
+closure reaches code far from the seeds: **325 of the 326 generated units change** (plus `table.cpp`).
+Phase 1 expected about 246 windows; that estimate covered the seeds alone and was wrong.
+The changes are code changes, not only id renumbering (ids are sequential per unit).
 
-- Candidates come from static scans. Indirect calls through computed or stored pointers are only seen
-  if a pointer sits in a data word or a `lui`/`addiu` pair.
-- `jr` through a register other than `ra` is not an unconditional-jump source. A jump table after it would
-  not be a fallthrough site.
-- Branch targets come from conditional branches and direct `j` only. Indirect targets are not known.
+Compiler: the production library was built with clang-cl 23.1.2. The installed system clang-cl is 22.1.3, and
+22.1.3 changes every object (0 of 8 sampled units identical). The candidate uses the portable LLVM 23.1.2 at
+`private/tooling/llvm-23.1.2/bin/clang-cl.exe`. With 23.1.2, the same 8 units are byte-identical to the
+production archive members after timestamp normalisation (8 of 8).
+
+## Phase 2 build and verification (2026-10-20)
+
+- Library (`coverage`): 139,534 dispatch ids = 135,806 baseline + 3,728 new, none lost; all 1,105 seeds translated;
+  325 objects differ from production and are exactly the 325 changed units (unit_00F8 and table.cpp are identical).
+  Library sha256 `8f40b11e...`, 70,694,004 bytes.
+- Executable: `slice208-build` (97,104,896 bytes, sha256 `b96c6d64...`), built with the slice206 compiler (22.1.3).
+- CTest 33 of 33; Python 583 OK, 23 skipped.
+- Headless, 4,200 frames, 42 dumps: identical to slice206 (42 of 42).
+- Not shown: whether the 1,105 new entries are reached. The headless path does not reach them; the owner play-through is the check.
+
+## Stage A tooling
+
+`scripts/ee_entries.py`, `tests/python/test_ee_entries.py` and the slice208 seed pins are restored from stage A
+(commit `65f24fb`) and adapted: the expected count is measured, not inherited (see above). The producer may now write
+into the assets checkout's `private/` (`scripts/ee_producer.py`). The qualified compiler is the portable 23.1.2.
+Stage A's slice161 pins are not used.
