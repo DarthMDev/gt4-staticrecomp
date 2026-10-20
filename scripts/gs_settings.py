@@ -5,7 +5,9 @@ docs/launcher/gs-settings.toml is the single source. This module:
 - parses user values (refusing unknown ids, unknown choices and out-of-range values);
 - renders gt4-gs.ini text (PCSX2 INI syntax) in a fixed section order;
 - writes the file atomically (temporary file in the same folder, then os.replace);
-- emits the allow-list of INI section/key pairs (docs/launcher/gs-settings-allowlist.json) for gt4-gs.exe.
+- emits the allow-list of INI section/key pairs and their accepted values (docs/launcher/gs-settings-allowlist.json),
+  which gt4-gs.exe embeds at build time (gt4-gs 1.0.0 ignores, with one warning line each, keys and values outside it);
+- maps the internal-resolution presets to the monitor height and the GPU texture limit (for the launcher, TASK-019).
 
 Command line (repository root):
   python scripts/gs_settings.py check                 validate the table
@@ -25,16 +27,19 @@ ROOT = Path(__file__).resolve().parents[1]
 TABLE_PATH = ROOT / 'docs/launcher/gs-settings.toml'
 ALLOWLIST_PATH = ROOT / 'docs/launcher/gs-settings-allowlist.json'
 SCHEMA_VERSION = 1
-PAGES = ('Graphics', 'Display', 'Advanced')
+PAGES = ('basic', 'advanced', 'mods', 'hidden')
 TYPES = ('bool', 'int', 'float', 'enum', 'string', 'path')
-VISIBILITIES = ('basic', 'advanced', 'hidden')
+CONTROLS = ('slider', 'toggle', 'dropdown', 'text', 'none')
+CONTROL_FOR_TYPE = {'bool': 'toggle', 'int': 'slider', 'float': 'slider', 'enum': 'dropdown', 'string': 'text',
+                    'path': 'none'}
 WRITTEN = ('always', 'when-set', 'launcher', 'never')
 STATUS_PATTERN = re.compile(r'ok|resolved|TBD-fork|pending-TASK-\d{3}')
 ID_PATTERN = re.compile(r'[a-z][a-z0-9_]*')
 ENV_PATTERN = re.compile(r'GT4_[A-Z0-9_]+')
 SECTION_ORDER = ('EmuCore/GS', 'EmuCore', 'Folders', 'GT4GS')
-REQUIRED_FIELDS = ('id', 'label', 'help', 'page', 'section', 'key', 'type', 'default', 'visibility', 'written',
+REQUIRED_FIELDS = ('id', 'label', 'help', 'page', 'order', 'control', 'section', 'key', 'type', 'default', 'written',
                    'status')
+PROFILE_DEFAULTS = 'gt4-defaults'
 # First line of the default INI. Kept verbatim: the default output must stay byte-identical to TASK-036.
 INI_HEADER = '; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)'
 
@@ -60,6 +65,13 @@ def table_errors(data):
     rows = data.get('setting')
     if not isinstance(rows, list) or not rows:
         return errors + ['no [[setting]] rows']
+    profiles = data.get('profile', [])
+    profile_names = [profile.get('name') for profile in profiles]
+    if PROFILE_DEFAULTS not in profile_names:
+        errors.append(f'missing [[profile]] {PROFILE_DEFAULTS}')
+    if len(set(profile_names)) != len(profile_names):
+        errors.append('duplicate [[profile]] name')
+    orders = {}
     seen_ids = set()
     seen_keys = set()
     for row in rows:
@@ -75,6 +87,11 @@ def table_errors(data):
         if any(field not in row for field in REQUIRED_FIELDS):
             continue
         errors += _row_errors(row)
+        if 'order' in row and 'page' in row:
+            slot = (row['page'], row['order'])
+            if slot in orders:
+                errors.append(f'{name}: order {row["order"]} is already used on page {row["page"]}')
+            orders[slot] = name
         if row['section'] and row['key']:
             pair = (row['section'], row['key'])
             if pair in seen_keys:
@@ -90,8 +107,15 @@ def _row_errors(row):
         errors.append(f'{name}: page must be one of {", ".join(PAGES)}')
     if row['type'] not in TYPES:
         errors.append(f'{name}: type must be one of {", ".join(TYPES)}')
-    if row['visibility'] not in VISIBILITIES:
-        errors.append(f'{name}: visibility must be one of {", ".join(VISIBILITIES)}')
+    if not isinstance(row['order'], int) or row['order'] < 1:
+        errors.append(f'{name}: order must be an integer from 1')
+    if row['control'] not in CONTROLS:
+        errors.append(f'{name}: control must be one of {", ".join(CONTROLS)}')
+    elif row['written'] == 'launcher':
+        if row['control'] != 'none':
+            errors.append(f'{name}: launcher-supplied rows have control none')
+    elif row['type'] in CONTROL_FOR_TYPE and row['control'] != CONTROL_FOR_TYPE[row['type']]:
+        errors.append(f'{name}: a {row["type"]} row needs control {CONTROL_FOR_TYPE[row["type"]]}')
     if row['written'] not in WRITTEN:
         errors.append(f'{name}: written must be one of {", ".join(WRITTEN)}')
     if not STATUS_PATTERN.fullmatch(row['status']):
@@ -133,6 +157,8 @@ def _row_errors(row):
 def _choice_errors(row):
     name = row['id']
     errors = []
+    if 'accept_ini' in row and not isinstance(row['accept_ini'], bool):
+        errors.append(f'{name}: accept_ini must be true or false')
     choices = row.get('choices', [])
     names = [choice.get('name') for choice in choices]
     if len(set(names)) != len(names):
@@ -142,8 +168,17 @@ def _choice_errors(row):
             errors.append(f'{name}: choice without name')
         if not STATUS_PATTERN.fullmatch(choice.get('status', '')):
             errors.append(f'{name}: choice {choice.get("name")} needs a status')
+        if 'label' in choice and not isinstance(choice['label'], str):
+            errors.append(f'{name}: choice {choice.get("name")} label must be text')
         if choice.get('status') == 'ok' and row['written'] != 'never' and not choice.get('ini'):
             errors.append(f'{name}: ok choice {choice.get("name")} needs an ini value')
+        if 'offered' in choice and not isinstance(choice['offered'], bool):
+            errors.append(f'{name}: choice {choice.get("name")} offered must be true or false')
+        if 'height' in choice and not (isinstance(choice['height'], int) and choice['height'] > 0):
+            errors.append(f'{name}: choice {choice.get("name")} height must be a positive integer')
+    inis = [choice.get('ini') for choice in choices if choice.get('ini')]
+    if row.get('accept_ini') and len(set(inis)) != len(inis):
+        errors.append(f'{name}: accept_ini needs unique ini values')
     if row['status'] == 'ok' and not any(choice.get('status') == 'ok' for choice in choices):
         errors.append(f'{name}: ok enum row needs at least one ok choice')
     return errors
@@ -190,6 +225,9 @@ def parse_value(row, raw):
         return text
     if row['type'] == 'enum':
         choices = {choice['name']: choice for choice in row['choices']}
+        if text not in choices and row.get('accept_ini'):
+            # The INI value is accepted as well (upscale: 3 = 1080p, 5 = 5x).
+            text = next((choice['name'] for choice in row['choices'] if choice.get('ini') == text), text)
         if text not in choices:
             raise SettingsError(f'{name} must be one of {", ".join(sorted(choices))}, got {text!r}')
         choice = choices[text]
@@ -228,8 +266,16 @@ def settings_to_json(settings):
 
 def settings_from_json(text, rows):
     """Reads a settings dict from JSON (the GT4_GS_SETTINGS environment variable) and checks it."""
+    def unique_settings(pairs):
+        settings = {}
+        for identifier, value in pairs:
+            if identifier in settings:
+                raise SettingsError(f'{identifier} is given twice')
+            settings[identifier] = value
+        return settings
+
     try:
-        decoded = json.loads(text)
+        decoded = json.loads(text, object_pairs_hook=unique_settings)
     except json.JSONDecodeError as error:
         raise SettingsError(f'GT4_GS_SETTINGS is not JSON: {error}') from error
     if not isinstance(decoded, dict):
@@ -242,6 +288,21 @@ def _json_text(value):
     if isinstance(value, bool):
         return 'true' if value else 'false'
     return str(value)
+
+
+def reset_to_defaults(rows=None):
+    """The GT4 default settings dict (profile gt4-defaults): the default of every settable row.
+
+    Launcher-supplied and launcher-only rows are left out. render_ini(rows, reset_to_defaults(rows)) is the default
+    gt4-gs.ini, byte for byte (tests/python/test_gs_settings.py).
+    """
+    rows = load_table() if rows is None else rows
+    settings = {}
+    for row in rows:
+        if row['status'] != 'ok' or row['written'] not in ('always', 'when-set') or row['type'] == 'path':
+            continue
+        settings[row['id']] = row['default']
+    return settings
 
 
 def render_ini(rows, settings=None, launcher=None, header=INI_HEADER):
@@ -270,7 +331,7 @@ def render_ini(rows, settings=None, launcher=None, header=INI_HEADER):
             continue
         if row['written'] == 'always':
             value = settings.get(identifier, row['default'])
-        elif row['written'] == 'when-set' and identifier in settings:
+        elif row['written'] == 'when-set' and identifier in settings and                 parse_value(row, settings[identifier]) != parse_value(row, row['default']):
             value = settings[identifier]
         elif row['written'] == 'launcher' and identifier in launcher:
             value = launcher[identifier]
@@ -311,12 +372,30 @@ def write_ini_atomic(path, text):
     return path
 
 
+def allowlist_rule(row):
+    """What gt4-gs.exe accepts for one keyed row: the type and its values (every choice, whatever its status: the
+    launcher decides what is offered; gt4-gs only refuses what PCSX2 or the fork does not know)."""
+    rule = {'section': row['section'], 'key': row['key'], 'type': row['type']}
+    if row['type'] == 'bool':
+        rule['values'] = ['true', 'false']
+    elif row['type'] == 'enum':
+        rule['values'] = [choice['ini'] for choice in row['choices'] if choice.get('ini')]
+    elif row['type'] in ('int', 'float'):
+        if isinstance(row.get('min'), (int, float)) and isinstance(row.get('max'), (int, float)):
+            rule['min'] = row['min']
+            rule['max'] = row['max']
+    return rule
+
+
 def allowlist(rows):
-    pairs = sorted({(row['section'], row['key']) for row in rows if row['section'] and row['key']})
+    keyed = sorted((row for row in rows if row['section'] and row['key']), key=lambda row: (row['section'], row['key']))
     return {'schema_version': SCHEMA_VERSION,
             'source': 'docs/launcher/gs-settings.toml',
-            'note': 'INI section/key pairs gt4-gs.exe may accept (fork enforcement pending, TASK-037/038 agent)',
-            'entries': [{'section': section, 'key': key} for section, key in pairs]}
+            'note': ('INI section/key pairs and values gt4-gs.exe accepts. gt4-gs 1.0.0 and later embed this file at build '
+                     'time; any other key, or a value outside its rule, is ignored with one warning line in the log. Types: '
+                     'bool and enum list their values; int and float give min and max; string and path take any '
+                     'single-line text.'),
+            'entries': [allowlist_rule(row) for row in keyed]}
 
 
 def allowlist_text(rows):
@@ -324,20 +403,54 @@ def allowlist_text(rows):
 
 
 def offered(rows):
-    """Rows the launcher may show: basic or advanced, settable, and with at least one settable value."""
+    """Rows the launcher may show: page basic or advanced, settable, and with at least one settable value.
+
+    Launcher-only rows (written = never) such as gs_engine are offered; launcher-supplied rows are not.
+    """
     result = []
     for row in rows:
-        if row['visibility'] == 'hidden' or row['status'] != 'ok' or row['written'] in ('never', 'launcher'):
+        if row['page'] not in ('basic', 'advanced') or row['status'] != 'ok' or row['written'] == 'launcher':
             continue
         if row['type'] == 'enum' and not any(choice['status'] == 'ok' for choice in row['choices']):
             continue
         result.append(row)
-    return result
+    return sorted(result, key=lambda row: (PAGES.index(row['page']), row['order']))
 
 
 def offered_choices(row):
-    """The choice names the launcher may show for an enum row."""
-    return [choice['name'] for choice in row['choices'] if choice['status'] == 'ok']
+    """The choice names the launcher may show for an enum row (status ok and not marked offered = false)."""
+    return [choice['name'] for choice in row['choices'] if choice['status'] == 'ok' and choice.get('offered', True)]
+
+
+# Internal resolution presets (owner decision 2026-10-16). The launcher (TASK-019) uses these two helpers; they are not a
+# launcher themselves.
+UPSCALE_DEFAULT_PRESET = '1080p'
+UPSCALE_TEXTURE_DIVISOR = 1280  # PCSX2 GSGetMaxUpscaleMultiplier: max(max texture size / 1280, 1)
+
+
+def upscale_presets(rows):
+    """The offered upscale presets in order: (name, multiplier, output height)."""
+    row = rows_by_id(rows)['upscale']
+    return [(choice['name'], int(choice['ini']), choice['height']) for choice in row['choices']
+            if choice['status'] == 'ok' and choice.get('offered', True)]
+
+
+def upscale_preset_for_monitor(rows, monitor_height):
+    """The launcher's initial preset: the smallest preset whose height is at least the monitor's vertical resolution;
+    an unknown height (None or 0) gives 1080p; a monitor taller than every preset gets the largest."""
+    presets = upscale_presets(rows)
+    if not monitor_height:
+        return UPSCALE_DEFAULT_PRESET
+    for name, _, height in presets:
+        if height >= monitor_height:
+            return name
+    return presets[-1][0]
+
+
+def upscale_presets_within_texture_limit(rows, max_texture_size):
+    """The presets the GPU can draw: multiplier <= max(max texture size / 1280, 1). The launcher greys out the others."""
+    limit = max(int(max_texture_size) // UPSCALE_TEXTURE_DIVISOR, 1)
+    return [name for name, multiplier, _ in upscale_presets(rows) if multiplier <= limit]
 
 
 def main(argv=None):

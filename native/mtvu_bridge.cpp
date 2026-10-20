@@ -7,6 +7,10 @@
 #include "vif.hpp"
 #include "vu_micro.hpp"
 
+#ifdef GT4_GS_STREAM_CLIENT
+#include "gs_stream/gs_stream_client.hpp"
+#endif
+
 namespace ps2::vif {
 // Defined by the --mtvu capsule (vif.cpp): hash of the EE shadow or the worker's VIF1 unit state.
 std::uint64_t verify_hash(bool worker_side);
@@ -40,6 +44,16 @@ void start_with_donor(const Settings &settings) {
   donor.render_gs = render_gs;
   donor.vif1_state_hash = vif1_state_hash;
   donor.apply_signal = apply_signal;
+#ifdef GT4_GS_STREAM_CLIENT
+  // TASK-041: in pcsx2 mode privileged GS writes only feed the GS stream, which needs them in stream order with the
+  // GIF output; the EE keeps its own CSR/IMR/SIGLBLID copy. GT4_MTVU_PRIV_ASYNC selects whether they wait.
+  if (gt4::gs_stream::stream_renderer()) {
+    set_ordered_privileged_consumer(&gt4::gs_stream::post_privileged_now);
+    gt4::gs_stream::set_privileged_ordering({&queue_privileged, &take_privileged_wait_us, &privileged_async});
+    // TASK-062: the VU1 worker busy time for the GS process's performance overlay (OSD_STATS).
+    gt4::gs_stream::set_worker_busy_source(&worker_busy_us);
+  }
+#endif
   start(settings, donor);
 }
 

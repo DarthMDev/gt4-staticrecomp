@@ -252,6 +252,7 @@ void check_spurious_wakes() {
   auto consumer = Session::open_consumer(producer->name());
   producer->set_spin_us(0);
   consumer->set_spin_us(0);
+  producer->set_data_wake_bytes(0);  // one wake-up per record: the sleeper must see the record at once
   for (Wake wake : {Wake::data, Wake::space, Wake::response, Wake::event}) producer->signal(wake);
   std::atomic<bool> got{false};
   std::thread reader([&] {
@@ -269,6 +270,80 @@ void check_spurious_wakes() {
   RecordView event;
   require(!producer->wait_event(event, 120), "spurious event wake does not invent an event");
   std::puts("[gs-stream-ipc] spurious wakes ok");
+}
+
+// TASK-041: wake batching. A sleeping consumer is signalled after data_wake_bytes of GIF/PRIV records, at once for
+// any other record type, and before the producer waits for ring space (else a full ring would stall until the
+// consumer's 100 ms sleep slice ends).
+std::uint64_t post_gif_records(Session &producer, int count, bool pause) {
+  std::vector<std::uint8_t> data(1024, 7);
+  for (int i = 0; i < count; ++i) {
+    producer.post(RecordType::gif, 0, data.data(), data.size());
+    if (pause) std::this_thread::sleep_for(std::chrono::milliseconds(2));  // the consumer drains and sleeps again
+  }
+  return producer.wait_totals().wakes_signalled[static_cast<int>(Wake::data)];
+}
+
+void check_wake_batching() {
+  for (const std::uint64_t threshold : {std::uint64_t(0), std::uint64_t(16) << 10}) {
+    auto producer = Session::create_producer(small_options(1 << 20));
+    auto consumer = Session::open_consumer(producer->name());
+    producer->set_spin_us(0);
+    consumer->set_spin_us(0);
+    producer->set_data_wake_bytes(threshold);
+    std::atomic<int> received{0};
+    std::thread reader([&] {
+      RecordView view;
+      for (;;) {
+        consumer->next_command(view);
+        const bool last = view.header->type == static_cast<std::uint16_t>(RecordType::control);
+        consumer->release_command(view);
+        ++received;
+        if (last) return;
+      }
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const std::uint64_t wakes = post_gif_records(*producer, 64, true);
+    const ControlPayload shutdown{static_cast<std::uint32_t>(ControlKind::shutdown), 0, {}};
+    const auto start = std::chrono::steady_clock::now();
+    producer->post(RecordType::control, 0, &shutdown, sizeof shutdown);  // not batched: wakes the consumer at once
+    reader.join();
+    const auto waited = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+    require(received == 65, "every record delivered");
+    require(waited.count() < 90, "a CONTROL record wakes the sleeping consumer at once");
+    if (threshold == 0)
+      require(wakes >= 60, "without batching every record wakes the sleeping consumer");
+    else
+      require(wakes >= 2 && wakes <= 6, "64 records of 1,056 bytes with a 16 KiB threshold wake it about 4 times");
+    std::printf("[gs-stream-ipc] wake batching threshold %llu: %llu data wake-ups for 64 GIF records\n",
+                static_cast<unsigned long long>(threshold), static_cast<unsigned long long>(wakes));
+  }
+  // Back-pressure with a threshold larger than the ring: the producer must wake the consumer before it waits.
+  auto producer = Session::create_producer(small_options(8192));
+  auto consumer = Session::open_consumer(producer->name());
+  producer->set_spin_us(0);
+  consumer->set_spin_us(0);
+  producer->set_data_wake_bytes(1u << 20);
+  std::atomic<int> received{0};
+  std::thread reader([&] {
+    RecordView view;
+    for (int i = 0; i < 101; ++i) {
+      consumer->next_command(view);
+      consumer->release_command(view);
+      ++received;
+    }
+  });
+  std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  const auto start = std::chrono::steady_clock::now();
+  post_gif_records(*producer, 100, false);
+  const ControlPayload shutdown{static_cast<std::uint32_t>(ControlKind::shutdown), 0, {}};
+  producer->post(RecordType::control, 0, &shutdown, sizeof shutdown);
+  reader.join();
+  const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start);
+  require(received == 101 && producer->wait_totals().space_waits > 0, "ring space waits exercised, every record delivered");
+  require(elapsed.count() < 1000, "a full ring wakes the batched consumer (no 100 ms stall per space wait)");
+  std::printf("[gs-stream-ipc] wake batching back-pressure: %llu space waits, %lld ms\n",
+              static_cast<unsigned long long>(producer->wait_totals().space_waits), static_cast<long long>(elapsed.count()));
 }
 
 void check_fatal_flag() {
@@ -428,6 +503,7 @@ int main(int argc, char **argv) {
     check_split();
     check_readback_and_frames();
     check_spurious_wakes();
+    check_wake_batching();
     check_fatal_flag();
     check_threaded_random(records);
     check_child_process();

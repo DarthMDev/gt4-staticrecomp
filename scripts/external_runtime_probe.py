@@ -74,8 +74,42 @@ PERF_PROFILES = {
     # the picture; the game keeps the keyboard focus on activation).
     'pcsx2-slice195': ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'),
     # TASK-047 (slice196): 480i deinterlacing (SetGsCrt posts SYNCV; gt4-gs 0.3.2 presents with the VSYNC display
-    # field, protocol 1.1). Mode pcsx2 points here.
-    'pcsx2': ('slice196-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
+    # field, protocol 1.1).
+    'pcsx2-slice196': ('slice196-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
+    # TASK-041 (slice198): privileged GS writes queued in the MTVU journal instead of draining the VU1 worker
+    # (GT4_MTVU_PRIV_ASYNC, default 1), one copy less per worker GIF record, F8 [gs-ipc] per-register lines and the EE
+    # critical path summary. Same gt4-gs 0.3.2 package as slice196.
+    'pcsx2-slice198': ('slice198-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
+    # TASK-042 (slice197): the JIT-free gt4-gs 0.4.0 (no recompilers, no GS software JIT, no executable memory,
+    # Arbitrary Code Guard). Same game runtime as slice196.
+    'pcsx2-slice197': ('slice197-pcsx2.json', 'private/slice196-gs-deinterlace-build/build/gt4vulkan.exe'),
+    # TASK-041 (slice199): the slice198 game runtime with the JIT-free gt4-gs 0.4.0 (no recompilers, no GS software JIT).
+    'pcsx2-slice199': ('slice199-pcsx2.json', 'private/slice198-gs-perf-build/build/gt4vulkan.exe'),
+    # TASK-058/059 (slice200): the slice199 candidate with the crash-safe memory card (memcard capsule), the installed-folder
+    # paths and --portable-check (port slice200-port).
+    'pcsx2-slice200': ('slice200-pcsx2.json', 'private/slice200-build/build/gt4vulkan.exe'),
+    # TASK-060/061/062 (slice201): cursor auto-hide, protocol 1.2 OSD_STATS for the performance overlay, and the stable
+    # gt4-gs 1.0.0 ("Compiling shaders" notice, overlay, settings allow-list).
+    'pcsx2-slice201': ('slice201-pcsx2.json', 'private/slice201-osd-build/build/gt4vulkan.exe'),
+    # slice202: one candidate with both: the slice200 game-side changes (TASK-058/059) and the slice201 ones
+    # (TASK-060/062), with the stable gt4-gs 1.0.0 package of slice201.
+    'pcsx2-slice202': ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'),
+    # slice203 (TASK-044): the slice202 game executable (same hash) with the stable gt4-gs 1.0.1 package (no writes under
+    # Documents\PCSX2). Kept as pcsx2-slice203 after TASK-017.
+    'pcsx2-slice203': ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'),
+    # TASK-017 (slice206): the slice203 game recipe plus the license demo guard v2 (both demo loaders), gt4-gs 1.0.1. Mode pcsx2
+    # points here. Halt dump and FSV trace are built in and off unless GT4_HALT_DUMP / GT4_FSV_TRACE are set.
+    'pcsx2': ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'),
+    # TASK-017 diagnostic candidate (slice181): the slice166 profile plus the FSV read trace (GT4_FSV_TRACE=1
+    # writes one [fsv] line per guest disc read to stderr). Not a performance candidate.
+    'license-trace': ('slice181-license-trace.json', 'private/slice181-license-build/build/gt4vulkan.exe'),
+    # TASK-017 halt-dump candidate (slice204): the slice181 license-trace profile plus the halt forensic dump in kernel.cpp.
+    # The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; [halt-dump] lines go to stderr at the halt.
+    # Diagnostic only; not a performance candidate.
+    'license-halt': ('slice204-halt-trace.json', 'private/slice204-halt-build/build/gt4vulkan.exe'),
+    # TASK-017 license guard v1 (slice205, owner test 2026-10-16; guards the 0x001100D0 loader only). History.
+    # (private/slice205-license-guard-runtime; halt dump and FSV trace built in, off unless GT4_HALT_DUMP/GT4_FSV_TRACE).
+    'license-guard': ('slice205-license-guard.json', 'private/slice205-license-guard-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -84,14 +118,23 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice156-quickfix.json', 'slice157-vu1-all.json', 'slice158-quickfix2.json', 'slice164-quickfix3.json',
                      'slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
+                     'slice201-pcsx2.json', 'slice202-pcsx2.json',
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
-                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json')
+                     'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
+                     'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
+                     'slice201-pcsx2.json', 'slice202-pcsx2.json',
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
+# TASK-060: GT4_CURSOR_AUTOHIDE (unset or 1 = hide the cursor over the picture after 3 s, 0 = never). Forwarded and
+# recorded; the settings table row cursor_autohide (launcher-only) names it.
+CURSOR_AUTOHIDE_VALUES = ('0', '1')
 # GT4_CONTROLS_FILE (docs/CONTROLS.md): input bindings in a TOML file. Unset means the built-in map.
 CONTROLS_SCHEMA = 1
 CONTROLS_INPUTS = ('dpad_up', 'dpad_right', 'dpad_down', 'dpad_left', 'cross', 'circle', 'square',
@@ -103,22 +146,26 @@ FORCE_480P_VALUES = ('0', '1')
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
 MTVU_MEASURE_VALUES = ('0', '1')
 # TASK-011 step 2 (slice170): worker runtime switches. Unset means the default shown; forwarded and recorded.
-MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0'}
+# GT4_MTVU_PRIV_ASYNC (TASK-041, slice198): privileged GS writes queued in the MTVU journal in pcsx2 mode (default on).
+MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0', 'GT4_MTVU_PRIV_ASYNC': '1'}
 # GT4_MTVU_REPORT_EVERY (slice171): VBlank count for the headless [mtvu] F8-equivalent report; unset means off.
 MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
 # TASK-035 (slice191): GS stream settings (native/gs_stream/gs_stream_client.hpp, tools/gs_stream_record).
 GS_STREAM_RENDERERS = ('donor', 'pcsx2')
 # GS display settings an owner run keeps from the caller (play_performance.py --gs-scale, --gs-readback, --gs-setting).
-GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_SETTINGS', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE')
+GS_USER_SETTINGS = ('GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_SETTINGS', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE',
+                    'GT4_GS_WAKE_BYTES')
 GS_STREAM_NAMES = ('GT4_RENDERER', 'GT4_GS_PROCESS', 'GT4_GS_CAPTURE', 'GT4_GS_CAPTURE_FRAMES', 'GT4_GS_FRAMES_IN_FLIGHT',
                    'GT4_GS_RECORD_OUTPUT', 'GT4_GS_RECORD_FRAMES', 'GT4_GS_PROCESS_SHA256', 'GT4_GS_CONFIG',
                    'GT4_GS_SCALE', 'GT4_GS_ASPECT', 'GT4_GS_READBACK', 'GT4_GS_EAGER_ACQUIRE',
-                   'GT4_GS_HANDSHAKE_TIMEOUT_MS', 'GT4_GS_LOST_GRACE_FRAMES', 'GT4_GS_SETTINGS')
+                   'GT4_GS_HANDSHAKE_TIMEOUT_MS', 'GT4_GS_LOST_GRACE_FRAMES', 'GT4_GS_SETTINGS',
+                   # TASK-041 (slice198): game-side test and A/B switches (wake batching, stream hash).
+                   'GT4_GS_WAKE_BYTES', 'GT4_GS_STREAM_HASH')
 # TASK-039: user GS settings as JSON (play_performance.py --gs-setting ID=VALUE and the shortcuts). The table:
 # docs/launcher/gs-settings.toml; the gt4-gs.ini writer is gs_config_text below (scripts/gs_settings.py).
 GS_SETTINGS_ENV = 'GT4_GS_SETTINGS'
 # TASK-036 (slice193): the minimal gt4-gs.ini values, kept as the names the launcher and tests use.
-GS_SCALES = tuple(str(n) for n in range(1, 9))
+GS_SCALES = tuple(str(n) for n in range(1, 13))
 GS_DEFAULT_SCALE = '3'
 # GT4_GS_ASPECT: display aspect of the GS output. 16:9 is the game's setting (widescreen card); auto is PCSX2's
 # "Auto 4:3/3:2" (used to compare with the TASK-034 proof-of-concept images).
@@ -193,7 +240,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2', 'license-guard') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
@@ -218,14 +265,14 @@ def gs_settings_from_environment(environment, rows):
     """The checked GS settings of a pcsx2 run, from the table (docs/GS-SETTINGS.md).
 
     GT4_GS_SETTINGS (JSON from play_performance.py --gs-setting ID=VALUE) holds the user settings. The shortcuts
-    GT4_GS_SCALE (upscale, default 3), GT4_GS_ASPECT (aspect) and GT4_GS_READBACK (hw_download_mode, default accurate)
+    GT4_GS_SCALE (upscale, 1 to 12, default 3), GT4_GS_ASPECT (aspect) and GT4_GS_READBACK (hw_download_mode, default accurate)
     set the same rows; a shortcut and a JSON setting for the same row conflict.
     """
     settings = {}
     if environment.get(GS_SETTINGS_ENV):
         settings = gs_settings.settings_from_json(environment[GS_SETTINGS_ENV], rows)
     index = gs_settings.rows_by_id(rows)
-    shortcuts = (('GT4_GS_SCALE', 'upscale', 'GT4_GS_SCALE must be an integer from 1 to 8'),
+    shortcuts = (('GT4_GS_SCALE', 'upscale', 'GT4_GS_SCALE must be an integer from 1 to 12'),
                  ('GT4_GS_ASPECT', 'aspect', 'GT4_GS_ASPECT must be one of ' + ', '.join(
                      gs_settings.offered_choices(index['aspect']))),
                  ('GT4_GS_READBACK', 'hw_download_mode', 'GT4_GS_READBACK must be one of ' + ', '.join(
@@ -426,6 +473,31 @@ def summarize_vu1_corpus(corpus):
     return summary
 
 
+# The owner's persistent card. --play-card selects another private card and may never name this one.
+OWNER_PLAY_CARD = 'private/manual-play/card.ps2'
+
+
+def separate_play_card(workspace, path):
+    """Validates a --play-card path: an existing file inside private/, never the owner's card. Returns it resolved.
+
+    Relative paths are taken from the assets checkout. The card is never created here: it must already exist, and
+    the usual backup (card-before.ps2 in the session folder) and session lock apply to it.
+    """
+    workspace = Path(workspace).resolve()
+    candidate = Path(path)
+    if not candidate.is_absolute():
+        candidate = workspace / candidate
+    resolved = candidate.resolve()
+    private = (workspace / 'private').resolve()
+    if not resolved.is_relative_to(private) or resolved == private:
+        raise ValueError(f'--play-card must be a card file inside private/: {path}')
+    if resolved == (workspace / OWNER_PLAY_CARD).resolve():
+        raise ValueError(f"--play-card must not be the owner's card {OWNER_PLAY_CARD}")
+    if not resolved.is_file():
+        raise ValueError(f'--play-card must name an existing card file (it is never created): {path}')
+    return resolved
+
+
 def resolve_controls_file(controls_file):
     """Returns the absolute controls path, or None for the built-in bindings.
 
@@ -489,7 +561,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              binary_workspace=None, cpu_cores=None, controls_file=None, renderer_override=None):
+              binary_workspace=None, cpu_cores=None, controls_file=None, renderer_override=None, separate_card=False):
     workspace = workspace.resolve()
     if cpu_cores is not None and not performance:
         raise ValueError('--cpu-cores is refused outside performance modes')
@@ -507,6 +579,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     # Refused before any output: the window is fixed 16:9, and unknown GT4_FORCE_480P values stop the run.
     if os.environ.get('GT4_FORCE_480P', '0') not in FORCE_480P_VALUES:
         raise ValueError('GT4_FORCE_480P must be 0 or 1')
+    if os.environ.get('GT4_CURSOR_AUTOHIDE', '1') not in CURSOR_AUTOHIDE_VALUES:
+        raise ValueError('GT4_CURSOR_AUTOHIDE must be 0 or 1')
     if os.environ.get('GT4_MTVU_MEASURE', '1') not in MTVU_MEASURE_VALUES:
         raise ValueError('GT4_MTVU_MEASURE must be 0 or 1')
     if not os.environ.get('GT4_MTVU_MEASURE_EVERY', '0').isdigit():
@@ -533,6 +607,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
             raise ValueError('Persistent card has an unexpected size; preserve it for inspection')
         if not play_card.exists() and card_seed is None:
             raise ValueError('First manual play needs a pinned seed card')
+        if separate_card:
+            play_card = separate_play_card(workspace, play_card)
 
     # Refused before any output: a bad controls file must stop the start, not the game.
     controls_path = resolve_controls_file(controls_file)
@@ -635,6 +711,9 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         with (run_directory / 'card-before.ps2').open('rb') as source:
             result['play_card_before'] = fingerprint(source)
         result['play_card_path'] = str(play_card)
+        if separate_card:
+            # --play-card: a separate test card, not the owner's private/manual-play/card.ps2.
+            result['play_card_option'] = str(play_card)
     start = time.monotonic()
     log_path = run_directory / 'probe.log'
     environment = os.environ.copy()
@@ -649,11 +728,19 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment.update(GT4_PERF='1', PS2_SCALE='1', PS2_GS='gpu')
         result['performance_environment'] = {'GT4_PERF': '1', 'PS2_SCALE': '1', 'PS2_GS': 'gpu'}
         result['measurement_mode'] = runtime_evidence.get('measurement_mode', 'detailed')
+        if runtime_evidence.get('measurement_mode') == 'license-halt':
+            # TASK-017 (slice204): the halt dump and the FSV read trace are both on for this diagnostic mode.
+            environment.update(GT4_FSV_TRACE='1', GT4_HALT_DUMP='1')
+            result['halt_dump_environment'] = {'GT4_FSV_TRACE': '1', 'GT4_HALT_DUMP': '1'}
         result['vulkan_loader_environment'] = {
             name: value for name, value in environment.items() if name.upper().startswith('VK_')}
     if 'GT4_GS_SYNC' in environment:
         result['gs_sync_environment'] = {'GT4_GS_SYNC': environment['GT4_GS_SYNC']}
     result.update(pacing_overrides(environment))
+    if 'GT4_CURSOR_AUTOHIDE' in environment:
+        if environment['GT4_CURSOR_AUTOHIDE'] not in CURSOR_AUTOHIDE_VALUES:
+            raise ValueError('GT4_CURSOR_AUTOHIDE must be 0 or 1')
+        result['cursor_environment'] = {'GT4_CURSOR_AUTOHIDE': environment['GT4_CURSOR_AUTOHIDE']}
     result.update(gs_stream_environment(environment, runtime_evidence, binary_workspace, performance,
                                         run_directory=run_directory, headless=not window,
                                         renderer_override=renderer_override))
@@ -663,6 +750,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:
         result['force_480p_environment'] = {'GT4_FORCE_480P': environment['GT4_FORCE_480P']}
+    if 'GT4_FSV_TRACE' in environment:
+        result['fsv_trace_environment'] = {'GT4_FSV_TRACE': environment['GT4_FSV_TRACE']}
+    if 'GT4_HALT_DUMP' in environment and 'halt_dump_environment' not in result:
+        result['halt_dump_environment'] = {'GT4_HALT_DUMP': environment['GT4_HALT_DUMP']}
     mtvu_measure = {name: environment[name] for name in ('GT4_MTVU_MEASURE', 'GT4_MTVU_MEASURE_EVERY') if name in environment}
     if mtvu_measure:
         result['mtvu_measure_environment'] = mtvu_measure
@@ -766,14 +857,19 @@ def main():
                         help='Experimental: hold the race display index at 480p (GT4_FORCE_480P=1)')
     parser.add_argument('--assets-root', type=Path,
                         help='Checkout with private/ and the disc (default: this checkout); outputs go under it')
+    parser.add_argument('--play-card', type=Path,
+                        help='Interactive only: play on this existing card inside private/ (never the owner card '
+                             'private/manual-play/card.ps2); backed up like the owner card and recorded in result.json')
     options = parser.parse_args()
     try:
         assets = (options.assets_root or ROOT).resolve()
+        play_card = separate_play_card(assets, options.play_card) if options.play_card else None
         result = run_probe(assets, options.run_directory, options.frames, options.timeout,
                            options.press, options.card_seed, options.runtime_manifest, options.window,
-                           options.capture_audio, options.interactive, force_480p=options.force_480p,
-                           controls_file=options.controls, runtime_workspace=ROOT,
-                           binary_workspace=binary_workspace_for(ROOT, assets))
+                           options.capture_audio, options.interactive, play_card=play_card,
+                           force_480p=options.force_480p, controls_file=options.controls,
+                           runtime_workspace=ROOT,
+                           binary_workspace=binary_workspace_for(ROOT, assets), separate_card=play_card is not None)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')
     print(json.dumps(result, indent=2))

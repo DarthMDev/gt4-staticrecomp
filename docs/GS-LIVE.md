@@ -1,6 +1,8 @@
 # Live PCSX2 GS process (TASK-036)
 
-Status: **built and checked headless; owner windowed test pending** (2026-10-16). Branch `task/036-gs-live` (main
+Status: **built and checked headless; owner windowed test pending** (2026-10-16). Performance of this path: section 9
+(TASK-041, slice198; on gt4-gs 0.4.0 from slice199, section 10.5). JIT-free package: section 10. Cursor auto-hide,
+"Compiling shaders" notice, performance overlay and the stable gt4-gs 1.0.0: section 11 (slice201). Branch `task/036-gs-live` (main
 repo, MIT) and `gt4gs/live` in the GPL fork [moesuito/gt4recomp-gs](https://github.com/moesuito/gt4recomp-gs).
 Decision [0070](decisions/0070-pcsx2-gs-separate-process.md), plan [GSDX-PLAN](GSDX-PLAN.md) sections B.3 and C,
 protocol [GS-STREAM-PROTOCOL](GS-STREAM-PROTOCOL.md). Labels: **Confirmed**, **High confidence**, **Hypothesis**,
@@ -332,3 +334,318 @@ mean same-field-line difference; flicker = mean frame-to-frame difference).
 The visible window (owner), interlaced races (480i held, no race capture), PAL and 1080i, the FastMAD look at 3x
 and the menu transitions with motion (the metric covers a static menu; 840-880 transitions were checked by eye
 only).
+
+## 9. Performance of the PCSX2 GS path (TASK-041, slice198)
+
+Status: **owner tested on gt4-gs 0.3.2** (slice198, 2026-10-16 night race with 5 AI: 59.97 FPS, 53 late frames, was 69;
+EE critical path 11.81 of 16.68 ms). Branch `task/041-gs-perf` (main repo only; the fork is unchanged). slice198 pins the
+`gt4gs-v0.3.2` package as slice196; **slice199 runs the same changes on the JIT-free gt4-gs 0.4.0** (section 10.5, pin
+[`slice199-pcsx2.json`](inputs/slice199-pcsx2.json)). `--mode pcsx2` now selects slice199; `--mode pcsx2-slice198` and
+`--mode pcsx2-slice197` keep the A/B pins; `--mode pcsx2-slice196` keeps TASK-047.
+
+### 9.1 A headless race
+
+The slice157 schedule never leaves the menus, so TASK-041 adds a race schedule (`private/slice198-scripts/
+headless-race.sh`, card seed `slice110-menu-pilot/name-control4`): Arcade, Single Race, Original Circuits, El Capitan,
+Ford Ka '01, 5 AI cars, cross held from frame 8800; the race runs from about frame 9000 to 16000 (dumps every 100
+frames show the car on track). It is a day track, but it has readbacks (294 in the run) with the same privileged-write
+pattern as the owner's night race. All timings below are headless, unthrottled and at 1x: they compare variants with
+each other, not with the owner's paced 60 Hz runs.
+
+### 9.2 Privileged writes and the MTVU sync (goal 1)
+
+Per-register counters (new F8 lines, section 9.5) give the night-race pattern (Confirmed):
+
+- every frame, at the VBlank: PMODE, SMODE2, DISPFB2, DISPLAY2, BGCOLOR (5 writes, worker idle, wait 0);
+- per readback: CSR (FINISH clear) and BUSDIR twice (to host before the FIFO read, back after). The owner's night race
+  has one readback per frame: 5 + 3 = **8.00 privileged writes per frame**, exactly the owner F8 value.
+- With the blocking sync, the whole wait sits before the CSR write: in the readback-dense race interval CSR 2.063 of
+  2.067 ms/frame, BUSDIR 0.004. The EE kicks the frame's VIF1 work, then clears CSR for the flare readback while the
+  worker still runs the VU1 programs; the sync waits for all of them.
+
+None of the registers needs the blocking sync in pcsx2 mode: CSR/IMR/SIGLBLID reads are answered from the EE copy,
+which the donor writes at the program point either way, and the GS process only needs the PRIV record at its stream
+position. `GT4_MTVU_PRIV_ASYNC=1` (default in slice198) skips the sync and lets the stream client queue the write in
+the MTVU journal (`EeJournal::append_privileged`) when worker output is outstanding; the journal drain posts it after
+the earlier GIF output (when nothing is outstanding it is posted at once, as before). Donor mode is unchanged (no
+ordered consumer is registered there). `GT4_MTVU_PRIV_ASYNC=0` restores the slice196 path.
+
+Equivalence (Confirmed, headless):
+
+| Check | Result |
+|---|---|
+| Menus, 4,200 frames: `.gscap` of donor slice198, pcsx2 slice198 (async), pcsx2 slice196 | byte-identical, sha256 `4ff3993d...` (0 writes queued in the menus) |
+| Race, 16,000 frames: stream hash (`GT4_GS_STREAM_HASH=1`) async 1 vs 0 | identical, 31,709,575 records, `9b88c23e984ff940`; 588 writes queued (all BUSDIR before a FIFO read) |
+| Race frames (gs-frames every 100), async 1 vs 0 | 159/159 identical |
+| Menus frames, slice198 pcsx2 1x vs slice196 | 41/41 identical (two runs) |
+
+Effect (Confirmed headless, the night race by inference): **the new gs_privileged wait is 0.000 ms/frame, but the wait
+moves to the download sync** a few microseconds later (READ_FIFO must follow the worker's GIF output in the stream,
+in both readback modes). Same race interval: privileged 1.323 -> 0, download 0 -> 1.503 ms/frame; over the race,
+gs_privileged 0.286 (async 0) vs download 0.307 (async 1). So in the night race the EE critical path should not
+change (High confidence); the wait is the readback's dependency on the VU1 worker, not a cost of the sync itself.
+The switch stays on because it is proven byte-equivalent and removes waits where a privileged write is not followed
+by a readback; the owner A/B (`GT4_MTVU_PRIV_ASYNC=0`) checks it on the real night race.
+
+### 9.3 Readback tail (goal 2)
+
+Race schedule twice with a new, empty pipeline cache folder (`[Folders] Cache`), then with a GS-side spin:
+
+| Run | Readback waits (game side) | GS thread frames over 33 ms |
+|---|---|---|
+| cold cache | mean 1.56 ms, max 58.0; 12 of 294 at 8 ms or more (5 at 16 ms or more) | 129 |
+| same cache, warm | mean 0.60 ms, max 2.7; none at 8 ms or more | 125 |
+| warm, `[GT4GS] SpinUs = 300` | mean 0.72 ms, max 3.2 | 128 |
+
+- The long readbacks are pipeline compiles (Confirmed: they disappear on the second run with the cache that the first
+  run filled). The owner's 23 ms tail at race start is the same mechanism; TASK-046 ("prepare shaders") is the fix.
+  The worktree cache shipped with slice198 already holds the El Capitan race pipelines (1x).
+- A longer GS-side spin does not help (mean 0.72 vs 0.60 ms; it only keeps the GS CPU thread awake), so the fork is
+  unchanged. Accurate stays the default.
+- Headless GS-thread frames over 33 ms are mostly loading screens (same in every run).
+
+### 9.4 Stream copies and wake-ups (goal 3)
+
+Profile of `gs_ipc_write` with the new counter: on the race the producer signalled the GS process's data event
+**322 times per frame** (one `SetEvent` system call and one thread wake-up for most GIF records, because the GS CPU
+thread drains the ring and sleeps after its 30 us spin). Changes:
+
+- Wake batching (`GT4_GS_WAKE_BYTES`, default 262,144; 0 = every record as before): GIF/PRIV records wake a sleeping
+  GS process every 256 KiB; VSYNC, READ_FIFO, RESET and CONTROL wake it at once, and the producer wakes it before it
+  waits for ring space ([protocol](GS-STREAM-PROTOCOL.md) section 5). Race: 322 -> 11-14 wake-ups per frame;
+  `gs_ipc_write` 0.169-0.180 -> 0.114-0.126 ms per MB of stream (about -30%; slice196 1.10 ms/frame at 6.1 MB, slice198
+  0.79 ms/frame at 6.3 MB). Readback mean unchanged (0.68 -> 0.61 ms with the privileged sync on).
+- MTVU journal: a worker GIF record that arrives in one chunk (the usual case) is moved into the drain queue instead of
+  copied a second time (`EeJournal::pump_output`); one copy of the worker's GIF bytes less on the EE thread.
+- Not done: writing the worker's GIF data straight into the shared ring. The bytes must wait in the journal for their
+  stream position (EE PATH3 and privileged writes interleave), so one copy into the ring remains.
+
+### 9.5 F8 `[gs-ipc]` section (goal 4)
+
+New lines after the existing ones (ms per frame unless noted):
+
+```
+[gs-ipc] privileged writes/frame (total 8.00): PMODE=1.00 SMODE2=1.00 DISPFB2=1.00 DISPLAY2=1.00 BGCOLOR=1.00 CSR=1.00 BUSDIR=2.00
+[gs-ipc] EE wait for the VU1 worker before privileged writes ms/frame (total ...): ... CSR=... BUSDIR=...
+[gs-ipc] privileged writes queued behind VU1 worker output/frame: 1.00 (GT4_MTVU_PRIV_ASYNC on)
+[gs-ipc] GS process woken from sleep per frame: 12.3 (records posted while its CPU thread slept; one event signal each)
+[gs-ipc] GS process CPU thread (STATS vsyncs 2500-9500): busy ms/frame=0.948 wait ms/frame=15.199 records/frame=... readbacks served ...
+[gs-ipc] summary: EE critical path 13.02 ms/frame of 16.68 budget (78%) = EE CPU 8.76 + waits for the VU1 worker 3.48 + readbacks 0.78 + GS back-pressure 0.00; headroom 3.67 ms; GS process CPU thread 0.95 ms/frame
+```
+
+(Example values: the owner's slice194 night race fed into the summary formula, checked by the client fixture.) The
+GS process CPU thread line is now the interval (difference of the STATS records), not the cumulative value. The GS
+thread and GPU times stay in the `(GSStreamReplayer)` lines every 500 VSYNCs of the same log; carrying them in STATS
+would change the fork and its vendored protocol copy, which TASK-042 is rebuilding, so it is left for later.
+
+### 9.6 Donor versus pcsx2 in the same build (goal 5)
+
+slice157 menus schedule, 4,200 frames, headless, two runs each, totals over the F8-equivalent reports:
+
+| Renderer | EE thread CPU | GS work on the EE | Elapsed |
+|---|---|---|---|
+| donor (CoreGS 1.1) | 7.60 / 7.53 ms/frame | gs_host_copy 0.32 + gs_execute 0.07 + journal GS front end 0.11 | 33.2 / 32.7 s |
+| pcsx2 (1x) | 7.30 / 7.10 ms/frame | gs_ipc_write 0.08 + journal drain 0.04 | 33.6 / 32.8 s |
+
+The GS stream costs the EE about 0.35 ms/frame less than the built-in renderer's front end in the menus (Confirmed for
+the menus; both are small next to the 6.4 ms of EE game code). Races are the owner's A/B.
+
+### 9.7 Checks and not verified
+
+- CTest 29/29 (new: privileged entries in the random journal scripts, `pcsx2-ordered` stream scenario byte-identical
+  to `pcsx2`, register table and summary line, wake batching counts and the back-pressure wake-up); Python 416 OK
+  (16 skipped; new `tests/python/test_gs_perf.py`); donor 42/42 identical to slice157 (two runs); pcsx2 1x 41/41
+  identical to slice196 (two runs); race stream hash and frames as in 9.2.
+- Not verified: the owner's night race (paced, 3x, visible window): whether the late frames change, the new F8 lines
+  with real values, and whether wake batching changes GS-thread smoothness at 60 Hz. The headless race is a day track
+  at 1x.
+
+## 10. No JIT (TASK-042, slice197, gt4-gs 0.4.0)
+
+Status: **built, published and checked headless; owner windowed check pending** (2026-10-16). Branch
+`task/042-gs-nojit` (main) and `gt4gs/nojit` in the fork (commit `4c8b63a6e`, prerelease `gt4gs-v0.4.0`). `--mode pcsx2`
+now selects [`slice197-pcsx2.json`](inputs/slice197-pcsx2.json); `--mode pcsx2-slice196` keeps 0.3.2. The game runtime
+is the slice196 build, unchanged (same file and hash); only the GS package changes. Project rule: no JIT ever
+(GPU driver shader compilation is allowed).
+
+### 10.1 Audit of 0.3.2 (fork sources and the 0.3.2 binary; PCSX2-tainted reading, no code copied here)
+
+| Site | 0.3.2 | Run in our replay mode (0.3.2) | 0.4.0 |
+|---|---|---|---|
+| EE recompiler (`pcsx2/x86/ix86-32/*`, `iR5900*`), `recCpu.Reserve` | compiled in | reserved at start (tables and code pointers, no code emitted; High confidence); never executed (the stream replayer is the CPU) | not compiled |
+| IOP recompiler (`iR3000A*`), `psxRec.Reserve` | compiled in | reserved, never executed | not compiled |
+| microVU VU0/VU1 (`pcsx2/x86/microVU*`) | compiled in | reserved (and opens the MTVU thread), never executed (VU interpreters selected) | not compiled; MTVU thread opened as on ARM64 |
+| VIF unpack recompilers (`Vif_UnpackSSE`, `Vif_Dynarec`) | compiled in | **code generated at start** (`VifUnpackSSE_Init`), never called (no VIF in a GS stream) | not compiled; interpreter loops |
+| x86 emitter (`common/emitter/*`) | compiled in | used by the generators above | not compiled |
+| Recompiler code area (`Memory.cpp`, `PageAccess_Any`) | 305 MB mapped `PAGE_EXECUTE_READWRITE` at start | yes, always | not reserved; `HostSys` refuses executable protections (`pxFailRel`) |
+| GS software JIT (xbyak: `GSDrawScanlineCodeGenerator`, `GSSetupPrimCodeGenerator`, 3 ISAs) | compiled in | only with CPU sprite render, CPU CLUT render or the software renderer: none of them in GT4's defaults (0 of 13 runs logged `SW JIT generated`); with both hacks on, 30,523 bytes generated | not compiled; C rasterizer (`CSetupPrim`, `CDrawScanline`, `CDrawEdge`) |
+| GS vertex trace, MultiISA templates | compiled | ahead-of-time code per ISA, not a code generator | unchanged |
+| Bundled DLLs (SDL3, shaderc, FreeType, HarfBuzz, libpng, libjpeg, libwebp, zstd, lz4, ryml, PlutoSVG) | no code generator markers, no writable and executable sections | shaderc compiles GLSL to SPIR-V (data) | unchanged; no FFmpeg or x264 DLLs (local deps without FFmpeg since 0.3.1) |
+| GPU driver (AMD Vulkan, system DLLs) | outside the package | compiles shaders and pipelines (allowed) | unchanged; works under Arbitrary Code Guard |
+
+### 10.2 What changed (fork)
+
+The CMake option `GT4GS_ONLY` (macro `GT4GS_NO_JIT`; details in the fork's `gt4gs/BUILD.md`, section "No JIT") leaves out
+the recompilers, the x86 emitter, the GS JIT generators and the xbyak include path; selects the interpreters as PCSX2's
+ARM64 build does; maps no code area; refuses executable page protections; forces the C rasterizer; and writes the
+recompiler settings off. `gt4-gs.exe` enables Windows **Arbitrary Code Guard** (`ProcessDynamicCodePolicy`,
+`ProhibitDynamicCode`) before its window, threads and GS device exist, proves it with a probe allocation that must fail,
+and walks its address space at the end of the stream and at exit. The log shows:
+
+```
+GT4GS no-JIT: Arbitrary Code Guard on (ProhibitDynamicCode=1); probe RWX allocation refused, error 1655
+GT4GS no-JIT audit (end of stream, GS device open): 1438 regions, 0 executable non-image regions
+```
+
+`[GT4GS] ProhibitDynamicCode = false` switches only the OS enforcement off. Since TASK-064 (2026-10-17) the launcher
+writes `false` by default, because Arbitrary Code Guard also blocks overlays such as MSI Afterburner / RivaTuner; the
+Advanced page option "Block third-party overlays" turns it back on. The build stays JIT-free either way (`GT4GS_ONLY`,
+`check-nojit.ps1`), and the audit line above is still printed. No GS setting needs the JIT, so none is refused: CPU sprite and
+CLUT render and the software renderer run the C rasterizer (notes in `docs/launcher/gs-settings.toml`).
+
+### 10.3 Evidence (2026-10-16)
+
+- **Static** (`tools/gs_nojit_check/check-nojit.ps1`, copy of the fork's `gt4gs/check-nojit.ps1`; `dumpbin` 14.44):
+  0.4.0 package: 23 modules, 0 code generator markers, 0 writable and executable sections, NX on, `gt4-gs.exe` imports
+  `SetProcessMitigationPolicy`. Positive control 0.3.2: 22 markers in `gt4-gs.exe` (xbyak RTTI, JIT classes and
+  messages, microVU/EE/IOP/VIF recompiler names, `Recompiler Cache`, emitter and `pcsx2\x86` source paths). The
+  Python test `tests/python/test_gs_nojit.py` repeats the marker scan. `release-local.ps1` refuses a package that fails
+  the check. Confirmed.
+- **Runtime, ACG**: works with the AMD Vulkan driver of this PC (RX 9060 XT): every replay and the live headless run
+  completed with ACG on, also with an empty shader cache (shaders compiled by shaderc, pipelines by the driver); the
+  probe allocation is refused with `ERROR_DYNAMIC_CODE_BLOCKED` (1655); 0 executable non-image regions in every audit.
+  Other drivers: Unknown.
+- **Image parity** (offline `--replay-gscap`, 4,200 vsyncs, deinterlace Automatic, 16:9, the GT4 defaults): the slice191
+  menus stream (no SYNCV; re-captured with slice195, sha256 `e651bba3...`, identical to the TASK-035 capture) and the
+  slice196 stream (SYNCV, sha256 `4ff3993d...`): 1x every 5th frame 837/837 and 3x every 25th frame 167/167 PNGs
+  **byte-identical** to 0.3.2, for the iteration build and the published zip. With an empty shader cache, 3x: 41/41
+  identical. With CPU sprite render (BW 10, level 2) and CPU CLUT render on (0.3.2 generated 30,523 bytes of JIT code):
+  167/167 identical, so the C rasterizer matches the JIT here. Live headless game (slice157 schedule, pcsx2 1x, auto
+  aspect): 41/41 frames identical to slice196 live; GS process exit 0; donor 42/42 identical to slice157. Confirmed.
+- **Performance** (PCSX2 "Average GS Thread Time", offline replay of the slice196 stream without frame dumps,
+  unthrottled, interleaved runs, no compiler running; another process used about one core throughout): 1x 0.42 ms/frame
+  (0.3.2, 3 runs) and 0.42 (0.4.0, 3 runs); 3x 0.49 (0.3.2, 9 runs, 0.36-0.64) and 0.56 (0.4.0, 9 runs, 0.45-0.63),
+  ACG on or off the same (0.57-0.59). The 3x difference is within the run-to-run spread (Hypothesis: noise; the replay
+  path does not touch the removed code). With CPU sprite and CLUT render on: 5.4 (JIT) against 6.5 ms/frame (C).
+
+### 10.4 Not verified
+
+The visible window and owner play with 0.4.0; races and the night race (no race capture); D3D11/D3D12 under ACG;
+other GPU vendors' drivers under ACG; the software renderer (`Renderer = 13`) with the C rasterizer.
+
+### 10.5 TASK-041 perf changes on gt4-gs 0.4.0 (slice199)
+
+slice199 keeps the slice198 game build (same file and hash) and pins the JIT-free `gt4-gs.exe` 0.4.0 of slice197
+(`gs_package` tree `e9402cf2...`, 140 files; exe sha256 `1c4c45da...`). The privileged-write journal, wake batching
+(`GT4_GS_WAKE_BYTES`), F8 `[gs-ipc]` lines and critical-path summary of section 9 therefore run with 0.4.0. The owner
+night-race numbers of section 9 were measured with 0.3.2; the 0.4.0 night race and F8 A/B (`GT4_MTVU_PRIV_ASYNC` 1 vs 0)
+are pending. Checks (2026-10-16, headless, slice157 menus schedule): donor 42/42 identical to slice157; pcsx2 1x gs-frames 41/41 identical to slice198 (gt4-gs 0.3.2); Python 438 OK, 20 skipped; CTest 29/29; static no-JIT check passes (23 modules).
+
+## 11. Cursor, "Compiling shaders" notice and performance overlay (TASK-060/061/062, slice201, gt4-gs 1.0.0)
+
+Status: **built, published and checked headless and with short visible fixtures; owner windowed test pending**
+(2026-10-16). Branch `task/060-062-osd` (main, from `3b5334d`) and `gt4gs/osd` in the fork (commit `3b9aae399`, tag
+`gt4gs-v1.0.0`, **the first stable gt4-gs release**, not a prerelease). `--mode pcsx2` selects
+[`slice201-pcsx2.json`](inputs/slice201-pcsx2.json); `--mode pcsx2-slice199` keeps slice199. Protocol 1.2
+([GS-STREAM-PROTOCOL](GS-STREAM-PROTOCOL.md) sections 6.1, 6.2, 6.5, 6.6). The fork side is PCSX2-tainted work; no PCSX2
+code is in this repository.
+
+### 11.1 Cursor auto-hide (TASK-060)
+
+- Rule (both windows, `native/cursor_autohide.*` and the fork's window thread): the cursor is hidden after **3 s without
+  movement while it is over the picture** (the window's client area, and that window is the one under the cursor);
+  any movement shows it at once; outside the picture (title bar, other windows, another monitor) it is never touched.
+  In borderless fullscreen the picture is the whole monitor. `GT4_CURSOR_AUTOHIDE=0` keeps the cursor (default on;
+  other values are refused by the launcher and the game).
+- In pcsx2 mode the picture is the gt4-gs child window (another process, detached input queues), so only gt4-gs can
+  change the cursor there. After CONTROL attach_window the game sends CONTROL cursor (flag, 3,000 ms) to a 1.2
+  consumer; gt4-gs samples the cursor every 100 ms and on mouse moves on its window thread and answers `WM_SETCURSOR`
+  itself while the policy is on (before, `DefWindowProc` asked the game window across processes). The game window
+  applies the same rule to its own client area (donor mode, and before the child is attached). Log lines:
+  `[window] cursor auto-hide on ...`, `gt4-gs: cursor auto-hide over the picture on (3000 ms ...)`, and in gt4-gs one
+  line per hide/show.
+- Checks: CTest `native_cursor_autohide` (the rule: delay, movement, outside the picture, switch off, clock order);
+  `tools/gs_live_check --cursor-check` (VISIBLE, about 1.7 s, 336x228 window at the top-left corner, CONTROL cursor with a
+  300 ms delay): visible on arrival, hidden after the rest, visible after a 3-pixel move, never hidden over the title
+  bar or outside the window; the cursor position is restored. Passed twice with gt4-gs 1.0.0 code. Earlier attempts
+  failed for reasons of the fixture (the check point lay outside the small window; another application's maximized
+  window was above the test window) and once without diagnostics (Hypothesis: the mouse moved during the rest; the
+  fixture now stops as inconclusive when the mouse moved or another window covers it).
+
+### 11.2 "Compiling shaders…" notice (TASK-061)
+
+- gt4-gs reuses PCSX2's compile signal (`GSShaderCompileIndicator`, the `CompileTimer` in `VKShaderCache` and
+  `VKBuilders`) and adds a "real compile" timestamp: a shader compiled to SPIR-V (a shader cache miss), or a pipeline
+  that the driver did **not** take from the pipeline cache. The second part uses `VK_EXT_pipeline_creation_feedback`
+  (cache-hit bit), enabled when the device has it (the AMD RX 9060 XT driver does: log `VK_EXT_pipeline_creation_feedback
+  is supported`); without it every pipeline creation counts.
+- Shown as plain white text with PCSX2's OSD shadow, bottom-left, no background, no animation, no count, while a real
+  compile happened in the last 0.5 s (PCSX2 compiles on the GS thread, so a notice is visible only on frames presented
+  shortly after a compile). `[GT4GS] ShaderCompileNotice = false` hides it (row `shader_compile_notice`).
+- Checks (hidden-window replay of the slice199 menus capture, 3x): empty cache: 238 real compiles, notice drawn in
+  1,100 of 1,100 frames (unthrottled); same cache again: 0 real compiles, 138 pipelines from the driver cache, notice in
+  0 frames. The session log ends with a `gt4-gs overlay:` line with these counts.
+
+### 11.3 Performance overlay (TASK-062)
+
+Off by default; `--gs-setting perf_overlay=true` turns on every item (rows `perf_overlay_*` switch single items off).
+Top-right, PCSX2 OSD font and margins, updated about twice per second:
+
+| Line | Source |
+|---|---|
+| `FPS 59.94` | game OSD_STATS: VSYNCs / interval (gt4-gs's own rate until the first record) |
+| `Frame 16.68 ms (max 17.10 ms)` | game: mean and longest time between two VSYNC posts |
+| `CPU (game) 14.2% (2.27 cores)` | gt4-gs sampler thread: GetProcessTimes of the game process plus gt4-gs, percent of all logical processors (as Task Manager) and busy cores |
+| `GPU (game) 23.5%` | sampler: PDH `\GPU Engine(*)\Utilization Percentage` instances of the two pids, summed per engine, busiest engine (as Task Manager) |
+| `Output 1920x1080 \| Internal 1920x1344 (3x)` | swap chain size; PCSX2 `GSgetInternalResolution` and the multiplier |
+| `EE 8.76 \| VU1 6.10 \| GS write 0.59 ms` | game: EE thread CPU, VU1 worker busy (MTVU accounting), `gs_ipc_write` |
+| `Readback 0.78 \| GS thread 1.17 ms` | game: `gs_ipc_readback_wait`; gt4-gs: PCSX2 GS thread time |
+| `Critical path 13.02 of 16.68 ms, headroom 3.66 ms` | the F8 summary formula, live (EE CPU + waits for the VU1 worker, readbacks and back-pressure); red when negative |
+
+- The game sends OSD_STATS only when READY asks for them (`kReadyFlagOsdStats`, set by gt4-gs while the overlay is on),
+  every 0.5 s right after a VSYNC, from cumulative counters: `perf_probe` keeps each category's exclusive time across
+  F7/F8/periodic interval resets (`cumulative_exclusive_us`), so the overlay never disturbs the F8 report. The
+  breakdown needs the performance accounting (`GT4_PERF=1`, set by every launcher run); without it the overlay shows
+  FPS, frame time and EE CPU only. No EE/VU emulation statistics are shown.
+- Overhead (measured): game EE thread 0.28 us per VSYNC and 2.05 us per record (mean, max 4.3 us; headless 4,200
+  frames, 65 records), about 0.35 us per frame. gt4-gs GS thread: ImGui text 12-15 us per frame; PCSX2 GS thread time
+  with the overlay off 0.385/0.385/0.403/0.413 ms/frame and on 0.410/0.412/0.426/0.428 (interleaved hidden-window
+  replays, 3x, quiet machine): +0.02 ms/frame; with the machine busy (release package, 3 runs each) no difference
+  (0.79 against 0.79). Sampler thread (below normal priority, not on the GS thread): 1.0-1.5 ms per 0.5 s tick.
+- Picture check: `tools/gs_live_check --overlay-shot` (VISIBLE, about 1 s, 480x270 client, cursor untouched) copied the
+  presented overlay from the screen: every line drawn with the synthetic night-race numbers; the breakdown line was too
+  wide for 480 pixels and was split into two lines before the release (the split was not re-shot: the second attempt
+  found another application's window above the test window and the copy was discarded).
+
+### 11.4 Stable gt4-gs 1.0.0 and the settings allow-list
+
+- `gt4-gs.exe` 1.0.0 embeds the allow-list of the settings table and ignores, with one warning line each, INI keys and
+  values outside it ([GS-SETTINGS](GS-SETTINGS.md) "Allow-list in gt4-gs"); checked with an INI holding an unknown key,
+  an unknown section, `upscale_multiplier = 13`, `PerfOverlay = yes` and `SpinUs = 5000`: five lines, session started.
+- Internal resolution presets 480p to 8K on the Graphics page; `--gs-resolution`; launcher rules for the monitor height
+  and the GPU limit ([GS-SETTINGS](GS-SETTINGS.md) "Internal resolution presets").
+- Release `gt4gs-v1.0.0` (stable): `gt4-gs-1.0.0-windows-x64.zip` 13,022,143 bytes, sha256
+  `2e8780196e9cb1ab134aabed464fa156a1a824db8e762304f4025c04f6f3c5a2`; source zip sha256
+  `e7c0a26426a2a475c61d2a92fe99e330d70fac25f654e5e05ef03103011c7724`; built with `release-local.ps1 -Release`
+  (MSVC cl 19.44.35222, CMake 4.3.1, Ninja 1.13.2, `GT4GS_ONLY=ON`); `check-nojit.ps1` passed (23 modules, no code
+  generator markers, no writable and executable sections). Downloaded back, `SHA256SUMS` OK, identical to the local zip,
+  extracted to `private/slice201-gt4gs-release-pkg` (140 files, tree sha256 `c95edf1c...`, `gt4-gs.exe` 8,955,392 bytes,
+  sha256 `53464022...`).
+
+### 11.5 Checks (2026-10-16) and not verified
+
+- CTest 30/30 (`native_cursor_autohide` new; `native_gs_stream_client` adds the OSD_STATS values and a 1.2 consumer
+  scenario: two records in 1.5 s, CONTROL cursor with the window's policy, no OSD_STATS in the capture); Python 455 OK,
+  25 skipped (`tests/python/test_gs_osd.py` new; settings, presets and allow-list tests in `test_gs_settings.py`).
+- Headless slice157 menus schedule from the worktree with the pinned slice201 files: donor 42/42 identical to slice157;
+  pcsx2 1x 41/41 identical to slice199 (overlay off); with the overlay on (iteration package) also 41/41 (headless runs
+  are surfaceless: nothing is drawn) and 65 OSD_STATS records. gt4-gs log: ACG on, 0 executable non-image regions.
+- Not verified: the game window itself (owner): cursor hiding in fullscreen and windowed with the real game, the notice
+  on a cold cache in a race, the overlay on a 1080p or 4K screen and its numbers against F8, GPU usage on other GPU
+  vendors and drivers, the PDH counters on a PC where the GPU Engine counter set is missing (the overlay then shows
+  `GPU (game) ...`).
+
+### 11.6 Owner test and slice202
+
+Owner test 2026-10-16 (slice201): overlay, cursor auto-hide and the shader notice OK; approved. slice202 merges main
+(TASK-058/059) and pins the same gt4-gs 1.0.0 ([BUILD](BUILD.md) slice202). Known issue: gt4-gs 1.0.0 writes under `Documents\PCSX2`: `VMManager::Internal::LoadStartupSettings()` runs before `[GT4GS] DataRoot` is applied, so it rewrites `Documents\PCSX2\logs\emulog.txt` every session (Confirmed: before/after snapshot of the folder) and creates the PCSX2 user folders there (bios, memcards, logs, ...) on a PC that has none (High confidence, `EmuFolders::EnsureFoldersExist`). The log line "MemoryCards Directory: ...Documents\PCSX2\memcards" is that early pass; the session itself uses DataRoot. Fix on fork branch `gt4gs/datadir` (commit `b30870fe8`, version 1.0.1, NOT released): the call moves after the stream folders; checked: 0 changes under `Documents\PCSX2`, emulog in DataRoot\logs.

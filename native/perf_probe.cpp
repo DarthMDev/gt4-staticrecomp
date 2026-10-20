@@ -143,6 +143,11 @@ void Probe::audio(std::uint64_t produced, std::uint64_t completed,
 }
 
 void Probe::reset(std::uint64_t now, GuestSample guest) noexcept {
+  // TASK-062: keep the time of the finished interval for cumulative_exclusive_us() (checkpoint first, so the time up to
+  // `now` belongs to the interval that ends here).
+  accounting_.checkpoint(now);
+  for (std::size_t index = 0; index < carried_exclusive_us_.size(); ++index)
+    carried_exclusive_us_[index] += accounting_.interval().categories[index].exclusive_us;
   accounting_.restart(now);
   if (g_mtvu_reset)
     g_mtvu_reset();
@@ -245,9 +250,12 @@ void Probe::print(const char *reason) noexcept {
         guest_cycles_ / 294912000.0 / seconds * 100.0, primitives_ / frames, vu_calls_ / frames);
   else std::fputs("[perf] guest counters reset: guest speed/count deltas Unknown\n", output_);
   const auto cpu_now = cpu_at_boundary_;
-  if (cpu_valid_ && cpu_now != UINT64_MAX && cpu_now >= cpu_start_)
+  report_cpu_ms_ = -1.0;
+  if (cpu_valid_ && cpu_now != UINT64_MAX && cpu_now >= cpu_start_) {
+    report_cpu_ms_ = (cpu_now - cpu_start_) / 1000.0 / frames;
     std::fprintf(output_, "[perf] measured_thread_cpu_ms/frame=%.3f; occupancy=%.1f%%\n",
-        (cpu_now - cpu_start_) / 1000.0 / frames, double(cpu_now - cpu_start_) / elapsed * 100);
+        report_cpu_ms_, double(cpu_now - cpu_start_) / elapsed * 100);
+  }
   else std::fputs("[perf] measured_thread_cpu=Unknown\n", output_);
   if (report_section_)
     report_section_(output_);
@@ -293,6 +301,13 @@ void Probe::print(const char *reason) noexcept {
   if (g_gs_ipc_report)
     g_gs_ipc_report(output_, accounting_.interval(), frames_);
   std::fflush(output_);
+}
+
+std::uint64_t Probe::cumulative_exclusive_us(Category category) const noexcept {
+  const auto index = static_cast<std::size_t>(category);
+  if (index >= carried_exclusive_us_.size())
+    return 0;
+  return carried_exclusive_us_[index] + accounting_.interval().categories[index].exclusive_us;
 }
 
 void Probe::set_mtvu_hooks(MtvuReport report, MtvuReset reset) noexcept {

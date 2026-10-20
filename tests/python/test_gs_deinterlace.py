@@ -29,8 +29,10 @@ class Slice196PinTests(unittest.TestCase):
     def manifest(self):
         return json.loads((ROOT / 'docs/inputs' / MANIFEST).read_text(encoding='utf-8'))
 
-    def test_mode_pcsx2_selects_slice196(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], (MANIFEST, EXECUTABLE))
+    def test_mode_pcsx2_slice196_stays_selectable(self):
+        # Since slice199 (TASK-041 on gt4-gs 0.4.0) --mode pcsx2 points at slice199; slice196 stays selectable.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice196'], (MANIFEST, EXECUTABLE))
+        self.assertIn('pcsx2-slice196', performance.MODES)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice195'],
                          ('slice195-pcsx2.json', 'private/slice195-gs-window-build/build/gt4vulkan.exe'))
         self.assertIn(MANIFEST, probe.VU1_AOT_MANIFESTS)
@@ -79,9 +81,10 @@ class Slice196PinTests(unittest.TestCase):
 
 
 class ProtocolStatementTests(unittest.TestCase):
-    def test_header_is_version_1_1_with_the_display_field(self):
+    def test_header_keeps_the_display_field(self):
+        # Version 1.2 (TASK-060/062) adds CONTROL cursor and OSD_STATS; the 1.1 VSYNC display field is unchanged.
         header = (ROOT / 'native/gs_stream/gs_stream_protocol.h').read_text(encoding='utf-8')
-        self.assertRegex(header, r'kVersionMinor = 1;')
+        self.assertRegex(header, r'kVersionMinor = 2;')
         self.assertIn('display', header[header.index('--- VSYNC'):header.index('struct VsyncPayload')])
 
     def test_set_gs_crt_posts_syncv_for_the_analog_modes(self):
@@ -95,7 +98,8 @@ class ProtocolStatementTests(unittest.TestCase):
 
     def test_protocol_document_matches(self):
         text = (ROOT / 'docs/GS-STREAM-PROTOCOL.md').read_text(encoding='utf-8')
-        self.assertTrue(text.startswith('# GS stream protocol, version 1.1'))
+        # Version 1.2 (TASK-060/062) keeps the 1.1 display field and the SYNCV values.
+        self.assertTrue(text.startswith('# GS stream protocol, version 1.2'))
         self.assertIn('display field', text)
         self.assertIn('0x00C7800601A01801', text)
 

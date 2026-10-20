@@ -99,3 +99,54 @@ https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v0.3.1 (prerelease):
   - `SHA256SUMS`
 The zip was downloaded back, checked with `sha256sum -c SHA256SUMS` (both OK) and is the package slice195 pins.
 The tag's CI run was cancelled before publishing (the tag trigger was removed afterwards; the workflow is manual only).
+
+### gt4gs-v0.4.0: JIT-free (task 042, 2026-10-16)
+
+Branch `gt4gs/nojit` (from `gt4gs/main` `660017bb1`), commit `4c8b63a6e`, built with `GT4GS_ONLY=ON` by
+`gt4gs/release-local.ps1` (MSVC cl 19.44.35222, CMake 4.3.1, Ninja 1.13.2, no LTO, deps of `private/slice193-gt4gs-deps`;
+`gt4gs/check-nojit.ps1` passed on the package before zipping). Release:
+https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v0.4.0 (prerelease):
+  - `gt4-gs-0.4.0-windows-x64.zip`, 13,008,479 bytes, SHA-256 `5c92ad003cf26237c3e859a82da6b400132a318479935b60a1ece5382fe1f44d`
+  - `gt4recomp-gs-0.4.0-source.zip`, SHA-256 `95f6a96e3106006a7f694f9ab4b95cb9ce0ad7da34e0bd9f0764fdecc4eed5a0`
+  - `SHA256SUMS`
+Downloaded back, `sha256sum -c SHA256SUMS` OK, byte-identical to the local zip; extracted to
+`private/slice197-gt4gs-release-pkg` (140 files, tree sha256 `e9402cf2...`, `gt4-gs.exe` 8,928,256 bytes, sha256
+`1c4c45da...`), the package slice197 pins. No FFmpeg or x264 DLLs (not needed: gt4-gs.exe does not import them; checked
+by running every replay with the package as shipped). What `GT4GS_ONLY` removes and how it is enforced: [GS-LIVE](GS-LIVE.md)
+section 9.
+
+### gt4gs-v1.0.0: first stable release (tasks 060, 061, 062; 2026-10-16)
+
+Branch `gt4gs/osd` (from `gt4gs/main` `0e40edc92`), commit `3b9aae399`, annotated tag `gt4gs-v1.0.0`. Built from the tag
+checkout with `gt4gs/release-local.ps1 -Release` into a fresh build folder (`private/slice201-gt4gs-release-build`;
+MSVC cl 19.44.35222, CMake 4.3.1, Ninja 1.13.2, no LTO, `GT4GS_ONLY=ON`, deps of `private/slice193-gt4gs-deps`, dependency
+script sha256 `735c239e...`); `gt4gs/check-nojit.ps1` passed on the package before zipping. **Published as a stable
+release (not a prerelease)**: https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v1.0.0
+  - `gt4-gs-1.0.0-windows-x64.zip`, 13,022,143 bytes, SHA-256 `2e8780196e9cb1ab134aabed464fa156a1a824db8e762304f4025c04f6f3c5a2`
+  - `gt4recomp-gs-1.0.0-source.zip`, 25,129,124 bytes, SHA-256 `e7c0a26426a2a475c61d2a92fe99e330d70fac25f654e5e05ef03103011c7724`
+  - `SHA256SUMS`
+Downloaded back, `sha256sum -c SHA256SUMS` OK, byte-identical to the local zip; extracted to
+`private/slice201-gt4gs-release-pkg` (140 files, tree sha256 `c95edf1c...`, `gt4-gs.exe` 8,955,392 bytes, sha256
+`53464022...`), the package slice201 pins. Changes: GS stream protocol 1.2 (vendored header of main `c8661bb`): cursor
+auto-hide policy on the child window, "Compiling shaders…" notice (real compiles only, `VK_EXT_pipeline_creation_feedback`),
+performance overlay fed by OSD_STATS, and the settings allow-list of main `c8661bb` embedded at configure time (keys and
+values outside it are ignored with a warning). Details: [GS-LIVE](GS-LIVE.md) section 11. 1.0.0 is the version the
+launcher (TASK-043) pins first; later fixes are 1.0.x on the same release flow.
+
+### gt4gs-v1.0.1: no writes under Documents\PCSX2 (TASK-044; 2026-10-16)
+
+Branch `gt4gs/datadir` (from `gt4gs/main` `9fc35d717`, the 1.0.0 history), commit `e4b3d6c88` (docs) on top of `b30870fe8`
+(the code fix), annotated tag `gt4gs-v1.0.1`. Merged to `gt4gs/main` as `d90c0f111` (PR #7). **Stable release (not a prerelease)**:
+https://github.com/moesuito/gt4recomp-gs/releases/tag/gt4gs-v1.0.1
+  - `gt4-gs-1.0.1-windows-x64.zip`, 13,022,346 bytes, SHA-256 `58f7cfef4842e781a62778a26276434510c6476545b6c6200269c2f1dd7244ca`
+  - `gt4recomp-gs-1.0.1-source.zip`, 25,129,708 bytes, SHA-256 `6baf52f2bc9076906cee4ff390da4d669ef2ea5cec7f595c20c9256043e2be0f`
+  - `SHA256SUMS`
+Built with `gt4gs/release-local.ps1 -Release` (GT4GS_ONLY=ON, deps of `private/slice193-gt4gs-deps`, dependency script
+sha256 `735c239e...`, the same as 1.0.0); `gt4gs/check-nojit.ps1` passed on the package. The zip was downloaded back and
+`sha256sum -c SHA256SUMS` passed; extracted to `private/slice203-gt4gs-release-pkg` (140 files, tree sha256 `55939b2b...`,
+`gt4-gs.exe` 8,955,904 bytes, sha256 `bda98d49...`), the package slice203 pins.
+Change: `pcsx2-gt4gs/Main.cpp` runs `VMManager::Internal::LoadStartupSettings()` only after `[GT4GS] DataRoot` is applied
+(stream modes), or right after the arguments (GSRunner dump replay). 1.0.0 created the PCSX2 user folders and wrote
+`Documents\PCSX2\logs\emulog.txt` on every session. Checked with a `Documents\PCSX2` snapshot: no changes for a live
+run and an offline replay. Version string 1.0.1. The GS stream protocol is unchanged (1.2).
+

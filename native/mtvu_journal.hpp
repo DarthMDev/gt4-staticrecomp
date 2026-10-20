@@ -27,6 +27,8 @@ class GsSink {
   virtual void gif_reset() = 0;
   virtual void vertex_reset() = 0;
   virtual void vblank_flush() = 0;
+  // TASK-041: a privileged GS register write that must stay in order with the GIF output (GS stream, pcsx2 mode).
+  virtual void privileged_write(std::uint32_t address, std::uint64_t value) = 0;
 };
 
 // Worker side: receives whole logical input records and emits outputs. Single thread only.
@@ -58,6 +60,9 @@ class EeJournal {
   void append_gif_reset();
   void append_vertex_reset();
   void append_vblank_flush();
+  // TASK-041: queues a privileged GS write behind every entry already in the journal; the drain hands it to
+  // GsSink::privileged_write after the outputs of every earlier job (stream order without waiting for the worker).
+  void append_privileged(std::uint32_t address, std::uint64_t value);
 
   // Executes every journal entry whose outputs are complete. Non-blocking: returns at the first incomplete job.
   // Blocking: waits for the worker until the journal is empty. Returns true when the journal is empty.
@@ -76,12 +81,13 @@ class EeJournal {
   std::uint64_t outputs_executed() const { return outputs_executed_; }
 
  private:
-  enum class EntryKind : std::uint8_t { EeGif, GifReset, VertexReset, VblankFlush, Placeholder };
+  enum class EntryKind : std::uint8_t { EeGif, GifReset, VertexReset, VblankFlush, Placeholder, Privileged };
 
   struct JournalEntry {
     EntryKind kind = EntryKind::EeGif;
     std::uint8_t path = 0;
-    std::uint64_t job = 0;
+    std::uint32_t address = 0;  // Privileged only
+    std::uint64_t job = 0;      // Placeholder; the register value for Privileged
     std::vector<std::uint8_t> bytes;
   };
 

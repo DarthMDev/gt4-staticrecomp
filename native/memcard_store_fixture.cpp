@@ -4,8 +4,10 @@
 #include "memcard_store.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace fs = std::filesystem;
@@ -85,9 +87,22 @@ void check_unchanged_bytes_without_save(const fs::path &dir) {
   std::fprintf(stderr, "[memcard] unchanged card round-trip: PASS\n");
 }
 
+// Kill-test writer (TASK-058): rewrites `card` forever in alternating images, so the Python test can kill the process
+// at a random moment. Usage: memcard_store_fixture --writer <card> <count>; count 0 means no limit.
+int run_writer(const fs::path &card, std::uint64_t count) {
+  for (std::uint64_t i = 0; count == 0 || i < count; ++i) {
+    const auto image = pattern(i % 2 == 0 ? 10u : 11u);
+    if (!gt4::memcard::write_card_atomically(card, image)) return 3;
+  }
+  return 0;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
+  if (argc == 4 && std::string(argv[1]) == "--writer") {
+    return run_writer(fs::path(argv[2]), std::strtoull(argv[3], nullptr, 10));
+  }
   try {
     const fs::path dir = argc > 1 ? fs::path(argv[1]) : fs::temp_directory_path() / "gt4-memcard-fixture";
     fs::create_directories(dir);

@@ -51,6 +51,13 @@ public:
   bool valid() const noexcept;
   std::uint64_t frames() const noexcept { return frames_; }
   const IntervalTime &interval() const noexcept { return accounting_.interval(); }
+  // TASK-041: measured EE-thread CPU ms/frame of the report being printed (negative when Unknown); the report hooks
+  // ([mtvu], [gs-ipc]) read it while print() runs.
+  double report_cpu_ms_per_frame() const noexcept { return report_cpu_ms_; }
+  // TASK-062: exclusive time of a category since the probe started, across every interval reset (F7, F8, periodic),
+  // so a live reader (the GS stream OSD statistics) can take differences without disturbing the F8 intervals. Only
+  // the owner thread may call it; 0 for an invalid category.
+  std::uint64_t cumulative_exclusive_us(Category category) const noexcept;
 
 private:
   bool owner() noexcept;
@@ -71,7 +78,10 @@ private:
   std::function<void(std::FILE *)> report_section_;
   std::uint64_t last_us_ = 0, last_frame_us_ = 0, cpu_start_ = 0;
   std::uint64_t cpu_at_boundary_ = UINT64_MAX;
+  double report_cpu_ms_ = -1.0;
   std::uint64_t frames_ = 0, guest_cycles_ = 0, primitives_ = 0, vu_calls_ = 0;
+  // TASK-062: exclusive time of every category in the intervals before the current one (added at each reset).
+  std::array<std::uint64_t, static_cast<std::size_t>(Category::count)> carried_exclusive_us_{};
   GuestSample last_guest_{};
   std::uint64_t read_bytes_ = 0, write_bytes_ = 0, rgba_bytes_ = 0;
   std::uint64_t presentations_ = 0, dispatches_ = 0, workgroups_ = 0;

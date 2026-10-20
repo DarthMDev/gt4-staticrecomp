@@ -1,6 +1,7 @@
 // CTest native_mtvu_journal: host-only controls for the TASK-011 step 1 ordered GS journal (mtvu_journal.hpp).
 // Random scripts run on the EE side against a real worker thread with random delays; the GS sink log must equal
 // the serial program order. Also: tiny-ring deadlock, blocking drain, fast path, shutdown, and worker errors.
+// TASK-041: privileged writes queued in the journal keep their place between the GIF outputs.
 #include "mtvu_journal.hpp"
 
 #include <chrono>
@@ -21,7 +22,7 @@ void require(bool value, const char *message) {
 }
 
 struct Event {
-  int kind = 0;  // 0 gif, 1 gif reset, 2 vertex reset, 3 vblank flush
+  int kind = 0;  // 0 gif, 1 gif reset, 2 vertex reset, 3 vblank flush, 4 privileged write (bytes: address, value)
   std::uint8_t path = 0;
   std::vector<std::uint8_t> bytes;
   bool operator==(const Event &other) const { return kind == other.kind && path == other.path && bytes == other.bytes; }
@@ -39,6 +40,16 @@ class RecordingSink final : public GsSink {
   void gif_reset() override { events.push_back(Event{1, 0, {}}); }
   void vertex_reset() override { events.push_back(Event{2, 0, {}}); }
   void vblank_flush() override { events.push_back(Event{3, 0, {}}); }
+  void privileged_write(std::uint32_t address, std::uint64_t value) override {
+    events.push_back(privileged_event(address, value));
+  }
+  static Event privileged_event(std::uint32_t address, std::uint64_t value) {
+    Event event;
+    event.kind = 4;
+    for (int i = 0; i < 4; ++i) event.bytes.push_back(static_cast<std::uint8_t>(address >> (8 * i)));
+    for (int i = 0; i < 8; ++i) event.bytes.push_back(static_cast<std::uint8_t>(value >> (8 * i)));
+    return event;
+  }
   std::vector<Event> events;
 };
 
@@ -155,6 +166,17 @@ void run_script(std::uint64_t seed, std::size_t input_bytes, std::size_t output_
         ++fast_path;
       } else {
         journal.append_vblank_flush();
+      }
+    } else if (choice < 80) {
+      // TASK-041: a privileged GS write goes behind the queued entries, or straight to the sink when none is queued.
+      const std::uint32_t address = (0x12000000u + static_cast<std::uint32_t>(rng() % 0x2000u)) & ~7u;
+      const std::uint64_t value = rng();
+      expected.push_back(RecordingSink::privileged_event(address, value));
+      if (journal.can_execute_now()) {
+        sink.privileged_write(address, value);
+        ++fast_path;
+      } else {
+        journal.append_privileged(address, value);
       }
     } else if (choice < 95) {
       journal.drain(false);

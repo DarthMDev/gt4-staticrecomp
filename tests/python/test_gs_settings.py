@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import tomllib
 import unittest
 from unittest.mock import patch
 
@@ -21,22 +22,25 @@ import play_performance as performance  # noqa: E402
 # as the pre-TASK-039 writer produced it. Written with the platform newline by the file writer.
 # The default gt4-gs.ini of origin/main (TASK-036 settings plus HWDownloadMode = 0 from TASK-037), byte for byte as
 # scripts/external_runtime_probe.py gs_config_text() produced it there. The table writer must reproduce it.
-LEGACY_DEFAULT = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)\n'
-                  '[EmuCore/GS]\n'
-                  'Renderer = 14\n'
-                  'upscale_multiplier = 3\n'
-                  'accurate_blending_unit = 3\n'
-                  'deinterlace_mode = 0\n'
-                  'AspectRatio = 16:9\n'
-                  'VsyncEnable = true\n'
-                  'DisableMailboxPresentation = true\n'
-                  'HWDownloadMode = 0\n')
-LEGACY_CACHE = LEGACY_DEFAULT + '\n[Folders]\nCache = C:/cache\n'
+LEGACY_BASE = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-036 minimal settings)\n'
+               '[EmuCore/GS]\n'
+               'Renderer = 14\n'
+               'upscale_multiplier = 3\n'
+               'accurate_blending_unit = 3\n'
+               'deinterlace_mode = 0\n'
+               'AspectRatio = 16:9\n'
+               'VsyncEnable = true\n'
+               'DisableMailboxPresentation = true\n'
+               'HWDownloadMode = 0\n')
+# TASK-064: ProhibitDynamicCode is always written; its default is false (overlays work out of the box).
+PROHIBIT_LINE = 'ProhibitDynamicCode = false\n'
+LEGACY_DEFAULT = LEGACY_BASE + '\n[GT4GS]\n' + PROHIBIT_LINE
+LEGACY_CACHE = LEGACY_BASE + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\n' + PROHIBIT_LINE
 # A real owner run: cache folder and the [GT4GS] DataRoot (package data_root = true).
-LEGACY_RUN = LEGACY_CACHE + '\n[GT4GS]\nDataRoot = C:/data\n'
-LEGACY_HEADLESS = (LEGACY_DEFAULT + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:/run/gs-frames\n'
-                   'DumpEvery = 100\n')
-REQUIRED = ('id', 'label', 'help', 'page', 'section', 'key', 'type', 'default', 'visibility', 'written', 'status')
+LEGACY_RUN = LEGACY_BASE + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\nDataRoot = C:/data\n' + PROHIBIT_LINE
+LEGACY_HEADLESS = (LEGACY_BASE + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:/run/gs-frames\n'
+                   'DumpEvery = 100\n' + PROHIBIT_LINE)
+REQUIRED = ('id', 'label', 'help', 'page', 'order', 'control', 'section', 'key', 'type', 'default', 'written', 'status')
 
 
 def rows():
@@ -50,8 +54,8 @@ def by_id():
 class TableSchemaTests(unittest.TestCase):
     def test_table_loads_and_has_one_row_per_setting(self):
         table = rows()
-        self.assertEqual(len(table), 51)
-        self.assertEqual(len({row['id'] for row in table}), 51)
+        self.assertEqual(len(table), 71)
+        self.assertEqual(len({row['id'] for row in table}), 71)
 
     def test_every_row_has_the_documented_columns(self):
         for row in rows():
@@ -59,7 +63,7 @@ class TableSchemaTests(unittest.TestCase):
                 self.assertIn(field, row, row['id'])
             self.assertIn(row['page'], gs_settings.PAGES)
             self.assertIn(row['type'], gs_settings.TYPES)
-            self.assertIn(row['visibility'], gs_settings.VISIBILITIES)
+            self.assertIn(row['control'], gs_settings.CONTROLS)
             self.assertIn(row['written'], gs_settings.WRITTEN)
             self.assertRegex(row['status'], gs_settings.STATUS_PATTERN.pattern)
 
@@ -82,25 +86,42 @@ class TableSchemaTests(unittest.TestCase):
         self.assertNotIn('gt4_readback', by_id())
 
     def test_validator_refuses_bad_tables(self):
-        good = {'schema_version': 1, 'setting': copy.deepcopy(rows())}
+        with gs_settings.TABLE_PATH.open('rb') as handle:
+            good = tomllib.load(handle)
         self.assertEqual(gs_settings.table_errors(good), [])
+
+        def row(data, identifier):
+            return next(item for item in data['setting'] if item['id'] == identifier)
+
+        def duplicate(data):
+            data['setting'].append(copy.deepcopy(data['setting'][0]))
+
         cases = {
             'wrong schema': lambda data: data.update(schema_version=2),
-            'duplicate id': lambda data: data['setting'].append(copy.deepcopy(data['setting'][0])),
-            'bad page': lambda data: data['setting'][0].update(page='Audio'),
-            'bad type': lambda data: data['setting'][0].update(type='double'),
-            'bad status': lambda data: data['setting'][0].update(status='maybe'),
-            'settable row without key': lambda data: data['setting'][0].update(key=''),
-            'duplicate INI key': lambda data: data['setting'][1].update(
-                section=data['setting'][0]['section'], key=data['setting'][0]['key']),
-            'int range inverted': lambda data: data['setting'][1].update(min=9, max=8),
-            'default outside range': lambda data: data['setting'][1].update(default='9'),
-            'always row not ok': lambda data: data['setting'][2].update(written='always'),
-            'path row set by user': lambda data: next(
-                row.update(written='when-set') for row in data['setting'] if row['type'] == 'path'),
-            'bool default': lambda data: next(
-                row.update(default='yes') for row in data['setting'] if row['type'] == 'bool'),
-            'launcher-only with an INI key': lambda data: data['setting'][1].update(written='never', env='GT4_X'),
+            'no defaults profile': lambda data: data.update(profile=[]),
+            'duplicate id': duplicate,
+            'bad page': lambda data: row(data, 'renderer').update(page='Graphics'),
+            'mods row on a page': lambda data: row(data, 'texture_load').update(page='advanced'),
+            'bad type': lambda data: row(data, 'renderer').update(type='double'),
+            'bad status': lambda data: row(data, 'renderer').update(status='maybe'),
+            'bad order': lambda data: row(data, 'fxaa').update(order=0),
+            'order used twice on a page': lambda data: row(data, 'fxaa').update(order=row(data, 'upscale')['order']),
+            'bad control': lambda data: row(data, 'fxaa').update(control='knob'),
+            'control does not fit the type': lambda data: row(data, 'fxaa').update(control='slider'),
+            'launcher row with a control': lambda data: row(data, 'cache_folder').update(control='dropdown'),
+            'settable row without key': lambda data: row(data, 'renderer').update(key=''),
+            'duplicate INI key': lambda data: row(data, 'upscale').update(
+                section=row(data, 'renderer')['section'], key=row(data, 'renderer')['key']),
+            'int range inverted': lambda data: row(data, 'cas_sharpness').update(min=101, max=100),
+            'choice offered flag not a bool': lambda data: row(data, 'upscale')['choices'][0].update(offered='no'),
+            'preset height not a number': lambda data: row(data, 'upscale')['choices'][0].update(height='tall'),
+            'accept_ini with duplicate ini values': lambda data: row(data, 'upscale')['choices'][1].update(ini='1'),
+            'default outside range': lambda data: row(data, 'upscale').update(default='13'),
+            'always row not ok': lambda data: row(data, 'filter').update(written='always'),
+            'path row set by user': lambda data: row(data, 'cache_folder').update(written='when-set'),
+            'bool default': lambda data: row(data, 'fxaa').update(default='yes'),
+            'launcher-only with an INI key': lambda data: row(data, 'gs_engine').update(
+                section='EmuCore/GS', key='Renderer'),
         }
         for name, break_table in cases.items():
             data = copy.deepcopy(good)
@@ -120,19 +141,20 @@ class DefaultTests(unittest.TestCase):
     def test_cache_and_headless_sections_are_unchanged(self):
         self.assertEqual(probe.gs_config_text({}, None, 'C:/cache'), LEGACY_CACHE)
         self.assertEqual(probe.gs_config_text({}, Path('C:/run/gs-frames'), None),
-                         LEGACY_DEFAULT + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:\\run\\gs-frames\n'
-                         'DumpEvery = 100\n')
+                         LEGACY_BASE + '\n[GT4GS]\nSurfaceless = true\nDumpDir = C:\\run\\gs-frames\n'
+                         'DumpEvery = 100\n' + PROHIBIT_LINE)
         self.assertEqual(gs_settings.render_ini(rows(), {}, {'cache_folder': 'C:/cache',
                                                              'headless_surfaceless': 'true',
                                                              'headless_dump_dir': 'C:/run/gs-frames',
                                                              'headless_dump_every': '100'}),
-                         LEGACY_DEFAULT + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\nSurfaceless = true\n'
-                         'DumpDir = C:/run/gs-frames\nDumpEvery = 100\n')
+                         LEGACY_BASE + '\n[Folders]\nCache = C:/cache\n\n[GT4GS]\nSurfaceless = true\n'
+                         'DumpDir = C:/run/gs-frames\nDumpEvery = 100\n' + PROHIBIT_LINE)
 
     def test_run_text_with_data_root_and_eager_switch(self):
         self.assertEqual(probe.gs_config_text({}, None, 'C:/cache', 'C:/data'), LEGACY_RUN)
         self.assertEqual(probe.gs_config_text({'GT4_GS_EAGER_ACQUIRE': '1'}, None, None, 'C:/data'),
-                         LEGACY_DEFAULT + '\n[GT4GS]\nDataRoot = C:/data\nDeferSwapChainAcquire = false\n')
+                         LEGACY_BASE + '\n[GT4GS]\nDataRoot = C:/data\nDeferSwapChainAcquire = false\n'
+                         + PROHIBIT_LINE)
         self.assertNotIn('DeferSwapChainAcquire', probe.gs_config_text({}, None, None, 'C:/data'))
 
     def test_default_file_bytes_match_the_main_writer(self):
@@ -152,11 +174,22 @@ class ValueTests(unittest.TestCase):
                 gs_settings.parse_value(by_id()['fxaa'], value)
 
     def test_int_range_is_checked(self):
-        upscale = by_id()['upscale']
-        self.assertEqual(gs_settings.parse_value(upscale, '1'), '1')
-        self.assertEqual(gs_settings.parse_value(upscale, '08'), '8')
-        for value in ('0', '9', '1.5', 'x', ' 3', ''):
+        every = by_id()['headless_dump_every']
+        self.assertEqual(gs_settings.parse_value(every, '1'), '1')
+        self.assertEqual(gs_settings.parse_value(every, '08'), '8')
+        self.assertEqual(gs_settings.parse_value(every, '100000'), '100000')
+        for value in ('0', '100001', '1.5', 'x', ' 3', ''):
             with self.assertRaises(gs_settings.SettingsError, msg=value):
+                gs_settings.parse_value(every, value)
+
+    def test_upscale_presets_and_multipliers(self):
+        upscale = by_id()['upscale']
+        for text, name in (('1080p', '1080p'), ('3', '1080p'), ('1', '480p'), ('2', '720p'), ('4', '1440p'),
+                           ('6', '4K'), ('12', '8K'), ('5', '5x'), ('11x', '11x')):
+            self.assertEqual(gs_settings.parse_value(upscale, text), name, text)
+        self.assertEqual(gs_settings.ini_value(upscale, '4K'), '6')
+        for value in ('0', '13', '08', '1.5', '4k', ''):
+            with self.assertRaisesRegex(gs_settings.SettingsError, 'upscale must be one of', msg=value):
                 gs_settings.parse_value(upscale, value)
 
     def test_enum_accepts_only_listed_settable_names(self):
@@ -207,13 +240,14 @@ class IniTests(unittest.TestCase):
         self.assertEqual(text.splitlines(), [
             gs_settings.INI_HEADER, '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 6',
             'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 4:3', 'VsyncEnable = true',
-            'DisableMailboxPresentation = true', 'fxaa = true', 'HWDownloadMode = 0'])
+            'DisableMailboxPresentation = true', 'HWDownloadMode = 0', 'fxaa = true', '', '[GT4GS]',
+            'ProhibitDynamicCode = false'])
 
     def test_sections_follow_the_fixed_order(self):
-        settings = {'game_fixes': 'true', 'upscale': '2'}
+        settings = {'game_fixes': 'false', 'upscale': '2'}
         text = gs_settings.render_ini(rows(), settings, {'cache_folder': 'C:/cache'})
         headers = [line for line in text.splitlines() if line.startswith('[')]
-        self.assertEqual(headers, ['[EmuCore/GS]', '[EmuCore]', '[Folders]'])
+        self.assertEqual(headers, ['[EmuCore/GS]', '[EmuCore]', '[Folders]', '[GT4GS]'])
 
     def test_json_settings_round_trip_and_are_checked(self):
         settings = gs_settings.settings_from_assignments(['upscale=2', 'fxaa=true'], rows())
@@ -223,8 +257,21 @@ class IniTests(unittest.TestCase):
             gs_settings.settings_from_json('{', rows())
         with self.assertRaisesRegex(gs_settings.SettingsError, 'JSON object'):
             gs_settings.settings_from_json('[1]', rows())
-        with self.assertRaisesRegex(gs_settings.SettingsError, 'must be from 1 to 8'):
-            gs_settings.settings_from_json('{"upscale": 9}', rows())
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'upscale must be one of'):
+            gs_settings.settings_from_json('{"upscale": 13}', rows())
+
+    def test_json_settings_refuse_duplicate_ids(self):
+        for text in ('{"upscale": 2, "upscale": 6}',
+                     '{"upscale": 2, "upscale": 2}',
+                     '{"upscale": 13, "upscale": 2}',
+                     r'{"upscale": 2, "\u0075pscale": 6}'):
+            with self.subTest(text=text), self.assertRaisesRegex(
+                    gs_settings.SettingsError, 'upscale is given twice'):
+                gs_settings.settings_from_json(text, rows())
+
+    def test_duplicate_json_settings_do_not_reach_the_ini(self):
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'fxaa is given twice'):
+            probe.gs_config_text({'GT4_GS_SETTINGS': '{"fxaa": false, "fxaa": true}'})
 
 
 class AtomicWriteTests(unittest.TestCase):
@@ -297,12 +344,12 @@ class PlayPerformanceTests(unittest.TestCase):
                                         '--gs-setting', 'fxaa=true'])
             self.assertEqual(code, 0)
             play.assert_called_once()
-            self.assertEqual(json.loads(os.environ['GT4_GS_SETTINGS']), {'fxaa': 'true', 'upscale': '2'})
+            self.assertEqual(json.loads(os.environ['GT4_GS_SETTINGS']), {'fxaa': 'true', 'upscale': '720p'})
 
     def test_gs_setting_refusals(self):
         for arguments in (['--mode', 'main', '--gs-setting', 'upscale=2'],
                           ['--mode', 'pcsx2', '--gs-setting', 'nope=1'],
-                          ['--mode', 'pcsx2', '--gs-setting', 'upscale=9'],
+                          ['--mode', 'pcsx2', '--gs-setting', 'upscale=13'],
                           ['--mode', 'pcsx2', '--gs-setting', 'renderer=d3d12'],
                           ['--mode', 'pcsx2', '--gs-setting', 'gt4_readback=accurate'],
                           ['--mode', 'pcsx2', '--gs-setting', 'hw_download_mode=accurate', '--gs-readback', 'unsynchronized'],
@@ -318,7 +365,25 @@ class PlayPerformanceTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(os.environ['GT4_GS_SCALE'], '1')
             settings = probe.gs_settings_from_environment(os.environ, rows())
-            self.assertEqual(settings['upscale'], '1')
+            self.assertEqual(settings['upscale'], '480p')
+
+    def test_gs_resolution_is_a_preset_of_gs_scale(self):
+        for preset, scale in (('480p', '1'), ('720p', '2'), ('1080p', '3'), ('1440p', '4'), ('4K', '6'), ('8K', '12')):
+            with patch.dict(os.environ, {}, clear=False):
+                code, play = self.run_main(['--mode', 'pcsx2', '--gs-resolution', preset])
+                self.assertEqual(code, 0, preset)
+                self.assertEqual(os.environ['GT4_GS_SCALE'], scale, preset)
+                self.assertIn(f'upscale_multiplier = {scale}\n', probe.gs_config_text(os.environ))
+        for arguments in (['--mode', 'main', '--gs-resolution', '720p'],
+                          ['--mode', 'pcsx2', '--gs-resolution', '720p', '--gs-scale', '2'],
+                          ['--mode', 'pcsx2', '--gs-resolution', '720p', '--gs-setting', 'upscale=4K']):
+            with patch.dict(os.environ, {}, clear=False):
+                code, play = self.run_main(arguments)
+            self.assertEqual(code, 1, arguments)
+            play.assert_not_called()
+        with self.assertRaises(SystemExit):
+            with patch('sys.stderr'):
+                self.run_main(['--mode', 'pcsx2', '--gs-resolution', '2160p'])
 
 
 class ProbeEnvironmentTests(unittest.TestCase):
@@ -335,8 +400,8 @@ class ProbeEnvironmentTests(unittest.TestCase):
             probe.gs_config_text({'GT4_PRESENT_MODE': 'mailbox', 'GT4_GS_SETTINGS': '{"vsync": false}'})
         with self.assertRaisesRegex(ValueError, 'GT4_GS_ASPECT must be one of'):
             probe.gs_config_text({'GT4_GS_ASPECT': 'wide'})
-        with self.assertRaisesRegex(ValueError, 'GT4_GS_SCALE must be an integer from 1 to 8'):
-            probe.gs_config_text({'GT4_GS_SCALE': '9'})
+        with self.assertRaisesRegex(ValueError, 'GT4_GS_SCALE must be an integer from 1 to 12'):
+            probe.gs_config_text({'GT4_GS_SCALE': '13'})
         with self.assertRaisesRegex(ValueError, 'GT4_PRESENT_MODE must be one of'):
             probe.gs_config_text({'GT4_PRESENT_MODE': 'adaptive'})
 
@@ -398,7 +463,7 @@ NUMBER_EXPECTED = {
 KEY_EXPECTED = {
     'fxaa': 'fxaa',
     'manual_hacks': 'UserHacks',
-    'mipmap': 'mipmap',
+    'mipmap': 'hw_mipmap',
     'antiblur': 'pcrtc_antiblur',
     'offsets': 'pcrtc_offsets',
     'overscan': 'pcrtc_overscan',
@@ -477,6 +542,187 @@ class ResolvedValueTests(unittest.TestCase):
         self.assertNotIn(('EmuCore/GS', 'ManualUserHacks'), entries)
         self.assertNotIn(('EmuCore/GS', 'HWMipmap'), entries)
         self.assertNotIn(('EmuCore/GS', 'FXAA'), entries)
+
+
+class PageLayoutTests(unittest.TestCase):
+    def test_graphics_page_is_basic_only(self):
+        basic = [row['id'] for row in rows() if row['page'] == 'basic']
+        self.assertEqual(basic, ['gs_engine', 'upscale', 'aspect', 'fxaa', 'cas_mode', 'cas_sharpness'])
+        upscale = by_id()['upscale']
+        self.assertEqual((upscale['control'], upscale['type'], upscale['default']), ('dropdown', 'enum', '1080p'))
+        # Owner decision 2026-10-16: ONLY these presets are offered.
+        self.assertEqual(gs_settings.offered_choices(upscale), ['480p', '720p', '1080p', '1440p', '4K', '8K'])
+        self.assertEqual({choice['label'] for choice in upscale['choices'] if choice.get('offered', True)},
+                         {'480p (1x)', '720p (2x)', '1080p (3x)', '1440p (4x)', '4K (6x)', '8K (12x)'})
+
+    def test_advanced_page_holds_the_rest_of_the_user_options(self):
+        advanced = [row for row in rows() if row['page'] == 'advanced']
+        self.assertEqual(len(advanced), 46)  # 45 + prohibit_dynamic_code (TASK-064)
+        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 47)))
+        self.assertTrue({'renderer', 'deinterlace', 'shade_boost', 'linear_present', 'tv_shader', 'osd_fps',
+                         'hw_download_mode', 'filter', 'trilinear', 'anisotropic'} <= {row['id'] for row in advanced})
+
+    def test_orders_are_unique_per_page(self):
+        seen = set()
+        for row in rows():
+            self.assertNotIn((row['page'], row['order']), seen, row['id'])
+            seen.add((row['page'], row['order']))
+
+    def test_mods_and_hidden_rows_are_on_neither_page(self):
+        offered_ids = {row['id'] for row in gs_settings.offered(rows())}
+        for row in rows():
+            if row['page'] in ('mods', 'hidden'):
+                self.assertNotIn(row['id'], offered_ids, row['id'])
+        self.assertEqual(sorted(row['id'] for row in rows() if row['page'] == 'mods'),
+                         sorted(['texture_load', 'texture_load_async', 'texture_precache', 'texture_dump',
+                                 'texture_dump_mipmaps', 'texture_dump_fmv']))
+
+    def test_renderer_choice_is_the_only_coregs_option(self):
+        choices = [choice['name'] for choice in by_id()['gs_engine']['choices']]
+        self.assertEqual(choices, ['pcsx2', 'coregs-1.1'])
+        self.assertEqual(by_id()['gs_engine']['written'], 'never')
+        self.assertIn('gs_engine', {row['id'] for row in gs_settings.offered(rows())})
+        self.assertNotIn('gs_engine', gs_settings.render_ini(rows()))
+
+    def test_no_fsr_row(self):
+        self.assertFalse(any('fsr' in row['id'] for row in rows()))
+        self.assertIn('cas_mode', by_id())
+
+
+class ResetToDefaultsTests(unittest.TestCase):
+    def test_reset_gives_the_exact_default_ini(self):
+        settings = gs_settings.reset_to_defaults(rows())
+        self.assertEqual(gs_settings.render_ini(rows(), settings), LEGACY_DEFAULT)
+
+    def test_reset_holds_only_settable_user_rows(self):
+        settings = gs_settings.reset_to_defaults(rows())
+        self.assertEqual(settings['upscale'], '1080p')
+        self.assertEqual(settings['renderer'], 'vulkan')
+        for identifier in settings:
+            row = by_id()[identifier]
+            self.assertEqual(row['status'], 'ok', identifier)
+            self.assertNotIn(row['written'], ('never', 'launcher'), identifier)
+        for identifier in ('gs_engine', 'cache_folder', 'data_root', 'filter', 'texture_load'):
+            self.assertNotIn(identifier, settings)
+
+    def test_defaults_profile_is_in_the_table(self):
+        with gs_settings.TABLE_PATH.open('rb') as handle:
+            profiles = tomllib.load(handle)['profile']
+        self.assertEqual([profile['name'] for profile in profiles], ['gt4-defaults'])
+
+    def test_when_set_row_equal_to_its_default_is_not_written(self):
+        text = gs_settings.render_ini(rows(), {'fxaa': 'false', 'antiblur': 'true', 'upscale': '3'})
+        self.assertEqual(text, LEGACY_DEFAULT)
+
+    def test_twelve_x_needs_no_extended_key(self):
+        text = gs_settings.render_ini(rows(), gs_settings.settings_from_assignments(['upscale=12'], rows()))
+        self.assertIn('upscale_multiplier = 12\n', text)
+        self.assertNotIn('ExtendedUpscalingMultipliers', text)
+        self.assertEqual(by_id()['extended_upscale']['page'], 'hidden')
+        self.assertEqual(by_id()['extended_upscale']['written'], 'when-set')
+
+    def test_mipmap_uses_the_hardware_key(self):
+        self.assertEqual(by_id()['mipmap']['key'], 'hw_mipmap')
+
+
+
+# TASK-060/061/062 rows and the launcher helpers for the resolution presets.
+class OsdRowTests(unittest.TestCase):
+    OVERLAY = {'perf_overlay': ('PerfOverlay', 'false'), 'perf_overlay_fps': ('PerfOverlayFPS', 'true'),
+               'perf_overlay_frame_time': ('PerfOverlayFrameTime', 'true'), 'perf_overlay_cpu': ('PerfOverlayCPU', 'true'),
+               'perf_overlay_gpu': ('PerfOverlayGPU', 'true'),
+               'perf_overlay_resolution': ('PerfOverlayResolution', 'true'),
+               'perf_overlay_breakdown': ('PerfOverlayBreakdown', 'true')}
+
+    def test_overlay_rows_are_advanced_toggles_off_by_default(self):
+        offered = {row['id'] for row in gs_settings.offered(rows())}
+        for identifier, (key, default) in self.OVERLAY.items():
+            row = by_id()[identifier]
+            self.assertEqual((row['page'], row['control'], row['section'], row['key'], row['default'], row['written'],
+                              row['status']),
+                             ('advanced', 'toggle', 'GT4GS', key, default, 'when-set', 'ok'), identifier)
+            self.assertIn(identifier, offered)
+        # Off by default: the default INI has no overlay line; the master switch alone turns every item on.
+        self.assertNotIn('PerfOverlay', gs_settings.render_ini(rows()))
+        text = gs_settings.render_ini(rows(), gs_settings.settings_from_assignments(['perf_overlay=true'], rows()))
+        self.assertTrue(text.endswith('\n[GT4GS]\nPerfOverlay = true\n' + PROHIBIT_LINE), text)
+        text = gs_settings.render_ini(rows(), gs_settings.settings_from_assignments(
+            ['perf_overlay=true', 'perf_overlay_gpu=false'], rows()))
+        self.assertTrue(text.endswith('[GT4GS]\nPerfOverlay = true\nPerfOverlayGPU = false\n' + PROHIBIT_LINE), text)
+
+
+class ProhibitDynamicCodeTests(unittest.TestCase):
+    """TASK-064: Arbitrary Code Guard is off by default so third-party overlays (RTSS) can hook gt4-gs."""
+
+    def test_row_is_an_advanced_always_written_switch_defaulting_to_false(self):
+        row = by_id()['prohibit_dynamic_code']
+        self.assertEqual((row['page'], row['order'], row['control'], row['type'], row['section'], row['key'],
+                          row['default'], row['written'], row['status']),
+                         ('advanced', 46, 'toggle', 'bool', 'GT4GS', 'ProhibitDynamicCode', 'false', 'always', 'ok'))
+        self.assertEqual(row['label'], 'Block third-party overlays (Arbitrary Code Guard)')
+        self.assertIn('prohibit_dynamic_code', {offered_row['id'] for offered_row in gs_settings.offered(rows())})
+
+    def test_default_ini_always_writes_false(self):
+        self.assertTrue(gs_settings.render_ini(rows()).endswith('\n[GT4GS]\nProhibitDynamicCode = false\n'))
+        self.assertIn('ProhibitDynamicCode = false\n', probe.gs_config_text({}))
+
+    def test_true_is_accepted_and_written(self):
+        settings = gs_settings.settings_from_assignments(['prohibit_dynamic_code=true'], rows())
+        self.assertIn('ProhibitDynamicCode = true\n', gs_settings.render_ini(rows(), settings))
+        text = probe.gs_config_text({'GT4_GS_SETTINGS': json.dumps({'prohibit_dynamic_code': True})})
+        self.assertIn('[GT4GS]\nProhibitDynamicCode = true\n', text)
+        self.assertNotIn('ProhibitDynamicCode = false', text)
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'must be true or false'):
+            gs_settings.parse_value(by_id()['prohibit_dynamic_code'], 'maybe')
+
+    def test_reset_to_defaults_restores_false(self):
+        settings = gs_settings.settings_from_assignments(['prohibit_dynamic_code=true'], rows())
+        self.assertEqual(gs_settings.reset_to_defaults(rows())['prohibit_dynamic_code'], 'false')
+        self.assertIn('ProhibitDynamicCode = false\n', gs_settings.render_ini(rows(), gs_settings.reset_to_defaults(rows())))
+        self.assertIn('ProhibitDynamicCode = true\n', gs_settings.render_ini(rows(), settings))
+
+    def test_shader_notice_and_cursor_rows(self):
+        notice = by_id()['shader_compile_notice']
+        self.assertEqual((notice['page'], notice['section'], notice['key'], notice['default']),
+                         ('advanced', 'GT4GS', 'ShaderCompileNotice', 'true'))
+        self.assertNotIn('ShaderCompileNotice', gs_settings.render_ini(rows()))
+        cursor = by_id()['cursor_autohide']
+        self.assertEqual((cursor['page'], cursor['written'], cursor['env'], cursor['default'], cursor['key']),
+                         ('advanced', 'never', 'GT4_CURSOR_AUTOHIDE', 'true', ''))
+        self.assertIn('cursor_autohide', {row['id'] for row in gs_settings.offered(rows())})
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'set by the launcher'):
+            gs_settings.settings_from_assignments(['cursor_autohide=false'], rows())
+
+    def test_monitor_height_picks_the_smallest_preset_that_covers_it(self):
+        pick = lambda height: gs_settings.upscale_preset_for_monitor(rows(), height)  # noqa: E731
+        self.assertEqual([pick(h) for h in (None, 0, 480, 600, 720, 768, 1080, 1200, 1440, 1600, 2160, 2880, 4320, 8640)],
+                         ['1080p', '1080p', '480p', '720p', '720p', '1080p', '1080p', '1440p', '1440p', '4K', '4K', '8K',
+                          '8K', '8K'])
+
+    def test_texture_limit_greys_out_large_presets(self):
+        allowed = lambda size: gs_settings.upscale_presets_within_texture_limit(rows(), size)  # noqa: E731
+        self.assertEqual(allowed(16384), ['480p', '720p', '1080p', '1440p', '4K', '8K'])
+        self.assertEqual(allowed(8192), ['480p', '720p', '1080p', '1440p', '4K'])
+        self.assertEqual(allowed(4096), ['480p', '720p', '1080p'])
+        self.assertEqual(allowed(1024), ['480p'])
+
+    def test_allow_list_carries_the_value_rules(self):
+        entries = {(entry['section'], entry['key']): entry for entry in
+                   json.loads(gs_settings.allowlist_text(rows()))['entries']}
+        self.assertEqual(entries[('EmuCore/GS', 'upscale_multiplier')]['values'],
+                         ['1', '2', '3', '4', '6', '12', '5', '7', '8', '9', '10', '11'])
+        self.assertEqual(entries[('GT4GS', 'PerfOverlay')], {'section': 'GT4GS', 'key': 'PerfOverlay', 'type': 'bool',
+                                                             'values': ['true', 'false']})
+        self.assertEqual((entries[('GT4GS', 'SpinUs')]['min'], entries[('GT4GS', 'SpinUs')]['max']), (0, 2000))
+        self.assertEqual(entries[('EmuCore/GS', 'Renderer')]['values'], ['14', '15', '3'])
+        self.assertEqual(entries[('GT4GS', 'DataRoot')], {'section': 'GT4GS', 'key': 'DataRoot', 'type': 'path'})
+        # Every key gt4-gs reads from [GT4GS] is listed (gt4-gs 1.0.0 ignores the others).
+        for key in ('Surfaceless', 'SpinUs', 'ProhibitDynamicCode', 'DeferSwapChainAcquire', 'DebugStallWindowMs',
+                    'DebugStallAfterMs', 'DataRoot', 'DumpDir', 'DumpEvery', 'ShaderCompileNotice', 'PerfOverlay'):
+            self.assertIn(('GT4GS', key), entries, key)
+
+    def test_cursor_switch_is_checked_and_recorded_by_the_probe(self):
+        self.assertEqual(probe.CURSOR_AUTOHIDE_VALUES, ('0', '1'))
 
 
 if __name__ == '__main__':

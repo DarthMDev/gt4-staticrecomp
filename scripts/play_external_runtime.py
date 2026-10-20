@@ -7,14 +7,16 @@ import os
 from pathlib import Path
 import sys
 
-from external_runtime_probe import (ROOT, VU1_CORPUS_NAME, binary_workspace_for, run_probe, verify_manual_capture_profile,
-                                    verify_performance_profile)
+from external_runtime_probe import (ROOT, VU1_CORPUS_NAME, binary_workspace_for, run_probe, separate_play_card,
+                                    verify_manual_capture_profile, verify_performance_profile)
 
 
 def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, cpu_cores=None,
-         controls_file=None, renderer_override=None):
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, cpu_cores=None, controls_file=None,
+         renderer_override=None, play_card=None):
     workspace = Path(assets_root or ROOT).resolve()
+    # --play-card (TASK-017 license checks): a separate existing card inside private/, never the owner's card.
+    separate_card = separate_play_card(workspace, play_card) if play_card is not None else None
     if performance:
         manifest = Path(runtime_manifest).resolve()
         verify_performance_profile(manifest, json.loads(manifest.read_text(encoding='utf-8')), ROOT)
@@ -34,7 +36,7 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
             raise ValueError('Another manual game session is already running') from error
         try:
             run_directory = play_directory / datetime.now().strftime('session-%Y%m%d-%H%M%S-%f')
-            card = play_directory / 'card.ps2'
+            card = separate_card or play_directory / 'card.ps2'
             manifest = Path(runtime_manifest or ROOT / 'docs/inputs/slice114-native-base.json').resolve()
             if not manifest.is_relative_to(ROOT / 'docs/inputs'):
                 raise ValueError('Manual runtime manifest must stay inside repository docs/inputs')
@@ -47,6 +49,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
             print('Display: 16:9 fixed. Alt+Enter or F11 toggles borderless fullscreen.', flush=True)
             if force_480p:
                 print('GT4_FORCE_480P=1: experimental 480p request rewrite; the owner checks menus and races.', flush=True)
+            if separate_card:
+                print(f'Separate test card (--play-card); the owner card is not used: {card}', flush=True)
             print(f'Local save: {card}\nSession log: {run_directory}', flush=True)
             if capture_shapes:
                 print('Capture starts OFF. Select the scene yourself, then press F8 to start/stop.', flush=True)
@@ -80,7 +84,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                                vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
                                force_480p=force_480p, vu0_verify=vu0_verify, cpu_cores=cpu_cores,
                                binary_workspace=binary_workspace_for(ROOT, workspace),
-                               controls_file=controls_file, renderer_override=renderer_override)
+                               controls_file=controls_file, renderer_override=renderer_override,
+                               separate_card=separate_card is not None)
             if result.get('gs_restart_requested') == 'donor' and renderer_override is None:
                 restart = True
             elif not result.get('manual_session_closed'):
@@ -95,7 +100,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
         print(f'GS process stopped; restarting with the built-in renderer (CoreGS 1.1). Previous log: {run_directory}',
               flush=True)
         play(assets_root, runtime_manifest, capture_shapes, performance, vu1_record, vu1_verify, vu1_interpret_only,
-             force_480p, vu0_verify, cpu_cores, controls_file=controls_file, renderer_override='donor')
+             force_480p, vu0_verify, cpu_cores, controls_file=controls_file, renderer_override='donor',
+             play_card=play_card)
 
 
 if __name__ == '__main__':

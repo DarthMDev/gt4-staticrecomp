@@ -1,6 +1,72 @@
 # Current Status
 
-## Current state (2026-10-16)
+## Current state (2026-10-17)
+
+**TASK-044 (packaging, docs only, branch `task/044-packaging`):** release 1.0.0 ships gt4-gs 1.0.1 (`gt4gs-v1.0.1`, the
+renderer already pinned for `--mode pcsx2`). The fork's release notes were edited (upstream base PCSX2 v2.8.2, commit
+`fd9d310cc`; patch list; GPL-3.0 and source; SHA256SUMS). README (renderers, known issues, license and legal),
+[THIRD_PARTY](../native/THIRD_PARTY.md) and [RELEASE-1.0.0-PLAN](RELEASE-1.0.0-PLAN.md) are updated. No build, no game run.
+Release order: the launcher and installer (TASK-019, TASK-043), the owner's end-to-end test, then the v1.0.0 tag.
+
+**slice206 (TASK-017 done, branch `task/017-license-crash`, main `ed123ed` merged in):** `--mode pcsx2` = slice206, the
+slice203 game recipe (gt4-gs 1.0.1) plus the license demo guard v2 (capsule `private/slice206-license-guard-runtime`,
+`ps2game.lib` unchanged). License demos that decrypt wrong (our FPU is not bit-exact, so 0 of 592 pass the game CRC; 52
+of the 85 US demos land in the wrong phase) get record count 0xFFFFFFFF at both demo loaders (0x001100D0 and 0x00110230),
+so the licenses are playable and those demos do not play, as in PCSX2 default. Memory-card loads check the CRC
+themselves; replays and ghosts from a real PS2 card fail to load cleanly. Consumer map and remaining risk:
+[LICENSE-DEMO-CIPHER](LICENSE-DEMO-CIPHER.md). Halt dump and FSV trace are built in, off unless GT4_HALT_DUMP /
+GT4_FSV_TRACE. New `--play-card PATH` (a separate private test card, never `private/manual-play/card.ps2`). CTest
+33/33 (native_memcard_store and native_license_guard now registered), Python suite with GT4_NATIVE_BUILD = slice206 all
+passing. `pcsx2-slice203` and `license-guard` (slice205, guard v1) kept. Follow-up TASK-063: bit-exact div.s/mul.s.
+
+Earlier (2026-10-16):
+
+**slice203 (TASK-044, branch `task/044-gs-101`):** the slice202 game executable (same hash) with the stable gt4-gs 1.0.1
+(tag `gt4gs-v1.0.1`, fork PR #7 merged as `d90c0f111`), which no longer writes under `Documents\PCSX2`. `--mode pcsx2` = slice203;
+`pcsx2-slice202` kept. Checks: Python 472 run (18 skipped), CTest 29/30 (`python_native_contracts` uses the stale slice202 build path),
+donor 42/42 = slice202, pcsx2 4200 frames 41/41 = slice202 (1x), no-JIT check of the 1.0.1 package passed, `Documents\PCSX2`
+unchanged. [BUILD](BUILD.md) slice 203.
+
+TASK-039 tooling follow-up (external contribution by Gustavo Canepa, PR #36, `fix/duplicate-gs-json-settings`): duplicate JSON setting ids now
+raise the same error as duplicate CLI assignments. The 58 GS settings module tests pass, including
+unchanged default INI output; no native build or gameplay validation was performed for this change.
+
+**slice202 (main `b955235` merged into `task/060-062-osd`):** one candidate with the owner-approved TASK-058/059 (crash-safe
+memory card, installed-folder paths, `--portable-check`, `make_distribution.py`) and TASK-060/061/062 (cursor, shader
+notice, overlay) on the stable gt4-gs 1.0.0. CTest 30/30, Python 469 OK, donor 42/42, pcsx2 41/41 = slice201, the same
+from the distribution folder, `--portable-check` ok. `--mode pcsx2` was slice202 until slice203 (gt4-gs 1.0.1). [BUILD](BUILD.md) slice202.
+
+**slice201 (TASK-060/061/062, branch `task/060-062-osd`, fork `gt4gs/osd`, `gt4gs-v1.0.0` stable):** the mouse cursor
+hides over the picture after 3 s without movement in fullscreen and windowed mode (game window and gt4-gs child agree
+through protocol 1.2 CONTROL cursor; `GT4_CURSOR_AUTOHIDE=0` keeps it); gt4-gs shows "Compiling shaders…" bottom-left
+while it really compiles (pipeline cache hits excluded); an optional top-right performance overlay (FPS, frame time,
+CPU and GPU usage of the game and gt4-gs, resolutions, EE/VU1/GS write/readback/GS thread ms and the headroom) fed by
+protocol 1.2 OSD_STATS (+0.35 us/frame on the EE thread, +0.02 ms/frame GS thread). Internal resolution presets 480p to
+8K (default 1080p); gt4-gs 1.0.0 ignores INI keys outside the allow-list with a warning and is the **first stable
+gt4-gs release** (zip sha256 `2e878019...`). CTest 30/30, Python 455 OK, donor 42/42, pcsx2 1x 41/41 = slice199,
+no-JIT check passes. `--mode pcsx2` = slice201, `--mode pcsx2-slice199` kept. Owner windowed test pending.
+[GS-LIVE](GS-LIVE.md) section 11.
+**slice200 (TASK-058 crash-safe memory card, TASK-059 installed folder; branch `task/058-059-release-hardening` from main `3b5334d`):** `--mode pcsx2` = slice200 (`docs/inputs/slice200-pcsx2.json`, game build `private/slice200-build`, 95,680,000 bytes). The runtime writes the card atomically through the TASK-025 writer (memcard capsule, dirty retry, flush on exit and after the GS-loss grace VSYNCs). The executable finds `shaders\` and `gs\gt4-gs.exe` next to itself, has `--portable-check`, and `scripts/make_distribution.py` assembles the folder (`private/slice200-dist`, 16 files, no GS package, no game data; `docs/DISTRIBUTION.md`). Checks: CTest 29/29; Python kill test, portable-check and distribution tests; donor 42/42 identical to slice157; pcsx2 41/41 identical to slice199, both run from the distribution folder. The headless schedule never saves, so the card check is the fixture and kill test; the in-game save is the owner's test. `--mode main` is not rebuilt. No PR opened.
+
+**slice199 (TASK-041 on the JIT-free gt4-gs 0.4.0, branch `task/041-gs-perf`, fork `gt4gs/nojit`, `gt4gs-v0.4.0`):** the slice198 game build (same file and hash) with the JIT-free gt4-gs 0.4.0 package of slice197. `--mode pcsx2` = slice199; `--mode pcsx2-slice198` and `--mode pcsx2-slice197` stay for A/B. Owner test of slice198 (gt4-gs 0.3.2) on 2026-10-16, night race with 5 AI: 59.97 FPS, 53 late frames (69 before), EE waits for the VU1 worker 2.99 ms (3.48 before), readback 0.69 ms, EE critical path 11.81 of 16.68 ms (71%), headroom 4.87 ms, no frametime spikes once the shader cache was warm. CTest 29/29, Python 438 OK, 20 skipped; donor 42/42 identical to slice157; pcsx2 1x 41/41 identical to slice198; no-JIT static check passes on the package. [GS-LIVE](GS-LIVE.md) sections 9 and 10. Owner night-race check on 0.4.0 pending.
+
+**slice198 (TASK-041, branch `task/041-gs-perf`, fork unchanged, `gt4gs-v0.3.2`):** performance of the PCSX2 GS path.
+A headless race schedule (El Capitan, 5 AI) reproduces the night-race privileged-write pattern: the 3.48 ms/frame
+`gs_privileged` wait is the EE waiting for the frame's VU1 work at the CSR write right before the flare readback.
+`GT4_MTVU_PRIV_ASYNC=1` (default) queues privileged writes in the MTVU journal: byte-identical stream and frames, the
+gs_privileged wait is 0 but moves to the readback's download sync (no net gain expected in the night race). Long
+readbacks are pipeline compiles (cold cache max 58 ms, warm 2.7 ms; TASK-046). Wake batching (`GT4_GS_WAKE_BYTES`)
+cuts GS wake-ups from 322 to about 12 per frame and `gs_ipc_write` by about 30% per MB. F8 `[gs-ipc]` gains
+per-register lines and an EE critical path summary. CTest 29/29, Python 416 OK, donor 42/42, pcsx2 41/41.
+Owner test 2026-10-16 (see slice199 above). `--mode pcsx2` was slice198 until slice199. [GS-LIVE](GS-LIVE.md) section 9.
+
+**slice197 (TASK-042, branch `task/042-gs-nojit`, fork `gt4gs/nojit`, `gt4gs-v0.4.0`):** JIT-free `gt4-gs.exe`. Build
+option `GT4GS_ONLY`: no EE/IOP/VU/VIF recompilers, no x86 emitter, no GS software JIT (C rasterizer), no executable
+memory; Windows Arbitrary Code Guard on at start (works with the AMD Vulkan driver). Static check passes (0.3.2: 22
+markers); replayed menu frames byte-identical to 0.3.2 at 1x and 3x; GS thread time unchanged within noise. CTest
+29/29, Python 414 OK, donor 42/42, live pcsx2 41/41 = slice196. `--mode pcsx2` was slice197 until slice199 (same game runtime). Owner
+windowed check pending. [GS-LIVE](GS-LIVE.md) section 10.
+
 
 **slice196 (TASK-047, branch `task/047-gs-deinterlace`, fork `gt4gs/deinterlace`, `gt4gs-v0.3.2`):** 480i menus in the
 PCSX2 GS mode. Cause: the stream had no SYNCV (PCSX2 never deinterlaced; fields line-doubled and bouncing) and,

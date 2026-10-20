@@ -295,7 +295,10 @@ RingWriter &Session::events_out() {
 void Session::signal(Wake which) { SetEvent(events_[static_cast<int>(which)]); }
 
 void Session::wake_if_waiting(std::uint32_t *waiter, Wake which) {
-  if (load32(*waiter)) SetEvent(events_[static_cast<int>(which)]);
+  if (load32(*waiter)) {
+    ++waits_.wakes_signalled[static_cast<int>(which)];
+    SetEvent(events_[static_cast<int>(which)]);
+  }
 }
 
 template <typename Ready>
@@ -355,13 +358,24 @@ void Session::post(RecordType type, std::uint16_t flags, const void *first, std:
                    std::size_t second_bytes) {
   RingWriter &ring = commands_out();
   while (!ring.try_write(type, flags, first, first_bytes, second, second_bytes)) {
-    // Back-pressure: wait until the consumer released enough bytes for the record (and a possible filler).
+    // Back-pressure: the consumer must be awake to free space, so wake it first (batched records may be waiting).
+    wake_if_waiting(&control_->data_waiter, Wake::data);
+    bytes_since_data_wake_ = 0;
+    // Wait until the consumer released enough bytes for the record (and a possible filler).
     const std::uint64_t need = record_size(first_bytes + second_bytes) * 2;
     ++waits_.space_waits;
     wait_until([&] { return ring.capacity() - ring.used_bytes() >= std::min(need, ring.capacity()); },
                &control_->space_waiter, Wake::space, &waits_.space_wait_us, INFINITE, "ring space");
   }
-  wake_if_waiting(&control_->data_waiter, Wake::data);
+  // TASK-041: GIF and PRIV records wake a sleeping consumer only every data_wake_bytes_ (one event signal costs a
+  // system call here and a thread wake-up there); every other record type, which the producer may wait on next
+  // (VSYNC frames in flight, READ_FIFO reply) or which ends the stream, wakes it at once.
+  bytes_since_data_wake_ += record_size(first_bytes + second_bytes);
+  const bool batchable = type == RecordType::gif || type == RecordType::priv;
+  if (!batchable || data_wake_bytes_ == 0 || bytes_since_data_wake_ >= data_wake_bytes_) {
+    wake_if_waiting(&control_->data_waiter, Wake::data);
+    bytes_since_data_wake_ = 0;
+  }
 }
 
 void Session::post_vsync(const VsyncPayload &vsync) {

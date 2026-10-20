@@ -13,6 +13,7 @@ input, as scripts/prepare_perf_runtime.py checks for its overlays.
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -122,7 +123,15 @@ def prepare(output, assets_root=None):
     if remove_overlay(derived) != source:
         raise ValueError('Memcard flush overlay does not reverse to the donor input')
     output.mkdir(parents=True, exist_ok=True)
-    (output / 'sio2.cpp').write_text(derived, encoding='utf-8')
+    (output / 'sio2.cpp').write_text(derived, encoding='utf-8', newline='\n')
+    manifest = {
+        'schema_version': 1,
+        'donor_source': DONOR_SIO2,
+        'donor_sha256': DONOR_SIO2_SHA256,
+        'sio2_sha256': hashlib.sha256(derived.encode('utf-8')).hexdigest(),
+        'overlay': 'TASK-025 Part A: atomic card write through memcard_store, exit flush (slice200)',
+    }
+    (output / 'runtime.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8', newline='\n')
     return derived
 
 

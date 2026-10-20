@@ -19,6 +19,9 @@
 //                  (TASK-038).
 //   pin-mismatch   GT4_GS_PROCESS_SHA256 differs from the GS process file: refused before the spawn (TASK-036).
 //   bad-config     GT4_GS_CONFIG names a missing file: refused (TASK-036).
+//   pcsx2-ordered  TASK-041: as pcsx2, but the PATH1/PATH2 data of each frame is held by a stand-in for the MTVU
+//                  journal and the privileged writes are queued behind it (PrivilegedOrdering hooks); the drain posts
+//                  them in order, so the stream must equal the pcsx2 capture byte for byte.
 // The pcsx2 scenario also sets the correct GT4_GS_PROCESS_SHA256 and a GT4_GS_CONFIG file (passed as --config).
 // Checks: the three stream files (donor capture, pcsx2 in-process capture, recorder output) are byte-identical; the
 // file parses back with the expected record counts, MORE split and VSYNC fields; the SetGsCrt table.
@@ -63,9 +66,49 @@ std::vector<std::uint8_t> qwords_of(std::size_t qwords, std::uint8_t seed) {
   return data;
 }
 
+// TASK-041: a stand-in for the MTVU journal. Worker GIF output and privileged writes queued behind it, in order.
+struct HeldEntry {
+  bool privileged = false;
+  int path = 0;
+  std::vector<std::uint8_t> data;
+  std::uint32_t address = 0;
+  std::uint64_t value = 0;
+};
+std::vector<HeldEntry> g_held;
+bool g_ordered = false;
+
+bool queue_behind_held(std::uint32_t address, std::uint64_t value) {
+  if (g_held.empty()) return false;
+  g_held.push_back(HeldEntry{true, 0, {}, address, value});
+  return true;
+}
+std::uint64_t no_wait_us() { return 0; }
+bool ordered_active() { return true; }
+
+// The "worker" output of the ordered scenario goes to the held list; otherwise straight to the client.
+void render_worker_output(int path, const std::vector<std::uint8_t> &data) {
+  if (g_ordered) {
+    g_held.push_back(HeldEntry{false, path, data, 0, 0});
+    return;
+  }
+  gt4::gs_stream::on_gif_render(path, data.data(), static_cast<std::uint32_t>(data.size() / 16));
+}
+
+// The drain: every held entry in order (GIF to the render hook, privileged writes posted now).
+void drain_held() {
+  for (const HeldEntry &entry : g_held) {
+    if (entry.privileged)
+      gt4::gs_stream::post_privileged_now(entry.address, entry.value);
+    else
+      gt4::gs_stream::on_gif_render(entry.path, entry.data.data(), static_cast<std::uint32_t>(entry.data.size() / 16));
+  }
+  g_held.clear();
+}
+
 // The scripted hook sequence of a short session (deterministic).
 void run_script(std::uint32_t frames) {
   namespace client = gt4::gs_stream;
+  if (g_ordered) client::set_privileged_ordering({&queue_behind_held, &no_wait_us, &ordered_active});
   client::set_halt_handler(count_halt);
   client::on_gs_reset();
   client::on_set_gs_crt(1, 0x02, 1);
@@ -76,10 +119,11 @@ void run_script(std::uint32_t frames) {
     const auto path1 = qwords_of(64, static_cast<std::uint8_t>(frame + 1));
     const auto path2 = qwords_of(5, static_cast<std::uint8_t>(frame + 2));
     client::on_gif_render(3, path3.data(), 3);
-    client::on_gif_render(1, path1.data(), 64);
-    client::on_gif_render(2, path2.data(), 5);
+    render_worker_output(1, path1);
+    render_worker_output(2, path2);
     client::on_privileged_write(0x12000070u, frame);
     client::on_privileged_write(0x12001000u, 8);
+    drain_held();
     if (frame == 4) {
       // Larger than one record: split with kRecordFlagMore (16 MiB of the 32 MiB ring per record).
       const std::size_t qwords = (16u << 20) / 16 + 3;
@@ -125,6 +169,24 @@ int scenario_main(const std::string &scenario, std::uint32_t frames) {
     gt4::gs_stream::on_gif_render(3, data.data(), 1);  // refuses (exits) on first use
     return 0;
   }
+  if (scenario == "osd") {
+    // TASK-060/062: a 1.2 consumer that asked for OSD_STATS. Frames are paced at about 25 ms so the 0.5 s OSD interval
+    // passes at least twice; the window handle is a placeholder (only the CONTROL records are checked).
+    namespace client = gt4::gs_stream;
+    client::set_cursor_policy(true, 3000);
+    client::set_halt_handler(count_halt);
+    client::on_gs_reset();
+    client::attach_window(0x1234, 640, 360);
+    for (std::uint32_t frame = 0; frame < frames; ++frame) {
+      const auto data = qwords_of(4, static_cast<std::uint8_t>(frame));
+      client::on_gif_render(3, data.data(), 4);
+      Sleep(25);
+      client::on_vsync((frame & 1) != 0);
+    }
+    client::finish(stdout);
+    return g_halts == 0 ? 0 : 6;
+  }
+  g_ordered = scenario == "pcsx2-ordered";
   run_script(frames);
   if (scenario == "peer-death") {
     // The fake GS process dies after 20 records (frame 1-2); the frames-in-flight wait sees it at the latest two VSYNCs
@@ -271,6 +333,82 @@ void check_crt_table() {
   std::puts("[fixture] SetGsCrt table ok");
 }
 
+// TASK-041: the privileged register table and the F8 summary line.
+void check_privileged_table_and_summary() {
+  namespace client = gt4::gs_stream;
+  require(client::privileged_register_index(0x12000000u) == 0 && std::string(client::privileged_register_name(0)) == "PMODE",
+          "PMODE");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12000070u))) == "DISPFB1",
+          "DISPFB1");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x120000E0u))) == "BGCOLOR",
+          "BGCOLOR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001000u))) == "CSR", "CSR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001010u))) == "IMR", "IMR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001040u))) == "BUSDIR",
+          "BUSDIR");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x12001080u))) == "SIGLBLID",
+          "SIGLBLID");
+  require(std::string(client::privileged_register_name(client::privileged_register_index(0x120000F0u))) == "other" &&
+              std::string(client::privileged_register_name(client::privileged_register_index(0x11000000u))) == "other",
+          "unknown addresses");
+  client::FrameCosts costs;
+  costs.ee_cpu_ms = 8.761;
+  costs.vu1_worker_wait_ms = 3.481;
+  costs.readback_wait_ms = 0.776;
+  costs.backpressure_ms = 0.0;
+  costs.gs_cpu_thread_ms = 0.948;
+  const std::string line = client::format_frame_summary(costs);
+  std::printf("[fixture] %s\n", line.c_str());
+  require(line.find("EE critical path 13.02 ms/frame of 16.68 budget (78%)") != std::string::npos &&
+              line.find("headroom 3.67 ms") != std::string::npos &&
+              line.find("GS process CPU thread 0.95 ms/frame") != std::string::npos,
+          "summary of the owner's night-race numbers");
+  costs.ee_cpu_ms = -1.0;
+  costs.gs_cpu_thread_ms = -1.0;
+  const std::string unknown = client::format_frame_summary(costs);
+  require(unknown.find("EE critical path Unknown") != std::string::npos &&
+              unknown.find("GS process CPU thread Unknown") != std::string::npos,
+          "summary without CPU times");
+  std::puts("[fixture] privileged register table and summary ok");
+}
+
+// TASK-062: OSD_STATS from two cumulative samples (the owner's slice194 night-race F8 numbers per frame, 30 frames).
+void check_osd_stats() {
+  namespace client = gt4::gs_stream;
+  client::OsdSample begin, end;
+  begin.wall_us = 1000000;
+  end.wall_us = begin.wall_us + 30 * 16683;
+  begin.vsyncs = 100;
+  end.vsyncs = 130;
+  begin.main_cpu_us = 5000000;
+  end.main_cpu_us = begin.main_cpu_us + 30 * 8761;
+  begin.worker_busy_us = 0;
+  end.worker_busy_us = 30 * 6100;
+  begin.accounting = end.accounting = true;
+  end.worker_wait_us = 30 * 3481;
+  end.readback_wait_us = 30 * 776;
+  end.stream_write_us = 30 * 590;
+  const OsdStatsPayload stats = client::make_osd_stats(begin, end, 17100);
+  require(stats.valid == (kOsdStatFrameTimes | kOsdStatMainThreadCpu | kOsdStatWorkerBusy | kOsdStatStreamCosts |
+                          kOsdStatWorkerWait | kOsdStatCriticalPath),
+          "every OSD field is valid with the accounting on");
+  require(stats.frames == 30 && stats.interval_us == 30 * 16683 && stats.frame_time_avg_us == 16683 &&
+              stats.frame_time_max_us == 17100,
+          "OSD frame times");
+  require(stats.main_thread_cpu_us == 8761 && stats.worker_busy_us == 6100 && stats.worker_wait_us == 3481 &&
+              stats.readback_wait_us == 776 && stats.stream_write_us == 590 && stats.backpressure_us == 0,
+          "OSD per-frame costs");
+  require(stats.critical_path_us == 8761 + 3481 + 776 && stats.frame_budget_us == 16683,
+          "OSD critical path and budget (the F8 summary formula: 13.02 of 16.68 ms)");
+  // Without the accounting only the frame times and the EE CPU are known; an empty interval is not valid at all.
+  begin.accounting = end.accounting = false;
+  const OsdStatsPayload partial = client::make_osd_stats(begin, end, 17100);
+  require(partial.valid == (kOsdStatFrameTimes | kOsdStatMainThreadCpu) && partial.critical_path_us == 0,
+          "OSD without accounting");
+  require(client::make_osd_stats(end, end, 0).valid == 0, "OSD of an empty interval");
+  std::puts("[fixture] OSD_STATS values ok");
+}
+
 }  // namespace
 
 int main(int argc, char **argv) {
@@ -290,6 +428,56 @@ int main(int argc, char **argv) {
         return 10;
       }
       auto session = ipc::Session::open_consumer(argv[2]);
+      if (std::string(mode) == "osd") {
+        // TASK-060/062: a protocol 1.2 consumer with an overlay. Counts OSD_STATS and CONTROL cursor records until
+        // CONTROL shutdown and writes the result to GT4_FIXTURE_PID_FILE's sibling ".osd" file.
+        ReadyPayload osd_ready{};
+        osd_ready.version_major = kVersionMajor;
+        osd_ready.version_minor = 2;
+        osd_ready.flags = kReadyFlagOsdStats;
+        osd_ready.consumer_pid = ipc::current_process_id();
+        session->post_event(RecordType::ready, &osd_ready, sizeof osd_ready);
+        std::uint64_t osd_records = 0, cursor_flags = 99, cursor_delay = 0, vsyncs = 0;
+        std::uint32_t valid_all = ~0u, frames_total = 0, budget = 0, max_avg = 0;
+        ipc::RecordView view;
+        for (;;) {
+          session->next_command(view);
+          const auto type = static_cast<RecordType>(view.header->type);
+          if (type == RecordType::vsync) {
+            ++vsyncs;
+            session->release_command(view);
+            session->complete_vsync();
+            continue;
+          }
+          if (type == RecordType::osd_stats && view.header->payload_bytes == sizeof(OsdStatsPayload)) {
+            OsdStatsPayload stats;
+            std::memcpy(&stats, view.payload, sizeof stats);
+            ++osd_records;
+            valid_all &= stats.valid;
+            frames_total += stats.frames;
+            budget = stats.frame_budget_us;
+            max_avg = std::max(max_avg, stats.frame_time_avg_us);
+          }
+          bool shutdown = false;
+          if (type == RecordType::control) {
+            ControlPayload control;
+            std::memcpy(&control, view.payload, sizeof control);
+            if (control.kind == static_cast<std::uint32_t>(ControlKind::cursor)) {
+              cursor_flags = control.args[0];
+              cursor_delay = control.args[1];
+            }
+            shutdown = control.kind == static_cast<std::uint32_t>(ControlKind::shutdown);
+          }
+          session->release_command(view);
+          if (shutdown) break;
+        }
+        if (const char *result = std::getenv("GT4_FIXTURE_PID_FILE"); result && *result) {
+          std::ofstream out(std::string(result) + ".osd");
+          out << osd_records << ' ' << valid_all << ' ' << frames_total << ' ' << max_avg << ' ' << budget << ' '
+              << cursor_flags << ' ' << cursor_delay << ' ' << vsyncs;
+        }
+        return 0;
+      }
       if (std::string(mode) == "hang") {
         // Posts READY, then ignores the game (no peer waits): only the kill-on-close job can end it.
         ReadyPayload hang_ready{};
@@ -315,6 +503,8 @@ int main(int argc, char **argv) {
       return 2;
     }
     check_crt_table();
+    check_privileged_table_and_summary();
+    check_osd_stats();
     const std::string recorder = argv[1];
     const std::string scratch = argv[2];
     CreateDirectoryA(scratch.c_str(), nullptr);
@@ -349,6 +539,60 @@ int main(int argc, char **argv) {
                 std::equal(capture_bytes.begin(), capture_bytes.end(), recorded_bytes.begin()),
             "recorder file equals the in-process capture plus CONTROL shutdown");
     std::puts("[fixture] donor capture, pcsx2 capture and recorder file are byte-identical");
+    // TASK-041: privileged writes queued behind held worker output reach the stream in the same order.
+    const std::string ordered_capture = scratch + "\\pcsx2-ordered-capture.gscap";
+    const std::string ordered_recorded = scratch + "\\pcsx2-ordered-recorded.gscap";
+    for (const std::string &path : {ordered_capture, ordered_recorded}) DeleteFileA(path.c_str());
+    require(run_scenario("pcsx2-ordered", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", recorder},
+                                           {"GT4_GS_RECORD_OUTPUT", ordered_recorded},
+                                           {"GT4_GS_CAPTURE", ordered_capture}}) == 0,
+            "pcsx2-ordered scenario");
+    require(read_all(ordered_capture) == capture_bytes, "ordered privileged writes: capture equals the pcsx2 capture");
+    require(read_all(ordered_recorded) == recorded_bytes, "ordered privileged writes: recorder file equals the pcsx2 one");
+    std::puts("[fixture] queued privileged writes keep the stream byte-identical");
+
+    // TASK-060/062 (protocol 1.2): CONTROL cursor after attach_window, OSD_STATS about every 0.5 s to a consumer that
+    // asked for them, and never in the .gscap capture.
+    const std::string osd_result = scratch + "\\osd.pid";
+    const std::string osd_capture = scratch + "\\osd-capture.gscap";
+    for (const std::string &path : {osd_result + ".osd", osd_capture}) DeleteFileA(path.c_str());
+    require(run_scenario("osd", {{"GT4_RENDERER", "pcsx2"}, {"GT4_GS_PROCESS", argv[0]}, {"GT4_FIXTURE_CHILD", "osd"},
+                                 {"GT4_FIXTURE_PID_FILE", osd_result}, {"GT4_GS_CAPTURE", osd_capture}},
+                         60) == 0,
+            "osd scenario");
+    {
+      std::ifstream in(osd_result + ".osd");
+      std::uint64_t records = 0, valid = 0, frames_total = 0, max_avg = 0, budget = 0, flags = 0, delay = 0, vsyncs = 0;
+      in >> records >> valid >> frames_total >> max_avg >> budget >> flags >> delay >> vsyncs;
+      std::printf("[fixture] osd: %llu OSD_STATS records, valid bits 0x%llx, %llu frames, max mean frame %llu us, "
+                  "cursor flags %llu delay %llu ms, %llu vsyncs\n",
+                  static_cast<unsigned long long>(records), static_cast<unsigned long long>(valid),
+                  static_cast<unsigned long long>(frames_total), static_cast<unsigned long long>(max_avg),
+                  static_cast<unsigned long long>(flags), static_cast<unsigned long long>(delay),
+                  static_cast<unsigned long long>(vsyncs));
+      require(vsyncs == 60, "the osd consumer saw every VSYNC");
+      require(records >= 2 && records <= 4, "about one OSD_STATS record per 0.5 s (60 frames of 25 ms)");
+      require((valid & kOsdStatFrameTimes) && (valid & kOsdStatMainThreadCpu), "OSD frame times and EE CPU are valid");
+      require(max_avg >= 20000 && max_avg < 200000, "OSD mean frame time near the 25 ms pacing");
+      require(flags == kCursorFlagAutoHide && delay == 3000, "CONTROL cursor carries the window's policy");
+      FileReader reader;
+      std::string error;
+      require(reader.open(osd_capture, error), "osd capture opens");
+      RecordHeader header;
+      std::vector<std::uint8_t> payload;
+      std::uint64_t captured_osd = 0, captured_cursor = 0;
+      while (reader.next(header, payload)) {
+        if (header.type == static_cast<std::uint16_t>(RecordType::osd_stats)) ++captured_osd;
+        if (header.type == static_cast<std::uint16_t>(RecordType::control) && payload.size() >= sizeof(ControlPayload)) {
+          ControlPayload control;
+          std::memcpy(&control, payload.data(), sizeof control);
+          if (control.kind == static_cast<std::uint32_t>(ControlKind::cursor)) ++captured_cursor;
+        }
+      }
+      require(captured_osd == 0, "OSD_STATS never reach the .gscap capture");
+      require(captured_cursor == 1, "CONTROL cursor is part of the stream (once, after attach_window)");
+    }
+    std::puts("[fixture] protocol 1.2: CONTROL cursor and OSD_STATS ok");
 
     require(run_scenario("bad-renderer", {{"GT4_RENDERER", "bogus"}}) == 1, "unknown renderer refused");
     require(run_scenario("no-process", {{"GT4_RENDERER", "pcsx2"}}) == 1, "missing GT4_GS_PROCESS refused");
