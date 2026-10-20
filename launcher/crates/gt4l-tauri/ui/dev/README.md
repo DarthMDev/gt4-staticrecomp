@@ -16,7 +16,8 @@ Scripts are classic (not modules) so the pages also open from `file://`.
 | `js/ui.js` | Element builder, hint bar, toast, dialogs, date format |
 | `js/settings-model.js` | Pure settings row model: visibility, the row after a change, the Saves/Replays entry, the newest-read gate (`GT4.settingsModel`) |
 | `js/nav.js` | Keyboard, Web Gamepad polling, Rust `gamepad` event, focus ring |
-| `js/controller-svg.js` | Original DualShock 2 drawing (no Sony artwork) |
+| `js/controller-svg.js` | GT4Recomp's own DualShock 2 drawing (no Sony artwork): buttons, chips, live state, nearest-button pick |
+| `js/controls-model.js` | Pure Controls rules: live state from the Gamepad API and keys, trigger output, key names, conflicts, chip labels (`GT4.controlsModel`) |
 | `js/config.js` | Feature flags (`mods` off for release 1.0.0) |
 | `js/app.js` | Router (`#/setup`, `#/home`, `#/settings/<tab>`) and boot |
 | `js/pages/*.js` | Setup, Home, Settings shell and rows, Saves and Replays, Controls |
@@ -44,10 +45,12 @@ Arguments are the payload object shown. Errors are strings or Error objects; the
 | `get_settings_table` | none | `{max_upscale: int, rows: [row]}` |
 | `set_setting` | `{id, value}` | none (`Result<(), String>`); after a success the UI sets the row's value and reads the table again, since other rows can depend on it (`visible_when`, `disabled`) |
 | `reset_gs_settings_to_defaults` | none | `{max_upscale, rows}` |
-| `get_controls` | none | `{controls: [{id, name, binding}], triggers: [row]}` |
-| `capture_binding` | `{control}` | `{control, binding}`; resolves on the next press |
+| `get_controls` | none | `{controls: [{id, name, binding, sources, xinput, key, is_default}], triggers: [row], locked}`; `id` is the input of the controls file (`cross`, `dpad_up`, `l2`...), `sources` the raw sources (`xinput:A`, `key:Z`), `xinput`/`key` the first of each family or null; `triggers` holds the analog rows (below); `locked` is true when the file comes from a newer launcher and is kept read-only |
+| `capture_binding` | `{control}` | `{control, source}`: the next newly pressed control of the first connected XInput pad (a control held at the start does not count). It binds nothing; the page checks for a conflict and calls `assign_binding`. `cancel_capture` ends it with an error |
 | `cancel_capture` | none | none |
-| `reset_binding` | `{control}` | none |
+| `assign_binding` | `{control, source, swap}` | the `get_controls` view plus `swapped_with` (the other button or null) and `unchanged`. `source` replaces the button's source of the same family (`xinput:` or `key:`). When another button has it, `swap: true` gives that button the previous source (or removes it there when there was none) and `swap: false` is refused. The file is written at once |
+| `reset_binding` | `{control}` | none; one button back to its built-in sources |
+| `reset_all_bindings` | none | the `get_controls` view; every button, trigger and stick setting back to the built-in mapping |
 | `saves_list` | none | `{items: [{id, name, modified, active}]}` |
 | `saves_import` | none | `{items}` or `null` when the picker is cancelled |
 | `saves_activate` | `{id}` | `{items}` |
@@ -92,7 +95,7 @@ Settings row (`rows[]` in the table):
 - slider values: `{min, max, step, unit?, limit?: "max_upscale"}`; the effective max is `min(max, table[limit])`.
 - dropdown values: `[{value, label, disabled?, note?}]`; disabled entries are greyed and not selectable.
 - toggle values: `null`; `current` is a bool.
-- Controls triggers use the same row shape. Their ids are `l2_deadzone`, `l2_curve`, `r2_deadzone`, `r2_curve`, and they are written with `set_setting`.
+- The Controls analog rows use the same row shape (`group: "controls"`). Their ids are `l2_deadzone`, `l2_curve`, `r2_deadzone`, `r2_curve`, `lstick_deadzone` and `rstick_deadzone` (percent of travel, 0-95), and they are written with `set_setting`. A trigger row tunes the trigger source of that button (`deadzone=`/`curve=` options); a stick row writes `deadzone=` on both axis sources of the stick.
 
 Tauri event (optional fallback): `gamepad` with `{button, pressed: true}`, where `button` is one of `a b x y lb rb start up down left right`.
 
@@ -126,8 +129,9 @@ Focus moves spatially (nearest element in the pressed direction; sideways offset
 | Settings: About | activate (log folder) | Back to Home | none | none | none | tabs | none |
 | Saves | select / make active | Back | Import | Make active | none | tabs | none |
 | Replays | none | Back | Import | Delete (confirm) | none | tabs | none |
-| Controls | select the pad button | Back | Rebind | Reset binding | none | tabs | none |
-| Capture overlay | none | cancel the rebind | none | none | none | none | none (navigation is suspended) |
+| Controls (on the drawing) | rebind the focused DS2 button | Back to the tab list | Reset all (asks first) | Reset this button | none | tabs | D-pad and stick move between DS2 buttons by position |
+| Rebind overlay | none | cancel (Esc too); every other pad button or key is the new binding | none | none | none | none | none (navigation is suspended) |
+| Conflict dialog | Swap (or Move) / Cancel | cancel | none | none | none | none | move between the two buttons |
 | Dialog (list, confirm) | activate | close | none | none | none | none | none |
 
 Right stick: scrolls the nearest scroll area of the focused element (or the page main area). Deadzone 0.2.
@@ -151,7 +155,16 @@ Tab order for LB/RB and Q/E: Graphics, Advanced, Display, Controls, Saves, Repla
 
 Keyboard: arrows move, Enter/Space activate (native), Esc = B, Q/E = LB/RB, Tab/Shift+Tab move in DOM order.
 
-Settings focus: moving the highlight over the tab list (up and down) only previews the tab and never enters it; only A or D-pad right (or Enter) enters. Rendering a tab never moves focus. Saves and Replays enter on the first row (Import only when the list is empty); Controls enters on L1.
+Settings focus: moving the highlight over the tab list (up and down) only previews the tab and never enters it; only A or D-pad right (or Enter) enters. Rendering a tab never moves focus. Saves and Replays enter on the first row (Import only when the list is empty); Controls enters on the DS2 button selected last (Cross at first).
+
+## Controls page
+
+- **Drawing.** `js/controller-svg.js` builds GT4Recomp's own DS2 drawing (mirrored cubic halves, plain geometry, stroke symbols; no Sony artwork, photos, logos or marks). Classes and SVG attributes only (CSP). Each DS2 button is a focusable `<g class="pad-ctl" data-control="cross">`; a chip beside it, with a short leader line, shows the XInput control (Controller view) or the key (Keyboard view). Chips of changed buttons have an amber edge. When the drawing is narrower than 560 px the chips grow 1.35x.
+- **Live input.** The page reads the first connected pad (the one the game reads) every animation frame, with a 100 ms timer when the window produces no frames. `GT4.controlsModel.liveState` maps the standard Gamepad buttons to XInput names, then through the current bindings to DS2 buttons, so a swapped button lights where the game would see it. L2/R2 fill with the raw trigger value; the panel meter shows the pressure the game computes after the deadzone and curve (`triggerOutput`, the formula of `native/controls.cpp`). Sticks move in their wells; the panel scopes show the per-axis deadzone square. Keys light the buttons they drive. The status pill names the pad (Gamepad API id without the API suffix) and says which of several pads is used.
+- **Selecting and rebinding.** Pad and keys: focus is the selection, A (Enter, Space) rebinds. Mouse and touch: a click or tap selects the nearest button or chip (large targets at any size); a second click, or Rebind in the panel, starts the rebind. The overlay counts down 5 s; a pad press comes from `capture_binding`, a key from the page (`keyFromEvent`: Esc cancels, F7, F8, F9 and F11 are refused). B cancels, so B itself is never captured: B moves only through a swap.
+- **Conflicts.** `GT4.controlsModel.conflict` finds the button that already has the source; the dialog offers Swap (the other button gets the previous source) or Move (when there is none), and Cancel. Rust applies the same rule (`gt4controls::Controls::assign`) and refuses a taken source without `swap`.
+- **Footer.** Content level: A Rebind, Y Reset button, X Reset all, B Back, LB RB Tabs on the drawing; A Select instead of A Rebind on the panel. Rebind: B Cancel. Dialogs: A Choose, B Cancel. The tab list keeps the shell's footer (`host.hints(list, {replace: true})`).
+- **Saving.** Every change writes `controls.toml` at once (no Save). A refused change or a failed write keeps the old file and shows the reason. The info "i" says that this game build still uses the built-in mapping; the bindings apply from the next game build.
 Mouse use hides the focus ring. A pad or key press brings it back.
 
 ## Mock data and browser preview
@@ -159,8 +172,10 @@ Mouse use hides the focus ring. A pad or key press brings it back.
 Serve `ui/` with any static server and open `dev/index.html`, for example
 `python -m http.server 8765` in `launcher/crates/gt4l-tauri/ui`, then `http://127.0.0.1:8765/dev/index.html#/home`.
 
-Query options: `?setup=done|needed|wrong|copying|preparing|renderer|failed|missing|offline` (default `done`), `&pick=spec` (the mock picker returns a refused Spec II image), `&running=1`, `&focus=play` (home only: focus the Play button, for screenshots).
+Query options: `?setup=done|needed|wrong|copying|preparing|renderer|failed|missing|offline` (default `done`), `&pick=spec` (the mock picker returns a refused Spec II image), `&running=1`, `&focus=play` (home only: focus the Play button, for screenshots), `&focus=content` (Settings: enter the tab).
 
-`dev/nav-test.html` checks the spatial picker, the swipe, stick and slider rules, the face-button routing, the two focus levels and the settings row model in a browser. It should report every case passed (95 of 95 at the time of writing).
+Controls (dev only): `&pad=A,LB,DpadRight` (pressed XInput controls of a still dev pad), `&lt=0.6&rt=0.2` (trigger values), `&lx=0.7&ly=-0.45&rx=&ry=` (stick axes, y down), `&pads=2` (a second pad), `&nopad=1` (no controller), `&select=circle`, `&mode=key` (Keyboard chips), `&remap=1` (a few changed buttons), `&locked=1` (read-only file), `&capture=hold` (the rebind overlay stays open, still countdown) or `&capture=conflict` (the capture returns LB, so the conflict dialog opens). Example, the live-input screenshot: `dev/index.html?focus=content&pad=A,LB,DpadRight,Start&lt=0.6&rt=0.15&lx=0.75&ly=-0.5&rx=-0.45&ry=0.7#/settings/controls`. Screenshots: headless Edge with `--force-prefers-reduced-motion` (`docs/launcher/shots/controls-v2-*.png`).
 
-`dev/focus-check.html` runs the DOM-level checks on the same mock (headless Edge, `--virtual-time-budget=60000`): the sidebar highlight over every tab with arrow keys, entering and leaving each tab, the Saves and Replays entry, no Save hint, and that a changed resolution, toggle or slider shows its new value. `body[data-focus-check]` is `pass` when all 59 checks pass. `&scenario=4k` only sets the state for the screenshot.
+`dev/nav-test.html` checks the spatial picker, the swipe, stick and slider rules, the face-button routing, the two focus levels and the settings row model in a browser. It also checks the Controls model (live state from Gamepad values, swaps, keys, trigger output, key names, conflicts, chip labels, pad summary) and spatial moves between DS2 buttons on the drawing's own layout. It should report every case passed (140 of 140 at the time of writing).
+
+`dev/focus-check.html` runs the DOM-level checks on the same mock (headless Edge, `--virtual-time-budget=60000`): the sidebar highlight over every tab with arrow keys, entering and leaving each tab, the Saves and Replays entry, no Save hint, that a changed resolution, toggle or slider shows its new value, and the Controls page: entry on Cross, D-pad moves between DS2 buttons with the selection following, rebind and cancel (Esc), Enter not taken as the new key, the conflict dialog (cancel, then Swap with the chips updated), live input from a still dev pad (Cross lit, L2 at 60%, the stick at its position, the pad name, no focus move), Y reset and X reset all. `body[data-focus-check]` is `pass` when all 90 checks pass. `&scenario=4k` only sets the state for the screenshot.

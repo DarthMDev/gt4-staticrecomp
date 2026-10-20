@@ -119,6 +119,78 @@ pub struct TriggerTuning {
 
 /// Default trigger deadzone: 30 of 255 raw units.
 pub const TRIGGER_DEFAULT_DEADZONE: f32 = 30.0 / 255.0;
+/// Default left stick deadzone: XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE (7849) of 32767 (native/controls.cpp).
+pub const LEFT_STICK_DEFAULT_DEADZONE: f32 = 7849.0 / 32767.0;
+/// Default right stick deadzone: XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE (8689) of 32767 (native/controls.cpp).
+pub const RIGHT_STICK_DEFAULT_DEADZONE: f32 = 8689.0 / 32767.0;
+/// Largest deadzone the launcher writes for a trigger or a stick (the file accepts values below 1).
+pub const MAX_DEADZONE: f32 = 0.95;
+
+/// One of the two PS2 analog sticks, as the Controls page tunes it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stick {
+    Left,
+    Right,
+}
+
+impl Stick {
+    /// The two axis inputs of the stick in the controls file.
+    pub fn inputs(self) -> [&'static str; 2] {
+        match self {
+            Stick::Left => ["lstick_x", "lstick_y"],
+            Stick::Right => ["rstick_x", "rstick_y"],
+        }
+    }
+}
+
+/// What `Controls::assign` changed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Assignment {
+    /// The other input that held the source and was swapped (or lost it), if any.
+    pub swapped_with: Option<String>,
+    /// True when the input already had exactly this source: nothing changed.
+    pub unchanged: bool,
+}
+
+/// `xinput:A | deadzone=0.1` -> `xinput:A`.
+pub fn source_base(source: &str) -> &str {
+    split_options(source).0
+}
+
+/// `xinput` or `key`: the family of a source (the part before the first `:`), or the whole base without one.
+pub fn source_family(source: &str) -> &str {
+    let base = source_base(source);
+    base.split_once(':').map_or(base, |(family, _)| family)
+}
+
+fn is_trigger_source(source: &str) -> bool {
+    matches!(source_base(source), "xinput:LT" | "xinput:RT")
+}
+
+fn is_axis_source(source: &str) -> bool {
+    matches!(source_base(source), "xinput:LX" | "xinput:LY" | "xinput:RX" | "xinput:RY")
+}
+
+/// The source with option `key` set to `value` (replaced when present, appended otherwise). Other options keep
+/// their order.
+fn with_option(source: &str, key: &str, value: &str) -> String {
+    let (base, options) = split_options(source);
+    let prefix = format!("{key}=");
+    let mut kept: Vec<String> = options
+        .iter()
+        .filter(|option| !option.starts_with(&prefix))
+        .map(|option| option.to_string())
+        .collect();
+    kept.push(format!("{key}={value}"));
+    format!("{base} | {}", kept.join(" "))
+}
+
+/// XInput sources first, then keys, each in their current order (the drawing shows the first one of each family).
+fn ordered(sources: Vec<String>) -> Vec<String> {
+    let (pad, other): (Vec<String>, Vec<String>) =
+        sources.into_iter().partition(|source| source_family(source) == "xinput");
+    pad.into_iter().chain(other).collect()
+}
 
 impl Controls {
     pub fn bindings(&self) -> &BTreeMap<String, Vec<String>> {
@@ -178,6 +250,129 @@ impl Controls {
             })
             .collect();
         self.set_sources(input, updated)
+    }
+
+    /// Deadzone of a stick, read from its first XInput axis source. Without a `deadzone` option, the default of the
+    /// physical stick that source reads (LX/LY left, RX/RY right) applies, as in native/controls.cpp.
+    pub fn stick_deadzone(&self, stick: Stick) -> f32 {
+        let source = stick.inputs().iter().find_map(|input| {
+            self.sources(input).and_then(|sources| sources.iter().find(|source| is_axis_source(source)).cloned())
+        });
+        let Some(source) = source else {
+            return match stick {
+                Stick::Left => LEFT_STICK_DEFAULT_DEADZONE,
+                Stick::Right => RIGHT_STICK_DEFAULT_DEADZONE,
+            };
+        };
+        let (base, options) = split_options(&source);
+        for option in options {
+            if let Some(value) = option.strip_prefix("deadzone=") {
+                if let Ok(parsed) = value.parse::<f32>() {
+                    return parsed;
+                }
+            }
+        }
+        if base.starts_with("xinput:L") {
+            LEFT_STICK_DEFAULT_DEADZONE
+        } else {
+            RIGHT_STICK_DEFAULT_DEADZONE
+        }
+    }
+
+    /// Writes `deadzone` (clamped to [0, MAX_DEADZONE]) on every XInput axis source of both axes of the stick.
+    /// Other options (`invert`, `curve`, `scale`) are kept.
+    pub fn set_stick_deadzone(&mut self, stick: Stick, deadzone: f32) -> Result<(), ControlsError> {
+        let value = format!("{:.3}", deadzone.clamp(0.0, MAX_DEADZONE));
+        let mut next = self.clone();
+        for input in stick.inputs() {
+            let updated: Vec<String> = self
+                .sources(input)
+                .unwrap_or(&[])
+                .iter()
+                .map(|source| if is_axis_source(source) { with_option(source, "deadzone", &value) } else { source.clone() })
+                .collect();
+            next.set_sources(input, updated)?;
+        }
+        *self = next;
+        Ok(())
+    }
+
+    /// The button input other than `except` whose sources include `source` (compared without options).
+    pub fn holder_of(&self, source: &str, except: &str) -> Option<String> {
+        let base = source_base(source);
+        BUTTON_INPUTS
+            .iter()
+            .filter(|input| **input != except)
+            .find(|input| {
+                self.sources(input)
+                    .is_some_and(|sources| sources.iter().any(|existing| source_base(existing) == base))
+            })
+            .map(|input| input.to_string())
+    }
+
+    /// Binds `source` to the button input `input`, in place of the input's sources of the same family (`xinput:` or
+    /// `key:`); sources of the other family stay. A trigger that replaces a trigger keeps its options (deadzone,
+    /// curve).
+    ///
+    /// When another button input already has the source, `swap` gives that input this input's previous source of the
+    /// same family (or removes the source from it when there was none). Without `swap` such a call is refused, so a
+    /// press never drives two PS2 buttons by accident. Nothing changes when any check fails.
+    pub fn assign(&mut self, input: &str, source: &str, swap: bool) -> Result<Assignment, ControlsError> {
+        if input_kind(input) != Some(InputKind::Button) {
+            return Err(error(0, format!("'{input}' is not a button input")));
+        }
+        let base = source_base(source).to_string();
+        validate_source(0, InputKind::Button, &base)?;
+        let family = source_family(&base).to_string();
+        let current: Vec<String> = self.sources(input).unwrap_or(&[]).to_vec();
+        if current.iter().any(|existing| source_base(existing) == base) {
+            return Ok(Assignment { swapped_with: None, unchanged: true });
+        }
+        let previous: Option<String> = current.iter().find(|existing| source_family(existing) == family).cloned();
+        let new_source = match &previous {
+            Some(old) if is_trigger_source(old) && is_trigger_source(&base) => {
+                let (_, options) = split_options(old);
+                if options.is_empty() {
+                    base.clone()
+                } else {
+                    format!("{base} | {}", options.join(" "))
+                }
+            }
+            _ => base.clone(),
+        };
+        let holder = self.holder_of(&base, input);
+        let mut next = self.clone();
+        if let Some(holder) = &holder {
+            if !swap {
+                return Err(error(0, format!("'{base}' is already bound to {holder}")));
+            }
+            let mut replaced: Vec<String> = Vec::new();
+            for existing in self.sources(holder).unwrap_or(&[]) {
+                let incoming = if source_base(existing) == base { previous.clone() } else { Some(existing.clone()) };
+                if let Some(incoming) = incoming {
+                    if !replaced.iter().any(|kept| source_base(kept) == source_base(&incoming)) {
+                        replaced.push(incoming);
+                    }
+                }
+            }
+            next.set_sources(holder, ordered(replaced))?;
+        }
+        let mut sources: Vec<String> =
+            current.into_iter().filter(|existing| source_family(existing) != family).collect();
+        sources.push(new_source);
+        next.set_sources(input, ordered(sources))?;
+        *self = next;
+        Ok(Assignment { swapped_with: holder, unchanged: false })
+    }
+
+    /// Every input back to the built-in mapping, including the trigger and stick options.
+    pub fn reset_all(&mut self) {
+        self.bindings = default_bindings();
+    }
+
+    /// True when `input` has exactly its built-in sources.
+    pub fn is_default(&self, input: &str) -> bool {
+        default_bindings().get(input).map(|sources| sources.as_slice()) == self.sources(input)
     }
 
     /// The file text (schema 1). Every input is written, so the file is complete on its own.
@@ -505,6 +700,81 @@ mod tests {
         let text = controls.render();
         assert!(text.contains("l2 = [\"xinput:LT | deadzone=0.050 curve=quadratic\", \"key:1\"]"));
         assert!(Controls::parse(&text).is_ok());
+    }
+
+    #[test]
+    fn stick_deadzones_default_to_the_xinput_constants_and_round_trip() {
+        let mut controls = Controls::default();
+        assert!((controls.stick_deadzone(Stick::Left) - 7849.0 / 32767.0).abs() < 1e-6);
+        assert!((controls.stick_deadzone(Stick::Right) - 8689.0 / 32767.0).abs() < 1e-6);
+        controls.set_stick_deadzone(Stick::Left, 0.1).unwrap();
+        assert!((controls.stick_deadzone(Stick::Left) - 0.1).abs() < 1e-6);
+        let text = controls.render();
+        assert!(text.contains("lstick_y = [\"xinput:LY | invert=true deadzone=0.100\"]"), "{text}");
+        assert!(text.contains("lstick_x = [\"xinput:LX | deadzone=0.100\"]"), "{text}");
+        assert!(Controls::parse(&text).is_ok());
+        controls.set_stick_deadzone(Stick::Right, 3.0).unwrap();
+        assert!((controls.stick_deadzone(Stick::Right) - MAX_DEADZONE).abs() < 1e-6, "clamped below 1");
+    }
+
+    #[test]
+    fn assign_replaces_only_the_same_family_and_swaps() {
+        let mut controls = Controls::default();
+        let result = controls.assign("cross", "xinput:RB", true).unwrap();
+        assert_eq!(result.swapped_with.as_deref(), Some("r1"));
+        assert_eq!(controls.sources("cross").unwrap(), &["xinput:RB".to_string(), "key:Z".to_string()][..]);
+        assert_eq!(controls.sources("r1").unwrap(), &["xinput:A".to_string(), "key:W".to_string()][..]);
+    }
+
+    #[test]
+    fn assign_refuses_a_taken_source_without_swap_and_changes_nothing() {
+        let mut controls = Controls::default();
+        assert!(controls.assign("cross", "key:Q", false).is_err());
+        assert_eq!(controls, Controls::default());
+        let free = controls.assign("cross", "key:M", false).unwrap();
+        assert_eq!(free.swapped_with, None);
+        assert_eq!(controls.sources("cross").unwrap(), &["xinput:A".to_string(), "key:M".to_string()][..]);
+    }
+
+    #[test]
+    fn assign_moves_a_source_when_the_input_had_none_of_that_family() {
+        let mut controls = Controls::default();
+        controls.set_sources("cross", vec!["xinput:A".into()]).unwrap();
+        controls.assign("cross", "key:Q", true).unwrap();
+        assert_eq!(controls.sources("l1").unwrap(), &["xinput:LB".to_string()][..], "L1 lost Q");
+        assert_eq!(controls.sources("cross").unwrap(), &["xinput:A".to_string(), "key:Q".to_string()][..]);
+    }
+
+    #[test]
+    fn assign_keeps_trigger_options_and_reports_no_change() {
+        let mut controls = Controls::default();
+        controls.set_trigger_tuning("l2", TriggerTuning { deadzone: 0.05, curve: Curve::Cubic }).unwrap();
+        controls.assign("l2", "xinput:RT", true).unwrap();
+        assert_eq!(controls.sources("l2").unwrap()[0], "xinput:RT | deadzone=0.050 curve=cubic");
+        assert_eq!(controls.sources("r2").unwrap()[0], "xinput:LT | deadzone=0.050 curve=cubic");
+        let again = controls.assign("l2", "xinput:RT", false).unwrap();
+        assert!(again.unchanged);
+        assert!(Controls::parse(&controls.render()).is_ok());
+    }
+
+    #[test]
+    fn assign_refuses_reserved_keys_sticks_and_unknown_inputs() {
+        let mut controls = Controls::default();
+        assert!(controls.assign("cross", "key:F9", true).is_err());
+        assert!(controls.assign("cross", "xinput:LX", true).is_err());
+        assert!(controls.assign("lstick_x", "xinput:A", true).is_err());
+        assert!(controls.assign("nope", "xinput:A", true).is_err());
+        assert_eq!(controls, Controls::default());
+    }
+
+    #[test]
+    fn reset_all_and_is_default() {
+        let mut controls = Controls::default();
+        controls.assign("cross", "xinput:B", true).unwrap();
+        assert!(!controls.is_default("cross") && !controls.is_default("circle"));
+        assert!(controls.is_default("square"));
+        controls.reset_all();
+        assert_eq!(controls, Controls::default());
     }
 
     #[test]

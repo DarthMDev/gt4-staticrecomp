@@ -13,6 +13,9 @@
  *
  * Face buttons on a page: X and Y run GT4.hooks.x / GT4.hooks.y when the page
  * sets them. B closes an open help tip, then the top dialog, then goes back.
+ *
+ * Rebind (Controls): while GT4.capturing is set only B does anything on the pad (GT4.cancelCapture), and every key
+ * goes to GT4.captureKey(event) first (it returns true when it used the key).
  */
 (function (root) {
   "use strict";
@@ -137,6 +140,9 @@
     var el = document.activeElement;
     if (el && el.tagName !== "INPUT" && typeof el.click === "function") {
       el.click();
+    } else if (el && el.hasAttribute && el.hasAttribute("data-focusable")) {
+      // SVG elements (the Controls drawing) have no click(): send the event the page listens to.
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     }
   }
 
@@ -312,6 +318,11 @@
 
   document.addEventListener("keydown", function (event) {
     if (GT4.capturing) {
+      // A rebind that takes keys (Controls) gets every key first; Esc still cancels when it does not.
+      if (GT4.captureKey && GT4.captureKey(event)) {
+        event.preventDefault();
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         back();

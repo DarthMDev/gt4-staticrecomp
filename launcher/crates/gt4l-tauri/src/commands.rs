@@ -129,7 +129,8 @@ pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
     Ok(model::settings_table(&state.config.settings, &state.controls))
 }
 
-/// `set_setting({id, value})`: a launcher row, a PCSX2 GS table row or a trigger row (`l2_deadzone`, `r2_curve`, ...).
+/// `set_setting({id, value})`: a launcher row, a PCSX2 GS table row, a trigger row (`l2_deadzone`, `r2_curve`, ...) or
+/// a stick row (`lstick_deadzone`, `rstick_deadzone`).
 /// A refused value leaves the setting unchanged and returns the reason.
 #[tauri::command]
 pub fn set_setting(id: String, value: Value, shared: State<'_, Shared>) -> Result<(), String> {
@@ -156,9 +157,17 @@ pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), S
             _ => return Err(format!("unknown setting '{id}'")),
         };
         let tuning = model::trigger_tuning(deadzone, &curve)?;
-        state.controls.set_trigger_tuning(trigger, tuning).map_err(|error| error.to_string())?;
-        state.save_controls();
-        return Ok(());
+        return change_controls(&mut state, |controls| {
+            controls.set_trigger_tuning(trigger, tuning).map_err(|error| error.to_string())
+        });
+    } else if let Some(stick) = model::stick_setting(&id) {
+        let percent = value.as_f64().ok_or_else(|| format!("'{id}' needs a number"))?;
+        if !(0.0..=100.0).contains(&percent) {
+            return Err("the deadzone must be between 0 and 100 percent".into());
+        }
+        return change_controls(&mut state, |controls| {
+            controls.set_stick_deadzone(stick, percent as f32 / 100.0).map_err(|error| error.to_string())
+        });
     } else if model::pcsx2_table_rows().iter().any(|row| row.id == id) {
         let text = model::value_text(&value, false).ok_or_else(|| format!("'{id}' needs a plain value"))?;
         state.config.settings.set_gs(&id, &text).map_err(|error| error.to_string())?;
@@ -329,54 +338,48 @@ fn program_directory() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-// Controls ----------------------------------------------------------------------------------------
-
 // Controls ---------------------------------------------------------------------------------------
 
-/// `get_controls()`: `{controls: [{id, name, binding}], triggers: [row]}`. Triggers use the settings row shape.
+/// Shown when the controls file was written by a newer launcher: it is kept as it is.
+const CONTROLS_LOCKED: &str =
+    "The controls file was written by a newer GT4Recomp and is kept as it is. Update the launcher to change controls.";
+
+/// Applies `change` to a copy of the controls, writes the file, and only then keeps the copy. A refused change or a
+/// failed write leaves the controls and the file as they were, and returns the reason.
+fn change_controls<T>(
+    state: &mut AppState,
+    change: impl FnOnce(&mut controls_file::Controls) -> Result<T, String>,
+) -> Result<T, String> {
+    if state.controls_locked {
+        return Err(CONTROLS_LOCKED.to_string());
+    }
+    let mut next = state.controls.clone();
+    let result = change(&mut next)?;
+    controls_file::save(&state.controls_path(), &next)
+        .map_err(|error| format!("The controls file could not be saved: {error}"))?;
+    state.controls = next;
+    Ok(result)
+}
+
+fn controls_view(state: &AppState) -> Value {
+    model::controls_view(&state.config.settings, &state.controls, state.controls_locked)
+}
+
+/// `get_controls()`: `{controls: [{id, name, binding, sources, xinput, key, is_default}], triggers: [row], locked}`.
+/// `triggers` holds the analog rows (trigger deadzone and curve, stick deadzones) in the settings row shape.
 #[tauri::command]
 pub fn get_controls(shared: State<'_, Shared>) -> Result<Value, String> {
     get_controls_of(shared.inner())
 }
 
 pub fn get_controls_of(shared: &Shared) -> Result<Value, String> {
-    let state = lock(shared);
-    let controls: Vec<Value> = model::control_rows(&state.controls)
-        .into_iter()
-        .map(|row| json!({ "id": row.input, "name": row.ps2_name, "binding": row.short }))
-        .collect();
-    let table = model::settings_table(&state.config.settings, &state.controls);
-    let triggers: Vec<Value> = table["rows"]
-        .as_array()
-        .map(|rows| {
-            rows.iter()
-                .filter(|row| row["id"].as_str().is_some_and(|id| id.starts_with("l2_") || id.starts_with("r2_")))
-                .cloned()
-                .collect()
-        })
-        .unwrap_or_default();
-    Ok(json!({ "controls": controls, "triggers": triggers }))
+    Ok(controls_view(&lock(shared)))
 }
 
-/// Replaces the sources of one kind (`key:` or `xinput:`) of an input and keeps the other kind.
-fn bind_source(state: &mut AppState, input: &str, prefix: &str, source: String) -> Result<(), String> {
-    let mut sources: Vec<String> = state
-        .controls
-        .sources(input)
-        .unwrap_or(&[])
-        .iter()
-        .filter(|existing| !existing.starts_with(prefix))
-        .cloned()
-        .collect();
-    sources.push(source.clone());
-    state.controls.set_sources(input, sources).map_err(|error| error.to_string())?;
-    state.save_controls();
-    state.controls_status = format!("{} is now bound to {}.", model::ps2_name(input), model::describe_source(&source));
-    Ok(())
-}
-
-/// `capture_binding({control})`: waits for the next newly pressed controller button and binds it. Resolves with
-/// `{control, binding}`. `cancel_capture` ends the wait with an error. A button held when the wait starts does not bind.
+/// `capture_binding({control})`: waits for the next newly pressed control of the first connected XInput controller
+/// and resolves with `{control, source}` (`xinput:A`, `xinput:LT`). It binds nothing: the page checks for a conflict
+/// and then calls `assign_binding`. A control held when the wait starts does not count. `cancel_capture` ends the
+/// wait with an error.
 #[tauri::command]
 pub async fn capture_binding(control: String, shared: State<'_, Shared>) -> Result<Value, String> {
     if !model::bindable(&control) {
@@ -391,7 +394,6 @@ pub async fn capture_binding(control: String, shared: State<'_, Shared>) -> Resu
         }
         state.capturing = Some(control.clone());
         state.capture_cancel = Some(cancel.clone());
-        state.controls_status = format!("Press a controller button for {}. Esc cancels.", model::ps2_name(&control));
     }
     tauri::async_runtime::spawn_blocking(move || {
         let baseline = pad::read_first_connected().unwrap_or_default();
@@ -412,13 +414,7 @@ pub async fn capture_binding(control: String, shared: State<'_, Shared>) -> Resu
             }
             state.capturing = None;
             state.capture_cancel = None;
-            bind_source(&mut state, &control, "xinput:", source)?;
-            let binding = model::control_rows(&state.controls)
-                .into_iter()
-                .find(|row| row.input == control)
-                .map(|row| row.short)
-                .unwrap_or_default();
-            return Ok(json!({ "control": control, "binding": binding }));
+            return Ok(json!({ "control": control, "source": source }));
         }
     })
     .await
@@ -437,6 +433,27 @@ pub fn cancel_capture(shared: State<'_, Shared>) -> Result<(), String> {
     Ok(())
 }
 
+/// `assign_binding({control, source, swap})`: binds `source` (`xinput:RB`, `key:Q`) to the button `control`, in place
+/// of its source of the same family. When another button has the source, `swap: true` gives that button the previous
+/// source; `swap: false` refuses. Writes the file at once and returns the `get_controls` view plus `swapped_with`
+/// (the other button, or null) and `unchanged`.
+#[tauri::command]
+pub fn assign_binding(control: String, source: String, swap: bool, shared: State<'_, Shared>) -> Result<Value, String> {
+    assign_binding_of(control, source, swap, shared.inner())
+}
+
+pub fn assign_binding_of(control: String, source: String, swap: bool, shared: &Shared) -> Result<Value, String> {
+    let mut state = lock(shared);
+    let assignment = change_controls(&mut state, |controls| {
+        controls.assign(&control, &source, swap).map_err(|error| error.to_string())
+    })?;
+    state.controls_status = format!("{} is now bound to {}.", model::ps2_name(&control), model::describe_source(&source));
+    let mut view = controls_view(&state);
+    view["swapped_with"] = json!(assignment.swapped_with);
+    view["unchanged"] = json!(assignment.unchanged);
+    Ok(view)
+}
+
 /// `reset_binding({control})`: restores the built-in sources of one input.
 #[tauri::command]
 pub fn reset_binding(control: String, shared: State<'_, Shared>) -> Result<(), String> {
@@ -445,12 +462,27 @@ pub fn reset_binding(control: String, shared: State<'_, Shared>) -> Result<(), S
 
 pub fn reset_binding_of(control: String, shared: &Shared) -> Result<(), String> {
     let mut state = lock(shared);
-    let defaults = default_bindings();
-    let sources = defaults.get(&control).cloned().ok_or_else(|| format!("unknown input '{control}'"))?;
-    state.controls.set_sources(&control, sources).map_err(|error| error.to_string())?;
-    state.save_controls();
+    let sources = default_bindings().get(&control).cloned().ok_or_else(|| format!("unknown input '{control}'"))?;
+    change_controls(&mut state, |controls| controls.set_sources(&control, sources).map_err(|error| error.to_string()))?;
     state.controls_status = format!("{} is back to its built-in binding.", model::ps2_name(&control));
     Ok(())
+}
+
+/// `reset_all_bindings()`: every button, trigger and stick setting back to the built-in mapping. Returns the
+/// `get_controls` view.
+#[tauri::command]
+pub fn reset_all_bindings(shared: State<'_, Shared>) -> Result<Value, String> {
+    reset_all_bindings_of(shared.inner())
+}
+
+pub fn reset_all_bindings_of(shared: &Shared) -> Result<Value, String> {
+    let mut state = lock(shared);
+    change_controls(&mut state, |controls| {
+        controls.reset_all();
+        Ok(())
+    })?;
+    state.controls_status = "Every control is back to its built-in binding.".to_string();
+    Ok(controls_view(&state))
 }
 
 // Saves and replays --------------------------------------------------------------------------------

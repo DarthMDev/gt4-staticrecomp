@@ -25,6 +25,8 @@
     "allow-capture-binding",
     "allow-cancel-capture",
     "allow-reset-binding",
+    "allow-assign-binding",
+    "allow-reset-all-bindings",
     "allow-about-info",
     "allow-open-log-folder",
     "allow-open-game-files-folder",

@@ -3,7 +3,9 @@
  * Arrow keys stand in for the pad (nav.js handles both). The results are written into a <pre> at the end of the
  * page and body[data-focus-check] is "pass" or "fail".
  *
- *   (no query)          the sidebar walk over every tab, Saves and Replays entry, B back, value changes
+ *   (no query)          the sidebar walk over every tab, Saves and Replays entry, B back, value changes, and the
+ *                       Controls page (entry on the DS2, spatial moves, rebind and cancel, conflict and swap, live
+ *                       input from a still dev pad, Y reset, X reset all)
  *   ?scenario=4k        only sets the state for docs/launcher/shots/graphics-4k-updated.png (4K chosen, row shown)
  */
 (function (root) {
@@ -118,7 +120,8 @@
         var first = active && active.getAttribute && active.getAttribute("data-item-id") === expected[tab];
         check("entering " + tab + " focuses its first row", !!first, "focus " + (active && active.outerHTML ? active.outerHTML.slice(0, 80) : active));
       } else if (tab === "controls") {
-        check("entering controls focuses the L1 shoulder tab", !!active && active.textContent === "L1", "focus " + (active && active.textContent));
+        var control = active && active.getAttribute ? active.getAttribute("data-control") : null;
+        check("entering controls focuses Cross on the drawing", control === "cross", "focus " + control);
       } else {
         check("entering " + tab + " puts focus in its rows", focusInContent() && !sideLevel(), sideDetail());
       }
@@ -190,6 +193,151 @@
     }
   }
 
+  // Controls (js/pages/controls.js): entry on the DS2, spatial moves, rebind with cancel, conflicts, live input, reset.
+  function key(name, code) {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: name, code: code || name, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent("keyup", { key: name, code: code || name, bubbles: true, cancelable: true }));
+  }
+
+  function focusedControl() {
+    var active = document.activeElement;
+    var group = active && active.closest ? active.closest(".pad-ctl") : null;
+    return group ? group.getAttribute("data-control") : null;
+  }
+
+  function cardName() {
+    var name = document.querySelector(".cx-card .cx-name");
+    return name ? name.textContent : null;
+  }
+
+  function badgeLabel(id) {
+    var badge = document.querySelector(".badge[data-for=\"" + id + "\"]");
+    return badge ? badge.getAttribute("data-label") : null;
+  }
+
+  async function controlsOf(id) {
+    var view = await GT4.backend.call("get_controls");
+    return view.controls.filter(function (control) { return control.id === id; })[0];
+  }
+
+  async function controlsChecks() {
+    GT4.devGamepads = function () { return []; };
+    await setHash("#/settings/controls");
+    await wait(400);
+    check("the Controls preview with live input running keeps focus on the tab list", sideStepOk("controls"), sideDetail());
+    press("ArrowRight");
+    await wait(200);
+    check("entering Controls focuses Cross on the drawing", focusedControl() === "cross", "focus " + focusedControl());
+    check("the Controls footer offers Rebind, Reset button and Reset all", /Rebind/.test(footerText()) && /Reset button/.test(footerText()) && /Reset all/.test(footerText()), footerText());
+
+    press("ArrowUp");
+    await wait(120);
+    check("D-pad up from Cross reaches Triangle", focusedControl() === "triangle", "focus " + focusedControl());
+    press("ArrowDown");
+    await wait(120);
+    press("ArrowLeft");
+    await wait(120);
+    check("D-pad left from Cross reaches Square", focusedControl() === "square", "focus " + focusedControl());
+    check("the selection follows focus (panel shows Square)", cardName() === "Square", cardName());
+    press("ArrowLeft");
+    await wait(120);
+    check("D-pad left from Square reaches Start", focusedControl() === "start", "focus " + focusedControl());
+    press("ArrowRight");
+    await wait(120);
+
+    // Rebind, then cancel with Esc (B on the pad goes through the same GT4.cancelCapture).
+    GT4.nav.activate();
+    await wait(200);
+    check("A on a DS2 button opens the rebind overlay", !!document.querySelector(".modal.is-capture") && GT4.capturing === true, "capturing " + GT4.capturing);
+    check("the overlay names the button", /Square/.test((document.querySelector(".modal.is-capture h3") || {}).textContent || ""), "no title");
+    check("the rebind footer shows only B Cancel", footerText() === "BCancel", footerText());
+    press("Escape");
+    await wait(200);
+    check("Esc cancels the rebind and closes the overlay", !document.querySelector(".modal.is-capture") && GT4.capturing === false, "capturing " + GT4.capturing);
+    check("after a cancel, focus is back on the button", focusedControl() === "square", "focus " + focusedControl());
+    check("a cancelled rebind changes nothing", (await controlsOf("square")).key === "A", "key " + (await controlsOf("square")).key);
+
+    // Enter on a focused button starts a rebind; that same Enter is not taken as the new key.
+    var squareGroup = document.querySelector(".pad-ctl[data-control=\"square\"]");
+    squareGroup.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+    await wait(200);
+    check("Enter on a DS2 button opens the rebind and keeps waiting", !!document.querySelector(".modal.is-capture") && GT4.capturing === true, "capturing " + GT4.capturing);
+    press("Escape");
+    await wait(200);
+    check("Enter did not become the binding", (await controlsOf("square")).key === "A", "key " + (await controlsOf("square")).key);
+
+    // A key already on another button: the conflict dialog; Esc keeps everything.
+    GT4.nav.activate();
+    await wait(200);
+    key("w", "KeyW");
+    await wait(250);
+    var dialogTitle = (document.querySelector(".modal h3") || {}).textContent || "";
+    check("a key already on R1 opens the conflict dialog", /already on R1/.test(dialogTitle), dialogTitle);
+    press("Escape");
+    await wait(200);
+    check("cancelling the conflict changes nothing", (await controlsOf("square")).key === "A" && (await controlsOf("r1")).key === "W", "square/r1 changed");
+
+    // Swap: Square takes Q from L1, L1 gets A (Square's previous key). The chips follow at once.
+    GT4.nav.activate();
+    await wait(200);
+    key("q", "KeyQ");
+    await wait(250);
+    var swap = Array.prototype.filter.call(document.querySelectorAll(".modal button"), function (button) {
+      return button.textContent === "Swap";
+    })[0];
+    check("the conflict dialog offers Swap", !!swap, "no Swap button");
+    if (swap) {
+      swap.click();
+      await wait(300);
+    }
+    var square = await controlsOf("square");
+    var l1 = await controlsOf("l1");
+    check("Swap gives Square the key Q and L1 the key A", square.key === "Q" && l1.key === "A", square.key + "/" + l1.key);
+    check("the chips show the swap (keyboard view)", badgeLabel("square") === "Q" && badgeLabel("l1") === "A", badgeLabel("square") + "/" + badgeLabel("l1"));
+    check("a swapped button reads Changed in the panel", (document.querySelector(".cx-card .cx-state") || {}).textContent === "Changed", "state");
+
+    // Live input from the Gamepad API (a still dev pad): Cross lights from A, L2 fills to 60%.
+    GT4.devGamepads = function () {
+      var buttons = GT4.controlsModel.STANDARD_TO_XINPUT.map(function (name) {
+        var value = name === "A" ? 1 : (name === "LT" ? 0.6 : 0);
+        return { pressed: value > 0.12, value: value };
+      });
+      return [{ id: "Test Pad (XInput STANDARD GAMEPAD)", index: 0, connected: true, buttons: buttons, axes: [1, 0, 0, -1] }];
+    };
+    await wait(200);
+    var cross = document.querySelector(".pad-ctl[data-control=\"cross\"]");
+    check("pad A lights Cross on the drawing", !!cross && cross.classList.contains("is-down"), "no is-down");
+    var level = document.querySelector(".pad-ctl[data-control=\"l2\"] .level");
+    check("LT at 60% fills L2 to 60%", !!level && Math.abs(Number(level.getAttribute("height")) - 42 * 0.6) < 0.2, level ? level.getAttribute("height") : "none");
+    var capL = document.querySelector(".pad-ctl[data-control=\"l3\"] .stick-cap");
+    check("the left stick moves to its real position", !!capL && capL.getAttribute("transform") === "translate(24 0)", capL ? capL.getAttribute("transform") : "none");
+    check("the status names the controller", /Test Pad/.test((document.querySelector(".cx-status") || {}).textContent || ""), "status");
+    check("live input never moves focus", focusedControl() === "square", "focus " + focusedControl());
+    GT4.devGamepads = function () { return []; };
+    await wait(150);
+    check("released buttons go dark", !cross.classList.contains("is-down"), "still down");
+
+    // Y resets the selected button; X resets everything after a confirmation.
+    GT4.hooks.y();
+    await wait(300);
+    check("Y resets Square to its default key", (await controlsOf("square")).key === "A", (await controlsOf("square")).key);
+    GT4.hooks.x();
+    await wait(150);
+    var resetAll = Array.prototype.filter.call(document.querySelectorAll(".modal button"), function (button) {
+      return button.textContent === "Reset all";
+    })[0];
+    check("X asks before resetting everything", !!resetAll, "no confirmation");
+    if (resetAll) {
+      resetAll.click();
+      await wait(300);
+    }
+    check("Reset all restores L1", (await controlsOf("l1")).key === "Q" && (await controlsOf("l1")).is_default, "l1 " + (await controlsOf("l1")).key);
+    press("Escape");
+    await wait(150);
+    check("B returns Controls to the tab list", sideStepOk("controls"), sideDetail());
+    delete GT4.devGamepads;
+  }
+
   // The screenshot state: Graphics with 4K chosen, the resolution row focused in pad mode.
   async function scenario4k() {
     GT4.nav.setMode("pad");
@@ -222,6 +370,7 @@
       await enterChecks();
       await importEntryCheck();
       await valueChecks();
+      await controlsChecks();
     } catch (err) {
       check("the checks ran to the end", false, String(err && err.message ? err.message : err));
     }

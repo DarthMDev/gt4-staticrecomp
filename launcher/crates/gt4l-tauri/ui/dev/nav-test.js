@@ -194,6 +194,84 @@
   same("an older read is not applied", gate.isLatest(firstRead), false);
   same("the newest read is applied", gate.isLatest(secondRead), true);
 
+  // Controls page model (js/controls-model.js): live state from Gamepad values, keys, conflicts, trigger output.
+  var CM = root.GT4.controlsModel;
+  function fakePad(pressed, values, axes) {
+    var buttons = CM.STANDARD_TO_XINPUT.map(function (name) {
+      var value = values && values[name] !== undefined ? values[name] : (pressed.indexOf(name) >= 0 ? 1 : 0);
+      return { pressed: value > 0.12, value: value };
+    });
+    return { id: "Xbox 360 Controller (XInput STANDARD GAMEPAD)", connected: true, buttons: buttons, axes: axes || [0, 0, 0, 0] };
+  }
+  var defaults = [
+    { id: "cross", sources: ["xinput:A", "key:Z"] }, { id: "circle", sources: ["xinput:B", "key:X"] },
+    { id: "l1", sources: ["xinput:LB", "key:Q"] }, { id: "l2", sources: ["xinput:LT", "key:1"] },
+    { id: "r2", sources: ["xinput:RT | deadzone=0.000 curve=quadratic", "key:2"] },
+    { id: "dpad_up", sources: ["xinput:DpadUp", "key:Up"] }, { id: "select", sources: ["xinput:Back"] }
+  ];
+  var live = CM.liveState(fakePad(["A", "DpadUp"], { LT: 0.6 }, [0.5, -0.25, -1, 1]), defaults, {});
+  same("pad A lights Cross", live.buttons.cross.pressed, true);
+  same("pad B up leaves Circle dark", live.buttons.circle.pressed, false);
+  same("D-pad up lights the D-pad up arm", live.buttons.dpad_up.pressed, true);
+  same("LT at 60% fills L2 to 60%", Math.round(live.buttons.l2.value * 100), 60);
+  same("L2 reads the game's pressure past the 30/255 deadzone: (153 - 30) * 255 / 225", Math.round(live.buttons.l2.output * 255), 139);
+  same("sticks keep their raw position", [live.sticks.left.x, live.sticks.left.y, live.sticks.right.x, live.sticks.right.y], [0.5, -0.25, -1, 1]);
+  var swapped = CM.liveState(fakePad(["A"]), [{ id: "circle", sources: ["xinput:A"] }, { id: "cross", sources: ["xinput:B"] }], {});
+  same("after a swap, pad A lights Circle, not Cross", [swapped.buttons.circle.pressed, swapped.buttons.cross.pressed], [true, false]);
+  same("a key lights the button it drives", CM.liveState(null, defaults, { Q: true }).buttons.l1.pressed, true);
+  same("no pad and no key: nothing is pressed", CM.liveState(null, defaults, {}).buttons.cross.pressed, false);
+  var light = CM.liveState(fakePad([], { LT: 0.1 }), defaults, {});
+  same("a trigger inside its deadzone fills but does not press", [light.buttons.l2.value > 0, light.buttons.l2.pressed], [true, false]);
+  same("R2 options (curve) shape the output", Math.round(CM.liveState(fakePad([], { RT: 0.5 }), defaults, {}).buttons.r2.output * 100), 25);
+
+  same("trigger output: linear 255 is full", CM.triggerOutput(1, 30 / 255, "linear"), 1);
+  same("trigger output: at the deadzone it is 0", CM.triggerOutput(30 / 255, 30 / 255, "linear"), 0);
+  same("trigger output: the integer formula of native/controls.cpp", CM.triggerOutput(128 / 255, 30 / 255, "linear"), Math.floor((98 * 255) / 225) / 255);
+  same("trigger output: cubic at half travel", Math.round(CM.triggerOutput(0.5, 0, "cubic") * 1000), 125);
+
+  same("KeyZ is Z", CM.keyFromEvent({ code: "KeyZ", key: "z" }), { name: "Z" });
+  same("Digit1 is 1", CM.keyFromEvent({ code: "Digit1", key: "1" }), { name: "1" });
+  same("Numpad4 is Num4", CM.keyFromEvent({ code: "Numpad4", key: "4" }), { name: "Num4" });
+  same("ArrowUp is Up", CM.keyFromEvent({ code: "ArrowUp", key: "ArrowUp" }), { name: "Up" });
+  same("right Shift is Shift", CM.keyFromEvent({ code: "ShiftRight", key: "Shift" }), { name: "Shift" });
+  same("Esc cancels", CM.keyFromEvent({ code: "Escape", key: "Escape" }), { cancel: true });
+  same("F9 is reserved for the game window", CM.keyFromEvent({ code: "F9", key: "F9" }), { reserved: "F9" });
+  same("F5 is a key name", CM.keyFromEvent({ code: "F5", key: "F5" }), { name: "F5" });
+  same("a key with no name is refused", CM.keyFromEvent({ code: "Semicolon", key: ";" }), { unsupported: ";" });
+
+  same("a free source has no conflict", CM.conflict(defaults, "cross", "xinput:RB"), null);
+  same("the button's own source is no change", CM.conflict(defaults, "cross", "xinput:A"), { same: true });
+  same("a taken source names the holder and the swap", CM.conflict(defaults, "cross", "xinput:LB"), { holder: "l1", previous: "xinput:A" });
+  same("a conflict ignores options", CM.conflict(defaults, "cross", "xinput:RT"), { holder: "r2", previous: "xinput:A" });
+  same("a button without that family moves the source", CM.conflict(defaults, "select", "key:Q"), { holder: "l1", previous: null });
+
+  same("XInput labels", [CM.label("xinput:LB").text, CM.label("xinput:LThumb").text, CM.label("xinput:DpadLeft").dir, CM.label("key:Backspace").text, CM.label(null).kind], ["LB", "LS", "left", "Bksp", "none"]);
+  same("the controller name drops the API suffix", CM.cleanPadName("Xbox 360 Controller (XInput STANDARD GAMEPAD)"), "Xbox 360 Controller");
+  var two = CM.padSummary([null, { id: "Pad One (XInput STANDARD GAMEPAD)", index: 1, connected: true }, { id: "Pad Two", index: 2, connected: true }]);
+  same("two pads: the first connected one is shown and counted", [two.connected, two.name, two.index, two.count], [true, "Pad One", 1, 2]);
+  same("no pad: not connected", CM.padSummary([null, null]).connected, false);
+
+  // Spatial navigation between DS2 buttons, on the drawing's own layout (js/controller-svg.js).
+  var LAYOUT = root.GT4.controllerSvg.LAYOUT;
+  var ids = Object.keys(LAYOUT);
+  var padRects = ids.map(function (id) { return rect(LAYOUT[id].x - 20, LAYOUT[id].y - 20, 40, 40); });
+  function padMove(from, dir) {
+    var next = pick(padRects, ids.indexOf(from), dir);
+    return next < 0 ? null : ids[next];
+  }
+  same("Cross up is Triangle", padMove("cross", "up"), "triangle");
+  same("Cross left is Square", padMove("cross", "left"), "square");
+  same("Cross right is Circle", padMove("cross", "right"), "circle");
+  same("Square left is Start", padMove("square", "left"), "start");
+  same("Start left is Select", padMove("start", "left"), "select");
+  same("Select left is D-pad right", padMove("select", "left"), "dpad_right");
+  same("D-pad up, up is L1", padMove("dpad_up", "up"), "l1");
+  same("L1 up is L2", padMove("l1", "up"), "l2");
+  same("D-pad down, down is L3", padMove("dpad_down", "down"), "l3");
+  same("L3 right is R3", padMove("l3", "right"), "r3");
+  same("Triangle up is R1", padMove("triangle", "up"), "r1");
+  same("Circle right leaves the drawing (the panel is next)", padMove("circle", "right"), null);
+
   function run() {
     var list = document.getElementById("results");
     var passed = 0;

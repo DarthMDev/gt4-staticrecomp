@@ -530,6 +530,7 @@
       var state = focusState ? FL.open(focusState, requested) : FL.start(requested);
       var shown = null;
       var tabHints = [];
+      var tabHintsReplace = false; // the tab gives the whole content-level footer (Controls)
       var entryPick = null; // the page's choice of the row A enters (null: the remembered row, else the first)
       var previewing = false; // true while a tab's content is being rendered: that never moves focus
       var ready = Promise.resolve();
@@ -609,7 +610,7 @@
           return { key: item.key, label: item.label, run: run };
         });
         if (state.level === FL.CONTENT) {
-          list = list.concat(tabHints);
+          list = tabHintsReplace ? tabHints.slice() : list.concat(tabHints);
         }
         GT4.ui.setHints(list);
       }
@@ -635,6 +636,7 @@
         });
         // Nothing from the previous tab is kept; the page sets its own keys and hooks while it mounts.
         tabHints = [];
+        tabHintsReplace = false;
         entryPick = null;
         delete GT4.hooks.x;
         delete GT4.hooks.y;
@@ -656,9 +658,11 @@
           entry: function (pick) {
             entryPick = pick;
           },
-          // The tab's own footer keys (shown on the content level); the level keys are added by renderFooter.
-          hints: function (extra) {
+          // The tab's own footer keys (shown on the content level); the level keys are added by renderFooter unless
+          // options.replace is set, when the tab's list is the whole footer of the content level.
+          hints: function (extra, options) {
             tabHints = extra || [];
+            tabHintsReplace = !!(options && options.replace);
             renderFooter();
           }
         };

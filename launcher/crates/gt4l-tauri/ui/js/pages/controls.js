@@ -1,233 +1,733 @@
 /*
- * Controls tab: original DualShock 2 drawing (controller-svg.js), the
- * L1/L2/R1/R2 tabs, the selected control's PS2 name and binding, and the
- * L2 (from LT) / R2 (from RT) trigger rows.
+ * Controls tab: the DualShock 2 drawing (controller-svg.js) as the hero, live input from the controller and the
+ * keyboard, the XInput control or key beside each DS2 button, and a side panel with the selected button and the
+ * analog settings. Every change is written at once (no Save).
  *
- * Commands:
- *   get_controls()                 -> {controls: [{id, name, binding}], triggers: [rows]}
- *   capture_binding({control})     -> {control, binding}   (waits for the next press)
- *   cancel_capture()               -> ends a capture
- *   reset_binding({control})       -> resets one control to its default
- *   set_setting({id, value})       -> trigger rows (ids like l2_deadzone)
+ * Commands (ui/dev/README.md):
+ *   get_controls()                          -> {controls: [{id, name, binding, sources, xinput, key, is_default}],
+ *                                               triggers: [row], locked}
+ *   capture_binding({control})              -> {control, source}   (the next new press on the first XInput pad)
+ *   cancel_capture()                        -> ends a capture
+ *   assign_binding({control, source, swap}) -> the get_controls view plus {swapped_with, unchanged}
+ *   reset_binding({control})                -> one button back to its default
+ *   reset_all_bindings()                    -> the get_controls view, everything back to defaults
+ *   set_setting({id, value})                -> analog rows: l2_deadzone, l2_curve, r2_*, lstick_deadzone, rstick_deadzone
+ *
+ * Navigation (two levels, js/focus-levels.js): A on the tab list enters on the last selected button (Cross at
+ * first). Inside, the D-pad moves between DS2 buttons by position and the selection follows focus. A rebinds, Y resets
+ * the button, X resets everything (after a confirmation), B returns to the tab list. Drawing the page never moves focus.
+ * Mouse and touch: a click or tap selects the nearest button; a second one (or Rebind) starts the rebind.
  */
 (function (root) {
   "use strict";
   var GT4 = (root.GT4 = root.GT4 || {});
   var h = GT4.ui.h;
+  var M = GT4.controlsModel;
 
-  var SHOULDER_TABS = [
-    { id: "l1", label: "L1" },
-    { id: "l2", label: "L2" },
-    { id: "r1", label: "R1" },
-    { id: "r2", label: "R2" }
-  ];
+  var CAPTURE_SECONDS = 5;
+  var remembered = { selected: "cross", mode: "xinput" }; // kept while the app runs
 
   function call(command, args) {
     return GT4.backend.call(command, args);
   }
 
-  GT4.tabPages.controls = function (content, host) {
-    var state = { controls: [], triggers: [], selected: null };
-    var pad = GT4.controllerSvg(function (id) { select(id); });
-    var panelName = h("div", { class: "ps2", text: "" });
-    var panelBind = h("div", { class: "bind", text: "" });
-    var panelRows = h("div", { class: "trigger-rows" });
-    var tabButtons = {};
+  // An HTML chip for a source (panel, legend, dialogs): the same look as the chips in the drawing.
+  function chip(source) {
+    var info = M.label(source);
+    return h("span", { class: "xchip kind-" + info.kind, title: info.long }, info.text);
+  }
 
-    var tabsRow = h("div", { class: "tabs-row", role: "tablist", "aria-label": "Shoulder buttons" },
-      SHOULDER_TABS.map(function (tab) {
+  function legendChip(kind, label) {
+    return h("span", { class: "xchip kind-" + kind }, label);
+  }
+
+  function readPads() {
+    if (GT4.devGamepads) {
+      return GT4.devGamepads();
+    }
+    try {
+      return navigator.getGamepads ? navigator.getGamepads() : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function svgNode(tag, attrs, parent) {
+    var node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    Object.keys(attrs).forEach(function (key) {
+      node.setAttribute(key, String(attrs[key]));
+    });
+    if (parent) {
+      parent.appendChild(node);
+    }
+    return node;
+  }
+
+  GT4.tabPages.controls = function (content, host) {
+    content.classList.add("is-controls");
+    var dev = GT4.devControls || {};
+    var state = {
+      controls: [],
+      analog: [],
+      analogKey: "",
+      locked: false,
+      selected: dev.select || remembered.selected,
+      mode: dev.mode || remembered.mode,
+      capture: null
+    };
+
+    var pad = GT4.controllerSvg({ onPick: onPick });
+
+    // ---- the chip mode switch (header) ----
+    var modeButtons = {};
+    var seg = h("div", { class: "cx-seg", role: "group", "aria-label": "Show bindings for" },
+      [["xinput", "Controller"], ["key", "Keyboard"]].map(function (pair) {
         var button = h("button", {
-          class: "tab-btn",
+          class: "cx-seg-btn",
           type: "button",
-          role: "tab",
-          "aria-selected": "false",
-          on: { click: function () { select(tab.id); } }
-        }, tab.label);
-        tabButtons[tab.id] = button;
+          "aria-pressed": "false",
+          data: { mode: pair[0] },
+          on: { click: function () { setMode(pair[0]); } }
+        }, pair[1]);
+        modeButtons[pair[0]] = button;
         return button;
       }));
-
-    var rebindButton = h("button", {
-      class: "btn primary small",
+    // ---- header: title, the honest note, controller status ----
+    var statusName = h("span", { class: "cx-status-name", text: "No controller" });
+    var statusSub = h("span", { class: "cx-status-sub", text: "" });
+    var status = h("div", { class: "cx-status", role: "status" }, [
+      h("span", { class: "dot", "aria-hidden": "true" }),
+      h("span", { class: "cx-status-text" }, [statusName, statusSub])
+    ]);
+    var tipText = "Bindings are saved to controls.toml in the GT4Recomp data folder. This game build still uses the " +
+      "built-in mapping; your bindings, trigger and stick settings apply from the next game build.";
+    var info = h("button", {
+      class: "info",
       type: "button",
-      on: { click: function () { rebind(state.selected); } }
-    }, "Rebind");
-    var resetButton = h("button", {
-      class: "btn small",
-      type: "button",
-      on: { click: function () { resetBinding(state.selected); } }
-    }, "Reset");
+      "aria-label": "About saving controls",
+      "aria-expanded": "false",
+      on: { click: function () { GT4.ui.toggleTip(info); } }
+    }, ["i", h("span", { class: "tip", role: "tooltip" }, [h("b", { text: "Controls" }), tipText])]);
+    var lockedNote = h("p", { class: "cx-locked", hidden: true, text: "" });
+    content.appendChild(h("div", { class: "cx-head" }, [
+      h("div", { class: "cx-title" }, [
+        h("h1", { text: "Controls" }),
+        h("p", { class: "note" }, [h("span", { text: "Changes save at once." }), info])
+      ]),
+      h("div", { class: "cx-head-right" }, [seg, status])
+    ]));
+    content.appendChild(lockedNote);
 
-    var svgWrap = h("div", { class: "pad-wrap" }, [pad.svg]);
-    var panel = h("aside", { class: "side-panel" }, [
-      panelName,
-      panelBind,
-      h("div", { class: "btns" }, [rebindButton, resetButton]),
-      h("h2", { text: "Triggers" }),
-      panelRows
+    var legend = h("div", { class: "cx-legend" });
+    var stage = h("div", { class: "cx-stage" }, [
+      h("div", { class: "cx-pad" }, [pad.svg]),
+      h("div", { class: "cx-under" }, [legend])
     ]);
 
-    content.appendChild(h("div", { class: "page-head" }, [
-      h("div", null, [
-        h("h1", { text: "Controls" }),
-        h("p", { class: "note", text: "Select a button, then Rebind. Press Esc or B to cancel a rebind." })
-      ])
-    ]));
-    content.appendChild(tabsRow);
-    content.appendChild(h("div", { class: "controls-page" }, [svgWrap, panel]));
+    // ---- side panel: the selected button ----
+    var cardGlyph = h("span", { class: "cx-glyph" });
+    var cardName = h("div", { class: "cx-name" });
+    var cardState = h("div", { class: "cx-state" });
+    var padChipSlot = h("span", { class: "cx-src-v" });
+    var keyChipSlot = h("span", { class: "cx-src-v" });
+    var rebindButton = h("button", { class: "btn primary small", type: "button", on: { click: function () { rebind(state.selected); } } }, "Rebind");
+    var resetButton = h("button", { class: "btn small", type: "button", on: { click: function () { resetOne(state.selected); } } }, "Reset");
+    var cardHint = h("p", { class: "cx-hint", text: "" });
+    var card = h("section", { class: "cx-card" }, [
+      h("div", { class: "cx-card-head" }, [cardGlyph, h("div", { class: "cx-card-title" }, [cardName, cardState])]),
+      h("div", { class: "cx-src" }, [h("span", { class: "cx-src-k", text: "Controller" }), padChipSlot]),
+      h("div", { class: "cx-src" }, [h("span", { class: "cx-src-k", text: "Keyboard" }), keyChipSlot]),
+      h("div", { class: "cx-actions" }, [rebindButton, resetButton]),
+      cardHint
+    ]);
+
+    // ---- side panel: analog settings with live meters ----
+    var meters = {};
+    var analogRows = {};
+    function triggerBlock(id, title) {
+      var raw = h("i", { class: "raw" });
+      var out = h("i", { class: "out" });
+      var dz = h("b", { class: "dz" });
+      var value = h("span", { class: "cx-meter-v", text: "0%" });
+      meters[id] = { raw: raw, out: out, dz: dz, value: value };
+      analogRows[id] = h("div", { class: "cx-rows" });
+      return h("div", { class: "cx-block" }, [
+        h("div", { class: "cx-block-head" }, [
+          h("span", { class: "cx-block-name", text: title }),
+          h("span", { class: "cx-meter", "aria-hidden": "true", title: "Grey: the trigger now. Blue: the pressure the game reads. Stripes: the deadzone." }, [dz, raw, out]),
+          value
+        ]),
+        analogRows[id]
+      ]);
+    }
+    function stickBlock(id, title) {
+      var scope = svgNode("svg", { viewBox: "-50 -50 100 100", class: "cx-scope", "aria-hidden": "true" });
+      svgNode("circle", { class: "ring", cx: 0, cy: 0, r: 44 }, scope);
+      svgNode("path", { class: "axis", d: "M-44 0 H44 M0 -44 V44" }, scope);
+      var zone = svgNode("rect", { class: "zone", x: -10, y: -10, width: 20, height: 20, rx: 2 }, scope);
+      var dot = svgNode("circle", { class: "dot", cx: 0, cy: 0, r: 7 }, scope);
+      meters[id] = { zone: zone, dot: dot };
+      analogRows[id] = h("div", { class: "cx-rows" });
+      return h("div", { class: "cx-block cx-block-stick" }, [
+        h("div", { class: "cx-block-head" }, [h("span", { class: "cx-block-name", text: title }), scope]),
+        analogRows[id]
+      ]);
+    }
+    var resetAllButton = h("button", { class: "btn danger small cx-reset-all", type: "button", on: { click: confirmResetAll } }, "Reset all to default");
+    var panel = h("aside", { class: "cx-panel", "aria-label": "Selected button and analog settings" }, [
+      card,
+      h("section", { class: "cx-analog" }, [
+        h("h2", null, ["Triggers", h("small", { text: "Game reads" })]),
+        triggerBlock("l2", "L2"),
+        triggerBlock("r2", "R2"),
+        h("h2", { text: "Sticks" }),
+        stickBlock("lstick", "Left stick"),
+        stickBlock("rstick", "Right stick")
+      ]),
+      resetAllButton
+    ]);
+    content.appendChild(h("div", { class: "cx-body" }, [stage, panel]));
 
     function findControl(id) {
-      for (var i = 0; i < state.controls.length; i++) {
-        if (state.controls[i].id === id) {
-          return state.controls[i];
-        }
-      }
-      return null;
+      return state.controls.filter(function (control) { return control.id === id; })[0] || null;
     }
 
-    function paintSelection() {
-      var control = state.selected ? findControl(state.selected) : null;
-      panelName.textContent = control ? control.name : "No button selected";
-      panelBind.textContent = control
-        ? (control.binding ? "Bound to " + control.binding : "Not bound")
-        : "Select a button on the drawing or a shoulder tab.";
-      rebindButton.disabled = !control;
-      resetButton.disabled = !control;
-      SHOULDER_TABS.forEach(function (tab) {
-        var on = tab.id === state.selected;
-        tabButtons[tab.id].setAttribute("aria-selected", String(on));
+    function firstOf(control, family) {
+      return control ? (control.sources || []).filter(function (source) { return M.family(source) === family; })[0] || null : null;
+    }
+
+    // ---- painting ----
+    function paintCard() {
+      var id = state.selected;
+      var control = findControl(id);
+      GT4.ui.clear(cardGlyph);
+      cardGlyph.appendChild(GT4.controllerSvg.glyph(id));
+      cardName.textContent = M.find(id).name;
+      cardState.textContent = control ? (control.is_default ? "Default" : "Changed") : "";
+      cardState.classList.toggle("is-changed", !!control && control.is_default === false);
+      [[padChipSlot, firstOf(control, "xinput")], [keyChipSlot, firstOf(control, "key")]].forEach(function (pair) {
+        GT4.ui.clear(pair[0]);
+        pair[0].appendChild(chip(pair[1]));
+        pair[0].appendChild(h("span", { class: "cx-src-t", text: M.label(pair[1]).long }));
       });
+      rebindButton.disabled = state.locked;
+      resetButton.disabled = state.locked || !control || control.is_default;
+      var pointer = GT4.inputMode && GT4.inputMode() === "mouse";
+      cardHint.textContent = state.locked ? "" : (pointer ? "Click or tap the button again to rebind it." : "Press A to rebind.");
+    }
+
+    function paintLegend() {
+      GT4.ui.clear(legend);
+      if (state.mode === "key") {
+        legend.appendChild(h("span", { class: "cx-legend-note", text: "Keys the game reads from the keyboard. Esc, F7, F8, F9 and F11 stay with the launcher and the game window." }));
+        return;
+      }
+      [
+        [["face", "A"], ["face", "B"], ["face", "X"], ["face", "Y"], "Buttons"],
+        [["bumper", "LB"], ["bumper", "RB"], "Bumpers"],
+        [["trigger", "LT"], ["trigger", "RT"], "Triggers, with pressure"],
+        [["thumb", "LS"], ["thumb", "RS"], "Stick clicks"],
+        [["menu", "Back"], ["menu", "Start"], "Menu"]
+      ].forEach(function (group) {
+        var chips = group.slice(0, -1).map(function (pair) { return legendChip(pair[0], pair[1]); });
+        legend.appendChild(h("span", { class: "cx-legend-item" }, chips.concat([h("span", { class: "cx-legend-t", text: group[group.length - 1] })])));
+      });
+    }
+
+    function setMode(mode) {
+      state.mode = mode;
+      remembered.mode = mode;
+      Object.keys(modeButtons).forEach(function (key) {
+        modeButtons[key].setAttribute("aria-pressed", String(key === mode));
+      });
+      pad.setBadges(state.controls, mode);
+      paintLegend();
     }
 
     function select(id) {
+      if (!M.find(id)) {
+        return;
+      }
       state.selected = id;
-      pad.select(id);
-      paintSelection();
+      remembered.selected = id;
+      pad.setSelected(id);
+      paintCard();
     }
 
-    function paintMapped() {
-      state.controls.forEach(function (control) {
-        pad.setMapped(control.id, !!control.binding);
-      });
-    }
-
-    function paintTriggers() {
-      GT4.ui.clear(panelRows);
+    // The analog rows use the settings row shape and its controls (slider, dropdown); set_setting writes them.
+    function paintAnalog(focusId) {
+      var key = JSON.stringify(state.analog) + state.locked;
+      if (key === state.analogKey && !focusId) {
+        return;
+      }
+      state.analogKey = key;
       var context = {
-        table: { rows: state.triggers },
-        content: panelRows,
-        refresh: function (focusId) { return load(focusId); }
+        table: { rows: state.analog },
+        content: panel,
+        refresh: function (id) { return load(id); }
       };
-      state.triggers.forEach(function (row) {
-        var node = GT4.settingsRows.rowNode(context, row);
-        if (node) {
-          panelRows.appendChild(node);
-        }
+      [["l2", ["l2_deadzone", "l2_curve"]], ["r2", ["r2_deadzone", "r2_curve"]], ["lstick", ["lstick_deadzone"]],
+        ["rstick", ["rstick_deadzone"]]].forEach(function (pair) {
+        var box = analogRows[pair[0]];
+        GT4.ui.clear(box);
+        pair[1].forEach(function (rowId) {
+          var row = state.analog.filter(function (candidate) { return candidate.id === rowId; })[0];
+          if (!row) {
+            return;
+          }
+          var node = GT4.settingsRows.rowNode(context, Object.assign({}, row, {
+            label: rowId.indexOf("curve") > 0 ? "Curve" : "Deadzone",
+            disabled: state.locked || !!row.disabled
+          }));
+          if (node) {
+            box.appendChild(node);
+          }
+        });
       });
+      if (focusId && content.contains(document.activeElement)) {
+        var target = panel.querySelector("[data-setting=\"" + focusId + "\"]");
+        if (target) {
+          target.focus({ preventScroll: true });
+        }
+      }
     }
 
-    // Only the newest read is drawn. A trigger row keeps focus only while focus is still on this tab.
+    function analogValue(id, fallback) {
+      var row = state.analog.filter(function (candidate) { return candidate.id === id; })[0];
+      return row && typeof row.current === "number" ? row.current / 100 : fallback;
+    }
+
+    function apply(view, focusId) {
+      state.controls = view.controls || [];
+      state.analog = view.triggers || [];
+      state.locked = !!view.locked;
+      lockedNote.hidden = !state.locked;
+      lockedNote.textContent = state.locked
+        ? "The controls file was written by a newer GT4Recomp and is kept as it is. Update the launcher to change controls."
+        : "";
+      pad.setBadges(state.controls, state.mode);
+      paintCard();
+      paintAnalog(focusId);
+    }
+
     var reads = GT4.settingsModel.readGate();
     function load(focusId) {
       var ticket = reads.ticket();
       return call("get_controls").then(function (view) {
-        if (!reads.isLatest(ticket)) {
-          return;
-        }
-        var keep = focusId && content.contains(document.activeElement) ? focusId : null;
-        state.controls = view.controls || [];
-        state.triggers = view.triggers || [];
-        paintMapped();
-        paintTriggers();
-        paintSelection();
-        if (keep) {
-          var target = content.querySelector("[data-setting=\"" + keep + "\"]");
-          if (target) {
-            target.focus({ preventScroll: true });
-          }
+        if (reads.isLatest(ticket)) {
+          apply(view, focusId);
         }
       }, function (err) {
         GT4.ui.toast(GT4.errorText(err), true);
       });
+    }
+
+    // ---- live input: the first connected controller (the one the game reads) and the keyboard ----
+    var keysDown = {};
+    var lastStatus = "";
+    function paintStatus(summary) {
+      var key = summary.connected + "|" + summary.name + "|" + summary.count;
+      if (key === lastStatus) {
+        return;
+      }
+      lastStatus = key;
+      status.classList.toggle("is-on", summary.connected);
+      statusName.textContent = summary.connected ? summary.name : "No controller";
+      statusSub.textContent = !summary.connected
+        ? "Connect one, or press a button on it"
+        : (summary.count > 1 ? "Connected · controller 1 of " + summary.count + ", the one the game uses" : "Connected");
+    }
+
+    function paintMeters(live) {
+      ["l2", "r2"].forEach(function (id) {
+        var reading = live.buttons[id] || { value: 0, output: 0 };
+        var meter = meters[id];
+        meter.raw.style.setProperty("--w", (reading.value * 100).toFixed(1) + "%");
+        meter.out.style.setProperty("--w", (reading.output * 100).toFixed(1) + "%");
+        meter.dz.style.setProperty("--w", (analogValue(id + "_deadzone", M.TRIGGER_DEFAULT_DEADZONE) * 100).toFixed(1) + "%");
+        meter.value.textContent = Math.round(reading.output * 100) + "%";
+      });
+      [["lstick", live.sticks.left, 0.24], ["rstick", live.sticks.right, 0.265]].forEach(function (triple) {
+        var meter = meters[triple[0]];
+        var dz = analogValue(triple[0] + "_deadzone", triple[2]);
+        var half = Math.max(0.5, dz * 44);
+        meter.zone.setAttribute("x", String(-half));
+        meter.zone.setAttribute("y", String(-half));
+        meter.zone.setAttribute("width", String(half * 2));
+        meter.zone.setAttribute("height", String(half * 2));
+        meter.dot.setAttribute("cx", String(Math.round(triple[1].x * 440) / 10));
+        meter.dot.setAttribute("cy", String(Math.round(triple[1].y * 440) / 10));
+        // The game reads each axis on its own: an axis inside the deadzone reads as centred.
+        var outside = Math.abs(triple[1].x) > dz || Math.abs(triple[1].y) > dz;
+        meter.dot.setAttribute("class", "dot" + (outside ? " is-out" : ""));
+      });
+    }
+
+    function onKeyDown(event) {
+      var key = M.keyFromEvent(event);
+      if (key.name) {
+        keysDown[key.name] = true;
+      }
+    }
+    function onKeyUp(event) {
+      var key = M.keyFromEvent(event);
+      if (key.name) {
+        delete keysDown[key.name];
+      }
+    }
+    function onBlur() {
+      keysDown = {};
+    }
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("keyup", onKeyUp, true);
+    root.addEventListener("blur", onBlur);
+
+    // One reading per animation frame. Windows that produce no frames (occluded, or a headless test run) still get a
+    // reading every 100 ms from the timer. Both stop when the page is gone (another tab or route).
+    var lastTick = 0;
+    var watchdog = null;
+    function alive() {
+      if (pad.svg.isConnected) {
+        return true;
+      }
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener("keyup", onKeyUp, true);
+      root.removeEventListener("blur", onBlur);
+      root.clearInterval(watchdog);
+      return false;
+    }
+    function tick() {
+      lastTick = Date.now();
+      var summary = M.padSummary(readPads());
+      paintStatus(summary);
+      var live = M.liveState(summary.pad, state.controls, keysDown);
+      pad.setLive(live);
+      paintMeters(live);
+    }
+    function frame() {
+      if (alive()) {
+        tick();
+        root.requestAnimationFrame(frame);
+      }
+    }
+    root.requestAnimationFrame(frame);
+    watchdog = root.setInterval(function () {
+      if (alive() && Date.now() - lastTick > 90) {
+        tick();
+      }
+    }, 100);
+
+    // ---- footer (content level; the tab list keeps the shell's footer) ----
+    function onDrawing() {
+      var active = document.activeElement;
+      return !!(active && active.closest && active.closest(".pad-ctl"));
+    }
+    function paintHints() {
+      var tabs = { key: "LB RB", label: "Tabs", run: function () { if (GT4.hooks.tabs) { GT4.hooks.tabs(1); } } };
+      var back = { key: "B", label: "Back", run: function () { GT4.back(); } };
+      var resetAll = { key: "X", label: "Reset all", run: confirmResetAll };
+      if (onDrawing() || !content.contains(document.activeElement)) {
+        host.hints([
+          { key: "A", label: "Rebind", run: function () { rebind(state.selected); } },
+          { key: "Y", label: "Reset button", run: function () { resetOne(state.selected); } },
+          resetAll, back, tabs
+        ], { replace: true });
+      } else {
+        host.hints([
+          { key: "A", label: "Select", run: function () { GT4.nav.activate(); } },
+          resetAll, back, tabs
+        ], { replace: true });
+      }
+    }
+
+    content.addEventListener("focusin", function (event) {
+      var group = event.target && event.target.closest ? event.target.closest(".pad-ctl") : null;
+      if (group) {
+        select(group.getAttribute("data-control"));
+      }
+      paintHints();
+    });
+
+    // ---- picking, rebinding, conflicts ----
+    function onPick(id, how) {
+      if (state.capture) {
+        return;
+      }
+      var group = pad.groups[id];
+      if (how === "activate") {
+        select(id);
+        rebind(id);
+        return;
+      }
+      var again = id === state.selected && document.activeElement === group;
+      select(id);
+      if (group && document.activeElement !== group) {
+        group.focus({ preventScroll: true });
+      }
+      if (again) {
+        rebind(id);
+      }
+    }
+
+    function captureBody(id) {
+      var ring = svgNode("svg", { viewBox: "0 0 100 100", class: "cx-ring", "aria-hidden": "true" });
+      svgNode("circle", { class: "track", cx: 50, cy: 50, r: 46 }, ring);
+      var arc = svgNode("circle", { class: "arc", cx: 50, cy: 50, r: 46, pathLength: 100, "stroke-dasharray": "100 100",
+        "stroke-dashoffset": 0, transform: "rotate(-90 50 50)" }, ring);
+      var seconds = h("span", { class: "cx-count", text: String(CAPTURE_SECONDS) });
+      var message = h("p", { class: "cx-capture-msg", role: "status", text: "" });
+      var body = h("div", { class: "cx-capture" }, [
+        h("div", { class: "cx-capture-art" }, [ring, h("span", { class: "cx-capture-glyph" }, [GT4.controllerSvg.glyph(id)]), seconds]),
+        h("div", { class: "cx-capture-text" }, [
+          h("p", { class: "modal-text", text: "Press a button or pull a trigger on the controller, or press a key." }),
+          h("p", { class: "cx-capture-sub" }, [h("span", { class: "key", text: "B" }), " or ", h("span", { class: "key", text: "Esc" }), " cancels."]),
+          message,
+          h("p", { class: "cx-capture-foot", text: "B cancels, so it cannot be picked here. To move B, rebind the button that has it and choose Swap." })
+        ])
+      ]);
+      return { body: body, arc: arc, seconds: seconds, message: message };
+    }
+
+    function captureTitle(id) {
+      var button = M.find(id);
+      var face = ["triangle", "square", "circle", "cross"].indexOf(id) >= 0;
+      return "Press a button for " + (face ? button.symbol + " (" + button.name + ")" : button.name) + "…";
     }
 
     function rebind(id) {
-      if (!id) {
-        GT4.ui.toast("Select a button first", true);
+      if (state.capture || !M.find(id)) {
         return;
       }
-      var control = findControl(id);
-      var finished = false;
-      var dialog = null;
+      if (state.locked) {
+        GT4.ui.toast("The controls file is kept as it is (written by a newer GT4Recomp).", true);
+        return;
+      }
+      select(id);
+      var parts = captureBody(id);
+      var capture = { id: id, done: false, started: Date.now(), timer: null, dialog: null };
+      state.capture = capture;
 
-      function finish(result, error) {
-        if (finished) {
+      function stop(reason, detail) {
+        if (capture.done) {
           return;
         }
-        finished = true;
+        capture.done = true;
+        root.clearInterval(capture.timer);
         GT4.capturing = false;
         GT4.cancelCapture = null;
-        pad.setCapturing(id, false);
-        if (dialog) {
-          dialog.close();
+        GT4.captureKey = null;
+        state.capture = null;
+        pad.setCapturing(null);
+        call("cancel_capture").catch(function () {});
+        capture.dialog.close();
+        paintHints();
+        if (reason === "timeout") {
+          GT4.ui.toast("No button was pressed. Nothing changed.");
+        } else if (reason === "error") {
+          GT4.ui.toast(GT4.errorText(detail), true);
+        } else if (reason === "source" && detail !== "xinput:B") {
+          // xinput:B is a cancel: the XInput capture may see B before the page's own pad poll does.
+          resolveSource(id, detail);
         }
-        if (error) {
-          GT4.ui.toast(GT4.errorText(error), true);
-        } else if (result && result.binding) {
-          GT4.ui.toast(control.name + " bound to " + result.binding);
-        }
-        load();
       }
 
       GT4.capturing = true;
-      pad.setCapturing(id, true);
-      GT4.cancelCapture = function () {
-        call("cancel_capture").catch(function () {});
-        finish(null, null);
+      GT4.cancelCapture = function () { stop("cancel"); };
+      GT4.captureKey = function (event) {
+        if (event.repeat) {
+          return true; // a key held since before the rebind
+        }
+        var key = M.keyFromEvent(event);
+        if (key.cancel) {
+          stop("cancel");
+        } else if (key.reserved) {
+          parts.message.textContent = key.reserved + " belongs to the game window. Try another key.";
+        } else if (key.unsupported) {
+          parts.message.textContent = "That key cannot be used. Try a letter, a number, an arrow or Enter.";
+        } else {
+          stop("source", "key:" + key.name);
+        }
+        return true;
       };
-      dialog = GT4.ui.openDialog({
-        title: "Press a button for " + control.name,
-        text: "Press a pad button or a key. Esc or B cancels.",
+      pad.setCapturing(id);
+      capture.dialog = GT4.ui.openDialog({
+        title: captureTitle(id),
+        body: parts.body,
+        wide: true,
         dismissable: false,
-        buttons: [
-          {
-            label: "Cancel",
-            closes: false,
-            run: function () { GT4.cancelCapture(); }
-          }
-        ]
+        buttons: [{ label: "Cancel", closes: false, run: function () { stop("cancel"); } }]
       });
-      call("capture_binding", { control: id }).then(
-        function (result) { finish(result, null); },
-        function (err) { finish(null, err); }
-      );
+      capture.dialog.el.classList.add("is-capture");
+      GT4.ui.setHints([{ key: "B", label: "Cancel", run: function () { stop("cancel"); } }]);
+
+      capture.timer = root.setInterval(function () {
+        if (dev.capture === "hold" || dev.capture === "conflict") {
+          // Dev screenshots: a still countdown.
+          parts.seconds.textContent = "4";
+          parts.arc.setAttribute("stroke-dashoffset", "22");
+          return;
+        }
+        var left = Math.max(0, CAPTURE_SECONDS - (Date.now() - capture.started) / 1000);
+        parts.seconds.textContent = String(Math.ceil(left));
+        parts.arc.setAttribute("stroke-dashoffset", String(Math.round((1 - left / CAPTURE_SECONDS) * 1000) / 10));
+        if (left <= 0) {
+          stop("timeout");
+        }
+      }, 100);
+
+      call("capture_binding", { control: id }).then(function (result) {
+        if (result && result.source) {
+          stop("source", result.source);
+        }
+      }, function (err) {
+        if (!capture.done && String(GT4.errorText(err)).indexOf("cancel") < 0) {
+          stop("error", err);
+        }
+      });
     }
 
-    function resetBinding(id) {
-      if (!id) {
-        GT4.ui.toast("Select a button first", true);
+    function sourceText(source) {
+      var info = M.label(source);
+      if (info.family === "key" || info.kind === "face" || info.kind === "dpad" || info.kind === "menu") {
+        return info.long;
+      }
+      return info.long + " (" + info.text + ")";
+    }
+
+    function resolveSource(id, source) {
+      var clash = M.conflict(state.controls, id, source);
+      if (clash && clash.same) {
+        GT4.ui.toast(M.titleOf(id) + " already uses " + sourceText(source) + ".");
+        return;
+      }
+      if (clash && clash.holder) {
+        openConflict(id, source, clash);
+        return;
+      }
+      assign(id, source, false);
+    }
+
+    function openConflict(id, source, clash) {
+      var holder = clash.holder;
+      var swap = !!clash.previous;
+      var what = M.family(source) === "key" ? "key" : "controller button";
+      var text = swap
+        ? "Swap them: " + M.titleOf(id) + " gets " + M.label(source).text + " and " + M.titleOf(holder) + " gets " + M.label(clash.previous).text + "."
+        : "Move it: " + M.titleOf(id) + " gets " + M.label(source).text + " and " + M.titleOf(holder) + " is left without a " + what + ".";
+      var row = function (target, incoming) {
+        return h("div", { class: "cx-swap-row" }, [
+          h("span", { class: "cx-swap-glyph" }, [GT4.controllerSvg.glyph(target)]),
+          h("span", { class: "cx-swap-name", text: M.find(target).name }),
+          h("span", { class: "cx-swap-arrow", "aria-hidden": "true", text: "←" }),
+          chip(incoming)
+        ]);
+      };
+      GT4.ui.openDialog({
+        title: sourceText(source) + " is already on " + M.titleOf(holder),
+        text: text,
+        body: h("div", { class: "cx-swap" }, [row(id, source), row(holder, swap ? clash.previous : null)]),
+        buttons: [
+          { label: "Cancel" },
+          { label: swap ? "Swap" : "Move", primary: true, run: function () { assign(id, source, true); } }
+        ],
+        onClose: function () { root.setTimeout(paintHints, 0); }
+      });
+      GT4.ui.setHints([
+        { key: "A", label: "Choose", run: function () { GT4.nav.activate(); } },
+        { key: "B", label: "Cancel", run: function () { GT4.back(); } }
+      ]);
+    }
+
+    function assign(id, source, swap) {
+      var ticket = reads.ticket();
+      call("assign_binding", { control: id, source: source, swap: swap }).then(function (view) {
+        if (reads.isLatest(ticket)) {
+          apply(view);
+        }
+        var changed = [id];
+        var message = M.titleOf(id) + " ← " + sourceText(source);
+        if (view && view.swapped_with) {
+          changed.push(view.swapped_with);
+          message += " · swapped with " + M.titleOf(view.swapped_with);
+        }
+        if (M.family(source) !== state.mode) {
+          setMode(M.family(source));
+        }
+        pad.flash(changed);
+        GT4.ui.toast(message);
+      }, function (err) {
+        GT4.ui.toast(GT4.errorText(err), true);
+        load();
+      });
+    }
+
+    function resetOne(id) {
+      if (state.locked || state.capture) {
+        return;
+      }
+      var control = findControl(id);
+      if (control && control.is_default) {
+        GT4.ui.toast(M.titleOf(id) + " already has its default binding.");
         return;
       }
       call("reset_binding", { control: id }).then(function () {
-        GT4.ui.toast("Reset to the default binding");
-        load();
+        return load().then(function () {
+          pad.flash([id]);
+          GT4.ui.toast(M.titleOf(id) + " is back to its default.");
+        });
       }, function (err) {
         GT4.ui.toast(GT4.errorText(err), true);
       });
     }
 
-    host.setHooks({
-      x: function () { rebind(state.selected); },
-      y: function () { resetBinding(state.selected); }
-    });
-    host.hints([
-      { key: "X", label: "Rebind", run: function () { rebind(state.selected); } },
-      { key: "Y", label: "Reset", run: function () { resetBinding(state.selected); } }
-    ]);
+    function confirmResetAll() {
+      if (state.locked || state.capture) {
+        return;
+      }
+      GT4.ui.openDialog({
+        title: "Reset all controls?",
+        text: "Every button, trigger and stick setting goes back to its default. This is saved at once.",
+        buttons: [
+          { label: "Cancel" },
+          {
+            label: "Reset all",
+            primary: true,
+            danger: true,
+            run: function () {
+              call("reset_all_bindings").then(function (view) {
+                apply(view);
+                pad.flash(M.BUTTONS.map(function (button) { return button.id; }));
+                GT4.ui.toast("All controls are back to their defaults.");
+              }, function (err) {
+                GT4.ui.toast(GT4.errorText(err), true);
+              });
+            }
+          }
+        ],
+        onClose: function () { root.setTimeout(paintHints, 0); }
+      });
+      GT4.ui.setHints([
+        { key: "A", label: "Choose", run: function () { GT4.nav.activate(); } },
+        { key: "B", label: "Cancel", run: function () { GT4.back(); } }
+      ]);
+    }
 
-    // A enters the tab on the first shoulder tab (L1). Drawing the page does not move focus.
-    host.entry(function () { return tabButtons.l1; });
-    paintSelection();
-    return load();
+    host.setHooks({
+      x: confirmResetAll,
+      y: function () { resetOne(state.selected); }
+    });
+    // A enters on the last selected button (Cross at first). Drawing the page does not move focus.
+    host.entry(function () { return pad.groups[state.selected] || pad.groups.cross; });
+
+    pad.setSelected(state.selected);
+    setMode(state.mode);
+    paintCard();
+    paintHints();
+    return load().then(function () {
+      if (dev.capture) {
+        // Dev harness only (screenshots): start a rebind on the selected button once the page is entered.
+        root.setTimeout(function () { rebind(state.selected); }, 300);
+      }
+    });
   };
 })(window);

@@ -1,7 +1,7 @@
 //! Pure rules of the command layer: Settings rows, Controls labels, key names and the About text.
 //! Nothing here touches the disk or a window, so every rule is tested without the UI.
 
-use gt4controls::{Controls, Curve, TriggerTuning, BUTTON_INPUTS};
+use gt4controls::{Controls, Curve, Stick, TriggerTuning, BUTTON_INPUTS};
 use gt4l_core::gs_table;
 use gt4l_core::settings::{self, Kind, Page, SettingDef, Settings, SETTINGS};
 use serde::Serialize;
@@ -37,6 +37,9 @@ pub fn settings_table(settings: &Settings, controls: &Controls) -> Value {
     for trigger in ["l2", "r2"] {
         rows.push(trigger_row(trigger, controls, "deadzone"));
         rows.push(trigger_row(trigger, controls, "curve"));
+    }
+    for stick in [Stick::Left, Stick::Right] {
+        rows.push(stick_row(stick, controls));
     }
     json!({ "max_upscale": MAX_UPSCALE_DEFAULT, "rows": rows })
 }
@@ -144,31 +147,92 @@ fn trigger_row(trigger: &str, controls: &Controls, field: &str) -> Value {
         json!({
             "id": format!("{trigger}_deadzone"),
             "label": title,
-            "help": "How far the trigger must be pressed before it counts, in percent of its travel.",
+            "help": "How far the trigger must travel before it counts, in percent of its travel. The pressure the game \
+                     reads starts above this point.",
             "page": "basic",
             "group": "controls",
             "control": "slider",
-            "values": { "min": 0, "max": 100, "step": 0.5, "unit": "%" },
-            "default": 0,
-            "current": ((tuning.deadzone * 100.0 * 10.0).round() / 10.0),
+            "values": { "min": 0, "max": 95, "step": 1, "unit": "%" },
+            "default": percent(gt4controls::TRIGGER_DEFAULT_DEADZONE),
+            "current": percent(tuning.deadzone),
         })
     } else {
         json!({
             "id": format!("{trigger}_curve"),
             "label": title,
-            "help": "How the trigger reading grows with the press.",
+            "help": "How the pressure grows with the trigger travel. Linear follows the trigger; quadratic and cubic \
+                     give finer control at light pressure.",
             "page": "basic",
             "group": "controls",
             "control": "dropdown",
             "values": [
-                { "value": "linear", "label": "linear" },
-                { "value": "quadratic", "label": "quadratic" },
-                { "value": "cubic", "label": "cubic" },
+                { "value": "linear", "label": "Linear" },
+                { "value": "quadratic", "label": "Quadratic" },
+                { "value": "cubic", "label": "Cubic" },
             ],
             "default": "linear",
             "current": tuning.curve.as_str(),
         })
     }
+}
+
+/// A fraction as a percentage with one decimal (0.1176 -> 11.8).
+fn percent(fraction: f32) -> f64 {
+    (f64::from(fraction) * 1000.0).round() / 10.0
+}
+
+/// The deadzone row of a stick (`lstick_deadzone`, `rstick_deadzone`).
+fn stick_row(stick: Stick, controls: &Controls) -> Value {
+    let (id, label, default) = match stick {
+        Stick::Left => ("lstick_deadzone", "Left stick deadzone", gt4controls::LEFT_STICK_DEFAULT_DEADZONE),
+        Stick::Right => ("rstick_deadzone", "Right stick deadzone", gt4controls::RIGHT_STICK_DEFAULT_DEADZONE),
+    };
+    json!({
+        "id": id,
+        "label": label,
+        "help": "How far the stick must move from the centre before the game sees it, in percent of its travel. \
+                 The default is the XInput standard; lower it for a precise pad, raise it for one that drifts.",
+        "page": "basic",
+        "group": "controls",
+        "control": "slider",
+        "values": { "min": 0, "max": 95, "step": 1, "unit": "%" },
+        "default": percent(default),
+        "current": percent(controls.stick_deadzone(stick)),
+    })
+}
+
+/// The stick a `set_setting` id tunes (`lstick_deadzone`, `rstick_deadzone`), or `None`.
+pub fn stick_setting(id: &str) -> Option<Stick> {
+    match id {
+        "lstick_deadzone" => Some(Stick::Left),
+        "rstick_deadzone" => Some(Stick::Right),
+        _ => None,
+    }
+}
+
+/// The payload of `get_controls` (ui/dev/README.md): the sixteen buttons in drawing order, the analog rows (trigger
+/// and stick settings, settings row shape) and whether the file is kept read-only (written by a newer launcher).
+pub fn controls_view(settings: &Settings, controls: &Controls, locked: bool) -> Value {
+    let rows: Vec<Value> = control_rows(controls)
+        .into_iter()
+        .map(|row| {
+            json!({
+                "id": row.input,
+                "name": row.ps2_name,
+                "binding": row.short,
+                "sources": row.sources,
+                "xinput": row.xinput,
+                "key": row.key,
+                "is_default": row.is_default,
+            })
+        })
+        .collect();
+    let table = settings_table(settings, controls);
+    let analog: Vec<Value> = table["rows"]
+        .as_array()
+        .map(|rows| rows.iter().filter(|row| row["group"] == "controls").cloned().collect())
+        .unwrap_or_default();
+    json!({ "controls": rows, "triggers": analog, "locked": locked })
 }
 
 /// The text a `set_setting` value stands for: booleans as `on`/`off` for launcher toggles and `true`/`false` for the
@@ -201,10 +265,10 @@ pub fn ps2_name(input: &str) -> &'static str {
         "triangle" => "Triangle",
         "l1" => "L1",
         "r1" => "R1",
-        "l2" => "L2 (from LT)",
-        "r2" => "R2 (from RT)",
-        "l3" => "L3 (left stick click)",
-        "r3" => "R3 (right stick click)",
+        "l2" => "L2",
+        "r2" => "R2",
+        "l3" => "L3",
+        "r3" => "R3",
         "select" => "Select",
         _ => "Start",
     }
@@ -272,6 +336,20 @@ pub struct ControlDto {
     pub sources: Vec<String>,
     /// Sources as the user reads them.
     pub described: Vec<String>,
+    /// The first XInput source without its prefix and options (`A`, `LT`), or `None` when no controller input drives it.
+    pub xinput: Option<String>,
+    /// The first keyboard key (`Z`, `Enter`), or `None`.
+    pub key: Option<String>,
+    /// True when the input has exactly its built-in sources.
+    pub is_default: bool,
+}
+
+/// The name after the family prefix of the first source of `family`, without options.
+fn first_of_family(sources: &[String], family: &str) -> Option<String> {
+    sources
+        .iter()
+        .find(|source| gt4controls::source_family(source) == family)
+        .map(|source| gt4controls::source_base(source).split_once(':').map_or("", |(_, name)| name).to_string())
 }
 
 /// Controls-page rows in display order.
@@ -285,6 +363,9 @@ pub fn control_rows(controls: &Controls) -> Vec<ControlDto> {
                 ps2_name: ps2_name(input).to_string(),
                 short: short_label(&sources),
                 described: sources.iter().map(|source| describe_source(source)).collect(),
+                xinput: first_of_family(&sources, "xinput"),
+                key: first_of_family(&sources, "key"),
+                is_default: controls.is_default(input),
                 sources,
             }
         })
@@ -383,7 +464,10 @@ mod tests {
         assert!(cross.described.contains(&"Controller: A".to_string()));
         assert!(cross.described.contains(&"Keyboard: Z".to_string()));
         let l2 = rows.iter().find(|row| row.input == "l2").unwrap();
-        assert_eq!(l2.ps2_name, "L2 (from LT)");
+        assert_eq!(l2.ps2_name, "L2");
+        assert_eq!(cross.xinput.as_deref(), Some("A"));
+        assert_eq!(cross.key.as_deref(), Some("Z"));
+        assert!(cross.is_default);
     }
 
     #[test]
@@ -494,6 +578,29 @@ mod table_tests {
         let table = settings_table(&Settings::default(), &Controls::default());
         assert_eq!(row(&table, "l2_deadzone")["control"], "slider");
         assert_eq!(row(&table, "r2_curve")["control"], "dropdown");
+        assert_eq!(row(&table, "l2_deadzone")["default"], json!(11.8), "30 of 255");
+        assert_eq!(row(&table, "lstick_deadzone")["current"], json!(24.0), "7849 of 32767");
+        assert_eq!(row(&table, "rstick_deadzone")["default"], json!(26.5), "8689 of 32767");
+    }
+
+    #[test]
+    fn controls_view_lists_buttons_with_both_sources_and_the_analog_rows() {
+        let mut controls = Controls::default();
+        controls.assign("cross", "xinput:B", true).unwrap();
+        let view = controls_view(&Settings::default(), &controls, false);
+        let buttons = view["controls"].as_array().unwrap();
+        assert_eq!(buttons.len(), 16);
+        let cross = buttons.iter().find(|button| button["id"] == "cross").unwrap();
+        assert_eq!(cross["xinput"], "B");
+        assert_eq!(cross["key"], "Z");
+        assert_eq!(cross["is_default"], false);
+        let circle = buttons.iter().find(|button| button["id"] == "circle").unwrap();
+        assert_eq!(circle["xinput"], "A", "swapped");
+        let analog: Vec<&str> = view["triggers"].as_array().unwrap().iter().map(|row| row["id"].as_str().unwrap()).collect();
+        assert_eq!(analog, ["l2_deadzone", "l2_curve", "r2_deadzone", "r2_curve", "lstick_deadzone", "rstick_deadzone"]);
+        assert_eq!(view["locked"], false);
+        assert_eq!(stick_setting("rstick_deadzone"), Some(Stick::Right));
+        assert_eq!(stick_setting("l2_deadzone"), None);
     }
 
     #[test]

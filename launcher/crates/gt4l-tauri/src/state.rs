@@ -171,17 +171,8 @@ impl AppState {
         }
     }
 
-    pub fn save_controls(&self) {
-        if self.controls_locked {
-            log(&self.dirs, "controls not saved: the file is from a newer launcher");
-            return;
-        }
-        let path = self.dirs.root().join(CONTROLS_FILE_NAME);
-        if let Err(error) = controls_file::save(&path, &self.controls) {
-            log(&self.dirs, &format!("controls not saved: {error}"));
-        }
-    }
-
+    /// The controls file. Commands write it through `commands::change_controls`, which refuses while
+    /// `controls_locked` is set and keeps the change only when the write succeeded.
     pub fn controls_path(&self) -> PathBuf {
         self.dirs.root().join(CONTROLS_FILE_NAME)
     }

@@ -51,7 +51,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] The tab list highlight is a soft pill that glides between tabs; the tab shown while you are in the content keeps a quiet accent edge.
 - [ ] A focused row has a lighter band with a thin accent edge; the focused control has a soft glow. There is no hard box.
 - [ ] With Windows "Show animations" off (or reduced motion), the pill and the glow change instantly.
-- [ ] Footer: the tab list shows A Enter, B Back, LB RB Tabs; the content shows A Select, B Tabs, then the tab's own keys (Advanced: Y Reset; Saves and Replays: X Import; Controls: X Rebind, Y Reset). No tab shows Save.
+- [ ] Footer: the tab list shows A Enter, B Back, LB RB Tabs; the content shows A Select, B Tabs, then the tab's own keys (Advanced: Y Reset; Saves and Replays: X Import). Controls shows A Rebind, Y Reset button, X Reset all, B Back, LB RB Tabs on the drawing, and A Select on the panel. No tab shows Save.
 - [ ] Mouse and touch: a click or tap focuses what was clicked; a click on a tab shows it without entering its rows.
 - [ ] The D-pad and the left stick move focus; holding repeats after about 0.4 s, then about every 0.1 s.
 - [ ] Stick deadzone: a slight drift does not move focus.
@@ -61,10 +61,10 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Before the first button press the page still works with the keyboard and mouse.
 - [ ] Every interactive element can be reached with the D-pad or the left stick (no control is skipped); the focus ring shows on each.
 - [ ] Right stick up and down scrolls the focused scroll area (Settings content, Saves, Replays, dialogs) at a steady speed; a slight push does nothing.
-- [ ] There is no Save: X does nothing on Graphics, Display and Advanced. X on Saves and Replays imports; X on Controls starts a rebind.
-- [ ] Pad: the highlight moves over Controls, Saves and Replays and focus stays in the tab list; only A or D-pad right enters a tab. Entering Saves or Replays focuses the first row (Import only when the list is empty); entering Controls focuses L1.
+- [ ] There is no Save: X does nothing on Graphics, Display and Advanced. X on Saves and Replays imports; X on Controls asks to reset all controls.
+- [ ] Pad: the highlight moves over Controls, Saves and Replays and focus stays in the tab list; only A or D-pad right enters a tab. Entering Saves or Replays focuses the first row (Import only when the list is empty); entering Controls focuses the DS2 button selected last (Cross the first time).
 - [ ] A changed value shows the new value at once (resolution dropdown, toggle, slider), and it still shows after leaving and re-entering the tab.
-- [ ] Y on Advanced asks "Reset to defaults?"; Y on Saves makes the selected save active; Y on Replays deletes after a confirm; Y on Controls resets the selected binding.
+- [ ] Y on Advanced asks "Reset to defaults?"; Y on Saves makes the selected save active; Y on Replays deletes after a confirm; Y on Controls resets the selected button.
 - [ ] B closes an open "i" tip first, then an open dialog or list, then goes back.
 - [ ] Left and right on a focused slider change it one step; on a dropdown they cycle the values.
 - [ ] Start on Home plays; A on Home plays; Y on Home opens Settings.
@@ -78,13 +78,20 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Mods is not in the nav column; LB/RB and Q/E skip it; `#/settings/mods` opens Graphics; no row has page "mods".
 - [ ] An error from `set_setting` shows a red toast and the row shows the value the launcher reads back.
 
-## Controls
+## Controls (needs a real XInput pad; the dev mock cannot test this)
 
-- [ ] Every button in the drawing is clickable and focusable; the selected one has a white outline.
-- [ ] The L1, L2, R1 and R2 tabs select the matching drawing; the panel shows the PS2 name and binding.
-- [ ] Rebind: the overlay names the button; Cancel and Esc call `cancel_capture`; a press saves the new binding.
-- [ ] Reset restores the default binding for the selected button only.
-- [ ] L2 (from LT) and R2 (from RT) show deadzone and curve sliders.
+- [ ] With the pad connected, the status pill names it and says Connected; unplugged, it says No controller. With two pads, it says "controller 1 of 2, the one the game uses".
+- [ ] Press every button: the matching DS2 button lights with a glow and its chip turns white. The D-pad arms and face buttons sink a little.
+- [ ] Pull LT and RT slowly: L2 and R2 fill from the bottom with the percentage, and the panel meters show the pressure the game reads (zero inside the striped deadzone). Change the curve and the deadzone and watch the meter follow.
+- [ ] Move both sticks: the caps move in their wells to the real position; the panel scopes show the dot leave the deadzone square. L3 and R3 clicks light the caps.
+- [ ] The keyboard lights the buttons its keys drive (Z Cross, arrows the D-pad...).
+- [ ] From the tab list, A enters on Cross (later: the last selected button). The D-pad and the left stick move between DS2 buttons by position; the panel follows the selection.
+- [ ] A rebinds: the overlay says "Press a button for (symbol) (Cross)..." and counts down 5 s; the selected button pulses. A pad button or a key binds; B or Esc cancels; after 5 s it ends with "No button was pressed". The A press that opened it does not bind A.
+- [ ] Binding a control another button already has opens "... is already on ...": Swap exchanges them, Cancel keeps both as they were. The chips of both buttons update and flash.
+- [ ] Y resets the selected button; X asks, then resets every button, trigger and stick setting.
+- [ ] The Controller / Keyboard switch shows XInput chips or key chips; after a key rebind the view switches to Keyboard.
+- [ ] Mouse and touch: a click or tap anywhere near a button selects it (even at 844 x 390); a second click or tap, or Rebind in the panel, starts the rebind.
+- [ ] `%LOCALAPPDATA%\GT4Recomp\controls.toml` changes after every change (no Save). Remapped buttons take effect in the game only from the next game build (the "i" next to "Changes save at once" says so).
 
 ## Saves and Replays
 

@@ -1,0 +1,313 @@
+/*
+ * Pure rules of the Controls page (no DOM; tested in dev/nav-test.html):
+ *
+ *   GT4.controlsModel.BUTTONS               the sixteen DS2 buttons (ids of the controls file), names, symbols
+ *   GT4.controlsModel.padSources(pad)       a Gamepad-like {buttons, axes} -> {"xinput:A": 0..1, ...}
+ *   GT4.controlsModel.liveState(pad, controls, keysDown)
+ *                                           what each DS2 button, stick and trigger shows right now
+ *   GT4.controlsModel.triggerOutput(raw, deadzone, curve)
+ *                                           the pressure the game computes from a trigger (native/controls.cpp)
+ *   GT4.controlsModel.keyFromEvent(event)   a key event -> {name} | {reserved} | {unsupported} | {cancel}
+ *   GT4.controlsModel.conflict(controls, id, source)
+ *                                           null, {same: true}, or {holder, previous} when another button has it
+ *   GT4.controlsModel.label(source)         {family, kind, text, long} for chips and the panel
+ *   GT4.controlsModel.padSummary(pads)      the controller the game uses (first connected) and how many there are
+ *
+ * A Gamepad in WebView2 uses the standard mapping for XInput pads: buttons 0-15 are A B X Y LB RB LT RT Back Start
+ * LThumb RThumb DpadUp DpadDown DpadLeft DpadRight; LT and RT carry their analog value (0..1); axes 0-3 are LX LY RX
+ * RY in -1..1 with y positive down.
+ */
+(function (root) {
+  "use strict";
+  var GT4 = (root.GT4 = root.GT4 || {});
+
+  var BUTTONS = [
+    { id: "l2", name: "L2", symbol: "L2" },
+    { id: "l1", name: "L1", symbol: "L1" },
+    { id: "r2", name: "R2", symbol: "R2" },
+    { id: "r1", name: "R1", symbol: "R1" },
+    { id: "dpad_up", name: "D-pad up", symbol: "↑" },
+    { id: "dpad_left", name: "D-pad left", symbol: "←" },
+    { id: "dpad_right", name: "D-pad right", symbol: "→" },
+    { id: "dpad_down", name: "D-pad down", symbol: "↓" },
+    { id: "select", name: "Select", symbol: "SELECT" },
+    { id: "start", name: "Start", symbol: "START" },
+    { id: "triangle", name: "Triangle", symbol: "△" },
+    { id: "square", name: "Square", symbol: "□" },
+    { id: "circle", name: "Circle", symbol: "○" },
+    { id: "cross", name: "Cross", symbol: "✕" },
+    { id: "l3", name: "L3", symbol: "L3" },
+    { id: "r3", name: "R3", symbol: "R3" }
+  ];
+
+  var STANDARD_TO_XINPUT = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "Back", "Start", "LThumb", "RThumb",
+    "DpadUp", "DpadDown", "DpadLeft", "DpadRight"];
+  var TRIGGER_INDEX = { 6: true, 7: true };
+
+  // The game's defaults (docs/CONTROLS.md): trigger 30 of 255, left stick 7849 and right stick 8689 of 32767.
+  var TRIGGER_DEFAULT_DEADZONE = 30 / 255;
+
+  function find(id) {
+    for (var i = 0; i < BUTTONS.length; i++) {
+      if (BUTTONS[i].id === id) {
+        return BUTTONS[i];
+      }
+    }
+    return null;
+  }
+
+  // "Cross" -> "✕ Cross"; shoulders and the rest keep their plain name.
+  function titleOf(id) {
+    var button = find(id);
+    if (!button) {
+      return id;
+    }
+    var face = ["triangle", "square", "circle", "cross"].indexOf(id) >= 0;
+    return face ? button.symbol + " " + button.name : button.name;
+  }
+
+  function sourceBase(source) {
+    return String(source || "").split("|")[0].trim();
+  }
+
+  function family(source) {
+    var base = sourceBase(source);
+    var colon = base.indexOf(":");
+    return colon < 0 ? base : base.slice(0, colon);
+  }
+
+  function sourceName(source) {
+    var base = sourceBase(source);
+    var colon = base.indexOf(":");
+    return colon < 0 ? base : base.slice(colon + 1);
+  }
+
+  // Options after "|": {deadzone: 0.05, curve: "cubic"}.
+  function sourceOptions(source) {
+    var options = {};
+    var parts = String(source || "").split("|");
+    if (parts.length < 2) {
+      return options;
+    }
+    parts[1].trim().split(/\s+/).forEach(function (pair) {
+      var eq = pair.indexOf("=");
+      if (eq > 0) {
+        options[pair.slice(0, eq)] = pair.slice(eq + 1);
+      }
+    });
+    return options;
+  }
+
+  // The pressure the game computes from a trigger reading (native/controls.cpp): raw and deadzone are fractions of
+  // full travel (255). Linear: (v - d) * 255 / (255 - d), integer division; otherwise curve(n) with n = (v - d) /
+  // (255 - d). Returns 0..1.
+  function triggerOutput(raw, deadzone, curve) {
+    var v = Math.round(Math.min(1, Math.max(0, Number(raw) || 0)) * 255);
+    var d = Math.round(Math.min(0.99, Math.max(0, deadzone === undefined ? TRIGGER_DEFAULT_DEADZONE : Number(deadzone))) * 255);
+    if (v <= d) {
+      return 0;
+    }
+    if (!curve || curve === "linear") {
+      return Math.floor(((v - d) * 255) / (255 - d)) / 255;
+    }
+    var n = (v - d) / (255 - d);
+    var shaped = curve === "cubic" ? n * n * n : n * n;
+    return Math.floor(Math.min(1, shaped) * 255) / 255;
+  }
+
+  // {"xinput:A": 1, "xinput:LT": 0.6, ...} for every standard button of a Gamepad-like object.
+  function padSources(pad) {
+    var out = {};
+    if (!pad || !pad.buttons) {
+      return out;
+    }
+    for (var i = 0; i < STANDARD_TO_XINPUT.length; i++) {
+      var button = pad.buttons[i];
+      if (!button) {
+        continue;
+      }
+      var value = TRIGGER_INDEX[i] ? Number(button.value) || 0 : (button.pressed ? 1 : 0);
+      if (TRIGGER_INDEX[i] && button.pressed && value === 0) {
+        value = 1;
+      }
+      out["xinput:" + STANDARD_TO_XINPUT[i]] = Math.min(1, Math.max(0, value));
+    }
+    return out;
+  }
+
+  function axis(pad, index) {
+    var value = pad && pad.axes ? Number(pad.axes[index]) || 0 : 0;
+    return Math.min(1, Math.max(-1, value));
+  }
+
+  // What the drawing shows this frame. controls = get_controls().controls; keysDown = {"Z": true}.
+  // buttons[id] = {value (raw 0..1, the fill of L2/R2), output (what the game reads, 0..1), pressed}
+  // sticks = {left: {x, y}, right: {x, y}} raw, y positive down; sources = the pad readings by source.
+  function liveState(pad, controls, keysDown) {
+    var sources = padSources(pad);
+    Object.keys(keysDown || {}).forEach(function (name) {
+      if (keysDown[name]) {
+        sources["key:" + name] = 1;
+      }
+    });
+    var buttons = {};
+    (controls || []).forEach(function (control) {
+      var value = 0;
+      var output = 0;
+      (control.sources || []).forEach(function (source) {
+        var raw = sources[sourceBase(source)] || 0;
+        if (!raw) {
+          return;
+        }
+        var name = sourceName(source);
+        var shaped = raw;
+        if (family(source) === "xinput" && (name === "LT" || name === "RT")) {
+          var options = sourceOptions(source);
+          shaped = triggerOutput(raw, options.deadzone === undefined ? undefined : Number(options.deadzone), options.curve);
+        }
+        value = Math.max(value, raw);
+        output = Math.max(output, shaped);
+      });
+      buttons[control.id] = { value: value, output: output, pressed: output > 0 };
+    });
+    return {
+      buttons: buttons,
+      sticks: {
+        left: { x: axis(pad, 0), y: axis(pad, 1) },
+        right: { x: axis(pad, 2), y: axis(pad, 3) }
+      },
+      sources: sources
+    };
+  }
+
+  var RESERVED_KEYS = { F7: true, F8: true, F9: true, F11: true };
+  var CODE_NAMES = {
+    ArrowUp: "Up", ArrowDown: "Down", ArrowLeft: "Left", ArrowRight: "Right",
+    Enter: "Enter", NumpadEnter: "Enter", Backspace: "Backspace", Tab: "Tab", Space: "Space",
+    ShiftLeft: "Shift", ShiftRight: "Shift", ControlLeft: "Ctrl", ControlRight: "Ctrl", AltLeft: "Alt", AltRight: "Alt",
+    Insert: "Insert", Delete: "Delete", Home: "Home", End: "End", PageUp: "PageUp", PageDown: "PageDown"
+  };
+
+  // A keydown -> the key name of the controls file. Esc cancels a capture; F7, F8, F9 and F11 belong to the game
+  // window; keys the file has no name for are refused.
+  function keyFromEvent(event) {
+    var code = (event && event.code) || "";
+    var key = (event && event.key) || "";
+    if (code === "Escape" || key === "Escape") {
+      return { cancel: true };
+    }
+    var match = /^Key([A-Z])$/.exec(code) || /^Digit([0-9])$/.exec(code);
+    if (match) {
+      return { name: match[1] };
+    }
+    match = /^Numpad([0-9])$/.exec(code);
+    if (match) {
+      return { name: "Num" + match[1] };
+    }
+    match = /^F([0-9]{1,2})$/.exec(code);
+    if (match && Number(match[1]) >= 1 && Number(match[1]) <= 12) {
+      return RESERVED_KEYS[code] ? { reserved: code } : { name: code };
+    }
+    if (CODE_NAMES[code]) {
+      return { name: CODE_NAMES[code] };
+    }
+    if (!code && key.length === 1 && /[a-z0-9]/i.test(key)) {
+      return { name: key.toUpperCase() };
+    }
+    return { unsupported: key || code || "?" };
+  }
+
+  // Before binding `source` to button `id`: null when it is free, {same: true} when the button already has it, else
+  // {holder, previous}: the other button that has it, and the source of the same family `id` would give it in a swap
+  // (null: the other button would lose it).
+  function conflict(controls, id, source) {
+    var base = sourceBase(source);
+    var list = controls || [];
+    function has(control) {
+      return (control.sources || []).some(function (existing) { return sourceBase(existing) === base; });
+    }
+    var own = list.filter(function (control) { return control.id === id; })[0] || { sources: [] };
+    if (has(own)) {
+      return { same: true };
+    }
+    var holder = list.filter(function (control) { return control.id !== id && has(control); })[0];
+    if (!holder) {
+      return null;
+    }
+    var previous = (own.sources || []).filter(function (existing) { return family(existing) === family(base); })[0];
+    return { holder: holder.id, previous: previous ? sourceBase(previous) : null };
+  }
+
+  var XINPUT_LABELS = {
+    A: ["face", "A", "A button"], B: ["face", "B", "B button"], X: ["face", "X", "X button"], Y: ["face", "Y", "Y button"],
+    LB: ["bumper", "LB", "Left bumper"], RB: ["bumper", "RB", "Right bumper"],
+    LT: ["trigger", "LT", "Left trigger"], RT: ["trigger", "RT", "Right trigger"],
+    Back: ["menu", "Back", "Back button"], Start: ["menu", "Start", "Start button"],
+    LThumb: ["thumb", "LS", "Left stick click"], RThumb: ["thumb", "RS", "Right stick click"],
+    DpadUp: ["dpad", "↑", "D-pad up"], DpadDown: ["dpad", "↓", "D-pad down"],
+    DpadLeft: ["dpad", "←", "D-pad left"], DpadRight: ["dpad", "→", "D-pad right"]
+  };
+  var KEY_TEXT = { Backspace: "Bksp", Up: "↑", Down: "↓", Left: "←", Right: "→", PageUp: "PgUp",
+    PageDown: "PgDn", Delete: "Del", Insert: "Ins" };
+
+  // Chip text for a source: {family: "xinput"|"key"|"", kind, text, long, dir?}. Unknown and empty sources read "-".
+  function label(source) {
+    if (!source) {
+      return { family: "", kind: "none", text: "–", long: "Not bound" };
+    }
+    var name = sourceName(source);
+    if (family(source) === "xinput" && XINPUT_LABELS[name]) {
+      var entry = XINPUT_LABELS[name];
+      var out = { family: "xinput", kind: entry[0], text: entry[1], long: entry[2] };
+      if (entry[0] === "dpad") {
+        out.dir = name.slice(4).toLowerCase();
+      }
+      return out;
+    }
+    if (family(source) === "key") {
+      return { family: "key", kind: "key", text: KEY_TEXT[name] || name, long: name + " key" };
+    }
+    return { family: family(source), kind: "none", text: name || "?", long: sourceBase(source) };
+  }
+
+  // "Xbox 360 Controller (XInput STANDARD GAMEPAD)" -> "Xbox 360 Controller".
+  function cleanPadName(id) {
+    var text = String(id || "").replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim();
+    return text || "Controller";
+  }
+
+  // pads = navigator.getGamepads(). The game reads the first connected XInput controller, so the page shows that one.
+  function padSummary(pads) {
+    var connected = [];
+    Array.prototype.forEach.call(pads || [], function (pad) {
+      if (pad && pad.connected !== false) {
+        connected.push(pad);
+      }
+    });
+    if (!connected.length) {
+      return { connected: false, count: 0, name: "", index: -1, pad: null };
+    }
+    return { connected: true, count: connected.length, name: cleanPadName(connected[0].id), index: connected[0].index,
+      pad: connected[0] };
+  }
+
+  GT4.controlsModel = {
+    BUTTONS: BUTTONS,
+    STANDARD_TO_XINPUT: STANDARD_TO_XINPUT,
+    TRIGGER_DEFAULT_DEADZONE: TRIGGER_DEFAULT_DEADZONE,
+    find: find,
+    titleOf: titleOf,
+    sourceBase: sourceBase,
+    family: family,
+    sourceName: sourceName,
+    sourceOptions: sourceOptions,
+    triggerOutput: triggerOutput,
+    padSources: padSources,
+    liveState: liveState,
+    keyFromEvent: keyFromEvent,
+    conflict: conflict,
+    label: label,
+    cleanPadName: cleanPadName,
+    padSummary: padSummary
+  };
+})(window);

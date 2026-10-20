@@ -129,6 +129,22 @@ Shipped in `docs/controls/` and checked by `controls_fixture` (CTest `native_con
 - An empty or unset `GT4_CONTROLS_FILE` means the built-in bindings. An inherited value is cleared
   for every probe run, so a stale variable cannot change the bindings.
 
+### What the launcher's Controls page writes (TASK-019, 2026-10-21)
+
+The format above is unchanged. The page writes the whole file after every change (no Save), always in
+the order of the Inputs table, and keeps the old file when a change is refused or the write fails.
+
+- **Rebind:** the new source replaces the button's source of the same family (`xinput:` or `key:`);
+  the other family stays. A trigger that replaces a trigger keeps its options.
+- **Conflict:** a source already on another button is not bound twice. Swap gives the other button
+  the previous source of that family (or removes the source there when there was none).
+- **Trigger rows:** `deadzone=` (0 to 0.95) and `curve=` on the `xinput:LT`/`xinput:RT` source of L2
+  and R2.
+- **Stick rows:** `deadzone=` (0 to 0.95) on every axis source of both axes of a stick; `invert` and
+  the other options are kept. Example: `lstick_y = ["xinput:LY | invert=true deadzone=0.100"]`.
+- **Reset all:** the built-in mapping, options included.
+- A file written by a newer launcher (unknown schema) is kept as it is and the page is read-only.
+
 ## Limits
 
 - **Confirmed:** only the windowed path reads the file (`open_window`). A headless run (`--frames`

@@ -91,6 +91,8 @@ fn main() {
             commands::capture_binding,
             commands::cancel_capture,
             commands::reset_binding,
+            commands::assign_binding,
+            commands::reset_all_bindings,
             commands::about_info,
             commands::open_log_folder,
             commands::open_game_files_folder,

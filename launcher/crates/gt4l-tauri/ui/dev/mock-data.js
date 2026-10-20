@@ -8,6 +8,8 @@
  *   pick=spec                                       (setup: the picker returns a Spec II image, refused)
  *   running=1                                       (game running at start)
  *   focus=play                                      (home: focus the Play button, for screenshots)
+ *   Controls: pad=A,LB,DpadRight lt=0.6 rt=0.2 lx=0.7 ly=-0.45 rx= ry= pads=2 nopad=1 (a still dev controller),
+ *             select=circle mode=key capture=hold|conflict remap=1 locked=1
  */
 (function (root) {
   "use strict";
@@ -163,32 +165,160 @@
       package: "GT4Recomp-Setup-1.0.1.exe",
       notes: "GT4Recomp 1.0.1\n\n* Tray: the launcher comes back when the game ends.\n* Sample text for the launcher preview." }
   ];
-  var controls = [
-    { id: "l1", name: "L1", binding: "Pad: LB" },
-    { id: "l2", name: "L2", binding: "Pad: LT" },
-    { id: "r1", name: "R1", binding: "Pad: RB" },
-    { id: "r2", name: "R2", binding: "Pad: RT" },
-    { id: "up", name: "D-pad up", binding: "Pad: D-pad up" },
-    { id: "down", name: "D-pad down", binding: "Pad: D-pad down" },
-    { id: "left", name: "D-pad left", binding: "Pad: D-pad left" },
-    { id: "right", name: "D-pad right", binding: "Pad: D-pad right" },
-    { id: "triangle", name: "Triangle", binding: "Pad: Y" },
-    { id: "circle", name: "Circle", binding: "Pad: B" },
-    { id: "cross", name: "Cross", binding: "Pad: A" },
-    { id: "square", name: "Square", binding: "Pad: X" },
-    { id: "select", name: "SELECT", binding: "Pad: Back" },
-    { id: "start", name: "START", binding: "Pad: Start" },
-    { id: "analog", name: "ANALOG", binding: "" },
-    { id: "l3", name: "L3 (left stick)", binding: "Pad: LS press" },
-    { id: "r3", name: "R3 (right stick)", binding: "" }
-  ];
+  // Controls: the built-in mapping of docs/CONTROLS.md, with the same assign/swap rules as gt4controls (Rust).
+  var CONTROL_ORDER = ["dpad_up", "dpad_right", "dpad_down", "dpad_left", "cross", "circle", "square", "triangle",
+    "l1", "r1", "l2", "r2", "l3", "r3", "select", "start"];
+  var CONTROL_NAMES = { dpad_up: "D-pad up", dpad_right: "D-pad right", dpad_down: "D-pad down", dpad_left: "D-pad left",
+    cross: "Cross", circle: "Circle", square: "Square", triangle: "Triangle", l1: "L1", r1: "R1", l2: "L2", r2: "R2",
+    l3: "L3", r3: "R3", select: "Select", start: "Start" };
+  var DEFAULT_SOURCES = {
+    dpad_up: ["xinput:DpadUp", "key:Up"], dpad_right: ["xinput:DpadRight", "key:Right"],
+    dpad_down: ["xinput:DpadDown", "key:Down"], dpad_left: ["xinput:DpadLeft", "key:Left"],
+    cross: ["xinput:A", "key:Z"], circle: ["xinput:B", "key:X"], square: ["xinput:X", "key:A"], triangle: ["xinput:Y", "key:S"],
+    l1: ["xinput:LB", "key:Q"], r1: ["xinput:RB", "key:W"], l2: ["xinput:LT", "key:1"], r2: ["xinput:RT", "key:2"],
+    l3: ["xinput:LThumb", "key:C"], r3: ["xinput:RThumb", "key:V"], select: ["xinput:Back", "key:Backspace"],
+    start: ["xinput:Start", "key:Enter"]
+  };
+  var RESERVED = { F7: true, F8: true, F9: true, F11: true };
+  var bindings = JSON.parse(JSON.stringify(DEFAULT_SOURCES));
+  // ?remap=1: a few changed buttons, so the "Changed" state shows in screenshots.
+  if (query.get("remap") === "1") {
+    bindings.cross = ["xinput:B", "key:Z"];
+    bindings.circle = ["xinput:A", "key:X"];
+    bindings.select = ["xinput:Back"];
+  }
 
-  var triggers = [
-    { id: "l2_deadzone", label: "L2 (from LT) deadzone", help: "Ignores the first part of the trigger travel.", control: "slider", values: { min: 0, max: 50, step: 1, unit: "%" }, default: 10, current: 10, page: "hidden" },
-    { id: "l2_curve", label: "L2 (from LT) curve", help: "0 is linear; higher values need a harder press for the same output.", control: "slider", values: { min: 0, max: 100, step: 1, unit: "%" }, default: 0, current: 0, page: "hidden" },
-    { id: "r2_deadzone", label: "R2 (from RT) deadzone", help: "Ignores the first part of the trigger travel.", control: "slider", values: { min: 0, max: 50, step: 1, unit: "%" }, default: 10, current: 10, page: "hidden" },
-    { id: "r2_curve", label: "R2 (from RT) curve", help: "0 is linear; higher values need a harder press for the same output.", control: "slider", values: { min: 0, max: 100, step: 1, unit: "%" }, default: 0, current: 0, page: "hidden" }
-  ];
+  function analogDefaults() {
+    var curve = [{ value: "linear", label: "Linear" }, { value: "quadratic", label: "Quadratic" }, { value: "cubic", label: "Cubic" }];
+    function slider(id, label, def) {
+      return { id: id, label: label, help: "How far it must travel before it counts, in percent of its travel.",
+        page: "basic", group: "controls", control: "slider", values: { min: 0, max: 95, step: 1, unit: "%" },
+        default: def, current: def };
+    }
+    function dropdown(id, label) {
+      return { id: id, label: label, help: "How the pressure grows with the trigger travel.", page: "basic",
+        group: "controls", control: "dropdown", values: curve, default: "linear", current: "linear" };
+    }
+    return [slider("l2_deadzone", "L2 deadzone", 11.8), dropdown("l2_curve", "L2 curve"),
+      slider("r2_deadzone", "R2 deadzone", 11.8), dropdown("r2_curve", "R2 curve"),
+      slider("lstick_deadzone", "Left stick deadzone", 24), slider("rstick_deadzone", "Right stick deadzone", 26.5)];
+  }
+  var analog = analogDefaults();
+
+  function base(source) { return String(source).split("|")[0].trim(); }
+  function familyOf(source) { return base(source).split(":")[0]; }
+  function nameOf(source) { return base(source).split(":")[1] || ""; }
+
+  function controlsView() {
+    return {
+      controls: CONTROL_ORDER.map(function (id) {
+        var sources = bindings[id].slice();
+        var pad = sources.filter(function (s) { return familyOf(s) === "xinput"; })[0];
+        var key = sources.filter(function (s) { return familyOf(s) === "key"; })[0];
+        return { id: id, name: CONTROL_NAMES[id], binding: sources.length ? nameOf(sources[0]) : "-", sources: sources,
+          xinput: pad ? nameOf(pad) : null, key: key ? nameOf(key) : null,
+          is_default: JSON.stringify(sources) === JSON.stringify(DEFAULT_SOURCES[id]) };
+      }),
+      triggers: JSON.parse(JSON.stringify(analog)),
+      locked: query.get("locked") === "1"
+    };
+  }
+
+  function ordered(list) {
+    return list.filter(function (s) { return familyOf(s) === "xinput"; }).concat(list.filter(function (s) { return familyOf(s) !== "xinput"; }));
+  }
+
+  // The rules of gt4controls::Controls::assign: same family replaced, swap with the holder, refusal without swap.
+  function assignBinding(id, source, swap) {
+    var b = base(source);
+    if (!bindings[id]) {
+      throw new Error("'" + id + "' is not a button input");
+    }
+    if (familyOf(b) === "key" && RESERVED[nameOf(b)]) {
+      throw new Error("key '" + nameOf(b) + "' is reserved by the launcher");
+    }
+    var current = bindings[id];
+    if (current.some(function (s) { return base(s) === b; })) {
+      var same = controlsView();
+      same.swapped_with = null;
+      same.unchanged = true;
+      return same;
+    }
+    var previous = current.filter(function (s) { return familyOf(s) === familyOf(b); })[0] || null;
+    var holder = CONTROL_ORDER.filter(function (other) {
+      return other !== id && bindings[other].some(function (s) { return base(s) === b; });
+    })[0] || null;
+    if (holder) {
+      if (!swap) {
+        throw new Error("'" + b + "' is already bound to " + holder);
+      }
+      var replaced = [];
+      bindings[holder].forEach(function (s) {
+        var incoming = base(s) === b ? previous : s;
+        if (incoming && !replaced.some(function (kept) { return base(kept) === base(incoming); })) {
+          replaced.push(incoming);
+        }
+      });
+      bindings[holder] = ordered(replaced);
+    }
+    bindings[id] = ordered(current.filter(function (s) { return familyOf(s) !== familyOf(b); }).concat([b]));
+    var view = controlsView();
+    view.swapped_with = holder;
+    view.unchanged = false;
+    return view;
+  }
+
+  // Dev-only live input for the Controls page: ?pad=A,LB,DpadRight&lt=0.6&rt=0&lx=0.7&ly=-0.45&rx=-0.3&ry=0.6&pads=2
+  // builds a still Gamepad-like object (standard mapping). ?nopad=1 shows "No controller".
+  var STANDARD = ["A", "B", "X", "Y", "LB", "RB", "LT", "RT", "Back", "Start", "LThumb", "RThumb", "DpadUp", "DpadDown",
+    "DpadLeft", "DpadRight"];
+  function devPad(index) {
+    var pressed = (query.get("pad") || "").split(",").filter(Boolean);
+    var buttons = STANDARD.map(function (name) {
+      var down = pressed.indexOf(name) >= 0;
+      var value = down ? 1 : 0;
+      if (name === "LT" && query.get("lt")) { value = Number(query.get("lt")); }
+      if (name === "RT" && query.get("rt")) { value = Number(query.get("rt")); }
+      return { pressed: value > 0.12, value: value };
+    });
+    var axes = ["lx", "ly", "rx", "ry"].map(function (key) { return Number(query.get(key) || 0); });
+    return { id: "Xbox Wireless Controller (XInput STANDARD GAMEPAD)", index: index, connected: true,
+      mapping: "standard", buttons: buttons, axes: axes };
+  }
+  if (query.get("pad") !== null || query.get("lt") !== null || query.get("lx") !== null || query.get("pads") !== null) {
+    var devPads = [devPad(0)];
+    if (query.get("pads") === "2") {
+      var second = devPad(1);
+      second.id = "Controller (Gamepad for Xbox 360)";
+      devPads.push(second);
+    }
+    root.GT4.devGamepads = function () { return devPads; };
+  } else if (query.get("nopad") === "1") {
+    root.GT4.devGamepads = function () { return []; };
+  }
+  // ?select=circle&mode=key&capture=hold|conflict (Controls screenshots; capture starts once the page is entered).
+  root.GT4.devControls = {
+    select: query.get("select") || "",
+    mode: query.get("mode") || "",
+    capture: query.get("capture") || ""
+  };
+
+  var pendingCapture = null;
+  function captureBinding() {
+    return new Promise(function (resolve, reject) {
+      pendingCapture = reject;
+      var mode = root.GT4.devControls.capture;
+      if (mode === "hold") {
+        return; // waits until cancel_capture
+      }
+      setTimeout(function () {
+        if (pendingCapture === reject) {
+          pendingCapture = null;
+          resolve({ control: "", source: mode === "conflict" ? "xinput:LB" : "xinput:RB" });
+        }
+      }, mode === "conflict" ? 200 : 2000);
+    });
+  }
 
   var saves = [
     { id: "01", name: "Save 01", modified: "2026-10-16T06:31:00", active: true },
@@ -240,7 +370,7 @@
       case "get_settings_table":
         return tableView();
       case "set_setting": {
-        var row = findRow(args.id);
+        var row = findRow(args.id) || analog.filter(function (item) { return item.id === args.id; })[0];
         if (!row) {
           throw new Error("Unknown setting " + args.id);
         }
@@ -256,31 +386,25 @@
         });
         return tableView();
       case "get_controls":
-        return {
-          controls: JSON.parse(JSON.stringify(controls)),
-          triggers: JSON.parse(JSON.stringify(triggers))
-        };
+        return controlsView();
       case "capture_binding":
-        // Fake capture: resolves after 1.5 s with a sample binding.
-        return new Promise(function (resolve) {
-          setTimeout(function () {
-            controls.forEach(function (control) {
-              if (control.id === args.control) {
-                control.binding = "Pad: Sample";
-              }
-            });
-            resolve({ control: args.control, binding: "Pad: Sample" });
-          }, 1500);
-        });
+        return captureBinding();
       case "cancel_capture":
+        if (pendingCapture) {
+          var rejectCapture = pendingCapture;
+          pendingCapture = null;
+          rejectCapture(new Error("capture cancelled"));
+        }
         return null;
+      case "assign_binding":
+        return assignBinding(args.control, args.source, !!args.swap);
       case "reset_binding":
-        controls.forEach(function (control) {
-          if (control.id === args.control) {
-            control.binding = "Pad: default";
-          }
-        });
+        bindings[args.control] = DEFAULT_SOURCES[args.control].slice();
         return null;
+      case "reset_all_bindings":
+        bindings = JSON.parse(JSON.stringify(DEFAULT_SOURCES));
+        analog = analogDefaults();
+        return controlsView();
       case "saves_list":
         return { items: JSON.parse(JSON.stringify(saves)) };
       case "saves_import":

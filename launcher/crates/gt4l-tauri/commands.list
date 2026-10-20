@@ -21,6 +21,8 @@ get_controls
 capture_binding
 cancel_capture
 reset_binding
+assign_binding
+reset_all_bindings
 about_info
 open_log_folder
 open_game_files_folder
