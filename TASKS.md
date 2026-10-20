@@ -100,6 +100,9 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
 | TASK‑063 | Bit-exact R5900 FPU `div.s`/`mul.s` (license demo phase, real-PS2 card replays and ghosts) | 📋 Planned · oracle ready (`scripts/license_demo_oracle.py`); needs hardware vectors |
 | TASK‑064 | Third-party overlays (MSI Afterburner / RivaTuner) with the PCSX2 GS: Arbitrary Code Guard off by default | ✅ Done (2026-10-17) · owner test: the RivaTuner/Afterburner overlay shows in game with default settings |
+| TASK‑075 | Input layer on SDL3: game reads all pads (XInput, DS4, DualSense, Switch Pro, generic) mapped to the DS2 layout, applies the launcher's controls.toml; launcher Controls page reads the same SDL3 layer | 📋 Planned (next game build, before 1.0.0) |
+| TASK‑076 | Modern fixed keyboard layout for GT4 (several keys per DS2 button: WASD + arrows, nitro, gear up/down, camera, look back, ghost, Enter/Esc/Backspace) | 📋 Planned (with TASK-075) |
+| TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Idea (after 1.0.0) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -269,9 +272,32 @@ Acceptance: owner sees the RTSS overlay in game with the default settings.
 State: ✅ Done (2026-10-17). Owner test: the MSI Afterburner / RivaTuner overlay shows in game with the default settings, confirming Arbitrary Code Guard as the cause. Branch `task/064-overlay-compat` (single writer, from main da1eb95). Python suite
 544 tests OK (38 skipped for missing private files). Merged with owner approval (PR #46).
 
+### TASK-075 — Input layer on SDL3
+Owner decision 2026-10-21. Replace the game's XInput-only pad code (native/host_io.cpp) with one input layer on
+SDL3 (zlib licence, fine in the MIT game exe; also the Linux and Android path, TASK-074 and TASK-022). SDL3 opens
+only its gamepad/joystick subsystems; the game window stays ours. Every pad SDL3 knows (Xbox/XInput, DualShock 4,
+DualSense, Switch Pro, generic) maps to the DS2 layout with analog L2/R2 pressure and stick dead zones kept. The game
+reads the launcher's controls.toml (the branch controls code, GT4_CONTROLS_FILE), so remapping in the launcher
+applies in game. The launcher's Controls page reads pads through the same SDL3 database (Rust sdl3 crate) instead of
+the WebView Gamepad API, so the launcher shows exactly what the game sees. The input layer runs in the game process
+(no launcher bridge: the launcher is hidden in the tray during play, and latency and force feedback need the game
+side). Racing wheels (TASK-018) build on this layer. Acceptance: Xbox and DS4/DualSense pads work in game with no
+third-party tools; launcher remaps apply in game; headless frame dumps unchanged; owner test.
+
+### TASK-076 — Modern fixed keyboard layout
+Owner design 2026-10-21, hard-coded (not remappable for now), several keys per DS2 button: D-pad left/right = A/D and
+arrows; D-pad up/down = arrows; D-pad up (ghost) also E; Cross (accelerate, confirm) = W and Enter; Square (brake) = S;
+Circle (handbrake) = Space; Triangle (back) = Backspace and Esc; nitro = Shift; gear up / gear down = their own keys
+near WASD; look back = Q; camera = C or Tab. Map each action to the DS2 button GT4 really uses (check the decomp and
+the manual: nitro, gears, rear view, camera). The launcher Controls page shows the layout read-only in Keyboard view.
+
+### TASK-077 — Context-aware input mapping (idea)
+Different mappings by game state (race vs menus), e.g. Esc = Start (pause) in a race and Triangle in menus. Needs a
+study of how to read the game state reliably. After 1.0.0; the owner has more ideas.
+
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
-(docs/MENUS-AND-WHEEL.md).
+(docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
 
 ### TASK-019 — Launcher
 Paused (owner, 2026-10-15; Tauri 2 WIP). Resumes for TASK-043 (decision 0070).
