@@ -97,9 +97,13 @@ PERF_PROFILES = {
     # slice203 (TASK-044): the slice202 game executable (same hash) with the stable gt4-gs 1.0.1 package (no writes under
     # Documents\PCSX2). Kept as pcsx2-slice203 after TASK-017.
     'pcsx2-slice203': ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'),
-    # TASK-017 (slice206): the slice203 game recipe plus the license demo guard v2 (both demo loaders), gt4-gs 1.0.1. Mode pcsx2
-    # points here. Halt dump and FSV trace are built in and off unless GT4_HALT_DUMP / GT4_FSV_TRACE are set.
-    'pcsx2': ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'),
+    # TASK-017 (slice206): the slice203 game recipe plus the license demo guard v2 (both demo loaders), gt4-gs 1.0.1.
+    # Halt dump and FSV trace are built in and off unless GT4_HALT_DUMP / GT4_FSV_TRACE are set. History mode after slice209.
+    'pcsx2-slice206': ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'),
+    # TASK-019 launcher test (slice209): the slice208 coverage build (accepted EE library, 1,105 seeds) plus the
+    # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
+    # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
+    'pcsx2': ('slice209-pcsx2.json', 'private/slice209-build/build/gt4vulkan.exe'),
     # TASK-017 diagnostic candidate (slice181): the slice166 profile plus the FSV read trace (GT4_FSV_TRACE=1
     # writes one [fsv] line per guest disc read to stderr). Not a performance candidate.
     'license-trace': ('slice181-license-trace.json', 'private/slice181-license-build/build/gt4vulkan.exe'),
@@ -111,7 +115,7 @@ PERF_PROFILES = {
     # (private/slice205-license-guard-runtime; halt dump and FSV trace built in, off unless GT4_HALT_DUMP/GT4_FSV_TRACE).
     'license-guard': ('slice205-license-guard.json', 'private/slice205-license-guard-build/build/gt4vulkan.exe'),
     # TASK-014 stage B (slice208): the slice206 game recipe with the accepted explicit-seed EE library (1,105 seeds,
-    # docs/inputs/slice208-ee-entries.txt; library profile coverage). Mode pcsx2 is unchanged and stays on slice206.
+    # docs/inputs/slice208-ee-entries.txt; library profile coverage). History mode: mode pcsx2 is slice209 (same library).
     'pcsx2-coverage': ('slice208-pcsx2.json', 'private/slice208-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
@@ -124,14 +128,16 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
+                     'slice209-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
+                     'slice209-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}

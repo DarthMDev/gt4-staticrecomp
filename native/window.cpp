@@ -302,8 +302,7 @@ bool open_window(bool fullscreen) {
   try {
     start_fullscreen = start_fullscreen || gt4::window_mode::parse_start_fullscreen(std::getenv("GT4_FULLSCREEN"));
   } catch (const std::invalid_argument &error) {
-    std::fprintf(stderr, "[window] %s, game not started
-", error.what());
+    std::fprintf(stderr, "[window] %s, game not started\n", error.what());
     return false;
   }
   // An invalid GT4_CONTROLS_FILE stops the start here, before any window or guest work.
@@ -343,8 +342,7 @@ bool open_window(bool fullscreen) {
   // Start in borderless fullscreen on the window's monitor: the same path as Alt+Enter and F11.
   if (start_fullscreen)
     set_fullscreen(true);
-  std::fprintf(stderr, "[window] %s start (GT4_FULLSCREEN)
-", start_fullscreen ? "fullscreen" : "windowed");
+  std::fprintf(stderr, "[window] %s start (GT4_FULLSCREEN)\n", start_fullscreen ? "fullscreen" : "windowed");
   return true;
 }
 

@@ -1533,3 +1533,44 @@ Checks (2026-10-20): CTest 33 of 33 (`private/slice208-scripts/ctest-208-r2.log`
 "no translated code". The headless path does not show whether the 1,105 new entries run; that is the owner play-through.
 
 Owner command (after this branch is merged): `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2-coverage`.
+
+## Slice 209 - TASK-019 launcher test: `GT4_FULLSCREEN` start (`--mode pcsx2`)
+
+The slice208 build (coverage EE library) with one native change: the game starts in borderless fullscreen when
+`GT4_FULLSCREEN=1` (the launcher's Display setting, on by default). Unset, empty or `0` start windowed; any other
+value stops the start with a message. The start uses the Alt+Enter path (`set_fullscreen`) after the window exists.
+Pins: `docs/inputs/slice209-pcsx2.json` (measurement mode `pcsx2`). `--mode pcsx2` now selects slice209; `pcsx2-coverage`
+(slice208) and `pcsx2-slice206` stay as history modes.
+
+Source: `private/slice209-src`, a `git archive` of main 8bd113a (identical to the slice208 source, 801ee94) with four
+files replaced: `native/window.cpp` (only the `open_window` start block), `native/window_mode.hpp`, `native/window_mode.cpp`
+(`parse_start_fullscreen`) and `native/quickfix_fixture.cpp` (`test_start_mode_environment`). Nothing else differs, so the
+window change is the only variable against slice208. The branch's `native/` also carries earlier TASK-019 native work
+(`controls.cpp`, `host_io`, the icon and title in `window.cpp`, `gt4vulkan.rc`); that work is not in slice209.
+
+Build (serial; `private/slice209-scripts/build-game-209.bat`, log `build-game-209.log`): the slice208 recipe with
+`GT4_EE_PROFILE=coverage`, the slice200 port, slice153 shaders, slice191 runtime, slice206 license guard, clang-cl 22.1.3
+(`C:/Program Files/LLVM/bin/clang-cl.exe`) inside the VS x64 environment. Executable `private/slice209-build/build/gt4vulkan.exe`,
+97,105,408 bytes, sha256 `a75c58faec60d41c...` (slice208: 97,104,896 bytes, `b96c6d64...`). The coverage library
+`private/slice208-ee-entries-producer/game-build/ps2game.lib` is the pinned file (sha256 `8f40b11e...`), unchanged.
+
+Checks (2026-10-20):
+- CTest 33 of 33 (`private/slice209-scripts/ctest-209.log`). The `native_quickfix` fixture covers the start values: unset,
+  empty and `0` start windowed; `1` starts fullscreen; `true`, `on` and `2` are refused.
+- Python `unittest discover` with `GT4_NATIVE_BUILD` = the slice209 build and `GT4_ASSETS_ROOT` = the main checkout:
+  589 OK, 23 skipped (`private/slice209-scripts/python-209.log`).
+- Headless, 4,200 frames, the slice208 arguments (12 presses, widescreen seed card, `--frames-dir`, `--frame-every 100`,
+  `GT4_MTVU_REPORT_EVERY=500`): 42 of 42 frame dumps identical to slice208 (`private/slice209-smoke/cand-209`
+  against `private/slice208-smoke/cand-208`, per-file sha256). No `no translated code` line.
+- The headless path never calls `open_window`, so the live fullscreen start is not covered by these runs; it is the owner's
+  launcher test.
+- Pins: the 23 pinned files of `docs/inputs/slice209-pcsx2.json` were checked by size and sha256 in the main checkout
+  (runtime, library, port, shaders, runtime dependencies, memcard and license guard capsules, card seeds, VU0 image,
+  gt4-gs package file list not recomputed here: unchanged from slice203).
+
+Owner launcher test folder (`private/owner-test-launcher`): `game` is slice209 (16 files: `gt4vulkan.exe`,
+`shaders/`, `licenses/`, the three VC runtime DLLs, `MANIFEST.json` with runtime manifest `slice209-pcsx2.json`), built with
+`scripts/make_distribution.py` in a fresh `game-209` and renamed. The slice206 folder is `game-206-old`. `GT4Recomp.exe`
+and `version.json` were not touched.
+
+Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.

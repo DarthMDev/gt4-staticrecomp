@@ -43,7 +43,8 @@ class Slice201PinTests(unittest.TestCase):
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice201'], (MANIFEST, EXECUTABLE))
         # slice206 (TASK-017) is the mode pcsx2 pin now; slice203 stays as pcsx2-slice203, slice202 as pcsx2-slice202.
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice202'], ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'))
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice209-pcsx2.json', 'private/slice209-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice206'], ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice203'], ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice200'], ('slice200-pcsx2.json', 'private/slice200-build/build/gt4vulkan.exe'))
         combined = manifest('slice202-pcsx2.json')
