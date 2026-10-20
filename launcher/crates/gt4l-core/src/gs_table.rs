@@ -4,8 +4,9 @@
 //! so the launcher and `scripts/gs_settings.py` read the same rows. This module is a port of the writer in
 //! `scripts/gs_settings.py` (`parse_value`, `render_ini`); a golden test compares both byte for byte.
 //!
-//! Columns read here: id, label, help, section, key, type, min, max, choices, default, visibility, written,
-//! status, env. Two columns are added by the UI work: `page` (basic | advanced | mods | hidden) and `control`
+//! Columns read here: id, label, help, section, key, type, min, max, choices, default, written,
+//! status, env. `page` (basic | advanced | mods | hidden) replaces the older `visibility` column (TASK-049); it
+//! also carries the UI page, with `control`
 //! (slider | toggle | dropdown). An unknown or missing `page` is treated as advanced, an unknown or missing
 //! `control` as dropdown. The older `page` values (Graphics, Display, Advanced) are not UI pages.
 
@@ -64,7 +65,6 @@ pub struct Row {
     #[serde(default)]
     pub choices: Vec<Choice>,
     pub default: String,
-    pub visibility: String,
     pub written: String,
     pub status: String,
     #[serde(default)]
@@ -208,7 +208,7 @@ pub fn offered() -> Vec<&'static Row> {
         .iter()
         .filter(|row| {
             row.page != MODS_PAGE
-                && row.visibility != "hidden"
+                && row.page != "hidden"
                 && row.status == "ok"
                 && !matches!(row.written.as_str(), "never" | "launcher")
                 && (row.kind != "enum" || row.choices.iter().any(|choice| choice.status == "ok"))
