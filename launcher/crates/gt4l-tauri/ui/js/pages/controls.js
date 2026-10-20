@@ -6,12 +6,15 @@
  * Commands (ui/dev/README.md):
  *   get_controls()                          -> {controls: [{id, name, binding, sources, xinput, key, is_default}],
  *                                               triggers: [row], locked}
- *   capture_binding({control})              -> {control, source}   (the next new press on the first XInput pad)
+ *   capture_binding({control})              -> {control, source}   (the next new press on the active pad, SDL3)
  *   cancel_capture()                        -> ends a capture
+ *   pad_status()                            -> the last pad-status payload (name, kind, count...)
  *   assign_binding({control, source, swap}) -> the get_controls view plus {swapped_with, unchanged}
  *   reset_binding({control})                -> one button back to its default
  *   reset_all_bindings()                    -> the get_controls view, everything back to defaults
  *   set_setting({id, value})                -> analog rows: l2_deadzone, l2_curve, r2_*, lstick_deadzone, rstick_deadzone
+ * Events (Rust pad service): pad-status (on change), pad-live (about 60 Hz while a pad is connected).
+ * Keyboard view: the fixed modern layout (GT4.controlsModel.KEYBOARD_LAYOUT), read only; rebinding is off for keys.
  *
  * Navigation (two levels, js/focus-levels.js): A on the tab list enters on the last selected button (Cross at
  * first). Inside, the D-pad moves between DS2 buttons by position and the selection follows focus. A rebinds, Y resets
@@ -39,17 +42,6 @@
 
   function legendChip(kind, label) {
     return h("span", { class: "xchip kind-" + kind }, label);
-  }
-
-  function readPads() {
-    if (GT4.devGamepads) {
-      return GT4.devGamepads();
-    }
-    try {
-      return navigator.getGamepads ? navigator.getGamepads() : [];
-    } catch (err) {
-      return [];
-    }
   }
 
   function svgNode(tag, attrs, parent) {
@@ -205,21 +197,36 @@
       cardName.textContent = M.find(id).name;
       cardState.textContent = control ? (control.is_default ? "Default" : "Changed") : "";
       cardState.classList.toggle("is-changed", !!control && control.is_default === false);
-      [[padChipSlot, firstOf(control, "xinput")], [keyChipSlot, firstOf(control, "key")]].forEach(function (pair) {
-        GT4.ui.clear(pair[0]);
-        pair[0].appendChild(chip(pair[1]));
-        pair[0].appendChild(h("span", { class: "cx-src-t", text: M.label(pair[1]).long }));
+      var padSource = firstOf(control, "xinput");
+      GT4.ui.clear(padChipSlot);
+      padChipSlot.appendChild(chip(padSource));
+      padChipSlot.appendChild(h("span", { class: "cx-src-t", text: M.label(padSource).long }));
+      // The keyboard layout is fixed in this build: every key of the button, read only.
+      var keyNames = M.KEYBOARD_LAYOUT[id] || [];
+      GT4.ui.clear(keyChipSlot);
+      keyNames.forEach(function (name) {
+        keyChipSlot.appendChild(chip("key:" + name));
       });
-      rebindButton.disabled = state.locked;
-      resetButton.disabled = state.locked || !control || control.is_default;
+      keyChipSlot.appendChild(h("span", { class: "cx-src-t", text: keyNames.length ? "Fixed layout" : "Not in the fixed layout yet" }));
+      var keysMode = state.mode === "key";
+      rebindButton.disabled = state.locked || keysMode;
+      resetButton.disabled = state.locked || keysMode || !control || control.is_default;
       var pointer = GT4.inputMode && GT4.inputMode() === "mouse";
-      cardHint.textContent = state.locked ? "" : (pointer ? "Click or tap the button again to rebind it." : "Press A to rebind.");
+      if (keysMode) {
+        cardHint.textContent = "The keyboard layout is fixed in this build. Switch to Controller to rebind a button.";
+      } else {
+        cardHint.textContent = state.locked ? "" : (pointer ? "Click or tap the button again to rebind it." : "Press A to rebind.");
+      }
     }
 
     function paintLegend() {
       GT4.ui.clear(legend);
       if (state.mode === "key") {
-        legend.appendChild(h("span", { class: "cx-legend-note", text: "Keys the game reads from the keyboard. Esc, F7, F8, F9 and F11 stay with the launcher and the game window." }));
+        var actions = M.KEYBOARD_ACTIONS.map(function (action) {
+          return action.name + " " + action.keys.join(" or ");
+        }).join(", ");
+        legend.appendChild(h("span", { class: "cx-legend-note", text: "Fixed keyboard layout, read only. Several keys drive one button. " +
+          "No button yet for: " + actions + " (to confirm)." }));
         return;
       }
       [
@@ -240,8 +247,20 @@
       Object.keys(modeButtons).forEach(function (key) {
         modeButtons[key].setAttribute("aria-pressed", String(key === mode));
       });
-      pad.setBadges(state.controls, mode);
+      paintBadges();
       paintLegend();
+      paintCard();
+    }
+
+    // The chips: the controller sources (Controller view) or the fixed keyboard layout (Keyboard view).
+    function paintBadges() {
+      if (state.mode === "key") {
+        pad.setBadges(state.controls.map(function (control) {
+          return { id: control.id, keys: M.KEYBOARD_LAYOUT[control.id] || [], is_default: true, sources: [] };
+        }), "key");
+      } else {
+        pad.setBadges(state.controls, "xinput");
+      }
     }
 
     function select(id) {
@@ -305,7 +324,7 @@
       lockedNote.textContent = state.locked
         ? "The controls file was written by a newer GT4Recomp and is kept as it is. Update the launcher to change controls."
         : "";
-      pad.setBadges(state.controls, state.mode);
+      paintBadges();
       paintCard();
       paintAnalog(focusId);
     }
@@ -322,21 +341,45 @@
       });
     }
 
-    // ---- live input: the first connected controller (the one the game reads) and the keyboard ----
+    // ---- live input: the pad from the Rust service (SDL3, the one the game reads) and the keyboard ----
     var keysDown = {};
     var lastStatus = "";
+    var latest = { live: null, status: null };
     function paintStatus(summary) {
-      var key = summary.connected + "|" + summary.name + "|" + summary.count;
+      var unavailable = summary.available === false;
+      var connected = !!summary.connected && !unavailable;
+      var key = [unavailable, connected, summary.name, summary.kind, summary.count, summary.error].join("|");
       if (key === lastStatus) {
         return;
       }
       lastStatus = key;
-      status.classList.toggle("is-on", summary.connected);
-      statusName.textContent = summary.connected ? summary.name : "No controller";
-      statusSub.textContent = !summary.connected
-        ? "Connect one, or press a button on it"
-        : (summary.count > 1 ? "Connected · controller 1 of " + summary.count + ", the one the game uses" : "Connected");
+      status.classList.toggle("is-on", connected);
+      statusName.textContent = connected ? summary.name : (unavailable ? "Controller input unavailable" : "No controller");
+      if (connected) {
+        statusSub.textContent = "Connected" + (summary.count > 1 ? " · controller 1 of " + summary.count + ", the one the game uses" : "");
+      } else {
+        statusSub.textContent = unavailable ? (summary.error || "SDL3 did not start") : "Connect one, or press a button on it";
+      }
     }
+    // Pad events from the Rust service. A page that is gone (another route) ignores them.
+    GT4.backend.listen("pad-live", function (payload) {
+      if (pad.svg.isConnected) {
+        latest.live = payload;
+      }
+    });
+    GT4.backend.listen("pad-status", function (payload) {
+      if (pad.svg.isConnected) {
+        latest.status = payload;
+        if (!payload || !payload.connected) {
+          latest.live = null; // no pad: nothing is pressed (pad-live stops)
+        }
+        paintStatus(payload || {});
+      }
+    });
+    call("pad_status").then(function (payload) {
+      latest.status = payload;
+      paintStatus(payload || {});
+    }, function () {});
 
     function paintMeters(live) {
       ["l2", "r2"].forEach(function (id) {
@@ -398,9 +441,8 @@
     }
     function tick() {
       lastTick = Date.now();
-      var summary = M.padSummary(readPads());
-      paintStatus(summary);
-      var live = M.liveState(summary.pad, state.controls, keysDown);
+      paintStatus(latest.status || {});
+      var live = M.liveState(latest.live, state.controls, keysDown);
       pad.setLive(live);
       paintMeters(live);
     }
@@ -502,6 +544,10 @@
         GT4.ui.toast("The controls file is kept as it is (written by a newer GT4Recomp).", true);
         return;
       }
+      if (state.mode === "key") {
+        GT4.ui.toast("The keyboard layout is fixed in this build. Switch to Controller to rebind a button.");
+        return;
+      }
       select(id);
       var parts = captureBody(id);
       var capture = { id: id, done: false, started: Date.now(), timer: null, dialog: null };
@@ -533,6 +579,7 @@
 
       GT4.capturing = true;
       GT4.cancelCapture = function () { stop("cancel"); };
+      // Keyboard rebinding is off: a key only cancels (Esc); the layout is fixed.
       GT4.captureKey = function (event) {
         if (event.repeat) {
           return true; // a key held since before the rebind
@@ -540,12 +587,8 @@
         var key = M.keyFromEvent(event);
         if (key.cancel) {
           stop("cancel");
-        } else if (key.reserved) {
-          parts.message.textContent = key.reserved + " belongs to the game window. Try another key.";
-        } else if (key.unsupported) {
-          parts.message.textContent = "That key cannot be used. Try a letter, a number, an arrow or Enter.";
         } else {
-          stop("source", "key:" + key.name);
+          parts.message.textContent = "Keyboard keys are fixed in this build. Press a controller button, or B to cancel.";
         }
         return true;
       };
@@ -663,6 +706,10 @@
 
     function resetOne(id) {
       if (state.locked || state.capture) {
+        return;
+      }
+      if (state.mode === "key") {
+        GT4.ui.toast("The keyboard layout is fixed in this build. Switch to Controller to reset a button.");
         return;
       }
       var control = findControl(id);

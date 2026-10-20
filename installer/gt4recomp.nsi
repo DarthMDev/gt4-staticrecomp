@@ -1,7 +1,9 @@
 ; GT4Recomp per-user installer (no administrator rights).
 ; Build (from the repository root, after the launcher and the game are built):
 ;   makensis /DVERSION=1.0.0 /DLAUNCHER_EXE=<path>\GT4Recomp.exe /DGAME_DIR=<path>\game ^
-;            /DOUTFILE=<path>\GT4Recomp-1.0.0-setup.exe installer\gt4recomp.nsi
+;            /DSDL3_DLL=<path>\SDL3.dll /DOUTFILE=<path>\GT4Recomp-1.0.0-setup.exe installer\gt4recomp.nsi
+; SDL3_DLL is SDL3 3.4.18 (runtime\SDL3.dll of SDL3-3.4.18-win32-x64.zip). It ships beside GT4Recomp.exe: the
+; launcher reads pads through SDL3 (launcher\crates\gt4l-platform\src\sdl_pads.rs).
 ; GAME_DIR must hold gt4vulkan.exe, the runtime DLLs, shaders\ and the licence texts. It is not in git.
 ; Saves and settings live in %LOCALAPPDATA%\GT4Recomp and are kept by the uninstaller unless the user ticks
 ; the box on the uninstall page.
@@ -14,6 +16,9 @@
 !endif
 !ifndef GAME_DIR
   !error "Define GAME_DIR=<folder with gt4vulkan.exe and its runtime files>"
+!endif
+!ifndef SDL3_DLL
+  !error "Define SDL3_DLL=<path to SDL3.dll, SDL 3.4.18>"
 !endif
 !ifndef OUTFILE
   !define OUTFILE "GT4Recomp-${VERSION}-setup.exe"
@@ -72,6 +77,7 @@ Section "Install" SecInstall
   SetShellVarContext current
   SetOutPath "$INSTDIR"
   File "/oname=GT4Recomp.exe" "${LAUNCHER_EXE}"
+  File "/oname=SDL3.dll" "${SDL3_DLL}"
   File "/oname=NOTICE.md" "${__FILEDIR__}\..\NOTICE.md"
   File "/oname=LICENSE.txt" "${__FILEDIR__}\..\LICENSE"
 

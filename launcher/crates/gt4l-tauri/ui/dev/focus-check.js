@@ -21,8 +21,10 @@
     });
   }
 
+  // A key press: down and up, so the page's held-key state (keysDown) clears as it does with a real keyboard.
   function press(name) {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }));
+    document.dispatchEvent(new KeyboardEvent("keyup", { key: name, bubbles: true, cancelable: true }));
   }
 
   function check(name, ok, detail) {
@@ -260,28 +262,26 @@
     // Enter on a focused button starts a rebind; that same Enter is not taken as the new key.
     var squareGroup = document.querySelector(".pad-ctl[data-control=\"square\"]");
     squareGroup.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+    squareGroup.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
     await wait(200);
     check("Enter on a DS2 button opens the rebind and keeps waiting", !!document.querySelector(".modal.is-capture") && GT4.capturing === true, "capturing " + GT4.capturing);
     press("Escape");
     await wait(200);
     check("Enter did not become the binding", (await controlsOf("square")).key === "A", "key " + (await controlsOf("square")).key);
 
-    // A key already on another button: the conflict dialog; Esc keeps everything.
+    // A controller button already on another DS2 button: the dev mock's capture answers RB (R1's); the conflict
+    // dialog opens. Esc keeps everything. (Keyboard rebinding is off: a key only cancels.)
     GT4.nav.activate();
-    await wait(200);
-    key("w", "KeyW");
-    await wait(250);
+    await wait(2600);
     var dialogTitle = (document.querySelector(".modal h3") || {}).textContent || "";
-    check("a key already on R1 opens the conflict dialog", /already on R1/.test(dialogTitle), dialogTitle);
+    check("a pad button already on R1 opens the conflict dialog", /already on R1/.test(dialogTitle), dialogTitle);
     press("Escape");
     await wait(200);
-    check("cancelling the conflict changes nothing", (await controlsOf("square")).key === "A" && (await controlsOf("r1")).key === "W", "square/r1 changed");
+    check("cancelling the conflict changes nothing", (await controlsOf("square")).xinput === "X" && (await controlsOf("r1")).xinput === "RB", "square/r1 changed");
 
-    // Swap: Square takes Q from L1, L1 gets A (Square's previous key). The chips follow at once.
+    // Swap: Square takes RB from R1, R1 gets X (Square's previous controller button). The chips follow at once.
     GT4.nav.activate();
-    await wait(200);
-    key("q", "KeyQ");
-    await wait(250);
+    await wait(2600);
     var swap = Array.prototype.filter.call(document.querySelectorAll(".modal button"), function (button) {
       return button.textContent === "Swap";
     })[0];
@@ -291,12 +291,13 @@
       await wait(300);
     }
     var square = await controlsOf("square");
-    var l1 = await controlsOf("l1");
-    check("Swap gives Square the key Q and L1 the key A", square.key === "Q" && l1.key === "A", square.key + "/" + l1.key);
-    check("the chips show the swap (keyboard view)", badgeLabel("square") === "Q" && badgeLabel("l1") === "A", badgeLabel("square") + "/" + badgeLabel("l1"));
+    var r1 = await controlsOf("r1");
+    check("Swap gives Square RB and R1 X", square.xinput === "RB" && r1.xinput === "X", square.xinput + "/" + r1.xinput);
+    check("the chips show the swap (controller view)", badgeLabel("square") === "RB" && badgeLabel("r1") === "X", badgeLabel("square") + "/" + badgeLabel("r1"));
     check("a swapped button reads Changed in the panel", (document.querySelector(".cx-card .cx-state") || {}).textContent === "Changed", "state");
 
-    // Live input from the Gamepad API (a still dev pad): Cross lights from A, L2 fills to 60%.
+    // Live input from the pad events (a still dev pad, sent by the mock like the Rust service): Cross lights from A,
+    // L2 fills to 60%.
     GT4.devGamepads = function () {
       var buttons = GT4.controlsModel.STANDARD_TO_XINPUT.map(function (name) {
         var value = name === "A" ? 1 : (name === "LT" ? 0.6 : 0);

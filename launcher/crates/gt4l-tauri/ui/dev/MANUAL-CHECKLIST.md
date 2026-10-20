@@ -106,6 +106,18 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Wrong disc shows the red message and "Choose another file", which opens the picker.
 - [ ] Done shows Ready and Play; Play starts the game and opens Home.
 
+## Pads (SDL3 in the Rust pad service, TASK-075 launcher side)
+
+- [ ] With no pad, Controls shows "No controller" and "Connect one, or press a button on it".
+- [ ] Connect a DualShock 4, a DualSense, a Switch Pro and an Xbox pad: each shows SDL's name, and its Cross (bottom face button) lights the DS2 Cross.
+- [ ] With two pads, the status says "controller 1 of 2"; the drawing follows the first one (the lowest SDL id).
+- [ ] Unplug the pad on Controls: within about a second the status returns to "No controller" and nothing stays lit.
+- [ ] Pad navigation: D-pad and the left stick move focus, with a first step at once and repeat after about 0.4 s; A activates, B goes back, X and Y run their page actions, LB and RB change tabs, Start is Play on Home.
+- [ ] The right stick scrolls the focused list.
+- [ ] Rebind: A on a DS2 button, then a pad button binds it (the name is in the controls-file form, `xinput:...`). A button held when the rebind starts does not bind. B cancels.
+- [ ] Keyboard view: the fixed layout is shown (D-pad left and right: A or D and the arrows, D-pad up also E; Cross: W and Enter; Square: S; Circle: Space; Triangle: Backspace and Esc); Rebind and Reset are disabled there.
+- [ ] Play hides the window; the game then owns the pad. When the game ends the launcher is back and the status shows the pad again.
+
 ## Known gaps (not yet built, from LAUNCHER-PLAN section 14)
 
 - Export of saves and replays, the `.max`/`.cbs`/`.xps` importers, and the Replays "On card" choice.

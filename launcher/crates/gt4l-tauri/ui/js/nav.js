@@ -1,15 +1,17 @@
 /*
- * Input: spatial focus movement, keyboard and Web Gamepad polling. Pages describe
- * their actions through GT4.hooks = {x, y, start, back, tabs(delta), horizontal(delta)}; the router resets it per page.
+ * Input: spatial focus movement and the keyboard. Pages describe their actions through
+ * GT4.hooks = {x, y, start, back, tabs(delta), horizontal(delta)}; the router resets it per page.
  *
- * Standard gamepad mapping (XInput layout in WebView2):
- *   0 A  activate            1 B  back / cancel
- *   2 X  page action 1       3 Y  page action 2
- *   4 LB previous tab        5 RB next tab
- *   9 Start: page start (Play on Home)
- *   12-15 D-pad and the left stick (deadzone 0.5): first press at once,
- *   then repeat after 420 ms and every 110 ms while held.
- *   Right stick (axes 2 and 3): scrolls the focused scroll container.
+ * The pad comes from the launcher's Rust side (SDL3, the layer the game uses): the `pad-nav` event carries the press,
+ * and Rust does the D-pad and left-stick repeat (first press at once, then after 420 ms and every 110 ms while held).
+ * The `pad-live` event carries the right stick, which scrolls the focused scroll container. No Web Gamepad polling.
+ *
+ * Pad mapping (SDL names as the page receives them):
+ *   a (SOUTH) activate            b (EAST) back / cancel
+ *   x (WEST) page action 1        y (NORTH) page action 2
+ *   lb previous tab               rb next tab
+ *   start: page start (Play on Home)
+ *   up / down / left / right: D-pad and the left stick
  *
  * Face buttons on a page: X and Y run GT4.hooks.x / GT4.hooks.y when the page
  * sets them. B closes an open help tip, then the top dialog, then goes back.
@@ -29,17 +31,7 @@
     "[data-focusable]:not([disabled]):not([aria-disabled=\"true\"])"
   ].join(",");
 
-  var PAD_BUTTONS = { 0: "a", 1: "b", 2: "x", 3: "y", 4: "lb", 5: "rb", 9: "start", 12: "up", 13: "down", 14: "left", 15: "right" };
-  var DIRECTIONS = ["up", "down", "left", "right"];
-  var STICK_DEADZONE = 0.5;
-  var REPEAT_FIRST_MS = 420;
-  var REPEAT_EVERY_MS = 110;
-
   var mode = "mouse";
-  var previousPressed = {};
-  var holdDirection = null;
-  var holdStart = 0;
-  var lastRepeat = 0;
 
   GT4.hooks = {};
   GT4.capturing = false;
@@ -215,16 +207,6 @@
     }
   }
 
-  function currentPad() {
-    var pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    for (var i = 0; i < pads.length; i++) {
-      if (pads[i] && pads[i].connected) {
-        return pads[i];
-      }
-    }
-    return null;
-  }
-
   // Nearest scrollable ancestor of the focused element, else the page's main scroll area.
   function isScrollable(el) {
     if (!el || el.scrollHeight <= el.clientHeight + 1) {
@@ -246,11 +228,12 @@
     return isScrollable(fallback) ? fallback : null;
   }
 
-  function scrollWithStick(pad) {
-    if (!pad || GT4.capturing) {
+  // y: the right stick's vertical axis, -1..1, positive down (pad-live).
+  function scrollWithStick(y) {
+    if (GT4.capturing) {
       return;
     }
-    var step = GT4.input ? GT4.input.stickScroll(pad.axes[3] || 0) : 0;
+    var step = GT4.input ? GT4.input.stickScroll(y || 0) : 0;
     if (step) {
       var target = scrollTarget();
       if (target) {
@@ -259,62 +242,15 @@
     }
   }
 
-  function readPad(pad) {
-    var pressed = {};
-    if (!pad) {
-      return pressed;
+  // The pad's discrete presses (pad-nav) and its right stick (pad-live). Repeat is done by Rust.
+  GT4.backend.listen("pad-nav", function (payload) {
+    if (payload && payload.name) {
+      padPress(payload.name);
     }
-    Object.keys(PAD_BUTTONS).forEach(function (index) {
-      var button = pad.buttons[Number(index)];
-      if (button && button.pressed) {
-        pressed[PAD_BUTTONS[index]] = true;
-      }
-    });
-    var x = pad.axes[0] || 0;
-    var y = pad.axes[1] || 0;
-    if (Math.abs(x) > STICK_DEADZONE || Math.abs(y) > STICK_DEADZONE) {
-      if (Math.abs(x) >= Math.abs(y)) {
-        pressed[x < 0 ? "left" : "right"] = true;
-      } else {
-        pressed[y < 0 ? "up" : "down"] = true;
-      }
-    }
-    return pressed;
-  }
-
-  function frame(now) {
-    var pad = currentPad();
-    var pressed = readPad(pad);
-    scrollWithStick(pad);
-    Object.keys(pressed).forEach(function (name) {
-      if (!previousPressed[name] && DIRECTIONS.indexOf(name) < 0) {
-        padPress(name);
-      }
-    });
-
-    // Directions: act on the first frame, then repeat while held.
-    var held = null;
-    DIRECTIONS.some(function (name) {
-      if (pressed[name]) {
-        held = name;
-        return true;
-      }
-      return false;
-    });
-    if (held !== holdDirection) {
-      holdDirection = held;
-      holdStart = now;
-      lastRepeat = now;
-      if (held) {
-        padPress(held);
-      }
-    } else if (held && now - holdStart >= REPEAT_FIRST_MS && now - lastRepeat >= REPEAT_EVERY_MS) {
-      lastRepeat = now;
-      padPress(held);
-    }
-    previousPressed = pressed;
-    root.requestAnimationFrame(frame);
-  }
+  });
+  GT4.backend.listen("pad-live", function (payload) {
+    scrollWithStick(payload && payload.sticks && payload.sticks.right ? payload.sticks.right.y : 0);
+  });
 
   document.addEventListener("keydown", function (event) {
     if (GT4.capturing) {
@@ -398,6 +334,4 @@
     setMode: setMode
   };
   GT4.back = back;
-
-  root.requestAnimationFrame(frame);
 })(window);

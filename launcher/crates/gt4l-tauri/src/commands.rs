@@ -4,9 +4,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::time::Duration;
 
 use gt4controls::{self as controls_file, default_bindings};
 use gt4l_core::exit::{self, Outcome};
@@ -16,7 +13,7 @@ use gt4l_core::paths::{self, DataDirs, GAME_EXECUTABLE};
 use gt4l_core::settings;
 use gt4l_core::{Settings, LAUNCHER_VERSION};
 use gt4l_disc::setup::{self as disc_setup, Installed};
-use gt4l_platform::{game, pad};
+use gt4l_platform::game;
 use gt4saves::library::Report;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -24,6 +21,7 @@ use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::model;
+use crate::pad_service;
 use crate::setup;
 use crate::saves::{self, Item};
 use crate::updates;
@@ -376,61 +374,52 @@ pub fn get_controls_of(shared: &Shared) -> Result<Value, String> {
     Ok(controls_view(&lock(shared)))
 }
 
-/// `capture_binding({control})`: waits for the next newly pressed control of the first connected XInput controller
-/// and resolves with `{control, source}` (`xinput:A`, `xinput:LT`). It binds nothing: the page checks for a conflict
-/// and then calls `assign_binding`. A control held when the wait starts does not count. `cancel_capture` ends the
-/// wait with an error.
+/// `capture_binding({control})`: waits for the next newly pressed control of the active pad (SDL3, the pad the game
+/// reads) and resolves with `{control, source}` (`xinput:A`, `xinput:LT`, in the controls-file names). It binds
+/// nothing: the page checks for a conflict and then calls `assign_binding`. A control held when the wait starts does
+/// not count. `cancel_capture` ends the wait with an error.
 #[tauri::command]
-pub async fn capture_binding(control: String, shared: State<'_, Shared>) -> Result<Value, String> {
+pub async fn capture_binding(
+    control: String,
+    shared: State<'_, Shared>,
+    pads: State<'_, pad_service::Handle>,
+) -> Result<Value, String> {
     if !model::bindable(&control) {
         return Err(format!("'{control}' cannot be rebound"));
     }
     let shared: Shared = shared.inner().clone();
-    let cancel = Arc::new(AtomicBool::new(false));
+    lock(&shared).capturing = Some(control.clone());
+    let answer = pads.inner().start_capture();
+    let outcome = tauri::async_runtime::spawn_blocking(move || answer.recv()).await;
     {
         let mut state = lock(&shared);
-        if let Some(previous) = state.capture_cancel.take() {
-            previous.store(true, Ordering::Relaxed);
-        }
-        state.capturing = Some(control.clone());
-        state.capture_cancel = Some(cancel.clone());
-    }
-    tauri::async_runtime::spawn_blocking(move || {
-        let baseline = pad::read_first_connected().unwrap_or_default();
-        loop {
-            if cancel.load(Ordering::Relaxed) {
-                return Err("capture cancelled".to_string());
-            }
-            std::thread::sleep(Duration::from_millis(15));
-            let Some(now) = pad::read_first_connected() else {
-                continue;
-            };
-            let Some(source) = pad::captured_source(&baseline, &now, pad::Target::Button) else {
-                continue;
-            };
-            let mut state = lock(&shared);
-            if cancel.load(Ordering::Relaxed) || state.capturing.as_deref() != Some(control.as_str()) {
-                return Err("capture cancelled".to_string());
-            }
+        if state.capturing.as_deref() == Some(control.as_str()) {
             state.capturing = None;
-            state.capture_cancel = None;
-            return Ok(json!({ "control": control, "source": source }));
         }
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    }
+    match outcome {
+        Ok(Ok(Ok(source))) => Ok(json!({ "control": control, "source": source })),
+        Ok(Ok(Err(message))) => Err(message),
+        Ok(Err(_)) => Err(pad_service::CAPTURE_CANCELLED.to_string()),
+        Err(error) => Err(error.to_string()),
+    }
 }
 
 /// `cancel_capture()`: ends a running capture without binding anything.
 #[tauri::command]
-pub fn cancel_capture(shared: State<'_, Shared>) -> Result<(), String> {
+pub fn cancel_capture(shared: State<'_, Shared>, pads: State<'_, pad_service::Handle>) -> Result<(), String> {
+    pads.inner().cancel_capture();
     let mut state = lock(shared.inner());
-    if let Some(cancel) = state.capture_cancel.take() {
-        cancel.store(true, Ordering::Relaxed);
-    }
     state.capturing = None;
     state.controls_status.clear();
     Ok(())
+}
+
+/// `pad_status()`: the last `pad-status` payload (`available`, `connected`, `name`, `kind`, `player_index`, `count`,
+/// `error`), for a page that opens after the event was sent.
+#[tauri::command]
+pub fn pad_status(pads: State<'_, pad_service::Handle>) -> Result<Value, String> {
+    Ok(pads.inner().status())
 }
 
 /// `assign_binding({control, source, swap})`: binds `source` (`xinput:RB`, `key:Q`) to the button `control`, in place

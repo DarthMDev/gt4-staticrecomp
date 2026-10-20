@@ -18,6 +18,7 @@ replays_list
 replays_import
 replays_delete
 get_controls
+pad_status
 capture_binding
 cancel_capture
 reset_binding

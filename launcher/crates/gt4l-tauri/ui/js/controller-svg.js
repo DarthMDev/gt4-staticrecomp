@@ -6,7 +6,9 @@
  * GT4.controllerSvg({onPick(id, how)}) -> {
  *   svg, groups, badges,
  *   setSelected(id), setCapturing(id|null),
- *   setBadges(controls, mode)      mode "xinput" | "key": the chip beside each button (get_controls().controls)
+ *   setBadges(controls, mode)      mode "xinput": the chip beside each button (get_controls().controls, its xinput
+ *                                  source); mode "key": every key of control.keys (the fixed keyboard layout), one
+ *                                  chip each, side by side
  *   setLive(state)                 GT4.controlsModel.liveState(...): pressed buttons, L2/R2 fill, stick positions
  *   flash(ids)                     a short highlight on changed chips
  * }
@@ -236,7 +238,7 @@
     var group = el("g", { class: "badge", "data-for": id }, parent);
     el("line", { class: "leader", x1: spot.lead[0], y1: spot.lead[1], x2: spot.badge[0], y2: spot.badge[1] }, group);
     var chip = el("g", { class: "chip" }, group);
-    return { group: group, chip: chip, x: spot.badge[0], y: spot.badge[1] };
+    return { group: group, chip: chip, chips: [chip], x: spot.badge[0], y: spot.badge[1] };
   }
 
   // Arrow characters would fall back to a colour emoji font in SVG text, so arrows are drawn as paths.
@@ -426,20 +428,45 @@
       svg.classList.toggle("is-capturing", !!id);
     }
 
+    // Chip nodes of one button: the first is the badge's own; more are added beside it when a button has several keys.
+    function chipNode(spot, index) {
+      while (spot.chips.length <= index) {
+        spot.chips.push(el("g", { class: "chip" }, spot.group));
+      }
+      return spot.chips[index];
+    }
+
     function setBadges(list, mode) {
       (list || []).forEach(function (control) {
         var spot = badges[control.id];
         if (!spot) {
           return;
         }
-        var source = (control.sources || []).filter(function (candidate) {
-          return GT4.controlsModel.family(candidate) === mode;
-        })[0] || null;
-        var info = GT4.controlsModel.label(source);
-        drawChip(spot.chip, info, spot.x, spot.y);
-        spot.group.classList.toggle("is-unbound", !source);
+        var infos;
+        var source = null;
+        if (mode === "key") {
+          var keys = control.keys || [];
+          infos = keys.length ? keys.map(function (name) { return GT4.controlsModel.label("key:" + name); })
+            : [GT4.controlsModel.label(null)];
+        } else {
+          source = (control.sources || []).filter(function (candidate) {
+            return GT4.controlsModel.family(candidate) === mode;
+          })[0] || null;
+          infos = [GT4.controlsModel.label(source)];
+        }
+        var step = infos.length > 1 ? 48 : 0;
+        infos.forEach(function (info, index) {
+          var node = chipNode(spot, index);
+          node.removeAttribute("display");
+          var offset = (index - (infos.length - 1) / 2) * step;
+          drawChip(node, info, spot.x + offset, spot.y);
+        });
+        spot.chips.slice(infos.length).forEach(function (node) {
+          node.setAttribute("display", "none");
+        });
+        spot.group.classList.toggle("is-unbound", mode !== "key" && !source);
         spot.group.classList.toggle("is-changed", control.is_default === false);
-        spot.group.setAttribute("data-label", info.text);
+        spot.group.setAttribute("data-label", infos.map(function (info) { return info.text; }).join(" "));
       });
     }
 

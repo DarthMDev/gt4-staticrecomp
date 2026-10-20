@@ -3,19 +3,23 @@
  *
  *   GT4.controlsModel.BUTTONS               the sixteen DS2 buttons (ids of the controls file), names, symbols
  *   GT4.controlsModel.padSources(pad)       a Gamepad-like {buttons, axes} -> {"xinput:A": 0..1, ...}
- *   GT4.controlsModel.liveState(pad, controls, keysDown)
- *                                           what each DS2 button, stick and trigger shows right now
+ *   GT4.controlsModel.liveState(live, controls, keysDown)
+ *                                           what each DS2 button, stick and trigger shows right now; live is the
+ *                                           pad-live event {sources, sticks} from the Rust pad service (SDL3)
+ *   GT4.controlsModel.padLive(pad)          dev mock only: a Gamepad-like object -> the pad-live shape
+ *   GT4.controlsModel.KEYBOARD_LAYOUT       the fixed modern keyboard (TASK-076), several keys per DS2 button
+ *   GT4.controlsModel.KEYBOARD_ACTIONS      keys with no DS2 button in this table yet
  *   GT4.controlsModel.triggerOutput(raw, deadzone, curve)
  *                                           the pressure the game computes from a trigger (native/controls.cpp)
  *   GT4.controlsModel.keyFromEvent(event)   a key event -> {name} | {reserved} | {unsupported} | {cancel}
  *   GT4.controlsModel.conflict(controls, id, source)
  *                                           null, {same: true}, or {holder, previous} when another button has it
  *   GT4.controlsModel.label(source)         {family, kind, text, long} for chips and the panel
- *   GT4.controlsModel.padSummary(pads)      the controller the game uses (first connected) and how many there are
+ *   GT4.controlsModel.padSummary(pads)      dev mock only: the first connected Gamepad-like object and how many there are
  *
- * A Gamepad in WebView2 uses the standard mapping for XInput pads: buttons 0-15 are A B X Y LB RB LT RT Back Start
- * LThumb RThumb DpadUp DpadDown DpadLeft DpadRight; LT and RT carry their analog value (0..1); axes 0-3 are LX LY RX
- * RY in -1..1 with y positive down.
+ * The launcher reads pads through SDL3 in Rust (launcher/crates/gt4l-platform/src/pad.rs): the page gets `pad-live`
+ * events whose sources are the controls-file names (xinput:A ... xinput:RT, pressure 0..1). The Web Gamepad API
+ * (navigator.getGamepads) is not used here; the dev mock turns Gamepad-like objects into the same shape.
  */
 (function (root) {
   "use strict";
@@ -115,7 +119,7 @@
     return Math.floor(Math.min(1, shaped) * 255) / 255;
   }
 
-  // {"xinput:A": 1, "xinput:LT": 0.6, ...} for every standard button of a Gamepad-like object.
+  // Dev mock only: {"xinput:A": 1, "xinput:LT": 0.6, ...} for every standard button of a Gamepad-like object.
   function padSources(pad) {
     var out = {};
     if (!pad || !pad.buttons) {
@@ -140,11 +144,31 @@
     return Math.min(1, Math.max(-1, value));
   }
 
-  // What the drawing shows this frame. controls = get_controls().controls; keysDown = {"Z": true}.
+   // Dev mock only: a Gamepad-like object -> {sources, sticks}, the shape of the pad-live event.
+  function padLive(pad) {
+    var sources = padSources(pad);
+    return {
+      sources: sources,
+      sticks: {
+        left: { x: axis(pad, 0), y: axis(pad, 1) },
+        right: { x: axis(pad, 2), y: axis(pad, 3) }
+      }
+    };
+  }
+
+  // One stick of a pad-live shape, each axis clamped to -1..1 (y positive down).
+  function stickOf(live, side) {
+    var part = live && live.sticks && live.sticks[side] ? live.sticks[side] : {};
+    var clamp = function (value) { return Math.min(1, Math.max(-1, Number(value) || 0)); };
+    return { x: clamp(part.x), y: clamp(part.y) };
+  }
+
+  // What the drawing shows this frame. live = {sources, sticks} (pad-live); controls = get_controls().controls;
+  // keysDown = {"W": true}. A button also lights when a key of the fixed keyboard layout is down.
   // buttons[id] = {value (raw 0..1, the fill of L2/R2), output (what the game reads, 0..1), pressed}
   // sticks = {left: {x, y}, right: {x, y}} raw, y positive down; sources = the pad readings by source.
-  function liveState(pad, controls, keysDown) {
-    var sources = padSources(pad);
+  function liveState(live, controls, keysDown) {
+    var sources = Object.assign({}, (live && live.sources) || {});
     Object.keys(keysDown || {}).forEach(function (name) {
       if (keysDown[name]) {
         sources["key:" + name] = 1;
@@ -154,6 +178,8 @@
     (controls || []).forEach(function (control) {
       var value = 0;
       var output = 0;
+      var fixedKeys = KEYBOARD_LAYOUT[control.id] || [];
+      var fixedDown = fixedKeys.some(function (name) { return !!(keysDown && keysDown[name]); });
       (control.sources || []).forEach(function (source) {
         var raw = sources[sourceBase(source)] || 0;
         if (!raw) {
@@ -168,17 +194,42 @@
         value = Math.max(value, raw);
         output = Math.max(output, shaped);
       });
+      if (fixedDown) {
+        value = 1;
+        output = 1;
+      }
       buttons[control.id] = { value: value, output: output, pressed: output > 0 };
     });
     return {
       buttons: buttons,
       sticks: {
-        left: { x: axis(pad, 0), y: axis(pad, 1) },
-        right: { x: axis(pad, 2), y: axis(pad, 3) }
+        left: stickOf(live, "left"),
+        right: stickOf(live, "right")
       },
       sources: sources
     };
   }
+
+  // The fixed keyboard layout (TASK-076, read-only on the Controls page): several keys per DS2 button. Names use the
+  // controls-file key names. The DS2 button of nitro, gears, look back and camera is not in this table yet.
+  var KEYBOARD_LAYOUT = {
+    dpad_up: ["Up", "E"],
+    dpad_down: ["Down"],
+    dpad_left: ["A", "Left"],
+    dpad_right: ["D", "Right"],
+    cross: ["W", "Enter"],
+    square: ["S"],
+    circle: ["Space"],
+    triangle: ["Backspace", "Esc"]
+  };
+  // Keys of the same layout that have no DS2 button yet (to confirm in docs/CONTROLS.md, game branch task/075).
+  var KEYBOARD_ACTIONS = [
+    { name: "Nitro", keys: ["Shift"] },
+    { name: "Gear up", keys: ["R"] },
+    { name: "Gear down", keys: ["F"] },
+    { name: "Look back", keys: ["Q"] },
+    { name: "Camera", keys: ["C", "Tab"] }
+  ];
 
   var RESERVED_KEYS = { F7: true, F8: true, F9: true, F11: true };
   var CODE_NAMES = {
@@ -194,7 +245,7 @@
     var code = (event && event.code) || "";
     var key = (event && event.key) || "";
     if (code === "Escape" || key === "Escape") {
-      return { cancel: true };
+      return { cancel: true, name: "Esc" };
     }
     var match = /^Key([A-Z])$/.exec(code) || /^Digit([0-9])$/.exec(code);
     if (match) {
@@ -276,7 +327,7 @@
     return text || "Controller";
   }
 
-  // pads = navigator.getGamepads(). The game reads the first connected XInput controller, so the page shows that one.
+  // Dev mock only: pads = a list of Gamepad-like objects. The first connected one is the one the game reads.
   function padSummary(pads) {
     var connected = [];
     Array.prototype.forEach.call(pads || [], function (pad) {
@@ -303,7 +354,10 @@
     sourceOptions: sourceOptions,
     triggerOutput: triggerOutput,
     padSources: padSources,
+    padLive: padLive,
     liveState: liveState,
+    KEYBOARD_LAYOUT: KEYBOARD_LAYOUT,
+    KEYBOARD_ACTIONS: KEYBOARD_ACTIONS,
     keyFromEvent: keyFromEvent,
     conflict: conflict,
     label: label,
