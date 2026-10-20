@@ -309,3 +309,65 @@ The owner ran the real `GT4Recomp.exe` (setup, Play and the return to Home worke
   goes through Tauri's IPC, so the ACL never ran. The mock answers every command name, including the old ones, and the
   contract test compared `generate_handler!` with the UI's names only, not with the permissions the real app enforces.
   The new test checks the permissions too, and 7.1 was checked in the real webview.
+
+### 7.7 Owner test of the real exe, round 2 (2026-10-21): focus, values, Save
+
+Four findings from the owner's test (Settings with the real `GT4Recomp.exe`). Checked with the dev mock in headless
+Edge (`ui/dev/focus-check.html`) on the HEAD code and on the fix. The pad itself is not tested here.
+
+1. **The sidebar auto-enters Controls, Saves and Replays (Confirmed).** Cause: those pages called `focus()` after they
+   drew their content (Controls: L1; Saves and Replays: a row or Import). The settings shell moves to the content level
+   on any focus inside the rows, so drawing the preview entered the tab. HEAD run: focus `null` and "in rows" after
+   ArrowDown reached Controls, Saves, Replays and About.
+2. **Saves and Replays select "Import ..." on entry (Confirmed).** Two causes. The page focused Import when the list was
+   empty, and the default entry (`focusRow`) takes the first focusable element of the tab, which is the Import button
+   (it sits above the list). HEAD run: entering Saves focused "Import save".
+3. **A changed value does not show on screen (Confirmed).** The dropdown's `choose()` wrote the label that was shown
+   before the change, so Internal resolution kept "1080p (3x)" after 4K was picked. `set_setting` returns nothing, and
+   the table was re-read only when another row's `visible_when` depended on the id. A row's `disabled` state also comes
+   from other settings (`settings.is_active`), so the table must be read after every write. HEAD run: "1080p (3x)" after
+   picking 4K; the table did hold 4K.
+4. **Save removed (owner request).** Every change applies at once, so the X = Save action, the "Saved" toast and the
+   Save hints are gone from Graphics, Display and Advanced. X stays Import (Saves, Replays) and Rebind (Controls).
+
+Fixes (`launcher/crates/gt4l-tauri/ui`):
+
+- `js/pages/settings.js`: a successful write updates the row model (`GT4.settingsModel.applyChange`), then the table is
+  read again and the tab is drawn from it. Focus returns to the same row only while focus is still in the tab's rows.
+  Only the newest read is drawn (`readGate`). The dropdown's `choose()` shows the chosen option's label. The tab's
+  focus-in listener ignores focus from rendering the preview (`FL.onContentFocus(state, previewing)`). Pages may set an
+  entry element (`host.entry`); a tab without one keeps the old default.
+- `js/pages/library.js`: the list does not focus anything when drawn. A enters on the first row, or on Import when the
+  list is empty (`libraryEntry`).
+- `js/pages/controls.js`: no focus on load. A enters on L1. Trigger rows use the same newest-read rule.
+- `js/settings-model.js` (new, pure): `findRow`, `rowVisible`, `applyChange`, `optionLabel`, `libraryEntry`, `readGate`.
+- `js/focus-levels.js`: `onContentFocus`.
+- Save removed: the X hint and `GT4.hooks.x` in the settings shell, Advanced's X hint, `SAVABLE_TABS`, the "Saved" toast.
+- `dev/mock-data.js`: `set_setting` returns nothing, as the Rust command does.
+- Docs: `dev/README.md` (navigation table without Save, `set_setting` row, file list), `dev/MANUAL-CHECKLIST.md`.
+
+Tests:
+
+- `dev/nav-test.html`: 95 of 95 PASS (was 77). New cases: a preview render does not move focus; entering Saves or
+  Replays focuses the first row, or Import when empty; entering Controls is L1; the row model holds a dropdown, toggle
+  and slider value after a change; a row with `visible_when` shows at once and hides again; the newest read wins.
+- `dev/focus-check.html` (new, dev only): 59 of 59 PASS in headless Edge with arrow keys and clicks on the mock. It
+  covers the sidebar highlight over every tab (down and up), each route opening with focus on its tab, entering and
+  leaving every tab with B, the Saves and Replays entry, the absence of Save in the footers, and a 4K choice, a toggle
+  and a slider showing their new values with the table holding the same values. On the HEAD code the same page gives
+  41 of 59, with the symptoms of findings 1 to 3.
+- `cargo test --workspace`: 196 passed, 0 failed, 3 ignored.
+- Not covered: `visible_when` refresh through the mock (the mock has no such row); the pure tests cover the rule.
+
+Screenshots (headless Edge, `--force-prefers-reduced-motion`, 1280 x 720, dev mock):
+
+- `docs/launcher/shots/pad-sidebar-on-saves.png`: highlight on Saves, focus still in the tab list.
+- `docs/launcher/shots/pad-saves-entered.png`: after A, the first save is focused.
+- `docs/launcher/shots/graphics-4k-updated.png`: 4K chosen, the Internal resolution row shows 4K (6x).
+
+Build: `cargo tauri build --no-bundle` (no Cargo.toml change). Owner test copy replaced:
+`private/owner-test-launcher/GT4Recomp.exe`, SHA-256 `53a0ad0b36eeedcae865efe78c278bd867d3278e013f17a2df3b74c9c86450bd`
+(was 1E122321...). Nothing else in that folder or in `%LOCALAPPDATA%\GT4Recomp` was touched.
+
+Not verified: the real webview run with a controller (the owner checks the pad items in `MANUAL-CHECKLIST.md`), and the
+real `set_setting` round trip (the mock answers at once).

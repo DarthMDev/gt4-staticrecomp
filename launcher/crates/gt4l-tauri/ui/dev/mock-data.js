@@ -245,7 +245,8 @@
           throw new Error("Unknown setting " + args.id);
         }
         row.current = args.value;
-        return row;
+        // The real set_setting returns nothing; the UI reads the table again.
+        return null;
       }
       case "reset_gs_settings_to_defaults":
         rows.forEach(function (row) {

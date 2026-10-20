@@ -38,7 +38,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Long lists (Settings, Saves, Replays) scroll with a finger and stop at their ends (no scroll trap).
 - [ ] Swipe left on Settings (over 60 px, mostly sideways) goes to the next tab; swipe right goes to the previous one. A short or diagonal drag does nothing.
 - [ ] A swipe that starts on a slider or an open list does not change the tab.
-- [ ] Tap a footer hint: A Select acts on the focused item, B Back goes back, X Save shows "Saved", LB RB Tabs switches tabs.
+- [ ] Tap a footer hint: A Select acts on the focused item, B Back goes back, LB RB Tabs switches tabs.
 
 ## Controller (XInput, WebView2)
 
@@ -51,7 +51,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] The tab list highlight is a soft pill that glides between tabs; the tab shown while you are in the content keeps a quiet accent edge.
 - [ ] A focused row has a lighter band with a thin accent edge; the focused control has a soft glow. There is no hard box.
 - [ ] With Windows "Show animations" off (or reduced motion), the pill and the glow change instantly.
-- [ ] Footer: the tab list shows A Enter, B Back, LB RB Tabs; the content shows A Select, B Tabs, then X Save and Y where the tab has them.
+- [ ] Footer: the tab list shows A Enter, B Back, LB RB Tabs; the content shows A Select, B Tabs, then the tab's own keys (Advanced: Y Reset; Saves and Replays: X Import; Controls: X Rebind, Y Reset). No tab shows Save.
 - [ ] Mouse and touch: a click or tap focuses what was clicked; a click on a tab shows it without entering its rows.
 - [ ] The D-pad and the left stick move focus; holding repeats after about 0.4 s, then about every 0.1 s.
 - [ ] Stick deadzone: a slight drift does not move focus.
@@ -61,7 +61,9 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Before the first button press the page still works with the keyboard and mouse.
 - [ ] Every interactive element can be reached with the D-pad or the left stick (no control is skipped); the focus ring shows on each.
 - [ ] Right stick up and down scrolls the focused scroll area (Settings content, Saves, Replays, dialogs) at a steady speed; a slight push does nothing.
-- [ ] X on Graphics, Display and Advanced shows "Saved"; X on Saves and Replays imports; X on Controls starts a rebind.
+- [ ] There is no Save: X does nothing on Graphics, Display and Advanced. X on Saves and Replays imports; X on Controls starts a rebind.
+- [ ] Pad: the highlight moves over Controls, Saves and Replays and focus stays in the tab list; only A or D-pad right enters a tab. Entering Saves or Replays focuses the first row (Import only when the list is empty); entering Controls focuses L1.
+- [ ] A changed value shows the new value at once (resolution dropdown, toggle, slider), and it still shows after leaving and re-entering the tab.
 - [ ] Y on Advanced asks "Reset to defaults?"; Y on Saves makes the selected save active; Y on Replays deletes after a confirm; Y on Controls resets the selected binding.
 - [ ] B closes an open "i" tip first, then an open dialog or list, then goes back.
 - [ ] Left and right on a focused slider change it one step; on a dropdown they cycle the values.
@@ -74,7 +76,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] CoreGS 2.0 is greyed and not selectable.
 - [ ] Advanced: "Reset to defaults" asks, then restores the values and says so in a toast.
 - [ ] Mods is not in the nav column; LB/RB and Q/E skip it; `#/settings/mods` opens Graphics; no row has page "mods".
-- [ ] An error from `set_setting` shows a red toast and the value shown matches the saved value after the next read.
+- [ ] An error from `set_setting` shows a red toast and the row shows the value the launcher reads back.
 
 ## Controls
 

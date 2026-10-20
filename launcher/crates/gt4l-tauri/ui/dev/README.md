@@ -14,6 +14,7 @@ Scripts are classic (not modules) so the pages also open from `file://`.
 | `js/input-rules.js` | Pure input rules: swipe step, right-stick scroll, slider value from a touch, face-button routing (`GT4.input`) |
 | `js/backend.js` | Command bridge: `window.__TAURI__.core.invoke`, or the dev mock |
 | `js/ui.js` | Element builder, hint bar, toast, dialogs, date format |
+| `js/settings-model.js` | Pure settings row model: visibility, the row after a change, the Saves/Replays entry, the newest-read gate (`GT4.settingsModel`) |
 | `js/nav.js` | Keyboard, Web Gamepad polling, Rust `gamepad` event, focus ring |
 | `js/controller-svg.js` | Original DualShock 2 drawing (no Sony artwork) |
 | `js/config.js` | Feature flags (`mods` off for release 1.0.0) |
@@ -22,7 +23,8 @@ Scripts are classic (not modules) so the pages also open from `file://`.
 | `assets/` | Fonts (Roboto, Roboto Condensed), `cover-front.png`, `logo-gt4.png` |
 | `dev/index.html` | Dev entry: same app with `dev/mock-data.js` (plain browser) |
 | `dev/mock-data.js` | Mock command layer; sample values only, not game data |
-| `dev/nav-test.html` | Unit test page for `spatial.js` (open in any browser) |
+| `dev/nav-test.html` | Unit tests: spatial picker, input rules, focus levels, settings row model (open in any browser) |
+| `dev/focus-check.html` | DOM-level focus and value checks on the mock (headless Edge; see below) |
 | `dev/MANUAL-CHECKLIST.md` | Manual checks for a controller and the Tauri build |
 
 `ui/dev/` is for development. Exclude it from release bundles if the build does not need it.
@@ -40,7 +42,7 @@ Arguments are the payload object shown. Errors are strings or Error objects; the
 | `play` | none | none |
 | `stop_game` | none | none |
 | `get_settings_table` | none | `{max_upscale: int, rows: [row]}` |
-| `set_setting` | `{id, value}` | any; the UI re-reads the table only when another row's visibility depends on `id` |
+| `set_setting` | `{id, value}` | none (`Result<(), String>`); after a success the UI sets the row's value and reads the table again, since other rows can depend on it (`visible_when`, `disabled`) |
 | `reset_gs_settings_to_defaults` | none | `{max_upscale, rows}` |
 | `get_controls` | none | `{controls: [{id, name, binding}], triggers: [row]}` |
 | `capture_binding` | `{control}` | `{control, binding}`; resolves on the next press |
@@ -119,8 +121,8 @@ Focus moves spatially (nearest element in the pressed direction; sideways offset
 |---|---|---|---|---|---|---|---|
 | Setup | primary button (Choose disc image / Choose another file / Play) | Cancel while copying or checking; Home when done | none | none | none | none | none |
 | Home | Play | none | none | Settings | Play | none | none |
-| Settings: Graphics, Display | activate (dropdown opens its list) | Back to Home (closes a tip or a dialog first) | Save: confirms with a "Saved" toast (settings already apply on change) | none | none | previous / next tab | adjust slider or dropdown |
-| Settings: Advanced | activate | Back to Home | Save (as Graphics) | Reset to defaults (confirm) | none | tabs | adjust |
+| Settings: Graphics, Display | activate (dropdown opens its list) | Back to Home (closes a tip or a dialog first) | none | none | none | previous / next tab | adjust slider or dropdown |
+| Settings: Advanced | activate | Back to Home | none | Reset to defaults (confirm) | none | tabs | adjust |
 | Settings: About | activate (log folder) | Back to Home | none | none | none | tabs | none |
 | Saves | select / make active | Back | Import | Make active | none | tabs | none |
 | Replays | none | Back | Import | Delete (confirm) | none | tabs | none |
@@ -129,7 +131,7 @@ Focus moves spatially (nearest element in the pressed direction; sideways offset
 | Dialog (list, confirm) | activate | close | none | none | none | none | none |
 
 Right stick: scrolls the nearest scroll area of the focused element (or the page main area). Deadzone 0.2.
-Footer hints (A Select, B Back, X Save where it applies, Y where defined, LB RB Tabs) are tappable by touch and mouse.
+Footer hints (A Select, B Back, X Import or Rebind where the tab has them, Y where defined, LB RB Tabs) are tappable by touch and mouse. Every settings change applies at once: there is no Save action.
 
 Routing of the face and shoulder buttons lives in `GT4.input.padRoute` (`js/input-rules.js`), tested in `dev/nav-test.html`.
 
@@ -148,6 +150,8 @@ Idle: dark translucent glass with a thin white border and a slow light sweep (ab
 Tab order for LB/RB and Q/E: Graphics, Advanced, Display, Controls, Saves, Replays, About. The Mods tab and its rows are behind `GT4.features.mods` in `js/config.js` (off in release 1.1.0 builds; the mod manager ships in 1.1.0).
 
 Keyboard: arrows move, Enter/Space activate (native), Esc = B, Q/E = LB/RB, Tab/Shift+Tab move in DOM order.
+
+Settings focus: moving the highlight over the tab list (up and down) only previews the tab and never enters it; only A or D-pad right (or Enter) enters. Rendering a tab never moves focus. Saves and Replays enter on the first row (Import only when the list is empty); Controls enters on L1.
 Mouse use hides the focus ring. A pad or key press brings it back.
 
 ## Mock data and browser preview
@@ -157,4 +161,6 @@ Serve `ui/` with any static server and open `dev/index.html`, for example
 
 Query options: `?setup=done|needed|wrong|copying|preparing|renderer|failed|missing|offline` (default `done`), `&pick=spec` (the mock picker returns a refused Spec II image), `&running=1`, `&focus=play` (home only: focus the Play button, for screenshots).
 
-`dev/nav-test.html` checks the spatial picker, the swipe, stick and slider rules and the face-button routing in a browser. It should report every case passed (55 of 55 at the time of writing).
+`dev/nav-test.html` checks the spatial picker, the swipe, stick and slider rules, the face-button routing, the two focus levels and the settings row model in a browser. It should report every case passed (95 of 95 at the time of writing).
+
+`dev/focus-check.html` runs the DOM-level checks on the same mock (headless Edge, `--virtual-time-budget=60000`): the sidebar highlight over every tab with arrow keys, entering and leaving each tab, the Saves and Replays entry, no Save hint, and that a changed resolution, toggle or slider shows its new value. `body[data-focus-check]` is `pass` when all 59 checks pass. `&scenario=4k` only sets the state for the screenshot.

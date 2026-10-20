@@ -151,6 +151,49 @@
   same("the tab-list footer shows A Enter, B Back, LB RB Tabs", FL.footer(FL.SIDE).map(function (item) { return item.key + " " + item.label; }).join("|"), "A Enter|B Back|LB RB Tabs");
   same("the content footer shows A Select, B Tabs", FL.footer(FL.CONTENT).map(function (item) { return item.key + " " + item.label; }).join("|"), "A Select|B Tabs");
 
+  // Preview and focus (js/focus-levels.js onContentFocus): drawing a tab's content never moves focus.
+  var sidePreview = FL.start("saves");
+  same("a focus event from rendering the preview keeps the tab list", FL.onContentFocus(sidePreview, true).level, FL.SIDE);
+  same("a focus event from the player moves to the rows", FL.onContentFocus(sidePreview, false).level, FL.CONTENT);
+  same("a focus event in the rows changes nothing", FL.onContentFocus(entered, false) === entered, true);
+  same("a preview render inside the rows changes nothing", FL.onContentFocus(entered, true) === entered, true);
+
+  // Entry (js/settings-model.js): A on Saves or Replays focuses the first row, or Import when the list is empty.
+  var SM = root.GT4.settingsModel;
+  same("entering Saves with rows focuses the first row", SM.libraryEntry(3), "row");
+  same("entering Replays with one row focuses that row", SM.libraryEntry(1), "row");
+  same("entering Saves with an empty list focuses Import", SM.libraryEntry(0), "import");
+
+  // Value changes (js/settings-model.js): the row model holds the written value and visibility follows it.
+  var model = {
+    max_upscale: 4,
+    rows: [
+      { id: "upscale", current: "1080p", control: "dropdown",
+        values: [{ value: "1080p", label: "1080p (3x)" }, { value: "4K", label: "4K (6x)" }] },
+      { id: "sharp", current: 50, control: "slider", page: "basic", visible_when: { id: "upscale", equals: "4K" } },
+      { id: "fxaa", current: false, control: "toggle", page: "basic" }
+    ]
+  };
+  same("a dropdown shows the label of the chosen option", SM.optionLabel(model.rows[0].values, "4K"), "4K (6x)");
+  same("a value without an option shows the raw value", SM.optionLabel(model.rows[0].values, "8K"), "8K");
+  same("a row hidden by visible_when stays hidden at the old value", SM.rowVisible(model, model.rows[1], false), false);
+  SM.applyChange(model, "upscale", "4K");
+  same("the row model holds the dropdown value after a change", SM.findRow(model, "upscale").current, "4K");
+  same("a row that depends on the changed row shows at once", SM.rowVisible(model, model.rows[1], false), true);
+  SM.applyChange(model, "upscale", "1080p");
+  same("the dependent row hides again when the value goes back", SM.rowVisible(model, model.rows[1], false), false);
+  SM.applyChange(model, "fxaa", true);
+  same("a toggle holds a boolean after a change", SM.findRow(model, "fxaa").current, true);
+  same("a change to an unknown row changes nothing", SM.applyChange(model, "nope", 1), null);
+  same("mod rows stay hidden while the feature is off", SM.rowVisible(model, { id: "m", page: "mods" }, false), false);
+
+  // Overlapping reads: only the newest answer is drawn.
+  var gate = SM.readGate();
+  var firstRead = gate.ticket();
+  var secondRead = gate.ticket();
+  same("an older read is not applied", gate.isLatest(firstRead), false);
+  same("the newest read is applied", gate.isLatest(secondRead), true);
+
   function run() {
     var list = document.getElementById("results");
     var passed = 0;

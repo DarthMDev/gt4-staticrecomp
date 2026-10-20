@@ -219,6 +219,11 @@
         }
       }
     });
+    // A enters the list on its first row; Import is the entry only when the list is empty.
+    host.entry(function () {
+      var rows = list.querySelectorAll("[data-item-id]");
+      return GT4.settingsModel.libraryEntry(rows.length) === "row" ? rows[0] : importButton;
+    });
     host.hints([
       { key: "X", label: "Import", run: importItems },
       { key: "Y", label: kind.activate ? "Make active" : "Delete", run: function () { if (GT4.hooks.y) { GT4.hooks.y(); } } }
@@ -233,14 +238,9 @@
       }
     });
 
+    // Drawing the list never moves focus: the tab list keeps it until the player presses A (host.entry).
     return GT4.backend.call(kind.list, {}).then(function (result) {
       apply(result, "");
-      var first = list.querySelector("[data-item-id]");
-      if (first) {
-        first.focus({ preventScroll: true });
-      } else {
-        importButton.focus({ preventScroll: true });
-      }
     }, function (err) {
       GT4.ui.toast(GT4.errorText(err), true);
     });

@@ -116,7 +116,7 @@
       var context = {
         table: { rows: state.triggers },
         content: panelRows,
-        refresh: function () { load(); }
+        refresh: function (focusId) { return load(focusId); }
       };
       state.triggers.forEach(function (row) {
         var node = GT4.settingsRows.rowNode(context, row);
@@ -126,15 +126,22 @@
       });
     }
 
+    // Only the newest read is drawn. A trigger row keeps focus only while focus is still on this tab.
+    var reads = GT4.settingsModel.readGate();
     function load(focusId) {
+      var ticket = reads.ticket();
       return call("get_controls").then(function (view) {
+        if (!reads.isLatest(ticket)) {
+          return;
+        }
+        var keep = focusId && content.contains(document.activeElement) ? focusId : null;
         state.controls = view.controls || [];
         state.triggers = view.triggers || [];
         paintMapped();
         paintTriggers();
         paintSelection();
-        if (focusId) {
-          var target = content.querySelector("[data-setting=\"" + focusId + "\"]");
+        if (keep) {
+          var target = content.querySelector("[data-setting=\"" + keep + "\"]");
           if (target) {
             target.focus({ preventScroll: true });
           }
@@ -218,12 +225,9 @@
       { key: "Y", label: "Reset", run: function () { resetBinding(state.selected); } }
     ]);
 
+    // A enters the tab on the first shoulder tab (L1). Drawing the page does not move focus.
+    host.entry(function () { return tabButtons.l1; });
     paintSelection();
-    return load().then(function () {
-      var first = tabButtons.l1;
-      if (first) {
-        first.focus({ preventScroll: true });
-      }
-    });
+    return load();
   };
 })(window);

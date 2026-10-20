@@ -50,41 +50,21 @@
   }
   GT4.errorText = errorText;
 
-  function findRow(table, id) {
-    for (var i = 0; i < table.rows.length; i++) {
-      if (table.rows[i].id === id) {
-        return table.rows[i];
-      }
-    }
-    return null;
-  }
+  var model = GT4.settingsModel;
 
-  // A change to a row that other rows depend on re-renders the tab.
-  function affectsVisibility(table, id) {
-    return table.rows.some(function (row) {
-      return row.visible_when && row.visible_when.id === id;
-    });
-  }
-
+  // Mod and texture rows never show in this build (rowVisible in js/settings-model.js).
   function rowVisible(table, row) {
-    // Mod and texture rows never show in this build.
-    if (row.page === "mods" && !GT4.features.mods) {
-      return false;
-    }
-    if (!row.visible_when) {
-      return true;
-    }
-    var other = findRow(table, row.visible_when.id);
-    return !!other && String(other.current) === String(row.visible_when.equals);
+    return model.rowVisible(table, row, !!GT4.features.mods);
   }
 
   // ctx = {table, content, refresh(focusId)}
+  // A successful write updates the row model, then the table is read again: other rows may depend on this one
+  // (visible_when, disabled), so the whole tab is drawn from the new table, with focus kept on the same row.
   function commit(ctx, id, value) {
     return call("set_setting", { id: id, value: value }).then(
       function () {
-        if (affectsVisibility(ctx.table, id)) {
-          ctx.refresh(id);
-        }
+        model.applyChange(ctx.table, id, value);
+        ctx.refresh(id);
       },
       function (err) {
         GT4.ui.toast(errorText(err), true);
@@ -221,8 +201,11 @@
     }, [h("span", { text: currentText }), h("span", { class: "chev" })]);
     var label = button.querySelector("span");
 
-    function choose(value) {
-      label.textContent = currentText;
+    // A chosen value shows its own label at once; the table is read again after the write.
+    function choose(value, text) {
+      row.current = value;
+      currentText = text;
+      label.textContent = text;
       commit(ctx, row.id, value);
     }
 
@@ -256,8 +239,7 @@
           on: {
             click: function () {
               dialog.close();
-              row.current = option.value;
-              choose(option.value);
+              choose(option.value, option.label);
             }
           }
         }, [
@@ -357,10 +339,16 @@
       }
     }
 
+    var reads = model.readGate();
     ctx.refresh = function (focusId) {
+      var ticket = reads.ticket();
       return call("get_settings_table").then(function (table) {
+        if (!reads.isLatest(ticket)) {
+          return;
+        }
         ctx.table = table;
-        paint(focusId);
+        // Focus moves back to the row only while it is still inside this tab (the user may have moved to the tab list).
+        paint(content.contains(document.activeElement) ? focusId : undefined);
       }, function (err) {
         GT4.ui.toast(errorText(err), true);
       });
@@ -437,7 +425,6 @@
       hooks: function (ctx, tabHost) {
         tabHost.setHooks({ y: function () { resetDefaults(ctx); } });
         tabHost.hints([
-          { key: "X", label: "Save", run: function () { GT4.hooks.x(); } },
           { key: "Y", label: "Reset", run: function () { resetDefaults(ctx); } }
         ]);
       }
@@ -526,7 +513,6 @@
   //   content  focus inside the rows; B returns to the tab list on the same tab.
   // Switching tabs re-renders only the content, so focus never resets. The hash follows the shown tab.
   var FL = GT4.focusLevels;
-  var SAVABLE_TABS = ["graphics", "display", "advanced"];
   var focusState = null; // kept while the app runs: the row last focused in each tab (session memory)
 
   GT4.pages = GT4.pages || {};
@@ -544,6 +530,8 @@
       var state = focusState ? FL.open(focusState, requested) : FL.start(requested);
       var shown = null;
       var tabHints = [];
+      var entryPick = null; // the page's choice of the row A enters (null: the remembered row, else the first)
+      var previewing = false; // true while a tab's content is being rendered: that never moves focus
       var ready = Promise.resolve();
 
       var content = h("div", { class: "content" });
@@ -608,7 +596,7 @@
         });
       }
 
-      // Footer: the level's keys, then (content level) the tab's own keys such as X Save and Y Reset.
+      // Footer: the level's keys, then (content level) the tab's own keys such as Y Reset or X Rebind.
       function renderFooter() {
         var runs = {
           Enter: enterContent,
@@ -633,18 +621,22 @@
         content = fresh;
         // Focus inside the rows: the level becomes content (a mouse click lands here too) and the row is remembered.
         fresh.addEventListener("focusin", function (event) {
-          if (state.level !== FL.CONTENT) {
-            setState(FL.enter(state));
+          var next = FL.onContentFocus(state, previewing);
+          if (next !== state) {
+            setState(next);
+          }
+          if (previewing) {
+            return;
           }
           var key = rowKeyOf(event.target);
           if (key) {
             setState(FL.remember(state, key));
           }
         });
-        tabHints = SAVABLE_TABS.indexOf(id) >= 0
-          ? [{ key: "X", label: "Save", run: function () { if (GT4.hooks.x) { GT4.hooks.x(); } } }]
-          : [];
-        GT4.hooks.x = SAVABLE_TABS.indexOf(id) >= 0 ? function () { GT4.ui.toast("Saved"); } : undefined;
+        // Nothing from the previous tab is kept; the page sets its own keys and hooks while it mounts.
+        tabHints = [];
+        entryPick = null;
+        delete GT4.hooks.x;
         delete GT4.hooks.y;
         delete GT4.hooks.start;
         markSide();
@@ -660,13 +652,23 @@
               GT4.hooks[key] = partial[key];
             });
           },
+          // The row A enters on this tab: a function that returns the element to focus (null: default).
+          entry: function (pick) {
+            entryPick = pick;
+          },
           // The tab's own footer keys (shown on the content level); the level keys are added by renderFooter.
           hints: function (extra) {
             tabHints = extra || [];
             renderFooter();
           }
         };
-        var mounted = GT4.tabPages[id] ? GT4.tabPages[id](fresh, host) : null;
+        previewing = true;
+        var mounted;
+        try {
+          mounted = GT4.tabPages[id] ? GT4.tabPages[id](fresh, host) : null;
+        } finally {
+          previewing = false;
+        }
         renderFooter();
         ready = Promise.resolve(mounted).catch(function (err) {
           GT4.ui.toast(errorText(err), true);
@@ -696,10 +698,13 @@
         if (state.level !== FL.CONTENT) {
           return;
         }
-        var list = GT4.nav.focusables();
-        var key = FL.rowFor(state);
-        var target = key ? list.filter(function (el) { return rowKeyOf(el) === key; })[0] : null;
-        target = target || list.filter(function (el) { return !!el.closest(".ctl"); })[0] || list[0];
+        var target = entryPick ? entryPick() : null;
+        if (!target) {
+          var list = GT4.nav.focusables();
+          var key = FL.rowFor(state);
+          target = key ? list.filter(function (el) { return rowKeyOf(el) === key; })[0] : null;
+          target = target || list.filter(function (el) { return !!el.closest(".ctl"); })[0] || list[0];
+        }
         if (target) {
           target.focus({ preventScroll: true });
         }

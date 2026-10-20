@@ -39,6 +39,15 @@
     return assign(state, { level: CONTENT });
   }
 
+  // Focus landed inside a tab's rows. A focus that comes from rendering the preview (previewing) never moves the
+  // level: the tab list keeps focus while its content is drawn. Returns the same state object when nothing changes.
+  function onContentFocus(state, previewing) {
+    if (previewing || state.level === CONTENT) {
+      return state;
+    }
+    return enter(state);
+  }
+
   // B inside the content: the side level, on the same tab. Nothing else changes.
   function back(state) {
     return assign(state, { level: SIDE });
@@ -71,7 +80,7 @@
     return Object.prototype.hasOwnProperty.call(state.rows, state.tab) ? state.rows[state.tab] : null;
   }
 
-  // Footer labels for a level. The tab adds its own keys (X Save, Y Reset) on the content level.
+  // Footer labels for a level. The tab adds its own keys (for example Y Reset, X Rebind) on the content level.
   function footer(level) {
     if (level === CONTENT) {
       return [{ key: "A", label: "Select" }, { key: "B", label: "Tabs" }];
@@ -85,6 +94,7 @@
     start: start,
     open: open,
     enter: enter,
+    onContentFocus: onContentFocus,
     back: back,
     select: select,
     moveTab: moveTab,
