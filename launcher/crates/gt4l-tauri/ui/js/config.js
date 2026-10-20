@@ -9,13 +9,16 @@
   GT4.features = {
     mods: false
   };
-  // Home background slideshow (three slots, in order). Placeholders until the final 16:9 images arrive;
-  // see ui/assets/backgrounds/README.md. Each slot has a CSS class bg-slide-1..3 in css/app.css.
+  // Home background slideshow (six slots, in order); see ui/assets/backgrounds/README.md. Each slot has a CSS
+  // class bg-slide-1..6 in css/app.css, so the list length must match the CSS slots.
   GT4.config = {
     backgrounds: [
-      "assets/backgrounds/bg-01.png",
-      "assets/backgrounds/bg-02.png",
-      "assets/backgrounds/bg-03.png"
+      "assets/backgrounds/bg-01.webp",
+      "assets/backgrounds/bg-02.webp",
+      "assets/backgrounds/bg-03.webp",
+      "assets/backgrounds/bg-04.webp",
+      "assets/backgrounds/bg-05.webp",
+      "assets/backgrounds/bg-06.webp"
     ]
   };
 })(window);
