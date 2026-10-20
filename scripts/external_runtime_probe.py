@@ -109,6 +109,9 @@ PERF_PROFILES = {
     # TASK-017 license guard v1 (slice205, owner test 2026-10-16; guards the 0x001100D0 loader only). History.
     # (private/slice205-license-guard-runtime; halt dump and FSV trace built in, off unless GT4_HALT_DUMP/GT4_FSV_TRACE).
     'license-guard': ('slice205-license-guard.json', 'private/slice205-license-guard-build/build/gt4vulkan.exe'),
+    # TASK-014 stage B (slice208): the slice206 game recipe with the accepted explicit-seed EE library (1,105 seeds,
+    # docs/inputs/slice208-ee-entries.txt; library profile coverage). Mode pcsx2 is unchanged and stays on slice206.
+    'pcsx2-coverage': ('slice208-pcsx2.json', 'private/slice208-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
 PACING_MANIFEST = 'slice153-pacing.json'
@@ -120,14 +123,14 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -233,7 +236,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
             (expected_mode is not None and evidence.get('measurement_mode') != expected_mode) or
-            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2', 'license-guard') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
+            (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2', 'license-guard', 'pcsx2-coverage') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
             evidence.get('keyboard_input_fix') != 'digital_only_slice136' or

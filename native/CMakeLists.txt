@@ -9,7 +9,7 @@ set(GT4_ASSETS_ROOT "${GT4_ROOT}" CACHE PATH "Verified private assets checkout")
 # Accounting layout matches across translation units. Legacy report lines are unchanged (kLegacyCategoryCount).
 add_compile_definitions(GT4_MTVU_RUNTIME)
 set(GT4_EE_PROFILE "production" CACHE STRING "Pinned EE library profile")
-set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation)
+set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation coverage)
 set(GT4_SHAPE_RUNTIME_SOURCE "" CACHE PATH "Verified experimental runtime overlay capsule")
 set(GT4_PERF_RUNTIME_SOURCE "" CACHE PATH "Verified performance-only runtime capsule")
 option(GT4_PERF_FRAME_ONLY "Compile out subsystem hooks for a matched timing control" OFF)
@@ -25,8 +25,9 @@ set(GT4_SHADER_DIR "${SHADERS}" CACHE PATH "Isolated qualified shader directory"
 # a worktree passes -DGT4_ASSETS_ROOT=<main checkout> and never links the main private/ directory.
 get_filename_component(GT4_PRIVATE_BASE "${GT4_ASSETS_ROOT}" ABSOLUTE)
 if(GT4_PERF_RUNTIME_SOURCE)
-    if(GT4_SHAPE_RUNTIME_SOURCE OR NOT GT4_EE_PROFILE STREQUAL "production")
-        message(FATAL_ERROR "Performance profile requires production EE and no observation overlay")
+    # TASK-014 slice208: the accepted explicit-seed library (profile coverage) may carry the performance capsule too.
+    if(GT4_SHAPE_RUNTIME_SOURCE OR NOT GT4_EE_PROFILE MATCHES "^(production|coverage)$")
+        message(FATAL_ERROR "Performance profile requires production or coverage EE and no observation overlay")
     endif()
     get_filename_component(PORT "${GT4_PORT_DIR}" ABSOLUTE)
     get_filename_component(SHADERS "${GT4_SHADER_DIR}" ABSOLUTE)
@@ -98,6 +99,17 @@ elseif(GT4_EE_PROFILE STREQUAL "baseline" OR GT4_EE_PROFILE STREQUAL "recovered"
     set(GAME_LIBRARY "${GT4_ROOT}/${library_path}")
     set(PORT "${GT4_ROOT}/${port_path}")
     set(SHADERS "${GT4_ROOT}/${shader_path}")
+elseif(GT4_EE_PROFILE STREQUAL "coverage")
+    # TASK-014 slice208: the accepted explicit-seed library. Pinned by docs/inputs/slice208-ee-libraries.json; the
+    # library is built from the slice208 producer directory and is not the production library.
+    file(READ "${GT4_ROOT}/docs/inputs/slice208-ee-libraries.json" coverage_manifest)
+    string(JSON library_path GET "${coverage_manifest}" profiles coverage path)
+    string(JSON expected_game_library_hash GET "${coverage_manifest}" profiles coverage sha256)
+    if(NOT library_path MATCHES "^private/slice208-ee-entries-producer/game-build/ps2game\.lib$")
+        message(FATAL_ERROR "Coverage library must be the slice208 producer library")
+    endif()
+    set(GAME_LIBRARY "${GT4_ASSETS_ROOT}/${library_path}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_ROOT}/docs/inputs/slice208-ee-libraries.json")
 else()
     message(FATAL_ERROR "Unknown GT4_EE_PROFILE; no permissive AOT library selection")
 endif()

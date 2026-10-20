@@ -53,7 +53,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑011 | MTVU: VU1 on its own thread, on by default | ✅ Done · in `--mode main` (slice178), `GT4_MTVU=0` A/B |
 | TASK‑012 | paraLLEl-GS as an optional PC renderer | ❌ Dropped (decision 0070): LGPL code not shipped. Branch `task/012-parallel-gs` kept as history; MIT seam and capture code salvaged into TASK-035 |
 | TASK‑013 | VU0 microcode compiled ahead of time | ✅ Done |
-| TASK‑014 | EE entry coverage from the decomp function list | 🔄 Stage A done |
+| TASK‑014 | EE entry coverage from the decomp function list | ✅ Done (2026-10-21) · 1,105 new entries (+3,728 dispatch ids), slice208 `pcsx2-coverage`; headless 42/42 identical; owner play-through approved |
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | ✅ Done (2026-10-16) · license demo guard on both demo loaders (slice206, `--mode pcsx2`): licenses playable, demos that decrypt wrong are skipped as in PCSX2 default; root cause moved to TASK‑063 |
@@ -204,6 +204,19 @@ Replaces the former donor-renderer upscaling, readback-wait and renderer-feature
 ### TASK-014 — EE entry coverage
 Add translator entries for decomp functions without one, starting with the 15
 referenced ones (docs/DECOMP-INTEGRATION.md).
+
+State (2026-10-20, branch task/014-ee-coverage-b, Phase 1 done, not merged): static entry ledger
+(scripts/ee_entry_ledger.py, docs/EE-ENTRY-LEDGER.md). Translated entries (case labels): 135,806. New
+candidates: 1,122 (high 1,076, medium 39, low 6, rejected 1), 246 unit windows. Decomp names untranslated: 83
+of 7,740. The 16 stage A seeds are found by the strict rules (14) and a 40-word window (2). The name table at
+decomp e0b70c4d6 equals the committed one. Open: the generated folder has 135,806 labels but its log says
+135,093; resolve before Phase 2 (extra-entries library A/B, then producer regeneration after owner approval).
+State (2026-10-20, branch task/014-ee-coverage-b, phase 2 candidate built, not merged): 1,105 accepted seeds
+(scripts/ee_entries.py). Library profile coverage: 139,534 dispatch ids (+3,728), 325 of 326 units change. Built with
+the portable clang-cl 23.1.2; the 8-unit object check is identical to production. CTest 33/33, Python 583 OK,
+headless 42/42 identical to slice206. New mode pcsx2-coverage (docs/inputs/slice208-pcsx2.json). Owner play-through
+pending; the 135,806 vs 135,093 gap is the codegen boundary entries (EE-ENTRY-LEDGER).
+State (2026-10-21): ✅ Done. The owner approved the slice208 candidate after the play-through and asked to close the task (PR into main). `--mode pcsx2` stays slice206 until the default is switched to slice208 in a follow-up (new pin labelled pcsx2, distribution and launcher test folder rebuilt).
 
 ### TASK-015 — LWR fidelity
 State: analysis done, no runtime change (branch task/015-lwr-fidelity). The donor helper matches PCSX2:
