@@ -165,10 +165,18 @@ body.is-home.input-keys #hints { display: none; }
   position: absolute; right: 40px; bottom: 28px; z-index: 2;
   font: 400 12px var(--label); letter-spacing: 0.08em; color: var(--silver);
 }
+/* Between the slideshow and the logo/Play: a bottom-up fade (dark at the bottom, clear by about 65% height)
+   for contrast under the logo and Play, plus a light top fade for the gear. */
 .home .shade {
   position: absolute; inset: 0;
-  background: linear-gradient(0deg, rgba(10, 12, 20, 0.90) 0%, rgba(10, 12, 20, 0) 50%),
-              linear-gradient(180deg, rgba(10, 12, 20, 0.55) 0%, rgba(10, 12, 20, 0) 18%);
+  background: linear-gradient(0deg,
+                rgba(10, 12, 20, 0.96) 0%,
+                rgba(10, 12, 20, 0.82) 22%,
+                rgba(10, 12, 20, 0.45) 42%,
+                rgba(10, 12, 20, 0.12) 56%,
+                rgba(10, 12, 20, 0) 66%),
+              linear-gradient(90deg, rgba(10, 12, 20, 0.55) 0%, rgba(10, 12, 20, 0.25) 24%, rgba(10, 12, 20, 0) 42%),
+              linear-gradient(180deg, rgba(10, 12, 20, 0.45) 0%, rgba(10, 12, 20, 0) 16%);
 }
 .gear {
   position: absolute; right: 40px; top: 32px; width: 40px; height: 40px; border-radius: 3px;

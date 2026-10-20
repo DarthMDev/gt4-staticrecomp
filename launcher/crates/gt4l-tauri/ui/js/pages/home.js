@@ -85,7 +85,8 @@
       }, [gearIcon()]);
 
       // Slideshow: one img per slot (bg-slide-1..6 crossfade in CSS). The slots come from GT4.config.
-      var backgrounds = ((GT4.config && GT4.config.backgrounds) || []).slice(0, 3);
+      // At most six slots: css/app.css defines bg-slide-1..6.
+      var backgrounds = ((GT4.config && GT4.config.backgrounds) || []).slice(0, 6);
       var slides = backgrounds.map(function (src, index) {
         return h("img", { class: "bg-slide bg-slide-" + (index + 1), src: src, alt: "" });
       });
