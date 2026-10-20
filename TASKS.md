@@ -103,6 +103,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑075 | Input layer on SDL3: game reads all pads (XInput, DS4, DualSense, Switch Pro, generic) mapped to the DS2 layout, applies the launcher's controls.toml; launcher Controls page reads the same SDL3 layer | 📋 Planned (next game build, before 1.0.0) |
 | TASK‑076 | Modern fixed keyboard layout for GT4 (several keys per DS2 button: WASD + arrows, nitro, gear up/down, camera, look back, ghost, Enter/Esc/Backspace) | 📋 Planned (with TASK-075) |
 | TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Open, study done (docs/CONTEXT-INPUT-STUDY.md); not in 1.0.0 |
+| TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -298,6 +299,17 @@ State (2026-10-20): open, out of the 1.0.0 scope (owner). The read-only study is
 a host-side VBlank read of guest RAM (the race_display pattern) can tell race classes apart by vtable and see the pause
 object; replay is still unknown. Proposed first step: a logging-only probe build (S1). Depends on TASK-029 reaching
 main and on TASK-075.
+
+### TASK-078 — Graphics settings in the game's own menu
+Owner idea 2026-10-20, after 1.0.0. Remove GT4's video-output row (480i / 480p / 1080i, the "HiVision" widget on
+Options → Screen), keep the game fixed at 480p, and show our settings in the native Options menu: output resolution
+(480p to 8K, the renderer's internal resolution), fullscreen, anti-aliasing and maybe more. Read-only study in
+docs/INGAME-SETTINGS-STUDY.md. Recommended path: host-side substitution of the option menu data when the game reads
+the disc (patch recipes applied to the user's own disc, never shipped game files) plus a host bridge for the script
+natives in `dispatch`; a host overlay menu is the fallback. Phases: P0 hold races at 480p for any saved value; P1 hide
+the old row; P2 the "Output resolution" row and a settings file the launcher merges; later fullscreen and AA rows and
+live apply in gt4-gs. Estimate: 4-5 slices for P0-P2, 6-8 plus a gt4-gs release in total. Owner decisions pending:
+provenance of OpenAdhoc-derived script edits, progressive menus (ELF patch) or not.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
