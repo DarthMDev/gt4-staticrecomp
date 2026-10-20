@@ -84,13 +84,20 @@
         on: { click: function () { GT4.go("#/settings/graphics"); } }
       }, [gearIcon()]);
 
-      page.appendChild(h("div", { class: "art" }, [
-        h("img", { src: "assets/cover-front.png", alt: "" }),
-        h("div", { class: "shade" })
-      ]));
+      // Slideshow: one img per slot (bg-slide-1..3 crossfade in CSS). The slots come from GT4.config.
+      var backgrounds = ((GT4.config && GT4.config.backgrounds) || []).slice(0, 3);
+      var slides = backgrounds.map(function (src, index) {
+        return h("img", { class: "bg-slide bg-slide-" + (index + 1), src: src, alt: "" });
+      });
+      page.appendChild(h("div", { class: "art" }, slides.concat([h("div", { class: "shade" })])));
+      var versionLabel = h("div", { class: "home-version", text: "" });
+      page.appendChild(versionLabel);
+      call("about_info").then(function (info) {
+        versionLabel.textContent = "GT4Recomp " + (info.version || "");
+      }, function () {});
       page.appendChild(gear);
       page.appendChild(h("div", { class: "home-bottom" }, [
-        h("img", { class: "home-logo", src: "assets/logo-gt4.png", alt: "Gran Turismo 4" }),
+        h("img", { class: "home-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
         playButton,
         running
       ]));

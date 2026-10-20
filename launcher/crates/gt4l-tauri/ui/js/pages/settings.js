@@ -469,7 +469,7 @@
           type: "button",
           on: { click: function () { GT4.go("#/home"); } }
         }, [backIcon, "Back"]),
-        h("img", { class: "side-logo", src: "assets/logo-gt4.png", alt: "Gran Turismo 4" }),
+        h("img", { class: "side-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
         tabs.map(function (tab) {
           return h("button", {
             class: "tab",

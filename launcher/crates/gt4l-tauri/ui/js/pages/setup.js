@@ -215,7 +215,7 @@
       var page = h("div", { class: "stage setup" }, [
         h("div", { class: "cover-col" }, [cover]),
         h("div", { class: "setup-main" }, [
-          h("img", { class: "wordmark", src: "assets/logo-gt4.png", alt: "Gran Turismo 4" }),
+          h("img", { class: "wordmark", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
           title,
           sub,
           steps,
