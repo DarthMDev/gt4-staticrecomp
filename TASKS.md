@@ -205,6 +205,13 @@ Replaces the former donor-renderer upscaling, readback-wait and renderer-feature
 Add translator entries for decomp functions without one, starting with the 15
 referenced ones (docs/DECOMP-INTEGRATION.md).
 
+State (2026-10-20, branch task/014-ee-coverage-b, Phase 1 done, not merged): static entry ledger
+(scripts/ee_entry_ledger.py, docs/EE-ENTRY-LEDGER.md). Translated entries (case labels): 135,806. New
+candidates: 1,122 (high 1,076, medium 39, low 6, rejected 1), 246 unit windows. Decomp names untranslated: 83
+of 7,740. The 16 stage A seeds are found by the strict rules (14) and a 40-word window (2). The name table at
+decomp e0b70c4d6 equals the committed one. Open: the generated folder has 135,806 labels but its log says
+135,093; resolve before Phase 2 (extra-entries library A/B, then producer regeneration after owner approval).
+
 ### TASK-015 — LWR fidelity
 State: analysis done, no runtime change (branch task/015-lwr-fidelity). The donor helper matches PCSX2:
 offset 0 sign-extends, offsets 1-3 preserve the upper 32 bits. The brief's premise does not hold in code.
