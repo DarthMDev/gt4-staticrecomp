@@ -521,39 +521,48 @@
     });
   };
 
-  // The settings shell: nav column, then the tab content.
+  // The settings shell: a tab list and the tab's rows, with the two focus levels of js/focus-levels.js.
+  //   side     focus on the tab list; the content shows the highlighted tab (preview).
+  //   content  focus inside the rows; B returns to the tab list on the same tab.
+  // Switching tabs re-renders only the content, so focus never resets. The hash follows the shown tab.
+  var FL = GT4.focusLevels;
+  var SAVABLE_TABS = ["graphics", "display", "advanced"];
+  var focusState = null; // kept while the app runs: the row last focused in each tab (session memory)
+
   GT4.pages = GT4.pages || {};
   GT4.pages.settings = {
     mount: function (root, params) {
       var tabs = visibleTabs();
-      var tabId = params.tab || "graphics";
-      var index = tabs.findIndex(function (tab) {
-        return tab.id === tabId;
+      var tabIds = tabs.map(function (tab) {
+        return tab.id;
       });
-      if (index < 0) {
+      var requested = params.tab || "graphics";
+      if (tabIds.indexOf(requested) < 0) {
         // Unknown or hidden tab (for example #/settings/mods in this build): fall back.
-        index = 0;
-        tabId = tabs[0].id;
+        requested = tabIds[0];
       }
+      var state = focusState ? FL.open(focusState, requested) : FL.start(requested);
+      var shown = null;
+      var tabHints = [];
+      var ready = Promise.resolve();
 
       var content = h("div", { class: "content" });
-      // Tabs with settings to save (X confirms). About and the list tabs set their own X or none.
-      var savableTabs = ["graphics", "display", "advanced"];
+      var pill = h("span", { class: "side-pill", "aria-hidden": "true" });
       var version = h("div", { class: "side-version", text: "" });
-      var backIcon = h("span", { "aria-hidden": "true", text: "‹" });
       var side = h("nav", { class: "side", "aria-label": "Settings" }, [
         h("button", {
           class: "back",
           type: "button",
           on: { click: function () { GT4.go("#/home"); } }
-        }, [backIcon, "Back"]),
+        }, [h("span", { "aria-hidden": "true", text: "‹" }), "Back"]),
         h("img", { class: "side-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
+        pill,
         tabs.map(function (tab) {
           return h("button", {
             class: "tab",
             type: "button",
-            "aria-current": tab.id === tabId ? "page" : null,
-            on: { click: function () { GT4.go("#/settings/" + tab.id); } }
+            data: { tab: tab.id },
+            on: { click: onTabClick }
           }, tab.label);
         }),
         version
@@ -561,34 +570,202 @@
       var stage = h("div", { class: "stage settings" }, [side, content]);
       root.appendChild(stage);
 
-      GT4.hooks.back = function () { GT4.go("#/home"); };
-      GT4.hooks.tabs = function (delta) {
-        var next = tabs[(index + delta + tabs.length) % tabs.length];
-        GT4.go("#/settings/" + next.id);
-      };
-      if (savableTabs.indexOf(tabId) >= 0) {
-        // Settings apply on change; X confirms that they are kept.
-        GT4.hooks.x = function () { GT4.ui.toast("Saved"); };
+      function sideButton(id) {
+        return side.querySelector("[data-tab=\"" + id + "\"]");
       }
 
-      var host = {
-        setHooks: function (partial) {
-          Object.keys(partial).forEach(function (key) {
-            GT4.hooks[key] = partial[key];
-          });
-        },
-        // Footer: the page's own keys first, then the shell keys. X is shown by the caller only where it applies.
-        hints: function (extra) {
-          GT4.ui.setHints((extra || []).concat([
-            { key: "A", label: "Select", run: function () { GT4.nav.activate(); } },
-            { key: "B", label: "Back", run: function () { GT4.back(); } },
-            { key: "LB RB", label: "Tabs", run: function () { GT4.hooks.tabs(1); } }
-          ]));
+      function rowKeyOf(el) {
+        var row = el && el.closest ? el.closest("[data-row]") : null;
+        return row ? row.getAttribute("data-row") : null;
+      }
+
+      function setState(next) {
+        state = next;
+        focusState = next;
+        stage.classList.toggle("is-side-level", state.level === FL.SIDE);
+        stage.classList.toggle("is-content-level", state.level === FL.CONTENT);
+        placePill();
+        renderFooter();
+      }
+
+      // The highlight pill sits on the focused item of the tab list (CSS animates its movement).
+      function placePill() {
+        var focused = side.contains(document.activeElement) ? document.activeElement : sideButton(state.tab);
+        if (!focused || focused.offsetParent === null) {
+          return;
+        }
+        pill.style.top = focused.offsetTop + "px";
+        pill.style.height = focused.offsetHeight + "px";
+      }
+
+      function markSide() {
+        side.querySelectorAll("[data-tab]").forEach(function (button) {
+          if (button.getAttribute("data-tab") === shown) {
+            button.setAttribute("aria-current", "page");
+          } else {
+            button.removeAttribute("aria-current");
+          }
+        });
+      }
+
+      // Footer: the level's keys, then (content level) the tab's own keys such as X Save and Y Reset.
+      function renderFooter() {
+        var runs = {
+          Enter: enterContent,
+          Select: function () { GT4.nav.activate(); },
+          Back: function () { GT4.back(); },
+          Tabs: function () { if (state.level === FL.CONTENT) { leaveContent(); } else { stepTab(1); } }
+        };
+        var list = FL.footer(state.level).map(function (item) {
+          var run = item.key === "LB RB" ? function () { stepTab(1); } : runs[item.label];
+          return { key: item.key, label: item.label, run: run };
+        });
+        if (state.level === FL.CONTENT) {
+          list = list.concat(tabHints);
+        }
+        GT4.ui.setHints(list);
+      }
+
+      function showTab(id) {
+        shown = id;
+        var fresh = h("div", { class: "content" });
+        stage.replaceChild(fresh, content);
+        content = fresh;
+        // Focus inside the rows: the level becomes content (a mouse click lands here too) and the row is remembered.
+        fresh.addEventListener("focusin", function (event) {
+          if (state.level !== FL.CONTENT) {
+            setState(FL.enter(state));
+          }
+          var key = rowKeyOf(event.target);
+          if (key) {
+            setState(FL.remember(state, key));
+          }
+        });
+        tabHints = SAVABLE_TABS.indexOf(id) >= 0
+          ? [{ key: "X", label: "Save", run: function () { if (GT4.hooks.x) { GT4.hooks.x(); } } }]
+          : [];
+        GT4.hooks.x = SAVABLE_TABS.indexOf(id) >= 0 ? function () { GT4.ui.toast("Saved"); } : undefined;
+        delete GT4.hooks.y;
+        delete GT4.hooks.start;
+        markSide();
+        // The hash follows the shown tab without a route change (replaceState fires no hashchange).
+        try {
+          window.history.replaceState(null, "", "#/settings/" + id);
+        } catch (err) {
+          // Some hosts refuse history changes; the tab still shows.
+        }
+        var host = {
+          setHooks: function (partial) {
+            Object.keys(partial).forEach(function (key) {
+              GT4.hooks[key] = partial[key];
+            });
+          },
+          // The tab's own footer keys (shown on the content level); the level keys are added by renderFooter.
+          hints: function (extra) {
+            tabHints = extra || [];
+            renderFooter();
+          }
+        };
+        var mounted = GT4.tabPages[id] ? GT4.tabPages[id](fresh, host) : null;
+        renderFooter();
+        ready = Promise.resolve(mounted).catch(function (err) {
+          GT4.ui.toast(errorText(err), true);
+        });
+        return ready;
+      }
+
+      // A, or D-pad right, on the highlighted tab: focus goes into its rows (the one last used, else the first).
+      function enterContent() {
+        if (state.level === FL.CONTENT) {
+          return;
+        }
+        setState(FL.enter(state));
+        ready.then(focusRow);
+      }
+
+      // B in the rows: the tab list, on the same tab. Nothing is reset.
+      function leaveContent() {
+        setState(FL.back(state));
+        var button = sideButton(state.tab);
+        if (button) {
+          button.focus({ preventScroll: true });
+        }
+      }
+
+      function focusRow() {
+        if (state.level !== FL.CONTENT) {
+          return;
+        }
+        var list = GT4.nav.focusables();
+        var key = FL.rowFor(state);
+        var target = key ? list.filter(function (el) { return rowKeyOf(el) === key; })[0] : null;
+        target = target || list.filter(function (el) { return !!el.closest(".ctl"); })[0] || list[0];
+        if (target) {
+          target.focus({ preventScroll: true });
+        }
+      }
+
+      // LB/RB (or a swipe): the next or previous tab. The level stays; in content the focus lands on that tab's row.
+      function stepTab(delta) {
+        var next = FL.moveTab(state, delta, tabIds);
+        setState(next);
+        showTab(next.tab);
+        if (state.level === FL.CONTENT) {
+          ready.then(focusRow);
+        } else {
+          var button = sideButton(state.tab);
+          if (button) {
+            button.focus({ preventScroll: true });
+          }
+        }
+      }
+
+      // Clicks: a pad or keyboard activation enters the tab. A mouse or touch click only focuses it (the preview
+      // already shows the tab).
+      function onTabClick(event) {
+        var mode = GT4.inputMode ? GT4.inputMode() : "mouse";
+        if (mode === "mouse") {
+          return;
+        }
+        event.preventDefault();
+        enterContent();
+      }
+
+      // Focus on the tab list: the highlighted tab is shown (preview). Focus on Back keeps the shown tab.
+      side.addEventListener("focusin", function (event) {
+        var id = event.target.getAttribute ? event.target.getAttribute("data-tab") : null;
+        if (state.level !== FL.SIDE) {
+          setState(FL.back(state));
+        }
+        if (id && id !== shown) {
+          setState(FL.select(state, id));
+          showTab(id);
+        }
+        placePill();
+      });
+
+      GT4.focusScope = function () {
+        return state.level === FL.CONTENT ? content : side;
+      };
+      GT4.hooks.back = function () {
+        if (state.level === FL.CONTENT) {
+          leaveContent();
+        } else {
+          GT4.go("#/home");
         }
       };
-      host.hints(savableTabs.indexOf(tabId) >= 0
-        ? [{ key: "X", label: "Save", run: function () { GT4.hooks.x(); } }]
-        : []);
+      GT4.hooks.tabs = function (delta) {
+        stepTab(delta);
+      };
+      // D-pad right on a tab enters it; everything else (sliders, the rows) is left to nav.js.
+      GT4.hooks.horizontal = function (delta) {
+        var focused = document.activeElement;
+        if (state.level === FL.SIDE && delta > 0 && focused && focused.hasAttribute && focused.hasAttribute("data-tab")) {
+          enterContent();
+          return true;
+        }
+        return false;
+      };
 
       // Swipe left or right (finger, not mouse) changes the tab. Sliders and dropdown lists keep their own drags.
       var swipe = null;
@@ -621,13 +798,43 @@
         version.textContent = "Version " + (info.version || "");
       }).catch(function () {});
 
-      var mounted = GT4.tabPages[tabId] ? GT4.tabPages[tabId](content, host) : null;
-      if (mounted && mounted.catch) {
-        mounted.catch(function (err) {
-          GT4.ui.toast(errorText(err), true);
-        });
+      // Dev harness only (ui/dev/index.html?focus=...): sets the focus state for screenshots and checks.
+      var dev = GT4.devFocus || "";
+      if (dev) {
+        GT4.nav.setMode("pad");
       }
-      return { destroy: function () {} };
+      setState(state);
+      // The pill needs the final layout: the logo and the fonts load after mount.
+      side.querySelector(".side-logo").addEventListener("load", placePill);
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(placePill);
+      }
+      window.requestAnimationFrame(placePill);
+      showTab(requested).then(function () {
+        placePill();
+        if (dev === "content" || dev === "row" || dev === "slider" || dev === "dropdown") {
+          enterContent();
+          ready.then(function () {
+            if (dev === "slider") {
+              var slider = content.querySelector("input[type=range]");
+              if (slider) { slider.focus({ preventScroll: true }); }
+            } else if (dev === "dropdown") {
+              var select = content.querySelector(".select");
+              if (select) { select.focus({ preventScroll: true }); select.click(); }
+            }
+          });
+        } else {
+          var button = sideButton(requested);
+          if (button) {
+            button.focus({ preventScroll: true });
+          }
+        }
+      });
+      return {
+        destroy: function () {
+          GT4.focusScope = null;
+        }
+      };
     }
   };
 })(window);

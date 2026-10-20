@@ -33,14 +33,14 @@ fn an_unversioned_dev_build_file_is_backed_up_and_migrated_to_schema_one() {
     let (loaded, notes) = config::load(&path);
     assert_eq!(loaded.settings.get("vsync"), "fast", "the values survive the migration");
     assert_eq!(loaded.disc_path.as_deref(), Some(Path::new("D:/gt4.iso")));
-    assert!(notes.iter().any(|note| note.contains("migrated from schema 0 to 1")), "{notes:?}");
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 0 to 2")), "{notes:?}");
 
     let copies = backups(&directory, "settings.toml.bak-schema0-");
     assert_eq!(copies.len(), 1, "exactly one backup");
     assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original, "the backup is the untouched original");
 
     let rewritten = fs::read_to_string(&path).unwrap();
-    assert!(rewritten.contains("schema_version = 1"), "{rewritten}");
+    assert!(rewritten.contains("schema_version = 2"), "{rewritten}");
     assert!(!rewritten.contains("\r\r"));
 }
 
@@ -102,4 +102,68 @@ fn a_damaged_version_file_is_refused_so_the_caller_falls_back_to_the_program_ver
     assert_eq!(fs::read_to_string(&path).unwrap(), r#"{"schema": 4, "gt4recomp": "9.0.0", "settings_schema": 1}"#);
     let file: Option<VersionFile> = versions::read(&directory.join("missing.json")).unwrap();
     assert!(file.is_none());
+}
+
+#[test]
+fn the_fullscreen_default_is_on_for_new_installs() {
+    let settings = gt4l_core::settings::Settings::default();
+    assert_eq!(settings.get("fullscreen"), "on");
+    assert!(!settings.was_chosen("fullscreen"));
+}
+
+#[test]
+fn schema_one_fullscreen_off_that_was_never_chosen_becomes_on_and_keeps_a_backup() {
+    let directory = scratch("fullscreen-default");
+    let path = directory.join("settings.toml");
+    let original = "schema_version = 1
+
+[settings]
+fullscreen = \"off\"
+vsync = \"fast\"
+";
+    fs::write(&path, original).unwrap();
+
+    let (loaded, notes) = config::load(&path);
+    assert_eq!(loaded.settings.get("fullscreen"), "on", "the old windowed default is replaced");
+    assert_eq!(loaded.settings.get("vsync"), "fast", "other values survive");
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 1 to 2")), "{notes:?}");
+
+    let copies = backups(&directory, "settings.toml.bak-schema1-");
+    assert_eq!(copies.len(), 1, "exactly one backup of the schema 1 file");
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original, "the backup is the untouched original");
+    assert!(fs::read_to_string(&path).unwrap().contains("fullscreen = \"on\""));
+}
+
+#[test]
+fn a_fullscreen_value_the_user_chose_is_kept_through_the_migration() {
+    let directory = scratch("fullscreen-chosen");
+    let path = directory.join("settings.toml");
+    fs::write(&path, "schema_version = 1
+
+[settings]
+fullscreen = \"off\"
+
+[choices]
+fullscreen = true
+").unwrap();
+
+    let (loaded, _) = config::load(&path);
+    assert_eq!(loaded.settings.get("fullscreen"), "off", "a deliberate windowed choice stays");
+    assert!(loaded.settings.was_chosen("fullscreen"));
+}
+
+#[test]
+fn a_choice_made_on_the_settings_page_is_saved_and_read_back() {
+    let directory = scratch("fullscreen-save");
+    let path = directory.join("settings.toml");
+    let mut config_file = ConfigFile::default();
+    config_file.settings.set_by_user("fullscreen", "off").unwrap();
+    config::save(&path, &config_file).unwrap();
+
+    let text = fs::read_to_string(&path).unwrap();
+    assert!(text.contains("[choices]
+fullscreen = true"), "{text}");
+    let (loaded, _) = config::load(&path);
+    assert_eq!(loaded.settings.get("fullscreen"), "off");
+    assert!(loaded.settings.was_chosen("fullscreen"));
 }

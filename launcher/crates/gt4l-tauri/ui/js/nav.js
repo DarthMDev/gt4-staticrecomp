@@ -1,7 +1,6 @@
 /*
- * Input: spatial focus movement, keyboard, Web Gamepad polling, and the
- * optional Rust "gamepad" event. Pages describe their actions through
- * GT4.hooks = {x, y, start, back, tabs(delta)}; the router resets it per page.
+ * Input: spatial focus movement, keyboard and Web Gamepad polling. Pages describe
+ * their actions through GT4.hooks = {x, y, start, back, tabs(delta), horizontal(delta)}; the router resets it per page.
  *
  * Standard gamepad mapping (XInput layout in WebView2):
  *   0 A  activate            1 B  back / cancel
@@ -53,9 +52,14 @@
   }
 
   // The top-most dialog owns navigation while it is open.
+  // A page may narrow the scope (Settings: the tab list or the tab's rows) with GT4.focusScope().
   function scopeRoot() {
     var dialogs = document.querySelectorAll(".modal");
-    return dialogs.length ? dialogs[dialogs.length - 1] : document.getElementById("app");
+    if (dialogs.length) {
+      return dialogs[dialogs.length - 1];
+    }
+    var narrowed = GT4.focusScope ? GT4.focusScope() : null;
+    return narrowed || document.getElementById("app");
   }
 
   function isShown(el) {
@@ -114,6 +118,10 @@
     if (GT4.capturing) {
       return;
     }
+    // A page may take the press first (Settings: D-pad right on a tab enters its content).
+    if (GT4.hooks.horizontal && GT4.hooks.horizontal(delta)) {
+      return;
+    }
     var el = document.activeElement;
     if (isAdjustable(el)) {
       el.dispatchEvent(new CustomEvent("gt4-adjust", { detail: { delta: delta } }));
@@ -168,7 +176,7 @@
     }
   }
 
-  // One logical button press from the gamepad or the Rust event.
+  // One logical button press from the gamepad.
   // Face and shoulder buttons go through GT4.input.padRoute (pure, tested in dev/nav-test.html).
   function padPress(name) {
     if (GT4.capturing && name !== "b") {
@@ -365,12 +373,10 @@
   document.addEventListener("pointerdown", function () { setMode("mouse"); }, true);
   document.addEventListener("pointermove", function () { setMode("mouse"); }, true);
 
-  // Rust-side fallback: {button: "a" | "b" | ... | "up", pressed: true}.
-  GT4.backend.listen("gamepad", function (payload) {
-    if (payload && payload.pressed && typeof payload.button === "string") {
-      padPress(payload.button);
-    }
-  });
+  // "mouse", "keys" or "pad": the last kind of input used. Pages use it to tell a pad A from a mouse click.
+  GT4.inputMode = function () {
+    return mode;
+  };
 
   GT4.nav = {
     move: move,

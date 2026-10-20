@@ -13,7 +13,7 @@ use crate::settings::{self, Settings};
 use crate::version::Version;
 
 /// Schema of this file (`migrate::SETTINGS`). Files without a schema number are schema 0 and are migrated.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConfigFile {
@@ -91,6 +91,14 @@ pub fn parse(text: &str) -> Result<(ConfigFile, Vec<String>), ConfigError> {
             }
         }
     }
+    // `[choices]`: settings the user set on the Settings page (see `Settings::set_by_user`).
+    if let Some(section) = table.get("choices").and_then(|value| value.as_table()) {
+        for (key, value) in section {
+            if settings::definition(key).is_some() && value.as_bool() == Some(true) {
+                config.settings.mark_chosen(key);
+            }
+        }
+    }
     if let Some(section) = table.get("gs").and_then(|value| value.as_table()) {
         for (key, value) in section {
             match value.as_str() {
@@ -131,6 +139,16 @@ pub fn render(config: &ConfigFile) -> String {
     text.push_str(&format!("schema_version = {SCHEMA_VERSION}\n\n[settings]\n"));
     for definition in settings::SETTINGS {
         text.push_str(&format!("{} = {}\n", definition.id, quote(config.settings.get(definition.id))));
+    }
+    let chosen = config.settings.chosen_ids();
+    if !chosen.is_empty() {
+        text.push_str("
+[choices]
+");
+        for id in chosen {
+            text.push_str(&format!("{id} = true
+"));
+        }
     }
     if !config.settings.gs_overrides().is_empty() {
         // PCSX2 GS table values (decision 0070): only the values the user set are stored.

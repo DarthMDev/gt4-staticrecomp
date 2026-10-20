@@ -42,6 +42,17 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 
 ## Controller (XInput, WebView2)
 
+- [ ] Settings has two levels. Opening it focuses the tab list on the current tab (Graphics by default); the content shows the highlighted tab as you move up and down.
+- [ ] A, or D-pad right, on a tab enters its content on the first row, or on the row you last used in that tab (remembered for the session).
+- [ ] In the content: up and down move between rows; left and right change a slider or dropdown; A opens a dropdown or flips a toggle.
+- [ ] B in the content goes back to the tab list on the same tab, and nothing is reset. B on the tab list goes Home.
+- [ ] LB and RB change tabs from either level; from the content the focus stays in the content on the new tab.
+- [ ] After a dropdown or dialog closes, focus is back on the control that opened it.
+- [ ] The tab list highlight is a soft pill that glides between tabs; the tab shown while you are in the content keeps a quiet accent edge.
+- [ ] A focused row has a lighter band with a thin accent edge; the focused control has a soft glow. There is no hard box.
+- [ ] With Windows "Show animations" off (or reduced motion), the pill and the glow change instantly.
+- [ ] Footer: the tab list shows A Enter, B Back, LB RB Tabs; the content shows A Select, B Tabs, then X Save and Y where the tab has them.
+- [ ] Mouse and touch: a click or tap focuses what was clicked; a click on a tab shows it without entering its rows.
 - [ ] The D-pad and the left stick move focus; holding repeats after about 0.4 s, then about every 0.1 s.
 - [ ] Stick deadzone: a slight drift does not move focus.
 - [ ] A activates; B goes back (closes a dialog first); Start on Home plays.

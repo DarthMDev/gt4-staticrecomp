@@ -297,9 +297,15 @@ void on_vblank() {
 } // namespace
 
 bool open_window(bool fullscreen) {
-  if (fullscreen)
-    throw std::runtime_error(
-        "Fullscreen is not qualified in this Vulkan pilot");
+  // The launcher passes GT4_FULLSCREEN (its Display setting, on by default). An invalid value stops the start.
+  bool start_fullscreen = fullscreen;
+  try {
+    start_fullscreen = start_fullscreen || gt4::window_mode::parse_start_fullscreen(std::getenv("GT4_FULLSCREEN"));
+  } catch (const std::invalid_argument &error) {
+    std::fprintf(stderr, "[window] %s, game not started
+", error.what());
+    return false;
+  }
   // An invalid GT4_CONTROLS_FILE stops the start here, before any window or guest work.
   try {
     active_controls = gt4::controls::load_controls_from_environment();
@@ -334,6 +340,11 @@ bool open_window(bool fullscreen) {
       window_class.hInstance, nullptr);
   if (!game_window)
     throw std::runtime_error("Cannot create native game window");
+  // Start in borderless fullscreen on the window's monitor: the same path as Alt+Enter and F11.
+  if (start_fullscreen)
+    set_fullscreen(true);
+  std::fprintf(stderr, "[window] %s start (GT4_FULLSCREEN)
+", start_fullscreen ? "fullscreen" : "windowed");
   return true;
 }
 

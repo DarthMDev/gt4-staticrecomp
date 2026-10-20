@@ -109,6 +109,48 @@
   expect("while a rebind waits, A does nothing", route("a", { hooks: pageHooks, capturing: true }), null);
   expect("while a rebind waits, Y does nothing", route("y", { hooks: pageHooks, capturing: true }), null);
 
+  // Two-level focus (js/focus-levels.js): enter, B back, LB/RB keeping the level, the remembered row per tab.
+  var FL = root.GT4.focusLevels;
+  var TABS = ["graphics", "advanced", "display", "controls"];
+  function same(name, actual, expected) {
+    expect(name, JSON.stringify(actual), JSON.stringify(expected));
+  }
+
+  var opened = FL.start("graphics");
+  same("opening Settings starts on the tab list", opened.level, FL.SIDE);
+  same("opening Settings shows the current tab", opened.tab, "graphics");
+
+  var entered = FL.enter(opened);
+  same("A on a tab enters its content", entered.level, FL.CONTENT);
+  same("entering keeps the tab", entered.tab, "graphics");
+  same("entering does not change the input state", opened.level, FL.SIDE);
+
+  var rowed = FL.remember(entered, "fxaa");
+  same("focus on a row is remembered for its tab", FL.rowFor(rowed), "fxaa");
+  var backed = FL.back(rowed);
+  same("B in the content returns to the tab list", backed.level, FL.SIDE);
+  same("B returns to the same tab", backed.tab, "graphics");
+  same("B resets nothing: the row is still remembered", FL.rowFor(backed), "fxaa");
+  same("entering again lands on the remembered row", FL.rowFor(FL.enter(backed)), "fxaa");
+
+  var lbContent = FL.moveTab(entered, 1, TABS);
+  same("LB/RB from content keeps the content level", lbContent.level, FL.CONTENT);
+  same("LB/RB from content moves to the next tab", lbContent.tab, "advanced");
+  var lbSide = FL.moveTab(backed, 1, TABS);
+  same("LB/RB from the tab list keeps the tab-list level", lbSide.level, FL.SIDE);
+  same("the previous tab is remembered per tab", FL.rowFor(FL.moveTab(FL.moveTab(rowed, 1, TABS), -1, TABS)), "fxaa");
+  same("another tab has no remembered row yet", FL.rowFor(lbContent), null);
+  same("LB/RB wraps from the last tab to the first", FL.moveTab(FL.select(backed, "controls"), 1, TABS).tab, "graphics");
+  same("RB/LB wraps back from the first tab", FL.moveTab(FL.select(backed, "graphics"), -1, TABS).tab, "controls");
+  same("the preview (select) changes only the tab", FL.select(backed, "display").level, FL.SIDE);
+
+  var reopened = FL.open(backed, "display");
+  same("reopening Settings puts focus on the tab list", reopened.level, FL.SIDE);
+  same("reopening keeps the remembered rows", FL.rowFor(FL.select(reopened, "graphics")), "fxaa");
+
+  same("the tab-list footer shows A Enter, B Back, LB RB Tabs", FL.footer(FL.SIDE).map(function (item) { return item.key + " " + item.label; }).join("|"), "A Enter|B Back|LB RB Tabs");
+  same("the content footer shows A Select, B Tabs", FL.footer(FL.CONTENT).map(function (item) { return item.key + " " + item.label; }).join("|"), "A Select|B Tabs");
+
   function run() {
     var list = document.getElementById("results");
     var passed = 0;

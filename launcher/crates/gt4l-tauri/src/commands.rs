@@ -141,7 +141,7 @@ pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), S
     if let Some(definition) = settings::definition(&id) {
         let text = model::value_text(&value, definition.kind == settings::Kind::Toggle)
             .ok_or_else(|| format!("'{id}' needs a plain value"))?;
-        state.config.settings.set(&id, &text).map_err(|error| error.to_string())?;
+        state.config.settings.set_by_user(&id, &text).map_err(|error| error.to_string())?;
     } else if let Some((trigger, field)) = id.split_once('_').filter(|(name, _)| ["l2", "r2"].contains(name)) {
         let current = state.controls.trigger_tuning(trigger);
         let (deadzone, curve) = match field {

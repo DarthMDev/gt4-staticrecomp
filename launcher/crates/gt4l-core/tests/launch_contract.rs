@@ -288,3 +288,24 @@ fn inputs() -> LaunchInputs<'static> {
         session_dir: Path::new("C:/session"),
     }
 }
+
+/// Both window modes start the game window (`--window` is required for any window). Only GT4_FULLSCREEN changes,
+/// and the native game reads it at start: 1 starts borderless fullscreen, 0 starts windowed.
+#[test]
+fn both_window_modes_pass_window_and_send_gt4_fullscreen_to_the_game_and_the_gs_child() {
+    let mut fullscreen = Settings::default();
+    fullscreen.set("fullscreen", "on").unwrap();
+    let mut windowed = Settings::default();
+    windowed.set("fullscreen", "off").unwrap();
+
+    for (settings, expected) in [(&fullscreen, "1"), (&windowed, "0")] {
+        let plan = launch::plan_launch(&inputs(), settings, &[]);
+        assert_eq!(plan.arguments.last().unwrap(), "--window", "a window is always started");
+        assert!(!plan.arguments.iter().any(|argument| argument == "--fullscreen"));
+        assert_eq!(env_map(&plan.environment)["GT4_FULLSCREEN"], expected);
+
+        let gs_plan = launch::plan_pcsx2_launch(&inputs(), settings, &pcsx2_paths(), &[]);
+        assert_eq!(gs_plan.arguments.last().unwrap(), "--window");
+        assert_eq!(env_map(&gs_plan.environment)["GT4_FULLSCREEN"], expected, "the PCSX2 GS path gets the same mode");
+    }
+}

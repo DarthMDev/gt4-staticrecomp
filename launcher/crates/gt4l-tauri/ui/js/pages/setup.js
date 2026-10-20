@@ -11,8 +11,8 @@
  *   disc_name, problem, note            (note: the renderer could not be installed; CoreGS 1.1 is used)
  * }
  * Flow: "Choose disc image" -> setup_choose_disc (Rust file picker and fast check) -> setup_start (copy, check,
- * prepare, renderer). A refused file shows its reason with "Choose another file". Commands: setup_choose_disc,
- * setup_start, setup_cancel, play.
+ * prepare, renderer). A refused file shows its reason with "Choose another file". When setup is done the page
+ * shows "Finish", which opens Home (it never starts the game). Commands: setup_choose_disc, setup_start, setup_cancel.
  */
 (function (root) {
   "use strict";
@@ -88,7 +88,7 @@
   function texts(state) {
     switch (state) {
       case "done":
-        return ["Ready", "Next time GT4Recomp opens straight to Play. You can move or delete the disc image you chose."];
+        return ["Ready", "Press Finish to open GT4Recomp. Next time it opens straight to the home screen. You can move or delete the disc image you chose."];
       case "files_missing":
         return ["Game files missing", "Choose your disc image again to copy the game files. Your saves and settings are kept."];
       case "checking":
@@ -161,8 +161,8 @@
     parts.notice.hidden = !(done && setup.note);
 
     if (done) {
-      buttons.push({ label: "Play", primary: true, run: playNow });
-      hints.push({ key: "A", label: "Play", run: playNow });
+      buttons.push({ label: "Finish", primary: true, run: finishSetup });
+      hints.push({ key: "A", label: "Finish", run: finishSetup });
     } else if (running) {
       if (setup.step !== "renderer") {
         buttons.push({ label: "Cancel", run: cancelSetup });
@@ -194,7 +194,7 @@
       }, button.label));
     });
     GT4.ui.setHints(hints);
-    GT4.hooks.back = running && setup.step !== "renderer" ? cancelSetup : (done ? function () { GT4.go("#/home"); } : null);
+    GT4.hooks.back = running && setup.step !== "renderer" ? cancelSetup : (done ? finishSetup : null);
   }
 
   var busyChoosing = false;
@@ -236,12 +236,9 @@
     });
   }
 
-  function playNow() {
-    call("play").then(function () {
-      GT4.go("#/home");
-    }, function (err) {
-      GT4.ui.toast(GT4.errorText(err), true);
-    });
+  // Setup is done: open Home. Play stays on Home; nothing starts the game here.
+  function finishSetup() {
+    GT4.go("#/home");
   }
 
   var active = null;

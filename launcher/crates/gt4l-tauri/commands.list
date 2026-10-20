@@ -1,0 +1,30 @@
+# Every command the launcher page may call. One name per line (snake_case, as in main.rs).
+# build.rs turns each name into an allow-<name> permission (dashes), capabilities/default.json must allow
+# exactly these, and src/contract.rs checks main.rs and ui/js against this list. Add a command here first.
+app_state
+get_settings_table
+set_setting
+reset_gs_settings_to_defaults
+setup_choose_disc
+setup_start
+setup_cancel
+play
+stop_game
+saves_list
+saves_import
+saves_activate
+saves_delete
+replays_list
+replays_import
+replays_delete
+get_controls
+capture_binding
+cancel_capture
+reset_binding
+about_info
+open_log_folder
+open_game_files_folder
+check_updates
+apply_update
+skip_update
+confirm_close

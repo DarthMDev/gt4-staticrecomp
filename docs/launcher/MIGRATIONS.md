@@ -10,7 +10,7 @@ Launcher-owned files:
 
 | File | Where | Schema key | Schema today | Chain |
 |---|---|---|---|---|
-| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 1 | `migrate::SETTINGS` (first schema 0) |
+| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 2 | `migrate::SETTINGS` (first schema 0) |
 | `controls.toml` | `%LOCALAPPDATA%\GT4Recomp\` | `schema` | 1 (the file format is owned by `gt4controls`) | `migrate::CONTROLS` (first schema 1) |
 | `version.json` | install folder, or data folder when read-only | `schema` | 1 | `migrate::VERSION_FILE` (first schema 1) |
 | save library | `%LOCALAPPDATA%\GT4Recomp\library\` | none | a folder, not a single index file | not applicable yet; see below |
@@ -79,6 +79,15 @@ Loading a schema 0 file gives: a backup `settings.toml.bak-schema0-<time>`, the 
 6. Mention the migration in the PR and in `docs/journal/`.
 
 Never edit an old step after it has shipped. Add a new step.
+
+## Schema 1 to 2: Fullscreen on by default (2026-10-21)
+
+Schema 2 adds the `[choices]` table: a setting the user set on the Settings page is listed there as `name = true`
+(`Settings::set_by_user`). Schema 1 files had the old windowed default (`fullscreen = "off"`) and no record of a choice,
+so the step `settings_1_to_2` changes `fullscreen` to `"on"` unless `[choices] fullscreen = true` is present. The backup
+`settings.toml.bak-schema1-<unix seconds>` is written first. A file that already says `"on"` only gains the schema number
+and the backup. Tests: `migrate::tests::schema_one_fullscreen_off_becomes_on_unless_chosen`,
+`config_migration.rs` (`schema_one_fullscreen_off_that_was_never_chosen...`, `a_fullscreen_value_the_user_chose...`).
 
 ## What the migrations do not do
 

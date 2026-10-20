@@ -22,7 +22,7 @@ GT4Recomp.exe start
       |      failed ......... reason + "Try again" / "Choose another file"
       |      files_missing .. "Game files missing" + "Choose disc image"
       |      checking ....... copying -> checking -> preparing -> renderer (bars, bytes, Cancel)
-      |      done ........... "Ready" + Play (note when CoreGS 1.1 is used)
+      |      done ........... "Ready" + Finish (opens Home; note when CoreGS 1.1 is used)
       |
       +-- setup.state == done --> #/home (slideshow, logo, Play, gear)
              Play -> prepare_play -> game::start -> tray hides the window
@@ -35,7 +35,7 @@ GT4Recomp.exe start
 | Screen | Commands it calls | Events it hears |
 |---|---|---|
 | Boot (`app.js`) | `app_state` | `update-available`, `close-confirm`, `update-finished`, `renderer-progress` (toasts outside setup), `game-state` |
-| Setup | `app_state` (polled every 400 ms), `setup_choose_disc`, `setup_start`, `setup_cancel`, `play` | (polls; `setup-progress`, `setup-finished` and `renderer-progress` are also emitted) |
+| Setup | `app_state` (polled every 400 ms), `setup_choose_disc`, `setup_start`, `setup_cancel` (Finish runs no command) | (polls; `setup-progress`, `setup-finished` and `renderer-progress` are also emitted) |
 | Home | `app_state` (game_running), `about_info` (version label), `play`, `stop_game` | `game-state` |
 | Settings: Graphics, Advanced, Display | `get_settings_table`, `set_setting`, `reset_gs_settings_to_defaults` | |
 | Settings: Controls | `get_controls`, `capture_binding`, `cancel_capture`, `reset_binding`, `set_setting` (triggers) | `gamepad` (optional) |
@@ -215,3 +215,97 @@ Screenshots (`docs/launcher/shots/`): `audit-tauri-first-launch-setup.png`, `aud
 - At 844 x 390 (phone landscape) the setup steps scroll; the A hint and the scroll reach the button.
 - The installer was not built (NSIS is not installed); its uninstall text now names the disc copy.
 - The native file picker, tray, update popup, pad, touch and Play need the owner.
+
+## 7. Owner test findings (2026-10-21) and the fixes
+
+The owner ran the real `GT4Recomp.exe` (setup, Play and the return to Home worked). Five findings, all fixed on
+`task/019-launcher`. The 2026-10-20 audit above did not catch them, for the reason in 7.6.
+
+### 7.1 Settings did not load: "Command get_settings_table not allowed by ACL" (critical, Confirmed)
+
+- Root cause: Tauri 2 allows an app command only when its `allow-<name>` permission is in `capabilities/default.json`,
+  and the permissions come from the `COMMANDS` list in `build.rs`. Both still had the names of an older UI
+  (`settings_rows`, `settings_set`, `controls_list`, ...). Every command the current UI calls was denied in the real app.
+- Mismatch (old list vs the registered and called names):
+  - in the old list only (removed): `settings_rows`, `settings_set`, `controls_list`, `controls_capture_start`,
+    `controls_capture_cancel`, `controls_bind_key`, `controls_reset`, `controls_set_trigger`;
+  - registered and called, missing from the old list (denied): `get_settings_table`, `set_setting`,
+    `reset_gs_settings_to_defaults`, `get_controls`, `capture_binding`, `cancel_capture`, `reset_binding`,
+    `open_game_files_folder`, `check_updates`, `apply_update`, `skip_update`, `confirm_close`.
+- Fix: one source of truth, `launcher/crates/gt4l-tauri/commands.list` (27 names). `build.rs` reads it for the
+  permissions; `capabilities/default.json` lists exactly the 27 `allow-*` entries.
+- Test: `src/contract.rs` (6 tests) fails on any mismatch between `commands.list`, `generate_handler!` in `main.rs`,
+  the `allow-*` permissions, the commands `ui/js` calls, and the events `ui/js` listens to (each must be emitted by Rust
+  through `emit(` or `notify(`). The `gamepad` event that `nav.js` listened to was never emitted by Rust, so that
+  listener was removed. A negative check (a fake name added to `commands.list`) failed the three set tests as intended.
+- Real-app check (2026-10-21): `GT4Recomp.exe` built with `cargo tauri build --no-bundle`, started with
+  `GT4RECOMP_DATA_DIR` set to a scratch folder and WebView2 remote debugging on port 9223. The probe script called 15
+  commands from the real webview: 0 denied by ACL (`app_state`, `get_settings_table`, `set_setting`,
+  `reset_gs_settings_to_defaults`, `get_controls`, `cancel_capture`, `reset_binding`, `about_info`, `saves_list`,
+  `saves_activate`, `saves_delete`, `replays_list`, `replays_delete`, `check_updates`, `skip_update`). The probes used
+  values the app refuses, or read-only calls. Not called on purpose: `play`, `stop_game`, `setup_*` (would start the
+  copy), `capture_binding`, `confirm_close`, `apply_update`, `open_game_files_folder`, `open_log_folder`,
+  `saves_import`, `replays_import`. Their permissions come from the same generated list, which the test checks.
+
+### 7.2 Setup offered only Play (Bug 2)
+
+- The setup page's done state now shows **Finish**, which goes to Home (`#/home`). It is the primary button: focused on
+  the pad, A activates it, and touch and mouse click it. It starts no game. A "done offline" setup (CoreGS 1.1 used)
+  shows the same Finish. A later launch with setup done still opens Home directly (`app.js`).
+- Check: the dev mock with `?setup=done` renders one primary `Finish` button, focused.
+
+### 7.3 The game started in a window (Confirmed in code)
+
+- Cause: `gt4l-core/src/launch.rs` always passes `--window` (the native window needs it). `GT4_FULLSCREEN` was sent
+  (1 for "on"), but the native code did not read it: `open_window(true)` threw "Fullscreen is not qualified in this
+  Vulkan pilot", and nothing set fullscreen at start.
+- Native change (`native/window.cpp`, `native/window_mode.{hpp,cpp}`): `GT4_FULLSCREEN` is parsed strictly (unset, empty
+  or `0` = windowed; `1` = fullscreen; any other value stops the start with a message). Fullscreen at start uses the same
+  borderless path as Alt+Enter and F11 (`set_fullscreen`). Alt+Enter and F11 are unchanged. The donor `--fullscreen`
+  argument reaches the same path.
+- Launcher: the default stays **on** (Display, "Fullscreen"). The game and the PCSX2 GS child both get `GT4_FULLSCREEN`
+  (`game_environment`, `pcsx2_environment`). Test: `launch_contract.rs`,
+  `both_window_modes_pass_window_and_send_gt4_fullscreen_to_the_game_and_the_gs_child`.
+- Migration (schema 1 to 2, see `docs/launcher/MIGRATIONS.md`): a schema 1 file with `fullscreen = "off"` that the user
+  never chose becomes "on", after a backup. The `[choices]` table records the settings the user set on the Settings page.
+  Tests: `migrate.rs` and `tests/config_migration.rs`.
+- **Owner's data.** `%LOCALAPPDATA%\GT4Recomp\config\settings.toml` already says `fullscreen = "on"` (read only; not
+  changed). The migration adds only the schema number and a backup for that file. The windowed start came from the
+  native code and `--window`, not from the saved value.
+- **Not built here.** The native change is not compiled in this session: the VS developer environment and clang-cl
+  exception handling failed in this sandbox. The fixture `quickfix_fixture` has the new test
+  (`test_start_mode_environment`). The game executable must be built and checked on the owner's machine before the
+  fullscreen start is confirmed in the built game (Unknown until then).
+
+### 7.4 Settings focus: two levels, console-style highlights (owner request)
+
+- Opening Settings focuses the tab list on the current tab. The content previews the highlighted tab (up and down).
+  A, or D-pad right, enters the tab: the first row, or the row last used in that tab (remembered for the session).
+  In the content: up and down move between rows; left and right change a slider or dropdown; A activates; **B returns
+  to the tab list on the same tab**. B on the tab list goes Home. LB and RB change tabs and keep the level.
+- Logic: `ui/js/focus-levels.js` (pure). `ui/dev/nav-test.js` has 22 new cases; `nav-test.html` gives 77 of 77 PASS in
+  headless Edge. The page: `ui/js/pages/settings.js` (a tab switch re-renders only the content, so focus does not reset;
+  the hash follows the shown tab). `nav.js`: `GT4.focusScope` narrows navigation to the level, `GT4.hooks.horizontal`
+  takes D-pad right on a tab, and `GT4.inputMode()` tells a pad A from a mouse click.
+- Visuals (`css/app.css`): the focus ring is a soft glow instead of a 2 px outline; a sidebar pill glides between tabs
+  (160 ms, instant with reduced motion); a focused row gets a lighter band, a thin accent edge and a brighter label; the
+  tab shown while focus is in the content keeps a quiet accent edge. The same ring applies on every page (Home, dialogs,
+  Saves, Replays, Controls).
+- Footers: tab list A Enter, B Back, LB RB Tabs; content A Select, B Tabs, then the tab's X Save and Y.
+- Screenshots (headless Edge, `--force-prefers-reduced-motion`, dev mock): `docs/launcher/shots/pad-sidebar-focus.png`,
+  `pad-content-row-focus.png`, `pad-slider-row-focus.png`, `pad-dropdown-open.png`. Dev-only `?focus=` values: side,
+  content, slider, dropdown.
+- **Not verified.** The pad itself (no controller in this sandbox). The owner checks the controller items in
+  `ui/dev/MANUAL-CHECKLIST.md`.
+
+### 7.5 Other changes
+
+- `ui/js/nav.js`: the unused `gamepad` Rust-event listener was removed (see 7.1).
+- `commands.list` is the only list of commands; a new command is added there first.
+
+### 7.6 Why the 2026-10-20 audit missed 7.1
+
+- The audit drove the command bodies (`flow_audit.rs`, plain Rust functions) and the dev mock in headless Edge. Neither
+  goes through Tauri's IPC, so the ACL never ran. The mock answers every command name, including the old ones, and the
+  contract test compared `generate_handler!` with the UI's names only, not with the permissions the real app enforces.
+  The new test checks the permissions too, and 7.1 was checked in the real webview.

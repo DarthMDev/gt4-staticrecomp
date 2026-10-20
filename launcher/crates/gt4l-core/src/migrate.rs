@@ -118,8 +118,8 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 1,
-    steps: &[Step { from: 0, apply: settings_0_to_1 }],
+    current: 2,
+    steps: &[Step { from: 0, apply: settings_0_to_1 }, Step { from: 1, apply: settings_1_to_2 }],
 };
 
 /// Controls file (`controls.toml`), schema key `schema`. Written as schema 1 since the first release.
@@ -127,6 +127,22 @@ pub const CONTROLS: Chain = Chain { file: "controls.toml", key: "schema", first:
 
 /// version.json in the install folder (or the data folder when the install folder is read-only).
 pub const VERSION_FILE: Chain = Chain { file: "version.json", key: "schema", first: 1, current: 1, steps: &[] };
+
+/// Schema 2: Fullscreen is on by default. A file of schema 1 may hold the old default ("off") that was never
+/// chosen on the Settings page. Such a value becomes "on"; a value the user chose (`[choices] fullscreen = true`)
+/// is kept. The backup of the old file is made by `config::prepare` before this step runs.
+fn settings_1_to_2(document: &mut Value) -> Result<(), String> {
+    let chosen = document.pointer("/choices/fullscreen").and_then(Value::as_bool) == Some(true);
+    if chosen {
+        return Ok(());
+    }
+    if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        if settings.get("fullscreen").and_then(Value::as_str) == Some("off") {
+            settings.insert("fullscreen".to_string(), Value::from("on"));
+        }
+    }
+    Ok(())
+}
 
 /// Example and first real step: the earlier dev builds wrote no schema number and nothing else differs, so the
 /// step has no content change. It is the template for later steps: change the document, nothing else.
@@ -249,10 +265,21 @@ mod tests {
     }
 
     #[test]
-    fn settings_schema_zero_gains_schema_one_and_keeps_its_values() {
+    fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(1));
+        assert_eq!(document["schema_version"], json!(2));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
+    }
+
+    #[test]
+    fn schema_one_fullscreen_off_becomes_on_unless_chosen() {
+        let mut unchosen = json!({"schema_version": 1, "settings": {"fullscreen": "off"}});
+        assert_eq!(migrate(&SETTINGS, &mut unchosen).unwrap(), 1);
+        assert_eq!(unchosen["settings"]["fullscreen"], json!("on"));
+
+        let mut chosen = json!({"schema_version": 1, "settings": {"fullscreen": "off"}, "choices": {"fullscreen": true}});
+        migrate(&SETTINGS, &mut chosen).unwrap();
+        assert_eq!(chosen["settings"]["fullscreen"], json!("off"));
     }
 }

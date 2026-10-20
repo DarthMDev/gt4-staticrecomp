@@ -6,8 +6,9 @@
   "permissions": [
     "core:event:default",
     "allow-app-state",
-    "allow-settings-rows",
-    "allow-settings-set",
+    "allow-get-settings-table",
+    "allow-set-setting",
+    "allow-reset-gs-settings-to-defaults",
     "allow-setup-choose-disc",
     "allow-setup-start",
     "allow-setup-cancel",
@@ -20,13 +21,16 @@
     "allow-replays-list",
     "allow-replays-import",
     "allow-replays-delete",
-    "allow-controls-list",
-    "allow-controls-capture-start",
-    "allow-controls-capture-cancel",
-    "allow-controls-bind-key",
-    "allow-controls-reset",
-    "allow-controls-set-trigger",
+    "allow-get-controls",
+    "allow-capture-binding",
+    "allow-cancel-capture",
+    "allow-reset-binding",
     "allow-about-info",
-    "allow-open-log-folder"
+    "allow-open-log-folder",
+    "allow-open-game-files-folder",
+    "allow-check-updates",
+    "allow-apply-update",
+    "allow-skip-update",
+    "allow-confirm-close"
   ]
 }

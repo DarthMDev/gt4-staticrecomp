@@ -8,7 +8,7 @@
 //! option is shown greyed out and never sent, so an unknown value cannot stop the game.
 //! Renderer-specific options are shown only for the selected renderer (see [`Settings::applies`]).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 /// Settings pages in the order of the Settings navigation (Saves, Replays, Controls and About
@@ -299,12 +299,14 @@ pub fn validate(definition: &SettingDef, value: &str) -> Result<String, SettingE
 pub struct Settings {
     values: BTreeMap<&'static str, String>,
     gs: BTreeMap<String, String>,
+    /// Settings the user set on the Settings page (`[choices]` in settings.toml). A migration keeps these as they are.
+    chosen: BTreeSet<&'static str>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         let values = SETTINGS.iter().map(|definition| (definition.id, definition.default.to_string())).collect();
-        Settings { values, gs: BTreeMap::new() }
+        Settings { values, gs: BTreeMap::new(), chosen: BTreeSet::new() }
     }
 }
 
@@ -327,6 +329,32 @@ impl Settings {
         let value = validate(definition, value)?;
         self.values.insert(definition.id, value);
         Ok(())
+    }
+
+    /// Sets a value the user chose on the Settings page, and marks it as chosen.
+    pub fn set_by_user(&mut self, id: &str, value: &str) -> Result<(), SettingError> {
+        self.set(id, value)?;
+        if let Some(definition) = definition(id) {
+            self.chosen.insert(definition.id);
+        }
+        Ok(())
+    }
+
+    /// Marks a setting as chosen by the user (used when a file is read).
+    pub fn mark_chosen(&mut self, id: &str) {
+        if let Some(definition) = definition(id) {
+            self.chosen.insert(definition.id);
+        }
+    }
+
+    /// Whether the user chose this value (see [`Settings::set_by_user`]).
+    pub fn was_chosen(&self, id: &str) -> bool {
+        self.chosen.contains(id)
+    }
+
+    /// The ids the user chose, in table order.
+    pub fn chosen_ids(&self) -> Vec<&'static str> {
+        self.chosen.iter().copied().collect()
     }
 
     /// Sets a value, or resets it to the default when it is invalid. Returns a warning for the log.

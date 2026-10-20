@@ -5,8 +5,14 @@
 // so the toggle rules can be checked without a window.
 
 #include <cstdint>
+#include <cstdlib>
 
 namespace gt4::window_mode {
+
+// Whether the game window starts in borderless fullscreen (GT4_FULLSCREEN, set by the launcher from its
+// Display setting). Unset or empty = windowed; "0" = windowed; "1" = fullscreen. Any other value is refused
+// with std::invalid_argument, so a typo never silently starts the wrong mode.
+bool parse_start_fullscreen(const char *value);
 
 // Same field order as RECT.
 struct Rect {
