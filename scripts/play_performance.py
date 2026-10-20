@@ -71,7 +71,9 @@ License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profil
 The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
 Diagnostic only: the run is not a performance measurement.
 
-TASK-019 launcher test: --mode pcsx2 runs the slice209 build (slice208 coverage EE library plus the GT4_FULLSCREEN start;
+TASK-075/076 (slice210): --mode pcsx2 runs the slice210 build (SDL3 gamepad input, GT4_INPUT=sdl by default; the TASK-076
+keyboard table). The slice209 build stays as --mode pcsx2-slice209.
+TASK-019 launcher test: --mode pcsx2 ran the slice209 build (slice208 coverage EE library plus the GT4_FULLSCREEN start;
 --mode pcsx2-slice206 keeps the slice206 build). License guard (TASK-017): the slice206 build has the license
 demo guard on both demo loaders (--mode pcsx2-slice203 keeps the build without it). --mode license-guard is the slice205
 test build (guard v1, first loader only), kept as history. A license demo that decrypts wrong (fails the game's CRC and is not the expected layout)

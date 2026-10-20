@@ -41,6 +41,12 @@ class PortableInstallTest(unittest.TestCase):
         cls.exe = cls.scratch / 'install' / 'gt4vulkan.exe'
         cls.exe.parent.mkdir()
         shutil.copyfile(executable(), cls.exe)
+        # TASK-075: gt4vulkan.exe imports SDL3.dll; the installed folder carries it, as make_distribution writes it.
+        shutil.copyfile(ASSETS / 'private/tooling/sdl3-3.4.18/runtime/SDL3.dll', cls.exe.parent / 'SDL3.dll')
+        # A missing DLL must fail a child quietly, never open a system error dialog.
+        if os.name == 'nt':
+            import ctypes
+            ctypes.windll.kernel32.SetErrorMode(0x0001 | 0x0002)
 
     @classmethod
     def tearDownClass(cls):

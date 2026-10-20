@@ -5,6 +5,8 @@ The folder holds what an installed game needs and nothing else:
   shaders/*.spv              the nine compute shaders next to the executable (pinned, checked)
   <runtime DLLs>             the Visual C++ runtime the executable links to, copied from the local Visual Studio
                              redistributable folder (see --crt-dir)
+  SDL3.dll                   SDL 3.4.18 (zlib), the gamepad layer (TASK-075), pinned in docs/inputs/slice210-sdl3.json
+  licenses/LICENSE-SDL3.txt  the SDL licence (zlib)
   licenses/                  the repository MIT license, the donor MIT license and the third-party notes
   MANIFEST.json              every file with its size and SHA-256, the pins used and the excluded items
 
@@ -56,6 +58,23 @@ def find_crt_directory():
         return None
     candidates = sorted(Path(install).glob(r'VC\Redist\MSVC\*\x64\Microsoft.VC143.CRT'))
     return candidates[-1] if candidates else None
+
+
+SDL3_PIN = 'docs/inputs/slice210-sdl3.json'
+SDL3_FOLDER = 'private/tooling/sdl3-3.4.18'
+
+
+def sdl3_files(assets_root):
+    """The SDL3 runtime DLL and its licence, as pinned in docs/inputs/slice210-sdl3.json (checked by size and SHA-256)."""
+    pin = json.loads((ROOT / SDL3_PIN).read_text(encoding='utf-8'))
+    folder = assets_root / SDL3_FOLDER
+    dll = pin['files']['runtime']
+    licence = pin['files']['license']
+    source_dll = folder / dll['path']
+    source_licence = folder / licence['path']
+    check_pin(source_dll, dll['size_bytes'], dll['sha256'], 'SDL3.dll')
+    check_pin(source_licence, licence['size_bytes'], licence['sha256'], 'SDL3 licence')
+    return source_dll, source_licence
 
 
 def pinned_files(runtime_manifest):
@@ -111,6 +130,10 @@ def assemble(output, assets_root, exe, runtime_manifest, shaders_dir, crt_dir, a
         check_pin(source, item['size_bytes'], item['sha256'], f'shader {name}.spv')
         record(f'shaders/{name}.spv', source)
 
+    sdl3_dll, sdl3_licence = sdl3_files(assets_root)
+    record('SDL3.dll', sdl3_dll)
+    record('licenses/LICENSE-SDL3.txt', sdl3_licence)
+
     if crt_dir is None:
         if not allow_missing_crt:
             raise ValueError('No Visual C++ CRT redistributable folder found; pass --crt-dir or --no-crt')
@@ -139,6 +162,7 @@ def assemble(output, assets_root, exe, runtime_manifest, shaders_dir, crt_dir, a
         'files': manifest_files,
         'excluded': list(EXCLUDED),
         'crt_directory': str(crt_dir) if crt_dir else None,
+        'sdl3': {'version': '3.4.18', 'pin': SDL3_PIN, 'dll': 'SDL3.dll'},
     }
     (output / 'MANIFEST.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8', newline='\n')
     return manifest

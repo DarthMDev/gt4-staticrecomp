@@ -1574,3 +1574,53 @@ Owner launcher test folder (`private/owner-test-launcher`): `game` is slice209 (
 and `version.json` were not touched.
 
 Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.
+
+## Slice 210 - TASK-075 (game side) and TASK-076: SDL3 gamepads and the keyboard table (`--mode pcsx2`)
+
+The slice209 build with the SDL3 gamepad layer and the TASK-076 keyboard table. Nothing else changes: guest code, EE
+library (coverage), port (slice200), shaders (slice153), runtime capsule (slice191), license guard (slice206) and the
+memory card capsule are the same. Pins: `docs/inputs/slice210-pcsx2.json` (measurement mode `pcsx2`) and
+`docs/inputs/slice210-sdl3.json`. `--mode pcsx2` selects slice210; `pcsx2-slice209` stays as history.
+
+SDL3 (zlib): the official SDL 3.4.18 Windows packages from the GitHub release `release-3.4.18`, fetched with
+`gh release download`. Their sha256 equals GitHub's asset digest:
+
+- `SDL3-devel-3.4.18-VC.zip` sha256 `78d84602ae616cfe26b33a73b7d3b9b6b56e8a6650e53d92c9c6ca938f747acd`
+- `SDL3-3.4.18-win32-x64.zip` sha256 `75c2c0fc74e7d1206aaedc22893a35887332f4f85f5c8b74fddc10d177985f2c`
+
+Extracted, not committed, to `private/tooling/sdl3-3.4.18/devel` (headers, `lib/x64/SDL3.lib`, licence) and
+`private/tooling/sdl3-3.4.18/runtime` (`SDL3.dll`). `native/CMakeLists.txt` (`gt4_sdl3`) checks the import library,
+`SDL3.dll` and the licence against the pin at configure time. Each executable that loads SDL (`gt4vulkan`,
+`host_io_fixture`) gets `SDL3.dll` copied beside it by a POST_BUILD step. `scripts/make_distribution.py` ships the DLL
+and `licenses/LICENSE-SDL3.txt`.
+
+Source: this branch (`task/075-sdl3-input`, from `task/019-launcher` f64f723). Build script
+`private/slice210-scripts/build-game-210.bat`: the slice209 recipe with the source `C:\Antigravity\gt4-wt-075`, the
+`GT4_SDL3_ROOT` pin, clang-cl 22.1.3 (`C:/Program Files/LLVM/bin/clang-cl.exe`) in the VS x64 environment, serial
+build. Executable `private/slice210-build/build/gt4vulkan.exe`, 97,184,768 bytes, sha256 `561a5e15...`.
+
+Changes against slice209: `native/pad_mapping.{hpp,cpp}` (new, pure mapping), `native/host_io.{hpp,cpp}` (SDL3 backend;
+the XInput path stays under `GT4_INPUT=xinput`), `native/window.cpp` (`GT4_INPUT`), `native/controls.cpp` (keyboard
+defaults), `native/CMakeLists.txt` (SDL3 pin, link, DLL copy, `pad_mapping_fixture`; the duplicated `gt4_memcard` block
+on the launcher branch is removed, it stopped configure), `native/host_io_fixture.cpp` (quiet loader errors),
+`scripts/external_runtime_probe.py` (quiet loader errors on game launches). Also on the branch since TASK-019 and not in
+slice209: `controls.cpp`, the window icon and title.
+
+Checks (2026-10-20/21):
+
+- CTest: `private/slice210-scripts/ctest-210.log`.
+- Python `unittest discover` with `GT4_NATIVE_BUILD` = `private/slice210-build/build`: 589 tests OK, 41 skipped
+  (`private/slice210-scripts/python-210.log`). The `FAIL:` lines in that log are subtest messages of the existing GS
+  option tests; the run reports OK.
+- Headless, 4,200 frames, the slice208 arguments (12 presses, widescreen seed card, `--frames-dir`, `--frame-every 100`,
+  `GT4_MTVU_REPORT_EVERY=500`, no `--window`): 42 of 42 frame dumps identical to slice209
+  (`private/slice210-smoke/cand-210` against `private/slice209-smoke/cand-209`, per-file sha256). No `no translated code`
+  line. The headless path never creates the controller, so SDL is not started there.
+- Pins: all 16 files of `docs/inputs/slice210-pcsx2.json` and the SDL3 library, DLL, licence and 86 headers of
+  `docs/inputs/slice210-sdl3.json` checked by size and sha256 in the main checkout.
+
+Owner launcher test folder (`private/owner-test-launcher`): `game` is slice210, made by `scripts/make_distribution.py`
+in `game-210` and renamed (18 files, including `SDL3.dll` and `licenses/LICENSE-SDL3.txt`); the slice209 folder is
+`game-209-old`. `GT4Recomp.exe`, `version.json` and `%LOCALAPPDATA%\GT4Recomp` were not touched.
+
+Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.

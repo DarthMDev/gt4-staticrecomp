@@ -369,23 +369,29 @@ const ControlMap &default_controls() {
     auto set = [&map](std::string_view name, std::vector<Binding> bindings) {
       map.bindings[input_index(name)] = std::move(bindings);
     };
-    set("dpad_up", {button(xinput::dpad_up), key(vk_up)});
-    set("dpad_right", {button(xinput::dpad_right), key(vk_right)});
+    // Pad sources use the XInput names, which name the physical positions: SDL3 (TASK-075) reads the same
+    // positions on every pad (A = SOUTH, B = EAST, X = WEST, Y = NORTH).
+    // Keyboard keys are the TASK-076 layout (docs/CONTROLS.md, keyboard-default): several keys per button.
+    set("dpad_up", {button(xinput::dpad_up), key(vk_up), key('E')});
+    set("dpad_right", {button(xinput::dpad_right), key('D'), key(vk_right)});
     set("dpad_down", {button(xinput::dpad_down), key(vk_down)});
-    set("dpad_left", {button(xinput::dpad_left), key(vk_left)});
-    set("cross", {button(xinput::a), key('Z')});
-    set("circle", {button(xinput::b), key('X')});
-    set("square", {button(xinput::x), key('A')});
-    set("triangle", {button(xinput::y), key('S')});
+    set("dpad_left", {button(xinput::dpad_left), key('A'), key(vk_left)});
+    set("cross", {button(xinput::a), key('W'), key(vk_return)});
+    set("circle", {button(xinput::b), key(vk_space)});
+    set("square", {button(xinput::x), key('S')});
+    set("triangle", {button(xinput::y), key(vk_back), key(vk_escape)});
+    // L1 is look back (rear view); R1 is nitro (boost); L2 and R2 are gear down and gear up.
     set("l1", {button(xinput::left_shoulder), key('Q')});
-    set("r1", {button(xinput::right_shoulder), key('W')});
+    set("r1", {button(xinput::right_shoulder), key(vk_shift)});
     // Triggers are pressure-sensitive L2/R2, like PCSX2's default XInput map.
-    set("l2", {trigger(0), key('1')});
-    set("r2", {trigger(1), key('2')});
-    set("l3", {button(xinput::left_thumb), key('C')});
-    set("r3", {button(xinput::right_thumb), key('V')});
-    set("select", {button(xinput::back), key(vk_back)});
-    set("start", {button(xinput::start), key(vk_return)});
+    set("l2", {trigger(0), key('F')});
+    set("r2", {trigger(1), key('R')});
+    set("l3", {button(xinput::left_thumb)});
+    set("r3", {button(xinput::right_thumb)});
+    // Select is the camera (C or Tab).
+    set("select", {button(xinput::back), key('C'), key(vk_tab)});
+    // Start has no key in the TASK-076 table (Enter is cross); P is a hypothesis pending the owner's choice.
+    set("start", {button(xinput::start), key('P')});
     set("rstick_x", {stick(0, false)});
     set("rstick_y", {stick(1, true)});
     set("lstick_x", {stick(2, false)});

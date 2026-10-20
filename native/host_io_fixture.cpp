@@ -13,6 +13,8 @@ void require(bool value, const char *label) {
 } // namespace
 
 int main() {
+  // A missing SDL3.dll must fail the test, not open a system error dialog.
+  SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
   try {
     const WORD buttons[] = {XINPUT_GAMEPAD_BACK,
                             XINPUT_GAMEPAD_LEFT_THUMB,
