@@ -10,6 +10,10 @@
  *   9 Start: page start (Play on Home)
  *   12-15 D-pad and the left stick (deadzone 0.5): first press at once,
  *   then repeat after 420 ms and every 110 ms while held.
+ *   Right stick (axes 2 and 3): scrolls the focused scroll container.
+ *
+ * Face buttons on a page: X and Y run GT4.hooks.x / GT4.hooks.y when the page
+ * sets them. B closes an open help tip, then the top dialog, then goes back.
  */
 (function (root) {
   "use strict";
@@ -135,6 +139,9 @@
       }
       return;
     }
+    if (GT4.ui.closeTips()) {
+      return;
+    }
     var dialog = GT4.ui.topDialog();
     if (dialog) {
       dialog.back();
@@ -162,38 +169,83 @@
   }
 
   // One logical button press from the gamepad or the Rust event.
+  // Face and shoulder buttons go through GT4.input.padRoute (pure, tested in dev/nav-test.html).
   function padPress(name) {
-    if (GT4.capturing) {
-      if (name === "b") {
-        back();
-      }
+    if (GT4.capturing && name !== "b") {
       return;
     }
     setMode("pad");
-    switch (name) {
-      case "a": activate(); break;
-      case "b": back(); break;
-      case "x": pageAction("x"); break;
-      case "y": pageAction("y"); break;
-      case "lb": tabs(-1); break;
-      case "rb": tabs(1); break;
-      case "start": pageAction("start"); break;
-      case "up": case "down": move(name); break;
-      case "left": horizontal(-1); break;
-      case "right": horizontal(1); break;
+    if (name === "up" || name === "down") {
+      move(name);
+      return;
+    }
+    if (name === "left" || name === "right") {
+      horizontal(name === "left" ? -1 : 1);
+      return;
+    }
+    var route = GT4.input.padRoute(name, {
+      capturing: GT4.capturing,
+      dialogOpen: !!GT4.ui.topDialog(),
+      tipOpen: !!document.querySelector(".info.is-open"),
+      hooks: { x: !!GT4.hooks.x, y: !!GT4.hooks.y, start: !!GT4.hooks.start, tabs: !!GT4.hooks.tabs }
+    });
+    switch (route) {
+      case "activate": activate(); break;
+      case "back": case "close-tip": case "dialog-back": case "cancel-capture": back(); break;
+      case "hook-x": GT4.hooks.x(); break;
+      case "hook-y": GT4.hooks.y(); break;
+      case "hook-start": GT4.hooks.start(); break;
+      case "tab-prev": GT4.hooks.tabs(-1); break;
+      case "tab-next": GT4.hooks.tabs(1); break;
       default: break;
     }
   }
 
-  function readPad() {
+  function currentPad() {
     var pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    var pad = null;
     for (var i = 0; i < pads.length; i++) {
       if (pads[i] && pads[i].connected) {
-        pad = pads[i];
-        break;
+        return pads[i];
       }
     }
+    return null;
+  }
+
+  // Nearest scrollable ancestor of the focused element, else the page's main scroll area.
+  function isScrollable(el) {
+    if (!el || el.scrollHeight <= el.clientHeight + 1) {
+      return false;
+    }
+    var overflow = root.getComputedStyle(el).overflowY;
+    return overflow === "auto" || overflow === "scroll";
+  }
+
+  function scrollTarget() {
+    var el = document.activeElement;
+    while (el && el !== document.body) {
+      if (isScrollable(el)) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    var fallback = scopeRoot().querySelector(".option-list, .lib-list, .content");
+    return isScrollable(fallback) ? fallback : null;
+  }
+
+  function scrollWithStick(pad) {
+    if (!pad || GT4.capturing) {
+      return;
+    }
+    var step = GT4.input ? GT4.input.stickScroll(pad.axes[3] || 0) : 0;
+    if (step) {
+      var target = scrollTarget();
+      if (target) {
+        target.scrollTop += step;
+      }
+    }
+  }
+
+  function readPad(pad) {
     var pressed = {};
     if (!pad) {
       return pressed;
@@ -217,7 +269,9 @@
   }
 
   function frame(now) {
-    var pressed = readPad();
+    var pad = currentPad();
+    var pressed = readPad(pad);
+    scrollWithStick(pad);
     Object.keys(pressed).forEach(function (name) {
       if (!previousPressed[name] && DIRECTIONS.indexOf(name) < 0) {
         padPress(name);

@@ -11,6 +11,7 @@ Scripts are classic (not modules) so the pages also open from `file://`.
 | `index.html` | App shell (Tauri `frontendDist` is `ui/`) |
 | `css/app.css` | Tokens from `docs/launcher/LAUNCHER-PLAN.md` section 12.2 |
 | `js/spatial.js` | Pure spatial focus picker (`GT4.spatial.pickNext`) |
+| `js/input-rules.js` | Pure input rules: swipe step, right-stick scroll, slider value from a touch, face-button routing (`GT4.input`) |
 | `js/backend.js` | Command bridge: `window.__TAURI__.core.invoke`, or the dev mock |
 | `js/ui.js` | Element builder, hint bar, toast, dialogs, date format |
 | `js/nav.js` | Keyboard, Web Gamepad polling, Rust `gamepad` event, focus ring |
@@ -84,12 +85,31 @@ Focus moves spatially (nearest element in the pressed direction; sideways offset
 |---|---|---|---|---|---|---|---|
 | Setup | primary button (Choose another file / Play) | none | none | none | none | none | none |
 | Home | Play | none | none | Settings | Play | none | none |
-| Settings (any tab) | activate (dropdown opens its list) | Back to Home (closes a dialog first) | tab action (Advanced: reset) | none | none | previous / next tab | adjust slider or dropdown |
+| Settings: Graphics, Display | activate (dropdown opens its list) | Back to Home (closes a tip or a dialog first) | Save: confirms with a "Saved" toast (settings already apply on change) | none | none | previous / next tab | adjust slider or dropdown |
+| Settings: Advanced | activate | Back to Home | Save (as Graphics) | Reset to defaults (confirm) | none | tabs | adjust |
+| Settings: About | activate (log folder) | Back to Home | none | none | none | tabs | none |
 | Saves | select / make active | Back | Import | Make active | none | tabs | none |
 | Replays | none | Back | Import | Delete (confirm) | none | tabs | none |
 | Controls | select the pad button | Back | Rebind | Reset binding | none | tabs | none |
 | Capture overlay | none | cancel the rebind | none | none | none | none | none (navigation is suspended) |
 | Dialog (list, confirm) | activate | close | none | none | none | none | none |
+
+Right stick: scrolls the nearest scroll area of the focused element (or the page main area). Deadzone 0.2.
+Footer hints (A Select, B Back, X Save where it applies, Y where defined, LB RB Tabs) are tappable by touch and mouse.
+
+Routing of the face and shoulder buttons lives in `GT4.input.padRoute` (`js/input-rules.js`), tested in `dev/nav-test.html`.
+
+## Touch
+
+- Every target is at least 48 x 48 CSS px (the visuals stay small; the hit area is padded). `pointer: coarse` adds a little spacing.
+- Nothing depends on hover. A help "i" opens on tap and closes on a second tap or a tap outside. Focus shows it for keys and pad only.
+- Sliders drag with touch (pointer events with capture; `touch-action: pan-y`). Dropdowns open as a list.
+- Long lists (settings, saves, replays) scroll with a finger and do not chain the scroll to the page.
+- A horizontal swipe over 60 px on the Settings page (finger, mostly horizontal) switches tabs: left goes to the next tab, right to the previous one. Swipes that start on a slider or a dropdown list do not switch tabs.
+
+## Play button
+
+Idle: dark translucent glass with a thin white border and a slow light sweep (about every 3.4 s). Focused (pad or keys) and hovered: solid white, dark label, scale 1.03, soft glow. Pressed: a quick press-down. Under `prefers-reduced-motion` the sweep is removed and the idle state stays static. Other primary buttons (`.btn.primary`) use the same idle and focused language, without the sweep.
 
 Tab order for LB/RB and Q/E: Graphics, Advanced, Display, Controls, Saves, Replays, About. The Mods tab and its rows are behind `GT4.features.mods` in `js/config.js` (off in release 1.1.0 builds; the mod manager ships in 1.1.0).
 
@@ -101,6 +121,6 @@ Mouse use hides the focus ring. A pad or key press brings it back.
 Serve `ui/` with any static server and open `dev/index.html`, for example
 `python -m http.server 8765` in `launcher/crates/gt4l-tauri/ui`, then `http://127.0.0.1:8765/dev/index.html#/home`.
 
-Query options: `?setup=done|checking|preparing|card|wrong|needed` (default `done`), `&running=1`.
+Query options: `?setup=done|checking|preparing|card|wrong|needed` (default `done`), `&running=1`, `&focus=play` (home only: focus the Play button, for screenshots).
 
-`dev/nav-test.html` checks the spatial picker in a browser. It should report 20 of 20 passed.
+`dev/nav-test.html` checks the spatial picker, the swipe, stick and slider rules and the face-button routing in a browser. It should report every case passed (55 of 55 at the time of writing).

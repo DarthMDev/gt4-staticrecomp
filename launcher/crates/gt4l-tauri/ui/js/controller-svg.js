@@ -31,6 +31,33 @@
     { id: "r3", name: "R3 (right stick)", kind: "circle", cx: 380, cy: 262, r: 28 }
   ];
 
+  // Bounding boxes of the D-pad arms (paths have no rect of their own), used for touch hit areas.
+  var PATH_BOXES = {
+    up: { x: 138, y: 148, w: 24, h: 32 },
+    down: { x: 138, y: 200, w: 24, h: 32 },
+    left: { x: 108, y: 178, w: 32, h: 24 },
+    right: { x: 160, y: 178, w: 32, h: 24 }
+  };
+  // Touch targets: at least 56 units (about 48 CSS px at the drawing's normal scale) around each control.
+  var MIN_HIT = 56;
+
+  function hitBox(control) {
+    var box;
+    if (control.kind === "rect") {
+      box = { x: control.x, y: control.y, w: control.w, h: control.h };
+    } else if (control.kind === "path") {
+      var arm = PATH_BOXES[control.id];
+      box = { x: arm.x, y: arm.y, w: arm.w, h: arm.h };
+    } else {
+      box = { x: control.cx - control.r, y: control.cy - control.r, w: control.r * 2, h: control.r * 2 };
+    }
+    var cx = box.x + box.w / 2;
+    var cy = box.y + box.h / 2;
+    var w = Math.max(box.w, MIN_HIT);
+    var h = Math.max(box.h, MIN_HIT);
+    return { x: cx - w / 2, y: cy - h / 2, w: w, h: h };
+  }
+
   var BODY_PATH =
     "M120 96 H480 C540 96 572 130 580 190 L592 300 C598 350 566 368 532 352 " +
     "C506 340 492 316 478 292 L440 246 H160 L122 292 C108 316 94 340 68 352 " +
@@ -77,6 +104,8 @@
       }, svg);
       var title = el("title", {}, group);
       title.textContent = control.name;
+      var hit = hitBox(control);
+      el("rect", { class: "hit", x: hit.x, y: hit.y, width: hit.w, height: hit.h }, group);
 
       if (control.kind === "path") {
         el("path", { class: "shape", d: control.d }, group);

@@ -6,6 +6,7 @@
  * Query options (ui/dev/index.html?...):
  *   setup=done|checking|preparing|card|wrong|needed   (default done)
  *   running=1                                       (game running at start)
+ *   focus=play                                      (home: focus the Play button, for screenshots)
  */
 (function (root) {
   "use strict";
@@ -31,6 +32,10 @@
   }
 
   var gameRunning = query.get("running") === "1";
+
+  // Read by pages/home.js: focuses Play on mount. Only the dev harness sets it.
+  root.GT4 = root.GT4 || {};
+  root.GT4.devFocus = query.get("focus") || "";
   var maxUpscale = 4;
 
   // Settings rows, the same shape as the Rust table.

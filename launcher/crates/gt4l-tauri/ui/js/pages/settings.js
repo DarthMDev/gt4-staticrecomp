@@ -131,6 +131,38 @@
     input.addEventListener("change", function () {
       commit(ctx, row.id, Number(input.value));
     });
+    // Touch and pen: drag with pointer capture. The thumb is 14 px, so the track is inset by 7 px on each side.
+    var touchDrag = false;
+    function valueAt(clientX) {
+      var box = input.getBoundingClientRect();
+      return GT4.input.valueFromPointer(clientX, box.left + 7, box.width - 14, spec.min, spec.max, spec.step);
+    }
+    input.addEventListener("pointerdown", function (event) {
+      if (event.pointerType === "mouse" || input.disabled) {
+        return;
+      }
+      touchDrag = true;
+      input.setPointerCapture(event.pointerId);
+      input.value = String(valueAt(event.clientX));
+      paint();
+      event.preventDefault();
+    });
+    input.addEventListener("pointermove", function (event) {
+      if (!touchDrag) {
+        return;
+      }
+      input.value = String(valueAt(event.clientX));
+      paint();
+    });
+    function endTouchDrag() {
+      if (!touchDrag) {
+        return;
+      }
+      touchDrag = false;
+      commit(ctx, row.id, Number(input.value));
+    }
+    input.addEventListener("pointerup", endTouchDrag);
+    input.addEventListener("pointercancel", endTouchDrag);
     input.addEventListener("gt4-adjust", function (event) {
       var next = Math.min(spec.max, Math.max(spec.min, Number(input.value) + event.detail.delta * spec.step));
       if (next === Number(input.value)) {
@@ -245,13 +277,26 @@
   }
 
   function infoButton(row) {
-    return h("button", { class: "info", type: "button", "aria-label": "About " + row.label }, [
+    var tipId = "tip-" + row.id;
+    var button = h("button", {
+      class: "info",
+      type: "button",
+      "aria-label": "About " + row.label,
+      "aria-expanded": "false",
+      "aria-describedby": tipId,
+      on: {
+        click: function () {
+          GT4.ui.toggleTip(button);
+        }
+      }
+    }, [
       "i",
-      h("span", { class: "tip", role: "tooltip" }, [
+      h("span", { class: "tip", id: tipId, role: "tooltip" }, [
         h("b", { text: row.label }),
         row.help || ""
       ])
     ]);
+    return button;
   }
 
   function rowNode(ctx, row) {
@@ -390,9 +435,10 @@
         content.appendChild(h("div", { class: "advanced-foot" }, [button]));
       },
       hooks: function (ctx, tabHost) {
-        tabHost.setHooks({ x: function () { resetDefaults(ctx); } });
+        tabHost.setHooks({ y: function () { resetDefaults(ctx); } });
         tabHost.hints([
-          { key: "X", label: "Reset to defaults", run: function () { resetDefaults(ctx); } }
+          { key: "X", label: "Save", run: function () { GT4.hooks.x(); } },
+          { key: "Y", label: "Reset", run: function () { resetDefaults(ctx); } }
         ]);
       }
     });
@@ -461,6 +507,8 @@
       }
 
       var content = h("div", { class: "content" });
+      // Tabs with settings to save (X confirms). About and the list tabs set their own X or none.
+      var savableTabs = ["graphics", "display", "advanced"];
       var version = h("div", { class: "side-version", text: "" });
       var backIcon = h("span", { "aria-hidden": "true", text: "‹" });
       var side = h("nav", { class: "side", "aria-label": "Settings" }, [
@@ -480,13 +528,18 @@
         }),
         version
       ]);
-      root.appendChild(h("div", { class: "stage settings" }, [side, content]));
+      var stage = h("div", { class: "stage settings" }, [side, content]);
+      root.appendChild(stage);
 
       GT4.hooks.back = function () { GT4.go("#/home"); };
       GT4.hooks.tabs = function (delta) {
         var next = tabs[(index + delta + tabs.length) % tabs.length];
         GT4.go("#/settings/" + next.id);
       };
+      if (savableTabs.indexOf(tabId) >= 0) {
+        // Settings apply on change; X confirms that they are kept.
+        GT4.hooks.x = function () { GT4.ui.toast("Saved"); };
+      }
 
       var host = {
         setHooks: function (partial) {
@@ -494,15 +547,45 @@
             GT4.hooks[key] = partial[key];
           });
         },
+        // Footer: the page's own keys first, then the shell keys. X is shown by the caller only where it applies.
         hints: function (extra) {
           GT4.ui.setHints((extra || []).concat([
-            { key: "A", label: "Select" },
-            { key: "B", label: "Back" },
-            { key: "LB RB", label: "Tabs" }
+            { key: "A", label: "Select", run: function () { GT4.nav.activate(); } },
+            { key: "B", label: "Back", run: function () { GT4.back(); } },
+            { key: "LB RB", label: "Tabs", run: function () { GT4.hooks.tabs(1); } }
           ]));
         }
       };
-      host.hints([]);
+      host.hints(savableTabs.indexOf(tabId) >= 0
+        ? [{ key: "X", label: "Save", run: function () { GT4.hooks.x(); } }]
+        : []);
+
+      // Swipe left or right (finger, not mouse) changes the tab. Sliders and dropdown lists keep their own drags.
+      var swipe = null;
+      stage.addEventListener("pointerdown", function (event) {
+        if (event.pointerType === "mouse" || GT4.capturing || GT4.ui.topDialog()) {
+          swipe = null;
+          return;
+        }
+        if (event.target.closest && event.target.closest("input, .select, .option-list, .info, .toggle")) {
+          swipe = null;
+          return;
+        }
+        swipe = { id: event.pointerId, x: event.clientX, y: event.clientY };
+      });
+      stage.addEventListener("pointerup", function (event) {
+        if (!swipe || event.pointerId !== swipe.id) {
+          return;
+        }
+        var step = GT4.input.swipeStep(event.clientX - swipe.x, event.clientY - swipe.y);
+        swipe = null;
+        if (step && GT4.hooks.tabs) {
+          GT4.hooks.tabs(step);
+        }
+      });
+      stage.addEventListener("pointercancel", function () {
+        swipe = null;
+      });
 
       call("about_info").then(function (info) {
         version.textContent = "Version " + (info.version || "");

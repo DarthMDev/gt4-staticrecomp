@@ -3,13 +3,16 @@
 Run the dev page (`dev/index.html`) in a browser, then the Tauri build with the real Rust side.
 Do not launch the game for these checks. Tick each item in the Tauri build before merging.
 
-## Layout (1280 x 720 and 960 x 600)
+## Layout (1280 x 720, 1920 x 1080, 960 x 600 and 844 x 390 landscape)
 
-- [ ] Setup, Home and every Settings tab fit without horizontal scroll at 960 x 600.
+- [ ] Setup, Home and every Settings tab fit without horizontal scroll at 960 x 600 and 844 x 390.
+- [ ] At 844 x 390 nothing is clipped: the Settings nav scrolls (with a finger or the right stick) and the footer hints stay visible.
+- [ ] The Play button is glass when idle, solid white with a glow when focused or hovered, and static under reduced motion.
 - [ ] Settings rows: label on the left, control in one right-aligned column; sliders line up with dropdowns.
 - [ ] Hover or focus on an "i" shows its help text; the card stays inside the window.
 - [ ] Home: the cover fills the window, the logo sits bottom-left, Play sits under it, the gear is top-right.
 - [ ] Footer hints show the right buttons per page. Home shows hints only after a pad or key is used.
+- [ ] The home slideshow is unchanged: six slots, 72 s cycle, bottom-up fade.
 
 ## Keyboard
 
@@ -26,6 +29,17 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Clicking a footer hint runs its action.
 - [ ] Dialogs close on Cancel and on Esc; Reset to defaults asks first.
 
+## Touch (touchscreen or touch emulation)
+
+- [ ] Every button, the "i" marks, toggles, dropdowns, tabs and footer hints respond to a tap, and each is easy to hit (48 px).
+- [ ] Tap an "i": its help opens. Tap it again, or tap anywhere else, and it closes. Nothing needs a hover.
+- [ ] Drag a slider with a finger: the value follows the finger and commits on release. A vertical drag on a slider scrolls the page.
+- [ ] Tap a dropdown: its list opens; tap an entry to choose it; tap Cancel or outside to close.
+- [ ] Long lists (Settings, Saves, Replays) scroll with a finger and stop at their ends (no scroll trap).
+- [ ] Swipe left on Settings (over 60 px, mostly sideways) goes to the next tab; swipe right goes to the previous one. A short or diagonal drag does nothing.
+- [ ] A swipe that starts on a slider or an open list does not change the tab.
+- [ ] Tap a footer hint: A Select acts on the focused item, B Back goes back, X Save shows "Saved", LB RB Tabs switches tabs.
+
 ## Controller (XInput, WebView2)
 
 - [ ] The D-pad and the left stick move focus; holding repeats after about 0.4 s, then about every 0.1 s.
@@ -34,6 +48,13 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] LB and RB switch Settings tabs; X and Y do the page action shown in the footer.
 - [ ] While a rebind is waiting, only B cancels and the other buttons do nothing.
 - [ ] Before the first button press the page still works with the keyboard and mouse.
+- [ ] Every interactive element can be reached with the D-pad or the left stick (no control is skipped); the focus ring shows on each.
+- [ ] Right stick up and down scrolls the focused scroll area (Settings content, Saves, Replays, dialogs) at a steady speed; a slight push does nothing.
+- [ ] X on Graphics, Display and Advanced shows "Saved"; X on Saves and Replays imports; X on Controls starts a rebind.
+- [ ] Y on Advanced asks "Reset to defaults?"; Y on Saves makes the selected save active; Y on Replays deletes after a confirm; Y on Controls resets the selected binding.
+- [ ] B closes an open "i" tip first, then an open dialog or list, then goes back.
+- [ ] Left and right on a focused slider change it one step; on a dropdown they cycle the values.
+- [ ] Start on Home plays; A on Home plays; Y on Home opens Settings.
 
 ## Settings behaviour
 

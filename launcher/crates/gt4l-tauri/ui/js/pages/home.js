@@ -3,6 +3,7 @@
  * becomes "Running · Stop". Polls app_state for game_running.
  * Commands: app_state, play, stop_game.
  * Controller: A or Start = Play, Y = Settings. Hints show only once a pad is used.
+ * Play is glass when idle (no focus): it takes the solid white state only when focused or hovered.
  */
 (function (root) {
   "use strict";
@@ -112,6 +113,11 @@
       }
       poll();
       timer = setInterval(poll, POLL_MS);
+
+      // Dev harness only (dev/mock-data.js sets GT4.devFocus from ?focus=play): focus Play for screenshots.
+      if (GT4.devFocus === "play") {
+        playButton.focus({ preventScroll: true });
+      }
 
       GT4.hooks.start = play;
       GT4.hooks.y = function () { GT4.go("#/settings/graphics"); };

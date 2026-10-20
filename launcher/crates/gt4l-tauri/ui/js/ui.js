@@ -169,6 +169,38 @@
     return modals.length ? modals[modals.length - 1].__dialog || null : null;
   }
 
+  // Help tips ("i") open on tap or click and close on a second tap or a tap outside.
+  // Returns true when a tip was open, so B can close it before it goes back.
+  function closeTips(except) {
+    var open = document.querySelectorAll(".info.is-open");
+    var closed = false;
+    Array.prototype.forEach.call(open, function (el) {
+      if (el !== except) {
+        el.classList.remove("is-open");
+        el.setAttribute("aria-expanded", "false");
+        closed = true;
+      }
+    });
+    return closed;
+  }
+
+  function toggleTip(info) {
+    var open = !info.classList.contains("is-open");
+    closeTips(info);
+    info.classList.toggle("is-open", open);
+    info.setAttribute("aria-expanded", String(open));
+  }
+
+  document.addEventListener("pointerdown", function (event) {
+    var target = event.target;
+    Array.prototype.forEach.call(document.querySelectorAll(".info.is-open"), function (el) {
+      if (!el.contains(target)) {
+        el.classList.remove("is-open");
+        el.setAttribute("aria-expanded", "false");
+      }
+    });
+  }, true);
+
   var dateFormat = null;
   try {
     dateFormat = new Intl.DateTimeFormat("en-GB", {
@@ -199,6 +231,8 @@
     toast: toast,
     openDialog: openDialog,
     topDialog: topDialog,
+    closeTips: closeTips,
+    toggleTip: toggleTip,
     formatDate: formatDate
   };
 })(window);

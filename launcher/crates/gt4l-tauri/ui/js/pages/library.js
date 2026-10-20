@@ -221,7 +221,7 @@
     });
     host.hints([
       { key: "X", label: "Import", run: importItems },
-      { key: "Y", label: kind.activate ? "Make active" : "Delete" }
+      { key: "Y", label: kind.activate ? "Make active" : "Delete", run: function () { if (GT4.hooks.y) { GT4.hooks.y(); } } }
     ]);
 
     content.addEventListener("keydown", function (event) {

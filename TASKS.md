@@ -268,8 +268,12 @@ test --workspace 117 passed, 0 failed, 1 ignored; Python unittest 555 OK, 38 ski
 (ui/assets/logo-gt4-white.png, launcher/tools/make_white_logo.py) on the setup, home and settings pages. The home page
 has a background slideshow (12 s per image, 1.5 s crossfade, slow pan, reduced-motion fallback) with placeholder images
 (ui/assets/backgrounds, see its README; the owner is making new images). The version is 1.0.0 everywhere it is declared
-(Cargo workspace, tauri.conf.json, installer NSIS, home label, About). Open: the owner test of setup, saves and controls;
-greying the presets above the device limit (max_upscale); the installer test (TASK-043). No PR yet.
+(Cargo workspace, tauri.conf.json, installer NSIS, home label, About). UI pass 3 (2026-10-20, owner requirements: touch, controller, Play): every control reachable by touch
+(48 px targets, tap help tips, slider drag, swipe between Settings tabs, scrolling lists), every page
+reachable by controller (X Save on Settings, Y secondary action, right-stick scroll, footer hints per
+page), and the glass Play button (idle sheen, solid white when focused). Branch task/019-launcher, not yet
+in a PR. Still open: the owner test of setup, saves, controls and the new touch and pad behaviour;
+greying the presets above the device limit (max_upscale); the installer test (TASK-043).
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
 
