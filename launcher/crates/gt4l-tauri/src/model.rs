@@ -472,9 +472,12 @@ mod table_tests {
     fn pcsx2_rows_show_only_for_the_pcsx2_renderer_and_the_upscale_is_limited() {
         let table = settings_table(&Settings::default(), &Controls::default());
         let upscale = row(&table, "upscale");
-        assert_eq!(upscale["control"], "slider");
-        assert_eq!(upscale["values"]["limit"], "max_upscale");
-        assert_eq!(upscale["values"]["max"], 8.0, "the table maximum is 8 and the limit is min(8, 12)");
+        // TASK-049 curated the table: upscale is a preset dropdown (480p to 8K), not a slider. The old slider
+        // expectation (max 8, limit max_upscale) encoded the older table. Greying presets above the device limit
+        // is not implemented yet (follow-up): the limit is still MAX_UPSCALE_DEFAULT here.
+        assert_eq!(upscale["control"], "dropdown");
+        let presets: Vec<&str> = upscale["values"].as_array().unwrap().iter().map(|choice| choice["value"].as_str().unwrap()).collect();
+        assert!(presets.contains(&"480p") && presets.contains(&"8K"), "presets: {presets:?}");
         assert_eq!(upscale["visible_when"]["equals"], "pcsx2");
         assert_eq!(table["max_upscale"], MAX_UPSCALE_DEFAULT);
     }

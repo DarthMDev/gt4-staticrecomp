@@ -64,6 +64,9 @@ pub struct Row {
     pub max: Option<f64>,
     #[serde(default)]
     pub choices: Vec<Choice>,
+    /// Enum rows: the INI value is also accepted as input (upscale 3 = 1080p). Mirrors `accept_ini`.
+    #[serde(default)]
+    pub accept_ini: bool,
     pub default: String,
     pub written: String,
     pub status: String,
@@ -263,15 +266,21 @@ pub fn parse_value(row: &Row, raw: &str) -> Result<String, TableError> {
             Ok(raw.to_string())
         }
         "enum" => {
+            // With accept_ini, the INI value is accepted as well (upscale: 3 = 1080p). Mirrors parse_value in Python.
+            let by_name = row.choices.iter().any(|choice| choice.name == raw);
+            let name_text = match row.choices.iter().find(|choice| choice.ini == raw) {
+                Some(choice) if !by_name && row.accept_ini => choice.name.as_str(),
+                _ => raw,
+            };
             let choice = row
                 .choices
                 .iter()
-                .find(|choice| choice.name == raw)
+                .find(|choice| choice.name == name_text)
                 .ok_or_else(|| TableError(format!("{name} must be one of {}, got {raw:?}", names(row))))?;
             if choice.status != "ok" {
                 return refuse(format!("{name}={raw} is not settable yet ({})", choice.status));
             }
-            Ok(raw.to_string())
+            Ok(name_text.to_string())
         }
         other => refuse(format!("{name} cannot be set from a value (type {other})")),
     }
@@ -349,12 +358,11 @@ pub fn render_ini(settings: &BTreeMap<String, String>, launcher: &BTreeMap<Strin
             continue;
         }
         let value = match row.written.as_str() {
-            // Mod rows (release 1.1.0) always get their default in 1.0.0, whatever a user value says.
             "always" => checked_settings.get(&row.id).cloned().unwrap_or_else(|| row.default.clone()),
-            _ if row.page == MODS_PAGE => row.default.clone(),
+            // Written only when set and different from the default (Python: render_ini).
             "when-set" => match checked_settings.get(&row.id) {
-                Some(value) => value.clone(),
-                None => continue,
+                Some(value) if *value != parse_value(row, &row.default)? => value.clone(),
+                _ => continue,
             },
             "launcher" => match checked_launcher.get(&row.id) {
                 Some(value) => value.clone(),
@@ -433,8 +441,11 @@ mod tests {
 
     #[test]
     fn values_are_checked_like_the_python_writer() {
-        assert_eq!(check_user_value("upscale", "2").unwrap(), "2");
-        assert!(check_user_value("upscale", "9").is_err());
+        // Main's table: upscale accepts its INI value (accept_ini) and the name; 9 is the INI value of 9x, out of
+        // range values are refused. Old expectation (upscale 9 refused) encoded the older table.
+        assert_eq!(check_user_value("upscale", "2").unwrap(), "720p");
+        assert_eq!(check_user_value("upscale", "9").unwrap(), "9x");
+        assert!(check_user_value("upscale", "13").is_err());
         assert!(check_user_value("upscale", "x").is_err());
         assert!(check_user_value("renderer", "d3d12").is_err(), "resolved choices are not settable");
         assert!(check_user_value("renderer", "vulkan").is_ok());

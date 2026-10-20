@@ -44,7 +44,8 @@ fn user_settings_ini_matches_the_python_writer_byte_for_byte() {
 #[test]
 fn refused_values_are_the_same_refusals_as_the_python_writer() {
     // scripts/gs_settings.py refuses these with SettingsError: out of range, not settable, launcher-only.
-    assert!(gs_table::render_ini(&map(&[("upscale", "9")]), &BTreeMap::new()).is_err());
+    // upscale 9 is the INI value of 9x (accepted); 13 is out of the table (refused by both writers).
+    assert!(gs_table::render_ini(&map(&[("upscale", "13")]), &BTreeMap::new()).is_err());
     assert!(gs_table::render_ini(&map(&[("filter", "nearest")]), &BTreeMap::new()).is_err());
     assert!(gs_table::render_ini(&map(&[("cache_folder", "C:/x")]), &BTreeMap::new()).is_err());
     assert!(gs_table::render_ini(&BTreeMap::new(), &map(&[("upscale", "2")])).is_err());
