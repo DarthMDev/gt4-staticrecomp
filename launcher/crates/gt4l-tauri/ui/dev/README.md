@@ -33,10 +33,10 @@ Arguments are the payload object shown. Errors are strings or Error objects; the
 
 | Command | Payload | Returns |
 |---|---|---|
-| `app_state` | none | `{setup: {state: "needed"\|"checking"\|"wrong_disc"\|"done", step: "checking"\|"preparing"\|"card", progress: 0..1, disc_name, problem}, game_running: bool}` |
-| `setup_start` | none | none (called once when `state` is `needed`) |
-| `setup_choose_disc` | none | none (file picker runs in Rust) |
-| `setup_cancel` | none | none |
+| `app_state` | none | `{setup: {state, step, progress, bytes_done, bytes_total, renderer_step, disc_name, problem, note}, game_running: bool, game_files}`; see "Setup states" below |
+| `setup_choose_disc` | none | `{path, serial, version, name}` when the file is accepted, `null` when the picker was cancelled; a refused file is an error string (the reason), and `app_state` then says `wrong_disc` |
+| `setup_start` | none | none; called by the page right after `setup_choose_disc` accepted a file (and by "Try again") |
+| `setup_cancel` | none | none; the copy and the staging folder are removed, `app_state` says `failed` with "Setup was cancelled" |
 | `play` | none | none |
 | `stop_game` | none | none |
 | `get_settings_table` | none | `{max_upscale: int, rows: [row]}` |
@@ -53,14 +53,29 @@ Arguments are the payload object shown. Errors are strings or Error objects; the
 | `replays_list` | none | `{items: [{id, name, modified}]}` |
 | `replays_import` | none | `{items}` or `null` |
 | `replays_delete` | `{id}` | `{items}` (the UI confirms first) |
-| `about_info` | none | `{version, gt4recomp, gt4gs, disc_path}`; `gt4gs` is `not installed` until the renderer is there |
+| `about_info` | none | `{version, gt4recomp, gt4gs, disc_path, game_files, data_folder}`; `gt4gs` is `not installed` until the renderer is there; `game_files` is the folder of the disc image copy |
 | `open_log_folder` | none | none |
+| `open_game_files_folder` | none | none; opens `game_files` in Explorer |
 | `check_updates` | none | `{offers: [offer], errors: [string], upToDate: bool, launcher, renderer}`; offer = `{stream, installed, latest, notes, package, update}` |
 | `apply_update` | `{stream}` (`launcher` or `renderer`) | `{ok, message}`; the renderer installs in place (not while the game runs); the launcher starts its setup and exits |
 | `skip_update` | `{stream, version}` | none; no offer again for exactly that version |
 | `confirm_close` | none | none; the player chose Close launcher in the close confirmation |
 
 `modified` is an ISO 8601 string; the UI formats it.
+
+### Setup states (`app_state().setup.state`)
+
+| state | When | Page |
+|---|---|---|
+| `needed` | never set up | "Choose disc image" |
+| `wrong_disc` | the chosen file was refused (`problem` is the reason, for example "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328). ...") | "Not supported" row, the reason, "Choose another file" |
+| `checking` | setup runs; `step` is `copying` (bytes), `checking`, `preparing` or `renderer` (`renderer_step`: `listing`, `downloading` with bytes, `installing`) | rows with a bar, Cancel (not during the renderer step) |
+| `failed` | a run stopped: cancelled, not enough free space, a write error | the reason, "Try again", "Choose another file" |
+| `files_missing` | set up once, but the copy of the disc image or the prepared files are gone or changed | "Game files missing", "Choose disc image" |
+| `done` | ready (the receipt's size and modified time of the copy match; nothing is hashed) | "Ready", Play; `note` says when CoreGS 1.1 is used because gt4-gs could not be downloaded |
+
+The game reads only the copy in `%LOCALAPPDATA%\GT4Recomp\disc\SCUS-97328.iso`. The file the player picked may be
+moved or deleted after setup.
 
 Settings row (`rows[]` in the table):
 
@@ -84,14 +99,17 @@ Other Tauri events from Rust (listened to in `js/app.js`, popup code in `js/upda
 | Event | Payload | Meaning |
 |---|---|---|
 | `update-available` | `{offers: [offer]}` | Sent at launch when a stream has a newer stable version that is not skipped. Shows the update popup. |
-| `renderer-progress` | `{step}`: `listing`, `downloading`, `installing`, `downloading-launcher`, `done`, `failed` | Progress of a gt4-gs install (first install or update). |
+| `setup-progress` | `{step, percent, bytesDone, bytesTotal}` | Setup progress (also in `app_state`, which the page polls). |
+| `setup-finished` | `{ok, message}` | The end of a setup run. |
+| `renderer-progress` | `{step}`: `listing`, `downloading` (with `percent`, `bytesDone`, `bytesTotal` during setup), `installing`, `downloading-launcher`, `done`, `failed` | Progress of a gt4-gs install (setup, the retry at launch, or an update). The setup page draws it; elsewhere `done` and `failed` are toasts. |
 | `update-finished` | `{stream, ok, message}` | The end of an `apply_update`. |
 | `game-state` | `{running, message}` | The game ended (`running: false`); a non-empty message is shown and Home is opened. |
 | `close-confirm` | `{message}` | The window close button was pressed while the game runs. The page asks "Close the launcher anyway?". |
 
 The update popup: Update (runs `apply_update`), Not now (closes it; B does the same), Skip this version (runs `skip_update`). The release notes are shown as text (`#` headings, bullets and `**bold**` only).
 
-Commands not in the brief that the UI needs: `cancel_capture`, `reset_binding`, `saves_*` and `replays_*` (names as listed), `open_log_folder`. The Rust side in `src/commands.rs` currently uses other names (`settings_rows`, `settings_set`, `controls_list`, `controls_capture_start`, `controls_bind_key`, `controls_reset`, `setup_*` and so on). The names above are the ones this UI calls.
+The Rust side registers exactly these names (`src/main.rs`). `src/contract.rs` checks both directions: every command a
+page calls is registered, and every registered command is called by a page.
 
 ## Navigation map
 
@@ -99,7 +117,7 @@ Focus moves spatially (nearest element in the pressed direction; sideways offset
 
 | Page | A | B / Esc | X | Y | Start | LB/RB or Q/E | Left/right |
 |---|---|---|---|---|---|---|---|
-| Setup | primary button (Choose another file / Play) | none | none | none | none | none | none |
+| Setup | primary button (Choose disc image / Choose another file / Play) | Cancel while copying or checking; Home when done | none | none | none | none | none |
 | Home | Play | none | none | Settings | Play | none | none |
 | Settings: Graphics, Display | activate (dropdown opens its list) | Back to Home (closes a tip or a dialog first) | Save: confirms with a "Saved" toast (settings already apply on change) | none | none | previous / next tab | adjust slider or dropdown |
 | Settings: Advanced | activate | Back to Home | Save (as Graphics) | Reset to defaults (confirm) | none | tabs | adjust |
@@ -137,6 +155,6 @@ Mouse use hides the focus ring. A pad or key press brings it back.
 Serve `ui/` with any static server and open `dev/index.html`, for example
 `python -m http.server 8765` in `launcher/crates/gt4l-tauri/ui`, then `http://127.0.0.1:8765/dev/index.html#/home`.
 
-Query options: `?setup=done|checking|preparing|card|wrong|needed` (default `done`), `&running=1`, `&focus=play` (home only: focus the Play button, for screenshots).
+Query options: `?setup=done|needed|wrong|copying|preparing|renderer|failed|missing|offline` (default `done`), `&pick=spec` (the mock picker returns a refused Spec II image), `&running=1`, `&focus=play` (home only: focus the Play button, for screenshots).
 
 `dev/nav-test.html` checks the spatial picker, the swipe, stick and slider rules and the face-button routing in a browser. It should report every case passed (55 of 55 at the time of writing).

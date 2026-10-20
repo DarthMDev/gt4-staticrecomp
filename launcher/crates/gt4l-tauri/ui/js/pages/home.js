@@ -63,6 +63,12 @@
         }, function (err) {
           paint(false);
           GT4.ui.toast(GT4.errorText(err), true);
+          // Game files missing (the data folder was cleaned): back to Setup, where the player chooses the disc again.
+          call("app_state").then(function (appState) {
+            if (appState.setup && appState.setup.state !== "done") {
+              GT4.go("#/setup");
+            }
+          }, function () {});
         });
       }
 

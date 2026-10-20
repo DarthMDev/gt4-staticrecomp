@@ -481,9 +481,25 @@
         h("p", { text: "Gran Turismo and the Gran Turismo 4 logo are trademarks of Sony Interactive Entertainment Inc. and Polyphony Digital Inc. They are used here only to identify the game. You need your own copy of the game to play." })
       ]));
       content.appendChild(h("div", { class: "group", text: "More" }));
+      // The game runs from GT4Recomp's own copy of the disc image (the file chosen at setup is not needed any more,
+      // so its path is not shown; it is in prepare.json and the log for support).
+      var openGameFiles = h("button", {
+        class: "btn small",
+        type: "button",
+        on: {
+          click: function () {
+            call("open_game_files_folder").catch(function (err) {
+              GT4.ui.toast(errorText(err), true);
+            });
+          }
+        }
+      }, "Open folder");
       content.appendChild(h("div", { class: "row" }, [
-        h("div", { class: "k", text: "Disc image" }),
-        h("div", { class: "ctl" }, [h("span", { class: "val", text: info.disc_path || "Not set" })])
+        h("div", { class: "k" }, [
+          h("span", { text: "Game files" }),
+          h("span", { class: "val", text: info.game_files || "" })
+        ]),
+        h("div", { class: "ctl" }, [openGameFiles])
       ]));
       var openLog = h("button", {
         class: "btn small",

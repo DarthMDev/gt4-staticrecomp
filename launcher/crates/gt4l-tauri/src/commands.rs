@@ -15,8 +15,7 @@ use gt4l_core::launch;
 use gt4l_core::paths::{self, DataDirs, GAME_EXECUTABLE};
 use gt4l_core::settings;
 use gt4l_core::{Settings, LAUNCHER_VERSION};
-use gt4l_disc::setup as disc_setup;
-use gt4l_disc::Pins;
+use gt4l_disc::setup::{self as disc_setup, Installed};
 use gt4l_platform::{game, pad};
 use gt4saves::library::Report;
 use serde::Serialize;
@@ -25,66 +24,76 @@ use tauri::{AppHandle, Emitter, State};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::model;
+use crate::setup;
 use crate::saves::{self, Item};
 use crate::updates;
-use crate::state::{self, lock, AppState, Shared};
+use crate::state::{self, lock, AppState, SetupOutcome, Shared};
 
-/// Everything the page needs to pick the screen and show the header of Home.
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Snapshot {
-    pub version: String,
-    /// `setup` or `home`.
-    pub screen: String,
-    pub disc_name: String,
-    pub home_message: String,
-    pub game_running: bool,
-    pub setup_busy: bool,
-    /// Development builds only (`visual-check`): the page to show first.
-    pub visual_page: Option<String>,
+/// `app_state()` (ui/dev/README.md):
+/// `{setup: {state, step, progress, bytes_done, bytes_total, renderer_step, disc_name, problem, note}, game_running,
+/// game_files}`.
+///
+/// `state` is `needed` (never set up), `wrong_disc` (the chosen file was refused), `checking` (setup runs),
+/// `failed` (a run stopped: cancel, no space, write error), `files_missing` (set up once, but the copied image or
+/// the prepared files are gone or changed) or `done`. No hash runs here: the copied image is trusted by its receipt.
+#[tauri::command]
+pub fn app_state(shared: State<'_, Shared>) -> Result<Value, String> {
+    Ok(app_state_of(&lock(shared.inner())))
 }
 
-fn snapshot_of(shared: State<'_, Shared>) -> Result<Snapshot, String> {
-    let state = lock(shared.inner());
-    let ready = state.home_ready();
-    let disc_name = state
+pub fn app_state_of(state: &AppState) -> Value {
+    let installed = state.installed();
+    let chosen_name = state
         .disc_path()
         .and_then(|path| path.file_name())
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-    Ok(Snapshot {
-        version: LAUNCHER_VERSION.to_string(),
-        screen: if ready || visual_ready() { "home" } else { "setup" }.to_string(),
-        disc_name,
-        home_message: state.home_message.clone(),
-        game_running: state.game_child.is_some(),
-        setup_busy: state.setup_busy,
-        visual_page: visual_page(),
-    })
-}
-
-/// `app_state()`: `{setup: {state, step, progress, disc_name, problem}, game_running}` (ui/dev/README.md).
-/// Progress is 0 until the setup pipeline reports it (open item).
-#[tauri::command]
-pub fn app_state(shared: State<'_, Shared>) -> Result<Value, String> {
-    let snapshot = snapshot_of(shared)?;
-    let (state, step) = if snapshot.screen == "home" {
-        ("done", "checking")
-    } else if snapshot.setup_busy {
-        ("checking", "preparing")
+    let run = &state.setup_run;
+    let (screen, problem, disc_name) = if visual_ready() {
+        ("done", String::new(), setup::disc_display_name("2.00"))
+    } else if state.setup_busy {
+        ("checking", String::new(), chosen_name)
+    } else if let Installed::Ready { version, .. } = &installed {
+        ("done", String::new(), setup::disc_display_name(version))
     } else {
-        ("needed", "checking")
+        match &state.setup_outcome {
+            SetupOutcome::Refused(message) => ("wrong_disc", message.clone(), chosen_name),
+            SetupOutcome::Failed(message) => ("failed", message.clone(), chosen_name),
+            SetupOutcome::Done { .. } => (
+                "files_missing",
+                "Game files missing. Choose your disc image again.".to_string(),
+                chosen_name,
+            ),
+            SetupOutcome::None => match &installed {
+                Installed::Missing { reason } => (
+                    "files_missing",
+                    format!("Game files missing ({reason}). Choose your disc image again."),
+                    chosen_name,
+                ),
+                _ => ("needed", String::new(), chosen_name),
+            },
+        }
     };
-    Ok(json!({
+    let note = match &state.setup_outcome {
+        SetupOutcome::Done { renderer_note } => renderer_note.clone(),
+        _ => String::new(),
+    };
+    json!({
         "setup": {
-            "state": state,
-            "step": step,
-            "progress": 0.0,
-            "disc_name": snapshot.disc_name,
-            "problem": snapshot.home_message,
+            "state": screen,
+            "step": if run.step.is_empty() { "copying" } else { run.step.as_str() },
+            "progress": run.fraction,
+            "bytes_done": run.bytes_done,
+            "bytes_total": run.bytes_total,
+            "renderer_step": run.renderer_step,
+            "disc_name": disc_name,
+            "problem": problem,
+            "note": note,
         },
-        "game_running": snapshot.game_running,
-    }))
+        "game_running": state.game_child.is_some(),
+        "game_files": state.dirs.disc_folder().display().to_string(),
+        "visual_page": visual_page(),
+    })
 }
 
 #[cfg(feature = "visual-check")]
@@ -112,7 +121,11 @@ fn visual_ready() -> bool {
 /// `get_settings_table()`: `{max_upscale, rows}`, the rows of ui/dev/README.md (see `model::settings_table`).
 #[tauri::command]
 pub fn get_settings_table(shared: State<'_, Shared>) -> Result<Value, String> {
-    let state = lock(shared.inner());
+    get_settings_table_of(shared.inner())
+}
+
+pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
+    let state = lock(shared);
     Ok(model::settings_table(&state.config.settings, &state.controls))
 }
 
@@ -120,7 +133,11 @@ pub fn get_settings_table(shared: State<'_, Shared>) -> Result<Value, String> {
 /// A refused value leaves the setting unchanged and returns the reason.
 #[tauri::command]
 pub fn set_setting(id: String, value: Value, shared: State<'_, Shared>) -> Result<(), String> {
-    let mut state = lock(shared.inner());
+    set_setting_of(id, value, shared.inner())
+}
+
+pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), String> {
+    let mut state = lock(shared);
     if let Some(definition) = settings::definition(&id) {
         let text = model::value_text(&value, definition.kind == settings::Kind::Toggle)
             .ok_or_else(|| format!("'{id}' needs a plain value"))?;
@@ -155,7 +172,11 @@ pub fn set_setting(id: String, value: Value, shared: State<'_, Shared>) -> Resul
 /// `reset_gs_settings_to_defaults()`: every PCSX2 GS table row back to its default. Returns the new table.
 #[tauri::command]
 pub fn reset_gs_settings_to_defaults(shared: State<'_, Shared>) -> Result<Value, String> {
-    let mut state = lock(shared.inner());
+    reset_gs_settings_to_defaults_of(shared.inner())
+}
+
+pub fn reset_gs_settings_to_defaults_of(shared: &Shared) -> Result<Value, String> {
+    let mut state = lock(shared);
     state.config.settings.clear_gs();
     state.save_config();
     Ok(model::settings_table(&state.config.settings, &state.controls))
@@ -163,52 +184,74 @@ pub fn reset_gs_settings_to_defaults(shared: State<'_, Shared>) -> Result<Value,
 
 // Play ------------------------------------------------------------------------------------------
 
-/// Starts the game with the chosen settings. Returns once the process is running; the page hears
-/// about the end through the `game-state` event.
-#[tauri::command]
-pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
-    let shared: Shared = shared.inner().clone();
-    let (disc, pins, dirs, program_dir, dev_dir, settings) = {
-        let state = lock(&shared);
-        if state.game_child.is_some() {
-            return Err("The game is already running.".into());
-        }
-        (
-            state.config.disc_path.clone(),
-            state.pins.clone(),
-            state.dirs.clone(),
-            program_directory(),
-            state.config.dev_game_dir.clone(),
-            state.config.settings.clone(),
-        )
-    };
-    let Some(disc) = disc.filter(|path| disc_present(path, &pins)) else {
-        lock(&shared).home_message = "Disc image not found or changed. Choose it again in setup.".into();
-        return Err("disc".into());
-    };
-    if let Err(message) = disc_setup::verify_prepared(&dirs.prepared(), &pins) {
-        return Err(format!("Game files are not ready ({message}). Prepare them again in setup."));
+/// Everything Play needs, checked: the copied disc image, the prepared ELF, the game program, the settings, the
+/// renderer and the extra environment. The flow test builds the launch plan from this without starting anything.
+pub struct PlayInputs {
+    pub dirs: DataDirs,
+    pub disc: PathBuf,
+    pub elf: PathBuf,
+    pub executable: PathBuf,
+    pub settings: Settings,
+    pub pcsx2: Option<gs_release::Installed>,
+    /// Why CoreGS 1.1 is used instead of the PCSX2 GS, if it is.
+    pub notice: Option<String>,
+    pub extra: Vec<(String, String)>,
+}
+
+/// The checks of Play before anything starts. `program_dir` is the folder of `GT4Recomp.exe`.
+pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, String> {
+    let state = lock(shared);
+    if state.game_child.is_some() {
+        return Err("The game is already running.".into());
     }
-    let game_dir = paths::game_directory(&program_dir, dev_dir.as_deref());
+    let disc = match state.installed() {
+        Installed::Ready { image, .. } => image,
+        Installed::Missing { reason } => {
+            return Err(format!("Game files missing ({reason}). Choose your disc image again."));
+        }
+        Installed::NotSetUp => return Err("Set up the game first.".into()),
+    };
+    let dirs = state.dirs.clone();
+    let game_dir = paths::game_directory(program_dir, state.config.dev_game_dir.as_deref());
     let executable = game_dir.join(GAME_EXECUTABLE);
     if !executable.exists() {
-        return Err("The game files are missing. Reinstall GT4Recomp.".into());
+        return Err("The game program is missing. Reinstall GT4Recomp.".into());
     }
     let mut extra: Vec<(String, String)> = Vec::new();
     let controls_path = dirs.root().join(gt4controls::CONTROLS_FILE_NAME);
     if controls_path.exists() {
         extra.push(("GT4_CONTROLS_FILE".into(), controls_path.display().to_string()));
     }
-    let card = dirs.runtime_card();
-    saves::prepare_card(&lock(&shared).library, &card)?;
     // Decision 0070: PCSX2 GS when it is installed and selected; otherwise CoreGS 1.1 with a message.
-    let renderer_root = dirs.root().join("gs");
-    let installed = gs_release::installed(&renderer_root);
+    let settings = state.config.settings.clone();
+    let installed = gs_release::installed(&updates::renderer_root(&dirs));
     let (pcsx2, notice) = match launch::choose_renderer(&settings, installed.as_ref()) {
         launch::RendererChoice::Pcsx2 => (installed.clone(), None),
         launch::RendererChoice::CoreGs11 { reason } => (None, reason),
     };
-    let elf = dirs.prepared().join(disc_setup::ELF_FILE);
+    Ok(PlayInputs {
+        elf: dirs.prepared().join(disc_setup::ELF_FILE),
+        dirs,
+        disc,
+        executable,
+        settings,
+        pcsx2,
+        notice,
+        extra,
+    })
+}
+
+/// Starts the game with the chosen settings. Returns once the process is running; the page hears
+/// about the end through the `game-state` event.
+#[tauri::command]
+pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
+    let shared: Shared = shared.inner().clone();
+    let inputs = prepare_play(&shared, &program_directory()).inspect_err(|message| {
+        lock(&shared).home_message = message.clone();
+    })?;
+    let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, notice, extra } = inputs;
+    let card = dirs.runtime_card();
+    saves::prepare_card(&lock(&shared).library, &card)?;
     let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), &extra)?;
     {
         let mut state = lock(&shared);
@@ -286,11 +329,6 @@ fn program_directory() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// Cheap check before Play: the file exists and has the pinned size (the full hash ran at setup).
-fn disc_present(path: &Path, pins: &Pins) -> bool {
-    fs::metadata(path).map(|meta| meta.len() == pins.disc.size_bytes).unwrap_or(false)
-}
-
 // Controls ----------------------------------------------------------------------------------------
 
 // Controls ---------------------------------------------------------------------------------------
@@ -298,7 +336,11 @@ fn disc_present(path: &Path, pins: &Pins) -> bool {
 /// `get_controls()`: `{controls: [{id, name, binding}], triggers: [row]}`. Triggers use the settings row shape.
 #[tauri::command]
 pub fn get_controls(shared: State<'_, Shared>) -> Result<Value, String> {
-    let state = lock(shared.inner());
+    get_controls_of(shared.inner())
+}
+
+pub fn get_controls_of(shared: &Shared) -> Result<Value, String> {
+    let state = lock(shared);
     let controls: Vec<Value> = model::control_rows(&state.controls)
         .into_iter()
         .map(|row| json!({ "id": row.input, "name": row.ps2_name, "binding": row.short }))
@@ -398,7 +440,11 @@ pub fn cancel_capture(shared: State<'_, Shared>) -> Result<(), String> {
 /// `reset_binding({control})`: restores the built-in sources of one input.
 #[tauri::command]
 pub fn reset_binding(control: String, shared: State<'_, Shared>) -> Result<(), String> {
-    let mut state = lock(shared.inner());
+    reset_binding_of(control, shared.inner())
+}
+
+pub fn reset_binding_of(control: String, shared: &Shared) -> Result<(), String> {
+    let mut state = lock(shared);
     let defaults = default_bindings();
     let sources = defaults.get(&control).cloned().ok_or_else(|| format!("unknown input '{control}'"))?;
     state.controls.set_sources(&control, sources).map_err(|error| error.to_string())?;
@@ -436,12 +482,20 @@ fn replays_view(state: &AppState) -> Result<LibraryView, String> {
 
 #[tauri::command]
 pub fn saves_list(shared: State<'_, Shared>) -> Result<LibraryView, String> {
-    saves_view(&lock(shared.inner()))
+    saves_list_of(shared.inner())
+}
+
+pub fn saves_list_of(shared: &Shared) -> Result<LibraryView, String> {
+    saves_view(&lock(shared))
 }
 
 #[tauri::command]
 pub fn replays_list(shared: State<'_, Shared>) -> Result<LibraryView, String> {
-    replays_view(&lock(shared.inner()))
+    replays_list_of(shared.inner())
+}
+
+pub fn replays_list_of(shared: &Shared) -> Result<LibraryView, String> {
+    replays_view(&lock(shared))
 }
 
 /// Picks a save file or card image and imports it into the library. Imports never overwrite.
@@ -456,7 +510,7 @@ pub async fn replays_import(app: AppHandle, shared: State<'_, Shared>) -> Result
 }
 
 #[derive(Clone, Copy)]
-enum Kind {
+pub enum Kind {
     Saves,
     Replays,
 }
@@ -473,24 +527,29 @@ async fn import_with_picker(app: AppHandle, shared: Shared, kind: Kind) -> Resul
             return Ok(None);
         };
         let path = picked.into_path().map_err(|error| error.to_string())?;
-        let mut state = lock(&shared);
-        let summary = match saves::import_path(&state.library, &path) {
-            Ok(report) => summary_of(&report),
-            Err(message) => message,
-        };
-        match kind {
-            Kind::Saves => {
-                state.saves_status = summary;
-                saves_view(&state).map(Some)
-            }
-            Kind::Replays => {
-                state.replays_status = summary;
-                replays_view(&state).map(Some)
-            }
-        }
+        import_into(&shared, &path, kind).map(Some)
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+/// The import behind `saves_import` and `replays_import` for a picked path. Imports never overwrite.
+pub fn import_into(shared: &Shared, path: &Path, kind: Kind) -> Result<LibraryView, String> {
+    let mut state = lock(shared);
+    let summary = match saves::import_path(&state.library, path) {
+        Ok(report) => summary_of(&report),
+        Err(message) => message,
+    };
+    match kind {
+        Kind::Saves => {
+            state.saves_status = summary;
+            saves_view(&state)
+        }
+        Kind::Replays => {
+            state.replays_status = summary;
+            replays_view(&state)
+        }
+    }
 }
 
 fn summary_of(report: &Report) -> String {
@@ -500,8 +559,12 @@ fn summary_of(report: &Report) -> String {
 /// Makes a save the one the next start uses. The save that was active moves to a new slot.
 #[tauri::command]
 pub fn saves_activate(id: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    saves_activate_of(id, shared.inner())
+}
+
+pub fn saves_activate_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
     let name = id;
-    let mut state = lock(shared.inner());
+    let mut state = lock(shared);
     let slot = saves::saves(&state.library)?
         .into_iter()
         .find(|item| item.name == name)
@@ -518,14 +581,22 @@ pub fn saves_activate(id: String, shared: State<'_, Shared>) -> Result<LibraryVi
 /// Sends a save or replay to the Recycle Bin.
 #[tauri::command]
 pub fn saves_delete(id: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    saves_delete_of(id, shared.inner())
+}
+
+pub fn saves_delete_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
     let name = id;
-    delete_item(&name, shared.inner(), Kind::Saves)
+    delete_item(&name, shared, Kind::Saves)
 }
 
 #[tauri::command]
 pub fn replays_delete(id: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    replays_delete_of(id, shared.inner())
+}
+
+pub fn replays_delete_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
     let name = id;
-    delete_item(&name, shared.inner(), Kind::Replays)
+    delete_item(&name, shared, Kind::Replays)
 }
 
 fn delete_item(name: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, String> {
@@ -566,11 +637,19 @@ pub struct AboutInfo {
     pub gt4recomp: String,
     /// The gt4-gs version in use, or `not installed`.
     pub gt4gs: String,
+    /// Where the game files live: the copy of the disc image (`<data>\disc`). The picked file is not needed.
+    pub game_files: String,
+    /// The data folder (saves, settings, prepared files, renderer).
+    pub data_folder: String,
 }
 
 #[tauri::command]
 pub fn about_info(shared: State<'_, Shared>) -> Result<AboutInfo, String> {
-    let state = lock(shared.inner());
+    about_info_of(shared.inner())
+}
+
+pub fn about_info_of(shared: &Shared) -> Result<AboutInfo, String> {
+    let state = lock(shared);
     let renderer = gs_release::installed(&updates::renderer_root(&state.dirs))
         .map(|installed| installed.version.text())
         .unwrap_or_else(|| "not installed".to_string());
@@ -581,6 +660,8 @@ pub fn about_info(shared: State<'_, Shared>) -> Result<AboutInfo, String> {
         version: LAUNCHER_VERSION.to_string(),
         gt4recomp: LAUNCHER_VERSION.to_string(),
         gt4gs: renderer,
+        game_files: state.dirs.disc_folder().display().to_string(),
+        data_folder: state.dirs.root().display().to_string(),
     })
 }
 
@@ -588,18 +669,29 @@ pub fn about_info(shared: State<'_, Shared>) -> Result<AboutInfo, String> {
 #[tauri::command]
 pub fn open_log_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let logs = lock(shared.inner()).dirs.logs();
-    fs::create_dir_all(&logs).map_err(|error| error.to_string())?;
+    open_folder(&logs)
+}
+
+/// Opens the game files folder (the copy of the disc image) in Explorer. The path is fixed by the launcher.
+#[tauri::command]
+pub fn open_game_files_folder(shared: State<'_, Shared>) -> Result<(), String> {
+    let folder = lock(shared.inner()).dirs.disc_folder();
+    open_folder(&folder)
+}
+
+fn open_folder(folder: &Path) -> Result<(), String> {
+    fs::create_dir_all(folder).map_err(|error| error.to_string())?;
     #[cfg(windows)]
     {
         std::process::Command::new("explorer.exe")
-            .arg(&logs)
+            .arg(&folder)
             .spawn()
             .map(|_| ())
-            .map_err(|error| format!("could not open {}: {error}", logs.display()))
+            .map_err(|error| format!("could not open {}: {error}", folder.display()))
     }
     #[cfg(not(windows))]
     {
-        let _ = logs;
+        let _ = folder;
         Ok(())
     }
 }

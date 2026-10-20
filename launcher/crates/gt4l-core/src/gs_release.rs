@@ -94,6 +94,8 @@ pub enum Step {
     Listing,
     /// Downloading `SHA256SUMS` and the package.
     Downloading,
+    /// Bytes of the package received so far, and its size when the server sent it.
+    Transfer { done: u64, total: Option<u64> },
     /// Checking sums and unpacking into the staging folder.
     Installing,
 }
@@ -158,7 +160,9 @@ pub fn install_latest_reporting(
     let sums = parse_checksums(&String::from_utf8_lossy(&sums_text));
     let package = package_name(version);
     let expected = sums.get(&package).ok_or_else(|| format!("{CHECKSUM_ASSET} has no line for {package}"))?;
-    let package_bytes = source.download(&asset(&package)?.url)?;
+    let package_bytes = source.download_reporting(&asset(&package)?.url, &mut |done, total| {
+        progress(Step::Transfer { done, total })
+    })?;
     if package_bytes.len() as u64 > MAX_PACKAGE_BYTES {
         return Err(format!("{package} is larger than the limit"));
     }
@@ -243,13 +247,40 @@ pub fn write_atomic(guard_root: &Path, path: &Path, text: &str) -> Result<(), St
     fs::rename(&temporary, path).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-/// Unpacks a zip into `destination`. Entries that would leave the folder are refused.
+/// The one top-level folder every entry of the package sits in, when the program is inside it and not at the root.
+/// The real gt4-gs 1.0.1 package wraps everything in `gt4-gs-1.0.1-windows-x64/` (checked 2026-10-20); the folder is
+/// removed on unpack so `gt4-gs.exe` lands at the version folder's root either way.
+fn wrapping_folder(names: &[PathBuf]) -> Option<PathBuf> {
+    if names.iter().any(|name| name == Path::new(EXECUTABLE_NAME)) {
+        return None;
+    }
+    let first = names.first()?.components().next()?.as_os_str().to_owned();
+    let folder = PathBuf::from(first);
+    let all_inside = names.iter().all(|name| name.starts_with(&folder));
+    (all_inside && names.iter().any(|name| *name == folder.join(EXECUTABLE_NAME))).then_some(folder)
+}
+
+/// Unpacks a zip into `destination`. Entries that would leave the folder are refused. A single wrapping folder
+/// around the program is removed (see [`wrapping_folder`]).
 fn unpack_zip(bytes: &[u8], destination: &Path, guard_root: &Path) -> Result<(), String> {
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).map_err(|error| format!("package is not a zip: {error}"))?;
     fs::create_dir_all(destination).map_err(|error| error.to_string())?;
+    let mut names = Vec::new();
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        names.push(entry.enclosed_name().ok_or_else(|| format!("unsafe path in package: {}", entry.name()))?);
+    }
+    let strip = wrapping_folder(&names);
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
         let relative = entry.enclosed_name().ok_or_else(|| format!("unsafe path in package: {}", entry.name()))?;
+        let relative = match &strip {
+            Some(folder) => relative.strip_prefix(folder).map(Path::to_path_buf).unwrap_or(relative),
+            None => relative,
+        };
+        if relative.as_os_str().is_empty() {
+            continue;
+        }
         let target = destination.join(relative);
         guard::check_write(guard_root, &target)?;
         if entry.is_dir() {

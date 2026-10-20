@@ -4,7 +4,8 @@
  * pages render in a plain browser. Values are sample values, not game data.
  *
  * Query options (ui/dev/index.html?...):
- *   setup=done|checking|preparing|card|wrong|needed   (default done)
+ *   setup=done|needed|wrong|copying|checking|preparing|renderer|failed|missing|offline   (default done)
+ *   pick=spec                                       (setup: the picker returns a Spec II image, refused)
  *   running=1                                       (game running at start)
  *   focus=play                                      (home: focus the Play button, for screenshots)
  */
@@ -13,22 +14,61 @@
 
   var query = new URLSearchParams(root.location.search);
   var setupStart = query.get("setup") || "done";
+  var IMAGE_BYTES = 5314478080;
+  var SPEC_MESSAGE = "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328). " +
+    "This looks like Gran Turismo 4 Spec II or GT4 Online (SCUS-97436).";
 
-  var setup = { state: "done", step: "checking", progress: 0, disc_name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00", problem: null };
+  var setup = { state: "done", step: "copying", progress: 0, bytes_done: 0, bytes_total: 0, renderer_step: "",
+    disc_name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00", problem: "", note: "" };
+  function running(step, progress) {
+    setup.state = "checking";
+    setup.step = step;
+    setup.progress = progress;
+    setup.bytes_total = step === "copying" ? IMAGE_BYTES : (step === "renderer" ? 48000000 : 0);
+    setup.bytes_done = Math.round(setup.bytes_total * progress);
+    setup.renderer_step = step === "renderer" ? "downloading" : "";
+  }
   if (setupStart === "wrong") {
     setup.state = "wrong_disc";
-    setup.disc_name = "Gran Turismo 4 Spec II";
+    setup.disc_name = "Gran Turismo 4 Spec II v1.10.iso";
+    setup.problem = SPEC_MESSAGE;
   } else if (setupStart === "needed") {
     setup.state = "needed";
-  } else if (setupStart === "checking") {
-    setup.state = "checking";
-    setup.progress = 0.62;
+    setup.disc_name = "";
+  } else if (setupStart === "copying" || setupStart === "checking") {
+    running("copying", 0.62);
   } else if (setupStart === "preparing") {
-    setup.state = "checking";
-    setup.step = "preparing";
-  } else if (setupStart === "card") {
-    setup.state = "checking";
-    setup.step = "card";
+    running("preparing", 0.5);
+  } else if (setupStart === "renderer") {
+    running("renderer", 0.4);
+  } else if (setupStart === "failed") {
+    setup.state = "failed";
+    setup.problem = "Not enough free space to copy the game files: 5.8 GB needed, 2.1 GB free. Free up space and try again.";
+  } else if (setupStart === "missing") {
+    setup.state = "files_missing";
+    setup.disc_name = "";
+    setup.problem = "Game files missing (SCUS-97328.iso is missing). Choose your disc image again.";
+  } else if (setupStart === "offline") {
+    setup.note = "PCSX2 GS could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start.";
+  }
+
+  // setup_start: walk the steps on a timer, like the Rust thread.
+  var PLAN = [["copying", 0], ["copying", 0.35], ["copying", 0.7], ["copying", 1], ["checking", 1], ["preparing", 0.5],
+    ["renderer", 0.3], ["renderer", 0.8], ["renderer", 1]];
+  var setupTimer = null;
+  function startSetup() {
+    var index = 0;
+    clearInterval(setupTimer);
+    setupTimer = setInterval(function () {
+      if (index >= PLAN.length) {
+        clearInterval(setupTimer);
+        setup.state = "done";
+        setup.renderer_step = "done";
+        return;
+      }
+      running(PLAN[index][0], PLAN[index][1]);
+      index += 1;
+    }, 500);
   }
 
   var gameRunning = query.get("running") === "1";
@@ -162,22 +202,8 @@
   ];
 
   function appState() {
-    if (setup.state === "checking") {
-      // Advance the fake check so the progress bar moves while the page is open.
-      setup.progress = Math.min(1, setup.progress + 0.05);
-      if (setup.progress >= 1) {
-        if (setup.step === "checking") {
-          setup.step = "preparing";
-          setup.progress = 0;
-        } else if (setup.step === "preparing") {
-          setup.step = "card";
-          setup.progress = 0;
-        } else {
-          setup.state = "done";
-        }
-      }
-    }
-    return { setup: JSON.parse(JSON.stringify(setup)), game_running: gameRunning };
+    return { setup: JSON.parse(JSON.stringify(setup)), game_running: gameRunning,
+      game_files: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp\\disc" };
   }
 
   function invoke(command, args) {
@@ -186,17 +212,24 @@
       case "app_state":
         return appState();
       case "setup_start":
-        setup.state = "checking";
-        setup.progress = 0;
-        setup.step = "checking";
+        running("copying", 0);
+        startSetup();
         return null;
       case "setup_choose_disc":
-        setup.state = "checking";
-        setup.progress = 0;
-        setup.step = "checking";
-        return null;
+        if (query.get("pick") === "spec") {
+          setup.state = "wrong_disc";
+          setup.disc_name = "Gran Turismo 4 Spec II v1.10.iso";
+          setup.problem = SPEC_MESSAGE;
+          throw new Error(SPEC_MESSAGE);
+        }
+        setup.disc_name = "Gran Turismo 4 (USA) (v2.00).iso";
+        setup.problem = "";
+        return { path: "D:\\Games\\Gran Turismo 4 (USA) (v2.00).iso", serial: "SCUS-97328", version: "2.00",
+          name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00" };
       case "setup_cancel":
-        setup.state = "needed";
+        clearInterval(setupTimer);
+        setup.state = "failed";
+        setup.problem = "Setup was cancelled. Nothing was changed.";
         return null;
       case "play":
         gameRunning = true;
@@ -275,9 +308,12 @@
           version: "1.0.0",
           gt4recomp: "1.0.0",
           gt4gs: "1.0.1",
-          disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso"
+          disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso",
+          game_files: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp\\disc",
+          data_folder: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp"
         };
       case "open_log_folder":
+      case "open_game_files_folder":
         return null;
       case "check_updates":
         // Demo: ?update=1 offers both streams; otherwise nothing is new.

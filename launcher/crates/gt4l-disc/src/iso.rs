@@ -52,6 +52,7 @@ impl From<io::Error> for IsoError {
 pub struct Iso {
     file: File,
     length_bytes: u64,
+    volume_space_bytes: u64,
     volume_identifier: String,
     root: FileEntry,
 }
@@ -70,13 +71,21 @@ impl Iso {
             return Err(IsoError::NotIso(format!("logical block size {block_size}, expected 2048")));
         }
         let volume_identifier = String::from_utf8_lossy(&descriptor[40..72]).trim().to_string();
+        let volume_sectors = u32::from_le_bytes([descriptor[80], descriptor[81], descriptor[82], descriptor[83]]);
+        let volume_space_bytes = volume_sectors as u64 * SECTOR_BYTES;
         let root = parse_record(&descriptor[156..190])
             .ok_or_else(|| IsoError::NotIso("root directory record is malformed".into()))?;
-        Ok(Iso { file, length_bytes, volume_identifier, root: FileEntry { name: ".".into(), ..root } })
+        Ok(Iso { file, length_bytes, volume_space_bytes, volume_identifier, root: FileEntry { name: ".".into(), ..root } })
     }
 
     pub fn length_bytes(&self) -> u64 {
         self.length_bytes
+    }
+
+    /// The volume space size of the primary descriptor, in bytes. On a dual-layer DVD it covers the first layer
+    /// only, so it is a lower bound of the image size, never an exact size.
+    pub fn volume_space_bytes(&self) -> u64 {
+        self.volume_space_bytes
     }
 
     /// The volume identifier from the primary descriptor (used to recognise other discs).

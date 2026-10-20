@@ -199,6 +199,14 @@ pub trait ReleaseSource {
     fn releases_json(&self) -> Result<String, String>;
     /// The bytes behind a download URL taken from a release asset.
     fn download(&self, url: &str) -> Result<Vec<u8>, String>;
+
+    /// [`ReleaseSource::download`] that reports `(bytes done, total bytes if known)` while it runs. The default
+    /// reports once at the end; the GitHub source reports every chunk.
+    fn download_reporting(&self, url: &str, report: &mut dyn FnMut(u64, Option<u64>)) -> Result<Vec<u8>, String> {
+        let bytes = self.download(url)?;
+        report(bytes.len() as u64, Some(bytes.len() as u64));
+        Ok(bytes)
+    }
 }
 
 /// A release source that reads a folder: `releases.json` plus the asset files. Download URLs of the form
@@ -255,19 +263,31 @@ impl ReleaseSource for GithubSource {
     }
 
     fn download(&self, url: &str) -> Result<Vec<u8>, String> {
+        self.download_reporting(url, &mut |_, _| {})
+    }
+
+    fn download_reporting(&self, url: &str, report: &mut dyn FnMut(u64, Option<u64>)) -> Result<Vec<u8>, String> {
         let mut response = GithubSource::agent(DOWNLOAD_TIMEOUT)
             .get(url)
             .header("User-Agent", "GT4Recomp-launcher")
             .call()
             .map_err(|error| format!("download: {error}"))?;
+        let total = response
+            .headers()
+            .get("content-length")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.trim().parse::<u64>().ok());
+        let mut reader = response.body_mut().with_config().limit(crate::gs_release::MAX_PACKAGE_BYTES).reader();
         let mut bytes = Vec::new();
-        response
-            .body_mut()
-            .with_config()
-            .limit(crate::gs_release::MAX_PACKAGE_BYTES)
-            .reader()
-            .read_to_end(&mut bytes)
-            .map_err(|error| format!("download: {error}"))?;
+        let mut buffer = vec![0u8; 256 * 1024];
+        loop {
+            let read = reader.read(&mut buffer).map_err(|error| format!("download: {error}"))?;
+            if read == 0 {
+                break;
+            }
+            bytes.extend_from_slice(&buffer[..read]);
+            report(bytes.len() as u64, total);
+        }
         Ok(bytes)
     }
 }

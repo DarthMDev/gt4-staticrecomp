@@ -37,3 +37,22 @@ fn real_disc_matches_the_pins_and_rebuilds_the_elf() {
     let image = elf::reconstruct(&core, &pins.policy).expect("rebuild");
     assert_eq!(elf::sha256_hex(&image), pins.elf.sha256);
 }
+
+/// The fast identity check (no full hash) against the owner's discs, read-only:
+///   set GT4_REAL_ISO=<v2.00 ISO>  and optionally  set GT4_SPEC2_ISO=<Spec II ISO>
+///   cargo test -p gt4l-disc --test real_disc -- --ignored --nocapture
+#[test]
+#[ignore = "needs the owner's disc images; see the module comment"]
+fn real_discs_pass_or_fail_the_precheck() {
+    use gt4l_disc::setup::{self, SetupError, Unsupported};
+    let pins = Pins::embedded().expect("pins parse");
+    let good = PathBuf::from(std::env::var("GT4_REAL_ISO").expect("set GT4_REAL_ISO to the ISO path"));
+    let summary = setup::precheck(&good, &pins).expect("the v2.00 disc passes the precheck");
+    println!("v2.00: {summary:?}");
+    assert!(summary.qualified_version);
+    if let Ok(spec) = std::env::var("GT4_SPEC2_ISO") {
+        let error = setup::precheck(std::path::Path::new(&spec), &pins).expect_err("Spec II is refused");
+        println!("Spec II: {}", error.user_message());
+        assert!(matches!(error, SetupError::Unsupported(Unsupported::SpecII)), "{error:?}");
+    }
+}

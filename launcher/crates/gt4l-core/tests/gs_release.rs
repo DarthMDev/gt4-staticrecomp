@@ -200,3 +200,57 @@ fn a_release_url_outside_the_fake_server_is_refused() {
     let error = gs_release::ReleaseSource::download(&source(&server), "https://example.invalid/x").unwrap_err();
     assert!(error.contains("not a release URL"), "{error}");
 }
+
+#[test]
+fn the_install_reports_its_steps_and_the_package_bytes() {
+    use gt4l_core::gs_release::Step;
+    let server = scratch("steps-server");
+    let install = scratch("steps-root");
+    let exe = b"fake gt4-gs for progress".to_vec();
+    let served = package(&exe);
+    let entry = write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &exe, serve: &served });
+    write_list(&server, &[entry]);
+    let mut steps = Vec::new();
+    gs_release::install_latest_reporting(&source(&server), &install, &mut |step| steps.push(step)).expect("install");
+    assert_eq!(steps.first(), Some(&Step::Listing));
+    assert!(steps.contains(&Step::Downloading));
+    let size = served.len() as u64;
+    assert!(steps.contains(&Step::Transfer { done: size, total: Some(size) }), "{steps:?}");
+    assert_eq!(steps.last(), Some(&Step::Installing));
+}
+
+/// The real gt4-gs 1.0.1 package (checked 2026-10-20) wraps its files in one folder, `gt4-gs-1.0.1-windows-x64/`,
+/// with `resources/` beside the program. The install removes that folder so `gt4-gs.exe` is at the version root.
+#[test]
+fn a_package_wrapped_in_one_folder_installs_like_the_real_release() {
+    let server = scratch("wrapped-server");
+    let install = scratch("wrapped-root");
+    let exe = b"fake gt4-gs inside a folder".to_vec();
+    let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options = zip::write::SimpleFileOptions::default();
+    writer.add_directory("gt4-gs-1.0.1-windows-x64/", options).unwrap();
+    writer.start_file("gt4-gs-1.0.1-windows-x64/gt4-gs.exe", options).unwrap();
+    writer.write_all(&exe).unwrap();
+    writer.add_directory("gt4-gs-1.0.1-windows-x64/resources/shaders/", options).unwrap();
+    writer.start_file("gt4-gs-1.0.1-windows-x64/resources/GameIndex.yaml", options).unwrap();
+    writer.write_all(b"index").unwrap();
+    let wrapped = writer.finish().unwrap().into_inner();
+
+    let folder = server.join("gt4gs-v1.0.1");
+    fs::create_dir_all(&folder).unwrap();
+    fs::write(folder.join("gt4-gs-1.0.1-windows-x64.zip"), &wrapped).unwrap();
+    // Like the real SHA256SUMS: a line for the package only, none for gt4-gs.exe.
+    fs::write(folder.join("SHA256SUMS"), format!("{}  gt4-gs-1.0.1-windows-x64.zip\n", gs_release::sha256_hex(&wrapped))).unwrap();
+    let entry = format!(
+        r#"{{"tag_name":"gt4gs-v1.0.1","prerelease":false,"draft":false,"assets":[{{"name":"gt4-gs-1.0.1-windows-x64.zip","browser_download_url":"{BASE}/gt4gs-v1.0.1/gt4-gs-1.0.1-windows-x64.zip"}},{{"name":"SHA256SUMS","browser_download_url":"{BASE}/gt4gs-v1.0.1/SHA256SUMS"}}]}}"#
+    );
+    write_list(&server, &[entry]);
+
+    let Outcome::Installed(installed) = gs_release::install_latest(&source(&server), &install).expect("install") else {
+        panic!("expected a fresh install");
+    };
+    assert_eq!(installed.executable, install.join("1.0.1").join("gt4-gs.exe"));
+    assert_eq!(fs::read(&installed.executable).unwrap(), exe);
+    assert!(install.join("1.0.1").join("resources").join("GameIndex.yaml").exists());
+    assert!(!install.join("1.0.1").join("gt4-gs-1.0.1-windows-x64").exists());
+}

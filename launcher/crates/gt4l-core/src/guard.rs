@@ -8,8 +8,9 @@
 
 use std::path::{Component, Path};
 
-/// Folders under the data folder that hold memory cards, save slots, replays or the card the game reads.
-pub const PROTECTED_FOLDERS: &[&str] = &["saves", "cards", "library", "replays", "runtime"];
+/// Folders under the data folder that hold memory cards, save slots, replays, the card the game reads, or the
+/// copy of the player's disc image (`disc`, made by setup; the game reads it at run time).
+pub const PROTECTED_FOLDERS: &[&str] = &["saves", "cards", "library", "replays", "runtime", "disc"];
 
 /// File extensions of memory card images and save files, refused anywhere under the data folder.
 pub const PROTECTED_EXTENSIONS: &[&str] = &["ps2", "psu", "mcd", "card", "sav"];
@@ -38,7 +39,7 @@ pub fn check_write(data_root: &Path, target: &Path) -> Result<(), String> {
     }
     let inside = &path[root.len()..];
     if inside.iter().any(|part| PROTECTED_FOLDERS.contains(&part.as_str())) {
-        return Err(format!("refused: {} is user data (saves, cards or replays)", target.display()));
+        return Err(format!("refused: {} is user data (saves, cards, replays or the disc copy)", target.display()));
     }
     if let Some(last) = inside.last() {
         if let Some((_, extension)) = last.rsplit_once('.') {
@@ -67,7 +68,7 @@ mod tests {
 
     #[test]
     fn card_save_and_replay_folders_are_refused_at_any_depth() {
-        for path in ["saves/slot1.psu", "cards/card.ps2", "library/Active save", "replays/run.bin", "runtime/card.ps2"] {
+        for path in ["saves/slot1.psu", "cards/card.ps2", "library/Active save", "replays/run.bin", "runtime/card.ps2", "disc/SCUS-97328.iso", "disc"] {
             let target = format!("{DATA}/{path}");
             assert!(check_write(Path::new(DATA), Path::new(&target)).is_err(), "{target} must be refused");
         }

@@ -14,6 +14,24 @@ Launcher-owned files:
 | `controls.toml` | `%LOCALAPPDATA%\GT4Recomp\` | `schema` | 1 (the file format is owned by `gt4controls`) | `migrate::CONTROLS` (first schema 1) |
 | `version.json` | install folder, or data folder when read-only | `schema` | 1 | `migrate::VERSION_FILE` (first schema 1) |
 | save library | `%LOCALAPPDATA%\GT4Recomp\library\` | none | a folder, not a single index file | not applicable yet; see below |
+| `prepare.json` (setup receipt) | `%LOCALAPPDATA%\GT4Recomp\prepared\` | `schema_version` | 2 | no chain: setup rewrites it; an older receipt sends the player back to setup (see below) |
+
+### The setup receipt (`prepare.json`)
+
+The receipt is the commit point of setup (`gt4l-disc/src/setup.rs`). It is never migrated in place, because what it
+describes must exist on disk:
+
+- **Schema 2** (2026-10-20): adds `image` (`file`, `size_bytes`, `modified_unix_nanos`, `sha256` of the copy of the disc
+  image in `%LOCALAPPDATA%\GT4Recomp\disc\`) and `qualified_dump` (the full image equals the qualified v2.00 dump).
+  Every launch compares the copy's size and modified time with `image` (no hash); a difference means "Game files
+  missing".
+- **Schema 1** (earlier dev builds): no copy of the image; the game read the picked file. `check_installed` reports
+  such a receipt as missing game files, so the setup page asks for the disc once and setup writes schema 2. The old
+  prepared folder is replaced only when the new run commits; nothing else in the data folder changes.
+- A damaged receipt is the same case (choose the disc again). A newer receipt (schema above 2) is also sent back to
+  setup by a launcher that cannot read it; a downgrade therefore costs one copy of the disc, never user data.
+
+Tests: `gt4l-disc/tests/setup_fake_iso.rs::later_launches_see_a_missing_or_changed_image_and_old_receipts`.
 
 Memory card images (`*.ps2`, `*.psu`, `*.mcd`) are never migrated or rewritten by the launcher. The data-path guard (`guard.rs`) refuses writes to them.
 

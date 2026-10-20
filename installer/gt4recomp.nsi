@@ -124,7 +124,8 @@ Section "Uninstall"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
   DeleteRegKey HKCU "${APP_KEY}"
 
-  ; User data (saves, replays, settings, prepared game files) stays unless the user asked for removal.
+  ; User data (saves, replays, settings, prepared game files and the copy of the disc image in disc\) stays unless
+  ; the user ticked the "also delete" box, which is unchecked by default. Install and update never write there.
   ${If} $DeleteDataState == ${BST_CHECKED}
     RMDir /r "$LOCALAPPDATA\GT4Recomp"
   ${EndIf}
@@ -136,9 +137,9 @@ Function un.DataPageCreate
   ${If} $0 == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 36u "Your saves, replays, settings and prepared game files are in:$\r$\n$LOCALAPPDATA\GT4Recomp"
+  ${NSD_CreateLabel} 0 0 100% 36u "Your saves, replays, settings and game files (including the copy of your disc image) are in:$\r$\n$LOCALAPPDATA\GT4Recomp"
   Pop $0
-  ${NSD_CreateCheckbox} 0 46u 100% 12u "Also delete my saves, replays, settings and prepared files"
+  ${NSD_CreateCheckbox} 0 46u 100% 12u "Also delete my saves, replays, settings and game files (the disc image copy)"
   Pop $DeleteDataCheckbox
   ${NSD_SetState} $DeleteDataCheckbox ${BST_UNCHECKED}
   nsDialogs::Show

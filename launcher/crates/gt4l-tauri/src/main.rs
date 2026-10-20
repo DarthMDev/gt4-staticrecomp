@@ -7,6 +7,8 @@
 mod commands;
 #[cfg(test)]
 mod contract;
+#[cfg(test)]
+mod flow_audit;
 mod model;
 mod saves;
 mod setup;
@@ -91,6 +93,7 @@ fn main() {
             commands::reset_binding,
             commands::about_info,
             commands::open_log_folder,
+            commands::open_game_files_folder,
             updates::check_updates,
             updates::apply_update,
             updates::skip_update,

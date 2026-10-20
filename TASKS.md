@@ -281,6 +281,14 @@ Not now, Skip this version; updates never automatic), data-folder guard, schema 
 controls, version.json), tray (hidden while the game runs, back on Home when it ends, close asks while it runs), and
 the Graphics table of the UI mock. Docs: `docs/RELEASES.md`, `docs/launcher/MIGRATIONS.md`. Checks: `cargo test
 --workspace` green. Not done here: a real installer build, a live GitHub check and the owner's end-to-end test.
+State (2026-10-20, flow audit, `docs/launcher/FLOW-AUDIT.md`): the whole flow mapped and tested end to end with the
+real discs in a sandbox (45 steps: 23 PASS, 17 FIXED, 0 FAIL, 5 NEEDS-OWNER). Disc rule: SCUS-97328 whose CORE.GT4
+equals the pin is accepted (v2.00 must also match the full image pin); Spec II and other discs get "This disc is not
+supported yet". Setup now copies the image to `%LOCALAPPDATA%\GT4Recomp\disc\SCUS-97328.iso` (free-space check,
+verify then rename, schema 2 receipt), so the picked file is needed only once; a missing copy leads back to setup.
+Setup draws copy, check, prepare and gt4-gs download progress; the real gt4-gs 1.0.1 zip (one wrapping folder) now
+installs. The real GT4Recomp.exe opened on Setup, Home and "Game files missing" in the sandbox. Checks: cargo test
+--workspace 186 passed, 3 ignored; nav-test 55/55. Owner: file picker, Play, tray, update popup, pad, touch.
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
 

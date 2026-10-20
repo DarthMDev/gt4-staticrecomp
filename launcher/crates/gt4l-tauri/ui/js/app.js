@@ -62,6 +62,10 @@
     GT4.ui.toast(payload && payload.message ? payload.message : "Update finished.", !(payload && payload.ok));
   });
   GT4.backend.listen("renderer-progress", function (payload) {
+    // The setup page draws its own renderer row; these toasts are for the retry at a later launch and updates.
+    if (parseRoute().name === "setup") {
+      return;
+    }
     if (payload && payload.step === "failed") {
       GT4.ui.toast("gt4-gs could not be installed. CoreGS 1.1 will be used.", true);
     } else if (payload && payload.step === "done") {

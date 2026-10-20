@@ -41,6 +41,12 @@ impl DataDirs {
         self.root.join("prepared")
     }
 
+    /// The copy of the player's disc image made by setup (`disc\SCUS-97328.iso`). The game reads it at run time,
+    /// so the file the player picked is needed only once. Protected user data (see `guard`).
+    pub fn disc_folder(&self) -> PathBuf {
+        self.root.join("disc")
+    }
+
     /// Setup writes here first and renames the folder into place at the end.
     pub fn prepared_staging(&self) -> PathBuf {
         self.root.join("prepared.tmp")

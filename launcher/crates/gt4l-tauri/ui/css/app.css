@@ -123,7 +123,7 @@ body.is-home.input-keys #hints { display: none; }
 .setup { position: absolute; inset: 0; display: grid; grid-template-columns: 420px 1fr; }
 .cover-col { background: var(--ink); display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .cover { width: 300px; height: 425px; object-fit: cover; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5); }
-.setup-main { padding: 72px 96px 40px 72px; display: flex; flex-direction: column; min-width: 0; }
+.setup-main { padding: 72px 96px 40px 72px; display: flex; flex-direction: column; min-width: 0; overflow-y: auto; }
 .wordmark { width: 124px; height: auto; margin-bottom: 28px; }
 .setup h1 { font-size: 34px; line-height: 40px; color: var(--white); margin-bottom: 8px; }
 .sub { color: var(--dim); margin-bottom: 32px; }
@@ -138,9 +138,11 @@ body.is-home.input-keys #hints { display: none; }
 .step .v.bad { color: var(--error); }
 .pad-wrap { min-width: 0; }
 .trigger-rows .row { min-height: 44px; }
-.bar { height: 2px; background: var(--graphite); margin-top: 8px; position: relative; overflow: hidden; }
+.bar { display: block; height: 2px; background: var(--graphite); margin-top: 8px; position: relative; overflow: hidden; }
 .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--white); transition: width 250ms ease; }
 .problem { margin-top: 20px; padding: 16px 18px; background: rgba(214, 69, 69, 0.08); border-left: 2px solid var(--error); color: var(--silver); max-width: 560px; }
+.notice { margin-top: 20px; padding: 16px 18px; background: rgba(255, 255, 255, 0.05); border-left: 2px solid var(--dim); color: var(--silver); max-width: 560px; }
+.step .bytes { display: block; color: var(--dim); font-size: 12px; margin-top: 4px; }
 .foot { margin-top: auto; display: flex; justify-content: flex-end; gap: 12px; padding-top: 24px; }
 
 /* ---------- home ---------- */
@@ -230,7 +232,7 @@ body.is-home.input-keys #hints { display: none; }
 .running { display: none; align-items: center; gap: 20px; height: 52px; }
 .running .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .running span.state { font: 500 14px var(--label); letter-spacing: 0.16em; text-transform: uppercase; color: var(--white); }
-.running .btn { height: 40px; }
+.running .btn { height: 48px; }
 .home.is-running .play { display: none; }
 .home.is-running .running { display: flex; }
 
@@ -451,6 +453,14 @@ body.input-pad .info:focus .tip { display: block; }
   .home-version { bottom: 12px; }
   .gear { top: 12px; right: 16px; }
   .lib-head h1 { font-size: 24px; }
+}
+
+/* ---------- 960 x 600 class windows: the setup steps and their buttons fit without scrolling ---------- */
+@media (max-height: 660px) and (min-height: 501px) {
+  .setup-main { padding-top: 32px; padding-bottom: 16px; }
+  .setup .wordmark { display: none; }
+  .sub { margin-bottom: 16px; }
+  .step { min-height: 48px; }
 }
 
 /* ---------- small screens: the layout keeps 16 px gutters and no horizontal scroll ---------- */

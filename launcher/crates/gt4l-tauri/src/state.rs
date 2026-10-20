@@ -29,6 +29,10 @@ pub struct AppState {
     /// Set by the Cancel button of setup; the setup thread checks it between steps.
     pub setup_cancel: Arc<AtomicBool>,
     pub setup_busy: bool,
+    /// Progress of the running setup (the page polls it through `app_state`).
+    pub setup_run: SetupRun,
+    /// How the last pick or setup run ended, until the next one starts.
+    pub setup_outcome: SetupOutcome,
     /// The running game's child process (shared with the watcher thread and Stop).
     pub game_child: Option<Arc<Mutex<Option<Child>>>>,
     /// Input name while a controller or key capture waits for a press.
@@ -48,6 +52,32 @@ pub struct AppState {
 }
 
 pub type Shared = Arc<Mutex<AppState>>;
+
+/// The step setup is on and how far it is. `step` is `copying`, `checking`, `preparing` or `renderer`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SetupRun {
+    pub step: String,
+    /// 0..1 of the current step.
+    pub fraction: f32,
+    /// Bytes done and total of a copy or a download (0 when not known).
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+    /// The renderer sub-step: `listing`, `downloading`, `installing`, `done` or `failed`.
+    pub renderer_step: String,
+}
+
+/// The result of the last disc pick or setup run.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum SetupOutcome {
+    #[default]
+    None,
+    /// The chosen file is not a supported disc (the page says "Not supported").
+    Refused(String),
+    /// The run stopped (cancel, no space, write error).
+    Failed(String),
+    /// The run finished. `renderer_note` is set when the PCSX2 GS could not be installed.
+    Done { renderer_note: String },
+}
 
 /// Locks the state; a poisoned lock still gives its data (a panicked job must not hang the UI).
 pub fn lock(shared: &Shared) -> MutexGuard<'_, AppState> {
@@ -69,6 +99,12 @@ pub fn log(dirs: &DataDirs, message: &str) {
 impl AppState {
     /// Loads the settings, controls and save library from the data folder.
     pub fn load(dirs: DataDirs) -> Result<AppState, String> {
+        let pins = Pins::embedded()?;
+        AppState::load_with_pins(dirs, pins)
+    }
+
+    /// [`AppState::load`] with given pins (the flow test uses synthetic pins for a synthetic disc).
+    pub fn load_with_pins(dirs: DataDirs, pins: Pins) -> Result<AppState, String> {
         std::fs::create_dir_all(dirs.root()).map_err(|error| format!("data folder: {error}"))?;
         let (config, warnings) = config::load(&dirs.config_file());
         for warning in &warnings {
@@ -97,7 +133,6 @@ impl AppState {
             }
         };
         let (library_root, library) = saves::open(dirs.root())?;
-        let pins = Pins::embedded()?;
         Ok(AppState {
             dirs,
             pins,
@@ -107,6 +142,8 @@ impl AppState {
             library,
             setup_cancel: Arc::new(AtomicBool::new(false)),
             setup_busy: false,
+            setup_run: SetupRun::default(),
+            setup_outcome: SetupOutcome::None,
             game_child: None,
             capturing: None,
             capture_cancel: None,
@@ -118,10 +155,14 @@ impl AppState {
         })
     }
 
-    /// Home is ready when the chosen disc still exists and the prepared game files verify.
+    /// The cheap check of the copied disc image and the prepared files (no hash; see `gt4l_disc::setup`).
+    pub fn installed(&self) -> disc_setup::Installed {
+        disc_setup::check_installed(&self.dirs.prepared(), &self.dirs.disc_folder(), &self.pins)
+    }
+
+    /// Home is ready when setup is not running and the copied image and prepared files pass the cheap check.
     pub fn home_ready(&self) -> bool {
-        self.config.disc_path.as_ref().is_some_and(|disc| disc.exists())
-            && disc_setup::verify_prepared(&self.dirs.prepared(), &self.pins).is_ok()
+        !self.setup_busy && matches!(self.installed(), disc_setup::Installed::Ready { .. })
     }
 
     pub fn save_config(&self) {

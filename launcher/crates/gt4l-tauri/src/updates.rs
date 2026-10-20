@@ -139,8 +139,15 @@ pub fn install_renderer(dirs: &DataDirs, progress: &mut dyn FnMut(Step)) -> Resu
 pub fn step_name(step: Step) -> &'static str {
     match step {
         Step::Listing => "listing",
-        Step::Downloading => "downloading",
+        Step::Downloading | Step::Transfer { .. } => "downloading",
         Step::Installing => "installing",
+    }
+}
+
+/// Emits a step change; the per-chunk byte counts are not sent from here (the setup page polls them).
+fn emit_step(app: &AppHandle, step: Step) {
+    if !matches!(step, Step::Transfer { .. }) {
+        emit_progress(app, step_name(step));
     }
 }
 
@@ -177,14 +184,16 @@ pub fn ensure_version_file(dirs: &DataDirs) {
 /// The background work at every launch: version file, the first renderer install when none exists, and the update
 /// check. Failures are logged only. Emits `update-available` when there is something to offer.
 pub fn check_on_launch(app: AppHandle, shared: Shared) {
-    let (dirs, config) = {
+    let (dirs, config, set_up) = {
         let state = lock(&shared);
-        (state.dirs.clone(), state.config.clone())
+        (state.dirs.clone(), state.config.clone(), state.home_ready())
     };
     ensure_version_file(&dirs);
-    if gs_release::installed(&renderer_root(&dirs)).is_none() {
+    // Before the first setup the renderer is installed by setup itself, with its progress on the setup page. Here it
+    // is only the retry after a setup that was offline.
+    if set_up && gs_release::installed(&renderer_root(&dirs)).is_none() {
         let progress_app = app.clone();
-        match install_renderer(&dirs, &mut |step| emit_progress(&progress_app, step_name(step))) {
+        match install_renderer(&dirs, &mut |step| emit_step(&progress_app, step)) {
             Ok(_) => emit_progress(&app, "done"),
             Err(message) => state::log(&dirs, &format!("gt4-gs not installed at launch: {message}")),
         }
@@ -249,7 +258,7 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
                     return Err("Close the game before updating the renderer.".to_string());
                 }
                 let progress_app = app.clone();
-                let outcome = install_renderer(&dirs, &mut |step| emit_progress(&progress_app, step_name(step)));
+                let outcome = install_renderer(&dirs, &mut |step| emit_step(&progress_app, step));
                 let (ok, message) = match outcome {
                     Ok(outcome) => (true, format!("gt4-gs {} is ready.", outcome.installed().version.text())),
                     Err(message) => (false, message),
