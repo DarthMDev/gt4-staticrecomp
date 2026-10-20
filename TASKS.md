@@ -102,7 +102,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑064 | Third-party overlays (MSI Afterburner / RivaTuner) with the PCSX2 GS: Arbitrary Code Guard off by default | ✅ Done (2026-10-17) · owner test: the RivaTuner/Afterburner overlay shows in game with default settings |
 | TASK‑075 | Input layer on SDL3: game reads all pads (XInput, DS4, DualSense, Switch Pro, generic) mapped to the DS2 layout, applies the launcher's controls.toml; launcher Controls page reads the same SDL3 layer | 📋 Planned (next game build, before 1.0.0) |
 | TASK‑076 | Modern fixed keyboard layout for GT4 (several keys per DS2 button: WASD + arrows, nitro, gear up/down, camera, look back, ghost, Enter/Esc/Backspace) | 📋 Planned (with TASK-075) |
-| TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Idea (after 1.0.0) |
+| TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Open, study done (docs/CONTEXT-INPUT-STUDY.md); not in 1.0.0 |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -294,6 +294,10 @@ the manual: nitro, gears, rear view, camera). The launcher Controls page shows t
 ### TASK-077 — Context-aware input mapping (idea)
 Different mappings by game state (race vs menus), e.g. Esc = Start (pause) in a race and Triangle in menus. Needs a
 study of how to read the game state reliably. After 1.0.0; the owner has more ideas.
+State (2026-10-20): open, out of the 1.0.0 scope (owner). The read-only study is in docs/CONTEXT-INPUT-STUDY.md:
+a host-side VBlank read of guest RAM (the race_display pattern) can tell race classes apart by vtable and see the pause
+object; replay is still unknown. Proposed first step: a logging-only probe build (S1). Depends on TASK-029 reaching
+main and on TASK-075.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
