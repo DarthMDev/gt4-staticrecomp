@@ -8,7 +8,7 @@
  *                                           pad-live event {sources, sticks} from the Rust pad service (SDL3)
  *   GT4.controlsModel.padLive(pad)          dev mock only: a Gamepad-like object -> the pad-live shape
  *   GT4.controlsModel.KEYBOARD_LAYOUT       the fixed modern keyboard (TASK-076), several keys per DS2 button
- *   GT4.controlsModel.KEYBOARD_ACTIONS      keys with no DS2 button in this table yet
+ *   GT4.controlsModel.KEYBOARD_ACTIONS      race actions of those keys (nitro, gears, look back, camera, pause)
  *   GT4.controlsModel.triggerOutput(raw, deadzone, curve)
  *                                           the pressure the game computes from a trigger (native/controls.cpp)
  *   GT4.controlsModel.keyFromEvent(event)   a key event -> {name} | {reserved} | {unsupported} | {cancel}
@@ -211,7 +211,7 @@
   }
 
   // The fixed keyboard layout (TASK-076, read-only on the Controls page): several keys per DS2 button. Names use the
-  // controls-file key names. The DS2 button of nitro, gears, look back and camera is not in this table yet.
+  // controls-file key names. Same table as the game (docs/CONTROLS.md, slice 210); P is Start (owner, 2026-10-21).
   var KEYBOARD_LAYOUT = {
     dpad_up: ["Up", "E"],
     dpad_down: ["Down"],
@@ -220,15 +220,22 @@
     cross: ["W", "Enter"],
     square: ["S"],
     circle: ["Space"],
-    triangle: ["Backspace", "Esc"]
+    triangle: ["Backspace", "Esc"],
+    r1: ["Shift"],
+    r2: ["R"],
+    l2: ["F"],
+    l1: ["Q"],
+    select: ["C", "Tab"],
+    start: ["P"]
   };
-  // Keys of the same layout that have no DS2 button yet (to confirm in docs/CONTROLS.md, game branch task/075).
+  // What those buttons do in a race (GT4's own controls; to confirm in game by the owner).
   var KEYBOARD_ACTIONS = [
-    { name: "Nitro", keys: ["Shift"] },
-    { name: "Gear up", keys: ["R"] },
-    { name: "Gear down", keys: ["F"] },
-    { name: "Look back", keys: ["Q"] },
-    { name: "Camera", keys: ["C", "Tab"] }
+    { name: "Nitro", keys: ["Shift"], button: "R1" },
+    { name: "Gear up", keys: ["R"], button: "R2" },
+    { name: "Gear down", keys: ["F"], button: "L2" },
+    { name: "Look back", keys: ["Q"], button: "L1" },
+    { name: "Camera", keys: ["C", "Tab"], button: "Select" },
+    { name: "Pause", keys: ["P"], button: "Start" }
   ];
 
   var RESERVED_KEYS = { F7: true, F8: true, F9: true, F11: true };

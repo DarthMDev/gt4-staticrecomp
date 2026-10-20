@@ -223,10 +223,10 @@
       GT4.ui.clear(legend);
       if (state.mode === "key") {
         var actions = M.KEYBOARD_ACTIONS.map(function (action) {
-          return action.name + " " + action.keys.join(" or ");
+          return action.name + " " + action.keys.join(" or ") + " (" + action.button + ")";
         }).join(", ");
         legend.appendChild(h("span", { class: "cx-legend-note", text: "Fixed keyboard layout, read only. Several keys drive one button. " +
-          "No button yet for: " + actions + " (to confirm)." }));
+          "In a race: " + actions + "." }));
         return;
       }
       [

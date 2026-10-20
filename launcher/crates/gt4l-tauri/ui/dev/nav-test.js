@@ -256,9 +256,10 @@
   same("keyboard: Space lights Circle", CM.liveState(null, defaults, { Space: true }).buttons.circle.pressed, true);
   same("keyboard: E lights D-pad up (ghost)", CM.liveState(null, defaults, { E: true }).buttons.dpad_up.pressed, true);
   same("keyboard: the fixed triangle keys are Backspace and Esc", CM.KEYBOARD_LAYOUT.triangle, ["Backspace", "Esc"]);
-  same("keyboard: nitro (Shift) has no DS2 button in the layout", Object.keys(CM.KEYBOARD_LAYOUT).some(function (id) {
-    return CM.KEYBOARD_LAYOUT[id].indexOf("Shift") >= 0;
-  }), false);
+  same("keyboard: same table as the game (slice 210)", [CM.KEYBOARD_LAYOUT.r1, CM.KEYBOARD_LAYOUT.r2, CM.KEYBOARD_LAYOUT.l2,
+    CM.KEYBOARD_LAYOUT.l1, CM.KEYBOARD_LAYOUT.select, CM.KEYBOARD_LAYOUT.start], [["Shift"], ["R"], ["F"], ["Q"], ["C", "Tab"], ["P"]]);
+  same("keyboard: C lights Select (camera)", CM.liveState(null, defaults, { C: true }).buttons.select.pressed, true);
+  same("keyboard: P lights Start", CM.liveState(null, [{ id: "start", sources: ["xinput:Start"] }], { P: true }).buttons.start.pressed, true);
   var sdlLive = CM.liveState({ sources: { "xinput:A": 1, "xinput:LT": 0.5 }, sticks: { left: { x: 0.5, y: -0.25 }, right: { x: 0, y: 1 } } }, defaults, {});
   same("pad-live: A presses Cross, LT fills L2, the left stick keeps its place", [sdlLive.buttons.cross.pressed, Math.round(sdlLive.buttons.l2.value * 100), sdlLive.sticks.left.x, sdlLive.sticks.left.y], [true, 50, 0.5, -0.25]);
   same("pad-live: no sources, nothing pressed", CM.liveState({ sources: {}, sticks: {} }, defaults, {}).buttons.cross.pressed, false);

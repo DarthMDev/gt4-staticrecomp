@@ -115,7 +115,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Pad navigation: D-pad and the left stick move focus, with a first step at once and repeat after about 0.4 s; A activates, B goes back, X and Y run their page actions, LB and RB change tabs, Start is Play on Home.
 - [ ] The right stick scrolls the focused list.
 - [ ] Rebind: A on a DS2 button, then a pad button binds it (the name is in the controls-file form, `xinput:...`). A button held when the rebind starts does not bind. B cancels.
-- [ ] Keyboard view: the fixed layout is shown (D-pad left and right: A or D and the arrows, D-pad up also E; Cross: W and Enter; Square: S; Circle: Space; Triangle: Backspace and Esc); Rebind and Reset are disabled there.
+- [ ] Keyboard view: the fixed layout is shown (D-pad left and right: A or D and the arrows, D-pad up also E; Cross: W and Enter; Square: S; Circle: Space; Triangle: Backspace and Esc; R1 nitro: Shift; R2 gear up: R; L2 gear down: F; L1 look back: Q; Select camera: C or Tab; Start: P); Rebind and Reset are disabled there.
 - [ ] Play hides the window; the game then owns the pad. When the game ends the launcher is back and the status shows the pad again.
 
 ## Known gaps (not yet built, from LAUNCHER-PLAN section 14)
