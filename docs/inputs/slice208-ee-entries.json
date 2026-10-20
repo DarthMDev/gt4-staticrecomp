@@ -1,0 +1,18 @@
+{
+  "analysis_source": "private/slice207-ee-ledger/ee-entry-ledger.json (scripts/ee_entry_ledger.py, decomp e0b70c4d6)",
+  "attribution": "Function-start addresses derive from gt4-decomp (MIT License, Copyright 2026 Gustavo Canepa and contributors) and from the reconstructed ELF scan. See THIRD_PARTY.md.",
+  "schema_version": 1,
+  "seed_sets": {
+    "accepted": {
+      "count": 1105,
+      "expected_translator_entries": 138813,
+      "method": "Analysis-level entries measured with eerecomp --entries (no codegen) on the reference translator before generation; the generated case-label count is a separate value (see docs/EE-ENTRY-LEDGER.md).",
+      "path": "docs/inputs/slice208-ee-entries.txt",
+      "selection": "Phase 1 ledger (private/slice207-ee-ledger): every new candidate with confidence high, plus medium candidates with a decomp name. Dropped: 10 medium without a name, 6 low, 1 rejected.",
+      "sha256": "6cf39fb73a8962fe1594a0f9e15dbf01667e9b07e6ed29ae1877019de200c5bb",
+      "size_bytes": 12155
+    }
+  },
+  "slice": 208,
+  "task": "TASK-014 EE entry coverage"
+}

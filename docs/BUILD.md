@@ -1499,3 +1499,37 @@ regions); no-JIT check of the 1.0.0 package as slice201.
 
 gt4-gs and `Documents\PCSX2` (TASK-044 note): gt4-gs 1.0.0 writes under `Documents\PCSX2`: `VMManager::Internal::LoadStartupSettings()` runs before `[GT4GS] DataRoot` is applied, so it rewrites `Documents\PCSX2\logs\emulog.txt` every session (Confirmed: before/after snapshot of the folder) and creates the PCSX2 user folders there (bios, memcards, logs, ...) on a PC that has none (High confidence, `EmuFolders::EnsureFoldersExist`). The log line "MemoryCards Directory: ...Documents\PCSX2\memcards" is that early pass; the session itself uses DataRoot. Fix on fork branch `gt4gs/datadir` (commit `b30870fe8`, version 1.0.1, NOT released): the call moves after the stream folders; checked: 0 changes under `Documents\PCSX2`, emulog in DataRoot\logs. Check script:
 `private/slice202-scripts/docs_check.ps1` (offline replay) and two headless live runs with a folder snapshot.
+
+## Slice 208 - TASK-014 stage B candidate (`--mode pcsx2-coverage`)
+
+The slice206 game with an EE library that has 1,105 accepted explicit translator entries (library profile `coverage`).
+Only the library changes. `--mode pcsx2` stays on slice206. Pins: `docs/inputs/slice208-pcsx2.json` (runtime and library
+hashes, measurement mode `pcsx2-coverage`) and `docs/inputs/slice208-ee-libraries.json` (library profile);
+seeds `docs/inputs/slice208-ee-entries.txt` and `.json` (sha256 and expected count).
+
+Steps (serial; fresh directories under the main checkout's `private/`):
+
+1. Seeds: the high candidates plus the medium candidates with a decomp name from the Phase 1 ledger (1,105; see
+   `docs/EE-ENTRY-LEDGER.md`).
+2. Producer: `python scripts/ee_entries.py prepare --assets-root C:\Antigravity\gt4-staticrecomp --output C:\Antigravity\gt4-staticrecomp\private\slice208-ee-entries-producer`,
+   then `python scripts/ee_entries.py generate --output <same> --seed-set accepted`. The translator reports 0 rejected
+   seeds, 138,813 analysis entries and 0 stop sites; 325 of 326 units change (`generation-entries.json`).
+3. Library: `private/slice208-scripts/build-library.cmd` configures `tools/ee_producer` with the portable clang-cl
+   23.1.2 (`private/tooling/llvm-23.1.2/bin/clang-cl.exe`) and builds `ps2game` with one worker. The 325 changed
+   objects differ from production; unchanged objects match (check: 8 sampled units compiled by 23.1.2 are identical to
+   the production members, timestamp-normalised). Record: `python scripts/ee_entries.py record-library --output <same> --seed-set accepted --profile coverage`.
+4. Executable: `private/slice208-scripts/build-game-208.bat` (`GT4_EE_PROFILE=coverage`, the slice206 capsules, port,
+   shaders and GS package). The executable uses the system clang-cl 22.1.3, the compiler that built slice206, so that the
+   library is the only changed variable.
+
+Hashes: executable `private/slice208-build/build/gt4vulkan.exe` 97,104,896 bytes, sha256 `b96c6d64...`; library
+`private/slice208-ee-entries-producer/game-build/ps2game.lib` 70,694,004 bytes, sha256 `8f40b11e...`. All 16 pinned
+files verified by sha256 in the main checkout.
+
+Checks (2026-10-20): CTest 33 of 33 (`private/slice208-scripts/ctest-208-r2.log`); Python 583 OK, 23 skipped
+(`GT4_NATIVE_BUILD` = slice208 build, `GT4_ASSETS_ROOT` = main checkout). Headless, 4,200 frames, the slice157/202
+12-press schedule and widescreen seed card, 42 frame dumps: slice206 (`private/slice208-smoke/base-206`) and slice208
+(`private/slice208-smoke/cand-208`) are identical, 42 of 42 (per-file sha256). Neither probe log contains
+"no translated code". The headless path does not show whether the 1,105 new entries run; that is the owner play-through.
+
+Owner command (after this branch is merged): `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2-coverage`.
