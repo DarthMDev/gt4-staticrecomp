@@ -1,0 +1,72 @@
+# Manual checklist (launcher UI)
+
+Run the dev page (`dev/index.html`) in a browser, then the Tauri build with the real Rust side.
+Do not launch the game for these checks. Tick each item in the Tauri build before merging.
+
+## Layout (1280 x 720 and 960 x 600)
+
+- [ ] Setup, Home and every Settings tab fit without horizontal scroll at 960 x 600.
+- [ ] Settings rows: label on the left, control in one right-aligned column; sliders line up with dropdowns.
+- [ ] Hover or focus on an "i" shows its help text; the card stays inside the window.
+- [ ] Home: the cover fills the window, the logo sits bottom-left, Play sits under it, the gear is top-right.
+- [ ] Footer hints show the right buttons per page. Home shows hints only after a pad or key is used.
+
+## Keyboard
+
+- [ ] Arrows move focus to the visually nearest control in that direction; no control is skipped.
+- [ ] Left and right change a focused slider by one step and cycle a focused dropdown.
+- [ ] Enter opens a dropdown list; Esc closes it; Esc on a page goes Home.
+- [ ] Q and E switch Settings tabs in the order Graphics, Advanced, Display, Controls, Saves, Replays, About (no Mods in release 1.0.0).
+- [ ] Tab and Shift+Tab move through controls in document order.
+- [ ] The focus ring shows after a key press and disappears after a mouse click.
+
+## Mouse
+
+- [ ] Every control responds to a click. Sliders drag and commit on release.
+- [ ] Clicking a footer hint runs its action.
+- [ ] Dialogs close on Cancel and on Esc; Reset to defaults asks first.
+
+## Controller (XInput, WebView2)
+
+- [ ] The D-pad and the left stick move focus; holding repeats after about 0.4 s, then about every 0.1 s.
+- [ ] Stick deadzone: a slight drift does not move focus.
+- [ ] A activates; B goes back (closes a dialog first); Start on Home plays.
+- [ ] LB and RB switch Settings tabs; X and Y do the page action shown in the footer.
+- [ ] While a rebind is waiting, only B cancels and the other buttons do nothing.
+- [ ] Before the first button press the page still works with the keyboard and mouse.
+
+## Settings behaviour
+
+- [ ] Graphics: internal resolution goes up to the `max_upscale` the table reports, with the "Limited to ... on this GPU" note when lower.
+- [ ] Changing the scaling filter to FSR shows FSR sharpness; changing CAS mode to CAS shows CAS sharpness.
+- [ ] CoreGS 2.0 is greyed and not selectable.
+- [ ] Advanced: "Reset to defaults" asks, then restores the values and says so in a toast.
+- [ ] Mods is not in the nav column; LB/RB and Q/E skip it; `#/settings/mods` opens Graphics; no row has page "mods".
+- [ ] An error from `set_setting` shows a red toast and the value shown matches the saved value after the next read.
+
+## Controls
+
+- [ ] Every button in the drawing is clickable and focusable; the selected one has a white outline.
+- [ ] The L1, L2, R1 and R2 tabs select the matching drawing; the panel shows the PS2 name and binding.
+- [ ] Rebind: the overlay names the button; Cancel and Esc call `cancel_capture`; a press saves the new binding.
+- [ ] Reset restores the default binding for the selected button only.
+- [ ] L2 (from LT) and R2 (from RT) show deadzone and curve sliders.
+
+## Saves and Replays
+
+- [ ] Empty states show the text from the mockup ("No saves yet", "No replays yet").
+- [ ] X imports; a cancelled picker changes nothing.
+- [ ] Y or A on a save makes it the next-play save; the "Next play" tag moves.
+- [ ] Delete asks first; the list refreshes from the returned items.
+
+## Setup
+
+- [ ] Checking shows a progress bar that moves with `progress`.
+- [ ] Wrong disc shows the red message and "Choose another file", which opens the picker.
+- [ ] Done shows Ready and Play; Play starts the game and opens Home.
+
+## Known gaps (not yet built, from LAUNCHER-PLAN section 14)
+
+- Export of saves and replays, the `.max`/`.cbs`/`.xps` importers, and the Replays "On card" choice.
+- Repair game files and the open-source licences list on About.
+- Background cross-fade: Home uses the single owner cover, with no rotation.
