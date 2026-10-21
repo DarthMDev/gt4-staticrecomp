@@ -79,6 +79,8 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes |
 | TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
 | TASK‑043 | Launcher: download, pin and update the GS renderer | ✅ Done (2026-10-21) · the launcher installs gt4-gs 1.0.1 from the GitHub release at setup; owner tested |
+| TASK‑075 | Input layer on SDL3 (game side in slice210: SDL3 3.4.18 gamepads mapped to the DS2 layout, controls.toml applied, GT4_INPUT=sdl default / xinput for one release) | ✅ Done (2026-10-21) · game (slice210) and launcher read pads through SDL3 3.4.18; owner tested and approved |
+| TASK‑076 | Modern fixed keyboard layout (several keys per DS2 button, table in docs/CONTROLS.md `keyboard-default`) | ✅ Done (2026-10-21) · fixed keyboard layout in game and launcher, P = Start (owner choice); owner tested |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | ✅ Done (2026-10-17) · release 1.0.0 ships gt4-gs 1.0.1; fork release notes, README, THIRD_PARTY and RELEASE-1.0.0-PLAN updated (docs only) |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
@@ -100,10 +102,9 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑062 | Performance overlay (FPS, frame time, CPU/GPU of the game, resolutions, frame cost and headroom) | ✅ Done · owner test 2026-10-16; overlay off by default, +0.35 us/frame EE, +0.02 ms/frame GS thread |
 | TASK‑063 | Bit-exact R5900 FPU `div.s`/`mul.s` (license demo phase, real-PS2 card replays and ghosts) | 📋 Planned · oracle ready (`scripts/license_demo_oracle.py`); needs hardware vectors |
 | TASK‑064 | Third-party overlays (MSI Afterburner / RivaTuner) with the PCSX2 GS: Arbitrary Code Guard off by default | ✅ Done (2026-10-17) · owner test: the RivaTuner/Afterburner overlay shows in game with default settings |
-| TASK‑075 | Input layer on SDL3: game reads all pads (XInput, DS4, DualSense, Switch Pro, generic) mapped to the DS2 layout, applies the launcher's controls.toml; launcher Controls page reads the same SDL3 layer | 📋 Planned (next game build, before 1.0.0) |
-| TASK‑076 | Modern fixed keyboard layout for GT4 (several keys per DS2 button: WASD + arrows, nitro, gear up/down, camera, look back, ghost, Enter/Esc/Backspace) | 📋 Planned (with TASK-075) |
 | TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Open, study done (docs/CONTEXT-INPUT-STUDY.md); not in 1.0.0 |
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
+| TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
 | TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned · study running (owner, 2026-10-21) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
@@ -275,25 +276,6 @@ Acceptance: owner sees the RTSS overlay in game with the default settings.
 State: ✅ Done (2026-10-17). Owner test: the MSI Afterburner / RivaTuner overlay shows in game with the default settings, confirming Arbitrary Code Guard as the cause. Branch `task/064-overlay-compat` (single writer, from main da1eb95). Python suite
 544 tests OK (38 skipped for missing private files). Merged with owner approval (PR #46).
 
-### TASK-075 — Input layer on SDL3
-Owner decision 2026-10-21. Replace the game's XInput-only pad code (native/host_io.cpp) with one input layer on
-SDL3 (zlib licence, fine in the MIT game exe; also the Linux and Android path, TASK-074 and TASK-022). SDL3 opens
-only its gamepad/joystick subsystems; the game window stays ours. Every pad SDL3 knows (Xbox/XInput, DualShock 4,
-DualSense, Switch Pro, generic) maps to the DS2 layout with analog L2/R2 pressure and stick dead zones kept. The game
-reads the launcher's controls.toml (the branch controls code, GT4_CONTROLS_FILE), so remapping in the launcher
-applies in game. The launcher's Controls page reads pads through the same SDL3 database (Rust sdl3 crate) instead of
-the WebView Gamepad API, so the launcher shows exactly what the game sees. The input layer runs in the game process
-(no launcher bridge: the launcher is hidden in the tray during play, and latency and force feedback need the game
-side). Racing wheels (TASK-018) build on this layer. Acceptance: Xbox and DS4/DualSense pads work in game with no
-third-party tools; launcher remaps apply in game; headless frame dumps unchanged; owner test.
-
-### TASK-076 — Modern fixed keyboard layout
-Owner design 2026-10-21, hard-coded (not remappable for now), several keys per DS2 button: D-pad left/right = A/D and
-arrows; D-pad up/down = arrows; D-pad up (ghost) also E; Cross (accelerate, confirm) = W and Enter; Square (brake) = S;
-Circle (handbrake) = Space; Triangle (back) = Backspace and Esc; nitro = Shift; gear up / gear down = their own keys
-near WASD; look back = Q; camera = C or Tab. Map each action to the DS2 button GT4 really uses (check the decomp and
-the manual: nitro, gears, rear view, camera). The launcher Controls page shows the layout read-only in Keyboard view.
-
 ### TASK-077 — Context-aware input mapping (idea)
 Different mappings by game state (race vs menus), e.g. Esc = Start (pause) in a race and Triangle in menus. Needs a
 study of how to read the game state reliably. After 1.0.0; the owner has more ideas.
@@ -325,6 +307,65 @@ TASK-078. Study first, then a phased plan.
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
+
+### TASK-075 — Input layer on SDL3
+Owner decision 2026-10-21. Replace the game's XInput-only pad code (native/host_io.cpp) with one input layer on
+SDL3 (zlib licence, fine in the MIT game exe; also the Linux and Android path, TASK-074 and TASK-022). SDL3 opens
+only its gamepad/joystick subsystems; the game window stays ours. Every pad SDL3 knows (Xbox/XInput, DualShock 4,
+DualSense, Switch Pro, generic) maps to the DS2 layout with analog L2/R2 pressure and stick dead zones kept. The game
+reads the launcher's controls.toml (the branch controls code, GT4_CONTROLS_FILE), so remapping in the launcher
+applies in game. The launcher's Controls page reads pads through the same SDL3 database (Rust sdl3 crate) instead of
+the WebView Gamepad API, so the launcher shows exactly what the game sees. The input layer runs in the game process
+(no launcher bridge: the launcher is hidden in the tray during play, and latency and force feedback need the game
+side). Racing wheels (TASK-018) build on this layer. Acceptance: Xbox and DS4/DualSense pads work in game with no
+third-party tools; launcher remaps apply in game; headless frame dumps unchanged; owner test.
+
+State: ✅ Done (2026-10-21). Game side slice210 (SDL3 3.4.18 pinned in `docs/inputs/slice210-sdl3.json`, `native/pad_mapping.*`, `GT4_INPUT=sdl` default, `xinput` kept as a fallback), launcher side on the Controls page (SDL3 through the Rust `sdl3` crate). Owner tested pads and remapping, and approved.
+
+### TASK-076 — Modern fixed keyboard layout
+Owner design 2026-10-21, hard-coded (not remappable for now), several keys per DS2 button: D-pad left/right = A/D and
+arrows; D-pad up/down = arrows; D-pad up (ghost) also E; Cross (accelerate, confirm) = W and Enter; Square (brake) = S;
+Circle (handbrake) = Space; Triangle (back) = Backspace and Esc; nitro = Shift; gear up / gear down = their own keys
+near WASD; look back = Q; camera = C or Tab. Map each action to the DS2 button GT4 really uses (check the decomp and
+the manual: nitro, gears, rear view, camera). The launcher Controls page shows the layout read-only in Keyboard view.
+State: ✅ Done (2026-10-21): the hard-coded table (`native/controls.cpp`, `docs/CONTROLS.md` keyboard-default, `docs/INPUT-SDL3.md`). Nitro = R1, gears = R2/L2, rear view = L1, camera = Select (ludo.guide); Start = P (owner). Owner tested.
+
+### TASK-079 — Force 16:9 at boot
+Owner request 2026-10-20. A fresh save starts the game in 4:3. When the player picks 16:9 (Wide) in GT4's own Options and
+saves, it stays 16:9. Force 16:9 at boot for everyone, the same way GT4_FORCE_480P holds 480p (TASK-009, slice164).
+Environment `GT4_FORCE_WIDESCREEN`: 1 forces 16:9, 0 leaves the game's own setting, unset means 1 (the launcher passes
+its setting). Any other value refuses the start. The launcher setting "Widescreen 16:9" (Graphics page, default on) sends
+it. Forced in guest RAM only; the owner's card file is never written by the host.
+
+Guest chain (decompiled source at identical addresses, gt4-decomp e0b70c4d6; Confirmed unless marked):
+- owner pointer `0x622F4C` (the game-data object); option object `owner + 0x38CB0` (MOption).
+- wide flag `option + 0x14` = `owner + 0x38CC4`: 0 = 4:3, 1 = 16:9. Set by `func_00437110` (the script setter
+  `MOption.wide_mode`, `MOption__get_wide_mode`), read by `func_001AB4C0` (race HUD rectangle, 0.75 scale of the
+  4:3 squeeze) and by the photo mode code. Saved with the option object (High confidence: the same object holds the
+  garage and calendar that the save path writes).
+- aspect record `option + 0x24`, 11 words, written by `func_00439108` from one of four presets in guest data:
+  `0x622E90` (4:3), `0x622EC0` (wide), `0x622EF0` (4:3 NTSC), `0x622F20` (wide NTSC); index = wide + 2 * (video == 1).
+  `func_004390D0` says "wide" when width / height >= 1.5 (f32) at `record + 0xC` and `+ 0x10`.
+- presets are filled at start by `func_00439B30` from `0x6A6188` (4:3, 275 x 205) and `0x6A61B8` (wide, 425 x 240);
+  the NTSC presets hold the same two records (checked in the pinned ELF, Confirmed).
+- video system `option + 0x1388` (1 = NTSC).
+- published word `0x6184F0` (D_006184F0) = `func_004390D0(option + 0x24)`, written by `MOption.apply` (`func_004365B8`).
+  It is the value the renderers read: RaceDisplay, RaceDisplayUtil::wideOffset, the 0.75 scale in `func_00393790`
+  and `func_00102B30`, the minimap offset.
+
+Native (`native/race_widescreen.*`, pure, fixture `native_race_widescreen`): at each guest VBlank, when the owner chain
+is valid and the wide preset is wide, it sets the flag to 1, copies the wide preset into the record when the record is
+not wide (what `func_004391C8` does), and publishes `0x6184F0` from the record. A preset that is not wide is refused
+with no write (logged once).
+
+Limits: the game's menu can show 4:3 for one frame before the next VBlank forces it back (same limit as 480p); a save
+made with the force on stores 16:9. The presentation of the 4:3 and 16:9 layouts of the game is otherwise unchanged.
+
+Checks (2026-10-21, slice211): see `docs/BUILD.md` slice 211 and `docs/journal/2026-10-21.md`.
+State: ✅ Done (2026-10-21). slice211 (`docs/inputs/slice211-pcsx2.json`, `--mode pcsx2`) and the launcher setting
+"Widescreen 16:9" (default on). Owner tested: a blank card boots in 16:9 and 480p, and the 100% save loads. A "Load
+failed!" seen during the test was the launcher card bug (save folder "." entry), fixed in TASK-019; the force was
+ruled out headless (slice210 and slice211 with the force off failed the same way on the bad card).
 
 ### TASK-019 — Launcher
 State (2026-10-21, TASK-075 launcher side, branch task/019-launcher): the launcher reads pads through SDL3 3.4.18 (`gt4l-platform` `sdl_pads`, the same layer the game uses), in a Rust pad service that emits `pad-status`, `pad-live` (about 60 Hz) and `pad-nav`; the Controls page and nav.js use these events, the Web Gamepad API is only in the dev mock. The Keyboard view shows the fixed modern layout (TASK-076), read only. Checks: `cargo test --workspace` green, nav-test 149 of 149, focus-check 90 of 90 (headless Edge), real exe over WebView2 with 0 ACL denials. Not done: the game side (task/075-sdl3-input) and the owner's pad test; the launcher's controls file still uses XInput-named sources (the game reads them until its SDL layer lands).

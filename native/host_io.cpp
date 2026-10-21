@@ -1,6 +1,8 @@
 #include "host_io.hpp"
 #include "perf_probe.hpp"
 
+#include <SDL3/SDL.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <cstdlib>
@@ -43,36 +45,17 @@ void press(PadState &pad, std::uint8_t bit, std::uint8_t pressure) {
 }
 } // namespace
 
-// Stick and trigger readings are computed by controls.cpp (read_axis, read_trigger).
+// Stick and trigger readings are computed by controls.cpp (read_axis, read_trigger), through pad_mapping.cpp.
 PadState map_gamepad(const XINPUT_GAMEPAD &gamepad, const ControlMap &map) {
-  PadState pad;
-  const BYTE triggers[] = {gamepad.bLeftTrigger, gamepad.bRightTrigger};
-  // PS2 analog byte order: RX, RY, LX, LY.
-  const SHORT sticks[] = {gamepad.sThumbRX, gamepad.sThumbRY, gamepad.sThumbLX,
-                          gamepad.sThumbLY};
-  for (std::size_t index = 0; index < gt4::controls::input_count; ++index) {
-    const auto &input = gt4::controls::inputs[index];
-    for (const auto &binding : map.bindings[index]) {
-      if (input.axis) {
-        if (binding.kind != SourceKind::xinput_axis)
-          continue;
-        const std::uint8_t value = gt4::controls::read_axis(binding, sticks[binding.source_index]);
-        // Several bindings on one stick: the reading furthest from rest wins.
-        const int deflection = std::abs(static_cast<int>(value) - 128);
-        if (deflection > std::abs(static_cast<int>(pad.axes[input.index]) - 128))
-          pad.axes[input.index] = value;
-      } else if (binding.kind == SourceKind::xinput_button) {
-        if (gamepad.wButtons & binding.button_mask)
-          press(pad, input.index, 255);
-      } else if (binding.kind == SourceKind::xinput_trigger) {
-        const auto reading = gt4::controls::read_trigger(binding, triggers[binding.source_index]);
-        if (reading.pressed)
-          press(pad, input.index, reading.pressure);
-      }
-      // Keyboard bindings arrive as a button mask through merge_keyboard.
-    }
-  }
-  return pad;
+  gt4::pad::GamepadReading reading;
+  reading.buttons = gamepad.wButtons;
+  reading.left_trigger = gamepad.bLeftTrigger;
+  reading.right_trigger = gamepad.bRightTrigger;
+  reading.thumb_rx = gamepad.sThumbRX;
+  reading.thumb_ry = gamepad.sThumbRY;
+  reading.thumb_lx = gamepad.sThumbLX;
+  reading.thumb_ly = gamepad.sThumbLY;
+  return gt4::pad::map_reading(reading, map);
 }
 
 PadState map_gamepad(const XINPUT_GAMEPAD &gamepad) {
@@ -87,15 +70,45 @@ void merge_keyboard(PadState &pad, std::uint16_t buttons) {
 }
 
 XINPUT_VIBRATION map_rumble(std::uint16_t rumble) {
-  return {static_cast<WORD>((rumble >> 8) * 257),
-          static_cast<WORD>((rumble & 1) ? 65535 : 0)};
+  const auto motors = gt4::pad::rumble_motors(rumble);
+  return {static_cast<WORD>(motors.low_frequency), static_cast<WORD>(motors.high_frequency)};
 }
 
-ControllerInput::ControllerInput(ControlMap map) : map_(std::move(map)) {}
+ControllerInput::ControllerInput(ControlMap map, gt4::pad::Backend backend)
+    : map_(std::move(map)), backend_(backend) {
+  if (backend_ == gt4::pad::Backend::sdl) {
+    // Gamepads only: SDL creates no window and takes no part in the game's message loop.
+    SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+    if (!SDL_Init(SDL_INIT_GAMEPAD))
+      throw std::runtime_error(std::string("SDL_Init(SDL_INIT_GAMEPAD) failed: ") + SDL_GetError());
+    sdl_initialized_ = true;
+  }
+}
 
-ControllerInput::~ControllerInput() { stop(); }
+ControllerInput::~ControllerInput() {
+  stop();
+  close_sdl_pad();
+  if (sdl_initialized_)
+    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
+}
+
+void ControllerInput::close_sdl_pad() {
+  if (sdl_pad_) {
+    SDL_CloseGamepad(sdl_pad_);
+    sdl_pad_ = nullptr;
+  }
+}
 
 PadState ControllerInput::poll(bool focused, std::uint16_t keyboard_buttons) {
+  PadState pad = backend_ == gt4::pad::Backend::sdl ? poll_sdl(focused) : poll_xinput(focused);
+  // Without focus the pad is neutral: the keyboard counts only in the game window.
+  if (!focused)
+    return pad;
+  merge_keyboard(pad, keyboard_buttons);
+  return pad;
+}
+
+PadState ControllerInput::poll_xinput(bool focused) {
   PadState pad;
   if (!focused) {
     stop();
@@ -130,11 +143,79 @@ PadState ControllerInput::poll(bool focused, std::uint16_t keyboard_buttons) {
       throw std::runtime_error("XInputGetState failed: " +
                                std::to_string(result));
   }
-  merge_keyboard(pad, keyboard_buttons);
   return pad;
 }
 
+PadState ControllerInput::poll_sdl(bool focused) {
+  PadState pad;
+  // Refresh the gamepad states once per poll (SDL does not pump them on its own without events).
+  SDL_UpdateGamepads();
+  if (sdl_pad_ && !SDL_GamepadConnected(sdl_pad_)) {
+    std::fprintf(stderr, "[input] SDL gamepad disconnected\n");
+    close_sdl_pad();
+    motors_ = 0;
+    sdl_next_scan_ = 0;
+  }
+  if (!sdl_pad_ && GetTickCount64() >= sdl_next_scan_) {
+    sdl_next_scan_ = GetTickCount64() + 2000;
+    int count = 0;
+    SDL_JoystickID *ids = SDL_GetGamepads(&count);
+    std::uint32_t player_one = 0;
+    if (ids && gt4::pad::first_pad(ids, static_cast<std::size_t>(count), player_one)) {
+      sdl_pad_ = SDL_OpenGamepad(player_one);
+      if (sdl_pad_) {
+        const char *name = SDL_GetGamepadName(sdl_pad_);
+        std::fprintf(stderr, "[input] SDL gamepad \"%s\" is controller 1 of %d\n",
+                     name ? name : "unnamed", count);
+      }
+    }
+    SDL_free(ids);
+  }
+  if (!sdl_pad_ || !focused) {
+    stop();
+    return pad;
+  }
+  gt4::pad::GamepadReading reading;
+  // SDL face buttons are positions: SOUTH is Cross on a PlayStation pad and A on an Xbox pad.
+  const struct {
+    SDL_GamepadButton button;
+    std::uint16_t mask;
+  } buttons[] = {
+      {SDL_GAMEPAD_BUTTON_SOUTH, gt4::controls::xinput::a},
+      {SDL_GAMEPAD_BUTTON_EAST, gt4::controls::xinput::b},
+      {SDL_GAMEPAD_BUTTON_WEST, gt4::controls::xinput::x},
+      {SDL_GAMEPAD_BUTTON_NORTH, gt4::controls::xinput::y},
+      {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, gt4::controls::xinput::left_shoulder},
+      {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, gt4::controls::xinput::right_shoulder},
+      {SDL_GAMEPAD_BUTTON_BACK, gt4::controls::xinput::back},
+      {SDL_GAMEPAD_BUTTON_START, gt4::controls::xinput::start},
+      {SDL_GAMEPAD_BUTTON_LEFT_STICK, gt4::controls::xinput::left_thumb},
+      {SDL_GAMEPAD_BUTTON_RIGHT_STICK, gt4::controls::xinput::right_thumb},
+      {SDL_GAMEPAD_BUTTON_DPAD_UP, gt4::controls::xinput::dpad_up},
+      {SDL_GAMEPAD_BUTTON_DPAD_DOWN, gt4::controls::xinput::dpad_down},
+      {SDL_GAMEPAD_BUTTON_DPAD_LEFT, gt4::controls::xinput::dpad_left},
+      {SDL_GAMEPAD_BUTTON_DPAD_RIGHT, gt4::controls::xinput::dpad_right},
+  };
+  for (const auto &entry : buttons)
+    if (SDL_GetGamepadButton(sdl_pad_, entry.button))
+      reading.buttons |= entry.mask;
+  reading.left_trigger = gt4::pad::trigger_byte(SDL_GetGamepadAxis(sdl_pad_, SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
+  reading.right_trigger = gt4::pad::trigger_byte(SDL_GetGamepadAxis(sdl_pad_, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+  reading.thumb_lx = SDL_GetGamepadAxis(sdl_pad_, SDL_GAMEPAD_AXIS_LEFTX);
+  reading.thumb_ly = gt4::pad::negate_axis(SDL_GetGamepadAxis(sdl_pad_, SDL_GAMEPAD_AXIS_LEFTY));
+  reading.thumb_rx = SDL_GetGamepadAxis(sdl_pad_, SDL_GAMEPAD_AXIS_RIGHTX);
+  reading.thumb_ry = gt4::pad::negate_axis(SDL_GetGamepadAxis(sdl_pad_, SDL_GAMEPAD_AXIS_RIGHTY));
+  return gt4::pad::map_reading(reading, map_);
+}
+
 void ControllerInput::rumble(std::uint16_t value) {
+  if (backend_ == gt4::pad::Backend::sdl)
+    rumble_sdl(value);
+  else
+    rumble_xinput(value);
+}
+
+void ControllerInput::rumble_xinput(std::uint16_t value) {
   if (slot_ == XUSER_MAX_COUNT || motors_ == value)
     return;
   auto vibration = map_rumble(value);
@@ -151,7 +232,27 @@ void ControllerInput::rumble(std::uint16_t value) {
   motors_ = value;
 }
 
+void ControllerInput::rumble_sdl(std::uint16_t value) {
+  if (!sdl_pad_)
+    return;
+  const ULONGLONG now = GetTickCount64();
+  // SDL rumble lasts for its duration: resend before it runs out while the value holds.
+  if (motors_ == value && now - rumble_sent_at_ < 250)
+    return;
+  const auto motors = gt4::pad::rumble_motors(value);
+  // A pad without rumble support refuses the call; that is not an error for the game.
+  SDL_RumbleGamepad(sdl_pad_, motors.low_frequency, motors.high_frequency, 500);
+  motors_ = value;
+  rumble_sent_at_ = now;
+}
+
 void ControllerInput::stop() {
+  if (backend_ == gt4::pad::Backend::sdl) {
+    if (sdl_pad_ && motors_)
+      SDL_RumbleGamepad(sdl_pad_, 0, 0, 0);
+    motors_ = 0;
+    return;
+  }
   if (slot_ != XUSER_MAX_COUNT && motors_) {
     XINPUT_VIBRATION vibration{};
     const DWORD result = XInputSetState(slot_, &vibration);

@@ -4,6 +4,7 @@
 #include "mtvu_journal.hpp"
 #include "mtvu_measure.hpp"
 #include "mtvu_ring.hpp"
+#include "race_widescreen.hpp"
 #include "perf_probe.hpp"
 
 #include <atomic>
@@ -17,6 +18,10 @@
 #include <string_view>
 #include <string>
 #include <thread>
+
+namespace ps2 {
+extern std::uint8_t g_ram[]; // ps2/memory.hpp (guest RAM, 32 MB)
+}  // namespace ps2
 
 namespace gt4::mtvu {
 namespace {
@@ -461,6 +466,8 @@ void pump() {
 }
 
 void vblank_sync() {
+  // TASK-079: GT4_FORCE_WIDESCREEN holds the 16:9 state at every guest VBlank (windowed and headless).
+  gt4::display::widescreen_hold_at_guest_vblank(ps2::g_ram, 32u << 20);
   Runtime &r = rt();
   if (!r.started) return;
   sync("vblank");

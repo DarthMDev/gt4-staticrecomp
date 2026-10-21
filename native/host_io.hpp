@@ -10,17 +10,18 @@
 
 #include "controls.hpp"
 #include "pacing.hpp"
+#include "pad_mapping.hpp"
 
 #include <array>
 #include <cstdint>
 #include <functional>
 #include <vector>
 
-struct PadState {
-  std::uint16_t buttons = 0;
-  std::array<std::uint8_t, 4> axes{128, 128, 128, 128};
-  std::array<std::uint8_t, 16> pressures{};
-};
+// TASK-075: the PS2 pad state lives in pad_mapping.hpp (shared with the SDL3 path).
+using PadState = gt4::pad::PadState;
+
+// SDL3 gamepad handle (SDL_gamepad.h); the header is kept out of this file.
+struct SDL_Gamepad;
 
 // Maps one XInput state through the binding table. The default-argument overload
 // uses controls::default_controls(), which equals the slice 157 mapping.
@@ -29,18 +30,35 @@ PadState map_gamepad(const XINPUT_GAMEPAD &gamepad);
 void merge_keyboard(PadState &pad, std::uint16_t buttons);
 XINPUT_VIBRATION map_rumble(std::uint16_t rumble);
 
+// Player 1's pad. GT4_INPUT=sdl (default): SDL3 gamepad subsystem only, no SDL window; the first connected pad is
+// player 1, and hot-plug is polled. GT4_INPUT=xinput: the previous XInput path.
 class ControllerInput {
 public:
-  explicit ControllerInput(gt4::controls::ControlMap map = gt4::controls::default_controls());
+  explicit ControllerInput(gt4::controls::ControlMap map = gt4::controls::default_controls(),
+                           gt4::pad::Backend backend = gt4::pad::Backend::sdl);
   ~ControllerInput();
+  ControllerInput(const ControllerInput &) = delete;
+  ControllerInput &operator=(const ControllerInput &) = delete;
   PadState poll(bool focused, std::uint16_t keyboard_buttons);
   void rumble(std::uint16_t value);
   void stop();
+  gt4::pad::Backend backend() const { return backend_; }
 
 private:
+  PadState poll_xinput(bool focused);
+  PadState poll_sdl(bool focused);
+  void rumble_xinput(std::uint16_t value);
+  void rumble_sdl(std::uint16_t value);
+  void close_sdl_pad();
+
   gt4::controls::ControlMap map_;
+  gt4::pad::Backend backend_;
   DWORD slot_ = XUSER_MAX_COUNT;
   ULONGLONG next_scan_ = 0;
+  SDL_Gamepad *sdl_pad_ = nullptr;
+  ULONGLONG sdl_next_scan_ = 0;
+  ULONGLONG rumble_sent_at_ = 0;
+  bool sdl_initialized_ = false;
   std::uint16_t motors_ = 0;
 };
 

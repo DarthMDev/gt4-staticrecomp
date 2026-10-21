@@ -6,6 +6,11 @@ the game process. Unset means the built-in bindings, which are the same as befor
 
 Labels: **Confirmed** (in code or tests), **Hypothesis** (not yet tested on hardware), **Unknown**.
 
+**slice210 (TASK-075/076):** the pad backend is SDL3 3.4.18 (`GT4_INPUT=sdl`, the default; `GT4_INPUT=xinput` keeps the
+XInput path for one release). The file format is unchanged: the `xinput:` source names name the physical positions
+and drive every pad. The built-in keyboard keys changed to the TASK-076 layout (section `keyboard-default`). See
+`docs/INPUT-SDL3.md`.
+
 ## What the file does
 
 The PS2 pad has 16 digital inputs and 4 analog sticks. Each logical input lists the host sources
@@ -50,14 +55,17 @@ game not started: ...` and exit code 1.
 
 | Name | PS2 meaning | Kind | Default XInput | Default key |
 | --- | --- | --- | --- | --- |
-| `dpad_up`, `dpad_right`, `dpad_down`, `dpad_left` | D-pad | digital | DpadUp, DpadRight, DpadDown, DpadLeft | Up, Right, Down, Left |
-| `cross`, `circle`, `square`, `triangle` | face buttons | digital, pressure | A, B, X, Y | Z, X, A, S |
-| `l1`, `r1` | shoulders | digital, pressure | LB, RB | Q, W |
-| `l2`, `r2` | triggers | digital, pressure | LT, RT (analog) | 1, 2 |
-| `l3`, `r3` | stick clicks | digital | LThumb, RThumb | C, V |
-| `select`, `start` | Select, Start | digital | Back, Start | Backspace, Enter |
+| `dpad_up`, `dpad_right`, `dpad_down`, `dpad_left` | D-pad | digital | DpadUp, DpadRight, DpadDown, DpadLeft | Up+E, Right+D, Down, Left+A |
+| `cross`, `circle`, `square`, `triangle` | face buttons | digital, pressure | A, B, X, Y | W+Enter, Space, S, Backspace+Esc |
+| `l1`, `r1` | shoulders | digital, pressure | LB, RB | Q, Shift |
+| `l2`, `r2` | triggers | digital, pressure | LT, RT (analog) | F, R |
+| `l3`, `r3` | stick clicks | digital | LThumb, RThumb | none |
+| `select`, `start` | Select, Start | digital | Back, Start | C+Tab, P (start: hypothesis) |
 | `rstick_x`, `rstick_y` | right stick | axis | RX, RY (invert=true on Y) | none |
 | `lstick_x`, `lstick_y` | left stick | axis | LX, LY (invert=true on Y) | none |
+
+The XInput names are positions (SDL 3.4.18, `docs/INPUT-SDL3.md`): `A` is the bottom face button (Cross on a
+PlayStation pad), `B` the right, `X` the left, `Y` the top.
 
 Stick and trigger sources are listed below. A stick input accepts only stick sources; a button
 input accepts button, trigger and key sources.
@@ -145,13 +153,47 @@ the order of the Inputs table, and keeps the old file when a change is refused o
 - **Reset all:** the built-in mapping, options included.
 - A file written by a newer launcher (unknown schema) is kept as it is and the page is read-only.
 
+## keyboard-default
+
+The built-in keyboard keys (TASK-076, slice210). Hard-coded: they are the defaults of `native/controls.cpp`
+(`default_controls`) and of `docs/controls/default.toml`, and the launcher shows them read-only. Keys are digital (full
+pressure). F7, F8, F9 and F11 belong to the host and are not used.
+
+```json
+{
+  "keyboard-default": {
+    "dpad_up": ["Up", "E"],
+    "dpad_right": ["D", "Right"],
+    "dpad_down": ["Down"],
+    "dpad_left": ["A", "Left"],
+    "cross": ["W", "Enter"],
+    "circle": ["Space"],
+    "square": ["S"],
+    "triangle": ["Backspace", "Esc"],
+    "l1": ["Q"],
+    "r1": ["Shift"],
+    "l2": ["F"],
+    "r2": ["R"],
+    "l3": [],
+    "r3": [],
+    "select": ["C", "Tab"],
+    "start": ["P"]
+  }
+}
+```
+
+Meaning: D-pad left and right also run on A and D; cross is accelerate and confirm; circle is handbrake; square brake;
+triangle back; L1 look back; R1 nitro; L2 gear down; R2 gear up; select the camera. `start` = P is a hypothesis
+pending the owner's choice (the table gives no Start key; Enter is Cross). Evidence and confidence: `docs/INPUT-SDL3.md`.
+
 ## Limits
 
 - **Confirmed:** only the windowed path reads the file (`open_window`). A headless run (`--frames`
   without `--window`) never polls a controller; the file is not read there.
-- **Confirmed:** XInput is the only controller backend. SDL3, DualSense and DS4 are not supported.
+- **Confirmed (slice210):** SDL3 is the gamepad backend (`GT4_INPUT=sdl`, default; `xinput` keeps the XInput path for one
+  release). DualShock 4, DualSense and Switch Pro pads are read through SDL's mapping; tested on the owner's pads only.
 - **Confirmed:** no hot reload. Change the file, then start the game again.
-- **Confirmed:** the rumble motors follow the XInput mapping and are not configurable here.
+- **Confirmed:** the rumble motors follow the same motor values on both backends and are not configurable here.
 - **Hypothesis:** GT4 reads L2/R2 pressure and sticks only in the modes its menus choose. The file
   cannot change what the game does with a pressure or stick value it does not read. See the owner
   test below.

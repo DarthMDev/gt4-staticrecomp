@@ -95,21 +95,31 @@ void expect_config_error(const std::string &text, const std::string &fragment, i
 }
 
 void check_default_keyboard_table() {
-  // The keyboard keys of slice 157 window.cpp, as (VK, PS2 bit).
-  const std::pair<std::uint8_t, std::uint16_t> legacy[] = {
-      {0x08, 1u << 0},  {'C', 1u << 1},       {'V', 1u << 2},       {0x0D, 1u << 3},
-      {0x26, 1u << 4},  {0x27, 1u << 5},      {0x28, 1u << 6},      {0x25, 1u << 7},
-      {'X', 1u << 13},  {'Z', 1u << 14},      {'A', 1u << 15},      {'S', 1u << 12},
-      {'Q', 1u << 10},  {'W', 1u << 11},      {'1', 1u << 8},       {'2', 1u << 9}};
+  // The TASK-076 keyboard layout (docs/CONTROLS.md, keyboard-default), as (VK, PS2 bit). Several keys per button.
+  const std::pair<std::uint8_t, std::uint16_t> layout[] = {
+      {0x26, 1u << 4},  {'E', 1u << 4},       // D-pad up: Up, E
+      {0x27, 1u << 5},  {'D', 1u << 5},       // D-pad right: Right, D
+      {0x28, 1u << 6},                        // D-pad down: Down
+      {0x25, 1u << 7},  {'A', 1u << 7},       // D-pad left: Left, A
+      {'W', 1u << 14},  {0x0D, 1u << 14},     // Cross: W, Enter
+      {0x20, 1u << 13},                       // Circle (handbrake): Space
+      {'S', 1u << 15},                        // Square (brake): S
+      {0x08, 1u << 12}, {0x1B, 1u << 12},     // Triangle (back): Backspace, Esc
+      {'Q', 1u << 10},                        // L1 (look back): Q
+      {0x10, 1u << 11},                       // R1 (nitro): Shift
+      {'F', 1u << 8},                         // L2 (gear down): F
+      {'R', 1u << 9},                         // R2 (gear up): R
+      {'C', 1u << 0}, {0x09, 1u << 0},        // Select (camera): C, Tab
+      {'P', 1u << 3}};                        // Start: P (hypothesis, see docs/CONTROLS.md)
   const auto keys = keyboard_bindings(default_controls());
-  require(keys.size() == 16, "default keyboard table has 16 keys");
-  for (const auto &expected : legacy) {
+  require(keys.size() == 20, "default keyboard table has 20 keys");
+  for (const auto &expected : layout) {
     bool found = false;
     for (const auto &key : keys)
       found = found || (key.virtual_key == expected.first && key.button_mask == expected.second);
     require(found, "default keyboard key present");
   }
-  std::fprintf(stderr, "PASS: default keyboard table equals slice 157 window.cpp\n");
+  std::fprintf(stderr, "PASS: default keyboard table is the TASK-076 layout\n");
 }
 
 void check_defaults_and_example_files() {
@@ -121,9 +131,9 @@ void check_defaults_and_example_files() {
   require(only_binding(pedals, "l2").kind == SourceKind::xinput_trigger &&
               only_binding(pedals, "r2").kind == SourceKind::xinput_trigger,
           "pedals example binds triggers to L2 and R2");
-  require(pedals.bindings[input_index_of("cross")].size() == 2 &&
-              only_binding(pedals, "cross").button_mask == 0x1000,
-          "pedals example keeps the default cross binding (XInput A and key Z)");
+  require(pedals.bindings[input_index_of("cross")].size() == 3 &&
+              pedals.bindings[input_index_of("cross")][0].button_mask == 0x1000,
+          "pedals example keeps the default cross binding (XInput A, keys W and Enter)");
   const ControlMap keyboard = load_controls_file(directory + "/keyboard-only.toml");
   require(keyboard.bindings[input_index_of("lstick_x")].empty() &&
               keyboard.bindings[input_index_of("rstick_y")].empty(),

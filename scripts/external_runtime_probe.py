@@ -16,6 +16,22 @@ import gs_settings
 from gt4disc import fingerprint
 
 
+SEM_FAILCRITICALERRORS = 0x0001
+SEM_NOGPFAULTERRORBOX = 0x0002
+
+
+def suppress_loader_dialogs():
+    """Windows: a child that cannot load a DLL (for example SDL3.dll beside gt4vulkan.exe) fails quietly.
+
+    The error mode is inherited by child processes created afterwards, so the run never opens a system error dialog
+    on the owner's desktop. No effect on other platforms.
+    """
+    if os.name != 'nt':
+        return
+    import ctypes
+    ctypes.windll.kernel32.SetErrorMode(SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX)
+
+
 ROOT = Path(__file__).resolve().parents[1]
 CAPTURE_MANIFEST = 'slice136-keyboard-input.json'
 CAPTURE_RUNTIME = 'private/slice136-keyboard-input/build/gt4vulkan.exe'
@@ -103,7 +119,13 @@ PERF_PROFILES = {
     # TASK-019 launcher test (slice209): the slice208 coverage build (accepted EE library, 1,105 seeds) plus the
     # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
     # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
-    'pcsx2': ('slice209-pcsx2.json', 'private/slice209-build/build/gt4vulkan.exe'),
+    'pcsx2': ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'),
+    # TASK-079 (slice211): the slice210 build plus GT4_FORCE_WIDESCREEN (16:9 held at guest VBlank, default on).
+    # Mode pcsx2 points here; slice210 stays as history.
+    'pcsx2-slice210': ('slice210-pcsx2.json', 'private/slice210-build/build/gt4vulkan.exe'),
+    # TASK-075/076 (slice210): the slice209 build with the SDL3 gamepad layer and the TASK-076 keyboard table.
+    # Mode pcsx2-slice209 stays as history.
+    'pcsx2-slice209': ('slice209-pcsx2.json', 'private/slice209-build/build/gt4vulkan.exe'),
     # TASK-017 diagnostic candidate (slice181): the slice166 profile plus the FSV read trace (GT4_FSV_TRACE=1
     # writes one [fsv] line per guest disc read to stderr). Not a performance candidate.
     'license-trace': ('slice181-license-trace.json', 'private/slice181-license-build/build/gt4vulkan.exe'),
@@ -129,7 +151,7 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
-                     'slice209-pcsx2.json')
+                     'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
@@ -137,7 +159,7 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mt
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
-                     'slice209-pcsx2.json')
+                     'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -152,6 +174,10 @@ CONTROLS_INPUTS = ('dpad_up', 'dpad_right', 'dpad_down', 'dpad_left', 'cross', '
 CONTROLS_SOURCE_KINDS = ('xinput', 'key')
 # GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
+# GT4_FORCE_WIDESCREEN (TASK-079, slice211): holds the game's wide flag at 16:9 at guest VBlank. Unset means on (the
+# native default, the launcher default); 0 leaves the game's own setting. Forwarded and recorded; never scrubbed.
+FORCE_WIDESCREEN_VALUES = ('0', '1')
+FORCE_WIDESCREEN_DEFAULT = '1'
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
 MTVU_MEASURE_VALUES = ('0', '1')
 # TASK-011 step 2 (slice170): worker runtime switches. Unset means the default shown; forwarded and recorded.
@@ -588,6 +614,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     # Refused before any output: the window is fixed 16:9, and unknown GT4_FORCE_480P values stop the run.
     if os.environ.get('GT4_FORCE_480P', '0') not in FORCE_480P_VALUES:
         raise ValueError('GT4_FORCE_480P must be 0 or 1')
+    if os.environ.get('GT4_FORCE_WIDESCREEN', FORCE_WIDESCREEN_DEFAULT) not in FORCE_WIDESCREEN_VALUES:
+        raise ValueError('GT4_FORCE_WIDESCREEN must be 0 or 1')
     if os.environ.get('GT4_CURSOR_AUTOHIDE', '1') not in CURSOR_AUTOHIDE_VALUES:
         raise ValueError('GT4_CURSOR_AUTOHIDE must be 0 or 1')
     if os.environ.get('GT4_MTVU_MEASURE', '1') not in MTVU_MEASURE_VALUES:
@@ -759,6 +787,11 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         environment['GT4_FORCE_480P'] = '1'
     if 'GT4_FORCE_480P' in environment:
         result['force_480p_environment'] = {'GT4_FORCE_480P': environment['GT4_FORCE_480P']}
+    # TASK-079: the game default is on; the explicit value is written to the environment so the evidence records it.
+    environment.setdefault('GT4_FORCE_WIDESCREEN', FORCE_WIDESCREEN_DEFAULT)
+    if environment['GT4_FORCE_WIDESCREEN'] not in FORCE_WIDESCREEN_VALUES:
+        raise ValueError('GT4_FORCE_WIDESCREEN must be 0 or 1')
+    result['force_widescreen_environment'] = {'GT4_FORCE_WIDESCREEN': environment['GT4_FORCE_WIDESCREEN']}
     if 'GT4_FSV_TRACE' in environment:
         result['fsv_trace_environment'] = {'GT4_FSV_TRACE': environment['GT4_FSV_TRACE']}
     if 'GT4_HALT_DUMP' in environment and 'halt_dump_environment' not in result:
@@ -790,6 +823,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if vu1_interpret_only:
         environment['PS2_VU_INTERPRET'] = '1'
         result['vu1_interpret_environment'] = {'PS2_VU_INTERPRET': '1'}
+    suppress_loader_dialogs()
     with log_path.open('wb') as output:
         try:
             if affinity_plan is None:

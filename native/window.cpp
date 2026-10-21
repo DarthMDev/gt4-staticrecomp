@@ -1,5 +1,6 @@
 #include "window.hpp"
 #include "race_display.hpp"
+#include "race_widescreen.hpp"
 #include "ps2/memory.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
@@ -54,6 +55,8 @@ gt4::display::Force480pState force_480p_state;
 AudioOutput *audio_output = nullptr;
 // Input bindings (controls.hpp). open_window loads them before the window exists.
 gt4::controls::ControlMap active_controls;
+// TASK-075: gamepad backend (GT4_INPUT=sdl default, xinput for one release). open_window loads it.
+gt4::pad::Backend input_backend = gt4::pad::Backend::sdl;
 std::vector<gt4::controls::KeyboardBinding> keyboard_keys;
 // TASK-060: cursor auto-hide over this window's picture (GT4_CURSOR_AUTOHIDE, cursor_autohide.hpp). In pcsx2 mode the
 // picture is the gt4-gs child window (another process), which applies the same rule itself (CONTROL cursor); this
@@ -314,6 +317,13 @@ bool open_window(bool fullscreen) {
     return false;
   }
   keyboard_keys = gt4::controls::keyboard_bindings(active_controls);
+  try {
+    input_backend = gt4::pad::parse_backend(std::getenv("GT4_INPUT"));
+  } catch (const std::invalid_argument &error) {
+    std::fprintf(stderr, "[input] %s, game not started\n", error.what());
+    return false;
+  }
+  std::fprintf(stderr, "[input] backend %s\n", gt4::pad::backend_name(input_backend));
   const char *controls_file = std::getenv("GT4_CONTROLS_FILE");
   std::fprintf(stderr, "[controls] %s\n",
                controls_file && *controls_file ? controls_file : "default bindings");
@@ -353,7 +363,7 @@ void flush_cards_now(); // memcard capsule sio2.cpp (scripts/prepare_memcard_flu
 #endif
 
 int run_window(const std::function<int()> &emulate) {
-  ControllerInput input(active_controls);
+  ControllerInput input(active_controls, input_backend);
   controller = &input;
   const auto cleanup = [&]() {
 #ifdef GT4_PERF_PROBE
@@ -383,6 +393,8 @@ int run_window(const std::function<int()> &emulate) {
     force_480p_state = {};
     if (force_480p_enabled)
       std::fprintf(stderr, "[display] GT4_FORCE_480P=1: race display index held at 480p (guest VBlank)\n");
+    // TASK-079: an invalid GT4_FORCE_WIDESCREEN stops the start here (the hold itself runs at guest VBlank).
+    gt4::display::widescreen_hold_enabled();
     pacing_mode = gt4::pacing::parse_mode(std::getenv("GT4_PACING"));
     cursor_autohide = gt4::cursor::AutoHide(gt4::cursor::parse_policy(std::getenv("GT4_CURSOR_AUTOHIDE")));
     std::fprintf(stderr, "[window] cursor auto-hide %s (GT4_CURSOR_AUTOHIDE; %u ms without movement over the picture)\n",
