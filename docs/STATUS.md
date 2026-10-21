@@ -1,5 +1,17 @@
 # Current Status
 
+## Release 1.1.0 prepared (2026-10-21, branch `task/080-aspect-ratios`, draft release, not merged)
+
+TASK-080 is done: the owner tested slice218 on ultrawide and approved ("funcionou perfeitamente"). Release prep on the
+branch: version 1.1.0 (Cargo workspace, `tauri.conf.json`, NSIS default; release notes
+[1.1.0](release-notes/1.1.0.md)); the launcher's Settings has no Display tab any more (Graphics holds the Display,
+Graphics and Advanced sections; `#/settings/display` falls back to Graphics); the launcher's gt4-gs minimum is 1.1.0 and
+an older install is replaced at launch (`gs_release::needs_install`); `version.json` is brought in line with the
+installed versions at start. Game executable unchanged (slice218, pin `docs/inputs/slice218-pcsx2.json`). Installer
+`private/release-110-out/GT4Recomp-Setup-1.1.0.exe` (sha256 `2ca0f80f8eb28023ffabe2446a30ffcdb6a139a0d96ac101fd6bc56fa7dd19de`) on a draft GitHub release v1.1.0; the coordinator
+merges and publishes. Open follow-ups: P3 progressive menus (with TASK-078); split screen and photo mode in ultrawide
+unverified. README: ultrawide headline, no emojis.
+
 ## TASK-080 ultrawide (2026-10-21, branch `task/080-aspect-ratios`, not merged)
 
 Rebuilt on the 1.0.0 release recipe after merging main db99f9e: slice215 = `--mode pcsx2` on the branch (slice214 plus

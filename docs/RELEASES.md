@@ -10,8 +10,9 @@ Status: launcher TASK-019 / TASK-043, 2026-10-20. Code: `launcher/crates/gt4l-co
 | **gt4-gs** | the PCSX2 GS renderer (`gt4-gs.exe`) | `moesuito/gt4recomp-gs` | `gt4gs-vX.Y.Z` | `gt4-gs-X.Y.Z-windows-x64.zip`, `gt4recomp-gs-X.Y.Z-source.zip`, `SHA256SUMS` |
 
 - Both streams use SemVer `MAJOR.MINOR.PATCH`. Comparison is numeric: `1.10.0` is newer than `1.9.0`.
-- Current versions: GT4Recomp **1.0.0**, gt4-gs **1.0.1** (`gh release view gt4gs-v1.0.1 --repo moesuito/gt4recomp-gs --json assets` lists the real asset names above).
-- The launcher's minimum for gt4-gs is **1.0.1**; for GT4Recomp it is **1.0.0** (`releases.rs`).
+- Current versions: GT4Recomp **1.1.0** (1.0.0 before), gt4-gs **1.1.0** (`gh release view gt4gs-v1.1.0 --repo moesuito/gt4recomp-gs --json assets` lists the real asset names above).
+- The launcher's minimum for gt4-gs is **1.1.0** since GT4Recomp 1.1.0 (it was 1.0.1): the ultrawide fill needs the
+  protocol 1.3 consumer. For GT4Recomp it is **1.0.0** (`releases.rs`).
 - A tag that does not match the stream's format is ignored. A renderer tag in the launcher repository (or the reverse) is never offered.
 
 ## The rule: stable only
@@ -37,6 +38,10 @@ Status: launcher TASK-019 / TASK-043, 2026-10-20. Code: `launcher/crates/gt4l-co
 
 - **On every launch** (background, timeout 6 s, never blocks Play): the launcher reads both release lists. A failure is logged only.
 - **gt4-gs not installed**: the launcher installs the newest stable one (setup does it too). No prompt. If the download fails, the launcher uses CoreGS 1.1 and says so.
+- **gt4-gs below the minimum** (for example 1.0.1 left by GT4Recomp 1.0.0): the launcher installs the newest stable one at
+  launch, the same path as a missing renderer (`gs_release::needs_install`), and records it in `version.json`. If that
+  fails (offline), the old version stays in use (the game sends protocol 1.3 messages only to a 1.3 consumer, so there
+  is no ultrawide fill) and the next launch tries again.
 - **An update exists** (newer stable, not skipped): the popup shows the current and new version and the notes. Buttons: **Update**, **Not now**, **Skip this version** (remembered in `settings.toml` under `[updates]`, for exactly that version).
 - **Updates are never automatic.** The launcher installs only when the player presses Update.
 - **gt4-gs update**: only while the game is not running. The new version goes into its own folder (`%LOCALAPPDATA%\GT4Recomp\gs\<version>\`), `current.txt` switches to it, the previous folder is kept for rollback, and `version.json` records the version.
@@ -51,14 +56,17 @@ Status: launcher TASK-019 / TASK-043, 2026-10-20. Code: `launcher/crates/gt4l-co
 ```json
 {
   "schema": 1,
-  "gt4recomp": "1.0.0",
-  "gt4gs": "1.0.1",
+  "gt4recomp": "1.1.0",
+  "gt4gs": "1.1.0",
   "settings_schema": 1
 }
 ```
 
 - `gt4recomp` is the GT4Recomp version. The launcher's own Cargo version is authoritative when the file disagrees (a warning goes to the log).
 - `gt4gs` is `null` until the renderer is installed.
+- The installer writes `gt4gs: null` on every install and upgrade. At each start the launcher rewrites a file that
+  disagrees with what is installed: `gt4recomp` becomes the Cargo version and `gt4gs` the checked gt4-gs install
+  (`versions::reconciled`; a damaged gt4-gs folder leaves the recorded value).
 - `settings_schema` is the schema of `settings.toml` that this launcher writes.
 - A damaged or newer `version.json` is not rewritten; a damaged one is kept as `version.json.bad` and replaced with a fresh one.
 
@@ -66,7 +74,8 @@ Status: launcher TASK-019 / TASK-043, 2026-10-20. Code: `launcher/crates/gt4l-co
 
 1. Bump the version in `launcher/Cargo.toml` (workspace), `launcher/crates/gt4l-tauri/tauri.conf.json` and the installer define in the release command.
 2. **Game executable, release build** (TASK-081): a fresh `private/sliceNNN-*` build with `-DGT4_RELEASE_DISTRIBUTION=ON`
-   (no build-time shader folder in the executable; slice214 is the 1.0.0 recipe, `private/slice214-scripts/build-game-214.bat`).
+   (no build-time shader folder in the executable; slice214 is the 1.0.0 recipe, `private/slice214-scripts/build-game-214.bat`;
+   slice218 is the 1.1.0 game, the same recipe plus the TASK-080 work, `docs/inputs/slice218-pcsx2.json`).
    CTest, the Python suite with `GT4_NATIVE_BUILD` on it, the headless frame comparison, a new `docs/inputs/sliceNNN-pcsx2.json`
    pin, then the distribution folder: `python scripts\make_distribution.py private\sliceNNN-dist --assets-root <main checkout>
    --exe <build>\gt4vulkan.exe --runtime-manifest docs\inputs\sliceNNN-pcsx2.json`. Scan the executable's ASCII and UTF-16
@@ -118,7 +127,8 @@ The launcher checks the PC before setup and before Play (`gt4l_core::system_chec
 - The update decision: newer stable, same version, prerelease, skipped version, first install, minimum (`update.rs`).
 - `version.json` round trip, the installer form, the unwritable-folder fallback and the Cargo version rule (`versions.rs`).
 - The data-path guard: installs and updates never write to saves, cards, library, replays or the runtime card folder, nor to card or save file types (`guard.rs`).
-- The gt4-gs install against a fake folder source: verified install, corrupt download refused, prereleases ignored, upgrade keeps one previous version (`tests/gs_release.rs`).
+- The gt4-gs install against a fake folder source: verified install, corrupt download refused, prereleases ignored, upgrade keeps one previous version, an installed 1.0.1 below the 1.1.0 minimum replaced by 1.1.0 (and kept when the update fails) (`tests/gs_release.rs`).
+- `version.json` brought in line after an upgrade (`versions.rs`).
 - Migrations: the chain, backups, newer and corrupt files (`migrate.rs`, `tests/config_migration.rs`).
 - The tray state machine (`gt4l-tauri/src/tray.rs`).
 

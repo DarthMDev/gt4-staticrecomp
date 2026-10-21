@@ -374,8 +374,9 @@ body.input-pad .info:focus .tip { display: block; }
 .val { font: 500 13px var(--label); letter-spacing: 0.06em; color: var(--dim); min-width: 52px; text-align: right; }
 
 .advanced-foot { margin-top: 28px; display: flex; gap: 12px; align-items: center; }
-/* Graphics: the Advanced section below the Graphics rows (a section of the tab, not a tab of its own) */
+/* Graphics: the Display, Graphics and Advanced sections of the tab (owner, 2026-10-21; no Display or Advanced tab) */
 .settings-section { margin-top: 36px; }
+.content > .note + .settings-section { margin-top: 20px; }
 .section-head { font: 500 12px var(--label); letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim);
   padding-bottom: 10px; border-bottom: 1px solid var(--hair); }
 .about-notice { max-width: 720px; color: var(--silver); font-size: 13px; line-height: 20px; margin-bottom: 8px; }

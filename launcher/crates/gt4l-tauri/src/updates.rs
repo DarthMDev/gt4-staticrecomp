@@ -155,8 +155,10 @@ pub fn emit_progress(app: &AppHandle, step: &str) {
     let _ = app.emit("renderer-progress", json!({ "step": step }));
 }
 
-/// Makes sure `version.json` exists and is readable. A damaged file is replaced by a fresh one (the damaged copy is
-/// kept as `version.json.bad`). The launcher version stays the Cargo version.
+/// Makes sure `version.json` exists, is readable and names what is installed. A damaged file is replaced by a fresh
+/// one (the damaged copy is kept as `version.json.bad`). The launcher version stays the Cargo version; a file that
+/// disagrees (after an upgrade the installer writes a null renderer) is rewritten with the Cargo version and the checked
+/// gt4-gs install (`versions::reconciled`).
 pub fn ensure_version_file(dirs: &DataDirs) {
     let location = version_location(dirs);
     match versions::read(&location.path) {
@@ -164,6 +166,12 @@ pub fn ensure_version_file(dirs: &DataDirs) {
             let (_, warning) = versions::reconcile_launcher_version(Some(&file), LAUNCHER_VERSION);
             if let Some(warning) = warning {
                 state::log(dirs, &warning);
+            }
+            let renderer = gs_release::installed(&renderer_root(dirs)).map(|installed| installed.version);
+            if let Some(next) = versions::reconciled(&file, LAUNCHER_VERSION, renderer) {
+                if let Err(message) = versions::write(&location.path, location.path.parent().unwrap_or(dirs.root()), &next) {
+                    state::log(dirs, &format!("version.json not updated: {message}"));
+                }
             }
         }
         Ok(None) => {
@@ -181,7 +189,8 @@ pub fn ensure_version_file(dirs: &DataDirs) {
     }
 }
 
-/// The background work at every launch: version file, the first renderer install when none exists, and the update
+/// The background work at every launch: version file, the renderer install when none exists or the installed one is
+/// below the minimum (gt4-gs 1.0.1 under launcher 1.1.0 is replaced by the newest stable release), and the update
 /// check. Failures are logged only. Emits `update-available` when there is something to offer.
 pub fn check_on_launch(app: AppHandle, shared: Shared) {
     let (dirs, config, set_up) = {
@@ -190,8 +199,8 @@ pub fn check_on_launch(app: AppHandle, shared: Shared) {
     };
     ensure_version_file(&dirs);
     // Before the first setup the renderer is installed by setup itself, with its progress on the setup page. Here it
-    // is only the retry after a setup that was offline.
-    if set_up && gs_release::installed(&renderer_root(&dirs)).is_none() {
+    // is the retry after a setup that was offline, or the update of a version below the minimum.
+    if set_up && gs_release::needs_install(&renderer_root(&dirs)) {
         let progress_app = app.clone();
         match install_renderer(&dirs, &mut |step| emit_step(&progress_app, step)) {
             Ok(_) => emit_progress(&app, "done"),

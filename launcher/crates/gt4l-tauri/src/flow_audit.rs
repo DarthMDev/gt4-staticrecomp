@@ -228,7 +228,11 @@ fn synthetic_flow_end_to_end() {
     assert_eq!(info.name, "Gran Turismo 4 \u{b7} USA \u{b7} v2.00");
     let recorder = Recorder::default();
     let seen = run_setup(&shared, &recorder, fake_renderer());
-    assert!(seen.iter().all(|label| label.starts_with("\"checking\"")), "the page shows setup until it ends: {seen:?}");
+    // The poll can catch the final state ("done") between the last state write and the thread's exit (it still sends
+    // setup-finished), so only the last label may be the final one.
+    let (last, before) = seen.split_last().expect("at least one label");
+    assert!(before.iter().all(|label| label.starts_with("\"checking\"")), "the page shows setup until it ends: {seen:?}");
+    assert!(last.starts_with("\"checking\"") || last.starts_with("\"done\""), "the page shows setup until it ends: {seen:?}");
     let view = screen(&shared);
     assert_eq!(view["setup"]["state"], "done", "{view}");
     assert_eq!(view["setup"]["note"], "");

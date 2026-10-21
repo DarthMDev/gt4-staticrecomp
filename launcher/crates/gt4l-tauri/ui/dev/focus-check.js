@@ -4,17 +4,20 @@
  * page and body[data-focus-check] is "pass" or "fail".
  *
  *   (no query)          the sidebar walk over every tab, Saves and Replays entry, B back, value changes, the
- *                       Advanced section inside Graphics (no Advanced tab; the D-pad reaches its rows), and the
+ *                       Display, Graphics and Advanced sections inside Graphics (no Display or Advanced tab; the
+ *                       D-pad walks through all three), and the
  *                       Controls page (entry on the DS2, spatial moves, rebind and cancel, conflict and swap, live
  *                       input from a still dev pad, Y reset, X reset all)
  *   ?scenario=4k        only sets the state for docs/launcher/shots/graphics-4k-updated.png (4K chosen, row shown)
  *   ?scenario=advanced  only sets the state for docs/launcher/shots/graphics-advanced-section.png (pad focus on the
  *                       first Advanced row inside Graphics)
+ *   ?scenario=render    only sets the state for docs/launcher/shots/graphics-sections.png (pad focus on Render scale,
+ *                       the Graphics section in view)
  */
 (function (root) {
   "use strict";
   var GT4 = root.GT4;
-  var TABS = ["graphics", "display", "controls", "saves", "replays", "about"];
+  var TABS = ["graphics", "controls", "saves", "replays", "about"];
   var lines = [];
   var failures = 0;
 
@@ -172,10 +175,11 @@
       await wait(300);
     }
 
-    await setHash("#/settings/display");
-    var select = document.querySelector("button.select[data-setting=\"resolution\"]");
-    check("resolution is on the Display tab", !!select, "no control");
-    check("monitor is on the Display tab", !!document.querySelector("button.select[data-setting=\"monitor\"]"), "no control");
+    await setHash("#/settings/graphics");
+    var select = document.querySelector("[data-section=\"display\"] button.select[data-setting=\"resolution\"]");
+    check("resolution is in the Display section of Graphics", !!select, "no control");
+    check("monitor is in the Display section of Graphics",
+      !!document.querySelector("[data-section=\"display\"] button.select[data-setting=\"monitor\"]"), "no control");
     if (!select) {
       return;
     }
@@ -238,36 +242,65 @@
 
   async function advancedSectionChecks() {
     check("the tab list has no Advanced tab", !sideButton("advanced"), "an Advanced tab is shown");
+    check("the tab list has no Display tab", !sideButton("display"), "a Display tab is shown");
     await setHash("#/settings/advanced");
     check("#/settings/advanced falls back to Graphics", shownTab() === "graphics", "shown " + shownTab());
+    await setHash("#/settings/display");
+    check("#/settings/display falls back to Graphics", shownTab() === "graphics", "shown " + shownTab());
     await setHash("#/settings/graphics");
-    var head = document.querySelector(".content .section-head");
-    check("Graphics shows an Advanced section heading", !!head && head.textContent === "Advanced", head ? head.textContent : "none");
-    var firstAdvanced = document.querySelector(".content .settings-section [data-setting]");
+    var heads = Array.prototype.map.call(document.querySelectorAll(".content .section-head"), function (item) {
+      return item.textContent;
+    }).join("|");
+    check("Graphics shows the Display, Graphics and Advanced sections in order", heads === "Display|Graphics|Advanced", heads);
+    var displayIds = Array.prototype.map.call(document.querySelectorAll("[data-section=\"display\"] .row"), function (item) {
+      return item.getAttribute("data-row");
+    }).join("|");
+    check("the Display section holds Monitor, Resolution, Fullscreen and VSync", displayIds === "monitor|resolution|fullscreen|vsync", displayIds);
+    var graphicsSection = document.querySelector("[data-section=\"graphics\"]");
+    var inGraphics = !!graphicsSection && ["renderer", "render_scale", "fxaa"].every(function (id) {
+      return !!graphicsSection.querySelector("[data-row=\"" + id + "\"]");
+    });
+    check("the Graphics section holds Renderer, Render scale and FXAA", inGraphics, "missing rows");
+    var looseRows = document.querySelectorAll(".content > .row").length;
+    check("every Graphics row sits in a section", looseRows === 0, looseRows + " loose rows");
+    var firstAdvanced = document.querySelector("[data-section=\"advanced\"] [data-setting]");
     var firstId = firstAdvanced ? firstAdvanced.getAttribute("data-setting") : null;
     check("the Advanced section holds the advanced rows", firstId === "async_gs", "first " + firstId);
     press("ArrowRight");
     await wait(200);
+    // Without a remembered row, A enters on the first control of the tab (settings.js focusRow): Monitor, at the top of
+    // Display. Earlier checks left a remembered row, so the walk starts from Monitor explicitly.
+    var firstControl = document.querySelector(".content .ctl [data-setting]");
+    var firstControlId = firstControl ? firstControl.getAttribute("data-setting") : null;
+    check("the first control of Graphics is Monitor, at the top of Display", firstControlId === "monitor", "first " + firstControlId);
+    if (firstControl) {
+      firstControl.focus({ preventScroll: true });
+    }
     var reached = false;
     var reset = false;
+    var passedGraphics = false;
     var walk = [];
-    for (var i = 0; i < 30 && !reset; i++) {
+    for (var i = 0; i < 60 && !reset; i++) {
       press("ArrowDown");
       await wait(80);
       var id = focusedSetting();
       walk.push(id || (document.activeElement ? document.activeElement.className : "none"));
       var active = document.activeElement;
-      if (active && active.closest && active.closest(".settings-section .row")) {
+      if (active && active.closest && active.closest("[data-section=\"graphics\"] .row")) {
+        passedGraphics = true; // a control or the "i" button of a Graphics row
+      }
+      if (active && active.closest && active.closest("[data-section=\"advanced\"] .row")) {
         reached = true; // a control or the "i" button of an Advanced row
       }
       if (id === "reset-defaults") {
         reset = true;
       }
     }
+    check("D-pad down from the Display rows passes through the Graphics rows", passedGraphics, "walk " + walk.join(" > "));
     check("D-pad down from the Graphics rows reaches the Advanced rows", reached, "walk " + walk.join(" > "));
     check("D-pad down reaches Reset to defaults at the end of the section", reset, "focus " + focusedSetting());
     check("the Graphics content footer offers Y Reset", /Reset/.test(footerText()), footerText());
-    var inSection = document.querySelector(".content .settings-section [data-setting=\"perf_overlay\"]");
+    var inSection = document.querySelector("[data-section=\"advanced\"] [data-setting=\"perf_overlay\"]");
     check("our performance overlay row is in the Advanced section", !!inSection, "no perf_overlay row");
     var osd = document.querySelector(".content [data-setting=\"osd_fps\"], .content [data-setting=\"aspect\"], " +
       ".content [data-setting=\"input_resolution\"], .content [data-setting=\"widescreen\"], " +
@@ -285,10 +318,25 @@
     await setHash("#/settings/graphics");
     press("ArrowRight");
     await wait(200);
-    var first = document.querySelector(".content .settings-section [data-setting]");
+    var first = document.querySelector("[data-section=\"advanced\"] [data-setting]");
     if (first) {
       first.focus();
       first.scrollIntoView({ block: "center" });
+    }
+    await wait(300);
+  }
+
+  // The screenshot state of docs/launcher/shots/graphics-sections.png: pad focus on Render scale, centred, so the end
+  // of the Display section, the Graphics section and the start of Advanced are in view.
+  async function scenarioRender() {
+    GT4.nav.setMode("pad");
+    await setHash("#/settings/graphics");
+    press("ArrowRight");
+    await wait(200);
+    var scale = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+    if (scale) {
+      scale.focus();
+      scale.scrollIntoView({ block: "center" });
     }
     await wait(300);
   }
@@ -467,6 +515,10 @@
       }
       if (scenario === "advanced") {
         await scenarioAdvanced();
+        return;
+      }
+      if (scenario === "render") {
+        await scenarioRender();
         return;
       }
       await routeChecks();

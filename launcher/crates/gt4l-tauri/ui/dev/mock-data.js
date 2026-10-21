@@ -196,12 +196,12 @@
 
   // Demo offers for the update popup (?update=1). Notes are sample text, not a real release.
   var DEMO_OFFERS = [
-    { stream: "renderer", installed: "1.0.1", latest: "1.0.2", update: true,
-      package: "gt4-gs-1.0.2-windows-x64.zip",
-      notes: "## gt4-gs 1.0.2\n\n- **Faster** present on VSync Off.\n- Fixes a crash on exit when the game ends first.\n- Sample text for the launcher preview."},
-    { stream: "launcher", installed: "1.0.0", latest: "1.0.1", update: true,
-      package: "GT4Recomp-Setup-1.0.1.exe",
-      notes: "GT4Recomp 1.0.1\n\n* Tray: the launcher comes back when the game ends.\n* Sample text for the launcher preview." }
+    { stream: "renderer", installed: "1.1.0", latest: "1.1.1", update: true,
+      package: "gt4-gs-1.1.1-windows-x64.zip",
+      notes: "## gt4-gs 1.1.1\n\n- **Faster** present on VSync Off.\n- Fixes a crash on exit when the game ends first.\n- Sample text for the launcher preview."},
+    { stream: "launcher", installed: "1.1.0", latest: "1.1.1", update: true,
+      package: "GT4Recomp-Setup-1.1.1.exe",
+      notes: "GT4Recomp 1.1.1\n\n* Tray: the launcher comes back when the game ends.\n* Sample text for the launcher preview." }
   ];
   // Controls: the built-in mapping of docs/CONTROLS.md, with the same assign/swap rules as gt4controls (Rust).
   var CONTROL_ORDER = ["dpad_up", "dpad_right", "dpad_down", "dpad_left", "cross", "circle", "square", "triangle",
@@ -474,9 +474,9 @@
         return { items: JSON.parse(JSON.stringify(replays)) };
       case "about_info":
         return {
-          version: "1.0.0",
-          gt4recomp: "1.0.0",
-          gt4gs: "1.0.1",
+          version: "1.1.0",
+          gt4recomp: "1.1.0",
+          gt4gs: "1.1.0",
           disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso",
           game_files: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp\\disc",
           data_folder: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp",
@@ -493,12 +493,12 @@
         if (query.get("update") === "1") {
           return {
             offers: DEMO_OFFERS.map(function (offer) { return JSON.parse(JSON.stringify(offer)); }),
-            errors: [], upToDate: false, launcher: "1.0.0", renderer: "1.0.1"
+            errors: [], upToDate: false, launcher: "1.1.0", renderer: "1.1.0"
           };
         }
-        return { offers: [], errors: [], upToDate: true, launcher: "1.0.0", renderer: "1.0.1" };
+        return { offers: [], errors: [], upToDate: true, launcher: "1.1.0", renderer: "1.1.0" };
       case "apply_update":
-        return { ok: true, message: args.stream === "launcher" ? "GT4Recomp setup started." : "gt4-gs 1.0.2 is ready." };
+        return { ok: true, message: args.stream === "launcher" ? "GT4Recomp setup started." : "gt4-gs 1.1.1 is ready." };
       case "skip_update":
       case "confirm_close":
         return null;

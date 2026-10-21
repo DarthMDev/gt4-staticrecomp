@@ -27,7 +27,7 @@ GT4Recomp.exe start
       +-- setup.state == done --> #/home (slideshow, logo, Play, gear)
              Play -> prepare_play -> game::start -> tray hides the window
              game ends -> card harvested -> window back on Home with any message
-             Settings: Graphics, Advanced, Display, Controls, Saves, Replays, About
+             Settings: Graphics (Display, Graphics, Advanced sections), Controls, Saves, Replays, About
 ```
 
 ### Screens, commands and events
@@ -37,7 +37,7 @@ GT4Recomp.exe start
 | Boot (`app.js`) | `app_state` | `update-available`, `close-confirm`, `update-finished`, `renderer-progress` (toasts outside setup), `game-state` |
 | Setup | `app_state` (polled every 400 ms), `setup_choose_disc`, `setup_start`, `setup_cancel` (Finish runs no command) | (polls; `setup-progress`, `setup-finished` and `renderer-progress` are also emitted) |
 | Home | `app_state` (game_running), `about_info` (version label), `play`, `stop_game` | `game-state` |
-| Settings: Graphics, Advanced, Display | `get_settings_table`, `set_setting`, `reset_gs_settings_to_defaults` | |
+| Settings: Graphics (Display, Graphics, Advanced sections) | `get_settings_table`, `set_setting`, `reset_gs_settings_to_defaults` | |
 | Settings: Controls | `get_controls`, `capture_binding`, `cancel_capture`, `reset_binding`, `set_setting` (triggers) | `gamepad` (optional) |
 | Settings: Saves, Replays | `saves_list`, `saves_import`, `saves_activate`, `saves_delete`, `replays_list`, `replays_import`, `replays_delete` | |
 | Settings: About | `about_info`, `check_updates`, `open_game_files_folder`, `open_log_folder` | |
@@ -368,6 +368,7 @@ Screenshots (headless Edge, `--force-prefers-reduced-motion`, 1280 x 720, dev mo
 - `docs/launcher/shots/pad-sidebar-on-saves.png`: highlight on Saves, focus still in the tab list.
 - `docs/launcher/shots/pad-saves-entered.png`: after A, the first save is focused.
 - `docs/launcher/shots/graphics-4k-updated.png`: regenerated 2026-10-21 (TASK-080 addendum): Render scale at 200%, the readout shows the resulting internal resolution (there is no Internal resolution row any more).
+- `docs/launcher/shots/graphics-sections.png`, `display-monitor-resolution.png`, `graphics-advanced-section.png`: regenerated 2026-10-21 (release 1.1.0): the Graphics tab with its Display, Graphics and Advanced sections; there is no Display tab.
 
 Build: `cargo tauri build --no-bundle` (no Cargo.toml change). Owner test copy replaced:
 `private/owner-test-launcher/GT4Recomp.exe`, SHA-256 `53a0ad0b36eeedcae865efe78c278bd867d3278e013f17a2df3b74c9c86450bd`

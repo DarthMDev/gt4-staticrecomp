@@ -105,7 +105,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Open, study done (docs/CONTEXT-INPUT-STUDY.md); not in 1.0.0 |
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
 | TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
-| TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
+| TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | ✅ Done 2026-10-21 (P0, P1, P2 and the seamless-display addendum, owner approved; release 1.1.0) · P3 progressive menus open with TASK-078 |
 | TASK‑081 | Release 1.0.0 hardening and installer: release game build without build paths (slice213), launcher without user paths, CPU (SSE4.1) and Vulkan checks before setup and Play, game Vulkan baseline path for older drivers (slice214), WebView2 bootstrapper in the installer, installer asset name `GT4Recomp-Setup-X.Y.Z.exe`, release notes and draft release | ✅ Done (2026-10-21) · owner tested and approved the installer; released as v1.0.0 |
 | TASK‑082 | Native variable frame rate: fixed 60 Hz simulation, render at any rate (render skip below 60, extra render-only passes above 60 with the game's own render time t) | 📋 Planned (after 1.0.0) · study done (docs/NATIVE-VARIABLE-FPS-STUDY.md) |
 | TASK‑083 | Faster loading and saves: instant disc reads (deeper than PCSX2 Fast CDVD) and loading/save speed-ups in our runtime and game code; gameplay untouched | 📋 Future study (owner, 2026-10-21) |
@@ -368,6 +368,16 @@ nav-test 150/150, focus-check 100/100; headless 1920x1080 menus 42/42 and race 1
 3440x1440 hook scaled, HUD widened, fill from VBlank 7670. Pin `docs/inputs/slice218-pcsx2.json` (`--mode pcsx2`;
 `pcsx2-slice217` history). New owner installer (sha256 9b039d61...) and portable folder `private/ultrawide-test-portable`.
 Open: owner tests on the 1080p remote screen and the 3440x1440 setup; then approval, PR and the 1.1.0 release.
+State (2026-10-21, ✅ done, release 1.1.0): the owner tested slice218 on ultrawide and approved ("funcionou
+perfeitamente"). Done: P0 (decision 0071), P1 (3D Hor+/Vert+, race view fill, protocol 1.3), P2 (race HUD centred 16:9)
+and the seamless-display addendum (Monitor, Resolution, automatic internal resolution, Render scale 50-200%). Release
+prep on the branch: the launcher's Settings has no Display tab any more (Graphics holds Display, Graphics and Advanced
+sections; `#/settings/display` falls back to Graphics); version 1.1.0 (Cargo workspace, tauri.conf.json, NSIS default,
+release notes `docs/release-notes/1.1.0.md`); the launcher's gt4-gs minimum is 1.1.0 and an older install is replaced at
+launch (`gs_release::needs_install`, test with an installed 1.0.1); `version.json` is brought in line with the installed
+versions at start. The game executable is unchanged (slice218, `docs/inputs/slice218-pcsx2.json`). Draft GitHub
+release v1.1.0 with `GT4Recomp-Setup-1.1.0.exe`. Follow-ups: P3 progressive menus (with TASK-078) stays open; split
+screen and photo mode in ultrawide are unverified; P4 (optional true-FOV mode) not started.
 
 ### TASK-081 — Release 1.0.0 hardening and installer
 Release audit 2026-10-21. Branch `task/081-release-1-0-0` (from main 26f83b8). Not PCSX2-tainted.

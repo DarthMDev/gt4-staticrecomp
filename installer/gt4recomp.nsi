@@ -1,8 +1,8 @@
 ; GT4Recomp per-user installer (no administrator rights).
 ; Build (from the repository root, after the launcher and the game are built):
-;   makensis /DVERSION=1.0.0 /DLAUNCHER_EXE=<path>\GT4Recomp.exe /DGAME_DIR=<path>\game ^
+;   makensis /DVERSION=1.1.0 /DLAUNCHER_EXE=<path>\GT4Recomp.exe /DGAME_DIR=<path>\game ^
 ;            /DSDL3_DLL=<path>\SDL3.dll /DWEBVIEW2_BOOTSTRAPPER=<path>\MicrosoftEdgeWebview2Setup.exe ^
-;            /DOUTFILE=<path>\GT4Recomp-Setup-1.0.0.exe installer\gt4recomp.nsi
+;            /DOUTFILE=<path>\GT4Recomp-Setup-1.1.0.exe installer\gt4recomp.nsi
 ; The default output name GT4Recomp-Setup-<VERSION>.exe is the asset name the launcher's updater looks for
 ; (launcher\crates\gt4l-core\src\releases.rs, docs/RELEASES.md).
 ; WEBVIEW2_BOOTSTRAPPER is Microsoft's Evergreen bootstrapper (https://go.microsoft.com/fwlink/p/?LinkId=2124703),
@@ -16,7 +16,7 @@
 ; %LOCALAPPDATA%\GT4Recomp and are kept by the uninstaller unless the user ticks the box on the uninstall page.
 
 !ifndef VERSION
-  !define VERSION "1.0.0"
+  !define VERSION "1.1.0"
 !endif
 !ifndef LAUNCHER_EXE
   !error "Define LAUNCHER_EXE=<path to GT4Recomp.exe>"

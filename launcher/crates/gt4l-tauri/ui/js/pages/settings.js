@@ -5,7 +5,7 @@
  *
  * Table shape (returned by get_settings_table as {max_upscale, rows}):
  *   row = {id, label, help, page: "basic"|"advanced"|"mods"|"hidden",
- *          group?: "graphics"|"display", control: "slider"|"toggle"|"dropdown",
+ *          group?: "graphics"|"display" (the Display or Graphics section of the Graphics tab), control: "slider"|"toggle"|"dropdown",
  *          values, default, current, disabled?, visible_when?: {id, equals}}
  *   slider values   = {min, max, step, unit?, limit?: "max_upscale", scale?: shown value = stored / scale,
  *                      labels?: {value: readout} (TASK-080 Render scale: "100% · 4x · 2560x1792")}
@@ -19,7 +19,6 @@
 
   var TABS = [
     { id: "graphics", label: "Graphics" },
-    { id: "display", label: "Display" },
     { id: "controls", label: "Controls" },
     { id: "saves", label: "Saves" },
     { id: "replays", label: "Replays" },
@@ -380,10 +379,11 @@
   GT4.settingsTab = settingsTab;
   GT4.settingsRows = { rowNode: rowNode };
 
-  // Graphics: page=basic rows in the graphics group, then the Advanced section (page=advanced rows and the
-  // reset-to-defaults action, Y on the pad). Advanced is a section of this tab, not a tab of its own (owner,
-  // 2026-10-21): the D-pad moves down from the last Graphics row into the Advanced rows, and B returns to the tab
-  // list from anywhere in the tab.
+  // Graphics: three sections in one tab (owner, 2026-10-21; there is no Display tab any more):
+  //   Display   page=basic rows in the display group (Monitor, Resolution, Fullscreen, VSync);
+  //   Graphics  page=basic rows in the graphics group (Renderer, Render scale, FXAA, CAS);
+  //   Advanced  page=advanced rows and the reset-to-defaults action (Y on the pad).
+  // The D-pad moves down through all three sections, and B returns to the tab list from anywhere in the tab.
   GT4.tabPages.graphics = function (content, host) {
     function resetDefaults(ctx) {
       GT4.ui.openDialog({
@@ -408,43 +408,55 @@
         ]
       });
     }
+
+    // One titled section; a section whose rows are all hidden is left out (except Advanced, which holds the reset).
+    function section(ctx, id, title, rows, always) {
+      var visible = rows.filter(function (row) {
+        return rowVisible(ctx.table, row);
+      });
+      if (!visible.length && !always) {
+        return null;
+      }
+      var node = h("section", { class: "settings-section", "aria-labelledby": "section-" + id, data: { section: id } }, [
+        h("h2", { class: "section-head", id: "section-" + id, text: title })
+      ]);
+      renderRows(ctx, visible, node);
+      content.appendChild(node);
+      return node;
+    }
+
     return settingsTab(content, host, {
       title: "Graphics",
-      filter: function (row) {
-        return row.page === "basic" && (row.group || "graphics") === "graphics";
+      // All rows are drawn by the sections below.
+      filter: function () {
+        return false;
       },
       extra: function (ctx) {
-        var advanced = ctx.table.rows.filter(function (row) {
-          return row.page === "advanced";
+        var basic = ctx.table.rows.filter(function (row) {
+          return row.page === "basic";
         });
-        var section = h("section", { class: "settings-section", "aria-labelledby": "section-advanced" }, [
-          h("h2", { class: "section-head", id: "section-advanced", text: "Advanced" })
-        ]);
-        renderRows(ctx, advanced, section);
+        section(ctx, "display", "Display", basic.filter(function (row) {
+          return row.group === "display";
+        }));
+        section(ctx, "graphics", "Graphics", basic.filter(function (row) {
+          return (row.group || "graphics") === "graphics";
+        }));
+        var advanced = section(ctx, "advanced", "Advanced", ctx.table.rows.filter(function (row) {
+          return row.page === "advanced";
+        }), true);
         var button = h("button", {
           class: "btn danger",
           type: "button",
           data: { action: "reset-defaults" },
           on: { click: function () { resetDefaults(ctx); } }
         }, "Reset to defaults");
-        section.appendChild(h("div", { class: "advanced-foot" }, [button]));
-        content.appendChild(section);
+        advanced.appendChild(h("div", { class: "advanced-foot" }, [button]));
       },
       hooks: function (ctx, tabHost) {
         tabHost.setHooks({ y: function () { resetDefaults(ctx); } });
         tabHost.hints([
           { key: "Y", label: "Reset", run: function () { resetDefaults(ctx); } }
         ]);
-      }
-    });
-  };
-
-  // Display: page=basic rows in the display group.
-  GT4.tabPages.display = function (content, host) {
-    return settingsTab(content, host, {
-      title: "Display",
-      filter: function (row) {
-        return row.page === "basic" && row.group === "display";
       }
     });
   };
@@ -560,6 +572,10 @@
         return tab.id;
       });
       var requested = params.tab || "graphics";
+      // Retired tabs live on as sections of Graphics (Display and Advanced, owner 2026-10-21).
+      if (requested === "display" || requested === "advanced") {
+        requested = "graphics";
+      }
       if (tabIds.indexOf(requested) < 0) {
         // Unknown or hidden tab (for example #/settings/mods in this build): fall back.
         requested = tabIds[0];

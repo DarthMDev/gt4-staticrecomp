@@ -9,7 +9,8 @@ No JIT, no emulator window, full speed.
 ![No JIT](https://img.shields.io/badge/guest%20JIT-none-2ea44f?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows%20x64-Vulkan-1f6feb?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/license-MIT-1f6feb?style=for-the-badge)
-![Release](https://img.shields.io/badge/release-1.0.0-2ea44f?style=for-the-badge)
+![Release](https://img.shields.io/badge/release-1.1.0-2ea44f?style=for-the-badge)
+![Ultrawide](https://img.shields.io/badge/ultrawide-any%20aspect%20ratio-2ea44f?style=for-the-badge)
 
 ![EE](https://img.shields.io/badge/EE%20(main%20CPU)-100%25%20AOT-2ea44f)
 ![VU0 macro](https://img.shields.io/badge/VU0%20macro-100%25%20AOT-2ea44f)
@@ -37,21 +38,24 @@ The game's own code is translated ahead of time into C++ and compiled to native 
 hardware it talks to is reproduced in software, and graphics run on **Vulkan**. Nothing generates code
 while the game runs, which is also what makes future **Android and iOS** builds possible.
 
-## ✨ Highlights
+## Highlights
 
-- 🏁 **Locked 60 FPS at 100% game speed** in every scene we test, with a frame every **16.7 ms**.
-- ⚙️ **All game code is precompiled:** the main CPU (EE) and every VU1 and VU0 microprogram run as native
+- **Locked 60 FPS at 100% game speed** in every scene we test, with a frame every **16.7 ms**.
+- **All game code is precompiled:** the main CPU (EE) and every VU1 and VU0 microprogram run as native
   code, with no interpreter on the normal path.
-- 🖥️ **Sharp, high-resolution image:** **1080p** out of the box, with **1440p, 4K and 8K** available. The game
-  is rendered at that resolution, not just stretched, in **16:9** with borderless fullscreen.
-- 🎨 **PCSX2 GS renderer** in its own process: crisp deinterlaced menus, FXAA and sharpening, and a built-in
+- **Sharp, high-resolution image:** **1080p** out of the box, with **1440p, 4K and 8K** available. The game
+  is rendered at that resolution, not just stretched, with borderless fullscreen.
+- **Native ultrawide and any aspect ratio (1.1.0):** 21:9, 32:9, 16:10 or a phone shape, automatic from the output
+  resolution. The 3D view widens Hor+/Vert+, the HUD stays centred 16:9 and menus are pillarboxed; the internal
+  resolution follows automatically, with a Render scale of 50-200%.
+- **PCSX2 GS renderer** in its own process: crisp deinterlaced menus, FXAA and sharpening, and a built-in
   performance overlay. **CoreGS 1.1** is built in as the fallback.
-- 💾 **Crash-safe memory card:** saves survive a crash or a forced close.
-- 🚀 **Release 1.0.0:** a one-click **installer** and a **launcher** that sets the game up from your own disc
+- **Crash-safe memory card:** saves survive a crash or a forced close.
+- **Release 1.1.0:** a one-click **installer** and a **launcher** that sets the game up from your own disc
   image, with settings, saves, controller remapping and update checks.
-- 🎮 **Any controller through SDL3** (Xbox, DualShock 4, DualSense, Switch Pro...) and a modern keyboard layout.
+- **Any controller through SDL3** (Xbox, DualShock 4, DualSense, Switch Pro...) and a modern keyboard layout.
 
-## 📊 Performance
+## Performance
 
 Every tested scene holds **60 FPS at 100% game speed** on the PCSX2 GS renderer
 (Ryzen 7 5700X + Radeon RX 9060 XT):
@@ -68,16 +72,17 @@ Every tested scene holds **60 FPS at 100% game speed** on the PCSX2 GS renderer
 ahead of time, submitting GPU work asynchronously and pacing every frame from a single clock brought it
 to a steady **60 FPS at full speed**.
 
-## 🐞 Known issues
+## Known issues
 
 - **Some license demos and menu backgrounds do not play**; every license test is playable. This matches
   PCSX2 with default settings ([why](docs/LICENSE-DEMO-CIPHER.md)).
 - Racing wheels are not supported yet, and long sessions are not fully qualified.
-- Ultrawide and other screen ratios are not supported yet: the game shows 16:9 (planned after 1.0.0).
+- Menus, movies and photo mode stay 16:9 (pillarboxed) at other aspect ratios; split screen and photo mode in
+  ultrawide have had little testing.
 - The installer is not code-signed: Windows SmartScreen may warn on the first start ("More info", "Run anyway").
 - Most testing was on an AMD GPU; NVIDIA and Intel GPUs have had less testing.
 
-## 🗺️ Roadmap
+## Roadmap
 
 | Phase | Platform | Renderer |
 |---|---|---|
@@ -87,7 +92,7 @@ to a steady **60 FPS at full speed**.
 
 Every piece of work is a numbered task in [TASKS.md](TASKS.md), tested in game before it is merged.
 
-## 🔧 How it works
+## How it works
 
 The EE game code is translated ahead of time into C++ and compiled for x86-64. The VU1 microcode, stored
 encrypted inside the executable, is recovered and compiled offline (all 2,048 entry points), verified
@@ -96,7 +101,7 @@ IOP system services are native. Frames are paced by one high-resolution clock wi
 This is a **hybrid recompilation**: PS2 hardware is still modeled in software, so we do not claim zero
 emulation or full PS2 fidelity. Details: [Architecture](docs/ARCHITECTURE.md).
 
-## 💻 Requirements
+## Requirements
 
 - **Windows 10 or 11, 64-bit.**
 - **A processor with SSE4.1** (Intel Core i3/i5/i7 / AMD FX or newer).
@@ -106,9 +111,9 @@ emulation or full PS2 fidelity. Details: [Architecture](docs/ARCHITECTURE.md).
 
 The launcher checks the processor and Vulkan before setup and before Play, and says what is missing.
 
-## 📦 Install
+## Install
 
-1. Download **`GT4Recomp-Setup-1.0.0.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
+1. Download **`GT4Recomp-Setup-1.1.0.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
    and run it. It installs for your Windows user only, without administrator rights. If the Microsoft Edge WebView2
    Runtime is missing (Windows 10), the installer downloads it from Microsoft.
 2. Start **Gran Turismo 4** from the Start menu and choose your disc image. The launcher copies and checks it and
@@ -122,14 +127,14 @@ first start (copied and checked; the old folder is renamed, never deleted).
 This repository does not include game files, disc images, BIOS dumps or save files. Building from source needs your
 own game files and a development environment: see the [Build guide](docs/BUILD.md).
 
-### 🕹️ Controls
+### Controls
 
 **Controllers** (Xbox, DualShock 4, DualSense, Switch Pro and others, through SDL3) work out of the box, mapped to the
 DualShock 2 layout, and can be remapped in the launcher (Settings > Controls).
 
 | Controller | PS2 | Notes |
 |---|---|---|
-| A · B · X · Y (✕ · ○ · □ · △ on PlayStation pads) | ✕ · ○ · □ · △ | Face buttons |
+| A · B · X · Y (Cross · Circle · Square · Triangle on PlayStation pads) | Cross · Circle · Square · Triangle | Face buttons |
 | LB · RB | L1 · R1 | |
 | **LT · RT** | **L2 · R2** | **Analog triggers with pressure**, for progressive throttle and brake |
 | Left / right stick | Left / right analog stick | With dead zones; L3 · R3 on stick click |
@@ -140,11 +145,11 @@ The keyboard has a fixed layout:
 
 | Key | Action (PS2 button) |
 |---|---|
-| W · Enter | Accelerate, confirm (✕) |
-| S | Brake (□) |
-| Space | Handbrake (○) |
+| W · Enter | Accelerate, confirm (Cross) |
+| S | Brake (Square) |
+| Space | Handbrake (Circle) |
 | A · D · arrow keys | Steer, navigate (D-pad); E is also D-pad up |
-| Backspace · Esc | Back (△) |
+| Backspace · Esc | Back (Triangle) |
 | Shift | Nitro (R1) |
 | R · F | Gear up · gear down (R2 · L2) |
 | Q | Look back (L1) |
@@ -152,7 +157,7 @@ The keyboard has a fixed layout:
 | P | Start / Pause |
 | Alt+Enter, F11 | Borderless fullscreen |
 
-## 🙏 Credits
+## Credits
 
 | Project | Author | What it gives this project |
 |---|---|---|
@@ -166,7 +171,7 @@ The keyboard has a fixed layout:
 
 Exact revisions and licenses: [THIRD_PARTY.md](native/THIRD_PARTY.md).
 
-## ⚖️ License and legal
+## License and legal
 
 - GT4Recomp's own code is [MIT](LICENSE). The game executable does not contain or link GPL code; the
   PCSX2 GS (GPL-3.0-or-later) runs only in the separate `gt4-gs.exe`, built from
@@ -176,7 +181,7 @@ Exact revisions and licenses: [THIRD_PARTY.md](native/THIRD_PARTY.md).
   logos and artwork belong to Sony Interactive Entertainment and Polyphony Digital. GT4Recomp is an
   unofficial fan project, not affiliated with or endorsed by either.
 
-## 📚 Documentation
+## Documentation
 
 [TASKS](TASKS.md) · [STATUS](docs/STATUS.md) · [BUILD](docs/BUILD.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) ·
 [Renderers](docs/GSDX-PLAN.md) · [Release 1.0.0 plan](docs/RELEASE-1.0.0-PLAN.md) ·
