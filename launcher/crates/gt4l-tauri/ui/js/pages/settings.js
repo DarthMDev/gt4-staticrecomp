@@ -18,7 +18,6 @@
 
   var TABS = [
     { id: "graphics", label: "Graphics" },
-    { id: "advanced", label: "Advanced" },
     { id: "display", label: "Display" },
     { id: "controls", label: "Controls" },
     { id: "saves", label: "Saves" },
@@ -302,22 +301,28 @@
     ]);
   }
 
-  // Renders the rows of one tab, restoring focus to focusId when given.
-  function renderRows(ctx, rows, focusId) {
+  // Renders rows into parent (the tab's content unless given).
+  function renderRows(ctx, rows, parent) {
+    var into = parent || ctx.content;
     rows.forEach(function (row) {
       if (!rowVisible(ctx.table, row)) {
         return;
       }
       var node = rowNode(ctx, row);
       if (node) {
-        ctx.content.appendChild(node);
+        into.appendChild(node);
       }
     });
-    if (focusId) {
-      var target = ctx.content.querySelector("[data-setting=\"" + focusId + "\"]");
-      if (target) {
-        target.focus({ preventScroll: true });
-      }
+  }
+
+  // Focus back on the control of focusId after the tab was drawn again (anywhere in the tab, sections included).
+  function restoreFocus(ctx, focusId) {
+    if (!focusId) {
+      return;
+    }
+    var target = ctx.content.querySelector("[data-setting=\"" + focusId + "\"]");
+    if (target) {
+      target.focus({ preventScroll: true });
     }
   }
 
@@ -333,10 +338,11 @@
       var rows = ctx.table.rows.filter(function (row) {
         return spec.filter(row, ctx.table);
       });
-      renderRows(ctx, rows, focusId);
+      renderRows(ctx, rows);
       if (spec.extra) {
         spec.extra(ctx, host);
       }
+      restoreFocus(ctx, focusId);
     }
 
     var reads = model.readGate();
@@ -364,28 +370,11 @@
   GT4.settingsTab = settingsTab;
   GT4.settingsRows = { rowNode: rowNode };
 
-  // Graphics: page=basic rows in the graphics group.
+  // Graphics: page=basic rows in the graphics group, then the Advanced section (page=advanced rows and the
+  // reset-to-defaults action, Y on the pad). Advanced is a section of this tab, not a tab of its own (owner,
+  // 2026-10-21): the D-pad moves down from the last Graphics row into the Advanced rows, and B returns to the tab
+  // list from anywhere in the tab.
   GT4.tabPages.graphics = function (content, host) {
-    return settingsTab(content, host, {
-      title: "Graphics",
-      filter: function (row) {
-        return row.page === "basic" && (row.group || "graphics") === "graphics";
-      }
-    });
-  };
-
-  // Display: page=basic rows in the display group.
-  GT4.tabPages.display = function (content, host) {
-    return settingsTab(content, host, {
-      title: "Display",
-      filter: function (row) {
-        return row.page === "basic" && row.group === "display";
-      }
-    });
-  };
-
-  // Advanced: page=advanced rows, plus the reset-to-defaults action (X).
-  GT4.tabPages.advanced = function (content, host) {
     function resetDefaults(ctx) {
       GT4.ui.openDialog({
         title: "Reset to defaults?",
@@ -410,23 +399,42 @@
       });
     }
     return settingsTab(content, host, {
-      title: "Advanced",
+      title: "Graphics",
       filter: function (row) {
-        return row.page === "advanced";
+        return row.page === "basic" && (row.group || "graphics") === "graphics";
       },
       extra: function (ctx) {
+        var advanced = ctx.table.rows.filter(function (row) {
+          return row.page === "advanced";
+        });
+        var section = h("section", { class: "settings-section", "aria-labelledby": "section-advanced" }, [
+          h("h2", { class: "section-head", id: "section-advanced", text: "Advanced" })
+        ]);
+        renderRows(ctx, advanced, section);
         var button = h("button", {
           class: "btn danger",
           type: "button",
+          data: { action: "reset-defaults" },
           on: { click: function () { resetDefaults(ctx); } }
         }, "Reset to defaults");
-        content.appendChild(h("div", { class: "advanced-foot" }, [button]));
+        section.appendChild(h("div", { class: "advanced-foot" }, [button]));
+        content.appendChild(section);
       },
       hooks: function (ctx, tabHost) {
         tabHost.setHooks({ y: function () { resetDefaults(ctx); } });
         tabHost.hints([
           { key: "Y", label: "Reset", run: function () { resetDefaults(ctx); } }
         ]);
+      }
+    });
+  };
+
+  // Display: page=basic rows in the display group.
+  GT4.tabPages.display = function (content, host) {
+    return settingsTab(content, host, {
+      title: "Display",
+      filter: function (row) {
+        return row.page === "basic" && row.group === "display";
       }
     });
   };

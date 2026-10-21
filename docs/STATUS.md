@@ -20,6 +20,11 @@
   `%LOCALAPPDATA%\GT4Recomp`. An older AppData library is copied, checked (size, sha256) and parked as
   `library.migrated-<t>` at the first start; the guard protects the player's folder; the uninstaller never touches it.
   See [FLOW-AUDIT section 8](launcher/FLOW-AUDIT.md) and [MIGRATIONS](launcher/MIGRATIONS.md).
+- Settings feedback (owner, 2026-10-21): 480p and 16:9 are fixed (the Input resolution, Widescreen 16:9 and GS
+  Aspect ratio rows are gone; the launcher always sends `GT4_FORCE_480P=1` and `GT4_FORCE_WIDESCREEN=1` and writes
+  `AspectRatio = 16:9`); PCSX2's own OSD rows are hidden and always written off (GS table column `forced`); Advanced
+  is a section at the bottom of Graphics, not a tab. Old values are ignored by a load-time rule (settings stay
+  schema 3). See [GS-SETTINGS](GS-SETTINGS.md) and [MIGRATIONS](launcher/MIGRATIONS.md).
 - Next: the owner installs from the draft and tests end to end (ideally also an NVIDIA or Intel PC and a fresh Windows
   user), approves, then the merge and the publish.
 

@@ -104,13 +104,13 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
 /// Only connected options emit anything.
 ///
 /// Mapping (setting -> variable):
-/// - `input_resolution`: 480p -> `GT4_FORCE_480P=1`; Native 480i -> `GT4_FORCE_480P=0`;
-///   1080i -> `GT4_FORCE_480P=0` and `GT4_RACE_DISPLAY=1080i` (the current build does not read it yet).
+/// - Always `GT4_FORCE_480P=1`: the game always runs at 480p (owner, 2026-10-21; there is no setting).
+/// - Always `GT4_FORCE_WIDESCREEN=1`: the game's wide flag is held at 16:9 until the ultrawide update (owner,
+///   2026-10-21; TASK-079 hold, there is no setting).
 /// - `internal_scale` -> `PS2_SCALE=1|2|3`; `present_filter` -> `GT4_PRESENT_FILTER` (`auto` sends nothing);
 ///   `fsr_sharpness` -> `GT4_FSR_SHARPNESS` with the FSR filter; `deinterlacing` -> `GT4_DEINTERLACE`;
 ///   `anti_aliasing` -> `GT4_AA`. These are hidden in the UI (decision 0070) and keep their defaults.
 /// - `fullscreen` -> `GT4_FULLSCREEN` (1/0).
-/// - `widescreen` -> `GT4_FORCE_WIDESCREEN` (1/0): the game's wide flag is held at 16:9 (TASK-079).
 /// - `vsync` -> `GT4_PRESENT_MODE` (on = fifo, fast = mailbox, off = immediate).
 /// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
 /// - `performance_report` on -> `GT4_PERF=1`.
@@ -120,19 +120,6 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
     variables.insert("GT4_RENDERER", "donor".to_string());
     variables.insert("PS2_GS", "gpu".to_string());
     variables.insert("PS2_SCALE", settings.get("internal_scale").to_string());
-
-    match settings.get("input_resolution") {
-        "480p" => {
-            variables.insert("GT4_FORCE_480P", "1".to_string());
-        }
-        "1080i" => {
-            variables.insert("GT4_FORCE_480P", "0".to_string());
-            variables.insert("GT4_RACE_DISPLAY", "1080i".to_string());
-        }
-        _ => {
-            variables.insert("GT4_FORCE_480P", "0".to_string());
-        }
-    }
 
     let filter = settings.get("present_filter");
     if filter != "auto" {
@@ -149,7 +136,7 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
 }
 
 /// The variables of a PCSX2 GS session: `GT4_RENDERER=pcsx2`, the process and its pin, the session INI, the
-/// folders, and 480p by default (`GT4_FORCE_480P=1`). Readback is accurate unless the table row
+/// folders, and the fixed 480p and 16:9 holds (see `add_common`). Readback is accurate unless the table row
 /// `hw_download_mode` says otherwise; it is written into the INI, so no variable is needed.
 pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String, String)> {
     let mut variables: BTreeMap<&'static str, String> = BTreeMap::new();
@@ -158,21 +145,18 @@ pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String
     variables.insert("GT4_GS_PROCESS_SHA256", paths.executable_sha256.clone());
     variables.insert("GT4_GS_CONFIG", paths.config.display().to_string());
     variables.insert("PS2_GS", "gpu".to_string());
-    variables.insert(
-        "GT4_FORCE_480P",
-        if settings.get("input_resolution") == "480i" { "0" } else { "1" }.to_string(),
-    );
-    if settings.get("input_resolution") == "1080i" {
-        variables.insert("GT4_RACE_DISPLAY", "1080i".to_string());
-    }
     add_common(&mut variables, settings);
     variables.into_iter().map(|(name, value)| (name.to_string(), value)).collect()
 }
 
-/// The variables shared by both renderers: display mode, present mode, async GS and diagnostics.
+/// The variables shared by both renderers: the fixed 480p and 16:9 holds, display mode, present mode, async GS and
+/// diagnostics.
 fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Settings) {
+    // Fixed (owner, 2026-10-21): the game always runs at 480p and 16:9. No setting changes these, and no stored
+    // value of the retired `input_resolution` or `widescreen` settings is read (settings::RETIRED_SETTINGS).
+    variables.insert("GT4_FORCE_480P", "1".to_string());
+    variables.insert("GT4_FORCE_WIDESCREEN", "1".to_string());
     variables.insert("GT4_FULLSCREEN", flag(settings.is_on("fullscreen")));
-    variables.insert("GT4_FORCE_WIDESCREEN", flag(settings.is_on("widescreen")));
     variables.insert(
         "GT4_PRESENT_MODE",
         match settings.get("vsync") {

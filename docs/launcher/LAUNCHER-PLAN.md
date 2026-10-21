@@ -41,6 +41,12 @@ Labels: **Confirmed** (read in code/data or measured), **High confidence**, **Hy
    coordinator; third-party parts keep their licenses, paraLLEl-GS LGPL in its DLL); installers are
    GitHub Releases of `moesuito/gt4-staticrecomp` and the launcher source lives in the same
    repository; the Windows display name is "Gran Turismo 4".
+7. **Owner feedback on the installed 1.0.0 launcher (2026-10-21, TASK-081).** The game is fixed at 480p and 16:9
+   (until the ultrawide update): the "Input resolution" (section 6, Image) and "Widescreen 16:9" rows and the GS
+   "Aspect ratio" row are removed; the launcher always sends `GT4_FORCE_480P=1` and `GT4_FORCE_WIDESCREEN=1` and
+   writes `AspectRatio = 16:9` (no `GT4_RACE_DISPLAY`). Advanced is a section at the bottom of the Graphics page, not
+   a tab. PCSX2's own OSD rows (Show FPS, GPU name, resolution) are hidden and always written off; only GT4Recomp's
+   performance overlay rows remain. Old stored values are ignored at load (docs/launcher/MIGRATIONS.md).
 
 Consequences to record when TASK-019 starts (documentation changes, not done here):
 `TASKS.md` "First stable release" currently says *"no game assets or binaries derived from the

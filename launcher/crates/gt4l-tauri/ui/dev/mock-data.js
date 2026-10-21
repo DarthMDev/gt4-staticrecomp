@@ -131,6 +131,10 @@
       page: "advanced", control: "toggle", values: null, default: false, current: false },
     { id: "performance_report", label: "Performance report", help: "Records frame timing while you play for bug reports.",
       page: "advanced", control: "toggle", values: null, default: false, current: false },
+    { id: "perf_overlay", label: "Performance overlay", help: "Shows GT4Recomp's own overlay while you play (FPS, frame time, CPU and GPU use).",
+      page: "advanced", control: "toggle", values: null, default: false, current: false },
+    { id: "perf_overlay_fps", label: "Overlay: FPS", help: "Shows the frame rate in the performance overlay.",
+      page: "advanced", control: "toggle", values: null, default: true, current: true },
     { id: "debug_internal", label: "Internal debug", help: "Not shown to users.",
       page: "hidden", control: "toggle", values: null, default: false, current: true }
   ];

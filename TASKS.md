@@ -352,6 +352,15 @@ Release audit 2026-10-21. Branch `task/081-release-1-0-0` (from main 26f83b8). N
   `id` and `modified` (the real launcher sent neither, so activate and delete could not name an item). Uninstaller
   page: saves and replays in Documents are always kept; the AppData box stays unchecked. `cargo test --workspace`
   250 passed; nav-test 150/150, focus-check pass; scratch exe run migrated a copy of the owner's library.
+- Settings feedback (owner, 2026-10-21, round 4): the game is fixed at 480p and 16:9 until the ultrawide update. The
+  Input resolution, Widescreen 16:9 and GS Aspect ratio rows are removed; the launcher always sends
+  `GT4_FORCE_480P=1` and `GT4_FORCE_WIDESCREEN=1` (no `GT4_RACE_DISPLAY`) and writes `AspectRatio = 16:9`. Old values
+  are ignored by a load-time rule (`settings::RETIRED_SETTINGS`; settings stay schema 3, TASK-080 keeps schema 4).
+  GS table column `forced` (Python and Rust writers): `aspect` 16:9 and PCSX2's `osd_fps`, `osd_gpu`,
+  `osd_resolution` hidden and always written off; the other stock OSD rows hidden; allow-list unchanged. Advanced is a
+  section at the bottom of Graphics (no Advanced tab; D-pad reaches it, B back, Y Reset). `cargo test --workspace`
+  252 passed; Python 598 OK; nav-test 150/150; focus-check 93/93 pass. Installer rebuilt (sha256 8cf61ef4...), draft
+  assets replaced.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
