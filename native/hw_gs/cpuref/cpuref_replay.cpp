@@ -133,6 +133,22 @@ bool ReplayCapture(const std::vector<uint8_t>& stream, ReplayTarget& renderer, R
     return true;
 }
 
+uint64_t HashLocalMemory(const uint8_t* bytes, size_t byteCount) {
+    uint64_t hash = 1469598103934665603ull;
+    size_t i = 0;
+    for (; i + 8 <= byteCount; i += 8) {
+        uint64_t word = 0;
+        for (int b = 0; b < 8; ++b) word |= static_cast<uint64_t>(bytes[i + b]) << (8 * b);
+        hash ^= word;
+        hash *= 1099511628211ull;
+    }
+    for (; i < byteCount; ++i) {
+        hash ^= bytes[i];
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
 void CaptureWriter::AppendU32(uint32_t value) {
     for (int i = 0; i < 4; ++i) {
         bytes_.push_back(static_cast<uint8_t>(value >> (8 * i)));

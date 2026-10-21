@@ -130,10 +130,12 @@ if(GT4_HW_GS)
     add_test(NAME hw_smoke_headless COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 4200)
     set_tests_properties(hw_smoke_headless PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
         PASS_REGULAR_EXPRESSION "frames=4200 presents=4200 black_presents=0")
-    # Hidden window with a real swapchain: one black present per frame, then the fail-closed cases.
+    # Hidden window with a real swapchain: 120 presents, then the fail-closed cases. With no GS data the
+    # all-zero register file decodes as a known mode with both circuits off, so every present carries the
+    # composed background image (BGCOLOR 0, black) and none is an image-less black present (IN-333).
     add_test(NAME hw_smoke_window COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 120 --window)
     set_tests_properties(hw_smoke_window PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
-        PASS_REGULAR_EXPRESSION "black_presents=120")
+        PASS_REGULAR_EXPRESSION "frames=120 presents=120 black_presents=0 gif_bytes=0 swapchain_recreations=0 faults=0")
     # Fullscreen-style toggles on the hidden window: resize flag, swapchain rebuild, every present under 100 ms.
     add_test(NAME hw_smoke_resize COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1 --resize-toggles 5)
     set_tests_properties(hw_smoke_resize PROPERTIES ENVIRONMENT "GT4_RENDERER=hw" PASS_REGULAR_EXPRESSION "resize_toggles=5")

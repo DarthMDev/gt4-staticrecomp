@@ -513,17 +513,36 @@ bool ExecuteBatch(gpu::GpuDrawer &gpu, const BatchTranslation &t, memory::LocalM
                 chunk.depthWords[index] = local.readPixel(t.zView, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
             }
         }
+        const std::vector<uint32_t> frameBefore = chunk.frameWords;
+        const std::vector<uint32_t> depthBefore = chunk.depthWords;
         if (!gpu.Execute(chunk, error)) return false;
         counters.gpuChunks++;
         counters.gpuDraws += chunk.draws.size();
+        // Write back only the words the draws changed (IN-335). The frame and depth buffers may share
+        // local memory (a 2D pass with an unused ZBUF pointing at the other display buffer, or at the
+        // frame itself): writing the untouched pre-draw depth words over the rectangle would put the
+        // old pixels back over what this chunk just drew. Per pixel the frame word is stored before the
+        // depth word, the order the CPU reference uses (cpuref_draw.cpp), so a changed depth word that
+        // aliases a changed frame word wins as it does there.
+        uint64_t frameChanged = 0;
+        uint64_t depthChanged = 0;
         index = 0;
         for (int32_t y = rectY0; y <= rectY1; ++y) {
             for (int32_t x = rectX0; x <= rectX1; ++x, ++index) {
-                local.writePixel(t.frameView, static_cast<uint32_t>(x), static_cast<uint32_t>(y), chunk.frameWords[index]);
-                local.writePixel(t.zView, static_cast<uint32_t>(x), static_cast<uint32_t>(y), chunk.depthWords[index]);
+                if (chunk.frameWords[index] != frameBefore[index]) {
+                    local.writePixel(t.frameView, static_cast<uint32_t>(x), static_cast<uint32_t>(y),
+                                     chunk.frameWords[index]);
+                    ++frameChanged;
+                }
+                if (chunk.depthWords[index] != depthBefore[index]) {
+                    local.writePixel(t.zView, static_cast<uint32_t>(x), static_cast<uint32_t>(y),
+                                     chunk.depthWords[index]);
+                    ++depthChanged;
+                }
             }
         }
-        counters.writebackPixels += words;
+        counters.writebackPixels += frameChanged;
+        counters.writebackDepthWords += depthChanged;
         begin = end;
     }
     return true;
@@ -553,6 +572,7 @@ public:
             StageTimer timer(frameTimings_.translateUs);
             Translate(batch, memory_.Local(), frontEnd_.Clut(), t, counters);
         }
+        if (observer_) observer_(batch, t);
         if (t.skippedTexture) {
             counters.primitivesSkippedTexture += batch.prims.size();
             counters.batchesSkippedTexture++;
@@ -590,10 +610,10 @@ public:
     display::DisplayRegisters displayRegs_;
     std::array<uint32_t, 2> previousDby_{};
     std::array<uint8_t, 3> background_{};
-    bool csrField_ = false;
     std::optional<display::Image> lastImage_;
     bool failed_ = false;
     std::string lastError_;
+    Renderer::BatchObserver observer_;
 };
 
 Renderer::Renderer() : impl_(std::make_unique<Impl>()) {}
@@ -616,7 +636,10 @@ bool Renderer::GifTransfer(std::uint32_t path, const std::uint8_t* bytes, std::s
 
 bool Renderer::GifBusy(std::uint32_t path) const { return impl_->frontEnd_.GifBusy(path); }
 
-void Renderer::GifReset(std::uint32_t pathMask) { impl_->frontEnd_.GifReset(pathMask); }
+void Renderer::GifReset(std::uint32_t pathMask) {
+    impl_->frontEnd_.GifReset(pathMask);
+    impl_->memory_.ResetRead();  // a GIF reset cancels the pending LOCAL->HOST read (10.2)
+}
 
 bool Renderer::WritePrivileged(std::uint32_t address, std::uint64_t value) {
     using namespace priv;
@@ -636,14 +659,25 @@ bool Renderer::WritePrivileged(std::uint32_t address, std::uint64_t value) {
             impl_->background_[2] = static_cast<uint8_t>(Field(value, 16, 8));
             return true;
         case kCsr:
-            impl_->csrField_ = Field(value, 13, 1) != 0;
+            // CSR.RESET (bit 9) resets the GS as in the CPU reference; CSR.FIELD is read-only, the
+            // VSYNC record supplies the display field.
+            if (Field(value, 9, 1) != 0) ResetGs();
             return true;
         default:
             return false;
     }
 }
 
-void Renderer::ResetGs() { impl_->frontEnd_.ResetGs(); }
+void Renderer::ResetGs() {
+    Impl& s = *impl_;
+    s.frontEnd_.ResetGs();
+    s.frontEnd_.GifReset(7u);
+    s.memory_.ResetRead();
+    s.displayRegs_ = {};
+    s.previousDby_ = {};
+    s.background_ = {};
+    s.lastImage_.reset();
+}
 
 bool Renderer::BeginAuxiliaryFrame() {
     Impl& s = *impl_;
@@ -680,15 +714,20 @@ void Renderer::ClearVram() {
 }
 
 std::size_t Renderer::ReadFifo(void* destination, std::size_t byteCount) {
-    if (impl_->auxiliary_) {
+    Impl& s = *impl_;
+    if (s.auxiliary_) {
         // A guest readback is never answered from an auxiliary frame (roadmap requirement 2).
-        impl_->counters.auxiliaryReadRefused++;
+        s.counters.auxiliaryReadRefused++;
         return 0;
     }
-    std::vector<uint8_t> data = impl_->memory_.TakeLocalToHostData();
-    const std::size_t limit = byteCount;
-    if (data.size() > limit) data.resize(limit);
-    if (!data.empty()) std::memcpy(destination, data.data(), data.size());
+    if (byteCount == 0) return 0;
+    // The first FIFO access observes every earlier draw and upload (10.2).
+    s.frontEnd_.FlushBatch(FlushReason::Transfer);
+    bool overrun = false;
+    const std::vector<uint8_t> data = s.memory_.ReadLocalToHost(byteCount, overrun);
+    if (overrun) s.counters.fifoOverruns++;
+    if (s.memory_.ReadDrained()) s.frontEnd_.WriteRegister(reg::kTrxdir, 3);
+    std::memcpy(destination, data.data(), data.size());
     return data.size();
 }
 
@@ -803,6 +842,8 @@ void Renderer::ComposeFrame(FrameOutput& out) {
     s.timings_.composeUs = composeUs;
     s.timings_.executeGpuUs = 0.0;  // reserved for GPU timestamps (not measured yet)
 }
+
+void Renderer::SetBatchObserver(BatchObserver observer) { impl_->observer_ = std::move(observer); }
 
 const std::uint8_t* Renderer::Slm() const { return impl_->memory_.Local().bytes().data(); }
 

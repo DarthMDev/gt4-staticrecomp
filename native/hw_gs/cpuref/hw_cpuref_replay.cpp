@@ -3,7 +3,9 @@
 // hw_cpuref_replay: replays a legacy or GSSTREAM v2 capture through the HWR CPU reference renderer and
 // writes one frame_NNNNN.ppm per frame that has a display image (TASK-027, M4 to M6 path).
 //
-// Usage: hw_cpuref_replay <capture.gscap> <output-dir> [--dump-source vram|scanout]
+// Usage: hw_cpuref_replay <capture.gscap> <output-dir> [--dump-source vram|scanout] [--slm-frame N]
+//        [--slm-hashes <file>]
+// --slm-hashes writes "<frame> <16 hex digits>" per frame: the FNV-1a hash of the 4 MiB local memory.
 // Default vram follows chapter 12.9. scanout preserves the earlier composed CLI output.
 // frames.jsonl records every capture-native frame; image filenames are never renumbered.
 // Copyright 2026 GT4Recomp contributors. Licensed under the MIT License (see LICENSE).
@@ -23,8 +25,10 @@ int main(int argc, char** argv) {
                              "default: vram (12.9 oracle decode); scanout: existing composed output\n"
                              "metadata: <output-dir>/frames.jsonl, capture-native frame IDs\n");
     };
-    hwgs::cpuref::DumpSource source = hwgs::cpuref::DumpSource::Vram;
+    hwgs::cpuref::DumpSource source = hwgs::cpuref::DumpSource::Vram;
+
     std::uint64_t slmFrame = UINT64_MAX;  // raw shadow local memory dump
+    std::string slmHashPath;              // per-frame local memory hashes
     bool selectedSource = false;
     std::vector<std::string> paths;
     for (int i = 1; i < argc; ++i) {
@@ -36,6 +40,14 @@ int main(int argc, char** argv) {
                 return 2;
             }
             slmFrame = std::strtoull(argv[++i], nullptr, 10);
+            continue;
+        }
+        if (arg == "--slm-hashes") {
+            if (i + 1 == argc) {
+                std::fprintf(stderr, "hw_cpuref_replay: --slm-hashes requires a file name\n");
+                return 2;
+            }
+            slmHashPath = argv[++i];
             continue;
         }
         if (arg == "--dump-source") {
@@ -71,6 +83,15 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    std::FILE* slmHashes = nullptr;
+    if (!slmHashPath.empty()) {
+        slmHashes = std::fopen(slmHashPath.c_str(), "w");
+        if (!slmHashes) {
+            std::fprintf(stderr, "hw_cpuref_replay: cannot create %s\n", slmHashPath.c_str());
+            return 1;
+        }
+    }
+
     hwgs::cpuref::CpuRenderer renderer;
     hwgs::cpuref::ReplaySummary summary;
     std::string error;
@@ -80,6 +101,11 @@ int main(int argc, char** argv) {
     const bool ok = hwgs::cpuref::ReplayCapture(
         stream, renderer, summary,
         [&](uint64_t frame, const hwgs::cpuref::FrameImage& scanout) {
+            if (slmHashes) {
+                const auto bytes = renderer.Memory().Local().bytes();
+                std::fprintf(slmHashes, "%llu %016llx\n", static_cast<unsigned long long>(frame),
+                             static_cast<unsigned long long>(hwgs::cpuref::HashLocalMemory(bytes.data(), bytes.size())));
+            }
             if (frame == slmFrame) {
                 char slmName[64];
                 std::snprintf(slmName, sizeof(slmName), "slm_%05llu.bin", static_cast<unsigned long long>(frame));
@@ -110,6 +136,7 @@ int main(int argc, char** argv) {
         },
         error);
 
+    if (slmHashes && std::fclose(slmHashes) != 0) writeFailed = true;
     metadata.flush();
     if (!metadata) writeFailed = true;
     std::printf("dump_source=%s images_written=%llu frames_without_image=%llu\n", hwgs::cpuref::DumpSourceName(source),

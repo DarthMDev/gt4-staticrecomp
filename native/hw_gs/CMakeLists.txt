@@ -55,7 +55,8 @@ target_compile_options(gt4_hw_writeback PRIVATE /W4)
 # Exit code 77 means "no compute-capable Vulkan 1.2 device" and is reported as Skipped, never as a pass.
 add_executable(hw_writeback_tests writeback/tests/hw_writeback_tests.cpp)
 target_include_directories(hw_writeback_tests PRIVATE "${GT4_HW_VULKAN_SDK}/Include" "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(hw_writeback_tests PRIVATE gt4_hw_writeback gt4_hw_vulkan_loader "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
+target_link_libraries(hw_writeback_tests PRIVATE gt4_hw_writeback gt4_hw_vulkan_loader hw_gs_cpuref
+    "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
 target_compile_options(hw_writeback_tests PRIVATE /W4 -Wno-missing-field-initializers)
 target_compile_definitions(hw_writeback_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
 # M6 replay tool: one recorded stream -> the GPU write-back renderer -> one PPM per frame. It reuses the
@@ -73,7 +74,8 @@ foreach(hw_writeback_test IN ITEMS hw_flat_provoking hw_sprite_corners hw_presen
         hw_gpu_equivalence_flat hw_gpu_equivalence_texture hw_gpu_equivalence_region
         hw_gpu_equivalence_bilinear hw_gpu_equivalence_tfx_fog hw_gpu_equivalence_depth_alpha
         hw_gpu_equivalence_scissor hw_gpu_raster_blend hw_gpu_raster_pabe hw_gpu_raster_atest
-        hw_gpu_raster_date hw_gpu_raster_frame hw_gpu_gouraud_report)
+        hw_gpu_raster_date hw_gpu_raster_frame hw_gpu_gouraud_report
+        hw_gpu_writeback_aliased_depth hw_readback_pending_draw hw_replay_parity_double_buffer)
     add_test(NAME ${hw_writeback_test} COMMAND hw_writeback_tests ${hw_writeback_test})
     set_tests_properties(${hw_writeback_test} PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
 endforeach()

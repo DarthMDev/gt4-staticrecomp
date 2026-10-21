@@ -5,7 +5,12 @@
 // PPM per frame, so the GPU path can be compared with the CPU reference on exactly the same input.
 // Chapters 14.3 (replay) and 12.9 (frame dumps); the record formats are the ones cpuref_replay reads.
 //
-// Usage: hw_writeback_replay <capture> <out-dir> [--every N]
+// Usage: hw_writeback_replay <capture> <out-dir> [--every N] [--slm-frame N] [--trace-frame N]
+//        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>]
+// --slm-hashes writes "<frame> <16 hex digits>" per frame (the FNV-1a hash of the 4 MiB local memory),
+// the same format as hw_cpuref_replay, so the two paths can be compared in memory on every frame.
+// --trace-frame prints every batch of that frame (state, rectangle, vertices) whose rectangle overlaps
+// --trace-rect (default: everything), so a pixel difference can be tied to the batch that drew it.
 // Exit 77 means "no Vulkan device with graphics and compute" (the caller reports it as skipped).
 
 #include <cstdio>
@@ -18,6 +23,7 @@
 #include "hw_gs_vulkan_device_table.hpp"
 #include "writeback/hw_gs_writeback.hpp"
 #include "../cpuref/cpuref_replay.hpp"
+#include "writeback/hw_writeback_replay_target.hpp"
 
 namespace {
 
@@ -89,57 +95,6 @@ struct HeadlessDevice {
     }
 };
 
-// The GPU write-back renderer as a replay target: EndFrame flushes the frame and composes the display.
-class WritebackTarget final : public cpuref::ReplayTarget {
-public:
-    explicit WritebackTarget(writeback::Renderer& renderer) : renderer_(renderer) {}
-
-    bool GifTransfer(std::uint32_t path, const std::vector<std::uint8_t>& bytes) override {
-        return renderer_.GifTransfer(path, bytes.data(), bytes.size());
-    }
-    bool WritePrivileged(std::uint32_t address, std::uint64_t value) override {
-        return renderer_.WritePrivileged(address, value);
-    }
-    std::vector<std::uint8_t> ReadFifo(std::uint32_t qwords) override {
-        std::vector<std::uint8_t> data(static_cast<std::size_t>(qwords) * 16u);
-        const std::size_t filled = renderer_.ReadFifo(data.data(), data.size());
-        data.resize(filled);
-        return data;
-    }
-    cpuref::FrameImage EndFrame() override {
-        renderer_.Flush();
-        writeback::FrameOutput out;
-        renderer_.ComposeFrame(out);
-        cpuref::FrameImage frame;
-        frame.valid = out.valid && out.width > 0 && out.height > 0;
-        if (!frame.valid) return frame;
-        frame.image = display::Image(out.width, out.height);
-        for (std::uint32_t y = 0; y < out.height; ++y) {
-            for (std::uint32_t x = 0; x < out.width; ++x) {
-                const std::uint32_t pixel = out.pixels[static_cast<std::size_t>(y) * out.width + x];
-                display::Rgba8& dst = frame.image.at(x, y);
-                dst.r = static_cast<std::uint8_t>(pixel & 0xFFu);
-                dst.g = static_cast<std::uint8_t>((pixel >> 8) & 0xFFu);
-                dst.b = static_cast<std::uint8_t>((pixel >> 16) & 0xFFu);
-                dst.a = static_cast<std::uint8_t>((pixel >> 24) & 0xFFu);
-            }
-        }
-        return frame;
-    }
-
-    void SetDisplayField(bool odd) override { oddField_ = odd; }
-    bool DisplayField() const override { return oddField_; }
-    void ResetGs(bool clearVram) override {
-        renderer_.ResetGs();
-        if (clearVram) renderer_.ClearVram();
-    }
-    void ResetGif(std::uint32_t pathMask) override { renderer_.GifReset(pathMask); }
-
-private:
-    writeback::Renderer& renderer_;
-    bool oddField_ = false;
-};
-
 bool WritePpm(const std::string& path, const cpuref::FrameImage& frame) {
     std::FILE* file = std::fopen(path.c_str(), "wb");
     if (!file) return false;
@@ -181,12 +136,22 @@ int main(int argc, char** argv) {
     const std::string outDir = argv[2];
     std::uint64_t every = 1;
     std::uint64_t slmFrame = UINT64_MAX;  // the frame whose raw shadow local memory is dumped
+    std::uint64_t traceFrame = UINT64_MAX;  // the frame whose batches are printed
+    std::string slmHashPath;                // per-frame local memory hashes
+    PixelRect traceRect{0, 0, 2047, 2047};
     for (int i = 3; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--every") == 0) {
             const long value = std::strtol(argv[i + 1], nullptr, 10);
             if (value > 0) every = static_cast<std::uint64_t>(value);
         } else if (std::strcmp(argv[i], "--slm-frame") == 0) {
             slmFrame = static_cast<std::uint64_t>(std::strtoull(argv[i + 1], nullptr, 10));
+        } else if (std::strcmp(argv[i], "--slm-hashes") == 0) {
+            slmHashPath = argv[i + 1];
+        } else if (std::strcmp(argv[i], "--trace-frame") == 0) {
+            traceFrame = static_cast<std::uint64_t>(std::strtoull(argv[i + 1], nullptr, 10));
+        } else if (std::strcmp(argv[i], "--trace-rect") == 0) {
+            int x0 = 0, y0 = 0, x1 = 0, y1 = 0;
+            if (std::sscanf(argv[i + 1], "%d,%d,%d,%d", &x0, &y0, &x1, &y1) == 4) traceRect = PixelRect{x0, y0, x1, y1};
         }
     }
 
@@ -218,10 +183,54 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    WritebackTarget target(renderer);
+    // Frame counter for the trace: EndFrame of frame N is the N-th call (0-based), as in onFrame.
+    std::uint64_t currentFrame = 0;
+    std::uint64_t traceBatch = 0;
+    if (traceFrame != UINT64_MAX) {
+        renderer.SetBatchObserver([&](const Batch& batch, const writeback::BatchTranslation& t) {
+            if (currentFrame != traceFrame) return;
+            const std::uint64_t index = traceBatch++;
+            if (!RectsOverlap(batch.drawRect, traceRect)) return;
+            const BatchState& st = batch.state;
+            std::printf("trace frame=%llu batch=%llu prims=%zu verts=%zu prim=0x%llx frame=0x%llx zbuf=0x%llx "
+                        "tex0=0x%llx tex1=0x%llx clamp=0x%llx alpha=0x%llx test=0x%llx scissor=0x%llx "
+                        "rect=%d,%d,%d,%d draws=%zu skipped=%d\n",
+                        static_cast<unsigned long long>(currentFrame), static_cast<unsigned long long>(index),
+                        batch.prims.size(), batch.vertices.size(), static_cast<unsigned long long>(st.effectivePrim),
+                        static_cast<unsigned long long>(st.ctx.frame), static_cast<unsigned long long>(st.ctx.zbuf),
+                        static_cast<unsigned long long>(st.ctx.tex0), static_cast<unsigned long long>(st.ctx.tex1),
+                        static_cast<unsigned long long>(st.ctx.clamp), static_cast<unsigned long long>(st.ctx.alpha),
+                        static_cast<unsigned long long>(st.ctx.test), static_cast<unsigned long long>(st.ctx.scissor),
+                        batch.drawRect.x0, batch.drawRect.y0, batch.drawRect.x1, batch.drawRect.y1, t.draws.size(),
+                        t.skippedTexture ? 1 : 0);
+            const std::size_t shown = batch.vertices.size() < 8 ? batch.vertices.size() : 8;
+            for (std::size_t v = 0; v < shown; ++v) {
+                const Vertex& x = batch.vertices[v];
+                std::printf("  v%zu xy4=%d,%d z=%u rgba=%u,%u,%u,%u fog=%u stq=%.9g,%.9g,%.9g uv=%u,%u\n", v, x.x4, x.y4,
+                            x.z, x.r, x.g, x.b, x.a, x.fog, x.s, x.t, x.q, x.u, x.v);
+            }
+        });
+    }
+
+    std::FILE* slmHashes = nullptr;
+    if (!slmHashPath.empty()) {
+        slmHashes = std::fopen(slmHashPath.c_str(), "w");
+        if (!slmHashes) {
+            std::fprintf(stderr, "cannot create %s\n", slmHashPath.c_str());
+            return 2;
+        }
+    }
+
+    writeback::WritebackReplayTarget target(renderer);
     cpuref::ReplaySummary summary;
     std::uint64_t written = 0;
     const auto onFrame = [&](std::uint64_t frame, const cpuref::FrameImage& image) {
+        currentFrame = frame + 1;
+        traceBatch = 0;
+        if (slmHashes) {
+            std::fprintf(slmHashes, "%llu %016llx\n", static_cast<unsigned long long>(frame),
+                         static_cast<unsigned long long>(cpuref::HashLocalMemory(renderer.Slm(), 4u * 1024u * 1024u)));
+        }
         if (!image.valid) return;
         if (every > 1 && frame % every != 0) return;
         char name[64];
@@ -239,6 +248,7 @@ int main(int argc, char** argv) {
     };
     const bool ok = cpuref::ReplayCapture(stream, target, summary, onFrame, error);
 
+    if (slmHashes) std::fclose(slmHashes);
     std::printf("records=%llu gif_packets=%llu gif_bytes=%llu privileged=%llu fifo_reads=%llu frames=%llu "
                 "images=%llu rejected_gif=%llu resets=%llu\n",
                 static_cast<unsigned long long>(summary.records),
@@ -252,15 +262,21 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(summary.resets));
     const writeback::Counters& counters = renderer.GetCounters();
     std::printf("batches=%llu primitives=%llu skipped_texture=%llu empty=%llu textures=%llu gpu_draws=%llu "
-                "writeback_pixels=%llu\n",
+                "writeback_pixels=%llu writeback_depth_words=%llu fifo_overruns=%llu failed=%d\n",
                 static_cast<unsigned long long>(counters.batches),
                 static_cast<unsigned long long>(counters.primitives),
                 static_cast<unsigned long long>(counters.primitivesSkippedTexture),
                 static_cast<unsigned long long>(counters.batchesEmpty),
                 static_cast<unsigned long long>(counters.texturesDecoded),
                 static_cast<unsigned long long>(counters.gpuDraws),
-                static_cast<unsigned long long>(counters.writebackPixels));
+                static_cast<unsigned long long>(counters.writebackPixels),
+                static_cast<unsigned long long>(counters.writebackDepthWords),
+                static_cast<unsigned long long>(counters.fifoOverruns), renderer.Failed() ? 1 : 0);
     std::printf("images_written=%llu\n", static_cast<unsigned long long>(written));
+    if (renderer.Failed()) {
+        std::fprintf(stderr, "GPU write-back renderer failed: %s\n", renderer.LastError().c_str());
+        return 1;
+    }
     if (!ok) {
         std::fprintf(stderr, "replay failed: %s\n", error.c_str());
         return 1;

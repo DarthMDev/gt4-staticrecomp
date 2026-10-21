@@ -23,6 +23,9 @@
 #include "../hw_gs_vulkan_device_table.hpp"
 #include "../hw_gs_present_scheduler.hpp"
 #include "../hw_gs_writeback.hpp"
+#include "../hw_writeback_replay_target.hpp"
+#include "../../cpuref/cpuref_renderer.hpp"
+#include "../../cpuref/cpuref_replay.hpp"
 
 namespace {
 
@@ -993,6 +996,219 @@ int TestPassTimings() {
     return 0;
 }
 
+// IN-335: the frame and depth buffers may share local memory (a 2D pass whose unused ZBUF points at the
+// other display buffer, or at the frame itself). The write-back must not put the pre-draw depth words of
+// the rectangle back over the pixels the batch just drew. The GPU result must equal the CPU reference,
+// which stores the frame word and then the depth word per pixel. Cases: ZBUF = FRAME with Z writes
+// masked, ZBUF = FRAME with Z written, and a ZBUF that starts one page row (32 lines) above FRAME, so
+// only the lower rows of the depth rectangle alias the upper rows of the drawn frame rectangle (rows the
+// write-back visits earlier, which is what exposes a stale depth word written over them).
+// Z written into a buffer that aliases the frame is reported, not asserted: Z32 and CT32 swizzle the same
+// page differently, so the last word stored at an address depends on the order in which the rasteriser
+// visits pixels (CPU reference: primitive by primitive; write-back: one raster pass over the rectangle),
+// which the specification does not define (IN-335).
+int TestWritebackAliasedDepth(gpu::GpuDrawer& drawer) {
+    struct AliasCase {
+        const char* label;
+        int32_t zbpOffsetPages;
+        bool zmsk;
+        bool asserted;
+    };
+    const AliasCase cases[] = {{"same pages, Z masked", 0, true, true},
+                               {"same pages, Z written (report only)", 0, false, false},
+                               {"one page row above, Z masked", -10, true, true}};
+    int failures = 0;
+    for (const AliasCase& c : cases) {
+        Setup s;
+        s.iip = false;
+        s.fbp = 30;
+        s.zbp = static_cast<uint32_t>(static_cast<int32_t>(s.fbp) + c.zbpOffsetPages);  // FBW 10: 10 pages per row
+        s.zmsk = c.zmsk;
+        s.zte = true;
+        s.ztst = 1;  // ALWAYS
+        Batch batch = MakeBatch(s, FlatQuad(4, 20, 60, 60, 200, 30, 90, 255), {PrimType::Triangle, PrimType::Triangle});
+        const CaseResult r = RunCase(drawer, s, batch, static_cast<uint32_t>(41 + c.zbpOffsetPages));
+        std::printf("  case: %s\n", c.label);
+        const int failed = Report("hw_gpu_writeback_aliased_depth", r);
+        if (c.asserted || r.gpuError) failures += failed;
+    }
+    return failures == 0 ? 0 : 1;
+}
+
+// Chapter 10.2: a LOCAL->HOST read observes every earlier draw, including draws still waiting in the open
+// batch, and the data is consumed sequentially across FIFO reads. Two sprites of different colours fill
+// rows 0..3 and 4..7 of an 8 x 8 CT32 rectangle; it is read back in two halves of 128 bytes with no VBlank
+// flush in between, so the first half must hold only the top colour and the second only the bottom one.
+int TestReadbackObservesPendingDraw(const gpu::VulkanHandles& handles) {
+    writeback::Renderer renderer;
+    std::string error;
+    if (!renderer.Init(handles, error)) {
+        std::printf("hw_readback_pending_draw: GPU drawer init failed: %s\n", error.c_str());
+        return 1;
+    }
+    const uint32_t top = 0x80402010u;     // A 0x80, B 0x40, G 0x20, R 0x10
+    const uint32_t bottom = 0x7F0A0B0Cu;  // A 0x7F, B 0x0A, G 0x0B, R 0x0C
+    auto rgbaq = [](uint32_t colour) { return uint64_t{colour} | (uint64_t{0x3F800000u} << 32); };  // Q = 1.0
+    auto xyz = [](uint32_t x, uint32_t y) { return uint64_t{x * 16} | (uint64_t{y * 16} << 16); };
+    std::vector<Qword> stream;
+    stream.push_back(PackedTag(16, true, 0, {0xE}));
+    stream.push_back(Qword{uint64_t{0} | (uint64_t{1} << 16), 0x4C});            // FRAME_1: FBP 0, FBW 1, CT32
+    stream.push_back(Qword{uint64_t{64} | (uint64_t{1} << 32), 0x4E});           // ZBUF_1: ZBP 64, ZMSK
+    stream.push_back(Qword{(uint64_t{63} << 16) | (uint64_t{63} << 48), 0x40});  // SCISSOR_1: 0..63 x 0..63
+    stream.push_back(Qword{0, 0x18});                                             // XYOFFSET_1 = 0
+    stream.push_back(Qword{(uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47});    // TEST_1: ZTE, ZTST ALWAYS
+    stream.push_back(Qword{6, 0x00});                                             // PRIM: sprite, context 1
+    stream.push_back(Qword{rgbaq(top), 0x01});
+    stream.push_back(Qword{xyz(0, 0), 0x05});
+    stream.push_back(Qword{xyz(8, 4), 0x05});  // kick: rows 0..3
+    stream.push_back(Qword{rgbaq(bottom), 0x01});
+    stream.push_back(Qword{xyz(0, 4), 0x05});
+    stream.push_back(Qword{xyz(8, 8), 0x05});                                     // kick: rows 4..7
+    stream.push_back(Qword{uint64_t{0} | (uint64_t{1} << 16), 0x50});             // BITBLTBUF: SBP 0, SBW 1, CT32
+    stream.push_back(Qword{0, 0x51});                                             // TRXPOS 0, 0
+    stream.push_back(Qword{uint64_t{8} | (uint64_t{8} << 32), 0x52});             // TRXREG 8 x 8
+    stream.push_back(Qword{1, 0x53});                                             // TRXDIR 1: local -> host
+    if (!renderer.GifTransfer(1, reinterpret_cast<const uint8_t*>(stream.data()), stream.size() * sizeof(Qword))) {
+        std::printf("hw_readback_pending_draw: GIF transfer refused\n");
+        return 1;
+    }
+    std::vector<uint32_t> words(64, 0);
+    const std::size_t first = renderer.ReadFifo(words.data(), 128);
+    const std::size_t second = renderer.ReadFifo(words.data() + 32, 128);
+    uint32_t pastEnd[4] = {};
+    const std::size_t third = renderer.ReadFifo(pastEnd, sizeof(pastEnd));  // past the end: zeros, one overrun
+    uint32_t wrong = 0;
+    for (size_t i = 0; i < 32; ++i) wrong += words[i] != top ? 1u : 0u;
+    for (size_t i = 32; i < 64; ++i) wrong += words[i] != bottom ? 1u : 0u;
+    std::printf("hw_readback_pending_draw: read %zu + %zu bytes (+%zu past the end), %u of 64 words wrong, "
+                "words 0/32 = %08X/%08X, overruns %llu\n",
+                first, second, third, wrong, words[0], words[32],
+                static_cast<unsigned long long>(renderer.GetCounters().fifoOverruns));
+    if (renderer.Failed()) {
+        std::printf("hw_readback_pending_draw: renderer failed: %s\n", renderer.LastError().c_str());
+        return 1;
+    }
+    return (first == 128 && second == 128 && wrong == 0 && renderer.GetCounters().fifoOverruns == 1) ? 0 : 1;
+}
+
+// IN-335 replay control: a double-buffered 2D scene in which every frame draws into the back buffer
+// while ZBUF (Z writes masked) stays at page 0, so on every other frame the unused depth buffer shares
+// the pages of the buffer being drawn: the pattern of GT4's boot and menu screens (ZBUF = 0x100000000).
+// The legacy capture is replayed through the CPU reference and through the GPU write-back renderer; every
+// frame must give the same composed image and the same 4 MiB local memory hash. Only sprites are drawn,
+// whose coverage and attributes both rasterisers are specified to agree on exactly, so any difference is
+// a write-back or flush defect. Before the IN-335 fix the frames drawn into page 0 lost part of their draws here.
+int TestReplayParityDoubleBuffer(const gpu::VulkanHandles& handles) {
+    constexpr uint32_t kFrames = 6;
+    constexpr uint32_t kBufferPages[2] = {0, 2};  // 64 x 64 CT32 buffers, FBW 1: two pages each
+    cpuref::CaptureWriter capture;
+    capture.Privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));                // PMODE: circuit 1, ALP 0xFF
+    capture.Privileged(0x12000010u, uint64_t{2} << 13);                             // SMODE1: CMOD 2 (NTSC)
+    capture.Privileged(0x12000080u, (uint64_t{63} << 32) | (uint64_t{63} << 44));  // DISPLAY1: 64 x 64
+    auto rgbaq = [](uint32_t colour) { return uint64_t{colour} | (uint64_t{0x3F800000u} << 32); };  // Q = 1.0
+    auto xyz = [](uint32_t x, uint32_t y) { return uint64_t{x * 16} | (uint64_t{y * 16} << 16); };
+    for (uint32_t frame = 0; frame < kFrames; ++frame) {
+        const uint32_t back = kBufferPages[frame & 1u];
+        const uint32_t background = 0x80000000u | (frame * 0x101010u + 0x203040u);
+        const uint32_t text = 0x60000000u | (0xF0E0D0u - frame * 0x010203u);
+        // A+D pairs: data, register address.
+        const std::vector<uint64_t> words = {
+            uint64_t{back} | (uint64_t{1} << 16), 0x4C,                         // FRAME_1: back buffer, FBW 1, CT32
+            uint64_t{0} | (uint64_t{1} << 32), 0x4E,                            // ZBUF_1: page 0, ZMSK
+            (uint64_t{63} << 16) | (uint64_t{63} << 48), 0x40,                  // SCISSOR_1: 0..63 x 0..63
+            0, 0x18,                                                            // XYOFFSET_1 = 0
+            (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,                    // TEST_1: ZTE, ZTST ALWAYS
+            (uint64_t{1} << 2) | (uint64_t{1} << 6), 0x42,                      // ALPHA_1: (Cs - Cd) * As + Cd
+            6, 0x00,                                                            // PRIM: sprite
+            rgbaq(background), 0x01, xyz(0, 0), 0x05, xyz(64, 64), 0x05,       // full-buffer clear
+            6u | (1u << 6), 0x00,                                               // PRIM: sprite, ABE
+            rgbaq(text), 0x01, xyz(4 + frame, 8), 0x05, xyz(40 + frame, 14), 0x05,  // a "text line"
+        };
+        capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(words.size() / 2), true, false, 0, 0,
+                                                     {0xE}, words));
+        capture.Privileged(0x12000070u, uint64_t{back} | (uint64_t{1} << 9));  // DISPFB1: show the back buffer
+        capture.FrameEnd(frame);
+    }
+
+    struct FrameRecord {
+        bool valid = false;
+        std::vector<uint8_t> rgb;
+        uint64_t slmHash = 0;
+    };
+    std::vector<FrameRecord> cpuFrames;
+    std::vector<FrameRecord> gpuFrames;
+    auto record = [](std::vector<FrameRecord>& out, const cpuref::FrameImage& image, const uint8_t* slm) {
+        FrameRecord r;
+        r.valid = image.valid;
+        if (image.valid) {
+            for (const display::Rgba8& p : image.image.pixels) {
+                r.rgb.push_back(p.r);
+                r.rgb.push_back(p.g);
+                r.rgb.push_back(p.b);
+            }
+        }
+        r.slmHash = cpuref::HashLocalMemory(slm, 4u * 1024u * 1024u);
+        out.push_back(std::move(r));
+    };
+
+    std::string error;
+    cpuref::CpuRenderer cpu;
+    cpuref::ReplaySummary cpuSummary;
+    if (!cpuref::ReplayCapture(capture.Bytes(), cpu, cpuSummary,
+                               [&](uint64_t, const cpuref::FrameImage& image) {
+                                   record(cpuFrames, image, cpu.Memory().Local().bytes().data());
+                               },
+                               error)) {
+        std::printf("hw_replay_parity_double_buffer: CPU replay failed: %s\n", error.c_str());
+        return 1;
+    }
+    writeback::Renderer renderer;
+    if (!renderer.Init(handles, error)) {
+        std::printf("hw_replay_parity_double_buffer: GPU drawer init failed: %s\n", error.c_str());
+        return 1;
+    }
+    writeback::WritebackReplayTarget target(renderer);
+    cpuref::ReplaySummary gpuSummary;
+    const bool replayed = cpuref::ReplayCapture(capture.Bytes(), target, gpuSummary,
+                                                [&](uint64_t, const cpuref::FrameImage& image) {
+                                                    record(gpuFrames, image, renderer.Slm());
+                                                },
+                                                error);
+    if (!replayed || renderer.Failed()) {
+        std::printf("hw_replay_parity_double_buffer: GPU replay failed: %s %s\n", error.c_str(),
+                    renderer.LastError().c_str());
+        return 1;
+    }
+    if (cpuFrames.size() != kFrames || gpuFrames.size() != kFrames) {
+        std::printf("hw_replay_parity_double_buffer: frame counts %zu / %zu, expected %u\n", cpuFrames.size(),
+                    gpuFrames.size(), kFrames);
+        return 1;
+    }
+    int failures = 0;
+    for (uint32_t frame = 0; frame < kFrames; ++frame) {
+        const FrameRecord& c = cpuFrames[frame];
+        const FrameRecord& g = gpuFrames[frame];
+        const bool imageEqual = c.valid == g.valid && c.rgb == g.rgb;
+        const bool memoryEqual = c.slmHash == g.slmHash;
+        std::printf("  frame %u (%s): image %s (valid %d/%d, %zu bytes), memory %016llx / %016llx %s\n", frame,
+                    (frame & 1u) ? "odd" : "even", imageEqual ? "equal" : "DIFFERENT", c.valid ? 1 : 0,
+                    g.valid ? 1 : 0, c.rgb.size(), static_cast<unsigned long long>(c.slmHash),
+                    static_cast<unsigned long long>(g.slmHash), memoryEqual ? "equal" : "DIFFERENT");
+        if (!imageEqual || !memoryEqual) ++failures;
+        // The fixture must not be blind: every frame changes memory and shows a non-empty image.
+        if (frame > 0 && c.slmHash == cpuFrames[frame - 1].slmHash) {
+            std::printf("  frame %u left memory unchanged (fixture is blind)\n", frame);
+            ++failures;
+        }
+        if (!c.valid || c.rgb.empty()) {
+            std::printf("  frame %u has no composed image (fixture is blind)\n", frame);
+            ++failures;
+        }
+    }
+    std::printf("hw_replay_parity_double_buffer: %u frames, %d failures\n", kFrames, failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int TestGouraudReport(gpu::GpuDrawer& drawer) {
     // Report only (IN-500): Gouraud interpolation rounding is not asserted yet.
     Setup s;
@@ -1048,6 +1264,9 @@ int main(int argc, char** argv) {
     if (name == "hw_gpu_raster_date") return TestRasterDate(drawer);
     if (name == "hw_gpu_raster_frame") return TestRasterFrameWrites(drawer);
     if (name == "hw_gpu_gouraud_report") return TestGouraudReport(drawer);
+    if (name == "hw_gpu_writeback_aliased_depth") return TestWritebackAliasedDepth(drawer);
+    if (name == "hw_readback_pending_draw") return TestReadbackObservesPendingDraw(handles);
+    if (name == "hw_replay_parity_double_buffer") return TestReplayParityDoubleBuffer(handles);
     std::printf("unknown test: %s\n", name.c_str());
     return 2;
 }

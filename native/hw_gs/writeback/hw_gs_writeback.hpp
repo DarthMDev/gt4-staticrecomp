@@ -17,6 +17,8 @@
 
 #include "hw_batch.hpp"
 #include "hw_clut.hpp"
+#include <functional>
+
 #include "hw_front_end.hpp"
 #include "hw_gs_display.hpp"
 #include "hw_memory.hpp"
@@ -36,7 +38,9 @@ struct Counters {
     std::uint64_t texelsDecoded = 0;
     std::uint64_t gpuChunks = 0;
     std::uint64_t gpuDraws = 0;
-    std::uint64_t writebackPixels = 0;          // frame pixels written back to the SLM
+    std::uint64_t writebackPixels = 0;          // changed frame words written back to the SLM (IN-335)
+    std::uint64_t writebackDepthWords = 0;      // changed depth words written back to the SLM (IN-335)
+    std::uint64_t fifoOverruns = 0;             // FIFO reads past the end of the LOCAL->HOST data (10.2)
     std::uint64_t flatDeindexedPrimitives = 0;  // IIP = 0 primitives (de-indexed, 03.2)
     std::uint64_t spritesExpanded = 0;
     std::uint64_t auxiliaryFrames = 0;        // render-only passes that restored guest memory
@@ -104,9 +108,13 @@ public:
     // Privileged writes (0x12000000..0x12001FFF). Returns false outside the display set.
     bool WritePrivileged(std::uint32_t address, std::uint64_t value);
 
-    void ResetGs();                // GS reset (front end), registers and CLUT
+    // GS reset as the CPU reference does it: front end, registers and CLUT, every GIF path, the pending
+    // LOCAL->HOST read and the display state (registers, previous DBY, background, kept image).
+    void ResetGs();
     void ClearVram();              // zeroes the SLM (drops nothing: write-back mode has no caches)
-    // LOCAL->HOST data of the pending read, at most byteCount bytes (10.2); returns the bytes copied.
+    // LOCAL->HOST data of the pending read (10.2): the batch is flushed first so the read observes every
+    // earlier draw, the data is consumed sequentially across calls, and TRXDIR becomes 3 once it is
+    // drained. Returns the bytes of real data copied (at most byteCount); the caller zero-fills the rest.
     std::size_t ReadFifo(void *destination, std::size_t byteCount);
 
     // VBlank: commits pending transfers and flushes the batch (chapter 02.8).
@@ -132,6 +140,11 @@ public:
     // too noisy to compare against the roadmap's per-pass budget, so callers report the average.
     const PassTimings &TimingTotals() const;
     std::uint64_t TimedFrames() const;
+
+    // Diagnostic hook (replay tools only): called for every batch after translation and before the GPU
+    // runs it, with the front-end batch and what the write-back path made of it. Empty = no call.
+    using BatchObserver = std::function<void(const Batch &, const BatchTranslation &)>;
+    void SetBatchObserver(BatchObserver observer);
 
     // CPU view of the SLM (4 MiB, GS layout).
     const std::uint8_t *Slm() const;

@@ -14,7 +14,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M3 front end, CLUT | Done; A+D vertex kicks fixed (IN-326) | CTest `m3_*`, `m3_hw_gif_ad_xyz` |
 | M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
-| M6 output | Display library done; CPU VRAM diagnostic added; IN-315/IN-316 closed; presentation interfaces decided (IN-331); HWR frame dumps implemented (IN-332) and the HWR replay tool added (IN-333): on identical records the GPU path is pixel-identical on every even frame and loses content on odd frames, i.e. field-parity draw loss is the open defect | slice227: 1,101 replayed frames, 0 skipped textures; even frames 0.000% bad, odd frames 1.5% (boot) to 10.6% (garage) |
+| M6 output | Display library, presentation interfaces (IN-331), HWR frame dumps (IN-332), replay tool (IN-333/IN-334) done; the odd-frame draw loss is FIXED (IN-335, write-back of stale depth words over an aliased frame buffer). 42/42 headless dumps inside the 14.4 2D gate vs the donor. Open: triangle attribute precision vs the CPU reference (IN-336, inside the gate), owner test 1 | slice228: `hw_gpu_writeback_aliased_depth`, `hw_replay_parity_double_buffer`, `hw_readback_pending_draw`; replay 678/1,101 frames byte-identical, 672 identical in memory, max pct_bad 0.154%; game 42/42 dumps max pct_bad 0.131% |
 | M7 cache | Bookkeeping core done | cache CTest |
 | M8, M12, M14, M15, M17, M19 | Not started | |
 | M9-M11, M13, M16, M18 | Pure references only (decide, lod, replace) | decide, lod, `hw_replace_*` CTest |
@@ -198,3 +198,40 @@ while a game is open, and never touches the owner's card.
 - `private/slice227-replay-gpu/{cpu,gpu,cpu-slm,gpu-slm}` and `inspect/` - the A/B that isolates the defect.
 - `private/slice226-hwr-dumps/` - 42-dump schedule from the game and the comparison JSON.
 - `private/hwr-play/` - the owner's windowed session (dumps + `session.log` with the counters).
+
+## 2026-10-21 M6 odd-frame defect fixed (local slice228, IN-335) - Claude
+
+- Confirmed cause: `ExecuteBatch` wrote back the whole rectangle of BOTH frame and depth words after every chunk,
+  even with ZMSK = 1. GT4's 2D passes keep ZBUF at page 0 with Z writes masked while the display double buffer
+  alternates FBP 0 / FBP 140, so on every other frame the unused depth buffer shares pages with the buffer being
+  drawn; Z32 and CT32 swizzle a page differently and the stale depth words landed on scattered drawn pixels (the
+  6,591 bytes of IN-334). Fix: write back only the words a chunk changed, frame word then depth word per pixel.
+- The coordinator's lead (odd fields draw with a half-line Y offset, `func_004A2A10` / scratchpad 0x2C0) was
+  tested as a Hypothesis and is not the cause: after the fix frame 101 is identical in image and memory, and the
+  remaining differences (IN-336) are spread evenly over odd and even frames.
+- Same commit aligns the GPU renderer with the CPU reference: `ReadFifo` flushes the open batch, consumes
+  LOCAL->HOST data sequentially, counts overruns and sets TRXDIR = 3 when drained; CSR.RESET resets the GS;
+  `ResetGs`/`GifReset` clear the pending read and display state like the CPU reference.
+- New controls (each fails on the old code where stated): `hw_gpu_writeback_aliased_depth` (1,274/1,176
+  mismatching pixels before the fix), `hw_replay_parity_double_buffer` (synthetic double-buffered capture, CPU vs
+  GPU image and 4 MiB memory hash per frame: 6/6 frames failed before the fix), `hw_readback_pending_draw`.
+  `hw_smoke_window` expectation updated to the IN-333 counter meaning (black_presents=0, composed background).
+- Replay tools: `--slm-hashes <file>` (per-frame FNV-1a of the 4 MiB memory, both tools) and
+  `hw_writeback_replay --trace-frame N --trace-rect x0,y0,x1,y1` (per-batch state dump).
+- Confirmed on `menu-v2.gscap` (1,101 frames): 678 frames byte-identical GPU vs CPU, 672 with identical memory;
+  the other 423 frames differ by small amounts on textured/Gouraud triangles (max pct_bad 0.154%, max delta 18),
+  IN-336, inside the 2D gate. Before: odd frames lost content (garage 10.6%).
+- Confirmed in game, headless 4,200 frames `GT4_RENDERER=hw`: 0 faults, 42 dumps, **42/42 inside the chapter 14.4
+  2D gate vs the donor** (frames 100-700 identical, max pct_bad 0.131% at frame 900, min PSNR 47.6 dB); before
+  the fix 0/42. Per-frame CPU averages: translate 27.4 ms, execute 61.9 ms (one draw per primitive; M7/M9).
+- Confirmed: fresh full build `build/slice228-coregs2` (215 CTests: 212 pass, Q-07 skipped, the expected
+  `python_native_contracts` distribution-pin error and `hw_smoke_window`, whose stale expectation is fixed in this
+  commit); default renderer headless 42/42 = slice214, card copy unchanged. Evidence:
+  `private/slice228-replay/`, `private/slice228-evidence/`.
+
+### Next step
+
+1. Owner test 1 (spec 15.2 M6): windowed look at menus and one race at 1x with `GT4_RENDERER=hw` (slow is
+   expected, about 10 FPS). The request goes to the owner in the handback report.
+2. IN-336 question to the spec team (oracle for triangle attribute interpolation at 1x).
+3. M7 surface cache, then M8 readbacks, M9 batching (the 27 + 62 ms per frame).

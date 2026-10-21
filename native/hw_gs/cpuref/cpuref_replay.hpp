@@ -64,6 +64,11 @@ bool ReplayCaptureV2(const std::vector<uint8_t>& stream, CpuRenderer& renderer, 
                      const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
                      std::string& error);
 
+// FNV-1a 64-bit hash of a shadow local memory image, taken over 64-bit little-endian words so that
+// hashing 4 MiB per frame stays cheap. Both replay tools print it per frame (--slm-hashes), so the GPU
+// write-back path and the CPU reference can be compared in memory on every frame, not only on images.
+uint64_t HashLocalMemory(const uint8_t* bytes, size_t byteCount);
+
 // Writes capture streams in the same record layout (used by the tests and synthetic captures).
 class CaptureWriter {
 public:

@@ -1901,3 +1901,23 @@ Incremental rebuild of the slice225 tree with `hw_writeback_replay` and the `bla
 - Confirmed: `hw_writeback_replay private/slice217-coregs2-evidence/menu-v2.gscap <out>` replays 1,101 frames in 100 s with 133,637 primitives, 0 skipped textures, 0 rejected GIF packets.
 - Confirmed by A/B against `hw_cpuref_replay` on the same capture: even frames 0.000% bad, odd frames 1.533% early and 10.579% at garage frame 900; the odd-frame difference is the first boot text line.
 - Confirmed: 174 HWR-related CTests still pass (backend, cpuref, frontend, pixel, display, writeback).
+
+## Local slice228 - M6 write-back aliasing fix (12.9, 14.3, 14.4, IN-335/IN-336)
+
+Fresh full build of the worktree (`build/slice228-coregs2/build-228.bat`, the slice217 recipe and input pins,
+`GT4_HW_GS=ON`, `GT4_RELEASE_DISTRIBUTION=ON`), output in `build/slice228-coregs2/build`. No main-checkout output,
+no candidate pin, no launcher mode. The headless scripts take the ELF from `private/reconstructed/SCUS_973.28.elf`
+(same SHA-256 prefix 10f82e22 as the earlier evidence copies).
+
+- Confirmed: CTest 215 selected, 212 pass, Q-07 skipped; failures: the expected `python_native_contracts`
+  distribution-pin error (629 Python tests, 46 skips) and `hw_smoke_window`, whose expectation was still the
+  pre-IN-333 counter (`black_presents=120`); its real output `frames=120 presents=120 black_presents=0 ...
+  faults=0` is now the expectation.
+- Confirmed: new fixtures `hw_gpu_writeback_aliased_depth`, `hw_replay_parity_double_buffer`,
+  `hw_readback_pending_draw` pass; the first two fail with the previous write-back.
+- Confirmed: default renderer headless 4,200 frames, 42/42 dump hashes equal slice214, card copy unchanged
+  (`private/slice228-evidence/default-parity/`).
+- Confirmed: `GT4_RENDERER=hw` headless 4,200 frames, 0 faults, 42 dumps, card copy unchanged, 416 s; against the
+  donor dumps 42/42 inside the 2D gate (`private/slice228-evidence/compare-vs-donor.json`).
+- Confirmed: replay of `menu-v2.gscap` through both tools with `--slm-hashes`: 678/1,101 frames byte-identical,
+  672/1,101 identical in memory, max pct_bad 0.154% (`private/slice228-replay/`).
