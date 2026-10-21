@@ -13,7 +13,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M2 memory | Done | CTest `memory_*` |
 | M3 front end, CLUT | Done; A+D vertex kicks fixed (IN-326) | CTest `m3_*`, `m3_hw_gif_ad_xyz` |
 | M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
-| M5 reference II | Arithmetic done on CPU and GPU (bit-exact); not wired | CTest `pixel_*`, `hw_gpu_*` |
+| M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
 | M6 output | Display library done; CPU VRAM diagnostic added; IN-315 comparison resolved and IN-316 closed (garage samples pass after IN-326); game dumps still pending | slice222:76/76 CPU-library tests; 11/11 aligned menu samples inside the 2D gate, worst 0.2051% / 45.992 dB |
 | M7 cache | Bookkeeping core done | cache CTest |
 | M8, M12, M14, M15, M17, M19 | Not started | |
@@ -40,8 +40,9 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 
 ## Next step
 
-**M4 parity replay**: add the HWR replay tool (the CUPTURE reader over the GPU write-back renderer) and record
-S-01/S-02 against the donor frames, as 15.2 M4 asks. Then M5 (blending in the raster path: ABE is currently
+**Parity replay and first playable**: add the HWR replay tool (the capture reader over the GPU write-back
+renderer) and record S-01/S-02 against the donor frames, as 15.2 M4/M5 ask; then M6 (HWR frame dumps from the
+sink and the first owner look at 1x). Then M5 (blending in the raster path: ABE is currently
 drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at 1x). The front-end equivalent of the old `.inc` copy is not needed: the sink no longer uses donor memory for output. S-03..S-11 still need owner gameplay captures.
 
 ## 2026-10-21 replay checkpoint (slice219)
@@ -91,3 +92,11 @@ drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at
 - Confirmed: full native CTest 200 pass + Q-07 skip + the known `python_native_contracts` distribution-pin failure (202 selected). Default renderer headless 4,200 frames: 42/42 dumps equal slice214, card copy unchanged. Python 629 tests, 44 skips, same single expected error.
 - Confirmed: `GT4_RENDERER=hw` now runs the write-back renderer in process: 600 headless frames, 205,791,616 GIF bytes, 2,987 privileged writes, 0 faults, 33 s (about 55 ms per guest frame; one draw per primitive with a barrier at 1x). Nothing is dumped yet, so this is a stability result, not a picture.
 - Evidence: `private/slice222-in326-evidence/hw-run/` and `.../default-parity/`. Fresh full build: `build/slice223-coregs2`. No pin, launcher mode, PR or merge.
+
+## 2026-10-21 M5 raster path checkpoint (blend unit through the draw stage)
+
+- Confirmed: the raster (fragment-shader) path now runs the whole pixel pipeline of chapter 08. The translation decodes the ALPHA register, PABE and COLCLAMP exactly as the CPU reference does and passes PRIM.ABE; `hw_process_pixel` was already the bit-exact core, so the only missing piece was the state.
+- Confirmed: five new fixtures compare GPU against the CPU reference with zero mismatching pixels: `hw_gpu_raster_blend` (81 modes x COLCLAMP both ways, 13,122 pixels), `hw_gpu_raster_pabe` (both alpha MSB cases), `hw_gpu_raster_atest` (8 methods x 4 AFAIL, 4,896 pixels), `hw_gpu_raster_date` (DATM both values over the written result) and `hw_gpu_raster_frame` (FBA, FBMSK on CT24, DIMX dither on CT16).
+- Confirmed: full native CTest 205 pass + Q-07 skip + the known distribution-pin failure (207 selected). Default renderer headless 4,200 frames: 42/42 dumps equal slice214, card copy unchanged.
+- Confirmed: `GT4_RENDERER=hw` headless 600 frames with blending enabled: 0 faults, 37.0 s (about 62 ms per guest frame; blending costs about 7% over the previous 33.2 s). No frame dump yet.
+- Open: DATE in CT24 writes nothing (read as High confidence in 08.7 and mirrored by both sides); the S-01/S-02 parity replay still needs the HWR replay tool.

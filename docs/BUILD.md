@@ -1868,3 +1868,11 @@ Fresh full build of the worktree with the slice217 recipe (`build/scripts-222/bu
 - Confirmed: default renderer headless, 4,200 frames, 32.5 s, exit0, copied seed card unchanged, 42/42 dump hashes equal slice214 (`private/slice222-in326-evidence/default-parity/`). Python 629 tests, 44 skips, same single expected error.
 - Confirmed: `GT4_RENDERER=hw` headless 600 frames: 600 vsyncs, 600 frames, 205,791,616 GIF bytes, 2,987 privileged writes, 0 unmirrored, 0 faults, 33.2 s, card unchanged (`.../hw-run/`). HWR game output still has no frame dump, so this proves the renderer runs in process, not that the picture is right.
 - Confirmed: the CPU reference fix of IN-328 changes no other fixture; `cpuref_constant_attributes` is the control, and the GPU TFX/fog equivalence went from 16 mismatches to 0.
+
+## Local slice224 - M5 pixel pipeline in the raster path (08, IN-330)
+
+Fresh full build of the worktree with the slice217 recipe (`build/scripts-222/build-game-224.bat`, same input pins, `GT4_HW_GS=ON`, `GT4_RELEASE_DISTRIBUTION=ON`), output in `build/slice224-coregs2/build`. No main-checkout output, no candidate pin, no launcher mode.
+
+- Confirmed: full native CTest 205 pass, Q-07 skipped, only the expected `python_native_contracts` distribution-pin failure (207 selected, 230 s). The five new raster fixtures are listed in IN-330.
+- Confirmed on the same source (incremental rebuild before this fresh build): default renderer headless 4,200 frames, 34.2 s, exit0, copied seed card unchanged, 42/42 dump hashes equal slice214; `GT4_RENDERER=hw` headless 600 frames with blending enabled, 0 faults, 37.0 s (about 62 ms per frame, +7% over the 33.2 s without blending). Evidence: `private/slice222-in326-evidence/default-parity-m5/` and `.../hw-run-m5/`.
+- Deferred: re-running those two headless checks against the slice224 executable itself. An owner game session (`gt4vulkan` from the main checkout's `private/slice218-build`) was running, and the launch guard refused, as it must. Nothing was launched while that session was open.

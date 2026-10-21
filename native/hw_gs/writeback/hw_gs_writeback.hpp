@@ -31,7 +31,7 @@ struct Counters {
     std::uint64_t primitivesSkippedTexture = 0;  // invalid texture format or size (01.5, IN-307)
     std::uint64_t batchesSkippedTexture = 0;
     std::uint64_t batchesEmpty = 0;             // no pixels after scissor and coverage
-    std::uint64_t batchesAbeIgnored = 0;        // ABE = 1 in M4: drawn as opaque (IN-500)
+    std::uint64_t batchesBlended = 0;           // ABE = 1: the blend unit ran for those batches
     std::uint64_t texturesDecoded = 0;
     std::uint64_t texelsDecoded = 0;
     std::uint64_t gpuChunks = 0;
@@ -52,7 +52,7 @@ struct FrameOutput {
 // Everything the GPU needs for one batch, plus the skip decisions (CPU translation, no GPU calls).
 struct BatchTranslation {
     bool skippedTexture = false;
-    bool abeIgnored = false;
+    bool blended = false;  // PRIM.ABE: the blend unit runs
     memory::BufferView frameView{0, 0, memory::Psm::Ct32};
     memory::BufferView zView{0, 0, memory::Psm::Z32};
     PixelRect rect;  // union of the draw scissors: the rectangle read and written back

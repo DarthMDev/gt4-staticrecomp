@@ -60,7 +60,8 @@ target_compile_definitions(hw_writeback_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
 foreach(hw_writeback_test IN ITEMS hw_flat_provoking hw_sprite_corners hw_gpu_coverage_vectors
         hw_gpu_equivalence_flat hw_gpu_equivalence_texture hw_gpu_equivalence_region
         hw_gpu_equivalence_bilinear hw_gpu_equivalence_tfx_fog hw_gpu_equivalence_depth_alpha
-        hw_gpu_equivalence_scissor hw_gpu_gouraud_report)
+        hw_gpu_equivalence_scissor hw_gpu_raster_blend hw_gpu_raster_pabe hw_gpu_raster_atest
+        hw_gpu_raster_date hw_gpu_raster_frame hw_gpu_gouraud_report)
     add_test(NAME ${hw_writeback_test} COMMAND hw_writeback_tests ${hw_writeback_test})
     set_tests_properties(${hw_writeback_test} PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
 endforeach()

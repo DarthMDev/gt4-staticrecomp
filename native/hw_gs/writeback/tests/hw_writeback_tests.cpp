@@ -17,6 +17,7 @@
 #include "../../cpuref/cpuref_draw.hpp"
 #include "../../cpuref/cpuref_memory.hpp"
 #include "../../frontend/hw_gs_registers.hpp"
+#include "../../pixel/hw_gs_pixel.hpp"
 #include "../../frontend/hw_gs_types.hpp"
 #include "../../hw_gs_vulkan_loader.hpp"
 #include "../hw_gs_vulkan_device_table.hpp"
@@ -127,6 +128,15 @@ struct Setup {
     bool mmag = false;
     uint32_t wms = 0, wmt = 0;
     uint32_t minu = 0, maxu = 0, minv = 0, maxv = 0;
+    bool abe = false;        // PRIM.ABE: run the blend unit
+    uint64_t alpha_reg = 0;  // ALPHA register (0x42), see pixel::encode_alpha_register
+    bool pabe = false;       // skip the blend when source alpha MSB is 0
+    bool colclamp = false;   // COLCLAMP: 0 wraps the low 8 bits
+    bool fba = false;        // force the alpha byte to 0x80 on write
+    bool dthe = false;       // dithering (16-bit frames)
+    uint64_t dimx = 0;       // DIMX, the dither matrix
+    bool date = false;       // DATE (destination alpha test)
+    bool datm = false;       // DATE expected MSB
     PrimType type = PrimType::Triangle;
 };
 
@@ -137,7 +147,14 @@ Batch MakeBatch(const Setup& s, const std::vector<Vertex>& vertices, const std::
     batch.state.ctx.frame = Pack(s.fbp, 0) | Pack(s.fbw, 16) | Pack(s.fpsm, 24) | Pack(s.fbmsk, 32);
     batch.state.ctx.zbuf = Pack(s.zbp, 0) | Pack(s.zpsm, 24) | Pack(s.zmsk ? 1 : 0, 32);
     batch.state.ctx.test = Pack(s.ate ? 1 : 0, 0) | Pack(s.atst, 1) | Pack(s.aref, 4) | Pack(s.afail, 12) |
-                           Pack(s.zte ? 1 : 0, 16) | Pack(s.ztst, 17);
+                           Pack(s.date ? 1 : 0, 14) | Pack(s.datm ? 1 : 0, 15) | Pack(s.zte ? 1 : 0, 16) |
+                           Pack(s.ztst, 17);
+    batch.state.ctx.alpha = s.alpha_reg;
+    batch.state.ctx.fba = Pack(s.fba ? 1 : 0, 0);
+    batch.state.env.pabe = s.pabe ? 1 : 0;
+    batch.state.env.colclamp = s.colclamp ? 1 : 0;
+    batch.state.env.dthe = s.dthe ? 1 : 0;
+    batch.state.env.dimx = s.dimx;
     batch.state.ctx.scissor = Pack(static_cast<uint64_t>(s.scax0), 0) | Pack(static_cast<uint64_t>(s.scax1), 16) |
                               Pack(static_cast<uint64_t>(s.scay0), 32) | Pack(static_cast<uint64_t>(s.scay1), 48);
     batch.state.ctx.tex0 = Pack(s.tbp, 0) | Pack(s.tbw, 14) | Pack(s.tpsm, 20) | Pack(s.tw, 26) | Pack(s.th, 30) |
@@ -148,7 +165,8 @@ Batch MakeBatch(const Setup& s, const std::vector<Vertex>& vertices, const std::
     batch.state.env.fogcol = s.fogcol;
     uint64_t prim = static_cast<uint64_t>(s.type == PrimType::Triangle ? 3 : static_cast<uint8_t>(s.type));
     prim = prim | (s.iip ? 1ull << primbit::kIip : 0) | (s.tme ? 1ull << primbit::kTme : 0) |
-           (s.fge ? 1ull << primbit::kFge : 0) | (s.fst ? 1ull << primbit::kFst : 0);
+           (s.fge ? 1ull << primbit::kFge : 0) | (s.abe ? 1ull << primbit::kAbe : 0) |
+           (s.fst ? 1ull << primbit::kFst : 0);
     batch.state.effectivePrim = prim;
     batch.cls = ClassOfType(static_cast<uint32_t>(prim & 7u));
     batch.vertices = vertices;
@@ -570,6 +588,161 @@ int TestEquivalenceScissor(gpu::GpuDrawer& drawer) {
     return Report("hw_gpu_equivalence_scissor", RunCase(drawer, s, batch, 15));
 }
 
+// ---- M5: blend unit, alpha test, DATE, FBA/FBMASK/DIMX through the raster path ------------------
+// Every case compares the GPU result with the CPU reference over the whole batch rectangle, like the
+// M4 equivalence cases: the CPU side is the bit-exact pixel library of chapter 08.
+
+uint64_t AlphaRegister(uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint8_t fix) {
+    return pixel::encode_alpha_register(static_cast<pixel::BlendSource>(a), static_cast<pixel::BlendSource>(b),
+                                        static_cast<pixel::BlendFactor>(c), static_cast<pixel::BlendSource>(d), fix);
+}
+
+// 81 blend modes of chapter 08.2 (A, B, C, D over Cs/Cd/Zero and As/Ad/FIX), with COLCLAMP both ways.
+// The destination is the deterministic frame pattern, so every mode blends against real destination
+// colours and alphas.
+int TestRasterBlendModes(gpu::GpuDrawer& drawer) {
+    uint64_t compared = 0;
+    uint64_t mismatches = 0;
+    for (uint32_t clamp = 0; clamp < 2; ++clamp) {
+        for (uint32_t a = 0; a < 3; ++a) {
+            for (uint32_t b = 0; b < 3; ++b) {
+                for (uint32_t c = 0; c < 3; ++c) {
+                    for (uint32_t d = 0; d < 3; ++d) {
+                        Setup s;
+                        s.iip = false;
+                        s.abe = true;
+                        s.colclamp = clamp != 0;
+                        s.alpha_reg = AlphaRegister(a, b, c, d, 0x40);
+                        Batch batch = MakeBatch(s, FlatQuad(0, 0, 8, 8, 120, 60, 30, 0x90),
+                                                {PrimType::Triangle, PrimType::Triangle});
+                        CaseResult r = RunCase(drawer, s, batch, 21 + a * 27 + b * 9 + c * 3 + d);
+                        if (r.gpuError) {
+                            std::printf("hw_gpu_raster_blend: GPU error: %s\n", r.error.c_str());
+                            return 1;
+                        }
+                        compared += r.compared;
+                        mismatches += r.mismatches;
+                    }
+                }
+            }
+        }
+    }
+    std::printf("hw_gpu_raster_blend: compared %llu pixels over 162 modes, mismatches %llu\n",
+                static_cast<unsigned long long>(compared), static_cast<unsigned long long>(mismatches));
+    return mismatches == 0 ? 0 : 1;
+}
+
+// PABE: with PABE = 1 the blend is skipped while the source alpha MSB is 0 (08.2).
+int TestRasterPabe(gpu::GpuDrawer& drawer) {
+    int failures = 0;
+    for (uint32_t alpha : {0x40u, 0xC0u}) {
+        Setup s;
+        s.iip = false;
+        s.abe = true;
+        s.pabe = true;
+        s.alpha_reg = AlphaRegister(0, 1, 0, 1, 0x00);  // Cs*Ad + Cd*(1-Ad)
+        Batch batch = MakeBatch(s, FlatQuad(0, 0, 8, 8, 200, 40, 90, static_cast<uint8_t>(alpha)),
+                                {PrimType::Triangle, PrimType::Triangle});
+        failures += Report("hw_gpu_raster_pabe", RunCase(drawer, s, batch, 31 + alpha));
+    }
+    return failures ? 1 : 0;
+}
+
+// Alpha test: the eight comparisons of 08.6 and the four AFAIL actions, with alphas on both sides of
+// the reference so both the pass and the fail path run.
+int TestRasterAlphaTest(gpu::GpuDrawer& drawer) {
+    uint64_t compared = 0;
+    uint64_t mismatches = 0;
+    for (uint32_t atst = 0; atst < 8; ++atst) {
+        for (uint32_t afail = 0; afail < 4; ++afail) {
+            Setup s;
+            s.iip = false;
+            s.ate = true;
+            s.atst = atst;
+            s.afail = afail;
+            s.aref = 0x50;
+            s.zte = true;
+            s.ztst = 1;
+            std::vector<Vertex> quad = FlatQuad(0, 0, 8, 8, 70, 80, 90, 0x30);
+            std::vector<Vertex> other = FlatQuad(8, 0, 16, 8, 20, 30, 40, 0x70);
+            quad.insert(quad.end(), other.begin(), other.end());
+            Batch batch = MakeBatch(s, quad, {PrimType::Triangle, PrimType::Triangle, PrimType::Triangle,
+                                              PrimType::Triangle});
+            CaseResult r = RunCase(drawer, s, batch, 41 + atst * 4 + afail);
+            if (r.gpuError) {
+                std::printf("hw_gpu_raster_atest: GPU error: %s\n", r.error.c_str());
+                return 1;
+            }
+            compared += r.compared;
+            mismatches += r.mismatches;
+        }
+    }
+    std::printf("hw_gpu_raster_atest: compared %llu pixels over 32 combinations, mismatches %llu\n",
+                static_cast<unsigned long long>(compared), static_cast<unsigned long long>(mismatches));
+    return mismatches == 0 ? 0 : 1;
+}
+
+// DATE (08.7): the destination alpha MSB decides whether a pixel is written. A first quad writes,
+// a second one with the opposite alpha tests against the pixels the first one produced.
+int TestRasterDate(gpu::GpuDrawer& drawer) {
+    uint64_t compared = 0;
+    uint64_t mismatches = 0;
+    for (uint32_t datm = 0; datm < 2; ++datm) {
+        Setup s;
+        s.iip = false;
+        s.date = true;
+        s.datm = datm != 0;
+        std::vector<Vertex> quad = FlatQuad(0, 0, 8, 8, 90, 40, 10, 0x80);
+        std::vector<Vertex> inner = FlatQuad(2, 2, 6, 6, 10, 200, 30, 0x40);
+        quad.insert(quad.end(), inner.begin(), inner.end());
+        Batch batch = MakeBatch(s, quad, {PrimType::Triangle, PrimType::Triangle, PrimType::Triangle,
+                                          PrimType::Triangle});
+        CaseResult r = RunCase(drawer, s, batch, 51 + datm);
+        if (r.gpuError) {
+            std::printf("hw_gpu_raster_date: GPU error: %s\n", r.error.c_str());
+            return 1;
+        }
+        compared += r.compared;
+        mismatches += r.mismatches;
+    }
+    std::printf("hw_gpu_raster_date: compared %llu pixels, mismatches %llu\n",
+                static_cast<unsigned long long>(compared), static_cast<unsigned long long>(mismatches));
+    return mismatches == 0 ? 0 : 1;
+}
+
+// FBA (alpha forced to 0x80), FBMSK on a CT24 target and DIMX dithering on a CT16 target (05.6, 08.8).
+int TestRasterFrameWrites(gpu::GpuDrawer& drawer) {
+    int failures = 0;
+    {
+        Setup s;
+        s.iip = false;
+        s.fba = true;
+        Batch batch = MakeBatch(s, FlatQuad(0, 0, 8, 8, 30, 60, 90, 0x12),
+                                {PrimType::Triangle, PrimType::Triangle});
+        failures += Report("hw_gpu_raster_fba", RunCase(drawer, s, batch, 61));
+    }
+    {
+        Setup s;
+        s.iip = false;
+        s.fpsm = 1;  // CT24
+        s.fbmsk = 0x00FFFFFF;
+        Batch batch = MakeBatch(s, FlatQuad(0, 0, 8, 8, 240, 120, 60, 0xFF),
+                                {PrimType::Triangle, PrimType::Triangle});
+        failures += Report("hw_gpu_raster_fbmsk", RunCase(drawer, s, batch, 62));
+    }
+    {
+        Setup s;
+        s.iip = false;
+        s.fpsm = 2;  // CT16
+        s.dthe = true;
+        s.dimx = 0x13579BDF2468ACE0ull & 0xFFFFFFFFFFFFull;  // 16 four-bit entries, values -4..+3
+        Batch batch = MakeBatch(s, FlatQuad(0, 0, 8, 8, 130, 70, 210, 0xC0),
+                                {PrimType::Triangle, PrimType::Triangle});
+        failures += Report("hw_gpu_raster_dither", RunCase(drawer, s, batch, 63));
+    }
+    return failures ? 1 : 0;
+}
+
 int TestGouraudReport(gpu::GpuDrawer& drawer) {
     // Report only (IN-500): Gouraud interpolation rounding is not asserted yet.
     Setup s;
@@ -614,6 +787,11 @@ int main(int argc, char** argv) {
     if (name == "hw_gpu_equivalence_tfx_fog") return TestEquivalenceTfxFog(drawer);
     if (name == "hw_gpu_equivalence_depth_alpha") return TestEquivalenceDepthAlpha(drawer);
     if (name == "hw_gpu_equivalence_scissor") return TestEquivalenceScissor(drawer);
+    if (name == "hw_gpu_raster_blend") return TestRasterBlendModes(drawer);
+    if (name == "hw_gpu_raster_pabe") return TestRasterPabe(drawer);
+    if (name == "hw_gpu_raster_atest") return TestRasterAlphaTest(drawer);
+    if (name == "hw_gpu_raster_date") return TestRasterDate(drawer);
+    if (name == "hw_gpu_raster_frame") return TestRasterFrameWrites(drawer);
     if (name == "hw_gpu_gouraud_report") return TestGouraudReport(drawer);
     std::printf("unknown test: %s\n", name.c_str());
     return 2;

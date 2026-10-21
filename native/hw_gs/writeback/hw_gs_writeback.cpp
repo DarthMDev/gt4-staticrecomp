@@ -255,7 +255,7 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
     out.zView = memory::BufferView{memory::blockOfPage(zbuf::Zbp(ctx.zbuf)), frame::Fbw(ctx.frame),
                                    zPsm ? *zPsm : memory::Psm::Z32};
 
-    // Pixel state, as the CPU reference sets it (01.5, 08). Blending is not in M4 (ABE opaque).
+    // Pixel state, computed exactly as the CPU reference sets it (01.5, 08).
     pixel::PixelState ps;
     ps.frame.format = FrameFormatOf(framePsmCode);
     ps.frame.fbmsk = frame::Fbmsk(ctx.frame);
@@ -272,6 +272,10 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
     ps.depth.compare = DepthCompareOf(test::Ztst(ctx.test));
     ps.depth.write_masked = zbuf::Zmsk(ctx.zbuf) != 0;
     ps.z_format = ZFormatOf(zbufPsmCode);
+    pixel::decode_alpha_register(ctx.alpha, ps.blend);
+    ps.blend.enabled = blendEnabled;
+    ps.blend.pabe = (env.pabe & 1u) != 0;
+    ps.blend.colour_clamp = (env.colclamp & 1u) != 0;
 
     TextureUnit texture;
     const bool tme = ((prim >> primbit::kTme) & 1u) != 0;
@@ -318,7 +322,14 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
     st.fields[gpu::gpufield::Ztst] = static_cast<uint32_t>(ps.depth.compare);
     st.fields[gpu::gpufield::Zmsk] = ps.depth.write_masked ? 1u : 0u;
     st.fields[gpu::gpufield::Zformat] = static_cast<uint32_t>(ps.z_format);
-    st.fields[gpu::gpufield::BlendOn] = 0;  // M4: no blending (IN-500)
+    st.fields[gpu::gpufield::BlendOn] = ps.blend.enabled ? 1u : 0u;
+    st.fields[gpu::gpufield::Pabe] = ps.blend.pabe ? 1u : 0u;
+    st.fields[gpu::gpufield::BlendA] = static_cast<uint32_t>(ps.blend.a);
+    st.fields[gpu::gpufield::BlendB] = static_cast<uint32_t>(ps.blend.b);
+    st.fields[gpu::gpufield::BlendC] = static_cast<uint32_t>(ps.blend.c);
+    st.fields[gpu::gpufield::BlendD] = static_cast<uint32_t>(ps.blend.d);
+    st.fields[gpu::gpufield::Fix] = ps.blend.fix;
+    st.fields[gpu::gpufield::Colclamp] = ps.blend.colour_clamp ? 1u : 0u;
     st.fields[gpu::gpufield::TexOn] = tme ? 1u : 0u;
     st.fields[gpu::gpufield::Tfx] = static_cast<uint32_t>(texture.tfx);
     st.fields[gpu::gpufield::Tcc] = texture.tcc ? 1u : 0u;
@@ -337,7 +348,7 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
     st.fields[gpu::gpufield::WrapMaxT] = static_cast<uint32_t>(texture.wrapT.maximum);
     st.fields[gpu::gpufield::TexLog2W] = texture.twLog2;
     st.fields[gpu::gpufield::TexLog2H] = texture.thLog2;
-    out.abeIgnored = blendEnabled;
+    out.blended = blendEnabled;
 
     // Primitives, in stream order (chapter 03.2). Each keeps its own scissor (the CPU clip).
     bool haveRect = false;
@@ -525,7 +536,7 @@ public:
             counters.batchesSkippedTexture++;
             return;
         }
-        if (t.abeIgnored) counters.batchesAbeIgnored++;
+        if (t.blended) counters.batchesBlended++;
         if (t.draws.empty()) {
             counters.batchesEmpty++;
             return;
