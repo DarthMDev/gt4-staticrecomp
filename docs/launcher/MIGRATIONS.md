@@ -10,7 +10,7 @@ Launcher-owned files:
 
 | File | Where | Schema key | Schema today | Chain |
 |---|---|---|---|---|
-| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 5 | `migrate::SETTINGS` (first schema 0; schema 3 adds `widescreen`, TASK-079, retired again on 2026-10-21 by a load-time rule, see below; schema 4 adds `aspect_ratio` = "auto" and `aspect_custom` = "233" and drops the retired keys, TASK-080; schema 5 drops the aspect keys and `[gs] upscale` and adds `monitor`, `resolution` and `render_scale`, TASK-080 addendum) |
+| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 6 | `migrate::SETTINGS` (first schema 0; schema 3 adds `widescreen`, TASK-079, retired again on 2026-10-21 by a load-time rule, see below; schema 4 adds `aspect_ratio` = "auto" and `aspect_custom` = "233" and drops the retired keys, TASK-080; schema 5 drops the aspect keys and `[gs] upscale` and adds `monitor`, `resolution` and `render_scale`, TASK-080 addendum; schema 6 adds `progressive` = "on", TASK-086) |
 | `controls.toml` | `%LOCALAPPDATA%\GT4Recomp\` | `schema` | 1 (the file format is owned by `gt4controls`) | `migrate::CONTROLS` (first schema 1) |
 | `version.json` | install folder, or data folder when read-only | `schema` | 1 | `migrate::VERSION_FILE` (first schema 1) |
 | save library | `%LOCALAPPDATA%\GT4Recomp\library\` | none | a folder, not a single index file | not applicable yet; see below |
@@ -177,6 +177,16 @@ defaults in memory and never rewrites the file. Tests: `migrate.rs::an_ultrawide
 size, `display::monitor_id`), never an index; it resolves to the same device, then a monitor with the same desktop size,
 then the primary monitor. `resolution` holds `desktop` or `<W>x<H>`; a size the monitor does not support resolves to its
 desktop mode. Choosing another monitor resets `resolution` to `desktop`.
+
+## Schema 5 to 6: Progressive 480p (TASK-086, owner 2026-10-21)
+
+The Graphics page gets the row "Progressive 480p" (`progressive`, a toggle, default on; it sends `GT4_PROGRESSIVE=1`
+or `0`). `settings_5_to_6` (`migrate.rs`) adds `progressive = "on"` to `[settings]` unless it is already there, so a
+release 1.1.0 file (schema 5) records what the game is sent; it changes nothing else and does not mark the value as
+chosen. The original is copied to `settings.toml.bak-schema5-<t>` first. Downgrade: the 1.1.0 launcher sees schema 6 as
+newer, uses defaults in memory and never rewrites the file. Tests:
+`tests/config_migration.rs::a_release_1_1_0_schema_5_file_gets_progressive_on_and_keeps_its_values` and
+`::a_schema_6_file_with_progressive_off_keeps_it`, `tests/launch_contract.rs::the_progressive_row_sends_gt4_progressive_on_both_paths`.
 
 ## What the migrations do not do
 

@@ -118,13 +118,14 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 5,
+    current: 6,
     steps: &[
         Step { from: 0, apply: settings_0_to_1 },
         Step { from: 1, apply: settings_1_to_2 },
         Step { from: 2, apply: settings_2_to_3 },
         Step { from: 3, apply: settings_3_to_4 },
         Step { from: 4, apply: settings_4_to_5 },
+        Step { from: 5, apply: settings_5_to_6 },
     ],
 };
 
@@ -208,6 +209,16 @@ fn settings_4_to_5(document: &mut Value) -> Result<(), String> {
     if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
         gs.remove("upscale");
         gs.remove("aspect");
+    }
+    Ok(())
+}
+
+/// Schema 6: the Progressive 480p row (TASK-086, `GT4_PROGRESSIVE`, owner 2026-10-21: on by default). A file of schema 5
+/// (release 1.1.0) has no such key; it gets the row's default "on" written out, so the file records what the game is
+/// sent. A value already present is kept. The id is literal on purpose (see `settings_3_to_4`).
+fn settings_5_to_6(document: &mut Value) -> Result<(), String> {
+    if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        settings.entry("progressive".to_string()).or_insert_with(|| Value::from("on"));
     }
     Ok(())
 }
@@ -336,7 +347,7 @@ mod tests {
     fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(5));
+        assert_eq!(document["schema_version"], json!(6));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
         assert!(document["settings"].get("widescreen").is_none(), "added by step 3, dropped by step 4");
         assert!(document["settings"].get("aspect_ratio").is_none(), "added by step 4, dropped by step 5");
@@ -344,6 +355,22 @@ mod tests {
         assert_eq!(document["settings"]["monitor"], json!("primary"));
         assert_eq!(document["settings"]["resolution"], json!("desktop"));
         assert_eq!(document["settings"]["render_scale"], json!("100"));
+        assert_eq!(document["settings"]["progressive"], json!("on"), "added by step 6");
+    }
+
+    #[test]
+    fn schema_six_step_adds_progressive_on_and_keeps_a_value_already_written() {
+        // TASK-086: a release 1.1.0 file (schema 5) gets the Progressive 480p row's default.
+        let mut released = json!({"schema_version": 5, "settings": {"render_scale": "150"}, "choices": {"render_scale": true}});
+        assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 5);
+        assert_eq!(released["schema_version"], json!(6));
+        assert_eq!(released["settings"]["progressive"], json!("on"));
+        assert_eq!(released["settings"]["render_scale"], json!("150"));
+        assert!(released["choices"].get("progressive").is_none(), "the default is not a user choice");
+
+        let mut off = json!({"settings": {"progressive": "off"}});
+        settings_5_to_6(&mut off).unwrap();
+        assert_eq!(off["settings"]["progressive"], json!("off"));
     }
 
     #[test]
@@ -358,7 +385,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 3);
-        assert_eq!(released["schema_version"], json!(5));
+        assert_eq!(released["schema_version"], json!(6));
         assert!(released["settings"].get("aspect_ratio").is_none());
         assert_eq!(released["settings"]["monitor"], json!("primary"));
         assert_eq!(released["settings"]["resolution"], json!("desktop"));
@@ -388,7 +415,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut file).unwrap(), 4);
-        assert_eq!(file["schema_version"], json!(5));
+        assert_eq!(file["schema_version"], json!(6));
         for gone in ["aspect_ratio", "aspect_custom"] {
             assert!(file["settings"].get(gone).is_none(), "{gone} dropped from [settings]");
             assert!(file["choices"].get(gone).is_none(), "{gone} dropped from [choices]");
@@ -422,7 +449,7 @@ mod tests {
 
         let mut chained = json!({"schema_version": 2, "settings": {"vsync": "on"}});
         assert_eq!(migrate(&SETTINGS, &mut chained).unwrap(), 2);
-        assert_eq!(chained["schema_version"], json!(5));
+        assert_eq!(chained["schema_version"], json!(6));
     }
 
     #[test]

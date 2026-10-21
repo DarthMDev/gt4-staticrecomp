@@ -1967,3 +1967,68 @@ sha256 `9b039d61289c0d307fd2c3a91449f5cef4001e8960c02dbfbdb3f387097a0df3` (`make
 `private/slice218-dist`; the slice217 installer moved to `superseded-slice217\`). Portable copy refreshed in
 `private/ultrawide-test-portable` (7-Zip extraction, no `$PLUGINSDIR`, no uninstaller; launcher and game executables
 equal to their sources). No GitHub release, draft or tag.
+
+## Slice 232 - TASK-086 step 1: progressive 480p menus and races (`--mode pcsx2`)
+
+slice232 = the slice218 recipe (license guard capsule `private/slice217-license-guard-runtime`, port slice200, shaders
+slice153, gt4-gs 1.0.1 package, SDL3) with the EE library profile `progressive` and new host code
+(`native/progressive_display.*`, decision [0072](decisions/0072-progressive-480p-menus-and-races.md)). Branch
+`task/086-progressive-480p`, worktree `C:\Antigravity\gt4-wt-086-progressive`.
+
+EE library `progressive` (`scripts/aspect_elf_patch.py --profile progressive`: the slice217 table plus
+`PROGRESSIVE_PATCHES` and `BOOT_REWRITES`, 29 words):
+1. `python scripts/aspect_elf_patch.py produce --profile progressive --assets-root C:/Antigravity/gt4-staticrecomp --output C:/Antigravity/gt4-staticrecomp/private/slice232-ee-progressive-producer`
+   (patched derivative `SCUS_973.28.progressive.elf` sha256 `39e1d70e...`; 138,813 translator entries as slice208;
+   changed units `unit_0000`, `unit_0001`, `unit_0045`, `unit_0046`, `unit_008F`, `unit_00A7`, `unit_00B6`,
+   `unit_00CD`).
+2. `private/slice232-scripts/build-library-232.cmd` (the slice208 recipe, portable clang-cl 23.1.2, one worker).
+3. `python scripts/aspect_elf_patch.py record-library --profile progressive --output <same>`: `ps2game.lib` 70,695,902
+   bytes, sha256 `772b971e0d829e9d06193928bd4b7ade8158b07dd8014d090d540e3127e5470b`; exactly the eight units above differ
+   from the slice208 library. Pin `docs/inputs/slice232-ee-libraries.json`; CMake `-DGT4_EE_PROFILE=progressive` (defines
+   `GT4_PROGRESSIVE_LIBRARY` for `gt4_quickfix`, so the host fills the words only in this profile).
+
+Game: `private/slice232-scripts/build-game-232.bat <build dir> progressive` (clang-cl 22.1.3, release distribution).
+`private/slice232-build/build/gt4vulkan.exe` 97,224,704 bytes, sha256
+`e8a388fa08a4318b89277af629a17e5acdb333240029f9d445eec8ecec1b20fa`. String scan (ASCII and UTF-16 of `Antigravity`,
+`Alano`, `gt4-wt`, `Users\`, `staticrecomp`, `private\slice`, `private/slice`, `.cargo`, `AppData`): no match.
+
+Host switch: `GT4_PROGRESSIVE` (unset or `1` on, `0` the original constants; anything else refuses the start) fills the
+words 0x7F08..0x7F1F at every guest VBlank (`[progressive] display words ...` in stderr). `GT4_PROGRESSIVE_BOOT=1` is an
+experimental, dormant boot path (off unless set; the launcher never sets it) that currently stops the boot.
+
+Intermediate builds (deleted, scripts and logs kept in `private/slice230-scripts`, `private/slice231-scripts`):
+slice230 had only the menu and race words (boot menus stayed 480i; switch at the first race); a host-side menu-mode
+request after boot blacked out the game (VRAM pool reset after the boot uploads); slice231 added the boot rewrite, which
+the display mode object's mode 2 undid during boot; slice232 adds the mode 2 rewrite (the boot then stops drawing, so it
+stays experimental) and the race monitor's explicit row-1 request.
+
+Checks (2026-10-21):
+- CTest 40/40 (`private/slice232-scripts/ctest-232.log`; new `native_progressive_display`). Python with
+  `GT4_NATIVE_BUILD` = slice232: 654 tests OK, 24 skipped (`python-232.log`; new
+  `tests/python/test_progressive_display.py`: table words against the pinned ELF, header, decision 0072, pins, probe
+  switch, launcher row, gate logic). `cargo test --workspace` 279 passed.
+- Headless donor runs (`private/slice232-scripts/run-all-headless-232.sh`, card copies only; gate
+  `scripts/progressive_gate.py`, results in `private/slice232-scripts/gate/`):
+  - off (`GT4_PROGRESSIVE=0`): menus 42/42 identical to slice218 `m-1920x1080`; race 160/160 identical to slice218
+    `r-1920x1080` and 160/160 to `r-2560x1080`; the gate: only 480i, no row-6 request, every informative frame a
+    line-doubled field;
+  - on, menu schedule (no scene): 42/42 identical to slice218 (the boot menus stay 480i), also with the switch unset;
+  - on, race schedule at 1920x1080 and 2560x1080: one CRT change, to 480p at the race start (VBlank 7518, request
+    psm 2 / row 6), none after it; 84/84 informative frames after it are full 448-line frames;
+  - on, `raceexit` schedule (race, pause, EXIT, the pre-race menu's exit icon, Arcade menus): no CRT change after the
+    race start; the Arcade menus after the race are full 448-line frames (43/43 informative frames after the switch),
+    at 1920x1080 and 2560x1080;
+  - `GT4_PROGRESSIVE_BOOT=1`: boot at 480p, then 46,062 primitives in 4,200 frames (black dumps), as documented.
+- Pins: `docs/inputs/slice232-pcsx2.json` (mode `pcsx2`; `pcsx2-slice218` kept as history); all 18 pinned files
+  verified by size and sha256 in the main checkout.
+- Distribution `private/slice232-dist` (18 files): `--portable-check` `result: ok`.
+
+Launcher (same branch, version 1.1.1): Settings > Graphics row "Progressive 480p" (`progressive`, toggle, default on)
+sends `GT4_PROGRESSIVE=1|0` on both renderer paths; settings schema 6 (`settings_5_to_6` adds `progressive = "on"`).
+Release build `launcher/tools/build-release.ps1`: GT4Recomp.exe 16,012,288 bytes, sha256 `0693c6b5...`, path scan clean
+(copy in `private/slice232-launcher`).
+
+Owner test installer (not a release): `private/slice232-installer/GT4Recomp-Setup-1.1.1-test.exe`, 28,758,789 bytes,
+sha256 `c6c10ed574730bf77481ba499833424dd35e21f16d66748b6ac89810276323f8` (`makensis /DVERSION=1.1.1`, GAME_DIR
+`private/slice232-dist`, SDL3 3.4.18, the 1.0.0 WebView2 bootstrapper receipt `private/release-100-webview2`). 7-Zip
+extraction: launcher and game executable equal to their sources. No GitHub release, draft or tag.

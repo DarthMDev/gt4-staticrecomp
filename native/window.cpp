@@ -2,6 +2,7 @@
 #include "race_display.hpp"
 #include "race_widescreen.hpp"
 #include "display_aspect.hpp"
+#include "progressive_display.hpp"
 #include "ps2/memory.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
@@ -382,6 +383,8 @@ bool open_window(bool fullscreen) {
   // TASK-080: an invalid GT4_DISPLAY_ASPECT, GT4_OUTPUT_SIZE or GT4_ASPECT_FOV_EXTRA stops the start here (prints and
   // exits).
   gt4::display_aspect::configured_setting();
+  // TASK-086: an invalid GT4_PROGRESSIVE stops the start here (prints and exits); the words are filled at guest VBlank.
+  gt4::progressive::configured_progressive();
   const gt4::display_aspect::OutputSize output = gt4::display_aspect::configured_output_size();
   std::string monitor_device;
   try {

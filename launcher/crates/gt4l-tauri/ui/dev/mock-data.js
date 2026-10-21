@@ -97,6 +97,9 @@
       page: "basic", group: "graphics", control: "slider",
       values: { min: 50, max: 200, step: 25, unit: "%" },
       default: 100, current: 100, visible_when: { id: "renderer", equals: "pcsx2" } },
+    // TASK-086: Progressive 480p (GT4_PROGRESSIVE), on by default.
+    { id: "progressive", label: "Progressive 480p", help: "Shows the menus at full 480p, like the races, instead of the original interlaced 480i.",
+      page: "basic", group: "graphics", control: "toggle", values: null, default: true, current: true },
     { id: "fxaa", label: "Anti-aliasing (FXAA)", help: "Smooths jagged edges with a fast filter. It softens fine detail a little. Off by default.",
       page: "basic", group: "graphics", control: "toggle", values: null, default: false, current: false },
     { id: "cas_mode", label: "Sharpening (CAS)", help: "FidelityFX Contrast Adaptive Sharpening. Off leaves the picture as the game drew it.",

@@ -1,0 +1,303 @@
+{
+  "donor_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "production_pins_modified": false,
+  "profiles": {
+    "progressive": {
+      "base_library": "private/slice208-ee-entries-producer/game-build/ps2game.lib",
+      "changed_objects_vs_slice208": [
+        "unit_0000.cpp.obj",
+        "unit_0001.cpp.obj",
+        "unit_0045.cpp.obj",
+        "unit_0046.cpp.obj",
+        "unit_008F.cpp.obj",
+        "unit_00A7.cpp.obj",
+        "unit_00B6.cpp.obj",
+        "unit_00CD.cpp.obj"
+      ],
+      "compiler_receipt": {
+        "sha256": "8af17f17df849a882ceea074642cd5242071a4e35b5279fdcf1a24f92000c4ca",
+        "size_bytes": 400
+      },
+      "object_count": 327,
+      "object_inventory_without_timestamps": "fce992324d9a6e828d176c2646ce443317cf127baa18af518507060b7786d01c",
+      "parameter_block": "0x00007F00",
+      "patched_elf_sha256": "39e1d70e045ef39bf992191cd0778ca7f25c2b0d9da254c2f620350aee8a7862",
+      "patches": [
+        {
+          "address": "0x0039F554",
+          "block_word": "0x00007F00",
+          "function": "RaceDisplay::render (0x0039F498)",
+          "new_word": "0x8C017F00",
+          "old_word": "0x3C013F40",
+          "purpose": "race HUD font x scale in wide mode: lui at,0x3F40 (0.75 = (4/3)/(16/9)) -> lw at,0x7F00(zero); block value (4/3)/R, stored by func_0044E390 into the race font object D_00623838 + 0x18",
+          "value_16_9": "0x3F400000"
+        },
+        {
+          "address": "0x0033EF98",
+          "block_word": "0x00007F04",
+          "function": "rear-view mirror placement (code after the jal at 0x0033EF70, RacePS2Base render path)",
+          "new_word": "0x8C087F04",
+          "old_word": "0x24080280",
+          "purpose": "mirror horizontal divisor: addiu t0,zero,640 -> lw t0,0x7F04(zero); the mirror is 260 x width / divisor frame pixels wide and centred, block value round(640 x R / (16/9)) for R > 16:9",
+          "value_16_9": "0x00000280"
+        },
+        {
+          "address": "0x00436750",
+          "block_word": "0x00007F08",
+          "function": "MOption.applyMenuDisplayMode (func_00436740)",
+          "new_word": "0x8C057F08",
+          "old_word": "0x24050001",
+          "purpose": "menu frame buffer format: addiu a1,zero,1 -> lw a1,0x7F08(zero); func_001074D0 psm 1 (CT24) off, 2 (CT16, as the 480p Try pop-up) on",
+          "value_original": "0x00000001",
+          "value_progressive": "0x00000002"
+        },
+        {
+          "address": "0x00436754",
+          "block_word": "0x00007F0C",
+          "function": "MOption.applyMenuDisplayMode (func_00436740)",
+          "new_word": "0x8C067F0C",
+          "old_word": "0x0000302D",
+          "purpose": "menu CRT row: daddu a2,zero,zero -> lw a2,0x7F0C(zero); row 0 (default row 1, 480i field) off, row 6 (480p, 640x448 frames) on",
+          "value_original": "0x00000000",
+          "value_progressive": "0x00000006"
+        },
+        {
+          "address": "0x00436700",
+          "block_word": "0x00007F08",
+          "function": "MOption.applyRaceDisplayMode (func_00436640), race display index 0 (\"normal\")",
+          "new_word": "0x8C057F08",
+          "old_word": "0x24050001",
+          "purpose": "race psm for index 0: addiu a1,zero,1 -> lw a1,0x7F08(zero); with 0x00436708 the normal index requests exactly what the menus request, so a menu-race switch is no CRT change",
+          "value_original": "0x00000001",
+          "value_progressive": "0x00000002"
+        },
+        {
+          "address": "0x00436708",
+          "block_word": "0x00007F0C",
+          "function": "MOption.applyRaceDisplayMode (func_00436640), shared by index 0 and indexes above 2",
+          "new_word": "0x8C067F0C",
+          "old_word": "0x0000302D",
+          "purpose": "race CRT row: daddu a2,zero,zero -> lw a2,0x7F0C(zero); row 0 off, row 6 (480p) on",
+          "value_original": "0x00000000",
+          "value_progressive": "0x00000006"
+        },
+        {
+          "address": "0x00436680",
+          "block_word": "0x00007F08",
+          "function": "MOption.applyRaceDisplayMode (func_00436640), indexes above 2 (branch delay slot)",
+          "new_word": "0x8C057F08",
+          "old_word": "0x24050001",
+          "purpose": "psm of the unknown-index path: addiu a1,zero,1 -> lw a1,0x7F08(zero); keeps that path equal to index 0",
+          "value_original": "0x00000001",
+          "value_progressive": "0x00000002"
+        },
+        {
+          "address": "0x00218240",
+          "block_word": "0x00007F10",
+          "function": "func_00218170 (mColorWindow__virtual_92 backdrop pass)",
+          "new_word": "0x8C017F10",
+          "old_word": "0x3C013F00",
+          "purpose": "field halving of the window rectangle: lui at,0x3F00 (0.5) -> lw at,0x7F10(zero); 0.5 off (224-line field buffers), 1.0 on (448-line frames, viewport type 0 draws UI units 1:1)",
+          "value_original": "0x3F000000",
+          "value_progressive": "0x3F800000"
+        },
+        {
+          "address": "0x00217EA0",
+          "block_word": "0x00007F10",
+          "function": "mRenderContextPS2__virtual_67 (0x00217D68), capture rectangle",
+          "new_word": "0x8C017F10",
+          "old_word": "0x3C013F00",
+          "purpose": "field halving of the captured rectangle (when self+0x1D9C == 0): lui at,0x3F00 -> lw at,0x7F10(zero); 0.5 off, 1.0 on",
+          "value_original": "0x3F000000",
+          "value_progressive": "0x3F800000"
+        },
+        {
+          "address": "0x00217EF8",
+          "block_word": "0x00007F14",
+          "function": "mRenderContextPS2__virtual_67 (0x00217D68), draw-back viewport",
+          "new_word": "0x8C047F14",
+          "old_word": "0x24040001",
+          "purpose": "viewport type of the draw back into the frame (func_004A2A10 argument, branch delay slot): addiu a0,zero,1 -> lw a0,0x7F14(zero); 1 (half-height field viewport) off, 0 (full frame) on",
+          "value_original": "0x00000001",
+          "value_progressive": "0x00000000"
+        },
+        {
+          "address": "0x003DA488",
+          "block_word": "0x00007F08",
+          "function": "race monitor state change (code after 0x003DA468, RaceMonitor area)",
+          "new_word": "0x8C057F08",
+          "old_word": "0x24050001",
+          "purpose": "psm of its 480i field request func_001074D0(state, 1, 1, 640, 448): addiu a1,zero,1 -> lw a1,0x7F08(zero)",
+          "value_original": "0x00000001",
+          "value_progressive": "0x00000002"
+        },
+        {
+          "address": "0x003DA490",
+          "block_word": "0x00007F1C",
+          "function": "race monitor state change (code after 0x003DA468, RaceMonitor area)",
+          "new_word": "0x8C067F1C",
+          "old_word": "0x24060001",
+          "purpose": "its explicit CRT row 1 (480i field): addiu a2,zero,1 -> lw a2,0x7F1C(zero); row 1 off, row 6 on (its row-2 request at 0x003DA4EC stays for step 2)",
+          "value_original": "0x00000001",
+          "value_progressive": "0x00000006"
+        },
+        {
+          "address": "0x001062FC",
+          "block_word": "0x00007F18",
+          "function": "func_001062E8 (display state init)",
+          "kind": "rewrite",
+          "new_word": "0x8C107F18",
+          "old_word": "0x00A0802D",
+          "purpose": "daddu s0,a1,zero -> lw s0,0x7F18(zero): the layout choice comes from the block word (0 field layout, the original path; 1 the 480p path); the original a1 is always 1 here and s0 only feeds the branch",
+          "value_original": "0x00000000",
+          "value_progressive": "0x00000001"
+        },
+        {
+          "address": "0x0010631C",
+          "function": "func_001062E8 (display state init)",
+          "kind": "rewrite",
+          "new_word": "0x24060050",
+          "old_word": "0x44810000",
+          "purpose": "mtc1 at,f0 -> addiu a2,zero,0x50: a2 = 0x50 for the 480p path (func_001063A8 ignores a2); f0 is not needed because 0x00106330 stores the 1.0f bits from at directly"
+        },
+        {
+          "address": "0x00106324",
+          "function": "func_001062E8 (display state init)",
+          "kind": "rewrite",
+          "new_word": "0x2407FFFF",
+          "old_word": "0x2403FFFF",
+          "purpose": "addiu v1,zero,-1 -> addiu a3,zero,-1: width -1 (= 640) for the 480p path; func_001063A8 ignores a3"
+        },
+        {
+          "address": "0x0010632C",
+          "function": "func_001062E8 (display state init)",
+          "kind": "rewrite",
+          "new_word": "0xAE270030",
+          "old_word": "0xAE230030",
+          "purpose": "sw v1,48(s1) -> sw a3,48(s1): the same -1 stored to state+0x30"
+        },
+        {
+          "address": "0x00106330",
+          "function": "func_001062E8 (display state init)",
+          "kind": "rewrite",
+          "new_word": "0xAE210014",
+          "old_word": "0xE6200014",
+          "purpose": "swc1 f0,20(s1) -> sw at,20(s1): the same 1.0f bits (0x3F800000) stored to state+0x14"
+        },
+        {
+          "address": "0x00106344",
+          "function": "func_001062E8 (display state init)",
+          "kind": "rewrite",
+          "new_word": "0x16000006",
+          "old_word": "0x12000006",
+          "purpose": "beq s0,zero,0x00106360 -> bne s0,zero,0x00106360: the 480p path when the block word is 1"
+        },
+        {
+          "address": "0x00106360",
+          "function": "func_001062E8, unused a1 == 0 path",
+          "kind": "rewrite",
+          "new_word": "0x0C041B6A",
+          "old_word": "0x0C0419C4",
+          "purpose": "jal 0x00106710 -> jal 0x00106DA8: the 480p initialiser of the game (a0 = state from 0x00106310)"
+        },
+        {
+          "address": "0x00106364",
+          "function": "func_001062E8, unused a1 == 0 path",
+          "kind": "rewrite",
+          "new_word": "0x24050002",
+          "old_word": "0x0220202D",
+          "purpose": "daddu a0,s1,zero -> addiu a1,zero,2 (delay slot): psm 2 (CT16); a0 already holds the state"
+        },
+        {
+          "address": "0x001077A4",
+          "function": "func_00107788 (boot CRT set)",
+          "kind": "rewrite",
+          "new_word": "0x8E050000",
+          "old_word": "0x24050001",
+          "purpose": "addiu a1,zero,1 -> lw a1,0(s0): interlace from the state (s0 = 0x006184D0); 1 off, 0 on"
+        },
+        {
+          "address": "0x001077A8",
+          "function": "func_00107788 (boot CRT set)",
+          "kind": "rewrite",
+          "new_word": "0x8E070008",
+          "old_word": "0x24070001",
+          "purpose": "addiu a3,zero,1 -> lw a3,8(s0): ffmd from the state; 1 both"
+        },
+        {
+          "address": "0x001077B4",
+          "function": "func_00107788 (boot CRT set)",
+          "kind": "rewrite",
+          "new_word": "0x8E060004",
+          "old_word": "0x24060002",
+          "purpose": "addiu a2,zero,2 -> lw a2,4(s0): mode from the state; 2 off, 0x50 on"
+        },
+        {
+          "address": "0x00100AA0",
+          "block_word": "0x00007F18",
+          "function": "func_00100A40 (display mode object), mode 2 case",
+          "kind": "rewrite",
+          "new_word": "0x8C027F18",
+          "old_word": "0x3C040062",
+          "purpose": "lui a0,0x0062 -> lw v0,0x7F18(zero): the boot layout word (v0 is dead here)",
+          "value_original": "0x00000000",
+          "value_progressive": "0x00000001"
+        },
+        {
+          "address": "0x00100AA4",
+          "function": "func_00100A40, mode 2 case",
+          "kind": "rewrite",
+          "new_word": "0x1440000A",
+          "old_word": "0x0C0418EA",
+          "purpose": "jal 0x001063A8 -> bne v0,zero,0x00100AD0: on, the mode 4 case (480p); its delay slot is the next row"
+        },
+        {
+          "address": "0x00100AA8",
+          "function": "func_00100A40, mode 2 case",
+          "kind": "rewrite",
+          "new_word": "0x3C040062",
+          "old_word": "0x248484D0",
+          "purpose": "addiu a0,a0,-31536 -> lui a0,0x0062 (delay slot; the mode 4 case sets a0 again)"
+        },
+        {
+          "address": "0x00100AAC",
+          "function": "func_00100A40, mode 2 case",
+          "kind": "rewrite",
+          "new_word": "0x0C0418EA",
+          "old_word": "0x10000019",
+          "purpose": "beq zero,zero,0x00100B14 -> jal 0x001063A8: off, the original call"
+        },
+        {
+          "address": "0x00100AB0",
+          "function": "func_00100A40, mode 2 case",
+          "kind": "rewrite",
+          "new_word": "0x248484D0",
+          "old_word": "0x00000000",
+          "purpose": "nop -> addiu a0,a0,-31536 (delay slot): a0 = 0x006184D0 as before"
+        },
+        {
+          "address": "0x00100AB4",
+          "function": "func_00100A40, mode 2 case (alignment padding before the mode 3 case)",
+          "kind": "rewrite",
+          "new_word": "0x10000017",
+          "old_word": "0x00000000",
+          "purpose": "nop -> beq zero,zero,0x00100B14: the original exit; its delay slot is the first word of the mode 3 case (lui a0,0x0062), which the exit path overwrites (addiu a0,zero,-1 at 0x00100B18)"
+        }
+      ],
+      "path": "private/slice232-ee-progressive-producer/game-build/ps2game.lib",
+      "qualification": "slice208 coverage library with the TASK-080 P2 and TASK-086 step 1 ELF patch table; owner gameplay pending",
+      "seed_set": "accepted",
+      "seed_sha256": "6cf39fb73a8962fe1594a0f9e15dbf01667e9b07e6ed29ae1877019de200c5bb",
+      "sha256": "772b971e0d829e9d06193928bd4b7ade8158b07dd8014d090d540e3127e5470b",
+      "size_bytes": 70695902,
+      "source_inventory": {
+        "file_count": 328,
+        "inventory_sha256": "6edb123616c0359ce51edceebdd410b61436f9c5cd164219eecda1a1681a99ab",
+        "size_bytes": 88421526
+      },
+      "translator_entries": 138813
+    }
+  },
+  "schema_version": 1,
+  "slice": 232
+}

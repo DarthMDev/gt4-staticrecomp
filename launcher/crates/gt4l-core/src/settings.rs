@@ -151,6 +151,19 @@ pub const SETTINGS: &[SettingDef] = &[
         connected: true,
     },
     SettingDef {
+        id: "progressive",
+        page: Page::Graphics,
+        group: "Image",
+        title: "Progressive 480p",
+        info: "Shows the menus at full 480p, like the races, instead of the original interlaced 480i, from your \
+               first race on. Menus get twice the lines, and going between menus and races no longer blanks the \
+               screen for a second. Turn off for the original interlaced menus. While on, the game's own Screen \
+               option (480i/480p) changes nothing.",
+        kind: TOGGLE,
+        default: "on",
+        connected: true,
+    },
+    SettingDef {
         id: "internal_scale",
         page: Page::Graphics,
         group: "CoreGS 1.1",

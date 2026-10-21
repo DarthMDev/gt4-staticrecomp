@@ -1,5 +1,16 @@
 # Current Status
 
+## Progressive 480p menus and races (2026-10-21, TASK-086 step 1, branch `task/086-progressive-480p`, not merged)
+
+slice232 (`--mode pcsx2` on the branch): menus ask for the 480p mode of the Screen page's "Try..." pop-up (psm 2 CT16,
+CRT row 6) and the normal race index asks for the same, so after the first race the CRT never changes between menus and
+races (no 1-second black) and the menus are full 448-line frames. Switch `GT4_PROGRESSIVE` (default on; `0` =
+byte-identical to slice218), launcher row Settings > Graphics > "Progressive 480p" (settings schema 6). Limitation found:
+the game only re-requests the menu mode when it leaves a scene, so the boot menus stay 480i until the first race; a 480p
+boot path exists behind the experimental `GT4_PROGRESSIVE_BOOT=1` but stops the boot (TASK-086 step 2). Owner test
+installer `private/slice232-installer/GT4Recomp-Setup-1.1.1-test.exe` (version 1.1.1, no GitHub release). Waiting for
+the owner test. Details: [BUILD](BUILD.md) slice 232, decision [0072](decisions/0072-progressive-480p-menus-and-races.md).
+
 ## Launcher self-update fixed (2026-10-21, TASK-085, branch `task/085-launcher-self-update`)
 
 Owner report: launcher 1.0.0 offered 1.1.0, closed after the download and installed nothing. The setup joined the

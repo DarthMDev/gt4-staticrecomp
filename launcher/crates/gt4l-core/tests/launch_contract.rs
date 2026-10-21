@@ -43,7 +43,30 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     // CoreGS 1.1 defaults also send deinterlacing (auto) and anti-aliasing (off).
     assert_eq!(environment["GT4_DEINTERLACE"], "auto");
     assert_eq!(environment["GT4_AA"], "off");
-    assert_eq!(environment.len(), 10, "the eight variables of slice210, GT4_FORCE_WIDESCREEN and GT4_DISPLAY_ASPECT");
+    // TASK-086: progressive 480p menus are on by default.
+    assert_eq!(environment["GT4_PROGRESSIVE"], "1");
+    assert_eq!(
+        environment.len(),
+        11,
+        "the eight variables of slice210, GT4_FORCE_WIDESCREEN, GT4_DISPLAY_ASPECT and GT4_PROGRESSIVE"
+    );
+}
+
+/// TASK-086: the Progressive 480p row sends GT4_PROGRESSIVE=1/0 on both renderer paths; 480p races stay fixed.
+#[test]
+fn the_progressive_row_sends_gt4_progressive_on_both_paths() {
+    let mut on = Settings::default();
+    on.set("progressive", "on").unwrap();
+    let mut off = Settings::default();
+    off.set("progressive", "off").unwrap();
+    for (settings, expected) in [(&on, "1"), (&off, "0")] {
+        let plan = launch::plan_launch(&inputs(), settings, None, &[]);
+        assert_eq!(env_map(&plan.environment)["GT4_PROGRESSIVE"], expected);
+        assert_eq!(env_map(&plan.environment)["GT4_FORCE_480P"], "1", "races stay at 480p either way");
+        let gs_plan = launch::plan_pcsx2_launch(&inputs(), settings, &pcsx2_paths(), None, &[]);
+        assert_eq!(env_map(&gs_plan.environment)["GT4_PROGRESSIVE"], expected, "the PCSX2 GS path gets the same switch");
+    }
+    assert!(Settings::default().is_on("progressive"), "on by default (owner, 2026-10-21)");
 }
 
 #[test]

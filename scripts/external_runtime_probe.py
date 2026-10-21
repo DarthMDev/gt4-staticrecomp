@@ -119,9 +119,13 @@ PERF_PROFILES = {
     # TASK-019 launcher test (slice209): the slice208 coverage build (accepted EE library, 1,105 seeds) plus the
     # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
     # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
-    # TASK-080 addendum (slice218): the slice217 build plus the seamless display host code (GT4_OUTPUT_SIZE gives the
-    # auto aspect, GT4_MONITOR the monitor, per-monitor DPI awareness). Mode pcsx2 points here.
-    'pcsx2': ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'),
+    # TASK-086 step 1 (slice232): the slice218 build with the EE library profile "progressive" (the slice217 table plus
+    # the progressive rows) and GT4_PROGRESSIVE (480p menus and races, default on; 0 = the original 480i menus,
+    # byte-identical to slice218). Mode pcsx2 points here.
+    'pcsx2': ('slice232-pcsx2.json', 'private/slice232-build/build/gt4vulkan.exe'),
+    # TASK-080 addendum (slice218, release 1.1.0): the slice217 build plus the seamless display host code
+    # (GT4_OUTPUT_SIZE gives the auto aspect, GT4_MONITOR the monitor, per-monitor DPI awareness). History.
+    'pcsx2-slice218': ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'),
     # TASK-080 P2 (slice217): the slice215 build plus the race HUD for other ratios (HUD canvas hook in the slice217
     # license guard capsule, HUD parameter block, EE library profile "aspect" re-translated from the ELF patch table,
     # protocol 1.3 fill target). History.
@@ -172,7 +176,8 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
                      'slice212b-pcsx2.json',
-                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json')
+                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json',
+                     'slice232-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
@@ -182,7 +187,8 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mt
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
                      'slice212b-pcsx2.json',
-                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json')
+                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json',
+                     'slice232-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -201,6 +207,14 @@ FORCE_480P_VALUES = ('0', '1')
 # native default, the launcher default); 0 leaves the game's own setting. Forwarded and recorded; never scrubbed.
 FORCE_WIDESCREEN_VALUES = ('0', '1')
 FORCE_WIDESCREEN_DEFAULT = '1'
+# GT4_PROGRESSIVE (TASK-086 step 1, slice232; native/progressive_display.hpp): 480p menus and races in the EE library
+# profile "progressive". Unset means on (the native default, the launcher default); 0 keeps the original 480i menus.
+# Forwarded and recorded; never scrubbed.
+PROGRESSIVE_VALUES = ('0', '1')
+PROGRESSIVE_DEFAULT = '1'
+# GT4_PROGRESSIVE_BOOT (experimental, TASK-086 step 2): the 480p boot path; unset means off. Forwarded and recorded when
+# set; never scrubbed.
+PROGRESSIVE_BOOT_VALUES = ('0', '1')
 # GT4_DISPLAY_ASPECT and GT4_ASPECT_FOV_EXTRA (TASK-080, slice212b; rules in native/display_aspect.hpp). Unset means
 # auto (the window's client area) and 1.0. Validated with the game's own rules, forwarded and recorded; never scrubbed.
 DISPLAY_ASPECT_RANGE = (0.5, 8.0)
@@ -710,6 +724,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('GT4_FORCE_480P must be 0 or 1')
     if os.environ.get('GT4_FORCE_WIDESCREEN', FORCE_WIDESCREEN_DEFAULT) not in FORCE_WIDESCREEN_VALUES:
         raise ValueError('GT4_FORCE_WIDESCREEN must be 0 or 1')
+    if os.environ.get('GT4_PROGRESSIVE', PROGRESSIVE_DEFAULT) not in PROGRESSIVE_VALUES:
+        raise ValueError('GT4_PROGRESSIVE must be 0 or 1')
+    if os.environ.get('GT4_PROGRESSIVE_BOOT', '0') not in PROGRESSIVE_BOOT_VALUES:
+        raise ValueError('GT4_PROGRESSIVE_BOOT must be 0 or 1')
     display_aspect_ratio(os.environ.get('GT4_DISPLAY_ASPECT'))
     aspect_fov_extra(os.environ.get('GT4_ASPECT_FOV_EXTRA'))
     output_size(os.environ.get('GT4_OUTPUT_SIZE'))
@@ -890,6 +908,15 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if environment['GT4_FORCE_WIDESCREEN'] not in FORCE_WIDESCREEN_VALUES:
         raise ValueError('GT4_FORCE_WIDESCREEN must be 0 or 1')
     result['force_widescreen_environment'] = {'GT4_FORCE_WIDESCREEN': environment['GT4_FORCE_WIDESCREEN']}
+    # TASK-086: the game default is on; the explicit value is written to the environment so the evidence records it.
+    environment.setdefault('GT4_PROGRESSIVE', PROGRESSIVE_DEFAULT)
+    if environment['GT4_PROGRESSIVE'] not in PROGRESSIVE_VALUES:
+        raise ValueError('GT4_PROGRESSIVE must be 0 or 1')
+    result['progressive_environment'] = {'GT4_PROGRESSIVE': environment['GT4_PROGRESSIVE']}
+    if 'GT4_PROGRESSIVE_BOOT' in environment:
+        if environment['GT4_PROGRESSIVE_BOOT'] not in PROGRESSIVE_BOOT_VALUES:
+            raise ValueError('GT4_PROGRESSIVE_BOOT must be 0 or 1')
+        result['progressive_environment']['GT4_PROGRESSIVE_BOOT'] = environment['GT4_PROGRESSIVE_BOOT']
     # TASK-080: unset means auto and 1.0; set values are checked again (the caller may pass its own environment).
     aspect = {name: environment[name] for name in ('GT4_DISPLAY_ASPECT', 'GT4_ASPECT_FOV_EXTRA', 'GT4_OUTPUT_SIZE',
                                                    'GT4_MONITOR') if name in environment}

@@ -108,6 +108,8 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
 /// - Always `GT4_FORCE_480P=1`: the game always runs at 480p (owner, 2026-10-21; there is no setting).
 /// - Always `GT4_FORCE_WIDESCREEN=1`: the game's wide flag is held at 16:9 (owner, 2026-10-21; TASK-079 hold, there
 ///   is no setting). Other screen shapes come from `aspect_ratio` on top of it.
+/// - `progressive` -> `GT4_PROGRESSIVE` (1/0, TASK-086): 480p menus and races (on, the default) or the original 480i
+///   menus (off).
 /// - `internal_scale` -> `PS2_SCALE=1|2|3`; `present_filter` -> `GT4_PRESENT_FILTER` (`auto` sends nothing);
 ///   `fsr_sharpness` -> `GT4_FSR_SHARPNESS` with the FSR filter; `deinterlacing` -> `GT4_DEINTERLACE`;
 ///   `anti_aliasing` -> `GT4_AA`. These are hidden in the UI (decision 0070) and keep their defaults.
@@ -163,6 +165,7 @@ fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Setting
     variables.insert("GT4_FORCE_480P", "1".to_string());
     variables.insert("GT4_FORCE_WIDESCREEN", "1".to_string());
     variables.insert("GT4_FULLSCREEN", flag(settings.is_on("fullscreen")));
+    variables.insert("GT4_PROGRESSIVE", flag(settings.is_on("progressive")));
     variables.insert("GT4_DISPLAY_ASPECT", "auto".to_string());
     variables.insert(
         "GT4_PRESENT_MODE",

@@ -9,7 +9,7 @@ set(GT4_ASSETS_ROOT "${GT4_ROOT}" CACHE PATH "Verified private assets checkout")
 # Accounting layout matches across translation units. Legacy report lines are unchanged (kLegacyCategoryCount).
 add_compile_definitions(GT4_MTVU_RUNTIME)
 set(GT4_EE_PROFILE "production" CACHE STRING "Pinned EE library profile")
-set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation coverage aspect)
+set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation coverage aspect progressive)
 set(GT4_SHAPE_RUNTIME_SOURCE "" CACHE PATH "Verified experimental runtime overlay capsule")
 set(GT4_PERF_RUNTIME_SOURCE "" CACHE PATH "Verified performance-only runtime capsule")
 option(GT4_PERF_FRAME_ONLY "Compile out subsystem hooks for a matched timing control" OFF)
@@ -26,7 +26,7 @@ set(GT4_SHADER_DIR "${SHADERS}" CACHE PATH "Isolated qualified shader directory"
 get_filename_component(GT4_PRIVATE_BASE "${GT4_ASSETS_ROOT}" ABSOLUTE)
 if(GT4_PERF_RUNTIME_SOURCE)
     # TASK-014 slice208: the accepted explicit-seed library (profile coverage) may carry the performance capsule too.
-    if(GT4_SHAPE_RUNTIME_SOURCE OR NOT GT4_EE_PROFILE MATCHES "^(production|coverage|aspect)$")
+    if(GT4_SHAPE_RUNTIME_SOURCE OR NOT GT4_EE_PROFILE MATCHES "^(production|coverage|aspect|progressive)$")
         message(FATAL_ERROR "Performance profile requires production or coverage EE and no observation overlay")
     endif()
     get_filename_component(PORT "${GT4_PORT_DIR}" ABSOLUTE)
@@ -122,6 +122,19 @@ elseif(GT4_EE_PROFILE STREQUAL "aspect")
     endif()
     set(GAME_LIBRARY "${GT4_ASSETS_ROOT}/${library_path}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_ROOT}/docs/inputs/slice217-ee-libraries.json")
+elseif(GT4_EE_PROFILE STREQUAL "progressive")
+    # TASK-086 step 1 slice232: the slice217 table plus the progressive rows (scripts/aspect_elf_patch.py
+    # PROGRESSIVE_PATCHES: the menu and normal-race video mode constants and the two UI field halvings become loads
+    # from the words native/progressive_display.cpp fills from GT4_PROGRESSIVE). Pinned by
+    # docs/inputs/slice232-ee-libraries.json.
+    file(READ "${GT4_ROOT}/docs/inputs/slice232-ee-libraries.json" progressive_manifest)
+    string(JSON library_path GET "${progressive_manifest}" profiles progressive path)
+    string(JSON expected_game_library_hash GET "${progressive_manifest}" profiles progressive sha256)
+    if(NOT library_path MATCHES "^private/slice232-ee-progressive-producer/game-build/ps2game\.lib$")
+        message(FATAL_ERROR "Progressive library must be the slice232 producer library")
+    endif()
+    set(GAME_LIBRARY "${GT4_ASSETS_ROOT}/${library_path}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_ROOT}/docs/inputs/slice232-ee-libraries.json")
 else()
     message(FATAL_ERROR "Unknown GT4_EE_PROFILE; no permissive AOT library selection")
 endif()
@@ -223,8 +236,14 @@ target_compile_options(gt4_pacing PRIVATE /W4)
 # Pure window-mode state and the GT4_FORCE_480P race display index (slice164).
 # TASK-060: cursor auto-hide rule (cursor_autohide.cpp) shared by the window.
 # TASK-080: display aspect (GT4_DISPLAY_ASPECT parse, Hor+/Vert+ matrix scale, scene policy, runtime glue).
-add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp race_widescreen.cpp cursor_autohide.cpp display_aspect.cpp)
+# TASK-086: progressive display words (GT4_PROGRESSIVE parse and fill); they have a reader only in the "progressive" EE
+# library, so the host fills them only there (GT4_PROGRESSIVE_LIBRARY).
+add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp race_widescreen.cpp cursor_autohide.cpp display_aspect.cpp
+            progressive_display.cpp)
 target_compile_options(gt4_quickfix PRIVATE /W4)
+if(GT4_EE_PROFILE STREQUAL "progressive")
+    target_compile_definitions(gt4_quickfix PRIVATE GT4_PROGRESSIVE_LIBRARY=1)
+endif()
 # TASK-081: pure Vulkan extension selection (required surface/swapchain only; swapchain maintenance 1 when present).
 add_library(gt4_vulkan_extensions STATIC vulkan_extensions.cpp)
 target_compile_options(gt4_vulkan_extensions PRIVATE /W4)
@@ -750,6 +769,9 @@ add_executable(race_display_fixture race_display_fixture.cpp)
 add_executable(race_widescreen_fixture race_widescreen_fixture.cpp)
 target_link_libraries(race_widescreen_fixture PRIVATE gt4_quickfix)
 target_compile_options(race_widescreen_fixture PRIVATE /W4)
+add_executable(progressive_display_fixture progressive_display_fixture.cpp)
+target_link_libraries(progressive_display_fixture PRIVATE gt4_quickfix)
+target_compile_options(progressive_display_fixture PRIVATE /W4)
 add_executable(display_aspect_fixture display_aspect_fixture.cpp)
 target_link_libraries(display_aspect_fixture PRIVATE gt4_quickfix)
 target_compile_options(display_aspect_fixture PRIVATE /W4)

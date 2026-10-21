@@ -494,6 +494,13 @@ replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRend
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
 
+State: 🧪 Step 1 built, waiting for the owner test (2026-10-21, branch `task/086-progressive-480p`, slice232; decision
+0072). Owner decisions taken: progressive on by default with an off switch (`GT4_PROGRESSIVE`, launcher Settings >
+Graphics "Progressive 480p"), CT16 menus, movies/photo/row 2 later. Result: races and the menus after them at 480p, no
+CRT change between them; off is byte-identical to slice218. Limitation: the boot menus stay 480i until the first race
+(the game re-requests the menu mode only after a scene); the 480p boot path (`GT4_PROGRESSIVE_BOOT=1`) stops the boot and
+moves to step 2. Owner test installer 1.1.1-test.
+
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.

@@ -163,10 +163,11 @@ class DisplayAspectLauncherTests(unittest.TestCase):
             with self.subTest(value=bad), self.assertRaises(ValueError):
                 probe.monitor_device(bad)
 
-    def test_mode_pcsx2_is_slice218_and_older_builds_are_history(self):
+    def test_mode_pcsx2_is_slice232_and_older_builds_are_history(self):
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
-        self.assertEqual((name, runtime), ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'))
+        self.assertEqual((name, runtime), ('slice232-pcsx2.json', 'private/slice232-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice218'], ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice217'],
                          ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'],
@@ -178,12 +179,22 @@ class DisplayAspectLauncherTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 218)
+        self.assertEqual(manifest['slice'], 232)
         self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
+        # slice232 = the slice218 recipe (capsule, port, shaders, gt4-gs) with the EE library profile "progressive"
+        # (TASK-086 step 1) and GT4_PROGRESSIVE: the library and the executable change.
+        newest = manifest
+        manifest = json.loads((ROOT / 'docs/inputs/slice218-pcsx2.json').read_text(encoding='utf-8'))
+        for key in ('card_seeds', 'gs_stream', 'vu1_aot', 'vu0_aot', 'source_capsule', 'license_guard_capsule',
+                    'license_guard_receipt_sha256', 'license_guard_source_sha256', 'port_capsule', 'shader_capsule',
+                    'memcard_capsule', 'memcard_capsule_sha256'):
+            self.assertEqual(newest[key], manifest[key], key)
+        self.assertEqual(newest['ee_library']['profile'], 'progressive')
+        self.assertNotEqual(newest['frozen_game_library'], manifest['frozen_game_library'])
         # slice218 = the slice217 recipe (capsule, EE library profile "aspect", port, shaders, gt4-gs) with the TASK-080
         # addendum host code (GT4_OUTPUT_SIZE, GT4_MONITOR, DPI awareness): only the executable changes.
         base = json.loads((ROOT / 'docs/inputs/slice217-pcsx2.json').read_text(encoding='utf-8'))

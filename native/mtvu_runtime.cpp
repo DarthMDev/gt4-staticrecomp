@@ -6,6 +6,7 @@
 #include "mtvu_ring.hpp"
 #include "race_widescreen.hpp"
 #include "display_aspect.hpp"
+#include "progressive_display.hpp"
 #include "perf_probe.hpp"
 
 #include <atomic>
@@ -471,6 +472,8 @@ void vblank_sync() {
   gt4::display::widescreen_hold_at_guest_vblank(ps2::g_ram, 32u << 20);
   // TASK-080: the display request sample drives the race view / pillarbox presentation (native/display_aspect.hpp).
   gt4::display_aspect::at_guest_vblank(ps2::g_ram, 32u << 20);
+  // TASK-086: the progressive display words (GT4_PROGRESSIVE) read by the "progressive" EE library's patched loads.
+  gt4::progressive::at_guest_vblank(ps2::g_ram, 32u << 20);
   Runtime &r = rt();
   if (!r.started) return;
   sync("vblank");
