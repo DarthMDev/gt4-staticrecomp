@@ -14,6 +14,7 @@
 
 #include "install_paths.hpp"
 #include "pacing.hpp"
+#include "vulkan_extensions.hpp"
 
 namespace gt4::vulkan {
 namespace {
@@ -67,6 +68,8 @@ namespace {
   X(vkEndCommandBuffer) \
   X(vkQueueSubmit) \
   X(vkQueueWaitIdle) \
+  X(vkDeviceWaitIdle) \
+  X(vkEnumerateDeviceExtensionProperties) \
   X(vkCreateFence) \
   X(vkResetFences) \
   X(vkCreateDescriptorSetLayout) \
@@ -158,7 +161,11 @@ Context::~Context() {
         vkFreeMemory(device_, buffer->memory, nullptr);
       delete buffer;
     }
+    if (!present_fences_ && vkDeviceWaitIdle)
+      vkDeviceWaitIdle(device_);
     destroy_image();
+    for (const VkSemaphore semaphore : image_rendered_)
+      vkDestroySemaphore(device_, semaphore, nullptr);
     if (swapchain_)
       vkDestroySwapchainKHR(device_, swapchain_, nullptr);
     for (auto &slot : slots_) {
@@ -231,14 +238,41 @@ void Context::initialize(const std::filesystem::path &build_time_shaders) {
   application.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   application.pApplicationName = "GT4 native Vulkan pilot";
   application.apiVersion = VK_API_VERSION_1_2;
-  const char *extensions[] = {"VK_KHR_surface", "VK_KHR_win32_surface",
-                              "VK_KHR_get_surface_capabilities2",
-                              "VK_KHR_surface_maintenance1"};
+  // TASK-081: only VK_KHR_surface and VK_KHR_win32_surface are required. The swapchain-maintenance prerequisites
+  // (2023+ EXT, 2025+ KHR drivers) are enabled when present (vulkan_extensions.cpp); GT4_VULKAN_FORCE_BASELINE=1
+  // forces the plain path.
+  force_baseline_ =
+      parse_force_baseline(std::getenv("GT4_VULKAN_FORCE_BASELINE"));
+  const auto enumerate_instance_extensions =
+      reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
+          get_instance(nullptr, "vkEnumerateInstanceExtensionProperties"));
+  if (!enumerate_instance_extensions)
+    throw std::runtime_error(
+        "Vulkan loader lacks vkEnumerateInstanceExtensionProperties");
+  std::vector<std::string> available_instance;
+  {
+    std::uint32_t extension_count = 0;
+    check(enumerate_instance_extensions(nullptr, &extension_count, nullptr),
+          "enumerate instance extensions");
+    std::vector<VkExtensionProperties> listed(extension_count);
+    check(enumerate_instance_extensions(nullptr, &extension_count,
+                                        listed.data()),
+          "enumerate instance extensions");
+    for (std::uint32_t index = 0; index < extension_count; ++index)
+      available_instance.emplace_back(listed[index].extensionName);
+  }
+  const InstanceChoice instance_choice =
+      select_instance_extensions(available_instance, force_baseline_);
+  maintenance_family_ = instance_choice.family;
+  std::vector<const char *> extensions;
+  for (const auto &name : instance_choice.extensions)
+    extensions.push_back(name.c_str());
   VkInstanceCreateInfo instance_info{};
   instance_info.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   instance_info.pApplicationInfo = &application;
-  instance_info.enabledExtensionCount = 4;
-  instance_info.ppEnabledExtensionNames = extensions;
+  instance_info.enabledExtensionCount =
+      static_cast<std::uint32_t>(extensions.size());
+  instance_info.ppEnabledExtensionNames = extensions.data();
   check(vkCreateInstance(&instance_info, nullptr, &instance_),
         "vkCreateInstance");
 #define LOAD_FUNCTION(name)                                                    \
@@ -306,32 +340,81 @@ void Context::initialize(const std::filesystem::path &build_time_shaders) {
   vkGetPhysicalDeviceFeatures(physical_, &available);
   VkPhysicalDeviceFeatures features{};
   features.robustBufferAccess = available.robustBufferAccess;
+  std::vector<std::string> available_device;
+  {
+    std::uint32_t extension_count = 0;
+    check(vkEnumerateDeviceExtensionProperties(physical_, nullptr,
+                                               &extension_count, nullptr),
+          "enumerate device extensions");
+    std::vector<VkExtensionProperties> listed(extension_count);
+    check(vkEnumerateDeviceExtensionProperties(physical_, nullptr,
+                                               &extension_count, listed.data()),
+          "enumerate device extensions");
+    for (std::uint32_t index = 0; index < extension_count; ++index)
+      available_device.emplace_back(listed[index].extensionName);
+  }
+  // The KHR and EXT swapchain-maintenance structures share one layout and one
+  // sType value; the feature is queried only when the device offers the
+  // extension of the instance's family.
+  const char *maintenance_name =
+      swapchain_maintenance_extension(maintenance_family_);
+  const bool maintenance_offered =
+      maintenance_name &&
+      std::find(available_device.begin(), available_device.end(),
+                maintenance_name) != available_device.end();
   VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance{};
   maintenance.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
   VkPhysicalDeviceTimelineSemaphoreFeatures timeline_features{};
   timeline_features.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
-  maintenance.pNext = &timeline_features;
   VkPhysicalDeviceFeatures2 queried{};
   queried.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-  queried.pNext = &maintenance;
+  queried.pNext = &timeline_features;
+  if (maintenance_offered && !force_baseline_) {
+    maintenance.pNext = &timeline_features;
+    queried.pNext = &maintenance;
+  }
   vkGetPhysicalDeviceFeatures2(physical_, &queried);
-  if (!maintenance.swapchainMaintenance1)
-    throw std::runtime_error(
-        "Vulkan pilot requires maintenance1 present fences");
   if (!timeline_features.timelineSemaphore)
     throw std::runtime_error("Vulkan pilot requires timeline semaphores");
-  const char *device_extensions[] = {"VK_KHR_swapchain",
-                                     "VK_KHR_swapchain_maintenance1"};
+  const DeviceChoice device_choice = select_device_extensions(
+      available_device, maintenance_family_,
+      maintenance_offered && maintenance.swapchainMaintenance1 == VK_TRUE,
+      force_baseline_);
+  present_fences_ = device_choice.present_fences;
+  std::vector<const char *> device_extensions;
+  for (const auto &name : device_choice.extensions)
+    device_extensions.push_back(name.c_str());
+  // Enable exactly the features that were queried: timeline semaphores (core
+  // 1.2) and, on the fast path, swapchainMaintenance1.
+  VkPhysicalDeviceTimelineSemaphoreFeatures timeline_enable{};
+  timeline_enable.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+  timeline_enable.timelineSemaphore = VK_TRUE;
+  VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance_enable{};
+  maintenance_enable.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
+  maintenance_enable.swapchainMaintenance1 = VK_TRUE;
+  maintenance_enable.pNext = &timeline_enable;
   VkDeviceCreateInfo device_info{};
   device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   device_info.queueCreateInfoCount = 1;
   device_info.pQueueCreateInfos = &queue_info;
   device_info.pEnabledFeatures = &features;
-  device_info.enabledExtensionCount = 2;
-  device_info.pNext = &maintenance;
-  device_info.ppEnabledExtensionNames = device_extensions;
+  device_info.enabledExtensionCount =
+      static_cast<std::uint32_t>(device_extensions.size());
+  device_info.pNext = present_fences_
+                          ? static_cast<const void *>(&maintenance_enable)
+                          : static_cast<const void *>(&timeline_enable);
+  device_info.ppEnabledExtensionNames = device_extensions.data();
+  std::fprintf(stderr,
+               "[vulkan] presentation path: %s (instance family %s, "
+               "present fences %s%s)\n",
+               device_choice.path,
+               maintenance_family_name(maintenance_family_),
+               present_fences_ ? "on" : "off",
+               force_baseline_ ? ", forced by GT4_VULKAN_FORCE_BASELINE=1" : "");
   check(vkCreateDevice(physical_, &device_info, nullptr, &device_),
         "vkCreateDevice");
 #define REQUIRE_FUNCTION(name)                                                 \
@@ -603,9 +686,17 @@ void Context::wait_presentation(Slot &slot) {
   if (!slot.presented)
     return;
   GT4_PERF_SCOPE(gt4::perf::Category::presentation_wait);
-  check(vkWaitForFences(device_, 1, &slot.present_fence, VK_TRUE,
-                        UINT64_MAX),
-        "wait presentation completion");
+  if (present_fences_) {
+    check(vkWaitForFences(device_, 1, &slot.present_fence, VK_TRUE,
+                          UINT64_MAX),
+          "wait presentation completion");
+  } else {
+    // Baseline (no swapchain maintenance 1): the slot's command buffer and
+    // acquire semaphore are free once its submission finished on the GPU. The
+    // present semaphore belongs to the swapchain image, which the presentation
+    // engine hands back through vkAcquireNextImageKHR.
+    wait_timeline(slot.presented_id);
+  }
   slot.presented = false;
 }
 
@@ -760,6 +851,10 @@ void Context::rebuild_swapchain() {
     return;
   wait_idle();
   wait_all_presentations();
+  // Without present fences, vkDeviceWaitIdle is the only wait that covers the
+  // presentation engine's semaphore waits before the swapchain is replaced.
+  if (!present_fences_)
+    check(vkDeviceWaitIdle(device_), "device idle before swapchain rebuild");
   VkSurfaceCapabilitiesKHR capabilities{};
   check(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_, surface_,
                                                   &capabilities),
@@ -862,6 +957,23 @@ void Context::rebuild_swapchain() {
     vkDestroySwapchainKHR(device_, swapchain_, nullptr);
   swapchain_ = next;
   resized_ = false;
+  // Baseline path: one present semaphore per swapchain image. The device is
+  // idle here (wait_idle above, plus vkDeviceWaitIdle for pending presents), so
+  // the previous set can be destroyed, signalled or not.
+  for (const VkSemaphore semaphore : image_rendered_)
+    vkDestroySemaphore(device_, semaphore, nullptr);
+  image_rendered_.clear();
+  if (!present_fences_) {
+    std::uint32_t image_count = 0;
+    check(vkGetSwapchainImagesKHR(device_, swapchain_, &image_count, nullptr),
+          "swapchain images");
+    VkSemaphoreCreateInfo semaphore_info{};
+    semaphore_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    image_rendered_.resize(image_count, VK_NULL_HANDLE);
+    for (auto &semaphore : image_rendered_)
+      check(vkCreateSemaphore(device_, &semaphore_info, nullptr, &semaphore),
+            "per-image present semaphore");
+  }
   std::fprintf(stderr,
                "[vulkan] Win32 swapchain %ux%u, format=%d, requested usage=0x%x "
                "(surface supports 0x%x); GPU blit, no temporal field blend\n",
@@ -1095,7 +1207,11 @@ std::uint64_t Context::submit(const Submission &submission, bool *presented) {
   VkPipelineStageFlags wait_stages[2] = {VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
                                          VK_PIPELINE_STAGE_TRANSFER_BIT};
   std::uint64_t wait_values[2] = {id - 1, 0};
-  VkSemaphore signals[2] = {timeline_, slot.rendered};
+  // The present semaphore: per slot with present fences, per swapchain image on
+  // the baseline path (reused only after that image is acquired again).
+  const VkSemaphore rendered =
+      presenting && !present_fences_ ? image_rendered_.at(image) : slot.rendered;
+  VkSemaphore signals[2] = {timeline_, rendered};
   std::uint64_t signal_values[2] = {id, 0};
   const std::uint32_t wait_count = presenting ? 2 : 1;
   VkTimelineSemaphoreSubmitInfo timeline{};
@@ -1118,12 +1234,10 @@ std::uint64_t Context::submit(const Submission &submission, bool *presented) {
   if (ring_->commit() != id)
     throw std::runtime_error("GS submission ids out of order");
   if (presenting) {
-    check(vkResetFences(device_, 1, &slot.present_fence),
-          "reset presentation fence");
     VkPresentInfoKHR present_info{};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
-    present_info.pWaitSemaphores = &slot.rendered;
+    present_info.pWaitSemaphores = &rendered;
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &swapchain_;
     present_info.pImageIndices = &image;
@@ -1131,7 +1245,12 @@ std::uint64_t Context::submit(const Submission &submission, bool *presented) {
     completion.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR;
     completion.swapchainCount = 1;
     completion.pFences = &slot.present_fence;
-    present_info.pNext = &completion;
+    if (present_fences_) {
+      check(vkResetFences(device_, 1, &slot.present_fence),
+            "reset presentation fence");
+      present_info.pNext = &completion;
+    }
+    slot.presented_id = id;
     const auto result = vkQueuePresentKHR(queue_, &present_info);
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR &&
         result != VK_ERROR_OUT_OF_DATE_KHR &&

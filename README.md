@@ -99,7 +99,7 @@ emulation or full PS2 fidelity. Details: [Architecture](docs/ARCHITECTURE.md).
 ## 💻 Requirements
 
 - **Windows 10 or 11, 64-bit.**
-- **A processor with AVX2** (Intel 4th gen Core / AMD Ryzen or newer).
+- **A processor with SSE4.1** (Intel Core i3/i5/i7 / AMD FX or newer).
 - **A graphics card with Vulkan 1.2** and current drivers (NVIDIA, AMD or Intel).
 - **Your own disc image of Gran Turismo 4 USA v2.00 (SCUS-97328)** as a plain `.iso`.
 - **About 6 GB free:** the launcher keeps a copy of your disc image (5.3 GB) next to the program.

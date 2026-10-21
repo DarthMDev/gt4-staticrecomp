@@ -121,17 +121,18 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
 
-    def test_mode_pcsx2_is_the_slice213_build_and_slice211_is_history(self):
+    def test_mode_pcsx2_is_the_slice214_build_and_slice213_slice211_are_history(self):
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
-        self.assertEqual((name, runtime), ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'))
+        self.assertEqual((name, runtime), ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice213'], ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice211'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice206'],
                          ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'))
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 213)
+        self.assertEqual(manifest['slice'], 214)
         self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])

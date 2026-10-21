@@ -206,7 +206,14 @@ target_compile_options(gt4_pacing PRIVATE /W4)
 # TASK-060: cursor auto-hide rule (cursor_autohide.cpp) shared by the window.
 add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp race_widescreen.cpp cursor_autohide.cpp)
 target_compile_options(gt4_quickfix PRIVATE /W4)
-target_link_libraries(ps2runtime_vulkan PUBLIC gt4_pacing gt4_quickfix gt4_install_paths)
+# TASK-081: pure Vulkan extension selection (required surface/swapchain only; swapchain maintenance 1 when present).
+add_library(gt4_vulkan_extensions STATIC vulkan_extensions.cpp)
+target_compile_options(gt4_vulkan_extensions PRIVATE /W4)
+target_include_directories(gt4_vulkan_extensions PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+add_executable(vulkan_extensions_fixture vulkan_extensions_fixture.cpp)
+target_link_libraries(vulkan_extensions_fixture PRIVATE gt4_vulkan_extensions)
+target_compile_options(vulkan_extensions_fixture PRIVATE /W4)
+target_link_libraries(ps2runtime_vulkan PUBLIC gt4_pacing gt4_quickfix gt4_install_paths gt4_vulkan_extensions)
 # TASK-059 (slice200): installed-folder paths (<exe folder>\shaders, <exe folder>\gs\gt4-gs.exe) and --portable-check.
 add_library(gt4_install_paths STATIC install_paths.cpp)
 target_compile_options(gt4_install_paths PRIVATE /W4)

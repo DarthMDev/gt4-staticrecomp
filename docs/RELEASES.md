@@ -66,7 +66,7 @@ Status: launcher TASK-019 / TASK-043, 2026-10-20. Code: `launcher/crates/gt4l-co
 
 1. Bump the version in `launcher/Cargo.toml` (workspace), `launcher/crates/gt4l-tauri/tauri.conf.json` and the installer define in the release command.
 2. **Game executable, release build** (TASK-081): a fresh `private/sliceNNN-*` build with `-DGT4_RELEASE_DISTRIBUTION=ON`
-   (no build-time shader folder in the executable; slice213 is the 1.0.0 recipe, `private/slice213-scripts/build-game-213.bat`).
+   (no build-time shader folder in the executable; slice214 is the 1.0.0 recipe, `private/slice214-scripts/build-game-214.bat`).
    CTest, the Python suite with `GT4_NATIVE_BUILD` on it, the headless frame comparison, a new `docs/inputs/sliceNNN-pcsx2.json`
    pin, then the distribution folder: `python scripts\make_distribution.py private\sliceNNN-dist --assets-root <main checkout>
    --exe <build>\gt4vulkan.exe --runtime-manifest docs\inputs\sliceNNN-pcsx2.json`. Scan the executable's ASCII and UTF-16
@@ -96,14 +96,17 @@ release. The owner publishes releases.
 The launcher checks the PC before setup and before Play (`gt4l_core::system_check`, rules tested without hardware;
 `gt4l_platform::system` reads the hardware). A failed check shows a message and starts nothing.
 
-- **Processor**: AVX2, FMA, BMI1 and BMI2 (CPUID leaves 1 and 7) and the AVX register state saved by Windows (OSXSAVE
-  and XCR0 bits 1 and 2). Message: "Your processor is not supported: GT4Recomp needs a CPU with AVX2 (Intel 4th gen
-  Core / AMD Ryzen or newer)." This is the release policy: `gt4vulkan.exe` itself is built for baseline x86-64
-  (`GT4_X86_64_V3` is off; its only AVX code is CPU-dispatched Visual C++ library code), so it needs no check of its own.
+- **Processor**: SSE4.1 with SSE3 and SSSE3 (CPUID leaf 1; owner decision 2026-10-21). Message: "Your processor is
+  not supported: GT4Recomp needs a CPU with SSE4.1 (Intel Core i3/i5/i7 / AMD FX or newer)." `gt4vulkan.exe` is built for baseline x86-64 (`GT4_X86_64_V3` is off; its only
+  AVX code is CPU-dispatched Visual C++ library code) and the PCSX2 GS needs SSE4.1 (PCSX2's published minimum; the
+  repository documents no other gt4-gs minimum), so the game has no CPU check of its own.
 - **Vulkan**: `vulkan-1.dll` from System32, a bare Vulkan 1.0 instance, at least one GPU driver (not the
-  "Microsoft Direct3D12 (...)" translation layer, not a CPU rasterizer) reporting Vulkan 1.2 or newer, and the four
-  instance extensions the game enables (`VK_KHR_surface`, `VK_KHR_win32_surface`, `VK_KHR_get_surface_capabilities2`,
-  `VK_KHR_surface_maintenance1`). The PCSX2 GS renders with Vulkan as well, so the check applies to both renderers. The
+  "Microsoft Direct3D12 (...)" translation layer, not a CPU rasterizer) reporting Vulkan 1.2 or newer, and the two
+  instance extensions the game requires (`VK_KHR_surface`, `VK_KHR_win32_surface`). Since slice214 the game uses
+  swapchain maintenance 1 (present fences; KHR on 2025+ drivers, EXT on 2023+ drivers) only when the driver has it, and
+  otherwise the plain `VK_KHR_swapchain` path; `GT4_VULKAN_FORCE_BASELINE=1` forces the plain path and the startup log
+  says which path runs (`[vulkan] presentation path: ...`). The PCSX2 GS renders with Vulkan as well, so the check
+  applies to both renderers. The
   probe runs once in the background at start; a success is kept for the session, a failure is checked again at the next
   Play. Messages name the driver update (NVIDIA, AMD or Intel).
 - **WebView2**: checked by the installer, not the launcher (the launcher cannot open its window without it).

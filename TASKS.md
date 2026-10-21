@@ -106,7 +106,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
 | TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
 | TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
-| TASK‑081 | Release 1.0.0 hardening and installer: release game build without build paths (slice213), launcher without user paths, CPU (AVX2) and Vulkan checks before setup and Play, WebView2 bootstrapper in the installer, installer asset name `GT4Recomp-Setup-X.Y.Z.exe`, release notes and draft release | 🧪 Waiting for owner test (2026-10-21) · branch `task/081-release-1-0-0`; installer `GT4Recomp-Setup-1.0.0.exe` built, draft release v1.0.0 (not published) |
+| TASK‑081 | Release 1.0.0 hardening and installer: release game build without build paths (slice213), launcher without user paths, CPU (SSE4.1) and Vulkan checks before setup and Play, game Vulkan baseline path for older drivers (slice214), WebView2 bootstrapper in the installer, installer asset name `GT4Recomp-Setup-X.Y.Z.exe`, release notes and draft release | 🧪 Waiting for owner test (2026-10-21) · branch `task/081-release-1-0-0`; installer `GT4Recomp-Setup-1.0.0.exe` built, draft release v1.0.0 (not published) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -325,9 +325,14 @@ Release audit 2026-10-21. Branch `task/081-release-1-0-0` (from main 26f83b8). N
   fails on any user or build path left. The launcher already links the VC runtime statically (Tauri default); it
   imports only the Windows UCRT (`api-ms-win-crt-*`, part of Windows 10/11).
 - Requirement checks before setup and Play (`gt4l_core::system_check`, pure and tested; `gt4l_platform::system`
-  reads CPUID/XCR0 and probes `vulkan-1.dll`): AVX2 + FMA + BMI1/2 with the OS AVX state (owner policy; the game
-  executable itself is baseline x86-64, so it has no own check), and a GPU with Vulkan 1.2 plus the game's four
-  instance extensions (the PCSX2 GS renders with Vulkan too, so the check is always on).
+  reads CPUID and probes `vulkan-1.dll`): SSE4.1 with SSE3/SSSE3 (owner decision 2026-10-21; the game executable is
+  baseline x86-64 and the PCSX2 GS needs SSE4.1, so the game has no own check), and a GPU with Vulkan 1.2 plus
+  `VK_KHR_surface` and `VK_KHR_win32_surface` (the PCSX2 GS renders with Vulkan too, so the check is always on).
+- Game Vulkan baseline path (slice214, release blocker): `native/vulkan_extensions.cpp` (pure, CTest
+  `native_vulkan_extensions`) enables swapchain maintenance 1 (KHR or EXT, with its instance prerequisites) only when
+  the driver has it; otherwise slots wait on the GS timeline and each swapchain image has its own present semaphore.
+  `GT4_VULKAN_FORCE_BASELINE=1` forces it (CTest `native_vulkan_pixels_baseline` presents to a hidden window on it).
+  slice214 = slice213 plus this change; `--mode pcsx2` = slice214.
 - Installer: detects the Evergreen WebView2 Runtime (HKLM WOW6432Node, HKLM, HKCU `pv`) and runs Microsoft's
   bootstrapper (embedded, Authenticode-checked) only when it is missing; default name `GT4Recomp-Setup-X.Y.Z.exe`;
   the uninstaller also removes `SDL3.dll`.

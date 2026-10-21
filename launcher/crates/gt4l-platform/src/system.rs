@@ -1,7 +1,7 @@
 //! Reads the processor features and probes Vulkan for the requirement checks (TASK-081). The rules that turn these
 //! readings into a message are pure and tested in `gt4l_core::system_check`.
 //!
-//! - `read_cpu_features`: CPUID leaves 1 and 7, and XCR0 through XGETBV (only when the OS set OSXSAVE).
+//! - `read_cpu_features`: CPUID leaf 1 (SSE3, SSSE3, SSE4.1).
 //! - `probe_vulkan`: loads `vulkan-1.dll` from System32 (as the game does), lists the instance extensions, creates a
 //!   bare Vulkan 1.0 instance with no extensions or layers, lists the GPUs with their Vulkan version, and destroys the
 //!   instance. It opens no window and allocates no GPU memory. A loaded driver stays in the launcher process until it
@@ -11,46 +11,16 @@ use std::sync::Mutex;
 
 use gt4l_core::system_check::{CpuFeatures, VulkanDevice, VulkanProbe};
 
-/// The processor features the rules need.
+/// The processor features the rules need (CPUID leaf 1, ECX: SSE3, SSSE3, SSE4.1).
 #[cfg(target_arch = "x86_64")]
 pub fn read_cpu_features() -> CpuFeatures {
-    use std::arch::x86_64::{__cpuid, __cpuid_count};
+    use std::arch::x86_64::__cpuid;
 
     let bit = |value: u32, index: u32| value & (1 << index) != 0;
     // CPUID is always present on x86-64.
     #[allow(unused_unsafe)]
-    let highest = unsafe { __cpuid(0) }.eax;
-    #[allow(unused_unsafe)]
     let leaf1 = unsafe { __cpuid(1) };
-    let leaf7_ebx = if highest >= 7 {
-        #[allow(unused_unsafe)]
-        let leaf7 = unsafe { __cpuid_count(7, 0) };
-        leaf7.ebx
-    } else {
-        0
-    };
-    let osxsave = bit(leaf1.ecx, 27);
-    // XCR0 bit 1 = SSE (XMM) state, bit 2 = AVX (upper YMM) state. XGETBV is valid only when OSXSAVE is set.
-    let os_saves_avx_state = osxsave && {
-        // SAFETY: OSXSAVE (CPUID.1:ECX bit 27) means XGETBV is supported and enabled by the OS.
-        let xcr0 = unsafe { read_xcr0() };
-        xcr0 & 0b110 == 0b110
-    };
-    CpuFeatures {
-        avx: bit(leaf1.ecx, 28),
-        fma: bit(leaf1.ecx, 12),
-        osxsave,
-        avx2: bit(leaf7_ebx, 5),
-        bmi1: bit(leaf7_ebx, 3),
-        bmi2: bit(leaf7_ebx, 8),
-        os_saves_avx_state,
-    }
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "xsave")]
-unsafe fn read_xcr0() -> u64 {
-    std::arch::x86_64::_xgetbv(0)
+    CpuFeatures { sse3: bit(leaf1.ecx, 0), ssse3: bit(leaf1.ecx, 9), sse4_1: bit(leaf1.ecx, 19) }
 }
 
 /// Other targets are not supported by the game; report nothing so the rules refuse.
@@ -277,16 +247,13 @@ mod vulkan_ffi {
 mod tests {
     use super::*;
 
-    /// Reads this machine; the rules are tested in gt4l-core. Here only the plumbing: the bits are consistent
-    /// (AVX2 implies AVX, the OS AVX state implies OSXSAVE).
+    /// Reads this machine; the rules are tested in gt4l-core. Here only the plumbing: the bits are consistent.
     #[test]
     fn cpu_reading_is_consistent() {
         let features = read_cpu_features();
-        if features.avx2 {
-            assert!(features.avx);
-        }
-        if features.os_saves_avx_state {
-            assert!(features.osxsave);
+        // Every x86-64 CPU that has SSE4.1 also has SSSE3 and SSE3.
+        if features.sse4_1 {
+            assert!(features.ssse3 && features.sse3);
         }
     }
 

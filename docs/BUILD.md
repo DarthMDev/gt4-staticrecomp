@@ -1694,7 +1694,7 @@ Changes against slice211:
   ends without the text, as for every other Vulkan start error).
 - CPU level: unchanged. `GT4_X86_64_V3` stays OFF. A disassembly of slice211 (llvm-objdump) finds 346 SSE4/AVX
   instructions, all in one 12 KB region of CPU-dispatched Visual C++ library code (`cpuid` x5, `xgetbv` x1), and no
-  BMI1/BMI2 instruction. The executable runs on baseline x86-64; the launcher's AVX2 check is a release policy, so the
+  BMI1/BMI2 instruction. The executable runs on baseline x86-64; the launcher checks SSE4.1 (owner, slice214 round), so the
   game has no CPU check of its own (Confirmed for slice211 and the same recipe in slice213).
 
 Checks (2026-10-21):
@@ -1717,3 +1717,35 @@ Checks (2026-10-21):
 
 Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.
 The installer (TASK-081) packs `private/slice213-dist` as `game\`.
+
+## Slice 214 - TASK-081 round 2: Vulkan baseline path for older drivers (`--mode pcsx2`)
+
+Release blocker: slice213 required `VK_KHR_get_surface_capabilities2` and `VK_KHR_surface_maintenance1` (instance) and
+`VK_KHR_swapchain_maintenance1` (device), which only 2025+ drivers have. slice214 = the slice213 recipe
+(`private/slice214-scripts/build-game-214.bat`) plus:
+- `native/vulkan_extensions.{hpp,cpp}` (pure): required = `VK_KHR_surface`, `VK_KHR_win32_surface` (instance) and
+  `VK_KHR_swapchain` (device). Swapchain maintenance 1 is enabled only when present: the KHR family (2025+), else the
+  EXT family (2023+, same structures and values), each with `VK_KHR_get_surface_capabilities2` and its own
+  `surface_maintenance1`, and only when the device reports the `swapchainMaintenance1` feature.
+  `GT4_VULKAN_FORCE_BASELINE=1` forces the plain path; any value other than 0 or 1 refuses the start.
+- `native/native_vulkan.cpp`: enumerates instance and device extensions; the feature query chains the maintenance
+  structure only when offered; timeline semaphores (core 1.2) stay required. Baseline path: a slot waits on the GS
+  timeline value of its last presenting submission instead of a present fence; each swapchain image has its own present
+  semaphore (recreated with the swapchain); `vkDeviceWaitIdle` before a swapchain rebuild and at shutdown. The startup
+  log says `[vulkan] presentation path: khr-maintenance1 | ext-maintenance1 | baseline (...)`.
+- CTest: `native_vulkan_extensions` (selection table) and `native_vulkan_pixels_baseline` (the pixel fixture, including
+  Win32 presentation to a hidden window with repeat, zero size and resize, on the forced baseline path).
+
+Executable `private/slice214-build/build/gt4vulkan.exe`, 97,197,568 bytes, sha256
+`77909fa6c9f6ea832c204136b118a8da559718ec72a231d3d1601beb60e36150`. String scan: no build path.
+
+Checks (2026-10-21):
+- CTest 38/38 (`private/slice214-scripts/ctest-214.log`); Python 596 OK, 24 skipped (`python-214.log`).
+- `vulkan_fixture` under `VK_LAYER_KHRONOS_validation` (Vulkan SDK 1.4.341.1), both paths: no validation message.
+- Headless, the slice213 arguments on a copy of the widescreen seed card: default path (`khr-maintenance1` on this AMD
+  driver) 42/42 and forced baseline 42/42 frame dumps identical to slice213 (`private/slice214-smoke/h214-default`,
+  `h214-baseline`). Headless runs never present, so the baseline difference is limited to presentation, which the
+  hidden-window CTest and the owner check.
+- Pins: `docs/inputs/slice214-pcsx2.json` (mode `pcsx2`; `pcsx2-slice213` kept). Distribution `private/slice214-dist`.
+- Launcher (same round): the CPU minimum is SSE4.1 with SSE3/SSSE3 (owner decision), and the Vulkan check requires only
+  `VK_KHR_surface` and `VK_KHR_win32_surface`.

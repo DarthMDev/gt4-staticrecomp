@@ -4,10 +4,12 @@
 
 **TASK-081 release 1.0.0 hardening (branch `task/081-release-1-0-0`, waiting for the owner's installer test):**
 - Game: slice213 = the slice211 recipe with `-DGT4_RELEASE_DISTRIBUTION=ON` (no build-time shader folder in the
-  executable; shaders only from `<exe folder>\shaders`). `--mode pcsx2` = slice213, `pcsx2-slice211` kept. String scan
+  executable; shaders only from `<exe folder>\shaders`). slice214 = slice213 plus the Vulkan baseline path (older
+  drivers: swapchain maintenance 1 only when present, `GT4_VULKAN_FORCE_BASELINE=1`). `--mode pcsx2` = slice214,
+  `pcsx2-slice213` and `pcsx2-slice211` kept. String scan
   clean; headless 42/42 frames identical to slice211; CTest and Python green ([BUILD](BUILD.md) slice 213).
 - Launcher: release build through `launcher/tools/build-release.ps1` (`--remap-path-prefix`; no user or build path in
-  `GT4Recomp.exe`); processor (AVX2 policy) and Vulkan 1.2 checks before setup and Play; the controls crate's built-in
+  `GT4Recomp.exe`); processor (SSE4.1, owner decision) and Vulkan 1.2 checks before setup and Play; the controls crate's built-in
   keyboard keys now match the TASK-076 layout (they were the old Z/X table, which a remap would have written to
   `controls.toml`).
 - Installer: WebView2 detection plus Microsoft's Evergreen bootstrapper, name `GT4Recomp-Setup-1.0.0.exe`, the

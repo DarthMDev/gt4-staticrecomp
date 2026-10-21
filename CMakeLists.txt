@@ -42,6 +42,13 @@ add_test(NAME native_vulkan_pixels COMMAND $<TARGET_FILE:vulkan_fixture>)
 add_test(NAME native_vulkan_pixels_sync COMMAND $<TARGET_FILE:vulkan_fixture>)
 set_tests_properties(native_vulkan_pixels_sync PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_GS_SYNC=1")
+# TASK-081: the same pixel and Win32 presentation fixture on the baseline path (no swapchain maintenance 1, per-image
+# present semaphores), as on a pre-2023 driver; and the pure extension selection.
+add_test(NAME native_vulkan_pixels_baseline COMMAND $<TARGET_FILE:vulkan_fixture>)
+set_tests_properties(native_vulkan_pixels_baseline PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
+    WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_VULKAN_FORCE_BASELINE=1"
+    PASS_REGULAR_EXPRESSION "presentation path: baseline [^\n]*forced by GT4_VULKAN_FORCE_BASELINE=1.*PASS: real Vulkan")
+add_test(NAME native_vulkan_extensions COMMAND $<TARGET_FILE:vulkan_extensions_fixture>)
 add_test(NAME native_gs_submit_ring COMMAND $<TARGET_FILE:gs_submit_ring_fixture>)
 add_test(NAME native_fpu_chop COMMAND $<TARGET_FILE:fpu_chop_fixture>)
 add_test(NAME native_vulkan_async_stress_async

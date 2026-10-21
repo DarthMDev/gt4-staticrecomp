@@ -3,90 +3,66 @@
 //! This module holds the rules only (pure functions over plain data), so every case is tested without the
 //! hardware. `gt4l-platform::system` reads CPUID and probes the Vulkan loader and fills these structs.
 //!
-//! - **Processor.** The launcher requires AVX2 with FMA, BMI1 and BMI2 (the x86-64-v3 level), and Windows must save
-//!   the AVX register state (OSXSAVE and XCR0 bits 1 and 2), otherwise AVX instructions fault even on a capable CPU.
-//!   This is the release policy (owner, TASK-081). Measured on slice211 and slice213, `gt4vulkan.exe` itself is built
-//!   for baseline x86-64 (`GT4_X86_64_V3` is off; its only AVX code is the CPU-dispatched Visual C++ library code),
-//!   so the policy is stricter than the game executable needs. `MINIMUM_CPU` is the single place to change it.
-//! - **Vulkan.** The game creates its own Vulkan instance with four instance extensions and needs a GPU that
-//!   reports Vulkan 1.2 or newer (`native/native_vulkan.cpp`). The PCSX2 GS renderer (`gt4-gs.exe`) renders with
-//!   Vulkan as well (`docs/GS-SETTINGS.md`, row `renderer`), so the check applies to both renderers.
+//! - **Processor.** SSE4.1 with its prerequisites SSE3 and SSSE3 (owner decision, 2026-10-21). `gt4vulkan.exe` is built
+//!   for baseline x86-64 (`GT4_X86_64_V3` is off; its only AVX code is CPU-dispatched Visual C++ library code), and the
+//!   PCSX2 GS (`gt4-gs.exe`) needs SSE4.1, PCSX2's published minimum. SSE state needs no OS opt-in on x64 Windows.
+//!   `MINIMUM_CPU` is the single place to change the level.
+//! - **Vulkan.** The game needs a GPU that reports Vulkan 1.2 or newer and the instance extensions `VK_KHR_surface` and
+//!   `VK_KHR_win32_surface` (`native/native_vulkan.cpp`, `native/vulkan_extensions.cpp`). Swapchain maintenance 1 is
+//!   used when present and is not required (slice214). The PCSX2 GS renders with Vulkan as well
+//!   (`docs/GS-SETTINGS.md`, row `renderer`), so the check applies to both renderers.
 
-/// What the processor and Windows report (CPUID leaf 1 and leaf 7, and XCR0).
+/// What the processor reports (CPUID leaf 1, ECX).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CpuFeatures {
-    /// CPUID.1:ECX bit 28.
-    pub avx: bool,
-    /// CPUID.7.0:EBX bit 5.
-    pub avx2: bool,
-    /// CPUID.1:ECX bit 12.
-    pub fma: bool,
-    /// CPUID.7.0:EBX bit 3.
-    pub bmi1: bool,
-    /// CPUID.7.0:EBX bit 8.
-    pub bmi2: bool,
-    /// CPUID.1:ECX bit 27: the operating system enabled XSAVE (needed to read XCR0).
-    pub osxsave: bool,
-    /// XCR0 bits 1 (SSE state) and 2 (AVX state) are both set: Windows saves the AVX registers.
-    pub os_saves_avx_state: bool,
+    /// CPUID.1:ECX bit 0.
+    pub sse3: bool,
+    /// CPUID.1:ECX bit 9.
+    pub ssse3: bool,
+    /// CPUID.1:ECX bit 19.
+    pub sse4_1: bool,
 }
 
 /// The processor level the release requires.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CpuLevel {
-    /// AVX2, FMA, BMI1 and BMI2 with the AVX state enabled by the OS (x86-64-v3 without the MOVBE/F16C/LZCNT details).
-    Avx2,
+    /// SSE4.1 with SSE3 and SSSE3 (Intel Core i3/i5/i7 and the late Core 2, AMD FX and newer).
+    Sse41,
 }
 
 /// The release policy (see the module comment).
-pub const MINIMUM_CPU: CpuLevel = CpuLevel::Avx2;
+pub const MINIMUM_CPU: CpuLevel = CpuLevel::Sse41;
 
-/// The message for a processor below the minimum (owner wording, TASK-081).
-pub const CPU_UNSUPPORTED_MESSAGE: &str = "Your processor is not supported: GT4Recomp needs a CPU with AVX2 \
-(Intel 4th gen Core / AMD Ryzen or newer).";
-
-/// The message for a capable processor whose AVX state Windows does not save.
-pub const CPU_AVX_DISABLED_MESSAGE: &str = "Your processor has AVX2, but Windows has AVX turned off, so GT4Recomp \
-cannot run. Update Windows, and check that AVX is not disabled in the BIOS or by a boot setting.";
+/// The message for a processor below the minimum (owner wording, TASK-081). SSE4.1 arrived with Intel's 45 nm Core 2
+/// (2008) and AMD's FX/Bulldozer (2011); every Intel Core i and every AMD Ryzen has it.
+pub const CPU_UNSUPPORTED_MESSAGE: &str = "Your processor is not supported: GT4Recomp needs a CPU with SSE4.1 \
+(Intel Core i3/i5/i7 / AMD FX or newer).";
 
 /// The hardware features missing for `level`, by name (empty when the processor has them all).
 pub fn missing_cpu_features(features: &CpuFeatures, level: CpuLevel) -> Vec<&'static str> {
     match level {
-        CpuLevel::Avx2 => {
-            let required = [
-                ("AVX", features.avx),
-                ("AVX2", features.avx2),
-                ("FMA", features.fma),
-                ("BMI1", features.bmi1),
-                ("BMI2", features.bmi2),
-            ];
+        CpuLevel::Sse41 => {
+            let required = [("SSE3", features.sse3), ("SSSE3", features.ssse3), ("SSE4.1", features.sse4_1)];
             required.iter().filter(|(_, present)| !present).map(|(name, _)| *name).collect()
         }
     }
 }
 
-/// `None` when the processor and Windows can run the release; otherwise the message for the player.
+/// `None` when the processor can run the release; otherwise the message for the player.
 pub fn cpu_problem(features: &CpuFeatures) -> Option<String> {
-    if !missing_cpu_features(features, MINIMUM_CPU).is_empty() {
-        return Some(CPU_UNSUPPORTED_MESSAGE.to_string());
+    if missing_cpu_features(features, MINIMUM_CPU).is_empty() {
+        None
+    } else {
+        Some(CPU_UNSUPPORTED_MESSAGE.to_string())
     }
-    if !features.osxsave || !features.os_saves_avx_state {
-        return Some(CPU_AVX_DISABLED_MESSAGE.to_string());
-    }
-    None
 }
 
 /// The lowest Vulkan version the game accepts on its GPU (`native/native_vulkan.cpp`: VK_API_VERSION_1_2).
 pub const MINIMUM_VULKAN: (u32, u32) = (1, 2);
 
-/// The instance extensions `gt4vulkan.exe` enables at `vkCreateInstance` (`native/native_vulkan.cpp`). Without any of
-/// them the game cannot create its Vulkan instance.
-pub const GAME_INSTANCE_EXTENSIONS: [&str; 4] = [
-    "VK_KHR_surface",
-    "VK_KHR_win32_surface",
-    "VK_KHR_get_surface_capabilities2",
-    "VK_KHR_surface_maintenance1",
-];
+/// The instance extensions `gt4vulkan.exe` requires (`native/vulkan_extensions.cpp`). The swapchain-maintenance ones
+/// are optional since slice214.
+pub const GAME_INSTANCE_EXTENSIONS: [&str; 2] = ["VK_KHR_surface", "VK_KHR_win32_surface"];
 
 /// One GPU as the Vulkan loader reports it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -168,7 +144,7 @@ pub fn vulkan_problem(probe: &VulkanProbe) -> Option<String> {
     }
 }
 
-/// The game's instance extensions that the loader does not offer.
+/// The game's required instance extensions that the loader does not offer.
 pub fn missing_instance_extensions(offered: &[String]) -> Vec<&'static str> {
     GAME_INSTANCE_EXTENSIONS.iter().copied().filter(|name| !offered.iter().any(|offer| offer == name)).collect()
 }
@@ -177,61 +153,47 @@ pub fn missing_instance_extensions(offered: &[String]) -> Vec<&'static str> {
 mod tests {
     use super::*;
 
-    fn haswell() -> CpuFeatures {
-        CpuFeatures { avx: true, avx2: true, fma: true, bmi1: true, bmi2: true, osxsave: true, os_saves_avx_state: true }
+    fn penryn() -> CpuFeatures {
+        CpuFeatures { sse3: true, ssse3: true, sse4_1: true }
     }
 
     #[test]
-    fn a_full_avx2_processor_with_the_os_state_passes() {
-        assert_eq!(cpu_problem(&haswell()), None);
-        assert!(missing_cpu_features(&haswell(), CpuLevel::Avx2).is_empty());
+    fn an_sse4_1_processor_passes() {
+        assert_eq!(cpu_problem(&penryn()), None);
+        assert!(missing_cpu_features(&penryn(), CpuLevel::Sse41).is_empty());
     }
 
     #[test]
     fn each_missing_feature_is_refused_with_the_owner_message() {
-        let cases: [(&str, fn(&mut CpuFeatures)); 5] = [
-            ("AVX", |f| f.avx = false),
-            ("AVX2", |f| f.avx2 = false),
-            ("FMA", |f| f.fma = false),
-            ("BMI1", |f| f.bmi1 = false),
-            ("BMI2", |f| f.bmi2 = false),
-        ];
+        let cases: [(&str, fn(&mut CpuFeatures)); 3] =
+            [("SSE3", |f| f.sse3 = false), ("SSSE3", |f| f.ssse3 = false), ("SSE4.1", |f| f.sse4_1 = false)];
         for (name, clear) in cases {
-            let mut features = haswell();
+            let mut features = penryn();
             clear(&mut features);
-            assert_eq!(missing_cpu_features(&features, CpuLevel::Avx2), vec![name]);
+            assert_eq!(missing_cpu_features(&features, CpuLevel::Sse41), vec![name]);
             assert_eq!(cpu_problem(&features).as_deref(), Some(CPU_UNSUPPORTED_MESSAGE), "{name}");
         }
     }
 
     #[test]
-    fn sandy_bridge_and_older_amd_fx_are_refused() {
-        // Sandy/Ivy Bridge: AVX without AVX2, FMA or BMI. FX (Piledriver): AVX, FMA and BMI1, no AVX2 or BMI2.
-        let sandy = CpuFeatures { avx2: false, fma: false, bmi1: false, bmi2: false, ..haswell() };
-        let piledriver = CpuFeatures { avx2: false, bmi2: false, ..haswell() };
-        assert_eq!(missing_cpu_features(&sandy, CpuLevel::Avx2), vec!["AVX2", "FMA", "BMI1", "BMI2"]);
-        assert_eq!(missing_cpu_features(&piledriver, CpuLevel::Avx2), vec!["AVX2", "BMI2"]);
-        assert_eq!(cpu_problem(&sandy).as_deref(), Some(CPU_UNSUPPORTED_MESSAGE));
-        assert_eq!(cpu_problem(&piledriver).as_deref(), Some(CPU_UNSUPPORTED_MESSAGE));
-    }
-
-    #[test]
-    fn a_capable_processor_without_the_os_avx_state_gets_the_windows_message() {
-        let no_xsave = CpuFeatures { osxsave: false, os_saves_avx_state: false, ..haswell() };
-        let no_state = CpuFeatures { os_saves_avx_state: false, ..haswell() };
-        assert_eq!(cpu_problem(&no_xsave).as_deref(), Some(CPU_AVX_DISABLED_MESSAGE));
-        assert_eq!(cpu_problem(&no_state).as_deref(), Some(CPU_AVX_DISABLED_MESSAGE));
+    fn conroe_core_2_and_phenom_ii_are_refused() {
+        // 65 nm Core 2 (Conroe/Merom): SSE3 and SSSE3, no SSE4.1. Phenom II: SSE3 (and SSE4a), no SSSE3 or SSE4.1.
+        let conroe = CpuFeatures { sse4_1: false, ..penryn() };
+        let phenom = CpuFeatures { sse3: true, ssse3: false, sse4_1: false };
+        assert_eq!(missing_cpu_features(&conroe, CpuLevel::Sse41), vec!["SSE4.1"]);
+        assert_eq!(missing_cpu_features(&phenom, CpuLevel::Sse41), vec!["SSSE3", "SSE4.1"]);
+        assert_eq!(cpu_problem(&conroe).as_deref(), Some(CPU_UNSUPPORTED_MESSAGE));
+        assert_eq!(cpu_problem(&phenom).as_deref(), Some(CPU_UNSUPPORTED_MESSAGE));
     }
 
     #[test]
     fn nothing_detected_is_the_unsupported_message() {
         assert_eq!(cpu_problem(&CpuFeatures::default()).as_deref(), Some(CPU_UNSUPPORTED_MESSAGE));
+        assert!(CPU_UNSUPPORTED_MESSAGE.contains("SSE4.1"));
     }
 
-    fn all_extensions() -> Vec<String> {
-        let mut list: Vec<String> = GAME_INSTANCE_EXTENSIONS.iter().map(|name| name.to_string()).collect();
-        list.push("VK_EXT_debug_utils".into());
-        list
+    fn required_extensions() -> Vec<String> {
+        GAME_INSTANCE_EXTENSIONS.iter().map(|name| name.to_string()).collect()
     }
 
     fn device(name: &str, major: u32, minor: u32) -> VulkanDevice {
@@ -239,17 +201,20 @@ mod tests {
     }
 
     #[test]
-    fn a_vulkan_1_2_gpu_with_the_game_extensions_passes() {
-        let probe = VulkanProbe::Ready { instance_extensions: all_extensions(), devices: vec![device("GPU", 1, 4)] };
+    fn a_vulkan_1_2_gpu_with_only_the_surface_extensions_passes() {
+        // An older driver: no get_surface_capabilities2, no surface_maintenance1 (the game uses its baseline path).
+        let probe = VulkanProbe::Ready { instance_extensions: required_extensions(), devices: vec![device("GPU", 1, 2)] };
         assert_eq!(vulkan_problem(&probe), None);
-        let exact = VulkanProbe::Ready { instance_extensions: all_extensions(), devices: vec![device("GPU", 1, 2)] };
-        assert_eq!(vulkan_problem(&exact), None);
+        let mut newer = required_extensions();
+        newer.extend(["VK_KHR_get_surface_capabilities2".to_string(), "VK_KHR_surface_maintenance1".to_string()]);
+        let probe = VulkanProbe::Ready { instance_extensions: newer, devices: vec![device("GPU", 1, 4)] };
+        assert_eq!(vulkan_problem(&probe), None);
     }
 
     #[test]
     fn one_good_gpu_among_old_ones_passes() {
         let probe = VulkanProbe::Ready {
-            instance_extensions: all_extensions(),
+            instance_extensions: required_extensions(),
             devices: vec![device("Old", 1, 0), device("New", 1, 3)],
         };
         assert_eq!(vulkan_problem(&probe), None);
@@ -260,15 +225,16 @@ mod tests {
         let probes = [
             VulkanProbe::LoaderMissing,
             VulkanProbe::InstanceFailed { code: -9 },
-            VulkanProbe::Ready { instance_extensions: all_extensions(), devices: vec![] },
-            VulkanProbe::Ready { instance_extensions: all_extensions(), devices: vec![device("HD 4000", 1, 0)] },
+            VulkanProbe::Ready { instance_extensions: required_extensions(), devices: vec![] },
+            VulkanProbe::Ready { instance_extensions: required_extensions(), devices: vec![device("HD 4000", 1, 0)] },
         ];
         for probe in probes {
             let message = vulkan_problem(&probe).expect("refused");
             assert!(message.contains("Update your graphics driver"), "{message}");
             assert!(message.contains("Vulkan"), "{message}");
         }
-        let old = VulkanProbe::Ready { instance_extensions: all_extensions(), devices: vec![device("HD 4000", 1, 1)] };
+        let old =
+            VulkanProbe::Ready { instance_extensions: required_extensions(), devices: vec![device("HD 4000", 1, 1)] };
         assert!(vulkan_problem(&old).unwrap().contains("(HD 4000) reports Vulkan 1.1"));
     }
 
@@ -284,36 +250,37 @@ mod tests {
         let llvmpipe =
             VulkanDevice { name: "llvmpipe".into(), api_major: 1, api_minor: 3, vendor_id: 0x10005, device_type: 4 };
         assert!(!is_gpu_driver(&dozen) && !is_gpu_driver(&llvmpipe));
-        let only_layers = VulkanProbe::Ready { instance_extensions: all_extensions(), devices: vec![dozen.clone(), llvmpipe] };
+        let only_layers =
+            VulkanProbe::Ready { instance_extensions: required_extensions(), devices: vec![dozen.clone(), llvmpipe] };
         assert!(vulkan_problem(&only_layers).unwrap().contains("No graphics card with Vulkan was found"));
         // This machine's real list (2026-10-21): the AMD driver plus two Dozen devices.
         let real = VulkanProbe::Ready {
-            instance_extensions: all_extensions(),
+            instance_extensions: required_extensions(),
             devices: vec![device("AMD Radeon RX 9060 XT", 1, 4), dozen],
         };
         assert_eq!(vulkan_problem(&real), None);
     }
 
     #[test]
-    fn a_driver_without_a_game_instance_extension_is_refused_by_name() {
-        let mut offered = all_extensions();
-        offered.retain(|name| name != "VK_KHR_surface_maintenance1");
+    fn a_loader_without_the_win32_surface_is_refused_by_name() {
+        let offered = vec!["VK_KHR_surface".to_string()];
         let probe = VulkanProbe::Ready { instance_extensions: offered.clone(), devices: vec![device("GPU", 1, 3)] };
         let message = vulkan_problem(&probe).expect("refused");
-        assert!(message.contains("missing Vulkan VK_KHR_surface_maintenance1"), "{message}");
-        assert_eq!(missing_instance_extensions(&offered), vec!["VK_KHR_surface_maintenance1"]);
+        assert!(message.contains("missing Vulkan VK_KHR_win32_surface"), "{message}");
+        assert_eq!(missing_instance_extensions(&offered), vec!["VK_KHR_win32_surface"]);
     }
 
     #[test]
-    fn the_extension_list_matches_the_game_source() {
-        // native/native_vulkan.cpp enables exactly these four at vkCreateInstance; a change there must change this list.
-        let source = include_str!("../../../../native/native_vulkan.cpp");
-        let start = source.find("const char *extensions[] = {").expect("extension list in native_vulkan.cpp");
-        let block = &source[start..start + source[start..].find("};").expect("end of list")];
+    fn the_required_list_matches_the_game_source() {
+        // native/vulkan_extensions.cpp requires exactly these two; the maintenance extensions are optional there.
+        let source = include_str!("../../../../native/vulkan_extensions.cpp");
+        let start = source.find("for (const char *required : {").expect("required list in vulkan_extensions.cpp");
+        let block = &source[start..start + source[start..].find('}').expect("end of list")];
         for name in GAME_INSTANCE_EXTENSIONS {
-            assert!(block.contains(&format!("\"{name}\"")), "{name} not in the game's list");
+            assert!(block.contains(&format!("\"{name}\"")), "{name} not in the game's required list");
         }
         assert_eq!(block.matches("\"VK_").count(), GAME_INSTANCE_EXTENSIONS.len());
-        assert!(source.contains("properties.apiVersion < VK_API_VERSION_1_2"), "the game's minimum is Vulkan 1.2");
+        let vulkan = include_str!("../../../../native/native_vulkan.cpp");
+        assert!(vulkan.contains("properties.apiVersion < VK_API_VERSION_1_2"), "the game's minimum is Vulkan 1.2");
     }
 }
