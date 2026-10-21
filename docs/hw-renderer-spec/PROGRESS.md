@@ -14,7 +14,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M3 front end, CLUT | Done; A+D vertex kicks fixed (IN-326) | CTest `m3_*`, `m3_hw_gif_ad_xyz` |
 | M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
-| M6 output | Display library done; CPU VRAM diagnostic added; IN-315/IN-316 closed; presentation interfaces decided (IN-331); HWR frame dumps implemented (IN-332) and the first real measurement is 42/42 frames outside the 2D gate, with two visible draw-loss defects to diagnose | slice226: 42 dumps from a 4,200-frame headless HWR run, 0 faults; 212 CTests (210 pass, Q-07 skip, known pin failure) |
+| M6 output | Display library done; CPU VRAM diagnostic added; IN-315/IN-316 closed; presentation interfaces decided (IN-331); HWR frame dumps implemented (IN-332) and the HWR replay tool added (IN-333): on identical records the GPU path is pixel-identical on every even frame and loses content on odd frames, i.e. field-parity draw loss is the open defect | slice227: 1,101 replayed frames, 0 skipped textures; even frames 0.000% bad, odd frames 1.5% (boot) to 10.6% (garage) |
 | M7 cache | Bookkeeping core done | cache CTest |
 | M8, M12, M14, M15, M17, M19 | Not started | |
 | M9-M11, M13, M16, M18 | Pure references only (decide, lod, replace) | decide, lod, `hw_replace_*` CTest |
@@ -117,3 +117,11 @@ drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at
 - Confirmed: 4,200 headless frames with `GT4_RENDERER=hw`, 0 faults, 42 dumps, card copy unchanged; per frame CPU averages translate 26.6 ms and execute 53.8 ms in this (menu-heavy) schedule.
 - Measured against the donor dumps of the same schedule: 42/42 outside the 14.4 2D gate. Boot frame 100 is 1.53% bad (the first text line is missing); from the garage screen on, 42-49% with alternating row bands and content kept from the previous screen, i.e. some primitives never reach VRAM.
 - The CPU reference draws the same scenes inside the gate, so the defect is in the GPU draw path, not in the front end or the pixel rules. Next: the HWR replay tool (capture -> GPU renderer -> PPM) to iterate on the garage frame without launching the game, then the draw-order/write-back diagnosis.
+
+## 2026-10-21 HWR replay tool checkpoint (IN-333)
+
+- Added `hw_writeback_replay`: one capture stream -> the GPU write-back renderer -> PPM per frame, using a renderer-neutral `ReplayTarget` shared with the CPU reference reader. 1,101 frames of the real menu capture replay with 133,637 primitives, 0 skipped textures and 0 rejected GIF packets (same counters as the CPU run).
+- Confirmed by direct A/B on identical input: every EVEN frame is pixel-identical between the CPU reference and the GPU path; every ODD frame differs by exactly 4,394 pixels, which is the first boot text line the GPU path does not keep. Later frames diverge further (garage 10.6%).
+- Diagnosis: not textures (0 refused), not the front end (same batches/primitives), not composition (even frames match). It is field-parity dependent draw loss in the GPU path, the same thing the owner saw in the window as 'one frame right, one striped'.
+- Also fixed a misleading counter: `black_presents` now counts only presents without a composed image (it was a leftover from the M0 stub that counted every present).
+- Next: root-cause the odd-frame loss in the GPU path with this deterministic replay (candidate: the per-field SCANMSK / clipping interaction in the per-primitive scissor), then re-run the 42-dump schedule.

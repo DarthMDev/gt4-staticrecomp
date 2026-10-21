@@ -53,7 +53,7 @@ private:
 
 }  // namespace
 
-bool ReplayCapture(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
+bool ReplayCapture(const std::vector<uint8_t>& stream, ReplayTarget& renderer, ReplaySummary& summary,
                    const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
                    std::string& error) {
     if (stream.size() >= 8 && std::memcmp(stream.data(), "GSSTREAM", 8) == 0) {
@@ -195,6 +195,45 @@ std::vector<uint8_t> CaptureWriter::Packet(uint32_t nloop, bool eop, bool pre, u
         push64(i + 1 < words.size() ? words[i + 1] : 0);
     }
     return out;
+}
+
+namespace {
+
+// The CPU reference as a ReplayTarget, so the original call sites keep working unchanged.
+class CpuRendererTarget final : public ReplayTarget {
+public:
+    explicit CpuRendererTarget(CpuRenderer& renderer) : renderer_(renderer) {}
+    bool GifTransfer(std::uint32_t path, const std::vector<std::uint8_t>& bytes) override {
+        return renderer_.GifTransfer(path, bytes);
+    }
+    bool WritePrivileged(std::uint32_t address, std::uint64_t value) override {
+        return renderer_.WritePrivileged(address, value);
+    }
+    std::vector<std::uint8_t> ReadFifo(std::uint32_t qwords) override { return renderer_.ReadFifo(qwords); }
+    FrameImage EndFrame() override { return renderer_.EndFrame(); }
+    void SetDisplayField(bool odd) override { renderer_.SetDisplayField(odd); }
+    bool DisplayField() const override { return renderer_.DisplayField(); }
+    void ResetGs(bool clearVram) override { renderer_.ResetGs(clearVram); }
+    void ResetGif(std::uint32_t pathMask) override { renderer_.ResetGif(pathMask); }
+
+private:
+    CpuRenderer& renderer_;
+};
+
+}  // namespace
+
+bool ReplayCapture(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
+                   const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
+                   std::string& error) {
+    CpuRendererTarget target(renderer);
+    return ReplayCapture(stream, target, summary, onFrame, error);
+}
+
+bool ReplayCaptureV2(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
+                     const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
+                     std::string& error) {
+    CpuRendererTarget target(renderer);
+    return ReplayCaptureV2(stream, target, summary, onFrame, error);
 }
 
 }  // namespace hwgs::cpuref

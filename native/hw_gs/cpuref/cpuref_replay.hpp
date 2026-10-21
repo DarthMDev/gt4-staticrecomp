@@ -29,8 +29,32 @@ struct ReplaySummary {
     uint64_t fieldsWithoutPhase = 0;  // v2 field-invalid records; initial phase is unspecified.
 };
 
-// Replays one capture stream. onFrame receives every frame end with the display result.
+// The four calls a replay makes on a renderer, so one recorded stream can drive the CPU reference or
+// the GPU write-back renderer (M6 replay tool).
+class ReplayTarget {
+public:
+    virtual ~ReplayTarget() = default;
+    virtual bool GifTransfer(std::uint32_t path, const std::vector<std::uint8_t>& bytes) = 0;
+    virtual bool WritePrivileged(std::uint32_t address, std::uint64_t value) = 0;
+    virtual std::vector<std::uint8_t> ReadFifo(std::uint32_t qwords) = 0;
+    virtual FrameImage EndFrame() = 0;
+    // v2 records carry the field bit and explicit resets (protocol 6.1), so a target must expose them.
+    virtual void SetDisplayField(bool odd) = 0;
+    virtual bool DisplayField() const = 0;
+    virtual void ResetGs(bool clearVram) = 0;
+    virtual void ResetGif(std::uint32_t pathMask) = 0;
+};
+
+// Replays one capture stream into any target. onFrame receives every frame end with the display result.
 // Returns false and sets error when the stream is malformed (the summary holds the progress).
+bool ReplayCapture(const std::vector<uint8_t>& stream, ReplayTarget& target, ReplaySummary& summary,
+                   const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
+                   std::string& error);
+bool ReplayCaptureV2(const std::vector<uint8_t>& stream, ReplayTarget& target, ReplaySummary& summary,
+                     const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
+                     std::string& error);
+
+// Same stream into the CPU reference renderer (the original entry points).
 bool ReplayCapture(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
                    const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
                    std::string& error);

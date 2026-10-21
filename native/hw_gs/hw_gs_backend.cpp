@@ -700,7 +700,7 @@ struct Backend::Impl {
     present.pImageIndices = &index;
     const VkResult result = vkQueuePresentKHR(queue, &present);
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) resize_pending = true;
-    stats.black_presents++;
+    if (frame == nullptr) stats.black_presents++;  // presented without a composed image (chapter 12.4)
   }
 };
 

@@ -1893,3 +1893,11 @@ Incremental rebuild of the slice225 tree (same recipe and pins, `build/slice225-
 - Confirmed: `GT4_RENDERER=hw` headless 4,200 frames, 0 faults, **42 dumps written**, card copy unchanged (`private/slice226-hwr-dumps/`).
 - Confirmed: `hw_compare.py --gate donor_2d_1x --report-only` against the donor dumps of the same schedule: 42/42 frames outside the gate (boot 1.53% / 19.7 dB; garage and later menus 42-49% / 6-14 dB). Report only: this is the first parity measurement of the GPU path, not a qualified scene.
 - Confirmed: rendering stops being correct exactly where the garage list is drawn; the CPU reference handles the same recorded frames inside the gate. Diagnosis continues with the HWR replay tool.
+
+## Local slice227 - HWR replay tool (14.3, IN-333)
+
+Incremental rebuild of the slice225 tree with `hw_writeback_replay` and the `black_presents` fix. No new slice directory, no pin or launcher change.
+
+- Confirmed: `hw_writeback_replay private/slice217-coregs2-evidence/menu-v2.gscap <out>` replays 1,101 frames in 100 s with 133,637 primitives, 0 skipped textures, 0 rejected GIF packets.
+- Confirmed by A/B against `hw_cpuref_replay` on the same capture: even frames 0.000% bad, odd frames 1.533% early and 10.579% at garage frame 900; the odd-frame difference is the first boot text line.
+- Confirmed: 174 HWR-related CTests still pass (backend, cpuref, frontend, pixel, display, writeback).

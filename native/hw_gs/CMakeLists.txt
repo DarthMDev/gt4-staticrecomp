@@ -58,6 +58,15 @@ target_include_directories(hw_writeback_tests PRIVATE "${GT4_HW_VULKAN_SDK}/Incl
 target_link_libraries(hw_writeback_tests PRIVATE gt4_hw_writeback gt4_hw_vulkan_loader "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
 target_compile_options(hw_writeback_tests PRIVATE /W4 -Wno-missing-field-initializers)
 target_compile_definitions(hw_writeback_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
+# M6 replay tool: one recorded stream -> the GPU write-back renderer -> one PPM per frame. It reuses the
+# capture reader of the CPU reference library (hw_gs_cpuref), so both paths replay identical records.
+add_executable(hw_writeback_replay writeback/hw_writeback_replay.cpp)
+target_include_directories(hw_writeback_replay PRIVATE "${GT4_HW_VULKAN_SDK}/Include" "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(hw_writeback_replay PRIVATE gt4_hw_writeback gt4_hw_vulkan_loader hw_gs_cpuref
+    "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
+target_compile_options(hw_writeback_replay PRIVATE /W4 -Wno-missing-field-initializers)
+target_compile_definitions(hw_writeback_replay PRIVATE _CRT_SECURE_NO_WARNINGS)
+
 foreach(hw_writeback_test IN ITEMS hw_flat_provoking hw_sprite_corners hw_present_scheduler
         hw_present_scheduler_hold hw_present_scheduler_rate hw_aux_frame_guest_untouched
         hw_pass_timings hw_gpu_coverage_vectors

@@ -29,7 +29,7 @@ T Load(const uint8_t* data) {
 }
 }  // namespace
 
-bool ReplayCaptureV2(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
+bool ReplayCaptureV2(const std::vector<uint8_t>& stream, ReplayTarget& renderer, ReplaySummary& summary,
                      const std::function<void(uint64_t, const FrameImage&)>& onFrame, std::string& error) {
     auto fail = [&](size_t offset, const char* reason) {
         error = std::string(reason) + " at byte " + std::to_string(offset);
