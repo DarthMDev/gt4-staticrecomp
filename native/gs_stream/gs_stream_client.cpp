@@ -6,6 +6,7 @@
 #include "gs_stream_ipc.hpp"
 #include "perf_probe.hpp"
 #include "../install_paths.hpp"
+#include "../display_aspect.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -71,6 +72,8 @@ std::uint64_t (*g_worker_busy_us)() = nullptr;
 // TASK-060: cursor policy of the game window, sent to a 1.2 consumer after attach_window (set by window.cpp).
 bool g_cursor_auto_hide = true;
 std::uint32_t g_cursor_hide_delay_ms = 3000;
+// TASK-080: display aspect mode wanted by the game (set_display_aspect_mode), posted after a VSYNC to a 1.3 consumer.
+std::atomic<std::uint32_t> g_display_aspect_mode{0};
 
 // CPU time of the calling thread in microseconds (UINT64_MAX when unavailable).
 std::uint64_t thread_cpu_us() {
@@ -226,7 +229,14 @@ class Client {
 
   void start() {
     open_capture();
-    if (renderer_ == Renderer::pcsx2) start_process();
+    if (renderer_ == Renderer::pcsx2) {
+      start_process();
+      // TASK-080: in pcsx2 mode the race-view presentation goes to the GS process (CONTROL display_aspect). Installed
+      // here so headless runs exercise it too; the game window (window.cpp) installs an equivalent sink later.
+      gt4::display_aspect::set_presentation_sink([](bool fill, double) {
+        set_display_aspect_mode(fill ? DisplayAspectMode::fill : DisplayAspectMode::game_aspect);
+      });
+    }
     gt4::perf::Probe::set_gs_ipc_hooks(&Client::report_interval_hook, &Client::reset_interval_hook);
   }
 
@@ -328,6 +338,7 @@ class Client {
     if (osd_wanted_) osd_after_vsync();
     const std::uint64_t resize = pending_resize_.exchange(0);
     if ((resize >> 63) && stream()) control(proto::ControlKind::resize, (resize >> 32) & 0x7FFFFFFFu, resize & 0xFFFFFFFFu, 0);
+    post_display_aspect();
   }
 
   void reset(proto::ResetKind kind, std::uint32_t mask) {
@@ -352,6 +363,24 @@ class Client {
     // would answer an unknown CONTROL kind with an error, so it is not sent there (that consumer never hides it).
     if (session_ && ready_.version_minor >= 2)
       control(proto::ControlKind::cursor, g_cursor_auto_hide ? proto::kCursorFlagAutoHide : 0, g_cursor_hide_delay_ms, 0);
+  }
+
+  // TASK-080 (protocol 1.3): CONTROL display_aspect when the wanted mode differs from the last one sent (the consumer
+  // starts in game_aspect). Effective from the next presented frame. A consumer below 1.3 is never sent it.
+  void post_display_aspect() {
+    const std::uint32_t wanted = g_display_aspect_mode.load();
+    if (wanted == display_aspect_sent_ || !session_ || dead_) return;
+    if (ready_.version_minor < 3) {
+      if (!display_aspect_refused_logged_) {
+        display_aspect_refused_logged_ = true;
+        std::fprintf(stderr, "[gs-ipc] GS process speaks protocol 1.%u: display aspect mode %u not sent (needs 1.3); "
+                     "the picture keeps the game's aspect\n", ready_.version_minor, wanted);
+      }
+      return;
+    }
+    control(proto::ControlKind::display_aspect, wanted, 0, 0);
+    display_aspect_sent_ = wanted;
+    ++display_aspect_controls_;
   }
 
   void request_resize(std::uint32_t width, std::uint32_t height) {
@@ -789,6 +818,9 @@ class Client {
   std::unique_ptr<ipc::Session> session_;
   ipc::ChildProcess child_;
   proto::ReadyPayload ready_{};
+  std::uint32_t display_aspect_sent_ = 0;  // DisplayAspectMode last sent; game_aspect is the consumer's default
+  bool display_aspect_refused_logged_ = false;
+  std::uint64_t display_aspect_controls_ = 0;
   proto::FileWriter capture_;
   std::uint64_t capture_first_ = 0, capture_last_ = ~std::uint64_t(0);
   std::uint64_t sequence_ = 0;
@@ -1073,6 +1105,8 @@ void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms) {
   g_cursor_auto_hide = auto_hide;
   g_cursor_hide_delay_ms = std::clamp<std::uint32_t>(hide_delay_ms, 1, 60000);
 }
+
+void set_display_aspect_mode(DisplayAspectMode mode) { g_display_aspect_mode.store(static_cast<std::uint32_t>(mode)); }
 
 void set_worker_busy_source(std::uint64_t (*worker_busy_us)()) { g_worker_busy_us = worker_busy_us; }
 

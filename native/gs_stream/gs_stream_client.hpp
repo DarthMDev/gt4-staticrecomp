@@ -84,6 +84,12 @@ bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t heig
 // Call before attach_window; attach_window then sends CONTROL cursor to a 1.2 consumer, so the GS child window hides the
 // cursor over the picture with the same rule. Default: auto-hide on, 3000 ms.
 void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms);
+// TASK-080 (protocol 1.3): how the GS process fits the picture into the window: the game's aspect (pillarbox, the
+// default) or fill (stretched to the window, the race view at a display ratio other than 16:9). Any thread; the client
+// posts CONTROL display_aspect after the next VSYNC when the mode changed, and only to a consumer whose READY minor is
+// 3 or more (a 1.2 consumer is never sent it and keeps the game's aspect).
+enum class DisplayAspectMode : std::uint32_t { game_aspect = 0, fill = 1 };
+void set_display_aspect_mode(DisplayAspectMode mode);
 // TASK-062 (protocol 1.2): cumulative busy time of the VU1 worker in microseconds (installed by the MTVU bridge in
 // pcsx2 mode); read for the OSD_STATS records. Null: the worker field is not sent.
 void set_worker_busy_source(std::uint64_t (*worker_busy_us)());

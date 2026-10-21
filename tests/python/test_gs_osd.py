@@ -43,7 +43,8 @@ class Slice201PinTests(unittest.TestCase):
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice201'], (MANIFEST, EXECUTABLE))
         # slice206 (TASK-017) is the mode pcsx2 pin now; slice203 stays as pcsx2-slice203, slice202 as pcsx2-slice202.
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice202'], ('slice202-pcsx2.json', 'private/slice202-build/build/gt4vulkan.exe'))
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice212b-pcsx2.json', 'private/slice212b-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice211'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice210'], ('slice210-pcsx2.json', 'private/slice210-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice209'], ('slice209-pcsx2.json', 'private/slice209-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice206'], ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'))
@@ -127,7 +128,7 @@ class CursorSwitchTests(unittest.TestCase):
 class ProtocolTests(unittest.TestCase):
     def test_version_1_2_records(self):
         header = source('native/gs_stream/gs_stream_protocol.h')
-        self.assertIn('kVersionMinor = 2;', header)
+        self.assertIn('kVersionMinor = 3;', header)  # 1.3 (TASK-080) keeps every 1.2 record
         self.assertIn('osd_stats = 11,', header)
         self.assertIn('cursor = 6,', header)
         self.assertIn('kReadyFlagOsdStats = 8u;', header)
@@ -147,7 +148,7 @@ class ProtocolTests(unittest.TestCase):
 
     def test_protocol_document_names_version_1_2(self):
         text = source('docs/GS-STREAM-PROTOCOL.md')
-        self.assertTrue(text.startswith('# GS stream protocol, version 1.2 (normative)'))
+        self.assertTrue(text.startswith('# GS stream protocol, version 1.3 (normative)'))
         for phrase in ('6 cursor (version 1.2', '| OSD_STATS | 11 |', '8 (version 1.2) the consumer draws a performance overlay'):
             self.assertIn(phrase, text)
 

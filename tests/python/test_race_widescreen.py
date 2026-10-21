@@ -89,8 +89,11 @@ class WidescreenProbeTests(unittest.TestCase):
                     run.assert_not_called()
                 self.assertFalse((root / 'private/unknown').exists())
 
-    def test_pcsx2_mode_is_slice211_and_slice210_is_history(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
+    def test_pcsx2_mode_is_slice212b_and_slice211_and_slice210_are_history(self):
+        # TASK-080 (slice212b) moved mode pcsx2 on; the TASK-079 hold is still in it (hardened: settle rule).
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice212b-pcsx2.json', 'private/slice212b-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice211'],
+                         ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice210'],
                          ('slice210-pcsx2.json', 'private/slice210-build/build/gt4vulkan.exe'))
         self.assertIn('slice211-pcsx2.json', probe.VU0_AOT_MANIFESTS)

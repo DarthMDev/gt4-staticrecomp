@@ -2,6 +2,8 @@
 #include "perf_probe.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -40,6 +42,36 @@ PresentationRect presentation_rect(std::uint32_t width, std::uint32_t height,
       1, std::min<std::uint64_t>(height, width * denominator / numerator)));
   return {(width - fitted_width) / 2, (height - fitted_height) / 2,
           fitted_width, fitted_height};
+}
+
+PresentationRect presentation_rect_ratio(std::uint32_t width, std::uint32_t height,
+                                         double ratio) {
+  if (!width || !height || !(ratio > 0.0))
+    return {0, 0, 0, 0};
+  const double fitted_by_height = static_cast<double>(height) * ratio;
+  std::uint32_t fitted_width = width, fitted_height = height;
+  if (fitted_by_height <= static_cast<double>(width))
+    fitted_width = static_cast<std::uint32_t>(std::max(1.0, std::floor(fitted_by_height + 0.5)));
+  else
+    fitted_height = static_cast<std::uint32_t>(
+        std::max(1.0, std::floor(static_cast<double>(width) / ratio + 0.5)));
+  fitted_width = std::min(fitted_width, width);
+  fitted_height = std::min(fitted_height, height);
+  return {(width - fitted_width) / 2, (height - fitted_height) / 2,
+          fitted_width, fitted_height};
+}
+
+namespace {
+// TASK-080: race view presentation (set_race_view_presentation). The ratio is stored as its bit pattern.
+std::atomic<bool> g_race_view_fill{false};
+std::atomic<std::uint64_t> g_race_view_ratio_bits{0};
+} // namespace
+
+void set_race_view_presentation(bool fill, double ratio) {
+  std::uint64_t bits = 0;
+  std::memcpy(&bits, &ratio, sizeof bits);
+  g_race_view_ratio_bits.store(bits);
+  g_race_view_fill.store(fill);
 }
 
 namespace {
@@ -964,8 +996,17 @@ void Context::record_presentation(VkCommandBuffer command,
   memory_barrier(command, VK_PIPELINE_STAGE_TRANSFER_BIT,
                  VK_PIPELINE_STAGE_TRANSFER_BIT, VK_ACCESS_TRANSFER_WRITE_BIT,
                  VK_ACCESS_TRANSFER_WRITE_BIT);
+  // TASK-080: the race view at a ratio other than 16:9 fills a rectangle of that ratio (linear filter, the frame is
+  // stretched by a non-integer factor); everything else keeps the 16:9 pillarbox and nearest filter.
+  const bool race_view_fill = g_race_view_fill.load();
+  double race_view_ratio = 0.0;
+  if (race_view_fill) {
+    const std::uint64_t bits = g_race_view_ratio_bits.load();
+    std::memcpy(&race_view_ratio, &bits, sizeof race_view_ratio);
+  }
   const auto destination =
-      presentation_rect(extent_.width, extent_.height, aspect_);
+      race_view_fill ? presentation_rect_ratio(extent_.width, extent_.height, race_view_ratio)
+                     : presentation_rect(extent_.width, extent_.height, aspect_);
   VkImageBlit blit{};
   blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
   blit.srcOffsets[1] = {static_cast<int>(width), static_cast<int>(height), 1};
@@ -977,7 +1018,7 @@ void Context::record_presentation(VkCommandBuffer command,
                         1};
   vkCmdBlitImage(command, display_image_, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
-                 VK_FILTER_NEAREST);
+                 race_view_fill ? VK_FILTER_LINEAR : VK_FILTER_NEAREST);
   // The rendered semaphore signals at ALL_COMMANDS, so presentation follows this transition.
   image_barrier(command, target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_PIPELINE_STAGE_TRANSFER_BIT,

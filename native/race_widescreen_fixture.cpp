@@ -112,8 +112,62 @@ void test_preset_selection() {
   require(widescreen_preset_address(true, true) == widescreen_preset_wide_ntsc, "wide NTSC preset (sel 3)");
 }
 
-void test_forced_write_ntsc() {
+// A state whose owner pointer has already settled on `owner` (it moved once from a boot object and stayed).
+WidescreenState settled_state() {
   WidescreenState state;
+  state.settle.current = owner;
+  state.settle.stable = kOwnerSettleVblanks;
+  state.settle.moves = 1;
+  state.logged_owner = owner;
+  return state;
+}
+
+void test_owner_settle_rule() {
+  OwnerSettle settle;
+  require(!owner_settled(settle, 0), "null pointer is never settled");
+  // Boot object: published, stable for a long time, but it has not moved yet.
+  constexpr std::uint32_t boot = 0x0096E360u, live = 0x00A0CC10u;
+  for (std::uint32_t frame = 0; frame < 200; ++frame)
+    require(!owner_settled(settle, boot), "the first object is not settled before the move (under the late limit)");
+  require(!owner_settled(settle, live), "the move itself is not settled");
+  require(settle.moves == 1, "one move counted");
+  for (std::uint32_t frame = 1; frame < kOwnerSettleVblanks; ++frame)
+    require(!owner_settled(settle, live), "the live object waits kOwnerSettleVblanks");
+  require(owner_settled(settle, live), "the live object is settled after the wait");
+  require(owner_settled(settle, live), "and stays settled");
+  // A later move starts the wait again.
+  require(!owner_settled(settle, 0x00B00000u), "a later move resets the wait");
+  // No move seen (both stores between two VBlanks): the late limit applies.
+  OwnerSettle single;
+  std::uint32_t frames = 0;
+  while (!owner_settled(single, live)) {
+    ++frames;
+    require(frames <= kOwnerLateSettleVblanks + 1, "the late limit ends the wait");
+  }
+  require(frames == kOwnerLateSettleVblanks, "a pointer that never moved settles after kOwnerLateSettleVblanks");
+}
+
+void test_boot_object_is_never_written() {
+  // The pointer first shows a boot object (4:3 data), then the live object: only the live one is written.
+  constexpr std::uint32_t boot_owner = 0x00200000u;
+  WidescreenState state;
+  auto ram = make_ram(boot_owner, 0, 1);
+  const std::uint32_t boot_flag = boot_owner + 0x38CC4u;
+  for (int frame = 0; frame < 300; ++frame)
+    require(!force_widescreen_at_vblank(ram.data(), ram_size, state), "no write while only the boot object is seen");
+  require(load(ram, boot_flag) == 0 && load(ram, widescreen_global_address) == 0, "boot object and global untouched");
+  store(ram, widescreen_owner_pointer_address, owner);
+  int writes_at = -1;
+  for (int frame = 0; frame < 100 && writes_at < 0; ++frame)
+    if (force_widescreen_at_vblank(ram.data(), ram_size, state))
+      writes_at = frame;
+  require(writes_at == static_cast<int>(kOwnerSettleVblanks), "the live object is written after the settle wait");
+  require(load(ram, flag_address) == 1, "live wide flag set");
+  require(load(ram, boot_flag) == 0, "the boot object stays as the game left it");
+}
+
+void test_forced_write_ntsc() {
+  WidescreenState state = settled_state();
   auto ram = make_ram(owner, 0, 1);
   require(force_widescreen_at_vblank(ram.data(), ram_size, state), "4:3 option is forced at VBlank");
   require(load(ram, flag_address) == 1, "wide flag becomes 1");
@@ -126,7 +180,7 @@ void test_forced_write_ntsc() {
 }
 
 void test_forced_write_pal_source() {
-  WidescreenState state;
+  WidescreenState state = settled_state();
   auto ram = make_ram(owner, 0, 0);
   require(force_widescreen_at_vblank(ram.data(), ram_size, state), "non-NTSC option is forced");
   require(std::memcmp(ram.data() + record_address, ram.data() + widescreen_preset_wide, widescreen_record_bytes) == 0,
@@ -134,7 +188,7 @@ void test_forced_write_pal_source() {
 }
 
 void test_global_only() {
-  WidescreenState state;
+  WidescreenState state = settled_state();
   auto ram = make_ram(owner, 1, 1);
   store_record(ram, record_address, 425.0f, 240.0f, 0x700u);
   require(force_widescreen_at_vblank(ram.data(), ram_size, state), "stale published global is corrected");
@@ -148,6 +202,7 @@ void test_refusals() {
   require(!force_widescreen_at_vblank(null_owner.data(), ram_size, state), "null owner writes nothing");
   require(load(null_owner, flag_address) == 0, "flag untouched without owner");
 
+  state = settled_state();
   auto no_preset = make_ram(owner, 0, 1);
   store_record(no_preset, widescreen_preset_wide_ntsc, 275.0f, 205.0f, 0x900u);
   require(!force_widescreen_at_vblank(no_preset.data(), ram_size, state), "non-wide preset is refused");
@@ -163,6 +218,8 @@ int main() {
   test_address_chain();
   test_record_test();
   test_preset_selection();
+  test_owner_settle_rule();
+  test_boot_object_is_never_written();
   test_forced_write_ntsc();
   test_forced_write_pal_source();
   test_global_only();

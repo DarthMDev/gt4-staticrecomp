@@ -1,6 +1,7 @@
 #include "window.hpp"
 #include "race_display.hpp"
 #include "race_widescreen.hpp"
+#include "display_aspect.hpp"
 #include "ps2/memory.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
@@ -218,11 +219,27 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     if (ps2::g_options.presses.empty())
       apply_pad({});
   }
+  // TASK-080: GT4_DISPLAY_ASPECT=auto follows the client area (windowed, fullscreen, Alt+Enter, resize).
+  if (message == WM_SIZE)
+    gt4::display_aspect::set_window_client_size(LOWORD(second), HIWORD(second));
   if (message == WM_SIZE && surface_attached) {
     ps2::gs::resize_window(LOWORD(second), HIWORD(second));
     return 0;
   }
   return DefWindowProcW(window, message, first, second);
+}
+
+// TASK-080 presentation sink (native/display_aspect.hpp, EE thread): CoreGS 1.1 fills a rectangle of the race
+// projection ratio; the PCSX2 GS process gets CONTROL display_aspect (protocol 1.3; only a 1.3 consumer is sent it).
+void present_race_view(bool fill, double ratio) {
+#ifdef GT4_GS_STREAM_CLIENT
+  if (gt4::gs_stream::stream_renderer()) {
+    gt4::gs_stream::set_display_aspect_mode(fill ? gt4::gs_stream::DisplayAspectMode::fill
+                                                 : gt4::gs_stream::DisplayAspectMode::game_aspect);
+    return;
+  }
+#endif
+  gt4::vulkan::set_race_view_presentation(fill, ratio);
 }
 
 bool pump_messages() {
@@ -317,6 +334,8 @@ bool open_window(bool fullscreen) {
     return false;
   }
   keyboard_keys = gt4::controls::keyboard_bindings(active_controls);
+  // TASK-080: an invalid GT4_DISPLAY_ASPECT or GT4_ASPECT_FOV_EXTRA stops the start here (prints and exits).
+  gt4::display_aspect::configured_setting();
   try {
     input_backend = gt4::pad::parse_backend(std::getenv("GT4_INPUT"));
   } catch (const std::invalid_argument &error) {
@@ -352,6 +371,10 @@ bool open_window(bool fullscreen) {
   // Start in borderless fullscreen on the window's monitor: the same path as Alt+Enter and F11.
   if (start_fullscreen)
     set_fullscreen(true);
+  RECT client{};
+  if (GetClientRect(game_window, &client))
+    gt4::display_aspect::set_window_client_size(static_cast<std::uint32_t>(client.right),
+                                                static_cast<std::uint32_t>(client.bottom));
   std::fprintf(stderr, "[window] %s start (GT4_FULLSCREEN)\n", start_fullscreen ? "fullscreen" : "windowed");
   return true;
 }
@@ -441,8 +464,9 @@ int run_window(const std::function<int()> &emulate) {
                                 nullptr, nullptr, bounds.right, bounds.bottom))
       throw std::runtime_error("Native Vulkan presentation refused window");
     surface_attached = true;
-    // The presentation is fixed 16:9.
+    // The presentation is 16:9 pillarbox; TASK-080 fills the screen in the race view at other ratios.
     ps2::gs::gpu::set_widescreen(true);
+    gt4::display_aspect::set_presentation_sink(present_race_view);
     std::fprintf(stderr,
                  "[window] real guest GPU output through native Vulkan\n");
     // shortcut: one thread and FIFO presentation, qualify pipelining later.

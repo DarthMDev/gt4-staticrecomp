@@ -24,12 +24,44 @@ pub fn pcsx2_table_rows() -> Vec<&'static gs_table::Row> {
 /// The payload of `get_settings_table`: `{max_upscale, rows}`. Launcher rows come from `SETTINGS`, PCSX2 GS rows from
 /// the table file; both use the row shape of ui/dev/README.md. Rows of the other renderer are sent with `visible_when`.
 pub fn settings_table(settings: &Settings, controls: &Controls) -> Value {
+    settings_table_with_display(settings, controls, None)
+}
+
+/// The monitor the launcher window is on, in physical pixels (TASK-080: shown on the Aspect ratio row).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DisplaySize {
+    pub width: u32,
+    pub height: u32,
+}
+
+/// "3440x1440, 21.5:9" (16:9 screens read "16:9"). The ratio is given per 9 rows, as players name ultrawide screens.
+pub fn describe_display(display: DisplaySize) -> String {
+    if display.width == 0 || display.height == 0 {
+        return format!("{}x{}", display.width, display.height);
+    }
+    let per_nine = display.width as f64 * 9.0 / display.height as f64;
+    if (per_nine - 16.0).abs() < 0.08 {
+        return format!("{}x{}, 16:9", display.width, display.height);
+    }
+    format!("{}x{}, {:.1}:9", display.width, display.height, per_nine)
+}
+
+/// The settings table; with a known monitor, the Aspect ratio row's Auto entry names it ("Auto (3440x1440, 21.5:9)").
+pub fn settings_table_with_display(settings: &Settings, controls: &Controls, display: Option<DisplaySize>) -> Value {
     let mut rows: Vec<Value> = Vec::new();
     for definition in SETTINGS {
         if !settings.applies(definition.id) {
             continue;
         }
-        rows.push(launcher_row(definition, settings));
+        let mut row = launcher_row(definition, settings);
+        if definition.id == "aspect_ratio" {
+            if let (Some(display), Some(values)) = (display, row["values"].as_array_mut()) {
+                if let Some(auto) = values.iter_mut().find(|choice| choice["value"] == "auto") {
+                    auto["label"] = json!(format!("Auto ({})", describe_display(display)));
+                }
+            }
+        }
+        rows.push(row);
     }
     for row in pcsx2_table_rows() {
         rows.push(gs_row(row, settings));
@@ -70,6 +102,13 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
             json!(definition.default.parse::<u32>().unwrap_or(0)),
             json!(settings.get(definition.id).parse::<u32>().unwrap_or(0)),
         ),
+        // TASK-080: the stored whole number of hundredths; the page shows it divided by `scale` ("2.33:1").
+        Kind::Hundredths { min, max } => (
+            "slider",
+            json!({ "min": min, "max": max, "step": 1, "unit": ":1", "scale": 100 }),
+            json!(definition.default.parse::<u32>().unwrap_or(min)),
+            json!(settings.get(definition.id).parse::<u32>().unwrap_or(min)),
+        ),
     };
     let mut row = json!({
         "id": definition.id,
@@ -84,6 +123,10 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
     });
     if !group.is_empty() {
         row["group"] = json!(group);
+    }
+    // TASK-080: the Custom ratio row shows only when Aspect ratio is Custom.
+    if definition.id == "aspect_custom" {
+        row["visible_when"] = json!({ "id": "aspect_ratio", "equals": "custom" });
     }
     row
 }
@@ -519,6 +562,36 @@ mod table_tests {
 
     fn row<'a>(table: &'a Value, id: &str) -> &'a Value {
         table["rows"].as_array().unwrap().iter().find(|row| row["id"] == id).unwrap()
+    }
+
+    #[test]
+    fn aspect_rows_offer_auto_and_a_custom_slider_shown_only_for_custom() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        let aspect = row(&table, "aspect_ratio");
+        assert_eq!(aspect["current"], "auto");
+        assert_eq!(aspect["group"], "graphics");
+        let values: Vec<&str> = aspect["values"].as_array().unwrap().iter().map(|v| v["value"].as_str().unwrap()).collect();
+        assert_eq!(values, ["auto", "16:9", "4:3", "custom"]);
+        assert_eq!(aspect["values"][0]["label"], "Auto", "no monitor known: plain Auto");
+        let custom = row(&table, "aspect_custom");
+        assert_eq!(custom["control"], "slider");
+        assert_eq!(custom["values"]["scale"], 100);
+        assert_eq!(custom["values"]["min"], 100);
+        assert_eq!(custom["values"]["max"], 600);
+        assert_eq!(custom["current"], 233);
+        assert_eq!(custom["visible_when"]["id"], "aspect_ratio");
+        assert_eq!(custom["visible_when"]["equals"], "custom");
+    }
+
+    #[test]
+    fn the_auto_entry_names_the_detected_monitor() {
+        let ultrawide = DisplaySize { width: 3440, height: 1440 };
+        let table = settings_table_with_display(&Settings::default(), &Controls::default(), Some(ultrawide));
+        assert_eq!(row(&table, "aspect_ratio")["values"][0]["label"], "Auto (3440x1440, 21.5:9)");
+        assert_eq!(describe_display(DisplaySize { width: 1920, height: 1080 }), "1920x1080, 16:9");
+        assert_eq!(describe_display(DisplaySize { width: 1366, height: 768 }), "1366x768, 16:9");
+        assert_eq!(describe_display(DisplaySize { width: 3088, height: 1440 }), "3088x1440, 19.3:9");
+        assert_eq!(describe_display(DisplaySize { width: 5120, height: 1440 }), "5120x1440, 32.0:9");
     }
 
     #[test]

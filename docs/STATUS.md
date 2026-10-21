@@ -1,5 +1,12 @@
 # Current Status
 
+## TASK-080 P1 (2026-10-21, branch `task/080-aspect-ratios`, not merged)
+
+slice212b = `--mode pcsx2` on the branch: native display aspect ratios (`GT4_DISPLAY_ASPECT`, auto by default; race
+camera Hor+/Vert+ hook; race view filled, menus 16:9; protocol 1.3 for gt4-gs 1.1.0; launcher Aspect ratio row) and the
+TASK-079 hold hardening. 16:9 frames byte-identical. Waiting for the owner tests and approval. Details:
+[BUILD](BUILD.md) slice 212b, decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md).
+
 ## Current state (2026-10-17)
 
 **TASK-044 (packaging, docs only, branch `task/044-packaging`):** release 1.0.0 ships gt4-gs 1.0.1 (`gt4gs-v1.0.1`, the

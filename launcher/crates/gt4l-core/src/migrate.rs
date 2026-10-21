@@ -118,11 +118,12 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 3,
+    current: 4,
     steps: &[
         Step { from: 0, apply: settings_0_to_1 },
         Step { from: 1, apply: settings_1_to_2 },
         Step { from: 2, apply: settings_2_to_3 },
+        Step { from: 3, apply: settings_3_to_4 },
     ],
 };
 
@@ -153,6 +154,17 @@ fn settings_1_to_2(document: &mut Value) -> Result<(), String> {
 fn settings_2_to_3(document: &mut Value) -> Result<(), String> {
     if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
         settings.entry("widescreen".to_string()).or_insert_with(|| Value::from("on"));
+    }
+    Ok(())
+}
+
+/// Schema 4: the Aspect ratio and Custom ratio rows (TASK-080, `GT4_DISPLAY_ASPECT`). A file of schema 3 has neither
+/// key; it gets the defaults written out ("auto" and 233 hundredths), so the file records what the game is sent. Values
+/// already present are kept.
+fn settings_3_to_4(document: &mut Value) -> Result<(), String> {
+    if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        settings.entry("aspect_ratio".to_string()).or_insert_with(|| Value::from("auto"));
+        settings.entry("aspect_custom".to_string()).or_insert_with(|| Value::from("233"));
     }
     Ok(())
 }
@@ -281,16 +293,33 @@ mod tests {
     fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(3));
+        assert_eq!(document["schema_version"], json!(4));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
         assert_eq!(document["settings"]["widescreen"], json!("on"));
+        assert_eq!(document["settings"]["aspect_ratio"], json!("auto"));
+        assert_eq!(document["settings"]["aspect_custom"], json!("233"));
+    }
+
+    #[test]
+    fn schema_three_gets_aspect_auto_and_keeps_values_already_written() {
+        let mut missing = json!({"schema_version": 3, "settings": {"vsync": "on", "widescreen": "off"}});
+        assert_eq!(migrate(&SETTINGS, &mut missing).unwrap(), 3);
+        assert_eq!(missing["schema_version"], json!(4));
+        assert_eq!(missing["settings"]["aspect_ratio"], json!("auto"));
+        assert_eq!(missing["settings"]["aspect_custom"], json!("233"));
+        assert_eq!(missing["settings"]["widescreen"], json!("off"), "other values survive");
+
+        let mut custom = json!({"schema_version": 3, "settings": {"aspect_ratio": "custom", "aspect_custom": "356"}});
+        migrate(&SETTINGS, &mut custom).unwrap();
+        assert_eq!(custom["settings"]["aspect_ratio"], json!("custom"));
+        assert_eq!(custom["settings"]["aspect_custom"], json!("356"));
     }
 
     #[test]
     fn schema_two_gets_widescreen_on_and_keeps_a_value_already_written() {
         let mut missing = json!({"schema_version": 2, "settings": {"vsync": "on"}});
         assert_eq!(migrate(&SETTINGS, &mut missing).unwrap(), 2);
-        assert_eq!(missing["schema_version"], json!(3));
+        assert_eq!(missing["schema_version"], json!(4));
         assert_eq!(missing["settings"]["widescreen"], json!("on"));
 
         let mut off = json!({"schema_version": 2, "settings": {"widescreen": "off"}});

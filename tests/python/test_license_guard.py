@@ -121,9 +121,11 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
 
-    def test_mode_pcsx2_is_the_slice211_build_and_slice210_is_history(self):
+    def test_mode_pcsx2_slice211_is_the_slice206_guard_build_and_slice210_is_history(self):
+        # TASK-080 (slice212b, tests/python/test_display_aspect.py) moved mode pcsx2 to the slice212b capsule (the guard
+        # plus the race camera aspect hook); slice211 keeps the slice206 guard as history mode pcsx2-slice211.
         import external_runtime_probe as probe
-        name, runtime = probe.PERF_PROFILES['pcsx2']
+        name, runtime = probe.PERF_PROFILES['pcsx2-slice211']
         self.assertEqual((name, runtime), ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice206'],
                          ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'))

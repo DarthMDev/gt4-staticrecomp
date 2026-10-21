@@ -7,7 +7,7 @@
  *   row = {id, label, help, page: "basic"|"advanced"|"mods"|"hidden",
  *          group?: "graphics"|"display", control: "slider"|"toggle"|"dropdown",
  *          values, default, current, disabled?, visible_when?: {id, equals}}
- *   slider values   = {min, max, step, unit?, limit?: "max_upscale"}
+ *   slider values   = {min, max, step, unit?, limit?: "max_upscale", scale?: shown value = stored / scale}
  *   dropdown values = [{value, label, disabled?, note?}]
  *   toggle values   = null (current is true/false)
  */
@@ -79,12 +79,17 @@
     if (spec.limit && typeof table[spec.limit] === "number") {
       max = Math.min(max, table[spec.limit]);
     }
-    return { min: spec.min, max: max, step: spec.step || 1, unit: spec.unit || "", fullMax: spec.max };
+    return { min: spec.min, max: max, step: spec.step || 1, unit: spec.unit || "", fullMax: spec.max,
+             scale: spec.scale || 1 };
   }
 
   function sliderControl(ctx, row) {
     var spec = sliderSpec(row, ctx.table);
+    // scale (TASK-080 custom aspect ratio): the stored whole number is shown divided by it, with two decimals.
     var format = function (value) {
+      if (spec.scale !== 1) {
+        return (Number(value) / spec.scale).toFixed(2) + spec.unit;
+      }
       return String(value) + spec.unit;
     };
     var input = h("input", {

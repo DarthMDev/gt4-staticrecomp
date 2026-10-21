@@ -111,6 +111,8 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
 ///   `anti_aliasing` -> `GT4_AA`. These are hidden in the UI (decision 0070) and keep their defaults.
 /// - `fullscreen` -> `GT4_FULLSCREEN` (1/0).
 /// - `widescreen` -> `GT4_FORCE_WIDESCREEN` (1/0): the game's wide flag is held at 16:9 (TASK-079).
+/// - `aspect_ratio` (+ `aspect_custom`) -> `GT4_DISPLAY_ASPECT`: `auto`, `16:9`, `4:3` or the custom ratio as a
+///   decimal with two places, e.g. `2.33` (TASK-080).
 /// - `vsync` -> `GT4_PRESENT_MODE` (on = fifo, fast = mailbox, off = immediate).
 /// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
 /// - `performance_report` on -> `GT4_PERF=1`.
@@ -173,6 +175,7 @@ pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String
 fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Settings) {
     variables.insert("GT4_FULLSCREEN", flag(settings.is_on("fullscreen")));
     variables.insert("GT4_FORCE_WIDESCREEN", flag(settings.is_on("widescreen")));
+    variables.insert("GT4_DISPLAY_ASPECT", display_aspect(settings));
     variables.insert(
         "GT4_PRESENT_MODE",
         match settings.get("vsync") {
@@ -224,6 +227,24 @@ pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths) -> Result<String,
 /// Whether the game asked for a restart with the built-in renderer (its log holds the marker line).
 pub fn restart_requested(log_text: &str) -> bool {
     log_text.lines().any(|line| line.contains(GS_RESTART_MARKER))
+}
+
+/// `GT4_DISPLAY_ASPECT` for the Aspect ratio row (TASK-080). The game refuses any other text, so only these forms are
+/// produced: `auto`, `16:9`, `4:3`, or the custom hundredths as `X.YY`.
+pub fn display_aspect(settings: &Settings) -> String {
+    match settings.get("aspect_ratio") {
+        "16:9" => "16:9".to_string(),
+        "4:3" => "4:3".to_string(),
+        "custom" => {
+            let hundredths: u32 = settings
+                .get("aspect_custom")
+                .parse()
+                .unwrap_or(233)
+                .clamp(crate::settings::ASPECT_CUSTOM_MIN, crate::settings::ASPECT_CUSTOM_MAX);
+            format!("{}.{:02}", hundredths / 100, hundredths % 100)
+        }
+        _ => "auto".to_string(),
+    }
 }
 
 fn flag(on: bool) -> String {

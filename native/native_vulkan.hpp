@@ -29,6 +29,15 @@ struct PresentationRect {
 PresentationRect presentation_rect(std::uint32_t width, std::uint32_t height,
                                    Aspect aspect);
 
+// TASK-080: the largest centred rectangle of `ratio` (width / height) inside the client area. Pure.
+PresentationRect presentation_rect_ratio(std::uint32_t width, std::uint32_t height,
+                                         double ratio);
+
+// TASK-080 (native/display_aspect.hpp): while the race view is shown at a ratio other than 16:9, the frame fills a
+// rectangle of that ratio (the whole client area in "auto") with linear filtering; otherwise the fixed 16:9
+// pillarbox with nearest filtering, as before. Any thread; read at the next presentation.
+void set_race_view_presentation(bool fill, double ratio);
+
 struct Buffer {
   VkBuffer handle = VK_NULL_HANDLE;
   VkDeviceMemory memory = VK_NULL_HANDLE;

@@ -97,10 +97,45 @@ std::uint32_t widescreen_preset_address(bool wide, bool ntsc) {
   return widescreen_preset_4_3;
 }
 
+bool owner_settled(OwnerSettle &settle, std::uint32_t owner_pointer) {
+  if (owner_pointer != settle.current) {
+    if (settle.current != 0 && owner_pointer != 0)
+      ++settle.moves;
+    settle.current = owner_pointer;
+    settle.stable = 0;
+    return false;
+  }
+  if (owner_pointer == 0)
+    return false;
+  if (settle.stable < kOwnerLateSettleVblanks)
+    ++settle.stable;
+  if (settle.stable < kOwnerSettleVblanks)
+    return false;
+  return settle.moves > 0 || settle.stable >= kOwnerLateSettleVblanks;
+}
+
 bool force_widescreen_at_vblank(std::uint8_t *ram, std::uint32_t ram_size, WidescreenState &state) {
   if (!word_in_ram(widescreen_owner_pointer_address, ram_size))
     return false;
   const std::uint32_t owner_pointer = read_le32(ram + widescreen_owner_pointer_address);
+  ++state.vblanks;
+  if (owner_pointer != state.logged_owner) {
+    std::fprintf(stderr, "[display] game-data pointer 0x%08X -> 0x%08X at vblank %llu (moves %u)\n",
+                 static_cast<unsigned>(state.logged_owner), static_cast<unsigned>(owner_pointer),
+                 static_cast<unsigned long long>(state.vblanks),
+                 static_cast<unsigned>(state.settle.moves + (state.logged_owner != 0 && owner_pointer != 0 ? 1 : 0)));
+    state.logged_owner = owner_pointer;
+  }
+  if (!owner_settled(state.settle, owner_pointer))
+    return false;
+  if (!state.settled_logged) {
+    state.settled_logged = true;
+    std::fprintf(stderr,
+                 "[display] GT4_FORCE_WIDESCREEN: game-data pointer settled on 0x%08X at vblank %llu (moves %u, "
+                 "stable %u)\n",
+                 static_cast<unsigned>(owner_pointer), static_cast<unsigned long long>(state.vblanks),
+                 static_cast<unsigned>(state.settle.moves), static_cast<unsigned>(state.settle.stable));
+  }
   const std::uint32_t option = widescreen_option_address(owner_pointer, ram_size);
   if (option == 0)
     return false;

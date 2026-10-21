@@ -1676,3 +1676,66 @@ Owner launcher test folder (`private/owner-test-launcher`): `game` is slice211 (
 build (`launcher/target/release/GT4Recomp.exe` on `task/019-launcher`). `version.json` and `%LOCALAPPDATA%\GT4Recomp` untouched.
 
 Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.
+
+## Slice 212b - TASK-080 P1 native display aspect ratios (`--mode pcsx2`)
+
+The slice211 build plus native aspect ratios (decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md),
+design [ULTRAWIDE-NATIVE-STUDY](ULTRAWIDE-NATIVE-STUDY.md)). Source: branch `task/080-aspect-ratios` (from main 26f83b8),
+worktree `C:\Antigravity\gt4-wt-080`. Build script `private/slice212b-scripts/build-game-212b.bat` (the slice211 recipe,
+clang-cl 22.1.3, serial) with `GT4_LICENSE_GUARD_SOURCE=private/slice212c-license-guard-runtime`. Executable
+`private/slice212b-build/build/gt4vulkan.exe`, 97,197,056 bytes, sha256 `d222a64772cba742...`. Game library, port,
+shaders, runtime and memcard capsules, VU tables and the gt4-gs 1.0.1 package are the slice211 inputs.
+(`private/slice212-scripts` and `private/slice212-smoke` belong to an earlier investigation; `private/slice212b-license-guard-runtime`
+is a first derivation without the RaceDisplay::render marker, never pinned or shipped.)
+
+Changes against slice211:
+- `native/display_aspect.{hpp,cpp}` (new, in `gt4_quickfix`): `GT4_DISPLAY_ASPECT` (unset/`auto` = the game window's
+  client area, followed on WM_SIZE and Alt+Enter, 16:9 headless; `16:9`, `4:3`, `W:H`, or a decimal 0.5..8; anything
+  else refuses the start) and the hidden `GT4_ASPECT_FOV_EXTRA` (0.5..3.0, default 1.0); 16:9 snap within 0.5%;
+  Hor+/Vert+ factors; the matrix scale; the scene policy and the runtime glue.
+- Capsule `private/slice212c-license-guard-runtime` (`scripts/prepare_license_guard.py --display-aspect`, overlay
+  `scripts/display_aspect_overlay.inc` on top of the slice206 guard; pin `docs/inputs/slice212c-license-guard-runtime.json`;
+  kernel.cpp and cdvdfsv.cpp byte-identical to slice206). Two hook lines in `dispatch`:
+  - the race camera call of `RaceBase::initMonitor` (return label 0x00388B38, a1 = sp = the 4x4 monitor matrix): Hor+
+    for R >= 16:9 scales the x output column (m[0], m[4], m[8], m[12]) by (16/9)/(R f); Vert+ below 16:9 scales the y
+    column by R/(16/9) and x by 1/f. Nothing is written when the factor is 1. a1 must equal sp. Photo pause
+    (`func_003C49C8`) reaches the same call;
+  - every dispatch of `RaceDisplay::render` (0x0039F498, the race HUD, only reached through vtables) marks the race view.
+- Scene policy: race view = the HUD rendered in the last 30 VBlanks and no photo/movie display request (row 2 of
+  `func_001074D0`, struct 0x006184D0; cleared by the next camera hook or request); 3-VBlank hysteresis. The first plan
+  (requests only) failed in the headless race trace: 480i races and menus make identical requests.
+- Presentation: CoreGS 1.1 fills a rectangle of the race projection ratio with linear filtering in the race view
+  (`native_vulkan.cpp` `presentation_rect_ratio`, `set_race_view_presentation`), 16:9 pillarbox and nearest elsewhere.
+  PCSX2 GS: protocol 1.3 producer, CONTROL kind 7 `display_aspect` (mode 0 game aspect, 1 fill) after a VSYNC when the
+  mode changes, only to a consumer whose READY minor is 3 or more (`docs/GS-STREAM-PROTOCOL.md` 1.3; header
+  `kVersionMinor = 3`, `ErrorCode::bad_argument = 7`). Nothing is ever sent while the projection ratio is 16:9.
+- TASK-079 hardening (`native/race_widescreen.*`): the hold writes only after the game-data pointer settled (moved from
+  the boot object and stable 30 VBlanks; 600 VBlanks if no move is seen). Headless: pointer 0 -> 0x0096E360 at VBlank 12,
+  -> 0x00A0CC10 at VBlank 20, settled at 50; the boot object is no longer written. Card I/O is not visible to the host
+  (it would need a new memcard capsule); not detected.
+- `native/window.cpp` (validation at start, client size, presentation sink), `native/mtvu_runtime.cpp` (VBlank tick),
+  `scripts/external_runtime_probe.py` (validation, forwarding and `display_aspect_environment`; mode `pcsx2` = slice212b,
+  `pcsx2-slice211` history), tests (`native_display_aspect`, fixtures in `native_race_widescreen`, `native_gs_stream_client`
+  1.3 scenario, `vulkan_fixture` ratio rectangles, `tests/python/test_display_aspect.py`).
+
+Checks (2026-10-21):
+- CTest 37 of 37 (`private/slice212b-scripts/ctest-212b-final.log`).
+- Python `unittest discover`, `GT4_NATIVE_BUILD` = slice212b: 612 tests OK, 23 skipped (`python-212b.log`).
+- Headless donor runs (`private/slice212b-scripts/run-headless-212b.sh`, stderr filtered on the fly because the
+  `--trace-syscalls` log is about 1 GB per race run):
+  - (a) menus, 4,200 frames, widescreen seed copy, `GT4_DISPLAY_ASPECT=16:9`: 42 of 42 dumps identical to slice211 (b, force on).
+  - (b) the same, unset (auto, headless 16:9): 42 of 42 identical.
+  - (d) menus, 4:3 card copy (name-control4), auto: 42 of 42 identical to slice211 (d3): the hardened hold gives the same frames.
+  - (c) race schedule (Arcade, El Capitan, Ford Ka, 5 AI; 16,000 frames, the TASK-041 presses), 4:3 card copy:
+    16:9 = no write, no presentation change; 21:9 and 32:9: 84 of 160 dumps differ from 16:9, the first at frame 7700
+    (camera hook at VBlank 7638 and 8335, matrix at sp 0x01FFF810 / 0x01FFF800, x factor 0.761905 = 16/21 and 0.5;
+    HUD from VBlank 7667, fill from 7670, no pillarbox gap with the 30-VBlank window). Run dirs `private/slice212b-smoke/f-*`. Also 4:3 (y 0.75) and 32:9 with `GT4_ASPECT_FOV_EXTRA=1.25` (x 0.4).
+- Headless pcsx2 (probe, race schedule 10,000 frames, `GT4_DISPLAY_ASPECT=21:9`): gt4-gs 1.0.1 (protocol 1.2, the pinned
+  package, same exe as `%LOCALAPPDATA%\GT4Recomp\gs\1.0.1`): no CONTROL display_aspect sent ("needs 1.3" logged once),
+  exit 0; gt4-gs 1.1.0 (protocol 1.3, `private/gt4gs-110-release-pkg`, read only): "CONTROL display_aspect 1 (fill) from
+  frame 7670", no ERROR, exit 0.
+- Pins: `docs/inputs/slice212b-pcsx2.json` (runtime above; license guard fields = slice212c) and
+  `docs/inputs/slice212c-license-guard-runtime.json`; every other input as slice211.
+
+Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`
+(set `GT4_DISPLAY_ASPECT` / `GT4_ASPECT_FOV_EXTRA` before it to test).

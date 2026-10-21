@@ -37,6 +37,9 @@ pub enum Kind {
     Toggle,
     /// A whole percentage from 0 to 100, shown as a slider. Stored as decimal text, e.g. `50`.
     Percent,
+    /// A ratio in hundredths (`233` = 2.33:1), shown as a slider from `min` to `max` hundredths. Stored as decimal
+    /// text of the whole number (TASK-080 custom aspect ratio).
+    Hundredths { min: u32, max: u32 },
 }
 
 /// One row of a Settings page.
@@ -117,6 +120,19 @@ const VERIFY_CHOICES: &[Choice] = &[
     Choice { value: "1000", label: "Every 1000th call", selectable: true },
 ];
 
+/// TASK-080 aspect ratio (`GT4_DISPLAY_ASPECT`): auto follows the game window; custom uses `aspect_custom`.
+const ASPECT_CHOICES: &[Choice] = &[
+    Choice { value: "auto", label: "Auto", selectable: true },
+    Choice { value: "16:9", label: "16:9", selectable: true },
+    Choice { value: "4:3", label: "4:3", selectable: true },
+    Choice { value: "custom", label: "Custom", selectable: true },
+];
+
+/// Custom ratio range in hundredths: 1.00:1 to 6.00:1 (the game accepts 0.5 to 8). Default 2.33:1 (21:9).
+pub const ASPECT_CUSTOM_MIN: u32 = 100;
+pub const ASPECT_CUSTOM_MAX: u32 = 600;
+pub const ASPECT_CUSTOM_DEFAULT: &str = "233";
+
 const TOGGLE: Kind = Kind::Toggle;
 
 /// Every user setting, in display order. Ids are the TOML keys.
@@ -151,6 +167,29 @@ pub const SETTINGS: &[SettingDef] = &[
         info: "Holds the game's Wide setting at 16:9 while it runs, so the game starts widescreen. Off leaves the                game's own Wide setting (Options, Screen) as it is.",
         kind: TOGGLE,
         default: "on",
+        connected: true,
+    },
+    SettingDef {
+        id: "aspect_ratio",
+        page: Page::Graphics,
+        group: "Image",
+        title: "Aspect ratio",
+        info: "The shape of your screen. Auto reads the game window (in fullscreen, the monitor) and widens the \
+               race view to fill it; menus, movies and photo mode stay 16:9 with side bars. 16:9 is the game's \
+               own picture. Custom uses the Custom ratio below.",
+        kind: Kind::Choice(ASPECT_CHOICES),
+        default: "auto",
+        connected: true,
+    },
+    SettingDef {
+        id: "aspect_custom",
+        page: Page::Graphics,
+        group: "Image",
+        title: "Custom ratio",
+        info: "Screen width divided by height, used when Aspect ratio is Custom: 1.60 is 16:10, 2.33 is 21:9, \
+               2.39 is 3440x1440, 3.56 is 32:9.",
+        kind: Kind::Hundredths { min: ASPECT_CUSTOM_MIN, max: ASPECT_CUSTOM_MAX },
+        default: ASPECT_CUSTOM_DEFAULT,
         connected: true,
     },
     SettingDef {
@@ -299,6 +338,10 @@ pub fn validate(definition: &SettingDef, value: &str) -> Result<String, SettingE
             .ok_or_else(invalid),
         Kind::Percent => match value.parse::<u8>() {
             Ok(percent) if percent <= 100 => Ok(percent.to_string()),
+            _ => Err(invalid()),
+        },
+        Kind::Hundredths { min, max } => match value.parse::<u32>() {
+            Ok(hundredths) if (min..=max).contains(&hundredths) => Ok(hundredths.to_string()),
             _ => Err(invalid()),
         },
     }

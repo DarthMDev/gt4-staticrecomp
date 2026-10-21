@@ -118,13 +118,23 @@ fn visual_ready() -> bool {
 
 /// `get_settings_table()`: `{max_upscale, rows}`, the rows of ui/dev/README.md (see `model::settings_table`).
 #[tauri::command]
-pub fn get_settings_table(shared: State<'_, Shared>) -> Result<Value, String> {
-    get_settings_table_of(shared.inner())
+pub fn get_settings_table(window: tauri::Window, shared: State<'_, Shared>) -> Result<Value, String> {
+    // TASK-080: the Aspect ratio row names the monitor the launcher is on (the game opens on the same monitor).
+    let display = window
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|monitor| model::DisplaySize { width: monitor.size().width, height: monitor.size().height });
+    get_settings_table_with_display(shared.inner(), display)
 }
 
 pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
+    get_settings_table_with_display(shared, None)
+}
+
+pub fn get_settings_table_with_display(shared: &Shared, display: Option<model::DisplaySize>) -> Result<Value, String> {
     let state = lock(shared);
-    Ok(model::settings_table(&state.config.settings, &state.controls))
+    Ok(model::settings_table_with_display(&state.config.settings, &state.controls, display))
 }
 
 /// `set_setting({id, value})`: a launcher row, a PCSX2 GS table row, a trigger row (`l2_deadzone`, `r2_curve`, ...) or

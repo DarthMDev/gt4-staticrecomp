@@ -93,7 +93,9 @@ Settings row (`rows[]` in the table):
   visible_when?: {id, equals} }          // e.g. FSR sharpness only when scaling_filter == "fsr"
 ```
 
-- slider values: `{min, max, step, unit?, limit?: "max_upscale"}`; the effective max is `min(max, table[limit])`.
+- slider values: `{min, max, step, unit?, limit?: "max_upscale", scale?}`; the effective max is `min(max, table[limit])`.
+  With `scale` (TASK-080 Custom ratio: 100) the stored whole number is shown divided by it with two decimals
+  (`233` reads "2.33:1").
 - dropdown values: `[{value, label, disabled?, note?}]`; disabled entries are greyed and not selectable.
 - toggle values: `null`; `current` is a bool.
 - The Controls analog rows use the same row shape (`group: "controls"`). Their ids are `l2_deadzone`, `l2_curve`, `r2_deadzone`, `r2_curve`, `lstick_deadzone` and `rstick_deadzone` (percent of travel, 0-95), and they are written with `set_setting`. A trigger row tunes the trigger source of that button (`deadzone=`/`curve=` options); a stick row writes `deadzone=` on both axis sources of the stick.

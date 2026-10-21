@@ -31,6 +31,8 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     assert_eq!(environment["GT4_FULLSCREEN"], "1");
     // TASK-079: Widescreen 16:9 is on by default and is always stated (the game's native default is on too).
     assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1");
+    // TASK-080: Aspect ratio Auto is the default and is always stated.
+    assert_eq!(environment["GT4_DISPLAY_ASPECT"], "auto");
     assert_eq!(environment["GT4_PRESENT_MODE"], "fifo");
     // Asynchronous GS is the default, so GT4_GS_SYNC stays unset.
     assert!(!environment.contains_key("GT4_GS_SYNC"));
@@ -39,7 +41,7 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     // CoreGS 1.1 defaults also send deinterlacing (auto) and anti-aliasing (off).
     assert_eq!(environment["GT4_DEINTERLACE"], "auto");
     assert_eq!(environment["GT4_AA"], "off");
-    assert_eq!(environment.len(), 9, "the eight variables of slice210 plus GT4_FORCE_WIDESCREEN");
+    assert_eq!(environment.len(), 10, "the eight variables of slice210, GT4_FORCE_WIDESCREEN and GT4_DISPLAY_ASPECT");
 }
 
 #[test]
@@ -113,6 +115,21 @@ fn settings_map_to_their_variables() {
     settings.set("widescreen", "off").unwrap();
     let environment = env_map(&launch::game_environment(&settings));
     assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "0", "Widescreen 16:9 off leaves the game's own setting");
+    // TASK-080: Aspect ratio -> GT4_DISPLAY_ASPECT in the forms the game accepts.
+    for (choice, expected) in [("16:9", "16:9"), ("4:3", "4:3"), ("auto", "auto")] {
+        settings.set("aspect_ratio", choice).unwrap();
+        assert_eq!(env_map(&launch::game_environment(&settings))["GT4_DISPLAY_ASPECT"], expected);
+    }
+    settings.set("aspect_ratio", "custom").unwrap();
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_DISPLAY_ASPECT"], "2.33", "custom default 21:9");
+    for (hundredths, expected) in [("356", "3.56"), ("160", "1.60"), ("100", "1.00"), ("600", "6.00")] {
+        settings.set("aspect_custom", hundredths).unwrap();
+        assert_eq!(env_map(&launch::game_environment(&settings))["GT4_DISPLAY_ASPECT"], expected);
+    }
+    for refused in ["99", "601", "2.33", "21:9", ""] {
+        assert!(settings.set("aspect_custom", refused).is_err(), "{refused} is not a custom ratio");
+    }
+    settings.set("aspect_ratio", "auto").unwrap();
     settings.set("vsync", "off").unwrap();
     let environment = env_map(&launch::game_environment(&settings));
     assert_eq!(environment["GT4_PRESENT_MODE"], "immediate");
