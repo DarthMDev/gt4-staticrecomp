@@ -1832,3 +1832,30 @@ ctest --test-dir build/slice221-cpuref --output-on-failure
 - Valid VRAM-to-VRAM2D report now has10/11 samples under the thresholds; donor900/capture899 still29.5487%
   bad, PSNR8.7427dB. Correctly paired800/1000/1100 need no vertical shift (see IN-315/325/327). No entire-scene
   parity, real scanout phase, GPU write-back or playable HWR is claimed. No game launch was needed.
+
+## Local slice222 - A+D XYZ kicks (01.1, 02.1, 02.3, IN-326)
+
+Standalone composed CPU libraries again, fresh `build/slice222-cpuref` inside the worktree, same recipe as
+slice221. No main-checkout output, no candidate pin and no launcher-mode change.
+
+```text
+cmake -S native/hw_gs/cpuref -B build/slice222-cpuref -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe"
+cmake --build build/slice222-cpuref --parallel 4
+ctest --test-dir build/slice222-cpuref --output-on-failure
+```
+
+- Confirmed: 76/76 tests pass (4.31s), including the new `m3_hw_gif_ad_xyz`. PACKED descriptor 0xE now decodes
+  XYZF2/XYZ2/XYZF3/XYZ3 as vertex kicks in the canonical register layout; bits 72..127 of the A+D qword, bit 111
+  ADC included, are ignored (01.1/02.1). REGLIST and PACKED descriptor behaviour is unchanged.
+- Confirmed cause of IN-316: with the same donor v2 menu capture (`menu-v2.gscap`, SHA-7abb51cf...) exactly
+  frames 811..916 change. 990/1,096 VRAM images and 995/1,101 scanout PPMs remain byte-identical to slice221.
+- Confirmed: aligned donor samples (capture N = donor N+1) now 11/11 inside the chapter14.4 2D thresholds; the
+  garage sample donor900/capture899 went from pct_bad29.5487%/PSNR8.7427dB to0.2051%/45.992dB. Report only:
+  full scene qualification is M8.
+- Confirmed: the game executable is byte-identical to slice217 (97,291,264 bytes, SHA-3fa40ea106b0...). The HWR
+  front end is linked only into the CPU reference, not into `gt4_hw_stream_sink`, so the default renderer path
+  and the recorded 42/42 headless parity keep holding. Slice217 full native CTest after the change: 188 passed,
+  Q-07 skipped, only the expected `python_native_contracts` distribution-pin failure. Python: 629 tests, 44
+  skips, same single expected error.
+- Evidence: `private/slice222-in326-evidence/` (`vram`, `scanout`, `aligned-candidate`,
+  `menu-vram-comparison.json`, logs). No game launch was needed; no windowed run.

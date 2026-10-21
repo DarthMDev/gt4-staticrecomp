@@ -29,7 +29,7 @@ struct GifTag {
 
 GifTag DecodeGifTag(const Qword& qword);
 
-// Vertex kick decoded from XYZ2/XYZF2/XYZ3/XYZF3 in either PACKED or REGLIST mode.
+// Vertex kick decoded from XYZ2/XYZF2/XYZ3/XYZF3 via PACKED descriptors, A+D or REGLIST.
 struct GifKick {
     uint32_t x = 0;      // 12.4, 16 bits
     uint32_t y = 0;      // 12.4, 16 bits

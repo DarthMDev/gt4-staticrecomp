@@ -32,7 +32,7 @@ GifKick DecodePackedXyz(const Qword& q, bool withFog, bool drawing) {
     return kick;
 }
 
-// Fields of an XYZ kick in register layout (chapter 01.1, REGLIST words).
+// Fields of an XYZ kick in register layout (chapter 01.1, A+D and REGLIST words).
 GifKick DecodeRegisterXyz(uint64_t word, bool withFog, bool drawing) {
     GifKick kick;
     kick.x = static_cast<uint32_t>(BitRange(word, 0, 15));
@@ -195,6 +195,16 @@ void GifParser::ConsumePacked(PathState& state, const Qword& q, GifSink& sink) {
         case 0xE: {  // A+D: address is bits 64..71, masked to 7 bits
             const uint8_t address = static_cast<uint8_t>(BitRange(q.hi, 0, 6));
             uint64_t data = q.lo;
+            // A+D carries the canonical 64-bit register layout, not the PACKED XYZ
+            // descriptor layout. Its ignored high-qword bits include bit 111: ADC
+            // applies only to descriptors 4/5/C/D (01.1, 02.1, 02.3; IN-326).
+            switch (address) {
+                case reg::kXyzf2: sink.Kick(DecodeRegisterXyz(data, true, true)); return;
+                case reg::kXyz2: sink.Kick(DecodeRegisterXyz(data, false, true)); return;
+                case reg::kXyzf3: sink.Kick(DecodeRegisterXyz(data, true, false)); return;
+                case reg::kXyz3: sink.Kick(DecodeRegisterXyz(data, false, false)); return;
+                default: break;
+            }
             if (address == reg::kRgbaq) {
                 const uint32_t qBits = SanitiseAdQ(static_cast<uint32_t>(data >> 32));
                 data = (data & 0xFFFFFFFFu) | (static_cast<uint64_t>(qBits) << 32);

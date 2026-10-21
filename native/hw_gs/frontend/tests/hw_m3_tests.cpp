@@ -395,7 +395,8 @@ void TestGifParserVectors() {
     CHECK_EQ(counters.Get(Counter::QSanitised), 3u);
 
     // REGLIST: NREG 2, NLOOP 1 gives two words in one qword. XYZ2 in REGLIST uses the
-    // register layout (Y at bit 16, Z at bit 32) and is a drawing kick. A+D is a no-op.
+    // register layout (Y at bit 16, Z at bit 32) and is a drawing kick. Descriptor E
+    // is a no-op in REGLIST (unlike the A+D descriptor E in PACKED mode).
     sink.kicks.clear();
     sink.writes.clear();
     std::vector<Qword> reglist;
@@ -423,6 +424,125 @@ void TestGifParserVectors() {
     parser.EndPathOnePacket();
     CHECK(!parser.Busy(1));
     CHECK_EQ(counters.Get(Counter::GifPathOneNoEop), 1u);
+}
+
+// IN-326: general-register XYZ writes kick in A+D as well as REGLIST (01.1, 02.1-02.3).
+// Expected field values are independent of either parser path, so equivalence alone cannot
+// hide an omitted kick or accidentally decode A+D as the dedicated PACKED XYZ descriptor.
+void CheckKickFields(const GifKick& actual, const GifKick& expected) {
+    CHECK_EQ(actual.x, expected.x);
+    CHECK_EQ(actual.y, expected.y);
+    CHECK_EQ(actual.z, expected.z);
+    CHECK_EQ(actual.hasFog, expected.hasFog);
+    CHECK_EQ(actual.fog, expected.fog);
+    CHECK_EQ(actual.drawing, expected.drawing);
+}
+
+void TestAdXyzParser() {
+    const std::vector<uint8_t> addresses = {reg::kXyz2, reg::kXyzf2, reg::kXyz3, reg::kXyzf3};
+    const std::vector<uint64_t> words = {
+        uint64_t{0x1234} | (uint64_t{0x5678} << 16) | (uint64_t{0x89ABCDEF} << 32),
+        uint64_t{0x4321} | (uint64_t{0x8765} << 16) | (uint64_t{0xABCDEF} << 32) | (uint64_t{0xA5} << 56),
+        uint64_t{0x2222} | (uint64_t{0x3333} << 16) | (uint64_t{0xFEDCBA98} << 32),
+        uint64_t{0x4444} | (uint64_t{0x5555} << 16) | (uint64_t{0x654321} << 32) | (uint64_t{0x5A} << 56)};
+    const GifKick expected[] = {
+        {0x1234, 0x5678, 0x89ABCDEF, false, 0, true},
+        {0x4321, 0x8765, 0xABCDEF, true, 0xA5, true},
+        {0x2222, 0x3333, 0xFEDCBA98, false, 0, false},
+        {0x4444, 0x5555, 0x654321, true, 0x5A, false}};
+    std::vector<Qword> ad;
+    ad.push_back(Tag(4, true, false, 0, kPacked, 1, {0xE}));
+    for (size_t i = 0; i < words.size(); ++i) {
+        // Address bit 7 is masked; bit 111 and all other non-address bits are ignored.
+        ad.push_back(Qword{words[i], uint64_t{addresses[i]} | 0x80u | (uint64_t{1} << 47)});
+    }
+    std::vector<Qword> reglist{Tag(1, true, false, 0, kRegList, 4, addresses),
+                               Qword{words[0], words[1]}, Qword{words[2], words[3]}};
+    for (uint32_t path : {1u, 2u, 3u}) {
+        for (const auto* stream : {&ad, &reglist}) {
+            for (size_t chunk : {size_t{1}, size_t{2}, size_t{5}, size_t{7}, stream->size()}) {
+                CounterSet counters;
+                GifParser parser(counters);
+                GifRecorder sink;
+                for (size_t at = 0; at < stream->size(); at += chunk) {
+                    parser.Transfer(path, stream->data() + at, std::min(chunk, stream->size() - at), sink);
+                }
+                CHECK(!parser.Busy(path));
+                CHECK(sink.writes.empty());
+                CHECK_EQ(sink.kicks.size(), 4);
+                for (size_t i = 0; i < std::min(sink.kicks.size(), size_t{4}); ++i) {
+                    CheckKickFields(sink.kicks[i], expected[i]);
+                }
+            }
+        }
+    }
+    // PACKED descriptor 5 still uses Y at bit 32 and honours ADC at bit 111.
+    CounterSet counters;
+    GifParser parser(counters);
+    GifRecorder sink;
+    const std::vector<Qword> packed{Tag(2, true, false, 0, kPacked, 1, {5}),
+        Qword{uint64_t{0x1234} | (uint64_t{0x5678} << 32), 0x89ABCDEF},
+        Qword{uint64_t{0x1234} | (uint64_t{0x5678} << 32), uint64_t{0x89ABCDEF} | (uint64_t{1} << 47)}};
+    parser.Transfer(1, packed.data(), packed.size(), sink);
+    CHECK_EQ(sink.kicks.size(), 2);
+    if (sink.kicks.size() == 2) {
+        CheckKickFields(sink.kicks[0], expected[0]);
+        GifKick adc = expected[0];
+        adc.drawing = false;
+        CheckKickFields(sink.kicks[1], adc);
+    }
+}
+
+void TestAdXyzFrontEnd() {
+    const std::vector<uint8_t> addresses = {reg::kXyzf3, reg::kXyz2, reg::kXyz3, reg::kXyzf2};
+    const std::vector<uint64_t> words = {
+        uint64_t{16} | (uint64_t{16} << 16) | (uint64_t{0x123} << 32) | (uint64_t{0xA5} << 56),
+        uint64_t{32} | (uint64_t{16} << 16) | (uint64_t{0x12345678} << 32),
+        uint64_t{48} | (uint64_t{16} << 16) | (uint64_t{0x23456789} << 32),
+        uint64_t{64} | (uint64_t{16} << 16) | (uint64_t{0x345678} << 32) | (uint64_t{0x5A} << 56)};
+    std::vector<Qword> baseline;
+    AppendBaseline(baseline);
+    AppendAd(baseline, {{reg::kPrim, 0}, {reg::kRgbaq, uint64_t{0x80402010} | (uint64_t{0x3F800000} << 32)}});
+    auto ad = baseline;
+    std::vector<std::pair<uint8_t, uint64_t>> writes;
+    for (size_t i = 0; i < words.size(); ++i) writes.emplace_back(addresses[i], words[i]);
+    AppendAd(ad, writes);
+    auto reglist = baseline;
+    reglist.push_back(Tag(1, true, false, 0, kRegList, 4, addresses));
+    reglist.push_back(Qword{words[0], words[1]});
+    reglist.push_back(Qword{words[2], words[3]});
+
+    World reference;
+    Feed(reference, reglist);
+    reference.fe.FlushBatch(FlushReason::Sync);
+    CHECK_EQ(reference.fe.Counters().Get(Counter::Vertices), 4);
+    CHECK_EQ(reference.fe.Counters().Get(Counter::PrimsSkipped), 2);
+    CHECK_EQ(reference.batches.emitted.size(), 1);
+    if (reference.batches.emitted.size() == 1) {
+        const auto& batch = reference.batches.emitted[0];
+        CHECK_EQ(batch.prims.size(), 2);
+        CHECK_EQ(batch.vertices.size(), 2);
+        if (batch.vertices.size() == 2) {
+            CHECK_EQ(batch.vertices[0].x4, 32);
+            CHECK_EQ(batch.vertices[0].y4, 16);
+            CHECK_EQ(batch.vertices[0].z, 0x12345678);
+            CHECK_EQ(batch.vertices[0].fog, 0xA5); // XYZF3 updated the latch despite no draw.
+            CHECK_EQ(batch.vertices[1].x4, 64);
+            CHECK_EQ(batch.vertices[1].z, 0x345678);
+            CHECK_EQ(batch.vertices[1].fog, 0x5A);
+        }
+    }
+    for (const auto* stream : {&ad, &reglist}) {
+        for (size_t chunk : {size_t{1}, size_t{2}, size_t{5}, size_t{7}, stream->size()}) {
+            CHECK(RunChunked(*stream, {chunk}) == reference.log);
+        }
+    }
+    World actual;
+    Feed(actual, ad);
+    actual.fe.FlushBatch(FlushReason::Sync);
+    CHECK_EQ(actual.fe.Counters().Get(Counter::Vertices), 4);
+    CHECK_EQ(actual.fe.Counters().Get(Counter::PrimsSkipped), 2);
+    CHECK_EQ(actual.batches.emitted.size(), 1);
 }
 
 // ---- flush rules ------------------------------------------------------------
@@ -1173,6 +1293,7 @@ int main(int argc, char** argv) {
     };
     const Entry entries[] = {
         {"hw_gif_split", [] { TestGifSplit(); TestGifParserVectors(); }},
+        {"hw_gif_ad_xyz", [] { TestAdXyzParser(); TestAdXyzFrontEnd(); }},
         {"hw_flush_rules", [] { TestFlushRules(); TestSignalFlush(); TestVBlankAndReset(); }},
         {"hw_autoflush", [] { TestAutoflush(); }},
         {"hw_vertex_trace", [] { TestVertexTrace(); }},

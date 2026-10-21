@@ -2,6 +2,7 @@
 # Self-contained: configure this directory as its own project for the M3 fixtures,
 # or add_subdirectory() it from native/CMakeLists.txt (the integrator decides).
 # Copyright 2026 GT4Recomp contributors. Licensed under the MIT License (see LICENSE).
+# Written from the TASK-026 specification (docs/hw-renderer-spec), chapters 01.1 and 02.
 
 cmake_minimum_required(VERSION 3.24)
 project(hw_gs_m3 LANGUAGES CXX)
@@ -36,7 +37,7 @@ target_link_libraries(hw_gs_m3_tests PRIVATE hw_gs_m3)
 set_target_properties(hw_gs_m3_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 foreach(hw_m3_test IN ITEMS
-        hw_gif_split hw_flush_rules hw_autoflush hw_vertex_trace hw_st_rounding
+        hw_gif_split hw_gif_ad_xyz hw_flush_rules hw_autoflush hw_vertex_trace hw_st_rounding
         hw_clut_load hw_clut_snapshot hw_transfers hw_counters)
     add_test(NAME ${hw_m3_test} COMMAND hw_gs_m3_tests ${hw_m3_test})
     set_tests_properties(${hw_m3_test} PROPERTIES TIMEOUT 120)

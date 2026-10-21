@@ -98,7 +98,7 @@ foreach(t IN ITEMS hw_swizzle_matches_donor hw_roundtrip_psms hw_psm_layout hw_v
     add_test(NAME memory_${t} COMMAND hw_memory_tests ${t})
 endforeach()
 
-foreach(t IN ITEMS hw_gif_split hw_flush_rules hw_autoflush hw_vertex_trace hw_st_rounding
+foreach(t IN ITEMS hw_gif_split hw_gif_ad_xyz hw_flush_rules hw_autoflush hw_vertex_trace hw_st_rounding
         hw_clut_load hw_clut_snapshot hw_transfers hw_counters)
     add_test(NAME m3_${t} COMMAND hw_m3_tests ${t})
 endforeach()
