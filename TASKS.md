@@ -104,6 +104,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑076 | Modern fixed keyboard layout for GT4 (several keys per DS2 button: WASD + arrows, nitro, gear up/down, camera, look back, ghost, Enter/Esc/Backspace) | 📋 Planned (with TASK-075) |
 | TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Open, study done (docs/CONTEXT-INPUT-STUDY.md); not in 1.0.0 |
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
+| TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned · study running (owner, 2026-10-21) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -310,6 +311,15 @@ natives in `dispatch`; a host overlay menu is the fallback. Phases: P0 hold race
 the old row; P2 the "Output resolution" row and a settings file the launcher merges; later fullscreen and AA rows and
 live apply in gt4-gs. Estimate: 4-5 slices for P0-P2, 6-8 plus a gt4-gs release in total. Owner decisions pending:
 provenance of OpenAdhoc-derived script edits, progressive menus (ELF patch) or not.
+
+### TASK-080 — Native ultrawide and other aspect ratios
+Owner request 2026-10-21. The launcher reads the monitor resolution. 4:3 and 16:9 use the game's own modes
+(TASK-079 forces 16:9). For other ratios the renderer stretches to the screen and the game's projection values
+(hidden Detail Monitor Settings: Width, the display width in mm that acts as FOV, default 425; Aspect, default 0.97
+for 16:9) are computed from the ratio (owner data points: 3088x1440 → Width 515, Aspect 1.20; 3440x1440 → Width 573,
+Aspect 1.34). The HUD, UI and text are corrected too. The SilentWarrior112 PCSX2 patches (no licence) are a
+reference only, mapped to decomp functions and redone in our own parameterised way. Progressive menus overlap
+TASK-078. Study first, then a phased plan.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
@@ -862,9 +872,10 @@ LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
 settings menus, Spec II as a second target or data source (docs/SPEC2-STUDY.md).
 
 A decompilation-based source port (native renderer, changing the game's physics
-timing, ultrawide, remaster) is out of scope for this repository and would be a
+timing, remaster) is out of scope for this repository and would be a
 separate project, possibly a fork. Presenting more than 60 FPS with the game's
-fixed 1/60 s physics untouched is in scope (TASK-031, owner 2026-10-15).
+fixed 1/60 s physics untouched is in scope (TASK-031, owner 2026-10-15). Ultrawide and other aspect ratios
+are in scope (TASK-080, owner 2026-10-21).
 
 ### TASK-031 — High frame rate (physics untouched)
 Dropped in this form (decision 0070): redone as TASK-045 on the PCSX2 GS after 1.0.0. Study docs stay on branch `task/031-high-fps`.

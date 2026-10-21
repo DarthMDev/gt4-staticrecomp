@@ -50,9 +50,15 @@ claim zero emulation or full PS2 fidelity.
 - **Phase 1 (current):** fast, stable recompiled port: 60 FPS at 100% game speed,
   smooth frametime, no interpreter on the normal path.
 - **Out of scope here:** a decompilation-based source port, a native (non-GS)
-  renderer, changes to the game's physics timing, ultrawide and remaster features
-  will be a separate project, possibly a fork. This repository's goal is the
-  original game running natively, optimized and as faithful as possible.
+  renderer, changes to the game's physics timing and remaster features will be a
+  separate project, possibly a fork. This repository's goal is the original game
+  running natively, optimized and as faithful as possible.
+- **Aspect ratios are in scope** (owner, 2026-10-21; TASK-079, TASK-080): 16:9 forced
+  at boot, and native support for other screen ratios (16:10, phones, 21:9, 32:9):
+  the renderer stretches to the screen, the game's own projection values (Width and
+  Aspect) and the HUD/UI layout are corrected from the screen ratio, parameterised
+  rather than fixed per ratio. Third-party PCSX2 patches are references only, never
+  copied.
   Presenting more than 60 FPS while the game's fixed 1/60 s physics stays
   untouched is in scope (TASK-045 on the PCSX2 GS, after 1.0.0; TASK-031 study;
   owner, 2026-10-15).
