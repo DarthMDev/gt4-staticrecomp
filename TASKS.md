@@ -106,6 +106,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
 | TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
 | TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
+| TASK‑082 | Native variable frame rate: fixed 60 Hz simulation, render at any rate (render skip below 60, extra render-only passes above 60 with the game's own render time t) | 📋 Planned (after 1.0.0) · study done (docs/NATIVE-VARIABLE-FPS-STUDY.md) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -313,6 +314,23 @@ constants. Menus, FMV and photo stay pillarboxed 16:9. gt4-gs needs "Stretch" an
 new gt4-gs release). Plan: P0 a decision superseding the 0055 lines; P1 auto 3D aspect plus a launcher row; P1b
 gt4-gs stretch; P2 HUD; P3 progressive menus (TASK-078); P4 optional true-FOV mode. After 1.0.0; seven owner
 decisions listed in the study.
+
+### TASK-082 — Native variable frame rate
+Owner request 2026-10-21: 30, 45, 120, 144 or unlocked FPS with game speed unchanged, real frames from the game rather
+than image interpolation (TASK-045 stays the fallback and runs its race oracle in parallel). Study:
+docs/NATIVE-VARIABLE-FPS-STUDY.md. GT4's main loop (`func_001016E8`) updates every object with dt 1/60, renders every
+object, then flips; render already takes a time `t` (`render_world(buf, t)`), and the race camera lerps two poses with
+it. Race time counts simulation steps, and replays and ghosts are frame-indexed inputs.
+Owner decisions (2026-10-21, the study's recommendations accepted):
+- N1: the simulation (physics, AI, timers, the 60 Hz guest VBlank) stays fixed at 60 Hz; only rendering changes rate.
+  N2 (BLACK-style variable dt) is rejected for vehicle physics and allowed only for cosmetic effects.
+- First P1, render skip below 60: game speed stays 100% down to 20 FPS with an identical simulation. Then extra
+  render-only passes above 60 (P2 camera-only at 120 Hz in Time Trial; kill gate: a pass over 7.3 ms), P3 cars and
+  scene, P4 present pacing (cap, VRR, unlocked), P5 a combined scheduler.
+- Extra frames interpolate (+1 frame) by default; latency is cut elsewhere later. Extrapolation stays an option.
+- Allowed: the main-loop ELF patch with re-translation (superseding decision 0055 for this feature), a GS stream
+  PRESENT record and the gt4-gs change. Menus stay at 60 Hz.
+Cost today: race critical path 10-19 ms of 16.7; one extra render pass 7-15 ms, so 120/144 needs cheaper passes.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
