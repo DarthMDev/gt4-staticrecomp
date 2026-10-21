@@ -14,7 +14,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M3 front end, CLUT | Done; A+D vertex kicks fixed (IN-326) | CTest `m3_*`, `m3_hw_gif_ad_xyz` |
 | M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
-| M6 output | Display library done; CPU VRAM diagnostic added; IN-315/IN-316 closed; presentation interfaces decided (IN-331: present scheduler, hold/re-present, auxiliary-frame isolation, per-pass timers); HWR frame dumps and the windowed scheduler wiring still pending | slice225: 212 CTests (210 pass, Q-07 skip, known pin failure); 5 interface fixtures; 11/11 aligned menu samples inside the 2D gate |
+| M6 output | Display library done; CPU VRAM diagnostic added; IN-315/IN-316 closed; presentation interfaces decided (IN-331); HWR frame dumps implemented (IN-332) and the first real measurement is 42/42 frames outside the 2D gate, with two visible draw-loss defects to diagnose | slice226: 42 dumps from a 4,200-frame headless HWR run, 0 faults; 212 CTests (210 pass, Q-07 skip, known pin failure) |
 | M7 cache | Bookkeeping core done | cache CTest |
 | M8, M12, M14, M15, M17, M19 | Not started | |
 | M9-M11, M13, M16, M18 | Pure references only (decide, lod, replace) | decide, lod, `hw_replace_*` CTest |
@@ -110,3 +110,10 @@ drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at
 - Confirmed: 212 CTests, 210 pass, Q-07 skip and only the known `python_native_contracts` distribution pin failure. Five new fixtures cover the scheduler (new/held/dropped, hold off, 2x rate + hook calls), the auxiliary-frame contract (guest SLM hash identical, readback refused, nested begin refused) and the timers (compose measured, draw timers 0 without a device, GPU field reserved).
 - Confirmed: headless HWR 600 frames, 0 faults, 33.7 s; per-frame CPU average translate 16.1 ms and execute 34.8 ms, which is the synchronous per-primitive submit that M7/M9 must attack.
 - Not done yet: windowed scheduler wiring (tick per host present slot), HWR frame dumps and the S-01/S-02 replay. Deferred deliberately: parity first.
+
+## 2026-10-21 M6 dumps checkpoint (IN-332)
+
+- Implemented `GT4_HW_DUMP_DIR` / `GT4_HW_DUMP_EVERY` in the sink: P6 PPM per interval from `Backend::scanout`, plus a counter line (batches, primitives, skipped textures, empty batches, textures, texels, GPU draws, written pixels, de-indexed, sprites).
+- Confirmed: 4,200 headless frames with `GT4_RENDERER=hw`, 0 faults, 42 dumps, card copy unchanged; per frame CPU averages translate 26.6 ms and execute 53.8 ms in this (menu-heavy) schedule.
+- Measured against the donor dumps of the same schedule: 42/42 outside the 14.4 2D gate. Boot frame 100 is 1.53% bad (the first text line is missing); from the garage screen on, 42-49% with alternating row bands and content kept from the previous screen, i.e. some primitives never reach VRAM.
+- The CPU reference draws the same scenes inside the gate, so the defect is in the GPU draw path, not in the front end or the pixel rules. Next: the HWR replay tool (capture -> GPU renderer -> PPM) to iterate on the garage frame without launching the game, then the draw-order/write-back diagnosis.

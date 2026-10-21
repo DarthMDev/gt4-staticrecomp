@@ -1885,3 +1885,11 @@ Fresh full build of the worktree with the slice217 recipe (`build/scripts-222/bu
 - Confirmed: the new fixtures `hw_present_scheduler`, `hw_present_scheduler_hold`, `hw_present_scheduler_rate`, `hw_aux_frame_guest_untouched` and `hw_pass_timings` pass, and every M4/M5 fixture still passes unchanged.
 - Confirmed on the same source (incremental rebuild before the fresh build): default renderer headless 4,200 frames, 42/42 dump hashes equal slice214, copied seed card unchanged (`private/slice222-in326-evidence/default-parity-m6/`). The windowed path is behaviourally identical: the default scheduler policy presents every VBlank.
 - Confirmed: `GT4_RENDERER=hw` headless 600 frames, 0 faults, 33.7 s. Per-frame CPU averages from the new timers: translate 16.1 ms, execute 34.8 ms, compose 0 (no window), upload/present 0 (no window). That split is the baseline the optimisation milestones attack (`private/slice222-in326-evidence/hw-run-m6g/`).
+
+## Local slice226 - HWR frame dumps (12.9, IN-332)
+
+Incremental rebuild of the slice225 tree (same recipe and pins, `build/slice225-coregs2/build`) with the sink dump path and the renderer counter report. No new slice directory, no main-checkout output, no pin or launcher change.
+
+- Confirmed: `GT4_RENDERER=hw` headless 4,200 frames, 0 faults, **42 dumps written**, card copy unchanged (`private/slice226-hwr-dumps/`).
+- Confirmed: `hw_compare.py --gate donor_2d_1x --report-only` against the donor dumps of the same schedule: 42/42 frames outside the gate (boot 1.53% / 19.7 dB; garage and later menus 42-49% / 6-14 dB). Report only: this is the first parity measurement of the GPU path, not a qualified scene.
+- Confirmed: rendering stops being correct exactly where the garage list is drawn; the CPU reference handles the same recorded frames inside the gate. Diagnosis continues with the HWR replay tool.

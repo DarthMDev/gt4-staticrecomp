@@ -903,6 +903,23 @@ void Backend::present(PresentPhase phase) {
   s.presentUs = elapsed.count();
 }
 
+RenderCounters Backend::render_counters() const {
+  RenderCounters out;
+  if (!impl_->renderer) return out;
+  const hwgs::writeback::Counters &c = impl_->renderer->GetCounters();
+  out.batches = c.batches;
+  out.primitives = c.primitives;
+  out.primitives_skipped_texture = c.primitivesSkippedTexture;
+  out.batches_empty = c.batchesEmpty;
+  out.textures = c.texturesDecoded;
+  out.texels = c.texelsDecoded;
+  out.gpu_draws = c.gpuDraws;
+  out.writeback_pixels = c.writebackPixels;
+  out.flat_deindexed = c.flatDeindexedPrimitives;
+  out.sprites = c.spritesExpanded;
+  return out;
+}
+
 bool Backend::has_window() const { return impl_->window != nullptr; }
 
 const Options &Backend::options() const { return impl_->options; }

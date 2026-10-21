@@ -58,6 +58,21 @@ struct Stats {
   double present_us = 0;                // swapchain acquire, submit and present, last present
 };
 
+// Renderer counters of chapter 12.7, flattened so the backend header stays free of the write-back
+// renderer's internals. They explain a missing draw: a skipped texture, an empty batch after culling.
+struct RenderCounters {
+  std::uint64_t batches = 0;
+  std::uint64_t primitives = 0;
+  std::uint64_t primitives_skipped_texture = 0;
+  std::uint64_t batches_empty = 0;
+  std::uint64_t textures = 0;
+  std::uint64_t texels = 0;
+  std::uint64_t gpu_draws = 0;
+  std::uint64_t writeback_pixels = 0;
+  std::uint64_t flat_deindexed = 0;
+  std::uint64_t sprites = 0;
+};
+
 // Result of the feature report (chapter 12.6).
 struct DeviceReport {
   std::string device_name;
@@ -123,6 +138,7 @@ public:
   const Options &options() const;
   const DeviceReport &device_report() const;
   Stats stats() const;
+  RenderCounters render_counters() const;
 
 private:
   struct Impl;
