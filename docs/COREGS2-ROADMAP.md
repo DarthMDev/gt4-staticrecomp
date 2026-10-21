@@ -85,6 +85,23 @@ Candidates, in order:
   CoreGS covers everything else.
 - Tools: capture and replay, pixel comparison and a frame analyser (partly done).
 
+## Idea to study: neural rendering before the upscaler (owner, 2026-10-21)
+- **The problem:** the owner tested a DLSS neural-rendering (NR) feature on the PCSX2 GS. It runs on the final
+  viewport image, at the display resolution (1440p on the owner's setup), even when the game renders at 480p. That is
+  very heavy.
+- **The idea:** in CoreGS 2.0, run the NR pass inside the renderer **before** the upscaler, on the internal render
+  resolution, then upscale to the output with FSR 3. The UI layer goes on top after both.
+  - Example: on 3440x1440 the fair rule gives 6x (100%). FSR 3 at a 50% input (its Performance mode; Balanced is
+    about 59% per axis) renders at 3x.
+  - NR then works on the 3x image, and FSR 3 brings it to 3440x1440. NR is optional; without it, FSR 3 alone.
+- **To study:**
+  - which inputs the NR feature needs (colour, depth, motion vectors, exposure) and whether it accepts a sub-output
+    resolution;
+  - its quality at a lower input versus its cost;
+  - the order with FSR's own anti-aliasing (NR before temporal upscaling may disturb the history; test both orders);
+  - licensing and the OptiScaler/user-supplied-DLL constraints above.
+- **Status:** recorded only; no implementation planned before the FSR 3 milestone.
+
 ## Honest limits
 - The PCSX2 GS has years of edge cases solved. Parity must be proven scene by scene with the chapter 14 protocol
   (night, rain, rally, replays, photo). gt4-gs stays the default until CoreGS 2.0 is better.
