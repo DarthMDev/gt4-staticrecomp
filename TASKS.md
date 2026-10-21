@@ -58,13 +58,13 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | ✅ Done (2026-10-16) · license demo guard on both demo loaders (slice206, `--mode pcsx2`): licenses playable, demos that decrypt wrong are skipped as in PCSX2 default; root cause moved to TASK‑063 |
 | TASK‑018 | Racing wheels with force feedback | 📋 Planned |
-| TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ⏸️ Paused (Tauri 2 WIP); resumes for TASK-043 (decision 0070) |
+| TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ✅ Launcher merged into main (2026-10-21): setup with disc copy, gt4-gs download, settings, saves, controls (SDL3), tray, updates; owner tested end to end. Still for 1.0.0: NSIS installer build and the v1.0.0 release |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
 | TASK‑026 | CoreGS 2.0, part 1: clean-room specification of the PCSX2 hardware renderer | ✅ Done (docs/hw-renderer-spec, PR #17) |
 | TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (unchanged) · pure libraries done on `task/027-hw-renderer` |
 | TASK‑028 | CoreGS 1.1: upscaling, interlaced-only deinterlace, FXAA-class AA, FSR 1.0 | ⏸️ Paused by the owner: 3x shows native-size aliasing on 3D models; stays the built-in fallback renderer (`task/028-donor-upscale`, latest slice186) |
-| TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
+| TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | ✅ Done (2026-10-21) · merged with the launcher; owner tested remapping in game |
 | TASK‑030 | Night-race readback wait (CoreGS 1.1) | ⏸️ Paused: owner test 59.07 FPS, wait unchanged at 4.3 ms because the page is drawn the same frame (`task/030-night-readback`) |
 | TASK‑031 | High frame rate (120-144 FPS) with game physics untouched | ❌ Dropped in this form; redone as TASK-045 on the PCSX2 GS (study docs on `task/031-high-fps`) |
 | TASK‑032 | Decision 0070 docs: PCSX2 GS in a separate process, clean-room wording, renderer docs | ✅ Done (PR #24) |
@@ -78,7 +78,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑040 | Texture dumping and replacement packs | ➡️ Folded into TASK-050 (mod manager, release 1.1.0) |
 | TASK‑041 | GS process performance: F8 `[gs-ipc]`, tuning, owner A/B | ✅ Done · owner test 2026-10-16: night race 59.97 FPS, 53 late frames (was 69), EE critical path 11.8 of 16.7 ms (headroom 4.9 ms); GS wake batching and ordered privileged writes |
 | TASK‑042 | JIT-free `gt4-gs.exe` (no recompilers, no RWX, no SW JIT); required before 1.0.0 | ✅ Done · owner test 2026-10-16 (menus, night race): gt4-gs 0.4.0 JIT-free, enforced by Arbitrary Code Guard; images identical to 0.3.2 |
-| TASK‑043 | Launcher: download, pin and update the GS renderer | 📋 Planned (waits for TASK-019 to resume) |
+| TASK‑043 | Launcher: download, pin and update the GS renderer | ✅ Done (2026-10-21) · the launcher installs gt4-gs 1.0.1 from the GitHub release at setup; owner tested |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | ✅ Done (2026-10-17) · release 1.0.0 ships gt4-gs 1.0.1; fork release notes, README, THIRD_PARTY and RELEASE-1.0.0-PLAN updated (docs only) |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
@@ -222,6 +222,7 @@ the portable clang-cl 23.1.2; the 8-unit object check is identical to production
 headless 42/42 identical to slice206. New mode pcsx2-coverage (docs/inputs/slice208-pcsx2.json). Owner play-through
 pending; the 135,806 vs 135,093 gap is the codegen boundary entries (EE-ENTRY-LEDGER).
 State (2026-10-21): ✅ Done. The owner approved the slice208 candidate after the play-through and asked to close the task (PR into main). `--mode pcsx2` stays slice206 until the default is switched to slice208 in a follow-up (new pin labelled pcsx2, distribution and launcher test folder rebuilt).
+Follow-up (2026-10-21, slice209): `--mode pcsx2` runs the slice209 pin (the slice208 coverage library plus the GT4_FULLSCREEN start, for the TASK-019 launcher test). `pcsx2-coverage` and `pcsx2-slice206` stay as history modes.
 
 ### TASK-015 — LWR fidelity
 State: analysis done, no runtime change (branch task/015-lwr-fidelity). The donor helper matches PCSX2:
@@ -326,7 +327,36 @@ High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
 
 ### TASK-019 — Launcher
-Paused (owner, 2026-10-15; Tauri 2 WIP). Resumes for TASK-043 (decision 0070).
+State (2026-10-21, TASK-075 launcher side, branch task/019-launcher): the launcher reads pads through SDL3 3.4.18 (`gt4l-platform` `sdl_pads`, the same layer the game uses), in a Rust pad service that emits `pad-status`, `pad-live` (about 60 Hz) and `pad-nav`; the Controls page and nav.js use these events, the Web Gamepad API is only in the dev mock. The Keyboard view shows the fixed modern layout (TASK-076), read only. Checks: `cargo test --workspace` green, nav-test 149 of 149, focus-check 90 of 90 (headless Edge), real exe over WebView2 with 0 ACL denials. Not done: the game side (task/075-sdl3-input) and the owner's pad test; the launcher's controls file still uses XInput-named sources (the game reads them until its SDL layer lands).
+State (2026-10-21, slice209): native game reads `GT4_FULLSCREEN` (strict 0/1; the launcher default is on). Game executable slice209 (build `private/slice209-build`, sha256 a75c58fa..., 97,105,408 bytes), mode `pcsx2` (docs/inputs/slice209-pcsx2.json): the slice208 coverage library and the fullscreen start only. CTest 33 of 33, Python 589 OK (23 skipped), headless 42 of 42 frame dumps identical to slice208. The owner launcher test folder was rebuilt (`private/owner-test-launcher/game`, slice209; the slice206 folder is `game-206-old`). Owner test of the fullscreen start pending; the branch is not in a PR.
+State (2026-10-20): in progress on `task/019-launcher`. Main is merged (c4c7304) and the UI branch is merged (4292f7f).
+The settings table is refreshed from main (TASK-049 page/curation, TASK-064 prohibit_dynamic_code always written), and the
+Rust gt4-gs.ini writer equals scripts/gs_settings.py (golden fixtures regenerated by the Python writer). Checks: cargo
+test --workspace 117 passed, 0 failed, 1 ignored; Python unittest 555 OK, 38 skipped. The logo has a white-text variant
+(ui/assets/logo-gt4-white.png, launcher/tools/make_white_logo.py) on the setup, home and settings pages. The home page
+has a background slideshow (12 s per image, 1.5 s crossfade, slow pan, reduced-motion fallback) with placeholder images
+(ui/assets/backgrounds, see its README; the owner is making new images). The version is 1.0.0 everywhere it is declared
+(Cargo workspace, tauri.conf.json, installer NSIS, home label, About). UI pass 3 (2026-10-20, owner requirements: touch, controller, Play): every control reachable by touch
+(48 px targets, tap help tips, slider drag, swipe between Settings tabs, scrolling lists), every page
+reachable by controller (X Save on Settings, Y secondary action, right-stick scroll, footer hints per
+page), and the glass Play button (idle sheen, solid white when focused). Branch task/019-launcher, not yet
+in a PR. Still open: the owner test of setup, saves, controls and the new touch and pad behaviour;
+greying the presets above the device limit (max_upscale); the installer test and the live update test (TASK-043).
+State (2026-10-20, owner requirements, one writer): SemVer streams (GT4Recomp `vX.Y.Z`, gt4-gs `gt4gs-vX.Y.Z`, minimum
+gt4-gs 1.0.1, asset `gt4-gs-X.Y.Z-windows-x64.zip`), `version.json` (installer writes it, launcher records gt4-gs),
+first gt4-gs install during setup and at launch, a launch-time update check (never blocks Play; popup with Update,
+Not now, Skip this version; updates never automatic), data-folder guard, schema migrations with backups (settings,
+controls, version.json), tray (hidden while the game runs, back on Home when it ends, close asks while it runs), and
+the Graphics table of the UI mock. Docs: `docs/RELEASES.md`, `docs/launcher/MIGRATIONS.md`. Checks: `cargo test
+--workspace` green. Not done here: a real installer build, a live GitHub check and the owner's end-to-end test.
+State (2026-10-20, flow audit, `docs/launcher/FLOW-AUDIT.md`): the whole flow mapped and tested end to end with the
+real discs in a sandbox (45 steps: 23 PASS, 17 FIXED, 0 FAIL, 5 NEEDS-OWNER). Disc rule: SCUS-97328 whose CORE.GT4
+equals the pin is accepted (v2.00 must also match the full image pin); Spec II and other discs get "This disc is not
+supported yet". Setup now copies the image to `%LOCALAPPDATA%\GT4Recomp\disc\SCUS-97328.iso` (free-space check,
+verify then rename, schema 2 receipt), so the picked file is needed only once; a missing copy leads back to setup.
+Setup draws copy, check, prepare and gt4-gs download progress; the real gt4-gs 1.0.1 zip (one wrapping folder) now
+installs. The real GT4Recomp.exe opened on Setup, Home and "Game files missing" in the sandbox. Checks: cargo test
+--workspace 186 passed, 3 ignored; nav-test 55/55. Owner: file picker, Play, tray, update popup, pad, touch.
 Rust + egui or GPUI: game image, renderer (paraLLEl-GS / donor fallback),
 upscaling, video mode, controls; CPU feature detection for build variants.
 
@@ -624,6 +654,11 @@ pending, no PR.
 
 ### TASK-043 — Launcher integration
 Repo: main, branch `task/019-launcher` (when the launcher resumes). Haiku, 2-3 sessions.
+State (2026-10-20): in progress on `task/019-launcher`. Code: `launcher/crates/gt4l-core/src/{releases,update,version,versions,guard,migrate,gs_release}.rs`
+and `launcher/crates/gt4l-tauri/src/{updates,tray}.rs`. Stable releases only (drafts and prereleases ignored); the
+renderer minimum is gt4-gs 1.0.1; the install is verified against `SHA256SUMS` and staged as before. Checks: fixtures
+for both repositories (no network), SemVer, update decision, version.json, migrations, data-path guard, tray state machine.
+Still open: the owner's live test against GitHub, and a real NSIS build (the installer was edited, not built here).
 Goal: renderer manifest (version, URL, size, SHA-256, protocol version, upstream commit) in the launcher;
 download with progress and resume, verify, unpack to the user data folder, update to newer pinned versions,
 offline fallback to CoreGS 1.1; settings pages generated from the table; license/source links shown.

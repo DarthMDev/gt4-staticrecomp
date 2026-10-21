@@ -1,0 +1,146 @@
+// Original line drawing of a PS2 pad (not a Sony design). Each hotspot is a button of the pad; clicking
+// one selects it for rebinding. Labels inside the hotspots show the primary binding of the input.
+import { Palette } from "tokens.slint";
+import { ComboBox, Slider } from "std-widgets.slint";
+
+component Hotspot inherits Rectangle {
+    in property <string> label;
+    in property <bool> round: false;
+    in property <bool> selected: false;
+    callback clicked();
+    border-width: root.selected ? 2px : 1px;
+    border-color: root.selected ? Palette.accent : Palette.dim;
+    background: touch.has-hover ? Palette.graphite : #00000066;
+    border-radius: root.round ? root.width / 2 : 4px;
+    Text {
+        text: root.label;
+        color: root.selected ? Palette.white : Palette.silver;
+        font-size: 11px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component ControllerView inherits Rectangle {
+    width: 620px;
+    height: 330px;
+    // Primary binding label for each input, in this order:
+    // 0 dpad_up, 1 dpad_right, 2 dpad_down, 3 dpad_left, 4 cross, 5 circle, 6 square, 7 triangle,
+    // 8 l1, 9 r1, 10 l2, 11 r2, 12 l3, 13 r3, 14 select, 15 start (16 and 17 are unused).
+    in property <[string]> captions;
+    // Index into the order above, or -1 for none.
+    in-out property <int> selected: -1;
+    callback select(int);
+
+    Path {
+        width: 620px;
+        height: 330px;
+        commands: "M 130 70 L 490 70 C 560 70 600 120 600 185 C 600 260 580 300 530 305 L 90 305 C 40 300 20 260 20 185 C 20 120 60 70 130 70 Z";
+        fill: #1E2229;
+        stroke: #5C626B;
+        stroke-width: 1px;
+    }
+
+    // Shoulders and triggers (behind the body edge).
+    Hotspot { x: 110px; y: 22px; width: 90px; height: 20px; label: captions[10]; selected: root.selected == 10; clicked => { root.select(10); } }
+    Hotspot { x: 420px; y: 22px; width: 90px; height: 20px; label: captions[11]; selected: root.selected == 11; clicked => { root.select(11); } }
+    Hotspot { x: 110px; y: 48px; width: 90px; height: 16px; label: captions[8]; selected: root.selected == 8; clicked => { root.select(8); } }
+    Hotspot { x: 420px; y: 48px; width: 90px; height: 16px; label: captions[9]; selected: root.selected == 9; clicked => { root.select(9); } }
+
+    // D-pad.
+    Hotspot { x: 135px; y: 116px; width: 30px; height: 34px; label: captions[0]; selected: root.selected == 0; clicked => { root.select(0); } }
+    Hotspot { x: 165px; y: 150px; width: 34px; height: 30px; label: captions[1]; selected: root.selected == 1; clicked => { root.select(1); } }
+    Hotspot { x: 135px; y: 184px; width: 30px; height: 34px; label: captions[2]; selected: root.selected == 2; clicked => { root.select(2); } }
+    Hotspot { x: 101px; y: 150px; width: 34px; height: 30px; label: captions[3]; selected: root.selected == 3; clicked => { root.select(3); } }
+
+    // Face buttons.
+    Hotspot { x: 455px; y: 108px; width: 30px; height: 30px; round: true; label: captions[7]; selected: root.selected == 7; clicked => { root.select(7); } }
+    Hotspot { x: 485px; y: 138px; width: 30px; height: 30px; round: true; label: captions[5]; selected: root.selected == 5; clicked => { root.select(5); } }
+    Hotspot { x: 455px; y: 168px; width: 30px; height: 30px; round: true; label: captions[4]; selected: root.selected == 4; clicked => { root.select(4); } }
+    Hotspot { x: 425px; y: 138px; width: 30px; height: 30px; round: true; label: captions[6]; selected: root.selected == 6; clicked => { root.select(6); } }
+
+    // Select and Start.
+    Hotspot { x: 225px; y: 150px; width: 36px; height: 14px; label: captions[14]; selected: root.selected == 14; clicked => { root.select(14); } }
+    Hotspot { x: 359px; y: 150px; width: 36px; height: 14px; label: captions[15]; selected: root.selected == 15; clicked => { root.select(15); } }
+
+    // Sticks: clicking a stick selects its stick-click input (L3 / R3).
+    Hotspot { x: 200px; y: 210px; width: 60px; height: 60px; round: true; label: captions[12]; selected: root.selected == 12; clicked => { root.select(12); } }
+    Hotspot { x: 360px; y: 210px; width: 60px; height: 60px; round: true; label: captions[13]; selected: root.selected == 13; clicked => { root.select(13); } }
+}
+
+// Analog trigger tuning for L2 and R2: deadzone and curve, with a live preview of the pressure curve.
+export component TriggerPanel inherits Rectangle {
+    width: 300px;
+    height: 150px;
+    // 0 = L2, 1 = R2
+    in property <int> trigger: 0;
+    in property <float> deadzone: 0.1176;
+    in property <int> curve: 0;
+    in property <string> deadzone-text;
+    callback changed(int, float, int);
+
+    Text {
+        x: 0px;
+        y: 0px;
+        text: root.trigger == 0 ? "L2 (from LT)" : "R2 (from RT)";
+        color: Palette.silver;
+        font-size: 13px;
+    }
+    Text {
+        x: 0px;
+        y: 20px;
+        width: 300px;
+        text: "Deadzone";
+        color: Palette.dim;
+        font-size: 12px;
+    }
+    Slider {
+        x: 0px;
+        y: 38px;
+        width: 180px;
+        minimum: 0;
+        maximum: 0.5;
+        value: root.deadzone;
+        changed(v) => { root.changed(root.trigger, v, root.curve); }
+    }
+    Text {
+        x: 190px;
+        y: 38px;
+        text: root.deadzone-text;
+        color: Palette.silver;
+        font-size: 12px;
+    }
+    Text {
+        x: 0px;
+        y: 70px;
+        text: "Curve";
+        color: Palette.dim;
+        font-size: 12px;
+    }
+    ComboBox {
+        x: 0px;
+        y: 88px;
+        width: 180px;
+        model: ["Linear", "Quadratic", "Cubic"];
+        current-index: root.curve;
+        selected(value) => {
+            root.changed(root.trigger, root.deadzone, value == "Quadratic" ? 1 : (value == "Cubic" ? 2 : 0));
+        }
+    }
+    // Preview: pressure (vertical) against trigger travel (horizontal). Linear is the straight line.
+    Path {
+        x: 200px;
+        y: 70px;
+        width: 90px;
+        height: 70px;
+        commands: root.curve == 0 ? "M 0 70 L 90 0" : (root.curve == 1 ? "M 0 70 Q 0 0 90 0" : "M 0 70 C 40 70 60 20 90 0");
+        stroke: Palette.accent;
+        stroke-width: 2px;
+        fill: transparent;
+    }
+}

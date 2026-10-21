@@ -71,8 +71,9 @@ License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profil
 The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
 Diagnostic only: the run is not a performance measurement.
 
-License guard (TASK-017): --mode pcsx2 runs the slice206 build (slice202/203 game recipe, gt4-gs 1.0.1, plus the license
-demo guard on both demo loaders; --mode pcsx2-slice203 keeps the build without it). --mode license-guard is the slice205
+TASK-019 launcher test: --mode pcsx2 runs the slice209 build (slice208 coverage EE library plus the GT4_FULLSCREEN start;
+--mode pcsx2-slice206 keeps the slice206 build). License guard (TASK-017): the slice206 build has the license
+demo guard on both demo loaders (--mode pcsx2-slice203 keeps the build without it). --mode license-guard is the slice205
 test build (guard v1, first loader only), kept as history. A license demo that decrypts wrong (fails the game's CRC and is not the expected layout)
 gets no demo inputs instead of crashing: the license test stays playable, its demo or background replay may not
 play (as in PCSX2). One [license-guard] line per demo load in probe.log. Same options as --mode pcsx2. The halt dump
@@ -94,6 +95,11 @@ MODES = tuple(PERF_PROFILES) + ('vu1-record',)
 # TASK-060/061/062 (owner decision 2026-10-16): the internal-resolution presets of the settings table (upscale row),
 # as multipliers; --gs-resolution X is the same as --gs-scale N.
 GS_RESOLUTIONS = {name: multiplier for name, multiplier, _ in gs_settings.upscale_presets(gs_settings.load_table())}
+
+
+def controls_options(args):
+    """--controls as a play() option; absent when not requested (built-in bindings)."""
+    return {} if args.controls is None else {'controls_file': args.controls}
 
 
 def cpu_options(args):
@@ -142,6 +148,8 @@ def main():
                              '(never private/manual-play/card.ps2); backed up and locked the same way, recorded in result.json')
     parser.add_argument('--vu0-verify', type=int, default=0, metavar='N',
                         help='sample every Nth generated VU0 call and compare with the exact interpreter (vu0-aot only)')
+    parser.add_argument('--controls', type=Path, default=None,
+                        help='controls TOML file (docs/CONTROLS.md); default: built-in bindings')
     args = parser.parse_args()
     try:
         if (args.vu1_verify or args.vu1_interpret_only) and args.mode not in ('vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu'):
@@ -183,7 +191,8 @@ def main():
             raise ValueError('--play-card is not available with --mode vu1-record')
         if args.mode == 'vu1-record':
             play(args.assets_root, ROOT / 'docs/inputs' / VU1_RECORD_MANIFEST,
-                 performance=True, vu1_record=True, **cpu_options(args))
+                 performance=True, vu1_record=True, **cpu_options(args),
+                 **controls_options(args))
         else:
             manifest, _ = PERF_PROFILES[args.mode]
             options = {}
@@ -196,6 +205,7 @@ def main():
             if args.vu0_verify:
                 options['vu0_verify'] = args.vu0_verify
             options.update(cpu_options(args))
+            options.update(controls_options(args))
             if args.play_card is not None:
                 options['play_card'] = args.play_card
             play(args.assets_root, ROOT / 'docs/inputs' / manifest, performance=True, **options)

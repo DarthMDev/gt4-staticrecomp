@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/gt4l-core",
+    "crates/gt4l-disc",
+    "crates/gt4saves",
+    "crates/gt4controls",
+    "crates/gt4l-platform",
+    "crates/gt4l-tauri",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/moesuito/gt4-staticrecomp"
+rust-version = "1.92"
+
+[workspace.dependencies]
+gt4l-core = { path = "crates/gt4l-core" }
+gt4l-disc = { path = "crates/gt4l-disc" }
+gt4saves = { path = "crates/gt4saves" }
+gt4controls = { path = "crates/gt4controls" }
+gt4l-platform = { path = "crates/gt4l-platform" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "1"
+sha2 = "0.11"
+flate2 = "1"

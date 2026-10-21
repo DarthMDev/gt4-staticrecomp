@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GT4Recomp Home Mockup</title>
+<style>
+:root{
+  --ink:#0a0c14; --carbon:#13161b; --graphite:#1e2229; --hair:rgba(255,255,255,.10);
+  --white:#ffffff; --silver:#dedede; --dim:#9aa0a8; --faint:#5c626b;
+  --paper-ink:#171717; --accent:#2c6bed; --ok:#2fa866;
+  --label:"Roboto Condensed","Helvetica Neue Condensed","Arial Narrow",sans-serif;
+  --text:"Roboto","Helvetica Neue",Arial,sans-serif;
+  --slot:#ff3df2;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:var(--silver);font:14px/20px var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+.controls{width:1280px;max-width:100%;display:flex;gap:8px;align-items:center;font:12px var(--text);color:var(--dim);margin-bottom:12px;flex-wrap:wrap}
+.controls b{font:500 12px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--white);margin-right:10px}
+.controls label{cursor:pointer;padding:4px 10px;border:1px solid var(--hair);border-radius:3px}
+input.st{position:absolute;opacity:0;pointer-events:none}
+#m1:checked ~ .controls [for=m1],#m2:checked ~ .controls [for=m2],#slots:checked ~ .controls [for=slots]{background:var(--white);color:var(--paper-ink);border-color:var(--white)}
+.viewport{width:100%;overflow-x:auto;display:flex;justify-content:center}
+.frame{position:relative;width:1280px;height:720px;flex:none;background:var(--ink);overflow:hidden}
+
+/* art */
+.art{position:absolute;inset:0}
+.art svg{width:100%;height:100%;display:block}
+.art .fade{position:absolute;inset:0;background:linear-gradient(0deg,rgba(10,12,20,.85) 0%,rgba(10,12,20,0) 45%),linear-gradient(180deg,rgba(10,12,20,.55) 0%,rgba(10,12,20,0) 18%)}
+
+.titlebar{position:absolute;top:0;left:0;right:0;height:32px;display:flex;align-items:center;padding-left:12px;gap:8px;font:12px var(--text);color:var(--dim);z-index:3}
+.ico{width:16px;height:16px;border-radius:3px;background:var(--graphite)}
+.winbtns{margin-left:auto;display:flex}.winbtns span{width:46px;text-align:center;color:var(--dim)}
+
+.gear{position:absolute;right:40px;top:56px;width:40px;height:40px;border-radius:3px;display:grid;place-items:center;color:var(--white);z-index:3}
+.gear:hover{background:rgba(255,255,255,.08)}
+
+.bottom{position:absolute;left:72px;bottom:72px;z-index:3}
+.logo{width:360px;height:96px;display:flex;align-items:flex-end;font:300 44px/1 var(--text);color:var(--white);letter-spacing:.01em;margin-bottom:32px}
+.play{width:240px;height:52px;border:0;border-radius:3px;background:var(--white);color:var(--paper-ink);font:500 15px var(--label);letter-spacing:.24em;text-transform:uppercase;transition:background .15s}
+.play:hover{background:#e9e9e9}
+.play:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.running{display:none;align-items:center;gap:20px;height:52px}
+.running .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.running span{font:500 14px var(--label);letter-spacing:.16em;text-transform:uppercase;color:var(--white)}
+.running button{height:40px;padding:0 18px;border:1px solid rgba(255,255,255,.3);background:transparent;color:var(--white);font:500 12px var(--label);letter-spacing:.12em;text-transform:uppercase;border-radius:3px}
+#m2:checked ~ .viewport .play{display:none}
+#m2:checked ~ .viewport .running{display:flex}
+
+.slot{position:relative}
+.art.slot{position:absolute}
+#slots:checked ~ .viewport .slot{outline:1.5px dashed var(--slot);outline-offset:-6px}
+#slots:checked ~ .viewport .logo.slot,#slots:checked ~ .viewport .ico.slot{outline-offset:3px}
+#slots:checked ~ .viewport .slot::after{content:attr(data-slot);position:absolute;z-index:9;left:0;top:calc(100% + 6px);width:max-content;max-width:320px;font:500 10px/14px var(--text);letter-spacing:0;color:#fff;background:#a0148f;padding:4px 6px;border-radius:2px}
+#slots:checked ~ .viewport .art.slot::after{left:auto;right:96px;top:120px}
+#slots:checked ~ .viewport .logo.slot::after{top:auto;bottom:calc(100% + 6px)}
+.legend{width:1280px;max-width:100%;margin-top:12px;font-size:12px;color:var(--dim)}
+</style>
+</head>
+<body>
+<input class="st" type="radio" name="m" id="m1" checked>
+<input class="st" type="radio" name="m" id="m2">
+<input class="st" type="checkbox" id="slots" checked>
+<div class="controls"><b>Home</b><label for="m1">Ready</label><label for="m2">Game running</label>
+  <span style="flex:1"></span><label for="slots">Official asset slots</label></div>
+
+<div class="viewport"><div class="frame">
+  <div class="art slot" data-slot="FROM YOUR DISC (never shipped) · GT4.VOL photo/000–063.JPG, cropped to 16:9, one cross-fade every 15 s · fallback before setup: assets/brand/cover-front.png, blurred">
+    <!-- original placeholder scene, deliberately quiet -->
+    <svg viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3442"/><stop offset=".55" stop-color="#5d6773"/><stop offset=".7" stop-color="#8b8f92"/></linearGradient>
+        <linearGradient id="road" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a3d42"/><stop offset="1" stop-color="#16181c"/></linearGradient>
+        <linearGradient id="car" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c9ced4"/><stop offset=".55" stop-color="#5f666f"/><stop offset="1" stop-color="#1b1e22"/></linearGradient>
+      </defs>
+      <rect width="1280" height="720" fill="url(#sky)"/>
+      <path d="M0 470 L200 440 L420 458 L640 432 L900 452 L1120 436 L1280 448 L1280 520 L0 520Z" fill="#3b434d"/>
+      <rect y="510" width="1280" height="210" fill="#2b2f34"/>
+      <path d="M-200 720 L600 512 L740 512 L1480 720Z" fill="url(#road)"/>
+      <path d="M-200 720 L600 512 L608 512 L-170 720Z" fill="#b8b8b8" opacity=".5"/>
+      <g transform="translate(640 486) scale(1.4)">
+        <ellipse cx="210" cy="110" rx="205" ry="12" fill="#000" opacity=".45"/>
+        <path d="M8 96 C34 92 70 78 112 62 C150 46 190 38 236 38 C282 38 318 50 350 64 L392 72 C410 76 420 84 422 94 L422 104 L8 106Z" fill="url(#car)"/>
+        <path d="M160 50 C192 42 240 42 274 52 L304 66 L146 66Z" fill="#20252b"/>
+        <circle cx="110" cy="106" r="21" fill="#0d0f12"/><circle cx="110" cy="106" r="11" fill="#6c737c"/>
+        <circle cx="350" cy="106" r="21" fill="#0d0f12"/><circle cx="350" cy="106" r="11" fill="#6c737c"/>
+      </g>
+    </svg>
+    <div class="fade"></div>
+  </div>
+
+  <div class="titlebar"><span class="ico slot" data-slot="OFFICIAL launcher.ico · assets/brand/ (bundled)"></span>Gran Turismo 4<div class="winbtns"><span>&#8212;</span><span>&#9633;</span><span>&#10005;</span></div></div>
+
+  <a class="gear" href="mockup-settings.html" title="Settings" aria-label="Settings">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+  </a>
+
+  <div class="bottom">
+    <div class="logo slot" data-slot="OFFICIAL logo-gt4.png (wordmark, transparent) · assets/brand/ (bundled) · de-branded build: text GT4Recomp">Gran Turismo 4</div>
+    <button class="play">Play</button>
+    <div class="running"><span class="dot"></span><span>Running</span><button>Stop</button></div>
+  </div>
+</div></div>
+<div class="legend">Only art, logo, Play and Settings. Enter or controller A = Play. Motion: background cross-fade (1 s) every 15 s, Play hover 150 ms; nothing else moves. Magenta = official asset slots.</div>
+</body>
+</html>

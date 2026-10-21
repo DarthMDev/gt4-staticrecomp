@@ -28,9 +28,10 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
-constexpr wchar_t window_title[] = L"GT4Recomp";
+constexpr wchar_t window_title[] = L"Gran Turismo 4";
 HWND game_window = nullptr;
 bool surface_attached = false;
 bool closing = false;
@@ -51,6 +52,9 @@ gt4::pacing::Counters counters_at_last_report;
 bool force_480p_enabled = false;
 gt4::display::Force480pState force_480p_state;
 AudioOutput *audio_output = nullptr;
+// Input bindings (controls.hpp). open_window loads them before the window exists.
+gt4::controls::ControlMap active_controls;
+std::vector<gt4::controls::KeyboardBinding> keyboard_keys;
 // TASK-060: cursor auto-hide over this window's picture (GT4_CURSOR_AUTOHIDE, cursor_autohide.hpp). In pcsx2 mode the
 // picture is the gt4-gs child window (another process), which applies the same rule itself (CONTROL cursor); this
 // window then only owns its own client area, which the child covers.
@@ -266,23 +270,14 @@ void on_vblank() {
   std::uint16_t buttons = 0;
   const bool focused = GetForegroundWindow() == game_window;
   if (focused) {
-    const struct {
-      int key;
-      std::uint16_t mask;
-    } bindings[] = {
-        {VK_BACK, 1u << 0},   {'C', 1u << 1},     {'V', 1u << 2},
-        {VK_RETURN, 1u << 3}, {VK_UP, 1u << 4},   {VK_RIGHT, 1u << 5},
-        {VK_DOWN, 1u << 6},   {VK_LEFT, 1u << 7}, {'X', 1u << 13},
-        {'Z', 1u << 14},      {'A', 1u << 15},    {'S', 1u << 12},
-        {'Q', 1u << 10},      {'W', 1u << 11},    {'1', 1u << 8},
-        {'2', 1u << 9}};
+    // Keyboard bindings come from the controls table (defaults match the old fixed map).
     // Alt+Enter toggles fullscreen: while Alt is held, Enter is not Start.
     const bool alt_held = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
-    for (const auto &binding : bindings) {
-      if (binding.key == VK_RETURN && alt_held)
+    for (const auto &binding : keyboard_keys) {
+      if (binding.virtual_key == VK_RETURN && alt_held)
         continue;
-      if (GetAsyncKeyState(binding.key) & 0x8000)
-        buttons |= binding.mask;
+      if (GetAsyncKeyState(binding.virtual_key) & 0x8000)
+        buttons |= binding.button_mask;
     }
   }
   if (ps2::g_options.presses.empty()) {
@@ -302,14 +297,33 @@ void on_vblank() {
 } // namespace
 
 bool open_window(bool fullscreen) {
-  if (fullscreen)
-    throw std::runtime_error(
-        "Fullscreen is not qualified in this Vulkan pilot");
+  // The launcher passes GT4_FULLSCREEN (its Display setting, on by default). An invalid value stops the start.
+  bool start_fullscreen = fullscreen;
+  try {
+    start_fullscreen = start_fullscreen || gt4::window_mode::parse_start_fullscreen(std::getenv("GT4_FULLSCREEN"));
+  } catch (const std::invalid_argument &error) {
+    std::fprintf(stderr, "[window] %s, game not started\n", error.what());
+    return false;
+  }
+  // An invalid GT4_CONTROLS_FILE stops the start here, before any window or guest work.
+  try {
+    active_controls = gt4::controls::load_controls_from_environment();
+  } catch (const gt4::controls::ConfigError &error) {
+    std::fprintf(stderr, "[controls] invalid controls file, game not started: %s\n",
+                 error.what());
+    return false;
+  }
+  keyboard_keys = gt4::controls::keyboard_bindings(active_controls);
+  const char *controls_file = std::getenv("GT4_CONTROLS_FILE");
+  std::fprintf(stderr, "[controls] %s\n",
+               controls_file && *controls_file ? controls_file : "default bindings");
   WNDCLASSW window_class{};
   window_class.lpfnWndProc = window_procedure;
   window_class.hInstance = GetModuleHandleW(nullptr);
   window_class.lpszClassName = L"GT4NativeVulkanPilot";
   window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
+  // Icon from the executable resource (gt4vulkan.rc, IDI 1 = game.ico from launcher/assets/brand).
+  window_class.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1));
   arrow_cursor = window_class.hCursor;
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
@@ -325,6 +339,10 @@ bool open_window(bool fullscreen) {
       window_class.hInstance, nullptr);
   if (!game_window)
     throw std::runtime_error("Cannot create native game window");
+  // Start in borderless fullscreen on the window's monitor: the same path as Alt+Enter and F11.
+  if (start_fullscreen)
+    set_fullscreen(true);
+  std::fprintf(stderr, "[window] %s start (GT4_FULLSCREEN)\n", start_fullscreen ? "fullscreen" : "windowed");
   return true;
 }
 
@@ -335,7 +353,7 @@ void flush_cards_now(); // memcard capsule sio2.cpp (scripts/prepare_memcard_flu
 #endif
 
 int run_window(const std::function<int()> &emulate) {
-  ControllerInput input;
+  ControllerInput input(active_controls);
   controller = &input;
   const auto cleanup = [&]() {
 #ifdef GT4_PERF_PROBE

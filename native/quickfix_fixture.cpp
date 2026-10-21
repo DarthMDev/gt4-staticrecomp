@@ -70,6 +70,26 @@ void test_environment_values_are_strict() {
   require(refused("480p"), "named values are refused");
 }
 
+bool start_refused(const char *value) {
+  try {
+    parse_start_fullscreen(value);
+  } catch (const std::invalid_argument &) {
+    return true;
+  }
+  return false;
+}
+
+// GT4_FULLSCREEN: unset, empty and 0 start windowed; 1 starts fullscreen; anything else stops the start.
+void test_start_mode_environment() {
+  require(!parse_start_fullscreen(nullptr), "unset starts windowed");
+  require(!parse_start_fullscreen(""), "empty starts windowed");
+  require(!parse_start_fullscreen("0"), "0 starts windowed");
+  require(parse_start_fullscreen("1"), "1 starts fullscreen");
+  require(start_refused("true"), "true is refused");
+  require(start_refused("on"), "on is refused");
+  require(start_refused("2"), "2 is refused");
+}
+
 } // namespace
 
 int main() {
@@ -77,6 +97,7 @@ int main() {
     test_toggle_restores_windowed_placement();
     test_fullscreen_style_mask();
     test_environment_values_are_strict();
+    test_start_mode_environment();
     std::puts("quickfix fixture PASS");
     return 0;
   } catch (const std::exception &error) {

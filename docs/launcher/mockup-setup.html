@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GT4Recomp Setup Mockup</title>
+<style>
+/* GT4Recomp design tokens (shared by all three mockups) */
+:root{
+  --ink:#0a0c14; --carbon:#13161b; --graphite:#1e2229; --hair:rgba(255,255,255,.10);
+  --white:#ffffff; --silver:#dedede; --dim:#9aa0a8; --faint:#5c626b;
+  --paper:#f8f8f8; --paper-ink:#171717; --paper-dim:#6b6f76; --paper-hair:#e3e3e3;
+  --accent:#2c6bed; --ok:#2fa866; --error:#d64545;
+  --label:"Roboto Condensed","Helvetica Neue Condensed","Arial Narrow",sans-serif;
+  --text:"Roboto","Helvetica Neue",Arial,sans-serif;
+  --slot:#ff3df2;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#000;color:var(--silver);font:14px/20px var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+.controls{width:1280px;max-width:100%;display:flex;gap:8px;align-items:center;font:12px var(--text);color:var(--dim);margin-bottom:12px;flex-wrap:wrap}
+.controls b{font:500 12px var(--label);letter-spacing:.12em;text-transform:uppercase;color:var(--white);margin-right:10px}
+.controls label{cursor:pointer;padding:4px 10px;border:1px solid var(--hair);border-radius:3px}
+input.st{position:absolute;opacity:0;pointer-events:none}
+#s1:checked ~ .controls [for=s1],#s2:checked ~ .controls [for=s2],#s3:checked ~ .controls [for=s3],#slots:checked ~ .controls [for=slots]{background:var(--white);color:var(--paper-ink);border-color:var(--white)}
+.viewport{width:100%;overflow-x:auto;display:flex;justify-content:center}
+.frame{position:relative;width:1280px;height:720px;flex:none;background:var(--carbon);overflow:hidden}
+
+.titlebar{position:absolute;top:0;left:0;right:0;height:32px;display:flex;align-items:center;padding-left:12px;gap:8px;font:12px var(--text);color:var(--dim);z-index:3}
+.ico{width:16px;height:16px;border-radius:3px;background:var(--graphite);position:relative}
+.winbtns{margin-left:auto;display:flex}.winbtns span{width:46px;text-align:center;color:var(--faint)}
+
+/* left: cover */
+.cover-col{position:absolute;left:0;top:0;bottom:0;width:480px;display:flex;align-items:center;justify-content:center;background:var(--ink)}
+.cover{width:300px;height:425px;background:linear-gradient(180deg,#22262d,#121419);box-shadow:0 24px 60px rgba(0,0,0,.5);display:flex;align-items:flex-end;padding:20px;font:500 12px var(--label);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+
+/* right: steps */
+.main{position:absolute;left:480px;right:0;top:0;bottom:0;padding:88px 96px 56px 80px;display:flex;flex-direction:column}
+.logo{height:28px;width:180px;display:flex;align-items:center;font:500 13px var(--label);letter-spacing:.2em;text-transform:uppercase;color:var(--white);margin-bottom:40px}
+h1{font:300 34px/40px var(--text);color:var(--white);margin-bottom:8px}
+.sub{color:var(--dim);margin-bottom:36px}
+.steps{list-style:none;border-top:1px solid var(--hair)}
+.steps li{display:grid;grid-template-columns:28px 1fr 160px;align-items:center;height:56px;border-bottom:1px solid var(--hair)}
+.steps .n{font:500 12px var(--label);color:var(--faint)}
+.steps .t{color:var(--white)}
+.steps .d{color:var(--dim);font-size:13px;margin-left:8px}
+.steps .v{text-align:right;font:500 13px var(--label);letter-spacing:.06em;color:var(--dim)}
+.steps .ok{color:var(--ok)} .steps .bad{color:var(--error)}
+.steps li.wait .t{color:var(--dim)}
+.bar{height:2px;background:var(--graphite);margin-top:8px;position:relative;overflow:hidden}
+.bar i{position:absolute;left:0;top:0;bottom:0;width:62%;background:var(--white);transition:width .25s}
+.err{margin-top:20px;padding:16px 18px;background:rgba(214,69,69,.08);border-left:2px solid var(--error);color:var(--silver);max-width:560px}
+.foot{margin-top:auto;display:flex;justify-content:flex-end;gap:12px}
+.btn{font:500 13px var(--label);letter-spacing:.12em;text-transform:uppercase;height:44px;padding:0 24px;border:1px solid var(--hair);background:transparent;color:var(--white);border-radius:3px}
+.btn.primary{background:var(--white);color:var(--paper-ink);border-color:var(--white)}
+.btn.primary[disabled]{background:var(--graphite);color:var(--faint);border-color:var(--graphite)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.state{display:none}
+#s1:checked ~ .viewport .v1,#s2:checked ~ .viewport .v2,#s3:checked ~ .viewport .v3{display:flex;flex-direction:column;flex:1}
+
+/* official asset slots */
+.slot{position:relative}
+#slots:checked ~ .viewport .slot{outline:1.5px dashed var(--slot);outline-offset:3px}
+#slots:checked ~ .viewport .slot::after{content:attr(data-slot);position:absolute;z-index:9;left:0;top:calc(100% + 6px);width:max-content;max-width:300px;font:500 10px/14px var(--text);letter-spacing:0;text-transform:none;color:#fff;background:#a0148f;padding:4px 6px;border-radius:2px}
+.legend{width:1280px;max-width:100%;margin-top:12px;font-size:12px;color:var(--dim)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<input class="st" type="radio" name="s" id="s1" checked>
+<input class="st" type="radio" name="s" id="s2">
+<input class="st" type="radio" name="s" id="s3">
+<input class="st" type="checkbox" id="slots" checked>
+<div class="controls"><b>Setup</b>
+  <label for="s1">Checking</label><label for="s2">Wrong disc</label><label for="s3">Done</label>
+  <span style="flex:1"></span><label for="slots">Official asset slots</label></div>
+
+<div class="viewport"><div class="frame">
+  <div class="titlebar"><span class="ico slot" data-slot="OFFICIAL launcher.ico · assets/brand/ (bundled) · made from the official GT emblem"></span>Gran Turismo 4<div class="winbtns"><span>&#8212;</span><span>&#9633;</span><span>&#10005;</span></div></div>
+
+  <div class="cover-col">
+    <div class="cover slot" data-slot="OFFICIAL cover-front.png · assets/brand/ (bundled) · public NTSC-U GT4 box art (not on the disc)">Cover art</div>
+  </div>
+
+  <div class="main">
+    <div class="logo slot" data-slot="OFFICIAL logo-gt4.png · assets/brand/ (bundled) · public GT4 logo">GT4 logo</div>
+
+    <section class="state v1">
+      <h1>Set up your game</h1>
+      <p class="sub">This only happens once.</p>
+      <ul class="steps">
+        <li><span class="n">01</span><span><span class="t">Disc</span><span class="d">Gran Turismo 4 · USA · v2.00</span></span><span class="v ok">&#10003;</span></li>
+        <li><span class="n">02</span><span><span class="t">Checking disc</span><div class="bar"><i></i></div></span><span class="v">62%</span></li>
+        <li class="wait"><span class="n">03</span><span><span class="t">Preparing game files</span><span class="d">about a minute</span></span><span class="v"></span></li>
+        <li class="wait"><span class="n">04</span><span class="t">Memory card</span><span class="v"></span></li>
+      </ul>
+      <div class="foot"><button class="btn">Cancel</button><button class="btn primary" disabled>Continue</button></div>
+    </section>
+
+    <section class="state v2">
+      <h1>Set up your game</h1>
+      <p class="sub">This only happens once.</p>
+      <ul class="steps">
+        <li><span class="n">01</span><span><span class="t">Disc</span><span class="d">Gran Turismo 4 Spec II</span></span><span class="v bad">Not supported</span></li>
+      </ul>
+      <p class="err">Only the USA v2.00 disc of Gran Turismo 4 (SCUS-97328) works. PAL, Japanese and Spec II discs are not supported.</p>
+      <div class="foot"><button class="btn primary">Choose another file</button></div>
+    </section>
+
+    <section class="state v3">
+      <h1>Ready</h1>
+      <p class="sub">Next time GT4Recomp opens straight to Play.</p>
+      <ul class="steps">
+        <li><span class="n">01</span><span><span class="t">Disc</span><span class="d">Gran Turismo 4 · USA · v2.00</span></span><span class="v ok">&#10003;</span></li>
+        <li><span class="n">02</span><span class="t">Checking disc</span><span class="v ok">&#10003;</span></li>
+        <li><span class="n">03</span><span class="t">Preparing game files</span><span class="v ok">&#10003;</span></li>
+        <li><span class="n">04</span><span class="t">Memory card</span><span class="v ok">&#10003;</span></li>
+      </ul>
+      <div class="foot"><button class="btn primary">Play</button></div>
+    </section>
+  </div>
+</div></div>
+<div class="legend">Step 03 extracts CORE.GT4 and rebuilds the game's ELF from your disc (plus the 64 disc photos used as Home backgrounds); nothing is recompiled. The memory card is created automatically. Motion: progress bar width eases, states cross-fade 200 ms. Magenta = official asset slots (toggle above).</div>
+</body>
+</html>

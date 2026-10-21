@@ -1,0 +1,309 @@
+/*
+ * Unit tests for GT4.spatial.pickNext (ui/js/spatial.js). Runs in any browser
+ * through nav-test.html; prints PASS/FAIL per case and a summary.
+ */
+(function (root) {
+  "use strict";
+  var pick = root.GT4.spatial.pickNext;
+  var cases = [];
+
+  function rect(left, top, width, height) {
+    return { left: left, top: top, width: width || 10, height: height || 10 };
+  }
+
+  function expect(name, actual, expected) {
+    cases.push({ name: name, pass: actual === expected, detail: "got " + actual + ", expected " + expected });
+  }
+
+  // Row of three: right and left move along it.
+  var row = [rect(0, 0), rect(20, 0), rect(40, 0)];
+  expect("right moves to the next item in a row", pick(row, 0, "right"), 1);
+  expect("right from the last item finds nothing", pick(row, 2, "right"), -1);
+  expect("left moves back along the row", pick(row, 2, "left"), 1);
+  expect("left from the first item finds nothing", pick(row, 0, "left"), -1);
+
+  // Column: up and down.
+  var column = [rect(0, 0), rect(0, 20), rect(0, 40)];
+  expect("down moves to the item below", pick(column, 0, "down"), 1);
+  expect("up from the top finds nothing", pick(column, 0, "up"), -1);
+  expect("up moves to the item above", pick(column, 2, "up"), 1);
+
+  // Items behind the origin are never chosen.
+  var behind = [rect(100, 100), rect(0, 100), rect(100, 0)];
+  expect("items to the left are ignored for right", pick(behind, 0, "right"), -1);
+  expect("items above are ignored for down", pick(behind, 0, "down"), -1);
+
+  // Sideways offset is penalised: a straight-below item beats a nearer diagonal one.
+  var penalty = [rect(0, 0), rect(0, 100), rect(30, 60)];
+  expect("straight below beats a nearer diagonal item", pick(penalty, 0, "down"), 1);
+
+  // Grid 3x3, index = row * 3 + col.
+  var grid = [];
+  for (var r = 0; r < 3; r++) {
+    for (var c = 0; c < 3; c++) {
+      grid.push(rect(c * 50, r * 50));
+    }
+  }
+  expect("grid centre right is the middle-right cell", pick(grid, 4, "right"), 5);
+  expect("grid centre left is the middle-left cell", pick(grid, 4, "left"), 3);
+  expect("grid centre down is the bottom-centre cell", pick(grid, 4, "down"), 7);
+  expect("grid bottom-left up is the middle-left cell", pick(grid, 6, "up"), 3);
+  expect("grid top-right down is the middle-right cell", pick(grid, 2, "down"), 5);
+
+  // Different sizes: centres are compared, not edges.
+  var sizes = [rect(0, 0, 100, 40), rect(120, 10, 20, 20)];
+  expect("different-sized neighbours compare by centre", pick(sizes, 0, "right"), 1);
+
+  // Invalid input.
+  expect("bad origin index gives -1", pick(row, 9, "right"), -1);
+  expect("unknown direction gives -1", pick(row, 0, "diagonal"), -1);
+  expect("empty list gives -1", pick([], 0, "down"), -1);
+
+  // Sideways items on the same line as the origin are not "ahead".
+  var sameLine = [rect(0, 0), rect(0, 0)];
+  expect("an item exactly on the origin is not ahead", pick(sameLine, 0, "down"), -1);
+
+  // Swipe: a finger moving left asks for the next tab (+1); right for the previous one (-1).
+  expect("swipe left (finger) gives the next tab", root.GT4.input.swipeStep(-80, 5), 1);
+  expect("swipe right (finger) gives the previous tab", root.GT4.input.swipeStep(90, -10), -1);
+  expect("a 59 px swipe is not a swipe", root.GT4.input.swipeStep(-59, 0), 0);
+  expect("exactly 60 px counts as a swipe", root.GT4.input.swipeStep(-60, 0), 1);
+  expect("a mostly vertical drag is not a swipe", root.GT4.input.swipeStep(-100, 80), 0);
+  expect("a diagonal drag at 1.5 ratio is not a swipe", root.GT4.input.swipeStep(-90, 60), 0);
+  expect("no movement is not a swipe", root.GT4.input.swipeStep(0, 0), 0);
+
+  // Right stick: deadzone 0.2, full deflection 18 px per frame, sign follows the stick.
+  expect("stick inside the deadzone does not scroll", root.GT4.input.stickScroll(0.15), 0);
+  expect("stick at rest does not scroll", root.GT4.input.stickScroll(0), 0);
+  expect("stick full down scrolls 18 px", root.GT4.input.stickScroll(1), 18);
+  expect("stick full up scrolls -18 px", root.GT4.input.stickScroll(-1), -18);
+  expect("stick just past the deadzone scrolls a little", root.GT4.input.stickScroll(0.25) > 0 && root.GT4.input.stickScroll(0.25) < 2, true);
+
+  // Slider from a touch position: 7 px thumb inset is applied by the caller; here the track is plain.
+  expect("touch at the left end gives min", root.GT4.input.valueFromPointer(0, 0, 100, 1, 12, 1), 1);
+  expect("touch at the right end gives max", root.GT4.input.valueFromPointer(100, 0, 100, 1, 12, 1), 12);
+  expect("touch past the right end clamps to max", root.GT4.input.valueFromPointer(300, 0, 100, 1, 12, 1), 12);
+  expect("touch before the left end clamps to min", root.GT4.input.valueFromPointer(-40, 0, 100, 1, 12, 1), 1);
+  expect("touch in the middle rounds to a step", root.GT4.input.valueFromPointer(50, 0, 100, 1, 12, 1), 7);
+  expect("steps of 5 snap to the step grid", root.GT4.input.valueFromPointer(52, 0, 100, 0, 100, 5), 50);
+  expect("a zero-width track gives min", root.GT4.input.valueFromPointer(10, 5, 0, 1, 12, 1), 1);
+
+  // Face and shoulder buttons: which route each one takes in each state.
+  var pageHooks = { x: true, y: true, start: true, tabs: true };
+  var open = { hooks: pageHooks, dialogOpen: false, tipOpen: false, capturing: false };
+  var route = root.GT4.input.padRoute;
+  expect("A activates", route("a", open), "activate");
+  expect("B goes back on a plain page", route("b", open), "back");
+  expect("B closes an open tip first", route("b", { hooks: pageHooks, tipOpen: true }), "close-tip");
+  expect("B closes a dialog", route("b", { hooks: pageHooks, dialogOpen: true }), "dialog-back");
+  expect("X runs the page's x hook", route("x", open), "hook-x");
+  expect("Y runs the page's y hook", route("y", open), "hook-y");
+  expect("X does nothing on a page without an x hook", route("x", { hooks: { y: true } }), null);
+  expect("Start runs the page's start hook", route("start", open), "hook-start");
+  expect("LB goes to the previous tab", route("lb", open), "tab-prev");
+  expect("RB goes to the next tab", route("rb", open), "tab-next");
+  expect("LB does nothing on a page without tabs", route("lb", { hooks: {} }), null);
+  expect("X is blocked by an open dialog", route("x", { hooks: pageHooks, dialogOpen: true }), null);
+  expect("A still activates inside a dialog", route("a", { hooks: pageHooks, dialogOpen: true }), "activate");
+  expect("while a rebind waits, B cancels it", route("b", { hooks: pageHooks, capturing: true }), "cancel-capture");
+  expect("while a rebind waits, A does nothing", route("a", { hooks: pageHooks, capturing: true }), null);
+  expect("while a rebind waits, Y does nothing", route("y", { hooks: pageHooks, capturing: true }), null);
+
+  // Two-level focus (js/focus-levels.js): enter, B back, LB/RB keeping the level, the remembered row per tab.
+  var FL = root.GT4.focusLevels;
+  var TABS = ["graphics", "advanced", "display", "controls"];
+  function same(name, actual, expected) {
+    expect(name, JSON.stringify(actual), JSON.stringify(expected));
+  }
+
+  var opened = FL.start("graphics");
+  same("opening Settings starts on the tab list", opened.level, FL.SIDE);
+  same("opening Settings shows the current tab", opened.tab, "graphics");
+
+  var entered = FL.enter(opened);
+  same("A on a tab enters its content", entered.level, FL.CONTENT);
+  same("entering keeps the tab", entered.tab, "graphics");
+  same("entering does not change the input state", opened.level, FL.SIDE);
+
+  var rowed = FL.remember(entered, "fxaa");
+  same("focus on a row is remembered for its tab", FL.rowFor(rowed), "fxaa");
+  var backed = FL.back(rowed);
+  same("B in the content returns to the tab list", backed.level, FL.SIDE);
+  same("B returns to the same tab", backed.tab, "graphics");
+  same("B resets nothing: the row is still remembered", FL.rowFor(backed), "fxaa");
+  same("entering again lands on the remembered row", FL.rowFor(FL.enter(backed)), "fxaa");
+
+  var lbContent = FL.moveTab(entered, 1, TABS);
+  same("LB/RB from content keeps the content level", lbContent.level, FL.CONTENT);
+  same("LB/RB from content moves to the next tab", lbContent.tab, "advanced");
+  var lbSide = FL.moveTab(backed, 1, TABS);
+  same("LB/RB from the tab list keeps the tab-list level", lbSide.level, FL.SIDE);
+  same("the previous tab is remembered per tab", FL.rowFor(FL.moveTab(FL.moveTab(rowed, 1, TABS), -1, TABS)), "fxaa");
+  same("another tab has no remembered row yet", FL.rowFor(lbContent), null);
+  same("LB/RB wraps from the last tab to the first", FL.moveTab(FL.select(backed, "controls"), 1, TABS).tab, "graphics");
+  same("RB/LB wraps back from the first tab", FL.moveTab(FL.select(backed, "graphics"), -1, TABS).tab, "controls");
+  same("the preview (select) changes only the tab", FL.select(backed, "display").level, FL.SIDE);
+
+  var reopened = FL.open(backed, "display");
+  same("reopening Settings puts focus on the tab list", reopened.level, FL.SIDE);
+  same("reopening keeps the remembered rows", FL.rowFor(FL.select(reopened, "graphics")), "fxaa");
+
+  same("the tab-list footer shows A Enter, B Back, LB RB Tabs", FL.footer(FL.SIDE).map(function (item) { return item.key + " " + item.label; }).join("|"), "A Enter|B Back|LB RB Tabs");
+  same("the content footer shows A Select, B Tabs", FL.footer(FL.CONTENT).map(function (item) { return item.key + " " + item.label; }).join("|"), "A Select|B Tabs");
+
+  // Preview and focus (js/focus-levels.js onContentFocus): drawing a tab's content never moves focus.
+  var sidePreview = FL.start("saves");
+  same("a focus event from rendering the preview keeps the tab list", FL.onContentFocus(sidePreview, true).level, FL.SIDE);
+  same("a focus event from the player moves to the rows", FL.onContentFocus(sidePreview, false).level, FL.CONTENT);
+  same("a focus event in the rows changes nothing", FL.onContentFocus(entered, false) === entered, true);
+  same("a preview render inside the rows changes nothing", FL.onContentFocus(entered, true) === entered, true);
+
+  // Entry (js/settings-model.js): A on Saves or Replays focuses the first row, or Import when the list is empty.
+  var SM = root.GT4.settingsModel;
+  same("entering Saves with rows focuses the first row", SM.libraryEntry(3), "row");
+  same("entering Replays with one row focuses that row", SM.libraryEntry(1), "row");
+  same("entering Saves with an empty list focuses Import", SM.libraryEntry(0), "import");
+
+  // Value changes (js/settings-model.js): the row model holds the written value and visibility follows it.
+  var model = {
+    max_upscale: 4,
+    rows: [
+      { id: "upscale", current: "1080p", control: "dropdown",
+        values: [{ value: "1080p", label: "1080p (3x)" }, { value: "4K", label: "4K (6x)" }] },
+      { id: "sharp", current: 50, control: "slider", page: "basic", visible_when: { id: "upscale", equals: "4K" } },
+      { id: "fxaa", current: false, control: "toggle", page: "basic" }
+    ]
+  };
+  same("a dropdown shows the label of the chosen option", SM.optionLabel(model.rows[0].values, "4K"), "4K (6x)");
+  same("a value without an option shows the raw value", SM.optionLabel(model.rows[0].values, "8K"), "8K");
+  same("a row hidden by visible_when stays hidden at the old value", SM.rowVisible(model, model.rows[1], false), false);
+  SM.applyChange(model, "upscale", "4K");
+  same("the row model holds the dropdown value after a change", SM.findRow(model, "upscale").current, "4K");
+  same("a row that depends on the changed row shows at once", SM.rowVisible(model, model.rows[1], false), true);
+  SM.applyChange(model, "upscale", "1080p");
+  same("the dependent row hides again when the value goes back", SM.rowVisible(model, model.rows[1], false), false);
+  SM.applyChange(model, "fxaa", true);
+  same("a toggle holds a boolean after a change", SM.findRow(model, "fxaa").current, true);
+  same("a change to an unknown row changes nothing", SM.applyChange(model, "nope", 1), null);
+  same("mod rows stay hidden while the feature is off", SM.rowVisible(model, { id: "m", page: "mods" }, false), false);
+
+  // Overlapping reads: only the newest answer is drawn.
+  var gate = SM.readGate();
+  var firstRead = gate.ticket();
+  var secondRead = gate.ticket();
+  same("an older read is not applied", gate.isLatest(firstRead), false);
+  same("the newest read is applied", gate.isLatest(secondRead), true);
+
+  // Controls page model (js/controls-model.js): live state from Gamepad values, keys, conflicts, trigger output.
+  var CM = root.GT4.controlsModel;
+  function fakePad(pressed, values, axes) {
+    var buttons = CM.STANDARD_TO_XINPUT.map(function (name) {
+      var value = values && values[name] !== undefined ? values[name] : (pressed.indexOf(name) >= 0 ? 1 : 0);
+      return { pressed: value > 0.12, value: value };
+    });
+    return { id: "Xbox 360 Controller (XInput STANDARD GAMEPAD)", connected: true, buttons: buttons, axes: axes || [0, 0, 0, 0] };
+  }
+  var defaults = [
+    { id: "cross", sources: ["xinput:A", "key:Z"] }, { id: "circle", sources: ["xinput:B", "key:X"] },
+    { id: "l1", sources: ["xinput:LB", "key:Q"] }, { id: "l2", sources: ["xinput:LT", "key:1"] },
+    { id: "r2", sources: ["xinput:RT | deadzone=0.000 curve=quadratic", "key:2"] },
+    { id: "dpad_up", sources: ["xinput:DpadUp", "key:Up"] }, { id: "select", sources: ["xinput:Back"] }
+  ];
+  var live = CM.liveState(CM.padLive(fakePad(["A", "DpadUp"], { LT: 0.6 }, [0.5, -0.25, -1, 1])), defaults, {});
+  same("pad A lights Cross", live.buttons.cross.pressed, true);
+  same("pad B up leaves Circle dark", live.buttons.circle.pressed, false);
+  same("D-pad up lights the D-pad up arm", live.buttons.dpad_up.pressed, true);
+  same("LT at 60% fills L2 to 60%", Math.round(live.buttons.l2.value * 100), 60);
+  same("L2 reads the game's pressure past the 30/255 deadzone: (153 - 30) * 255 / 225", Math.round(live.buttons.l2.output * 255), 139);
+  same("sticks keep their raw position", [live.sticks.left.x, live.sticks.left.y, live.sticks.right.x, live.sticks.right.y], [0.5, -0.25, -1, 1]);
+  var swapped = CM.liveState(CM.padLive(fakePad(["A"])), [{ id: "circle", sources: ["xinput:A"] }, { id: "cross", sources: ["xinput:B"] }], {});
+  same("after a swap, pad A lights Circle, not Cross", [swapped.buttons.circle.pressed, swapped.buttons.cross.pressed], [true, false]);
+  same("a key lights the button it drives", CM.liveState(null, defaults, { Q: true }).buttons.l1.pressed, true);
+  same("no pad and no key: nothing is pressed", CM.liveState(null, defaults, {}).buttons.cross.pressed, false);
+  var light = CM.liveState(CM.padLive(fakePad([], { LT: 0.1 })), defaults, {});
+  same("a trigger inside its deadzone fills but does not press", [light.buttons.l2.value > 0, light.buttons.l2.pressed], [true, false]);
+  same("R2 options (curve) shape the output", Math.round(CM.liveState(CM.padLive(fakePad([], { RT: 0.5 })), defaults, {}).buttons.r2.output * 100), 25);
+
+  same("trigger output: linear 255 is full", CM.triggerOutput(1, 30 / 255, "linear"), 1);
+  same("trigger output: at the deadzone it is 0", CM.triggerOutput(30 / 255, 30 / 255, "linear"), 0);
+  same("trigger output: the integer formula of native/controls.cpp", CM.triggerOutput(128 / 255, 30 / 255, "linear"), Math.floor((98 * 255) / 225) / 255);
+  same("trigger output: cubic at half travel", Math.round(CM.triggerOutput(0.5, 0, "cubic") * 1000), 125);
+
+  same("KeyZ is Z", CM.keyFromEvent({ code: "KeyZ", key: "z" }), { name: "Z" });
+  same("Digit1 is 1", CM.keyFromEvent({ code: "Digit1", key: "1" }), { name: "1" });
+  same("Numpad4 is Num4", CM.keyFromEvent({ code: "Numpad4", key: "4" }), { name: "Num4" });
+  same("ArrowUp is Up", CM.keyFromEvent({ code: "ArrowUp", key: "ArrowUp" }), { name: "Up" });
+  same("right Shift is Shift", CM.keyFromEvent({ code: "ShiftRight", key: "Shift" }), { name: "Shift" });
+  same("Esc cancels and is named Esc", CM.keyFromEvent({ code: "Escape", key: "Escape" }), { cancel: true, name: "Esc" });
+  same("F9 is reserved for the game window", CM.keyFromEvent({ code: "F9", key: "F9" }), { reserved: "F9" });
+  same("F5 is a key name", CM.keyFromEvent({ code: "F5", key: "F5" }), { name: "F5" });
+  same("a key with no name is refused", CM.keyFromEvent({ code: "Semicolon", key: ";" }), { unsupported: ";" });
+
+  same("a free source has no conflict", CM.conflict(defaults, "cross", "xinput:RB"), null);
+  same("the button's own source is no change", CM.conflict(defaults, "cross", "xinput:A"), { same: true });
+  same("a taken source names the holder and the swap", CM.conflict(defaults, "cross", "xinput:LB"), { holder: "l1", previous: "xinput:A" });
+  same("a conflict ignores options", CM.conflict(defaults, "cross", "xinput:RT"), { holder: "r2", previous: "xinput:A" });
+  same("a button without that family moves the source", CM.conflict(defaults, "select", "key:Q"), { holder: "l1", previous: null });
+
+  same("XInput labels", [CM.label("xinput:LB").text, CM.label("xinput:LThumb").text, CM.label("xinput:DpadLeft").dir, CM.label("key:Backspace").text, CM.label(null).kind], ["LB", "LS", "left", "Bksp", "none"]);
+  same("the controller name drops the API suffix", CM.cleanPadName("Xbox 360 Controller (XInput STANDARD GAMEPAD)"), "Xbox 360 Controller");
+  var two = CM.padSummary([null, { id: "Pad One (XInput STANDARD GAMEPAD)", index: 1, connected: true }, { id: "Pad Two", index: 2, connected: true }]);
+  same("two pads: the first connected one is shown and counted", [two.connected, two.name, two.index, two.count], [true, "Pad One", 1, 2]);
+  same("no pad: not connected", CM.padSummary([null, null]).connected, false);
+  // Fixed keyboard layout (TASK-076, read only) and the pad-live shape from the Rust service (SDL3).
+  same("keyboard: W lights Cross", CM.liveState(null, defaults, { W: true }).buttons.cross.pressed, true);
+  same("keyboard: Enter lights Cross too", CM.liveState(null, defaults, { Enter: true }).buttons.cross.pressed, true);
+  same("keyboard: Space lights Circle", CM.liveState(null, defaults, { Space: true }).buttons.circle.pressed, true);
+  same("keyboard: E lights D-pad up (ghost)", CM.liveState(null, defaults, { E: true }).buttons.dpad_up.pressed, true);
+  same("keyboard: the fixed triangle keys are Backspace and Esc", CM.KEYBOARD_LAYOUT.triangle, ["Backspace", "Esc"]);
+  same("keyboard: same table as the game (slice 210)", [CM.KEYBOARD_LAYOUT.r1, CM.KEYBOARD_LAYOUT.r2, CM.KEYBOARD_LAYOUT.l2,
+    CM.KEYBOARD_LAYOUT.l1, CM.KEYBOARD_LAYOUT.select, CM.KEYBOARD_LAYOUT.start], [["Shift"], ["R"], ["F"], ["Q"], ["C", "Tab"], ["P"]]);
+  same("keyboard: C lights Select (camera)", CM.liveState(null, defaults, { C: true }).buttons.select.pressed, true);
+  same("keyboard: P lights Start", CM.liveState(null, [{ id: "start", sources: ["xinput:Start"] }], { P: true }).buttons.start.pressed, true);
+  var sdlLive = CM.liveState({ sources: { "xinput:A": 1, "xinput:LT": 0.5 }, sticks: { left: { x: 0.5, y: -0.25 }, right: { x: 0, y: 1 } } }, defaults, {});
+  same("pad-live: A presses Cross, LT fills L2, the left stick keeps its place", [sdlLive.buttons.cross.pressed, Math.round(sdlLive.buttons.l2.value * 100), sdlLive.sticks.left.x, sdlLive.sticks.left.y], [true, 50, 0.5, -0.25]);
+  same("pad-live: no sources, nothing pressed", CM.liveState({ sources: {}, sticks: {} }, defaults, {}).buttons.cross.pressed, false);
+
+  // Spatial navigation between DS2 buttons, on the drawing's own layout (js/controller-svg.js).
+  var LAYOUT = root.GT4.controllerSvg.LAYOUT;
+  var ids = Object.keys(LAYOUT);
+  var padRects = ids.map(function (id) { return rect(LAYOUT[id].x - 20, LAYOUT[id].y - 20, 40, 40); });
+  function padMove(from, dir) {
+    var next = pick(padRects, ids.indexOf(from), dir);
+    return next < 0 ? null : ids[next];
+  }
+  same("Cross up is Triangle", padMove("cross", "up"), "triangle");
+  same("Cross left is Square", padMove("cross", "left"), "square");
+  same("Cross right is Circle", padMove("cross", "right"), "circle");
+  same("Square left is Start", padMove("square", "left"), "start");
+  same("Start left is Select", padMove("start", "left"), "select");
+  same("Select left is D-pad right", padMove("select", "left"), "dpad_right");
+  same("D-pad up, up is L1", padMove("dpad_up", "up"), "l1");
+  same("L1 up is L2", padMove("l1", "up"), "l2");
+  same("D-pad down, down is L3", padMove("dpad_down", "down"), "l3");
+  same("L3 right is R3", padMove("l3", "right"), "r3");
+  same("Triangle up is R1", padMove("triangle", "up"), "r1");
+  same("Circle right leaves the drawing (the panel is next)", padMove("circle", "right"), null);
+
+  function run() {
+    var list = document.getElementById("results");
+    var passed = 0;
+    cases.forEach(function (item) {
+      if (item.pass) {
+        passed += 1;
+      }
+      var li = document.createElement("li");
+      li.className = "step";
+      var label = document.createElement("span");
+      label.className = "t";
+      label.textContent = (item.pass ? "PASS  " : "FAIL  ") + item.name + (item.pass ? "" : " (" + item.detail + ")");
+      li.appendChild(label);
+      list.appendChild(li);
+    });
+    var summary = document.getElementById("summary");
+    summary.textContent = passed + " of " + cases.length + " passed.";
+    root.GT4_NAV_TEST_RESULT = { passed: passed, total: cases.length };
+  }
+
+  run();
+})(window);

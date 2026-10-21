@@ -1,0 +1,752 @@
+// GT4Recomp launcher UI. Design tokens and components follow docs/launcher/LAUNCHER-PLAN.md section 12.
+// Every settings row is generated from the Rust settings table (gt4l-core), so this file holds no setting names.
+import { ComboBox, Switch, ScrollView, Slider } from "std-widgets.slint";
+import { Palette } from "tokens.slint";
+import { ControllerView, TriggerPanel } from "controller.slint";
+
+export struct SetupStep {
+    label: string,
+    status: string,
+    // 0 = waiting, 1 = running, 2 = done, 3 = failed
+    state: int,
+}
+
+export struct SettingRow {
+    id: string,
+    group-header: string,
+    title: string,
+    info: string,
+    is-choice: bool,
+    choices: [string],
+    choice-index: int,
+    toggle-on: bool,
+    enabled: bool,
+}
+
+export struct SaveRow {
+    name: string,
+    label: string,
+    active: bool,
+}
+
+component PrimaryButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 52px;
+    min-width: 220px;
+    border-radius: 3px;
+    background: root.enabled ? (touch.has-hover ? #E2E2E2 : Palette.paper) : Palette.graphite;
+    opacity: root.enabled ? 1 : 0.5;
+    Text {
+        text: root.label;
+        color: root.enabled ? Palette.paper-ink : Palette.dim;
+        font-size: 15px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component SecondaryButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 40px;
+    min-width: 120px;
+    border-radius: 3px;
+    border-width: 1px;
+    border-color: Palette.hair;
+    background: touch.has-hover && root.enabled ? Palette.graphite : transparent;
+    opacity: root.enabled ? 1 : 0.5;
+    Text {
+        text: root.label;
+        color: Palette.silver;
+        font-size: 13px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component StepRow inherits Rectangle {
+    in property <string> label;
+    in property <string> status;
+    in property <int> state;
+    height: 56px;
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        width: parent.width;
+        background: Palette.hair;
+    }
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        alignment: space-between;
+        Text {
+            text: root.label;
+            color: root.state == 0 ? Palette.dim : Palette.silver;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+        Text {
+            text: root.status;
+            color: root.state == 2 ? Palette.ok : (root.state == 3 ? Palette.error : Palette.silver);
+            font-size: 13px;
+            vertical-alignment: center;
+        }
+    }
+}
+
+component InfoBadge inherits Rectangle {
+    in property <string> text;
+    width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    border-width: 1px;
+    border-color: Palette.dim;
+    Text {
+        text: "i";
+        color: Palette.dim;
+        font-size: 11px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+    }
+    if touch.has-hover : Rectangle {
+        x: -8px;
+        y: 24px;
+        z: 10;
+        width: 320px;
+        height: card-text.preferred-height + 24px;
+        border-radius: 3px;
+        background: Palette.paper;
+        card-text := Text {
+            x: 12px;
+            y: 12px;
+            width: parent.width - 24px;
+            text: root.text;
+            color: Palette.paper-ink;
+            font-size: 13px;
+            wrap: word-wrap;
+        }
+    }
+}
+
+component OptionRow inherits Rectangle {
+    in property <SettingRow> setting;
+    callback choice-changed(string);
+    callback toggled(bool);
+    height: 56px;
+    opacity: setting.enabled ? 1 : 0.4;
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        width: parent.width;
+        background: Palette.hair;
+    }
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 12px;
+        alignment: space-between;
+        HorizontalLayout {
+            spacing: 10px;
+            alignment: start;
+            Text {
+                text: setting.title;
+                color: Palette.silver;
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+            InfoBadge {
+                y: (parent.height - self.height) / 2;
+                text: setting.info;
+            }
+        }
+        if setting.is-choice : ComboBox {
+            width: 240px;
+            enabled: setting.enabled;
+            model: setting.choices;
+            current-index: setting.choice-index;
+            selected(value) => { root.choice-changed(value); }
+        }
+        if !setting.is-choice : Switch {
+            enabled: setting.enabled;
+            checked: setting.toggle-on;
+            toggled => { root.toggled(self.checked); }
+        }
+    }
+}
+
+component ListButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: 120px;
+    height: 32px;
+    border-width: 1px;
+    border-color: Palette.dim;
+    background: touch.has-hover && root.enabled ? Palette.graphite : transparent;
+    opacity: root.enabled ? 1 : 0.5;
+    Text {
+        text: root.label;
+        color: Palette.silver;
+        font-size: 13px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+component SaveLine inherits Rectangle {
+    in property <SaveRow> entry;
+    in property <bool> can-activate: false;
+    callback activate-clicked();
+    callback delete-clicked();
+    height: 52px;
+    Rectangle {
+        y: parent.height - 1px;
+        height: 1px;
+        width: parent.width;
+        background: Palette.hair;
+    }
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 4px;
+        spacing: 12px;
+        alignment: space-between;
+        Text {
+            text: root.entry.label;
+            color: root.entry.active ? Palette.white : Palette.silver;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            if root.can-activate && !root.entry.active : ListButton {
+                label: "Make active";
+                width: 130px;
+                clicked => { root.activate-clicked(); }
+            }
+            if !root.entry.active : ListButton {
+                label: "Delete";
+                width: 90px;
+                clicked => { root.delete-clicked(); }
+            }
+        }
+    }
+}
+
+component NavItem inherits Rectangle {
+    in property <string> label;
+    in property <bool> current: false;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 40px;
+    background: touch.has-hover && root.enabled ? Palette.graphite : transparent;
+    Rectangle {
+        x: 0px;
+        width: 2px;
+        height: parent.height;
+        background: root.current ? Palette.white : transparent;
+    }
+    Text {
+        x: 20px;
+        text: root.label;
+        color: root.current ? Palette.white : (root.enabled ? Palette.dim : Palette.faint);
+        font-size: 14px;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        width: parent.width;
+        height: parent.height;
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "GT4Recomp";
+    preferred-width: 1280px;
+    preferred-height: 720px;
+    min-width: 960px;
+    min-height: 600px;
+    background: Palette.carbon;
+    forward-focus: capture-scope;
+
+    // 0 = setup, 1 = home, 2 = settings
+    in-out property <int> screen: 1;
+    // 0 Graphics, 1 Display, 2 Saves, 3 Replays, 4 Controls, 5 Advanced, 6 About
+    in-out property <int> settings-page: 0;
+    in property <[SettingRow]> rows;
+    in property <[SetupStep]> setup-steps;
+    in property <string> setup-message;
+    in property <bool> setup-busy: false;
+    in property <bool> setup-has-disc: false;
+    in property <string> disc-name;
+    in property <bool> game-running: false;
+    in property <string> home-message;
+    in property <string> version-text;
+    in property <string> about-text;
+    in property <bool> reduce-motion: false;
+    in property <[string]> controls-captions;
+    in-out property <int> controls-selected: -1;
+    in property <string> controls-detail;
+    in property <bool> controls-capturing: false;
+    in property <string> controls-status;
+    in property <float> l2-deadzone: 0.1176;
+    in property <int> l2-curve: 0;
+    in property <string> l2-deadzone-text;
+    in property <float> r2-deadzone: 0.1176;
+    in property <int> r2-curve: 0;
+    in property <string> r2-deadzone-text;
+    in property <[SaveRow]> save-rows;
+    in property <[SaveRow]> replay-rows;
+    in property <string> library-message;
+
+    callback choose-disc();
+    callback start-setup();
+    callback cancel-setup();
+    callback play();
+    callback stop-game();
+    callback open-settings();
+    callback close-settings();
+    callback select-settings-page(int);
+    callback setting-choice(int, string);
+    callback setting-toggled(int, bool);
+    callback open-log-folder();
+    callback dismiss-message();
+    callback controls-select(int);
+    callback controls-start-capture();
+    callback controls-capture-key(string);
+    callback controls-cancel-capture();
+    callback controls-reset();
+    callback trigger-changed(int, float, int);
+    callback import-saves();
+    callback activate-save(string);
+    callback delete-item(string);
+
+    // Key capture for rebinding: forwards key presses only while a binding is waiting for a key.
+    capture-scope := FocusScope {
+        key-pressed(event) => {
+            if (!root.controls-capturing) {
+                return reject;
+            }
+            if (event.text == Key.Escape) {
+                root.controls-cancel-capture();
+            } else if (event.text == Key.Return) {
+                root.controls-capture-key("Enter");
+            } else if (event.text == Key.Backspace) {
+                root.controls-capture-key("Backspace");
+            } else if (event.text == Key.Tab) {
+                root.controls-capture-key("Tab");
+            } else if (event.text == Key.Space) {
+                root.controls-capture-key("Space");
+            } else if (event.text == Key.UpArrow) {
+                root.controls-capture-key("Up");
+            } else if (event.text == Key.DownArrow) {
+                root.controls-capture-key("Down");
+            } else if (event.text == Key.LeftArrow) {
+                root.controls-capture-key("Left");
+            } else if (event.text == Key.RightArrow) {
+                root.controls-capture-key("Right");
+            } else {
+                root.controls-capture-key(event.text);
+            }
+            return accept;
+        }
+    }
+
+    // ---------- Setup ----------
+    if root.screen == 0 : Rectangle {
+        background: Palette.carbon;
+        HorizontalLayout {
+            padding: 72px;
+            spacing: 72px;
+            Rectangle {
+                width: 300px;
+                height: 425px;
+                border-radius: 3px;
+                background: @linear-gradient(160deg, #2A2F38 0%, #0A0C14 100%);
+                Text {
+                    text: "Cover art";
+                    color: Palette.faint;
+                    font-size: 12px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+            VerticalLayout {
+                spacing: 16px;
+                alignment: center;
+                Text {
+                    text: "GRAN TURISMO 4";
+                    color: Palette.white;
+                    font-size: 28px;
+                    font-weight: 300;
+                    letter-spacing: 4px;
+                }
+                Text {
+                    text: "Set up your game";
+                    color: Palette.white;
+                    font-size: 34px;
+                    font-weight: 300;
+                }
+                Text {
+                    text: "This only happens once.";
+                    color: Palette.dim;
+                    font-size: 14px;
+                }
+                for step in root.setup-steps : StepRow {
+                    label: step.label;
+                    status: step.status;
+                    state: step.state;
+                }
+                Text {
+                    text: root.setup-message;
+                    color: Palette.error;
+                    font-size: 14px;
+                    wrap: word-wrap;
+                    height: self.preferred-height;
+                }
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+                    SecondaryButton {
+                        label: "Choose disc image";
+                        enabled: !root.setup-busy;
+                        clicked => { root.choose-disc(); }
+                    }
+                    PrimaryButton {
+                        label: "Prepare game files";
+                        enabled: root.setup-has-disc && !root.setup-busy;
+                        clicked => { root.start-setup(); }
+                    }
+                    SecondaryButton {
+                        label: "Cancel";
+                        enabled: root.setup-busy;
+                        clicked => { root.cancel-setup(); }
+                    }
+                }
+                Text {
+                    text: root.disc-name;
+                    color: Palette.faint;
+                    font-size: 12px;
+                }
+            }
+        }
+    }
+
+    // ---------- Home ----------
+    if root.screen == 1 : Rectangle {
+        background: @linear-gradient(180deg, #1E2229 0%, #0A0C14 100%);
+        Rectangle {
+            // Disc photo background: shown once the photos are extracted (not yet in this build).
+            background: transparent;
+        }
+        settings-gear := Rectangle {
+            x: parent.width - 64px;
+            y: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 20px;
+            background: gear-touch.has-hover ? Palette.graphite : transparent;
+            Text {
+                text: "⚙";
+                color: Palette.silver;
+                font-size: 22px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            gear-touch := TouchArea {
+                width: parent.width;
+                height: parent.height;
+                clicked => { root.open-settings(); }
+            }
+        }
+        VerticalLayout {
+            padding-left: 72px;
+            padding-bottom: 72px;
+            alignment: end;
+            spacing: 24px;
+            Text {
+                text: "GRAN TURISMO 4";
+                color: Palette.white;
+                font-size: 44px;
+                font-weight: 300;
+                letter-spacing: 6px;
+            }
+            if !root.game-running : PrimaryButton {
+                label: "PLAY";
+                width: 360px;
+                clicked => { root.play(); }
+            }
+            if root.game-running : PrimaryButton {
+                label: "Running · Stop";
+                width: 360px;
+                clicked => { root.stop-game(); }
+            }
+            if root.home-message != "" : Rectangle {
+                height: message-text.preferred-height + 24px;
+                width: 720px;
+                background: #00000099;
+                border-radius: 3px;
+                message-text := Text {
+                    x: 16px;
+                    y: 12px;
+                    width: parent.width - 32px;
+                    text: root.home-message;
+                    color: Palette.white;
+                    font-size: 14px;
+                    wrap: word-wrap;
+                }
+                TouchArea {
+                    clicked => { root.dismiss-message(); }
+                }
+            }
+        }
+    }
+
+    // ---------- Settings ----------
+    if root.screen == 2 : Rectangle {
+        background: Palette.carbon;
+        HorizontalLayout {
+            Rectangle {
+                width: 240px;
+                background: Palette.ink;
+                VerticalLayout {
+                    padding-top: 24px;
+                    padding-left: 0px;
+                    spacing: 4px;
+                    NavItem {
+                        label: "←  Back";
+                        clicked => { root.close-settings(); }
+                    }
+                    Rectangle { height: 16px; }
+                    NavItem {
+                        label: "Graphics";
+                        current: root.settings-page == 0;
+                        clicked => { root.select-settings-page(0); }
+                    }
+                    NavItem {
+                        label: "Display";
+                        current: root.settings-page == 1;
+                        clicked => { root.select-settings-page(1); }
+                    }
+                    NavItem {
+                        label: "Saves";
+                        current: root.settings-page == 2;
+                        clicked => { root.select-settings-page(2); }
+                    }
+                    NavItem {
+                        label: "Replays";
+                        current: root.settings-page == 3;
+                        clicked => { root.select-settings-page(3); }
+                    }
+                    NavItem {
+                        label: "Controls";
+                        current: root.settings-page == 4;
+                        clicked => { root.select-settings-page(4); }
+                    }
+                    NavItem {
+                        label: "Advanced";
+                        current: root.settings-page == 5;
+                        clicked => { root.select-settings-page(5); }
+                    }
+                    NavItem {
+                        label: "About";
+                        current: root.settings-page == 6;
+                        clicked => { root.select-settings-page(6); }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                    Text {
+                        x: 20px;
+                        text: root.version-text;
+                        color: Palette.faint;
+                        font-size: 12px;
+                    }
+                }
+            }
+            VerticalLayout {
+                padding: 40px;
+                spacing: 8px;
+                Text {
+                    text: root.settings-page == 0 ? "Graphics" : (root.settings-page == 1 ? "Display" : (root.settings-page == 2 ? "Saves" : (root.settings-page == 3 ? "Replays" : (root.settings-page == 4 ? "Controls" : (root.settings-page == 5 ? "Advanced" : "About")))));
+                    color: Palette.white;
+                    font-size: 30px;
+                    font-weight: 300;
+                }
+                if root.settings-page <= 1 || root.settings-page == 5 : Text {
+                    text: "Changes apply the next time you play.";
+                    color: Palette.dim;
+                    font-size: 13px;
+                }
+                if root.settings-page <= 1 || root.settings-page == 5 : ScrollView {
+                    VerticalLayout {
+                        spacing: 0px;
+                        for row[index] in root.rows : VerticalLayout {
+                            if row.group-header != "" : Text {
+                                text: row.group-header;
+                                color: Palette.dim;
+                                font-size: 12px;
+                                letter-spacing: 2px;
+                                height: 40px;
+                                vertical-alignment: bottom;
+                            }
+                            OptionRow {
+                                setting: row;
+                                choice-changed(value) => { root.setting-choice(index, value); }
+                                toggled(on) => { root.setting-toggled(index, on); }
+                            }
+                        }
+                    }
+                }
+                if root.settings-page == 2 || root.settings-page == 3 : VerticalLayout {
+                    spacing: 12px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        alignment: start;
+                        ListButton {
+                            label: "Import file...";
+                            width: 150px;
+                            clicked => { root.import-saves(); }
+                        }
+                        Text {
+                            text: root.library-message;
+                            color: Palette.dim;
+                            font-size: 13px;
+                            vertical-alignment: center;
+                        }
+                    }
+                    if root.settings-page == 2 && root.save-rows.length == 0 : Text {
+                        text: "No saves yet. Your save appears here after you play, or when you import a save file (.psu or memory card image).";
+                        color: Palette.dim;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                    }
+                    if root.settings-page == 3 && root.replay-rows.length == 0 : Text {
+                        text: "No replays yet. Replays saved in the game appear here once you play.";
+                        color: Palette.dim;
+                        font-size: 13px;
+                        wrap: word-wrap;
+                    }
+                    ScrollView {
+                        if root.settings-page == 2 : VerticalLayout {
+                            for entry in root.save-rows : SaveLine {
+                                entry: entry;
+                                can-activate: true;
+                                activate-clicked => { root.activate-save(entry.name); }
+                                delete-clicked => { root.delete-item(entry.name); }
+                            }
+                        }
+                        if root.settings-page == 3 : VerticalLayout {
+                            for entry in root.replay-rows : SaveLine {
+                                entry: entry;
+                                can-activate: false;
+                                delete-clicked => { root.delete-item(entry.name); }
+                            }
+                        }
+                    }
+                }
+                if root.settings-page == 4 : HorizontalLayout {
+                    spacing: 32px;
+                    VerticalLayout {
+                        spacing: 8px;
+                        ControllerView {
+                            captions: root.controls-captions;
+                            selected: root.controls-selected;
+                            select(index) => { root.controls-select(index); }
+                        }
+                        HorizontalLayout {
+                            spacing: 24px;
+                            TriggerPanel {
+                                trigger: 0;
+                                deadzone: root.l2-deadzone;
+                                curve: root.l2-curve;
+                                deadzone-text: root.l2-deadzone-text;
+                                changed(t, d, c) => { root.trigger-changed(t, d, c); }
+                            }
+                            TriggerPanel {
+                                trigger: 1;
+                                deadzone: root.r2-deadzone;
+                                curve: root.r2-curve;
+                                deadzone-text: root.r2-deadzone-text;
+                                changed(t, d, c) => { root.trigger-changed(t, d, c); }
+                            }
+                        }
+                    }
+                    VerticalLayout {
+                        width: 240px;
+                        spacing: 10px;
+                        Text {
+                            text: root.controls-detail;
+                            color: Palette.silver;
+                            font-size: 13px;
+                            wrap: word-wrap;
+                        }
+                        if !root.controls-capturing : PrimaryButton {
+                            label: "Press a control";
+                            enabled: root.controls-selected >= 0;
+                            clicked => { root.controls-start-capture(); }
+                        }
+                        if root.controls-capturing : Text {
+                            text: "Press a button, trigger or key now. Esc cancels.";
+                            color: Palette.accent;
+                            font-size: 13px;
+                            wrap: word-wrap;
+                        }
+                        SecondaryButton {
+                            label: "Reset controls";
+                            clicked => { root.controls-reset(); }
+                        }
+                        Text {
+                            text: root.controls-status;
+                            color: Palette.dim;
+                            font-size: 12px;
+                            wrap: word-wrap;
+                        }
+                    }
+                }
+                if root.settings-page == 6 : VerticalLayout {
+                    spacing: 16px;
+                    ScrollView {
+                        Text {
+                            text: root.about-text;
+                            color: Palette.silver;
+                            font-size: 13px;
+                            wrap: word-wrap;
+                            width: 760px;
+                        }
+                    }
+                    SecondaryButton {
+                        label: "Open log folder";
+                        width: 200px;
+                        clicked => { root.open-log-folder(); }
+                    }
+                }
+            }
+        }
+    }
+}

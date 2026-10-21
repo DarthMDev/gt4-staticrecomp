@@ -1,0 +1,8 @@
+# GT4Recomp controls: triggers as analog pedals on L2/R2 with a small deadzone.
+# Pair this with the in-game setting that assigns accelerate/brake to R2/L2 (to be confirmed
+# by the owner test in docs/CONTROLS.md). Everything else keeps the default XInput mapping.
+schema = 1
+
+[bindings]
+l2 = ["xinput:LT | deadzone=0.05", "key:1"]
+r2 = ["xinput:RT | deadzone=0.05", "key:2"]

@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import time
+import tomllib
 
 from cpu_affinity import apply_process_affinity, plan_affinity
 import gs_settings
@@ -96,9 +97,13 @@ PERF_PROFILES = {
     # slice203 (TASK-044): the slice202 game executable (same hash) with the stable gt4-gs 1.0.1 package (no writes under
     # Documents\PCSX2). Kept as pcsx2-slice203 after TASK-017.
     'pcsx2-slice203': ('slice203-pcsx2.json', 'private/slice203-build/build/gt4vulkan.exe'),
-    # TASK-017 (slice206): the slice203 game recipe plus the license demo guard v2 (both demo loaders), gt4-gs 1.0.1. Mode pcsx2
-    # points here. Halt dump and FSV trace are built in and off unless GT4_HALT_DUMP / GT4_FSV_TRACE are set.
-    'pcsx2': ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'),
+    # TASK-017 (slice206): the slice203 game recipe plus the license demo guard v2 (both demo loaders), gt4-gs 1.0.1.
+    # Halt dump and FSV trace are built in and off unless GT4_HALT_DUMP / GT4_FSV_TRACE are set. History mode after slice209.
+    'pcsx2-slice206': ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'),
+    # TASK-019 launcher test (slice209): the slice208 coverage build (accepted EE library, 1,105 seeds) plus the
+    # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
+    # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
+    'pcsx2': ('slice209-pcsx2.json', 'private/slice209-build/build/gt4vulkan.exe'),
     # TASK-017 diagnostic candidate (slice181): the slice166 profile plus the FSV read trace (GT4_FSV_TRACE=1
     # writes one [fsv] line per guest disc read to stderr). Not a performance candidate.
     'license-trace': ('slice181-license-trace.json', 'private/slice181-license-build/build/gt4vulkan.exe'),
@@ -110,7 +115,7 @@ PERF_PROFILES = {
     # (private/slice205-license-guard-runtime; halt dump and FSV trace built in, off unless GT4_HALT_DUMP/GT4_FSV_TRACE).
     'license-guard': ('slice205-license-guard.json', 'private/slice205-license-guard-build/build/gt4vulkan.exe'),
     # TASK-014 stage B (slice208): the slice206 game recipe with the accepted explicit-seed EE library (1,105 seeds,
-    # docs/inputs/slice208-ee-entries.txt; library profile coverage). Mode pcsx2 is unchanged and stays on slice206.
+    # docs/inputs/slice208-ee-entries.txt; library profile coverage). History mode: mode pcsx2 is slice209 (same library).
     'pcsx2-coverage': ('slice208-pcsx2.json', 'private/slice208-build/build/gt4vulkan.exe'),
 }
 GS_ASYNC_MANIFEST = 'slice152-gs-async.json'
@@ -123,20 +128,28 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
+                     'slice209-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
                      'slice193-pcsx2.json', 'slice194-pcsx2.json', 'slice195-pcsx2.json', 'slice196-pcsx2.json',
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
-                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json')
+                     'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
+                     'slice209-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
 # TASK-060: GT4_CURSOR_AUTOHIDE (unset or 1 = hide the cursor over the picture after 3 s, 0 = never). Forwarded and
 # recorded; the settings table row cursor_autohide (launcher-only) names it.
 CURSOR_AUTOHIDE_VALUES = ('0', '1')
+# GT4_CONTROLS_FILE (docs/CONTROLS.md): input bindings in a TOML file. Unset means the built-in map.
+CONTROLS_SCHEMA = 1
+CONTROLS_INPUTS = ('dpad_up', 'dpad_right', 'dpad_down', 'dpad_left', 'cross', 'circle', 'square',
+                   'triangle', 'l1', 'r1', 'l2', 'r2', 'l3', 'r3', 'select', 'start',
+                   'rstick_x', 'rstick_y', 'lstick_x', 'lstick_y')
+CONTROLS_SOURCE_KINDS = ('xinput', 'key')
 # GT4_FORCE_480P (slice164): holds the race display index at 480p; unset means off. Forwarded and recorded.
 FORCE_480P_VALUES = ('0', '1')
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
@@ -494,6 +507,58 @@ def separate_play_card(workspace, path):
     return resolved
 
 
+def resolve_controls_file(controls_file):
+    """Returns the absolute controls path, or None for the built-in bindings.
+
+    Checks the TOML shape the launcher can see: schema 1, [bindings] only, known input names,
+    and string sources with a known kind. The C++ reader (native/controls.cpp) applies the full
+    rules at start; this check refuses the obvious mistakes before any run output exists.
+    """
+    if controls_file is None:
+        return None
+    path = Path(controls_file).resolve()
+    if not path.is_file():
+        raise ValueError(f'Controls file not found: {path}')
+    try:
+        document = tomllib.loads(path.read_bytes().decode('utf-8'))
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
+        raise ValueError(f'Controls file is not valid TOML: {path}: {error}') from error
+    unknown_tables = sorted(set(document) - {'schema', 'bindings'})
+    if unknown_tables:
+        raise ValueError(f'Controls file has unknown keys: {unknown_tables}')
+    if type(document.get('schema')) is not int or document['schema'] != CONTROLS_SCHEMA:
+        raise ValueError(f'Controls file needs schema = {CONTROLS_SCHEMA}')
+    bindings = document.get('bindings', {})
+    if not isinstance(bindings, dict):
+        raise ValueError('Controls file: [bindings] must be a table')
+    for name, sources in bindings.items():
+        if name not in CONTROLS_INPUTS:
+            raise ValueError(f'Controls file: unknown input {name!r}')
+        items = [sources] if isinstance(sources, str) else sources
+        if not isinstance(items, list) or not all(isinstance(item, str) for item in items):
+            raise ValueError(f'Controls file: {name} must be a string or a list of strings')
+        for item in items:
+            kind = item.split('|', 1)[0].partition(':')[0].strip().lower()
+            if kind not in CONTROLS_SOURCE_KINDS:
+                raise ValueError(f'Controls file: {name} has an unknown source {item!r}')
+    return path
+
+
+def controls_evidence(path):
+    """Run evidence for the bindings in force: the file hash when a file was used."""
+    if path is None:
+        return {'source': 'default'}
+    data = path.read_bytes()
+    return {'source': 'file', 'path': str(path), 'size_bytes': len(data),
+            'sha256': hashlib.sha256(data).hexdigest()}
+
+
+def apply_controls_environment(environment, path):
+    """Sets GT4_CONTROLS_FILE for the game only; an inherited value never selects the bindings."""
+    environment.pop('GT4_CONTROLS_FILE', None)
+    if path is not None:
+        environment['GT4_CONTROLS_FILE'] = str(path)
+
 def binary_workspace_for(runtime_workspace, workspace):
     """Checkout holding the pinned binaries: the runtime checkout, or the assets checkout when the runtime
     checkout is a worktree without private/ (worktrees never link the main private/ directory)."""
@@ -505,7 +570,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               runtime_manifest=None, window=False, capture_audio=False, interactive=False,
               play_card=None, runtime_workspace=None, capture_shapes=False,
               performance=False, vu1_record=False, vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0,
-              binary_workspace=None, cpu_cores=None, renderer_override=None, separate_card=False):
+              binary_workspace=None, cpu_cores=None, controls_file=None, renderer_override=None, separate_card=False):
     workspace = workspace.resolve()
     if cpu_cores is not None and not performance:
         raise ValueError('--cpu-cores is refused outside performance modes')
@@ -554,6 +619,8 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         if separate_card:
             play_card = separate_play_card(workspace, play_card)
 
+    # Refused before any output: a bad controls file must stop the start, not the game.
+    controls_path = resolve_controls_file(controls_file)
     inputs = workspace / 'docs/inputs'
     native = json.loads((inputs / 'usa-v2.00-native.json').read_text(encoding='utf-8'))
     disc_manifest = json.loads((inputs / 'usa-v2.00.json').read_text(encoding='utf-8'))
@@ -646,6 +713,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
               'presentation_aspect': '16:9',
               'disc_sha256': disc_manifest['disc']['sha256'],
               'runtime_sha256': executable_pin['sha256']}
+    result['controls'] = controls_evidence(controls_path)
     if seed_pin is not None:
         result['card_seed'] = seed_pin
     if play_card is not None:
@@ -662,6 +730,7 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     # Aspect selection was removed in slice156; a stale inherited value must not reach the game.
     environment.pop('GT4_ASPECT', None)
     environment.pop('GT4_OBSERVATION_OUTPUT', None)
+    apply_controls_environment(environment, controls_path)
     environment.pop('GT4_PERF', None)
     if performance:
         scrub_performance_environment(environment)
@@ -791,6 +860,8 @@ def main():
     parser.add_argument('--window', action='store_true', help='Present real guest output in a native window')
     parser.add_argument('--capture-audio', action='store_true', help='Record guest PCM in private audio.wav')
     parser.add_argument('--interactive', action='store_true', help='Manual window play without scripted input or captures')
+    parser.add_argument('--controls', type=Path, default=None,
+                        help='Controls TOML file (docs/CONTROLS.md); default: built-in bindings')
     parser.add_argument('--force-480p', action='store_true',
                         help='Experimental: hold the race display index at 480p (GT4_FORCE_480P=1)')
     parser.add_argument('--assets-root', type=Path,
@@ -805,7 +876,8 @@ def main():
         result = run_probe(assets, options.run_directory, options.frames, options.timeout,
                            options.press, options.card_seed, options.runtime_manifest, options.window,
                            options.capture_audio, options.interactive, play_card=play_card,
-                           force_480p=options.force_480p, runtime_workspace=ROOT,
+                           force_480p=options.force_480p, controls_file=options.controls,
+                           runtime_workspace=ROOT,
                            binary_workspace=binary_workspace_for(ROOT, assets), separate_card=play_card is not None)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         parser.exit(1, f'FAIL: {error}\n')

@@ -12,8 +12,8 @@ from external_runtime_probe import (ROOT, VU1_CORPUS_NAME, binary_workspace_for,
 
 
 def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performance=False, vu1_record=False,
-         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, cpu_cores=None, renderer_override=None,
-         play_card=None):
+         vu1_verify=0, vu1_interpret_only=False, force_480p=False, vu0_verify=0, cpu_cores=None, controls_file=None,
+         renderer_override=None, play_card=None):
     workspace = Path(assets_root or ROOT).resolve()
     # --play-card (TASK-017 license checks): a separate existing card inside private/, never the owner's card.
     separate_card = separate_play_card(workspace, play_card) if play_card is not None else None
@@ -84,7 +84,8 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
                                vu1_record=vu1_record, vu1_verify=vu1_verify, vu1_interpret_only=vu1_interpret_only,
                                force_480p=force_480p, vu0_verify=vu0_verify, cpu_cores=cpu_cores,
                                binary_workspace=binary_workspace_for(ROOT, workspace),
-                               renderer_override=renderer_override, separate_card=separate_card is not None)
+                               controls_file=controls_file, renderer_override=renderer_override,
+                               separate_card=separate_card is not None)
             if result.get('gs_restart_requested') == 'donor' and renderer_override is None:
                 restart = True
             elif not result.get('manual_session_closed'):
@@ -99,16 +100,19 @@ def play(assets_root=None, runtime_manifest=None, capture_shapes=False, performa
         print(f'GS process stopped; restarting with the built-in renderer (CoreGS 1.1). Previous log: {run_directory}',
               flush=True)
         play(assets_root, runtime_manifest, capture_shapes, performance, vu1_record, vu1_verify, vu1_interpret_only,
-             force_480p, vu0_verify, cpu_cores, renderer_override='donor', play_card=play_card)
+             force_480p, vu0_verify, cpu_cores, controls_file=controls_file, renderer_override='donor',
+             play_card=play_card)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--force-480p', action='store_true',
                         help='Experimental: rewrite the default 480i request to 480p progressive (GT4_FORCE_480P=1)')
+    parser.add_argument('--controls', type=Path, default=None,
+                        help='Controls TOML file (docs/CONTROLS.md); default: built-in bindings')
     options = parser.parse_args()
     try:
-        play(force_480p=options.force_480p)
+        play(force_480p=options.force_480p, controls_file=options.controls)
     except (OSError, ValueError, KeyError, StopIteration) as error:
         print(f'FAIL: {error}', file=sys.stderr)
         raise SystemExit(1)

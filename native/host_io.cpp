@@ -3,9 +3,29 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <stdexcept>
+#include <utility>
 #include <string>
+
+using gt4::controls::ControlMap;
+using gt4::controls::SourceKind;
+
+static_assert(gt4::controls::xinput::dpad_up == XINPUT_GAMEPAD_DPAD_UP);
+static_assert(gt4::controls::xinput::dpad_right == XINPUT_GAMEPAD_DPAD_RIGHT);
+static_assert(gt4::controls::xinput::dpad_down == XINPUT_GAMEPAD_DPAD_DOWN);
+static_assert(gt4::controls::xinput::dpad_left == XINPUT_GAMEPAD_DPAD_LEFT);
+static_assert(gt4::controls::xinput::start == XINPUT_GAMEPAD_START);
+static_assert(gt4::controls::xinput::back == XINPUT_GAMEPAD_BACK);
+static_assert(gt4::controls::xinput::left_thumb == XINPUT_GAMEPAD_LEFT_THUMB);
+static_assert(gt4::controls::xinput::right_thumb == XINPUT_GAMEPAD_RIGHT_THUMB);
+static_assert(gt4::controls::xinput::left_shoulder == XINPUT_GAMEPAD_LEFT_SHOULDER);
+static_assert(gt4::controls::xinput::right_shoulder == XINPUT_GAMEPAD_RIGHT_SHOULDER);
+static_assert(gt4::controls::xinput::a == XINPUT_GAMEPAD_A);
+static_assert(gt4::controls::xinput::b == XINPUT_GAMEPAD_B);
+static_assert(gt4::controls::xinput::x == XINPUT_GAMEPAD_X);
+static_assert(gt4::controls::xinput::y == XINPUT_GAMEPAD_Y);
 
 namespace {
 void check_audio(MMRESULT result, const char *operation) {
@@ -17,57 +37,46 @@ void check_audio(MMRESULT result, const char *operation) {
                            std::to_string(result) + ")");
 }
 
-std::uint8_t axis_value(SHORT raw, int deadzone, bool invert) {
-  const int value = raw;
-  const int magnitude = value < 0 ? -value : value;
-  if (magnitude <= deadzone)
-    return 128;
-  const int range = (value < 0 ? 32768 : 32767) - deadzone;
-  const int distance = magnitude - deadzone;
-  const bool negative = (value < 0) != invert;
-  return static_cast<std::uint8_t>(negative ? 128 - distance * 128 / range
-                                            : 128 + distance * 127 / range);
+void press(PadState &pad, std::uint8_t bit, std::uint8_t pressure) {
+  pad.buttons |= static_cast<std::uint16_t>(1u << bit);
+  pad.pressures[bit] = std::max(pad.pressures[bit], pressure);
 }
 } // namespace
 
-PadState map_gamepad(const XINPUT_GAMEPAD &gamepad) {
+// Stick and trigger readings are computed by controls.cpp (read_axis, read_trigger).
+PadState map_gamepad(const XINPUT_GAMEPAD &gamepad, const ControlMap &map) {
   PadState pad;
-  const struct {
-    WORD host;
-    int guest;
-  } bindings[] = {{XINPUT_GAMEPAD_BACK, 0},
-                  {XINPUT_GAMEPAD_LEFT_THUMB, 1},
-                  {XINPUT_GAMEPAD_RIGHT_THUMB, 2},
-                  {XINPUT_GAMEPAD_START, 3},
-                  {XINPUT_GAMEPAD_DPAD_UP, 4},
-                  {XINPUT_GAMEPAD_DPAD_RIGHT, 5},
-                  {XINPUT_GAMEPAD_DPAD_DOWN, 6},
-                  {XINPUT_GAMEPAD_DPAD_LEFT, 7},
-                  {XINPUT_GAMEPAD_LEFT_SHOULDER, 10},
-                  {XINPUT_GAMEPAD_RIGHT_SHOULDER, 11},
-                  {XINPUT_GAMEPAD_Y, 12},
-                  {XINPUT_GAMEPAD_B, 13},
-                  {XINPUT_GAMEPAD_A, 14},
-                  {XINPUT_GAMEPAD_X, 15}};
-  for (const auto &binding : bindings)
-    if (gamepad.wButtons & binding.host) {
-      pad.buttons |= static_cast<std::uint16_t>(1u << binding.guest);
-      pad.pressures[binding.guest] = 255;
-    }
   const BYTE triggers[] = {gamepad.bLeftTrigger, gamepad.bRightTrigger};
-  for (int trigger = 0; trigger < 2; ++trigger)
-    if (triggers[trigger] > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) {
-      pad.buttons |= static_cast<std::uint16_t>(1u << (8 + trigger));
-      pad.pressures[8 + trigger] = static_cast<std::uint8_t>(
-          (triggers[trigger] - XINPUT_GAMEPAD_TRIGGER_THRESHOLD) * 255 /
-          (255 - XINPUT_GAMEPAD_TRIGGER_THRESHOLD));
+  // PS2 analog byte order: RX, RY, LX, LY.
+  const SHORT sticks[] = {gamepad.sThumbRX, gamepad.sThumbRY, gamepad.sThumbLX,
+                          gamepad.sThumbLY};
+  for (std::size_t index = 0; index < gt4::controls::input_count; ++index) {
+    const auto &input = gt4::controls::inputs[index];
+    for (const auto &binding : map.bindings[index]) {
+      if (input.axis) {
+        if (binding.kind != SourceKind::xinput_axis)
+          continue;
+        const std::uint8_t value = gt4::controls::read_axis(binding, sticks[binding.source_index]);
+        // Several bindings on one stick: the reading furthest from rest wins.
+        const int deflection = std::abs(static_cast<int>(value) - 128);
+        if (deflection > std::abs(static_cast<int>(pad.axes[input.index]) - 128))
+          pad.axes[input.index] = value;
+      } else if (binding.kind == SourceKind::xinput_button) {
+        if (gamepad.wButtons & binding.button_mask)
+          press(pad, input.index, 255);
+      } else if (binding.kind == SourceKind::xinput_trigger) {
+        const auto reading = gt4::controls::read_trigger(binding, triggers[binding.source_index]);
+        if (reading.pressed)
+          press(pad, input.index, reading.pressure);
+      }
+      // Keyboard bindings arrive as a button mask through merge_keyboard.
     }
-  pad.axes = {
-      axis_value(gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE, false),
-      axis_value(gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE, true),
-      axis_value(gamepad.sThumbLX, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, false),
-      axis_value(gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE, true)};
+  }
   return pad;
+}
+
+PadState map_gamepad(const XINPUT_GAMEPAD &gamepad) {
+  return map_gamepad(gamepad, gt4::controls::default_controls());
 }
 
 void merge_keyboard(PadState &pad, std::uint16_t buttons) {
@@ -81,6 +90,8 @@ XINPUT_VIBRATION map_rumble(std::uint16_t rumble) {
   return {static_cast<WORD>((rumble >> 8) * 257),
           static_cast<WORD>((rumble & 1) ? 65535 : 0)};
 }
+
+ControllerInput::ControllerInput(ControlMap map) : map_(std::move(map)) {}
 
 ControllerInput::~ControllerInput() { stop(); }
 
@@ -109,7 +120,7 @@ PadState ControllerInput::poll(bool focused, std::uint16_t keyboard_buttons) {
   if (slot_ != XUSER_MAX_COUNT) {
     const DWORD result = XInputGetState(slot_, &state);
     if (result == ERROR_SUCCESS)
-      pad = map_gamepad(state.Gamepad);
+      pad = map_gamepad(state.Gamepad, map_);
     else if (result == ERROR_DEVICE_NOT_CONNECTED) {
       std::fprintf(stderr, "[input] XInput controller disconnected\n");
       slot_ = XUSER_MAX_COUNT;
