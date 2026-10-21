@@ -1800,3 +1800,35 @@ Standalone composed CPU libraries, fresh `build/slice219-cpuref` inside the work
 - Original legacy capture SHA-256 `c72a2f0c52dd6b529a0ee804f78608ae19be5b2e90a4430b81f27503a634a0ee`; same-record envelope conversion to v2 SHA-256 `ba5c301ddfdb5e47c962fb3748af314ffaf4d11b34cf42dcd4754c5412085345`. Both replay 488,553 records / 1,101 frames. **All 1,101 PPMs are byte-identical across legacy, converted v2 and fresh donor v2**, including every frame ID0..1100. Replays took59.85/59.81/60.81 s. Evidence: worktree `private/slice218-replay-evidence/`, `replay-results.json`, `fresh-legacy-parity.json` and replay logs.
 - Menu comparison rerun: `fresh-menu-comparison-diagnostic.json` records 11 donor frames100..1100 against capture frames99..1099. It is explicitly diagnostic only: the CPU output is composed and the donor output is VRAM-decoded (IN-325). Ten samples have pct_bad <=0.038%; garage frame900 remains29.5487%, PSNR8.7427 dB. No chapter14 qualification or IN-315/IN-316 closure is claimed.
 - S-01/S-02 are covered. S-03..S-11 are owner gameplay scenes (chapter14.5) and were not recorded or claimed here. No windowed game was launched.
+
+## Local slice221 - CPU VRAM diagnostic output (12.9,14.2-14.4)
+
+Fresh standalone build inside the CoreGS worktree: `build/slice221-cpuref`. Local build names are not main
+checkout slice reservations or release pins. Main checkout remains read-only. Configure/build/test in VS x64:
+
+```text
+cmake -S native/hw_gs/cpuref -B build/slice221-cpuref -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe"
+cmake --build build/slice221-cpuref --parallel 4
+ctest --test-dir build/slice221-cpuref --output-on-failure
+```
+
+- Confirmed:75/75 pass (3.82s), including6 new `cpuref_vram_dump_*` fixtures. Initial local220 had one incorrect
+  NTSC test geometry;221 corrects the fixture magnification, leaving the diagnostic implementation unchanged.
+- CLI: `hw_cpuref_replay <capture> <out-dir> [--dump-source vram|scanout]`. Default vram, explicit scanout
+  preserves prior output; EndFrame/ReplayCapture API defaults stay unchanged. `frames.jsonl` contains all IDs,
+  no-image reasons and lossless raw register metadata. No automatic renumbering or image shifts.
+- Binary SHA-256 `5a411d1887bb5439c8ce3c2a98fb73c77636a737fa68b45aa35a0953d6eb8f21`.
+- Python command from worktree, with `GT4_NATIVE_BUILD`=full-game local217 and `GT4_HW_REPLAY_EXE`=local221
+  replay executable: `python -m unittest discover -s tests/python`:629 run,44 skipped, only the expected
+  pre-existing distribution-pin error. The2 new external CLI tests ran, including metadata and invalid options.
+- Reused fresh donor capture from local217 (`menu-v2.gscap`, SHA7abb51cf...; full digest in slice219 section).
+  Raw explicit/default replays take65.62/64.40s, each1,096 PPMs and1,101 metadata rows. All PPMs identical.
+  Five omitted images are precisely frames0..4 with no enabled circuit. Explicit scanout takes63.62s and all
+  1,101 PPMs equal prior local219 output. Exit0 for all; no unsupported PSM/dimension refusals in real menu data.
+- Evidence: `private/slice221-vram-evidence/validation.json`, metadata/replay logs,
+  `frame-mapping.json`, `menu-vram-comparison.json`, `vertical-pairing.json`. Harness/build/Python logs:
+  `build/coregs2-next-validation/`. Aligned sample folders rename copied files only, preserving pixel bytes
+  and recording their original capture IDs/hashes. Donor frameN+1 corresponds to capture frameN.
+- Valid VRAM-to-VRAM2D report now has10/11 samples under the thresholds; donor900/capture899 still29.5487%
+  bad, PSNR8.7427dB. Correctly paired800/1000/1100 need no vertical shift (see IN-315/325/327). No entire-scene
+  parity, real scanout phase, GPU write-back or playable HWR is claimed. No game launch was needed.

@@ -3,9 +3,11 @@
 // hw_cpuref_replay: replays a legacy or GSSTREAM v2 capture through the HWR CPU reference renderer and
 // writes one frame_NNNNN.ppm per frame that has a display image (TASK-027, M4 to M6 path).
 //
-// Usage: hw_cpuref_replay <capture.gscap> <output-dir>
+// Usage: hw_cpuref_replay <capture.gscap> <output-dir> [--dump-source vram|scanout]
+// Default vram follows chapter 12.9. scanout preserves the earlier composed CLI output.
+// frames.jsonl records every capture-native frame; image filenames are never renumbered.
 // Copyright 2026 GT4Recomp contributors. Licensed under the MIT License (see LICENSE).
-// Written from the TASK-026 specification (docs/hw-renderer-spec), chapters 02, 10.2, 14.3.
+// Written from the TASK-026 specification (docs/hw-renderer-spec), chapters 02, 10.2, 12.9, 14.3.
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -16,20 +18,47 @@
 #include "cpuref_replay.hpp"
 
 int main(int argc, char** argv) {
-    if (argc != 3) {
-        std::fprintf(stderr, "usage: hw_cpuref_replay <capture> <output-dir>\n");
+    auto usage = [] {
+        std::fprintf(stderr, "usage: hw_cpuref_replay <capture> <output-dir> [--dump-source vram|scanout]\n"
+                             "default: vram (12.9 oracle decode); scanout: existing composed output\n"
+                             "metadata: <output-dir>/frames.jsonl, capture-native frame IDs\n");
+    };
+    hwgs::cpuref::DumpSource source = hwgs::cpuref::DumpSource::Vram;
+    bool selectedSource = false;
+    std::vector<std::string> paths;
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--help" && argc == 2) { usage(); return 0; }
+        if (arg == "--dump-source") {
+            if (selectedSource || i + 1 == argc || !hwgs::cpuref::ParseDumpSource(argv[++i], source)) {
+                std::fprintf(stderr, "hw_cpuref_replay: --dump-source requires one of vram|scanout, once\n");
+                return 2;
+            }
+            selectedSource = true;
+        } else if (arg.starts_with("--")) {
+            std::fprintf(stderr, "hw_cpuref_replay: unknown option %s\n", arg.c_str());
+            return 2;
+        } else paths.push_back(arg);
+    }
+    if (paths.size() != 2) {
+        usage();
         return 2;
     }
-    std::ifstream input(argv[1], std::ios::binary);
+    std::ifstream input(paths[0], std::ios::binary);
     if (!input) {
-        std::fprintf(stderr, "hw_cpuref_replay: cannot open %s\n", argv[1]);
+        std::fprintf(stderr, "hw_cpuref_replay: cannot open %s\n", paths[0].c_str());
         return 1;
     }
     const std::vector<uint8_t> stream((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
     std::error_code ec;
-    std::filesystem::create_directories(argv[2], ec);
+    std::filesystem::create_directories(paths[1], ec);
     if (ec) {
-        std::fprintf(stderr, "hw_cpuref_replay: cannot create %s: %s\n", argv[2], ec.message().c_str());
+        std::fprintf(stderr, "hw_cpuref_replay: cannot create %s: %s\n", paths[1].c_str(), ec.message().c_str());
+        return 1;
+    }
+    std::ofstream metadata(std::filesystem::path(paths[1]) / "frames.jsonl", std::ios::binary);
+    if (!metadata) {
+        std::fprintf(stderr, "hw_cpuref_replay: cannot create frames.jsonl\n");
         return 1;
     }
 
@@ -37,25 +66,36 @@ int main(int argc, char** argv) {
     hwgs::cpuref::ReplaySummary summary;
     std::string error;
     bool writeFailed = false;
+    uint64_t imagesWritten = 0;
+    uint64_t framesWithoutImage = 0;
     const bool ok = hwgs::cpuref::ReplayCapture(
         stream, renderer, summary,
-        [&](uint64_t frame, const hwgs::cpuref::FrameImage& image) {
+        [&](uint64_t frame, const hwgs::cpuref::FrameImage& scanout) {
+            const auto vram = renderer.DumpVramDisplay();
+            const auto& image = source == hwgs::cpuref::DumpSource::Vram ? vram.frame : scanout;
+            metadata << hwgs::cpuref::EncodeDumpMetadata(frame, source, vram, image) << '\n';
+            if (!metadata) writeFailed = true;
             if (!image.valid) {
+                ++framesWithoutImage;
                 return;
             }
             char name[64];
             std::snprintf(name, sizeof(name), "frame_%05llu.ppm", static_cast<unsigned long long>(frame));
-            const std::filesystem::path path = std::filesystem::path(argv[2]) / name;
+            const std::filesystem::path path = std::filesystem::path(paths[1]) / name;
             std::ofstream out(path, std::ios::binary);
             const std::string ppm = hwgs::cpuref::EncodePpm(image.image);
             out.write(ppm.data(), static_cast<std::streamsize>(ppm.size()));
             if (!out) {
                 writeFailed = true;
-            }
+            } else ++imagesWritten;
         },
         error);
 
-    std::printf("records=%llu gif_packets=%llu gif_bytes=%llu privileged=%llu fifo_reads=%llu frames=%llu images=%llu\n",
+    metadata.flush();
+    if (!metadata) writeFailed = true;
+    std::printf("dump_source=%s images_written=%llu frames_without_image=%llu\n", hwgs::cpuref::DumpSourceName(source),
+                static_cast<unsigned long long>(imagesWritten), static_cast<unsigned long long>(framesWithoutImage));
+    std::printf("records=%llu gif_packets=%llu gif_bytes=%llu privileged=%llu fifo_reads=%llu frames=%llu scanout_images=%llu\n",
                 static_cast<unsigned long long>(summary.records), static_cast<unsigned long long>(summary.gifPackets),
                 static_cast<unsigned long long>(summary.gifBytes), static_cast<unsigned long long>(summary.privileged),
                 static_cast<unsigned long long>(summary.fifoReads), static_cast<unsigned long long>(summary.frames),
@@ -77,7 +117,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (writeFailed) {
-        std::fprintf(stderr, "hw_cpuref_replay: a frame could not be written\n");
+        std::fprintf(stderr, "hw_cpuref_replay: a frame or its metadata could not be written\n");
         return 1;
     }
     return 0;

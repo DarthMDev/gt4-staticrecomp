@@ -4,7 +4,7 @@
 // in the shadow local memory, and the display path composes the frame image from the
 // circuits (M4 to M6 of the plan, all on the CPU).
 // Copyright 2026 GT4Recomp contributors.
-// Written from the TASK-026 specification (docs/hw-renderer-spec): chapters 02, 01.7, 13.1 to 13.3.
+// Written from the TASK-026 specification (docs/hw-renderer-spec): chapters 02, 01.7, 12.9, 13.1 to 13.3, 14.2.
 #pragma once
 
 #include <array>
@@ -42,6 +42,36 @@ struct FrameImage {
     display::Image image;
 };
 
+enum class DumpSource : uint8_t { Vram, Scanout };
+bool ParseDumpSource(const std::string& name, DumpSource& source);
+const char* DumpSourceName(DumpSource source);
+
+// Chapter 12.9 oracle diagnostic: a single VRAM-decoded circuit, before PCRTC merge.
+// Circuit is 1 or 2, or 0 when neither PMODE enable bit is set. Raw register values
+// accompany decoded geometry so a comparison never needs to guess its image origin.
+struct VramDisplayDump {
+    FrameImage frame;
+    uint32_t circuit = 0;
+    uint64_t pmode = 0;
+    uint64_t smode1 = 0;
+    uint64_t smode2 = 0;
+    uint64_t dispfb = 0;
+    uint64_t display = 0;
+    uint32_t fbp = 0;  // GS pages, not 256-byte blocks
+    uint32_t fbw = 0;
+    uint32_t psm = 0;
+    uint32_t dbx = 0;
+    uint32_t dby = 0;
+    uint32_t width = 0;
+    uint32_t height = 0;
+    bool lineDouble = false;
+    std::string refusal;  // Empty on success; no stale-image fallback on refusal.
+};
+
+// One JSON object per capture-native frame. Hex strings preserve every raw register bit.
+std::string EncodeDumpMetadata(uint64_t captureFrame, DumpSource source, const VramDisplayDump& vram,
+                               const FrameImage& writtenImage);
+
 class CpuRenderer final : public BatchSink, public SyncSink {
 public:
     CpuRenderer();
@@ -68,6 +98,10 @@ public:
 
     // Ends a frame: flushes the batch, then composes the display image from the registers.
     FrameImage EndFrame();
+
+    // Coherent SLM decode matching the MIT donor's gs::display at 1x (12.9, 14.2).
+    // Does not merge, deinterlace, apply anti-blur, or alter display/history state.
+    VramDisplayDump DumpVramDisplay();
 
     // BatchSink
     void OnBatch(Batch&& batch) override;
