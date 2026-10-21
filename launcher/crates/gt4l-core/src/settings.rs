@@ -144,6 +144,16 @@ pub const SETTINGS: &[SettingDef] = &[
         connected: true,
     },
     SettingDef {
+        id: "widescreen",
+        page: Page::Graphics,
+        group: "Image",
+        title: "Widescreen 16:9",
+        info: "Holds the game's Wide setting at 16:9 while it runs, so the game starts widescreen. Off leaves the                game's own Wide setting (Options, Screen) as it is.",
+        kind: TOGGLE,
+        default: "on",
+        connected: true,
+    },
+    SettingDef {
         id: "internal_scale",
         page: Page::Graphics,
         group: "CoreGS 1.1",

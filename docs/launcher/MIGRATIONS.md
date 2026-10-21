@@ -10,7 +10,7 @@ Launcher-owned files:
 
 | File | Where | Schema key | Schema today | Chain |
 |---|---|---|---|---|
-| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 2 | `migrate::SETTINGS` (first schema 0) |
+| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 3 | `migrate::SETTINGS` (first schema 0; schema 3 adds `widescreen`, TASK-079) |
 | `controls.toml` | `%LOCALAPPDATA%\GT4Recomp\` | `schema` | 1 (the file format is owned by `gt4controls`) | `migrate::CONTROLS` (first schema 1) |
 | `version.json` | install folder, or data folder when read-only | `schema` | 1 | `migrate::VERSION_FILE` (first schema 1) |
 | save library | `%LOCALAPPDATA%\GT4Recomp\library\` | none | a folder, not a single index file | not applicable yet; see below |
