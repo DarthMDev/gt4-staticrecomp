@@ -102,6 +102,19 @@ pub fn reconcile_launcher_version(file: Option<&VersionFile>, cargo_version: &st
     }
 }
 
+/// The file brought in line with what is installed, or `None` when it already is. The installer writes its own
+/// version and a null renderer on every install or upgrade (for example 1.0.0 -> 1.1.0 over an installed gt4-gs), and
+/// an older launcher may have left an older GT4Recomp version: the launcher version is the Cargo version, and the
+/// renderer is the checked install (`None` keeps the recorded value, so a damaged folder does not erase it).
+pub fn reconciled(file: &VersionFile, cargo_version: &str, renderer: Option<Version>) -> Option<VersionFile> {
+    let mut next = file.clone();
+    next.gt4recomp = cargo_version.to_string();
+    if let Some(renderer) = renderer {
+        next.gt4gs = Some(renderer.text());
+    }
+    (next != *file).then_some(next)
+}
+
 /// Reads the file at the location (no migration writes). A missing or damaged file gives `None` and a reason.
 pub fn read(path: &Path) -> Result<Option<VersionFile>, String> {
     match fs::read_to_string(path) {
@@ -177,6 +190,22 @@ mod tests {
         assert!(warning.unwrap().contains("0.9.0"));
         assert!(reconcile_launcher_version(None, "1.0.0").1.is_none());
         assert!(reconcile_launcher_version(Some(&VersionFile::for_install("1.0.0", 1)), "1.0.0").1.is_none());
+    }
+
+    #[test]
+    fn an_upgrade_to_1_1_0_records_the_new_launcher_and_the_installed_renderer() {
+        // As the 1.1.0 installer leaves it over a 1.0.0 install with gt4-gs 1.1.0 already in place.
+        let after_installer = VersionFile::for_install("1.1.0", 1);
+        let fixed = reconciled(&after_installer, "1.1.0", Some(Version(1, 1, 0))).unwrap();
+        assert_eq!(fixed.gt4recomp, "1.1.0");
+        assert_eq!(fixed.gt4gs.as_deref(), Some("1.1.0"));
+        // A file still naming 1.0.0 (an older install folder) takes the program's version.
+        let old = VersionFile { schema: 1, gt4recomp: "1.0.0".into(), gt4gs: Some("1.0.1".into()), settings_schema: 1 };
+        let fixed = reconciled(&old, "1.1.0", Some(Version(1, 0, 1))).unwrap();
+        assert_eq!((fixed.gt4recomp.as_str(), fixed.gt4gs.as_deref()), ("1.1.0", Some("1.0.1")));
+        // Nothing to change, or no checked renderer: the recorded renderer stays.
+        assert!(reconciled(&fixed, "1.1.0", Some(Version(1, 0, 1))).is_none());
+        assert!(reconciled(&fixed, "1.1.0", None).is_none());
     }
 
     #[test]

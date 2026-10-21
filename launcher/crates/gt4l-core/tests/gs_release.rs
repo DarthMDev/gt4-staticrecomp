@@ -70,17 +70,17 @@ fn stable_release_is_verified_and_installed_with_its_hash_recorded() {
     let server = scratch("install-server");
     let install = scratch("install-root");
     let exe = b"fake gt4-gs 0.3.2".to_vec();
-    let entry = write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &exe, serve: &package(&exe) });
+    let entry = write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.0", prerelease: false, executable: &exe, serve: &package(&exe) });
     write_list(&server, &[entry]);
 
     let outcome = gs_release::install_latest(&source(&server), &install).expect("install");
     let Outcome::Installed(installed) = outcome else { panic!("expected a fresh install") };
-    assert_eq!(installed.version, Version(1, 0, 1));
-    assert_eq!(installed.executable, install.join("1.0.1").join("gt4-gs.exe"));
+    assert_eq!(installed.version, Version(1, 1, 0));
+    assert_eq!(installed.executable, install.join("1.1.0").join("gt4-gs.exe"));
     assert_eq!(installed.executable_sha256, gs_release::sha256_hex(&exe));
     assert_eq!(fs::read(&installed.executable).unwrap(), exe);
     assert_eq!(gs_release::installed(&install), Some(installed.clone()));
-    assert_eq!(fs::read_to_string(install.join("current.txt")).unwrap().trim(), "1.0.1");
+    assert_eq!(fs::read_to_string(install.join("current.txt")).unwrap().trim(), "1.1.0");
 
     // Asking again with the same release is an up-to-date result, not a second install.
     assert!(matches!(gs_release::install_latest(&source(&server), &install), Ok(Outcome::UpToDate(_))));
@@ -94,25 +94,25 @@ fn prereleases_and_too_old_versions_are_ignored() {
     let newer_prerelease = b"prerelease 0.4.0".to_vec();
     let old = b"old 0.3.1".to_vec();
     let entries = vec![
-        write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.0", prerelease: true, executable: &newer_prerelease, serve: &package(&newer_prerelease) }),
-        write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &stable, serve: &package(&stable) }),
-        write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.0", prerelease: false, executable: &old, serve: &package(&old) }),
+        write_release(&server, &FakeRelease { tag: "gt4gs-v1.2.0", prerelease: true, executable: &newer_prerelease, serve: &package(&newer_prerelease) }),
+        write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.0", prerelease: false, executable: &stable, serve: &package(&stable) }),
+        write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &old, serve: &package(&old) }),
     ];
     write_list(&server, &entries);
 
     let releases = gs_release::parse_releases(&fs::read_to_string(server.join("releases.json")).unwrap(), Stream::Renderer).unwrap();
-    assert_eq!(releases::select_latest(&releases, gs_release::MINIMUM_VERSION).unwrap().tag, "gt4gs-v1.0.1", "1.1.0 is a prerelease");
+    assert_eq!(releases::select_latest(&releases, gs_release::MINIMUM_VERSION).unwrap().tag, "gt4gs-v1.1.0", "1.2.0 is a prerelease");
 
     let Outcome::Installed(installed) = gs_release::install_latest(&source(&server), &install).unwrap() else {
         panic!("expected install")
     };
-    assert_eq!(installed.version, Version(1, 0, 1));
+    assert_eq!(installed.version, Version(1, 1, 0));
 
     // Only a prerelease and an old release on the server: nothing to install, the error names the minimum.
     let only_old = scratch("only-old-server");
-    write_list(&only_old, &[write_release(&only_old, &FakeRelease { tag: "gt4gs-v1.0.0", prerelease: false, executable: &old, serve: &package(&old) })]);
+    write_list(&only_old, &[write_release(&only_old, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &old, serve: &package(&old) })]);
     let error = gs_release::install_latest(&source(&only_old), &install).unwrap_err();
-    assert!(error.contains("1.0.1"), "{error}");
+    assert!(error.contains("1.1.0"), "{error}");
 }
 
 #[test]
@@ -124,22 +124,22 @@ fn upgrade_keeps_the_previous_version_and_removes_older_ones() {
     let third = b"exe 0.3.4".to_vec();
 
     let entry = |tag: &str, bytes: &[u8]| write_release(&server, &FakeRelease { tag, prerelease: false, executable: bytes, serve: &package(bytes) });
-    write_list(&server, &[entry("gt4gs-v1.0.1", &first)]);
+    write_list(&server, &[entry("gt4gs-v1.1.0", &first)]);
     gs_release::install_latest(&source(&server), &install).unwrap();
 
-    write_list(&server, &[entry("gt4gs-v1.0.1", &first), entry("gt4gs-v1.0.2", &second)]);
+    write_list(&server, &[entry("gt4gs-v1.1.0", &first), entry("gt4gs-v1.1.1", &second)]);
     let Outcome::Installed(upgraded) = gs_release::install_latest(&source(&server), &install).unwrap() else {
         panic!("expected upgrade")
     };
-    assert_eq!(upgraded.version, Version(1, 0, 2));
-    assert!(install.join("1.0.1").is_dir(), "the previous version stays until the next upgrade");
-    assert!(install.join("1.0.2").is_dir());
+    assert_eq!(upgraded.version, Version(1, 1, 1));
+    assert!(install.join("1.1.0").is_dir(), "the previous version stays until the next upgrade");
+    assert!(install.join("1.1.1").is_dir());
 
-    write_list(&server, &[entry("gt4gs-v1.0.3", &third)]);
+    write_list(&server, &[entry("gt4gs-v1.1.2", &third)]);
     gs_release::install_latest(&source(&server), &install).unwrap();
-    assert!(install.join("1.0.3").is_dir());
-    assert!(install.join("1.0.2").is_dir(), "the new previous version is kept");
-    assert!(!install.join("1.0.1").exists(), "two versions back is removed");
+    assert!(install.join("1.1.2").is_dir());
+    assert!(install.join("1.1.1").is_dir(), "the new previous version is kept");
+    assert!(!install.join("1.1.0").exists(), "two versions back is removed");
 }
 
 #[test]
@@ -147,7 +147,7 @@ fn corrupt_download_is_refused_and_the_installed_version_is_kept() {
     let server = scratch("corrupt-server");
     let install = scratch("corrupt-root");
     let good = b"exe good".to_vec();
-    write_list(&server, &[write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &good, serve: &package(&good) })]);
+    write_list(&server, &[write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.0", prerelease: false, executable: &good, serve: &package(&good) })]);
     gs_release::install_latest(&source(&server), &install).unwrap();
 
     // The next release is served with a damaged package: its sum no longer matches.
@@ -155,17 +155,17 @@ fn corrupt_download_is_refused_and_the_installed_version_is_kept() {
     let mut damaged = package(&bad);
     let last = damaged.len() - 1;
     damaged[last] ^= 0xFF;
-    let next = write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.2", prerelease: false, executable: &bad, serve: &damaged });
+    let next = write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.1", prerelease: false, executable: &bad, serve: &damaged });
     // The package was written from `damaged`, but the sums list the original package bytes.
     let original_sum = gs_release::sha256_hex(&package(&bad));
-    let sums = format!("{original_sum}  gt4-gs-1.0.2-windows-x64.zip\n");
-    fs::write(server.join("gt4gs-v1.0.2").join("SHA256SUMS"), sums).unwrap();
+    let sums = format!("{original_sum}  gt4-gs-1.1.1-windows-x64.zip\n");
+    fs::write(server.join("gt4gs-v1.1.1").join("SHA256SUMS"), sums).unwrap();
     write_list(&server, &[next]);
 
     let error = gs_release::install_latest(&source(&server), &install).unwrap_err();
     assert!(error.contains("SHA-256"), "{error}");
-    assert_eq!(gs_release::installed(&install).unwrap().version, Version(1, 0, 1), "the old version still works");
-    assert!(!install.join("1.0.2").exists());
+    assert_eq!(gs_release::installed(&install).unwrap().version, Version(1, 1, 0), "the old version still works");
+    assert!(!install.join("1.1.1").exists());
     assert!(!install.join(".staging-0.3.3").exists(), "the staging folder is removed");
 }
 
@@ -177,10 +177,10 @@ fn package_without_the_program_is_refused_and_nothing_changes() {
     writer.start_file("readme.txt", zip::write::SimpleFileOptions::default()).unwrap();
     writer.write_all(b"no program here").unwrap();
     let archive = writer.finish().unwrap().into_inner();
-    write_list(&server, &[write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: b"", serve: &archive })]);
+    write_list(&server, &[write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.0", prerelease: false, executable: b"", serve: &archive })]);
     assert!(gs_release::install_latest(&source(&server), &install).is_err());
     assert!(gs_release::installed(&install).is_none());
-    assert!(!install.join("1.0.1").exists());
+    assert!(!install.join("1.1.0").exists());
 }
 
 #[test]
@@ -188,9 +188,9 @@ fn a_damaged_installed_program_fails_the_check_so_the_launcher_falls_back() {
     let server = scratch("damaged-installed-server");
     let install = scratch("damaged-installed-root");
     let exe = b"exe installed".to_vec();
-    write_list(&server, &[write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &exe, serve: &package(&exe) })]);
+    write_list(&server, &[write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.0", prerelease: false, executable: &exe, serve: &package(&exe) })]);
     gs_release::install_latest(&source(&server), &install).unwrap();
-    fs::write(install.join("1.0.1").join("gt4-gs.exe"), b"changed").unwrap();
+    fs::write(install.join("1.1.0").join("gt4-gs.exe"), b"changed").unwrap();
     assert!(gs_release::installed(&install).is_none());
 }
 
@@ -208,7 +208,7 @@ fn the_install_reports_its_steps_and_the_package_bytes() {
     let install = scratch("steps-root");
     let exe = b"fake gt4-gs for progress".to_vec();
     let served = package(&exe);
-    let entry = write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &exe, serve: &served });
+    let entry = write_release(&server, &FakeRelease { tag: "gt4gs-v1.1.0", prerelease: false, executable: &exe, serve: &served });
     write_list(&server, &[entry]);
     let mut steps = Vec::new();
     gs_release::install_latest_reporting(&source(&server), &install, &mut |step| steps.push(step)).expect("install");
@@ -219,7 +219,7 @@ fn the_install_reports_its_steps_and_the_package_bytes() {
     assert_eq!(steps.last(), Some(&Step::Installing));
 }
 
-/// The real gt4-gs 1.0.1 package (checked 2026-10-20) wraps its files in one folder, `gt4-gs-1.0.1-windows-x64/`,
+/// The real gt4-gs packages (1.0.1 checked 2026-10-20) wrap their files in one folder, `gt4-gs-<version>-windows-x64/`,
 /// with `resources/` beside the program. The install removes that folder so `gt4-gs.exe` is at the version root.
 #[test]
 fn a_package_wrapped_in_one_folder_installs_like_the_real_release() {
@@ -228,29 +228,86 @@ fn a_package_wrapped_in_one_folder_installs_like_the_real_release() {
     let exe = b"fake gt4-gs inside a folder".to_vec();
     let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
     let options = zip::write::SimpleFileOptions::default();
-    writer.add_directory("gt4-gs-1.0.1-windows-x64/", options).unwrap();
-    writer.start_file("gt4-gs-1.0.1-windows-x64/gt4-gs.exe", options).unwrap();
+    writer.add_directory("gt4-gs-1.1.0-windows-x64/", options).unwrap();
+    writer.start_file("gt4-gs-1.1.0-windows-x64/gt4-gs.exe", options).unwrap();
     writer.write_all(&exe).unwrap();
-    writer.add_directory("gt4-gs-1.0.1-windows-x64/resources/shaders/", options).unwrap();
-    writer.start_file("gt4-gs-1.0.1-windows-x64/resources/GameIndex.yaml", options).unwrap();
+    writer.add_directory("gt4-gs-1.1.0-windows-x64/resources/shaders/", options).unwrap();
+    writer.start_file("gt4-gs-1.1.0-windows-x64/resources/GameIndex.yaml", options).unwrap();
     writer.write_all(b"index").unwrap();
     let wrapped = writer.finish().unwrap().into_inner();
 
-    let folder = server.join("gt4gs-v1.0.1");
+    let folder = server.join("gt4gs-v1.1.0");
     fs::create_dir_all(&folder).unwrap();
-    fs::write(folder.join("gt4-gs-1.0.1-windows-x64.zip"), &wrapped).unwrap();
+    fs::write(folder.join("gt4-gs-1.1.0-windows-x64.zip"), &wrapped).unwrap();
     // Like the real SHA256SUMS: a line for the package only, none for gt4-gs.exe.
-    fs::write(folder.join("SHA256SUMS"), format!("{}  gt4-gs-1.0.1-windows-x64.zip\n", gs_release::sha256_hex(&wrapped))).unwrap();
+    fs::write(folder.join("SHA256SUMS"), format!("{}  gt4-gs-1.1.0-windows-x64.zip\n", gs_release::sha256_hex(&wrapped))).unwrap();
     let entry = format!(
-        r#"{{"tag_name":"gt4gs-v1.0.1","prerelease":false,"draft":false,"assets":[{{"name":"gt4-gs-1.0.1-windows-x64.zip","browser_download_url":"{BASE}/gt4gs-v1.0.1/gt4-gs-1.0.1-windows-x64.zip"}},{{"name":"SHA256SUMS","browser_download_url":"{BASE}/gt4gs-v1.0.1/SHA256SUMS"}}]}}"#
+        r#"{{"tag_name":"gt4gs-v1.1.0","prerelease":false,"draft":false,"assets":[{{"name":"gt4-gs-1.1.0-windows-x64.zip","browser_download_url":"{BASE}/gt4gs-v1.1.0/gt4-gs-1.1.0-windows-x64.zip"}},{{"name":"SHA256SUMS","browser_download_url":"{BASE}/gt4gs-v1.1.0/SHA256SUMS"}}]}}"#
     );
     write_list(&server, &[entry]);
 
     let Outcome::Installed(installed) = gs_release::install_latest(&source(&server), &install).expect("install") else {
         panic!("expected a fresh install");
     };
-    assert_eq!(installed.executable, install.join("1.0.1").join("gt4-gs.exe"));
+    assert_eq!(installed.executable, install.join("1.1.0").join("gt4-gs.exe"));
     assert_eq!(fs::read(&installed.executable).unwrap(), exe);
-    assert!(install.join("1.0.1").join("resources").join("GameIndex.yaml").exists());
-    assert!(!install.join("1.0.1").join("gt4-gs-1.0.1-windows-x64").exists());
+    assert!(install.join("1.1.0").join("resources").join("GameIndex.yaml").exists());
+    assert!(!install.join("1.1.0").join("gt4-gs-1.1.0-windows-x64").exists());
+}
+
+/// Release 1.1.0 raised the minimum to gt4-gs 1.1.0 (the ultrawide fill needs the protocol 1.3 consumer). A launcher that
+/// finds gt4-gs 1.0.1 installed (as left by release 1.0.0) must replace it at launch: `needs_install` is true, and the
+/// install path of `check_on_launch` puts 1.1.0 in place and points `current.txt` at it.
+#[test]
+fn an_installed_1_0_1_is_below_the_minimum_and_is_replaced_by_1_1_0() {
+    let server = scratch("below-minimum-server");
+    let install = scratch("below-minimum-root");
+
+    // The state release 1.0.0 leaves behind: gt4-gs 1.0.1 installed and checked.
+    let old = b"gt4-gs 1.0.1 as installed by launcher 1.0.0".to_vec();
+    fs::create_dir_all(install.join("1.0.1")).unwrap();
+    fs::write(install.join("1.0.1").join("gt4-gs.exe"), &old).unwrap();
+    fs::write(install.join("1.0.1").join("sha256.txt"), format!("{}\n", gs_release::sha256_hex(&old))).unwrap();
+    fs::write(install.join("current.txt"), "1.0.1\n").unwrap();
+    assert_eq!(gs_release::installed(&install).unwrap().version, Version(1, 0, 1), "1.0.1 passes the check");
+    assert!(gs_release::needs_install(&install), "1.0.1 is below the 1.1.0 minimum");
+
+    // The server as it is today: 1.1.0 is the newest stable release, 1.0.1 and 1.0.0 are older.
+    let new = b"gt4-gs 1.1.0 with the protocol 1.3 consumer".to_vec();
+    let entry = |tag: &str, bytes: &[u8]| write_release(&server, &FakeRelease { tag, prerelease: false, executable: bytes, serve: &package(bytes) });
+    write_list(&server, &[entry("gt4gs-v1.1.0", &new), entry("gt4gs-v1.0.1", &old), entry("gt4gs-v1.0.0", b"1.0.0")]);
+
+    let Outcome::Installed(installed) = gs_release::install_latest(&source(&server), &install).unwrap() else {
+        panic!("expected 1.1.0 to be installed over 1.0.1")
+    };
+    assert_eq!(installed.version, Version(1, 1, 0));
+    assert_eq!(fs::read(&installed.executable).unwrap(), new);
+    assert_eq!(fs::read_to_string(install.join("current.txt")).unwrap().trim(), "1.1.0");
+    assert_eq!(gs_release::installed(&install).unwrap().version, Version(1, 1, 0));
+    assert!(!gs_release::needs_install(&install), "1.1.0 meets the minimum");
+    assert!(install.join("1.0.1").is_dir(), "the previous version stays until the next upgrade");
+
+    // Nothing installed at all also needs an install; a damaged 1.1.0 does too.
+    assert!(gs_release::needs_install(&scratch("below-minimum-empty")));
+    fs::write(install.join("1.1.0").join("gt4-gs.exe"), b"changed").unwrap();
+    assert!(gs_release::needs_install(&install));
+}
+
+/// If the update to 1.1.0 cannot be made (offline, or no release at or above the minimum), the installed 1.0.1 stays
+/// in place and keeps working; the next launch tries again.
+#[test]
+fn a_failed_update_from_1_0_1_keeps_the_old_version() {
+    let server = scratch("below-minimum-offline-server");
+    let install = scratch("below-minimum-offline-root");
+    let old = b"gt4-gs 1.0.1 kept".to_vec();
+    fs::create_dir_all(install.join("1.0.1")).unwrap();
+    fs::write(install.join("1.0.1").join("gt4-gs.exe"), &old).unwrap();
+    fs::write(install.join("1.0.1").join("sha256.txt"), format!("{}\n", gs_release::sha256_hex(&old))).unwrap();
+    fs::write(install.join("current.txt"), "1.0.1\n").unwrap();
+    write_list(&server, &[write_release(&server, &FakeRelease { tag: "gt4gs-v1.0.1", prerelease: false, executable: &old, serve: &package(&old) })]);
+
+    let error = gs_release::install_latest(&source(&server), &install).unwrap_err();
+    assert!(error.contains("1.1.0"), "{error}");
+    assert_eq!(gs_release::installed(&install).unwrap().version, Version(1, 0, 1), "the old version still works");
+    assert!(gs_release::needs_install(&install), "the next launch tries again");
 }

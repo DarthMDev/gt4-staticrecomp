@@ -1,0 +1,55 @@
+{
+  "donor_commit": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "production_pins_modified": false,
+  "profiles": {
+    "aspect": {
+      "base_library": "private/slice208-ee-entries-producer/game-build/ps2game.lib",
+      "changed_objects_vs_slice208": [
+        "unit_008F.cpp.obj",
+        "unit_00A7.cpp.obj"
+      ],
+      "compiler_receipt": {
+        "sha256": "f387f5d2f6a6f4390c1306b248f2c646728a4e21acce7ed1f350a4033834ce92",
+        "size_bytes": 395
+      },
+      "object_count": 327,
+      "object_inventory_without_timestamps": "c216b1e4c74676b86e57f4767f9eaad9ec1d87eb4734daaf0a2f5deadeebabf3",
+      "parameter_block": "0x00007F00",
+      "patched_elf_sha256": "f10a568fb502471b7cde5a84ceee3632be58514d0b2b622175a4ed9b6124f25a",
+      "patches": [
+        {
+          "address": "0x0039F554",
+          "block_word": "0x00007F00",
+          "function": "RaceDisplay::render (0x0039F498)",
+          "new_word": "0x8C017F00",
+          "old_word": "0x3C013F40",
+          "purpose": "race HUD font x scale in wide mode: lui at,0x3F40 (0.75 = (4/3)/(16/9)) -> lw at,0x7F00(zero); block value (4/3)/R, stored by func_0044E390 into the race font object D_00623838 + 0x18",
+          "value_16_9": "0x3F400000"
+        },
+        {
+          "address": "0x0033EF98",
+          "block_word": "0x00007F04",
+          "function": "rear-view mirror placement (code after the jal at 0x0033EF70, RacePS2Base render path)",
+          "new_word": "0x8C087F04",
+          "old_word": "0x24080280",
+          "purpose": "mirror horizontal divisor: addiu t0,zero,640 -> lw t0,0x7F04(zero); the mirror is 260 x width / divisor frame pixels wide and centred, block value round(640 x R / (16/9)) for R > 16:9",
+          "value_16_9": "0x00000280"
+        }
+      ],
+      "path": "private/slice217-ee-aspect-producer/game-build/ps2game.lib",
+      "qualification": "slice208 coverage library with the TASK-080 P2 ELF patch table; owner gameplay pending",
+      "seed_set": "accepted",
+      "seed_sha256": "6cf39fb73a8962fe1594a0f9e15dbf01667e9b07e6ed29ae1877019de200c5bb",
+      "sha256": "8e671a10667cdb3e20ad70367fe4021763309446cd525fc6c5f8d0dec57c129b",
+      "size_bytes": 70693756,
+      "source_inventory": {
+        "file_count": 328,
+        "inventory_sha256": "921b18fb69c6ec5521315eadfe7aeb310526fc0ce7ac0833e75dc71b79d87b4d",
+        "size_bytes": 88421210
+      },
+      "translator_entries": 138813
+    }
+  },
+  "schema_version": 1,
+  "slice": 217
+}

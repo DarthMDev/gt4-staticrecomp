@@ -21,6 +21,24 @@ outside it is ignored with one warning line; gt4-gs never refuses to start becau
 - The allow-list did not change (`forced` is not part of a rule; `false` and `16:9` were already accepted), so gt4-gs
   needs no new build.
 
+**TASK-080 addendum (owner, 2026-10-21, slice218): the internal resolution is automatic.**
+
+- The `upscale` row ("Internal resolution") is no longer offered: `page = hidden` (order 22), still `written = always`
+  and `status = ok`. The launcher writes `upscale_multiplier` from its display plan (`gt4l_core::display::display_plan`):
+  k = ceil(max(W / 640, H / 448)) for the chosen output size W x H, times the **Render scale** (a launcher row, 50% to
+  200% in steps of 25%, default 100%), rounded to a whole number (ties up) and clamped to 1..12. A stored `[gs] upscale`
+  is dropped by settings schema 5 and refused by `Settings::set_gs`.
+- **What gt4-gs accepts for upscale:** `[EmuCore/GS] upscale_multiplier` takes the whole numbers 1 to 12 only (the
+  allow-list values `1|2|3|4|6|12|5|7|8|9|10|11`; no fractional multipliers, `ExtendedUpscalingMultipliers` is never
+  written). gt4-gs lowers a value above the GPU's limit (max texture size / 1280: 12x on 16384-texel GPUs, 6x on 8192)
+  with a notice; READY does not report that limit yet. Every value 1 to 12 is a choice of the row, so the allow-list
+  and gt4-gs are unchanged (no fork change).
+- k per output: 1920x1080 3x, 1920x1200 3x, 1680x1050 3x, 2560x1080 4x, 2560x1440 4x, 3440x1440 6x, 3088x1440 5x,
+  3840x2160 6x. Render scale 2560x1440: 50% 2x, 100% 4x, 200% 8x. The default INI (1920x1080 or no monitor known, 100%)
+  is unchanged: `upscale_multiplier = 3`.
+- `aspect` stays forced 16:9 in the INI: the per-scene fill still comes only from protocol 1.3 `display_aspect`; the
+  launcher has no aspect setting any more (always auto from the output size, decision 0071 addendum).
+
 ## What it is
 
 `docs/launcher/gs-settings.toml` is the single source for the PCSX2 GS options that GT4Recomp exposes. Each row is one
@@ -78,12 +96,11 @@ A value is settable only when its row and its choice both have status `ok`. The 
 
 ## Launcher pages (owner decisions, 2026-10-16)
 
-### GRAPHICS page (`page = basic`, 5 rows; `aspect` moved to hidden on 2026-10-21)
+### GRAPHICS page (`page = basic`, 4 rows; `aspect` moved to hidden on 2026-10-21, `upscale` on 2026-10-21 by the TASK-080 addendum)
 
 | Order | Row | Control | GT4 default | Status | Why it is here |
 |---|---|---|---|---|---|
 | 1 | `gs_engine` "Renderer" | dropdown | PCSX2 GS | ok (launcher-only) | Decision 1: PCSX2 GS, or CoreGS 1.1 as the secondary renderer. Not written to the INI. |
-| 2 | `upscale` "Internal resolution" | dropdown: 480p (1x), 720p (2x), 1080p (3x), 1440p (4x), 4K (6x), 8K (12x) | 1080p (3x) | ok | Decisions 1 and 6; presets since slice201 (owner, 2026-10-16). Biggest visual effect. Cannot break the renderer. |
 | 3 | `fxaa` "Anti-aliasing (FXAA)" | toggle | off | ok | Decision 1. |
 | 4 | `cas_mode` "Sharpening (CAS)" | dropdown | off | resolved | Decision 1: FidelityFX CAS mode. Settable after the owner checks it in game. |
 | 5 | `cas_sharpness` "Sharpening amount" | slider 0 to 100 | 50 | resolved | Decision 1: CAS sharpness. Used with CAS on. |
@@ -151,6 +168,8 @@ Never shown to the owner:
 - `spin_us` (`SpinUs`), `debug_stall_window_ms`
   (`DebugStallWindowMs`), `debug_stall_after_ms` (`DebugStallAfterMs`): fork keys of tuning and test tools (status
   `resolved`, never written by the launcher), listed so the gt4-gs 1.0.0 allow-list accepts them.
+- Since 2026-10-21 (TASK-080 addendum): `upscale` (`upscale_multiplier`, always written, set by the launcher from the
+  Resolution and the Render scale; not forced, every choice 1 to 12 stays settable from the command line).
 - Since 2026-10-21 (owner): `aspect` (`AspectRatio`, forced 16:9, always written) until the ultrawide update;
   `osd_fps`, `osd_gpu`, `osd_resolution` (`OsdShowFPS`, `OsdShowGPU`, `OsdShowResolution`, forced `false`, always
   written); `osd_messages_pos`, `osd_performance_pos`, `osd_scale` (status `resolved`, never written).
@@ -163,7 +182,10 @@ The launcher writes the reset file with `write_ini_atomic(path, render_ini(rows,
 `tests/python/test_gs_settings.py` (`ResetToDefaultsTests`) proves that this reproduces the default gt4-gs.ini
 byte for byte.
 
-## Internal resolution presets (owner decision 2026-10-16, slice201)
+## Internal resolution presets (owner decision 2026-10-16, slice201; replaced by the automatic plan)
+
+Superseded for the launcher on 2026-10-21 by the TASK-080 addendum (see the top of this page): the launcher no longer
+offers presets. The presets below remain the row's choice names and the command-line shortcuts.
 
 The `upscale` row is a dropdown with ONLY these presets, using PCSX2's width-based mapping (640 x scale is at least the
 target width): **480p (1x)**, **720p (2x)** (640 x 2 = 1280), **1080p (3x)** (1920), **1440p (4x)** (2560),

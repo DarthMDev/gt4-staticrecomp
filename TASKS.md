@@ -105,7 +105,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Open, study done (docs/CONTEXT-INPUT-STUDY.md); not in 1.0.0 |
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
 | TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
-| TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
+| TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | ✅ Done 2026-10-21 (P0, P1, P2 and the seamless-display addendum, owner approved; release 1.1.0) · P3 progressive menus open with TASK-078 |
 | TASK‑081 | Release 1.0.0 hardening and installer: release game build without build paths (slice213), launcher without user paths, CPU (SSE4.1) and Vulkan checks before setup and Play, game Vulkan baseline path for older drivers (slice214), WebView2 bootstrapper in the installer, installer asset name `GT4Recomp-Setup-X.Y.Z.exe`, release notes and draft release | ✅ Done (2026-10-21) · owner tested and approved the installer; released as v1.0.0 |
 | TASK‑082 | Native variable frame rate: fixed 60 Hz simulation, render at any rate (render skip below 60, extra render-only passes above 60 with the game's own render time t) | 📋 Planned (after 1.0.0) · study done (docs/NATIVE-VARIABLE-FPS-STUDY.md) |
 | TASK‑083 | Faster loading and saves: instant disc reads (deeper than PCSX2 Fast CDVD) and loading/save speed-ups in our runtime and game code; gameplay untouched | 📋 Future study (owner, 2026-10-21) |
@@ -317,6 +317,67 @@ constants. Menus, FMV and photo stay pillarboxed 16:9. gt4-gs needs "Stretch" an
 new gt4-gs release). Plan: P0 a decision superseding the 0055 lines; P1 auto 3D aspect plus a launcher row; P1b
 gt4-gs stretch; P2 HUD; P3 progressive menus (TASK-078); P4 optional true-FOV mode. After 1.0.0; seven owner
 decisions listed in the study.
+State (2026-10-21, P0 + P1 in progress, branch `task/080-aspect-ratios`, slice212b): owner decisions taken
+(geometry-correct Hor+, Vert+ below 16:9, no extra FOV by default; menus, FMV and photo pillarboxed 16:9; order P1, P1b,
+P2, P3). P0: decision 0071 supersedes the 0055 sentence on game patches, memory writes and camera projection (guard
+rails: no save-data writes, 16:9 byte-identical, every hook listed with tests, the SilentWarrior112 file is a reference
+only). P1: `GT4_DISPLAY_ASPECT` (auto = the window client area; 16:9, 4:3, W:H, decimal; invalid refuses the start) and
+the hidden `GT4_ASPECT_FOV_EXTRA` (default 1.0) for owner test T1; race camera hook at return 0x00388B38 scales the
+stack matrix (x by 16/(9R) Hor+, y by 9R/16 Vert+); race view = RaceDisplay::render (0x0039F498) in the last 30 VBlanks
+minus photo/movie requests; CoreGS 1.1 fill with linear filter; protocol 1.3 CONTROL display_aspect producer (only to a
+consumer with READY minor >= 3); launcher row "Aspect ratio: Auto / 16:9 / 4:3 / Custom" (Auto names the monitor,
+Custom ratio slider 1.00-6.00), settings schema 4; TASK-079 hold hardened (writes only after the game-data pointer
+settled). Checks: CTest 37/37, Python 612 OK, headless 16:9 and auto 42/42 identical to slice211, race frames differ
+from frame 7700 at 21:9/32:9 (hook evidence in docs/BUILD.md slice 212b), gt4-gs 1.0.1 gets no kind 7, gt4-gs 1.1.0
+switches to fill at frame 7670. Pins `docs/inputs/slice212b-pcsx2.json` (`--mode pcsx2`; `pcsx2-slice211` history).
+Open: owner tests T1 (roundness, auto vs `GT4_ASPECT_FOV_EXTRA`), T2 (3440x1440, phone-like window), T3 (edge pop-in
+at 32:9), menus pillarboxed, the 100% save still loads; then owner approval. HUD (P2) is still 16:9-stretched.
+State (2026-10-21, after release 1.0.0, branch `task/080-aspect-ratios`, slice215): main db99f9e merged (480p stays
+fixed; the Aspect ratio row is the only aspect control; `GT4_FORCE_WIDESCREEN=1` always, the game's own 16:9 is the base;
+the GS settings-file aspect stays forced 16:9 and the per-scene fill comes only from protocol 1.3). Settings schema 4
+migrates the 1.0.0 schema 3 file (drops the retired keys, adds Auto). The launcher passes `GT4_ASPECT_FOV_EXTRA`
+through for T1. slice215 = the slice214 release recipe plus the slice212c capsule and the TASK-080 host code: CTest
+39/39, Python 616 OK, cargo 256, headless 16:9/auto 42/42 = slice214, race 21:9/32:9 = slice212b, gt4-gs 1.0.1 no kind 7,
+gt4-gs 1.1.0 fill from frame 7670. Pin `docs/inputs/slice215-pcsx2.json` (`--mode pcsx2`). Owner test installer
+`private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe` (app version 1.0.0; no GitHub release). Planned as
+GT4Recomp 1.1.0 (Auto default). Open: the owner tests above, then approval, PR and the 1.1.0 release.
+State (2026-10-21, P2 race HUD, branch `task/080-aspect-ratios`, slice217): owner test of P1 on 1920x1080 with Custom
+2.44: the race was stretched because gt4-gs 1.1.0 fills the whole window; CoreGS 1.1 already letterboxed. Protocol 1.3
+fill now carries the target aspect x 1e6 in `args[1]` (0 = whole window); gt4-gs needs a release that reads it (fork
+work). HUD (owner design: 3D full screen, HUD centred 16:9): runtime hook at `RaceDisplay::render` rewrites the HUD
+canvas (320 -/+ 240 R; Vert+ below 16:9); the race font x scale (0x0039F554) and the mirror divisor (0x0033EF98) are
+immediates behind direct calls, so they go through the ELF patch table (`scripts/aspect_elf_patch.py`) as loads from a
+host-filled block at guest 0x7F00; library profile `aspect` (only `unit_008F` and `unit_00A7` change). Split screen is
+left alone and stays pillarboxed 16:9. Checks: CTest 39/39, Python 627 OK; headless 16:9 menus 42/42 = slice215, 16:9
+race 160/160 = slice212b; tachometer aspect at 21:9, 2.44 and 32:9 equal to 16:9 within 0.5% (P1: +31% at 21:9) and
+centred like 16:9. Pins `docs/inputs/slice217-pcsx2.json` (`--mode pcsx2`; `pcsx2-slice215` history),
+`slice217-license-guard-runtime.json`, `slice217-ee-libraries.json`; decision 0071 lists every hook and word. New owner
+installer `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe` and portable folder
+`private/ultrawide-test-portable`. Open: owner T4 (HUD at 21:9/2.44/32:9: dials, lap times, mini-map, mirror,
+countdown, results; Custom ratios with CoreGS 1.1 until a gt4-gs release reads `args[1]`), T5 (license test, split
+screen if reachable), photo mode; then approval, PR and the 1.1.0 release.
+State (2026-10-21, addendum: seamless display, branch `task/080-aspect-ratios`, slice218): owner design: no Aspect ratio
+and no Internal resolution option. The aspect is always the chosen Resolution's shape (`GT4_DISPLAY_ASPECT=auto` with
+`GT4_OUTPUT_SIZE`; 16:9 unchanged, other ratios turn P1/P2 on); Display has Monitor (connected monitors, default
+primary, stable identifier `<GDI device>@<W>x<H>`) and Resolution (the monitor's real modes, default desktop);
+fullscreen stays borderless on the chosen monitor; Graphics has Render scale 50-200% (step 25%) shown as "100% · 4x ·
+2560x1792". Rule `gt4l_core::display::display_plan`: k = ceil(max(W/640, H/448)), multiplier = k x scale rounded ties
+up, clamped 1..12 (gt4-gs takes whole `upscale_multiplier` 1..12). Settings schema 5 (from 3 or 4, backup first). Game
+slice218: `GT4_OUTPUT_SIZE`, `GT4_MONITOR`, per-monitor DPI awareness. Checks: CTest 39/39, Python 629 OK, cargo 270,
+nav-test 150/150, focus-check 100/100; headless 1920x1080 menus 42/42 and race 160/160 = slice217; 2560x1080 and
+3440x1440 hook scaled, HUD widened, fill from VBlank 7670. Pin `docs/inputs/slice218-pcsx2.json` (`--mode pcsx2`;
+`pcsx2-slice217` history). New owner installer (sha256 9b039d61...) and portable folder `private/ultrawide-test-portable`.
+Open: owner tests on the 1080p remote screen and the 3440x1440 setup; then approval, PR and the 1.1.0 release.
+State (2026-10-21, ✅ done, release 1.1.0): the owner tested slice218 on ultrawide and approved ("funcionou
+perfeitamente"). Done: P0 (decision 0071), P1 (3D Hor+/Vert+, race view fill, protocol 1.3), P2 (race HUD centred 16:9)
+and the seamless-display addendum (Monitor, Resolution, automatic internal resolution, Render scale 50-200%). Release
+prep on the branch: the launcher's Settings has no Display tab any more (Graphics holds Display, Graphics and Advanced
+sections; `#/settings/display` falls back to Graphics); version 1.1.0 (Cargo workspace, tauri.conf.json, NSIS default,
+release notes `docs/release-notes/1.1.0.md`); the launcher's gt4-gs minimum is 1.1.0 and an older install is replaced at
+launch (`gs_release::needs_install`, test with an installed 1.0.1); `version.json` is brought in line with the installed
+versions at start. The game executable is unchanged (slice218, `docs/inputs/slice218-pcsx2.json`). Draft GitHub
+release v1.1.0 with `GT4Recomp-Setup-1.1.0.exe`. Follow-ups: P3 progressive menus (with TASK-078) stays open; split
+screen and photo mode in ultrawide are unverified; P4 (optional true-FOV mode) not started.
 
 ### TASK-081 — Release 1.0.0 hardening and installer
 Release audit 2026-10-21. Branch `task/081-release-1-0-0` (from main 26f83b8). Not PCSX2-tainted.

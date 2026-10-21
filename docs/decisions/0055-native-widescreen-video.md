@@ -6,6 +6,11 @@ Independent scan-mode fidelity remains open. Baseline f9346c8;
 branch codex/widescreen-video-113. Owner prioritizes16:9/default and keeps4:3
 as an option. Qualify480p/1080i after entering a real race, then open manual play.
 
+Superseded in part, 2026-10-21: the sentence "No translated game patch, guessed
+memory write or forced camera projection" below is replaced by decision
+[0071](0071-native-aspect-ratios-runtime-hooks.md) (TASK-080 native aspect ratios
+through runtime hooks, with guard rails). The rest of this decision stands.
+
 Use the original GT4 Screen Settings option to enable native widescreen and
 save through the game. The pinned ELF setter00437110 updates the option and
 projection; race application004365F0 publishes wide flag006184F0 for HUD layout.

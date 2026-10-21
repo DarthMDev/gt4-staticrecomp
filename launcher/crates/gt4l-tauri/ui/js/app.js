@@ -2,8 +2,9 @@
  * Router and boot. Routes (location.hash):
  *   #/setup                  first run (also shown until setup is done)
  *   #/home                   Play and Settings
- *   #/settings/<tab>         graphics | display | controls | saves | replays | about (mods only when GT4.features.mods;
- *                            Advanced is a section of Graphics, so #/settings/advanced falls back to graphics)
+ *   #/settings/<tab>         graphics | controls | saves | replays | about (mods only when GT4.features.mods;
+ *                            Display and Advanced are sections of Graphics, so #/settings/display and
+ *                            #/settings/advanced fall back to graphics)
  * Each page mounts into #app and sets GT4.hooks for the input layer.
  */
 (function (root) {

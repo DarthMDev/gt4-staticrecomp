@@ -27,8 +27,9 @@ pub const CHECKSUM_ASSET: &str = "SHA256SUMS";
 pub const MAX_NOTES_CHARS: usize = 6000;
 /// Lowest stable GT4Recomp version the launcher offers.
 pub const LAUNCHER_MINIMUM: Version = Version(1, 0, 0);
-/// Lowest stable gt4-gs version the launcher installs.
-pub const RENDERER_MINIMUM: Version = Version(1, 0, 1);
+/// Lowest stable gt4-gs version the launcher installs. 1.1.0 (TASK-080, release 1.1.0): the ultrawide fill needs its
+/// protocol 1.3 consumer. An older install is replaced at the next launch (`gs_release::needs_install`).
+pub const RENDERER_MINIMUM: Version = Version(1, 1, 0);
 /// Longest time a download may take. The gt4-gs package is far below the size limit of the install code.
 pub const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 /// Longest time the release list may take at launch. The check never blocks Play.
@@ -340,10 +341,10 @@ mod tests {
     #[test]
     fn selection_takes_the_highest_stable_at_or_above_the_minimum() {
         let json = r#"[
-          {"tag_name":"gt4gs-v1.1.0","prerelease":false,"draft":true,"assets":[]},
-          {"tag_name":"gt4gs-v1.0.2","prerelease":true,"draft":false,"assets":[]},
+          {"tag_name":"gt4gs-v1.2.0","prerelease":false,"draft":true,"assets":[]},
+          {"tag_name":"gt4gs-v1.1.1","prerelease":true,"draft":false,"assets":[]},
+          {"tag_name":"gt4gs-v1.1.0","prerelease":false,"draft":false,"assets":[]},
           {"tag_name":"gt4gs-v1.0.1","prerelease":false,"draft":false,"assets":[]},
-          {"tag_name":"gt4gs-v1.0.0","prerelease":false,"draft":false,"assets":[]},
           {"tag_name":"gt4gs-v1.10.0","prerelease":false,"draft":false,"assets":[]},
           {"tag_name":"gt4gs-v1.9.0","prerelease":false,"draft":false,"assets":[]}
         ]"#;
@@ -352,11 +353,11 @@ mod tests {
         assert_eq!(chosen.tag, "gt4gs-v1.10.0", "numeric comparison: 1.10.0 beats 1.9.0");
 
         let only_old = r#"[
-          {"tag_name":"gt4gs-v1.0.0","prerelease":false,"draft":false,"assets":[]},
-          {"tag_name":"gt4gs-v1.0.2","prerelease":true,"draft":false,"assets":[]}
+          {"tag_name":"gt4gs-v1.0.1","prerelease":false,"draft":false,"assets":[]},
+          {"tag_name":"gt4gs-v1.1.1","prerelease":true,"draft":false,"assets":[]}
         ]"#;
         let releases = parse_releases(only_old, Stream::Renderer).unwrap();
-        assert!(select_latest(&releases, RENDERER_MINIMUM).is_none(), "1.0.0 is below the minimum, 1.0.2 a prerelease");
+        assert!(select_latest(&releases, RENDERER_MINIMUM).is_none(), "1.0.1 is below the minimum, 1.1.1 a prerelease");
     }
 
     #[test]

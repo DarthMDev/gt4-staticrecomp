@@ -11,6 +11,7 @@
 
 use std::path::{Path, PathBuf};
 
+use gt4l_core::display::{DisplayTarget, Size};
 use gt4l_core::launch::{self, LaunchInputs};
 use gt4l_core::settings::{self, Settings};
 
@@ -31,6 +32,8 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     assert_eq!(environment["GT4_FULLSCREEN"], "1");
     // 16:9 is fixed (owner, 2026-10-21): GT4_FORCE_WIDESCREEN=1 is always stated; there is no setting.
     assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1");
+    // TASK-080 addendum: the aspect is always Auto (the output size's shape); there is no setting.
+    assert_eq!(environment["GT4_DISPLAY_ASPECT"], "auto");
     assert!(!environment.contains_key("GT4_RACE_DISPLAY"), "480p is fixed: no 480i or 1080i path");
     assert_eq!(environment["GT4_PRESENT_MODE"], "fifo");
     // Asynchronous GS is the default, so GT4_GS_SYNC stays unset.
@@ -40,7 +43,7 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     // CoreGS 1.1 defaults also send deinterlacing (auto) and anti-aliasing (off).
     assert_eq!(environment["GT4_DEINTERLACE"], "auto");
     assert_eq!(environment["GT4_AA"], "off");
-    assert_eq!(environment.len(), 9, "the eight variables of slice210 plus GT4_FORCE_WIDESCREEN");
+    assert_eq!(environment.len(), 10, "the eight variables of slice210, GT4_FORCE_WIDESCREEN and GT4_DISPLAY_ASPECT");
 }
 
 #[test]
@@ -53,7 +56,7 @@ fn argument_list_matches_run_probe_order() {
         card: Path::new(r"C:\Users\me\AppData\Local\GT4Recomp\runtime\card.ps2"),
         session_dir: session,
     };
-    let plan = launch::plan_launch(&inputs, &Settings::default(), &[]);
+    let plan = launch::plan_launch(&inputs, &Settings::default(), None, &[]);
     assert_eq!(
         plan.arguments,
         vec![
@@ -89,9 +92,12 @@ fn inherited_gt4_and_ps2_variables_are_scrubbed_and_others_kept() {
         "PS2_DUMP_AUDIO".to_string(),
         "PATH".to_string(),
         "VK_LAYER_PATH".to_string(),
+        "GT4_ASPECT_FOV_EXTRA".to_string(),
+        "GT4_DISPLAY_ASPECT".to_string(),
     ];
-    let plan = launch::plan_launch(&inputs, &Settings::default(), &inherited);
-    assert_eq!(plan.removed_inherited, vec!["GT4_PACING", "PS2_DUMP_AUDIO"]);
+    let plan = launch::plan_launch(&inputs, &Settings::default(), None, &inherited);
+    // TASK-080 T1: the hidden FOV factor passes through; the aspect itself is always auto.
+    assert_eq!(plan.removed_inherited, vec!["GT4_DISPLAY_ASPECT", "GT4_PACING", "PS2_DUMP_AUDIO"]);
     assert!(!plan.removed_inherited.iter().any(|name| name == "PATH" || name == "VK_LAYER_PATH"));
 }
 
@@ -111,6 +117,20 @@ fn settings_map_to_their_variables() {
     assert_eq!(environment["GT4_VU0_VERIFY"], "1000");
 
     assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1", "16:9 is fixed whatever the other settings");
+    // TASK-080 addendum: no aspect or internal-resolution setting exists any more.
+    for gone in ["aspect_ratio", "aspect_custom"] {
+        assert!(settings.set(gone, "auto").is_err(), "{gone} is not a setting");
+    }
+    assert!(settings.set_gs("upscale", "4K").is_err(), "the internal resolution is derived, not set");
+    for (id, good, bad) in [
+        ("render_scale", "150", "110"),
+        ("resolution", "2560x1080", "2560*1080"),
+        ("monitor", r"\\.\DISPLAY2@3440x1440", "DISPLAY2"),
+    ] {
+        settings.set(id, good).unwrap();
+        assert!(settings.set(id, bad).is_err(), "{id} refuses {bad}");
+    }
+    assert_eq!(env_map(&launch::game_environment(&settings))["GT4_DISPLAY_ASPECT"], "auto");
     settings.set("vsync", "off").unwrap();
     let environment = env_map(&launch::game_environment(&settings));
     assert_eq!(environment["GT4_PRESENT_MODE"], "immediate");
@@ -257,7 +277,7 @@ fn pcsx2_environment_carries_the_process_pin_config_and_480p() {
 fn pcsx2_plan_keeps_the_probe_argument_list_and_scrubs_inherited_names() {
     let paths = pcsx2_paths();
     let inherited = vec!["GT4_GS_PROCESS".to_string(), "PATH".to_string(), "PS2_SCALE".to_string()];
-    let plan = launch::plan_pcsx2_launch(&inputs(), &Settings::default(), &paths, &inherited);
+    let plan = launch::plan_pcsx2_launch(&inputs(), &Settings::default(), &paths, None, &inherited);
     assert_eq!(plan.arguments.last().unwrap(), "--window");
     assert_eq!(plan.arguments[0], "C:/work/SCUS_973.28");
     assert_eq!(plan.removed_inherited, vec!["GT4_GS_PROCESS".to_string(), "PS2_SCALE".to_string()]);
@@ -266,10 +286,71 @@ fn pcsx2_plan_keeps_the_probe_argument_list_and_scrubs_inherited_names() {
 #[test]
 fn session_ini_matches_the_python_writer_for_the_default_settings() {
     let paths = pcsx2_paths();
-    let text = launch::gs_config_text(&Settings::default(), &paths).unwrap();
+    let text = launch::gs_config_text(&Settings::default(), &paths, None).unwrap();
     let bytes = gt4l_core::gs_table::ini_file_bytes(&text);
     let expected = include_bytes!("fixtures/gs/default-session.ini");
     assert_eq!(bytes.as_slice(), expected.as_slice(), "Rust gt4-gs.ini differs from scripts/gs_settings.py");
+    // A 1920x1080 output at 100% is the same 3x: the default INI did not change with the display plan.
+    let full_hd = display_target(r"\\.\DISPLAY1", 1920, 1080);
+    assert_eq!(launch::gs_config_text(&Settings::default(), &paths, Some(&full_hd)).unwrap(), text);
+}
+
+fn display_target(device: &str, width: u32, height: u32) -> DisplayTarget {
+    DisplayTarget { device: device.to_string(), output: Size::new(width, height) }
+}
+
+fn multiplier_line(text: &str) -> &str {
+    text.lines().find(|line| line.starts_with("upscale_multiplier = ")).unwrap()
+}
+
+#[test]
+fn the_internal_resolution_follows_the_output_size_and_the_render_scale() {
+    let paths = pcsx2_paths();
+    let mut settings = Settings::default();
+    for (width, height, scale, expected) in [
+        (1920, 1080, "100", "3"),
+        (2560, 1080, "100", "4"),
+        (2560, 1440, "50", "2"),
+        (2560, 1440, "100", "4"),
+        (2560, 1440, "200", "8"),
+        (3440, 1440, "100", "6"),
+        (3440, 1440, "200", "12"),
+        (3088, 1440, "100", "5"),
+        (3840, 2160, "75", "5"),
+        (1280, 720, "100", "2"),
+    ] {
+        settings.set("render_scale", scale).unwrap();
+        let target = display_target(r"\\.\DISPLAY1", width, height);
+        let text = launch::gs_config_text(&settings, &paths, Some(&target)).unwrap();
+        assert_eq!(multiplier_line(&text), format!("upscale_multiplier = {expected}"), "{width}x{height} at {scale}%");
+    }
+    // A stored upscale (an old file edited by hand) never wins: the plan does.
+    settings.set("render_scale", "100").unwrap();
+    let text = launch::gs_config_text(&settings, &paths, Some(&display_target("x", 2560, 1440))).unwrap();
+    assert_eq!(multiplier_line(&text), "upscale_multiplier = 4");
+}
+
+#[test]
+fn the_display_target_becomes_gt4_monitor_and_gt4_output_size() {
+    let target = display_target(r"\\.\DISPLAY2", 3440, 1440);
+    let plan = launch::plan_launch(&inputs(), &Settings::default(), Some(&target), &[]);
+    let environment = env_map(&plan.environment);
+    assert_eq!(environment["GT4_MONITOR"], r"\\.\DISPLAY2");
+    assert_eq!(environment["GT4_OUTPUT_SIZE"], "3440x1440");
+    assert_eq!(environment["GT4_DISPLAY_ASPECT"], "auto");
+    let gs_plan = launch::plan_pcsx2_launch(&inputs(), &Settings::default(), &pcsx2_paths(), Some(&target), &[]);
+    assert_eq!(env_map(&gs_plan.environment)["GT4_OUTPUT_SIZE"], "3440x1440");
+    let sorted = {
+        let mut names: Vec<&String> = gs_plan.environment.iter().map(|(name, _)| name).collect();
+        let before = names.clone();
+        names.sort();
+        names == before
+    };
+    assert!(sorted, "the environment stays sorted by name");
+    // No monitor known: no display variables (the game opens on the primary monitor at its desktop size).
+    let unknown = launch::plan_launch(&inputs(), &Settings::default(), None, &[]);
+    assert!(!env_map(&unknown.environment).contains_key("GT4_MONITOR"));
+    assert!(!env_map(&unknown.environment).contains_key("GT4_OUTPUT_SIZE"));
 }
 
 #[test]
@@ -316,12 +397,12 @@ fn both_window_modes_pass_window_and_send_gt4_fullscreen_to_the_game_and_the_gs_
     windowed.set("fullscreen", "off").unwrap();
 
     for (settings, expected) in [(&fullscreen, "1"), (&windowed, "0")] {
-        let plan = launch::plan_launch(&inputs(), settings, &[]);
+        let plan = launch::plan_launch(&inputs(), settings, None, &[]);
         assert_eq!(plan.arguments.last().unwrap(), "--window", "a window is always started");
         assert!(!plan.arguments.iter().any(|argument| argument == "--fullscreen"));
         assert_eq!(env_map(&plan.environment)["GT4_FULLSCREEN"], expected);
 
-        let gs_plan = launch::plan_pcsx2_launch(&inputs(), settings, &pcsx2_paths(), &[]);
+        let gs_plan = launch::plan_pcsx2_launch(&inputs(), settings, &pcsx2_paths(), None, &[]);
         assert_eq!(gs_plan.arguments.last().unwrap(), "--window");
         assert_eq!(env_map(&gs_plan.environment)["GT4_FULLSCREEN"], expected, "the PCSX2 GS path gets the same mode");
     }

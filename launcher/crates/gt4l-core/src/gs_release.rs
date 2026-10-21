@@ -105,6 +105,17 @@ pub fn version_directory(root: &Path, version: Version) -> PathBuf {
     root.join(version.text())
 }
 
+/// True when the renderer must be installed at launch: nothing usable is installed, or the installed version is below
+/// [`MINIMUM_VERSION`] (for example gt4-gs 1.0.1 under launcher 1.1.0). [`install_latest`] then installs the newest
+/// stable release, which is at least the minimum. Until that succeeds, the older version keeps working (the game only
+/// sends protocol 1.3 messages to a 1.3 consumer).
+pub fn needs_install(root: &Path) -> bool {
+    match installed(root) {
+        Some(current) => current.version < MINIMUM_VERSION,
+        None => true,
+    }
+}
+
 /// The installed version named by `current.txt`, if its folder passes the check. Any problem gives `None`.
 pub fn installed(root: &Path) -> Option<Installed> {
     let text = fs::read_to_string(root.join(CURRENT_FILE)).ok()?;
@@ -321,8 +332,8 @@ mod tests {
     }
 
     #[test]
-    fn the_minimum_is_1_0_1_with_the_real_asset_name() {
-        assert_eq!(MINIMUM_VERSION, Version(1, 0, 1));
-        assert_eq!(package_name(Version(1, 0, 1)), "gt4-gs-1.0.1-windows-x64.zip");
+    fn the_minimum_is_1_1_0_with_the_real_asset_name() {
+        assert_eq!(MINIMUM_VERSION, Version(1, 1, 0));
+        assert_eq!(package_name(Version(1, 1, 0)), "gt4-gs-1.1.0-windows-x64.zip");
     }
 }

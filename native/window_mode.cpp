@@ -1,5 +1,6 @@
 #include "window_mode.hpp"
 
+#include <cmath>
 #include <cstring>
 #include <stdexcept>
 
@@ -11,6 +12,35 @@ bool parse_start_fullscreen(const char *value) {
   if (std::strcmp(value, "1") == 0)
     return true;
   throw std::invalid_argument("GT4_FULLSCREEN must be 0 or 1");
+}
+
+std::string parse_monitor(const char *value) {
+  if (value == nullptr || std::strlen(value) == 0)
+    return {};
+  const std::size_t length = std::strlen(value);
+  bool printable = true;
+  for (std::size_t i = 0; i < length; ++i)
+    printable = printable && value[i] > 0x20 && value[i] < 0x7F;
+  if (length < 5 || length > 31 || !printable || std::strncmp(value, "\\\\.\\", 4) != 0)
+    throw std::invalid_argument(std::string("GT4_MONITOR '") + value + "' is not a monitor device name (\\\\.\\DISPLAYn)");
+  return value;
+}
+
+ClientSize fit_client(std::uint32_t wanted_width, std::uint32_t wanted_height, std::int32_t max_width,
+                      std::int32_t max_height) {
+  if (wanted_width == 0 || wanted_height == 0 || max_width <= 0 || max_height <= 0)
+    return {static_cast<std::int32_t>(wanted_width), static_cast<std::int32_t>(wanted_height)};
+  const double scale = std::fmin(1.0, std::fmin(static_cast<double>(max_width) / wanted_width,
+                                                static_cast<double>(max_height) / wanted_height));
+  const auto width = static_cast<std::int32_t>(std::floor(wanted_width * scale));
+  const auto height = static_cast<std::int32_t>(std::floor(wanted_height * scale));
+  return {width < 1 ? 1 : width, height < 1 ? 1 : height};
+}
+
+Rect centred(const Rect &area, std::int32_t width, std::int32_t height) {
+  const std::int32_t left = area.left + ((area.right - area.left) - width) / 2;
+  const std::int32_t top = area.top + ((area.bottom - area.top) - height) / 2;
+  return {left, top, left + width, top + height};
 }
 
 std::uint32_t fullscreen_style(std::uint32_t windowed_style) {

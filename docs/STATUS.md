@@ -1,5 +1,40 @@
 # Current Status
 
+## Release 1.1.0 prepared (2026-10-21, branch `task/080-aspect-ratios`, draft release, not merged)
+
+TASK-080 is done: the owner tested slice218 on ultrawide and approved ("funcionou perfeitamente"). Release prep on the
+branch: version 1.1.0 (Cargo workspace, `tauri.conf.json`, NSIS default; release notes
+[1.1.0](release-notes/1.1.0.md)); the launcher's Settings has no Display tab any more (Graphics holds the Display,
+Graphics and Advanced sections; `#/settings/display` falls back to Graphics); the launcher's gt4-gs minimum is 1.1.0 and
+an older install is replaced at launch (`gs_release::needs_install`); `version.json` is brought in line with the
+installed versions at start. Game executable unchanged (slice218, pin `docs/inputs/slice218-pcsx2.json`). Installer
+`private/release-110-out/GT4Recomp-Setup-1.1.0.exe` (sha256 `2ca0f80f8eb28023ffabe2446a30ffcdb6a139a0d96ac101fd6bc56fa7dd19de`) on a draft GitHub release v1.1.0; the coordinator
+merges and publishes. Open follow-ups: P3 progressive menus (with TASK-078); split screen and photo mode in ultrawide
+unverified. README: ultrawide headline, no emojis.
+
+## TASK-080 ultrawide (2026-10-21, branch `task/080-aspect-ratios`, not merged)
+
+Rebuilt on the 1.0.0 release recipe after merging main db99f9e: slice215 = `--mode pcsx2` on the branch (slice214 plus
+native display aspect ratios: `GT4_DISPLAY_ASPECT`, auto by default; race camera Hor+/Vert+ hook; race view filled,
+menus 16:9; protocol 1.3 for gt4-gs 1.1.0; launcher Aspect ratio row, settings schema 4 migrating the 1.0.0 file).
+16:9 frames byte-identical to slice214. Owner test installer `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`
+(app version 1.0.0, no GitHub release). Waiting for the owner tests and approval; planned as GT4Recomp 1.1.0. Details:
+[BUILD](BUILD.md) slice 215 (and 212b), decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md).
+
+P2 (slice217, `--mode pcsx2` on the branch): the race HUD stays the game's 16:9 layout, undistorted and centred, at any
+ratio (HUD canvas hook at `RaceDisplay::render`; race font x scale and mirror divisor through the ELF patch table and the
+re-translated library profile `aspect`); split screen stays 16:9. Protocol 1.3 fill carries the target aspect so a custom
+ratio is letterboxed (CoreGS 1.1 already was; gt4-gs needs a release that reads it). 16:9 byte-identical (menus 42/42,
+race 160/160). New owner installer and the portable folder `private/ultrawide-test-portable`. Details: [BUILD](BUILD.md)
+slice 217.
+
+Addendum (slice218, `--mode pcsx2` on the branch, owner design 2026-10-21): seamless display. No Aspect ratio and no
+Internal resolution rows: the aspect is always the chosen Resolution's shape (16:9 unchanged; other ratios turn P1/P2
+on), Display has Monitor and Resolution (real monitors and modes), Graphics has Render scale 50-200% with the resulting
+internal resolution (k = ceil(max(W/640, H/448)), whole multipliers 1..12). Game: `GT4_OUTPUT_SIZE`, `GT4_MONITOR`,
+per-monitor DPI awareness. Settings schema 5. 16:9 byte-identical (menus 42/42, race 160/160). New owner installer and
+portable folder. Details: [BUILD](BUILD.md) slice 218, decision 0071 addendum.
+
 ## Current state (2026-10-21)
 
 **TASK-081 release 1.0.0 hardening (branch `task/081-release-1-0-0`, waiting for the owner's installer test):**

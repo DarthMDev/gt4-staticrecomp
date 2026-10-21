@@ -58,7 +58,8 @@ fn retired_and_forced_values_of_an_old_file_are_ignored_and_dropped_at_the_next_
     assert_eq!(config.settings.gs_value("osd_fps"), "false");
     assert!(config.settings.chosen_ids().is_empty(), "retired ids are not kept as choices");
     let written = config::render(&config);
-    for retired in ["input_resolution", "widescreen", "aspect", "osd_"] {
+    assert!(written.contains("resolution = \"desktop\""), "the TASK-080 display rows replace them: {written}");
+    for retired in ["input_resolution", "widescreen", "aspect =", "osd_"] {
         assert!(!written.contains(retired), "{retired} is dropped at the next write:\n{written}");
     }
 }
@@ -70,7 +71,11 @@ fn config_round_trip_keeps_values_and_paths() {
     config.settings.set("renderer", "coregs11").unwrap();
     config.settings.set("fsr_sharpness", "30").unwrap();
     config.settings.set("internal_scale", "3").unwrap();
-    config.settings.set_gs("upscale", "2").unwrap();
+    config.settings.set_gs("fxaa", "true").unwrap();
+    // TASK-080 addendum: the monitor identifier holds backslashes; it must survive the TOML round trip.
+    config.settings.set("monitor", r"\\.\DISPLAY2@3440x1440").unwrap();
+    config.settings.set("resolution", "2560x1080").unwrap();
+    config.settings.set("render_scale", "175").unwrap();
     config.settings.set_gs("hw_download_mode", "unsynchronized").unwrap();
     config.disc_path = Some(r#"D:\Games\Gran Turismo 4 "quoted" (USA).iso"#.into());
     config.dev_game_dir = Some(r"C:\Antigravity\build\game".into());

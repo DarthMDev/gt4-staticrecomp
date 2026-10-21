@@ -37,6 +37,16 @@ pub enum Kind {
     Toggle,
     /// A whole percentage from 0 to 100, shown as a slider. Stored as decimal text, e.g. `50`.
     Percent,
+    /// A whole number from `min` to `max` in steps of `step`, shown as a slider (TASK-080 Render scale, percent).
+    /// Stored as decimal text, e.g. `100`.
+    Steps { min: u32, max: u32, step: u32 },
+    /// A connected monitor (TASK-080 addendum): `primary`, or a stored identifier `<device>@<W>x<H>`
+    /// (`display::monitor_id`). The list of choices comes from the platform at run time, so any well-formed
+    /// identifier is accepted here; a monitor that is gone resolves to the primary one (`display::resolve_monitor`).
+    Monitor,
+    /// An output resolution (TASK-080 addendum): `desktop` (the monitor's desktop mode) or `<W>x<H>`. A size the
+    /// chosen monitor does not support resolves to its desktop mode (`display::resolve_resolution`).
+    Resolution,
 }
 
 /// One row of a Settings page.
@@ -127,6 +137,20 @@ pub const SETTINGS: &[SettingDef] = &[
         connected: true,
     },
     SettingDef {
+        id: "render_scale",
+        page: Page::Graphics,
+        group: "Image",
+        title: "Render scale",
+        info: "How sharp the picture is drawn. 100% draws it at least at your resolution (taken from the Resolution                setting on the Display page); 50% is faster and softer, 200% is sharper and needs a much faster GPU.                The number next to the slider is the resulting internal resolution.",
+        kind: Kind::Steps {
+            min: crate::display::RENDER_SCALE_MIN,
+            max: crate::display::RENDER_SCALE_MAX,
+            step: crate::display::RENDER_SCALE_STEP,
+        },
+        default: "100",
+        connected: true,
+    },
+    SettingDef {
         id: "internal_scale",
         page: Page::Graphics,
         group: "CoreGS 1.1",
@@ -181,11 +205,31 @@ pub const SETTINGS: &[SettingDef] = &[
         connected: true,
     },
     SettingDef {
+        id: "monitor",
+        page: Page::Display,
+        group: "Window",
+        title: "Monitor",
+        info: "The screen the game opens on. The primary monitor is used until you pick another one.",
+        kind: Kind::Monitor,
+        default: crate::display::PRIMARY,
+        connected: true,
+    },
+    SettingDef {
+        id: "resolution",
+        page: Page::Display,
+        group: "Window",
+        title: "Resolution",
+        info: "The size of the picture, from the sizes your monitor supports. The shape of the screen follows it:                at 16:9 the game is unchanged, other shapes widen or heighten the race view. A size below the                monitor's own is drawn at that size and stretched to fill the screen.",
+        kind: Kind::Resolution,
+        default: crate::display::DESKTOP,
+        connected: true,
+    },
+    SettingDef {
         id: "fullscreen",
         page: Page::Display,
         group: "Window",
         title: "Fullscreen",
-        info: "Start in fullscreen. Alt+Enter or F11 switches while playing.",
+        info: "Start in fullscreen on the chosen monitor (a borderless window that covers it). Alt+Enter or F11                switches while playing.",
         kind: TOGGLE,
         default: "on",
         connected: true,
@@ -238,8 +282,20 @@ pub const SETTINGS: &[SettingDef] = &[
 /// needed because the launcher no longer reads them. The game always gets the fixed value (`launch.rs`).
 pub const RETIRED_SETTINGS: &[(&str, &str)] = &[
     ("input_resolution", "the game always runs at 480p (GT4_FORCE_480P=1)"),
-    ("widescreen", "the game is fixed at 16:9 until the ultrawide update (GT4_FORCE_WIDESCREEN=1)"),
+    ("widescreen", "the game's own 16:9 is always on (GT4_FORCE_WIDESCREEN=1); the Resolution sets the screen shape"),
+    ("aspect_ratio", "the aspect is always the Resolution's shape (TASK-080 addendum)"),
+    ("aspect_custom", "the aspect is always the Resolution's shape (TASK-080 addendum)"),
 ];
+
+/// PCSX2 GS table rows the launcher derives from other settings, never stored as a user value (TASK-080 addendum):
+/// `upscale` (`upscale_multiplier`) follows the Resolution and the Render scale (`display::display_plan`).
+pub const LAUNCHER_DERIVED_GS: &[(&str, &str)] =
+    &[("upscale", "the internal resolution follows the Resolution and the Render scale")];
+
+/// Why a PCSX2 GS row is derived by the launcher, or `None`.
+pub fn launcher_derived_gs(id: &str) -> Option<&'static str> {
+    LAUNCHER_DERIVED_GS.iter().find(|(derived, _)| *derived == id).map(|(_, reason)| *reason)
+}
 
 /// Why a retired setting is ignored, or `None` for any other id.
 pub fn retired(id: &str) -> Option<&'static str> {
@@ -287,6 +343,26 @@ pub fn validate(definition: &SettingDef, value: &str) -> Result<String, SettingE
             Ok(percent) if percent <= 100 => Ok(percent.to_string()),
             _ => Err(invalid()),
         },
+        Kind::Steps { min, max, step } => match value.parse::<u32>() {
+            Ok(number) if (min..=max).contains(&number) && (number - min) % step.max(1) == 0 => Ok(number.to_string()),
+            _ => Err(invalid()),
+        },
+        Kind::Monitor => {
+            if value == crate::display::PRIMARY || crate::display::parse_monitor_id(value).is_some() {
+                Ok(value.to_string())
+            } else {
+                Err(invalid())
+            }
+        }
+        Kind::Resolution => {
+            if value == crate::display::DESKTOP {
+                return Ok(value.to_string());
+            }
+            match crate::display::Size::parse(value) {
+                Some(size) => Ok(size.text()),
+                None => Err(invalid()),
+            }
+        }
     }
 }
 
@@ -395,6 +471,9 @@ impl Settings {
 
     /// Sets a PCSX2 GS table value after the table's own check (range, choice, status).
     pub fn set_gs(&mut self, id: &str, value: &str) -> Result<(), String> {
+        if let Some(reason) = launcher_derived_gs(id) {
+            return Err(format!("{id} is set by the launcher: {reason}"));
+        }
         let normalized = crate::gs_table::check_user_value(id, value)?;
         self.gs.insert(id.to_string(), normalized);
         Ok(())

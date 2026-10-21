@@ -308,6 +308,9 @@ body.input-pad nav.side .ring-on { box-shadow: none; }
    (spatial focus depends on it). */
 .row .ctl { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex: none; width: 220px; }
 .row .ctl .slider { flex: 1; width: auto; min-width: 0; }
+/* TASK-080 Render scale: the readout names the resulting resolution ("100% · 4x · 2560x1792"). */
+.row .ctl.wide { width: min(400px, 62%); }
+.row .ctl.wide .val { white-space: nowrap; min-width: 168px; }
 .row .hint-text { font-size: 12px; color: var(--faint); }
 .row.is-disabled .k { color: var(--faint); }
 .row.is-disabled .ctl { opacity: 0.35; }
@@ -371,8 +374,9 @@ body.input-pad .info:focus .tip { display: block; }
 .val { font: 500 13px var(--label); letter-spacing: 0.06em; color: var(--dim); min-width: 52px; text-align: right; }
 
 .advanced-foot { margin-top: 28px; display: flex; gap: 12px; align-items: center; }
-/* Graphics: the Advanced section below the Graphics rows (a section of the tab, not a tab of its own) */
+/* Graphics: the Display, Graphics and Advanced sections of the tab (owner, 2026-10-21; no Display or Advanced tab) */
 .settings-section { margin-top: 36px; }
+.content > .note + .settings-section { margin-top: 20px; }
 .section-head { font: 500 12px var(--label); letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim);
   padding-bottom: 10px; border-bottom: 1px solid var(--hair); }
 .about-notice { max-width: 720px; color: var(--silver); font-size: 13px; line-height: 20px; margin-bottom: 8px; }

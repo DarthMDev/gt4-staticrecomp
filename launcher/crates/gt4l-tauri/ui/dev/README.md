@@ -87,13 +87,16 @@ Settings row (`rows[]` in the table):
 
 ```
 { id, label, help, page: "basic"|"advanced"|"mods"|"hidden",
-  group?: "graphics"|"display",          // splits page=basic into the Graphics and Display tabs
+  group?: "graphics"|"display",          // splits page=basic into the Display and Graphics sections of the Graphics tab
   control: "slider"|"toggle"|"dropdown",
   values, default, current, disabled?,
   visible_when?: {id, equals} }          // e.g. FSR sharpness only when scaling_filter == "fsr"
 ```
 
-- slider values: `{min, max, step, unit?, limit?: "max_upscale"}`; the effective max is `min(max, table[limit])`.
+- slider values: `{min, max, step, unit?, limit?: "max_upscale", scale?, labels?}`; the effective max is `min(max, table[limit])`. `labels` maps a value to its readout (TASK-080 Render scale: `{"100": "100% · 4x · 2560x1792"}`); a slider with labels gets a wider control.
+- TASK-080 addendum rows: `monitor` (dropdown of the connected monitors, values `<GDI device>@<W>x<H>`, `primary` when none is known), `resolution` (dropdown of the chosen monitor's modes, `WxH`, `desktop` when none is known; set_setting `monitor` resets it to `desktop`), `render_scale` (slider 50..200 step 25 with `labels`, `visible_when` renderer = pcsx2). There is no `aspect_ratio`, `aspect_custom` or `upscale` row.
+  With `scale` (TASK-080 Custom ratio: 100) the stored whole number is shown divided by it with two decimals
+  (`233` reads "2.33:1").
 - dropdown values: `[{value, label, disabled?, note?}]`; disabled entries are greyed and not selectable.
 - toggle values: `null`; `current` is a bool.
 - The Controls analog rows use the same row shape (`group: "controls"`). Their ids are `l2_deadzone`, `l2_curve`, `r2_deadzone`, `r2_curve`, `lstick_deadzone` and `rstick_deadzone` (percent of travel, 0-95), and they are written with `set_setting`. A trigger row tunes the trigger source of that button (`deadzone=`/`curve=` options); a stick row writes `deadzone=` on both axis sources of the stick.
@@ -160,10 +163,15 @@ Routing of the face and shoulder buttons lives in `GT4.input.padRoute` (`js/inpu
 
 Idle: dark translucent glass with a thin white border and a slow light sweep (about every 3.4 s). Focused (pad or keys) and hovered: solid white, dark label, scale 1.03, soft glow. Pressed: a quick press-down. Under `prefers-reduced-motion` the sweep is removed and the idle state stays static. Other primary buttons (`.btn.primary`) use the same idle and focused language, without the sweep.
 
-Tab order for LB/RB and Q/E: Graphics, Display, Controls, Saves, Replays, About. Advanced is not a tab (owner,
-2026-10-21): it is a section at the bottom of Graphics (heading "Advanced", the `page = advanced` rows, then "Reset to
-defaults"); the D-pad moves down from the last Graphics row into it, and `#/settings/advanced` falls back to Graphics.
-Screenshot: `docs/launcher/shots/graphics-advanced-section.png` (`dev/focus-check.html?scenario=advanced`). The Mods tab and its rows are behind `GT4.features.mods` in `js/config.js` (off in release 1.1.0 builds; the mod manager ships in 1.1.0).
+Tab order for LB/RB and Q/E: Graphics, Controls, Saves, Replays, About. Display and Advanced are not tabs (owner,
+2026-10-21): the Graphics tab holds three sections, in order **Display** (Monitor, Resolution, Fullscreen, VSync: the
+`group = display` rows), **Graphics** (Renderer, Render scale, FXAA, CAS: the other `page = basic` rows) and **Advanced**
+(the `page = advanced` rows, then "Reset to defaults"; Y resets). Each section has a heading styled like "ADVANCED"
+(`.section-head`, `section[data-section]`). The D-pad moves down through all three, B returns to the tab list from any of
+them, and `#/settings/display` and `#/settings/advanced` fall back to Graphics. Screenshots:
+`docs/launcher/shots/display-monitor-resolution.png` (`dev/index.html?focus=content#/settings/graphics`: the Display
+section at the top), `docs/launcher/shots/graphics-sections.png` (`dev/focus-check.html?scenario=render`) and
+`docs/launcher/shots/graphics-advanced-section.png` (`dev/focus-check.html?scenario=advanced`). The Mods tab and its rows are behind `GT4.features.mods` in `js/config.js` (off in release 1.1.0 builds; the mod manager ships in 1.1.0).
 
 Keyboard: arrows move, Enter/Space activate (native), Esc = B, Q/E = LB/RB, Tab/Shift+Tab move in DOM order.
 
@@ -190,4 +198,4 @@ Controls (dev only): `&pad=A,LB,DpadRight` (pressed XInput names of a still dev 
 
 `dev/nav-test.html` checks the spatial picker, the swipe, stick and slider rules, the face-button routing, the two focus levels and the settings row model in a browser. It also checks the Controls model (live state from the pad-live shape, swaps, keys and the fixed keyboard layout, trigger output, key names, conflicts, chip labels, pad summary) and spatial moves between DS2 buttons on the drawing's own layout. It should report every case passed (150 of 150 at the time of writing).
 
-`dev/focus-check.html` runs the DOM-level checks on the same mock (headless Edge, `--virtual-time-budget=60000`): the sidebar highlight over every tab with arrow keys, entering and leaving each tab, the Saves and Replays entry, no Save hint, that a changed resolution, toggle or slider shows its new value, and the Controls page: entry on Cross, D-pad moves between DS2 buttons with the selection following, rebind and cancel (Esc), Enter not taken as the new key, the conflict dialog from a pad button (the mock answers RB; cancel, then Swap with the chips updated), live input from a still dev pad (Cross lit, L2 at 60%, the stick at its position, the pad name, no focus move), Y reset and X reset all. `body[data-focus-check]` is `pass` when all 90 checks pass. `&scenario=4k` only sets the state for the screenshot.
+`dev/focus-check.html` runs the DOM-level checks on the same mock (headless Edge, `--virtual-time-budget=60000`): the sidebar highlight over every tab with arrow keys, entering and leaving each tab, the Saves and Replays entry, no Save hint, that no aspect or internal-resolution row is shown, that the Render scale readout follows a step and the chosen Resolution, that a changed resolution (Display section), toggle or slider shows its new value, the three sections of Graphics in order (no Display or Advanced tab, both routes fall back to Graphics, Monitor first, the D-pad walk from Display through Graphics to Reset to defaults), and the Controls page: entry on Cross, D-pad moves between DS2 buttons with the selection following, rebind and cancel (Esc), Enter not taken as the new key, the conflict dialog from a pad button (the mock answers RB; cancel, then Swap with the chips updated), live input from a still dev pad (Cross lit, L2 at 60%, the stick at its position, the pad name, no focus move), Y reset and X reset all. `body[data-focus-check]` is `pass` when all 100 checks pass. `&scenario=4k` only sets the state for the screenshot (Render scale at 200%; `docs/launcher/shots/graphics-4k-updated.png`); `docs/launcher/shots/display-monitor-resolution.png` is `dev/index.html?focus=content#/settings/graphics` (the Display section at the top of Graphics).

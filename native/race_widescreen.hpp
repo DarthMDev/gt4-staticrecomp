@@ -55,10 +55,35 @@ bool record_is_widescreen(const std::uint8_t *record);
 // Guest address of the preset record that func_00439108 copies for (wide, ntsc). Pure.
 std::uint32_t widescreen_preset_address(bool wide, bool ntsc);
 
+// TASK-080 hardening (gotchas/game-data-pointer-moves-at-boot, docs/ULTRAWIDE-NATIVE-STUDY.md section 3.4). At boot
+// func_00108BF8 allocates one game-data object (func_0043A490, publishes it at 0x622F4C), loads data for a while, then
+// func_0010AFC8 allocates the second one and publishes it: the pointer moves once (headless: 0x0096E360, then
+// 0x00A0CC10). The hold must only write the live object, so it waits until the pointer has settled:
+//   - the pointer is non-zero and unchanged for kOwnerSettleVblanks consecutive VBlanks, and
+//   - it has moved at least once from one non-zero object to another (the boot object is never the live one), or,
+//     if that move was never seen (both stores between two VBlanks), it has been unchanged for kOwnerLateSettleVblanks.
+// A later move (none is known in this binary) starts the wait again. Memory card activity is not visible here (the
+// card I/O lives in the memcard capsule); the settle wait keeps the first write after the boot load in practice.
+inline constexpr std::uint32_t kOwnerSettleVblanks = 30;
+inline constexpr std::uint32_t kOwnerLateSettleVblanks = 600;
+
+struct OwnerSettle {
+  std::uint32_t current = 0;  // owner pointer seen at the last VBlank
+  std::uint32_t stable = 0;   // consecutive VBlanks with the same non-zero pointer
+  std::uint32_t moves = 0;    // changes from one non-zero pointer to another
+};
+
+// One VBlank sample of the owner pointer. Returns true when `owner_pointer` is the settled live object. Pure.
+bool owner_settled(OwnerSettle &settle, std::uint32_t owner_pointer);
+
 struct WidescreenState {
   std::uint64_t writes = 0;
   bool logged = false;
   bool refused_logged = false;
+  OwnerSettle settle;
+  std::uint32_t logged_owner = 0;  // last owner pointer reported in the log
+  bool settled_logged = false;
+  std::uint64_t vblanks = 0;  // VBlanks seen by the hold (log lines only)
 };
 
 // GT4_FORCE_WIDESCREEN as read once per process: unset or "1" is on, "0" is off. An invalid value prints the
@@ -69,8 +94,9 @@ bool widescreen_hold_enabled();
 // headless runs): holds the widescreen state when enabled, otherwise does nothing.
 void widescreen_hold_at_guest_vblank(std::uint8_t *ram, std::uint32_t ram_size);
 
-// One guest VBlank: when the owner chain is valid, forces the wide flag, the aspect record and the published global
-// word in `ram`. Returns true when it wrote anything. A preset that is not wide (data not loaded) is refused: no write.
+// One guest VBlank: when the owner chain is valid and the owner pointer has settled (OwnerSettle), forces the wide
+// flag, the aspect record and the published global word in `ram`. Returns true when it wrote anything. A preset that
+// is not wide (data not loaded) is refused: no write.
 bool force_widescreen_at_vblank(std::uint8_t *ram, std::uint32_t ram_size, WidescreenState &state);
 
 } // namespace gt4::display

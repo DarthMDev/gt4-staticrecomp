@@ -3,6 +3,7 @@
 //! Windows-specific piece is the process-lock file, which uses std APIs only.
 
 pub mod config;
+pub mod display;
 pub mod exit;
 pub mod guard;
 pub mod gs_release;

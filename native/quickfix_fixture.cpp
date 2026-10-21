@@ -90,6 +90,35 @@ void test_start_mode_environment() {
   require(start_refused("2"), "2 is refused");
 }
 
+bool monitor_refused(const char *value) {
+  try {
+    parse_monitor(value);
+  } catch (const std::invalid_argument &) {
+    return true;
+  }
+  return false;
+}
+
+// GT4_MONITOR and the windowed client placement (TASK-080 addendum).
+void test_monitor_and_client_size() {
+  require(parse_monitor(nullptr).empty(), "unset = primary monitor");
+  require(parse_monitor("").empty(), "empty = primary monitor");
+  require(parse_monitor(R"(\\.\DISPLAY2)") == R"(\\.\DISPLAY2)", "a device name is kept");
+  require(monitor_refused("DISPLAY2"), "no device prefix");
+  require(monitor_refused(R"(\\.\)"), "too short");
+  require(monitor_refused(R"(\\.\DISPLAY 2)"), "spaces");
+  require(monitor_refused(R"(\\.\DISPLAY2222222222222222222222222)"), "too long");
+  const ClientSize same = fit_client(1920, 1080, 2560, 1400);
+  require(same.width == 1920 && same.height == 1080, "a size that fits is kept");
+  const ClientSize wide = fit_client(3440, 1440, 3440, 1380);
+  require(wide.height == 1380 && wide.width == 3296, "too tall for the work area: shrunk with its shape");
+  const ClientSize big = fit_client(3840, 2160, 1920, 1040);
+  require(big.width == 1848 && big.height == 1040, "a 4K output in a 1080p work area keeps 16:9");
+  const Rect area{1920, 0, 5360, 1440};
+  const Rect box = centred(area, 2560, 1080);
+  require(box.left == 2360 && box.top == 180 && box.right == 4920 && box.bottom == 1260, "centred on the second monitor");
+}
+
 } // namespace
 
 int main() {
@@ -98,6 +127,7 @@ int main() {
     test_fullscreen_style_mask();
     test_environment_values_are_strict();
     test_start_mode_environment();
+    test_monitor_and_client_size();
     std::puts("quickfix fixture PASS");
     return 0;
   } catch (const std::exception &error) {

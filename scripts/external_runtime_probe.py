@@ -119,15 +119,28 @@ PERF_PROFILES = {
     # TASK-019 launcher test (slice209): the slice208 coverage build (accepted EE library, 1,105 seeds) plus the
     # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
     # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
-    'pcsx2': ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'),
-    # TASK-081 round 2 (slice214): the slice213 release build with the Vulkan baseline path (swapchain maintenance 1
-    # only when the driver has it; GT4_VULKAN_FORCE_BASELINE=1 forces the plain path). Mode pcsx2 points here.
-    'pcsx2-slice213': ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'),
+    # TASK-080 addendum (slice218): the slice217 build plus the seamless display host code (GT4_OUTPUT_SIZE gives the
+    # auto aspect, GT4_MONITOR the monitor, per-monitor DPI awareness). Mode pcsx2 points here.
+    'pcsx2': ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'),
+    # TASK-080 P2 (slice217): the slice215 build plus the race HUD for other ratios (HUD canvas hook in the slice217
+    # license guard capsule, HUD parameter block, EE library profile "aspect" re-translated from the ELF patch table,
+    # protocol 1.3 fill target). History.
+    'pcsx2-slice217': ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'),
+    # TASK-080 (slice215): the slice214 release build plus native display aspect ratios (GT4_DISPLAY_ASPECT, the race
+    # camera Hor+/Vert+ hook in the slice212c license guard capsule, race-view fill presentation, protocol 1.3 producer)
+    # and the TASK-079 hold hardening. History.
+    'pcsx2-slice215': ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'),
+    # TASK-081 round 2 (slice214, release 1.0.0): the slice213 release build with the Vulkan baseline path (swapchain
+    # maintenance 1 only when the driver has it; GT4_VULKAN_FORCE_BASELINE=1 forces the plain path). History.
+    'pcsx2-slice214': ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'),
     # TASK-081 (slice213): the slice211 recipe as a release build (GT4_RELEASE_DISTRIBUTION=ON: no build-time shader
-    # folder in the executable; shaders from <exe folder>\shaders). Mode pcsx2 points here; slice211 stays as history.
-    'pcsx2-slice211': ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'),
+    # folder in the executable; shaders from <exe folder>\shaders). History.
+    'pcsx2-slice213': ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'),
+    # TASK-080 P1 (slice212b): the slice211 build plus the display aspect work (first owner test build). History.
+    'pcsx2-slice212b': ('slice212b-pcsx2.json', 'private/slice212b-build/build/gt4vulkan.exe'),
     # TASK-079 (slice211): the slice210 build plus GT4_FORCE_WIDESCREEN (16:9 held at guest VBlank, default on).
-    # Mode pcsx2 points here; slice210 stays as history.
+    'pcsx2-slice211': ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'),
+    # Mode pcsx2 pointed at slice211; slice210 stays as history.
     'pcsx2-slice210': ('slice210-pcsx2.json', 'private/slice210-build/build/gt4vulkan.exe'),
     # TASK-075/076 (slice210): the slice209 build with the SDL3 gamepad layer and the TASK-076 keyboard table.
     # Mode pcsx2-slice209 stays as history.
@@ -158,7 +171,8 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
-                     'slice214-pcsx2.json')
+                     'slice212b-pcsx2.json',
+                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
@@ -167,7 +181,8 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mt
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
-                     'slice214-pcsx2.json')
+                     'slice212b-pcsx2.json',
+                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -186,6 +201,77 @@ FORCE_480P_VALUES = ('0', '1')
 # native default, the launcher default); 0 leaves the game's own setting. Forwarded and recorded; never scrubbed.
 FORCE_WIDESCREEN_VALUES = ('0', '1')
 FORCE_WIDESCREEN_DEFAULT = '1'
+# GT4_DISPLAY_ASPECT and GT4_ASPECT_FOV_EXTRA (TASK-080, slice212b; rules in native/display_aspect.hpp). Unset means
+# auto (the window's client area) and 1.0. Validated with the game's own rules, forwarded and recorded; never scrubbed.
+DISPLAY_ASPECT_RANGE = (0.5, 8.0)
+ASPECT_FOV_EXTRA_RANGE = (0.5, 3.0)
+
+
+def _positive_decimal(text):
+    """A plain positive decimal (digits and at most one dot, at most 16 characters) or None."""
+    if not text or len(text) > 16 or text.count('.') > 1 or not all(c.isdigit() or c == '.' for c in text):
+        return None
+    if not any(c.isdigit() for c in text):
+        return None
+    value = float(text)
+    return value if value > 0 else None
+
+
+def display_aspect_ratio(value):
+    """GT4_DISPLAY_ASPECT as the game reads it: None for auto, else the ratio. Raises ValueError like the game."""
+    if value is None or value == 'auto':
+        return None
+    if ':' in value:
+        width_text, _, height_text = value.partition(':')
+        width, height = _positive_decimal(width_text), _positive_decimal(height_text)
+        ratio = width / height if width and height else None
+    else:
+        ratio = _positive_decimal(value)
+    if ratio is None or not DISPLAY_ASPECT_RANGE[0] <= ratio <= DISPLAY_ASPECT_RANGE[1]:
+        raise ValueError('GT4_DISPLAY_ASPECT must be auto, 16:9, 4:3, W:H or a decimal ratio between 0.5 and 8')
+    return ratio
+
+
+def aspect_fov_extra(value):
+    """GT4_ASPECT_FOV_EXTRA as the game reads it (default 1.0). Raises ValueError like the game."""
+    if value is None:
+        return 1.0
+    factor = _positive_decimal(value)
+    if factor is None or not ASPECT_FOV_EXTRA_RANGE[0] <= factor <= ASPECT_FOV_EXTRA_RANGE[1]:
+        raise ValueError('GT4_ASPECT_FOV_EXTRA must be a decimal factor between 0.5 and 3.0')
+    return factor
+
+
+# GT4_OUTPUT_SIZE and GT4_MONITOR (TASK-080 addendum, slice218; rules in native/display_aspect.hpp and
+# native/window_mode.hpp). The launcher sends both; unset means the window's client area and the primary monitor.
+OUTPUT_SIDE_RANGE = (320, 16384)
+
+
+def output_size(value):
+    """GT4_OUTPUT_SIZE as the game reads it: None when unset, else (W, H). Raises ValueError like the game."""
+    if value is None:
+        return None
+    width_text, separator, height_text = value.partition('x')
+    sides = []
+    for text in (width_text, height_text):
+        if not separator or not text or len(text) > 5 or not all('0' <= c <= '9' for c in text):
+            raise ValueError('GT4_OUTPUT_SIZE must be WxH with each side from 320 to 16384')
+        sides.append(int(text))
+    width, height = sides
+    if not all(OUTPUT_SIDE_RANGE[0] <= side <= OUTPUT_SIDE_RANGE[1] for side in sides) or \
+            not DISPLAY_ASPECT_RANGE[0] <= width / height <= DISPLAY_ASPECT_RANGE[1]:
+        raise ValueError('GT4_OUTPUT_SIZE must be WxH with each side from 320 to 16384 and a ratio from 1:2 to 8:1')
+    return width, height
+
+
+def monitor_device(value):
+    """GT4_MONITOR as the game reads it: '' for the primary monitor, else the device name. Raises ValueError."""
+    if not value:
+        return ''
+    if not 5 <= len(value) <= 31 or not value.startswith('\\\\.\\') or \
+            not all(0x20 < ord(c) < 0x7F for c in value):
+        raise ValueError('GT4_MONITOR must be a monitor device name such as \\\\.\\DISPLAY2')
+    return value
 # GT4_MTVU_MEASURE (slice169): counters of the mtvu-measure build; unset means on. Forwarded and recorded.
 MTVU_MEASURE_VALUES = ('0', '1')
 # TASK-011 step 2 (slice170): worker runtime switches. Unset means the default shown; forwarded and recorded.
@@ -624,6 +710,10 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
         raise ValueError('GT4_FORCE_480P must be 0 or 1')
     if os.environ.get('GT4_FORCE_WIDESCREEN', FORCE_WIDESCREEN_DEFAULT) not in FORCE_WIDESCREEN_VALUES:
         raise ValueError('GT4_FORCE_WIDESCREEN must be 0 or 1')
+    display_aspect_ratio(os.environ.get('GT4_DISPLAY_ASPECT'))
+    aspect_fov_extra(os.environ.get('GT4_ASPECT_FOV_EXTRA'))
+    output_size(os.environ.get('GT4_OUTPUT_SIZE'))
+    monitor_device(os.environ.get('GT4_MONITOR'))
     if os.environ.get('GT4_CURSOR_AUTOHIDE', '1') not in CURSOR_AUTOHIDE_VALUES:
         raise ValueError('GT4_CURSOR_AUTOHIDE must be 0 or 1')
     if os.environ.get('GT4_MTVU_MEASURE', '1') not in MTVU_MEASURE_VALUES:
@@ -800,6 +890,14 @@ def run_probe(workspace, run_directory, frame_count, timeout_seconds, presses, c
     if environment['GT4_FORCE_WIDESCREEN'] not in FORCE_WIDESCREEN_VALUES:
         raise ValueError('GT4_FORCE_WIDESCREEN must be 0 or 1')
     result['force_widescreen_environment'] = {'GT4_FORCE_WIDESCREEN': environment['GT4_FORCE_WIDESCREEN']}
+    # TASK-080: unset means auto and 1.0; set values are checked again (the caller may pass its own environment).
+    aspect = {name: environment[name] for name in ('GT4_DISPLAY_ASPECT', 'GT4_ASPECT_FOV_EXTRA', 'GT4_OUTPUT_SIZE',
+                                                   'GT4_MONITOR') if name in environment}
+    display_aspect_ratio(aspect.get('GT4_DISPLAY_ASPECT'))
+    aspect_fov_extra(aspect.get('GT4_ASPECT_FOV_EXTRA'))
+    output_size(aspect.get('GT4_OUTPUT_SIZE'))
+    monitor_device(aspect.get('GT4_MONITOR'))
+    result['display_aspect_environment'] = aspect or {'GT4_DISPLAY_ASPECT': 'auto (unset)'}
     if 'GT4_FSV_TRACE' in environment:
         result['fsv_trace_environment'] = {'GT4_FSV_TRACE': environment['GT4_FSV_TRACE']}
     if 'GT4_HALT_DUMP' in environment and 'halt_dump_environment' not in result:

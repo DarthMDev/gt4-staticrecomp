@@ -70,6 +70,8 @@ add_test(NAME native_pacing COMMAND $<TARGET_FILE:pacing_fixture>)
 add_test(NAME native_quickfix COMMAND $<TARGET_FILE:quickfix_fixture>)
 add_test(NAME native_race_display COMMAND $<TARGET_FILE:race_display_fixture>)
 add_test(NAME native_race_widescreen COMMAND $<TARGET_FILE:race_widescreen_fixture>)
+# TASK-080: GT4_DISPLAY_ASPECT parse, Hor+/Vert+ factors, matrix scale, scene policy.
+add_test(NAME native_display_aspect COMMAND $<TARGET_FILE:display_aspect_fixture>)
 add_test(NAME native_cursor_autohide COMMAND $<TARGET_FILE:cursor_autohide_fixture>)
 add_test(NAME native_shape_observer COMMAND $<TARGET_FILE:shape_observer_fixture>)
 add_test(NAME native_performance_accounting COMMAND $<TARGET_FILE:perf_accounting_fixture>)
