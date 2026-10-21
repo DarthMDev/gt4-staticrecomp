@@ -107,6 +107,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
 | TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
 | TASK‑082 | Native variable frame rate: fixed 60 Hz simulation, render at any rate (render skip below 60, extra render-only passes above 60 with the game's own render time t) | 📋 Planned (after 1.0.0) · study done (docs/NATIVE-VARIABLE-FPS-STUDY.md) |
+| TASK‑083 | Faster loading and saves: instant disc reads (deeper than PCSX2 Fast CDVD) and loading/save speed-ups in our runtime and game code; gameplay untouched | 📋 Future study (owner, 2026-10-21) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -331,6 +332,17 @@ Owner decisions (2026-10-21, the study's recommendations accepted):
 - Allowed: the main-loop ELF patch with re-translation (superseding decision 0055 for this feature), a GS stream
   PRESENT record and the gt4-gs change. Menus stay at 60 Hz.
 Cost today: race critical path 10-19 ms of 16.7; one extra render pass 7-15 ms, so 120/144 needs cheaper passes.
+
+### TASK-083 — Faster loading and saves (future study)
+Owner request 2026-10-21. Loading and saves run at PS2 speed today: the CDVD HLE models every read as 0.4 ms plus
+0.25 ms per 2 KiB sector of guest time (about 8 MB/s, donor `iop/cdvd.cpp` `read_cycles`), and the guest clock stays
+paced at 60 VBlanks per second during loading screens and saves. The owner reports that PCSX2's Fast CDVD breaks
+nothing in GT4 but does not gain much, and asks for a deeper, deliberate speed-up, game code changes included.
+Study first: measure where boot, race-entry and save time goes (disc wait, decompression, fixed waits in game code,
+card writes, VBlank pacing). Candidate levers: instant disc reads (and a faster byte copy than `write8` per byte);
+an unthrottled guest clock while a loading or save screen is active (the TASK-077 study found the loading object),
+with audio muted or kept at the right pace; hooks or ELF patches that shorten fixed waits and per-frame save
+chunking. Never during races or replays; physics, lap times and replays untouched. After 1.0.0.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
