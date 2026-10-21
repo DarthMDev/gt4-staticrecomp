@@ -481,7 +481,12 @@ survives the exit, a plain one dies. Launchers 1.0.0 keep the bug, so their user
 (release notes). Release v1.1.0 was set back to draft while fixing it and republished with the fixed launcher.
 
 ### TASK-086 — Progressive 480p everywhere
-Planned (owner, 2026-10-21; after the CoreGS 2.0 parity work, shares the ELF patch table with TASK-078 P5 and TASK-080
+**Shelved (owner, 2026-10-21): the game stays 480i.** Step 1 was built on branch `task/086-progressive-480p` (a3873a1,
+slice232, kept for a later restart; not merged). Owner test of the 1.1.1-test installer: boot menus stay 480i (known);
+after the first race the menus are 480p, but the car selection shows large green/black garbage blocks over the car
+picture, and the next race load hangs on its loading screen (frames still produced). Likely a VRAM layout or
+render-target difference of the 480p CT16 menu mode in the car-select/garage path; not investigated further.
+Original plan (owner, 2026-10-21; after the CoreGS 2.0 parity work, shares the ELF patch table with TASK-078 P5 and TASK-080
 P3). Study: [docs/PROGRESSIVE-EVERYWHERE-STUDY.md](docs/PROGRESSIVE-EVERYWHERE-STUDY.md). The 480p "Try..." pop-up in
 the Screen options proves the menus already render at 480p: `MOption.applyRaceDisplayMode` (`func_00436640`) requests
 CRT row 6 (480p, 640x448) and `applyMenuDisplayMode` (`func_00436740`) returns to row 1 (480i field). Plan:
