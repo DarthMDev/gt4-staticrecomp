@@ -146,6 +146,10 @@ def _row_errors(row):
             errors.append(f'{name}: min is above max')
     if row['type'] == 'enum':
         errors += _choice_errors(row)
+    if 'forced' in row and not isinstance(row['forced'], bool):
+        errors.append(f'{name}: forced must be true or false')
+    if row.get('forced') and (row['page'] != 'hidden' or row['written'] != 'always' or row['status'] != 'ok'):
+        errors.append(f'{name}: forced rows must be page hidden, written always and status ok')
     if row['status'] == 'ok' and row['written'] in ('always', 'when-set') and row['type'] != 'path':
         try:
             parse_value(row, row['default'])
@@ -196,7 +200,19 @@ def _lookup(rows, identifier):
 
 
 def parse_value(row, raw):
-    """Checks one value of a row and returns its normalized name (enum, bool, int) or text (path)."""
+    """Checks one value of a row and returns its normalized name (enum, bool, int) or text (path).
+
+    A forced row (owner, 2026-10-21: aspect 16:9, the PCSX2 OSD rows off) accepts only its default value.
+    """
+    value = _parse_unforced(row, raw)
+    if row.get('forced'):
+        default = _parse_unforced(row, row['default'])
+        if value != default:
+            raise SettingsError(f'{row["id"]} is fixed at {default} in this release')
+    return value
+
+
+def _parse_unforced(row, raw):
     name = row['id']
     text = _json_text(raw)
     if row['type'] == 'path':
@@ -418,7 +434,10 @@ def offered(rows):
 
 
 def offered_choices(row):
-    """The choice names the launcher may show for an enum row (status ok and not marked offered = false)."""
+    """The choice names the launcher may show for an enum row (status ok and not marked offered = false). A forced row
+    offers only its default."""
+    if row.get('forced'):
+        return [row['default']]
     return [choice['name'] for choice in row['choices'] if choice['status'] == 'ok' and choice.get('offered', True)]
 
 

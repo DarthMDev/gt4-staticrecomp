@@ -131,6 +131,10 @@
       page: "advanced", control: "toggle", values: null, default: false, current: false },
     { id: "performance_report", label: "Performance report", help: "Records frame timing while you play for bug reports.",
       page: "advanced", control: "toggle", values: null, default: false, current: false },
+    { id: "perf_overlay", label: "Performance overlay", help: "Shows GT4Recomp's own overlay while you play (FPS, frame time, CPU and GPU use).",
+      page: "advanced", control: "toggle", values: null, default: false, current: false },
+    { id: "perf_overlay_fps", label: "Overlay: FPS", help: "Shows the frame rate in the performance overlay.",
+      page: "advanced", control: "toggle", values: null, default: true, current: true },
     { id: "debug_internal", label: "Internal debug", help: "Not shown to users.",
       page: "hidden", control: "toggle", values: null, default: false, current: true }
   ];
@@ -408,7 +412,7 @@
         analog = analogDefaults();
         return controlsView();
       case "saves_list":
-        return { items: JSON.parse(JSON.stringify(saves)) };
+        return { items: JSON.parse(JSON.stringify(saves)), folder: "C:\\Users\\Player\\Documents\\Gran Turismo 4\\Saves" };
       case "saves_import":
         return null;
       case "saves_activate":
@@ -422,7 +426,7 @@
         });
         return { items: JSON.parse(JSON.stringify(saves)) };
       case "replays_list":
-        return { items: JSON.parse(JSON.stringify(replays)) };
+        return { items: JSON.parse(JSON.stringify(replays)), folder: "C:\\Users\\Player\\Documents\\Gran Turismo 4\\Replays" };
       case "replays_import":
         return null;
       case "replays_delete":
@@ -437,10 +441,14 @@
           gt4gs: "1.0.1",
           disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso",
           game_files: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp\\disc",
-          data_folder: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp"
+          data_folder: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp",
+          saves_folder: "C:\\Users\\Player\\Documents\\Gran Turismo 4"
         };
       case "open_log_folder":
       case "open_game_files_folder":
+      case "open_player_folder":
+      case "open_saves_folder":
+      case "open_replays_folder":
         return null;
       case "check_updates":
         // Demo: ?update=1 offers both streams; otherwise nothing is new.

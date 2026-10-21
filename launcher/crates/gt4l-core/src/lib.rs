@@ -13,6 +13,7 @@ pub mod migrate;
 pub mod paths;
 pub mod releases;
 pub mod settings;
+pub mod system_check;
 pub mod update;
 pub mod version;
 pub mod versions;

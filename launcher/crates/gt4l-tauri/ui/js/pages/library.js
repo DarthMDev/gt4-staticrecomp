@@ -2,7 +2,9 @@
  * Saves and Replays tabs. One list component, two commands sets:
  *   saves:   saves_list, saves_import, saves_activate({id}), saves_delete({id})
  *   replays: replays_list, replays_import, replays_delete({id})
- * Item = {id, name, modified (ISO 8601), active (saves only)}.
+ * Item = {id (library name, sent back to activate/delete), name (shown), modified (ISO 8601), active (saves only)}. The list result also has `folder`: the
+ * player's folder that holds the files (Documents\Gran Turismo 4\Saves or \Replays), shown with
+ * "Open folder" (open_saves_folder / open_replays_folder).
  * saves_import / replays_import return the new list, or null when cancelled.
  *
  * Keys on a focused row: A = select (saves: make active), Y = make active
@@ -47,6 +49,14 @@
     var items = [];
     var list = h("div", { class: "lib-list" });
     var headNote = h("p", { class: "note", text: kind.note });
+    var folderText = h("span", { class: "val lib-folder-path", text: "" });
+
+    function openFolder() {
+      var request = kindName === "saves" ? GT4.backend.call("open_saves_folder", {}) : GT4.backend.call("open_replays_folder", {});
+      request.catch(function (err) {
+        GT4.ui.toast(GT4.errorText(err), true);
+      });
+    }
 
     function selectedRow() {
       var active = document.activeElement;
@@ -86,14 +96,15 @@
       });
     }
 
-    function row(item) {
+    function row(item, index) {
       var children = [];
       if (kindName === "saves") {
         children.push(h("span", { class: "radio", "aria-hidden": "true" }));
       } else {
         children.push(h("span"));
       }
-      children.push(h("span", { class: "no", text: String(item.id).padStart(2, "0") }));
+      // Row number: the position in the list (the id is the library name, e.g. "Save 02").
+      children.push(h("span", { class: "no", text: String(index + 1).padStart(2, "0") }));
       var nameNode = h("span", { class: "nm", text: item.name || kind.itemWord + " " + item.id });
       if (item.active) {
         nameNode.appendChild(h("small", { text: "Next play" }));
@@ -158,8 +169,8 @@
         ]));
       } else {
         list.classList.add("lib-list");
-        items.forEach(function (item) {
-          list.appendChild(row(item));
+        items.forEach(function (item, index) {
+          list.appendChild(row(item, index));
         });
       }
       if (focusId !== undefined) {
@@ -173,6 +184,9 @@
     function apply(result, message) {
       if (result && Array.isArray(result.items)) {
         items = result.items;
+      }
+      if (result && typeof result.folder === "string" && result.folder) {
+        folderText.textContent = result.folder;
       }
       if (message) {
         GT4.ui.toast(message);
@@ -202,6 +216,13 @@
       importButton
     ]));
     content.appendChild(list);
+    // Where the files are: the player's folder in Documents, easy to find and back up.
+    content.appendChild(h("div", { class: "row lib-folder" }, [
+      h("div", { class: "k" }, [h("span", { text: "Folder" }), folderText]),
+      h("div", { class: "ctl" }, [
+        h("button", { class: "btn small", type: "button", on: { click: openFolder } }, "Open folder")
+      ])
+    ]));
 
     host.setHooks({
       x: importItems,

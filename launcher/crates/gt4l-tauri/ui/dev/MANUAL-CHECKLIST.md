@@ -19,7 +19,9 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Arrows move focus to the visually nearest control in that direction; no control is skipped.
 - [ ] Left and right change a focused slider by one step and cycle a focused dropdown.
 - [ ] Enter opens a dropdown list; Esc closes it; Esc on a page goes Home.
-- [ ] Q and E switch Settings tabs in the order Graphics, Advanced, Display, Controls, Saves, Replays, About (no Mods in release 1.0.0).
+- [ ] Q and E switch Settings tabs in the order Graphics, Display, Controls, Saves, Replays, About (no Mods in release 1.0.0; no Advanced tab).
+- [ ] Graphics ends with an "Advanced" section; the D-pad moves down from the Graphics rows into its rows and to "Reset to defaults"; B from any of them returns to the tab list on Graphics.
+- [ ] No "Input resolution", "Widescreen 16:9", "Aspect ratio", "Show FPS", "Show GPU name" or "Show resolution" row anywhere (480p and 16:9 are fixed; PCSX2's own OSD is always off).
 - [ ] Tab and Shift+Tab move through controls in document order.
 - [ ] The focus ring shows after a key press and disappears after a mouse click.
 
@@ -51,7 +53,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] The tab list highlight is a soft pill that glides between tabs; the tab shown while you are in the content keeps a quiet accent edge.
 - [ ] A focused row has a lighter band with a thin accent edge; the focused control has a soft glow. There is no hard box.
 - [ ] With Windows "Show animations" off (or reduced motion), the pill and the glow change instantly.
-- [ ] Footer: the tab list shows A Enter, B Back, LB RB Tabs; the content shows A Select, B Tabs, then the tab's own keys (Advanced: Y Reset; Saves and Replays: X Import). Controls shows A Rebind, Y Reset button, X Reset all, B Back, LB RB Tabs on the drawing, and A Select on the panel. No tab shows Save.
+- [ ] Footer: the tab list shows A Enter, B Back, LB RB Tabs; the content shows A Select, B Tabs, then the tab's own keys (Graphics: Y Reset; Saves and Replays: X Import). Controls shows A Rebind, Y Reset button, X Reset all, B Back, LB RB Tabs on the drawing, and A Select on the panel. No tab shows Save.
 - [ ] Mouse and touch: a click or tap focuses what was clicked; a click on a tab shows it without entering its rows.
 - [ ] The D-pad and the left stick move focus; holding repeats after about 0.4 s, then about every 0.1 s.
 - [ ] Stick deadzone: a slight drift does not move focus.
@@ -61,10 +63,10 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Before the first button press the page still works with the keyboard and mouse.
 - [ ] Every interactive element can be reached with the D-pad or the left stick (no control is skipped); the focus ring shows on each.
 - [ ] Right stick up and down scrolls the focused scroll area (Settings content, Saves, Replays, dialogs) at a steady speed; a slight push does nothing.
-- [ ] There is no Save: X does nothing on Graphics, Display and Advanced. X on Saves and Replays imports; X on Controls asks to reset all controls.
+- [ ] There is no Save: X does nothing on Graphics and Display. X on Saves and Replays imports; X on Controls asks to reset all controls.
 - [ ] Pad: the highlight moves over Controls, Saves and Replays and focus stays in the tab list; only A or D-pad right enters a tab. Entering Saves or Replays focuses the first row (Import only when the list is empty); entering Controls focuses the DS2 button selected last (Cross the first time).
 - [ ] A changed value shows the new value at once (resolution dropdown, toggle, slider), and it still shows after leaving and re-entering the tab.
-- [ ] Y on Advanced asks "Reset to defaults?"; Y on Saves makes the selected save active; Y on Replays deletes after a confirm; Y on Controls resets the selected button.
+- [ ] Y on Graphics asks "Reset to defaults?"; Y on Saves makes the selected save active; Y on Replays deletes after a confirm; Y on Controls resets the selected button.
 - [ ] B closes an open "i" tip first, then an open dialog or list, then goes back.
 - [ ] Left and right on a focused slider change it one step; on a dropdown they cycle the values.
 - [ ] Start on Home plays; A on Home plays; Y on Home opens Settings.
@@ -74,7 +76,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Graphics: internal resolution goes up to the `max_upscale` the table reports, with the "Limited to ... on this GPU" note when lower.
 - [ ] Changing the scaling filter to FSR shows FSR sharpness; changing CAS mode to CAS shows CAS sharpness.
 - [ ] CoreGS 2.0 is greyed and not selectable.
-- [ ] Advanced: "Reset to defaults" asks, then restores the values and says so in a toast.
+- [ ] Graphics, Advanced section: "Reset to defaults" asks, then restores the values and says so in a toast.
 - [ ] Mods is not in the nav column; LB/RB and Q/E skip it; `#/settings/mods` opens Graphics; no row has page "mods".
 - [ ] An error from `set_setting` shows a red toast and the row shows the value the launcher reads back.
 

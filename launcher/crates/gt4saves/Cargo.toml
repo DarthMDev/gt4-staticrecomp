@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "GT4Recomp save and replay manager (stub until TASK-025 lands)"
+description = "GT4Recomp save and replay manager: card images, the save library and its move to Documents"
 
 [dependencies]
+sha2.workspace = true
+serde_json.workspace = true

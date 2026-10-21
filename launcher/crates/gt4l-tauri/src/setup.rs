@@ -67,6 +67,7 @@ pub async fn setup_choose_disc(app: AppHandle, shared: State<'_, Shared>) -> Res
         if lock(&shared).setup_busy {
             return Err("Setup is already running.".to_string());
         }
+        refuse_unsupported_system(&shared)?;
         let picked = app
             .dialog()
             .file()
@@ -123,7 +124,20 @@ pub fn choose_disc_path(shared: &Shared, path: &Path) -> Result<DiscInfo, String
 /// Starts the setup thread for the chosen disc. Returns at once; progress arrives through `app_state` and events.
 #[tauri::command]
 pub fn setup_start(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
+    refuse_unsupported_system(shared.inner())?;
     start_with(shared.inner(), notifier(&app), github_renderer()).map(|_| ())
+}
+
+/// TASK-081: the processor and Vulkan checks before setup (`gt4l_core::system_check`). A problem is shown on the
+/// setup page as a failed setup with its message, and logged.
+fn refuse_unsupported_system(shared: &Shared) -> Result<(), String> {
+    let Some(problem) = gt4l_platform::system::requirements_problem() else {
+        return Ok(());
+    };
+    let mut state = lock(shared);
+    state::log(&state.dirs, &format!("system requirement not met: {problem}"));
+    state.setup_outcome = SetupOutcome::Failed(problem.clone());
+    Err(problem)
 }
 
 /// The body of `setup_start`. Returns the thread so tests can wait for it.

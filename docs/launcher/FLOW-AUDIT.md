@@ -57,13 +57,17 @@ registered command is called by a page (27 commands).
 | `version.json` | launcher | next to `GT4Recomp.exe` (or the data folder when that is read-only) |
 | `config\settings.toml` (+ `.bak-schema<N>-<t>`) | settings, setup (`disc_path`, skipped updates) | on change |
 | `controls.toml` | controls | on change |
-| `library\...`, `runtime\card.ps2` | saves | import, activate, delete, Play, game end |
+| `Documents\Gran Turismo 4\Saves\...`, `...\Replays\...` (the player's folder, not the data folder) | saves | import, activate, delete, game end (harvest), first start (migration) |
+| `runtime\card.ps2`, `library\backups\` | saves | Play (built from the library), game end |
+| `config\library-migration.json`, `library.migrated-<t>\` | saves | first start after an older launcher (TASK-081) |
 | `sessions\session-<t>\` (`game.log`, `misses.txt`, `gt4-gs.ini`) | Play | per session, 20 kept |
 | `logs\launcher.log` | everything | appended |
 
 Protected by the data-path guard (installs and updates refuse to write there): `saves`, `cards`, `library`,
-`replays`, `runtime` and now `disc`, plus card and save extensions. The uninstaller removes the data folder only when
-the player ticks its unchecked "also delete" box.
+`replays`, `runtime` and now `disc`, plus card and save extensions, and (TASK-081) the player's folder
+`Documents\Gran Turismo 4` wherever Documents is (registered at start, and by name: `Saves` or `Replays` inside a
+`Gran Turismo 4` folder). The uninstaller never touches the player's folder; it removes the AppData data folder
+only when the player ticks its unchecked "also delete" box.
 
 ## 2. Disc rule (what is accepted)
 
@@ -371,3 +375,27 @@ Build: `cargo tauri build --no-bundle` (no Cargo.toml change). Owner test copy r
 
 Not verified: the real webview run with a controller (the owner checks the pad items in `MANUAL-CHECKLIST.md`), and the
 real `set_setting` round trip (the mock answers at once).
+
+## 8. Saves and replays in Documents (TASK-081, owner 2026-10-21)
+
+- **Where:** `Documents\Gran Turismo 4\Saves` (`Active\BASCUS-97328GAMEDATA`, `Save NN\...`, `.backup\`) and
+  `...\Replays\<replay>`. Documents comes from `SHGetKnownFolderPath(FOLDERID_Documents)`
+  (`gt4l_platform::known_folder`), so OneDrive and redirection to another drive are followed; the path is never built
+  from the user name. When Windows reports no usable Documents folder, or the library cannot be created there, the
+  launcher uses `<data>\Gran Turismo 4` and logs a warning; Play never fails on it. `GT4RECOMP_DOCUMENTS_DIR` replaces
+  Documents for development and tests only.
+- **What stays in AppData:** the disc copy, prepared files, `gs\`, config and controls, logs, sessions, the live
+  `runtime\card.ps2` (the game writes only this file during play, so OneDrive never syncs a card mid-write) and
+  `library\backups` (card images before each replacement).
+- **Migration:** see [MIGRATIONS](MIGRATIONS.md#the-save-library-moves-to-documents-2026-10-21).
+- **Pages:** Saves and Replays show their folder with "Open folder" (`open_saves_folder`, `open_replays_folder`);
+  About shows "Saves and replays" with "Open folder" (`open_player_folder`). Items now carry `id` (the library name the
+  page sends back) and `modified`; before, the real launcher sent `name`/`label` only, so activate and delete from
+  the page had no id (found while wiring the folder row; the dev mock had hidden it).
+- **Tests:** `gt4saves/tests/migration.rs` (fresh, migrated and parked, empty new folders, both non-empty, copy
+  failure rolled back, a corrupted copy refused, harvest and prepare against Documents), `gt4l-core` `paths` (known
+  folder injected, override, fallback) and `guard` (the player's folder refused anywhere, registered roots, program
+  folders still writable), `gt4l-tauri` `saves` (first start moves and builds the card; unusable folder falls back;
+  item shape). Real exe run against a scratch `GT4RECOMP_DATA_DIR` holding a copy of the owner's old library and a
+  scratch `GT4RECOMP_DOCUMENTS_DIR`: 6 files (1,533,775 bytes) moved and checked, old folders in
+  `library.migrated-<t>`, a second start logs "already moved". Play was not pressed.

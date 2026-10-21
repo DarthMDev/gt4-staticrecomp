@@ -31,22 +31,25 @@ const RESERVED_KEYS: &[&str] = &["F7", "F8", "F9", "F11"];
 /// Built-in mapping: each input and its default sources (the game's built-in map).
 pub fn default_bindings() -> BTreeMap<String, Vec<String>> {
     let entries: &[(&str, &[&str])] = &[
-        ("dpad_up", &["xinput:DpadUp", "key:Up"]),
-        ("dpad_right", &["xinput:DpadRight", "key:Right"]),
+        // TASK-076 keyboard layout, the same table as native/controls.cpp and docs/controls/default.toml
+        // (tests/docs_match.rs checks both). The launcher writes every input to controls.toml, so a stale table here
+        // would replace the game's keyboard layout after the first remap.
+        ("dpad_up", &["xinput:DpadUp", "key:Up", "key:E"]),
+        ("dpad_right", &["xinput:DpadRight", "key:D", "key:Right"]),
         ("dpad_down", &["xinput:DpadDown", "key:Down"]),
-        ("dpad_left", &["xinput:DpadLeft", "key:Left"]),
-        ("cross", &["xinput:A", "key:Z"]),
-        ("circle", &["xinput:B", "key:X"]),
-        ("square", &["xinput:X", "key:A"]),
-        ("triangle", &["xinput:Y", "key:S"]),
+        ("dpad_left", &["xinput:DpadLeft", "key:A", "key:Left"]),
+        ("cross", &["xinput:A", "key:W", "key:Enter"]),
+        ("circle", &["xinput:B", "key:Space"]),
+        ("square", &["xinput:X", "key:S"]),
+        ("triangle", &["xinput:Y", "key:Backspace", "key:Esc"]),
         ("l1", &["xinput:LB", "key:Q"]),
-        ("r1", &["xinput:RB", "key:W"]),
-        ("l2", &["xinput:LT", "key:1"]),
-        ("r2", &["xinput:RT", "key:2"]),
-        ("l3", &["xinput:LThumb", "key:C"]),
-        ("r3", &["xinput:RThumb", "key:V"]),
-        ("select", &["xinput:Back", "key:Backspace"]),
-        ("start", &["xinput:Start", "key:Enter"]),
+        ("r1", &["xinput:RB", "key:Shift"]),
+        ("l2", &["xinput:LT", "key:F"]),
+        ("r2", &["xinput:RT", "key:R"]),
+        ("l3", &["xinput:LThumb"]),
+        ("r3", &["xinput:RThumb"]),
+        ("select", &["xinput:Back", "key:C", "key:Tab"]),
+        ("start", &["xinput:Start", "key:P"]),
         ("rstick_x", &["xinput:RX"]),
         ("rstick_y", &["xinput:RY | invert=true"]),
         ("lstick_x", &["xinput:LX"]),
@@ -684,7 +687,7 @@ mod tests {
         assert_eq!(controls.sources("cross"), Some(&[][..]));
         assert_eq!(
             controls.sources("circle").unwrap(),
-            &["xinput:B".to_string(), "key:X".to_string()][..]
+            &["xinput:B".to_string(), "key:Space".to_string()][..]
         );
     }
 
@@ -698,7 +701,7 @@ mod tests {
         assert!((tuning.deadzone - 0.05).abs() < 0.001);
         assert_eq!(tuning.curve, Curve::Quadratic);
         let text = controls.render();
-        assert!(text.contains("l2 = [\"xinput:LT | deadzone=0.050 curve=quadratic\", \"key:1\"]"));
+        assert!(text.contains("l2 = [\"xinput:LT | deadzone=0.050 curve=quadratic\", \"key:F\"]"));
         assert!(Controls::parse(&text).is_ok());
     }
 
@@ -722,8 +725,11 @@ mod tests {
         let mut controls = Controls::default();
         let result = controls.assign("cross", "xinput:RB", true).unwrap();
         assert_eq!(result.swapped_with.as_deref(), Some("r1"));
-        assert_eq!(controls.sources("cross").unwrap(), &["xinput:RB".to_string(), "key:Z".to_string()][..]);
-        assert_eq!(controls.sources("r1").unwrap(), &["xinput:A".to_string(), "key:W".to_string()][..]);
+        assert_eq!(
+            controls.sources("cross").unwrap(),
+            &["xinput:RB".to_string(), "key:W".to_string(), "key:Enter".to_string()][..]
+        );
+        assert_eq!(controls.sources("r1").unwrap(), &["xinput:A".to_string(), "key:Shift".to_string()][..]);
     }
 
     #[test]

@@ -7,6 +7,20 @@ PCSX2 v2.8.2 (tag `v2.8.2` = commit `fd9d310c`). Design source: [GSDX-PLAN](GSDX
 "Corrections"). **The allow-list is enforced by `gt4-gs.exe` 1.0.0** (section "Allow-list in gt4-gs"): a key or value
 outside it is ignored with one warning line; gt4-gs never refuses to start because of the INI.
 
+**Owner changes of 2026-10-21 (TASK-081, release 1.0.0):**
+
+- The launcher's Advanced rows are a **section at the bottom of the Graphics page**, not a page of their own. `page`
+  keeps its values: `basic` rows come first on Graphics, `advanced` rows follow under the "Advanced" heading.
+- **`aspect` is fixed at 16:9** until the ultrawide update: `page = hidden`, `forced = true`, always written as
+  `AspectRatio = 16:9`. `--gs-setting aspect=4:3` and `GT4_GS_ASPECT=auto` are refused.
+- **PCSX2's own on-screen display is always off.** `osd_fps`, `osd_gpu` and `osd_resolution` are `page = hidden`,
+  `forced = true`, `written = always`, default `false`: every gt4-gs.ini now holds `OsdShowFPS = false`,
+  `OsdShowGPU = false` and `OsdShowResolution = false`, and no user value can turn them on. The other stock OSD rows
+  (`osd_messages_pos`, `osd_performance_pos`, `osd_scale`, status `resolved`, never written) are hidden too. GT4Recomp's
+  own performance overlay (`perf_overlay*`, `[GT4GS] PerfOverlay*`, TASK-062) stays on the Advanced section.
+- The allow-list did not change (`forced` is not part of a rule; `false` and `16:9` were already accepted), so gt4-gs
+  needs no new build.
+
 ## What it is
 
 `docs/launcher/gs-settings.toml` is the single source for the PCSX2 GS options that GT4Recomp exposes. Each row is one
@@ -44,7 +58,7 @@ presets (section "Internal resolution presets").
 | Column | Meaning |
 |---|---|
 | `id` | launcher identifier, used by `--gs-setting ID=VALUE` |
-| `page` | `basic` (launcher GRAPHICS page), `advanced` (ADVANCED page), `mods` (TASK-048 mod manager; neither page), `hidden` (never shown) |
+| `page` | `basic` (launcher Graphics page), `advanced` (the Advanced section at the bottom of the Graphics page), `mods` (TASK-048 mod manager; not shown), `hidden` (never shown) |
 | `order` | position on its page (unique per page) |
 | `control` | `slider` (int range), `toggle` (bool), `dropdown` (enum), `text` (string), `none` (launcher-supplied, path) |
 | `label`, `help` | the name and one-line help shown to the owner |
@@ -55,6 +69,7 @@ presets (section "Internal resolution presets").
 | `default` | GT4 default (launcher name for enums; `true` or `false` for bool) |
 | `written` | `always`, `when-set`, `launcher` (supplied by the launcher), or `never` (launcher-only) |
 | `status` | `ok` (settable), `resolved` (confirmed in the sources, not settable until the owner checks it in game), `pending-TASK-NNN` |
+| `forced` | optional; `true` on a hidden, always-written, `ok` row whose value is fixed. Both writers (`scripts/gs_settings.py` and `gs_table.rs`) write the default and refuse any other value ("X is fixed at D in this release"); `offered_choices` returns only the default. A value stored by an earlier launcher is ignored on load. Since 2026-10-21: `aspect`, `osd_fps`, `osd_gpu`, `osd_resolution` |
 | `env` | launcher-only rows: the environment variable the launcher reads |
 | `notes` | sources (file:line at v2.8.2) and open points |
 
@@ -63,26 +78,27 @@ A value is settable only when its row and its choice both have status `ok`. The 
 
 ## Launcher pages (owner decisions, 2026-10-16)
 
-### GRAPHICS page (`page = basic`, 6 rows)
+### GRAPHICS page (`page = basic`, 5 rows; `aspect` moved to hidden on 2026-10-21)
 
 | Order | Row | Control | GT4 default | Status | Why it is here |
 |---|---|---|---|---|---|
 | 1 | `gs_engine` "Renderer" | dropdown | PCSX2 GS | ok (launcher-only) | Decision 1: PCSX2 GS, or CoreGS 1.1 as the secondary renderer. Not written to the INI. |
 | 2 | `upscale` "Internal resolution" | dropdown: 480p (1x), 720p (2x), 1080p (3x), 1440p (4x), 4K (6x), 8K (12x) | 1080p (3x) | ok | Decisions 1 and 6; presets since slice201 (owner, 2026-10-16). Biggest visual effect. Cannot break the renderer. |
-| 3 | `aspect` "Aspect ratio" | dropdown | 16:9 | ok | Visible and safe. Moved here from Display: 16:9 is the GT4 setting (TASK-009). |
-| 4 | `fxaa` "Anti-aliasing (FXAA)" | toggle | off | ok | Decision 1. |
-| 5 | `cas_mode` "Sharpening (CAS)" | dropdown | off | resolved | Decision 1: FidelityFX CAS mode. Settable after the owner checks it in game. |
-| 6 | `cas_sharpness` "Sharpening amount" | slider 0 to 100 | 50 | resolved | Decision 1: CAS sharpness. Used with CAS on. |
+| 3 | `fxaa` "Anti-aliasing (FXAA)" | toggle | off | ok | Decision 1. |
+| 4 | `cas_mode` "Sharpening (CAS)" | dropdown | off | resolved | Decision 1: FidelityFX CAS mode. Settable after the owner checks it in game. |
+| 5 | `cas_sharpness` "Sharpening amount" | slider 0 to 100 | 50 | resolved | Decision 1: CAS sharpness. Used with CAS on. |
 
 Rows with status `resolved` are shown in the layout but not offered until the owner's in-game check turns them `ok`.
-Today the launcher offers four Graphics rows (`gs_engine`, `upscale`, `aspect`, `fxaa`).
+Today the launcher offers three Graphics rows from this table (`gs_engine`, `upscale`, `fxaa`). `aspect` was row 3
+until 2026-10-21; it is now hidden and fixed at 16:9 (see HIDDEN).
 
 CoreGS 1.1 options (upscale, FSR, FXAA, deinterlace) are hidden for now (decision 5). They are CoreGS controls, not rows of
 this table. Only the renderer choice `coregs-1.1` remains.
 
-### ADVANCED page (`page = advanced`, 46 rows, 25 offered today)
+### ADVANCED section of the Graphics page (`page = advanced`, 40 rows, 22 offered today)
 
-Pre-configured to the GT4 ideal. Groups in order:
+Shown under the "Advanced" heading at the bottom of the Graphics page (owner, 2026-10-21; before, a separate Advanced
+tab), followed by "Reset to defaults" (Y on the pad). Pre-configured to the GT4 ideal. Groups in order:
 
 - Renderer and presentation: `renderer` (Graphics API, Vulkan; D3D12 and D3D11 after the owner checks them), `adapter`
   (empty, resolved), `vsync` (always set by `GT4_PRESENT_MODE`), `mailbox`, `linear_present` (present filter, Smooth),
@@ -94,11 +110,11 @@ Pre-configured to the GT4 ideal. Groups in order:
   `texture_preloading` (Full), `hw_download_mode` "Readbacks" (Accurate, always; Unsynchronized is labelled "faster,
   may drop effects"), `accurate_alpha_test` (off), `aa1` (off), `rov` (off, experimental).
 - Colour: `shade_boost` (off) and the four levels (50 each).
-- OSD: `osd_fps`, `osd_gpu`, `osd_resolution` (off), `osd_messages_pos` (top left), `osd_performance_pos` (top right),
-  `osd_scale` (100 percent).
+- OSD: none since 2026-10-21. PCSX2's own OSD rows moved to HIDDEN (forced off); the performance overlay below is
+  GT4Recomp's own.
 - Other: `disable_shader_cache` (off).
 - Overlays (TASK-064, owner decision 2026-10-17): `prohibit_dynamic_code` "Block third-party overlays (Arbitrary Code
-  Guard)" (`[GT4GS] ProhibitDynamicCode`, order 46, default `false`, always written). Off (default) lets MSI Afterburner /
+  Guard)" (`[GT4GS] ProhibitDynamicCode`, order 40 since 2026-10-21 (was 46), default `false`, always written). Off (default) lets MSI Afterburner /
   RivaTuner Statistics Server draw their overlay; on turns Windows Arbitrary Code Guard back on for gt4-gs, which blocks
   that code injection. The no-JIT guarantee does not depend on this switch (GT4GS_ONLY build and `check-nojit.ps1`).
 - TASK-060/061/062 (slice201, gt4-gs 1.0.0): `cursor_autohide` "Hide the mouse cursor" (on; launcher-only, the game
@@ -122,7 +138,7 @@ Texture replacement and dumping: `texture_load`, `texture_load_async`, `texture_
 `texture_dump_mipmaps`, `texture_dump_fmv`. Decision 4: they are on neither page. The future mod manager (TASK-048,
 Content Manager style) manages them. Status stays `pending-TASK-040`.
 
-### HIDDEN (`page = hidden`, 14 rows)
+### HIDDEN (`page = hidden`, 20 rows)
 
 Never shown to the owner:
 
@@ -135,6 +151,9 @@ Never shown to the owner:
 - `spin_us` (`SpinUs`), `debug_stall_window_ms`
   (`DebugStallWindowMs`), `debug_stall_after_ms` (`DebugStallAfterMs`): fork keys of tuning and test tools (status
   `resolved`, never written by the launcher), listed so the gt4-gs 1.0.0 allow-list accepts them.
+- Since 2026-10-21 (owner): `aspect` (`AspectRatio`, forced 16:9, always written) until the ultrawide update;
+  `osd_fps`, `osd_gpu`, `osd_resolution` (`OsdShowFPS`, `OsdShowGPU`, `OsdShowResolution`, forced `false`, always
+  written); `osd_messages_pos`, `osd_performance_pos`, `osd_scale` (status `resolved`, never written).
 
 ## Reset to defaults
 

@@ -32,6 +32,14 @@ def executable():
     return candidate if candidate.exists() else None
 
 
+def release_distribution_build():
+    """True when the build under test was configured with GT4_RELEASE_DISTRIBUTION=ON (TASK-081)."""
+    cache = Path(BUILD) / 'CMakeCache.txt' if BUILD else None
+    if not cache or not cache.exists():
+        return False
+    return 'GT4_RELEASE_DISTRIBUTION:BOOL=ON' in cache.read_text(encoding='utf-8', errors='replace')
+
+
 @unittest.skipUnless(executable() and pinned_shader_dir().is_dir(),
                      'GT4_NATIVE_BUILD (gt4vulkan.exe) or the pinned shader folder is not available')
 class PortableInstallTest(unittest.TestCase):
@@ -96,11 +104,41 @@ class PortableInstallTest(unittest.TestCase):
         self.assertIn('GS process (GT4_GS_PROCESS): D:/elsewhere/gt4-gs.exe', output)
 
     def test_no_installed_shaders_uses_the_build_time_folder(self):
+        if release_distribution_build():
+            self.skipTest('release build: no build-time fallback (see the release test below)')
         shutil.rmtree(self.exe.parent / 'shaders', ignore_errors=True)
         code, output = self.run_check()
         self.assertIn('build-time fallback', output)
+        self.assertIn('build-time shader fallback: present (development build)', output)
         self.assertIn('GS process: none', output)
         self.assertIn('result: ', output)
+
+    def test_release_build_has_no_fallback_and_reports_missing_shaders(self):
+        """TASK-081: a release build never names a build-machine folder; without a shaders folder the check fails."""
+        if not release_distribution_build():
+            self.skipTest('development build: it keeps the build-time fallback')
+        shutil.rmtree(self.exe.parent / 'shaders', ignore_errors=True)
+        code, output = self.run_check()
+        self.assertEqual(code, 1, output)
+        self.assertIn('build-time shader fallback: none (release build)', output)
+        self.assertIn('missing; a release build has no build-time fallback', output)
+        self.assertIn('result: shaders missing', output)
+        self.assertNotIn('Antigravity', output)
+        self.assertNotIn('private', output.replace(str(self.exe.parent), ''))
+
+    def test_release_executable_holds_no_build_machine_path(self):
+        """TASK-081: no absolute path (ASCII or UTF-16) of the build machine and no user folder in a release build."""
+        if not release_distribution_build():
+            self.skipTest('development build: it embeds the build-time shader folder on purpose')
+        data = executable().read_bytes()
+        needles = [b'Antigravity', b'gt4-staticrecomp', b'gt4-wt-', b'\\Users\\', b'/Users/', b'private/slice',
+                   b'private\\slice']
+        user = os.environ.get('USERNAME')
+        if user and len(user) >= 4:
+            needles.append(user.encode('ascii', 'ignore'))
+        for needle in needles:
+            self.assertNotIn(needle, data, needle)
+            self.assertNotIn(needle.decode('ascii').encode('utf-16-le'), data, needle)
 
 
 if __name__ == '__main__':

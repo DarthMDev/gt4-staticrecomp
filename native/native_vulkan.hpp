@@ -9,6 +9,7 @@
 
 #include "gs_submit_ring.hpp"
 #include "pacing.hpp"
+#include "vulkan_extensions.hpp"
 
 #include <array>
 #include <cstdint>
@@ -111,6 +112,9 @@ private:
     VkSemaphore rendered = VK_NULL_HANDLE;
     VkFence present_fence = VK_NULL_HANDLE;
     bool presented = false;
+    // Timeline id of the submission that presented from this slot (baseline path: the slot is free once the GPU
+    // finished it; the present semaphore is per swapchain image, see image_rendered_).
+    std::uint64_t presented_id = 0;
   };
 
   void ensure_slot_capacity(Slot &slot, std::uint64_t arena_bytes,
@@ -170,6 +174,12 @@ private:
   VkExtent2D extent_{};
   Aspect aspect_ = Aspect::widescreen;
   bool resized_ = false;
+  // TASK-081: swapchain maintenance 1 present fences when the driver has them (present_fences_), else the baseline
+  // path with one present semaphore per swapchain image. GT4_VULKAN_FORCE_BASELINE=1 forces the baseline.
+  bool force_baseline_ = false;
+  bool present_fences_ = false;
+  MaintenanceFamily maintenance_family_ = MaintenanceFamily::none;
+  std::vector<VkSemaphore> image_rendered_;
   std::uint64_t presentations_ = 0;
   std::uint64_t zero_dispatches_ = 0;
 };

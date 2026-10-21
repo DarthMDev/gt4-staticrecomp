@@ -42,13 +42,17 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(text.splitlines()[1:], [
             '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 3', 'accurate_blending_unit = 3',
             'deinterlace_mode = 0', 'AspectRatio = 16:9', 'VsyncEnable = true', 'DisableMailboxPresentation = true',
-            'HWDownloadMode = 0', '', '[GT4GS]', 'ProhibitDynamicCode = false'])  # slice194 (TASK-037): readback mode accurate by default; TASK-064: ACG off
+            'HWDownloadMode = 0', 'OsdShowFPS = false', 'OsdShowGPU = false', 'OsdShowResolution = false', '', '[GT4GS]',
+            'ProhibitDynamicCode = false'])  # slice194 (TASK-037): readback mode accurate by default; TASK-064: ACG off
 
     def test_scale_present_mode_and_aspect(self):
-        text = probe.gs_config_text({'GT4_GS_SCALE': '1', 'GT4_PRESENT_MODE': 'immediate', 'GT4_GS_ASPECT': 'auto'})
+        text = probe.gs_config_text({'GT4_GS_SCALE': '1', 'GT4_PRESENT_MODE': 'immediate', 'GT4_GS_ASPECT': '16:9'})
         self.assertIn('upscale_multiplier = 1\n', text)
         self.assertIn('VsyncEnable = false\n', text)
-        self.assertIn('AspectRatio = Auto 4:3/3:2\n', text)
+        self.assertIn('AspectRatio = 16:9\n', text)
+        # Owner, 2026-10-21: the aspect is fixed at 16:9 until the ultrawide update.
+        with self.assertRaisesRegex(ValueError, 'GT4_GS_ASPECT must be one of 16:9$'):
+            probe.gs_config_text({'GT4_GS_ASPECT': 'auto'})
         text = probe.gs_config_text({'GT4_PRESENT_MODE': 'mailbox'})
         self.assertIn('VsyncEnable = true\n', text)
         self.assertIn('DisableMailboxPresentation = false\n', text)

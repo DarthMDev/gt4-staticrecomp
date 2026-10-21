@@ -33,7 +33,7 @@ The script refuses an output folder outside the assets checkout's `private/` fol
 
 | Need | Resolution (TASK-059) | Notes |
 |---|---|---|
-| Shaders | `<exe folder>\shaders` when that folder exists, else the build-time folder `GT4_VULKAN_SHADER_DIR` | The build-time fallback is the development behaviour (`native/install_paths.cpp`, `native/native_vulkan.cpp`). |
+| Shaders | `<exe folder>\shaders` when that folder exists, else the build-time folder `GT4_VULKAN_SHADER_DIR` | The build-time fallback is the development behaviour (`native/install_paths.cpp`, `native/native_vulkan.cpp`). A release build (`-DGT4_RELEASE_DISTRIBUTION=ON`, TASK-081, slice213) has no fallback: only `<exe folder>\shaders`, and a missing folder stops the start with "The game's shader folder is missing (...). Reinstall GT4Recomp." The build tree of a release build gets its own `shaders\` copy. |
 | GS process (`--mode pcsx2`) | `GT4_GS_PROCESS` when set; else `<exe folder>\gs\gt4-gs.exe` when that file exists; else refused with a message | The launcher sets `GT4_GS_PROCESS` and `GT4_GS_PROCESS_SHA256` from its pin. `gt4-gs.ini` comes from `GT4_GS_CONFIG`. |
 | Memory card | `--memcard <file>` only; no default path is built in | The launcher passes the active slot's card. |
 | Disc, ELF | command-line arguments | Unchanged. |
@@ -47,6 +47,16 @@ gt4vulkan.exe --portable-check
 Prints the executable folder, the shader folder and whether it is installed or the build-time fallback, the nine
 shader files (`complete` or `INCOMPLETE`), the GS process in use, and `result: ok` (exit 0) or `result: shaders
 missing` (exit 1). It loads nothing and opens no window. The port entry point is `private/slice200-port/main.cpp`.
+
+### Release build (TASK-081, slice213)
+
+`-DGT4_RELEASE_DISTRIBUTION=ON` sets `GT4_VULKAN_SHADER_DIR` to an empty string and copies the nine shaders from the
+pinned capsule into `<build>\shaders` (CMake POST_BUILD), so CTest and headless runs from the build tree still work.
+`--portable-check` prints `build-time shader fallback: none (release build)`.
+
+Scan of the slice213 `gt4vulkan.exe` (97,188,352 bytes, sha256 `c503ee9c...`), ASCII and UTF-16 runs of 5 or more
+characters, for `X:\`, `X:/`, `Antigravity`, `Alano`, `gt4-wt`, `Users\`, `staticrecomp`, `private\slice`, `.cargo` and
+`AppData`: **no match**. `tests/python/test_portable_install.py` repeats the scan for every release build.
 
 ### Remaining absolute strings in the executable (audit, slice200)
 
@@ -97,8 +107,9 @@ not copied into the worktree). The installed folder is run with `GT4_GS_PROCESS`
 
 ## Open items
 
-- The release build should use an empty build-time shader fallback, so no build path remains at all. Not done here: the
-  development builds still depend on it.
-- The installer (TASK-019/044) and the launcher download of the GS package (TASK-043) are not part of this folder.
+- Done in TASK-081 (slice213): the release build has an empty build-time shader fallback, so no build path remains.
+  Development builds keep the fallback.
+- The installer (`installer/gt4recomp.nsi`, TASK-081) packs this folder as `game\`; the launcher downloads the GS
+  package (TASK-043). Neither is part of this folder.
 - The crash-safe flush on exit is verified by the fixture, the kill test and the build, not by a headless save (no
   headless schedule saves yet, see BUILD slice200).

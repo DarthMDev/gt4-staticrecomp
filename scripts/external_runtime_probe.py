@@ -119,7 +119,13 @@ PERF_PROFILES = {
     # TASK-019 launcher test (slice209): the slice208 coverage build (accepted EE library, 1,105 seeds) plus the
     # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
     # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
-    'pcsx2': ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'),
+    'pcsx2': ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'),
+    # TASK-081 round 2 (slice214): the slice213 release build with the Vulkan baseline path (swapchain maintenance 1
+    # only when the driver has it; GT4_VULKAN_FORCE_BASELINE=1 forces the plain path). Mode pcsx2 points here.
+    'pcsx2-slice213': ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'),
+    # TASK-081 (slice213): the slice211 recipe as a release build (GT4_RELEASE_DISTRIBUTION=ON: no build-time shader
+    # folder in the executable; shaders from <exe folder>\shaders). Mode pcsx2 points here; slice211 stays as history.
+    'pcsx2-slice211': ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'),
     # TASK-079 (slice211): the slice210 build plus GT4_FORCE_WIDESCREEN (16:9 held at guest VBlank, default on).
     # Mode pcsx2 points here; slice210 stays as history.
     'pcsx2-slice210': ('slice210-pcsx2.json', 'private/slice210-build/build/gt4vulkan.exe'),
@@ -151,7 +157,8 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
-                     'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json')
+                     'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
+                     'slice214-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
@@ -159,7 +166,8 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mt
                      'slice197-pcsx2.json', 'slice198-pcsx2.json', 'slice199-pcsx2.json', 'slice200-pcsx2.json',
                      'slice201-pcsx2.json', 'slice202-pcsx2.json',
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
-                     'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json')
+                     'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
+                     'slice214-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}

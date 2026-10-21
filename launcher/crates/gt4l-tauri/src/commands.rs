@@ -253,6 +253,13 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
 #[tauri::command]
 pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let shared: Shared = shared.inner().clone();
+    // TASK-081: the processor and Vulkan checks before the game starts (`gt4l_core::system_check`).
+    if let Some(problem) = gt4l_platform::system::requirements_problem() {
+        let mut state = lock(&shared);
+        state::log(&state.dirs, &format!("system requirement not met: {problem}"));
+        state.home_message = problem.clone();
+        return Err(problem);
+    }
     let inputs = prepare_play(&shared, &program_directory()).inspect_err(|message| {
         lock(&shared).home_message = message.clone();
     })?;
@@ -481,7 +488,8 @@ pub fn reset_all_bindings_of(shared: &Shared) -> Result<Value, String> {
 pub struct LibraryView {
     pub items: Vec<Item>,
     pub status: String,
-    /// Replays only: the library folder, shown so a user can find the files.
+    /// The folder that holds the page's files (`Documents\Gran Turismo 4\Saves` or `...\Replays`), shown with an
+    /// "Open folder" button so a player can find and back up the files.
     pub folder: String,
 }
 
@@ -489,7 +497,7 @@ fn saves_view(state: &AppState) -> Result<LibraryView, String> {
     Ok(LibraryView {
         items: saves::saves(&state.library)?,
         status: state.saves_status.clone(),
-        folder: state.library_root.display().to_string(),
+        folder: state.user_dirs.saves().display().to_string(),
     })
 }
 
@@ -497,7 +505,7 @@ fn replays_view(state: &AppState) -> Result<LibraryView, String> {
     Ok(LibraryView {
         items: saves::replays(&state.library)?,
         status: state.replays_status.clone(),
-        folder: state.library_root.display().to_string(),
+        folder: state.user_dirs.replays().display().to_string(),
     })
 }
 
@@ -627,7 +635,7 @@ fn delete_item(name: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, S
         .into_iter()
         .find(|item| item.name == name)
         .ok_or_else(|| "That item is not in the library any more.".to_string())?;
-    let result = saves::delete(&state.library_root, &item);
+    let result = saves::delete(&state.library, &item);
     let status = match result {
         Ok(()) => format!("{} moved to the Recycle Bin.", item.label),
         Err(message) => message,
@@ -660,8 +668,10 @@ pub struct AboutInfo {
     pub gt4gs: String,
     /// Where the game files live: the copy of the disc image (`<data>\disc`). The picked file is not needed.
     pub game_files: String,
-    /// The data folder (saves, settings, prepared files, renderer).
+    /// The data folder (settings, prepared files, renderer, logs).
     pub data_folder: String,
+    /// The player's folder with the saves and replays (`Documents\Gran Turismo 4`).
+    pub saves_folder: String,
 }
 
 #[tauri::command]
@@ -683,6 +693,7 @@ pub fn about_info_of(shared: &Shared) -> Result<AboutInfo, String> {
         gt4gs: renderer,
         game_files: state.dirs.disc_folder().display().to_string(),
         data_folder: state.dirs.root().display().to_string(),
+        saves_folder: state.user_dirs.root().display().to_string(),
     })
 }
 
@@ -697,6 +708,27 @@ pub fn open_log_folder(shared: State<'_, Shared>) -> Result<(), String> {
 #[tauri::command]
 pub fn open_game_files_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let folder = lock(shared.inner()).dirs.disc_folder();
+    open_folder(&folder)
+}
+
+/// Opens the player's folder (`Documents\Gran Turismo 4`, with Saves and Replays) in Explorer.
+#[tauri::command]
+pub fn open_player_folder(shared: State<'_, Shared>) -> Result<(), String> {
+    let folder = lock(shared.inner()).user_dirs.root().to_path_buf();
+    open_folder(&folder)
+}
+
+/// Opens the Saves folder of the player's folder (`Documents\Gran Turismo 4\Saves`) in Explorer.
+#[tauri::command]
+pub fn open_saves_folder(shared: State<'_, Shared>) -> Result<(), String> {
+    let folder = lock(shared.inner()).user_dirs.saves();
+    open_folder(&folder)
+}
+
+/// Opens the Replays folder of the player's folder (`Documents\Gran Turismo 4\Replays`) in Explorer.
+#[tauri::command]
+pub fn open_replays_folder(shared: State<'_, Shared>) -> Result<(), String> {
+    let folder = lock(shared.inner()).user_dirs.replays();
     open_folder(&folder)
 }
 

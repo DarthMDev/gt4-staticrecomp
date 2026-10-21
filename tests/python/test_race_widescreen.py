@@ -89,12 +89,19 @@ class WidescreenProbeTests(unittest.TestCase):
                     run.assert_not_called()
                 self.assertFalse((root / 'private/unknown').exists())
 
-    def test_pcsx2_mode_is_slice211_and_slice210_is_history(self):
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
+    def test_pcsx2_mode_is_slice214_and_slice213_slice211_slice210_are_history(self):
+        # TASK-081: slice213 is the slice211 recipe as a release build; it keeps GT4_FORCE_WIDESCREEN.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice213'], ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice211'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice210'],
                          ('slice210-pcsx2.json', 'private/slice210-build/build/gt4vulkan.exe'))
         self.assertIn('slice211-pcsx2.json', probe.VU0_AOT_MANIFESTS)
         self.assertIn('slice211-pcsx2.json', probe.VU1_AOT_MANIFESTS)
+        self.assertIn('slice213-pcsx2.json', probe.VU0_AOT_MANIFESTS)
+        self.assertIn('slice213-pcsx2.json', probe.VU1_AOT_MANIFESTS)
+        self.assertIn('slice214-pcsx2.json', probe.VU0_AOT_MANIFESTS)
+        self.assertIn('slice214-pcsx2.json', probe.VU1_AOT_MANIFESTS)
 
 
 if __name__ == '__main__':

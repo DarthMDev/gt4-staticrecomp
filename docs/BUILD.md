@@ -1676,3 +1676,76 @@ Owner launcher test folder (`private/owner-test-launcher`): `game` is slice211 (
 build (`launcher/target/release/GT4Recomp.exe` on `task/019-launcher`). `version.json` and `%LOCALAPPDATA%\GT4Recomp` untouched.
 
 Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.
+
+## Slice 213 - TASK-081 release build for 1.0.0 (`--mode pcsx2`)
+
+The slice211 recipe plus `-DGT4_RELEASE_DISTRIBUTION=ON`. Source: branch `task/081-release-1-0-0` (from main 26f83b8).
+Build script `private/slice213-scripts/build-game-213.bat` (clang-cl 22.1.3 as slice206-slice211, `--parallel 4`).
+Executable `private/slice213-build/build/gt4vulkan.exe`, 97,188,352 bytes, sha256
+`c503ee9c0729a9e0acc606762a0cb79c130829e311a771ac284e25a63c27422b`.
+
+Changes against slice211:
+- `native/CMakeLists.txt`: option `GT4_RELEASE_DISTRIBUTION` (default OFF). ON sets `GT4_VULKAN_SHADER_DIR` to an empty
+  string and copies the nine shaders of the pinned capsule into `<build>\shaders` after `gt4vulkan` links.
+- `native/install_paths.{hpp,cpp}`: with an empty build-time folder the answer is always `<exe folder>\shaders`;
+  `--portable-check` prints `build-time shader fallback: present (development build)` or `none (release build)`.
+- `native/native_vulkan.cpp`: a missing shader folder stops Vulkan start with "The game's shader folder is missing
+  (...). Reinstall GT4Recomp." (windowed runs print it as `[host] audio/input/window failure: ...`; a headless run
+  ends without the text, as for every other Vulkan start error).
+- CPU level: unchanged. `GT4_X86_64_V3` stays OFF. A disassembly of slice211 (llvm-objdump) finds 346 SSE4/AVX
+  instructions, all in one 12 KB region of CPU-dispatched Visual C++ library code (`cpuid` x5, `xgetbv` x1), and no
+  BMI1/BMI2 instruction. The executable runs on baseline x86-64; the launcher checks SSE4.1 (owner, slice214 round), so the
+  game has no CPU check of its own (Confirmed for slice211 and the same recipe in slice213).
+
+Checks (2026-10-21):
+- String scan of `gt4vulkan.exe` (ASCII and UTF-16 runs of 5+ characters; drive paths, `Antigravity`, `Alano`,
+  `gt4-wt`, `Users\`, `staticrecomp`, `private\slice`, `.cargo`, `AppData`): no match. slice211 had exactly one
+  (`C:/Antigravity/gt4-staticrecomp/private/slice153-pacing-shaders`).
+- CTest: `private/slice213-scripts/ctest-213.log`.
+- Python `unittest discover` with `GT4_NATIVE_BUILD` = slice213: `private/slice213-scripts/python-213.log`.
+- Headless, 4,200 frames, the slice211 arguments (12 presses, frame dump every 100, `--trace-syscalls`,
+  `GT4_MTVU_REPORT_EVERY=500`), a copy of the widescreen seed card, `GT4_FORCE_WIDESCREEN` unset:
+  42 of 42 frame dumps identical to slice211 runs (a), (a2) and (b) (`private/slice213-smoke/h213-seed-unset`,
+  `private/slice213-scripts/sha-213.txt`). No `no translated code` line. The card copy is unchanged. The log shows
+  `[vulkan] shader folder: ...\slice213-build\build\shaders` (the build-tree copy).
+- Without `shaders\` (scratch copy of the distribution folder): `--portable-check` says `missing; a release build has
+  no build-time fallback` and exits 1; the game start stops at Vulkan start.
+- Distribution folder `private/slice213-dist` (`scripts/make_distribution.py`, 18 files, 97 MB): `--portable-check`
+  `result: ok`, `build-time shader fallback: none (release build)`.
+- Pins: `docs/inputs/slice213-pcsx2.json` (mode `pcsx2`; `pcsx2-slice211` kept as history). Every other pin is
+  unchanged.
+
+Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.
+The installer (TASK-081) packs `private/slice213-dist` as `game\`.
+
+## Slice 214 - TASK-081 round 2: Vulkan baseline path for older drivers (`--mode pcsx2`)
+
+Release blocker: slice213 required `VK_KHR_get_surface_capabilities2` and `VK_KHR_surface_maintenance1` (instance) and
+`VK_KHR_swapchain_maintenance1` (device), which only 2025+ drivers have. slice214 = the slice213 recipe
+(`private/slice214-scripts/build-game-214.bat`) plus:
+- `native/vulkan_extensions.{hpp,cpp}` (pure): required = `VK_KHR_surface`, `VK_KHR_win32_surface` (instance) and
+  `VK_KHR_swapchain` (device). Swapchain maintenance 1 is enabled only when present: the KHR family (2025+), else the
+  EXT family (2023+, same structures and values), each with `VK_KHR_get_surface_capabilities2` and its own
+  `surface_maintenance1`, and only when the device reports the `swapchainMaintenance1` feature.
+  `GT4_VULKAN_FORCE_BASELINE=1` forces the plain path; any value other than 0 or 1 refuses the start.
+- `native/native_vulkan.cpp`: enumerates instance and device extensions; the feature query chains the maintenance
+  structure only when offered; timeline semaphores (core 1.2) stay required. Baseline path: a slot waits on the GS
+  timeline value of its last presenting submission instead of a present fence; each swapchain image has its own present
+  semaphore (recreated with the swapchain); `vkDeviceWaitIdle` before a swapchain rebuild and at shutdown. The startup
+  log says `[vulkan] presentation path: khr-maintenance1 | ext-maintenance1 | baseline (...)`.
+- CTest: `native_vulkan_extensions` (selection table) and `native_vulkan_pixels_baseline` (the pixel fixture, including
+  Win32 presentation to a hidden window with repeat, zero size and resize, on the forced baseline path).
+
+Executable `private/slice214-build/build/gt4vulkan.exe`, 97,197,568 bytes, sha256
+`77909fa6c9f6ea832c204136b118a8da559718ec72a231d3d1601beb60e36150`. String scan: no build path.
+
+Checks (2026-10-21):
+- CTest 38/38 (`private/slice214-scripts/ctest-214.log`); Python 596 OK, 24 skipped (`python-214.log`).
+- `vulkan_fixture` under `VK_LAYER_KHRONOS_validation` (Vulkan SDK 1.4.341.1), both paths: no validation message.
+- Headless, the slice213 arguments on a copy of the widescreen seed card: default path (`khr-maintenance1` on this AMD
+  driver) 42/42 and forced baseline 42/42 frame dumps identical to slice213 (`private/slice214-smoke/h214-default`,
+  `h214-baseline`). Headless runs never present, so the baseline difference is limited to presentation, which the
+  hidden-window CTest and the owner check.
+- Pins: `docs/inputs/slice214-pcsx2.json` (mode `pcsx2`; `pcsx2-slice213` kept). Distribution `private/slice214-dist`.
+- Launcher (same round): the CPU minimum is SSE4.1 with SSE3/SSSE3 (owner decision), and the Vulkan check requires only
+  `VK_KHR_surface` and `VK_KHR_win32_surface`.

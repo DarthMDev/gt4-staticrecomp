@@ -101,11 +101,11 @@ fn harvest_replaces_a_changed_save_and_never_deletes() {
     let after = Card::build(&[game_save(21)]).unwrap().to_image();
     let report = lib.harvest(&after).unwrap();
     assert!(report.replaced_active);
-    let kept = folder::import_item(&lib.memcard_dir().join(GAME_SAVE_NAME)).unwrap();
+    let kept = folder::import_item(&lib.active_dir().join(GAME_SAVE_NAME)).unwrap();
     assert!(gt4saves::card::same_contents(std::slice::from_ref(&kept), std::slice::from_ref(&game_save(21))));
-    let backup_dirs: Vec<_> = fs::read_dir(lib.memcard_dir().join(".backup")).unwrap().collect();
+    let backup_dirs: Vec<_> = fs::read_dir(lib.active_backup_dir()).unwrap().collect();
     assert_eq!(backup_dirs.len(), 1, "the previous save was copied to .backup");
-    assert!(lib.memcard_dir().join(REPLAY).is_dir(), "a replay missing from the card is kept, not deleted");
+    assert!(lib.replays_dir().join(REPLAY).is_dir(), "a replay missing from the card is kept, not deleted");
 }
 
 #[test]
@@ -155,7 +155,7 @@ fn write_card_image_keeps_the_previous_card_as_a_backup() {
     fs::write(&target, b"previous").unwrap();
     lib.write_card_image(&target, &Card::blank().to_image()).unwrap();
     assert!(Card::from_image(&fs::read(&target).unwrap()).is_ok());
-    let backups: Vec<_> = fs::read_dir(lib.memcard_dir().parent().unwrap().join("backups")).unwrap().collect();
+    let backups: Vec<_> = fs::read_dir(&lib.paths().backups).unwrap().collect();
     assert_eq!(backups.len(), 1);
 }
 
