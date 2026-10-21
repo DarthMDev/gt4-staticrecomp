@@ -1,11 +1,13 @@
 # Current Status
 
-## TASK-080 P1 (2026-10-21, branch `task/080-aspect-ratios`, not merged)
+## TASK-080 ultrawide (2026-10-21, branch `task/080-aspect-ratios`, not merged)
 
-slice212b = `--mode pcsx2` on the branch: native display aspect ratios (`GT4_DISPLAY_ASPECT`, auto by default; race
-camera Hor+/Vert+ hook; race view filled, menus 16:9; protocol 1.3 for gt4-gs 1.1.0; launcher Aspect ratio row) and the
-TASK-079 hold hardening. 16:9 frames byte-identical. Waiting for the owner tests and approval. Details:
-[BUILD](BUILD.md) slice 212b, decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md).
+Rebuilt on the 1.0.0 release recipe after merging main db99f9e: slice215 = `--mode pcsx2` on the branch (slice214 plus
+native display aspect ratios: `GT4_DISPLAY_ASPECT`, auto by default; race camera Hor+/Vert+ hook; race view filled,
+menus 16:9; protocol 1.3 for gt4-gs 1.1.0; launcher Aspect ratio row, settings schema 4 migrating the 1.0.0 file).
+16:9 frames byte-identical to slice214. Owner test installer `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`
+(app version 1.0.0, no GitHub release). Waiting for the owner tests and approval; planned as GT4Recomp 1.1.0. Details:
+[BUILD](BUILD.md) slice 215 (and 212b), decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md).
 
 ## Current state (2026-10-21)
 

@@ -1811,3 +1811,53 @@ Checks (2026-10-21):
 - Pins: `docs/inputs/slice214-pcsx2.json` (mode `pcsx2`; `pcsx2-slice213` kept). Distribution `private/slice214-dist`.
 - Launcher (same round): the CPU minimum is SSE4.1 with SSE3/SSSE3 (owner decision), and the Vulkan check requires only
   `VK_KHR_surface` and `VK_KHR_win32_surface`.
+
+## Slice 215 - TASK-080 native aspect ratios on the 1.0.0 release recipe (`--mode pcsx2`)
+
+The slice214 recipe (release distribution switch on, Vulkan baseline path) with the TASK-080 work of slice212b on top.
+Source: branch `task/080-aspect-ratios` after merging main db99f9e (release 1.0.0), worktree `C:\Antigravity\gt4-wt-080`.
+Build script `private/slice215-scripts/build-game-215.bat` = `build-game-214.bat` with the worktree source and
+`GT4_LICENSE_GUARD_SOURCE=private/slice212c-license-guard-runtime` (clang-cl 22.1.3, `--parallel 4`). Executable
+`private/slice215-build/build/gt4vulkan.exe`, 97,207,808 bytes, sha256
+`3c9c252d6ac68b675290da55d7390b29978b2e1db4968f23e05ac8c0765b305a`; `SDL3.dll` and `shaders\` beside it.
+String scan (ASCII and UTF-16: `Antigravity`, `Alano`, `gt4-wt`, `Users\`, `staticrecomp`, `private\slice`,
+`private/slice`, `.cargo`, `AppData`): no match.
+
+Game-side changes against slice214: exactly the slice212b list (display_aspect, the slice212c capsule hooks, race-view
+fill, protocol 1.3 producer, TASK-079 settle rule). `GT4_FORCE_WIDESCREEN` stays on: the game's own 16:9 is the base
+and Hor+/Vert+ is applied on top of it. The gt4-gs.ini aspect stays forced 16:9; the per-scene fill reaches gt4-gs only
+through protocol 1.3 `display_aspect`.
+
+Launcher (same branch): the Aspect ratio row (Auto / 16:9 / 4:3 / Custom, Custom ratio 1.00-6.00) is the only aspect
+control; Input resolution and Widescreen stay retired (`GT4_FORCE_480P=1`, `GT4_FORCE_WIDESCREEN=1` always).
+Settings schema 4 migrates the 1.0.0 schema 3 file (drops `input_resolution`, `widescreen`, `[gs] aspect`; adds
+`aspect_ratio = "auto"`, `aspect_custom = "233"`; see [MIGRATIONS](launcher/MIGRATIONS.md)). The hidden owner test knob
+`GT4_ASPECT_FOV_EXTRA` is passed through from the launcher's environment (`launch::PASSED_THROUGH`); every other
+inherited `GT4_`/`PS2_` variable is still scrubbed.
+
+Checks (2026-10-21):
+- CTest 39/39 (`private/slice215-scripts/ctest-215-final.log`); Python `unittest discover` with `GT4_NATIVE_BUILD` =
+  slice215: 616 tests OK, 24 skipped (`python-215.log`); `cargo test --workspace` 256 passed; UI nav-test 150/150,
+  focus-check 93/93 (headless Edge).
+- Headless donor runs (`private/slice215-scripts/run-headless-215.sh`, stderr filtered on the fly; card copies only):
+  - menus, 4,200 frames, widescreen seed copy: `GT4_DISPLAY_ASPECT=16:9` and unset (auto, headless 16:9): 42 of 42
+    dumps identical to slice214 (`private/slice214-smoke/h214-default`); the card copy is unchanged.
+  - race schedule (Arcade, El Capitan, Ford Ka, 5 AI; 16,000 frames), 4:3 card copy: 21:9 and 32:9 runs are 160 of 160
+    identical to the slice212b runs; 84 of 160 differ from the 16:9 race, the first at frame 7700. Camera hook at VBlank
+    7638 and 8335 (matrix at sp 0x01FFF810 / 0x01FFF800, x factor 0.761905 and 0.5), fill from VBlank 7670.
+- Headless pcsx2 (probe, race schedule 10,000 frames, `GT4_DISPLAY_ASPECT=21:9`, pin `slice215-pcsx2.json`):
+  gt4-gs 1.0.1 (the pinned package): "protocol 1.2: display aspect mode 1 not sent (needs 1.3)", exit 0;
+  gt4-gs 1.1.0 (`private/gt4gs-110-release-pkg`, gt4-gs.exe sha256 48ecec53... = the exe in the published zip
+  cd07f5a2...): "CONTROL display_aspect 1 (fill) from frame 7670", no ERROR, exit 0. Both gt4-gs.ini files say
+  `AspectRatio = 16:9`. The 0.9 GB probe logs were reduced to `probe-filtered.log`.
+- Distribution `private/slice215-dist` (`scripts/make_distribution.py`, 18 files): `--portable-check` `result: ok`.
+- Pins: `docs/inputs/slice215-pcsx2.json` (mode `pcsx2`; `pcsx2-slice214`, `pcsx2-slice213`, `pcsx2-slice212b`,
+  `pcsx2-slice211` kept as history). License guard fields = slice212c; every other input as slice214.
+
+Owner test installer (not a release): `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`, 28,733,896
+bytes, sha256 `18dad203399dddd8ded9c2d9ebdbf7b3ad8dc3428fe75beea0bd34d3ecf83f46` (the 1.0.0 recipe of
+[RELEASES](RELEASES.md): `launcher/tools/build-release.ps1`, GT4Recomp.exe sha256 744c19dd..., path scan clean; the
+1.0.0 WebView2 bootstrapper receipt `private/release-100-webview2`; `makensis /DVERSION=1.0.0`). The launcher refuses
+SemVer pre-release tags, so the app version stays 1.0.0 and only the file name says "ultrawide-test": the updater never
+offers it, and an installed 1.0.0 is not offered an update by it. 7-Zip extraction: launcher and game executable equal
+to their sources. No GitHub release, draft or tag.

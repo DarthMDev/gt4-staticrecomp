@@ -1,4 +1,4 @@
-"""TASK-080 P1 native display aspect ratios (slice212b): capsule derivation and pins, launcher validation of
+"""TASK-080 P1 native display aspect ratios (slice212b, rebuilt on the 1.0.0 release recipe as slice215): capsule derivation and pins, launcher validation of
 GT4_DISPLAY_ASPECT / GT4_ASPECT_FOV_EXTRA, the mode pin, and the race camera hook on a synthetic guest stack.
 
 The behaviour tests compile the overlay helpers and hook with native/display_aspect.cpp and a minimal guest model
@@ -137,22 +137,25 @@ class DisplayAspectLauncherTests(unittest.TestCase):
             with self.subTest(value=bad), self.assertRaises(ValueError):
                 probe.aspect_fov_extra(bad)
 
-    def test_mode_pcsx2_is_slice212b_and_slice211_is_history(self):
+    def test_mode_pcsx2_is_slice215_and_older_builds_are_history(self):
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
-        self.assertEqual((name, runtime), ('slice212b-pcsx2.json', 'private/slice212b-build/build/gt4vulkan.exe'))
-        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice211'],
-                         ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
+        self.assertEqual((name, runtime), ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'],
+                         ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice212b'],
+                         ('slice212b-pcsx2.json', 'private/slice212b-build/build/gt4vulkan.exe'))
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], '212b')
+        self.assertEqual(manifest['slice'], 215)
         self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
-        base = json.loads((ROOT / 'docs/inputs/slice211-pcsx2.json').read_text(encoding='utf-8'))
+        # slice215 = the slice214 release recipe (1.0.0) plus the slice212c capsule and the TASK-080 host code.
+        base = json.loads((ROOT / 'docs/inputs/slice214-pcsx2.json').read_text(encoding='utf-8'))
         for key in ('frozen_game_library', 'card_seeds', 'gs_stream', 'vu1_aot', 'vu0_aot', 'source_capsule',
                     'port_capsule', 'shader_capsule', 'memcard_capsule', 'memcard_capsule_sha256'):
             self.assertEqual(manifest[key], base[key], key)

@@ -135,10 +135,14 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 214)
-        self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
-        self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
-        self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])
+        self.assertEqual(manifest['slice'], 215)
+        # The slice212c capsule is the slice206 guard plus the aspect hook: kernel.cpp and cdvdfsv.cpp are unchanged.
+        aspect_pin = json.loads((ROOT / 'docs/inputs/slice212c-license-guard-runtime.json').read_text(encoding='utf-8'))
+        self.assertEqual(manifest['license_guard_capsule'], aspect_pin['capsule'])
+        self.assertEqual(manifest['license_guard_source_sha256'], aspect_pin['source_sha256'])
+        self.assertEqual(manifest['license_guard_receipt_sha256'], aspect_pin['receipt_sha256'])
+        for unchanged in ('kernel.cpp', 'cdvdfsv.cpp'):
+            self.assertEqual(manifest['license_guard_source_sha256'][unchanged], PIN['source_sha256'][unchanged], unchanged)
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice203'],

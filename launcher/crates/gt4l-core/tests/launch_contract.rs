@@ -91,9 +91,12 @@ fn inherited_gt4_and_ps2_variables_are_scrubbed_and_others_kept() {
         "PS2_DUMP_AUDIO".to_string(),
         "PATH".to_string(),
         "VK_LAYER_PATH".to_string(),
+        "GT4_ASPECT_FOV_EXTRA".to_string(),
+        "GT4_DISPLAY_ASPECT".to_string(),
     ];
     let plan = launch::plan_launch(&inputs, &Settings::default(), &inherited);
-    assert_eq!(plan.removed_inherited, vec!["GT4_PACING", "PS2_DUMP_AUDIO"]);
+    // TASK-080 T1: the hidden FOV factor passes through; the aspect itself comes only from the setting.
+    assert_eq!(plan.removed_inherited, vec!["GT4_DISPLAY_ASPECT", "GT4_PACING", "PS2_DUMP_AUDIO"]);
     assert!(!plan.removed_inherited.iter().any(|name| name == "PATH" || name == "VK_LAYER_PATH"));
 }
 

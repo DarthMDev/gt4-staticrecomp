@@ -236,9 +236,15 @@ fn flag(on: bool) -> String {
     if on { "1" } else { "0" }.to_string()
 }
 
+/// Inherited variables that are passed through to the game although they carry a scrubbed prefix. Each one is a
+/// hidden owner test knob that the game validates itself (an invalid value refuses the start):
+/// - `GT4_ASPECT_FOV_EXTRA` (TASK-080 owner test T1, 0.5..3.0, default 1.0): an extra horizontal FOV factor on top of
+///   the geometry-correct Hor+ widening, to compare roundness. It is not a setting and no row writes it.
+pub const PASSED_THROUGH: &[&str] = &["GT4_ASPECT_FOV_EXTRA"];
+
 /// Whether an inherited variable must be removed for the game process.
 pub fn is_scrubbed(name: &str) -> bool {
-    SCRUBBED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+    !PASSED_THROUGH.contains(&name) && SCRUBBED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
 /// Plans one CoreGS 1.1 launch. Pure: it creates no files and starts no process.
