@@ -84,8 +84,10 @@ Candidates, in order:
 2. **NVIDIA DLSS Super Resolution and DLSS Frame Generation** through Streamline, on Vulkan. The redistributable binaries
    are under NVIDIA's licence. Needs good motion vectors for cars.
 3. **Intel XeSS:** Vulkan; redistributable binary.
-4. **FSR 4 (ML) is DirectX 12 only today.** That would need a D3D12 present path or interop on PC; evaluate when
-   needed.
+4. **FSR 4 (ML):** the owner reports (2026-10-21) that AMD released FSR 4.1.2 with native Vulkan support. If that is
+   confirmed, FSR 4 no longer needs a D3D12 path: study it for CoreGS 2.0 as the ML upscaler on Vulkan, with the same
+   inputs as FSR 3. Before implementing, verify the SDK release, its licence and redistribution terms, GPU
+   requirements (which AMD generations, and any support on other vendors), and frame-generation support.
 5. **Neural rendering features (new DLSS generations):** check each feature's inputs when its SDK is public. Features
    that need engine-level control of materials and lighting fit the native renderer (TASK-065..073) better than an
    emulated GS.
