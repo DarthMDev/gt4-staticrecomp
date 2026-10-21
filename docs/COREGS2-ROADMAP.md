@@ -23,6 +23,34 @@ must never be GPL.
 4. **No shader-compile stutter.** GT4 uses a finite, measurable set of GS states (spec census). Ship the pipelines
    precompiled; nothing compiles during play.
 
+## Variable frame rate readiness: design requirements for the foundation (owner, 2026-10-21)
+The TASK-026 specification (chapter 12.5) was written for **one present per guest VBlank**. TASK-082 (fixed 60 Hz
+simulation, render at any rate) and TASK-045 (interpolation) came later. The foundation must not close those doors,
+even though the features come after parity:
+
+1. **Present decoupled from VSYNC.**
+   - A frame becomes a finished image, then a present scheduler decides when to show it.
+   - Required for frame skip below 60 (TASK-082 P1: the game updates every VBlank and skips the render when the
+     host falls behind, so CoreGS must accept "no new frame this VBlank" and re-present or hold the last image
+     without stalling), for VRR, and for 120/144/unlocked presents.
+2. **Auxiliary frames without guest side effects.** Extra render-only passes (TASK-082 P2/P3) and interpolated
+   frames (TASK-045) must render without changing anything the guest can observe:
+   - readbacks are not answered from them;
+   - signals and FINISH are not raised;
+   - emulated VRAM and render targets are either untouched (shadow targets) or overwritten by the next real frame.
+   - The protocol already reserves AUX_FRAME_BEGIN/END (records 9/10). Design the targets so that an aux frame can
+     use a scratch copy.
+3. **Frame history and motion data.** Keep the previous frame's colour, depth and camera (from the camera hook) as
+   first-class resources. The same data feeds TASK-045 interpolation, FSR 3 frame generation, TAA and the FSR 3 or
+   DLSS upscalers. Build it once.
+4. **A per-pass cost budget.** CPU and GPU timers per frame, per pass and per target, from the start. Needed for the
+   TASK-082 kill gate (a render pass over 7.3 ms) and for frame-skip decisions.
+5. **Latency hooks:** late input sampling and just-in-time present (Reflex-style), so interpolation or frame
+   generation latency can be offset.
+
+None of this changes 1x parity work. Each item is an interface or resource decision to make early (spec milestones
+M5/M6, presentation), not a feature to build before parity.
+
 ## Enhancements we can own
 
 ### Image
