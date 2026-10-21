@@ -108,6 +108,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
 | TASK‑082 | Native variable frame rate: fixed 60 Hz simulation, render at any rate (render skip below 60, extra render-only passes above 60 with the game's own render time t) | 📋 Planned (after 1.0.0) · study done (docs/NATIVE-VARIABLE-FPS-STUDY.md) |
 | TASK‑083 | Faster loading and saves: instant disc reads (deeper than PCSX2 Fast CDVD) and loading/save speed-ups in our runtime and game code; gameplay untouched | 📋 Future study (owner, 2026-10-21) |
+| TASK‑084 | Frame cost optimisation: cut the emulation-side EE overhead and the night-race readback (target about 6 ms per race frame headless) | 📋 Planned (after 1.0.0) · study done (docs/FRAME-COST-STUDY.md) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -343,6 +344,19 @@ card writes, VBlank pacing). Candidate levers: instant disc reads (and a faster 
 an unthrottled guest clock while a loading or save screen is active (the TASK-077 study found the loading object),
 with audio muted or kept at the right pace; hooks or ELF patches that shorten fixed waits and per-frame save
 chunking. Never during races or replays; physics, lap times and replays untouched. After 1.0.0.
+
+### TASK-084 — Frame cost optimisation
+Owner request 2026-10-21. Study: docs/FRAME-COST-STUDY.md (slice211, headless, timed only with no builds running).
+In the day race the EE thread takes 8.2 ms per frame, of which the translated game code is 2.9 ms; the rest is VIF1
+job posting (about 5,200 MTVU jobs per frame, one doorbell), the journal GS front end, stream writes, IOP, run loop and
+waits for the VU1 worker. The night-race lens-flare readback (2 KiB per frame) adds 3.3 ms of EE wait plus a 0.9-1.6 ms
+GS round trip and serialises EE and VU1. Ranked plan: (1) defer the flare readback one frame, ordered through the
+journal, after checking nothing in gameplay reads it (-4 to -5 ms night); (2) one MTVU job per VIF1 DMA chain and
+wake-ups only when waiting (-1 to -2 ms); (3) no EE wait for the VU1 worker at every VBlank in pcsx2 mode (-1 to -3 ms);
+(4) drop the second GIF walk and a copy (-0.4 to -0.8 ms); then compiler flags, run-loop fast paths, VU1 speed. Add the
+missing F8 instrumentation first (pacing-sleep scope, fixed summary formula, per-readback records). Each step: its
+own slice, headless frame identity, CTest and Python, owner F8 check. Feeds TASK-082 (a render pass must fit 7.3 ms for
+120 Hz) and weaker PCs. After 1.0.0.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
