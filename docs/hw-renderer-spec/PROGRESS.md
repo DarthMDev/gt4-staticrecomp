@@ -33,9 +33,9 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 
 ## Known failures at handover (slice216)
 
-- `hw_gpu_pixel_directed`: 8 TEXA cases; GPU shader lacks the IN-07 AEM rule the CPU reference took in 2434e1d.
+- `hw_gpu_pixel_directed`: resolved on 2026-10-21 in slice217; the 07.5 / IN-07 A-bit priority rule now matches the CPU reference (all three GPU exactness fixtures pass).
 - `python_native_contracts` / `test_make_distribution`: refuses the unpinned development executable (expected).
 
 ## Next step
 
-Bring IN-07 into `hw_pixel_core.glsl` (warm-up), then native `.gscap` v2 replay for the CPU reference (brief section 5, step 1).
+Native `.gscap` v2 replay for the CPU reference (brief section 5, step 1). Warm-up complete: slice217 compiled; `hw_gpu_blend_sweep`, `hw_gpu_pixel_directed`, and `hw_gpu_pixel_random` pass. Build output is under this worktree's ignored `build/slice217-coregs2/`, honoring the owner's no-writes-to-main instruction.

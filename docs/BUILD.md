@@ -1779,3 +1779,11 @@ Checks (2026-10-21):
   - `GT4_RENDERER=hw`: exit 0 after 4,200 frames; `[hw] session: vsyncs=4200 frames=4200 gif_bytes=2546704448
     privileged=20987 unmirrored_privileged=0 faults=0`; 0 frame dumps (the donor display path is off in a non-donor
     mode; HWR frame dumps are M6 work) (`private/slice216-smoke/h216-hw`).
+
+## Slice 217 - TASK-027 GPU TEXA/AEM warm-up (07.5, IN-07)
+
+Fresh full build using the slice216 recipe and unchanged asset pins, with the shader following the resolved IN-07 A-bit priority rule. To honor the owner's instruction to write only inside the worktree, build output is `C:\Antigravity\gt4-wt-027-coregs2\build\slice217-coregs2\build`; recipe and build log are in its parent. No main-checkout output was created. No launcher mode or distribution pin.
+
+- Confirmed: full build passed with clang-cl and pinned glslangValidator 16.2.0 / Vulkan SDK 1.4.341.1.
+- Executable: 97,291,264 bytes, SHA-256 `3fa40ea106b09816b52f1b0da5a7c7f3350f97ce77e953f5fce91e25fcd5b458`.
+- Confirmed: `ctest -R "^hw_gpu_" --output-on-failure`: 3/3 passed, including directed TEXA and random pixel fixtures (8.59 s). Full suite and default-renderer headless check are recorded with the next replay checkpoint.

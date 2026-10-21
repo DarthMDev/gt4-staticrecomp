@@ -2,7 +2,8 @@
 //
 // HWR uber pixel core (TASK-027, M4). Copyright (c) 2026 GT4Recomp contributors.
 //
-// Written from docs/hw-renderer-spec (chapters 01.5, 03.3, 03.4, 03.9, 08.1 to 08.11),
+// Written from the TASK-026 specification (docs/hw-renderer-spec),
+// chapters 01.5, 03.3, 03.4, 03.9, 07.5, 08.1 to 08.11;
 // clean room under decision 0069. No other renderer's shader or source was consulted.
 //
 // This file has no #version line: the shader entry points include it after their own
@@ -219,9 +220,14 @@ ivec4 hw_expand_texel16(uint texel, uint ta0, uint ta1, bool aem) {
     o.r = int((texel & 0x1Fu) << 3);
     o.g = int(((texel >> 5) & 0x1Fu) << 3);
     o.b = int(((texel >> 10) & 0x1Fu) << 3);
-    o.a = int((texel & 0x8000u) != 0u ? ta1 : ta0);
-    if (aem && o.r == 0 && o.g == 0 && o.b == 0) {
-        o.a = 0;
+    // IN-07 / 07.5: the A bit selects TA1 before the AEM black-texel test.
+    if ((texel & 0x8000u) != 0u) {
+        o.a = int(ta1);
+    } else {
+        o.a = int(ta0);
+        if (aem && o.r == 0 && o.g == 0 && o.b == 0) {
+            o.a = 0;
+        }
     }
     return o;
 }

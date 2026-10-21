@@ -554,7 +554,7 @@ HWR backend (`GT4_HW_GS=ON` builds only; black output). `task/027-m4-gpuref` (e3
 is not merged. Implementation continues with the external agent **GPT 6.1 Sol** as the only writer of the
 branch, clean room from `docs/hw-renderer-spec` (brief `AGENT-BRIEF-COREGS2.md`, progress in
 `docs/hw-renderer-spec/PROGRESS.md` and ai-memory `decisions/coregs2-implementation`). No pins until a
-candidate is offered to the owner. History of the pause follows.
+candidate is offered to the owner. Warm-up complete (2026-10-21): shader TEXA/AEM follows 07.5 / IN-07; slice217 builds and all three GPU exactness fixtures pass. Native v2 replay is next. History of the pause follows.
 
 **Paused by the owner on 2026-10-15** to focus on release 1.0.0. State on the
 integration branch `task/027-hw-renderer`: CPU-verified pure libraries for GS
