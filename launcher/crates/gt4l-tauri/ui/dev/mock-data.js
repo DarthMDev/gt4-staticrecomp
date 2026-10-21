@@ -91,17 +91,12 @@
         { value: "coregs-2.0", label: "CoreGS 2.0 (coming soon)", disabled: true }
       ],
       default: "pcsx2", current: "pcsx2" },
-    { id: "upscale", label: "Internal resolution", help: "The resolution the game is drawn at before it is shown. 480p is the PS2 size; higher presets look sharper and need a faster GPU.",
-      page: "basic", group: "graphics", control: "dropdown",
-      values: [
-        { value: "480p", label: "480p (1x)" },
-        { value: "720p", label: "720p (2x)" },
-        { value: "1080p", label: "1080p (3x)" },
-        { value: "1440p", label: "1440p (4x)" },
-        { value: "4K", label: "4K (6x)" },
-        { value: "8K", label: "8K (12x)" }
-      ],
-      default: "1080p", current: "1080p" },
+    // TASK-080 addendum: no Aspect ratio and no Internal resolution row. Render scale (50% to 200%) with the
+    // resulting internal resolution as its readout (labels are filled by tableView from the chosen resolution).
+    { id: "render_scale", label: "Render scale", help: "How sharp the picture is drawn. 100% draws it at least at your resolution; 50% is faster and softer, 200% is sharper and needs a much faster GPU.",
+      page: "basic", group: "graphics", control: "slider",
+      values: { min: 50, max: 200, step: 25, unit: "%" },
+      default: 100, current: 100, visible_when: { id: "renderer", equals: "pcsx2" } },
     { id: "fxaa", label: "Anti-aliasing (FXAA)", help: "Smooths jagged edges with a fast filter. It softens fine detail a little. Off by default.",
       page: "basic", group: "graphics", control: "toggle", values: null, default: false, current: false },
     { id: "cas_mode", label: "Sharpening (CAS)", help: "FidelityFX Contrast Adaptive Sharpening. Off leaves the picture as the game drew it.",
@@ -116,6 +111,10 @@
       page: "basic", group: "graphics", control: "slider",
       values: { min: 0, max: 100, step: 1, unit: "%" },
       default: 50, current: 50 },
+    { id: "monitor", label: "Monitor", help: "The screen the game opens on. The primary monitor is used until you pick another one.",
+      page: "basic", group: "display", control: "dropdown", values: [], default: "primary", current: "primary" },
+    { id: "resolution", label: "Resolution", help: "The size of the picture, from the sizes your monitor supports. The shape of the screen follows it.",
+      page: "basic", group: "display", control: "dropdown", values: [], default: "desktop", current: "desktop" },
     { id: "fullscreen", label: "Fullscreen", help: "Start in fullscreen. Alt+Enter or F11 switches while playing.",
       page: "basic", group: "display", control: "toggle", values: null, default: false, current: true },
     { id: "vsync", label: "VSync", help: "On keeps motion smooth with no tearing. Off lowers latency and may tear.",
@@ -142,7 +141,42 @@
     DEFAULTS[row.id] = row.default;
   });
 
+  // Two sample monitors (the Rust table lists the connected ones; see model::settings_table_with_monitors).
+  var MONITORS = [
+    { id: "\\\\.\\DISPLAY1@1920x1080", label: "TV \u2013 1920x1080 (primary)", desktop: "1920x1080",
+      modes: ["1920x1080", "1600x900", "1280x720", "1024x768", "800x600"] },
+    { id: "\\\\.\\DISPLAY2@3440x1440", label: "DELL U3419W \u2013 3440x1440", desktop: "3440x1440",
+      modes: ["3440x1440", "2560x1080", "1920x1080", "1680x1050", "1280x720"] }
+  ];
+  // The rule of gt4l_core::display::display_plan: k = ceil(max(W / 640, H / 448)), times the scale, ties up, 1..12.
+  function renderLabels(output) {
+    var size = output.split("x").map(Number);
+    var k = Math.max(Math.ceil(size[0] / 640), Math.ceil(size[1] / 448));
+    var labels = {};
+    for (var step = 50; step <= 200; step += 25) {
+      var m = Math.min(12, Math.max(1, Math.floor((2 * k * step + 100) / 200)));
+      labels[String(step)] = step + "% \u00B7 " + m + "x \u00B7 " + (640 * m) + "x" + (448 * m);
+    }
+    return labels;
+  }
+  function fillDisplayRows() {
+    var monitorRow = findRow("monitor");
+    var chosen = MONITORS.filter(function (m) { return m.id === monitorRow.current; })[0] || MONITORS[0];
+    monitorRow.current = chosen.id;
+    monitorRow.values = MONITORS.map(function (m) { return { value: m.id, label: m.label }; });
+    var resolutionRow = findRow("resolution");
+    if (chosen.modes.indexOf(resolutionRow.current) < 0) {
+      resolutionRow.current = chosen.desktop;
+    }
+    resolutionRow.default = chosen.desktop;
+    resolutionRow.values = chosen.modes.map(function (mode) {
+      return { value: mode, label: mode === chosen.desktop ? mode + " (desktop)" : mode };
+    });
+    findRow("render_scale").values.labels = renderLabels(resolutionRow.current);
+  }
+
   function tableView() {
+    fillDisplayRows();
     return {
       max_upscale: maxUpscale,
       rows: rows.map(function (row) {
@@ -379,6 +413,10 @@
           throw new Error("Unknown setting " + args.id);
         }
         row.current = args.value;
+        if (args.id === "monitor") {
+          // As the launcher: another monitor's Resolution goes back to its desktop mode.
+          findRow("resolution").current = "desktop";
+        }
         // The real set_setting returns nothing; the UI reads the table again.
         return null;
       }

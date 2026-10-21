@@ -172,9 +172,9 @@ fn play_plan(shared: &Shared, program_dir: &Path) -> Result<launch::LaunchPlan, 
     Ok(match &inputs.pcsx2 {
         Some(installed) => {
             let paths = launch::Pcsx2Paths::for_session(installed, &inputs.dirs.root().join("gs"), &session);
-            launch::plan_pcsx2_launch(&launch_inputs, &inputs.settings, &paths, &inherited)
+            launch::plan_pcsx2_launch(&launch_inputs, &inputs.settings, &paths, inputs.display.as_ref(), &inherited)
         }
-        None => launch::plan_launch(&launch_inputs, &inputs.settings, &inherited),
+        None => launch::plan_launch(&launch_inputs, &inputs.settings, inputs.display.as_ref(), &inherited),
     })
 }
 

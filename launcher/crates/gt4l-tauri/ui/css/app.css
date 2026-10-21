@@ -308,6 +308,9 @@ body.input-pad nav.side .ring-on { box-shadow: none; }
    (spatial focus depends on it). */
 .row .ctl { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex: none; width: 220px; }
 .row .ctl .slider { flex: 1; width: auto; min-width: 0; }
+/* TASK-080 Render scale: the readout names the resulting resolution ("100% · 4x · 2560x1792"). */
+.row .ctl.wide { width: min(400px, 62%); }
+.row .ctl.wide .val { white-space: nowrap; min-width: 168px; }
 .row .hint-text { font-size: 12px; color: var(--faint); }
 .row.is-disabled .k { color: var(--faint); }
 .row.is-disabled .ctl { opacity: 0.35; }

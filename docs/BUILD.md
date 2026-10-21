@@ -1917,3 +1917,53 @@ sha256 `65965f0199a760a6106f63d4b723df59a9807aef9062e6c949e9629b581a7d7a` (same 
 slice215; the slice215 installer moved to `superseded-slice215\`). Portable copy: the installer extracted with 7-Zip into
 `private/ultrawide-test-portable` (no `$PLUGINSDIR`, no uninstaller; game executable sha256 593803cd...). No GitHub
 release, draft or tag.
+
+## Slice 218 - TASK-080 addendum: seamless display (`--mode pcsx2`)
+
+slice218 = the slice217 recipe (license guard capsule `private/slice217-license-guard-runtime`, EE library profile
+`aspect`, port slice200, shaders slice153, gt4-gs 1.0.1 package, SDL3) with new host code only (decision 0071 addendum):
+
+- `native/display_aspect.*`: `GT4_OUTPUT_SIZE=WxH` (each side 320..16384, ratio 1:2..8:1, anything else refuses the
+  start); with `GT4_DISPLAY_ASPECT` auto (or unset) the ratio is the output size's, fixed for the session, also headless.
+  A fixed `GT4_DISPLAY_ASPECT` still wins (developer knob).
+- `native/window.cpp`, `native/window_mode.*`: `GT4_MONITOR` (a GDI device name such as `\\.\DISPLAY2`; malformed
+  refuses the start, not connected falls back to the primary monitor with a log line); with either variable set the
+  process declares per-monitor DPI awareness v2, the windowed client area is the output size (shrunk with its shape to
+  the work area) centred on that monitor, and borderless fullscreen covers that monitor. Without both variables the
+  window starts as before (960x540 where Windows puts it).
+
+Build: `private/slice218-scripts/build-game-218.bat <build dir> aspect` (the slice217 script with the same inputs).
+`private/slice218-build/build/gt4vulkan.exe` 97,221,120 bytes, sha256
+`e96f3549108d7943d9d5544fddb1584f4e5327599aec1209910e7a7b82b6881e`; `SDL3.dll` and `shaders\` beside it.
+
+Checks (2026-10-21):
+- CTest 39/39 (`private/slice218-scripts/ctest-218.log`; new fixture checks: `GT4_OUTPUT_SIZE` parsing and the auto
+  ratio, `GT4_MONITOR` parsing, client fit and centring). Python with `GT4_NATIVE_BUILD` = slice218: 629 tests OK,
+  24 skipped (`python-218.log`; new: overlay harness `test_output_size_drives_auto` and the refusal, probe validators
+  for `GT4_OUTPUT_SIZE` and `GT4_MONITOR`).
+- Headless donor runs (`private/slice218-scripts/run-all-headless-218.sh`, `GT4_DISPLAY_ASPECT` unset = auto with
+  `GT4_OUTPUT_SIZE`, card copies only; stderr filtered on the fly, logs under 5 KB):
+  - 1920x1080 menus (widescreen seed copy): 42 of 42 frame dumps identical to slice217 `m-16x9`;
+  - 1920x1080 race (4:3 card copy, race schedule, 16,000 frames): 160 of 160 identical to slice217 `r-16x9`; camera
+    hooks at VBlank 7638 and 8335 "unchanged", parameter block 0.75 / 640;
+  - 2560x1080 race: auto 21.33:9 (2.3704); hook 1 at VBlank 7638 scaled x 0.750000; parameter block 0x3F100000 / 853;
+    HUD canvas -248.889..888.889; presentation fill from VBlank 7670;
+  - 3440x1440 race: auto 21.50:9 (2.3889); hook scaled x 0.744186; parameter block 0x3F0EE23C / 860; HUD canvas
+    -253.333..893.333; fill from VBlank 7670.
+- Distribution `private/slice218-dist` (18 files): `--portable-check` `result: ok`.
+- Pins: `docs/inputs/slice218-pcsx2.json` (mode `pcsx2`; `pcsx2-slice217` kept as history); all 18 pinned files
+  verified by size and sha256 in the main checkout.
+
+Launcher (same branch): `gt4l-core::display` (`display_plan`, monitor identifiers and resolving), settings schema 5,
+Monitor / Resolution / Render scale rows, `GT4_MONITOR` and `GT4_OUTPUT_SIZE`, `upscale_multiplier` from the plan.
+`cargo test --workspace` 270 passed; UI nav-test 150/150, focus-check 100/100. Release build
+`launcher/tools/build-release.ps1`: GT4Recomp.exe 16,040,448 bytes, sha256 `87c08add...`, path scan clean. A
+`visual-check` build of the same code (scratchpad target dir) on a scratch data and Documents folder listed the real
+monitor ("Legacy Moonli...", the Moonlight virtual display, 1920x1080 primary) and its modes (3840x2160 down to
+640x480); Play was not pressed.
+
+Owner test build (not a release): `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`, 28,764,515 bytes,
+sha256 `9b039d61289c0d307fd2c3a91449f5cef4001e8960c02dbfbdb3f387097a0df3` (`makensis /DVERSION=1.0.0`, GAME_DIR
+`private/slice218-dist`; the slice217 installer moved to `superseded-slice217\`). Portable copy refreshed in
+`private/ultrawide-test-portable` (7-Zip extraction, no `$PLUGINSDIR`, no uninstaller; launcher and game executables
+equal to their sources). No GitHub release, draft or tag.

@@ -71,7 +71,11 @@ License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profil
 The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
 Diagnostic only: the run is not a performance measurement.
 
-TASK-080 P2 (slice217): --mode pcsx2 runs the slice217 build: slice215 plus the race HUD kept as an undistorted, centred
+TASK-080 addendum (slice218): --mode pcsx2 runs the slice218 build: slice217 plus GT4_OUTPUT_SIZE=WxH (the aspect
+follows the output size when GT4_DISPLAY_ASPECT is auto) and GT4_MONITOR (the monitor's GDI device name, e.g. DISPLAY2 with its device prefix),
+as the launcher sends them; both unset = the window's client area on the primary monitor. slice217 stays as
+--mode pcsx2-slice217.
+TASK-080 P2 (slice217): --mode pcsx2 ran the slice217 build: slice215 plus the race HUD kept as an undistorted, centred
 16:9 layout at other ratios (HUD canvas hook, HUD parameter block, EE library profile "aspect"). slice215 stays as
 --mode pcsx2-slice215.
 TASK-080 (slice215): --mode pcsx2 ran the slice215 build: the slice214 release build plus native display aspect ratios.

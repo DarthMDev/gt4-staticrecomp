@@ -149,8 +149,33 @@
   // Changed values show on screen at once and stay after the table is read again.
   async function valueChecks() {
     await setHash("#/settings/graphics");
-    var select = document.querySelector("button.select[data-setting=\"upscale\"]");
-    check("internal resolution is on the Graphics tab", !!select, "no control");
+    // TASK-080 addendum: no Internal resolution or Aspect ratio row; Render scale shows the resulting resolution.
+    var gone = document.querySelector(".content [data-setting=\"upscale\"], .content [data-setting=\"aspect_ratio\"], " +
+      ".content [data-setting=\"aspect_custom\"]");
+    check("no internal resolution or aspect row is shown", !gone, gone ? gone.getAttribute("data-setting") : "");
+    var scale = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+    check("render scale is a slider on the Graphics tab", !!scale, "no control");
+    var readout = scale && scale.parentNode.querySelector(".val");
+    check("the render scale readout shows the resulting resolution", !!readout && readout.textContent === "100% \u00B7 3x \u00B7 1920x1344",
+      readout ? readout.textContent : "none");
+    if (scale) {
+      scale.focus({ preventScroll: true });
+      scale.dispatchEvent(new CustomEvent("gt4-adjust", { detail: { delta: 1 } }));
+      await wait(300);
+      var after = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+      var afterReadout = after && after.parentNode.querySelector(".val");
+      check("one step right gives 125% and 4x", !!afterReadout && afterReadout.textContent === "125% \u00B7 4x \u00B7 2560x1792",
+        afterReadout ? afterReadout.textContent : "none");
+      var scaleFocus = document.activeElement && document.activeElement.getAttribute("data-setting");
+      check("focus stays on the render scale slider", scaleFocus === "render_scale", "focus " + scaleFocus);
+      after.dispatchEvent(new CustomEvent("gt4-adjust", { detail: { delta: -1 } }));
+      await wait(300);
+    }
+
+    await setHash("#/settings/display");
+    var select = document.querySelector("button.select[data-setting=\"resolution\"]");
+    check("resolution is on the Display tab", !!select, "no control");
+    check("monitor is on the Display tab", !!document.querySelector("button.select[data-setting=\"monitor\"]"), "no control");
     if (!select) {
       return;
     }
@@ -159,20 +184,25 @@
     select.click();
     await wait(150);
     var option = Array.prototype.filter.call(document.querySelectorAll(".modal .option"), function (item) {
-      return item.textContent.indexOf("4K (6x)") === 0;
+      return item.textContent.indexOf("1280x720") === 0;
     })[0];
-    check("the resolution list offers 4K", !!option, "no 4K option");
+    check("the resolution list offers the monitor's modes", !!option, "no 1280x720 option");
     if (option) {
       option.click();
       await wait(300);
     }
-    var label = document.querySelector("button.select[data-setting=\"upscale\"] span");
-    check("the resolution row shows 4K (6x) after the change", !!label && label.textContent === "4K (6x)", label ? label.textContent : "none");
+    var label = document.querySelector("button.select[data-setting=\"resolution\"] span");
+    check("the resolution row shows 1280x720 after the change", !!label && label.textContent === "1280x720", label ? label.textContent : "none");
     var table = await GT4.backend.call("get_settings_table");
-    var row = GT4.settingsModel.findRow(table, "upscale");
-    check("the table holds 4K after the change", !!row && row.current === "4K", row ? String(row.current) : "no row");
+    var row = GT4.settingsModel.findRow(table, "resolution");
+    check("the table holds 1280x720 after the change", !!row && row.current === "1280x720", row ? String(row.current) : "no row");
+    var scaleRow = GT4.settingsModel.findRow(table, "render_scale");
+    check("the render scale readout follows the resolution", scaleRow.values.labels["100"] === "100% \u00B7 2x \u00B7 1280x896",
+      scaleRow.values.labels["100"]);
     var focused = document.activeElement && document.activeElement.getAttribute("data-setting");
-    check("focus stays on the changed control", focused === "upscale", "focus " + focused);
+    check("focus stays on the changed control", focused === "resolution", "focus " + focused);
+    await GT4.backend.call("set_setting", { id: "resolution", value: "1920x1080" });
+    await setHash("#/settings/graphics");
 
     var toggle = document.querySelector("button.toggle[data-setting=\"fxaa\"]");
     check("anti-aliasing is a toggle on Graphics", !!toggle, "no control");
@@ -240,7 +270,8 @@
     var inSection = document.querySelector(".content .settings-section [data-setting=\"perf_overlay\"]");
     check("our performance overlay row is in the Advanced section", !!inSection, "no perf_overlay row");
     var osd = document.querySelector(".content [data-setting=\"osd_fps\"], .content [data-setting=\"aspect\"], " +
-      ".content [data-setting=\"input_resolution\"], .content [data-setting=\"widescreen\"]");
+      ".content [data-setting=\"input_resolution\"], .content [data-setting=\"widescreen\"], " +
+      ".content [data-setting=\"aspect_ratio\"], .content [data-setting=\"upscale\"]");
     check("no PCSX2 OSD, aspect, input resolution or widescreen row is shown", !osd, osd ? osd.getAttribute("data-setting") : "");
     press("ArrowUp");
     await wait(80);
@@ -406,21 +437,22 @@
     delete GT4.devGamepads;
   }
 
-  // The screenshot state: Graphics with 4K chosen, the resolution row focused in pad mode.
+  // The screenshot state (scenario "4k", name kept for the screenshot list): Graphics with Render scale at 200%, the
+  // slider focused in pad mode (TASK-080 addendum: there is no Internal resolution row any more).
   async function scenario4k() {
     GT4.nav.setMode("pad");
     await setHash("#/settings/graphics");
     press("ArrowRight");
     await wait(200);
-    var select = document.querySelector("button.select[data-setting=\"upscale\"]");
-    select.focus({ preventScroll: true });
-    select.click();
-    await wait(150);
-    var option = Array.prototype.filter.call(document.querySelectorAll(".modal .option"), function (item) {
-      return item.textContent.indexOf("4K (6x)") === 0;
-    })[0];
-    if (option) {
-      option.click();
+    var scale = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+    if (scale) {
+      scale.focus({ preventScroll: true });
+      for (var i = 0; i < 4; i++) {
+        var current = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+        current.focus({ preventScroll: true });
+        current.dispatchEvent(new CustomEvent("gt4-adjust", { detail: { delta: 1 } }));
+        await wait(250);
+      }
     }
     await wait(400);
   }

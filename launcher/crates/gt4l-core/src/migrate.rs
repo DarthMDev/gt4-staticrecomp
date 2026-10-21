@@ -118,12 +118,13 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 4,
+    current: 5,
     steps: &[
         Step { from: 0, apply: settings_0_to_1 },
         Step { from: 1, apply: settings_1_to_2 },
         Step { from: 2, apply: settings_2_to_3 },
         Step { from: 3, apply: settings_3_to_4 },
+        Step { from: 4, apply: settings_4_to_5 },
     ],
 };
 
@@ -179,6 +180,33 @@ fn settings_3_to_4(document: &mut Value) -> Result<(), String> {
         choices.remove("widescreen");
     }
     if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
+        gs.remove("aspect");
+    }
+    Ok(())
+}
+
+/// Schema 5: seamless display (TASK-080 addendum, owner 2026-10-21). There is no aspect choice and no internal
+/// resolution choice any more: the aspect is the Resolution's shape and the internal resolution follows the
+/// Resolution and the Render scale (`display::display_plan`). This step drops `aspect_ratio` and `aspect_custom`
+/// (written by the schema 4 ultrawide test builds) from `[settings]` and `[choices]`, and the PCSX2 GS `upscale`
+/// (the old "Internal resolution" row) and `aspect` from `[gs]`; it adds `monitor` = "primary", `resolution` =
+/// "desktop" and `render_scale` = "100", so the file records what the game is sent. A schema 3 file (release 1.0.0)
+/// reaches this step through 3 -> 4 first, so both kinds of file end the same. Ids are literal on purpose (see
+/// `settings_3_to_4`).
+fn settings_4_to_5(document: &mut Value) -> Result<(), String> {
+    if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        settings.remove("aspect_ratio");
+        settings.remove("aspect_custom");
+        settings.entry("monitor".to_string()).or_insert_with(|| Value::from("primary"));
+        settings.entry("resolution".to_string()).or_insert_with(|| Value::from("desktop"));
+        settings.entry("render_scale".to_string()).or_insert_with(|| Value::from("100"));
+    }
+    if let Some(choices) = document.get_mut("choices").and_then(Value::as_object_mut) {
+        choices.remove("aspect_ratio");
+        choices.remove("aspect_custom");
+    }
+    if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
+        gs.remove("upscale");
         gs.remove("aspect");
     }
     Ok(())
@@ -308,11 +336,14 @@ mod tests {
     fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(4));
+        assert_eq!(document["schema_version"], json!(5));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
         assert!(document["settings"].get("widescreen").is_none(), "added by step 3, dropped by step 4");
-        assert_eq!(document["settings"]["aspect_ratio"], json!("auto"));
-        assert_eq!(document["settings"]["aspect_custom"], json!("233"));
+        assert!(document["settings"].get("aspect_ratio").is_none(), "added by step 4, dropped by step 5");
+        assert!(document["settings"].get("aspect_custom").is_none(), "added by step 4, dropped by step 5");
+        assert_eq!(document["settings"]["monitor"], json!("primary"));
+        assert_eq!(document["settings"]["resolution"], json!("desktop"));
+        assert_eq!(document["settings"]["render_scale"], json!("100"));
     }
 
     #[test]
@@ -327,9 +358,11 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 3);
-        assert_eq!(released["schema_version"], json!(4));
-        assert_eq!(released["settings"]["aspect_ratio"], json!("auto"));
-        assert_eq!(released["settings"]["aspect_custom"], json!("233"));
+        assert_eq!(released["schema_version"], json!(5));
+        assert!(released["settings"].get("aspect_ratio").is_none());
+        assert_eq!(released["settings"]["monitor"], json!("primary"));
+        assert_eq!(released["settings"]["resolution"], json!("desktop"));
+        assert_eq!(released["settings"]["render_scale"], json!("100"));
         for retired in ["input_resolution", "widescreen"] {
             assert!(released["settings"].get(retired).is_none(), "{retired} dropped from [settings]");
             assert!(released["choices"].get(retired).is_none(), "{retired} dropped from [choices]");
@@ -341,10 +374,39 @@ mod tests {
         assert_eq!(released["gs"]["osd_fps"], json!("true"), "forced GS rows stay with the load-time rule");
         assert_eq!(released["install"]["disc_path"], json!("D:/gt4.iso"));
 
-        let mut custom = json!({"schema_version": 3, "settings": {"aspect_ratio": "custom", "aspect_custom": "356"}});
-        migrate(&SETTINGS, &mut custom).unwrap();
-        assert_eq!(custom["settings"]["aspect_ratio"], json!("custom"));
-        assert_eq!(custom["settings"]["aspect_custom"], json!("356"));
+    }
+
+    #[test]
+    fn an_ultrawide_test_build_file_drops_aspect_and_upscale_and_gets_the_display_rows() {
+        // A schema 4 file as the TASK-080 test builds wrote it (the owner's real file): a custom ratio and a chosen
+        // internal resolution.
+        let mut file = json!({
+            "schema_version": 4,
+            "settings": {"aspect_ratio": "custom", "aspect_custom": "244", "vsync": "on", "fullscreen": "off"},
+            "choices": {"aspect_ratio": true, "aspect_custom": true, "fullscreen": true},
+            "gs": {"upscale": "4K", "fxaa": "true"},
+            "install": {"disc_path": "D:/gt4.iso"}
+        });
+        assert_eq!(migrate(&SETTINGS, &mut file).unwrap(), 4);
+        assert_eq!(file["schema_version"], json!(5));
+        for gone in ["aspect_ratio", "aspect_custom"] {
+            assert!(file["settings"].get(gone).is_none(), "{gone} dropped from [settings]");
+            assert!(file["choices"].get(gone).is_none(), "{gone} dropped from [choices]");
+        }
+        assert!(file["gs"].get("upscale").is_none(), "the internal resolution follows the Resolution now");
+        assert_eq!(file["gs"]["fxaa"], json!("true"));
+        assert_eq!(file["settings"]["monitor"], json!("primary"));
+        assert_eq!(file["settings"]["resolution"], json!("desktop"));
+        assert_eq!(file["settings"]["render_scale"], json!("100"));
+        assert_eq!(file["settings"]["fullscreen"], json!("off"), "other values survive");
+        assert_eq!(file["choices"]["fullscreen"], json!(true));
+        assert_eq!(file["install"]["disc_path"], json!("D:/gt4.iso"));
+
+        // Values already present (a file edited by hand) are kept.
+        let mut kept = json!({"schema_version": 4, "settings": {"render_scale": "150", "resolution": "2560x1080"}});
+        migrate(&SETTINGS, &mut kept).unwrap();
+        assert_eq!(kept["settings"]["render_scale"], json!("150"));
+        assert_eq!(kept["settings"]["resolution"], json!("2560x1080"));
     }
 
     #[test]
@@ -360,7 +422,7 @@ mod tests {
 
         let mut chained = json!({"schema_version": 2, "settings": {"vsync": "on"}});
         assert_eq!(migrate(&SETTINGS, &mut chained).unwrap(), 2);
-        assert_eq!(chained["schema_version"], json!(4));
+        assert_eq!(chained["schema_version"], json!(5));
     }
 
     #[test]

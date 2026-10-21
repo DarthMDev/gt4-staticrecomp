@@ -381,8 +381,49 @@ void test_hud_parameters() {
 
 }  // namespace
 
+bool output_refused(const char *value) {
+  try {
+    parse_output_size(value);
+  } catch (const std::invalid_argument &) {
+    return true;
+  }
+  return false;
+}
+
+// TASK-080 addendum: GT4_OUTPUT_SIZE and auto from the output size.
+void test_output_size() {
+  require(!parse_output_size(nullptr).known(), "unset output size is not known");
+  const OutputSize full_hd = parse_output_size("1920x1080");
+  require(full_hd.width == 1920 && full_hd.height == 1080, "1920x1080");
+  const OutputSize wide = parse_output_size("3440x1440");
+  require(wide.width == 3440 && wide.height == 1440, "3440x1440");
+  require(parse_output_size("320x320").known() && parse_output_size("16384x8192").known(), "side limits");
+  const char *bad[] = {"", "1920", "1920x", "x1080", "1920X1080", "1920x1080x1", " 1920x1080", "1920x1080 ", "-1920x1080",
+                       "319x240", "16385x8192", "100000x1080", "1920.0x1080", "0x0", "5000x320", "320x5000", "auto"};
+  for (const char *value : bad)
+    require(output_refused(value), value);
+
+  const Setting automatic = parse_display_aspect(nullptr);
+  const Setting from_full_hd = resolve_setting(automatic, full_hd);
+  require(from_full_hd.source == Source::output_size && from_full_hd.ratio == kGameRatio,
+          "1920x1080 is exactly 16:9: nothing changes");
+  require(resolve_setting(automatic, parse_output_size("1366x768")).ratio == kGameRatio, "1366x768 snaps to 16:9");
+  const Setting from_wide = resolve_setting(automatic, wide);
+  require(from_wide.source == Source::output_size && near(from_wide.ratio, 3440.0 / 1440.0), "3440x1440 ratio");
+  require(near(resolve_setting(automatic, parse_output_size("2560x1080")).ratio, 2560.0 / 1080.0), "2560x1080 ratio");
+  require(near(resolve_setting(automatic, parse_output_size("1920x1200")).ratio, 1.6), "16:10 ratio");
+  require(resolve_setting(automatic, OutputSize{}).source == Source::automatic, "no output size: window client area");
+  const Setting fixed = parse_display_aspect("4:3");
+  require(resolve_setting(fixed, wide).source == Source::fixed && resolve_setting(fixed, wide).ratio == 4.0 / 3.0,
+          "a fixed GT4_DISPLAY_ASPECT wins over the output size");
+  // The ultrawide path: Hor+ at 3440x1440, untouched at 1920x1080.
+  require(projection_scale(from_full_hd.ratio, 1.0).identity(), "16:9 output: identity projection");
+  require(!projection_scale(from_wide.ratio, 1.0).identity(), "3440x1440 output: Hor+ projection");
+}
+
 int main() {
   test_parse();
+  test_output_size();
   test_fov_extra();
   test_ratios();
   test_projection_scale();

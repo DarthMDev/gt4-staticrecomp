@@ -120,6 +120,10 @@ class DisplayAspectDerivationTests(unittest.TestCase):
     def test_host_glue(self):
         window = source('native/window.cpp')
         self.assertIn('gt4::display_aspect::configured_setting();', window)
+        # TASK-080 addendum: the window opens on GT4_MONITOR at GT4_OUTPUT_SIZE, per-monitor DPI aware.
+        self.assertIn('gt4::display_aspect::configured_output_size();', window)
+        self.assertIn('gt4::window_mode::parse_monitor(std::getenv("GT4_MONITOR"))', window)
+        self.assertIn('DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2', window)
         self.assertIn('gt4::display_aspect::set_window_client_size(LOWORD(second), HIWORD(second));', window)
         self.assertIn('gt4::display_aspect::set_presentation_sink(present_race_view);', window)
         self.assertIn('gt4::display_aspect::at_guest_vblank(ps2::g_ram, 32u << 20);', source('native/mtvu_runtime.cpp'))
@@ -144,11 +148,27 @@ class DisplayAspectLauncherTests(unittest.TestCase):
         for bad in ('', '0', '0.4', '3.5', 'x'):
             with self.subTest(value=bad), self.assertRaises(ValueError):
                 probe.aspect_fov_extra(bad)
+        # TASK-080 addendum: GT4_OUTPUT_SIZE and GT4_MONITOR, the rules of native/display_aspect.cpp and window_mode.cpp.
+        self.assertIsNone(probe.output_size(None))
+        self.assertEqual(probe.output_size('3440x1440'), (3440, 1440))
+        self.assertEqual(probe.output_size('320x320'), (320, 320))
+        for bad in ('', '1920', '1920X1080', '1920x', 'x1080', '319x240', '16385x8192', '1920x1080x1', ' 1920x1080',
+                    '5000x320', '1920.5x1080'):
+            with self.subTest(value=bad), self.assertRaises(ValueError):
+                probe.output_size(bad)
+        self.assertEqual(probe.monitor_device(None), '')
+        self.assertEqual(probe.monitor_device(r'\\.\DISPLAY2'), r'\\.\DISPLAY2')
+        prefix = '\\\\.\\'
+        for bad in ('DISPLAY2', prefix, prefix + 'DISPLAY 2', prefix + 'D' * 40):
+            with self.subTest(value=bad), self.assertRaises(ValueError):
+                probe.monitor_device(bad)
 
-    def test_mode_pcsx2_is_slice217_and_older_builds_are_history(self):
+    def test_mode_pcsx2_is_slice218_and_older_builds_are_history(self):
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
-        self.assertEqual((name, runtime), ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
+        self.assertEqual((name, runtime), ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice217'],
+                         ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'],
                          ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'],
@@ -158,20 +178,23 @@ class DisplayAspectLauncherTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 217)
+        self.assertEqual(manifest['slice'], 218)
         self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
-        # slice217 = the slice215 recipe (slice214 release recipe plus TASK-080 P1) with the slice217 capsule (P2 HUD
-        # canvas hook), the P2 host code and the re-translated EE library profile "aspect" (ELF patch table).
-        base = json.loads((ROOT / 'docs/inputs/slice215-pcsx2.json').read_text(encoding='utf-8'))
-        for key in ('card_seeds', 'gs_stream', 'vu1_aot', 'vu0_aot', 'source_capsule',
-                    'port_capsule', 'shader_capsule', 'memcard_capsule', 'memcard_capsule_sha256'):
+        # slice218 = the slice217 recipe (capsule, EE library profile "aspect", port, shaders, gt4-gs) with the TASK-080
+        # addendum host code (GT4_OUTPUT_SIZE, GT4_MONITOR, DPI awareness): only the executable changes.
+        base = json.loads((ROOT / 'docs/inputs/slice217-pcsx2.json').read_text(encoding='utf-8'))
+        for key in ('card_seeds', 'gs_stream', 'vu1_aot', 'vu0_aot', 'source_capsule', 'frozen_game_library',
+                    'license_guard_capsule', 'license_guard_receipt_sha256', 'license_guard_source_sha256',
+                    'ee_library', 'port_capsule', 'shader_capsule', 'memcard_capsule', 'memcard_capsule_sha256'):
             self.assertEqual(manifest[key], base[key], key)
         self.assertNotEqual(manifest['runtime']['sha256'], base['runtime']['sha256'])
-        self.assertNotEqual(manifest['frozen_game_library'], base['frozen_game_library'])
+        # slice217 itself = the slice215 recipe with the P2 capsule and the re-translated library.
+        older = json.loads((ROOT / 'docs/inputs/slice215-pcsx2.json').read_text(encoding='utf-8'))
+        self.assertNotEqual(base['frozen_game_library'], older['frozen_game_library'])
 
     def test_protocol_1_3_is_documented(self):
         doc = source('docs/GS-STREAM-PROTOCOL.md')
@@ -274,12 +297,15 @@ int main(int argc, char **argv) {
     def tearDownClass(cls):
         cls.folder.cleanup()
 
-    def run_harness(self, scenario, aspect=None, extra=None, check=True):
-        env = {k: v for k, v in os.environ.items() if k not in ('GT4_DISPLAY_ASPECT', 'GT4_ASPECT_FOV_EXTRA')}
+    def run_harness(self, scenario, aspect=None, extra=None, check=True, output=None):
+        env = {k: v for k, v in os.environ.items()
+               if k not in ('GT4_DISPLAY_ASPECT', 'GT4_ASPECT_FOV_EXTRA', 'GT4_OUTPUT_SIZE')}
         if aspect is not None:
             env['GT4_DISPLAY_ASPECT'] = aspect
         if extra is not None:
             env['GT4_ASPECT_FOV_EXTRA'] = extra
+        if output is not None:
+            env['GT4_OUTPUT_SIZE'] = output
         return subprocess.run([str(self.exe), scenario], capture_output=True, text=True, check=check, env=env)
 
     @staticmethod
@@ -344,6 +370,28 @@ int main(int argc, char **argv) {
                 result = self.run_harness('h', aspect)
                 self.assertEqual(self.values(result)['hud_same'], 1)
                 self.assertNotIn('HUD canvas', result.stderr)
+
+    def test_output_size_drives_auto(self):
+        # TASK-080 addendum: the launcher sends GT4_DISPLAY_ASPECT=auto with GT4_OUTPUT_SIZE.
+        same = self.run_harness('n', 'auto', output='1920x1080')
+        self.assertEqual(self.values(same)['same'], 1)
+        self.assertIn('auto (output size 1920x1080, 16:9', same.stderr)
+        self.assertIn('unchanged (x 1.000000, y 1.000000)', same.stderr)
+        wide = self.run_harness('n', None, output='3440x1440')
+        self.assertAlmostEqual(self.values(wide)['m0'], self.f32(1.299) * (16 / 9) / (3440 / 1440), places=5)
+        self.assertIn('scaled (x 0.744186, y 1.000000)', wide.stderr)
+        self.assertAlmostEqual(self.values(self.run_harness('n', None, output='2560x1080'))['m0'],
+                               self.f32(1.299) * 0.75, places=5)
+        hud = self.values(self.run_harness('h', None, output='2560x1080'))
+        self.assertEqual(hud['hud_same'], 0)
+        fixed = self.values(self.run_harness('n', '16:9', output='3440x1440'))
+        self.assertEqual(fixed['same'], 1, 'a fixed GT4_DISPLAY_ASPECT wins over the output size')
+
+    def test_invalid_output_size_stops_the_process(self):
+        result = self.run_harness('n', None, check=False, output='1920*1080')
+        self.assertEqual(result.returncode, 1)
+        self.assertIn('GT4_OUTPUT_SIZE', result.stderr)
+        self.assertIn('game not started', result.stderr)
 
     def test_invalid_value_stops_the_process(self):
         result = self.run_harness('n', '16/9', check=False)

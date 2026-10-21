@@ -21,7 +21,7 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 - [ ] Enter opens a dropdown list; Esc closes it; Esc on a page goes Home.
 - [ ] Q and E switch Settings tabs in the order Graphics, Display, Controls, Saves, Replays, About (no Mods in release 1.0.0; no Advanced tab).
 - [ ] Graphics ends with an "Advanced" section; the D-pad moves down from the Graphics rows into its rows and to "Reset to defaults"; B from any of them returns to the tab list on Graphics.
-- [ ] No "Input resolution", "Widescreen 16:9", "Aspect ratio", "Show FPS", "Show GPU name" or "Show resolution" row anywhere (480p and 16:9 are fixed; PCSX2's own OSD is always off).
+- [ ] No "Input resolution", "Widescreen 16:9", "Aspect ratio", "Custom ratio", "Internal resolution", "Show FPS", "Show GPU name" or "Show resolution" row anywhere (480p is fixed, the aspect follows the Resolution, the internal resolution follows the Render scale; PCSX2's own OSD is always off).
 - [ ] Tab and Shift+Tab move through controls in document order.
 - [ ] The focus ring shows after a key press and disappears after a mouse click.
 
@@ -73,7 +73,8 @@ Do not launch the game for these checks. Tick each item in the Tauri build befor
 
 ## Settings behaviour
 
-- [ ] Graphics: internal resolution goes up to the `max_upscale` the table reports, with the "Limited to ... on this GPU" note when lower.
+- [ ] Display: Monitor lists every connected monitor by name and desktop size, the primary one marked and chosen by default; Resolution lists that monitor's modes with its desktop mode marked; picking another monitor resets Resolution to its desktop mode.
+- [ ] Graphics: Render scale moves 50% to 200% in steps of 25% and its readout names the result ("100% · 4x · 2560x1792" on 2560x1080); it shows only with the PCSX2 GS.
 - [ ] Changing the scaling filter to FSR shows FSR sharpness; changing CAS mode to CAS shows CAS sharpness.
 - [ ] CoreGS 2.0 is greyed and not selectable.
 - [ ] Graphics, Advanced section: "Reset to defaults" asks, then restores the values and says so in a toast.

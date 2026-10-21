@@ -121,12 +121,13 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
 
-    def test_mode_pcsx2_is_the_slice217_build_and_older_builds_are_history(self):
+    def test_mode_pcsx2_is_the_slice218_build_and_older_builds_are_history(self):
         # TASK-080 P2 (slice217, tests/python/test_display_aspect.py): the slice215 build with the slice217 capsule
-        # (the slice206 guard plus the race camera aspect hook and the HUD canvas hook).
+        # (the slice206 guard plus the race camera aspect hook and the HUD canvas hook); slice218 keeps that capsule.
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
-        self.assertEqual((name, runtime), ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
+        # TASK-080 addendum (slice218): the slice217 capsule and library with the seamless display host code.
+        self.assertEqual((name, runtime), ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'], ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'], ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice213'], ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'))
@@ -136,7 +137,8 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 217)
+        self.assertEqual(manifest['slice'], 218)
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice217'], ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
         # The slice217 capsule is the slice206 guard plus the aspect hooks: kernel.cpp and cdvdfsv.cpp are unchanged.
         aspect_pin = json.loads((ROOT / 'docs/inputs/slice217-license-guard-runtime.json').read_text(encoding='utf-8'))
         self.assertEqual(manifest['license_guard_capsule'], aspect_pin['capsule'])

@@ -367,7 +367,7 @@ Screenshots (headless Edge, `--force-prefers-reduced-motion`, 1280 x 720, dev mo
 
 - `docs/launcher/shots/pad-sidebar-on-saves.png`: highlight on Saves, focus still in the tab list.
 - `docs/launcher/shots/pad-saves-entered.png`: after A, the first save is focused.
-- `docs/launcher/shots/graphics-4k-updated.png`: 4K chosen, the Internal resolution row shows 4K (6x).
+- `docs/launcher/shots/graphics-4k-updated.png`: regenerated 2026-10-21 (TASK-080 addendum): Render scale at 200%, the readout shows the resulting internal resolution (there is no Internal resolution row any more).
 
 Build: `cargo tauri build --no-bundle` (no Cargo.toml change). Owner test copy replaced:
 `private/owner-test-launcher/GT4Recomp.exe`, SHA-256 `53a0ad0b36eeedcae865efe78c278bd867d3278e013f17a2df3b74c9c86450bd`

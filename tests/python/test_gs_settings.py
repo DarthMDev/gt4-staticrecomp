@@ -110,7 +110,7 @@ class TableSchemaTests(unittest.TestCase):
             'bad type': lambda data: row(data, 'renderer').update(type='double'),
             'bad status': lambda data: row(data, 'renderer').update(status='maybe'),
             'bad order': lambda data: row(data, 'fxaa').update(order=0),
-            'order used twice on a page': lambda data: row(data, 'fxaa').update(order=row(data, 'upscale')['order']),
+            'order used twice on a page': lambda data: row(data, 'fxaa').update(order=row(data, 'cas_mode')['order']),
             'bad control': lambda data: row(data, 'fxaa').update(control='knob'),
             'control does not fit the type': lambda data: row(data, 'fxaa').update(control='slider'),
             'launcher row with a control': lambda data: row(data, 'cache_folder').update(control='dropdown'),
@@ -346,8 +346,10 @@ class AllowListTests(unittest.TestCase):
 class OfferedTests(unittest.TestCase):
     def test_launcher_offers_only_settable_options(self):
         offered = {row['id'] for row in gs_settings.offered(rows())}
-        self.assertTrue({'renderer', 'upscale', 'vsync', 'deinterlace', 'blending', 'fxaa'} <= offered)
+        self.assertTrue({'renderer', 'vsync', 'deinterlace', 'blending', 'fxaa'} <= offered)
         self.assertNotIn('aspect', offered)
+        # TASK-080 addendum: the internal resolution follows the launcher's Resolution and Render scale.
+        self.assertNotIn('upscale', offered)
         for identifier in ('filter', 'cas_mode', 'cas_sharpness', 'texture_load', 'adapter',
                            'cache_folder', 'headless_dump_dir', 'manual_hacks'):
             self.assertNotIn(identifier, offered, identifier)
@@ -580,9 +582,14 @@ class ResolvedValueTests(unittest.TestCase):
 class PageLayoutTests(unittest.TestCase):
     def test_graphics_page_is_basic_only(self):
         basic = [row['id'] for row in rows() if row['page'] == 'basic']
-        self.assertEqual(basic, ['gs_engine', 'upscale', 'fxaa', 'cas_mode', 'cas_sharpness'])
+        self.assertEqual(basic, ['gs_engine', 'fxaa', 'cas_mode', 'cas_sharpness'])
         upscale = by_id()['upscale']
         self.assertEqual((upscale['control'], upscale['type'], upscale['default']), ('dropdown', 'enum', '1080p'))
+        # TASK-080 addendum (owner, 2026-10-21): hidden, always written, set by the launcher from the display plan;
+        # every multiplier 1 to 12 stays a settable choice, so the gt4-gs allow-list is unchanged.
+        self.assertEqual((upscale['page'], upscale['written'], upscale['status']), ('hidden', 'always', 'ok'))
+        self.assertEqual(sorted(int(choice['ini']) for choice in upscale['choices'] if choice['status'] == 'ok'),
+                         list(range(1, 13)))
         # Owner decision 2026-10-16: ONLY these presets are offered.
         self.assertEqual(gs_settings.offered_choices(upscale), ['480p', '720p', '1080p', '1440p', '4K', '8K'])
         self.assertEqual({choice['label'] for choice in upscale['choices'] if choice.get('offered', True)},

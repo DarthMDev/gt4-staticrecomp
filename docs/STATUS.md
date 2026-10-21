@@ -16,6 +16,13 @@ ratio is letterboxed (CoreGS 1.1 already was; gt4-gs needs a release that reads 
 race 160/160). New owner installer and the portable folder `private/ultrawide-test-portable`. Details: [BUILD](BUILD.md)
 slice 217.
 
+Addendum (slice218, `--mode pcsx2` on the branch, owner design 2026-10-21): seamless display. No Aspect ratio and no
+Internal resolution rows: the aspect is always the chosen Resolution's shape (16:9 unchanged; other ratios turn P1/P2
+on), Display has Monitor and Resolution (real monitors and modes), Graphics has Render scale 50-200% with the resulting
+internal resolution (k = ceil(max(W/640, H/448)), whole multipliers 1..12). Game: `GT4_OUTPUT_SIZE`, `GT4_MONITOR`,
+per-monitor DPI awareness. Settings schema 5. 16:9 byte-identical (menus 42/42, race 160/160). New owner installer and
+portable folder. Details: [BUILD](BUILD.md) slice 218, decision 0071 addendum.
+
 ## Current state (2026-10-21)
 
 **TASK-081 release 1.0.0 hardening (branch `task/081-release-1-0-0`, waiting for the owner's installer test):**

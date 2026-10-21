@@ -72,6 +72,35 @@ P1); for gt4-gs, protocol 1.3 `display_aspect` fill now carries the target aspec
 window). gt4-gs 1.1.0 ignores `args[1]` and fills the whole window, which is what the owner saw on 2026-10-21
 (Custom 2.44 on 1920x1080, race stretched to 16:9); a gt4-gs release that reads it is needed (fork work).
 
+**Addendum (owner, 2026-10-21): seamless display, Auto only (slice218).** The owner removed every aspect and
+internal-resolution choice from the launcher:
+
+- **No Aspect ratio option.** The aspect is always the output size's shape: the launcher sends
+  `GT4_DISPLAY_ASPECT=auto` with `GT4_OUTPUT_SIZE=WxH`, and the game takes R = W / H (snapped to 16:9 within 0.5%).
+  At 16:9 nothing changes (guard rail 2 still holds: a 1920x1080 output is byte-identical to slice217); at any other
+  ratio the P1/P2 path above turns on by itself. Custom ratios are gone, so the output aspect always equals the window
+  in fullscreen on a monitor whose desktop has the same shape; the protocol 1.3 `args[1]` fill target stays in the
+  protocol and is sent as before, but no gt4-gs change is requested. CoreGS 1.1 is being retired: it gets no new
+  feature (it keeps its own internal resolution and the auto aspect it already had).
+- **Display page: Monitor and Resolution.** Monitor lists the connected monitors (EnumDisplayMonitors, GetMonitorInfo,
+  friendly names from DisplayConfig), default the primary one, stored as `<GDI device>@<W>x<H>`; Resolution lists the
+  modes that monitor reports (EnumDisplaySettings, unique sizes, at least 640x480, largest first), default its desktop
+  mode. The game gets `GT4_MONITOR` (device name) and `GT4_OUTPUT_SIZE`; invalid values refuse the start like
+  `GT4_FULLSCREEN`, and a well-formed monitor that is no longer connected falls back to the primary monitor with a log
+  line. Fullscreen is always borderless on the chosen monitor (there never was an exclusive mode; the Fullscreen toggle
+  and Alt+Enter/F11 stay, owner decisions of TASK-009/038 and settings schema 2). Windowed, the client area is the
+  output size (shrunk with its shape to the work area), centred on the monitor. The game declares per-monitor DPI
+  awareness (v2) before its window exists, so sizes are physical pixels on scaled desktops.
+- **Internal resolution is automatic.** k = ceil(max(W / 640, H / 448)) (640 x 448 is GT4's frame; wide screens stretch
+  its width), so the render is never below the output on either axis; the **Render scale** slider (50% to 200% in steps
+  of 25%, default 100%) multiplies it: the multiplier is k x scale rounded to a whole number (ties up) and clamped to
+  1..12, what gt4-gs accepts (`upscale_multiplier` 1 to 12, the allow-list; gt4-gs itself lowers a value above the
+  GPU's limit, max texture size / 1280). The rule is the pure `gt4l_core::display::display_plan` (mobile-ready).
+  A resolution below the desktop mode renders at that plan and the picture is scaled to fill the monitor by the
+  presenter (one scale step from the internal frame to the screen; the swapchain stays the window's size).
+- The `upscale` row of `docs/launcher/gs-settings.toml` is now `page = hidden` and written by the launcher from the plan;
+  its choices (1 to 12) and the gt4-gs allow-list are unchanged.
+
 **Consequences.** The P1 build changes only runtime code (a new license guard capsule `slice212c`, used by the slice212b game build, native host code,
 pins); the game library is unchanged. A save made with any ratio is a plain save. PCSX2 GS presentation per scene
 needs protocol 1.3 (`CONTROL display_aspect`) in gt4-gs; a 1.2 consumer keeps the 16:9 picture. P2/P3 ELF patches

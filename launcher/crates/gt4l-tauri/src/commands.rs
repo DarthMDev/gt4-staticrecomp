@@ -6,6 +6,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use gt4controls::{self as controls_file, default_bindings};
+use gt4l_core::display::{self as display_rules, DisplayTarget};
 use gt4l_core::exit::{self, Outcome};
 use gt4l_core::gs_release;
 use gt4l_core::launch;
@@ -117,24 +118,20 @@ fn visual_ready() -> bool {
 // Settings ------------------------------------------------------------------------------------
 
 /// `get_settings_table()`: `{max_upscale, rows}`, the rows of ui/dev/README.md (see `model::settings_table`).
+/// TASK-080 addendum: the Monitor and Resolution rows list the connected monitors and their modes, read each time.
 #[tauri::command]
-pub fn get_settings_table(window: tauri::Window, shared: State<'_, Shared>) -> Result<Value, String> {
-    // TASK-080: the Aspect ratio row names the monitor the launcher is on (the game opens on the same monitor).
-    let display = window
-        .current_monitor()
-        .ok()
-        .flatten()
-        .map(|monitor| model::DisplaySize { width: monitor.size().width, height: monitor.size().height });
-    get_settings_table_with_display(shared.inner(), display)
+pub fn get_settings_table(shared: State<'_, Shared>) -> Result<Value, String> {
+    get_settings_table_with_monitors(shared.inner(), &gt4l_platform::display::monitors())
 }
 
+/// The table without monitors (tests and the flow audit): Monitor shows "Primary monitor", Resolution the desktop.
 pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
-    get_settings_table_with_display(shared, None)
+    get_settings_table_with_monitors(shared, &[])
 }
 
-pub fn get_settings_table_with_display(shared: &Shared, display: Option<model::DisplaySize>) -> Result<Value, String> {
+pub fn get_settings_table_with_monitors(shared: &Shared, monitors: &[display_rules::Monitor]) -> Result<Value, String> {
     let state = lock(shared);
-    Ok(model::settings_table_with_display(&state.config.settings, &state.controls, display))
+    Ok(model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors))
 }
 
 /// `set_setting({id, value})`: a launcher row, a PCSX2 GS table row, a trigger row (`l2_deadzone`, `r2_curve`, ...) or
@@ -151,6 +148,10 @@ pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), S
         let text = model::value_text(&value, definition.kind == settings::Kind::Toggle)
             .ok_or_else(|| format!("'{id}' needs a plain value"))?;
         state.config.settings.set_by_user(&id, &text).map_err(|error| error.to_string())?;
+        if id == "monitor" {
+            // Another monitor has other modes: the Resolution goes back to that monitor's desktop mode.
+            state.config.settings.set("resolution", display_rules::DESKTOP).map_err(|error| error.to_string())?;
+        }
     } else if let Some((trigger, field)) = id.split_once('_').filter(|(name, _)| ["l2", "r2"].contains(name)) {
         let current = state.controls.trigger_tuning(trigger);
         let (deadzone, curve) = match field {
@@ -212,6 +213,8 @@ pub struct PlayInputs {
     pub pcsx2: Option<gs_release::Installed>,
     /// Why CoreGS 1.1 is used instead of the PCSX2 GS, if it is.
     pub notice: Option<String>,
+    /// The resolved Monitor and Resolution (TASK-080 addendum); `None` when no monitor could be read.
+    pub display: Option<DisplayTarget>,
     pub extra: Vec<(String, String)>,
 }
 
@@ -246,7 +249,30 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         launch::RendererChoice::Pcsx2 => (installed.clone(), None),
         launch::RendererChoice::CoreGs11 { reason } => (None, reason),
     };
+    // TASK-080 addendum: the stored Monitor and Resolution against the monitors connected now.
+    let display = display_rules::resolve_target(
+        &gt4l_platform::display::monitors(),
+        settings.get("monitor"),
+        settings.get("resolution"),
+    );
+    let plan = launch::session_plan(&settings, display.as_ref());
+    state::log(
+        &dirs,
+        &format!(
+            "display: {} output {} -> {}x internal {}x{} (k {}, render scale {}%, aspect {:.4}{})",
+            display.as_ref().map(|target| target.device.as_str()).unwrap_or("unknown monitor"),
+            display.as_ref().map(|target| target.output.text()).unwrap_or_else(|| "unknown".into()),
+            plan.multiplier,
+            plan.internal_width,
+            plan.internal_height,
+            plan.base_multiplier,
+            plan.render_scale,
+            plan.aspect,
+            if plan.ultrawide_on { ", aspect path on" } else { "" }
+        ),
+    );
     Ok(PlayInputs {
+        display,
         elf: dirs.prepared().join(disc_setup::ELF_FILE),
         dirs,
         disc,
@@ -273,10 +299,10 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let inputs = prepare_play(&shared, &program_directory()).inspect_err(|message| {
         lock(&shared).home_message = message.clone();
     })?;
-    let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, notice, extra } = inputs;
+    let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, notice, display, extra } = inputs;
     let card = dirs.runtime_card();
     saves::prepare_card(&lock(&shared).library, &card)?;
-    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), &extra)?;
+    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), display.as_ref(), &extra)?;
     {
         let mut state = lock(&shared);
         state.game_child = Some(running.child.clone());
@@ -298,7 +324,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
             // The player chose "restart with the built-in renderer" after a PCSX2 GS failure (TASK-038).
             state::log(&dirs, "PCSX2 GS asked for a restart; starting CoreGS 1.1");
             drop(running);
-            match game::start(&dirs, &executable, &elf, &disc, &settings, None, &extra) {
+            match game::start(&dirs, &executable, &elf, &disc, &settings, None, display.as_ref(), &extra) {
                 Ok(next) => {
                     lock(&shared).game_child = Some(next.child.clone());
                     running = next;

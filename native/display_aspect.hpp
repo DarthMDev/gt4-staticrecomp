@@ -3,12 +3,20 @@
 // TASK-080 P1: native display aspect ratios (decision 0071, docs/ULTRAWIDE-NATIVE-STUDY.md).
 //
 // GT4_DISPLAY_ASPECT picks the ratio R of the picture on screen:
-//   unset, "auto"   R = the game window's client area (fullscreen: the monitor), followed on resize and Alt+Enter;
-//                   headless runs (no window) use 16:9
+//   unset, "auto"   with GT4_OUTPUT_SIZE (TASK-080 addendum, the launcher always sends it): R = W / H of the output
+//                   size, fixed for the session, in windowed, fullscreen and headless runs alike;
+//                   without it: R = the game window's client area (fullscreen: the monitor), followed on resize and
+//                   Alt+Enter; headless runs (no window) use 16:9
 //   "16:9", "4:3"   fixed ratios
 //   "W:H"           a custom ratio, W and H positive decimals (for example "21:9", "32:9", "3440:1440", "21.5:9")
 //   "X.YY"          a custom ratio as one decimal number (for example "2.39")
 // Any other value (empty, zero, negative, a ratio outside 1:2 .. 8:1) refuses the start, like GT4_FULLSCREEN.
+//
+// GT4_OUTPUT_SIZE "WxH" (TASK-080 addendum, owner 2026-10-21): the output resolution the player chose on the launcher's
+// Display page. W and H are decimal integers from 320 to 16384 and W / H must lie in 1:2 .. 8:1; anything else (also
+// an empty value) refuses the start. The window opens at that client size (windowed) or covers the chosen monitor
+// (fullscreen, GT4_MONITOR); the GS renders at the launcher's internal resolution k x 640 by k x 448 and the picture is
+// scaled to the window. A fixed GT4_DISPLAY_ASPECT (a developer knob) wins over the output size.
 //
 // GT4_ASPECT_FOV_EXTRA (hidden comparison switch for owner test T1): a decimal factor f, default 1.0, range
 // 0.5 .. 3.0. It widens the horizontal field of view by f on top of the geometry-correct value. The owner's tuned
@@ -59,7 +67,7 @@ inline constexpr std::uint32_t kRequestPendingOffset = 0x24u;
 inline constexpr std::uint32_t kRequestModeOffset = 0x2Cu;
 inline constexpr std::uint32_t kRequestRowOffset = 0x30u;
 
-enum class Source { automatic, fixed };
+enum class Source { automatic, fixed, output_size };
 
 struct Setting {
   Source source = Source::automatic;
@@ -68,6 +76,22 @@ struct Setting {
 
 // GT4_DISPLAY_ASPECT. nullptr = automatic. Throws std::invalid_argument with a message for any invalid value.
 Setting parse_display_aspect(const char *value);
+
+inline constexpr std::uint32_t kMinOutputSide = 320;
+inline constexpr std::uint32_t kMaxOutputSide = 16384;
+
+struct OutputSize {
+  std::uint32_t width = 0;
+  std::uint32_t height = 0;
+  bool known() const { return width != 0 && height != 0; }
+};
+
+// GT4_OUTPUT_SIZE. nullptr = not known (0 x 0). Throws std::invalid_argument for any invalid value (see above).
+OutputSize parse_output_size(const char *value);
+
+// The setting for a GT4_DISPLAY_ASPECT value and an output size: "auto" (or unset) with a known output size becomes
+// Source::output_size at the snapped W / H; a fixed ratio stays fixed. Pure.
+Setting resolve_setting(const Setting &aspect, const OutputSize &output);
 
 // GT4_ASPECT_FOV_EXTRA. nullptr = 1.0. Throws std::invalid_argument for an invalid value.
 double parse_fov_extra(const char *value);
@@ -248,15 +272,16 @@ bool write_hud_parameters(std::uint8_t *ram, std::uint32_t ram_size, const HudPa
 
 // --- Runtime glue (one process-wide state; EE thread unless noted) ------------------------------------------------
 
-// Reads GT4_DISPLAY_ASPECT and GT4_ASPECT_FOV_EXTRA once. An invalid value prints the refusal and exits with status 1
+// Reads GT4_DISPLAY_ASPECT, GT4_OUTPUT_SIZE and GT4_ASPECT_FOV_EXTRA once. An invalid value prints the refusal and exits with status 1
 // (called at window start, and again at the first hook or VBlank so headless runs refuse too).
 const Setting &configured_setting();
+OutputSize configured_output_size();
 double configured_fov_extra();
 
 // Window thread: the game window's client size (WM_SIZE, fullscreen). 0 x 0 is ignored (minimized).
 void set_window_client_size(std::uint32_t width, std::uint32_t height);
 
-// R now: the fixed ratio, or the client area ratio (16:9 before any window size is known). Snapped.
+// R now: the fixed or output-size ratio, or the client area ratio (16:9 before any window size is known). Snapped.
 double current_ratio();
 
 // The ratio the last race camera hook used (16:9 before the first hook).

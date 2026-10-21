@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::display::{self, DisplayTarget};
 use crate::gs_release::Installed;
 use crate::gs_table;
 use crate::settings::{self, Settings};
@@ -110,10 +111,12 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
 /// - `internal_scale` -> `PS2_SCALE=1|2|3`; `present_filter` -> `GT4_PRESENT_FILTER` (`auto` sends nothing);
 ///   `fsr_sharpness` -> `GT4_FSR_SHARPNESS` with the FSR filter; `deinterlacing` -> `GT4_DEINTERLACE`;
 ///   `anti_aliasing` -> `GT4_AA`. These are hidden in the UI (decision 0070) and keep their defaults.
-/// - `fullscreen` -> `GT4_FULLSCREEN` (1/0).
-/// - `aspect_ratio` (+ `aspect_custom`) -> `GT4_DISPLAY_ASPECT`: `auto`, `16:9`, `4:3` or the custom ratio as a
-///   decimal with two places, e.g. `2.33` (TASK-080). The game's own 16:9 stays the base (`GT4_FORCE_WIDESCREEN=1`);
-///   Hor+/Vert+ is applied on top of it.
+/// - `fullscreen` -> `GT4_FULLSCREEN` (1/0): borderless fullscreen on the chosen monitor (there is no exclusive mode).
+/// - Always `GT4_DISPLAY_ASPECT=auto` (TASK-080 addendum, owner 2026-10-21: there is no aspect setting). With
+///   `GT4_OUTPUT_SIZE` (see [`display_environment`]) the game takes the ratio of the output size; the game's own 16:9
+///   stays the base (`GT4_FORCE_WIDESCREEN=1`) and Hor+/Vert+ is applied on top of it at other ratios.
+/// - `monitor` and `resolution` -> `GT4_MONITOR` and `GT4_OUTPUT_SIZE`, resolved against the connected monitors by the
+///   caller ([`display::resolve_target`]) and added by [`plan_launch`] / [`plan_pcsx2_launch`].
 /// - `vsync` -> `GT4_PRESENT_MODE` (on = fifo, fast = mailbox, off = immediate).
 /// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
 /// - `performance_report` on -> `GT4_PERF=1`.
@@ -160,7 +163,7 @@ fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Setting
     variables.insert("GT4_FORCE_480P", "1".to_string());
     variables.insert("GT4_FORCE_WIDESCREEN", "1".to_string());
     variables.insert("GT4_FULLSCREEN", flag(settings.is_on("fullscreen")));
-    variables.insert("GT4_DISPLAY_ASPECT", display_aspect(settings));
+    variables.insert("GT4_DISPLAY_ASPECT", "auto".to_string());
     variables.insert(
         "GT4_PRESENT_MODE",
         match settings.get("vsync") {
@@ -189,11 +192,43 @@ fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Setting
     }
 }
 
+/// `GT4_MONITOR` (the monitor's device name) and `GT4_OUTPUT_SIZE` (`WxH`) for a resolved display target; nothing
+/// when no monitor is known (the game then opens on the primary monitor at its desktop size).
+pub fn display_environment(display: Option<&DisplayTarget>) -> Vec<(String, String)> {
+    match display {
+        Some(target) => vec![
+            ("GT4_MONITOR".to_string(), target.device.clone()),
+            ("GT4_OUTPUT_SIZE".to_string(), target.output.text()),
+        ],
+        None => Vec::new(),
+    }
+}
+
+/// The render plan of a session (TASK-080 addendum): the output size of the display target (1920 x 1080 when none is
+/// known) and the Render scale, for the PCSX2 GS. Never fails: an output the plan refuses falls back to 1920 x 1080.
+pub fn session_plan(settings: &Settings, display: Option<&DisplayTarget>) -> display::DisplayPlan {
+    let scale = settings.get("render_scale").parse::<u32>().unwrap_or(display::RENDER_SCALE_DEFAULT);
+    let output = display.map(|target| target.output).unwrap_or(display::FALLBACK_OUTPUT);
+    let fallback = || {
+        display::display_plan(
+            display::FALLBACK_OUTPUT.width,
+            display::FALLBACK_OUTPUT.height,
+            display::RENDER_SCALE_DEFAULT,
+            display::PCSX2_GS_CAPS,
+        )
+        .expect("1920x1080 at 100% is a valid plan")
+    };
+    display::display_plan(output.width, output.height, scale, display::PCSX2_GS_CAPS).unwrap_or_else(|_| fallback())
+}
+
 /// The gt4-gs.ini text of a session, rendered from the table (`gs_table::render_ini`, same rules as
 /// scripts/gs_settings.py). The vsync and mailbox rows follow the present mode the way the probe does:
-/// fifo writes both true, mailbox writes mailbox false, immediate writes vsync false.
-pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths) -> Result<String, String> {
+/// fifo writes both true, mailbox writes mailbox false, immediate writes vsync false. `upscale_multiplier` comes from
+/// the session plan ([`session_plan`]); a stored `upscale` value is never used (there is no such setting). With no
+/// display known and Render scale 100% the plan gives 3x, the table default, so that INI is unchanged.
+pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths, display: Option<&DisplayTarget>) -> Result<String, String> {
     let mut user: BTreeMap<String, String> = settings.gs_overrides().clone();
+    user.insert("upscale".to_string(), session_plan(settings, display).multiplier.to_string());
     let present = match settings.get("vsync") {
         "fast" => "mailbox",
         "off" => "immediate",
@@ -214,24 +249,6 @@ pub fn restart_requested(log_text: &str) -> bool {
     log_text.lines().any(|line| line.contains(GS_RESTART_MARKER))
 }
 
-/// `GT4_DISPLAY_ASPECT` for the Aspect ratio row (TASK-080). The game refuses any other text, so only these forms are
-/// produced: `auto`, `16:9`, `4:3`, or the custom hundredths as `X.YY`.
-pub fn display_aspect(settings: &Settings) -> String {
-    match settings.get("aspect_ratio") {
-        "16:9" => "16:9".to_string(),
-        "4:3" => "4:3".to_string(),
-        "custom" => {
-            let hundredths: u32 = settings
-                .get("aspect_custom")
-                .parse()
-                .unwrap_or(233)
-                .clamp(crate::settings::ASPECT_CUSTOM_MIN, crate::settings::ASPECT_CUSTOM_MAX);
-            format!("{}.{:02}", hundredths / 100, hundredths % 100)
-        }
-        _ => "auto".to_string(),
-    }
-}
-
 fn flag(on: bool) -> String {
     if on { "1" } else { "0" }.to_string()
 }
@@ -248,8 +265,13 @@ pub fn is_scrubbed(name: &str) -> bool {
 }
 
 /// Plans one CoreGS 1.1 launch. Pure: it creates no files and starts no process.
-pub fn plan_launch(inputs: &LaunchInputs<'_>, settings: &Settings, inherited_names: &[String]) -> LaunchPlan {
-    plan_with(inputs, game_environment(settings), inherited_names)
+pub fn plan_launch(
+    inputs: &LaunchInputs<'_>,
+    settings: &Settings,
+    display: Option<&DisplayTarget>,
+    inherited_names: &[String],
+) -> LaunchPlan {
+    plan_with(inputs, with_display(game_environment(settings), display), inherited_names)
 }
 
 /// Plans one PCSX2 GS launch. Pure: the caller writes `paths.config` (see [`gs_config_text`]) before starting.
@@ -257,9 +279,16 @@ pub fn plan_pcsx2_launch(
     inputs: &LaunchInputs<'_>,
     settings: &Settings,
     paths: &Pcsx2Paths,
+    display: Option<&DisplayTarget>,
     inherited_names: &[String],
 ) -> LaunchPlan {
-    plan_with(inputs, pcsx2_environment(settings, paths), inherited_names)
+    plan_with(inputs, with_display(pcsx2_environment(settings, paths), display), inherited_names)
+}
+
+fn with_display(mut environment: Vec<(String, String)>, display: Option<&DisplayTarget>) -> Vec<(String, String)> {
+    environment.extend(display_environment(display));
+    environment.sort();
+    environment
 }
 
 fn plan_with(inputs: &LaunchInputs<'_>, environment: Vec<(String, String)>, inherited_names: &[String]) -> LaunchPlan {

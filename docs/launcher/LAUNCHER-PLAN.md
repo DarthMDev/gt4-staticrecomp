@@ -47,6 +47,12 @@ Labels: **Confirmed** (read in code/data or measured), **High confidence**, **Hy
    writes `AspectRatio = 16:9` (no `GT4_RACE_DISPLAY`). Advanced is a section at the bottom of the Graphics page, not
    a tab. PCSX2's own OSD rows (Show FPS, GPU name, resolution) are hidden and always written off; only GT4Recomp's
    performance overlay rows remain. Old stored values are ignored at load (docs/launcher/MIGRATIONS.md).
+8. **Owner design, seamless display (2026-10-21, TASK-080 addendum, decision 0071).** No aspect and no internal
+   resolution choice: Display has **Monitor** (the connected monitors, default the primary one) and **Resolution** (that
+   monitor's modes, default its desktop mode) next to Fullscreen (always borderless on the chosen monitor) and VSync;
+   Graphics has **Render scale** (50% to 200%, the resulting internal resolution shown beside it). The launcher sends
+   `GT4_MONITOR`, `GT4_OUTPUT_SIZE` and `GT4_DISPLAY_ASPECT=auto`, and writes `upscale_multiplier` from
+   `gt4l_core::display::display_plan`. Settings schema 5 (docs/launcher/MIGRATIONS.md).
 
 Consequences to record when TASK-019 starts (documentation changes, not done here):
 `TASKS.md` "First stable release" currently says *"no game assets or binaries derived from the

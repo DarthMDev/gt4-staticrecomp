@@ -88,6 +88,50 @@ void update_cursor() {
     SetCursor(arrow_cursor);
 }
 
+// TASK-080 addendum: the monitor named by GT4_MONITOR (a GDI device name such as \\.\DISPLAY2).
+struct MonitorSearch {
+  const std::wstring *device;
+  HMONITOR found;
+};
+
+BOOL CALLBACK find_monitor(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
+  auto *search = reinterpret_cast<MonitorSearch *>(data);
+  MONITORINFOEXW info{};
+  info.cbSize = sizeof info;
+  if (GetMonitorInfoW(monitor, &info) && *search->device == info.szDevice) {
+    search->found = monitor;
+    return FALSE;
+  }
+  return TRUE;
+}
+
+// The chosen monitor, or the primary monitor when none is named or the named one is not connected.
+HMONITOR chosen_monitor(const std::string &device) {
+  const HMONITOR primary = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+  if (device.empty())
+    return primary;
+  const std::wstring wide(device.begin(), device.end());  // printable ASCII only (parse_monitor)
+  MonitorSearch search{&wide, nullptr};
+  EnumDisplayMonitors(nullptr, nullptr, find_monitor, reinterpret_cast<LPARAM>(&search));
+  if (search.found)
+    return search.found;
+  std::fprintf(stderr, "[window] GT4_MONITOR %s is not connected; using the primary monitor\n", device.c_str());
+  return primary;
+}
+
+// Per-monitor DPI awareness (v2) before any window exists, so window sizes, the monitor rectangle and the swapchain are
+// physical pixels on scaled desktops too (the launcher reads the modes in physical pixels).
+void declare_dpi_awareness() {
+  using SetContext = BOOL(WINAPI *)(DPI_AWARENESS_CONTEXT);
+  const HMODULE user32 = GetModuleHandleW(L"user32.dll");
+  const auto set_context =
+      user32 ? reinterpret_cast<SetContext>(GetProcAddress(user32, "SetProcessDpiAwarenessContext")) : nullptr;
+  const bool aware = set_context && set_context(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+  if (!aware)
+    SetProcessDPIAware();
+  std::fprintf(stderr, "[window] DPI awareness %s\n", aware ? "per-monitor v2" : "system");
+}
+
 void apply_pad(const PadState &pad) {
   ps2::set_pad_buttons(pad.buttons);
   for (int axis = 0; axis < 4; ++axis)
@@ -335,8 +379,17 @@ bool open_window(bool fullscreen) {
     return false;
   }
   keyboard_keys = gt4::controls::keyboard_bindings(active_controls);
-  // TASK-080: an invalid GT4_DISPLAY_ASPECT or GT4_ASPECT_FOV_EXTRA stops the start here (prints and exits).
+  // TASK-080: an invalid GT4_DISPLAY_ASPECT, GT4_OUTPUT_SIZE or GT4_ASPECT_FOV_EXTRA stops the start here (prints and
+  // exits).
   gt4::display_aspect::configured_setting();
+  const gt4::display_aspect::OutputSize output = gt4::display_aspect::configured_output_size();
+  std::string monitor_device;
+  try {
+    monitor_device = gt4::window_mode::parse_monitor(std::getenv("GT4_MONITOR"));
+  } catch (const std::invalid_argument &error) {
+    std::fprintf(stderr, "[window] %s, game not started\n", error.what());
+    return false;
+  }
   try {
     input_backend = gt4::pad::parse_backend(std::getenv("GT4_INPUT"));
   } catch (const std::invalid_argument &error) {
@@ -357,15 +410,41 @@ bool open_window(bool fullscreen) {
   arrow_cursor = window_class.hCursor;
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
-  // The presentation is fixed 16:9: the client area is 960x540.
+  // Without GT4_MONITOR and GT4_OUTPUT_SIZE (headless tools, older launchers): a 960x540 client area where Windows puts
+  // it, as before. With them (TASK-080 addendum): a client area of the output size (shrunk with its shape when it does
+  // not fit the work area) centred on the chosen monitor; fullscreen covers that monitor (set_fullscreen).
+  const bool placed = output.known() || !monitor_device.empty();
+  if (placed)
+    declare_dpi_awareness();
   RECT window_bounds{0, 0, 960, 540};
+  int left = CW_USEDEFAULT, top = CW_USEDEFAULT;
+  HMONITOR monitor = nullptr;
+  MONITORINFO monitor_info{};
+  monitor_info.cbSize = sizeof monitor_info;
+  if (placed) {
+    monitor = chosen_monitor(monitor_device);
+    if (!GetMonitorInfoW(monitor, &monitor_info))
+      throw std::runtime_error("Cannot read the chosen monitor");
+    RECT frame{0, 0, 0, 0};
+    AdjustWindowRectEx(&frame, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    const RECT work = monitor_info.rcWork;
+    const auto client = gt4::window_mode::fit_client(
+        output.known() ? output.width : 960u, output.known() ? output.height : 540u,
+        (work.right - work.left) - (frame.right - frame.left), (work.bottom - work.top) - (frame.bottom - frame.top));
+    window_bounds = RECT{0, 0, client.width, client.height};
+  }
   if (!AdjustWindowRectEx(&window_bounds, WS_OVERLAPPEDWINDOW, FALSE, 0))
     throw std::runtime_error("Cannot size native game window");
+  const int window_width = window_bounds.right - window_bounds.left;
+  const int window_height = window_bounds.bottom - window_bounds.top;
+  if (placed) {
+    const auto box = gt4::window_mode::centred(to_rect(monitor_info.rcWork), window_width, window_height);
+    left = box.left;
+    top = box.top;
+  }
   game_window = CreateWindowExW(
       0, window_class.lpszClassName, window_title,
-      WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-      window_bounds.right - window_bounds.left,
-      window_bounds.bottom - window_bounds.top, nullptr, nullptr,
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE, left, top, window_width, window_height, nullptr, nullptr,
       window_class.hInstance, nullptr);
   if (!game_window)
     throw std::runtime_error("Cannot create native game window");
@@ -377,6 +456,12 @@ bool open_window(bool fullscreen) {
     gt4::display_aspect::set_window_client_size(static_cast<std::uint32_t>(client.right),
                                                 static_cast<std::uint32_t>(client.bottom));
   std::fprintf(stderr, "[window] %s start (GT4_FULLSCREEN)\n", start_fullscreen ? "fullscreen" : "windowed");
+  if (placed) {
+    const RECT &area = monitor_info.rcMonitor;
+    std::fprintf(stderr, "[window] monitor %s (%ldx%ld at %ld,%ld), output size %ux%u, client %ldx%ld\n",
+                 monitor_device.empty() ? "primary" : monitor_device.c_str(), area.right - area.left,
+                 area.bottom - area.top, area.left, area.top, output.width, output.height, client.right, client.bottom);
+  }
   return true;
 }
 

@@ -78,6 +78,41 @@ Setting parse_display_aspect(const char *value) {
   return Setting{Source::fixed, snap_ratio(ratio)};
 }
 
+OutputSize parse_output_size(const char *value) {
+  constexpr const char *kRule = "use WxH with each side from 320 to 16384 and a ratio between 1:2 and 8:1";
+  if (value == nullptr)
+    return OutputSize{};
+  const char *separator = std::strchr(value, 'x');
+  const char *end = value + std::strlen(value);
+  auto side = [&](const char *begin, const char *stop) -> std::uint32_t {
+    if (begin == stop || stop - begin > 5)
+      refuse("GT4_OUTPUT_SIZE", value, kRule);
+    std::uint32_t number = 0;
+    for (const char *p = begin; p != stop; ++p) {
+      if (*p < '0' || *p > '9')
+        refuse("GT4_OUTPUT_SIZE", value, kRule);
+      number = number * 10u + static_cast<std::uint32_t>(*p - '0');
+    }
+    if (number < kMinOutputSide || number > kMaxOutputSide)
+      refuse("GT4_OUTPUT_SIZE", value, kRule);
+    return number;
+  };
+  if (separator == nullptr)
+    refuse("GT4_OUTPUT_SIZE", value, kRule);
+  const OutputSize size{side(value, separator), side(separator + 1, end)};
+  const double ratio = static_cast<double>(size.width) / static_cast<double>(size.height);
+  if (!(ratio >= kMinRatio && ratio <= kMaxRatio))
+    refuse("GT4_OUTPUT_SIZE", value, kRule);
+  return size;
+}
+
+Setting resolve_setting(const Setting &aspect, const OutputSize &output) {
+  if (aspect.source != Source::automatic || !output.known())
+    return aspect;
+  return Setting{Source::output_size,
+                 snap_ratio(static_cast<double>(output.width) / static_cast<double>(output.height))};
+}
+
 double parse_fov_extra(const char *value) {
   if (value == nullptr)
     return 1.0;
@@ -366,6 +401,7 @@ Runtime &runtime() {
 
 struct Config {
   Setting setting;
+  OutputSize output;
   double fov_extra = 1.0;
 };
 
@@ -373,17 +409,24 @@ const Config &config() {
   static const Config value = [] {
     Config c;
     try {
-      c.setting = parse_display_aspect(std::getenv("GT4_DISPLAY_ASPECT"));
+      c.output = parse_output_size(std::getenv("GT4_OUTPUT_SIZE"));
+      c.setting = resolve_setting(parse_display_aspect(std::getenv("GT4_DISPLAY_ASPECT")), c.output);
       c.fov_extra = parse_fov_extra(std::getenv("GT4_ASPECT_FOV_EXTRA"));
     } catch (const std::invalid_argument &error) {
       std::fprintf(stderr, "[aspect] %s, game not started\n", error.what());
       std::fflush(stderr);
       std::exit(1);
     }
-    std::fprintf(stderr, "[aspect] GT4_DISPLAY_ASPECT %s, FOV extra %.3f\n",
-                 c.setting.source == Source::automatic ? "auto (window client area)"
-                                                       : describe_ratio(c.setting.ratio).c_str(),
-                 c.fov_extra);
+    std::string described;
+    if (c.setting.source == Source::automatic) {
+      described = "auto (window client area)";
+    } else if (c.setting.source == Source::output_size) {
+      described = "auto (output size " + std::to_string(c.output.width) + "x" + std::to_string(c.output.height) + ", " +
+                  describe_ratio(c.setting.ratio) + ")";
+    } else {
+      described = describe_ratio(c.setting.ratio);
+    }
+    std::fprintf(stderr, "[aspect] GT4_DISPLAY_ASPECT %s, FOV extra %.3f\n", described.c_str(), c.fov_extra);
     return c;
   }();
   return value;
@@ -392,6 +435,7 @@ const Config &config() {
 }  // namespace
 
 const Setting &configured_setting() { return config().setting; }
+OutputSize configured_output_size() { return config().output; }
 double configured_fov_extra() { return config().fov_extra; }
 
 void set_window_client_size(std::uint32_t width, std::uint32_t height) {
@@ -404,7 +448,7 @@ void set_window_client_size(std::uint32_t width, std::uint32_t height) {
 
 double current_ratio() {
   const Setting &setting = configured_setting();
-  if (setting.source == Source::fixed)
+  if (setting.source != Source::automatic)
     return setting.ratio;
   const Runtime &r = runtime();
   return client_ratio(r.client_width.load(), r.client_height.load());

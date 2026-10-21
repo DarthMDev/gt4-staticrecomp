@@ -7,7 +7,8 @@
  *   row = {id, label, help, page: "basic"|"advanced"|"mods"|"hidden",
  *          group?: "graphics"|"display", control: "slider"|"toggle"|"dropdown",
  *          values, default, current, disabled?, visible_when?: {id, equals}}
- *   slider values   = {min, max, step, unit?, limit?: "max_upscale", scale?: shown value = stored / scale}
+ *   slider values   = {min, max, step, unit?, limit?: "max_upscale", scale?: shown value = stored / scale,
+ *                      labels?: {value: readout} (TASK-080 Render scale: "100% · 4x · 2560x1792")}
  *   dropdown values = [{value, label, disabled?, note?}]
  *   toggle values   = null (current is true/false)
  */
@@ -79,13 +80,17 @@
       max = Math.min(max, table[spec.limit]);
     }
     return { min: spec.min, max: max, step: spec.step || 1, unit: spec.unit || "", fullMax: spec.max,
-             scale: spec.scale || 1 };
+             scale: spec.scale || 1, labels: spec.labels || null };
   }
 
   function sliderControl(ctx, row) {
     var spec = sliderSpec(row, ctx.table);
     // scale (TASK-080 custom aspect ratio): the stored whole number is shown divided by it, with two decimals.
     var format = function (value) {
+      // labels (TASK-080 Render scale): the table's readout for this step, e.g. "100% · 4x · 2560x1792".
+      if (spec.labels && Object.prototype.hasOwnProperty.call(spec.labels, String(Number(value)))) {
+        return spec.labels[String(Number(value))];
+      }
       if (spec.scale !== 1) {
         return (Number(value) / spec.scale).toFixed(2) + spec.unit;
       }
@@ -158,7 +163,7 @@
     });
     paint();
     var nodes = [input, readout];
-    return { node: nodes, limited: spec.max < spec.fullMax ? spec.max + spec.unit : null };
+    return { node: nodes, limited: spec.max < spec.fullMax ? spec.max + spec.unit : null, wide: !!spec.labels };
   }
 
   function toggleControl(ctx, row) {
@@ -302,7 +307,7 @@
     }
     return h("div", { class: "row" + (row.disabled ? " is-disabled" : ""), data: { row: row.id } }, [
       h("div", { class: "k" }, keyNodes),
-      h("div", { class: "ctl" }, control.node)
+      h("div", { class: "ctl" + (control.wide ? " wide" : "") }, control.node)
     ]);
   }
 
