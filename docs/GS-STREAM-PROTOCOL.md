@@ -29,6 +29,11 @@ Version 1.3 (TASK-080, 2026-10-21) adds, without changing any existing layout or
 (gt4-gs 1.0.x) keep working with a 1.3 producer and never receive it. The 1.3 text was written by an agent that is not
 PCSX2-tainted, from our own records only.
 
+Version 1.3, P2 amendment (TASK-080 P2, slice217, 2026-10-21): `display_aspect` mode 1 carries a fill target in
+`args[1]` (the target aspect x 1e6; 0 = the whole window, the earlier meaning). Before it, `args[1]` was reserved and
+sent as 0, so a consumer that ignores it (gt4-gs 1.1.0) keeps the earlier behaviour (fill the whole window), and the
+READY minor stays 3. Written by an agent that is not PCSX2-tainted.
+
 ## 1. Scope
 
 The protocol carries GS hardware traffic from a **producer** (the game process, which runs the EE, VU and IOP
@@ -219,15 +224,22 @@ client area, so the two processes agree.
 
 | Argument | Meaning |
 |---|---|
-| `args[0]` mode | 0 = game aspect: the aspect ratio of the consumer's settings file (16:9 by default) inside the window, pillarbox or letterbox, the behaviour before 1.3; 1 = fill: the picture is stretched to the whole window |
-| `args[1]`, `args[2]` | reserved: the producer sends 0, the consumer ignores them |
+| `args[0]` mode | 0 = game aspect: the aspect ratio of the consumer's settings file (16:9 by default) inside the window, pillarbox or letterbox, the behaviour before 1.3; 1 = fill: the picture is stretched to the fill rectangle (`args[1]`) |
+| `args[1]` fill target | mode 1 only (P2 amendment, slice217): the target aspect (width / height) x 1e6 of the fill rectangle, the largest rectangle of that aspect centred in the window, with black bars on the two other sides (letterbox when the target is wider than the window, pillarbox when narrower). 0 = the whole window. Example: a custom ratio 2.44 in a 1920x1080 window is 2440000, a 1920x787 band at y = 146. The producer sends 0 with mode 0 and a value in 500000..8000000 (or 0) with mode 1 |
+| `args[2]` | reserved: the producer sends 0, the consumer ignores it |
 
 Rules:
 
 - The consumer applies the mode from the **next presented frame**; it stays until the next display_aspect. Every
   session starts in mode 0.
 - Any other mode is answered with a non-fatal ERROR `bad_argument` (code 7, new in 1.3); the consumer keeps its
-  current mode and the stream continues.
+  current mode and the stream continues. So is a mode 1 `args[1]` other than 0 or 500000..8000000.
+- A record with the same mode and a different `args[1]` is a change (the producer sends it, for example when the window
+  ratio changes in auto mode); the consumer applies the new rectangle from the next presented frame.
+- The fill rectangle never stretches the picture to a window of another ratio: that was the 2026-10-21 owner report
+  (Custom 2.44 on a 1920x1080 monitor stretched to 16:9 by gt4-gs 1.1.0, which fills the whole window). A consumer that
+  predates the amendment ignores `args[1]` and fills the whole window; that is correct only when the target equals the
+  window's ratio (auto mode).
 - The consumer's READY `version_minor` is 3. The producer sends kind 7 only when the consumer's READY minor is 3 or
   more; a 1.2 consumer never receives it and always presents the game aspect.
 - The producer (the game) sends a record only when the mode changes, right after a VSYNC record. Its policy (TASK-080,
@@ -281,6 +293,9 @@ Rules:
   (`set_display_aspect_mode`, driven by the TASK-080 scene policy) differs from the last mode sent, the game posts
   CONTROL display_aspect to a consumer whose READY minor is 3 or more. A 1.2 consumer is never sent it; the game logs
   once that the picture keeps the game's aspect.
+- P2 amendment (slice217): with mode 1 the game sends the race projection ratio as the fill target, `args[1]` =
+  round(ratio x 1e6) (`aspect_millionths`, `native/gs_stream/gs_stream_client.hpp`); a change of the target alone is a
+  new record. CoreGS 1.1 applies the same rectangle in-process (`presentation_rect_ratio`).
 
 ## 8. Consumer rules
 

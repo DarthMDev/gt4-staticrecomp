@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
@@ -72,8 +73,9 @@ std::uint64_t (*g_worker_busy_us)() = nullptr;
 // TASK-060: cursor policy of the game window, sent to a 1.2 consumer after attach_window (set by window.cpp).
 bool g_cursor_auto_hide = true;
 std::uint32_t g_cursor_hide_delay_ms = 3000;
-// TASK-080: display aspect mode wanted by the game (set_display_aspect_mode), posted after a VSYNC to a 1.3 consumer.
-std::atomic<std::uint32_t> g_display_aspect_mode{0};
+// TASK-080: display aspect wanted by the game (set_display_aspect_mode), posted after a VSYNC to a 1.3 consumer.
+// Low 32 bits: the mode; high 32 bits: the fill target aspect x 1e6 (0 = the whole window; P2, slice217).
+std::atomic<std::uint64_t> g_display_aspect_wanted{0};
 
 // CPU time of the calling thread in microseconds (UINT64_MAX when unavailable).
 std::uint64_t thread_cpu_us() {
@@ -233,8 +235,9 @@ class Client {
       start_process();
       // TASK-080: in pcsx2 mode the race-view presentation goes to the GS process (CONTROL display_aspect). Installed
       // here so headless runs exercise it too; the game window (window.cpp) installs an equivalent sink later.
-      gt4::display_aspect::set_presentation_sink([](bool fill, double) {
-        set_display_aspect_mode(fill ? DisplayAspectMode::fill : DisplayAspectMode::game_aspect);
+      gt4::display_aspect::set_presentation_sink([](bool fill, double ratio) {
+        set_display_aspect_mode(fill ? DisplayAspectMode::fill : DisplayAspectMode::game_aspect,
+                                fill ? aspect_millionths(ratio) : 0);
       });
     }
     gt4::perf::Probe::set_gs_ipc_hooks(&Client::report_interval_hook, &Client::reset_interval_hook);
@@ -365,11 +368,14 @@ class Client {
       control(proto::ControlKind::cursor, g_cursor_auto_hide ? proto::kCursorFlagAutoHide : 0, g_cursor_hide_delay_ms, 0);
   }
 
-  // TASK-080 (protocol 1.3): CONTROL display_aspect when the wanted mode differs from the last one sent (the consumer
-  // starts in game_aspect). Effective from the next presented frame. A consumer below 1.3 is never sent it.
+  // TASK-080 (protocol 1.3): CONTROL display_aspect when the wanted mode or fill target differs from the last one sent
+  // (the consumer starts in game_aspect). Effective from the next presented frame. A consumer below 1.3 is never sent
+  // it. args[1] = the fill target aspect x 1e6 (P2, slice217; 0 = the whole window), see GS-STREAM-PROTOCOL 6.7.
   void post_display_aspect() {
-    const std::uint32_t wanted = g_display_aspect_mode.load();
-    if (wanted == display_aspect_sent_ || !session_ || dead_) return;
+    const std::uint64_t wanted_both = g_display_aspect_wanted.load();
+    if (wanted_both == display_aspect_sent_ || !session_ || dead_) return;
+    const std::uint32_t wanted = static_cast<std::uint32_t>(wanted_both);
+    const std::uint32_t target = static_cast<std::uint32_t>(wanted_both >> 32);
     if (ready_.version_minor < 3) {
       if (!display_aspect_refused_logged_) {
         display_aspect_refused_logged_ = true;
@@ -378,8 +384,8 @@ class Client {
       }
       return;
     }
-    control(proto::ControlKind::display_aspect, wanted, 0, 0);
-    display_aspect_sent_ = wanted;
+    control(proto::ControlKind::display_aspect, wanted, target, 0);
+    display_aspect_sent_ = wanted_both;
     ++display_aspect_controls_;
   }
 
@@ -818,7 +824,7 @@ class Client {
   std::unique_ptr<ipc::Session> session_;
   ipc::ChildProcess child_;
   proto::ReadyPayload ready_{};
-  std::uint32_t display_aspect_sent_ = 0;  // DisplayAspectMode last sent; game_aspect is the consumer's default
+  std::uint64_t display_aspect_sent_ = 0;  // mode | target << 32 last sent; game_aspect is the consumer's default
   bool display_aspect_refused_logged_ = false;
   std::uint64_t display_aspect_controls_ = 0;
   proto::FileWriter capture_;
@@ -1106,7 +1112,15 @@ void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms) {
   g_cursor_hide_delay_ms = std::clamp<std::uint32_t>(hide_delay_ms, 1, 60000);
 }
 
-void set_display_aspect_mode(DisplayAspectMode mode) { g_display_aspect_mode.store(static_cast<std::uint32_t>(mode)); }
+void set_display_aspect_mode(DisplayAspectMode mode, std::uint32_t fill_aspect_millionths) {
+  const std::uint32_t target = mode == DisplayAspectMode::fill ? fill_aspect_millionths : 0;
+  g_display_aspect_wanted.store(static_cast<std::uint64_t>(mode) | (static_cast<std::uint64_t>(target) << 32));
+}
+
+std::uint32_t aspect_millionths(double ratio) {
+  if (!(ratio >= kMinFillAspect && ratio <= kMaxFillAspect)) return 0;
+  return static_cast<std::uint32_t>(std::floor(ratio * 1e6 + 0.5));
+}
 
 void set_worker_busy_source(std::uint64_t (*worker_busy_us)()) { g_worker_busy_us = worker_busy_us; }
 

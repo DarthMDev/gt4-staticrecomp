@@ -235,7 +235,8 @@ void present_race_view(bool fill, double ratio) {
 #ifdef GT4_GS_STREAM_CLIENT
   if (gt4::gs_stream::stream_renderer()) {
     gt4::gs_stream::set_display_aspect_mode(fill ? gt4::gs_stream::DisplayAspectMode::fill
-                                                 : gt4::gs_stream::DisplayAspectMode::game_aspect);
+                                                 : gt4::gs_stream::DisplayAspectMode::game_aspect,
+                                            fill ? gt4::gs_stream::aspect_millionths(ratio) : 0);
     return;
   }
 #endif

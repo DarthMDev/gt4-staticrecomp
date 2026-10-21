@@ -177,6 +177,165 @@ bool ScenePolicy::at_vblank(std::uint64_t vblank, const DisplayRequest &request)
   return presented_;
 }
 
+// --- P2: race HUD and UI ------------------------------------------------------------------------------------------
+
+namespace {
+
+std::uint32_t float_bits(float value) {
+  std::uint32_t bits = 0;
+  std::memcpy(&bits, &value, sizeof bits);
+  return bits;
+}
+
+float bits_float(std::uint32_t bits) {
+  float value = 0.0f;
+  std::memcpy(&value, &bits, sizeof value);
+  return value;
+}
+
+constexpr double kGameCanvasLeft = -320.0 / 3.0;
+constexpr double kGameCanvasRight = 2240.0 / 3.0;
+constexpr double kGameCanvasTop = 480.0;
+constexpr double kGameCanvasBottom = 0.0;
+constexpr double kCanvasTolerance = 0.05;
+// Words of a setProjectionMatrix result other than m[0], m[5], m[12], m[13]: zero except m[10] = -1, m[15] = 1.
+constexpr int kZeroIndices[10] = {1, 2, 3, 4, 6, 7, 8, 9, 11, 14};
+
+}  // namespace
+
+HudCanvas hud_canvas(double ratio) {
+  const double r = snap_ratio(ratio);
+  if (r == kGameRatio)
+    return {kGameCanvasLeft, kGameCanvasRight, kGameCanvasTop, kGameCanvasBottom};
+  if (r > kGameRatio)
+    return {320.0 - 240.0 * r, 320.0 + 240.0 * r, kGameCanvasTop, kGameCanvasBottom};
+  const double half_height = 240.0 * kGameRatio / r;
+  return {kGameCanvasLeft, kGameCanvasRight, 240.0 + half_height, 240.0 - half_height};
+}
+
+HudMatrixWords hud_matrix_words(const HudCanvas &canvas) {
+  const float left = static_cast<float>(canvas.left), right = static_cast<float>(canvas.right);
+  const float top = static_cast<float>(canvas.top), bottom = static_cast<float>(canvas.bottom);
+  HudMatrixWords words;
+  words.m0 = float_bits(2.0f / (right - left));
+  words.m5 = float_bits(2.0f / (bottom - top));
+  words.m12 = float_bits((left + right) / (left - right));
+  words.m13 = float_bits((top + bottom) / (top - bottom));
+  return words;
+}
+
+namespace {
+
+// Decodes a setProjectionMatrix result into its canvas edges. False when the words are not that layout.
+bool decode_hud_canvas(const std::uint32_t words[16], HudCanvas &canvas) {
+  for (const int index : kZeroIndices)
+    if (words[index] != 0)
+      return false;
+  if (words[10] != float_bits(-1.0f) || words[15] != float_bits(1.0f))
+    return false;
+  const double m0 = bits_float(words[0]), m5 = bits_float(words[5]);
+  const double m12 = bits_float(words[12]), m13 = bits_float(words[13]);
+  if (!(m0 > 0.0) || !(m5 < 0.0) || !std::isfinite(m12) || !std::isfinite(m13))
+    return false;
+  const double width = 2.0 / m0;      // right - left
+  const double height = -2.0 / m5;    // top - bottom
+  const double sum_x = -m12 * width;  // left + right
+  const double sum_y = m13 * height;  // top + bottom
+  canvas = {(sum_x - width) / 2.0, (sum_x + width) / 2.0, (sum_y + height) / 2.0, (sum_y - height) / 2.0};
+  return true;
+}
+
+bool same_edge(double a, double b) { return std::fabs(a - b) <= kCanvasTolerance; }
+
+}  // namespace
+
+bool is_game_hud_canvas(const std::uint32_t words[16]) {
+  HudCanvas c{};
+  return decode_hud_canvas(words, c) && same_edge(c.left, kGameCanvasLeft) && same_edge(c.right, kGameCanvasRight) &&
+         same_edge(c.top, kGameCanvasTop) && same_edge(c.bottom, kGameCanvasBottom);
+}
+
+bool is_split_screen_hud_canvas(const std::uint32_t words[16]) {
+  HudCanvas c{};
+  if (!decode_hud_canvas(words, c))
+    return false;
+  const bool wide_half = same_edge(c.left, kGameCanvasLeft) && same_edge(c.right, 320.0) &&
+                         same_edge(c.top - c.bottom, 480.0);
+  const bool narrow_half = same_edge(c.left, 0.0) && same_edge(c.right, 640.0) && same_edge(c.top - c.bottom, 240.0);
+  return wide_half || narrow_half;
+}
+
+bool HudCanvasHook::apply(std::uint8_t *ram, std::uint32_t ram_size, std::uint32_t self, double ratio) {
+  last_split_ = false;
+  const std::uint64_t address = static_cast<std::uint64_t>(self) + kHudMatrixOffset;
+  if ((self & 3u) != 0 || address + kMatrixBytes > ram_size)
+    return false;
+  std::uint32_t words[16];
+  for (std::uint32_t i = 0; i < 16; ++i)
+    words[i] = read_le32(ram + address + 4u * i);
+  const HudMatrixWords current{words[0], words[5], words[12], words[13]};
+  last_split_ = is_split_screen_hud_canvas(words);
+  Slot *slot = nullptr;
+  for (Slot &candidate : slots_)
+    if (candidate.used && candidate.address == static_cast<std::uint32_t>(address))
+      slot = &candidate;
+  const bool ours = slot != nullptr && current == slot->written && words[10] == float_bits(-1.0f) &&
+                    words[15] == float_bits(1.0f);
+  if (!ours) {
+    if (!is_game_hud_canvas(words)) {
+      ++foreign_;  // split screen, the 4:3 game canvas, or anything else: left alone
+      return false;
+    }
+    if (slot == nullptr) {
+      slot = &slots_[next_];
+      next_ = (next_ + 1) % kSlots;
+    }
+    slot->used = true;
+    slot->address = static_cast<std::uint32_t>(address);
+    slot->original = current;
+    slot->written = current;
+  }
+  const HudMatrixWords target =
+      is_game_ratio(snap_ratio(ratio)) ? slot->original : hud_matrix_words(hud_canvas(ratio));
+  if (target == current)
+    return false;
+  write_le32(ram + address + 0u, target.m0);
+  write_le32(ram + address + 20u, target.m5);
+  write_le32(ram + address + 48u, target.m12);
+  write_le32(ram + address + 52u, target.m13);
+  slot->written = target;
+  ++writes_;
+  return true;
+}
+
+HudParameters hud_parameters(double ratio) {
+  const double r = snap_ratio(ratio);
+  HudParameters block;
+  if (r == kGameRatio) {
+    block.words[kFontScaleOffset / 4u] = kGameFontScaleBits;
+    block.words[kMirrorDivisorOffset / 4u] = kGameMirrorDivisor;
+    return block;
+  }
+  block.words[kFontScaleOffset / 4u] = float_bits(static_cast<float>((4.0 / 3.0) / r));
+  block.words[kMirrorDivisorOffset / 4u] =
+      r > kGameRatio ? static_cast<std::uint32_t>(std::floor(640.0 * r / kGameRatio + 0.5)) : kGameMirrorDivisor;
+  return block;
+}
+
+bool write_hud_parameters(std::uint8_t *ram, std::uint32_t ram_size, const HudParameters &parameters) {
+  if (static_cast<std::uint64_t>(kHudParameterBlock) + 4u * kHudParameterWords > ram_size)
+    return false;
+  bool written = false;
+  for (std::uint32_t i = 0; i < kHudParameterWords; ++i) {
+    std::uint8_t *word = ram + kHudParameterBlock + 4u * i;
+    if (read_le32(word) != parameters.words[i]) {
+      write_le32(word, parameters.words[i]);
+      written = true;
+    }
+  }
+  return written;
+}
+
 // --- Runtime glue -------------------------------------------------------------------------------------------------
 
 namespace {
@@ -191,6 +350,13 @@ struct Runtime {
   double presented_ratio = kGameRatio;
   std::uint64_t hooks = 0, scaled = 0, renders = 0;
   std::uint32_t request_lines = 0;
+  // P2: HUD canvas hook and parameter block.
+  HudCanvasHook hud;
+  double hud_logged_ratio = kGameRatio;
+  bool block_known = false;
+  HudParameters block{};
+  std::uint32_t block_refills_logged = 0;
+  std::uint64_t split_renders = 0;
 };
 
 Runtime &runtime() {
@@ -271,9 +437,34 @@ void on_race_display_render() {
   r.policy.on_race_display_render(r.vblank);
 }
 
+void on_race_display_render(std::uint8_t *ram, std::uint32_t ram_size, std::uint32_t self) {
+  Runtime &r = runtime();
+  const double ratio = r.projection_ratio;
+  const std::uint64_t foreign_before = r.hud.foreign();
+  const bool written = r.hud.apply(ram, ram_size, self, ratio);
+  if (r.hud.last_was_split_screen()) {
+    // Split screen: its own half-screen canvases, left alone, and not the race view (pillarboxed 16:9).
+    if (r.split_renders++ == 0)
+      std::fprintf(stderr, "[aspect] RaceDisplay 0x%08X has a split-screen HUD canvas at vblank %llu: not the race "
+                   "view, the picture stays 16:9\n", self, static_cast<unsigned long long>(r.vblank));
+    return;
+  }
+  on_race_display_render();
+  if (written && ratio != r.hud_logged_ratio) {
+    r.hud_logged_ratio = ratio;
+    const HudCanvas canvas = hud_canvas(ratio);
+    std::fprintf(stderr, "[aspect] HUD canvas of RaceDisplay 0x%08X at vblank %llu: R %s, left %.3f right %.3f top %.3f "
+                 "bottom %.3f\n", self, static_cast<unsigned long long>(r.vblank), describe_ratio(ratio).c_str(),
+                 canvas.left, canvas.right, canvas.top, canvas.bottom);
+  }
+  if (r.hud.foreign() != foreign_before && r.hud.foreign() == 1)
+    std::fprintf(stderr, "[aspect] RaceDisplay 0x%08X: HUD matrix is not the full-screen 16:9 canvas (4:3 game or "
+                 "unknown); left unchanged\n", self);
+}
+
 void set_presentation_sink(PresentationSink sink) { runtime().sink = sink; }
 
-void at_guest_vblank(const std::uint8_t *ram, std::uint32_t ram_size) {
+void at_guest_vblank(std::uint8_t *ram, std::uint32_t ram_size) {
   Runtime &r = runtime();
   configured_setting();  // a headless run refuses an invalid value here
   ++r.vblank;
@@ -282,6 +473,20 @@ void at_guest_vblank(const std::uint8_t *ram, std::uint32_t ram_size) {
     request.pending = read_le32(ram + kDisplayRequestState + kRequestPendingOffset);
     request.mode = read_le32(ram + kDisplayRequestState + kRequestModeOffset);
     request.row = read_le32(ram + kDisplayRequestState + kRequestRowOffset);
+  }
+  // P2: the HUD parameter block for the ratio of the last race camera hook (the original constants before it and at
+  // 16:9). Refilled whenever guest RAM differs (the boot clears low RAM before the game runs).
+  const HudParameters wanted_block = hud_parameters(r.projection_ratio);
+  if (write_hud_parameters(ram, ram_size, wanted_block)) {
+    if (!r.block_known || !(wanted_block == r.block) || r.block_refills_logged < 4) {
+      if (r.block_known && wanted_block == r.block)
+        ++r.block_refills_logged;
+      std::fprintf(stderr, "[aspect] HUD parameter block 0x%08X at vblank %llu: font x scale 0x%08X, mirror divisor %u\n",
+                   kHudParameterBlock, static_cast<unsigned long long>(r.vblank),
+                   wanted_block.words[kFontScaleOffset / 4u], wanted_block.words[kMirrorDivisorOffset / 4u]);
+    }
+    r.block_known = true;
+    r.block = wanted_block;
   }
   const std::uint64_t events_before = r.policy.request_events();
   const bool race_view = r.policy.at_vblank(r.vblank, request);

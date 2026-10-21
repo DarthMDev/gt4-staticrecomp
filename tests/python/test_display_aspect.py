@@ -1,5 +1,6 @@
-"""TASK-080 P1 native display aspect ratios (slice212b, rebuilt on the 1.0.0 release recipe as slice215): capsule derivation and pins, launcher validation of
-GT4_DISPLAY_ASPECT / GT4_ASPECT_FOV_EXTRA, the mode pin, and the race camera hook on a synthetic guest stack.
+"""TASK-080 native display aspect ratios (P1 slice212b/slice215; P2 HUD slice217): capsule derivation and pins, launcher
+validation of GT4_DISPLAY_ASPECT / GT4_ASPECT_FOV_EXTRA, the mode pin, the race camera hook on a synthetic guest stack and
+(P2) the RaceDisplay::render HUD canvas hook on a synthetic RaceDisplay.
 
 The behaviour tests compile the overlay helpers and hook with native/display_aspect.cpp and a minimal guest model
 (clang-cl; skipped when it is absent). Scenarios: 21:9 and 32:9 scale the x column of the stack matrix, 4:3 scales
@@ -25,7 +26,8 @@ import prepare_perf_runtime as perf  # noqa: E402
 CLANG_CL = Path('C:/Program Files/LLVM/bin/clang-cl.exe')
 ASSETS = Path(os.environ.get('GT4_ASSETS_ROOT', 'C:/Antigravity/gt4-staticrecomp'))
 DONOR_SRC = ASSETS / 'private/references/ps2-web-recomp/runtime/src'
-PIN = json.loads((ROOT / 'docs/inputs/slice212c-license-guard-runtime.json').read_text(encoding='utf-8'))
+PIN = json.loads((ROOT / 'docs/inputs/slice217-license-guard-runtime.json').read_text(encoding='utf-8'))
+PIN_212C = json.loads((ROOT / 'docs/inputs/slice212c-license-guard-runtime.json').read_text(encoding='utf-8'))
 PIN_206 = json.loads((ROOT / 'docs/inputs/slice206-license-guard-runtime.json').read_text(encoding='utf-8'))
 DONOR_EXCERPT = (
     '#include "ps2/generated.hpp"\n'
@@ -70,10 +72,14 @@ class DisplayAspectDerivationTests(unittest.TestCase):
         self.assertEqual(digest, PIN_206['source_sha256']['dispatch.cpp'])
 
     def test_pin_profile_and_overlay_hashes(self):
-        self.assertEqual(PIN['license_guard_profile'], 'task017-guard-v2+task080-aspect-v1')
+        self.assertEqual(PIN['license_guard_profile'], 'task017-guard-v2+task080-aspect-v2')
         self.assertEqual(PIN['display_aspect_overlay_sha256'], guard.overlay_sha256(guard.ASPECT_OVERLAY_PATH))
         self.assertEqual(PIN['license_guard_overlay_sha256'], guard.overlay_sha256(guard.GUARD_OVERLAY_PATH))
-        self.assertEqual(PIN['capsule'], 'private/slice212c-license-guard-runtime')
+        self.assertEqual(PIN['capsule'], 'private/slice217-license-guard-runtime')
+        # slice212c (P1) stays as history: same guard, kernel and cdvdfsv; only dispatch.cpp (the overlay) changed.
+        self.assertEqual(PIN_212C['license_guard_profile'], 'task017-guard-v2+task080-aspect-v1')
+        self.assertEqual(PIN_212C['license_guard_overlay_sha256'], PIN['license_guard_overlay_sha256'])
+        self.assertNotEqual(PIN_212C['source_sha256']['dispatch.cpp'], PIN['source_sha256']['dispatch.cpp'])
         for name in ('kernel.cpp', 'cdvdfsv.cpp'):
             self.assertEqual(PIN['source_sha256'][name], PIN_206['source_sha256'][name], name)
         self.assertNotEqual(PIN['source_sha256']['dispatch.cpp'], PIN_206['source_sha256']['dispatch.cpp'])
@@ -87,7 +93,7 @@ class DisplayAspectDerivationTests(unittest.TestCase):
             for name in ('dispatch.cpp', 'kernel.cpp', 'iop/cdvdfsv.cpp'):
                 (donor / name).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(DONOR_SRC / name, donor / name)
-            receipt = guard.prepare(root / 'private/slice212c-license-guard-runtime', root, display_aspect=True)
+            receipt = guard.prepare(root / 'private/slice217-license-guard-runtime', root, display_aspect=True)
             self.assertEqual(receipt['source_sha256'], PIN['source_sha256'])
             self.assertEqual(receipt['license_guard_profile'], PIN['license_guard_profile'])
 
@@ -105,6 +111,8 @@ class DisplayAspectDerivationTests(unittest.TestCase):
         cmake = source('native/CMakeLists.txt')
         self.assertIn('private/slice212c-license-guard-runtime', cmake)
         self.assertIn('docs/inputs/slice212c-license-guard-runtime.json', cmake)
+        self.assertIn('private/slice217-license-guard-runtime', cmake)
+        self.assertIn('docs/inputs/slice217-license-guard-runtime.json', cmake)
         self.assertIn('display_aspect.cpp', cmake)
         self.assertIn('add_test(NAME native_display_aspect COMMAND $<TARGET_FILE:display_aspect_fixture>)',
                       source('CMakeLists.txt'))
@@ -137,10 +145,12 @@ class DisplayAspectLauncherTests(unittest.TestCase):
             with self.subTest(value=bad), self.assertRaises(ValueError):
                 probe.aspect_fov_extra(bad)
 
-    def test_mode_pcsx2_is_slice215_and_older_builds_are_history(self):
+    def test_mode_pcsx2_is_slice217_and_older_builds_are_history(self):
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
-        self.assertEqual((name, runtime), ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
+        self.assertEqual((name, runtime), ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'],
+                         ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'],
                          ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice212b'],
@@ -148,18 +158,20 @@ class DisplayAspectLauncherTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 215)
+        self.assertEqual(manifest['slice'], 217)
         self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
-        # slice215 = the slice214 release recipe (1.0.0) plus the slice212c capsule and the TASK-080 host code.
-        base = json.loads((ROOT / 'docs/inputs/slice214-pcsx2.json').read_text(encoding='utf-8'))
-        for key in ('frozen_game_library', 'card_seeds', 'gs_stream', 'vu1_aot', 'vu0_aot', 'source_capsule',
+        # slice217 = the slice215 recipe (slice214 release recipe plus TASK-080 P1) with the slice217 capsule (P2 HUD
+        # canvas hook), the P2 host code and the re-translated EE library profile "aspect" (ELF patch table).
+        base = json.loads((ROOT / 'docs/inputs/slice215-pcsx2.json').read_text(encoding='utf-8'))
+        for key in ('card_seeds', 'gs_stream', 'vu1_aot', 'vu0_aot', 'source_capsule',
                     'port_capsule', 'shader_capsule', 'memcard_capsule', 'memcard_capsule_sha256'):
             self.assertEqual(manifest[key], base[key], key)
         self.assertNotEqual(manifest['runtime']['sha256'], base['runtime']['sha256'])
+        self.assertNotEqual(manifest['frozen_game_library'], base['frozen_game_library'])
 
     def test_protocol_1_3_is_documented(self):
         doc = source('docs/GS-STREAM-PROTOCOL.md')
@@ -170,6 +182,11 @@ class DisplayAspectLauncherTests(unittest.TestCase):
         self.assertIn('bad_argument = 7,', header)
         client = source('native/gs_stream/gs_stream_client.cpp')
         self.assertIn('if (ready_.version_minor < 3) {', client)
+        # P2 (slice217): fill carries the target aspect x 1e6 in args[1] (0 = the whole window), so a custom ratio
+        # wider than the window is letterboxed by the consumer instead of stretched.
+        self.assertIn('control(proto::ControlKind::display_aspect, wanted, target, 0);', client)
+        self.assertIn('target aspect', doc)
+        self.assertIn('2440000', doc)
 
 
 @unittest.skipUnless(CLANG_CL.exists(), 'clang-cl is not installed')
@@ -215,6 +232,23 @@ int main(int argc, char **argv) {
     if (scenario == 'o') c.r[31].w[0] = 0x00388B0Cu;                     // the first virtual call in initMonitor
     if (scenario == 'a') c.r[5].w[0] = sp + 0x40u;                       // a1 is not sp
     dispatch_model(c);
+    if (scenario == 'h') {
+        // P2: RaceDisplay::render dispatched with a0 = a RaceDisplay whose HUD matrix is the game's 16:9 canvas.
+        const std::uint32_t self = 0x01C044C0u;
+        const float l = -106.666664f, r = 746.666687f, t = 480.0f, b = 0.0f;
+        const float hud[16] = {2.0f / (r - l), 0, 0, 0, 0, 2.0f / (b - t), 0, 0, 0, 0, -1.0f, 0,
+                               (l + r) / (l - r), (t + b) / (t - b), 0, 1.0f};
+        std::memcpy(g_ram + self + gt4::display_aspect::kHudMatrixOffset, hud, sizeof hud);
+        Cpu h{};
+        h.pc = gt4::display_aspect::kRaceDisplayRender;
+        h.r[31].w[0] = 0x0039F000u;
+        h.r[4].w[0] = self;
+        dispatch_model(h);
+        float out_hud[16];
+        std::memcpy(out_hud, g_ram + self + gt4::display_aspect::kHudMatrixOffset, sizeof out_hud);
+        std::printf("hud_m0=%.9f hud_m12=%.9f hud_same=%d ", out_hud[0], out_hud[12],
+                    std::memcmp(out_hud, hud, sizeof hud) == 0 ? 1 : 0);
+    }
     float out[16];
     std::memcpy(out, g_ram + sp, sizeof out);
     std::printf("m0=%.6f m5=%.6f m8=%.6f m9=%.6f same=%d\n", out[0], out[5], out[8], out[9],
@@ -294,6 +328,22 @@ int main(int argc, char **argv) {
         result = self.run_harness('a', '21:9')
         self.assertEqual(self.values(result)['same'], 1)
         self.assertIn('is not sp', result.stderr)
+
+    def test_render_hook_widens_the_hud_canvas(self):
+        result = self.run_harness('h', '21:9')
+        values = self.values(result)
+        self.assertEqual(values['hud_same'], 0)
+        self.assertAlmostEqual(values['hud_m0'], 2 / 1120, places=7)       # canvas 320 -/+ 240 x 21/9 = -240 .. 880
+        self.assertAlmostEqual(values['hud_m12'], 640 / -1120, places=6)
+        self.assertIn('HUD canvas of RaceDisplay 0x01C044C0', result.stderr)
+        self.assertIn('left -240.000 right 880.000', result.stderr)
+
+    def test_render_hook_writes_nothing_at_16_9(self):
+        for aspect in ('16:9', None):
+            with self.subTest(aspect=aspect):
+                result = self.run_harness('h', aspect)
+                self.assertEqual(self.values(result)['hud_same'], 1)
+                self.assertNotIn('HUD canvas', result.stderr)
 
     def test_invalid_value_stops_the_process(self):
         result = self.run_harness('n', '16/9', check=False)

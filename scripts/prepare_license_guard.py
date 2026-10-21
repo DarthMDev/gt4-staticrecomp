@@ -9,10 +9,12 @@ The capsule holds three derived donor files that replace their donor originals i
   * kernel.cpp: the slice204 halt forensic dump (scripts/halt_dump_overlay.inc); silent unless GT4_HALT_DUMP=1.
   * cdvdfsv.cpp: the slice181 FSV read trace (scripts/fsv_trace_overlay.inc); silent unless GT4_FSV_TRACE=1.
 
-With --display-aspect (TASK-080 P1, capsule slice212c for the slice212b build) dispatch.cpp also carries the race camera aspect hook
-(scripts/display_aspect_overlay.inc, rule in native/display_aspect.hpp), applied on top of the license guard: it acts
-only on the camera virtual call of RaceBase::initMonitor (return label 0x00388B38) and writes nothing at 16:9. The
-receipt then names the profile 'task017-guard-v2+task080-aspect-v1' and the aspect overlay hash. Without the option the
+With --display-aspect (TASK-080; P1 capsule slice212c for the slice212b build, P2 capsule slice217) dispatch.cpp also
+carries the race camera aspect hook and the RaceDisplay::render hook (scripts/display_aspect_overlay.inc, rule in
+native/display_aspect.hpp), applied on top of the license guard: they act only on the camera virtual call of
+RaceBase::initMonitor (return label 0x00388B38) and on the dispatch of RaceDisplay::render (0x0039F498, HUD canvas),
+and write nothing at 16:9. The receipt then names the profile 'task017-guard-v2+task080-aspect-v2' (v1 was slice212c)
+and the aspect overlay hash. Without the option the
 output is byte-identical to the slice206 capsule.
 
 The capsule is independent of the performance capsule (GT4_PERF_RUNTIME_SOURCE), which derives other donor
@@ -43,7 +45,8 @@ ASPECT_OVERLAY_ANCHORS = {
     'hook': ('after', '    if (gt4::license_guard::loader_for_return(c.r[31].w[0])) [[unlikely]] license_demo_guard(c);\n'),
 }
 GUARD_PROFILE = 'task017-guard-v2'
-ASPECT_PROFILE = 'task017-guard-v2+task080-aspect-v1'
+# v1 = slice212c (camera hook and race-view marker); v2 = slice217 (P2: the marker also runs the HUD canvas hook).
+ASPECT_PROFILE = 'task017-guard-v2+task080-aspect-v2'
 PREFIX = '// TASK-017 license guard capsule: MIT donor derivation; see native/THIRD_PARTY.md.\n'
 CAPSULE_FILES = ('cdvdfsv.cpp', 'dispatch.cpp', 'kernel.cpp')
 
@@ -119,6 +122,6 @@ if __name__ == '__main__':
     parser.add_argument('output', type=Path)
     parser.add_argument('--assets-root', type=Path)
     parser.add_argument('--display-aspect', action='store_true',
-                        help='also apply the TASK-080 race camera aspect hook (slice212c capsule, used by the slice212b build)')
+                        help='also apply the TASK-080 aspect hooks (current overlay: v2, slice217 capsule)')
     options = parser.parse_args()
     print(json.dumps(prepare(options.output, options.assets_root, options.display_aspect), indent=2))

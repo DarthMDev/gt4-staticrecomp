@@ -230,6 +230,155 @@ void test_scene_policy() {
   require(!brief.race_view_presented(), "a single HUD frame is gone after the window");
 }
 
+// --- P2 (slice217) --------------------------------------------------------------------------------------------------
+
+std::uint32_t bits_of(float value) {
+  std::uint32_t bits = 0;
+  std::memcpy(&bits, &value, 4);
+  return bits;
+}
+
+float float_of(std::uint32_t bits) {
+  float value = 0.0f;
+  std::memcpy(&value, &bits, 4);
+  return value;
+}
+
+// A RaceDisplay HUD matrix as RaceDisplay::setProjectionMatrix (0x0039BB38) writes it, at self + 0x70.
+void put_game_hud_matrix(std::vector<std::uint8_t> &ram, std::uint32_t self, float left, float right, float top,
+                         float bottom) {
+  const std::uint32_t at = self + kHudMatrixOffset;
+  for (std::uint32_t i = 0; i < 16; ++i)
+    put_le32(ram, at + 4 * i, 0);
+  put_le32(ram, at + 0, bits_of(2.0f / (right - left)));
+  put_le32(ram, at + 20, bits_of(2.0f / (bottom - top)));
+  put_le32(ram, at + 40, bits_of(-1.0f));
+  put_le32(ram, at + 48, bits_of((left + right) / (left - right)));
+  put_le32(ram, at + 52, bits_of((top + bottom) / (top - bottom)));
+  put_le32(ram, at + 60, bits_of(1.0f));
+}
+
+// Maps a canvas x (or y) through the HUD matrix to the frame's normalised device coordinate.
+double ndc_x(const std::vector<std::uint8_t> &ram, std::uint32_t self, double x) {
+  const std::uint32_t at = self + kHudMatrixOffset;
+  return x * float_of(get_le32(ram, at + 0)) + float_of(get_le32(ram, at + 48));
+}
+
+double ndc_y(const std::vector<std::uint8_t> &ram, std::uint32_t self, double y) {
+  const std::uint32_t at = self + kHudMatrixOffset;
+  return y * float_of(get_le32(ram, at + 20)) + float_of(get_le32(ram, at + 52));
+}
+
+void test_hud_canvas() {
+  const HudCanvas game = hud_canvas(kGameRatio);
+  require(near(game.left, -320.0 / 3.0) && near(game.right, 2240.0 / 3.0) && game.top == 480.0 && game.bottom == 0.0,
+          "16:9 canvas = the game's wide canvas");
+  const HudCanvas ultra = hud_canvas(21.0 / 9.0);
+  require(near(ultra.left, 320.0 - 560.0) && near(ultra.right, 320.0 + 560.0) && ultra.top == 480.0,
+          "21:9 canvas = 320 -/+ 240 R");
+  const HudCanvas super = hud_canvas(32.0 / 9.0);
+  require(near(super.right - super.left, 480.0 * 32.0 / 9.0) && near(super.left + super.right, 640.0),
+          "32:9 canvas twice as wide, centred on 320");
+  const HudCanvas tall = hud_canvas(1.6);
+  require(near(tall.left, -320.0 / 3.0) && near(tall.top - tall.bottom, 480.0 * kGameRatio / 1.6) &&
+              near(tall.top + tall.bottom, 480.0),
+          "16:10 (Vert+) canvas taller, centred on 240");
+
+  constexpr std::uint32_t ram_size = 1u << 20;
+  constexpr std::uint32_t self = 0x00080000u, split = 0x00090000u, narrow = 0x000A0000u;
+  std::vector<std::uint8_t> ram(ram_size, 0xCD);
+  put_game_hud_matrix(ram, self, -106.666664f, 746.666687f, 480.0f, 0.0f);
+  put_game_hud_matrix(ram, split, -106.666664f, 320.0f, 480.0f, 0.0f);  // RaceSplitDisplayBase, wide
+  put_game_hud_matrix(ram, narrow, 0.0f, 640.0f, 480.0f, 0.0f);          // the 4:3 game canvas
+  std::uint32_t words[16];
+  for (std::uint32_t i = 0; i < 16; ++i)
+    words[i] = get_le32(ram, self + kHudMatrixOffset + 4 * i);
+  require(is_game_hud_canvas(words), "the game's 16:9 HUD matrix is recognised");
+  for (std::uint32_t i = 0; i < 16; ++i)
+    words[i] = get_le32(ram, split + kHudMatrixOffset + 4 * i);
+  require(!is_game_hud_canvas(words), "a split-screen canvas is not");
+  require(is_split_screen_hud_canvas(words), "the wide split-screen canvas is recognised as split screen");
+  for (std::uint32_t i = 0; i < 16; ++i)
+    words[i] = get_le32(ram, self + kHudMatrixOffset + 4 * i);
+  require(!is_split_screen_hud_canvas(words), "the full-screen canvas is not split screen");
+  {
+    std::vector<std::uint8_t> half(ram_size, 0);
+    put_game_hud_matrix(half, self, 0.0f, 640.0f, 230.0f, -10.0f);  // 4:3 split screen, top player
+    for (std::uint32_t i = 0; i < 16; ++i)
+      words[i] = get_le32(half, self + kHudMatrixOffset + 4 * i);
+    require(is_split_screen_hud_canvas(words) && !is_game_hud_canvas(words), "the 4:3 split-screen canvas");
+  }
+  const std::vector<std::uint8_t> original = ram;
+
+  HudCanvasHook hook;
+  require(!hook.apply(ram.data(), ram_size, self, kGameRatio) && ram == original, "16:9 writes nothing");
+  require(!hook.apply(ram.data(), ram_size, split, 21.0 / 9.0), "split screen left alone");
+  require(hook.last_was_split_screen(), "split screen reported (not the race view)");
+  require(!hook.apply(ram.data(), ram_size, narrow, 21.0 / 9.0), "4:3 game canvas left alone");
+  require(!hook.last_was_split_screen(), "the 4:3 full-screen canvas is not split screen");
+  require(ram == original && hook.foreign() == 2, "foreign canvases untouched and counted");
+
+  // 21:9: the 16:9 HUD keeps its shape once the frame is stretched by s = R / (16/9), and stays centred.
+  const double s = (21.0 / 9.0) / kGameRatio;
+  require(hook.apply(ram.data(), ram_size, self, 21.0 / 9.0), "21:9 writes the canvas");
+  const std::uint32_t m = self + kHudMatrixOffset;
+  for (std::uint32_t at = 0; at < ram_size; ++at) {
+    const std::uint32_t index = (at - m) / 4;
+    const bool hud_word = at >= m && at < m + 64 && (index == 0 || index == 5 || index == 12 || index == 13);
+    if (!hud_word)
+      require(ram[at] == original[at], "only m[0], m[5], m[12], m[13] of that object change");
+  }
+  require(std::fabs(ndc_x(ram, self, 320.0)) < 1e-6, "the HUD centre stays at the frame centre");
+  const double width_ndc = ndc_x(ram, self, 746.666687) - ndc_x(ram, self, -106.666664);
+  require(near(width_ndc * s, 2.0, 1e-5), "the 16:9 canvas spans 1/s of the frame (full 16:9 width after the stretch)");
+  require(near(ndc_y(ram, self, 480.0), -1.0, 1e-6) && near(ndc_y(ram, self, 0.0), 1.0, 1e-6),
+          "the vertical mapping is unchanged");
+  require(!hook.apply(ram.data(), ram_size, self, 21.0 / 9.0), "same ratio again: no write");
+  // A ratio change follows (auto mode, window resized) and 16:9 restores the game's words exactly.
+  require(hook.apply(ram.data(), ram_size, self, 32.0 / 9.0), "32:9 rewrites");
+  require(near((ndc_x(ram, self, 746.666687) - ndc_x(ram, self, -106.666664)) * 2.0, 2.0, 1e-5), "32:9: half width");
+  require(hook.apply(ram.data(), ram_size, self, kGameRatio) && ram == original, "16:9 restores the exact words");
+  // 16:10 (Vert+): the canvas is taller; the horizontal mapping stays.
+  require(hook.apply(ram.data(), ram_size, self, 1.6), "16:10 writes");
+  require(near(ndc_x(ram, self, -106.666664), -1.0, 1e-5) && std::fabs(ndc_y(ram, self, 240.0)) < 1e-6,
+          "16:10: full width, vertical centre kept");
+  require(near((ndc_y(ram, self, 0.0) - ndc_y(ram, self, 480.0)) * (kGameRatio / 1.6), 2.0, 1e-5),
+          "16:10: the 16:9 canvas spans R / (16/9) of the frame height");
+  // A new RaceDisplay at the same address (fresh 16:9 words from initialize) is recognised again.
+  put_game_hud_matrix(ram, self, -106.666664f, 746.666687f, 480.0f, 0.0f);
+  require(hook.apply(ram.data(), ram_size, self, 21.0 / 9.0), "a fresh object at a reused address is rewritten");
+  require(!hook.apply(ram.data(), ram_size, ram_size - 16, 21.0 / 9.0), "outside RAM refused");
+  require(!hook.apply(ram.data(), ram_size, self + 2, 21.0 / 9.0), "unaligned refused");
+}
+
+void test_hud_parameters() {
+  const HudParameters game = hud_parameters(kGameRatio);
+  require(game.words[kFontScaleOffset / 4] == 0x3F400000u, "16:9 font x scale = the original 0.75");
+  require(game.words[kMirrorDivisorOffset / 4] == 640u, "16:9 mirror divisor = the original 640");
+  require(hud_parameters(1366.0 / 768.0) == game, "a near-16:9 ratio snaps to the original block");
+  const HudParameters ultra = hud_parameters(21.0 / 9.0);
+  require(float_of(ultra.words[0]) == static_cast<float>((4.0 / 3.0) / (21.0 / 9.0)), "21:9 font x scale (4/3)/R");
+  require(ultra.words[1] == 840u, "21:9 mirror divisor 640 x 21/16 = 840");
+  const HudParameters super = hud_parameters(32.0 / 9.0);
+  require(float_of(super.words[0]) == 0.375f && super.words[1] == 1280u, "32:9: 0.375 and 1280");
+  const HudParameters custom = hud_parameters(2.44);
+  require(custom.words[1] == 878u, "2.44: divisor round(640 x 2.44 / (16/9)) = 878");
+  const HudParameters tall = hud_parameters(1.6);
+  require(float_of(tall.words[0]) == static_cast<float>((4.0 / 3.0) / 1.6) && tall.words[1] == 640u,
+          "16:10: font (4/3)/R, mirror unchanged");
+
+  constexpr std::uint32_t ram_size = 1u << 16;
+  std::vector<std::uint8_t> ram(ram_size, 0);
+  require(write_hud_parameters(ram.data(), ram_size, game), "the first fill writes");
+  require(get_le32(ram, kHudParameterBlock) == 0x3F400000u && get_le32(ram, kHudParameterBlock + 4) == 640u,
+          "block at 0x7F00");
+  require(!write_hud_parameters(ram.data(), ram_size, game), "unchanged block: no write");
+  for (std::uint32_t at = 0; at < ram_size; ++at)
+    if (at < kHudParameterBlock || at >= kHudParameterBlock + 4 * kHudParameterWords)
+      require(ram[at] == 0, "nothing outside the block is written");
+  require(kHudParameterBlock + 4 * kHudParameterWords <= 0x8000u, "the block is reachable as offset(zero)");
+}
+
 }  // namespace
 
 int main() {
@@ -240,6 +389,8 @@ int main() {
   test_scale_matrix();
   test_guest_matrix();
   test_scene_policy();
+  test_hud_canvas();
+  test_hud_parameters();
   std::puts("display_aspect fixture: all checks passed");
   return 0;
 }

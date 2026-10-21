@@ -88,8 +88,18 @@ void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms);
 // default) or fill (stretched to the window, the race view at a display ratio other than 16:9). Any thread; the client
 // posts CONTROL display_aspect after the next VSYNC when the mode changed, and only to a consumer whose READY minor is
 // 3 or more (a 1.2 consumer is never sent it and keeps the game's aspect).
+//
+// P2 (slice217): with fill, `fill_aspect_millionths` = the target aspect (width / height) x 1e6 of the rectangle the
+// picture fills: the largest centred rectangle of that aspect inside the window (letterbox or pillarbox bars), so a
+// custom ratio wider or narrower than the window is never stretched to the window. 0 = the whole window. It is sent as
+// args[1] of the record (GS-STREAM-PROTOCOL 6.7); a consumer from before P2 (gt4-gs 1.1.0) ignores it and fills the
+// whole window. A change of the target alone also posts a record.
 enum class DisplayAspectMode : std::uint32_t { game_aspect = 0, fill = 1 };
-void set_display_aspect_mode(DisplayAspectMode mode);
+void set_display_aspect_mode(DisplayAspectMode mode, std::uint32_t fill_aspect_millionths = 0);
+// The protocol value of a ratio: round(ratio x 1e6), or 0 (the whole window) outside kMinFillAspect..kMaxFillAspect.
+inline constexpr double kMinFillAspect = 0.5;
+inline constexpr double kMaxFillAspect = 8.0;
+std::uint32_t aspect_millionths(double ratio);
 // TASK-062 (protocol 1.2): cumulative busy time of the VU1 worker in microseconds (installed by the MTVU bridge in
 // pcsx2 mode); read for the OSD_STATS records. Null: the worker field is not sent.
 void set_worker_busy_source(std::uint64_t (*worker_busy_us)());

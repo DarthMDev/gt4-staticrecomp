@@ -341,6 +341,21 @@ through for T1. slice215 = the slice214 release recipe plus the slice212c capsul
 gt4-gs 1.1.0 fill from frame 7670. Pin `docs/inputs/slice215-pcsx2.json` (`--mode pcsx2`). Owner test installer
 `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe` (app version 1.0.0; no GitHub release). Planned as
 GT4Recomp 1.1.0 (Auto default). Open: the owner tests above, then approval, PR and the 1.1.0 release.
+State (2026-10-21, P2 race HUD, branch `task/080-aspect-ratios`, slice217): owner test of P1 on 1920x1080 with Custom
+2.44: the race was stretched because gt4-gs 1.1.0 fills the whole window; CoreGS 1.1 already letterboxed. Protocol 1.3
+fill now carries the target aspect x 1e6 in `args[1]` (0 = whole window); gt4-gs needs a release that reads it (fork
+work). HUD (owner design: 3D full screen, HUD centred 16:9): runtime hook at `RaceDisplay::render` rewrites the HUD
+canvas (320 -/+ 240 R; Vert+ below 16:9); the race font x scale (0x0039F554) and the mirror divisor (0x0033EF98) are
+immediates behind direct calls, so they go through the ELF patch table (`scripts/aspect_elf_patch.py`) as loads from a
+host-filled block at guest 0x7F00; library profile `aspect` (only `unit_008F` and `unit_00A7` change). Split screen is
+left alone and stays pillarboxed 16:9. Checks: CTest 39/39, Python 627 OK; headless 16:9 menus 42/42 = slice215, 16:9
+race 160/160 = slice212b; tachometer aspect at 21:9, 2.44 and 32:9 equal to 16:9 within 0.5% (P1: +31% at 21:9) and
+centred like 16:9. Pins `docs/inputs/slice217-pcsx2.json` (`--mode pcsx2`; `pcsx2-slice215` history),
+`slice217-license-guard-runtime.json`, `slice217-ee-libraries.json`; decision 0071 lists every hook and word. New owner
+installer `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe` and portable folder
+`private/ultrawide-test-portable`. Open: owner T4 (HUD at 21:9/2.44/32:9: dials, lap times, mini-map, mirror,
+countdown, results; Custom ratios with CoreGS 1.1 until a gt4-gs release reads `args[1]`), T5 (license test, split
+screen if reachable), photo mode; then approval, PR and the 1.1.0 release.
 
 ### TASK-081 — Release 1.0.0 hardening and installer
 Release audit 2026-10-21. Branch `task/081-release-1-0-0` (from main 26f83b8). Not PCSX2-tainted.

@@ -9,6 +9,13 @@ menus 16:9; protocol 1.3 for gt4-gs 1.1.0; launcher Aspect ratio row, settings s
 (app version 1.0.0, no GitHub release). Waiting for the owner tests and approval; planned as GT4Recomp 1.1.0. Details:
 [BUILD](BUILD.md) slice 215 (and 212b), decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md).
 
+P2 (slice217, `--mode pcsx2` on the branch): the race HUD stays the game's 16:9 layout, undistorted and centred, at any
+ratio (HUD canvas hook at `RaceDisplay::render`; race font x scale and mirror divisor through the ELF patch table and the
+re-translated library profile `aspect`); split screen stays 16:9. Protocol 1.3 fill carries the target aspect so a custom
+ratio is letterboxed (CoreGS 1.1 already was; gt4-gs needs a release that reads it). 16:9 byte-identical (menus 42/42,
+race 160/160). New owner installer and the portable folder `private/ultrawide-test-portable`. Details: [BUILD](BUILD.md)
+slice 217.
+
 ## Current state (2026-10-21)
 
 **TASK-081 release 1.0.0 hardening (branch `task/081-release-1-0-0`, waiting for the owner's installer test):**

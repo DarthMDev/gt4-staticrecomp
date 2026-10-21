@@ -1861,3 +1861,59 @@ bytes, sha256 `18dad203399dddd8ded9c2d9ebdbf7b3ad8dc3428fe75beea0bd34d3ecf83f46`
 SemVer pre-release tags, so the app version stays 1.0.0 and only the file name says "ultrawide-test": the updater never
 offers it, and an installed 1.0.0 is not offered an update by it. 7-Zip extraction: launcher and game executable equal
 to their sources. No GitHub release, draft or tag.
+
+## Slice 217 - TASK-080 P2: race HUD at other aspect ratios (`--mode pcsx2`)
+
+slice217 = the slice215 recipe with three changes: the license guard capsule `private/slice217-license-guard-runtime`
+(`scripts/prepare_license_guard.py ... --display-aspect`, profile `task017-guard-v2+task080-aspect-v2`: the
+`RaceDisplay::render` marker also runs the HUD canvas hook on a0), the P2 host code (`native/display_aspect.*`: HUD canvas
+hook, HUD parameter block at guest 0x7F00, split screen pillarboxed; `gs_stream_client`: fill target in `args[1]`) and
+the EE library profile `aspect`.
+
+EE library `aspect` (decision 0071 P2 table; `scripts/aspect_elf_patch.py`):
+1. `python scripts/aspect_elf_patch.py produce --assets-root C:/Antigravity/gt4-staticrecomp --output C:/Antigravity/gt4-staticrecomp/private/slice217-ee-aspect-producer`
+   (`ee_producer.py prepare`, the verified ELF sha256 `10f82e22...`, the patched derivative `SCUS_973.28.aspect.elf`
+   sha256 `f10a568f...`, the slice208 accepted seed set and translator; 138,813 entries as slice208; changed units
+   `unit_008F.cpp` and `unit_00A7.cpp`, one line each: `set32(c.r[8], ld32((0u + 32516u)))` for `640u` and
+   `set32(c.r[1], ld32((0u + 32512u)))` for `0x3F400000u`).
+2. `private/slice217-scripts/build-library-217.cmd` (the slice208 recipe: `tools/ee_producer`, portable clang-cl 23.1.2,
+   one worker, about 11 minutes).
+3. `python scripts/aspect_elf_patch.py record-library --output <same>`: `ps2game.lib` 70,693,756 bytes, sha256
+   `8e671a10667cdb3e20ad70367fe4021763309446cd525fc6c5f8d0dec57c129b`; changed objects against the slice208 library:
+   exactly `unit_008F.cpp.obj` and `unit_00A7.cpp.obj`. Pin `docs/inputs/slice217-ee-libraries.json`; CMake
+   `-DGT4_EE_PROFILE=aspect`.
+
+Game: `private/slice217-scripts/build-game-217.bat <build dir> aspect` (clang-cl 22.1.3, release distribution, the
+slice215 inputs otherwise). `private/slice217-build/build/gt4vulkan.exe` 97,212,416 bytes, sha256
+`593803cd6281431d7aab038fd1fcb300a20863796b7077d9f29bc2db9b49ec2b`; `SDL3.dll` and `shaders\` beside it. String scan
+(ASCII and UTF-16 of `Antigravity`, `Alano`, `gt4-wt`, `Users\`, `staticrecomp`, `private\slice`, `private/slice`,
+`.cargo`, `AppData`): no match. An experiment build with the slice208 library (`slice217x1`, canvas hook only) showed
+the dials fixed and the text and mirror still stretched; it was deleted after the check.
+
+Checks (2026-10-21):
+- CTest 39/39 (`private/slice217-scripts/ctest-217.log`); Python with `GT4_NATIVE_BUILD` = slice217: 627 tests OK,
+  24 skipped (`python-217.log`); new: `tests/python/test_aspect_elf_patch.py`, HUD canvas harness tests, fixture
+  `test_hud_canvas` / `test_hud_parameters`, letterbox rectangles 1920x1080 at 2.44 and 32:9, fill target 2,440,000.
+- Headless donor runs (`private/slice217-scripts/run-all-headless-217.sh`, card copies only):
+  - menus 16:9 and auto (widescreen seed copy): 42 of 42 identical to slice215; the card copy is unchanged;
+  - race 16:9 (4:3 card copy, race schedule, 16,000 frames): 160 of 160 identical to slice212b `f-c-race-16x9` (the
+    hook writes nothing; the parameter block holds 0.75 and 640);
+  - race 21:9, 2.44, 32:9, 16:10: HUD canvas -240..880, -265.6..905.6, -533.3..1173.3, and top/bottom
+    506.7/-26.7 (16:10, Vert+); parameter block 0x3F124925/840, 0x3F0BE406/878, 0x3EC00000/1280, 0x3F555555/640.
+  - Tachometer dial (template match against the 16:9 frame, frames 9000 and 10000; aspect = presented width / height
+    relative to 16:9; the 16:9 frame against itself gives 1.005 / 1.010, the method's own bias): 21:9 1.010 / 1.010,
+    2.44 1.010 / 1.010, 32:9 1.005 / 1.000 (slice215 P1: 21:9 1.313 / 1.320, the stretch s = 1.3125); pivot 0.213
+    screen heights right of the screen centre at every ratio, as at 16:9 (P1: 0.279 at 21:9, 0.425 at 32:9). 16:10
+    (frame 9000): 0.896 x 0.891 of the 16:9 size, aspect 1.005 (the 16:9 box shrinks to fit the narrower screen).
+- Headless pcsx2 (probe, pins verified, race 10,000 frames, 21:9): gt4-gs 1.0.1 (pinned) gets no kind 7; gt4-gs 1.1.0
+  logs "CONTROL display_aspect 1 (fill) from frame 7670", no ERROR (it accepts the new `args[1]` and ignores it). The
+  0.9 GB probe logs were reduced to `probe-filtered.log`.
+- Distribution `private/slice217-dist` (18 files): `--portable-check` `result: ok`.
+- Pins: `docs/inputs/slice217-pcsx2.json` (mode `pcsx2`; `pcsx2-slice215` kept as history),
+  `docs/inputs/slice217-license-guard-runtime.json`, `docs/inputs/slice217-ee-libraries.json`.
+
+Owner test build (not a release): `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`, 28,735,702 bytes,
+sha256 `65965f0199a760a6106f63d4b723df59a9807aef9062e6c949e9629b581a7d7a` (same launcher 744c19dd..., same recipe as
+slice215; the slice215 installer moved to `superseded-slice215\`). Portable copy: the installer extracted with 7-Zip into
+`private/ultrawide-test-portable` (no `$PLUGINSDIR`, no uninstaller; game executable sha256 593803cd...). No GitHub
+release, draft or tag.

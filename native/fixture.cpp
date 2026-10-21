@@ -105,7 +105,14 @@ int main() {
           tall_in_wide.width != 1440 || tall_in_wide.left != 240 || tall_in_wide.height != 1080 ||
           none.width != 0 || bad.width != 0)
         throw std::runtime_error("ratio presentation rectangle differs from expected values");
-      std::fprintf(stderr, "[fixture] TASK-080 ratio rectangles passed\n");
+      // Owner test 2026-10-21 (P2 letterbox check): a custom ratio wider than a 1920x1080 window is a letterboxed band
+      // of that ratio, never the whole 16:9 window (Custom 2.44 and 32:9 = 3.56).
+      const auto custom_244 = presentation_rect_ratio(1920, 1080, 2.44);
+      const auto custom_329 = presentation_rect_ratio(1920, 1080, 32.0 / 9.0);
+      if (custom_244.left != 0 || custom_244.width != 1920 || custom_244.height != 787 || custom_244.top != 146 ||
+          custom_329.left != 0 || custom_329.width != 1920 || custom_329.height != 540 || custom_329.top != 270)
+        throw std::runtime_error("custom ratio wider than the window is not letterboxed");
+      std::fprintf(stderr, "[fixture] TASK-080 ratio rectangles passed (custom 2.44 and 32:9 letterboxed in 16:9)\n");
     }
     {
       gt4::vulkan::Context context;

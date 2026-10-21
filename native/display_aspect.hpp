@@ -143,6 +143,109 @@ class ScenePolicy {
 // Whether a new display request event happened between two samples: pending rises, or mode/row change.
 bool is_new_request(const DisplayRequest &previous, const DisplayRequest &current);
 
+// --- P2: race HUD and UI (slice217; decision 0071 table) ---------------------------------------------------------
+//
+// Owner design: the 3D fills the screen, the race HUD keeps the game's 16:9 layout, undistorted and centred ("HUD
+// centred 16:9"). The game draws the HUD into the same 640-pixel frame after the 3D, so the frame's stretch to R
+// (fill) is undone for the HUD only:
+//   (a) HUD canvas, runtime hook at the dispatch of RaceDisplay::render (0x0039F498, a0 = this): the HUD ortho matrix
+//       at this + 0x70 (written by RaceDisplay::setProjectionMatrix 0x0039BB38 at initialize; read by render through
+//       func_004A74B4) is rewritten from the game's 16:9 canvas (left -106.667, right 746.667, top 480, bottom 0) to
+//       the largest centred 16:9 box of a screen of ratio R: R >= 16:9: left/right = 320 -/+ 240 R (wider canvas);
+//       R < 16:9: top/bottom = 240 +/- 240 (16/9) / R (taller canvas). Only matrices that are the game's full-screen
+//       16:9 canvas, or one this hook wrote, are touched: split-screen canvases (RaceSplitDisplayBase::initialize,
+//       -106.667..320 or 0..640 x 240) and the 4:3 game canvas (0..640) are left alone. At R = 16:9 the game's own words
+//       are restored exactly (kept per object).
+//   (b) Constants compiled into the translated code (an immediate becomes a C++ constant, and every call after the
+//       render entry is a direct jal, so no dispatch point exists between the store and its use): the ELF patch table
+//       (scripts/aspect_elf_patch.py, re-translated library profile "aspect") turns each one into a load from the HUD
+//       parameter block below. The host fills the block at every guest VBlank; at 16:9 it holds the original constants,
+//       so the patched code computes exactly what the original did.
+inline constexpr std::uint32_t kHudMatrixOffset = 0x70u;  // RaceDisplay + 0x70: 16 x f32, setProjectionMatrix layout
+
+struct HudCanvas {
+  double left, right, top, bottom;
+};
+
+// The canvas for a snapped ratio R (16:9 = the game's canvas -320/3, 2240/3, 480, 0). Pure.
+HudCanvas hud_canvas(double ratio);
+
+// The four words of the HUD matrix a canvas sets, in single precision like RaceDisplay::setProjectionMatrix:
+// m[0] = 2 / (right - left), m[5] = 2 / (bottom - top), m[12] = (left + right) / (left - right),
+// m[13] = (top + bottom) / (top - bottom).
+struct HudMatrixWords {
+  std::uint32_t m0 = 0, m5 = 0, m12 = 0, m13 = 0;
+  bool operator==(const HudMatrixWords &other) const {
+    return m0 == other.m0 && m5 == other.m5 && m12 == other.m12 && m13 == other.m13;
+  }
+};
+HudMatrixWords hud_matrix_words(const HudCanvas &canvas);
+
+// Whether 16 matrix words are an orthographic HUD matrix of the game's full-screen 16:9 canvas (decoded edges within
+// 0.05; the other words 0 except m[10] = -1 and m[15] = 1).
+bool is_game_hud_canvas(const std::uint32_t words[16]);
+
+// Whether 16 matrix words are one of the split-screen HUD canvases of RaceSplitDisplayBase::initialize: wide
+// (left -106.667, right 320, 480 high) or 4:3 (0..640, 240 high). A RaceDisplay::render with such a canvas is not
+// counted as the race view, so split screen stays pillarboxed 16:9 with the game's own HUD (owner rule, P2).
+bool is_split_screen_hud_canvas(const std::uint32_t words[16]);
+
+// Per-object state of the canvas hook: the game's own words of up to kSlots RaceDisplay objects and the words the hook
+// last wrote, so 16:9 restores them exactly and a fresh object at a reused address is recognised again.
+class HudCanvasHook {
+ public:
+  static constexpr int kSlots = 8;
+  // Rewrites the matrix at `self + kHudMatrixOffset` for the ratio. Returns true when words were written.
+  bool apply(std::uint8_t *ram, std::uint32_t ram_size, std::uint32_t self, double ratio);
+  std::uint64_t writes() const { return writes_; }
+  std::uint64_t foreign() const { return foreign_; }
+  // Whether the last apply() found a split-screen canvas (see is_split_screen_hud_canvas).
+  bool last_was_split_screen() const { return last_split_; }
+
+ private:
+  struct Slot {
+    std::uint32_t address = 0;
+    bool used = false;
+    HudMatrixWords original{}, written{};
+  };
+  Slot slots_[kSlots]{};
+  int next_ = 0;
+  std::uint64_t writes_ = 0, foreign_ = 0;
+  bool last_split_ = false;
+};
+
+// HUD parameter block in guest kernel RAM that neither the game nor our HLE kernel uses (the kernel uses 0x800-0x848,
+// 0x1800-0x1BFF and 0x1950+, its stacks grow down from 0x80000; 0x7000-0x7FFF read zero in the uw-study-01 RAM dump).
+// The ELF patch table's loads read it as `lw rt, offset(zero)`, so it must sit below 0x8000. scripts/aspect_elf_patch.py
+// holds the same table; CTest checks the old words against the pinned ELF.
+inline constexpr std::uint32_t kHudParameterBlock = 0x00007F00u;
+inline constexpr std::uint32_t kHudParameterWords = 2u;
+// +0x00 f32: race HUD font x scale (RaceDisplay::render 0x0039F554, `lui at,0x3F40` = 0.75 = (4/3) / (16/9)).
+// +0x04 s32: rear-view mirror horizontal divisor (0x0033EF98, `addiu t0,zero,640`): the mirror rectangle is
+//            260 x width / divisor frame pixels wide, centred on the frame; 640 x s keeps its 16:9 shape.
+inline constexpr std::uint32_t kFontScaleOffset = 0x00u;
+inline constexpr std::uint32_t kMirrorDivisorOffset = 0x04u;
+inline constexpr std::uint32_t kGameFontScaleBits = 0x3F400000u;  // 0.75f
+inline constexpr std::uint32_t kGameMirrorDivisor = 640u;
+
+struct HudParameters {
+  std::uint32_t words[kHudParameterWords] = {};
+  bool operator==(const HudParameters &other) const {
+    for (std::uint32_t i = 0; i < kHudParameterWords; ++i)
+      if (words[i] != other.words[i])
+        return false;
+    return true;
+  }
+};
+
+// The block for a snapped ratio R; 16:9 gives the original constants exactly. Pure.
+//   font x scale = (4/3) / R: glyphs (drawn in frame pixels, then stretched to R) keep their 16:9 shape;
+//   mirror divisor = round(640 x R / (16/9)) for R > 16:9, 640 otherwise.
+HudParameters hud_parameters(double ratio);
+
+// Writes the block into guest RAM when it differs. Returns true when words were written.
+bool write_hud_parameters(std::uint8_t *ram, std::uint32_t ram_size, const HudParameters &parameters);
+
 // --- Runtime glue (one process-wide state; EE thread unless noted) ------------------------------------------------
 
 // Reads GT4_DISPLAY_ASPECT and GT4_ASPECT_FOV_EXTRA once. An invalid value prints the refusal and exits with status 1
@@ -164,15 +267,21 @@ double race_projection_ratio();
 bool on_race_camera(std::uint8_t *ram, std::uint32_t ram_size, std::uint32_t matrix_address);
 
 // Called by the dispatch overlay at every dispatch of RaceDisplay::render (0x0039F498): marks the race view.
+// (The slice212c capsule's form; kept so that capsule still builds.)
 void on_race_display_render();
+
+// P2 (slice217 capsule): the same marker plus the HUD canvas hook on `self` = a0 (RaceDisplay or a subclass such as
+// RaceLicenseDisplay, vtable 0x680D00). Uses the ratio of the last race camera hook, the ratio the presentation fills.
+void on_race_display_render(std::uint8_t *ram, std::uint32_t ram_size, std::uint32_t self);
 
 // Presentation sink: race_view = fill the screen at `ratio`; otherwise pillarbox 16:9. Called on the EE thread only
 // when the presented state or ratio changes (never while R stays 16:9).
 using PresentationSink = void (*)(bool race_view, double ratio);
 void set_presentation_sink(PresentationSink sink);
 
-// Guest VBlank entry (mtvu_runtime.cpp vblank_sync): samples the display request and drives the scene policy.
-void at_guest_vblank(const std::uint8_t *ram, std::uint32_t ram_size);
+// Guest VBlank entry (mtvu_runtime.cpp vblank_sync): samples the display request, drives the scene policy and (P2)
+// keeps the HUD parameter block filled for the ratio of the last race camera hook (16:9 values before it).
+void at_guest_vblank(std::uint8_t *ram, std::uint32_t ram_size);
 
 // "21:9 (2.333)" style text for logs.
 std::string describe_ratio(double ratio);

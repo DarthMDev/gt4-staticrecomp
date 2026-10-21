@@ -178,8 +178,10 @@ int scenario_main(const std::string &scenario, std::uint32_t frames) {
     client::on_gs_reset();
     client::attach_window(0x1234, 640, 360);
     for (std::uint32_t frame = 0; frame < frames; ++frame) {
-      // TASK-080 (protocol 1.3): fill from frame 10, the same mode again at 11 (no second record), game aspect at 30.
-      if (frame == 10 || frame == 11) client::set_display_aspect_mode(client::DisplayAspectMode::fill);
+      // TASK-080 (protocol 1.3): fill from frame 10 with the P2 target 2.44 (args[1] = 2,440,000; a custom ratio wider
+      // than the window must be letterboxed by the consumer), the same again at 11 (no second record), game aspect at 30.
+      if (frame == 10 || frame == 11)
+        client::set_display_aspect_mode(client::DisplayAspectMode::fill, client::aspect_millionths(2.44));
       if (frame == 30) client::set_display_aspect_mode(client::DisplayAspectMode::game_aspect);
       const auto data = qwords_of(4, static_cast<std::uint8_t>(frame));
       client::on_gif_render(3, data.data(), 4);
@@ -476,7 +478,9 @@ int main(int argc, char **argv) {
               ++aspect_records;
               aspect_modes = aspect_modes * 10 + control.args[0];
               aspect_after_vsync = vsyncs;
-              if (control.args[1] != 0 || control.args[2] != 0) aspect_modes = 999;
+              // P2: fill carries the target aspect x 1e6 in args[1]; game aspect sends 0. args[2] stays 0.
+              const std::uint64_t expected_target = control.args[0] == 1 ? 2440000u : 0u;
+              if (control.args[1] != expected_target || control.args[2] != 0) aspect_modes = 999;
             }
             shutdown = control.kind == static_cast<std::uint32_t>(ControlKind::shutdown);
           }
@@ -630,7 +634,14 @@ int main(int argc, char **argv) {
       std::printf("[fixture] display aspect: %llu CONTROL display_aspect records, modes %llu, last after VSYNC %llu\n",
                   static_cast<unsigned long long>(aspect_records), static_cast<unsigned long long>(aspect_modes),
                   static_cast<unsigned long long>(aspect_after));
-      require(aspect_records == 2 && aspect_modes == 10, "1.3 consumer: fill then game aspect, one record each");
+      require(aspect_records == 2 && aspect_modes == 10,
+              "1.3 consumer: fill (target 2,440,000) then game aspect (target 0), one record each");
+      // P2 (slice217): the fill target value. 0 means the whole window; outside 0.5 .. 8.0 the producer sends 0.
+      require(gt4::gs_stream::aspect_millionths(2.44) == 2440000u, "target 2.44 -> 2,440,000");
+      require(gt4::gs_stream::aspect_millionths(16.0 / 9.0) == 1777778u, "target 16:9 -> 1,777,778");
+      require(gt4::gs_stream::aspect_millionths(32.0 / 9.0) == 3555556u, "target 32:9 -> 3,555,556");
+      require(gt4::gs_stream::aspect_millionths(0.4) == 0u && gt4::gs_stream::aspect_millionths(9.0) == 0u,
+              "targets outside 0.5 .. 8.0 -> 0 (whole window)");
       require(aspect_after == 31, "the game-aspect record follows the VSYNC of the frame that asked for it");
       FileReader reader;
       std::string error;
