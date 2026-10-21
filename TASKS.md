@@ -105,7 +105,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑077 | Context-aware input mapping (race vs menus, e.g. Esc = Start in a race, Triangle in menus) | 📋 Open, study done (docs/CONTEXT-INPUT-STUDY.md); not in 1.0.0 |
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
 | TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
-| TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned · study running (owner, 2026-10-21) |
+| TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -303,6 +303,16 @@ for 16:9) are computed from the ratio (owner data points: 3088x1440 → Width 51
 Aspect 1.34). The HUD, UI and text are corrected too. The SilentWarrior112 PCSX2 patches (no licence) are a
 reference only, mapped to decomp functions and redone in our own parameterised way. Progressive menus overlap
 TASK-078. Study first, then a phased plan.
+State (2026-10-21): study done, `docs/ULTRAWIDE-NATIVE-STUDY.md` (owner asked to keep it). Findings: the patch file
+targets our ELF; the hidden-menu record (Width, Aspect...) lives in the saved option object, so the plan writes no
+save data. 3D: a dispatch hook on the race camera call after `RaceBase::initMonitor` (return 0x388B38) widens the
+projection by s = R / (16/9) (Hor+, Vert+ below 16:9; at 16:9 frames stay byte-identical). The owner's values
+scale both Width and Aspect, which is about 23-37% too wide by the game's maths: first owner test. HUD: a hook on
+`RaceDisplay::render` for the canvas (320 -/+ 240 R), plus an ELF patch table and re-translation for the fixed HUD
+constants. Menus, FMV and photo stay pillarboxed 16:9. gt4-gs needs "Stretch" and a per-scene control message (a
+new gt4-gs release). Plan: P0 a decision superseding the 0055 lines; P1 auto 3D aspect plus a launcher row; P1b
+gt4-gs stretch; P2 HUD; P3 progressive menus (TASK-078); P4 optional true-FOV mode. After 1.0.0; seven owner
+decisions listed in the study.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
