@@ -233,6 +233,33 @@ void TestGouraudInterpolation() {
     CHECK(((mid >> 0) & 0xFFu) > 0 && ((mid >> 16) & 0xFFu) > 0);
 }
 
+// IN-328: a constant interpolated attribute keeps its exact value. A Gouraud triangle whose three
+// vertices share colour (200, 100, 50) and fog 90 must shade to (80, 55, 58) everywhere: the
+// barycentric weights are doubles that do not sum to 1, so an unguarded interpolation gives 89.99 and
+// the 0..255 truncation loses one unit. Fog colour 0x402010 -> (0x10, 0x20, 0x40), chapter 03.4.
+void TestConstantAttributes() {
+    Harness h;
+    EnvironmentRegs env;
+    env.fogcol = 0x402010;
+    std::vector<Vertex> verts = {MakeVertex(0, 0, 200, 100, 50, 0x80), MakeVertex(32, 0, 200, 100, 50, 0x80),
+                                 MakeVertex(0, 32, 200, 100, 50, 0x80)};
+    for (Vertex& v : verts) {
+        v.fog = 90;
+    }
+    h.Draw(MakeBatch(BaseContext(), env, PrimBits(3, true, false, true, false, false), PrimType::Triangle, verts));
+    int covered = 0;
+    for (uint32_t y = 0; y < 32; ++y) {
+        for (uint32_t x = 0; x < 32; ++x) {
+            if (h.Frame(x, y) == 0) {
+                continue;
+            }
+            ++covered;
+            CHECK_EQ(h.Frame(x, y), Rgba(80, 55, 58, 0x80));
+        }
+    }
+    CHECK_EQ(covered, 528);  // x + y <= 31: the diagonal is a top-left edge, so it is inclusive (01.4)
+}
+
 // A 4 x 4 sprite covers 16 pixels, with colour from the second vertex.
 void TestSpriteRectangle() {
     Harness h;
@@ -551,6 +578,7 @@ const Test kTests[] = {
     {"cpuref_triangle_shared_edge", TestTriangleSharedEdge},
     {"cpuref_flat_provoking", TestFlatProvokingVertex},
     {"cpuref_gouraud", TestGouraudInterpolation},
+    {"cpuref_constant_attributes", TestConstantAttributes},
     {"cpuref_sprite_rectangle", TestSpriteRectangle},
     {"cpuref_scissor", TestScissorClip},
     {"cpuref_depth", TestDepthTestAndWrite},

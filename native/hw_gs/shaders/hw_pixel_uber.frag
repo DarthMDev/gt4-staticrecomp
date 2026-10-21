@@ -2,16 +2,19 @@
 //
 // HWR uber pixel shader (TASK-027, M4). Copyright (c) 2026 GT4Recomp contributors.
 //
-// Written from docs/hw-renderer-spec chapters 03.4, 08.8 and 12.6, clean room (decision 0069).
+// Written from docs/hw-renderer-spec chapters 03.4, 03.5, 08.8 and 12.6, clean room (decision 0069).
 //
 // Destination reads use storage images (r32ui frame words and depth words) rather than input
 // attachments: the target is written by imageStore in the same invocation after the read, so no
 // colour attachment is needed (fragmentStoresAndAtomics, chapter 12.6). Overlap ordering between
-// primitives is the barrier policy of chapter 08.8 and is not handled here.
+// primitives is handled by the caller (one draw per primitive with a barrier between draws).
 //
-// Texel source: one r32ui storage image of raw texels; point sampling with repeat wrap only (full
-// addressing is a later milestone, IN-212). The fragment colour is the interpolated colour rounded to
-// the nearest integer (IN-203); Z is the linearly interpolated float (IN-205).
+// Texture source (M4, write-back mode): every texel is decoded on the CPU from the shadow local
+// memory into RGBA8 (palette and TEXA already applied) and stored as one packed u32 per texel in
+// an r32ui image of 2^TW x 2^TH. This shader does the coordinate step (FST, or STQ with the
+// per-pixel divide), the wrap modes of 03.5 and nearest or 4-tap bilinear filtering with the
+// integer 4-bit weights of the CPU reference (IN-305), then the TFX and fog stages of 03.4.
+// Colour is truncated like the CPU reference (IN-304, tolerance IN-500).
 
 #version 450
 #extension GL_GOOGLE_include_directive : require
@@ -56,7 +59,7 @@ layout(std140, set = 0, binding = 0) uniform PixelStateBlock {
     uint tex_on;
     uint tfx;
     uint tcc;
-    uint texel_kind;
+    uint texel_kind;   // reserved: texels are RGBA8 in M4 (CPU-expanded)
     uint ta0;
     uint ta1;
     uint aem;
@@ -64,11 +67,72 @@ layout(std140, set = 0, binding = 0) uniform PixelStateBlock {
     uint fog_r;
     uint fog_g;
     uint fog_b;
+    uint tex_fst;      // TEX0.FST: coordinates are UV (10.4) instead of STQ
+    uint tex_linear;   // TEX1.MMAG = 1: bilinear
+    uint wrap_s;       // WMS: 0 repeat, 1 clamp, 2 region clamp, 3 region repeat
+    uint wrap_t;       // WMT
+    uint wrap_min_s;   // MINU
+    uint wrap_max_s;   // MAXU
+    uint wrap_min_t;   // MINV
+    uint wrap_max_t;   // MAXV
+    uint tex_log2_w;   // TW
+    uint tex_log2_h;   // TH
 } state;
 
 layout(set = 0, binding = 1, r32ui) uniform uimage2D hw_frame;
 layout(set = 0, binding = 2, r32ui) uniform uimage2D hw_depth;
 layout(set = 0, binding = 3, r32ui) uniform readonly uimage2D hw_texels;
+
+// CPU ToTexel104: floor of the scaled coordinate, saturated far outside the 1024 range.
+int to_texel_104(float value) {
+    return int(clamp(floor(value), -1.0e9, 1.0e9));
+}
+
+// pixel::wrap_texel for one axis (mode values are the GS WMS/WMT encoding).
+int wrap_texel(int texel, uint log2_size, uint mode, uint minimum, uint maximum) {
+    int last = int((1u << log2_size) - 1u);
+    if (mode == 0u) {
+        return texel & last;
+    }
+    if (mode == 1u) {
+        return clamp(texel, 0, last);
+    }
+    if (mode == 2u) {
+        return clamp(texel, int(minimum), int(maximum));
+    }
+    return (texel & int(minimum)) | int(maximum);
+}
+
+ivec4 fetch_texel(int x, int y) {
+    uint raw = imageLoad(hw_texels, ivec2(x, y)).x;
+    return ivec4(int(raw & 0xFFu), int((raw >> 8) & 0xFFu), int((raw >> 16) & 0xFFu), int((raw >> 24) & 0xFFu));
+}
+
+// SampleTexture of the CPU reference: nearest, or bilinear with the 4-bit weights (IN-305).
+ivec4 sample_texture(int uvs, int uvt) {
+    if (state.tex_linear == 0u) {
+        int x = wrap_texel(uvs >> 4, state.tex_log2_w, state.wrap_s, state.wrap_min_s, state.wrap_max_s);
+        int y = wrap_texel(uvt >> 4, state.tex_log2_h, state.wrap_t, state.wrap_min_t, state.wrap_max_t);
+        return fetch_texel(x, y);
+    }
+    int bs = uvs - 8;
+    int bt = uvt - 8;
+    int x0 = wrap_texel(bs >> 4, state.tex_log2_w, state.wrap_s, state.wrap_min_s, state.wrap_max_s);
+    int x1 = wrap_texel((bs >> 4) + 1, state.tex_log2_w, state.wrap_s, state.wrap_min_s, state.wrap_max_s);
+    int y0 = wrap_texel(bt >> 4, state.tex_log2_h, state.wrap_t, state.wrap_min_t, state.wrap_max_t);
+    int y1 = wrap_texel((bt >> 4) + 1, state.tex_log2_h, state.wrap_t, state.wrap_min_t, state.wrap_max_t);
+    int fx = bs & 15;
+    int fy = bt & 15;
+    ivec4 c00 = fetch_texel(x0, y0);
+    ivec4 c10 = fetch_texel(x1, y0);
+    ivec4 c01 = fetch_texel(x0, y1);
+    ivec4 c11 = fetch_texel(x1, y1);
+    int w00 = (16 - fx) * (16 - fy);
+    int w10 = fx * (16 - fy);
+    int w01 = (16 - fx) * fy;
+    int w11 = fx * fy;
+    return (c00 * w00 + c10 * w10 + c01 * w01 + c11 * w11) >> 8;
+}
 
 void main() {
     ivec2 pixel = ivec2(floor(gl_FragCoord.xy));
@@ -99,21 +163,39 @@ void main() {
     s.fix = state.fix;
     s.colclamp = state.colclamp;
 
-    // Point-sampled texel with repeat wrap (IN-212).
-    ivec2 texel_size = imageSize(hw_texels);
-    ivec2 texel_xy = (ivec2(floor(in_uv)) >> 4) & (texel_size - ivec2(1));
-    uint texel_raw = imageLoad(hw_texels, texel_xy).x;
-
-    ivec4 frag = ivec4(floor(in_rgba + vec4(0.5)));
-    ivec4 shaded = hw_shade_fragment(state.tex_on != 0u, state.tfx, state.tcc != 0u, state.texel_kind,
-                                     texel_raw, state.ta0, state.ta1, state.aem != 0u, state.fog_on != 0u,
-                                     int(floor(in_fog + 0.5)), ivec3(int(state.fog_r), int(state.fog_g), int(state.fog_b)),
-                                     frag);
+    // Colour and fog: truncation of the interpolated 0..255 values (IN-304). The 0.001 tolerance
+    // absorbs float interpolation noise on exact integer vertices (IN-500).
+    ivec4 frag = ivec4(floor(clamp(in_rgba, 0.0, 255.0) + vec4(0.001)));
+    ivec4 colour = frag;
+    if (state.tex_on != 0u) {
+        int uvs;
+        int uvt;
+        if (state.tex_fst != 0u) {
+            uvs = to_texel_104(in_uv.x);
+            uvt = to_texel_104(in_uv.y);
+        } else {
+            // Per-pixel divide by Q; a zero Q is treated as 1 (IN-310).
+            float q = in_q == 0.0 ? 1.0 : in_q;
+            float scale_s = float(1u << state.tex_log2_w) * 16.0;
+            float scale_t = float(1u << state.tex_log2_h) * 16.0;
+            uvs = to_texel_104((in_st.x / q) * scale_s);
+            uvt = to_texel_104((in_st.y / q) * scale_t);
+        }
+        ivec4 texel = sample_texture(uvs, uvt);
+        colour = hw_texture_function(state.tfx, state.tcc != 0u, texel, frag);
+    }
+    if (state.fog_on != 0u) {
+        int fog = int(clamp(floor(clamp(in_fog, 0.0, 255.0) + 0.001), 0.0, 255.0));
+        ivec3 fog_colour = ivec3(int(state.fog_r), int(state.fog_g), int(state.fog_b));
+        colour.r = (fog * colour.r + (255 - fog) * fog_colour.r) >> 8;
+        colour.g = (fog * colour.g + (255 - fog) * fog_colour.g) >> 8;
+        colour.b = (fog * colour.b + (255 - fog) * fog_colour.b) >> 8;
+    }
 
     HwFragment f;
     f.x = uint(pixel.x);
     f.y = uint(pixel.y);
-    f.colour = shaded;
+    f.colour = colour;
     f.z = uint(clamp(in_z, 0.0, 4294967040.0));
 
     uint frame_old = imageLoad(hw_frame, pixel).x;

@@ -40,8 +40,10 @@ bool load_loader(std::string &error) {
   return true;
 }
 
-bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &missing) {
-  resolve(gt4_hw_vkAcquireNextImageKHR, instance, "vkAcquireNextImageKHR", missing);
+namespace {
+
+// Entry points a windowless device needs: no surface, no swapchain (M4 fixtures and headless runs).
+void resolve_headless(VkInstance instance, std::vector<std::string> &missing) {
   resolve(gt4_hw_vkAllocateCommandBuffers, instance, "vkAllocateCommandBuffers", missing);
   resolve(gt4_hw_vkBeginCommandBuffer, instance, "vkBeginCommandBuffer", missing);
   resolve(gt4_hw_vkCmdClearColorImage, instance, "vkCmdClearColorImage", missing);
@@ -50,15 +52,11 @@ bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &m
   resolve(gt4_hw_vkCreateDevice, instance, "vkCreateDevice", missing);
   resolve(gt4_hw_vkCreateFence, instance, "vkCreateFence", missing);
   resolve(gt4_hw_vkCreateSemaphore, instance, "vkCreateSemaphore", missing);
-  resolve(gt4_hw_vkCreateSwapchainKHR, instance, "vkCreateSwapchainKHR", missing);
-  resolve(gt4_hw_vkCreateWin32SurfaceKHR, instance, "vkCreateWin32SurfaceKHR", missing);
   resolve(gt4_hw_vkDestroyCommandPool, instance, "vkDestroyCommandPool", missing);
   resolve(gt4_hw_vkDestroyDevice, instance, "vkDestroyDevice", missing);
   resolve(gt4_hw_vkDestroyFence, instance, "vkDestroyFence", missing);
   resolve(gt4_hw_vkDestroyInstance, instance, "vkDestroyInstance", missing);
   resolve(gt4_hw_vkDestroySemaphore, instance, "vkDestroySemaphore", missing);
-  resolve(gt4_hw_vkDestroySurfaceKHR, instance, "vkDestroySurfaceKHR", missing);
-  resolve(gt4_hw_vkDestroySwapchainKHR, instance, "vkDestroySwapchainKHR", missing);
   resolve(gt4_hw_vkDeviceWaitIdle, instance, "vkDeviceWaitIdle", missing);
   resolve(gt4_hw_vkEndCommandBuffer, instance, "vkEndCommandBuffer", missing);
   resolve(gt4_hw_vkEnumerateDeviceExtensionProperties, instance, "vkEnumerateDeviceExtensionProperties", missing);
@@ -68,16 +66,37 @@ bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &m
   resolve(gt4_hw_vkGetPhysicalDeviceFormatProperties, instance, "vkGetPhysicalDeviceFormatProperties", missing);
   resolve(gt4_hw_vkGetPhysicalDeviceProperties, instance, "vkGetPhysicalDeviceProperties", missing);
   resolve(gt4_hw_vkGetPhysicalDeviceQueueFamilyProperties, instance, "vkGetPhysicalDeviceQueueFamilyProperties", missing);
+  resolve(gt4_hw_vkQueueSubmit, instance, "vkQueueSubmit", missing);
+  resolve(gt4_hw_vkResetCommandBuffer, instance, "vkResetCommandBuffer", missing);
+  resolve(gt4_hw_vkResetFences, instance, "vkResetFences", missing);
+  resolve(gt4_hw_vkWaitForFences, instance, "vkWaitForFences", missing);
+}
+
+// Surface and presentation entry points: only the windowed path needs them.
+void resolve_surface(VkInstance instance, std::vector<std::string> &missing) {
+  resolve(gt4_hw_vkAcquireNextImageKHR, instance, "vkAcquireNextImageKHR", missing);
+  resolve(gt4_hw_vkCreateSwapchainKHR, instance, "vkCreateSwapchainKHR", missing);
+  resolve(gt4_hw_vkCreateWin32SurfaceKHR, instance, "vkCreateWin32SurfaceKHR", missing);
+  resolve(gt4_hw_vkDestroySurfaceKHR, instance, "vkDestroySurfaceKHR", missing);
+  resolve(gt4_hw_vkDestroySwapchainKHR, instance, "vkDestroySwapchainKHR", missing);
   resolve(gt4_hw_vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instance, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR", missing);
   resolve(gt4_hw_vkGetPhysicalDeviceSurfaceFormatsKHR, instance, "vkGetPhysicalDeviceSurfaceFormatsKHR", missing);
   resolve(gt4_hw_vkGetPhysicalDeviceSurfacePresentModesKHR, instance, "vkGetPhysicalDeviceSurfacePresentModesKHR", missing);
   resolve(gt4_hw_vkGetPhysicalDeviceSurfaceSupportKHR, instance, "vkGetPhysicalDeviceSurfaceSupportKHR", missing);
   resolve(gt4_hw_vkGetSwapchainImagesKHR, instance, "vkGetSwapchainImagesKHR", missing);
   resolve(gt4_hw_vkQueuePresentKHR, instance, "vkQueuePresentKHR", missing);
-  resolve(gt4_hw_vkQueueSubmit, instance, "vkQueueSubmit", missing);
-  resolve(gt4_hw_vkResetCommandBuffer, instance, "vkResetCommandBuffer", missing);
-  resolve(gt4_hw_vkResetFences, instance, "vkResetFences", missing);
-  resolve(gt4_hw_vkWaitForFences, instance, "vkWaitForFences", missing);
+}
+
+} // namespace
+
+bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &missing) {
+  resolve_headless(instance, missing);
+  resolve_surface(instance, missing);
+  return missing.empty();
+}
+
+bool load_headless_entry_points(VkInstance instance, std::vector<std::string> &missing) {
+  resolve_headless(instance, missing);
   return missing.empty();
 }
 

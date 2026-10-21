@@ -316,6 +316,17 @@ Clip BoundsOf(const Vertex* vertices, size_t count) {
 }
 
 // Barycentric interpolation (flat colour from the last vertex, IN-304).
+// One interpolated attribute. A constant attribute returns its exact vertex value: the barycentric
+// weights are doubles that do not always sum to 1, so the general expression turns a constant fog of
+// 90 into 89.999.. and the 0..255 truncation of 03.7 would lose one unit (IN-328). The rule holds on
+// hardware too, where a constant attribute interpolates to itself.
+double Lerp3(double a, double b, double c, double w0, double w1, double w2) {
+    if (a == b && b == c) {
+        return a;
+    }
+    return w0 * a + w1 * b + w2 * c;
+}
+
 Sample Blend(const Vertex& v0, const Vertex& v1, const Vertex& v2, double w0, double w1, double w2, bool flat) {
     Sample s;
     if (flat) {
@@ -324,18 +335,18 @@ Sample Blend(const Vertex& v0, const Vertex& v1, const Vertex& v2, double w0, do
         s.b = v2.b;
         s.a = v2.a;
     } else {
-        s.r = w0 * v0.r + w1 * v1.r + w2 * v2.r;
-        s.g = w0 * v0.g + w1 * v1.g + w2 * v2.g;
-        s.b = w0 * v0.b + w1 * v1.b + w2 * v2.b;
-        s.a = w0 * v0.a + w1 * v1.a + w2 * v2.a;
+        s.r = Lerp3(v0.r, v1.r, v2.r, w0, w1, w2);
+        s.g = Lerp3(v0.g, v1.g, v2.g, w0, w1, w2);
+        s.b = Lerp3(v0.b, v1.b, v2.b, w0, w1, w2);
+        s.a = Lerp3(v0.a, v1.a, v2.a, w0, w1, w2);
     }
-    s.fog = w0 * v0.fog + w1 * v1.fog + w2 * v2.fog;
-    s.z = w0 * static_cast<double>(v0.z) + w1 * static_cast<double>(v1.z) + w2 * static_cast<double>(v2.z);
-    s.s = w0 * v0.s + w1 * v1.s + w2 * v2.s;
-    s.t = w0 * v0.t + w1 * v1.t + w2 * v2.t;
-    s.q = w0 * v0.q + w1 * v1.q + w2 * v2.q;
-    s.u = w0 * static_cast<double>(v0.u) + w1 * static_cast<double>(v1.u) + w2 * static_cast<double>(v2.u);
-    s.v = w0 * static_cast<double>(v0.v) + w1 * static_cast<double>(v1.v) + w2 * static_cast<double>(v2.v);
+    s.fog = Lerp3(v0.fog, v1.fog, v2.fog, w0, w1, w2);
+    s.z = Lerp3(static_cast<double>(v0.z), static_cast<double>(v1.z), static_cast<double>(v2.z), w0, w1, w2);
+    s.s = Lerp3(v0.s, v1.s, v2.s, w0, w1, w2);
+    s.t = Lerp3(v0.t, v1.t, v2.t, w0, w1, w2);
+    s.q = Lerp3(v0.q, v1.q, v2.q, w0, w1, w2);
+    s.u = Lerp3(static_cast<double>(v0.u), static_cast<double>(v1.u), static_cast<double>(v2.u), w0, w1, w2);
+    s.v = Lerp3(static_cast<double>(v0.v), static_cast<double>(v1.v), static_cast<double>(v2.v), w0, w1, w2);
     return s;
 }
 

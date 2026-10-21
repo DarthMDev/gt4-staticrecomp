@@ -12,10 +12,13 @@
 #include "hw_gs_present_rect.hpp"
 
 #include "hw_gs_vulkan_loader.hpp" // Vulkan names renamed to gt4_hw_*; pointers loaded at run time
+#include "writeback/hw_gs_vulkan_device_table.hpp"
+#include "writeback/hw_gs_writeback.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <memory>
 #include <cstring>
 #include <stdexcept>
 
@@ -110,10 +113,26 @@ struct Backend::Impl {
   bool resize_pending = false;
   bool initialised = false;
 
+  // M4: GS front end, shadow local memory and the GPU write-back drawer (writeback/).
+  std::unique_ptr<hwgs::writeback::Renderer> renderer;
+
+  // Present path: staging buffer and RGBA8 image for the composed display frame (recreated on resize).
+  struct FrameUpload {
+    VkImage image = VK_NULL_HANDLE;
+    VkDeviceMemory image_memory = VK_NULL_HANDLE;
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VkDeviceMemory buffer_memory = VK_NULL_HANDLE;
+    void *mapped = nullptr;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+  } upload;
+
   ~Impl() { shutdown(); }
 
   void shutdown() {
     if (device) vkDeviceWaitIdle(device);
+    destroy_upload();
+    renderer.reset();  // GPU drawer resources are released before the device
     destroy_swapchain();
     if (device) {
       for (std::uint32_t i = 0; i < frame_slots; ++i) {
@@ -132,6 +151,76 @@ struct Backend::Impl {
     instance = VK_NULL_HANDLE;
     surface = VK_NULL_HANDLE;
     initialised = false;
+  }
+
+  bool memory_type(std::uint32_t bits, VkMemoryPropertyFlags wanted, std::uint32_t &chosen) const {
+    VkPhysicalDeviceMemoryProperties props{};
+    gt4_hwd_vkGetPhysicalDeviceMemoryProperties(physical, &props);
+    for (std::uint32_t i = 0; i < props.memoryTypeCount; ++i) {
+      if ((bits & (1u << i)) && (props.memoryTypes[i].propertyFlags & wanted) == wanted) {
+        chosen = i;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void destroy_upload() {
+    if (!device) return;
+    if (upload.mapped) gt4_hwd_vkUnmapMemory(device, upload.buffer_memory);
+    if (upload.buffer) gt4_hwd_vkDestroyBuffer(device, upload.buffer, nullptr);
+    if (upload.buffer_memory) gt4_hwd_vkFreeMemory(device, upload.buffer_memory, nullptr);
+    if (upload.image) gt4_hwd_vkDestroyImage(device, upload.image, nullptr);
+    if (upload.image_memory) gt4_hwd_vkFreeMemory(device, upload.image_memory, nullptr);
+    upload = FrameUpload{};
+  }
+
+  // Creates the staging buffer and the RGBA8 image for a width x height frame (no-op when they fit).
+  bool ensure_upload(std::uint32_t width, std::uint32_t height) {
+    if (upload.image && upload.width == width && upload.height == height) return true;
+    destroy_upload();
+    upload.width = width;
+    upload.height = height;
+    const VkDeviceSize bytes = static_cast<VkDeviceSize>(width) * height * 4;
+
+    VkBufferCreateInfo buffer{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    buffer.size = bytes;
+    buffer.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    buffer.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    if (gt4_hwd_vkCreateBuffer(device, &buffer, nullptr, &upload.buffer) != VK_SUCCESS) return false;
+    VkMemoryRequirements req{};
+    gt4_hwd_vkGetBufferMemoryRequirements(device, upload.buffer, &req);
+    std::uint32_t type = 0;
+    if (!memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                     type)) {
+      return false;
+    }
+    VkMemoryAllocateInfo alloc{VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
+    alloc.allocationSize = req.size;
+    alloc.memoryTypeIndex = type;
+    if (gt4_hwd_vkAllocateMemory(device, &alloc, nullptr, &upload.buffer_memory) != VK_SUCCESS) return false;
+    gt4_hwd_vkBindBufferMemory(device, upload.buffer, upload.buffer_memory, 0);
+    if (gt4_hwd_vkMapMemory(device, upload.buffer_memory, 0, bytes, 0, &upload.mapped) != VK_SUCCESS) return false;
+
+    VkImageCreateInfo image{VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
+    image.imageType = VK_IMAGE_TYPE_2D;
+    image.format = VK_FORMAT_R8G8B8A8_UNORM;
+    image.extent = {width, height, 1};
+    image.mipLevels = 1;
+    image.arrayLayers = 1;
+    image.samples = VK_SAMPLE_COUNT_1_BIT;
+    image.tiling = VK_IMAGE_TILING_OPTIMAL;
+    image.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    image.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    image.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (gt4_hwd_vkCreateImage(device, &image, nullptr, &upload.image) != VK_SUCCESS) return false;
+    gt4_hwd_vkGetImageMemoryRequirements(device, upload.image, &req);
+    if (!memory_type(req.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, type)) return false;
+    alloc.allocationSize = req.size;
+    alloc.memoryTypeIndex = type;
+    if (gt4_hwd_vkAllocateMemory(device, &alloc, nullptr, &upload.image_memory) != VK_SUCCESS) return false;
+    gt4_hwd_vkBindImageMemory(device, upload.image, upload.image_memory, 0);
+    return true;
   }
 
   void destroy_swapchain() {
@@ -463,9 +552,84 @@ struct Backend::Impl {
     image_layouts[index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
   }
 
-  // One black 16:9 frame into the swapchain (chapter 12.5 present path; the fragment pass
-  // that draws the output stage arrives in M6). Headless callers never reach this.
-  void present_black() {
+  // Records one presentation: the swapchain image is cleared to black, then the composed display frame
+  // is blitted into the centred rectangle that keeps its aspect ratio (chapter 12.5; the fragment output
+  // stage that replaces this blit is M6).
+  void record_frame(VkCommandBuffer cmd, std::uint32_t index, const hwgs::writeback::FrameOutput &frame) {
+    (void)frame;
+    record_black_then(cmd, index, [&] {
+      VkImageMemoryBarrier to_copy{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+      to_copy.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+      to_copy.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+      to_copy.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      to_copy.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      to_copy.image = upload.image;
+      to_copy.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+      to_copy.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+      vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
+                           nullptr, 1, &to_copy);
+      VkBufferImageCopy region{};
+      region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+      region.imageExtent = {upload.width, upload.height, 1};
+      gt4_hwd_vkCmdCopyBufferToImage(cmd, upload.buffer, upload.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                     &region);
+      to_copy.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+      to_copy.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+      to_copy.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+      to_copy.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+      vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
+                           nullptr, 1, &to_copy);
+      // Keeps the frame's aspect ratio inside the swapchain (letterbox or pillarbox, centred).
+      const std::uint64_t sw = extent.width, sh = extent.height;
+      const std::uint64_t fw = upload.width, fh = upload.height;
+      std::uint64_t dw = sw, dh = sh;
+      if (fw * sh > fh * sw) {
+        dh = sw * fh / fw;
+      } else {
+        dw = sh * fw / fh;
+      }
+      const std::int32_t left = static_cast<std::int32_t>((sw - dw) / 2);
+      const std::int32_t top = static_cast<std::int32_t>((sh - dh) / 2);
+      VkImageBlit blit{};
+      blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+      blit.srcOffsets[1] = {static_cast<std::int32_t>(upload.width), static_cast<std::int32_t>(upload.height), 1};
+      blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+      blit.dstOffsets[0] = {left, top, 0};
+      blit.dstOffsets[1] = {left + static_cast<std::int32_t>(dw), top + static_cast<std::int32_t>(dh), 1};
+      gt4_hwd_vkCmdBlitImage(cmd, upload.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, images[index],
+                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit, VK_FILTER_LINEAR);
+    });
+  }
+
+  // Transition to TRANSFER_DST, clear to black, run `body`, transition to PRESENT_SRC.
+  template <typename Body> void record_black_then(VkCommandBuffer cmd, std::uint32_t index, Body body) {
+    VkImageMemoryBarrier to_clear{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    to_clear.oldLayout = image_layouts[index];
+    to_clear.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    to_clear.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_clear.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    to_clear.image = images[index];
+    to_clear.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    to_clear.srcAccessMask = 0;
+    to_clear.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                         0, nullptr, 0, nullptr, 1, &to_clear);
+    VkClearColorValue black{};
+    vkCmdClearColorImage(cmd, images[index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1,
+                         &to_clear.subresourceRange);
+    body();
+    VkImageMemoryBarrier to_present = to_clear;
+    to_present.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    to_present.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    to_present.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    to_present.dstAccessMask = 0;
+    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+                         0, nullptr, 0, nullptr, 1, &to_present);
+    image_layouts[index] = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  }
+
+  // One presentation per guest VBlank: the composed display frame, or black without one (chapter 12.5).
+  void present_frame(const hwgs::writeback::FrameOutput *frame) {
     if (!swapchain) return;
     const std::uint32_t slot = static_cast<std::uint32_t>(submissions % frame_slots);
     // At most presents_in_flight submissions outstanding: wait for the one issued two ago.
@@ -491,7 +655,14 @@ struct Backend::Impl {
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(cmd, &begin);
-    record_black(cmd, index);
+    if (frame && frame->valid && ensure_upload(frame->width, frame->height)) {
+      // The staging buffer is reused across presents: let the previous copy finish first.
+      vkDeviceWaitIdle(device);
+      std::memcpy(upload.mapped, frame->pixels.data(), frame->pixels.size() * sizeof(std::uint32_t));
+      record_frame(cmd, index, *frame);
+    } else {
+      record_black(cmd, index);
+    }
     vkEndCommandBuffer(cmd);
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -543,6 +714,13 @@ bool Backend::init(const Options &options, std::string &error) {
     s.shutdown();
     return false;
   }
+  // M4: the GS front end and the write-back drawer run on this device (no silent fallback on failure).
+  s.renderer = std::make_unique<hwgs::writeback::Renderer>();
+  const hwgs::gpu::VulkanHandles handles{s.instance, s.physical, s.device, s.queue, s.queue_family};
+  if (!s.renderer->Init(handles, error)) {
+    s.shutdown();
+    return false;
+  }
   s.initialised = true;
   return true;
 }
@@ -553,18 +731,18 @@ void Backend::set_stream_event_handler(StreamEventHandler handler, void *context
 }
 
 bool Backend::gif_transfer(int path, const std::uint8_t *bytes, std::size_t byte_count) {
-  (void)bytes;
   if (path < 1 || path > 3) return false;
   impl_->stats.gif_bytes += byte_count;
-  return true; // M0 stub: no GIF parsing yet (chapter 02)
+  return impl_->renderer && impl_->renderer->GifTransfer(static_cast<std::uint32_t>(path), bytes, byte_count);
 }
 
 bool Backend::gif_busy(int path) const {
-  return path >= 1 && path <= 3 && impl_->gif_path_state[path] != 0;
+  return path >= 1 && path <= 3 && impl_->renderer &&
+         impl_->renderer->GifBusy(static_cast<std::uint32_t>(path));
 }
 
 void Backend::reset_gif_paths() {
-  std::memset(impl_->gif_path_state, 0, sizeof impl_->gif_path_state);
+  if (impl_->renderer) impl_->renderer->GifReset(0x7u);
 }
 
 bool Backend::write_privileged(std::uint32_t address, std::uint64_t value) {
@@ -574,6 +752,8 @@ bool Backend::write_privileged(std::uint32_t address, std::uint64_t value) {
   }
   impl_->privileged[(address - privileged_base) / 8] = value;
   impl_->stats.privileged_writes++;
+  // Display registers feed the composed frame (chapter 12.4); other addresses are the donor's.
+  if (impl_->renderer) impl_->renderer->WritePrivileged(address, value);
   return true;
 }
 
@@ -582,23 +762,31 @@ std::uint64_t Backend::read_privileged(std::uint32_t address) const {
   return impl_->privileged[(address - privileged_base) / 8];
 }
 
-void Backend::reset_context() {}
+void Backend::reset_context() {
+  if (impl_->renderer) impl_->renderer->ResetGs();
+}
 
-void Backend::clear_vram() {}
+void Backend::clear_vram() {
+  if (impl_->renderer) impl_->renderer->ClearVram();
+}
 
 std::size_t Backend::read_transfer_fifo(void *destination, std::size_t qwords) {
-  // M0 stub: no LOCAL->HOST data exists yet, so the caller receives zeros (not a fault; chapter 10 is later).
-  std::memset(destination, 0, qwords * 16);
+  // LOCAL->HOST data of the most recent TRXDIR = 1 transfer (chapter 10.2); zeros beyond it.
+  const std::size_t bytes = impl_->renderer ? impl_->renderer->ReadFifo(destination, qwords * 16) : 0;
+  std::memset(static_cast<std::uint8_t *>(destination) + bytes, 0, qwords * 16 - bytes);
   return qwords;
 }
 
 const std::uint8_t *Backend::map_vram(std::uint32_t offset, std::uint32_t size) {
-  (void)offset;
-  (void)size;
-  return nullptr; // M0: no GS memory yet
+  if (!impl_->renderer || static_cast<std::uint64_t>(offset) + size > 4u * 1024u * 1024u) return nullptr;
+  impl_->renderer->Flush();  // coherent with the recorded work (chapter 12.3)
+  return impl_->renderer->Slm() + offset;
 }
 
-void Backend::flush() { impl_->stats.flushes++; }
+void Backend::flush() {
+  impl_->stats.flushes++;
+  if (impl_->renderer) impl_->renderer->Flush();  // VBlank commit and batch flush (chapter 02.8)
+}
 
 void Backend::next_frame() { impl_->stats.frames++; }
 
@@ -610,7 +798,13 @@ bool Backend::scanout(ScanoutRequest &request) {
   request.width = 0;
   request.height = 0;
   request.pixels.clear();
-  return false; // M0: no image; the presenter shows black
+  if (!impl_->renderer) return false;
+  hwgs::writeback::FrameOutput frame = impl_->renderer->Compose();
+  if (!frame.valid) return false;  // no known video mode: no image (chapter 12.4)
+  request.width = frame.width;
+  request.height = frame.height;
+  request.pixels = std::move(frame.pixels);
+  return true;
 }
 
 bool Backend::attach_window(void *hwnd, std::string &error) {
@@ -665,7 +859,9 @@ void Backend::present(PresentPhase phase) {
       return;
     }
   }
-  if (s.swapchain) s.present_black();
+  if (!s.swapchain) return;
+  const hwgs::writeback::FrameOutput frame = s.renderer->Compose();
+  s.present_frame(frame.valid ? &frame : nullptr);
 }
 
 bool Backend::has_window() const { return impl_->window != nullptr; }

@@ -12,7 +12,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M1 tools | Native replay supports legacy and GSSTREAM v2; real menu parity confirmed | slice219: 69/69 CPU-library tests; 1,101/1,101 identical PPMs in legacy, converted v2 and fresh donor v2 replays |
 | M2 memory | Done | CTest `memory_*` |
 | M3 front end, CLUT | Done; A+D vertex kicks fixed (IN-326) | CTest `m3_*`, `m3_hw_gif_ad_xyz` |
-| M4 reference I | CPU reference done; GPU write-back WIP on `task/027-m4-gpuref` (e31fcc4, not built) | CTest `cpuref_*`; menu capture replay |
+| M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact); not wired | CTest `pixel_*`, `hw_gpu_*` |
 | M6 output | Display library done; CPU VRAM diagnostic added; IN-315 comparison resolved and IN-316 closed (garage samples pass after IN-326); game dumps still pending | slice222:76/76 CPU-library tests; 11/11 aligned menu samples inside the 2D gate, worst 0.2051% / 45.992 dB |
 | M7 cache | Bookkeeping core done | cache CTest |
@@ -40,10 +40,9 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 
 ## Next step
 
-**M4 GPU write-back**: rebase the ideas of `task/027-m4-gpuref` (`e31fcc4`) onto this branch, move its front-end
-edit into `hw_gs_stream_sink.cpp`, build, and register `writeback/tests` in CTest (acceptance in 15.2 M4 and
-section 5 step 3 of the brief). IN-326/IN-316 are closed and the VRAM diagnostic plus frame alignment stay as
-they are; no field offset and no arbitrary shift was added. S-03..S-11 still need owner gameplay captures.
+**M4 parity replay**: add the HWR replay tool (the CUPTURE reader over the GPU write-back renderer) and record
+S-01/S-02 against the donor frames, as 15.2 M4 asks. Then M5 (blending in the raster path: ABE is currently
+drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at 1x). The front-end equivalent of the old `.inc` copy is not needed: the sink no longer uses donor memory for output. S-03..S-11 still need owner gameplay captures.
 
 ## 2026-10-21 replay checkpoint (slice219)
 
@@ -82,3 +81,13 @@ they are; no field offset and no arbitrary shift was added. S-03..S-11 still nee
 - Slice217 full native CTest after the change: 188 passed, Q-07 skipped, only the expected pre-existing
   `python_native_contracts` distribution-pin failure. Python: 629 tests, 44 skips, same single expected error.
 - Evidence: `private/slice222-in326-evidence/` (vram, scanout, aligned-candidate, comparison JSON, logs).
+
+## 2026-10-21 M4 write-back port checkpoint (slice223, IN-328/IN-329)
+
+- Ported `task/027-m4-gpuref` (e31fcc4) onto this branch: `writeback/` (Vulkan-free drawer interface, `gt4_hwd_*` device table, batch translation, chunked execute with SLM read/write-back, Renderer), the uber vertex/fragment shaders and the backend routing. The dropped `.inc` edit has no equivalent need here: the sink owns presentation and never reads donor memory.
+- Confirmed: the WIP did not compile; fixes were include/API drift, a mangled struct fragment at writeback.cpp:228 that closed the namespace twice, a `ClutUnit` constructor argument, a test predicate that compared `word >> 16` with 255 instead of the masked blue channel, and the loader's instance set (surface and swapchain entry points). New `load_headless_entry_points` serves windowless devices.
+- Confirmed: 11 fixtures green — `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors` (chapter 03.3 vectors, sub-pixel sprite edges), `hw_gpu_equivalence_{flat,texture,region,bilinear,tfx_fog,depth_alpha,scissor}` (0 mismatching pixels over 1089-1681 compared pixels each) and the report-only `hw_gpu_gouraud_report`.
+- Confirmed IN-328: the CPU reference truncated a constant fog of 90 to 89 (double barycentric weights that do not sum to 1), which was the 16-pixel TFX/fog difference. Constant attributes now interpolate exactly; new fixture `cpuref_constant_attributes` (528 covered pixels, exact (80,55,58)).
+- Confirmed: full native CTest 200 pass + Q-07 skip + the known `python_native_contracts` distribution-pin failure (202 selected). Default renderer headless 4,200 frames: 42/42 dumps equal slice214, card copy unchanged. Python 629 tests, 44 skips, same single expected error.
+- Confirmed: `GT4_RENDERER=hw` now runs the write-back renderer in process: 600 headless frames, 205,791,616 GIF bytes, 2,987 privileged writes, 0 faults, 33 s (about 55 ms per guest frame; one draw per primitive with a barrier at 1x). Nothing is dumped yet, so this is a stability result, not a picture.
+- Evidence: `private/slice222-in326-evidence/hw-run/` and `.../default-parity/`. Fresh full build: `build/slice223-coregs2`. No pin, launcher mode, PR or merge.

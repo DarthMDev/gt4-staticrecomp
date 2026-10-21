@@ -110,4 +110,8 @@ bool load_loader(std::string &error);
 // Fills every instance-level pointer for `instance`. Names the entry points that did not resolve.
 bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &missing);
 
+// Fills only the entry points a windowless device needs (no surface, no swapchain). False with the
+// missing names when one did not resolve; used by the M4 fixtures and headless runs.
+bool load_headless_entry_points(VkInstance instance, std::vector<std::string> &missing);
+
 } // namespace gt4::hw::vulkan_loader

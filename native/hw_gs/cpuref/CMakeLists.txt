@@ -75,7 +75,7 @@ target_link_libraries(hw_m3_tests PRIVATE hw_gs_cpuref)
 
 foreach(t IN ITEMS
         cpuref_coverage_vectors cpuref_line_pixels cpuref_triangle_shared_edge cpuref_flat_provoking
-        cpuref_gouraud cpuref_sprite_rectangle cpuref_scissor cpuref_depth cpuref_texture_nearest_decal
+        cpuref_gouraud cpuref_constant_attributes cpuref_sprite_rectangle cpuref_scissor cpuref_depth cpuref_texture_nearest_decal
         cpuref_clut_indexed cpuref_blend_sweep cpuref_in07_aem cpuref_capture_replay cpuref_ppm cpuref_display_frame)
     add_test(NAME ${t} COMMAND cpuref_tests ${t})
 endforeach()

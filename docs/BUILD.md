@@ -1859,3 +1859,12 @@ ctest --test-dir build/slice222-cpuref --output-on-failure
   skips, same single expected error.
 - Evidence: `private/slice222-in326-evidence/` (`vram`, `scanout`, `aligned-candidate`,
   `menu-vram-comparison.json`, logs). No game launch was needed; no windowed run.
+
+## Local slice223 - M4 GPU write-back port (03, 12.3, 12.9, IN-328/IN-329)
+
+Fresh full build of the worktree with the slice217 recipe (`build/scripts-222/build-game-223.bat`, same input pins, `GT4_HW_GS=ON`, `GT4_RELEASE_DISTRIBUTION=ON`), output in `build/slice223-coregs2/build`. No main-checkout output, no candidate pin, no launcher mode.
+
+- Confirmed: full native CTest 200 pass, Q-07 skipped, only the expected `python_native_contracts` distribution-pin failure (202 selected, 214 s). The new fixtures are listed in IN-329.
+- Confirmed: default renderer headless, 4,200 frames, 32.5 s, exit0, copied seed card unchanged, 42/42 dump hashes equal slice214 (`private/slice222-in326-evidence/default-parity/`). Python 629 tests, 44 skips, same single expected error.
+- Confirmed: `GT4_RENDERER=hw` headless 600 frames: 600 vsyncs, 600 frames, 205,791,616 GIF bytes, 2,987 privileged writes, 0 unmirrored, 0 faults, 33.2 s, card unchanged (`.../hw-run/`). HWR game output still has no frame dump, so this proves the renderer runs in process, not that the picture is right.
+- Confirmed: the CPU reference fix of IN-328 changes no other fixture; `cpuref_constant_attributes` is the control, and the GPU TFX/fog equivalence went from 16 mismatches to 0.
