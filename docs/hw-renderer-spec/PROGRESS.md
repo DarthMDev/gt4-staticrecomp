@@ -132,3 +132,69 @@ drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at
 - Confirmed at frame 101 (odd): the SLMs differ in 6,591 bytes, all in the framebuffer pages that hold the boot text (64 KiB pages 3-4). Even frames still match byte for byte.
 - Conclusion: the odd-field text loss is a WRITE problem (the primitive does not land in VRAM), not a display/composition problem, and it is tied to the field parity of the input. Ruled out this round: texture refusal (0), the front end (same counters), composition (even frames identical) and the per-primitive scissor (disabling it made the garage worse: 48.8% against 10.6%).
 - Next: instrument the draw of the text region on an odd frame (which batch, which rect, which scissor, whether the pixel rules reject it) using the SLM dump as the oracle.
+
+## Handover 2026-10-21 (local227) - continue in Claude
+
+Branch `task/027-coregs2`, worktree `C:\Antigravity\gt4-wt-027-coregs2`, last commit **04daf64**, tree
+clean, nothing merged. Read before working: `AGENTS.md`, `AGENT-BRIEF-COREGS2.md`, this file,
+`IMPLEMENTATION-NOTES.md` (IN-331..IN-334), and the ai-memory page `decisions/coregs2-implementation`.
+
+### Where the work stands
+
+- M0-M3 done. M4 GPU write-back ported and wired (IN-329/IN-328). M5 pixel pipeline in the raster path
+  (IN-330). M6 presentation interfaces (IN-331), HWR frame dumps (IN-332), HWR replay tool (IN-333) and the
+  shadow-memory comparison (IN-334) are done.
+- Open defect, the reason we are not at parity: on identical recorded input the GPU path is
+  **pixel-identical on every even frame** and loses content on **odd** frames. In memory (frame 101) the two
+  4 MiB shadow memories differ in 6,591 bytes, all inside the framebuffer pages holding the boot text
+  (64 KiB pages 3-4). The garage frame 900 diverges 10.6%. So it is a VRAM **write** problem tied to the
+  input's field parity.
+- Ruled out, each with a test: texture refusal (0 skipped), the front end (identical counters), composition
+  (even frames byte-identical), per-primitive scissor (disabling it made the garage worse: 48.8% vs 10.6%).
+
+### Exact commands
+
+```text
+# build the candidate tree (incremental; new candidates get a new build/sliceNNN-* recipe)
+cmd /c build\scripts-222\build-game-225.bat
+
+# GPU path replay (add --slm-frame N to dump the 4 MiB shadow memory at that frame)
+build\slice217-coregs2\build\hw_writeback_replay.exe private\slice217-coregs2-evidence\menu-v2.gscap <out-gpu> [--slm-frame N]
+
+# CPU reference on the same records (ground truth for this comparison)
+build\slice217-coregs2\build\hw_cpuref_replay.exe private\slice217-coregs2-evidence\menu-v2.gscap <out-cpu> --dump-source scanout [--slm-frame N]
+
+# compare (frames, pixels, memory) - committed helper, no local state needed
+private\tooling-venv\Scripts\python.exe scripts\hw_frame_tools.py pct <a> <b> 100 101 900
+private\tooling-venv\Scripts\python.exe scripts\hw_frame_tools.py slm <a.bin> <b.bin>
+private\tooling-venv\Scripts\python.exe scripts\hw_frame_tools.py diff <a.ppm> <b.ppm> <out.png>
+private\tooling-venv\Scripts\python.exe scripts\hw_frame_tools.py png <in.ppm> <out.png>
+```
+
+Launching the game: `build\hwr-play.ps1` (windowed HWR, card copy, dumps, session log). It refuses to run
+while a game is open, and never touches the owner's card.
+
+### Next step (in order)
+
+1. Instrument the draw list for the boot-text rows on an odd frame in both paths (`writeback::Translate`
+   and `cpuref::DrawBatch`): primitive type, rect, scissor and the pixel-rule outcome, for frames 100-102,
+   then diff the two lists. The SLM dump is the oracle.
+2. Fix the divergence found; re-run the replay until all 1,101 frames match in image AND memory.
+3. Re-run the 42-dump schedule (`private/slice226-hwr-dumps/run-hw-dumps.py` recipe in the build dir) and
+   compare against the donor dumps; target: inside the chapter 14.4 gates.
+4. Then the windowed scheduler wiring (IN-331 follow-up), and only then ask the owner for a windowed look.
+
+### Known costs and limits
+
+- Headless HWR costs ~26 ms translate + ~54 ms execute per menu frame (windowed: 33 + 67 ms), because it
+  issues one draw per primitive with a barrier. That is why the game runs at ~10 FPS, and the 3D car view
+  is slower still. M7 (surface cache) and M9 (batching) must remove it; do not treat it as an M6 bug.
+- Lines still use Vulkan rasterisation, not Bresenham; DATE on CT24 writes nothing (08.7, High).
+- No pin, no launcher mode, no PR, no merge. The main checkout stays read-only; PCSX2 and the gt4-gs fork
+  remain forbidden (clean room, decision 0070).
+
+### Evidence on disk (private, never staged)
+
+- `private/slice227-replay-gpu/{cpu,gpu,cpu-slm,gpu-slm}` and `inspect/` - the A/B that isolates the defect.
+- `private/slice226-hwr-dumps/` - 42-dump schedule from the game and the comparison JSON.
+- `private/hwr-play/` - the owner's windowed session (dumps + `session.log` with the counters).
