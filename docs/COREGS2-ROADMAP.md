@@ -92,17 +92,26 @@ Candidates, in order:
 - Every enhancement is opt-in; the default image stays faithful to the original.
 
 ## Order
-Parity first (spec milestones through M8, the current focus). Then:
-1. the UI layer;
-2. the fractional render scale and per-target resolution;
-3. precompiled pipelines;
-4. readback removal;
-5. AF and SMAA;
-6. FSR 2/3;
-7. camera motion vectors and jitter, then DLSS SR and XeSS;
-8. frame generation together with TASK-082;
-9. object motion vectors;
-10. state-gated effects (AO first);
-11. HDR10;
-12. texture packs;
-13. mobile backends.
+Parity first (spec milestones through M8, the current focus). Then, by owner priority (2026-10-21):
+
+1. **Immediate image wins:** forced anisotropic filtering and LOD bias on 3D textures, and modern anti-aliasing
+   (SMAA first; TAA later), all applied before the UI layer and only where they make sense.
+2. **The UI layer** (a prerequisite for upscalers and frame generation), the fractional render scale and
+   per-target resolution.
+3. **FSR 3**, the main upscaler: MIT, Vulkan, and frame generation included, to be unified with TASK-082 (variable
+   frame rate).
+   - It uses camera-only motion vectors: depth plus the current and previous view-projection from the camera hook.
+   - Car, wheel and particle draws are known by category, so they go into FSR's reactive and
+     transparency-composition masks to limit ghosting.
+   - Object motion vectors come later (primitive matching or decomp transforms).
+   - Render scale below 100% plus FSR 3 is the performance mode for weak PCs and mobile.
+4. Precompiled pipelines, readback removal, then state-gated effects (AO first), HDR10, texture packs and mobile
+   backends.
+5. **Optional, community, never shipped by us:** a DLSS path (including neural-rendering features) through
+   OptiScaler, with the user supplying NVIDIA's DLL and any third-party runtime.
+   - Before we automate anything in the launcher, check:
+     - the licence terms of the NVIDIA SDK and of each third-party runtime (some forbid use on non-NVIDIA GPUs or
+       redistribution);
+     - the security of loading unsigned third-party DLLs into the game process;
+     - support load.
+   - Our own NVIDIA path, if any, goes through the official Streamline SDK.
