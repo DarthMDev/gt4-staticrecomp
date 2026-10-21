@@ -1934,3 +1934,13 @@ main-checkout output, no pin, no launcher mode.
 - Confirmed: `hw_writeback_replay --compose presentation` on `menu-v2.gscap`: static screens show 0.000% change
   between consecutive frames (`private/slice229-replay/presentation/`). Before the IN-337 correction the headless
   scanout dumps of the boot screen changed 2.04% between consecutive frames (`private/slice229-evidence/`).
+
+## Local slice230 - menu field phase (13.3, 13.4, IN-339)
+
+Incremental rebuild of the slice228 tree. No pin or launcher change.
+
+- Confirmed: 178 HWR/CPU-library CTests pass (Q-07 skipped); `test_hw_presentation_capture.py` passes with
+  `GT4_HW_WRITEBACK_REPLAY_EXE` and `GT4_HW_MENU_CAPTURE` set (2 tests, 119 s).
+- Confirmed: `GT4_RENDERER=hw` headless 1,200 frames with `GT4_HW_DUMP_SOURCE=scanout`, 0 faults, card copy
+  unchanged; garage menu combing 2.08, static screens identical between VBlanks outside the edge rows
+  (`private/slice230-evidence/hwr-scanout-1200/`). Phase study: `private/slice230-deint/`.

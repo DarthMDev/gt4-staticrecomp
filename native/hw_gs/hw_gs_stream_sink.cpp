@@ -125,10 +125,8 @@ void vsync(bool odd_field) {
   ++g_vsyncs;
   hw.set_display_field(odd_field);
   hw.flush();
-  if (hw.has_window())
-    hw.present(odd_field ? PresentPhase::field_odd : PresentPhase::field_even);
-  else
-    hw.next_frame();
+  hw.next_frame();  // one guest frame per VBlank, windowed or headless (the session line's `frames`)
+  if (hw.has_window()) hw.present(odd_field ? PresentPhase::field_odd : PresentPhase::field_even);
   maybe_dump(hw);
 }
 

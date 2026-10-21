@@ -1216,7 +1216,8 @@ int TestReplayParityDoubleBuffer(const gpu::VulkanHandles& handles) {
 //   - Deinterlace off: the presentation equals the reference for both fields.
 //   - Weave over an even/odd pair: the odd field is shifted down one row (13.3 step 3) and woven, which
 //     for static content must rebuild exactly the line-doubled reference image (no one-line bob).
-//   - Bob: the even field is shifted down one row (13.4), so it must differ from the reference.
+//   - Weave of two field buffers (each with its own lines) gives the progressive frame (IN-339 phase).
+//   - Bob: the CSR.FIELD = 1 field is shifted down one row (13.4, IN-339); the other is not.
 // No Vulkan device is needed: uploads go to the shadow memory and composition is CPU work.
 int TestPresentationFieldPhase() {
     constexpr uint32_t kWidth = 64;
@@ -1286,15 +1287,17 @@ int TestPresentationFieldPhase() {
     const writeback::FrameOutput woven = frame(weave, true, ComposeKind::Presentation);
     check(woven.pixels == refEven.pixels, "weave of an even/odd pair rebuilds the line-doubled image");
     check(weave.GetCounters().interlaceOffsetFrames == 1 && weave.GetCounters().deinterlacedFrames == 2,
-          "weave: one odd-field offset, two deinterlaced fields");
+          "weave: one field offset (the CSR.FIELD = 0 field), two deinterlaced fields");
 
-    // Field phase: each field buffer holds its own lines (as GT4's field rendering does); weaving the pair
-    // must give the progressive frame, line y = lineColour(y). A wrong field-to-row parity puts the odd
-    // field's lines on even rows and fails here.
+    // Field phase (IN-339): each field buffer holds its own lines, as GT4's field rendering does. The frame
+    // whose display field is CSR.FIELD = 1 holds the upper lines (2k), the CSR.FIELD = 0 frame the lower
+    // lines (2k + 1). Weaving the pair must give the progressive frame, line y = lineColour(y); the IN-35
+    // reading (field 1 shifted down) puts every line two rows from its partner and fails here.
     writeback::Renderer phase;
     setup(phase, display::DeinterlaceMode::Weave);
-    frame(phase, false, ComposeKind::Presentation);
     upload(phase, 1);
+    frame(phase, false, ComposeKind::Presentation);
+    upload(phase, 0);
     const writeback::FrameOutput progressive = frame(phase, true, ComposeKind::Presentation);
     bool progressiveOk = progressive.valid && progressive.height >= 2 * kRows && progressive.width >= kWidth;
     uint32_t wrongRows = 0;
@@ -1308,8 +1311,11 @@ int TestPresentationFieldPhase() {
 
     writeback::Renderer bob;
     setup(bob, display::DeinterlaceMode::Bob);
-    const writeback::FrameOutput bobEven = frame(bob, false, ComposeKind::Presentation);
-    check(bobEven.valid && bobEven.pixels != refEven.pixels, "bob shifts the even field by one row");
+    // 13.4 bob shifts the row-0 field (CSR.FIELD = 1, IN-339) down by one row and leaves the other as is.
+    const writeback::FrameOutput bobUpper = frame(bob, true, ComposeKind::Presentation);
+    const writeback::FrameOutput bobLower = frame(bob, false, ComposeKind::Presentation);
+    check(bobUpper.valid && bobUpper.pixels != refEven.pixels, "bob shifts the CSR.FIELD = 1 field by one row");
+    check(bobLower.pixels == refEven.pixels, "bob leaves the CSR.FIELD = 0 field in place");
 
     std::printf("hw_presentation_field_phase: %d failures\n", failures);
     return failures == 0 ? 0 : 1;

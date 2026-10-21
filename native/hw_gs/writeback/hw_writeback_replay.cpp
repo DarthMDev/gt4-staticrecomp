@@ -7,6 +7,7 @@
 //
 // Usage: hw_writeback_replay <capture> <out-dir> [--every N] [--slm-frame N] [--trace-frame N]
 //        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>] [--compose reference|presentation]
+//        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]]
 // --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
 // the default `auto`) instead of the reference image (12.9 `vram`, the CPU reference's image).
 // --slm-hashes writes "<frame> <16 hex digits>" per frame (the FNV-1a hash of the 4 MiB local memory),
@@ -141,6 +142,7 @@ int main(int argc, char** argv) {
     std::uint64_t traceFrame = UINT64_MAX;  // the frame whose batches are printed
     std::string slmHashPath;                // per-frame local memory hashes
     writeback::ComposeKind composeKind = writeback::ComposeKind::Reference;
+    writeback::OutputSettings outputSettings;  // --deinterlace (13.4 names, `_bff` suffix allowed)
     PixelRect traceRect{0, 0, 2047, 2047};
     for (int i = 3; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--every") == 0) {
@@ -155,6 +157,14 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "--compose takes reference or presentation\n");
                 return 2;
             }
+        } else if (std::strcmp(argv[i], "--deinterlace") == 0) {
+            const auto setting = display::parse_deinterlace_option(argv[i + 1]);
+            if (!setting) {
+                std::fprintf(stderr, "--deinterlace takes auto|off|weave|bob|blend|adaptive with optional _bff\n");
+                return 2;
+            }
+            outputSettings.deinterlace = setting->mode;
+            outputSettings.bottomFieldFirst = setting->bottom_first;
         } else if (std::strcmp(argv[i], "--slm-hashes") == 0) {
             slmHashPath = argv[i + 1];
         } else if (std::strcmp(argv[i], "--trace-frame") == 0) {
@@ -192,6 +202,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "GPU drawer init failed: %s\n", error.c_str());
         return 1;
     }
+    renderer.SetOutputSettings(outputSettings);
 
     // Frame counter for the trace: EndFrame of frame N is the N-th call (0-based), as in onFrame.
     std::uint64_t currentFrame = 0;

@@ -776,6 +776,11 @@ const OutputSettings& Renderer::GetOutputSettings() const { return impl_->settin
 
 namespace {
 
+// Row field of 13.3/13.4 (0 = the field on even output rows, unshifted) for a display field as the VSYNC
+// record carries it (CSR.FIELD, 1 = odd). IN-339 (Confirmed on GT4 menus by measurement, against the IN-35
+// reading): CSR.FIELD = 1 is the upper (even-row) field, CSR.FIELD = 0 the lower one.
+int RowFieldOfDisplayField(bool csrFieldOdd) { return csrFieldOdd ? 0 : 1; }
+
 void CopyImage(const display::Image& image, FrameOutput& out) {
     out.valid = image.width > 0 && image.height > 0;
     out.width = image.width;
@@ -873,7 +878,12 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
                                 ? display::resolve_auto_deinterlace(layout, layout.ffmd, s.displayRegs_.scanmsk_active)
                                 : s.settings_.deinterlace;
             }
-            const int fieldPhase = (s.oddField_ ? 1 : 0) ^ (s.settings_.bottomFieldFirst ? 1 : 0);
+            // IN-339: the display field of a frame (VSYNC field = CSR.FIELD, 1 = odd) maps to the LOWER row
+            // phase when it is 0 and to the upper one when it is 1: GT4 draws its CSR.FIELD = 1 frames half a
+            // line higher, so with the IN-35 reading (field 1 shifted down) every woven menu line landed two
+            // rows from its partner. `_bff` still inverts the result.
+            const int vblankField = RowFieldOfDisplayField(s.oddField_);
+            const int fieldPhase = vblankField ^ (s.settings_.bottomFieldFirst ? 1 : 0);
             const int32_t offsetRows =
                 presentation ? display::interlace_offset_rows(layout.really_interlaced, layout.ffmd, effective, 1,
                                                               fieldPhase)
@@ -897,7 +907,7 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
                 const bool anySource = available[0] || available[1];
                 const bool runs = anySource && layout.really_interlaced && effective != display::DeinterlaceMode::Off;
                 if (runs) {
-                    merged = s.deinterlacer_.process(merged, s.oddField_ ? 1 : 0, effective,
+                    merged = s.deinterlacer_.process(merged, vblankField, effective,
                                                      s.settings_.bottomFieldFirst, 1);
                     s.counters.deinterlacedFrames++;
                 } else if (!anySource) {

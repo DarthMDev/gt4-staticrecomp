@@ -261,3 +261,16 @@ while a game is open, and never touches the owner's card.
 
 1. Owner test 1 (windowed, 1x, slow): menus and one race.
 2. M7 surface cache (8 d in the plan; highest risk).
+
+## 2026-10-21 Owner test 1 and the menu field phase (local slice230, IN-339) - Claude
+
+- Owner test 1 (coordinator relay): 55 s windowed, Home menu reached, "the delivery looks right in principle",
+  very slow as expected; defect: menus looked combed / not deinterlaced. `frames=0` in the session line.
+- Cause (Confirmed): the field-to-row mapping. GT4 draws its CSR.FIELD = 1 frames half a line higher; with the
+  IN-35 reading every woven line landed two rows from its partner. Fixed: row field = !CSR.FIELD (IN-339).
+  Garage menu combing 5.09 -> 2.04 (reference 2.73); static screens stable; headless game scanout 1,200 frames
+  confirms. `frames` now counts windowed VBlanks too.
+- Controls: `hw_presentation_field_phase` updated to the IN-339 phase; new capture-gated
+  `tests/python/test_hw_presentation_capture.py` (passes; fails with the old phase).
+- `hw_writeback_replay --deinterlace <mode>[_bff]` added for these studies.
+- Next: owner look at the menus again (same command), then M7.
