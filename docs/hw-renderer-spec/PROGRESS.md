@@ -14,7 +14,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M3 front end, CLUT | Done; A+D vertex kicks fixed (IN-326) | CTest `m3_*`, `m3_hw_gif_ad_xyz` |
 | M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
-| M6 output | Display library, presentation interfaces (IN-331), HWR frame dumps (IN-332), replay tool (IN-333/IN-334) done; the odd-frame draw loss is FIXED (IN-335, write-back of stale depth words over an aliased frame buffer). 42/42 headless dumps inside the 14.4 2D gate vs the donor. Open: triangle attribute precision vs the CPU reference (IN-336, inside the gate), owner test 1 | slice228: `hw_gpu_writeback_aliased_depth`, `hw_replay_parity_double_buffer`, `hw_readback_pending_draw`; replay 678/1,101 frames byte-identical, 672 identical in memory, max pct_bad 0.154%; game 42/42 dumps max pct_bad 0.131% |
+| M6 output | Done except owner test 1: display library, presentation interfaces (IN-331) with `end_frame`/`present_slot`, HWR frame dumps (IN-332; `vram` = reference image, `scanout` = presentation image, IN-338), replay tool (IN-333/IN-334), odd-frame draw loss fixed (IN-335), field offset and deinterlace in the presentation (IN-338) with the adaptive rule corrected (IN-337). Open: IN-336 (triangle precision, inside the gate) | local slice229: `hw_presentation_field_phase`, `display_hw_deint_adaptive`; 42/42 `vram` dumps inside the 2D gate and byte-identical to slice228; presentation replay of the menu capture bob-free on static screens |
 | M7 cache | Bookkeeping core done | cache CTest |
 | M8, M12, M14, M15, M17, M19 | Not started | |
 | M9-M11, M13, M16, M18 | Pure references only (decide, lod, replace) | decide, lod, `hw_replace_*` CTest |
@@ -235,3 +235,29 @@ while a game is open, and never touches the owner's card.
    expected, about 10 FPS). The request goes to the owner in the handback report.
 2. IN-336 question to the spec team (oracle for triangle attribute interpolation at 1x).
 3. M7 surface cache, then M8 readbacks, M9 batching (the 27 + 62 ms per frame).
+
+## 2026-10-21 M6 output stage: field phase and deinterlace (local slice229, IN-337/IN-338) - Claude
+
+- The renderer composes two images (12.9): `Reference` (the donor-matching merge; dump source `vram`, the 14.4
+  gates) and `Presentation` (13.3 step 3 field offset + 13.4 deinterlacer; the window and dump source
+  `scanout`). The VSYNC field reaches the renderer; the 13.2 layout is computed once per VBlank; 13.7/V-01-12
+  counters print in the sink's `[hw] output:` line.
+- IN-337: the adaptive deinterlacer treated every sharp static line as motion (IN-39 compared the bob average
+  with the previous output), so the static boot text bobbed one line per VBlank (headless scanout dumps: 2.04%
+  of pixels changed between consecutive frames; 1.23% with `off`). Now literal 13.4: compare current vs
+  previous same-parity field on the line above, the line itself and below; still lines take the previous
+  field's line. Presentation replay of the menu capture: static screens 0.000% between consecutive frames; fades
+  change only by their real content; one edge row (row 0 on the odd field) still alternates, as 13.4 passes edge
+  rows through.
+- `Backend::present` is now `end_frame(phase)` + `present_slot()` (IN-331 follow-up): the host-slot entry point
+  for TASK-082/TASK-045 exists, still called once per VBlank on the EE thread (parity unchanged).
+- Confirmed: incremental rebuild of `build/slice228-coregs2` (local slice229): 178 HWR/CPU-library CTests pass
+  (Q-07 skipped); the 4,200-frame headless `vram` dumps are byte-identical to slice228 (42/42 inside the 2D
+  gate). `hw_writeback_replay --compose presentation` added.
+- Not done: the headless game scanout run with the corrected adaptive rule (another agent's slice230 headless runs
+  were active; the launch guard refused). The replay covers the same frames.
+
+### Next step
+
+1. Owner test 1 (windowed, 1x, slow): menus and one race.
+2. M7 surface cache (8 d in the plan; highest risk).

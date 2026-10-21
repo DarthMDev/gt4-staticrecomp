@@ -1921,3 +1921,16 @@ no candidate pin, no launcher mode. The headless scripts take the ELF from `priv
   donor dumps 42/42 inside the 2D gate (`private/slice228-evidence/compare-vs-donor.json`).
 - Confirmed: replay of `menu-v2.gscap` through both tools with `--slm-hashes`: 678/1,101 frames byte-identical,
   672/1,101 identical in memory, max pct_bad 0.154% (`private/slice228-replay/`).
+
+## Local slice229 - M6 output stage: field offset and deinterlace (13.3, 13.4, 12.9, IN-337/IN-338)
+
+Incremental rebuild of the slice228 tree (`build/slice228-coregs2/build-228.bat`, same recipe and pins). No
+main-checkout output, no pin, no launcher mode.
+
+- Confirmed: 178 HWR and CPU-library CTests pass (Q-07 skipped), including the new `hw_presentation_field_phase`
+  and the extended `display_hw_deint_adaptive` (fails with the IN-39 rule).
+- Confirmed: `GT4_RENDERER=hw` headless 4,200 frames with the default `vram` dump source: 42 dumps byte-identical
+  to slice228, card copy unchanged (`private/slice229-evidence/hwr-dumps-vram/`).
+- Confirmed: `hw_writeback_replay --compose presentation` on `menu-v2.gscap`: static screens show 0.000% change
+  between consecutive frames (`private/slice229-replay/presentation/`). Before the IN-337 correction the headless
+  scanout dumps of the boot screen changed 2.04% between consecutive frames (`private/slice229-evidence/`).

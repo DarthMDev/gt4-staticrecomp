@@ -18,7 +18,10 @@ namespace hwgs::writeback {
 
 class WritebackReplayTarget final : public cpuref::ReplayTarget {
 public:
-    explicit WritebackReplayTarget(Renderer& renderer) : renderer_(renderer) {}
+    // `kind` selects the image of each frame end: Reference (default, the image the CPU reference and the
+    // donor decode produce) or Presentation (field offset and deinterlace, what the window shows).
+    explicit WritebackReplayTarget(Renderer& renderer, ComposeKind kind = ComposeKind::Reference)
+        : renderer_(renderer), kind_(kind) {}
 
     bool GifTransfer(std::uint32_t path, const std::vector<std::uint8_t>& bytes) override {
         return renderer_.GifTransfer(path, bytes.data(), bytes.size());
@@ -35,7 +38,7 @@ public:
     cpuref::FrameImage EndFrame() override {
         renderer_.Flush();
         FrameOutput out;
-        renderer_.ComposeFrame(out);
+        renderer_.ComposeFrame(out, kind_);
         cpuref::FrameImage frame;
         frame.valid = out.valid && out.width > 0 && out.height > 0;
         if (!frame.valid) return frame;
@@ -53,7 +56,10 @@ public:
         return frame;
     }
 
-    void SetDisplayField(bool odd) override { oddField_ = odd; }
+    void SetDisplayField(bool odd) override {
+        oddField_ = odd;
+        renderer_.SetDisplayField(odd);
+    }
     bool DisplayField() const override { return oddField_; }
     void ResetGs(bool clearVram) override {
         renderer_.ResetGs();
@@ -63,6 +69,7 @@ public:
 
 private:
     Renderer& renderer_;
+    ComposeKind kind_;
     bool oddField_ = false;
 };
 

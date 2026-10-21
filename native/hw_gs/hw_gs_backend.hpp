@@ -71,6 +71,14 @@ struct RenderCounters {
   std::uint64_t writeback_pixels = 0;
   std::uint64_t flat_deindexed = 0;
   std::uint64_t sprites = 0;
+  // Output stage (13.7) and V-01-12.
+  std::uint64_t presentation_frames = 0;
+  std::uint64_t blank_frames = 0;
+  std::uint64_t deinterlaced_frames = 0;
+  std::uint64_t interlace_offset_frames = 0;
+  std::uint64_t merge_alpha_from_texel = 0;
+  std::uint64_t writeback_depth_words = 0;
+  std::uint64_t fifo_overruns = 0;
 };
 
 // Result of the feature report (chapter 12.6).
@@ -119,6 +127,9 @@ public:
 
   void flush();       // submits recorded work, never waits
   void next_frame(); // headless frame boundary
+  // Field of the VBlank being closed (CSR.FIELD from the VSYNC record; chapters 12.4, 13.3, 13.4). Set before
+  // present() and before a scanout dump so the field offset and the deinterlacer use this VBlank's field.
+  void set_display_field(bool odd);
   void wait_idle();
 
   // Builds the display image as present would. M0: no image, returns false (black).
@@ -129,8 +140,14 @@ public:
   void detach_window();
   // Resize and fullscreen only set a flag; recreation happens before the next present.
   void resize_window(std::uint32_t width, std::uint32_t height);
-  // One call per guest VBlank: a black 16:9 frame. Headless (no window) only counts.
+  // One call per guest VBlank: end_frame(phase) then one present_slot(). Headless (no window) only counts.
   void present(PresentPhase phase);
+  // The two halves of present() (IN-331 follow-up, roadmap requirement 1): end_frame composes the guest
+  // frame and submits its stamp to the present scheduler (false when nothing can be shown: headless, no
+  // swapchain); present_slot is one host present opportunity (new image, held image or nothing). A host
+  // clock faster than the guest calls present_slot() more often; it must run on the thread owning the queue.
+  bool end_frame(PresentPhase phase);
+  void present_slot();
 
   // True while a window (swapchain) is attached; headless runs advance frames themselves.
   bool has_window() const;

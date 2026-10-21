@@ -12,6 +12,7 @@
 //
 // Usage: hw_gs_display_fixture [test-name ...]. With no arguments every test runs.
 
+#include <algorithm>
 #include "hw_gs_display.hpp"
 
 #include <cmath>
@@ -535,6 +536,41 @@ void test_deinterlace_adaptive() {
     CHECK_EQ(out.at(0, 1).r, 255);  // moving: bob of the rows above and below
     CHECK_EQ(out.at(1, 1).r, 0);    // static column: previous line kept
     CHECK(out.at(0, 2) == (Rgba8{255, 255, 255, 255}));  // current-field rows pass through
+
+    // Static sharp detail in field-rendered content (IN-337, GT4 menus): each field holds its own lines,
+    // line-doubled into the merge and the odd field shifted down one row (13.3 step 3). Every frame line
+    // has its own value, so no line is the average of its neighbours. From the third field on (each parity
+    // has a predecessor) the output must be the progressive picture and must not change between fields.
+    constexpr std::uint32_t kLines = 12;
+    auto line_value = [](std::uint32_t line) { return static_cast<std::uint8_t>((line * 37u + 11u) & 0xFFu); };
+    auto field_merge = [&](int field) {
+        Image merged(1, kLines, Rgba8{0, 0, 0, 255});
+        for (std::uint32_t y = 0; y < kLines; ++y) {
+            // Even field: rows 2k and 2k+1 show line 2k. Odd field: rows 2k+1 and 2k+2 show line 2k+1.
+            const std::uint32_t k = field == 0 ? y / 2u : (y == 0u ? 0u : (y - 1u) / 2u);
+            const std::uint32_t line = std::min<std::uint32_t>(2u * k + static_cast<std::uint32_t>(field), kLines - 1u);
+            const std::uint8_t v = line_value(line);
+            merged.at(0, y) = Rgba8{v, v, v, 255};
+        }
+        return merged;
+    };
+    Deinterlacer sharp;
+    Image last;
+    for (int step = 0; step < 6; ++step) {
+        const int field = step & 1;
+        const Image result = sharp.process(field_merge(field), field, DeinterlaceMode::Adaptive, false, 1);
+        if (step >= 2) {
+            for (std::uint32_t y = 1; y + 1 < kLines; ++y) {
+                CHECK_EQ(result.at(0, y).r, line_value(y));  // the progressive picture, interior rows
+            }
+            if (step >= 3) {
+                // No bob between consecutive fields. The top and bottom rows pass through (13.4) and are
+                // the two fields' own edge lines, so only interior rows are compared.
+                for (std::uint32_t y = 1; y + 1 < kLines; ++y) CHECK(result.at(0, y) == last.at(0, y));
+            }
+        }
+        last = result;
+    }
 
     // Clearing the history removes the previous field: the next field is bobbed.
     moving.clear_history();

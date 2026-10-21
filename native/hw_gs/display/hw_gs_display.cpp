@@ -535,13 +535,18 @@ Image Deinterlacer::adaptive(const Image& merged, int row_parity, double thresho
         history_.pop_front();
     }
 
-    // Previous same-parity field: the most recent older entry with this row parity (IN-39).
-    const FieldRecord* previous = nullptr;
+    // Previous same-parity field: the most recent older entry with this row parity (IN-39), and the
+    // previous field: the most recent older entry with the other parity, whose rows are exactly the lines
+    // this field is missing (IN-337).
+    const FieldRecord* previous_same = nullptr;
+    const FieldRecord* previous_other = nullptr;
     for (std::size_t index = history_.size() - 1u; index-- > 0u;) {
         const FieldRecord& record = history_[index];
-        if (record.row_parity == row_parity && record.image.same_size(merged)) {
-            previous = &record;
-            break;
+        if (!record.image.same_size(merged)) continue;
+        if (record.row_parity == row_parity) {
+            if (previous_same == nullptr) previous_same = &record;
+        } else if (previous_other == nullptr) {
+            previous_other = &record;
         }
     }
     const bool have_output = has_previous_output_ && previous_output_.same_size(merged);
@@ -560,19 +565,23 @@ Image Deinterlacer::adaptive(const Image& merged, int row_parity, double thresho
             const Rgba8 down = merged.at(x, y + 1u);
             const Rgba8 bob{average_byte(up.r, down.r), average_byte(up.g, down.g),
                             average_byte(up.b, down.b), average_byte(up.a, down.a)};
+            // 13.4: compare the current and the previous same-parity field at the same position on the
+            // line above, the line itself and the line below (IN-337: "the line itself" is the merged row y
+            // of both fields, not an interpolation, so sharp static detail is not mistaken for motion).
             bool motion = true;
-            if (previous != nullptr && have_output) {
-                const Rgba8 prev_up = previous->image.at(x, y - 1u);
-                const Rgba8 prev_down = previous->image.at(x, y + 1u);
-                const Rgba8 static_line = previous_output_.at(x, y);
-                motion = exceeds_threshold(up, prev_up, threshold) ||
-                         exceeds_threshold(down, prev_down, threshold) ||
-                         exceeds_threshold(bob, static_line, threshold);
+            if (previous_same != nullptr) {
+                motion = exceeds_threshold(up, previous_same->image.at(x, y - 1u), threshold) ||
+                         exceeds_threshold(merged.at(x, y), previous_same->image.at(x, y), threshold) ||
+                         exceeds_threshold(down, previous_same->image.at(x, y + 1u), threshold);
             }
-            if (motion || !have_output) {
+            if (motion) {
                 out.at(x, y) = bob;
+            } else if (previous_other != nullptr) {
+                out.at(x, y) = previous_other->image.at(x, y);  // weave: the previous field's line
+            } else if (have_output) {
+                out.at(x, y) = previous_output_.at(x, y);  // no field of the other parity yet
             } else {
-                out.at(x, y) = previous_output_.at(x, y);  // weave: the previous line
+                out.at(x, y) = bob;
             }
         }
     }

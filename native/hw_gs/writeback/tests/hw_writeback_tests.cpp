@@ -1209,6 +1209,112 @@ int TestReplayParityDoubleBuffer(const gpu::VulkanHandles& handles) {
     return failures == 0 ? 0 : 1;
 }
 
+// M6 output stage (13.3 step 3, 13.4, 12.9): the presentation compose follows the VBlank field, the
+// reference compose (the donor-matching `vram` image) never does. A static 64 x 32 field buffer (one colour
+// per row) is shown through a 480i NTSC circuit with FFMD = 1, so every source row covers two output rows.
+//   - Reference: identical for even and odd fields; no deinterlace counters move.
+//   - Deinterlace off: the presentation equals the reference for both fields.
+//   - Weave over an even/odd pair: the odd field is shifted down one row (13.3 step 3) and woven, which
+//     for static content must rebuild exactly the line-doubled reference image (no one-line bob).
+//   - Bob: the even field is shifted down one row (13.4), so it must differ from the reference.
+// No Vulkan device is needed: uploads go to the shadow memory and composition is CPU work.
+int TestPresentationFieldPhase() {
+    constexpr uint32_t kWidth = 64;
+    constexpr uint32_t kRows = 32;
+    // Colour of progressive frame line `line` (448-line frame; field buffers hold every other line).
+    auto lineColour = [](uint32_t line) {
+        return 0x80000000u | ((line * 7u + 3u) & 0xFFu) | (((line * 13u) & 0xFFu) << 8);
+    };
+    // Field buffer: row k holds frame line 2k + fieldLine (fieldLine 0 = even field, 1 = odd field).
+    auto upload = [&](writeback::Renderer& renderer, uint32_t fieldLine = 0) {
+        std::vector<Qword> stream;
+        stream.push_back(PackedTag(4, false, 0, {0xE}));
+        stream.push_back(Qword{(uint64_t{1} << 16) | (uint64_t{1} << 48), 0x50});  // BITBLTBUF: DBP 0, DBW 1, CT32
+        stream.push_back(Qword{0, 0x51});                                           // TRXPOS 0, 0
+        stream.push_back(Qword{uint64_t{kWidth} | (uint64_t{kRows} << 32), 0x52});  // TRXREG 64 x 32
+        stream.push_back(Qword{0, 0x53});                                           // TRXDIR 0: host -> local
+        const uint32_t qwords = kWidth * kRows / 4;
+        stream.push_back(PackedTag(qwords, true, 2, {}));
+        for (uint32_t i = 0; i < qwords; ++i) {
+            const uint32_t row = (i * 4) / kWidth;
+            const uint32_t colour = lineColour(2 * row + fieldLine);
+            stream.push_back(Qword{uint64_t{colour} | (uint64_t{colour} << 32), uint64_t{colour} | (uint64_t{colour} << 32)});
+        }
+        renderer.GifTransfer(1, reinterpret_cast<const uint8_t*>(stream.data()), stream.size() * sizeof(Qword));
+    };
+    auto setup = [&](writeback::Renderer& renderer, display::DeinterlaceMode mode) {
+        writeback::OutputSettings settings;
+        settings.deinterlace = mode;
+        renderer.SetOutputSettings(settings);
+        upload(renderer);
+        renderer.WritePrivileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));  // PMODE: RC1, MMOD 1, ALP 255
+        renderer.WritePrivileged(0x12000010u, uint64_t{2} << 13);              // SMODE1: NTSC
+        renderer.WritePrivileged(0x12000020u, 3u);                             // SMODE2: INT, FFMD
+        renderer.WritePrivileged(0x12000060u, 1u);                             // SYNCV: interlaced signal (13.1)
+        renderer.WritePrivileged(0x12000070u, uint64_t{1} << 9);               // DISPFB1: FBP 0, FBW 1, CT32
+        renderer.WritePrivileged(0x12000080u, (uint64_t{3} << 23) | (uint64_t{4 * kWidth - 1} << 32) |
+                                                  (uint64_t{2 * kRows - 1} << 44));  // DISPLAY1: MAGH 3, 64 x 64
+    };
+    auto frame = [](writeback::Renderer& renderer, bool odd, writeback::ComposeKind kind) {
+        renderer.SetDisplayField(odd);
+        renderer.Flush();
+        return renderer.Compose(kind);
+    };
+    using writeback::ComposeKind;
+    int failures = 0;
+    auto check = [&](bool ok, const char* what) {
+        std::printf("  %s: %s\n", what, ok ? "ok" : "FAILED");
+        if (!ok) ++failures;
+    };
+
+    writeback::Renderer off;
+    setup(off, display::DeinterlaceMode::Off);
+    const writeback::FrameOutput refEven = frame(off, false, ComposeKind::Reference);
+    const writeback::FrameOutput refOdd = frame(off, true, ComposeKind::Reference);
+    const writeback::FrameOutput offEven = frame(off, false, ComposeKind::Presentation);
+    const writeback::FrameOutput offOdd = frame(off, true, ComposeKind::Presentation);
+    std::printf("  reference %ux%u valid %d\n", refEven.width, refEven.height, refEven.valid ? 1 : 0);
+    check(refEven.valid && refEven.height >= 2 * kRows, "reference image exists and is full height");
+    check(refEven.pixels == refOdd.pixels, "reference is independent of the field");
+    check(offEven.pixels == refEven.pixels && offOdd.pixels == refEven.pixels, "deinterlace off presents the reference");
+    check(off.GetCounters().deinterlacedFrames == 0 && off.GetCounters().interlaceOffsetFrames == 0,
+          "deinterlace off moves no deinterlace counter");
+
+    writeback::Renderer weave;
+    setup(weave, display::DeinterlaceMode::Weave);
+    frame(weave, false, ComposeKind::Presentation);
+    const writeback::FrameOutput woven = frame(weave, true, ComposeKind::Presentation);
+    check(woven.pixels == refEven.pixels, "weave of an even/odd pair rebuilds the line-doubled image");
+    check(weave.GetCounters().interlaceOffsetFrames == 1 && weave.GetCounters().deinterlacedFrames == 2,
+          "weave: one odd-field offset, two deinterlaced fields");
+
+    // Field phase: each field buffer holds its own lines (as GT4's field rendering does); weaving the pair
+    // must give the progressive frame, line y = lineColour(y). A wrong field-to-row parity puts the odd
+    // field's lines on even rows and fails here.
+    writeback::Renderer phase;
+    setup(phase, display::DeinterlaceMode::Weave);
+    frame(phase, false, ComposeKind::Presentation);
+    upload(phase, 1);
+    const writeback::FrameOutput progressive = frame(phase, true, ComposeKind::Presentation);
+    bool progressiveOk = progressive.valid && progressive.height >= 2 * kRows && progressive.width >= kWidth;
+    uint32_t wrongRows = 0;
+    for (uint32_t y = 0; progressiveOk && y < 2 * kRows; ++y) {
+        const uint32_t expected = lineColour(y) & 0x00FFFFFFu;
+        const uint32_t got = progressive.pixels[static_cast<size_t>(y) * progressive.width] & 0x00FFFFFFu;
+        if (got != expected) ++wrongRows;
+    }
+    std::printf("  progressive weave: %u of %u rows wrong\n", wrongRows, 2 * kRows);
+    check(progressiveOk && wrongRows == 0, "weave of two field buffers gives the progressive frame");
+
+    writeback::Renderer bob;
+    setup(bob, display::DeinterlaceMode::Bob);
+    const writeback::FrameOutput bobEven = frame(bob, false, ComposeKind::Presentation);
+    check(bobEven.valid && bobEven.pixels != refEven.pixels, "bob shifts the even field by one row");
+
+    std::printf("hw_presentation_field_phase: %d failures\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int TestGouraudReport(gpu::GpuDrawer& drawer) {
     // Report only (IN-500): Gouraud interpolation rounding is not asserted yet.
     Setup s;
@@ -1232,6 +1338,7 @@ int main(int argc, char** argv) {
     if (name == "hw_present_scheduler_rate") return TestPresentSchedulerRate();
     if (name == "hw_aux_frame_guest_untouched") return TestAuxFrameGuestUntouched();
     if (name == "hw_pass_timings") return TestPassTimings();
+    if (name == "hw_presentation_field_phase") return TestPresentationFieldPhase();
 
     Headless headless;
     std::string error;

@@ -4,8 +4,9 @@
 // in the game process (native/gs_stream/gs_stream_sink.hpp). Replaces the M0b gs.cpp splice of task/027-hw-renderer
 // (native/hw_gs_frontend.inc and the paraLLEl-GS dispatch, dropped with paraLLEl-GS by decision 0070).
 //
-// Scope today (M0 backend): the backend starts, receives every GIF chunk, privileged write and VSYNC, and presents
-// black. Local-to-host reads return what read_transfer_fifo returns (zeros until the GPU write-back path lands).
+// The backend receives every GIF chunk, privileged write and VSYNC, draws through the GPU write-back renderer (M4/M5)
+// and presents the composed display with the VBlank's field (M6: 13.3 field offset, 13.4 deinterlace). Local-to-host
+// reads are answered from the shadow local memory after the open batch is flushed (10.2).
 
 #include "gs_stream/gs_stream_sink.hpp"
 
@@ -122,6 +123,7 @@ void vsync(bool odd_field) {
   Backend &hw = backend();
   g_odd_field = odd_field;
   ++g_vsyncs;
+  hw.set_display_field(odd_field);
   hw.flush();
   if (hw.has_window())
     hw.present(odd_field ? PresentPhase::field_odd : PresentPhase::field_even);
@@ -188,6 +190,17 @@ void finish(std::FILE *output) {
                static_cast<unsigned long long>(counters.writeback_pixels),
                static_cast<unsigned long long>(counters.flat_deindexed),
                static_cast<unsigned long long>(counters.sprites));
+  std::fprintf(output,
+               "[hw] output: presentation_frames=%llu blank_frames=%llu deinterlaced_frames=%llu "
+               "interlace_offset_frames=%llu merge_alpha_from_texel=%llu writeback_depth_words=%llu "
+               "fifo_overruns=%llu\n",
+               static_cast<unsigned long long>(counters.presentation_frames),
+               static_cast<unsigned long long>(counters.blank_frames),
+               static_cast<unsigned long long>(counters.deinterlaced_frames),
+               static_cast<unsigned long long>(counters.interlace_offset_frames),
+               static_cast<unsigned long long>(counters.merge_alpha_from_texel),
+               static_cast<unsigned long long>(counters.writeback_depth_words),
+               static_cast<unsigned long long>(counters.fifo_overruns));
   if (g_dump_every != 0) {
     std::fprintf(output, "[hw] dumps: written=%llu without_image=%llu every=%u dir=%s\n",
                  static_cast<unsigned long long>(g_dumps), static_cast<unsigned long long>(g_dumps_without_image),

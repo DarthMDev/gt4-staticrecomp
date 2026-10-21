@@ -121,6 +121,7 @@ struct Backend::Impl {
   // M6 interface: the frame end composes into `frame`, the scheduler decides whether it reaches the
   // display, and `shownFrame` is what the display currently holds (a hold re-presents exactly this).
   hwgs::present::Scheduler scheduler;
+  std::uint64_t presentedVblank = UINT64_MAX;  // flush count of the VBlank whose presentation image is in `frame`
   hwgs::writeback::FrameOutput frame;
   hwgs::writeback::FrameOutput shownFrame;
   std::uint64_t guestFrames = 0;
@@ -736,6 +737,19 @@ bool Backend::init(const Options &options, std::string &error) {
     s.shutdown();
     return false;
   }
+  // Output stage options (13.4 GT4_HW_DEINTERLACE, 13.2 GT4_HW_ANTIBLUR).
+  hwgs::writeback::OutputSettings output;
+  switch (options.deinterlace.algorithm) {
+    case DeinterlaceAlgorithm::automatic: output.deinterlace = hwgs::display::DeinterlaceMode::Auto; break;
+    case DeinterlaceAlgorithm::off: output.deinterlace = hwgs::display::DeinterlaceMode::Off; break;
+    case DeinterlaceAlgorithm::weave: output.deinterlace = hwgs::display::DeinterlaceMode::Weave; break;
+    case DeinterlaceAlgorithm::bob: output.deinterlace = hwgs::display::DeinterlaceMode::Bob; break;
+    case DeinterlaceAlgorithm::blend: output.deinterlace = hwgs::display::DeinterlaceMode::Blend; break;
+    case DeinterlaceAlgorithm::adaptive: output.deinterlace = hwgs::display::DeinterlaceMode::Adaptive; break;
+  }
+  output.bottomFieldFirst = options.deinterlace.bottom_field_first;
+  output.antiBlur = options.antiblur;
+  s.renderer->SetOutputSettings(output);
   s.initialised = true;
   return true;
 }
@@ -805,6 +819,10 @@ void Backend::flush() {
 
 void Backend::next_frame() { impl_->stats.frames++; }
 
+void Backend::set_display_field(bool odd) {
+  if (impl_->renderer) impl_->renderer->SetDisplayField(odd);
+}
+
 void Backend::wait_idle() {
   if (impl_->device) vkDeviceWaitIdle(impl_->device);
 }
@@ -814,7 +832,22 @@ bool Backend::scanout(ScanoutRequest &request) {
   request.height = 0;
   request.pixels.clear();
   if (!impl_->renderer) return false;
-  hwgs::writeback::FrameOutput frame = impl_->renderer->Compose();
+  // 12.9: `vram` (default) is the reference image the donor's decode matches; `scanout` is the presentation
+  // image (field offset and deinterlace). The deinterlacer is stateful, so a windowed session reuses the
+  // image it presented this VBlank instead of composing the presentation a second time.
+  Impl &s = *impl_;
+  if (s.options.dump_source == DumpSource::scanout) {
+    if (s.window && s.presentedVblank == s.stats.flushes && s.frame.valid) {
+      request.width = s.frame.width;
+      request.height = s.frame.height;
+      request.pixels = s.frame.pixels;
+      return true;
+    }
+  }
+  const hwgs::writeback::ComposeKind kind = s.options.dump_source == DumpSource::scanout
+                                                ? hwgs::writeback::ComposeKind::Presentation
+                                                : hwgs::writeback::ComposeKind::Reference;
+  hwgs::writeback::FrameOutput frame = impl_->renderer->Compose(kind);
   if (!frame.valid) return false;  // no known video mode: no image (chapter 12.4)
   request.width = frame.width;
   request.height = frame.height;
@@ -863,22 +896,28 @@ void Backend::resize_window(std::uint32_t width, std::uint32_t height) {
 }
 
 void Backend::present(PresentPhase phase) {
+  // One guest VBlank on the default policy: the frame end and one present slot (chapter 12.5 parity).
+  if (end_frame(phase)) present_slot();
+}
+
+bool Backend::end_frame(PresentPhase phase) {
   Impl &s = *impl_;
   s.stats.presents++;
-  if (!s.window) return; // headless: counted, nothing displayed
+  if (!s.window) return false; // headless: counted, nothing displayed
   if (s.resize_pending || !s.swapchain) {
     std::string error;
     if (!s.recreate_swapchain(error)) {
       s.resize_pending = false;
-      return;
+      return false;
     }
   }
-  if (!s.swapchain || !s.renderer) return;
+  if (!s.swapchain || !s.renderer) return false;
 
-  // Frame end (chapter 12.5) with the present decision separated from it (M6 interface): compose once
-  // into the reusable buffer, hand the stamp to the scheduler, and present only if it says so. The
-  // default policy presents every VBlank, so the parity path is unchanged.
-  s.renderer->ComposeFrame(s.frame);
+  // Frame end (chapter 12.5) with the present decision separated from it (M6 interface, IN-331): compose
+  // the presentation image once into the reusable buffer and hand its stamp to the scheduler.
+  s.renderer->SetDisplayField(phase == PresentPhase::field_odd);
+  s.renderer->ComposeFrame(s.frame, hwgs::writeback::ComposeKind::Presentation);
+  s.presentedVblank = s.stats.flushes;
   s.composeTotalUs += s.renderer->Timings().composeUs;
   ++s.composedFrames;
   hwgs::present::FrameStamp stamp;
@@ -888,6 +927,15 @@ void Backend::present(PresentPhase phase) {
                                                     : hwgs::present::Phase::Progressive;
   stamp.hasImage = s.frame.valid;
   s.scheduler.SubmitFrame(stamp);
+  return true;
+}
+
+void Backend::present_slot() {
+  // One host present opportunity: the scheduler decides new, held or nothing. A host clock running faster
+  // than the guest (VRR, 120/144 Hz; TASK-082/TASK-045) calls this more often than end_frame(); it must be
+  // called from the thread that owns the queue (today the EE thread at VBlank).
+  Impl &s = *impl_;
+  if (!s.window || !s.swapchain || !s.renderer) return;
   const hwgs::present::Action action = s.scheduler.Tick();
   if (action == hwgs::present::Action::none) return;  // holding: the display keeps what it has
   if (action == hwgs::present::Action::presentNew) {
@@ -917,6 +965,13 @@ RenderCounters Backend::render_counters() const {
   out.writeback_pixels = c.writebackPixels;
   out.flat_deindexed = c.flatDeindexedPrimitives;
   out.sprites = c.spritesExpanded;
+  out.presentation_frames = c.presentationFrames;
+  out.blank_frames = c.blankFrames;
+  out.deinterlaced_frames = c.deinterlacedFrames;
+  out.interlace_offset_frames = c.interlaceOffsetFrames;
+  out.merge_alpha_from_texel = c.mergeAlphaFromTexel;
+  out.writeback_depth_words = c.writebackDepthWords;
+  out.fifo_overruns = c.fifoOverruns;
   return out;
 }
 

@@ -41,6 +41,12 @@ struct Counters {
     std::uint64_t writebackPixels = 0;          // changed frame words written back to the SLM (IN-335)
     std::uint64_t writebackDepthWords = 0;      // changed depth words written back to the SLM (IN-335)
     std::uint64_t fifoOverruns = 0;             // FIFO reads past the end of the LOCAL->HOST data (10.2)
+    // Output stage (13.7 counters and V-01-12).
+    std::uint64_t presentationFrames = 0;     // presentation composes with an image
+    std::uint64_t blankFrames = 0;            // VBlanks with no image (unknown mode or kept previous)
+    std::uint64_t deinterlacedFrames = 0;     // presentation composes that ran the 13.4 deinterlacer
+    std::uint64_t interlaceOffsetFrames = 0;  // presentation composes shifted by the 13.3 step 3 offset
+    std::uint64_t mergeAlphaFromTexel = 0;    // V-01-12: RC1 blended with MMOD = 0 over RC2 (both circuits)
     std::uint64_t flatDeindexedPrimitives = 0;  // IIP = 0 primitives (de-indexed, 03.2)
     std::uint64_t spritesExpanded = 0;
     std::uint64_t auxiliaryFrames = 0;        // render-only passes that restored guest memory
@@ -55,6 +61,22 @@ struct PassTimings {
     double executeUs = 0.0;
     double composeUs = 0.0;
     double executeGpuUs = 0.0;
+};
+
+// Which image a compose produces (12.9, 13.3, 13.4).
+//  - Reference: the merge of 13.3 without the interlace offset and without deinterlacing. It is the image
+//    the CPU reference composes and the one the donor's own decode matches (the `vram` dump source and the
+//    chapter 14.4 donor gates use it).
+//  - Presentation: what the window shows: the 13.3 step 3 field offset and the 13.4 deinterlacer driven by
+//    the VBlank field (`scanout` dump source). The deinterlacer is stateful, so a presentation compose is
+//    made at most once per VBlank.
+enum class ComposeKind : std::uint8_t { Reference, Presentation };
+
+// Output-stage settings from the options (GT4_HW_DEINTERLACE, GT4_HW_ANTIBLUR).
+struct OutputSettings {
+    display::DeinterlaceMode deinterlace = display::DeinterlaceMode::Auto;
+    bool bottomFieldFirst = false;
+    bool antiBlur = true;
 };
 
 // Output of the display path for one VBlank (13.1 to 13.3, no deinterlace, no post-fx yet).
@@ -122,8 +144,16 @@ public:
     // Composes the display image from the SLM and the display registers. ComposeFrame() writes into a
     // caller-owned buffer and keeps its capacity, so a steady frame rate does not reallocate 1.1 MiB
     // every VBlank; Compose() returns a fresh copy for tests and one-shot callers.
-    void ComposeFrame(FrameOutput &out);
-    FrameOutput Compose();
+    // The display layout (13.2) is computed once per VBlank (Flush), so several composes of the same VBlank
+    // (a dump and a present) see the same DBY history.
+    void ComposeFrame(FrameOutput &out, ComposeKind kind = ComposeKind::Reference);
+    FrameOutput Compose(ComposeKind kind = ComposeKind::Reference);
+
+    // Display field of the VBlank being closed (CSR.FIELD from the VSYNC record, 12.4, 13.3, 13.4).
+    void SetDisplayField(bool odd);
+    bool DisplayField() const;
+    void SetOutputSettings(const OutputSettings &settings);
+    const OutputSettings &GetOutputSettings() const;
 
     // Render-only pass with no guest-visible side effect (roadmap requirement 2, chapter 00 write-back
     // mode): the whole SLM is snapshotted on begin and restored on end, so transfers, draws and clears

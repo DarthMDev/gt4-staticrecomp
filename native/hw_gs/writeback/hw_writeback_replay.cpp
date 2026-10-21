@@ -6,7 +6,9 @@
 // Chapters 14.3 (replay) and 12.9 (frame dumps); the record formats are the ones cpuref_replay reads.
 //
 // Usage: hw_writeback_replay <capture> <out-dir> [--every N] [--slm-frame N] [--trace-frame N]
-//        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>]
+//        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>] [--compose reference|presentation]
+// --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
+// the default `auto`) instead of the reference image (12.9 `vram`, the CPU reference's image).
 // --slm-hashes writes "<frame> <16 hex digits>" per frame (the FNV-1a hash of the 4 MiB local memory),
 // the same format as hw_cpuref_replay, so the two paths can be compared in memory on every frame.
 // --trace-frame prints every batch of that frame (state, rectangle, vertices) whose rectangle overlaps
@@ -138,6 +140,7 @@ int main(int argc, char** argv) {
     std::uint64_t slmFrame = UINT64_MAX;  // the frame whose raw shadow local memory is dumped
     std::uint64_t traceFrame = UINT64_MAX;  // the frame whose batches are printed
     std::string slmHashPath;                // per-frame local memory hashes
+    writeback::ComposeKind composeKind = writeback::ComposeKind::Reference;
     PixelRect traceRect{0, 0, 2047, 2047};
     for (int i = 3; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--every") == 0) {
@@ -145,6 +148,13 @@ int main(int argc, char** argv) {
             if (value > 0) every = static_cast<std::uint64_t>(value);
         } else if (std::strcmp(argv[i], "--slm-frame") == 0) {
             slmFrame = static_cast<std::uint64_t>(std::strtoull(argv[i + 1], nullptr, 10));
+        } else if (std::strcmp(argv[i], "--compose") == 0) {
+            if (std::strcmp(argv[i + 1], "presentation") == 0) {
+                composeKind = writeback::ComposeKind::Presentation;
+            } else if (std::strcmp(argv[i + 1], "reference") != 0) {
+                std::fprintf(stderr, "--compose takes reference or presentation\n");
+                return 2;
+            }
         } else if (std::strcmp(argv[i], "--slm-hashes") == 0) {
             slmHashPath = argv[i + 1];
         } else if (std::strcmp(argv[i], "--trace-frame") == 0) {
@@ -221,7 +231,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    writeback::WritebackReplayTarget target(renderer);
+    writeback::WritebackReplayTarget target(renderer, composeKind);
     cpuref::ReplaySummary summary;
     std::uint64_t written = 0;
     const auto onFrame = [&](std::uint64_t frame, const cpuref::FrameImage& image) {

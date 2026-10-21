@@ -610,7 +610,15 @@ public:
     display::DisplayRegisters displayRegs_;
     std::array<uint32_t, 2> previousDby_{};
     std::array<uint8_t, 3> background_{};
-    std::optional<display::Image> lastImage_;
+    std::optional<display::Image> lastImage_;      // last reference image (KeepPrevious, 13.3)
+    std::optional<display::Image> lastPresented_;  // last presentation image (KeepPrevious, 13.3)
+    display::Deinterlacer deinterlacer_;           // 13.4 history (presentation only)
+    OutputSettings settings_;
+    bool oddField_ = false;                        // field of the VBlank being closed (12.4)
+    std::uint64_t vblanks_ = 0;                    // Flush() count: one per VBlank
+    std::uint64_t layoutVblank_ = 0;               // VBlank whose layout is cached in layout_
+    bool layoutValid_ = false;
+    display::DisplayLayout layout_;
     bool failed_ = false;
     std::string lastError_;
     Renderer::BatchObserver observer_;
@@ -674,9 +682,13 @@ void Renderer::ResetGs() {
     s.frontEnd_.GifReset(7u);
     s.memory_.ResetRead();
     s.displayRegs_ = {};
+    s.displayRegs_.anti_blur = s.settings_.antiBlur;
     s.previousDby_ = {};
     s.background_ = {};
     s.lastImage_.reset();
+    s.lastPresented_.reset();
+    s.deinterlacer_.clear_history();
+    s.layoutValid_ = false;
 }
 
 bool Renderer::BeginAuxiliaryFrame() {
@@ -742,15 +754,73 @@ void Renderer::Flush() {
     s.timingTotals_.executeUs += s.frameTimings_.executeUs;
     s.frameTimings_ = PassTimings{};
     ++s.timedFrames_;
+    ++s.vblanks_;  // the next compose computes this VBlank's display layout (13.2)
 }
 
-FrameOutput Renderer::Compose() {
+FrameOutput Renderer::Compose(ComposeKind kind) {
     FrameOutput out;
-    ComposeFrame(out);
+    ComposeFrame(out, kind);
     return out;
 }
 
-void Renderer::ComposeFrame(FrameOutput& out) {
+void Renderer::SetDisplayField(bool odd) { impl_->oddField_ = odd; }
+
+bool Renderer::DisplayField() const { return impl_->oddField_; }
+
+void Renderer::SetOutputSettings(const OutputSettings& settings) {
+    impl_->settings_ = settings;
+    impl_->displayRegs_.anti_blur = settings.antiBlur;
+}
+
+const OutputSettings& Renderer::GetOutputSettings() const { return impl_->settings_; }
+
+namespace {
+
+void CopyImage(const display::Image& image, FrameOutput& out) {
+    out.valid = image.width > 0 && image.height > 0;
+    out.width = image.width;
+    out.height = image.height;
+    out.pixels.clear();
+    out.pixels.reserve(image.pixels.size());
+    for (const display::Rgba8& p : image.pixels) {
+        out.pixels.push_back(static_cast<uint32_t>(p.r) | (static_cast<uint32_t>(p.g) << 8) |
+                             (static_cast<uint32_t>(p.b) << 16) | (static_cast<uint32_t>(p.a) << 24));
+    }
+}
+
+// One circuit's source rectangle read from the SLM (13.2, 13.3). CT24 alpha is 0x80 (IN-313).
+display::Image ReadCircuit(const memory::LocalMemory& local, const display::CircuitRect& circuit) {
+    display::Image image(circuit.read_width, circuit.read_height);
+    const auto psm = memory::decodePsm(circuit.psm);
+    if (!psm) return image;
+    const memory::BufferView view{memory::blockOfPage(circuit.fbp), circuit.fbw, *psm};
+    const pixel::FrameFormat format = [&] {
+        switch (circuit.psm) {
+            case 0x01: return pixel::FrameFormat::Ct24;
+            case 0x02:
+            case 0x0A: return pixel::FrameFormat::Ct16;
+            default: return pixel::FrameFormat::Ct32;
+        }
+    }();
+    for (uint32_t y = 0; y < circuit.read_height; ++y) {
+        for (uint32_t x = 0; x < circuit.read_width; ++x) {
+            const uint32_t sx = static_cast<uint32_t>(circuit.dbx + static_cast<int32_t>(x)) & 2047u;
+            const uint32_t sy = static_cast<uint32_t>(circuit.dby + static_cast<int32_t>(y)) & 2047u;
+            const uint32_t stored = local.readPixel(view, sx, sy);
+            const pixel::Colour colour = pixel::frame_word_to_colour(pixel::unpack_frame_word(format, stored));
+            display::Rgba8& dst = image.at(x, y);
+            dst.r = static_cast<uint8_t>(colour.r);
+            dst.g = static_cast<uint8_t>(colour.g);
+            dst.b = static_cast<uint8_t>(colour.b);
+            dst.a = format == pixel::FrameFormat::Ct24 ? 0x80 : static_cast<uint8_t>(colour.a);
+        }
+    }
+    return image;
+}
+
+}  // namespace
+
+void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
     Impl& s = *impl_;
     out.valid = false;
     out.width = 0;
@@ -758,85 +828,93 @@ void Renderer::ComposeFrame(FrameOutput& out) {
     double composeUs = 0.0;
     {
         StageTimer timer(composeUs);
+        // 13.2 once per VBlank: compute_layout advances the DBY history, so a second compose of the
+        // same VBlank (a dump next to a present) must reuse the layout instead of recomputing it.
+        if (s.layoutVblank_ != s.vblanks_ || !s.layoutValid_) {
+            s.layout_ = display::compute_layout(s.displayRegs_, s.previousDby_);
+            s.layoutVblank_ = s.vblanks_;
+            s.layoutValid_ = true;
+        }
+        const display::DisplayLayout& layout = s.layout_;
+        const bool presentation = kind == ComposeKind::Presentation;
+        const auto blank = [&] {
+            if (presentation) {
+                s.counters.blankFrames++;
+                s.deinterlacer_.clear_history();  // 13.4: no source, no stale history next time
+            }
+        };
         const auto body = [&] {
-    const display::DisplayLayout layout = display::compute_layout(s.displayRegs_, s.previousDby_);
-    if (!layout.valid) {
-        return;
-    }
-    const display::PmodeFields pmode = display::decode_pmode(s.displayRegs_.pmode);
-    std::array<display::Image, 2> sources{};
-    std::array<bool, 2> available{false, false};
-    for (std::size_t i = 0; i < 2; ++i) {
-        const display::CircuitRect& circuit = layout.circuits[i];
-        if (!circuit.enabled || circuit.read_width == 0 || circuit.read_height == 0) continue;
-        display::Image image(circuit.read_width, circuit.read_height);
-        const auto psm = memory::decodePsm(circuit.psm);
-        if (psm) {
-            const memory::BufferView view{memory::blockOfPage(circuit.fbp), circuit.fbw, *psm};
-            const pixel::FrameFormat format = [&] {
-                switch (circuit.psm) {
-                    case 0x01: return pixel::FrameFormat::Ct24;
-                    case 0x02:
-                    case 0x0A: return pixel::FrameFormat::Ct16;
-                    default: return pixel::FrameFormat::Ct32;
+            if (!layout.valid) {
+                blank();
+                return;
+            }
+            const display::PmodeFields pmode = display::decode_pmode(s.displayRegs_.pmode);
+            std::array<display::Image, 2> sources{};
+            std::array<bool, 2> available{false, false};
+            for (std::size_t i = 0; i < 2; ++i) {
+                const display::CircuitRect& circuit = layout.circuits[i];
+                if (!circuit.enabled || circuit.read_width == 0 || circuit.read_height == 0) continue;
+                sources[i] = ReadCircuit(s.memory_.Local(), circuit);
+                available[i] = true;
+            }
+            const display::MergePlan plan =
+                display::plan_merge(pmode, layout.circuits[0], layout.circuits[1], available[0], available[1]);
+            if (plan.outcome == display::MergeOutcome::KeepPrevious) {
+                // 13.3: a circuit is enabled without a source; nothing new this VBlank, previous image kept.
+                const std::optional<display::Image>& kept = presentation ? s.lastPresented_ : s.lastImage_;
+                if (kept) CopyImage(*kept, out);
+                blank();
+                return;
+            }
+            // Effective deinterlace (13.4). The reference image never deinterlaces (it is the donor decode).
+            display::DeinterlaceMode effective = display::DeinterlaceMode::Off;
+            if (presentation) {
+                effective = s.settings_.deinterlace == display::DeinterlaceMode::Auto
+                                ? display::resolve_auto_deinterlace(layout, layout.ffmd, s.displayRegs_.scanmsk_active)
+                                : s.settings_.deinterlace;
+            }
+            const int fieldPhase = (s.oddField_ ? 1 : 0) ^ (s.settings_.bottomFieldFirst ? 1 : 0);
+            const int32_t offsetRows =
+                presentation ? display::interlace_offset_rows(layout.really_interlaced, layout.ffmd, effective, 1,
+                                                              fieldPhase)
+                             : 0;
+            const display::OutputSize size =
+                display::merge_output_size(layout, effective == display::DeinterlaceMode::Off, 1);
+            const display::SourcePlacement rc1{available[0] ? &sources[0] : nullptr, layout.circuits[0].screen_x,
+                                               layout.circuits[0].screen_y,
+                                               static_cast<int32_t>(layout.circuits[0].display_width),
+                                               static_cast<int32_t>(layout.circuits[0].display_height)};
+            const display::SourcePlacement rc2{available[1] ? &sources[1] : nullptr, layout.circuits[1].screen_x,
+                                               layout.circuits[1].screen_y,
+                                               static_cast<int32_t>(layout.circuits[1].display_width),
+                                               static_cast<int32_t>(layout.circuits[1].display_height)};
+            display::Image merged = display::compose_merge(plan, pmode, s.background_[0], s.background_[1],
+                                                           s.background_[2], size.width, size.height, 1, offsetRows,
+                                                           rc1, rc2);
+            if (presentation) {
+                if (plan.use_rc1 && plan.use_rc2 && !pmode.mmod) s.counters.mergeAlphaFromTexel++;  // V-01-12
+                if (offsetRows != 0) s.counters.interlaceOffsetFrames++;
+                const bool anySource = available[0] || available[1];
+                const bool runs = anySource && layout.really_interlaced && effective != display::DeinterlaceMode::Off;
+                if (runs) {
+                    merged = s.deinterlacer_.process(merged, s.oddField_ ? 1 : 0, effective,
+                                                     s.settings_.bottomFieldFirst, 1);
+                    s.counters.deinterlacedFrames++;
+                } else if (!anySource) {
+                    s.deinterlacer_.clear_history();
                 }
-            }();
-            for (uint32_t y = 0; y < circuit.read_height; ++y) {
-                for (uint32_t x = 0; x < circuit.read_width; ++x) {
-                    const uint32_t sx = static_cast<uint32_t>(circuit.dbx + static_cast<int32_t>(x)) & 2047u;
-                    const uint32_t sy = static_cast<uint32_t>(circuit.dby + static_cast<int32_t>(y)) & 2047u;
-                    const uint32_t stored = s.memory_.Local().readPixel(view, sx, sy);
-                    const pixel::Colour colour = pixel::frame_word_to_colour(pixel::unpack_frame_word(format, stored));
-                    display::Rgba8& dst = image.at(x, y);
-                    dst.r = static_cast<uint8_t>(colour.r);
-                    dst.g = static_cast<uint8_t>(colour.g);
-                    dst.b = static_cast<uint8_t>(colour.b);
-                    dst.a = format == pixel::FrameFormat::Ct24 ? 0x80 : static_cast<uint8_t>(colour.a);
+                s.counters.presentationFrames++;
+            }
+            CopyImage(merged, out);
+            if (!s.auxiliary_) {
+                // An auxiliary frame never replaces the guest's display history.
+                if (presentation) {
+                    s.lastPresented_ = std::move(merged);
+                } else {
+                    s.lastImage_ = std::move(merged);
                 }
             }
-        }
-        sources[i] = std::move(image);
-        available[i] = true;
-    }
-    const display::MergePlan plan =
-        display::plan_merge(pmode, layout.circuits[0], layout.circuits[1], available[0], available[1]);
-    if (plan.outcome == display::MergeOutcome::KeepPrevious) {
-        if (s.lastImage_) {
-            out.valid = true;
-            out.width = s.lastImage_->width;
-            out.height = s.lastImage_->height;
-            out.pixels.clear();
-            for (const display::Rgba8& p : s.lastImage_->pixels) {
-                out.pixels.push_back(static_cast<uint32_t>(p.r) | (static_cast<uint32_t>(p.g) << 8) |
-                                     (static_cast<uint32_t>(p.b) << 16) | (static_cast<uint32_t>(p.a) << 24));
-            }
-        }
-        return;
-    }
-    const display::OutputSize size = display::merge_output_size(layout, true, 1);
-    const display::SourcePlacement rc1{available[0] ? &sources[0] : nullptr, layout.circuits[0].screen_x,
-                                       layout.circuits[0].screen_y,
-                                       static_cast<int32_t>(layout.circuits[0].display_width),
-                                       static_cast<int32_t>(layout.circuits[0].display_height)};
-    const display::SourcePlacement rc2{available[1] ? &sources[1] : nullptr, layout.circuits[1].screen_x,
-                                       layout.circuits[1].screen_y,
-                                       static_cast<int32_t>(layout.circuits[1].display_width),
-                                       static_cast<int32_t>(layout.circuits[1].display_height)};
-    display::Image merged = display::compose_merge(plan, pmode, s.background_[0], s.background_[1], s.background_[2],
-                                                   size.width, size.height, 1, 0, rc1, rc2);
-    out.valid = size.width > 0 && size.height > 0;
-    out.width = merged.width;
-    out.height = merged.height;
-    out.pixels.clear();
-    out.pixels.reserve(merged.pixels.size());
-    for (const display::Rgba8& p : merged.pixels) {
-        out.pixels.push_back(static_cast<uint32_t>(p.r) | (static_cast<uint32_t>(p.g) << 8) |
-                             (static_cast<uint32_t>(p.b) << 16) | (static_cast<uint32_t>(p.a) << 24));
-    }
-    if (!s.auxiliary_) {
-        s.lastImage_ = std::move(merged);  // an auxiliary frame never replaces the guest's history
-    }
-        };  // end of the timed compose body
+        };
         body();
     }
     s.timings_.composeUs = composeUs;
