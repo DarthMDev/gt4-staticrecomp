@@ -23,6 +23,7 @@ foreach(hw_test IN ITEMS
     hw_v01_4_z_unaligned
     hw_reinterp_maps
     hw_format_predicates
-    hw_transfers)
+    hw_transfers
+    hw_rect_matches_pixels)
   add_test(NAME ${hw_test} COMMAND hw_gs_memory_tests ${hw_test})
 endforeach()

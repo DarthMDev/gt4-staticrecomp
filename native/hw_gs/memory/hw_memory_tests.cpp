@@ -12,6 +12,7 @@
 // hw_swizzle_matches_donor replays. The donor is used only as an output oracle;
 // no donor code is compiled into this library or these fixtures.
 
+#include <algorithm>
 #include "hw_memory.hpp"
 
 #include <cstdint>
@@ -491,6 +492,49 @@ void testTransfers() {
     HW_CHECK(readbackQwords(0x05, 16, 16) == std::optional<std::uint64_t>(64), "unknown selector counts as 32 bpp");
 }
 
+// readRect/writeRect (M7 performance, IN-343) must address exactly like readPixel/writePixel: for every PSM,
+// several buffer widths and unaligned bases (Z formats included), a rectangle read with readRect equals the
+// per-pixel reads, and writing it with writeRect leaves memory byte-identical to per-pixel writes.
+void testRectMatchesPixels() {
+    const std::uint32_t bases[] = {0u, 5u, 37u, 16000u};
+    const std::uint32_t widths[] = {1u, 3u, 10u};
+    for (Psm psm : kAllPsms) {
+        for (std::uint32_t base : bases) {
+            for (std::uint32_t bw : widths) {
+                LocalMemory memory;
+                std::uint64_t state = 0x5EED0000ull + static_cast<std::uint32_t>(psm) * 131u + base * 7u + bw;
+                for (std::uint32_t address = 0; address < kLocalMemoryBytes; address += 4) {
+                    const std::uint32_t word = static_cast<std::uint32_t>(nextRandom(state));
+                    for (std::uint32_t b = 0; b < 4; ++b) memory.setByte(address + b, static_cast<std::uint8_t>(word >> (8 * b)));
+                }
+                const BufferView view{base, bw, psm};
+                const std::uint32_t x0 = 3, y0 = 5, width = 150, height = 70;
+                std::vector<std::uint32_t> rect(static_cast<std::size_t>(width) * height);
+                memory.readRect(view, x0, y0, width, height, rect.data());
+                std::size_t mismatches = 0;
+                for (std::uint32_t y = 0; y < height; ++y) {
+                    for (std::uint32_t x = 0; x < width; ++x) {
+                        if (rect[static_cast<std::size_t>(y) * width + x] != memory.readPixel(view, x0 + x, y0 + y)) ++mismatches;
+                    }
+                }
+                HW_CHECK(mismatches == 0, "readRect equals readPixel");
+                std::vector<std::uint32_t> values(rect.size());
+                for (std::uint32_t& v : values) v = static_cast<std::uint32_t>(nextRandom(state));
+                LocalMemory byPixel = memory;
+                LocalMemory byRect = memory;
+                for (std::uint32_t y = 0; y < height; ++y) {
+                    for (std::uint32_t x = 0; x < width; ++x) {
+                        byPixel.writePixel(view, x0 + x, y0 + y, values[static_cast<std::size_t>(y) * width + x]);
+                    }
+                }
+                byRect.writeRect(view, x0, y0, width, height, values.data());
+                HW_CHECK(std::equal(byPixel.bytes().begin(), byPixel.bytes().end(), byRect.bytes().begin()),
+                         "writeRect equals writePixel");
+            }
+        }
+    }
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -507,6 +551,7 @@ int main(int argc, char** argv) {
         {"hw_reinterp_maps", testReinterpMapsBruteForce},
         {"hw_format_predicates", testFormatPredicates},
         {"hw_transfers", testTransfers},
+        {"hw_rect_matches_pixels", testRectMatchesPixels},
     };
     const std::string requested = argc > 1 ? argv[1] : "";
     int ran = 0;

@@ -315,8 +315,10 @@ int main(int argc, char** argv) {
     {
         const writeback::PassTimings& totals = renderer.TimingTotals();
         const double frames = renderer.TimedFrames() ? static_cast<double>(renderer.TimedFrames()) : 1.0;
-        std::printf("per_frame_ms translate=%.2f execute=%.2f\n", totals.translateUs / frames / 1000.0,
-                    totals.executeUs / frames / 1000.0);
+        std::printf("per_frame_ms translate=%.2f execute=%.2f writeback=%.2f load=%.2f decode=%.2f\n",
+                    totals.translateUs / frames / 1000.0, totals.executeUs / frames / 1000.0,
+                    counters.cacheWritebackUs / frames / 1000.0, counters.cacheLoadUs / frames / 1000.0,
+                    counters.textureDecodeUs / frames / 1000.0);
     }
     std::printf("images_written=%llu\n", static_cast<unsigned long long>(written));
     if (renderer.Failed()) {

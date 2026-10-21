@@ -94,7 +94,7 @@ foreach(t IN ITEMS hw_video_mode hw_pcrtc_rects hw_pcrtc_offsets hw_merge_plan h
 endforeach()
 
 foreach(t IN ITEMS hw_swizzle_matches_donor hw_roundtrip_psms hw_psm_layout hw_v01_3_t8_lanes
-        hw_v01_4_z_unaligned hw_reinterp_maps hw_format_predicates hw_transfers)
+        hw_v01_4_z_unaligned hw_reinterp_maps hw_format_predicates hw_transfers hw_rect_matches_pixels)
     add_test(NAME memory_${t} COMMAND hw_memory_tests ${t})
 endforeach()
 

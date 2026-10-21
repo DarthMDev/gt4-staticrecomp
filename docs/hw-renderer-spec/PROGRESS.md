@@ -294,3 +294,14 @@ while a game is open, and never touches the owner's card.
   distribution-pin error; `test_hw_presentation_capture.py` passes.
 - Next M7 steps: display compose read from the resident target (no per-VBlank write-back), two colour slots for the
   double buffer, then target lists per chapter 05; M9: one draw per primitive with barriers is the next cost.
+
+## 2026-10-21 memory addressing performance (local slice232, IN-343) - Claude
+
+- Same addressing, faster: table lookups for the PSM description and the in-page layout, 4-byte slot accesses,
+  row-wise `readRect`/`writeRect` used by target loads, write-backs, texture decode and compose.
+  `memory_hw_rect_matches_pixels` proves equality with the per-pixel functions on every PSM.
+- Headless `GT4_RENDERER=hw`, 4,200 frames: 416 s (slice228) -> 152 s (slice231) -> **76 s**, translate 6.5 ms and
+  execute 3.2 ms per frame, 42/42 dumps byte-identical to slice228. Menu capture memory hashes unchanged.
+- Tests: 180 HWR/CPU-library CTests pass (Q-07 skip); default renderer 42/42 = slice214, card copy unchanged.
+- Next: an owner look at the speed and the menus (`build\hwr-play.ps1`), then the remaining M7 items (target lists,
+  display from targets, preload, dirty lists, clears, GPU moves) and M9 batching.

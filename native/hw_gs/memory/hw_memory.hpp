@@ -165,6 +165,14 @@ public:
     std::uint32_t readPixel(const BufferView& buffer, std::uint32_t x, std::uint32_t y) const;
     void writePixel(const BufferView& buffer, std::uint32_t x, std::uint32_t y, std::uint32_t value);
 
+    // Rectangle forms of readPixel/writePixel (same addressing, the AfterAdd Z rule): `width` x `height` pixels
+    // from (x0, y0), row-major in `values`. Coordinates must be below 2048 so no wrap is involved; the caller
+    // falls back to readPixel otherwise. They walk the page table once per row instead of once per pixel.
+    void readRect(const BufferView& buffer, std::uint32_t x0, std::uint32_t y0, std::uint32_t width,
+                  std::uint32_t height, std::uint32_t* values) const;
+    void writeRect(const BufferView& buffer, std::uint32_t x0, std::uint32_t y0, std::uint32_t width,
+                   std::uint32_t height, const std::uint32_t* values);
+
 private:
     std::vector<std::uint8_t> bytes_;
 };

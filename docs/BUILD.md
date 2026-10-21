@@ -1959,3 +1959,13 @@ Incremental rebuild of the slice228 tree. No pin or launcher change.
   42 dumps byte-identical to slice228, card copy unchanged (`private/slice231-evidence/hwr-dumps-cache/`).
 - Confirmed: 179 HWR/CPU-library CTests pass (Q-07 skipped); Python 631 tests, 46 skips, only the expected
   distribution-pin error.
+
+## Local slice232 - memory addressing performance (02.7, 13.2, IN-343)
+
+Incremental rebuild of the slice228 tree. No pin or launcher change.
+
+- Confirmed: new `memory_hw_rect_matches_pixels` passes; 180 HWR/CPU-library CTests pass (Q-07 skipped).
+- Confirmed: `GT4_RENDERER=hw` headless 4,200 frames (cache mode): 0 faults, 75.8 s, 42 dumps byte-identical to
+  slice228, card copy unchanged (`private/slice232-evidence/hwr-dumps-cache/`). Default renderer 42/42 = slice214
+  (`private/slice232-evidence/default-parity/`).
+- Confirmed: menu capture memory hashes per frame unchanged (cache mode); per frame translate 5.5 ms, execute 2.7 ms.

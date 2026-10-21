@@ -48,6 +48,10 @@ struct Counters {
     std::uint64_t cacheLoadWords = 0;
     std::uint64_t cacheWritebacks = 0;        // drawn rectangles stored back into the shadow memory
     std::uint64_t cacheWritebackWords = 0;
+    // CPU microseconds spent in the M7 coherence work and the texture decode (report only, per session).
+    double cacheWritebackUs = 0.0;
+    double cacheLoadUs = 0.0;
+    double textureDecodeUs = 0.0;
     std::uint64_t texturesCached = 0;         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
     std::uint64_t presentationFrames = 0;     // presentation composes with an image

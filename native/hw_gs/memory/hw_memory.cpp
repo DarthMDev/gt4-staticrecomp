@@ -7,7 +7,10 @@
 #include "hw_memory.hpp"
 
 #include <algorithm>
+#include <array>
+#include <bit>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 namespace hwgs::memory {
@@ -302,11 +305,19 @@ bool isValidPsmCode(std::uint32_t code) {
     return decodePsm(code).has_value();
 }
 
-const PsmInfo& psmInfo(Psm psm) {
-    for (const PsmInfo& info : kPsmTable) {
-        if (info.psm == psm) return info;
+// Index of each PSM code in kPsmTable (codes are 6-bit), built once. psmInfo() runs for every pixel access,
+// so it is a table lookup rather than a search.
+constexpr std::array<std::uint8_t, 64> kPsmTableIndex = [] {
+    std::array<std::uint8_t, 64> table{};
+    for (std::size_t i = 0; i < kPsmTable.size(); ++i) {
+        table[static_cast<std::uint8_t>(kPsmTable[i].psm) & kPsmCodeMask] = static_cast<std::uint8_t>(i);
     }
-    return kPsmTable.front();  // unreachable for valid Psm values
+    return table;
+}();
+
+const PsmInfo& psmInfo(Psm psm) {
+    const PsmInfo& info = kPsmTable[kPsmTableIndex[static_cast<std::uint8_t>(psm) & kPsmCodeMask]];
+    return info.psm == psm ? info : kPsmTable.front();  // unreachable for valid Psm values
 }
 
 std::uint8_t PixelSlot::bytesCovered() const {
@@ -318,11 +329,35 @@ std::uint32_t pagesPerRow(std::uint32_t bufferWidth, Psm psm) {
     return std::max<std::uint32_t>(1u, bufferWidth * 64u / pageWidth);
 }
 
+// The in-page location of every pixel of a page, per PSM, computed once at start-up from locateInPage (the
+// same result, looked up instead of recomputed for every pixel access).
+struct InPageTables {
+    std::array<std::vector<InPageLocation>, kPsmTable.size()> perPsm;
+    InPageTables() {
+        for (std::size_t index = 0; index < kPsmTable.size(); ++index) {
+            const PsmInfo& info = kPsmTable[index];
+            std::vector<InPageLocation>& table = perPsm[index];
+            table.resize(static_cast<std::size_t>(info.pageWidth) * info.pageHeight);
+            for (std::uint32_t py = 0; py < info.pageHeight; ++py) {
+                for (std::uint32_t px = 0; px < info.pageWidth; ++px) {
+                    table[static_cast<std::size_t>(py) * info.pageWidth + px] = locateInPage(info, px, py);
+                }
+            }
+        }
+    }
+};
+const InPageTables kInPageTables;
+
+inline const InPageLocation& inPageLocation(const PsmInfo& info, std::uint32_t x, std::uint32_t y) {
+    const std::size_t index = static_cast<std::size_t>(&info - kPsmTable.data());
+    return kInPageTables.perPsm[index][static_cast<std::size_t>(y) * info.pageWidth + x];
+}
+
 PixelSlot pixelSlot(const BufferView& buffer, std::uint32_t x, std::uint32_t y, ZBlockXorRule zRule) {
     const PsmInfo& info = psmInfo(buffer.psm);
-    const std::uint32_t perRow = pagesPerRow(buffer.bufferWidth, buffer.psm);
+    const std::uint32_t perRow = std::max<std::uint32_t>(1u, buffer.bufferWidth * 64u / info.pageWidth);
     const std::uint32_t page = (y / info.pageHeight) * perRow + (x / info.pageWidth);
-    const InPageLocation inPage = locateInPage(info, x % info.pageWidth, y % info.pageHeight);
+    const InPageLocation& inPage = inPageLocation(info, x % info.pageWidth, y % info.pageHeight);
 
     const std::uint32_t pageBlock = buffer.basePointer + kBlocksPerPage * page;
     std::uint32_t block = 0;
@@ -362,11 +397,28 @@ void LocalMemory::setByte(std::uint32_t address, std::uint8_t value) {
 }
 
 std::uint32_t LocalMemory::readSlot(const PixelSlot& slot) const {
+    if (slot.byteOffset + 4u <= kLocalMemoryBytes) {
+        // Every storage unit (4 to 32 bits) lies in the 4 bytes from byteOffset: one little-endian load.
+        std::uint32_t word = 0;
+        std::memcpy(&word, bytes_.data() + slot.byteOffset, sizeof(word));
+        return static_cast<std::uint32_t>((static_cast<std::uint64_t>(word) >> slot.bitShift) & bitMask(slot.bitWidth));
+    }
     const std::uint64_t raw = readStorageBytes(bytes_, slot.byteOffset, slot.bytesCovered());
     return static_cast<std::uint32_t>((raw >> slot.bitShift) & bitMask(slot.bitWidth));
 }
 
 void LocalMemory::writeSlot(const PixelSlot& slot, std::uint32_t value) {
+    if (slot.byteOffset + 4u <= kLocalMemoryBytes) {
+        // Read-modify-write of the 4 bytes from byteOffset; bytes outside the field are stored unchanged.
+        std::uint32_t word = 0;
+        std::memcpy(&word, bytes_.data() + slot.byteOffset, sizeof(word));
+        const std::uint64_t fieldMask = bitMask(slot.bitWidth) << slot.bitShift;
+        const std::uint64_t merged = (static_cast<std::uint64_t>(word) & ~fieldMask) |
+                                     ((static_cast<std::uint64_t>(value) & bitMask(slot.bitWidth)) << slot.bitShift);
+        word = static_cast<std::uint32_t>(merged);
+        std::memcpy(bytes_.data() + slot.byteOffset, &word, sizeof(word));
+        return;
+    }
     const std::uint8_t count = slot.bytesCovered();
     std::uint64_t raw = readStorageBytes(bytes_, slot.byteOffset, count);
     const std::uint64_t fieldMask = bitMask(slot.bitWidth) << slot.bitShift;
@@ -378,6 +430,68 @@ void LocalMemory::writeSlot(const PixelSlot& slot, std::uint32_t value) {
 
 std::uint32_t LocalMemory::readPixel(const BufferView& buffer, std::uint32_t x, std::uint32_t y) const {
     return readSlot(pixelSlot(buffer, x, y));
+}
+
+namespace {
+
+// Slot of (x, y) from a precomputed row: the same arithmetic as pixelSlot with the AfterAdd Z rule.
+struct RowWalker {
+    const PsmInfo& info;
+    const BufferView& buffer;
+    std::uint32_t perRow;
+    std::uint32_t widthShift;
+    std::uint32_t heightShift;
+
+    RowWalker(const PsmInfo& psmInfoRef, const BufferView& view)
+        : info(psmInfoRef), buffer(view),
+          perRow(std::max<std::uint32_t>(1u, view.bufferWidth * 64u / psmInfoRef.pageWidth)),
+          widthShift(static_cast<std::uint32_t>(std::countr_zero(static_cast<std::uint32_t>(psmInfoRef.pageWidth)))),
+          heightShift(static_cast<std::uint32_t>(std::countr_zero(static_cast<std::uint32_t>(psmInfoRef.pageHeight)))) {}
+
+    PixelSlot slot(std::uint32_t x, std::uint32_t y, const InPageLocation* rowTable) const {
+        const std::uint32_t page = (y >> heightShift) * perRow + (x >> widthShift);
+        const InPageLocation& inPage = rowTable[x & (info.pageWidth - 1u)];
+        std::uint32_t block = buffer.basePointer + kBlocksPerPage * page + inPage.tableBlock;
+        if (info.zBlockXorApplies) block ^= kZBlockXor;
+        block %= kBlocksTotal;
+        PixelSlot result{};
+        result.byteOffset = (block * kBlockBytes + inPage.byteInBlock) & kLocalMemoryMask;
+        result.bitShift = inPage.bitShift;
+        result.bitWidth = inPage.bitWidth;
+        return result;
+    }
+};
+
+}  // namespace
+
+void LocalMemory::readRect(const BufferView& buffer, std::uint32_t x0, std::uint32_t y0, std::uint32_t width,
+                           std::uint32_t height, std::uint32_t* values) const {
+    const PsmInfo& info = psmInfo(buffer.psm);
+    const RowWalker walker(info, buffer);
+    const std::size_t tableIndex = static_cast<std::size_t>(&info - kPsmTable.data());
+    for (std::uint32_t row = 0; row < height; ++row) {
+        const std::uint32_t y = y0 + row;
+        const InPageLocation* rowTable =
+            kInPageTables.perPsm[tableIndex].data() + static_cast<std::size_t>(y & (info.pageHeight - 1u)) * info.pageWidth;
+        for (std::uint32_t column = 0; column < width; ++column) {
+            *values++ = readSlot(walker.slot(x0 + column, y, rowTable));
+        }
+    }
+}
+
+void LocalMemory::writeRect(const BufferView& buffer, std::uint32_t x0, std::uint32_t y0, std::uint32_t width,
+                            std::uint32_t height, const std::uint32_t* values) {
+    const PsmInfo& info = psmInfo(buffer.psm);
+    const RowWalker walker(info, buffer);
+    const std::size_t tableIndex = static_cast<std::size_t>(&info - kPsmTable.data());
+    for (std::uint32_t row = 0; row < height; ++row) {
+        const std::uint32_t y = y0 + row;
+        const InPageLocation* rowTable =
+            kInPageTables.perPsm[tableIndex].data() + static_cast<std::size_t>(y & (info.pageHeight - 1u)) * info.pageWidth;
+        for (std::uint32_t column = 0; column < width; ++column) {
+            writeSlot(walker.slot(x0 + column, y, rowTable), *values++);
+        }
+    }
 }
 
 void LocalMemory::writePixel(const BufferView& buffer, std::uint32_t x, std::uint32_t y, std::uint32_t value) {

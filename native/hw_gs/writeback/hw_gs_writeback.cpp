@@ -182,9 +182,8 @@ bool BuildTexture(const BatchState& state, const clut::ClutUnit& clut, TextureUn
     return true;
 }
 
-// Colour of one texel after TEXA and palette expansion, packed RGBA8 (the GPU's texel format).
-uint32_t DecodeTexel(const memory::LocalMemory& local, const TextureUnit& t, uint32_t x, uint32_t y) {
-    const uint32_t value = local.readPixel(t.view, x, y);
+// Colour of one stored texel value after TEXA and palette expansion, packed RGBA8 (the GPU's texel format).
+uint32_t ExpandTexel(const TextureUnit& t, uint32_t value) {
     switch (t.cls) {
         case TexClass::Ct32:
             return value;
@@ -231,6 +230,24 @@ bool TextureExtent(const TextureUnit& t, uint32_t& width, uint32_t& height) {
     }
     return width <= gpu::kGpuMaxTextureSide && height <= gpu::kGpuMaxTextureSide;
 }
+
+// Wall-clock stage timer of one pass (roadmap requirement 4). CPU only: the GPU timestamp pool is a
+// later step, and PassTimings::executeGpuUs stays 0 so a reader never mistakes it for a measurement.
+class StageTimer {
+public:
+    explicit StageTimer(double& accumulator) : accumulator_(accumulator), start_(Clock::now()) {}
+    ~StageTimer() {
+        const std::chrono::duration<double, std::micro> elapsed = Clock::now() - start_;
+        accumulator_ += elapsed.count();
+    }
+    StageTimer(const StageTimer&) = delete;
+    StageTimer& operator=(const StageTimer&) = delete;
+
+private:
+    using Clock = std::chrono::steady_clock;
+    double& accumulator_;
+    Clock::time_point start_;
+};
 
 // Called just before the texels of a batch are read from the shadow memory (the M7 resident targets write
 // back drawn pixels that overlap the texture first, IN-340).
@@ -346,12 +363,10 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
             out.texels = *cached;
             counters.texturesCached++;
         } else {
+            StageTimer decodeTimer(counters.textureDecodeUs);
             out.texels.resize(static_cast<size_t>(width) * height);
-            for (uint32_t y = 0; y < height; ++y) {
-                for (uint32_t x = 0; x < width; ++x) {
-                    out.texels[static_cast<size_t>(y) * width + x] = DecodeTexel(local, texture, x, y);
-                }
-            }
+            local.readRect(texture.view, 0, 0, width, height, out.texels.data());  // stored values (IN-343)
+            for (uint32_t& texel : out.texels) texel = ExpandTexel(texture, texel);
             counters.texturesDecoded++;
             counters.texelsDecoded += static_cast<uint64_t>(width) * height;
             if (textureCache) textureCache->store(key, texture.view, out.texels);
@@ -562,23 +577,6 @@ bool DepthUsed(const gpu::GpuPixelState& st) {
     return testReads || st.fields[gpu::gpufield::Zmsk] == 0;
 }
 
-// Wall-clock stage timer of one pass (roadmap requirement 4). CPU only: the GPU timestamp pool is a
-// later step, and PassTimings::executeGpuUs stays 0 so a reader never mistakes it for a measurement.
-class StageTimer {
-public:
-    explicit StageTimer(double& accumulator) : accumulator_(accumulator), start_(Clock::now()) {}
-    ~StageTimer() {
-        const std::chrono::duration<double, std::micro> elapsed = Clock::now() - start_;
-        accumulator_ += elapsed.count();
-    }
-    StageTimer(const StageTimer&) = delete;
-    StageTimer& operator=(const StageTimer&) = delete;
-
-private:
-    using Clock = std::chrono::steady_clock;
-    double& accumulator_;
-    Clock::time_point start_;
-};
 
 } // namespace
 
@@ -621,13 +619,13 @@ bool ExecuteBatch(gpu::GpuDrawer &gpu, const BatchTranslation &t, memory::LocalM
         }
         chunk.frameWords.resize(words);
         chunk.depthWords.resize(words);
+        const uint32_t rectWidth = static_cast<uint32_t>(rectX1 - rectX0 + 1);
+        const uint32_t rectHeight = static_cast<uint32_t>(rectY1 - rectY0 + 1);
+        local.readRect(t.frameView, static_cast<uint32_t>(rectX0), static_cast<uint32_t>(rectY0), rectWidth, rectHeight,
+                       chunk.frameWords.data());
+        local.readRect(t.zView, static_cast<uint32_t>(rectX0), static_cast<uint32_t>(rectY0), rectWidth, rectHeight,
+                       chunk.depthWords.data());
         std::size_t index = 0;
-        for (int32_t y = rectY0; y <= rectY1; ++y) {
-            for (int32_t x = rectX0; x <= rectX1; ++x, ++index) {
-                chunk.frameWords[index] = local.readPixel(t.frameView, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
-                chunk.depthWords[index] = local.readPixel(t.zView, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
-            }
-        }
         const std::vector<uint32_t> frameBefore = chunk.frameWords;
         const std::vector<uint32_t> depthBefore = chunk.depthWords;
         if (!gpu.Execute(chunk, error)) return false;
@@ -804,6 +802,7 @@ public:
 
     void WriteBack(ResidentSlot& slot, bool depth) {
         if (slot.drawn.Empty() || failed_) return;
+        StageTimer timer(counters.cacheWritebackUs);
         const PixelRect r = slot.drawn;
         gpu::GpuChunk chunk;
         chunk.rectX0 = r.x0;
@@ -822,13 +821,9 @@ public:
             Fail(error);
             return;
         }
-        memory::LocalMemory& local = memory_.Local();
-        size_t index = 0;
-        for (int32_t y = r.y0; y <= r.y1; ++y) {
-            for (int32_t x = r.x0; x <= r.x1; ++x, ++index) {
-                local.writePixel(slot.view, static_cast<uint32_t>(x), static_cast<uint32_t>(y), data[index]);
-            }
-        }
+        memory_.Local().writeRect(slot.view, static_cast<uint32_t>(r.x0), static_cast<uint32_t>(r.y0),
+                                  static_cast<uint32_t>(r.x1 - r.x0 + 1), static_cast<uint32_t>(r.y1 - r.y0 + 1),
+                                  data.data());
         counters.cacheWritebacks++;
         counters.cacheWritebackWords += words;
         MarkWritten(SpanOfRect(slot.view, r));
@@ -873,6 +868,7 @@ public:
             slot.view = view;
         }
         if (Contains(slot.loaded, rect)) return;
+        StageTimer timer(counters.cacheLoadUs);
         // Grow the loaded rectangle. The shadow memory is made current first, so reloading the union from
         // it keeps every drawn pixel.
         WriteBack(slot, depth);
@@ -889,13 +885,9 @@ public:
         const size_t words = static_cast<size_t>(wanted.x1 - wanted.x0 + 1) * static_cast<size_t>(wanted.y1 - wanted.y0 + 1);
         std::vector<uint32_t>& data = depth ? chunk.depthWords : chunk.frameWords;
         data.resize(words);
-        const memory::LocalMemory& local = memory_.Local();
-        size_t index = 0;
-        for (int32_t y = wanted.y0; y <= wanted.y1; ++y) {
-            for (int32_t x = wanted.x0; x <= wanted.x1; ++x, ++index) {
-                data[index] = local.readPixel(view, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
-            }
-        }
+        memory_.Local().readRect(view, static_cast<uint32_t>(wanted.x0), static_cast<uint32_t>(wanted.y0),
+                                 static_cast<uint32_t>(wanted.x1 - wanted.x0 + 1),
+                                 static_cast<uint32_t>(wanted.y1 - wanted.y0 + 1), data.data());
         std::string error;
         if (!gpu_.Execute(chunk, error)) {
             Fail(error);
@@ -1269,11 +1261,20 @@ display::Image ReadCircuit(const memory::LocalMemory& local, const display::Circ
             default: return pixel::FrameFormat::Ct32;
         }
     }();
+    // Stored words of the read rectangle; readRect when it does not wrap at 2048 (IN-24), else per pixel.
+    std::vector<uint32_t> words(static_cast<size_t>(circuit.read_width) * circuit.read_height);
+    const bool wraps = circuit.dbx < 0 || circuit.dby < 0 ||
+                       static_cast<uint32_t>(circuit.dbx) + circuit.read_width > 2048u ||
+                       static_cast<uint32_t>(circuit.dby) + circuit.read_height > 2048u;
+    if (!wraps) {
+        local.readRect(view, static_cast<uint32_t>(circuit.dbx), static_cast<uint32_t>(circuit.dby), circuit.read_width,
+                       circuit.read_height, words.data());
+    }
     for (uint32_t y = 0; y < circuit.read_height; ++y) {
         for (uint32_t x = 0; x < circuit.read_width; ++x) {
             const uint32_t sx = static_cast<uint32_t>(circuit.dbx + static_cast<int32_t>(x)) & 2047u;
             const uint32_t sy = static_cast<uint32_t>(circuit.dby + static_cast<int32_t>(y)) & 2047u;
-            const uint32_t stored = local.readPixel(view, sx, sy);
+            const uint32_t stored = wraps ? local.readPixel(view, sx, sy) : words[static_cast<size_t>(y) * circuit.read_width + x];
             const pixel::Colour colour = pixel::frame_word_to_colour(pixel::unpack_frame_word(format, stored));
             display::Rgba8& dst = image.at(x, y);
             dst.r = static_cast<uint8_t>(colour.r);
