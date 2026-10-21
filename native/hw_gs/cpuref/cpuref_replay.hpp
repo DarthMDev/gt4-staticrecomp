@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 //
-// HWR CPU reference replay: parses GT4_PGS_CAPTURE streams (record layout in scripts/hw_capture.py)
-// and feeds them to the CPU reference renderer, one display image per 'V' record.
+// HWR CPU reference replay: parses legacy GT4_PGS_CAPTURE and native GSSTREAM v2 streams
+// and feeds them to the CPU reference renderer, one display image per frame end.
 // Copyright 2026 GT4Recomp contributors.
-// Written from docs/hw-renderer-spec (clean room, decision 0069): chapter 14.3 (M1 replay).
+// Written from the TASK-026 specification (docs/hw-renderer-spec): chapter 14.3 (M1 replay).
 #pragma once
 
 #include <cstdint>
@@ -24,6 +24,9 @@ struct ReplaySummary {
     uint64_t frames = 0;
     uint64_t framesWithImage = 0;
     uint64_t rejectedGifPackets = 0;  // GIF path 0 or odd sizes (IN-312)
+    uint64_t presentationControls = 0;  // Window/resize/cursor records have no CPU image effect.
+    uint64_t resets = 0;
+    uint64_t fieldsWithoutPhase = 0;  // v2 field-invalid records; initial phase is unspecified.
 };
 
 // Replays one capture stream. onFrame receives every frame end with the display result.
@@ -31,6 +34,11 @@ struct ReplaySummary {
 bool ReplayCapture(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
                    const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
                    std::string& error);
+
+// Native GSSTREAM v2 envelopes, from our MIT protocol (GS-STREAM-PROTOCOL sections 2, 6, 10).
+bool ReplayCaptureV2(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
+                     const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
+                     std::string& error);
 
 // Writes capture streams in the same record layout (used by the tests and synthetic captures).
 class CaptureWriter {

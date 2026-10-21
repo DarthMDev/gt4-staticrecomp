@@ -4,7 +4,7 @@
 // in the shadow local memory, and the display path composes the frame image from the
 // circuits (M4 to M6 of the plan, all on the CPU).
 // Copyright 2026 GT4Recomp contributors.
-// Written from docs/hw-renderer-spec (clean room, decision 0069): chapters 02, 01.7, 13.1 to 13.3.
+// Written from the TASK-026 specification (docs/hw-renderer-spec): chapters 02, 01.7, 13.1 to 13.3.
 #pragma once
 
 #include <array>
@@ -52,8 +52,19 @@ public:
     // Privileged write (guest address, 64-bit value). Returns false for unknown addresses.
     bool WritePrivileged(uint32_t address, uint64_t value);
 
-    // LOCAL->HOST FIFO read of up to qwords 64-bit words (10.2); empty when nothing is pending.
+    // LOCAL->HOST FIFO read of qwords 128-bit words (10.2); zeros and a fault on overrun.
+    // Replay resource limit: our producer splits requests at its 4 MiB + 64 KiB response area
+    // (GS-STREAM-PROTOCOL 6.4). Oversized direct calls return empty and count a fault.
+    static constexpr uint32_t kMaxFifoQwords = ((4u << 20) + 65536u) / 16u;
     std::vector<uint8_t> ReadFifo(uint32_t qwords);
+
+    // CSR reset keeps local memory; protocol hard reset additionally clears it (02.11).
+    void ResetGs(bool clearVram);
+    // CPU parser mask: bit 0 = PATH1, bit 1 = PATH2, bit 2 = PATH3 (02.1).
+    void ResetGif(uint32_t pathMask);
+    void SetDisplayField(bool odd) { csrField_ = odd; }
+    bool DisplayField() const { return csrField_; }
+    uint64_t fifoFaults = 0;
 
     // Ends a frame: flushes the batch, then composes the display image from the registers.
     FrameImage EndFrame();

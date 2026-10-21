@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 // Copyright 2026 GT4Recomp contributors.
-// Written from docs/hw-renderer-spec (clean room, decision 0069): chapters 02, 01.7, 13.1 to 13.3.
+// Written from the TASK-026 specification (docs/hw-renderer-spec): chapters 02, 01.7, 10.2, 13.1 to 13.3.
 #include "cpuref_renderer.hpp"
 
 #include <cstring>
+#include <algorithm>
 
 #include "hw_gs_pixel.hpp"
 #include "hw_gs_registers.hpp"
@@ -109,7 +110,10 @@ bool CpuRenderer::WritePrivileged(uint32_t address, uint64_t value) {
             background_[2] = static_cast<uint8_t>(Field(value, 16, 8));
             return true;
         case priv::kCsr:
-            csrField_ = Field(value, 13, 1) != 0;  // FIELD, IN-35
+            if (Field(value, 9, 1) != 0) {
+                ResetGs(false);
+            }
+            // CSR.FIELD is read-only. The v2 VSYNC supplies the display field explicitly.
             return true;
         default:
             unhandledPrivileged++;
@@ -118,12 +122,39 @@ bool CpuRenderer::WritePrivileged(uint32_t address, uint64_t value) {
 }
 
 std::vector<uint8_t> CpuRenderer::ReadFifo(uint32_t qwords) {
-    std::vector<uint8_t> data = memory_.TakeLocalToHostData();
-    const size_t limit = static_cast<size_t>(qwords) * 8u;
-    if (data.size() > limit) {
-        data.resize(limit);
+    if (qwords > kMaxFifoQwords) {
+        ++fifoFaults;
+        return {};
     }
+    if (qwords == 0) {
+        return {};
+    }
+    // First FIFO access must observe all earlier draws and uploads (10.2).
+    frontEnd_.FlushBatch(FlushReason::Transfer);
+    bool overrun = false;
+    std::vector<uint8_t> data = memory_.ReadLocalToHost(static_cast<size_t>(qwords) * 16u, overrun);
+    if (overrun) ++fifoFaults;
+    if (memory_.ReadDrained()) frontEnd_.WriteRegister(reg::kTrxdir, 3);
     return data;
+}
+
+void CpuRenderer::ResetGif(uint32_t pathMask) {
+    frontEnd_.GifReset(pathMask);
+    memory_.ResetRead();
+}
+
+void CpuRenderer::ResetGs(bool clearVram) {
+    frontEnd_.ResetGs();
+    ResetGif(7);
+    if (clearVram) {
+        auto bytes = memory_.Local().bytes();
+        std::fill(bytes.begin(), bytes.end(), 0);
+    }
+    displayRegs_ = {};
+    previousDby_ = {};
+    background_ = {};
+    csrField_ = false;
+    lastImage_.reset();
 }
 
 FrameImage CpuRenderer::EndFrame() {

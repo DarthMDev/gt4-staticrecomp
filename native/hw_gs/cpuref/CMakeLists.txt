@@ -3,6 +3,7 @@
 # native/CMakeLists.txt. Build:
 #   cmake -S native/hw_gs/cpuref -B <build> -G Ninja -DCMAKE_BUILD_TYPE=Release
 # Copyright 2026 GT4Recomp contributors. Licensed under the MIT License (see LICENSE).
+# Written from the TASK-026 specification (docs/hw-renderer-spec), chapters 02, 10.2, 14.3.
 cmake_minimum_required(VERSION 3.24)
 project(HwGsCpuRef VERSION 0.1.0 LANGUAGES CXX)
 
@@ -17,6 +18,7 @@ add_library(hw_gs_cpuref STATIC
     cpuref_draw.cpp
     cpuref_renderer.cpp
     cpuref_replay.cpp
+    cpuref_replay_v2.cpp
     "${HW_GS_DIR}/memory/hw_memory.cpp"
     "${HW_GS_DIR}/clut/hw_clut.cpp"
     "${HW_GS_DIR}/frontend/hw_gs_registers.cpp"
@@ -46,6 +48,12 @@ enable_testing()
 
 add_executable(cpuref_tests tests/cpuref_tests.cpp)
 target_link_libraries(cpuref_tests PRIVATE hw_gs_cpuref)
+
+add_executable(cpuref_replay_v2_tests tests/cpuref_replay_v2_tests.cpp)
+target_link_libraries(cpuref_replay_v2_tests PRIVATE hw_gs_cpuref)
+foreach(t IN ITEMS parity resets fifo malformed)
+    add_test(NAME cpuref_capture_v2_${t} COMMAND cpuref_replay_v2_tests ${t})
+endforeach()
 
 # Existing milestone fixtures, built against the same sources so the composed libraries are
 # covered by CTest too.

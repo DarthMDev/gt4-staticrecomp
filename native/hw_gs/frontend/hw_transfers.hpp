@@ -52,6 +52,8 @@ public:
     virtual void LocalToLocalMove(const LocalMoveCommit& move) = 0;
     // Chapter 10: local to host read begins.
     virtual void BeginLocalToHost(const LocalToHostSetup& setup) = 0;
+    // Discards an unfinished FIFO read when TRXDIR changes or the GS/GIF resets (10.2, 02.1).
+    virtual void CancelLocalToHost() {}
 };
 
 // Hooks the front end supplies so the bookkeeping can run the overlap checks

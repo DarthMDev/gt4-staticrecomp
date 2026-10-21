@@ -9,7 +9,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M | State | Evidence |
 |---|---|---|
 | M0 scaffolding | Done; game hookup moved to the GS stream seam on 2026-10-21 | CTest `hw_options`, `hw_present_rect`, `hw_smoke_*`, `hw_stream_sink` |
-| M1 tools | Python done; native replay reads the old capture format only | `test_hw_capture`, `test_hw_replay_compare`, `hw_cpuref_replay` |
+| M1 tools | Native replay supports legacy and GSSTREAM v2; real menu parity confirmed | slice219: 69/69 CPU-library tests; 1,101/1,101 identical PPMs in legacy, converted v2 and fresh donor v2 replays |
 | M2 memory | Done | CTest `memory_*` |
 | M3 front end, CLUT | Done | CTest `m3_*` |
 | M4 reference I | CPU reference done; GPU write-back WIP on `task/027-m4-gpuref` (e31fcc4, not built) | CTest `cpuref_*`; menu capture replay |
@@ -38,4 +38,11 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 
 ## Next step
 
-Native `.gscap` v2 replay for the CPU reference (brief section 5, step 1). Warm-up complete: slice217 compiled; `hw_gpu_blend_sweep`, `hw_gpu_pixel_directed`, and `hw_gpu_pixel_random` pass. Build output is under this worktree's ignored `build/slice217-coregs2/`, honoring the owner's no-writes-to-main instruction.
+Implement the chapter 12.9 VRAM diagnostic output for the CPU replay before qualifying IN-315/IN-316. Use capture VSYNC N for donor dump N+1 (IN-325); retain composed output separately. Fix the separate existing A+D XYZ kick gap with its own fixture (IN-326). Then investigate the garage texture in the coherent SLM and return to brief step 3 (M4 GPU write-back); do not merge that WIP before these checks. Captures outside the headless S-01/S-02 schedule still require owner gameplay. No windowed game run was made.
+
+## 2026-10-21 replay checkpoint (slice219)
+
+- Confirmed: IN-07 shader warm-up committed; slice217 full native CTest: 177 passed, 1 skipped (178 selected; Python run separately). Python: 627 tests, 44 skipped, one pre-existing distribution-pin error. Default donor headless: 42/42 = slice214, copied card unchanged.
+- Confirmed: slice219 standalone CPU reference and composed libraries: 69/69 tests pass, including four new v2 fixtures. Real legacy, envelope-converted v2 and newly recorded donor v2 each replay all 1,101 frames to identical PPMs, with no rejected GIF, skipped texture or FIFO fault.
+- Outputs are private/ and build/ **inside this worktree**, honoring the owner's no-writes-to-main instruction. Main assets and old slices remain read-only; no launcher mode/pin changes. Evidence and hashes: BUILD slice219 and the journal.
+- Diagnostic only: after aligning capture N to donor N+1, 10/11 sampled menu frames have pct_bad <= 0.038%; donor frame900 still has 29.5487%, PSNR 8.7427 dB. These compare composed CPU output to donor VRAM output, so are not chapter14 qualification (IN-325). IN-315/IN-316 remain open; no field-offset rule was added.

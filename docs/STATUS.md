@@ -6,7 +6,7 @@
 `C:\Antigravity\gt4-wt-027-coregs2`) = `main` 1.0.0 + the paused TASK-027 work, without paraLLEl-GS. With
 `GT4_HW_GS=ON`, `GT4_RENDERER=hw` sends main's GS stream hooks to the in-process HWR backend (black output; nothing
 drawn yet); the default renderer stays byte-identical (check build slice216, [BUILD](BUILD.md) slice 216). The
-implementation goes to an external clean-room agent (GPT 6.1 Sol); brief `AGENT-BRIEF-COREGS2.md` on that branch. The shader IN-07 AEM mismatch is now fixed: fresh slice217 build and all three GPU exactness fixtures pass. Native v2 capture replay is next; the game renderer still presents black.
+implementation goes to an external clean-room agent (GPT 6.1 Sol); brief `AGENT-BRIEF-COREGS2.md` on that branch. The shader IN-07 AEM mismatch is now fixed: fresh slice217 build and all three GPU exactness fixtures pass. Native v2 capture replay now passes 69/69 CPU-library tests and produces 1,101/1,101 byte-identical PPMs from legacy, converted v2 and fresh donor v2 menus (slice219). Default headless output remains 42/42 identical to slice214. IN-315/IN-316 remain open: correct the comparison to use VRAM output (IN-325) before qualification. The game renderer still presents black.
 
 **TASK-081 release 1.0.0 hardening (branch `task/081-release-1-0-0`, waiting for the owner's installer test):**
 - Game: slice213 = the slice211 recipe with `-DGT4_RELEASE_DISTRIBUTION=ON` (no build-time shader folder in the

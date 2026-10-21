@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Copyright 2026 GT4Recomp contributors.
-// Written from docs/hw-renderer-spec (clean room, decision 0069): chapters 02.7, 10.2.
+// Written from the TASK-026 specification (docs/hw-renderer-spec): chapters 02.7, 10.2.
 #include "cpuref_memory.hpp"
+
+#include <algorithm>
 
 namespace hwgs::cpuref {
 
@@ -45,8 +47,29 @@ void LocalMemorySink::LocalToLocalMove(const LocalMoveCommit& move) {
 }
 
 void LocalMemorySink::BeginLocalToHost(const LocalToHostSetup& setup) {
+    ResetRead();
     pending_ = setup;
     ++readCount;
+}
+
+void LocalMemorySink::ResetRead() {
+    pending_.reset();
+    readData_.clear();
+    readCursor_ = 0;
+}
+
+std::vector<uint8_t> LocalMemorySink::ReadLocalToHost(size_t bytes, bool& overrun) {
+    if (pending_) {
+        readData_ = TakeLocalToHostData();
+        readCursor_ = 0;
+    }
+    const size_t available = readData_.size() - readCursor_;
+    const size_t copied = std::min(bytes, available);
+    overrun = copied < bytes;
+    std::vector<uint8_t> result(bytes, 0);
+    std::copy_n(readData_.begin() + static_cast<std::ptrdiff_t>(readCursor_), copied, result.begin());
+    readCursor_ += copied;
+    return result;
 }
 
 std::vector<uint8_t> LocalMemorySink::TakeLocalToHostData() {

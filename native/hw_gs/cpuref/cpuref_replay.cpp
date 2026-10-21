@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // Copyright 2026 GT4Recomp contributors.
-// Written from docs/hw-renderer-spec (clean room, decision 0069): chapter 14.3 (M1 replay).
+// Written from the TASK-026 specification (docs/hw-renderer-spec): chapter 14.3 (M1 replay).
 #include "cpuref_replay.hpp"
 
 #include <cstring>
@@ -19,7 +19,7 @@ class Reader {
 public:
     explicit Reader(const std::vector<uint8_t>& data) : data_(data) {}
 
-    bool Has(size_t count) const { return position_ + count <= data_.size(); }
+    bool Has(size_t count) const { return count <= data_.size() - position_; }
     size_t Position() const { return position_; }
 
     uint8_t U8() {
@@ -56,6 +56,9 @@ private:
 bool ReplayCapture(const std::vector<uint8_t>& stream, CpuRenderer& renderer, ReplaySummary& summary,
                    const std::function<void(uint64_t frame, const FrameImage& image)>& onFrame,
                    std::string& error) {
+    if (stream.size() >= 8 && std::memcmp(stream.data(), "GSSTREAM", 8) == 0) {
+        return ReplayCaptureV2(stream, renderer, summary, onFrame, error);
+    }
     Reader reader(stream);
     while (reader.Has(1)) {
         const size_t offset = reader.Position();
@@ -98,6 +101,10 @@ bool ReplayCapture(const std::vector<uint8_t>& stream, CpuRenderer& renderer, Re
                     return false;
                 }
                 const uint32_t qwords = reader.U32();
+                if (qwords > CpuRenderer::kMaxFifoQwords) {
+                    error = "oversized FIFO read at byte " + std::to_string(offset);
+                    return false;
+                }
                 summary.fifoReads++;
                 renderer.ReadFifo(qwords);  // performed for its side effects; data is not stored
                 break;

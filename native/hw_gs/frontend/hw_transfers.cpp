@@ -41,6 +41,7 @@ void TransferUnit::WriteTrxreg(uint64_t value) {
 
 void TransferUnit::WriteTrxdir(uint64_t value) {
     CommitPending(TransferReason::TrxdirWrite);
+    sink_.CancelLocalToHost();
     active_ = false;
     buffer_.clear();
     regs_.xdir = static_cast<uint32_t>(value & 3u);
@@ -186,6 +187,7 @@ void TransferUnit::Commit(bool complete, TransferReason reason) {
 }
 
 void TransferUnit::Reset() {
+    sink_.CancelLocalToHost();
     active_ = false;
     totalBytes_ = 0;
     buffer_.clear();
@@ -193,6 +195,7 @@ void TransferUnit::Reset() {
 }
 
 void TransferUnit::ForceTrxdirIdle() {
+    sink_.CancelLocalToHost();
     active_ = false;
     totalBytes_ = 0;
     buffer_.clear();

@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 //
-// hw_cpuref_replay: replays a GT4_PGS_CAPTURE stream through the HWR CPU reference renderer and
+// hw_cpuref_replay: replays a legacy or GSSTREAM v2 capture through the HWR CPU reference renderer and
 // writes one frame_NNNNN.ppm per frame that has a display image (TASK-027, M4 to M6 path).
 //
 // Usage: hw_cpuref_replay <capture.gscap> <output-dir>
 // Copyright 2026 GT4Recomp contributors. Licensed under the MIT License (see LICENSE).
-// Written from docs/hw-renderer-spec (clean room, decision 0069).
+// Written from the TASK-026 specification (docs/hw-renderer-spec), chapters 02, 10.2, 14.3.
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -67,6 +67,11 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(stats.framePixelsWritten),
                 static_cast<unsigned long long>(stats.depthPixelsWritten));
     std::printf("textured_primitives=%llu skipped_texture=%llu rejected_gif=%llu unhandled_privileged=%llu\n", static_cast<unsigned long long>(stats.primitivesTextured), static_cast<unsigned long long>(stats.primitivesSkippedTexture), static_cast<unsigned long long>(renderer.rejectedGifPaths), static_cast<unsigned long long>(renderer.unhandledPrivileged));
+    std::printf("resets=%llu presentation_controls=%llu fields_without_phase=%llu fifo_faults=%llu\n",
+                static_cast<unsigned long long>(summary.resets),
+                static_cast<unsigned long long>(summary.presentationControls),
+                static_cast<unsigned long long>(summary.fieldsWithoutPhase),
+                static_cast<unsigned long long>(renderer.fifoFaults));
     if (!ok) {
         std::fprintf(stderr, "hw_cpuref_replay: %s\n", error.c_str());
         return 1;
