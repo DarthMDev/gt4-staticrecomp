@@ -125,3 +125,10 @@ drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at
 - Diagnosis: not textures (0 refused), not the front end (same batches/primitives), not composition (even frames match). It is field-parity dependent draw loss in the GPU path, the same thing the owner saw in the window as 'one frame right, one striped'.
 - Also fixed a misleading counter: `black_presents` now counts only presents without a composed image (it was a leftover from the M0 stub that counted every present).
 - Next: root-cause the odd-frame loss in the GPU path with this deterministic replay (candidate: the per-field SCANMSK / clipping interaction in the per-primitive scissor), then re-run the 42-dump schedule.
+
+## 2026-10-21 memory-level diagnosis checkpoint (IN-334)
+
+- Added `--slm-frame N` to both replay tools: they dump the same 4 MiB shadow local memory at the same frame number, so the GPU path and the CPU reference can be compared in memory.
+- Confirmed at frame 101 (odd): the SLMs differ in 6,591 bytes, all in the framebuffer pages that hold the boot text (64 KiB pages 3-4). Even frames still match byte for byte.
+- Conclusion: the odd-field text loss is a WRITE problem (the primitive does not land in VRAM), not a display/composition problem, and it is tied to the field parity of the input. Ruled out this round: texture refusal (0), the front end (same counters), composition (even frames identical) and the per-primitive scissor (disabling it made the garage worse: 48.8% against 10.6%).
+- Next: instrument the draw of the text region on an odd frame (which batch, which rect, which scissor, whether the pixel rules reject it) using the SLM dump as the oracle.

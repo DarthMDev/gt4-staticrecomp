@@ -180,10 +180,13 @@ int main(int argc, char** argv) {
     const std::string capturePath = argv[1];
     const std::string outDir = argv[2];
     std::uint64_t every = 1;
+    std::uint64_t slmFrame = UINT64_MAX;  // the frame whose raw shadow local memory is dumped
     for (int i = 3; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--every") == 0) {
             const long value = std::strtol(argv[i + 1], nullptr, 10);
             if (value > 0) every = static_cast<std::uint64_t>(value);
+        } else if (std::strcmp(argv[i], "--slm-frame") == 0) {
+            slmFrame = static_cast<std::uint64_t>(std::strtoull(argv[i + 1], nullptr, 10));
         }
     }
 
@@ -224,6 +227,15 @@ int main(int argc, char** argv) {
         char name[64];
         std::snprintf(name, sizeof(name), "frame_%05llu.ppm", static_cast<unsigned long long>(frame));
         if (WritePpm(outDir + "\\" + name, image)) ++written;
+        if (frame == slmFrame) {
+            char slmName[64];
+            std::snprintf(slmName, sizeof(slmName), "slm_%05llu.bin", static_cast<unsigned long long>(frame));
+            std::FILE* slm = std::fopen((outDir + "\\" + slmName).c_str(), "wb");
+            if (slm) {
+                std::fwrite(renderer.Slm(), 1, 4u * 1024u * 1024u, slm);
+                std::fclose(slm);
+            }
+        }
     };
     const bool ok = cpuref::ReplayCapture(stream, target, summary, onFrame, error);
 

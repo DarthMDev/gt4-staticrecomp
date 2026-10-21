@@ -23,12 +23,21 @@ int main(int argc, char** argv) {
                              "default: vram (12.9 oracle decode); scanout: existing composed output\n"
                              "metadata: <output-dir>/frames.jsonl, capture-native frame IDs\n");
     };
-    hwgs::cpuref::DumpSource source = hwgs::cpuref::DumpSource::Vram;
+    hwgs::cpuref::DumpSource source = hwgs::cpuref::DumpSource::Vram;
+    std::uint64_t slmFrame = UINT64_MAX;  // raw shadow local memory dump
     bool selectedSource = false;
     std::vector<std::string> paths;
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--help" && argc == 2) { usage(); return 0; }
+        if (arg == "--slm-frame") {
+            if (i + 1 == argc) {
+                std::fprintf(stderr, "hw_cpuref_replay: --slm-frame requires a frame number\n");
+                return 2;
+            }
+            slmFrame = std::strtoull(argv[++i], nullptr, 10);
+            continue;
+        }
         if (arg == "--dump-source") {
             if (selectedSource || i + 1 == argc || !hwgs::cpuref::ParseDumpSource(argv[++i], source)) {
                 std::fprintf(stderr, "hw_cpuref_replay: --dump-source requires one of vram|scanout, once\n");
@@ -71,6 +80,16 @@ int main(int argc, char** argv) {
     const bool ok = hwgs::cpuref::ReplayCapture(
         stream, renderer, summary,
         [&](uint64_t frame, const hwgs::cpuref::FrameImage& scanout) {
+            if (frame == slmFrame) {
+                char slmName[64];
+                std::snprintf(slmName, sizeof(slmName), "slm_%05llu.bin", static_cast<unsigned long long>(frame));
+                std::FILE* slm = std::fopen((paths[1] + "/" + slmName).c_str(), "wb");
+                if (slm) {
+                    const auto bytes = renderer.Memory().Local().bytes();
+                    std::fwrite(bytes.data(), 1, bytes.size(), slm);
+                    std::fclose(slm);
+                }
+            }
             const auto vram = renderer.DumpVramDisplay();
             const auto& image = source == hwgs::cpuref::DumpSource::Vram ? vram.frame : scanout;
             metadata << hwgs::cpuref::EncodeDumpMetadata(frame, source, vram, image) << '\n';
