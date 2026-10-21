@@ -1624,3 +1624,55 @@ in `game-210` and renamed (18 files, including `SDL3.dll` and `licenses/LICENSE-
 `game-209-old`. `GT4Recomp.exe`, `version.json` and `%LOCALAPPDATA%\GT4Recomp` were not touched.
 
 Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.
+
+## Slice 211 - TASK-079 force 16:9 at boot (`--mode pcsx2`)
+
+The slice210 build plus `GT4_FORCE_WIDESCREEN`: the game's own Wide setting is held at 16:9 at every guest VBlank.
+Source: this branch (`task/079-force-widescreen`, from `task/075-sdl3-input` 85b63cd). Build script
+`private/slice211-scripts/build-game-211.bat` (the slice210 recipe, source `C:\Antigravity\gt4-wt-079`, clang-cl 22.1.3
+as slice206-slice210). Executable `private/slice211-build/build/gt4vulkan.exe`, 97,186,816 bytes, sha256 `2fecda70...`.
+
+Changes against slice210:
+- `native/race_widescreen.{hpp,cpp}` (new, pure logic plus two entry points). It holds three guest words, all range-checked:
+  the wide flag `owner + 0x38CC4` (= option + 0x14, set to 1); the aspect record `option + 0x24` (11 words, copied from the
+  wide preset `0x622EC0`, or `0x622F20` for NTSC, when the record is not wide); the published word `0x6184F0` (D_006184F0,
+  set to 1 when the record is wide). A wide preset that is not wide is refused with no write. Option = `owner + 0x38CB0`.
+- `native/mtvu_runtime.cpp` `vblank_sync`: calls the hold at the top, so it runs at every guest VBlank in windowed and
+  headless runs (the donor's `system.cpp` calls `gt4::mtvu::vblank_sync()` before `on_vblank`). The window's `on_vblank`
+  is not used for it: `run_window` is never reached headless, and a static initializer for `g_options.on_vblank` was
+  overwritten by the dynamic initialization of `Options` (std::string members). `native/CMakeLists.txt`: `gt4_mtvu_runtime`
+  links `gt4_quickfix`.
+- `native/window.cpp`: validates `GT4_FORCE_WIDESCREEN` at window start (invalid value: refused, exit before guest work).
+- Fixture `native_race_widescreen` (CTest), `tests/python/test_race_widescreen.py` (launcher env, mode pin, ELF records).
+- `scripts/external_runtime_probe.py`: `GT4_FORCE_WIDESCREEN` validated (unset means 1; `0` and `1` only), forwarded and
+  recorded as `force_widescreen_environment`. `PERF_PROFILES['pcsx2']` is slice211; `pcsx2-slice210` is history.
+
+Pinned ELF facts (checked in `private/reconstructed/SCUS_973.28.elf`): the wide and 4:3 preset sources at `0x6A61B8` and
+`0x6A6188` are 425 x 240 and 275 x 205 (func_00439B30 initialises the presets from them).
+
+Checks (2026-10-21):
+- CTest: the new fixture and all other tests were run; `python_native_contracts` failed on an autocrlf artifact
+  (`docs/inputs/slice208-ee-entries.txt` in the working copy) and on a pin test that was updated (slice 211). The
+  worktree copy was restored from the committed LF blob.
+- Python `unittest discover` with `GT4_NATIVE_BUILD` = slice211: see `private/slice211-scripts/python-211-final.log`.
+- Headless, 4,200 frames, the slice210 arguments (12 presses, frame dump every 100, `--trace-syscalls`,
+  `GT4_MTVU_REPORT_EVERY=500`), 42 frame dumps each:
+  - (a) widescreen seed card (`private/slice113-video/widescreen-seed/card.ps2`), `GT4_FORCE_WIDESCREEN=0`: 42 of 42
+    identical to slice210 (`private/slice210-smoke/cand-210`, per-file sha256).
+  - (a2) the same, unset (force on): 42 of 42 identical to (a). The 16:9 card is unchanged by the hold.
+  - (c) 4:3 candidate card (`private/slice110-menu-pilot/name-control4/card.ps2`, a copy, `GT4_FORCE_WIDESCREEN=0`):
+    36 of 42 frames differ from (a) (title screen).
+  - (d) the same 4:3 copy, unset (force on): 3 of 42 frames differ from (c) (frames 700, 800, 900, the title transition);
+    the log shows `wide flag set to 16:9 at guest 0x009A7024 (owner 0x0096E360, ntsc 0)`. 35 of 42 frames still differ
+    from (a).
+  - Limit found: the headless schedule stays on the title screen, so no race, HUD or photo frame is compared. The
+    16:9 state of the native seed card includes more than the three words held here; the remaining state is not identified.
+    The owner's in-game test is the decision point.
+- Pins: `docs/inputs/slice211-pcsx2.json` (runtime `private/slice211-build/build/gt4vulkan.exe`, 97,186,816 bytes, sha256
+  `2fecda70...`). Every other pin is unchanged.
+
+Owner launcher test folder (`private/owner-test-launcher`): `game` is slice211 (`make_distribution.py`, 18 files including
+`SDL3.dll` and `licenses/LICENSE-SDL3.txt`); the slice210 folder is `game-210-old`; `GT4Recomp.exe` is the TASK-079 launcher
+build (`launcher/target/release/GT4Recomp.exe` on `task/019-launcher`). `version.json` and `%LOCALAPPDATA%\GT4Recomp` untouched.
+
+Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.

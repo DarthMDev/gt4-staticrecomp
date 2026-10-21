@@ -81,6 +81,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑043 | Launcher: download, pin and update the GS renderer | 🟡 In progress on `task/019-launcher` (code done 2026-10-20; owner live test pending) |
 | TASK‑075 | Input layer on SDL3 (game side in slice210: SDL3 3.4.18 gamepads mapped to the DS2 layout, controls.toml applied, GT4_INPUT=sdl default / xinput for one release) | 🟡 Game side done in slice210 (branch `task/075-sdl3-input`), owner test pending; launcher Controls page on `task/019-launcher` |
 | TASK‑076 | Modern fixed keyboard layout (several keys per DS2 button, table in docs/CONTROLS.md `keyboard-default`) | 🟡 Done in slice210 (branch `task/075-sdl3-input`), owner test pending; Start key is a hypothesis (P) |
+| TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | 🔄 In progress (branch `task/079-force-widescreen`): slice211 built, CTest and Python green, owner test pending |
 | TASK‑044 | Packaging, release notes and the release 1.0.0 plan update | ✅ Done (2026-10-17) · release 1.0.0 ships gt4-gs 1.0.1; fork release notes, README, THIRD_PARTY and RELEASE-1.0.0-PLAN updated (docs only) |
 | TASK‑045 | High frame rate on the PCSX2 GS (TASK-031 redone) | 📋 Planned (after 1.0.0) |
 | TASK‑046 | Launcher "Prepare shaders": compile GT4's PCSX2 GS pipeline list headless (gt4-gs --warm-selectors) and keep the cache warm | 📋 Planned (study done, 2026-10-16) |
@@ -296,6 +297,41 @@ Circle (handbrake) = Space; Triangle (back) = Backspace and Esc; nitro = Shift; 
 near WASD; look back = Q; camera = C or Tab. Map each action to the DS2 button GT4 really uses (check the decomp and
 the manual: nitro, gears, rear view, camera). The launcher Controls page shows the layout read-only in Keyboard view.
 State: 🟡 Done in slice210 (2026-10-21): the hard-coded table (`native/controls.cpp`, `docs/CONTROLS.md` keyboard-default, `docs/INPUT-SDL3.md`). Nitro = R1, gears = R2/L2, rear view = L1, camera = Select (ludo.guide, Hypothesis). Start has no owner key; P is a placeholder. Owner test pending.
+
+### TASK-079 — Force 16:9 at boot
+Owner request 2026-10-20. A fresh save starts the game in 4:3. When the player picks 16:9 (Wide) in GT4's own Options and
+saves, it stays 16:9. Force 16:9 at boot for everyone, the same way GT4_FORCE_480P holds 480p (TASK-009, slice164).
+Environment `GT4_FORCE_WIDESCREEN`: 1 forces 16:9, 0 leaves the game's own setting, unset means 1 (the launcher passes
+its setting). Any other value refuses the start. The launcher setting "Widescreen 16:9" (Graphics page, default on) sends
+it. Forced in guest RAM only; the owner's card file is never written by the host.
+
+Guest chain (decompiled source at identical addresses, gt4-decomp e0b70c4d6; Confirmed unless marked):
+- owner pointer `0x622F4C` (the game-data object); option object `owner + 0x38CB0` (MOption).
+- wide flag `option + 0x14` = `owner + 0x38CC4`: 0 = 4:3, 1 = 16:9. Set by `func_00437110` (the script setter
+  `MOption.wide_mode`, `MOption__get_wide_mode`), read by `func_001AB4C0` (race HUD rectangle, 0.75 scale of the
+  4:3 squeeze) and by the photo mode code. Saved with the option object (High confidence: the same object holds the
+  garage and calendar that the save path writes).
+- aspect record `option + 0x24`, 11 words, written by `func_00439108` from one of four presets in guest data:
+  `0x622E90` (4:3), `0x622EC0` (wide), `0x622EF0` (4:3 NTSC), `0x622F20` (wide NTSC); index = wide + 2 * (video == 1).
+  `func_004390D0` says "wide" when width / height >= 1.5 (f32) at `record + 0xC` and `+ 0x10`.
+- presets are filled at start by `func_00439B30` from `0x6A6188` (4:3, 275 x 205) and `0x6A61B8` (wide, 425 x 240);
+  the NTSC presets hold the same two records (checked in the pinned ELF, Confirmed).
+- video system `option + 0x1388` (1 = NTSC).
+- published word `0x6184F0` (D_006184F0) = `func_004390D0(option + 0x24)`, written by `MOption.apply` (`func_004365B8`).
+  It is the value the renderers read: RaceDisplay, RaceDisplayUtil::wideOffset, the 0.75 scale in `func_00393790`
+  and `func_00102B30`, the minimap offset.
+
+Native (`native/race_widescreen.*`, pure, fixture `native_race_widescreen`): at each guest VBlank, when the owner chain
+is valid and the wide preset is wide, it sets the flag to 1, copies the wide preset into the record when the record is
+not wide (what `func_004391C8` does), and publishes `0x6184F0` from the record. A preset that is not wide is refused
+with no write (logged once).
+
+Limits: the game's menu can show 4:3 for one frame before the next VBlank forces it back (same limit as 480p); a save
+made with the force on stores 16:9. The presentation of the 4:3 and 16:9 layouts of the game is otherwise unchanged.
+
+Checks (2026-10-21, slice211): see `docs/BUILD.md` slice 211 and `docs/journal/2026-10-21.md`.
+State: 🔄 In progress: game side (slice211, branch `task/079-force-widescreen`) and launcher setting (branch
+`task/019-launcher`, `task/079` on the launcher side). Owner test pending: start a fresh card and an old 4:3 save in game.
 
 ### TASK-019 — Launcher
 State (2026-10-21): native game reads `GT4_FULLSCREEN` (strict 0/1; the launcher default is on). Game executable slice209 (build `private/slice209-build`, sha256 a75c58fa..., 97,105,408 bytes), mode `pcsx2` (docs/inputs/slice209-pcsx2.json): the slice208 coverage library and the fullscreen start only. CTest 33 of 33, Python 589 OK (23 skipped), headless 42 of 42 frame dumps identical to slice208. The owner launcher test folder was rebuilt (`private/owner-test-launcher/game`, slice209; the slice206 folder is `game-206-old`). Owner test of the fullscreen start pending; the branch is not in a PR.

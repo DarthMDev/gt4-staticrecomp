@@ -1,5 +1,6 @@
 #include "window.hpp"
 #include "race_display.hpp"
+#include "race_widescreen.hpp"
 #include "ps2/memory.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
@@ -392,6 +393,8 @@ int run_window(const std::function<int()> &emulate) {
     force_480p_state = {};
     if (force_480p_enabled)
       std::fprintf(stderr, "[display] GT4_FORCE_480P=1: race display index held at 480p (guest VBlank)\n");
+    // TASK-079: an invalid GT4_FORCE_WIDESCREEN stops the start here (the hold itself runs at guest VBlank).
+    gt4::display::widescreen_hold_enabled();
     pacing_mode = gt4::pacing::parse_mode(std::getenv("GT4_PACING"));
     cursor_autohide = gt4::cursor::AutoHide(gt4::cursor::parse_policy(std::getenv("GT4_CURSOR_AUTOHIDE")));
     std::fprintf(stderr, "[window] cursor auto-hide %s (GT4_CURSOR_AUTOHIDE; %u ms without movement over the picture)\n",

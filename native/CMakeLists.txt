@@ -204,7 +204,7 @@ add_library(gt4_pacing STATIC pacing.cpp)
 target_compile_options(gt4_pacing PRIVATE /W4)
 # Pure window-mode state and the GT4_FORCE_480P race display index (slice164).
 # TASK-060: cursor auto-hide rule (cursor_autohide.cpp) shared by the window.
-add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp cursor_autohide.cpp)
+add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp race_widescreen.cpp cursor_autohide.cpp)
 target_compile_options(gt4_quickfix PRIVATE /W4)
 target_link_libraries(ps2runtime_vulkan PUBLIC gt4_pacing gt4_quickfix gt4_install_paths)
 # TASK-059 (slice200): installed-folder paths (<exe folder>\shaders, <exe folder>\gs\gt4-gs.exe) and --portable-check.
@@ -256,7 +256,7 @@ target_link_libraries(mtvu_journal_fixture PRIVATE gt4_mtvu_journal)
 target_compile_options(mtvu_journal_fixture PRIVATE /W4)
 # TASK-011 step 2: worker runtime (EE shadow, worker dispatch, journal drain). Linked into the slice170 runtime only.
 add_library(gt4_mtvu_runtime STATIC mtvu_runtime.cpp)
-target_link_libraries(gt4_mtvu_runtime PUBLIC gt4_mtvu_journal gt4_mtvu_measure gt4_perf_probe)
+target_link_libraries(gt4_mtvu_runtime PUBLIC gt4_mtvu_journal gt4_mtvu_measure gt4_perf_probe gt4_quickfix)
 target_compile_options(gt4_mtvu_runtime PRIVATE /W4)
 # TASK-035: GS stream protocol, shared-memory transport and .gscap v2 files (MIT, no donor or renderer code), the
 # game-side client (linked into the runtime by the slice191 capsule only) and their host-only controls.
@@ -698,6 +698,9 @@ add_executable(fpu_chop_fixture fpu_chop_fixture.cpp)
 target_compile_options(fpu_chop_fixture PRIVATE /W4)
 add_executable(quickfix_fixture quickfix_fixture.cpp)
 add_executable(race_display_fixture race_display_fixture.cpp)
+add_executable(race_widescreen_fixture race_widescreen_fixture.cpp)
+target_link_libraries(race_widescreen_fixture PRIVATE gt4_quickfix)
+target_compile_options(race_widescreen_fixture PRIVATE /W4)
 add_executable(cursor_autohide_fixture cursor_autohide_fixture.cpp)
 target_link_libraries(cursor_autohide_fixture PRIVATE gt4_quickfix)
 target_compile_options(cursor_autohide_fixture PRIVATE /W4)
