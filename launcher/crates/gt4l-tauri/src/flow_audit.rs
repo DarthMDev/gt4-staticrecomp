@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gt4l_core::launch::{self, LaunchInputs};
-use gt4l_core::paths::DataDirs;
+use gt4l_core::paths::{DataDirs, UserDirs, UserRootSource, USER_FOLDER_NAME};
 use gt4l_disc::testing::{build_iso, pins_for, synthetic_game, system_cnf};
 use gt4l_disc::Pins;
 use serde_json::{json, Value};
@@ -46,7 +46,9 @@ impl Recorder {
 }
 
 fn launch(dirs: &DataDirs, pins: &Pins) -> Shared {
-    Arc::new(Mutex::new(AppState::load_with_pins(dirs.clone(), pins.clone()).expect("state loads")))
+    // A stand-in for Documents inside the sandbox: the flow never touches the real player's folder.
+    let user = UserDirs::new(dirs.root().join("documents-stand-in").join(USER_FOLDER_NAME), UserRootSource::Override);
+    Arc::new(Mutex::new(AppState::load_with(dirs.clone(), pins.clone(), user).expect("state loads")))
 }
 
 fn screen(shared: &Shared) -> Value {

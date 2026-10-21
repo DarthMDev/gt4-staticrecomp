@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use gt4controls::{self as controls_file, Controls, CONTROLS_FILE_NAME};
 use gt4l_core::config::{self, ConfigFile};
-use gt4l_core::paths::DataDirs;
+use gt4l_core::paths::{DataDirs, UserDirs, DOCUMENTS_DIR_OVERRIDE_VAR};
 use gt4l_disc::setup as disc_setup;
 use gt4l_disc::Pins;
 use gt4saves::library::Library;
@@ -24,7 +24,8 @@ pub struct AppState {
     pub pins: Pins,
     pub config: ConfigFile,
     pub controls: Controls,
-    pub library_root: PathBuf,
+    /// The player's folder in use (`Documents\Gran Turismo 4`, or its data-folder fallback).
+    pub user_dirs: UserDirs,
     pub library: Library,
     /// Set by the Cancel button of setup; the setup thread checks it between steps.
     pub setup_cancel: Arc<AtomicBool>,
@@ -95,14 +96,21 @@ pub fn log(dirs: &DataDirs, message: &str) {
 }
 
 impl AppState {
-    /// Loads the settings, controls and save library from the data folder.
+    /// Loads the settings and controls from the data folder and the save library from the player's folder
+    /// (`Documents\Gran Turismo 4`, found through the Windows known-folder API).
     pub fn load(dirs: DataDirs) -> Result<AppState, String> {
         let pins = Pins::embedded()?;
-        AppState::load_with_pins(dirs, pins)
+        let user = UserDirs::resolve(
+            std::env::var_os(DOCUMENTS_DIR_OVERRIDE_VAR),
+            gt4l_platform::known_folder::documents(),
+            &dirs,
+        );
+        AppState::load_with(dirs, pins, user)
     }
 
-    /// [`AppState::load`] with given pins (the flow test uses synthetic pins for a synthetic disc).
-    pub fn load_with_pins(dirs: DataDirs, pins: Pins) -> Result<AppState, String> {
+    /// [`AppState::load`] with given pins and player's folder (the flow test uses synthetic pins for a synthetic
+    /// disc and a scratch stand-in for Documents).
+    pub fn load_with(dirs: DataDirs, pins: Pins, user: UserDirs) -> Result<AppState, String> {
         std::fs::create_dir_all(dirs.root()).map_err(|error| format!("data folder: {error}"))?;
         let (config, warnings) = config::load(&dirs.config_file());
         for warning in &warnings {
@@ -130,14 +138,17 @@ impl AppState {
                 Controls::default()
             }
         };
-        let (library_root, library) = saves::open(dirs.root())?;
+        let opened = saves::open(&dirs, &user)?;
+        for line in &opened.log {
+            log(&dirs, line);
+        }
         Ok(AppState {
             dirs,
             pins,
             config,
             controls,
-            library_root,
-            library,
+            user_dirs: opened.user,
+            library: opened.library,
             setup_cancel: Arc::new(AtomicBool::new(false)),
             setup_busy: false,
             setup_run: SetupRun::default(),
@@ -146,7 +157,7 @@ impl AppState {
             capturing: None,
             home_message: String::new(),
             controls_status: String::new(),
-            saves_status: String::new(),
+            saves_status: opened.notice.unwrap_or_default(),
             replays_status: String::new(),
             controls_locked,
         })

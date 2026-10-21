@@ -488,6 +488,25 @@
         ]),
         h("div", { class: "ctl" }, [openGameFiles])
       ]));
+      // The player's saves and replays live in Documents\Gran Turismo 4 (kept by the uninstaller).
+      var openSaves = h("button", {
+        class: "btn small",
+        type: "button",
+        on: {
+          click: function () {
+            call("open_player_folder").catch(function (err) {
+              GT4.ui.toast(errorText(err), true);
+            });
+          }
+        }
+      }, "Open folder");
+      content.appendChild(h("div", { class: "row" }, [
+        h("div", { class: "k" }, [
+          h("span", { text: "Saves and replays" }),
+          h("span", { class: "val", text: info.saves_folder || "" })
+        ]),
+        h("div", { class: "ctl" }, [openSaves])
+      ]));
       var openLog = h("button", {
         class: "btn small",
         type: "button",

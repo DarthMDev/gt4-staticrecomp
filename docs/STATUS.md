@@ -15,6 +15,11 @@
 - Installer: WebView2 detection plus Microsoft's Evergreen bootstrapper, name `GT4Recomp-Setup-1.0.0.exe`, the
   uninstaller removes `SDL3.dll`. Built in `private/release-100-out` with `SHA256SUMS`; draft GitHub release v1.0.0
   (not published). Release notes: [1.0.0](release-notes/1.0.0.md); steps: [RELEASES](RELEASES.md).
+- Saves in Documents (owner request): saves and replays live in `Documents\Gran Turismo 4` (`Saves`, `Replays`; the
+  Documents known folder, data-folder fallback); everything else, including the live `runtime\card.ps2`, stays in
+  `%LOCALAPPDATA%\GT4Recomp`. An older AppData library is copied, checked (size, sha256) and parked as
+  `library.migrated-<t>` at the first start; the guard protects the player's folder; the uninstaller never touches it.
+  See [FLOW-AUDIT section 8](launcher/FLOW-AUDIT.md) and [MIGRATIONS](launcher/MIGRATIONS.md).
 - Next: the owner installs from the draft and tests end to end (ideally also an NVIDIA or Intel PC and a fresh Windows
   user), approves, then the merge and the publish.
 

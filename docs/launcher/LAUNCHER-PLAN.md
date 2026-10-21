@@ -373,7 +373,7 @@ launcher contains no reference to the official branding or bundled payload.
 | What | Where |
 |---|---|
 | Program (installer-owned, replaced on update) | `%LOCALAPPDATA%\Programs\GT4Recomp\` → `GT4Recomp.exe`, `game\gt4recomp-game.exe`, `game\gt4_parallel_gs.dll`, `game\shaders\*.spv`, `branding\`, `licenses\`, `release-manifest.json`, `uninstall.exe` |
-| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `memcard\` (folder card: active save + all replays), `saves\` (inactive saves), `runtime\card.ps2` (section 13), `art\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20), `cache\` (Vulkan pipeline cache) |
+| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `disc\`, `gs\`, `runtime\card.ps2` (section 13), `library\backups\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20). **Saves and replays (TASK-081, owner 2026-10-21):** `Documents\Gran Turismo 4\Saves\` (`Active\` = the active save, `Save NN\`, `.backup\`) and `\Replays\`, found through the Documents known folder and always kept by the uninstaller (see FLOW-AUDIT section 8) |
 
 `%LOCALAPPDATA%` (not Roaming) avoids syncing 8 MB cards and 6 MB ELFs through roaming profiles/
 OneDrive. A "Portable mode" (a `portable.txt` next to the exe redirects data to `.\data`) is cheap to

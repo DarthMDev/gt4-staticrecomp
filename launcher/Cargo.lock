@@ -1250,6 +1250,10 @@ dependencies = [
 [[package]]
 name = "gt4saves"
 version = "1.0.0"
+dependencies = [
+ "serde_json",
+ "sha2 0.11.1",
+]
 
 [[package]]
 name = "gtk"

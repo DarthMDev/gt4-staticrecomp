@@ -11,8 +11,9 @@
 ; SDL3_DLL is SDL3 3.4.18 (runtime\SDL3.dll of SDL3-3.4.18-win32-x64.zip). It ships beside GT4Recomp.exe: the
 ; launcher reads pads through SDL3 (launcher\crates\gt4l-platform\src\sdl_pads.rs).
 ; GAME_DIR must hold gt4vulkan.exe, the runtime DLLs, shaders\ and the licence texts. It is not in git.
-; Saves and settings live in %LOCALAPPDATA%\GT4Recomp and are kept by the uninstaller unless the user ticks
-; the box on the uninstall page.
+; The player's saves and replays live in Documents\Gran Turismo 4 (found by the launcher through the Windows
+; known-folder API) and are never touched by this script. Settings, the disc copy and other data live in
+; %LOCALAPPDATA%\GT4Recomp and are kept by the uninstaller unless the user ticks the box on the uninstall page.
 
 !ifndef VERSION
   !define VERSION "1.0.0"
@@ -190,10 +191,27 @@ Section "Uninstall"
   DeleteRegKey HKCU "${UNINSTALL_KEY}"
   DeleteRegKey HKCU "${APP_KEY}"
 
-  ; User data (saves, replays, settings, prepared game files and the copy of the disc image in disc\) stays unless
-  ; the user ticked the "also delete" box, which is unchecked by default. Install and update never write there.
+  ; Saves and replays in Documents\Gran Turismo 4 are never touched here. AppData data (settings, prepared game
+  ; files, the copy of the disc image in disc\, logs) stays unless the user ticked the "also delete" box, which is
+  ; unchecked by default. Even then the launcher's fallback player folder (GT4Recomp\Gran Turismo 4, used only when
+  ; Documents was not available) is kept. Install and update never write to either place.
   ${If} $DeleteDataState == ${BST_CHECKED}
-    RMDir /r "$LOCALAPPDATA\GT4Recomp"
+    StrCpy $R0 "$LOCALAPPDATA\GT4Recomp"
+    FindFirst $R1 $R2 "$R0\*"
+    ${DoWhile} $R2 != ""
+      ${If} $R2 != "."
+      ${AndIf} $R2 != ".."
+      ${AndIf} $R2 != "Gran Turismo 4"
+        ${If} ${FileExists} "$R0\$R2\*.*"
+          RMDir /r "$R0\$R2"
+        ${Else}
+          Delete "$R0\$R2"
+        ${EndIf}
+      ${EndIf}
+      FindNext $R1 $R2
+    ${Loop}
+    FindClose $R1
+    RMDir "$R0"
   ${EndIf}
 SectionEnd
 
@@ -203,9 +221,9 @@ Function un.DataPageCreate
   ${If} $0 == error
     Abort
   ${EndIf}
-  ${NSD_CreateLabel} 0 0 100% 36u "Your saves, replays, settings and game files (including the copy of your disc image) are in:$\r$\n$LOCALAPPDATA\GT4Recomp"
+  ${NSD_CreateLabel} 0 0 100% 36u "Your saves and replays in Documents\Gran Turismo 4 are always kept.$\r$\nSettings, the disc copy and other data are in $LOCALAPPDATA\GT4Recomp"
   Pop $0
-  ${NSD_CreateCheckbox} 0 46u 100% 12u "Also delete my saves, replays, settings and game files (the disc image copy)"
+  ${NSD_CreateCheckbox} 0 46u 100% 12u "Also delete settings, the disc copy and other data in AppData"
   Pop $DeleteDataCheckbox
   ${NSD_SetState} $DeleteDataCheckbox ${BST_UNCHECKED}
   nsDialogs::Show

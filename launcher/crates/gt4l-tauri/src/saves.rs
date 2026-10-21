@@ -1,46 +1,129 @@
 //! The Saves and Replays pages and the card around each Play, on top of the `gt4saves` library.
 //!
-//! The library lives in `<data folder>\library`. Before a start the launcher writes the card the game
-//! reads (`runtime\card.ps2`) from the library; after the game exits it harvests that card back into
-//! the library. Imports never overwrite; deletes go to the Recycle Bin (see `recycle`).
+//! The library lives in the player's folder `Documents\Gran Turismo 4` (`Saves`, `Replays`; TASK-081, owner
+//! 2026-10-21). Before a start the launcher writes the card the game reads (`runtime\card.ps2`, in the AppData data
+//! folder) from the library; after the game exits it harvests that card back into the library. So the game never
+//! writes into Documents, and OneDrive never syncs a card while it is being written. Imports never overwrite;
+//! deletes go to the Recycle Bin (see `recycle`).
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
+use gt4l_core::guard;
+use gt4l_core::paths::{DataDirs, UserDirs, UserRootSource};
 use gt4saves::card::GAME_SAVE_NAME;
-use gt4saves::library::{Library, Report};
+use gt4saves::library::{Library, LibraryPaths, Report, SLOT_PREFIX};
+use gt4saves::migration::{self, LegacySources, Outcome, Targets};
 
 use gt4l_platform::recycle;
 use serde::Serialize;
 
-/// Folder name of the library under the data folder.
-pub const LIBRARY_FOLDER: &str = "library";
+/// The opened library and what the launcher log and the Saves page should say about it.
+pub struct OpenedLibrary {
+    pub library: Library,
+    /// The player's folder in use (the Documents one, or the data-folder fallback).
+    pub user: UserDirs,
+    /// Lines for the launcher log (folder choice, the one-time move).
+    pub log: Vec<String>,
+    /// A sentence for the Saves page when the move to Documents did not happen as planned.
+    pub notice: Option<String>,
+}
+
+/// Moves an old AppData library to the player's folder once (see `gt4saves::migration`), then opens the library
+/// there. When the player's folder cannot be used, the data-folder fallback is used, so Play never fails on it.
+pub fn open(dirs: &DataDirs, user: &UserDirs) -> Result<OpenedLibrary, String> {
+    let mut log = Vec::new();
+    if let UserRootSource::Fallback(reason) = user.source() {
+        log.push(format!("save library: WARNING {reason}; using {}", user.root().display()));
+    }
+    match open_at(dirs, user, &mut log) {
+        Ok((library, notice)) => Ok(OpenedLibrary { library, user: user.clone(), log, notice }),
+        Err(error) if !matches!(user.source(), UserRootSource::Fallback(_)) => {
+            let fallback = UserDirs::new(dirs.fallback_user_root(), UserRootSource::Fallback(error.clone()));
+            log.push(format!("save library: WARNING {} cannot be used ({error}); using {}", user.root().display(), fallback.root().display()));
+            let (library, notice) = open_at(dirs, &fallback, &mut log)?;
+            let notice = notice.or_else(|| Some(format!("Saves are kept in {} because {} could not be used.", fallback.root().display(), user.root().display())));
+            Ok(OpenedLibrary { library, user: fallback, log, notice })
+        }
+        Err(error) => Err(error),
+    }
+}
+
+fn open_at(dirs: &DataDirs, user: &UserDirs, log: &mut Vec<String>) -> Result<(Library, Option<String>), String> {
+    guard::protect_user_library(user.root());
+    let targets = Targets { saves: user.saves(), replays: user.replays() };
+    let outcome = migration::migrate(
+        &LegacySources::of_data_root(dirs.root()),
+        &targets,
+        dirs.root(),
+        &dirs.library_migration_marker(),
+        &gt4saves::timestamp(),
+        &migration::copy_file,
+    );
+    log.push(outcome.describe(&targets));
+    let notice = match &outcome {
+        Outcome::Conflict { .. } => Some(format!(
+            "An older save library is still in {}. It was not merged; the saves shown here are in {}.",
+            dirs.legacy_library().display(),
+            user.root().display()
+        )),
+        Outcome::Failed(_) => Some(format!(
+            "Your saves could not be moved to {}. They are safe in {}; the launcher tries again at the next start.",
+            user.root().display(),
+            dirs.legacy_library().display()
+        )),
+        _ => None,
+    };
+    let paths = LibraryPaths { saves: user.saves(), replays: user.replays(), backups: dirs.card_backups() };
+    let library = Library::open_paths(&paths).map_err(|error| format!("save library: {error}"))?;
+    Ok((library, notice))
+}
 
 /// One row of the Saves or Replays page.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Item {
     /// Library name: `Save NN` for an inactive slot, the game's save name, or a replay name.
     pub name: String,
     pub label: String,
     /// The save the next start uses.
     pub active: bool,
+    /// Last change of the item's folder, ISO 8601 UTC (empty when unknown).
+    pub modified: String,
 }
 
-/// Opens (and creates, if needed) the library under `data_root`.
-pub fn open(data_root: &Path) -> Result<(PathBuf, Library), String> {
-    let root = data_root.join(LIBRARY_FOLDER);
-    let library = Library::open(&root).map_err(|error| format!("save library: {error}"))?;
-    Ok((root, library))
+/// The page's item shape (`ui/js/pages/library.js`): `id` is the library name the page sends back to
+/// `saves_activate`, `saves_delete` and `replays_delete`; `name` is the text shown.
+impl Serialize for Item {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeStruct;
+        let mut row = serializer.serialize_struct("Item", 4)?;
+        row.serialize_field("id", &self.name)?;
+        row.serialize_field("name", &self.label)?;
+        row.serialize_field("active", &self.active)?;
+        row.serialize_field("modified", &self.modified)?;
+        row.end()
+    }
+}
+
+/// ISO 8601 time of the last change of `folder`, or an empty text.
+fn modified_of(folder: &Path) -> String {
+    fs::metadata(folder).and_then(|metadata| metadata.modified()).map(gt4saves::iso8601_utc).unwrap_or_default()
 }
 
 /// The active save first, then the inactive slots in slot order.
 pub fn saves(library: &Library) -> Result<Vec<Item>, String> {
     let mut items = Vec::new();
     if library.active_save().map_err(|error| error.to_string())?.is_some() {
-        items.push(Item { name: GAME_SAVE_NAME.to_string(), label: "Active save".to_string(), active: true });
+        items.push(Item {
+            name: GAME_SAVE_NAME.to_string(),
+            label: "Active save".to_string(),
+            active: true,
+            modified: modified_of(&library.active_dir().join(GAME_SAVE_NAME)),
+        });
     }
     for slot in library.slots().map_err(|error| error.to_string())? {
-        items.push(Item { label: slot.clone(), name: slot, active: false });
+        let modified = modified_of(&library.slot_dir(&slot).join(GAME_SAVE_NAME));
+        items.push(Item { label: slot.clone(), name: slot, active: false, modified });
     }
     Ok(items)
 }
@@ -51,7 +134,10 @@ pub fn replays(library: &Library) -> Result<Vec<Item>, String> {
         .replays()
         .map_err(|error| error.to_string())?
         .into_iter()
-        .map(|name| Item { label: name.clone(), name, active: false })
+        .map(|name| {
+            let modified = modified_of(&library.replays_dir().join(&name));
+            Item { label: name.clone(), name, active: false, modified }
+        })
         .collect())
 }
 
@@ -127,14 +213,14 @@ pub fn import_summary(report: &Report) -> String {
 }
 
 /// Sends a library item to the Recycle Bin. Only inactive slots and replays can be deleted here.
-pub fn delete(root: &Path, item: &Item) -> Result<(), String> {
+pub fn delete(library: &Library, item: &Item) -> Result<(), String> {
     if item.active {
         return Err("The active save cannot be deleted. Activate another save first.".to_string());
     }
-    let path = if item.name.starts_with("Save ") {
-        root.join("saves").join(&item.name)
+    let path = if item.name.starts_with(SLOT_PREFIX) {
+        library.slot_dir(&item.name)
     } else {
-        root.join("memcard").join(&item.name)
+        library.replays_dir().join(&item.name)
     };
     if !path.is_dir() {
         return Err(format!("{} is not in the library any more", item.label));
@@ -147,6 +233,15 @@ mod tests {
     use super::*;
     use gt4saves::card::{DirEntry, Node, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
     use gt4saves::Card;
+    use std::path::PathBuf;
+
+    /// The library of a scratch data folder, with a scratch stand-in for Documents (never the real one).
+    fn open_scratch(data: &Path) -> (UserDirs, Library) {
+        let dirs = DataDirs::new(data);
+        let user = UserDirs::new(data.join("Documents").join("Gran Turismo 4"), UserRootSource::Override);
+        let opened = open(&dirs, &user).unwrap();
+        (opened.user, opened.library)
+    }
 
     const STAMP: [u8; 8] = [0, 39, 50, 7, 12, 10, 0xEA, 0x07];
     const REPLAY: &str = "BASCUS-97328R0001";
@@ -188,7 +283,7 @@ mod tests {
     #[test]
     fn a_game_card_is_harvested_and_the_next_card_is_built_from_the_library() {
         let data = scratch("harvest");
-        let (root, library) = open(&data).unwrap();
+        let (user, library) = open_scratch(&data);
         let runtime_card = data.join("runtime").join("card.ps2");
         fs::create_dir_all(runtime_card.parent().unwrap()).unwrap();
         fs::write(&runtime_card, card_with(&[game_save(1), replay()])).unwrap();
@@ -203,14 +298,16 @@ mod tests {
         let built = Card::from_image(&fs::read(&runtime_card).unwrap()).unwrap().root().unwrap();
         let built_names: Vec<String> = built.iter().map(|node| node.name()).collect();
         assert_eq!(built_names, vec![GAME_SAVE_NAME.to_string(), REPLAY.to_string()]);
-        assert!(root.join("memcard").join(GAME_SAVE_NAME).is_dir());
+        assert!(user.saves().join("Active").join(GAME_SAVE_NAME).is_dir(), "the save is in Documents\\Gran Turismo 4\\Saves");
+        assert!(user.replays().join(REPLAY).is_dir());
+        assert!(!data.join("library").join("memcard").exists(), "nothing is written to the old AppData library");
         let _ = fs::remove_dir_all(&data);
     }
 
     #[test]
     fn an_import_never_overwrites_and_identical_saves_are_not_repeated() {
         let data = scratch("import");
-        let (_, library) = open(&data).unwrap();
+        let (_, library) = open_scratch(&data);
         let first = data.join("first.ps2");
         fs::write(&first, card_with(&[game_save(1)])).unwrap();
         let second = data.join("second.ps2");
@@ -231,7 +328,7 @@ mod tests {
     #[test]
     fn activating_a_slot_parks_the_previous_save() {
         let data = scratch("activate");
-        let (_, library) = open(&data).unwrap();
+        let (_, library) = open_scratch(&data);
         let runtime_card = data.join("runtime").join("card.ps2");
         let source = data.join("source.ps2");
         fs::write(&source, card_with(&[game_save(3)])).unwrap();
@@ -239,7 +336,8 @@ mod tests {
         // Make the imported save active: the library had no active save, so the slot becomes it.
         activate(&library, "Save 01").unwrap();
         let before = saves(&library).unwrap();
-        assert_eq!(before, vec![Item { name: GAME_SAVE_NAME.into(), label: "Active save".into(), active: true }]);
+        assert_eq!(names(&before), vec![GAME_SAVE_NAME.to_string()]);
+        assert!(before[0].active && before[0].label == "Active save");
 
         let other = data.join("other.ps2");
         fs::write(&other, card_with(&[game_save(4)])).unwrap();
@@ -254,13 +352,89 @@ mod tests {
     #[test]
     fn the_active_save_cannot_be_deleted() {
         let data = scratch("delete");
-        let (root, library) = open(&data).unwrap();
+        let (_, library) = open_scratch(&data);
         let card = data.join("card.ps2");
         fs::write(&card, card_with(&[game_save(5), replay()])).unwrap();
         harvest_card(&library, &card).unwrap();
-        let active = Item { name: GAME_SAVE_NAME.into(), label: "Active save".into(), active: true };
-        assert!(delete(&root, &active).is_err());
-        assert!(root.join("memcard").join(GAME_SAVE_NAME).is_dir(), "refused delete leaves the save");
+        let active = Item { name: GAME_SAVE_NAME.into(), label: "Active save".into(), active: true, modified: String::new() };
+        assert!(delete(&library, &active).is_err());
+        assert!(library.active_dir().join(GAME_SAVE_NAME).is_dir(), "refused delete leaves the save");
         let _ = fs::remove_dir_all(&data);
+    }
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use super::*;
+    use gt4saves::card::{DirEntry, Node, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
+    use gt4saves::Card;
+    use std::path::PathBuf;
+
+    const STAMP: [u8; 8] = [0, 39, 50, 7, 12, 10, 0xEA, 0x07];
+
+    fn scratch(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("gt4l-saves-move-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    fn old_save(data: &Path) -> Node {
+        let file = Node::file(DirEntry::new("garage", MODE_FILE_DEFAULT, STAMP, STAMP).unwrap(), vec![7; 4_000]);
+        let save = Node::dir(DirEntry::new(GAME_SAVE_NAME, MODE_DIR_DEFAULT, STAMP, STAMP).unwrap(), vec![file]);
+        let memcard = data.join("library").join("memcard");
+        fs::create_dir_all(&memcard).unwrap();
+        gt4saves::folder::export_item(&memcard, &save).unwrap();
+        save
+    }
+
+    #[test]
+    fn the_first_start_moves_the_old_library_to_the_players_folder() {
+        let data = scratch("first-start");
+        let save = old_save(&data);
+        let dirs = DataDirs::new(&data);
+        let user = UserDirs::new(data.join("Docs").join("Gran Turismo 4"), UserRootSource::Override);
+        let opened = open(&dirs, &user).unwrap();
+        assert!(opened.notice.is_none());
+        assert!(opened.log.iter().any(|line| line.contains("moved 3 files")), "{:?}", opened.log);
+        assert_eq!(saves(&opened.library).unwrap()[0].label, "Active save");
+        // Play builds the card from the moved save.
+        let card = dirs.runtime_card();
+        prepare_card(&opened.library, &card).unwrap();
+        let built = Card::from_image(&fs::read(&card).unwrap()).unwrap().root().unwrap();
+        assert!(gt4saves::card::same_contents(&built, std::slice::from_ref(&save)));
+        let parked: Vec<_> = fs::read_dir(&data).unwrap().filter_map(|e| e.ok()).filter(|e| e.file_name().to_string_lossy().starts_with("library.migrated-")).collect();
+        assert_eq!(parked.len(), 1, "the old folders are parked, not deleted");
+        // The guard now refuses the player's folder for install and update writes.
+        assert!(gt4l_core::guard::check_write(&data, &user.saves().join("x")).is_err());
+        let _ = fs::remove_dir_all(&data);
+    }
+
+    #[test]
+    fn an_unusable_players_folder_falls_back_to_the_data_folder() {
+        let data = scratch("fallback");
+        old_save(&data);
+        let dirs = DataDirs::new(&data);
+        // A file where the folder should be: the library cannot be made there.
+        let blocked = data.join("blocked-docs");
+        fs::write(&blocked, b"not a folder").unwrap();
+        let user = UserDirs::new(blocked.join("Gran Turismo 4"), UserRootSource::Documents);
+        let opened = open(&dirs, &user).unwrap();
+        assert_eq!(opened.user.root(), data.join("Gran Turismo 4"));
+        assert!(opened.notice.is_some());
+        assert_eq!(saves(&opened.library).unwrap().len(), 1, "the old save was moved to the fallback folder");
+        let _ = fs::remove_dir_all(&data);
+    }
+}
+
+#[cfg(test)]
+mod page_shape_tests {
+    use super::Item;
+
+    #[test]
+    fn an_item_has_the_fields_the_page_reads() {
+        let item = Item { name: "Save 02".into(), label: "Save 02".into(), active: false, modified: "2026-10-21T12:00:00Z".into() };
+        let json = serde_json::to_value(&item).unwrap();
+        assert_eq!(json, serde_json::json!({ "id": "Save 02", "name": "Save 02", "active": false, "modified": "2026-10-21T12:00:00Z" }));
     }
 }

@@ -89,9 +89,31 @@ so the step `settings_1_to_2` changes `fullscreen` to `"on"` unless `[choices] f
 and the backup. Tests: `migrate::tests::schema_one_fullscreen_off_becomes_on_unless_chosen`,
 `config_migration.rs` (`schema_one_fullscreen_off_that_was_never_chosen...`, `a_fullscreen_value_the_user_chose...`).
 
+## The save library moves to Documents (2026-10-21)
+
+Not a schema step: a one-time move of files, in `gt4saves::migration`, run at every start until it has succeeded.
+
+- **When:** the old AppData library (`library\memcard`, `library\saves`, `library\replays` or `replays`) holds at least
+  one file, and `Documents\Gran Turismo 4\Saves` and `\Replays` hold none (empty folders made by an earlier start do
+  not count).
+- **Mapping:** `memcard\BASCUS-97328GAMEDATA` -> `Saves\Active\`, `memcard\.backup\` -> `Saves\.backup\`, a replay in
+  `memcard\` -> `Replays\`, anything else in `memcard\` -> `Saves\Active\`, `saves\Save NN\` -> `Saves\Save NN\`, a
+  replay folder -> `Replays\`. `library\backups` stays in AppData and is still used.
+- **How:** every file is copied into staging folders beside the targets (`.Saves.migrating-<t>`), then compared with
+  its source by size and SHA-256. Any failure removes the staging copy only and leaves the old library untouched (the
+  next start tries again). Then the staging folders are renamed into place and the old folders are renamed into
+  `<data>\library.migrated-<UTC timestamp>\` (`memcard`, `saves`, ...). Nothing old is deleted. A folder that cannot
+  be renamed keeps its data and is listed in the marker.
+- **Both hold files:** nothing is copied, merged or overwritten. The Documents library is used, the conflict is logged
+  and shown on the Saves page, and the old folders stay as they are.
+- **Marker:** `config\library-migration.json` (`schema` 1, `status` = `migrated`, `conflict` or `failed`, the time,
+  folders, file and byte counts). It is not part of `settings.toml`. A `migrated` marker stops later runs.
+- The owner's manual backup `parked-2026-10-21-100pct-save` is not a source and is never touched.
+- Tests: `launcher/crates/gt4saves/tests/migration.rs`.
+
 ## What the migrations do not do
 
-- They do not rewrite memory cards or save slots.
+- They do not rewrite memory cards or save slots (the library move copies save folders byte for byte).
 - They do not run for a file the launcher only reads and never writes (the backup is made before any write, so a read-only file is left as it is).
 - They do not change `gt4controls` rules: the controls parser refuses other schemas, and the launcher keeps a file it cannot read (a copy is made before a reset).
 

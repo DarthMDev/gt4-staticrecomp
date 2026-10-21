@@ -340,6 +340,18 @@ Release audit 2026-10-21. Branch `task/081-release-1-0-0` (from main 26f83b8). N
   the old Z/X table; a remap wrote them into `controls.toml`). `cargo test --workspace` green again (233 passed).
 - Release: README for 1.0.0, `docs/release-notes/1.0.0.md`, draft GitHub release v1.0.0 with the installer and
   `SHA256SUMS`. The owner tests the installer end to end before the merge and the publish.
+- Saves in Documents (owner request 2026-10-21): the save library and replays live in `Documents\Gran Turismo 4`
+  (`Saves\Active`, `Saves\Save NN`, `Saves\.backup`, `Replays`), found with SHGetKnownFolderPath(FOLDERID_Documents)
+  (OneDrive and redirection followed; data-folder fallback `<data>\Gran Turismo 4` with a logged warning;
+  `GT4RECOMP_DOCUMENTS_DIR` is a dev and test override). The disc copy, prepared files, gs, config, controls, logs,
+  sessions, `runtime\card.ps2` and `library\backups` stay in `%LOCALAPPDATA%\GT4Recomp`. One-time migration
+  (`gt4saves::migration`): copy, size and sha256 check, rename the old `library\memcard` and `library\saves` into
+  `library.migrated-<UTC stamp>`; both non-empty = no merge, conflict logged; failure = staging copy removed, old
+  data untouched; marker `config\library-migration.json`. The guard refuses the player's folder for install,
+  update and renderer writes. Saves, Replays and About show the folder with Open folder. The page items now carry
+  `id` and `modified` (the real launcher sent neither, so activate and delete could not name an item). Uninstaller
+  page: saves and replays in Documents are always kept; the AppData box stays unchecked. `cargo test --workspace`
+  250 passed; nav-test 150/150, focus-check pass; scratch exe run migrated a copy of the owner's library.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback

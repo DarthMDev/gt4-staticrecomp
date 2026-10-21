@@ -115,7 +115,10 @@ The launcher checks the processor and Vulkan before setup and before Play, and s
    downloads the PCSX2 GS renderer (CoreGS 1.1 is used if you are offline).
 3. Press **Play**.
 
-Saves, replays and settings live in `%LOCALAPPDATA%\GT4Recomp`; uninstalling keeps them unless you tick the box.
+Your saves and replays live in `Documents\Gran Turismo 4` (`Saves`, `Replays`): easy to find and back up, and the
+uninstaller always keeps them. Settings, the copy of your disc image and other data live in `%LOCALAPPDATA%\GT4Recomp`;
+uninstalling keeps them unless you tick the box. A save library from an earlier launcher moves to Documents at the
+first start (copied and checked; the old folder is renamed, never deleted).
 This repository does not include game files, disc images, BIOS dumps or save files. Building from source needs your
 own game files and a development environment: see the [Build guide](docs/BUILD.md).
 
