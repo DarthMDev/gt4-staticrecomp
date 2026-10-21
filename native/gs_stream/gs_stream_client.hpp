@@ -5,6 +5,9 @@
 //   unset or "donor"  the donor GS front end and the native Vulkan renderer (unchanged; every hook returns at once)
 //   "pcsx2"           the GS stream: no donor Vulkan device; GIF, privileged writes, VSYNC and readbacks go to a GS
 //                     process (GT4_GS_PROCESS=<executable>) over shared memory (gs_stream_ipc.hpp)
+//   "hw"              TASK-027 development builds only (CMake GT4_HW_GS=ON, compile definition GT4_GS_STREAM_HW): no
+//                     donor Vulkan device and no GS process; the same hooks feed the in-process HWR backend
+//                     (gs_stream_sink.hpp). GT4_GS_CAPTURE is refused in this mode. Other builds refuse "hw".
 // Any other value stops the process before the game starts.
 //
 // TASK-036 (slice193), pcsx2 mode: GT4_GS_PROCESS_SHA256=<hex> refuses a GS process whose SHA-256 differs (the launcher
@@ -31,11 +34,12 @@
 
 namespace gt4::gs_stream {
 
-enum class Renderer { donor, pcsx2 };
+enum class Renderer { donor, pcsx2, hw };
 
 // Parsed once from GT4_RENDERER. An unknown value prints a message and exits with EXIT_FAILURE.
 Renderer renderer();
-// True when GT4_RENDERER=pcsx2: the donor GS front end and Vulkan renderer are not used.
+// True when GT4_RENDERER=pcsx2 (or hw in a GT4_GS_STREAM_HW build): the donor GS front end and Vulkan renderer are
+// not used.
 bool stream_renderer();
 
 // --- hooks (EE thread) ---

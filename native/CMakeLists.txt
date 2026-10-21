@@ -277,6 +277,15 @@ target_compile_definitions(gt4_gs_stream_client PRIVATE _CRT_SECURE_NO_WARNINGS)
 target_compile_options(gt4_gs_stream_client PRIVATE /W4)
 # TASK-038: users of the client (window.cpp through ps2runtime_vulkan) see GT4_GS_STREAM_CLIENT.
 target_compile_definitions(gt4_gs_stream_client INTERFACE GT4_GS_STREAM_CLIENT)
+# TASK-027 (CoreGS 2.0, development branch only): GT4_HW_GS=ON builds the HWR libraries, tools and tests (native/hw_gs)
+# and lets the GS stream seam accept GT4_RENDERER=hw. In that mode the same hooks that feed gt4-gs.exe in pcsx2 mode
+# feed the in-process HWR backend (native/hw_gs/hw_gs_stream_sink.cpp); no GS process is started. With GT4_HW_GS=OFF
+# (the default and every release build) the client still refuses any value other than donor or pcsx2.
+if(GT4_HW_GS)
+    add_subdirectory(hw_gs)
+    target_link_libraries(gt4_gs_stream_client PUBLIC gt4_hw_stream_sink)
+    target_compile_definitions(gt4_gs_stream_client PRIVATE GT4_GS_STREAM_HW)
+endif()
 add_executable(gs_stream_ipc_fixture gs_stream/gs_stream_ipc_fixture.cpp)
 target_link_libraries(gs_stream_ipc_fixture PRIVATE gt4_gs_stream)
 target_compile_options(gs_stream_ipc_fixture PRIVATE /W4)
