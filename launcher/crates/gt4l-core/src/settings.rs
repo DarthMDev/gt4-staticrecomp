@@ -71,12 +71,6 @@ const RENDERER_CHOICES: &[Choice] = &[
     Choice { value: CORE_GS_20, label: "CoreGS 2.0 (coming soon)", selectable: false },
 ];
 
-const RESOLUTION_CHOICES: &[Choice] = &[
-    Choice { value: "480i", label: "Native (480i)", selectable: true },
-    Choice { value: "480p", label: "480p", selectable: true },
-    Choice { value: "1080i", label: "1080i", selectable: true },
-];
-
 const INTERNAL_SCALE_CHOICES: &[Choice] = &[
     Choice { value: "1", label: "1x", selectable: true },
     Choice { value: "2", label: "2x", selectable: true },
@@ -146,27 +140,6 @@ pub const SETTINGS: &[SettingDef] = &[
                paraLLEl-GS project (LGPL). CoreGS 2.0 is in development.",
         kind: Kind::Choice(RENDERER_CHOICES),
         default: PCSX2_GS,
-        connected: true,
-    },
-    SettingDef {
-        id: "input_resolution",
-        page: Page::Graphics,
-        group: "Image",
-        title: "Input resolution",
-        info: "The video mode the game renders races in. 480p is recommended: it is progressive. \
-               Native (480i) and 1080i are interlaced, which looks softer and flickers. Menus are not affected.",
-        kind: Kind::Choice(RESOLUTION_CHOICES),
-        default: "480p",
-        connected: true,
-    },
-    SettingDef {
-        id: "widescreen",
-        page: Page::Graphics,
-        group: "Image",
-        title: "Widescreen 16:9",
-        info: "Holds the game's Wide setting at 16:9 while it runs, so the game starts widescreen. Off leaves the                game's own Wide setting (Options, Screen) as it is.",
-        kind: TOGGLE,
-        default: "on",
         connected: true,
     },
     SettingDef {
@@ -298,6 +271,19 @@ pub const SETTINGS: &[SettingDef] = &[
         connected: true,
     },
 ];
+
+/// Settings that earlier launchers stored and that are now fixed (owner, 2026-10-21). A value of one of these in
+/// `settings.toml` (or in `[choices]`) is ignored when the file is read and dropped at the next write; no schema step is
+/// needed because the launcher no longer reads them. The game always gets the fixed value (`launch.rs`).
+pub const RETIRED_SETTINGS: &[(&str, &str)] = &[
+    ("input_resolution", "the game always runs at 480p (GT4_FORCE_480P=1)"),
+    ("widescreen", "the game's own 16:9 is always on (GT4_FORCE_WIDESCREEN=1); Aspect ratio sets the screen shape"),
+];
+
+/// Why a retired setting is ignored, or `None` for any other id.
+pub fn retired(id: &str) -> Option<&'static str> {
+    RETIRED_SETTINGS.iter().find(|(retired_id, _)| *retired_id == id).map(|(_, reason)| *reason)
+}
 
 /// Looks up a definition by id.
 pub fn definition(id: &str) -> Option<&'static SettingDef> {

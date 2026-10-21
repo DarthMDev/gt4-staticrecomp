@@ -31,7 +31,12 @@ LEGACY_BASE = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-
                'AspectRatio = 16:9\n'
                'VsyncEnable = true\n'
                'DisableMailboxPresentation = true\n'
-               'HWDownloadMode = 0\n')
+               'HWDownloadMode = 0\n'
+               # Owner, 2026-10-21: PCSX2's own OSD rows are forced off and always written (GT4Recomp has its own
+               # performance overlay).
+               'OsdShowFPS = false\n'
+               'OsdShowGPU = false\n'
+               'OsdShowResolution = false\n')
 # TASK-064: ProhibitDynamicCode is always written; its default is false (overlays work out of the box).
 PROHIBIT_LINE = 'ProhibitDynamicCode = false\n'
 LEGACY_DEFAULT = LEGACY_BASE + '\n[GT4GS]\n' + PROHIBIT_LINE
@@ -193,11 +198,38 @@ class ValueTests(unittest.TestCase):
                 gs_settings.parse_value(upscale, value)
 
     def test_enum_accepts_only_listed_settable_names(self):
-        aspect = by_id()['aspect']
-        self.assertEqual(gs_settings.ini_value(aspect, gs_settings.parse_value(aspect, 'auto')), 'Auto 4:3/3:2')
-        self.assertEqual(gs_settings.ini_value(aspect, gs_settings.parse_value(aspect, '4:3')), '4:3')
+        deinterlace = by_id()['deinterlace']
+        self.assertEqual(gs_settings.ini_value(deinterlace, gs_settings.parse_value(deinterlace, 'automatic')), '0')
         with self.assertRaises(gs_settings.SettingsError):
-            gs_settings.parse_value(aspect, 'wide')
+            gs_settings.parse_value(deinterlace, 'wide')
+
+    def test_forced_rows_accept_only_their_fixed_value(self):
+        # Owner, 2026-10-21: 16:9 until the ultrawide update; PCSX2's own OSD rows always off.
+        aspect = by_id()['aspect']
+        self.assertEqual(gs_settings.ini_value(aspect, gs_settings.parse_value(aspect, '16:9')), '16:9')
+        for value in ('4:3', 'auto', 'wide'):
+            with self.assertRaises(gs_settings.SettingsError, msg=value):
+                gs_settings.parse_value(aspect, value)
+        with self.assertRaisesRegex(gs_settings.SettingsError, 'aspect is fixed at 16:9'):
+            gs_settings.settings_from_assignments(['aspect=4:3'], rows())
+        self.assertEqual(gs_settings.offered_choices(aspect), ['16:9'])
+        for identifier in ('osd_fps', 'osd_gpu', 'osd_resolution'):
+            row = by_id()[identifier]
+            self.assertEqual((row['page'], row['written'], row['default'], row['forced']),
+                             ('hidden', 'always', 'false', True), identifier)
+            self.assertEqual(gs_settings.parse_value(row, 'false'), 'false')
+            with self.assertRaisesRegex(gs_settings.SettingsError, f'{identifier} is fixed at false'):
+                gs_settings.parse_value(row, 'true')
+        for identifier in ('osd_messages_pos', 'osd_performance_pos', 'osd_scale'):
+            self.assertEqual(by_id()[identifier]['page'], 'hidden', identifier)
+        offered = {row['id'] for row in gs_settings.offered(rows())}
+        self.assertFalse({'aspect', 'osd_fps', 'osd_gpu', 'osd_resolution', 'osd_messages_pos',
+                          'osd_performance_pos', 'osd_scale'} & offered)
+
+    def test_forced_rows_must_be_hidden_always_and_ok(self):
+        row = dict(by_id()['aspect'], page='basic')
+        self.assertIn('aspect: forced rows must be page hidden, written always and status ok',
+                      gs_settings._row_errors(row))
 
     def test_tbd_choices_and_rows_are_refused(self):
         renderer = by_id()['renderer']
@@ -235,13 +267,13 @@ class ValueTests(unittest.TestCase):
 
 class IniTests(unittest.TestCase):
     def test_user_settings_replace_defaults_and_add_when_set_rows(self):
-        settings = gs_settings.settings_from_assignments(['upscale=6', 'fxaa=true', 'aspect=4:3'], rows())
+        settings = gs_settings.settings_from_assignments(['upscale=6', 'fxaa=true', 'aspect=16:9'], rows())
         text = gs_settings.render_ini(rows(), settings)
         self.assertEqual(text.splitlines(), [
             gs_settings.INI_HEADER, '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 6',
-            'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 4:3', 'VsyncEnable = true',
-            'DisableMailboxPresentation = true', 'HWDownloadMode = 0', 'fxaa = true', '', '[GT4GS]',
-            'ProhibitDynamicCode = false'])
+            'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 16:9', 'VsyncEnable = true',
+            'DisableMailboxPresentation = true', 'HWDownloadMode = 0', 'fxaa = true', 'OsdShowFPS = false',
+            'OsdShowGPU = false', 'OsdShowResolution = false', '', '[GT4GS]', 'ProhibitDynamicCode = false'])
 
     def test_sections_follow_the_fixed_order(self):
         settings = {'game_fixes': 'false', 'upscale': '2'}
@@ -314,7 +346,8 @@ class AllowListTests(unittest.TestCase):
 class OfferedTests(unittest.TestCase):
     def test_launcher_offers_only_settable_options(self):
         offered = {row['id'] for row in gs_settings.offered(rows())}
-        self.assertTrue({'renderer', 'upscale', 'aspect', 'vsync', 'deinterlace', 'blending', 'fxaa'} <= offered)
+        self.assertTrue({'renderer', 'upscale', 'vsync', 'deinterlace', 'blending', 'fxaa'} <= offered)
+        self.assertNotIn('aspect', offered)
         for identifier in ('filter', 'cas_mode', 'cas_sharpness', 'texture_load', 'adapter',
                            'cache_folder', 'headless_dump_dir', 'manual_hacks'):
             self.assertNotIn(identifier, offered, identifier)
@@ -547,7 +580,7 @@ class ResolvedValueTests(unittest.TestCase):
 class PageLayoutTests(unittest.TestCase):
     def test_graphics_page_is_basic_only(self):
         basic = [row['id'] for row in rows() if row['page'] == 'basic']
-        self.assertEqual(basic, ['gs_engine', 'upscale', 'aspect', 'fxaa', 'cas_mode', 'cas_sharpness'])
+        self.assertEqual(basic, ['gs_engine', 'upscale', 'fxaa', 'cas_mode', 'cas_sharpness'])
         upscale = by_id()['upscale']
         self.assertEqual((upscale['control'], upscale['type'], upscale['default']), ('dropdown', 'enum', '1080p'))
         # Owner decision 2026-10-16: ONLY these presets are offered.
@@ -557,9 +590,10 @@ class PageLayoutTests(unittest.TestCase):
 
     def test_advanced_page_holds_the_rest_of_the_user_options(self):
         advanced = [row for row in rows() if row['page'] == 'advanced']
-        self.assertEqual(len(advanced), 46)  # 45 + prohibit_dynamic_code (TASK-064)
-        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 47)))
-        self.assertTrue({'renderer', 'deinterlace', 'shade_boost', 'linear_present', 'tv_shader', 'osd_fps',
+        # 45 + prohibit_dynamic_code (TASK-064) - the six PCSX2 OSD rows, hidden since 2026-10-21
+        self.assertEqual(len(advanced), 40)
+        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 41)))
+        self.assertTrue({'renderer', 'deinterlace', 'shade_boost', 'linear_present', 'tv_shader', 'perf_overlay',
                          'hw_download_mode', 'filter', 'trilinear', 'anisotropic'} <= {row['id'] for row in advanced})
 
     def test_orders_are_unique_per_page(self):
@@ -658,7 +692,7 @@ class ProhibitDynamicCodeTests(unittest.TestCase):
         row = by_id()['prohibit_dynamic_code']
         self.assertEqual((row['page'], row['order'], row['control'], row['type'], row['section'], row['key'],
                           row['default'], row['written'], row['status']),
-                         ('advanced', 46, 'toggle', 'bool', 'GT4GS', 'ProhibitDynamicCode', 'false', 'always', 'ok'))
+                         ('advanced', 40, 'toggle', 'bool', 'GT4GS', 'ProhibitDynamicCode', 'false', 'always', 'ok'))
         self.assertEqual(row['label'], 'Block third-party overlays (Arbitrary Code Guard)')
         self.assertIn('prohibit_dynamic_code', {offered_row['id'] for offered_row in gs_settings.offered(rows())})
 

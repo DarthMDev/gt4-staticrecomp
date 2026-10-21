@@ -29,10 +29,11 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     // Differences with the Python launcher, approved in LAUNCHER-PLAN section 6:
     assert!(!environment.contains_key("GT4_PERF"), "Performance report is off by default");
     assert_eq!(environment["GT4_FULLSCREEN"], "1");
-    // TASK-079: Widescreen 16:9 is on by default and is always stated (the game's native default is on too).
+    // 16:9 is fixed (owner, 2026-10-21): GT4_FORCE_WIDESCREEN=1 is always stated; there is no setting.
     assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1");
     // TASK-080: Aspect ratio Auto is the default and is always stated.
     assert_eq!(environment["GT4_DISPLAY_ASPECT"], "auto");
+    assert!(!environment.contains_key("GT4_RACE_DISPLAY"), "480p is fixed: no 480i or 1080i path");
     assert_eq!(environment["GT4_PRESENT_MODE"], "fifo");
     // Asynchronous GS is the default, so GT4_GS_SYNC stays unset.
     assert!(!environment.contains_key("GT4_GS_SYNC"));
@@ -99,26 +100,25 @@ fn inherited_gt4_and_ps2_variables_are_scrubbed_and_others_kept() {
 #[test]
 fn settings_map_to_their_variables() {
     let mut settings = Settings::default();
-    settings.set("input_resolution", "480i").unwrap();
     settings.set("vsync", "fast").unwrap();
     settings.set("async_gs", "off").unwrap();
     settings.set("performance_report", "on").unwrap();
     settings.set("check_vu_code", "1000").unwrap();
     let environment = env_map(&launch::game_environment(&settings));
-    assert_eq!(environment["GT4_FORCE_480P"], "0");
+    assert_eq!(environment["GT4_FORCE_480P"], "1", "480p is fixed whatever the other settings");
     assert_eq!(environment["GT4_PRESENT_MODE"], "mailbox");
     assert_eq!(environment["GT4_GS_SYNC"], "1");
     assert_eq!(environment["GT4_PERF"], "1");
     assert_eq!(environment["GT4_VU1_VERIFY"], "1000");
     assert_eq!(environment["GT4_VU0_VERIFY"], "1000");
 
-    settings.set("widescreen", "off").unwrap();
-    let environment = env_map(&launch::game_environment(&settings));
-    assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "0", "Widescreen 16:9 off leaves the game's own setting");
+    assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1", "16:9 is fixed whatever the other settings");
     // TASK-080: Aspect ratio -> GT4_DISPLAY_ASPECT in the forms the game accepts.
     for (choice, expected) in [("16:9", "16:9"), ("4:3", "4:3"), ("auto", "auto")] {
         settings.set("aspect_ratio", choice).unwrap();
-        assert_eq!(env_map(&launch::game_environment(&settings))["GT4_DISPLAY_ASPECT"], expected);
+        let environment = env_map(&launch::game_environment(&settings));
+        assert_eq!(environment["GT4_DISPLAY_ASPECT"], expected);
+        assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1", "the game's own 16:9 is the base for every ratio");
     }
     settings.set("aspect_ratio", "custom").unwrap();
     assert_eq!(env_map(&launch::game_environment(&settings))["GT4_DISPLAY_ASPECT"], "2.33", "custom default 21:9");
@@ -136,14 +136,28 @@ fn settings_map_to_their_variables() {
 }
 
 #[test]
-fn one_hundred_and_1080i_map_as_documented() {
+fn check_every_100th_call_maps_as_documented() {
     let mut settings = Settings::default();
-    settings.set("input_resolution", "1080i").unwrap();
     settings.set("check_vu_code", "100").unwrap();
     let environment = env_map(&launch::game_environment(&settings));
-    assert_eq!(environment["GT4_RACE_DISPLAY"], "1080i");
-    assert_eq!(environment["GT4_FORCE_480P"], "0");
     assert_eq!(environment["GT4_VU1_VERIFY"], "100");
+    assert_eq!(environment["GT4_VU0_VERIFY"], "100");
+}
+
+#[test]
+fn input_resolution_and_widescreen_are_retired_and_fixed() {
+    // Owner, 2026-10-21: the game always runs at 480p and 16:9. The rows are gone; old values cannot be set.
+    let mut settings = Settings::default();
+    for id in ["input_resolution", "widescreen"] {
+        assert!(settings::definition(id).is_none(), "{id} has no row");
+        assert!(settings::retired(id).is_some(), "{id} is listed as retired");
+        assert!(settings.set(id, "480i").is_err());
+    }
+    for environment in [env_map(&launch::game_environment(&settings))] {
+        assert_eq!(environment["GT4_FORCE_480P"], "1");
+        assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1");
+        assert!(!environment.contains_key("GT4_RACE_DISPLAY"));
+    }
 }
 
 #[test]

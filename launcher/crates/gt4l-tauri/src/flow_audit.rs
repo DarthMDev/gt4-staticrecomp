@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gt4l_core::launch::{self, LaunchInputs};
-use gt4l_core::paths::DataDirs;
+use gt4l_core::paths::{DataDirs, UserDirs, UserRootSource, USER_FOLDER_NAME};
 use gt4l_disc::testing::{build_iso, pins_for, synthetic_game, system_cnf};
 use gt4l_disc::Pins;
 use serde_json::{json, Value};
@@ -46,7 +46,9 @@ impl Recorder {
 }
 
 fn launch(dirs: &DataDirs, pins: &Pins) -> Shared {
-    Arc::new(Mutex::new(AppState::load_with_pins(dirs.clone(), pins.clone()).expect("state loads")))
+    // A stand-in for Documents inside the sandbox: the flow never touches the real player's folder.
+    let user = UserDirs::new(dirs.root().join("documents-stand-in").join(USER_FOLDER_NAME), UserRootSource::Override);
+    Arc::new(Mutex::new(AppState::load_with(dirs.clone(), pins.clone(), user).expect("state loads")))
 }
 
 fn screen(shared: &Shared) -> Value {
@@ -139,13 +141,13 @@ fn walk_pages(shared: &Shared, card: &Path) -> Vec<String> {
     let swapped = commands::assign_binding_of("cross".into(), "key:Q".into(), true, shared).expect("swap");
     assert_eq!(swapped["swapped_with"], json!("l1"));
     let file = fs::read_to_string(lock(shared).controls_path()).expect("controls file written");
-    assert!(file.contains("cross = [\"xinput:A\", \"key:Q\"]") && file.contains("l1 = [\"xinput:LB\", \"key:Z\"]"), "{file}");
+    assert!(file.contains("cross = [\"xinput:A\", \"key:Q\"]") && file.contains("l1 = [\"xinput:LB\", \"key:W\"]"), "{file}");
     commands::set_setting_of("lstick_deadzone".into(), json!(10), shared).expect("stick deadzone");
     let tuned = fs::read_to_string(lock(shared).controls_path()).unwrap();
     assert!(tuned.contains("xinput:LX | deadzone=0.100"), "{tuned}");
     let reset = commands::reset_all_bindings_of(shared).expect("reset all");
     let cross = reset["controls"].as_array().unwrap().iter().find(|row| row["id"] == "cross").unwrap().clone();
-    assert_eq!(cross["key"], json!("Z"));
+    assert_eq!(cross["key"], json!("W"));
     log.push(format!("controls: {} inputs, cross reset, swap with l1, stick deadzone, reset all", controls["controls"].as_array().unwrap().len()));
 
     let about = commands::about_info_of(shared).expect("about");

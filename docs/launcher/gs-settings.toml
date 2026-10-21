@@ -8,7 +8,7 @@
 #   id          launcher identifier (lowercase; play_performance.py --gs-setting ID=VALUE uses it)
 #   label       name shown to the owner
 #   help        one-line help text
-#   page        basic (the launcher's GRAPHICS page), advanced (ADVANCED page), mods (a future mod manager, TASK-048;
+#   page        basic (the launcher's Graphics page), advanced (the Advanced section of the Graphics page), mods (a future mod manager, TASK-048;
 #               shown on neither page), hidden (never shown: launcher or GT4 internal)
 #   order       position within the page (1 is first); unique per page
 #   control     slider (int range), toggle (bool), dropdown (enum), text (string), none (launcher-supplied, path)
@@ -27,6 +27,9 @@
 #               resolved  key and values confirmed in the PCSX2 v2.8.2 sources; not settable until the owner
 #                         checks it in the game (then it becomes ok)
 #               pending-TASK-0NN  depends on another task
+#   forced      optional, true on a hidden, always-written, ok row whose value is fixed: the writer always writes the
+#               default and refuses any other value (Python and Rust writers alike); the launcher never shows it, and a
+#               value stored by an earlier launcher is ignored (owner, 2026-10-21: aspect 16:9, PCSX2 OSD rows off)
 #   env         launcher-only rows: the environment variable the launcher reads
 #   notes       sources and open points
 #
@@ -164,9 +167,9 @@ notes = "GSInterlaceMode (pcsx2/Config.h:291-302: Automatic = 0 ... AdaptiveBFF 
 [[setting]]
 id = "aspect"
 label = "Aspect ratio"
-help = "Display aspect ratio. 16:9 is the game widescreen setting (TASK-009)."
-page = "basic"
-order = 3
+help = "Display aspect ratio. Fixed at 16:9 until the ultrawide update (owner, 2026-10-21)."
+page = "hidden"
+order = 21
 control = "dropdown"
 section = "EmuCore/GS"
 key = "AspectRatio"
@@ -174,6 +177,7 @@ type = "enum"
 default = "16:9"
 written = "always"
 status = "ok"
+forced = true
 choices = [
   { name = "16:9", ini = "16:9", status = "ok" },
   { name = "4:3", ini = "4:3", status = "ok" },
@@ -238,7 +242,7 @@ id = "fxaa"
 label = "Anti-aliasing (FXAA)"
 help = "Fast approximate anti-aliasing applied to the output. Off by default."
 page = "basic"
-order = 4
+order = 3
 control = "toggle"
 section = "EmuCore/GS"
 key = "fxaa"
@@ -253,7 +257,7 @@ id = "cas_mode"
 label = "Sharpening (CAS)"
 help = "FidelityFX Contrast Adaptive Sharpening (CAS) mode. Off by default."
 page = "basic"
-order = 5
+order = 4
 control = "dropdown"
 section = "EmuCore/GS"
 key = "CASMode"
@@ -273,7 +277,7 @@ id = "cas_sharpness"
 label = "Sharpening amount"
 help = "Strength of CAS sharpening (0 to 100). Used with CAS on."
 page = "basic"
-order = 6
+order = 5
 control = "slider"
 section = "EmuCore/GS"
 key = "CASSharpness"
@@ -693,54 +697,57 @@ notes = "Stored as u8 (pcsx2/Config.h:902, default 50). Loader pcsx2/Pcsx2Config
 [[setting]]
 id = "osd_fps"
 label = "Show FPS"
-help = "Show the GS frame rate on screen. Off by default."
-page = "advanced"
-order = 30
+help = "PCSX2's own FPS display. Always off: GT4Recomp shows its own performance overlay (owner, 2026-10-21)."
+page = "hidden"
+order = 15
 control = "toggle"
 section = "EmuCore/GS"
 key = "OsdShowFPS"
 type = "bool"
 default = "false"
-written = "when-set"
+written = "always"
 status = "ok"
+forced = true
 notes = "D.1 OSD row: default shows messages only, so FPS is Off. Loader pcsx2/Pcsx2Config.cpp:965."
 
 [[setting]]
 id = "osd_gpu"
 label = "Show GPU name"
-help = "Show the GPU name on screen. Off by default."
-page = "advanced"
-order = 31
+help = "PCSX2's own GPU name display. Always off: GT4Recomp shows its own performance overlay (owner, 2026-10-21)."
+page = "hidden"
+order = 16
 control = "toggle"
 section = "EmuCore/GS"
 key = "OsdShowGPU"
 type = "bool"
 default = "false"
-written = "when-set"
+written = "always"
 status = "ok"
+forced = true
 notes = "D.1 OSD row: messages only by default. Loader pcsx2/Pcsx2Config.cpp:968."
 
 [[setting]]
 id = "osd_resolution"
 label = "Show resolution"
-help = "Show the internal resolution on screen. Off by default."
-page = "advanced"
-order = 32
+help = "PCSX2's own resolution display. Always off: GT4Recomp shows its own performance overlay (owner, 2026-10-21)."
+page = "hidden"
+order = 17
 control = "toggle"
 section = "EmuCore/GS"
 key = "OsdShowResolution"
 type = "bool"
 default = "false"
-written = "when-set"
+written = "always"
 status = "ok"
+forced = true
 notes = "D.1 OSD row: messages only by default. Loader pcsx2/Pcsx2Config.cpp:971."
 
 [[setting]]
 id = "osd_messages_pos"
 label = "OSD message position"
 help = "Where OSD messages appear. Top left is the default."
-page = "advanced"
-order = 33
+page = "hidden"
+order = 18
 control = "dropdown"
 section = "EmuCore/GS"
 key = "OsdMessagesPos"
@@ -766,8 +773,8 @@ notes = "OsdOverlayPos (pcsx2/Config.h:341-351: None = 0, TopLeft = 1 ... Bottom
 id = "osd_performance_pos"
 label = "OSD performance position"
 help = "Where the performance overlay (FPS, speed) appears."
-page = "advanced"
-order = 34
+page = "hidden"
+order = 19
 control = "dropdown"
 section = "EmuCore/GS"
 key = "OsdPerformancePos"
@@ -793,8 +800,8 @@ notes = "OsdPerformancePos (pcsx2/Config.h:341-351); loader pcsx2/Pcsx2Config.cp
 id = "osd_scale"
 label = "OSD scale"
 help = "Size of OSD text (percent)."
-page = "advanced"
-order = 35
+page = "hidden"
+order = 20
 control = "slider"
 section = "EmuCore/GS"
 key = "OsdScale"
@@ -811,7 +818,7 @@ id = "disable_shader_cache"
 label = "Disable shader cache"
 help = "Turn off the GS shader cache (debugging only). Off."
 page = "advanced"
-order = 36
+order = 30
 control = "toggle"
 section = "EmuCore/GS"
 key = "DisableShaderCache"
@@ -826,7 +833,7 @@ id = "cursor_autohide"
 label = "Hide the mouse cursor"
 help = "Hide the mouse cursor over the picture after 3 s without movement (fullscreen and windowed). On by default."
 page = "advanced"
-order = 37
+order = 31
 control = "toggle"
 section = ""
 key = ""
@@ -842,7 +849,7 @@ id = "shader_compile_notice"
 label = "Show \"Compiling shaders\" notice"
 help = "Small text in the bottom-left corner while the PCSX2 GS compiles shaders or pipelines (not when they come from the cache)."
 page = "advanced"
-order = 38
+order = 32
 control = "toggle"
 section = "GT4GS"
 key = "ShaderCompileNotice"
@@ -857,7 +864,7 @@ id = "perf_overlay"
 label = "Performance overlay"
 help = "Show performance numbers in the top-right corner (the items below). Off by default."
 page = "advanced"
-order = 39
+order = 33
 control = "toggle"
 section = "GT4GS"
 key = "PerfOverlay"
@@ -872,7 +879,7 @@ id = "perf_overlay_fps"
 label = "Overlay: FPS"
 help = "Frames per second of the game (VSYNCs per second)."
 page = "advanced"
-order = 40
+order = 34
 control = "toggle"
 section = "GT4GS"
 key = "PerfOverlayFPS"
@@ -887,7 +894,7 @@ id = "perf_overlay_frame_time"
 label = "Overlay: frame time"
 help = "Mean and longest frame time in milliseconds."
 page = "advanced"
-order = 41
+order = 35
 control = "toggle"
 section = "GT4GS"
 key = "PerfOverlayFrameTime"
@@ -902,7 +909,7 @@ id = "perf_overlay_cpu"
 label = "Overlay: CPU usage of the game"
 help = "CPU usage of the game process plus the gt4-gs process (not the whole PC)."
 page = "advanced"
-order = 42
+order = 36
 control = "toggle"
 section = "GT4GS"
 key = "PerfOverlayCPU"
@@ -917,7 +924,7 @@ id = "perf_overlay_gpu"
 label = "Overlay: GPU usage of the game"
 help = "GPU usage of the game process plus the gt4-gs process (Windows per-process GPU counters)."
 page = "advanced"
-order = 43
+order = 37
 control = "toggle"
 section = "GT4GS"
 key = "PerfOverlayGPU"
@@ -932,7 +939,7 @@ id = "perf_overlay_resolution"
 label = "Overlay: resolutions"
 help = "Output (window) resolution and the GS internal render resolution."
 page = "advanced"
-order = 44
+order = 38
 control = "toggle"
 section = "GT4GS"
 key = "PerfOverlayResolution"
@@ -947,7 +954,7 @@ id = "perf_overlay_breakdown"
 label = "Overlay: frame cost breakdown"
 help = "Milliseconds per frame of EE game logic, VU1 worker, GS stream write, readbacks and GS thread, and the headroom."
 page = "advanced"
-order = 45
+order = 39
 control = "toggle"
 section = "GT4GS"
 key = "PerfOverlayBreakdown"
@@ -1221,7 +1228,7 @@ id = "prohibit_dynamic_code"
 label = "Block third-party overlays (Arbitrary Code Guard)"
 help = "On blocks code injection into the renderer, which also hides overlays such as MSI Afterburner / RivaTuner. Off (default) lets them work."
 page = "advanced"
-order = 46
+order = 40
 control = "toggle"
 section = "GT4GS"
 key = "ProhibitDynamicCode"

@@ -41,7 +41,7 @@ fn an_unversioned_dev_build_file_is_backed_up_and_migrated_to_schema_one() {
 
     let rewritten = fs::read_to_string(&path).unwrap();
     assert!(rewritten.contains("schema_version = 4"), "{rewritten}");
-    assert!(rewritten.contains("widescreen = \"on\""), "{rewritten}");
+    assert!(!rewritten.contains("widescreen"), "{rewritten}");
     assert!(rewritten.contains("aspect_ratio = \"auto\""), "{rewritten}");
     assert!(!rewritten.contains("\r\r"));
 }
@@ -168,4 +168,38 @@ fullscreen = true"), "{text}");
     let (loaded, _) = config::load(&path);
     assert_eq!(loaded.settings.get("fullscreen"), "off");
     assert!(loaded.settings.was_chosen("fullscreen"));
+}
+
+#[test]
+fn a_release_1_0_0_schema_3_file_is_backed_up_and_migrated_to_schema_four() {
+    // The settings file of the 1.0.0 launcher, with the keys it retired by a load-time rule still stored.
+    let directory = scratch("v3-release-100");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 3\n\n",
+        "[settings]\nrenderer = \"pcsx2\"\ninput_resolution = \"480p\"\nwidescreen = \"on\"\nvsync = \"fast\"\n\n",
+        "[choices]\nwidescreen = true\nvsync = true\n\n",
+        "[gs]\naspect = \"16:9\"\nfxaa = \"true\"\n\n",
+        "[install]\ndisc_path = \"D:/gt4.iso\"\n",
+    );
+    fs::write(&path, original).unwrap();
+
+    let (loaded, notes) = config::load(&path);
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 3 to 4")), "{notes:?}");
+    assert!(!notes.iter().any(|note| note.contains("no longer used")), "the step already dropped them: {notes:?}");
+    assert_eq!(loaded.settings.get("vsync"), "fast");
+    assert_eq!(loaded.settings.get("aspect_ratio"), "auto");
+    assert_eq!(loaded.settings.get("aspect_custom"), "233");
+    assert_eq!(loaded.settings.gs_value("fxaa"), "true");
+    assert_eq!(loaded.settings.gs_value("aspect"), "16:9", "the GS settings-file aspect stays forced");
+    assert_eq!(loaded.disc_path.as_deref(), Some(Path::new("D:/gt4.iso")));
+
+    let copies = backups(&directory, "settings.toml.bak-schema3-");
+    assert_eq!(copies.len(), 1, "exactly one backup");
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original);
+    let rewritten = fs::read_to_string(&path).unwrap();
+    assert!(rewritten.contains("schema_version = 4"), "{rewritten}");
+    for retired in ["input_resolution", "widescreen", "aspect = "] {
+        assert!(!rewritten.contains(retired), "{retired} in {rewritten}");
+    }
 }

@@ -135,8 +135,8 @@ Focus moves spatially (nearest element in the pressed direction; sideways offset
 |---|---|---|---|---|---|---|---|
 | Setup | primary button (Choose disc image / Choose another file / Play) | Cancel while copying or checking; Home when done | none | none | none | none | none |
 | Home | Play | none | none | Settings | Play | none | none |
-| Settings: Graphics, Display | activate (dropdown opens its list) | Back to Home (closes a tip or a dialog first) | none | none | none | previous / next tab | adjust slider or dropdown |
-| Settings: Advanced | activate | Back to Home | none | Reset to defaults (confirm) | none | tabs | adjust |
+| Settings: Graphics (with its Advanced section) | activate (dropdown opens its list) | Back to Home (closes a tip or a dialog first) | none | Reset to defaults (confirm) | none | previous / next tab | adjust slider or dropdown |
+| Settings: Display | activate (dropdown opens its list) | Back to Home (closes a tip or a dialog first) | none | none | none | previous / next tab | adjust slider or dropdown |
 | Settings: About | activate (log folder) | Back to Home | none | none | none | tabs | none |
 | Saves | select / make active | Back | Import | Make active | none | tabs | none |
 | Replays | none | Back | Import | Delete (confirm) | none | tabs | none |
@@ -162,7 +162,10 @@ Routing of the face and shoulder buttons lives in `GT4.input.padRoute` (`js/inpu
 
 Idle: dark translucent glass with a thin white border and a slow light sweep (about every 3.4 s). Focused (pad or keys) and hovered: solid white, dark label, scale 1.03, soft glow. Pressed: a quick press-down. Under `prefers-reduced-motion` the sweep is removed and the idle state stays static. Other primary buttons (`.btn.primary`) use the same idle and focused language, without the sweep.
 
-Tab order for LB/RB and Q/E: Graphics, Advanced, Display, Controls, Saves, Replays, About. The Mods tab and its rows are behind `GT4.features.mods` in `js/config.js` (off in release 1.1.0 builds; the mod manager ships in 1.1.0).
+Tab order for LB/RB and Q/E: Graphics, Display, Controls, Saves, Replays, About. Advanced is not a tab (owner,
+2026-10-21): it is a section at the bottom of Graphics (heading "Advanced", the `page = advanced` rows, then "Reset to
+defaults"); the D-pad moves down from the last Graphics row into it, and `#/settings/advanced` falls back to Graphics.
+Screenshot: `docs/launcher/shots/graphics-advanced-section.png` (`dev/focus-check.html?scenario=advanced`). The Mods tab and its rows are behind `GT4.features.mods` in `js/config.js` (off in release 1.1.0 builds; the mod manager ships in 1.1.0).
 
 Keyboard: arrows move, Enter/Space activate (native), Esc = B, Q/E = LB/RB, Tab/Shift+Tab move in DOM order.
 

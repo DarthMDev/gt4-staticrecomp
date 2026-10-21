@@ -3,8 +3,10 @@
 //! The fixtures in tests/fixtures/gs were written by scripts/gs_settings.py (Python in text mode on Windows, so the
 //! lines end with CRLF). Regenerate them only with that script; never edit them by hand.
 //! Commands used (repository root, Python from private/tooling-venv):
-//!   python -I scripts/gs_settings.py ini --set upscale=2 --set aspect=4:3 --set hw_download_mode=unsynchronized
+//!   python -I scripts/gs_settings.py ini --set upscale=2 --set hw_download_mode=unsynchronized
 //!       --set fxaa=true --set mipmap=false --set blending=high --out <file>
+//!   (regenerated 2026-10-21: aspect is fixed at 16:9 and the PCSX2 OSD rows are always written off, so aspect=4:3
+//!   is no longer accepted and both files gained the OsdShow* lines)
 //!   default-session.ini: render_ini(rows, {vsync: true, mailbox: true}, {cache_folder, data_root}) with the
 //!   cache and data folders C:/gs/cache and C:/gs/data.
 
@@ -31,7 +33,6 @@ fn default_session_ini_matches_the_python_writer_byte_for_byte() {
 fn user_settings_ini_matches_the_python_writer_byte_for_byte() {
     let settings = map(&[
         ("upscale", "2"),
-        ("aspect", "4:3"),
         ("hw_download_mode", "unsynchronized"),
         ("fxaa", "true"),
         ("mipmap", "false"),
@@ -48,6 +49,9 @@ fn refused_values_are_the_same_refusals_as_the_python_writer() {
     assert!(gs_table::render_ini(&map(&[("upscale", "13")]), &BTreeMap::new()).is_err());
     assert!(gs_table::render_ini(&map(&[("filter", "nearest")]), &BTreeMap::new()).is_err());
     assert!(gs_table::render_ini(&map(&[("cache_folder", "C:/x")]), &BTreeMap::new()).is_err());
+    // Forced rows (owner, 2026-10-21): only the fixed value is accepted.
+    assert!(gs_table::render_ini(&map(&[("aspect", "4:3")]), &BTreeMap::new()).is_err());
+    assert!(gs_table::render_ini(&map(&[("osd_fps", "true")]), &BTreeMap::new()).is_err());
     assert!(gs_table::render_ini(&BTreeMap::new(), &map(&[("upscale", "2")])).is_err());
 }
 

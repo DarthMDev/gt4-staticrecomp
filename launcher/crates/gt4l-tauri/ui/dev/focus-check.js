@@ -3,15 +3,18 @@
  * Arrow keys stand in for the pad (nav.js handles both). The results are written into a <pre> at the end of the
  * page and body[data-focus-check] is "pass" or "fail".
  *
- *   (no query)          the sidebar walk over every tab, Saves and Replays entry, B back, value changes, and the
+ *   (no query)          the sidebar walk over every tab, Saves and Replays entry, B back, value changes, the
+ *                       Advanced section inside Graphics (no Advanced tab; the D-pad reaches its rows), and the
  *                       Controls page (entry on the DS2, spatial moves, rebind and cancel, conflict and swap, live
  *                       input from a still dev pad, Y reset, X reset all)
  *   ?scenario=4k        only sets the state for docs/launcher/shots/graphics-4k-updated.png (4K chosen, row shown)
+ *   ?scenario=advanced  only sets the state for docs/launcher/shots/graphics-advanced-section.png (pad focus on the
+ *                       first Advanced row inside Graphics)
  */
 (function (root) {
   "use strict";
   var GT4 = root.GT4;
-  var TABS = ["graphics", "advanced", "display", "controls", "saves", "replays", "about"];
+  var TABS = ["graphics", "display", "controls", "saves", "replays", "about"];
   var lines = [];
   var failures = 0;
 
@@ -195,6 +198,70 @@
     }
   }
 
+  // Advanced is a section at the bottom of Graphics (owner, 2026-10-21), not a tab: the old route falls back to
+  // Graphics, the D-pad walks from the Graphics rows into the Advanced rows and the reset button, Y is Reset, and B
+  // returns to the tab list from inside the section.
+  function focusedSetting() {
+    var active = document.activeElement;
+    return active && active.getAttribute ? active.getAttribute("data-setting") || active.getAttribute("data-action") : null;
+  }
+
+  async function advancedSectionChecks() {
+    check("the tab list has no Advanced tab", !sideButton("advanced"), "an Advanced tab is shown");
+    await setHash("#/settings/advanced");
+    check("#/settings/advanced falls back to Graphics", shownTab() === "graphics", "shown " + shownTab());
+    await setHash("#/settings/graphics");
+    var head = document.querySelector(".content .section-head");
+    check("Graphics shows an Advanced section heading", !!head && head.textContent === "Advanced", head ? head.textContent : "none");
+    var firstAdvanced = document.querySelector(".content .settings-section [data-setting]");
+    var firstId = firstAdvanced ? firstAdvanced.getAttribute("data-setting") : null;
+    check("the Advanced section holds the advanced rows", firstId === "async_gs", "first " + firstId);
+    press("ArrowRight");
+    await wait(200);
+    var reached = false;
+    var reset = false;
+    var walk = [];
+    for (var i = 0; i < 30 && !reset; i++) {
+      press("ArrowDown");
+      await wait(80);
+      var id = focusedSetting();
+      walk.push(id || (document.activeElement ? document.activeElement.className : "none"));
+      var active = document.activeElement;
+      if (active && active.closest && active.closest(".settings-section .row")) {
+        reached = true; // a control or the "i" button of an Advanced row
+      }
+      if (id === "reset-defaults") {
+        reset = true;
+      }
+    }
+    check("D-pad down from the Graphics rows reaches the Advanced rows", reached, "walk " + walk.join(" > "));
+    check("D-pad down reaches Reset to defaults at the end of the section", reset, "focus " + focusedSetting());
+    check("the Graphics content footer offers Y Reset", /Reset/.test(footerText()), footerText());
+    var inSection = document.querySelector(".content .settings-section [data-setting=\"perf_overlay\"]");
+    check("our performance overlay row is in the Advanced section", !!inSection, "no perf_overlay row");
+    var osd = document.querySelector(".content [data-setting=\"osd_fps\"], .content [data-setting=\"aspect\"], " +
+      ".content [data-setting=\"input_resolution\"], .content [data-setting=\"widescreen\"]");
+    check("no PCSX2 OSD, aspect, input resolution or widescreen row is shown", !osd, osd ? osd.getAttribute("data-setting") : "");
+    press("ArrowUp");
+    await wait(80);
+    press("Escape");
+    await wait(150);
+    check("B inside the Advanced section returns to the tab list on Graphics", sideStepOk("graphics"), sideDetail());
+  }
+
+  async function scenarioAdvanced() {
+    GT4.nav.setMode("pad");
+    await setHash("#/settings/graphics");
+    press("ArrowRight");
+    await wait(200);
+    var first = document.querySelector(".content .settings-section [data-setting]");
+    if (first) {
+      first.focus();
+      first.scrollIntoView({ block: "center" });
+    }
+    await wait(300);
+  }
+
   // Controls (js/pages/controls.js): entry on the DS2, spatial moves, rebind with cancel, conflicts, live input, reset.
   function key(name, code) {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: name, code: code || name, bubbles: true, cancelable: true }));
@@ -366,11 +433,16 @@
         await scenario4k();
         return;
       }
+      if (scenario === "advanced") {
+        await scenarioAdvanced();
+        return;
+      }
       await routeChecks();
       await sideWalk();
       await enterChecks();
       await importEntryCheck();
       await valueChecks();
+      await advancedSectionChecks();
       await controlsChecks();
     } catch (err) {
       check("the checks ran to the end", false, String(err && err.message ? err.message : err));

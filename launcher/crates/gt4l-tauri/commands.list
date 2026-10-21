@@ -27,6 +27,9 @@ reset_all_bindings
 about_info
 open_log_folder
 open_game_files_folder
+open_player_folder
+open_saves_folder
+open_replays_folder
 check_updates
 apply_update
 skip_update

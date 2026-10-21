@@ -41,6 +41,12 @@ Labels: **Confirmed** (read in code/data or measured), **High confidence**, **Hy
    coordinator; third-party parts keep their licenses, paraLLEl-GS LGPL in its DLL); installers are
    GitHub Releases of `moesuito/gt4-staticrecomp` and the launcher source lives in the same
    repository; the Windows display name is "Gran Turismo 4".
+7. **Owner feedback on the installed 1.0.0 launcher (2026-10-21, TASK-081).** The game is fixed at 480p and 16:9
+   (until the ultrawide update): the "Input resolution" (section 6, Image) and "Widescreen 16:9" rows and the GS
+   "Aspect ratio" row are removed; the launcher always sends `GT4_FORCE_480P=1` and `GT4_FORCE_WIDESCREEN=1` and
+   writes `AspectRatio = 16:9` (no `GT4_RACE_DISPLAY`). Advanced is a section at the bottom of the Graphics page, not
+   a tab. PCSX2's own OSD rows (Show FPS, GPU name, resolution) are hidden and always written off; only GT4Recomp's
+   performance overlay rows remain. Old stored values are ignored at load (docs/launcher/MIGRATIONS.md).
 
 Consequences to record when TASK-019 starts (documentation changes, not done here):
 `TASKS.md` "First stable release" currently says *"no game assets or binaries derived from the
@@ -373,7 +379,7 @@ launcher contains no reference to the official branding or bundled payload.
 | What | Where |
 |---|---|
 | Program (installer-owned, replaced on update) | `%LOCALAPPDATA%\Programs\GT4Recomp\` → `GT4Recomp.exe`, `game\gt4recomp-game.exe`, `game\gt4_parallel_gs.dll`, `game\shaders\*.spv`, `branding\`, `licenses\`, `release-manifest.json`, `uninstall.exe` |
-| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `memcard\` (folder card: active save + all replays), `saves\` (inactive saves), `runtime\card.ps2` (section 13), `art\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20), `cache\` (Vulkan pipeline cache) |
+| User data (survives updates/uninstall unless asked) | `%LOCALAPPDATA%\GT4Recomp\` → `config\settings.toml`, `prepared\` (CORE, ELF, receipt), `disc\`, `gs\`, `runtime\card.ps2` (section 13), `library\backups\`, `logs\launcher.log`, `sessions\session-YYYYMMDD-HHMMSS\` (keep last 20). **Saves and replays (TASK-081, owner 2026-10-21):** `Documents\Gran Turismo 4\Saves\` (`Active\` = the active save, `Save NN\`, `.backup\`) and `\Replays\`, found through the Documents known folder and always kept by the uninstaller (see FLOW-AUDIT section 8) |
 
 `%LOCALAPPDATA%` (not Roaming) avoids syncing 8 MB cards and 6 MB ELFs through roaming profiles/
 OneDrive. A "Portable mode" (a `portable.txt` next to the exe redirects data to `.\data`) is cheap to

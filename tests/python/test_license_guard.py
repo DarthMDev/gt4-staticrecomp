@@ -121,18 +121,21 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         self.assertIn(name, probe.VU1_AOT_MANIFESTS)
         self.assertIn(name, probe.VU0_AOT_MANIFESTS)
 
-    def test_mode_pcsx2_slice211_is_the_slice206_guard_build_and_slice210_is_history(self):
-        # TASK-080 (slice212b, tests/python/test_display_aspect.py) moved mode pcsx2 to the slice212b capsule (the guard
-        # plus the race camera aspect hook); slice211 keeps the slice206 guard as history mode pcsx2-slice211.
+    def test_mode_pcsx2_is_the_slice215_build_and_older_builds_are_history(self):
+        # TASK-080 (slice215, tests/python/test_display_aspect.py): the slice214 release build plus the slice212c capsule
+        # (the slice206 guard plus the race camera aspect hook).
         import external_runtime_probe as probe
-        name, runtime = probe.PERF_PROFILES['pcsx2-slice211']
-        self.assertEqual((name, runtime), ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
+        name, runtime = probe.PERF_PROFILES['pcsx2']
+        self.assertEqual((name, runtime), ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'], ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice213'], ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice211'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice206'],
                          ('slice206-pcsx2.json', 'private/slice206-build/build/gt4vulkan.exe'))
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 211)
+        self.assertEqual(manifest['slice'], 214)
         self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])

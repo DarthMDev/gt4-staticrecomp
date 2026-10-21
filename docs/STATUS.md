@@ -7,7 +7,35 @@ camera Hor+/Vert+ hook; race view filled, menus 16:9; protocol 1.3 for gt4-gs 1.
 TASK-079 hold hardening. 16:9 frames byte-identical. Waiting for the owner tests and approval. Details:
 [BUILD](BUILD.md) slice 212b, decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md).
 
-## Current state (2026-10-17)
+## Current state (2026-10-21)
+
+**TASK-081 release 1.0.0 hardening (branch `task/081-release-1-0-0`, waiting for the owner's installer test):**
+- Game: slice213 = the slice211 recipe with `-DGT4_RELEASE_DISTRIBUTION=ON` (no build-time shader folder in the
+  executable; shaders only from `<exe folder>\shaders`). slice214 = slice213 plus the Vulkan baseline path (older
+  drivers: swapchain maintenance 1 only when present, `GT4_VULKAN_FORCE_BASELINE=1`). `--mode pcsx2` = slice214,
+  `pcsx2-slice213` and `pcsx2-slice211` kept. String scan
+  clean; headless 42/42 frames identical to slice211; CTest and Python green ([BUILD](BUILD.md) slice 213).
+- Launcher: release build through `launcher/tools/build-release.ps1` (`--remap-path-prefix`; no user or build path in
+  `GT4Recomp.exe`); processor (SSE4.1, owner decision) and Vulkan 1.2 checks before setup and Play; the controls crate's built-in
+  keyboard keys now match the TASK-076 layout (they were the old Z/X table, which a remap would have written to
+  `controls.toml`).
+- Installer: WebView2 detection plus Microsoft's Evergreen bootstrapper, name `GT4Recomp-Setup-1.0.0.exe`, the
+  uninstaller removes `SDL3.dll`. Built in `private/release-100-out` with `SHA256SUMS`; draft GitHub release v1.0.0
+  (not published). Release notes: [1.0.0](release-notes/1.0.0.md); steps: [RELEASES](RELEASES.md).
+- Saves in Documents (owner request): saves and replays live in `Documents\Gran Turismo 4` (`Saves`, `Replays`; the
+  Documents known folder, data-folder fallback); everything else, including the live `runtime\card.ps2`, stays in
+  `%LOCALAPPDATA%\GT4Recomp`. An older AppData library is copied, checked (size, sha256) and parked as
+  `library.migrated-<t>` at the first start; the guard protects the player's folder; the uninstaller never touches it.
+  See [FLOW-AUDIT section 8](launcher/FLOW-AUDIT.md) and [MIGRATIONS](launcher/MIGRATIONS.md).
+- Settings feedback (owner, 2026-10-21): 480p and 16:9 are fixed (the Input resolution, Widescreen 16:9 and GS
+  Aspect ratio rows are gone; the launcher always sends `GT4_FORCE_480P=1` and `GT4_FORCE_WIDESCREEN=1` and writes
+  `AspectRatio = 16:9`); PCSX2's own OSD rows are hidden and always written off (GS table column `forced`); Advanced
+  is a section at the bottom of Graphics, not a tab. Old values are ignored by a load-time rule (settings stay
+  schema 3). See [GS-SETTINGS](GS-SETTINGS.md) and [MIGRATIONS](launcher/MIGRATIONS.md).
+- Next: the owner installs from the draft and tests end to end (ideally also an NVIDIA or Intel PC and a fresh Windows
+  user), approves, then the merge and the publish.
+
+## Earlier state (2026-10-17)
 
 **TASK-044 (packaging, docs only, branch `task/044-packaging`):** release 1.0.0 ships gt4-gs 1.0.1 (`gt4gs-v1.0.1`, the
 renderer already pinned for `--mode pcsx2`). The fork's release notes were edited (upstream base PCSX2 v2.8.2, commit

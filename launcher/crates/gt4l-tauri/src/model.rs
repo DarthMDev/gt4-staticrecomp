@@ -505,11 +505,11 @@ mod tests {
         assert_eq!(cross.ps2_name, "Cross");
         assert_eq!(cross.short, "A");
         assert!(cross.described.contains(&"Controller: A".to_string()));
-        assert!(cross.described.contains(&"Keyboard: Z".to_string()));
+        assert!(cross.described.contains(&"Keyboard: W".to_string()), "{:?}", cross.described);
         let l2 = rows.iter().find(|row| row.input == "l2").unwrap();
         assert_eq!(l2.ps2_name, "L2");
         assert_eq!(cross.xinput.as_deref(), Some("A"));
-        assert_eq!(cross.key.as_deref(), Some("Z"));
+        assert_eq!(cross.key.as_deref(), Some("W"));
         assert!(cross.is_default);
     }
 
@@ -665,7 +665,7 @@ mod table_tests {
         assert_eq!(buttons.len(), 16);
         let cross = buttons.iter().find(|button| button["id"] == "cross").unwrap();
         assert_eq!(cross["xinput"], "B");
-        assert_eq!(cross["key"], "Z");
+        assert_eq!(cross["key"], "W");
         assert_eq!(cross["is_default"], false);
         let circle = buttons.iter().find(|button| button["id"] == "circle").unwrap();
         assert_eq!(circle["xinput"], "A", "swapped");

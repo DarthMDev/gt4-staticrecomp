@@ -70,6 +70,10 @@ pub struct Row {
     pub default: String,
     pub written: String,
     pub status: String,
+    /// A hidden, always-written row whose value is fixed: only the default is accepted (owner, 2026-10-21: aspect
+    /// 16:9 and the PCSX2 OSD rows off). Mirrors `forced` in scripts/gs_settings.py.
+    #[serde(default)]
+    pub forced: bool,
     #[serde(default)]
     pub env: String,
 }
@@ -158,6 +162,9 @@ fn check_row(row: &Row) -> Result<(), TableError> {
             return refuse(format!("{name}: ok enum row needs at least one ok choice"));
         }
     }
+    if row.forced && (row.page != "hidden" || row.written != "always" || row.status != "ok") {
+        return refuse(format!("{name}: forced rows must be page hidden, written always and status ok"));
+    }
     if row.status == "ok" && matches!(row.written.as_str(), "always" | "when-set") && row.kind != "path" {
         parse_value(row, &row.default).map_err(|error| TableError(format!("{name}: default refused: {error}")))?;
     }
@@ -229,14 +236,28 @@ pub fn ui_control(row: &Row) -> &str {
     if UI_CONTROLS.contains(&row.control.as_str()) { row.control.as_str() } else { "dropdown" }
 }
 
-/// The choice names the launcher may offer for an enum row.
+/// The choice names the launcher may offer for an enum row. A forced row offers only its default.
 pub fn offered_choices(row: &Row) -> Vec<&str> {
+    if row.forced {
+        return vec![row.default.as_str()];
+    }
     row.choices.iter().filter(|choice| choice.status == "ok").map(|choice| choice.name.as_str()).collect()
 }
 
 /// Checks one value of a row and returns its normalized text (enum name, bool, integer text, float text or path).
-/// Mirrors `parse_value` in scripts/gs_settings.py.
+/// Mirrors `parse_value` in scripts/gs_settings.py: a forced row accepts only its default value.
 pub fn parse_value(row: &Row, raw: &str) -> Result<String, TableError> {
+    let value = parse_unforced(row, raw)?;
+    if row.forced {
+        let default = parse_unforced(row, &row.default)?;
+        if value != default {
+            return refuse(format!("{} is fixed at {default} in this release", row.id));
+        }
+    }
+    Ok(value)
+}
+
+fn parse_unforced(row: &Row, raw: &str) -> Result<String, TableError> {
     let name = &row.id;
     if row.kind == "path" {
         if raw.is_empty() || raw.contains('\n') || raw.contains('\r') {
@@ -452,6 +473,41 @@ mod tests {
         assert!(check_user_value("filter", "nearest").is_err(), "resolved rows are not settable");
         assert!(check_user_value("cache_folder", "C:/x").is_err(), "launcher rows are not user settings");
         assert!(check_user_value("vsync", "yes").is_err());
+    }
+
+    #[test]
+    fn forced_rows_are_hidden_written_and_fixed() {
+        // Owner, 2026-10-21: 16:9 until the ultrawide update, and PCSX2's own OSD rows always off.
+        for (id, fixed) in [("aspect", "16:9"), ("osd_fps", "false"), ("osd_gpu", "false"), ("osd_resolution", "false")] {
+            let forced = row(id).unwrap();
+            assert!(forced.forced && forced.page == "hidden" && forced.written == "always", "{id}");
+            assert!(!offered().iter().any(|offered| offered.id == id), "{id} is not offered");
+            assert_eq!(check_user_value(id, fixed).unwrap(), fixed);
+            assert!(check_user_value(id, if fixed == "false" { "true" } else { "4:3" }).is_err(), "{id}");
+        }
+        assert_eq!(offered_choices(row("aspect").unwrap()), vec!["16:9"]);
+        let text = render_ini(&BTreeMap::new(), &BTreeMap::new()).unwrap();
+        for line in ["AspectRatio = 16:9\n", "OsdShowFPS = false\n", "OsdShowGPU = false\n", "OsdShowResolution = false\n"] {
+            assert!(text.contains(line), "{line}");
+        }
+        // The other PCSX2 OSD rows (position, scale) are hidden and not settable.
+        for id in ["osd_messages_pos", "osd_performance_pos", "osd_scale"] {
+            assert_eq!(row(id).unwrap().page, "hidden", "{id}");
+        }
+        // Our own overlay rows stay on the Advanced section, mapped to the gt4-gs [GT4GS] PerfOverlay* keys (TASK-062).
+        for (id, key) in [
+            ("perf_overlay", "PerfOverlay"),
+            ("perf_overlay_fps", "PerfOverlayFPS"),
+            ("perf_overlay_frame_time", "PerfOverlayFrameTime"),
+            ("perf_overlay_cpu", "PerfOverlayCPU"),
+            ("perf_overlay_gpu", "PerfOverlayGPU"),
+            ("perf_overlay_resolution", "PerfOverlayResolution"),
+            ("perf_overlay_breakdown", "PerfOverlayBreakdown"),
+        ] {
+            let overlay = row(id).unwrap();
+            assert_eq!((overlay.section.as_str(), overlay.key.as_str(), overlay.page.as_str()), ("GT4GS", key, "advanced"));
+            assert!(offered().iter().any(|offered| offered.id == id), "{id} is offered");
+        }
     }
 
     #[test]

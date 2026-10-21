@@ -81,7 +81,11 @@ pub fn parse(text: &str) -> Result<(ConfigFile, Vec<String>), ConfigError> {
     if let Some(section) = table.get("settings").and_then(|value| value.as_table()) {
         for (key, value) in section {
             match (settings::definition(key), value.as_str()) {
-                (None, _) => warnings.push(format!("unknown setting '{key}' ignored")),
+                (None, _) => match settings::retired(key) {
+                    // Load-time rule (no schema step): a retired setting is fixed now; its stored value never matters.
+                    Some(reason) => warnings.push(format!("setting '{key}' is no longer used ({reason}); ignored")),
+                    None => warnings.push(format!("unknown setting '{key}' ignored")),
+                },
                 (Some(_), None) => warnings.push(format!("setting '{key}' is not text; using the default")),
                 (Some(_), Some(text)) => {
                     if let Some(warning) = config.settings.set_or_default(key, text) {

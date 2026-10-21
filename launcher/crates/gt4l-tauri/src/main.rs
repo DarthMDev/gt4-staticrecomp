@@ -52,10 +52,11 @@ fn main() {
     visual::seed(&app_state);
 
     let shared: state::Shared = Arc::new(Mutex::new(app_state));
+    let dirs_for_setup = dirs.clone();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(shared)
-        .setup(|app| {
+        .setup(move |app| {
             tray::install(app)?;
             // The gamepad service (SDL3) runs on its own thread for the whole session.
             let pads = pad_service::spawn(app.handle().clone());
@@ -64,6 +65,13 @@ fn main() {
             let launch_shared = app.state::<state::Shared>().inner().clone();
             let launch_app = app.handle().clone();
             std::thread::spawn(move || updates::check_on_launch(launch_app, launch_shared));
+            // TASK-081: probe the processor and Vulkan once in the background, so Play does not wait for the driver
+            // to load; a problem is logged here and shown when the player starts setup or Play.
+            let check_dirs = dirs_for_setup.clone();
+            std::thread::spawn(move || match gt4l_platform::system::requirements_problem() {
+                Some(problem) => state::log(&check_dirs, &format!("system requirement not met: {problem}")),
+                None => state::log(&check_dirs, "system requirements: processor and Vulkan OK"),
+            });
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -102,6 +110,9 @@ fn main() {
             commands::about_info,
             commands::open_log_folder,
             commands::open_game_files_folder,
+            commands::open_player_folder,
+            commands::open_saves_folder,
+            commands::open_replays_folder,
             updates::check_updates,
             updates::apply_update,
             updates::skip_update,

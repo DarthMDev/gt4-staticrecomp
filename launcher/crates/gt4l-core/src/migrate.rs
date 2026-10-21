@@ -161,10 +161,25 @@ fn settings_2_to_3(document: &mut Value) -> Result<(), String> {
 /// Schema 4: the Aspect ratio and Custom ratio rows (TASK-080, `GT4_DISPLAY_ASPECT`). A file of schema 3 has neither
 /// key; it gets the defaults written out ("auto" and 233 hundredths), so the file records what the game is sent. Values
 /// already present are kept.
+///
+/// A schema 3 file written by the 1.0.0 launcher may still hold the settings that 1.0.0 retired by a load-time rule
+/// (`settings::RETIRED_SETTINGS`): `input_resolution` and `widescreen` in `[settings]` and `[choices]`, and the PCSX2 GS
+/// `aspect` in `[gs]`. The Aspect ratio row replaces all of them, so this step drops them; the old 16:9/4:3 value is
+/// not carried over (1.0.0 always ran 16:9, and Auto is the new default). The ids are literal here on purpose: a
+/// migration step describes the files of its own time and never changes with later tables.
 fn settings_3_to_4(document: &mut Value) -> Result<(), String> {
     if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        settings.remove("input_resolution");
+        settings.remove("widescreen");
         settings.entry("aspect_ratio".to_string()).or_insert_with(|| Value::from("auto"));
         settings.entry("aspect_custom".to_string()).or_insert_with(|| Value::from("233"));
+    }
+    if let Some(choices) = document.get_mut("choices").and_then(Value::as_object_mut) {
+        choices.remove("input_resolution");
+        choices.remove("widescreen");
+    }
+    if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
+        gs.remove("aspect");
     }
     Ok(())
 }
@@ -295,19 +310,36 @@ mod tests {
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
         assert_eq!(document["schema_version"], json!(4));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
-        assert_eq!(document["settings"]["widescreen"], json!("on"));
+        assert!(document["settings"].get("widescreen").is_none(), "added by step 3, dropped by step 4");
         assert_eq!(document["settings"]["aspect_ratio"], json!("auto"));
         assert_eq!(document["settings"]["aspect_custom"], json!("233"));
     }
 
     #[test]
-    fn schema_three_gets_aspect_auto_and_keeps_values_already_written() {
-        let mut missing = json!({"schema_version": 3, "settings": {"vsync": "on", "widescreen": "off"}});
-        assert_eq!(migrate(&SETTINGS, &mut missing).unwrap(), 3);
-        assert_eq!(missing["schema_version"], json!(4));
-        assert_eq!(missing["settings"]["aspect_ratio"], json!("auto"));
-        assert_eq!(missing["settings"]["aspect_custom"], json!("233"));
-        assert_eq!(missing["settings"]["widescreen"], json!("off"), "other values survive");
+    fn a_release_1_0_0_file_drops_the_retired_keys_and_gets_aspect_auto() {
+        // A schema 3 file as the 1.0.0 launcher could leave it: the retired rows still stored (an older 1.0.0
+        // candidate wrote them, and 1.0.0 only ignores them on load), plus a GS aspect value.
+        let mut released = json!({
+            "schema_version": 3,
+            "settings": {"vsync": "fast", "input_resolution": "1080i", "widescreen": "off", "fullscreen": "on"},
+            "choices": {"input_resolution": true, "widescreen": true, "vsync": true},
+            "gs": {"aspect": "4:3", "fxaa": "true", "osd_fps": "true"},
+            "install": {"disc_path": "D:/gt4.iso"}
+        });
+        assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 3);
+        assert_eq!(released["schema_version"], json!(4));
+        assert_eq!(released["settings"]["aspect_ratio"], json!("auto"));
+        assert_eq!(released["settings"]["aspect_custom"], json!("233"));
+        for retired in ["input_resolution", "widescreen"] {
+            assert!(released["settings"].get(retired).is_none(), "{retired} dropped from [settings]");
+            assert!(released["choices"].get(retired).is_none(), "{retired} dropped from [choices]");
+        }
+        assert!(released["gs"].get("aspect").is_none(), "the GS aspect is replaced by the Aspect ratio row");
+        assert_eq!(released["settings"]["vsync"], json!("fast"), "other values survive");
+        assert_eq!(released["choices"]["vsync"], json!(true));
+        assert_eq!(released["gs"]["fxaa"], json!("true"));
+        assert_eq!(released["gs"]["osd_fps"], json!("true"), "forced GS rows stay with the load-time rule");
+        assert_eq!(released["install"]["disc_path"], json!("D:/gt4.iso"));
 
         let mut custom = json!({"schema_version": 3, "settings": {"aspect_ratio": "custom", "aspect_custom": "356"}});
         migrate(&SETTINGS, &mut custom).unwrap();
@@ -316,15 +348,19 @@ mod tests {
     }
 
     #[test]
-    fn schema_two_gets_widescreen_on_and_keeps_a_value_already_written() {
-        let mut missing = json!({"schema_version": 2, "settings": {"vsync": "on"}});
-        assert_eq!(migrate(&SETTINGS, &mut missing).unwrap(), 2);
-        assert_eq!(missing["schema_version"], json!(4));
+    fn schema_two_step_adds_widescreen_on_and_keeps_a_value_already_written() {
+        // The 2 -> 3 step as shipped; step 4 removes the key again (tested above).
+        let mut missing = json!({"settings": {"vsync": "on"}});
+        settings_2_to_3(&mut missing).unwrap();
         assert_eq!(missing["settings"]["widescreen"], json!("on"));
 
-        let mut off = json!({"schema_version": 2, "settings": {"widescreen": "off"}});
-        migrate(&SETTINGS, &mut off).unwrap();
+        let mut off = json!({"settings": {"widescreen": "off"}});
+        settings_2_to_3(&mut off).unwrap();
         assert_eq!(off["settings"]["widescreen"], json!("off"));
+
+        let mut chained = json!({"schema_version": 2, "settings": {"vsync": "on"}});
+        assert_eq!(migrate(&SETTINGS, &mut chained).unwrap(), 2);
+        assert_eq!(chained["schema_version"], json!(4));
     }
 
     #[test]
