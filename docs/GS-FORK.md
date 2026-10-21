@@ -54,6 +54,12 @@ Changes from upstream are kept to `gt4gs/` (README, BUILD, NOTICE), the trimmed 
   - `gt4recomp-gs-0.1.0-poc-source.zip`, 24,954,987 bytes, SHA-256 `6cae6c3ac9cc607f1d764a891f9641b2ef79e786b48bfdbb04f7cccabc6ce371`
   - `SHA256SUMS`, 199 bytes
 
+- `gt4gs-v1.1.0` (2026-10-21, owner approved; fork PR #8, commit `6586085d9`): a fixed crop of 1 native pixel on the
+  right and the bottom (the edge lines GT4 leaves in every resolution; not a user setting), `AspectRatio=Stretch`
+  allowed, and GS stream protocol 1.3 CONTROL kind 7 `display_aspect` (consumer READY minor 3; ERROR code 7
+  `bad_argument`). Zip `gt4-gs-1.1.0-windows-x64.zip`, SHA-256
+  `cd07f5a226c6f521187b17cda7af703a18cab47f6566124aa2ff5ad2ea5064e6`. A 1.2 producer (slice211) works unchanged.
+
 The release contents are:
   - `gt4-gs-<version>-windows-x64.zip`: `gt4-gs.exe` (the stock `pcsx2-gsrunner`, renamed), the DLLs it
     needs, `resources/`, `COPYING.GPLv3`, `NOTICE`, `README.md` and `SOURCE.txt` (tag and commit);
