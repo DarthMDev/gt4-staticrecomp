@@ -1,5 +1,15 @@
 # Current Status
 
+## Launcher self-update fixed (2026-10-21, TASK-085, branch `task/085-launcher-self-update`)
+
+Owner report: launcher 1.0.0 offered 1.1.0, closed after the download and installed nothing. The setup joined the
+launcher's kill-on-close job and died with it; now it leaves the job (`CREATE_BREAKAWAY_FROM_JOB`, Explorer fallback).
+Release v1.1.0 went back to draft (0 installer downloads) and was rebuilt: launcher GT4Recomp.exe 16,010,752 bytes,
+sha256 `884f4e9b4a17e54ead031bca744534ca9f50e8b94d988e0ff92b83f897979c77`; installer
+`private/release-110b-out/GT4Recomp-Setup-1.1.0.exe` 28,761,196 bytes, sha256
+`6ad624307370998142bdfcacbd330f6cbe6a17e70e35c8ab5a2d44db8097da0d` (same game files, slice218). Launchers 1.0.0 cannot
+self-update; the release notes tell those users to run the setup.
+
 ## Release 1.1.0 prepared (2026-10-21, branch `task/080-aspect-ratios`, draft release, not merged)
 
 TASK-080 is done: the owner tested slice218 on ultrawide and approved ("funcionou perfeitamente"). Release prep on the

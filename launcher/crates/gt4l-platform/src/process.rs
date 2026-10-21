@@ -3,6 +3,10 @@
 //! The launcher puts itself in a Job Object with kill-on-close. The game is started from the launcher,
 //! so it joins the same job; when the launcher exits, the job's last handle closes and Windows ends
 //! every process in it. The job handle is intentionally never closed before exit.
+//!
+//! The job allows breakaway: a process the launcher must outlive on purpose (the GT4Recomp setup program of a
+//! self-update) is started with `spawn_outside_job`. Without it, the setup joined the job and Windows ended it the
+//! moment the launcher exited to let it replace the program files (launcher 1.0.0 bug, 2026-10-21).
 
 #[cfg(windows)]
 mod windows_impl {
@@ -13,7 +17,7 @@ mod windows_impl {
     use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
     use windows::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation, SetInformationJobObject,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+        JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows::Win32::System::Threading::{CreateMutexW, GetCurrentProcess};
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE};
@@ -50,7 +54,8 @@ mod windows_impl {
         unsafe {
             let job = CreateJobObjectW(None, PCWSTR::null()).map_err(|error| format!("job object: {error}"))?;
             let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
-            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            // Children stay in the job unless they ask to leave it (CREATE_BREAKAWAY_FROM_JOB); the game never does.
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
             let set = SetInformationJobObject(
                 job,
                 JobObjectExtendedLimitInformation,
@@ -73,6 +78,21 @@ mod windows_impl {
 
 #[cfg(windows)]
 pub use windows_impl::{claim_single_instance, join_kill_on_close_job};
+
+/// `CREATE_BREAKAWAY_FROM_JOB`: the new process is not a member of the launcher's kill-on-close job.
+#[cfg(windows)]
+const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+
+/// Starts a program that must keep running after the launcher exits (the setup program of a self-update). On
+/// Windows it leaves the launcher's kill-on-close job; any other child (the game) stays in it.
+pub fn spawn_outside_job(command: &mut std::process::Command) -> std::io::Result<std::process::Child> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_BREAKAWAY_FROM_JOB);
+    }
+    command.spawn()
+}
 
 #[cfg(not(windows))]
 pub fn claim_single_instance() -> bool {
