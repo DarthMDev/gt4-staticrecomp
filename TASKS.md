@@ -468,6 +468,18 @@ missing F8 instrumentation first (pacing-sleep scope, fixed summary formula, per
 own slice, headless frame identity, CTest and Python, owner F8 check. Feeds TASK-082 (a render pass must fit 7.3 ms for
 120 Hz) and weaker PCs. After 1.0.0.
 
+### TASK-085 — Launcher self-update starts the setup outside its job
+Done 2026-10-21 (branch `task/085-launcher-self-update`). Owner report: launcher 1.0.0 offered 1.1.0, downloaded it,
+closed, and nothing was installed. Cause (Confirmed): the launcher sits in a kill-on-close Job Object so the game ends
+with it, and the setup program it started for the update joined that job; Windows ended the setup as soon as the
+launcher exited. The log showed "setup verified; starting it" and the verified setup stayed in
+`%TEMP%\GT4Recomp-update`. Fix: the job allows breakaway and the setup starts with `CREATE_BREAKAWAY_FROM_JOB`
+(`gt4l_platform::process::spawn_outside_job`); when an outer job forbids that, Explorer starts it and the launcher waits
+3 s. The game still ends with the launcher, and a launcher update is refused while the game runs. Test
+`gt4l-platform/tests/job_breakaway.rs` runs the real job code in a child process: a helper started outside the job
+survives the exit, a plain one dies. Launchers 1.0.0 keep the bug, so their users install 1.1.0 by running the setup
+(release notes). Release v1.1.0 was set back to draft while fixing it and republished with the fixed launcher.
+
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.

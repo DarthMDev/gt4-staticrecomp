@@ -280,6 +280,10 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
                 }
             }
             "launcher" => {
+                // Updating ends the launcher, and the game ends with it (kill-on-close job).
+                if game_running {
+                    return Err("Close the game before updating GT4Recomp.".to_string());
+                }
                 let message = start_launcher_setup(&app, &dirs)?;
                 Ok(json!({ "ok": true, "message": message }))
             }
@@ -316,7 +320,17 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
         let _ = fs::remove_file(&path);
     })?;
     state::log(dirs, &format!("GT4Recomp {} setup verified; starting it", version.text()));
-    Command::new(&path).spawn().map_err(|error| format!("could not start the setup: {error}"))?;
+    // The setup must outlive the launcher: it leaves the launcher's kill-on-close job (gt4l_platform::process).
+    // A job that the launcher itself was started in may forbid that; then the Windows shell (the running Explorer,
+    // outside every job of ours) starts it, and the launcher waits a moment so the hand-over completes first.
+    if let Err(error) = gt4l_platform::process::spawn_outside_job(&mut Command::new(&path)) {
+        state::log(dirs, &format!("setup could not leave the launcher job ({error}); asking Explorer to start it"));
+        Command::new("explorer.exe")
+            .arg(&path)
+            .spawn()
+            .map_err(|error| format!("could not start the setup: {error}"))?;
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
     let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Setup started." }));
     app.exit(0);
     Ok(format!("GT4Recomp {} setup started.", version.text()))
