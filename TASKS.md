@@ -562,6 +562,11 @@ MIT implementation written only from the TASK-026 specification, behind our GS
 front end next to paraLLEl-GS and the donor renderer. Implementers never open
 PCSX2 GS sources. Milestones and acceptance come from the specification.
 
+Roadmap beyond parity (owner, 2026-10-21): docs/COREGS2-ROADMAP.md. It covers the separate UI layer, a fractional
+render scale, per-target resolution, precompiled pipelines, readback removal, AF and SMAA, FSR 2/3, DLSS and XeSS with
+camera motion vectors and jitter, frame generation with TASK-082, effects gated by game state (AO before the UI),
+HDR10, texture packs and mobile backends. Every enhancement is opt-in; the faithful image stays the default.
+
 ### First stable release
 After TASK-019: a tagged GitHub Release of this repository with the NSIS
 installer (prebuilt game executable and launcher; the user supplies their own
