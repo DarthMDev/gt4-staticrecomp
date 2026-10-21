@@ -480,6 +480,20 @@ launcher exited. The log showed "setup verified; starting it" and the verified s
 survives the exit, a plain one dies. Launchers 1.0.0 keep the bug, so their users install 1.1.0 by running the setup
 (release notes). Release v1.1.0 was set back to draft while fixing it and republished with the fixed launcher.
 
+### TASK-086 — Progressive 480p everywhere
+Planned (owner, 2026-10-21; after the CoreGS 2.0 parity work, shares the ELF patch table with TASK-078 P5 and TASK-080
+P3). Study: [docs/PROGRESSIVE-EVERYWHERE-STUDY.md](docs/PROGRESSIVE-EVERYWHERE-STUDY.md). The 480p "Try..." pop-up in
+the Screen options proves the menus already render at 480p: `MOption.applyRaceDisplayMode` (`func_00436640`) requests
+CRT row 6 (480p, 640x448) and `applyMenuDisplayMode` (`func_00436740`) returns to row 1 (480i field). Plan:
+(1) menus and races, behind a switch: `func_00436740` requests 480p (0x436750 `24050001`→`24050002`, 0x436754
+`0000302D`→`24060006`) and races always take the 480p index (0x43665C); same VRAM footprint as 480i menus; removes the
+1-second black between menus and races; (2) CRT table row 2 (photo pause, after movies) and boot init
+(`func_001063A8`, `func_00107788`); (3) optional: movies and photo develop (256x384 buffers, risky) and CT16 vs CT24
+menus. Checks: SMODE gate, the 42-dump headless run, owner pass on menus, garage, colour window, license tests, race,
+replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRenderContextPS2__virtual_67`), 16-bit
+banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
+interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
+
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
