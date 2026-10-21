@@ -32,10 +32,15 @@ namespace {
 constexpr std::uint32_t kSurfaceSize = static_cast<std::uint32_t>(kGpuSurface);  // 2048
 constexpr std::uint32_t kTextureMax = kGpuMaxTextureSide;                       // texels per axis
 constexpr VkDeviceSize kFrameBytes = static_cast<VkDeviceSize>(kSurfaceSize) * kSurfaceSize * 4;
-constexpr VkDeviceSize kStagingBytes = 2 * kFrameBytes + static_cast<VkDeviceSize>(kTextureMax) * kTextureMax * 4;
+// Staging, vertex and uniform memory are rings (IN-342): chunks are recorded into one command buffer and
+// submitted when a readback needs the result, a ring is full, or the caller flushes (each VBlank). The staging
+// ring holds at least one chunk of the largest size (two full surfaces and a full texture).
+constexpr VkDeviceSize kStagingBytes = 2 * kFrameBytes + static_cast<VkDeviceSize>(kTextureMax) * kTextureMax * 4 +
+                                       (static_cast<VkDeviceSize>(32) << 20);
 constexpr VkDeviceSize kReadbackBytes = 2 * kFrameBytes;
 constexpr VkDeviceSize kVertexBytes = static_cast<VkDeviceSize>(kGpuMaxVertices) * sizeof(GpuVertex);
-constexpr VkDeviceSize kUniformBytes = 256;
+constexpr VkDeviceSize kUniformBytes = 256;                   // one pixel-state block
+constexpr VkDeviceSize kUniformRingBytes = static_cast<VkDeviceSize>(4) << 20;  // 16,384 blocks at 256 B
 constexpr std::uint32_t kPushBytes = 28;  // hw_vertex.vert PushConstants
 
 const char *result_text(VkResult result) {
@@ -99,6 +104,18 @@ struct GpuDrawer::Impl {
 
   bool ready = false;
   GpuStats stats;
+
+  // Recording state of the rings (IN-342).
+  bool recording = false;        // the command buffer is open
+  bool inFlight = false;         // a submission may still read the rings
+  VkDeviceSize stagingUsed = 0;  // bytes
+  VkDeviceSize vertexUsed = 0;   // vertices
+  VkDeviceSize uniformUsed = 0;  // bytes
+  VkDeviceSize uniformStride = kUniformBytes;
+
+  bool submit(bool wait, std::string &error);
+  bool wait_idle(std::string &error);
+  bool begin_recording(std::string &error);
 
   // Chooses a memory type with all `wanted` flags; `preferred` flags are tried first.
   bool memory_type(std::uint32_t typeBits, VkMemoryPropertyFlags wanted, VkMemoryPropertyFlags preferred,
@@ -290,6 +307,10 @@ struct GpuDrawer::Impl {
   }
 
   void destroy() {
+    if (recording && device) {
+      std::string ignored;
+      submit(true, ignored);  // recorded work completes before the resources go
+    }
     if (device) gt4_hw_vkDeviceWaitIdle(device);
     if (device) {
       for (VkPipeline &pipeline : pipelines) {
@@ -383,7 +404,7 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   if (!s.vertexModule || !s.fragmentModule) return false;
 
   VkDescriptorSetLayoutBinding bindings[4]{};
-  bindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+  bindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
   bindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
   bindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
   bindings[3] = {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
@@ -402,7 +423,7 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   layoutInfo.pPushConstantRanges = &push;
   if (!check(gt4_hwd_vkCreatePipelineLayout(s.device, &layoutInfo, nullptr, &s.pipelineLayout), "vkCreatePipelineLayout", error)) return false;
 
-  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1}, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3}};
+  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1}, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3}};
   VkDescriptorPoolCreateInfo poolSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   poolSetInfo.maxSets = 1;
   poolSetInfo.poolSizeCount = 2;
@@ -421,7 +442,13 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
                      VK_MEMORY_PROPERTY_HOST_CACHED_BIT, true, error)) return false;
   if (!s.make_buffer(s.vertices, kVertexBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, true, error)) return false;
-  if (!s.make_buffer(s.uniforms, kUniformBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+  {
+    VkPhysicalDeviceProperties properties{};
+    gt4_hw_vkGetPhysicalDeviceProperties(s.physical, &properties);
+    const VkDeviceSize align = std::max<VkDeviceSize>(properties.limits.minUniformBufferOffsetAlignment, 1);
+    s.uniformStride = (kUniformBytes + align - 1) / align * align;
+  }
+  if (!s.make_buffer(s.uniforms, kUniformRingBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, true, error)) return false;
 
   if (!s.make_image(s.frame, kSurfaceSize, kSurfaceSize, error)) return false;
@@ -438,7 +465,7 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   writes[0].dstSet = s.descriptorSet;
   writes[0].dstBinding = 0;
   writes[0].descriptorCount = 1;
-  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
   writes[0].pBufferInfo = &uniformInfo;
   for (int i = 0; i < 3; ++i) {
     writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -474,13 +501,56 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   return true;
 }
 
+// Submits the recorded commands. With `wait`, blocks until the GPU finished them and the rings are free again;
+// without, the fence is waited for before the next recording reuses the rings (the GPU works while the CPU
+// prepares the next frame).
+bool GpuDrawer::Impl::submit(bool wait, std::string &error) {
+  if (recording) {
+    if (!check(gt4_hw_vkEndCommandBuffer(cmd), "vkEndCommandBuffer", error)) return false;
+    VkSubmitInfo submitInfo{VK_STRUCTURE_TYPE_SUBMIT_INFO};
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &cmd;
+    gt4_hw_vkResetFences(device, 1, &fence);
+    if (!check(gt4_hw_vkQueueSubmit(queue, 1, &submitInfo, fence), "vkQueueSubmit", error)) return false;
+    recording = false;
+    inFlight = true;
+    ++stats.submissions;
+  }
+  if (wait) return wait_idle(error);
+  return true;
+}
+
+bool GpuDrawer::Impl::wait_idle(std::string &error) {
+  if (inFlight) {
+    if (!check(gt4_hw_vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) return false;
+    inFlight = false;
+  }
+  stagingUsed = 0;
+  vertexUsed = 0;
+  uniformUsed = 0;
+  return true;
+}
+
+bool GpuDrawer::Impl::begin_recording(std::string &error) {
+  if (recording) return true;
+  if (!wait_idle(error)) return false;  // the rings may still be read by the previous submission
+  VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+  begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+  if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
+  recording = true;
+  return true;
+}
+
+bool GpuDrawer::Flush(bool wait, std::string &error) { return impl_->submit(wait, error); }
+
 bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   Impl &s = *impl_;
   if (!s.ready) {
     error = "GpuDrawer::Execute before Init";
     return false;
   }
-  if (chunk.draws.empty()) return true;
+  const bool anyTransfer = chunk.uploadFrame || chunk.uploadDepth || chunk.readbackFrame || chunk.readbackDepth;
+  if (chunk.draws.empty() && !anyTransfer) return true;
   if (chunk.vertices.size() > kGpuMaxVertices) {
     error = "chunk exceeds the vertex buffer (the caller must split it)";
     return false;
@@ -493,7 +563,8 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     return false;
   }
   const std::size_t words = static_cast<std::size_t>(width) * static_cast<std::size_t>(height);
-  if (chunk.frameWords.size() != words || chunk.depthWords.size() != words) {
+  if (((chunk.uploadFrame || chunk.readbackFrame) && chunk.frameWords.size() != words) ||
+      ((chunk.uploadDepth || chunk.readbackDepth) && chunk.depthWords.size() != words)) {
     error = "frame or depth word count does not match the rectangle";
     return false;
   }
@@ -504,24 +575,49 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     return false;
   }
 
-  // Staging: frame words, depth words, then texels (all 4-byte aligned).
-  const VkDeviceSize frameBytes = words * 4;
-  const VkDeviceSize depthOffset = frameBytes;
-  const VkDeviceSize textureOffset = 2 * frameBytes;
-  auto *staging = static_cast<std::uint32_t *>(s.staging.mapped);
-  std::memcpy(staging, chunk.frameWords.data(), frameBytes);
-  std::memcpy(reinterpret_cast<std::uint8_t *>(staging) + depthOffset, chunk.depthWords.data(), frameBytes);
+  // Ring space this chunk needs (IN-342): the staging bytes of its uploads, its vertices and one uniform slot.
+  const VkDeviceSize frameBytes = static_cast<VkDeviceSize>(words) * 4;
   const VkDeviceSize textureBytes = chunk.hasTexture ? static_cast<VkDeviceSize>(chunk.texels.size()) * 4 : 0;
+  const VkDeviceSize stagingNeeded =
+      (chunk.uploadFrame ? frameBytes : 0) + (chunk.uploadDepth ? frameBytes : 0) + textureBytes;
+  const VkDeviceSize vertexNeeded = chunk.vertices.size();
+  const bool drawing = !chunk.draws.empty();
+  if (s.stagingUsed + stagingNeeded > kStagingBytes || s.vertexUsed + vertexNeeded > kGpuMaxVertices ||
+      s.uniformUsed + s.uniformStride > kUniformRingBytes) {
+    if (!s.submit(true, error)) return false;
+  }
+  if (!s.begin_recording(error)) return false;
+
+  auto *stagingBase = static_cast<std::uint8_t *>(s.staging.mapped);
+  const VkDeviceSize frameOffset = s.stagingUsed;
+  if (chunk.uploadFrame) {
+    std::memcpy(stagingBase + s.stagingUsed, chunk.frameWords.data(), frameBytes);
+    s.stagingUsed += frameBytes;
+  }
+  const VkDeviceSize depthOffset = s.stagingUsed;
+  if (chunk.uploadDepth) {
+    std::memcpy(stagingBase + s.stagingUsed, chunk.depthWords.data(), frameBytes);
+    s.stagingUsed += frameBytes;
+  }
+  const VkDeviceSize textureOffset = s.stagingUsed;
   if (chunk.hasTexture) {
-    std::memcpy(reinterpret_cast<std::uint8_t *>(staging) + textureOffset, chunk.texels.data(), textureBytes);
+    std::memcpy(stagingBase + s.stagingUsed, chunk.texels.data(), textureBytes);
+    s.stagingUsed += textureBytes;
   }
+  const VkDeviceSize vertexOffsetBytes = s.vertexUsed * sizeof(GpuVertex);
   if (!chunk.vertices.empty()) {
-    std::memcpy(s.vertices.mapped, chunk.vertices.data(), chunk.vertices.size() * sizeof(GpuVertex));
+    std::memcpy(static_cast<std::uint8_t *>(s.vertices.mapped) + vertexOffsetBytes, chunk.vertices.data(),
+                chunk.vertices.size() * sizeof(GpuVertex));
+    s.vertexUsed += vertexNeeded;
   }
-  std::uint32_t uniform[64] = {};
-  static_assert(sizeof(chunk.state.fields) <= sizeof(uniform), "uniform copy");
-  std::memcpy(uniform, chunk.state.fields, sizeof(chunk.state.fields));
-  std::memcpy(s.uniforms.mapped, uniform, sizeof(uniform));
+  const std::uint32_t uniformOffset = static_cast<std::uint32_t>(s.uniformUsed);
+  if (drawing) {
+    std::uint32_t uniform[64] = {};
+    static_assert(sizeof(chunk.state.fields) <= sizeof(uniform), "uniform copy");
+    std::memcpy(uniform, chunk.state.fields, sizeof(chunk.state.fields));
+    std::memcpy(static_cast<std::uint8_t *>(s.uniforms.mapped) + uniformOffset, uniform, sizeof(uniform));
+    s.uniformUsed += s.uniformStride;
+  }
 
   const std::uint32_t zFormat = chunk.state.fields[gpufield::Zformat];
   const std::uint32_t zMax = zFormat == 1 ? 0xFFFFFFu : zFormat == 2 ? 0xFFFFu : 0xFFFFFFFFu;
@@ -536,31 +632,33 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   pushWords[5] = 0;
   pushWords[6] = zMax;
 
-  VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-  begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  if (!check(gt4_hw_vkBeginCommandBuffer(s.cmd, &begin), "vkBeginCommandBuffer", error)) return false;
-
-  // Host writes (staging, vertices, uniforms) become visible to transfers and vertex/fragment reads.
-  VkMemoryBarrier hostBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  hostBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-  hostBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
-                              VK_ACCESS_UNIFORM_READ_BIT | VK_ACCESS_SHADER_READ_BIT;
-  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_HOST_BIT,
-                              VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT |
-                                  VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                              0, 1, &hostBarrier, 0, nullptr, 0, nullptr);
+  // Earlier chunks of this or a previous submission wrote the frame, depth and texel images (copies and shader
+  // writes): make those writes visible and finish their reads before this chunk copies or draws.
+  VkMemoryBarrier previousWork{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+  previousWork.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+  previousWork.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT |
+                               VK_ACCESS_TRANSFER_WRITE_BIT;
+  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1,
+                              &previousWork, 0, nullptr, 0, nullptr);
+  s.stats.barriers++;
 
   VkBufferImageCopy frameCopy{};
-  frameCopy.bufferOffset = 0;
+  frameCopy.bufferOffset = frameOffset;
   frameCopy.bufferRowLength = static_cast<std::uint32_t>(width);
   frameCopy.bufferImageHeight = static_cast<std::uint32_t>(height);
   frameCopy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
   frameCopy.imageOffset = {chunk.rectX0, chunk.rectY0, 0};
   frameCopy.imageExtent = {static_cast<std::uint32_t>(width), static_cast<std::uint32_t>(height), 1};
-  gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.frame.image, VK_IMAGE_LAYOUT_GENERAL, 1, &frameCopy);
   VkBufferImageCopy depthCopy = frameCopy;
   depthCopy.bufferOffset = depthOffset;
-  gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.depth.image, VK_IMAGE_LAYOUT_GENERAL, 1, &depthCopy);
+  const bool anyUpload = chunk.uploadFrame || chunk.uploadDepth || chunk.hasTexture;
+  if (chunk.uploadFrame) {
+    gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.frame.image, VK_IMAGE_LAYOUT_GENERAL, 1, &frameCopy);
+  }
+  if (chunk.uploadDepth) {
+    gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.depth.image, VK_IMAGE_LAYOUT_GENERAL, 1, &depthCopy);
+  }
   if (chunk.hasTexture) {
     VkBufferImageCopy texCopy{};
     texCopy.bufferOffset = textureOffset;
@@ -570,88 +668,96 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     texCopy.imageExtent = {chunk.texWidth, chunk.texHeight, 1};
     gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.texels.image, VK_IMAGE_LAYOUT_GENERAL, 1, &texCopy);
   }
-  VkMemoryBarrier copyBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  copyBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  copyBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 1,
-                              &copyBarrier, 0, nullptr, 0, nullptr);
-  s.stats.barriers += 2;
-
-  VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-  pass.renderPass = s.renderPass;
-  pass.framebuffer = s.framebuffer;
-  pass.renderArea = {{0, 0}, {kSurfaceSize, kSurfaceSize}};
-  gt4_hwd_vkCmdBeginRenderPass(s.cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
-  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelineLayout, 0, 1, &s.descriptorSet, 0,
-                                  nullptr);
-  gt4_hwd_vkCmdPushConstants(s.cmd, s.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, kPushBytes, pushWords);
-  VkViewport viewport{0.0f, 0.0f, static_cast<float>(kSurfaceSize), static_cast<float>(kSurfaceSize), 0.0f, 1.0f};
-  gt4_hwd_vkCmdSetViewport(s.cmd, 0, 1, &viewport);
-  VkDeviceSize vertexOffset = 0;
-  gt4_hwd_vkCmdBindVertexBuffers(s.cmd, 0, 1, &s.vertices.buffer, &vertexOffset);
-
-  bool anyDraw = false;
-  for (std::size_t i = 0; i < chunk.draws.size(); ++i) {
-    const GpuDraw &draw = chunk.draws[i];
-    if (draw.count == 0 || draw.first + draw.count > chunk.vertices.size()) continue;
-    const std::int32_t x0 = std::max<std::int32_t>(0, draw.x0);
-    const std::int32_t y0 = std::max<std::int32_t>(0, draw.y0);
-    const std::int32_t x1 = std::min<std::int32_t>(kGpuSurface - 1, draw.x1);
-    const std::int32_t y1 = std::min<std::int32_t>(kGpuSurface - 1, draw.y1);
-    if (x1 < x0 || y1 < y0) continue;
-    if (anyDraw) {
-      // Storage images: the next draw reads what this draw wrote (no implicit ordering in Vulkan).
-      VkMemoryBarrier between{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-      between.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-      between.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-      gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                                  0, 1, &between, 0, nullptr, 0, nullptr);
-      s.stats.barriers++;
-    }
-    VkRect2D scissor{{x0, y0}, {static_cast<std::uint32_t>(x1 - x0 + 1), static_cast<std::uint32_t>(y1 - y0 + 1)}};
-    gt4_hwd_vkCmdSetScissor(s.cmd, 0, 1, &scissor);
-    const std::size_t pipelineIndex = draw.topology == GpuTopology::Points  ? 0
-                                      : draw.topology == GpuTopology::Lines ? 1
-                                                                            : 2;
-    gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelines[pipelineIndex]);
-    gt4_hwd_vkCmdDraw(s.cmd, draw.count, 1, draw.first, 0);
-    anyDraw = true;
-    s.stats.draws++;
+  if (anyUpload) {
+    VkMemoryBarrier copyBarrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    copyBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    copyBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+    gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1,
+                                &copyBarrier, 0, nullptr, 0, nullptr);
+    s.stats.barriers++;
   }
-  gt4_hwd_vkCmdEndRenderPass(s.cmd);
 
-  // Make the storage writes visible to the readback copies.
+  if (drawing) {
+    VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    pass.renderPass = s.renderPass;
+    pass.framebuffer = s.framebuffer;
+    pass.renderArea = {{0, 0}, {kSurfaceSize, kSurfaceSize}};
+    gt4_hwd_vkCmdBeginRenderPass(s.cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
+    gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelineLayout, 0, 1, &s.descriptorSet, 1,
+                                    &uniformOffset);
+    gt4_hwd_vkCmdPushConstants(s.cmd, s.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, kPushBytes, pushWords);
+    VkViewport viewport{0.0f, 0.0f, static_cast<float>(kSurfaceSize), static_cast<float>(kSurfaceSize), 0.0f, 1.0f};
+    gt4_hwd_vkCmdSetViewport(s.cmd, 0, 1, &viewport);
+    VkDeviceSize vertexBufferOffset = vertexOffsetBytes;
+    gt4_hwd_vkCmdBindVertexBuffers(s.cmd, 0, 1, &s.vertices.buffer, &vertexBufferOffset);
+
+    bool anyDraw = false;
+    for (std::size_t i = 0; i < chunk.draws.size(); ++i) {
+      const GpuDraw &draw = chunk.draws[i];
+      if (draw.count == 0 || draw.first + draw.count > chunk.vertices.size()) continue;
+      const std::int32_t x0 = std::max<std::int32_t>(0, draw.x0);
+      const std::int32_t y0 = std::max<std::int32_t>(0, draw.y0);
+      const std::int32_t x1 = std::min<std::int32_t>(kGpuSurface - 1, draw.x1);
+      const std::int32_t y1 = std::min<std::int32_t>(kGpuSurface - 1, draw.y1);
+      if (x1 < x0 || y1 < y0) continue;
+      if (anyDraw) {
+        // Storage images: the next draw reads what this draw wrote (no implicit ordering in Vulkan).
+        VkMemoryBarrier between{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        between.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        between.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                                    0, 1, &between, 0, nullptr, 0, nullptr);
+        s.stats.barriers++;
+      }
+      VkRect2D scissor{{x0, y0}, {static_cast<std::uint32_t>(x1 - x0 + 1), static_cast<std::uint32_t>(y1 - y0 + 1)}};
+      gt4_hwd_vkCmdSetScissor(s.cmd, 0, 1, &scissor);
+      const std::size_t pipelineIndex = draw.topology == GpuTopology::Points  ? 0
+                                        : draw.topology == GpuTopology::Lines ? 1
+                                                                              : 2;
+      gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelines[pipelineIndex]);
+      gt4_hwd_vkCmdDraw(s.cmd, draw.count, 1, draw.first, 0);
+      anyDraw = true;
+      s.stats.draws++;
+    }
+    gt4_hwd_vkCmdEndRenderPass(s.cmd);
+  }
+
+  s.stats.executions++;
+  s.stats.vertices += chunk.vertices.size();
+  s.stats.uploadBytes += stagingNeeded + chunk.vertices.size() * sizeof(GpuVertex);
+
+  if (!(chunk.readbackFrame || chunk.readbackDepth)) return true;  // recorded; submitted later (IN-342)
+
+  // Readback: make the shader and copy writes visible to the copies, copy, then submit and wait.
   VkMemoryBarrier toReadback{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  toReadback.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+  toReadback.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
   toReadback.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1,
-                              &toReadback, 0, nullptr, 0, nullptr);
-  gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.frame.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &frameCopy);
-  VkBufferImageCopy depthReadback = depthCopy;
-  gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.depth.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &depthReadback);
+  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT,
+                              VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &toReadback, 0, nullptr, 0, nullptr);
+  VkBufferImageCopy frameReadback = frameCopy;
+  frameReadback.bufferOffset = 0;
+  VkBufferImageCopy depthReadback = frameCopy;
+  depthReadback.bufferOffset = frameBytes;
+  if (chunk.readbackFrame) {
+    gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.frame.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &frameReadback);
+  }
+  if (chunk.readbackDepth) {
+    gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.depth.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1,
+                                   &depthReadback);
+  }
   VkMemoryBarrier readbackDone{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
   readbackDone.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
   readbackDone.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
   gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &readbackDone,
                               0, nullptr, 0, nullptr);
   s.stats.barriers += 2;
-  if (!check(gt4_hw_vkEndCommandBuffer(s.cmd), "vkEndCommandBuffer", error)) return false;
-
-  VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
-  submit.commandBufferCount = 1;
-  submit.pCommandBuffers = &s.cmd;
-  gt4_hw_vkResetFences(s.device, 1, &s.fence);
-  if (!check(gt4_hw_vkQueueSubmit(s.queue, 1, &submit, s.fence), "vkQueueSubmit", error)) return false;
-  if (!check(gt4_hw_vkWaitForFences(s.device, 1, &s.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) return false;
+  if (!s.submit(true, error)) return false;
 
   const auto *readback = static_cast<const std::uint8_t *>(s.readback.mapped);
-  std::memcpy(chunk.frameWords.data(), readback, frameBytes);
-  std::memcpy(chunk.depthWords.data(), readback + depthOffset, frameBytes);
-
-  s.stats.executions++;
-  s.stats.vertices += chunk.vertices.size();
-  s.stats.uploadBytes += frameBytes * 2 + textureBytes + chunk.vertices.size() * sizeof(GpuVertex);
-  s.stats.readbackBytes += frameBytes * 2;
+  if (chunk.readbackFrame) std::memcpy(chunk.frameWords.data(), readback, frameBytes);
+  if (chunk.readbackDepth) std::memcpy(chunk.depthWords.data(), readback + frameBytes, frameBytes);
+  s.stats.readbackBytes += frameBytes * ((chunk.readbackFrame ? 1 : 0) + (chunk.readbackDepth ? 1 : 0));
   return true;
 }
 

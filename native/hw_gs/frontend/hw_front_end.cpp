@@ -174,6 +174,10 @@ TransferHooks FrontEnd::MakeTransferHooks() {
     return hooks;
 }
 
+void FrontEnd::SetBeforeLocalRead(std::function<void(const BlockRange&)> callback) {
+    beforeLocalRead_ = std::move(callback);
+}
+
 void FrontEnd::SetLocalMemory(const uint8_t* localMemory) {
     localMemory_ = localMemory != nullptr ? localMemory : zeroMemory_.data();
 }
@@ -325,6 +329,12 @@ void FrontEnd::OnTex0Write(uint32_t contextIndex) {
         }
         if (flush) {
             FlushBatch(FlushReason::ClutLoad);
+        }
+        if (beforeLocalRead_) {
+            // CSM1 palettes sit in one page from CBP (a second page covers an unaligned CBP); CSM2 reads a
+            // TEXCLUT row anywhere in a CBW-wide buffer, so the whole memory is reported (rare in GT4).
+            const BlockRange range = write.csm == 0 ? BlockRange{write.cbp & ~31u, 64u} : BlockRange{0u, kBlocksTotal};
+            beforeLocalRead_(range);
         }
         if (!inTransferHook_) {
             transfers_.CommitPending(TransferReason::ClutLoad);

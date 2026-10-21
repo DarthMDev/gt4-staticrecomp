@@ -76,7 +76,7 @@ foreach(hw_writeback_test IN ITEMS hw_flat_provoking hw_sprite_corners hw_presen
         hw_gpu_equivalence_scissor hw_gpu_raster_blend hw_gpu_raster_pabe hw_gpu_raster_atest
         hw_gpu_raster_date hw_gpu_raster_frame hw_gpu_gouraud_report
         hw_gpu_writeback_aliased_depth hw_readback_pending_draw hw_replay_parity_double_buffer
-        hw_presentation_field_phase)
+        hw_presentation_field_phase hw_cache_equals_writeback)
     add_test(NAME ${hw_writeback_test} COMMAND hw_writeback_tests ${hw_writeback_test})
     set_tests_properties(${hw_writeback_test} PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300)
 endforeach()

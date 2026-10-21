@@ -7,7 +7,8 @@
 //
 // Usage: hw_writeback_replay <capture> <out-dir> [--every N] [--slm-frame N] [--trace-frame N]
 //        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>] [--compose reference|presentation]
-//        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]]
+//        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]] [--sync-mode cache|writeback]
+// --sync-mode selects GT4_HW_SYNC_MODE (default cache, as in the game; writeback is the reference mode).
 // --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
 // the default `auto`) instead of the reference image (12.9 `vram`, the CPU reference's image).
 // --slm-hashes writes "<frame> <16 hex digits>" per frame (the FNV-1a hash of the 4 MiB local memory),
@@ -143,6 +144,7 @@ int main(int argc, char** argv) {
     std::string slmHashPath;                // per-frame local memory hashes
     writeback::ComposeKind composeKind = writeback::ComposeKind::Reference;
     writeback::OutputSettings outputSettings;  // --deinterlace (13.4 names, `_bff` suffix allowed)
+    bool cacheMode = true;                     // --sync-mode
     PixelRect traceRect{0, 0, 2047, 2047};
     for (int i = 3; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--every") == 0) {
@@ -155,6 +157,13 @@ int main(int argc, char** argv) {
                 composeKind = writeback::ComposeKind::Presentation;
             } else if (std::strcmp(argv[i + 1], "reference") != 0) {
                 std::fprintf(stderr, "--compose takes reference or presentation\n");
+                return 2;
+            }
+        } else if (std::strcmp(argv[i], "--sync-mode") == 0) {
+            if (std::strcmp(argv[i + 1], "writeback") == 0) {
+                cacheMode = false;
+            } else if (std::strcmp(argv[i + 1], "cache") != 0) {
+                std::fprintf(stderr, "--sync-mode takes cache or writeback\n");
                 return 2;
             }
         } else if (std::strcmp(argv[i], "--deinterlace") == 0) {
@@ -203,6 +212,7 @@ int main(int argc, char** argv) {
         return 1;
     }
     renderer.SetOutputSettings(outputSettings);
+    renderer.SetSyncMode(cacheMode);
 
     // Frame counter for the trace: EndFrame of frame N is the N-th call (0-based), as in onFrame.
     std::uint64_t currentFrame = 0;
@@ -293,6 +303,21 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(counters.writebackPixels),
                 static_cast<unsigned long long>(counters.writebackDepthWords),
                 static_cast<unsigned long long>(counters.fifoOverruns), renderer.Failed() ? 1 : 0);
+    std::printf("textures_cached=%llu ", static_cast<unsigned long long>(counters.texturesCached));
+    std::printf("sync_mode=%s resident_batches=%llu fallback_batches=%llu loads=%llu load_words=%llu writebacks=%llu "
+                "writeback_words=%llu\n",
+                cacheMode ? "cache" : "writeback", static_cast<unsigned long long>(counters.cacheResidentBatches),
+                static_cast<unsigned long long>(counters.cacheFallbackBatches),
+                static_cast<unsigned long long>(counters.cacheLoads),
+                static_cast<unsigned long long>(counters.cacheLoadWords),
+                static_cast<unsigned long long>(counters.cacheWritebacks),
+                static_cast<unsigned long long>(counters.cacheWritebackWords));
+    {
+        const writeback::PassTimings& totals = renderer.TimingTotals();
+        const double frames = renderer.TimedFrames() ? static_cast<double>(renderer.TimedFrames()) : 1.0;
+        std::printf("per_frame_ms translate=%.2f execute=%.2f\n", totals.translateUs / frames / 1000.0,
+                    totals.executeUs / frames / 1000.0);
+    }
     std::printf("images_written=%llu\n", static_cast<unsigned long long>(written));
     if (renderer.Failed()) {
         std::fprintf(stderr, "GPU write-back renderer failed: %s\n", renderer.LastError().c_str());

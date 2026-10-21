@@ -72,10 +72,18 @@ static_assert(Count <= 48, "GpuPixelState has 48 fields");
 
 // One chunk of work. The frame and depth rectangles are inclusive and equal; words are the raw
 // stored values of the 32-bit view (SLM readPixel), row-major with width = rect width.
+// The four transfer flags select what Execute moves between the words and the frame/depth images over the
+// rectangle: the write-back mode sets all four (upload, draw, read back); the resident-target cache (M7,
+// IN-340) uploads only when a target is loaded, draws with no transfer, and reads back only when the shadow
+// memory must become coherent (a chunk with no draws is a pure transfer).
 struct GpuChunk {
     std::int32_t rectX0 = 0, rectY0 = 0, rectX1 = -1, rectY1 = -1;
-    std::vector<std::uint32_t> frameWords;   // read in, written back by Execute
-    std::vector<std::uint32_t> depthWords;   // read in, written back by Execute
+    bool uploadFrame = true;
+    bool uploadDepth = true;
+    bool readbackFrame = true;
+    bool readbackDepth = true;
+    std::vector<std::uint32_t> frameWords;   // uploaded and/or read back per the flags
+    std::vector<std::uint32_t> depthWords;
     bool hasTexture = false;
     std::uint32_t texWidth = 0;              // texels (power of two up to 1024 or region extent)
     std::uint32_t texHeight = 0;
@@ -97,6 +105,7 @@ struct GpuStats {
     std::uint64_t uploadBytes = 0;
     std::uint64_t readbackBytes = 0;
     std::uint64_t barriers = 0;
+    std::uint64_t submissions = 0;  // queue submissions (IN-342: several chunks per submission)
 };
 
 class GpuDrawer {
@@ -110,8 +119,13 @@ public:
     bool Init(const VulkanHandles &handles, std::string &error);
     bool Ready() const;
 
-    // Draws one chunk and reads the frame and depth words back into the chunk. Blocks until done.
+    // Records one chunk (uploads, draws, readbacks as its flags say). A chunk with a readback submits and waits,
+    // so its words are filled on return; other chunks are submitted later (IN-342), when a ring is full, a
+    // readback needs the results, or Flush() is called.
     bool Execute(GpuChunk &chunk, std::string &error);
+
+    // Submits the recorded chunks; with `wait`, also waits for them.
+    bool Flush(bool wait, std::string &error);
 
     const GpuStats &Stats() const;
 

@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstring>
 #include <optional>
+#include <unordered_map>
 
 #include "hw_batch.hpp"
 #include "hw_clut.hpp"
@@ -231,8 +232,40 @@ bool TextureExtent(const TextureUnit& t, uint32_t& width, uint32_t& height) {
     return width <= gpu::kGpuMaxTextureSide && height <= gpu::kGpuMaxTextureSide;
 }
 
+// Called just before the texels of a batch are read from the shadow memory (the M7 resident targets write
+// back drawn pixels that overlap the texture first, IN-340).
+using TextureReadHook = std::function<void(const memory::BufferView&, uint32_t width, uint32_t height)>;
+
+// Decoded-texture cache (M7 memory sources, chapter 04; IN-341). The key is everything the decode reads
+// besides memory: TBP0, TBW, PSM, the decoded extent, TEXA for 16/24-bit texels and the palette contents
+// for indexed ones. `find` returns texels only when no shadow-memory write touched the texture's pages since
+// they were decoded; `store` keeps a fresh decode.
+struct TextureKey {
+    uint32_t tbp = 0, tbw = 0, psm = 0, width = 0, height = 0;
+    uint32_t ta0 = 0, ta1 = 0, aem = 0;
+    uint64_t paletteHash = 0;
+    bool operator==(const TextureKey&) const = default;
+};
+
+class TextureCacheView {
+public:
+    virtual ~TextureCacheView() = default;
+    virtual const std::vector<uint32_t>* find(const TextureKey& key, const memory::BufferView& view) = 0;
+    virtual void store(const TextureKey& key, const memory::BufferView& view, const std::vector<uint32_t>& texels) = 0;
+};
+
+uint64_t HashPalette(const clut::Palette& palette) {
+    uint64_t hash = 1469598103934665603ull;
+    for (uint32_t i = 0; i < 256; ++i) {
+        hash ^= palette.entries[i];
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
 void Translate(const Batch& batch, const memory::LocalMemory& local, const clut::ClutUnit& clut, Translation& out,
-               Counters& counters) {
+               Counters& counters, const TextureReadHook& beforeTextureRead = {},
+               TextureCacheView* textureCache = nullptr) {
     const BatchState& state = batch.state;
     const EnvironmentRegs& env = state.env;
     const ContextRegs& ctx = state.ctx;
@@ -292,17 +325,37 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
             out.skippedTexture = true;
             return;
         }
+        if (beforeTextureRead) beforeTextureRead(texture.view, width, height);
         out.hasTexture = true;
         out.texWidth = width;
         out.texHeight = height;
-        out.texels.resize(static_cast<size_t>(width) * height);
-        for (uint32_t y = 0; y < height; ++y) {
-            for (uint32_t x = 0; x < width; ++x) {
-                out.texels[static_cast<size_t>(y) * width + x] = DecodeTexel(local, texture, x, y);
-            }
+        TextureKey key;
+        key.tbp = texture.view.basePointer;
+        key.tbw = texture.view.bufferWidth;
+        key.psm = static_cast<uint32_t>(texture.view.psm);
+        key.width = width;
+        key.height = height;
+        if (texture.cls == TexClass::Ct16 || texture.cls == TexClass::Ct24) {
+            key.ta0 = texture.texa.ta0;
+            key.ta1 = texture.texa.ta1;
+            key.aem = texture.texa.aem ? 1u : 0u;
         }
-        counters.texturesDecoded++;
-        counters.texelsDecoded += static_cast<uint64_t>(width) * height;
+        if (texture.cls == TexClass::Indexed) key.paletteHash = HashPalette(texture.palette);
+        const std::vector<uint32_t>* cached = textureCache ? textureCache->find(key, texture.view) : nullptr;
+        if (cached) {
+            out.texels = *cached;
+            counters.texturesCached++;
+        } else {
+            out.texels.resize(static_cast<size_t>(width) * height);
+            for (uint32_t y = 0; y < height; ++y) {
+                for (uint32_t x = 0; x < width; ++x) {
+                    out.texels[static_cast<size_t>(y) * width + x] = DecodeTexel(local, texture, x, y);
+                }
+            }
+            counters.texturesDecoded++;
+            counters.texelsDecoded += static_cast<uint64_t>(width) * height;
+            if (textureCache) textureCache->store(key, texture.view, out.texels);
+        }
     }
 
     // GPU pixel-state block (hw_pixel_uber.frag). Field values equal the CPU reference's PixelState.
@@ -447,6 +500,68 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
     }
 }
 
+// ---- Block spans (M7 coherence, IN-340) ------------------------------------------------------------
+// A conservative range of GS blocks (modulo 16384) that a rectangle of a buffer can touch: whole page rows
+// from the row of y0 to the row of y1, plus one page for an unaligned base and one page row when the
+// rectangle is wider than the buffer (the row wraps). count >= 16384 means "all memory".
+struct BlockSpan {
+    uint32_t begin = 0;
+    uint32_t count = 0;
+};
+
+constexpr uint32_t kAllBlocks = kBlocksTotal;
+
+BlockSpan SpanOfRect(const memory::BufferView& view, int32_t x0, int32_t y0, int32_t x1, int32_t y1) {
+    if (x1 < x0 || y1 < y0) return BlockSpan{};
+    if (x0 < 0 || y0 < 0 || x1 >= 2048 || y1 >= 2048) return BlockSpan{0, kAllBlocks};
+    const memory::PsmInfo& info = memory::psmInfo(view.psm);
+    const uint32_t bufferWidth = std::max<uint32_t>(view.bufferWidth, 1u) * 64u;
+    const uint32_t pagesPerRow = std::max<uint32_t>(1u, (bufferWidth + info.pageWidth - 1u) / info.pageWidth);
+    const uint32_t firstRow = static_cast<uint32_t>(y0) / info.pageHeight;
+    uint32_t rows = static_cast<uint32_t>(y1) / info.pageHeight - firstRow + 1u;
+    if (static_cast<uint32_t>(x1) >= bufferWidth) rows += 1u + static_cast<uint32_t>(x1) / bufferWidth;
+    const uint64_t count = static_cast<uint64_t>(rows) * pagesPerRow * kBlocksPerPage + kBlocksPerPage;
+    if (count >= kAllBlocks) return BlockSpan{0, kAllBlocks};
+    const uint32_t begin = (view.basePointer + firstRow * pagesPerRow * kBlocksPerPage) % kAllBlocks;
+    return BlockSpan{begin, static_cast<uint32_t>(count)};
+}
+
+BlockSpan SpanOfRect(const memory::BufferView& view, const PixelRect& r) { return SpanOfRect(view, r.x0, r.y0, r.x1, r.y1); }
+
+bool SpansOverlap(const BlockSpan& a, const BlockSpan& b) {
+    if (a.count == 0 || b.count == 0) return false;
+    if (a.count >= kAllBlocks || b.count >= kAllBlocks) return true;
+    const uint32_t ab = (b.begin + kAllBlocks - a.begin) % kAllBlocks;
+    const uint32_t ba = (a.begin + kAllBlocks - b.begin) % kAllBlocks;
+    return ab < a.count || ba < b.count;
+}
+
+// Span of a transfer rectangle (02.7): coordinates wrap at 2048, which the conservative span reports as all
+// memory.
+BlockSpan SpanOfTransfer(uint32_t bp, uint32_t bw, uint32_t psmCode, uint32_t x, uint32_t y, uint32_t w, uint32_t h) {
+    const auto psm = memory::decodePsm(psmCode);
+    if (!psm) return BlockSpan{0, kAllBlocks};
+    if (w == 0 || h == 0) return BlockSpan{};
+    return SpanOfRect(memory::BufferView{bp, bw, *psm}, static_cast<int32_t>(x), static_cast<int32_t>(y),
+                      static_cast<int32_t>(x + w - 1u), static_cast<int32_t>(y + h - 1u));
+}
+
+bool SameView(const memory::BufferView& a, const memory::BufferView& b) {
+    return a.basePointer == b.basePointer && a.bufferWidth == b.bufferWidth && a.psm == b.psm;
+}
+
+bool Contains(const PixelRect& outer, const PixelRect& inner) {
+    return !outer.Empty() && outer.x0 <= inner.x0 && outer.y0 <= inner.y0 && outer.x1 >= inner.x1 && outer.y1 >= inner.y1;
+}
+
+// The batch reads or writes depth (01.5): a depth test other than ALWAYS, or depth writes not masked. A
+// batch that does neither leaves the depth image untouched, so no depth target is needed for it.
+bool DepthUsed(const gpu::GpuPixelState& st) {
+    const bool testReads = st.fields[gpu::gpufield::Ztest] != 0 &&
+                           st.fields[gpu::gpufield::Ztst] != static_cast<uint32_t>(pixel::DepthCompare::Always);
+    return testReads || st.fields[gpu::gpufield::Zmsk] == 0;
+}
+
 // Wall-clock stage timer of one pass (roadmap requirement 4). CPU only: the GPU timestamp pool is a
 // later step, and PassTimings::executeGpuUs stays 0 so a reader never mistakes it for a measurement.
 class StageTimer {
@@ -555,10 +670,315 @@ void TranslateBatch(const Batch &batch, const memory::LocalMemory &local, const 
 
 // ---- Renderer -----------------------------------------------------------------------------------
 
-class Renderer::Impl final : public BatchSink, public SyncSink {
+class Renderer::Impl final : public BatchSink, public SyncSink, public TransferSink, public TextureCacheView {
 public:
-    Impl() : frontEnd_(FrontEndOptions{}, *this, *this, memory_) {
+    // ---- Shadow-memory write tracking and the decoded-texture cache (IN-341) ----------------------------
+    // Every write into the shadow memory bumps the sequence number of the pages it may touch (conservative
+    // spans). A cached decode is reused only when none of its pages changed after it was made.
+    void MarkWritten(const BlockSpan& span) {
+        if (span.count == 0) return;
+        ++writeSequence_;
+        if (span.count >= kAllBlocks) {
+            pageWrites_.fill(writeSequence_);
+            return;
+        }
+        const uint32_t firstPage = span.begin / kBlocksPerPage;
+        const uint32_t lastBlock = span.begin + span.count - 1u;
+        for (uint32_t page = firstPage; page <= lastBlock / kBlocksPerPage; ++page) {
+            pageWrites_[page % memory::kPagesTotal] = writeSequence_;
+        }
+    }
+
+    bool UnchangedSince(const BlockSpan& span, uint64_t sequence) const {
+        if (span.count >= kAllBlocks) {
+            for (uint64_t value : pageWrites_) {
+                if (value > sequence) return false;
+            }
+            return true;
+        }
+        const uint32_t firstPage = span.begin / kBlocksPerPage;
+        const uint32_t lastBlock = span.begin + span.count - 1u;
+        for (uint32_t page = firstPage; page <= lastBlock / kBlocksPerPage; ++page) {
+            if (pageWrites_[page % memory::kPagesTotal] > sequence) return false;
+        }
+        return true;
+    }
+
+    struct CachedTexture {
+        TextureKey key;
+        BlockSpan span;
+        uint64_t sequence = 0;
+        uint64_t lastUse = 0;
+        std::vector<uint32_t> texels;
+    };
+
+    static uint64_t KeyHash(const TextureKey& k) {
+        const uint64_t words[] = {k.tbp, k.tbw, k.psm, k.width, k.height, k.ta0, k.ta1, k.aem, k.paletteHash};
+        uint64_t hash = 1469598103934665603ull;
+        for (uint64_t w : words) {
+            hash ^= w;
+            hash *= 1099511628211ull;
+        }
+        return hash;
+    }
+
+    const std::vector<uint32_t>* find(const TextureKey& key, const memory::BufferView&) override {
+        if (!textureCacheEnabled_) return nullptr;
+        auto it = textures_.find(KeyHash(key));
+        if (it == textures_.end() || !(it->second.key == key)) return nullptr;
+        if (!UnchangedSince(it->second.span, it->second.sequence)) {
+            textures_.erase(it);
+            return nullptr;
+        }
+        it->second.lastUse = ++textureUses_;
+        return &it->second.texels;
+    }
+
+    void store(const TextureKey& key, const memory::BufferView& view, const std::vector<uint32_t>& texels) override {
+        if (!textureCacheEnabled_) return;
+        if (textures_.size() >= kTextureCacheEntries) {
+            // Least recently used entry goes (the cache is small: GT4 menus reuse a few dozen textures).
+            auto oldest = textures_.begin();
+            for (auto it = textures_.begin(); it != textures_.end(); ++it) {
+                if (it->second.lastUse < oldest->second.lastUse) oldest = it;
+            }
+            textures_.erase(oldest);
+        }
+        CachedTexture entry;
+        entry.key = key;
+        entry.span = SpanOfRect(view, 0, 0, static_cast<int32_t>(key.width) - 1, static_cast<int32_t>(key.height) - 1);
+        entry.sequence = writeSequence_;
+        entry.lastUse = ++textureUses_;
+        entry.texels = texels;
+        textures_[KeyHash(key)] = std::move(entry);
+    }
+
+    Impl() : frontEnd_(FrontEndOptions{}, *this, *this, *this) {
         frontEnd_.SetLocalMemory(memory_.Local().bytes().data());
+        frontEnd_.SetBeforeLocalRead([this](const BlockRange& range) {
+            CoherentForRead(BlockSpan{range.begin, range.count});
+        });
+    }
+
+    // ---- Transfers (02.7, 10.2): the resident targets are made coherent, then the shadow memory works ----
+    void InvalidateDestination(const UploadCommit& c) override {
+        CoherentForWrite(SpanOfTransfer(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, c.rrh));
+        memory_.InvalidateDestination(c);
+    }
+    void CommitUpload(const UploadCommit& c, const uint8_t* bytes, size_t byteCount) override {
+        const BlockSpan span = SpanOfTransfer(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, c.rrh);
+        CoherentForWrite(span);
+        memory_.CommitUpload(c, bytes, byteCount);
+        MarkWritten(span);
+    }
+    void LocalToLocalMove(const LocalMoveCommit& m) override {
+        CoherentForRead(SpanOfTransfer(m.sbp, m.sbw, m.spsm, m.ssax, m.ssay, m.rrw, m.rrh));
+        const BlockSpan destination = SpanOfTransfer(m.dbp, m.dbw, m.dpsm, m.dsax, m.dsay, m.rrw, m.rrh);
+        CoherentForWrite(destination);
+        memory_.LocalToLocalMove(m);
+        MarkWritten(destination);
+    }
+    void BeginLocalToHost(const LocalToHostSetup& r) override {
+        CoherentForRead(SpanOfTransfer(r.sbp, r.sbw, r.spsm, r.ssax, r.ssay, r.rrw, r.rrh));
+        memory_.BeginLocalToHost(r);
+    }
+    void CancelLocalToHost() override { memory_.CancelLocalToHost(); }
+
+    // ---- Resident targets (M7 first step, IN-340) ------------------------------------------------------
+    // One colour target and one depth target stay in the GPU frame and depth images between batches. A target
+    // is an exact (BP, BW, PSM) at 1x; `loaded` is the rectangle the image holds (equal to the shadow memory
+    // when it was loaded), `drawn` the part the GPU changed since (newer than the shadow memory). Any shadow
+    // memory read of a drawn range writes it back first; any write over a loaded range writes back and drops
+    // the target. Batches whose colour and depth targets share memory fall back to the write-back path, so
+    // the cache mode stores exactly what the write-back mode stores (spec 15.2 M7 gate).
+    struct ResidentSlot {
+        bool hasIdentity = false;
+        memory::BufferView view{0, 0, memory::Psm::Ct32};
+        PixelRect loaded;  // empty = nothing loaded
+        PixelRect drawn;   // empty = nothing newer than the shadow memory
+    };
+
+    BlockSpan LoadedSpan(const ResidentSlot& slot) const {
+        return slot.loaded.Empty() ? BlockSpan{} : SpanOfRect(slot.view, slot.loaded);
+    }
+
+    void WriteBack(ResidentSlot& slot, bool depth) {
+        if (slot.drawn.Empty() || failed_) return;
+        const PixelRect r = slot.drawn;
+        gpu::GpuChunk chunk;
+        chunk.rectX0 = r.x0;
+        chunk.rectY0 = r.y0;
+        chunk.rectX1 = r.x1;
+        chunk.rectY1 = r.y1;
+        chunk.uploadFrame = false;
+        chunk.uploadDepth = false;
+        chunk.readbackFrame = !depth;
+        chunk.readbackDepth = depth;
+        const size_t words = static_cast<size_t>(r.x1 - r.x0 + 1) * static_cast<size_t>(r.y1 - r.y0 + 1);
+        std::vector<uint32_t>& data = depth ? chunk.depthWords : chunk.frameWords;
+        data.resize(words);
+        std::string error;
+        if (!gpu_.Execute(chunk, error)) {
+            Fail(error);
+            return;
+        }
+        memory::LocalMemory& local = memory_.Local();
+        size_t index = 0;
+        for (int32_t y = r.y0; y <= r.y1; ++y) {
+            for (int32_t x = r.x0; x <= r.x1; ++x, ++index) {
+                local.writePixel(slot.view, static_cast<uint32_t>(x), static_cast<uint32_t>(y), data[index]);
+            }
+        }
+        counters.cacheWritebacks++;
+        counters.cacheWritebackWords += words;
+        MarkWritten(SpanOfRect(slot.view, r));
+        slot.drawn = PixelRect{};
+    }
+
+    void Drop(ResidentSlot& slot) {
+        slot.loaded = PixelRect{};
+        slot.drawn = PixelRect{};
+    }
+
+    void CoherentForRead(const BlockSpan& span) {
+        if (!slot_[0].drawn.Empty() && SpansOverlap(SpanOfRect(slot_[0].view, slot_[0].drawn), span)) WriteBack(slot_[0], false);
+        if (!slot_[1].drawn.Empty() && SpansOverlap(SpanOfRect(slot_[1].view, slot_[1].drawn), span)) WriteBack(slot_[1], true);
+    }
+
+    void CoherentForWrite(const BlockSpan& span) {
+        for (int i = 0; i < 2; ++i) {
+            if (SpansOverlap(LoadedSpan(slot_[i]), span)) {
+                WriteBack(slot_[i], i == 1);
+                Drop(slot_[i]);
+            }
+        }
+    }
+
+    void WriteBackAll() {
+        WriteBack(slot_[0], false);
+        WriteBack(slot_[1], true);
+    }
+
+    void DropAll() {
+        Drop(slot_[0]);
+        Drop(slot_[1]);
+    }
+
+    // Makes `slot` hold `view` with at least `rect` loaded from the shadow memory.
+    void Load(ResidentSlot& slot, bool depth, const memory::BufferView& view, const PixelRect& rect) {
+        if (!slot.hasIdentity || !SameView(slot.view, view)) {
+            WriteBack(slot, depth);
+            Drop(slot);
+            slot.hasIdentity = true;
+            slot.view = view;
+        }
+        if (Contains(slot.loaded, rect)) return;
+        // Grow the loaded rectangle. The shadow memory is made current first, so reloading the union from
+        // it keeps every drawn pixel.
+        WriteBack(slot, depth);
+        const PixelRect wanted = slot.loaded.Empty() ? rect : UnionRects(slot.loaded, rect);
+        gpu::GpuChunk chunk;
+        chunk.rectX0 = wanted.x0;
+        chunk.rectY0 = wanted.y0;
+        chunk.rectX1 = wanted.x1;
+        chunk.rectY1 = wanted.y1;
+        chunk.uploadFrame = !depth;
+        chunk.uploadDepth = depth;
+        chunk.readbackFrame = false;
+        chunk.readbackDepth = false;
+        const size_t words = static_cast<size_t>(wanted.x1 - wanted.x0 + 1) * static_cast<size_t>(wanted.y1 - wanted.y0 + 1);
+        std::vector<uint32_t>& data = depth ? chunk.depthWords : chunk.frameWords;
+        data.resize(words);
+        const memory::LocalMemory& local = memory_.Local();
+        size_t index = 0;
+        for (int32_t y = wanted.y0; y <= wanted.y1; ++y) {
+            for (int32_t x = wanted.x0; x <= wanted.x1; ++x, ++index) {
+                data[index] = local.readPixel(view, static_cast<uint32_t>(x), static_cast<uint32_t>(y));
+            }
+        }
+        std::string error;
+        if (!gpu_.Execute(chunk, error)) {
+            Fail(error);
+            return;
+        }
+        slot.loaded = wanted;
+        counters.cacheLoads++;
+        counters.cacheLoadWords += words;
+    }
+
+    // One translated batch through the resident targets. Returns false (nothing done) when the batch must
+    // take the write-back path instead.
+    bool ExecuteResident(const Translation& t, std::string& error) {
+        const bool depthUsed = DepthUsed(t.state);
+        const BlockSpan frameSpan = SpanOfRect(t.frameView, t.rect);
+        const BlockSpan depthSpan = depthUsed ? SpanOfRect(t.zView, t.rect) : BlockSpan{};
+        if (depthUsed && SpansOverlap(frameSpan, depthSpan)) return false;  // colour and depth share memory
+        // The other slot must not hold memory this batch writes: write it back and drop it if it does.
+        ResidentSlot& colour = slot_[0];
+        ResidentSlot& depthSlot = slot_[1];
+        if (!(colour.hasIdentity && SameView(colour.view, t.frameView)) && SpansOverlap(LoadedSpan(colour), frameSpan)) {
+            WriteBack(colour, false);
+            Drop(colour);
+        }
+        if (SpansOverlap(LoadedSpan(depthSlot), frameSpan) &&
+            !(depthUsed && depthSlot.hasIdentity && SameView(depthSlot.view, t.zView))) {
+            WriteBack(depthSlot, true);
+            Drop(depthSlot);
+        }
+        if (depthUsed && SpansOverlap(LoadedSpan(colour), depthSpan) &&
+            !(colour.hasIdentity && SameView(colour.view, t.frameView))) {
+            WriteBack(colour, false);
+            Drop(colour);
+        }
+        Load(colour, false, t.frameView, t.rect);
+        if (depthUsed) Load(depthSlot, true, t.zView, t.rect);
+        if (failed_) return true;
+        // After loading, the two resident rectangles must not share memory (they would be two images of the
+        // same bytes): undo and take the write-back path.
+        if (depthUsed && SpansOverlap(LoadedSpan(colour), LoadedSpan(depthSlot))) {
+            WriteBackAll();
+            DropAll();
+            return false;
+        }
+        size_t begin = 0;
+        while (begin < t.draws.size()) {
+            size_t end = begin;
+            uint32_t vertexCount = 0;
+            while (end < t.draws.size() && vertexCount + t.draws[end].count <= gpu::kGpuMaxVertices) {
+                vertexCount += t.draws[end].count;
+                ++end;
+            }
+            if (end == begin) {
+                error = "a primitive exceeds the vertex buffer";
+                return true;
+            }
+            const uint32_t baseVertex = t.draws[begin].first;
+            gpu::GpuChunk chunk;
+            chunk.rectX0 = t.rect.x0;
+            chunk.rectY0 = t.rect.y0;
+            chunk.rectX1 = t.rect.x1;
+            chunk.rectY1 = t.rect.y1;
+            chunk.uploadFrame = chunk.uploadDepth = chunk.readbackFrame = chunk.readbackDepth = false;
+            chunk.state = t.state;
+            chunk.hasTexture = t.hasTexture;
+            chunk.texWidth = t.texWidth;
+            chunk.texHeight = t.texHeight;
+            chunk.texels = t.texels;
+            chunk.vertices.assign(t.vertices.begin() + baseVertex, t.vertices.begin() + baseVertex + vertexCount);
+            for (size_t i = begin; i < end; ++i) {
+                gpu::GpuDraw draw = t.draws[i];
+                draw.first -= baseVertex;
+                chunk.draws.push_back(draw);
+            }
+            if (!gpu_.Execute(chunk, error)) return true;
+            counters.gpuChunks++;
+            counters.gpuDraws += chunk.draws.size();
+            begin = end;
+        }
+        colour.drawn = colour.drawn.Empty() ? t.rect : UnionRects(colour.drawn, t.rect);
+        if (depthUsed) depthSlot.drawn = depthSlot.drawn.Empty() ? t.rect : UnionRects(depthSlot.drawn, t.rect);
+        counters.cacheResidentBatches++;
+        return true;
     }
 
     void OnBatch(Batch&& batch) override {
@@ -570,7 +990,12 @@ public:
         Translation t;
         {
             StageTimer timer(frameTimings_.translateUs);
-            Translate(batch, memory_.Local(), frontEnd_.Clut(), t, counters);
+            Translate(batch, memory_.Local(), frontEnd_.Clut(), t, counters,
+                      [this](const memory::BufferView& view, uint32_t width, uint32_t height) {
+                          CoherentForRead(SpanOfRect(view, 0, 0, static_cast<int32_t>(width) - 1,
+                                                     static_cast<int32_t>(height) - 1));
+                      },
+                      this);
         }
         if (observer_) observer_(batch, t);
         if (t.skippedTexture) {
@@ -586,7 +1011,23 @@ public:
         std::string error;
         {
             StageTimer timer(frameTimings_.executeUs);
-            if (!ExecuteBatch(gpu_, t, memory_.Local(), counters, error)) Fail(error);
+            bool done = false;
+            if (cacheMode_) {
+                done = ExecuteResident(t, error);
+                if (done && !error.empty()) Fail(error);
+            }
+            if (!done) {
+                if (cacheMode_) {
+                    // Write-back path for this batch. It uploads its own rectangle into the same GPU frame and
+                    // depth images the resident targets live in, so both targets are stored and dropped first.
+                    WriteBackAll();
+                    DropAll();
+                    counters.cacheFallbackBatches++;
+                }
+                if (!ExecuteBatch(gpu_, t, memory_.Local(), counters, error)) Fail(error);
+                MarkWritten(SpanOfRect(t.frameView, t.rect));
+                MarkWritten(SpanOfRect(t.zView, t.rect));
+            }
         }
     }
 
@@ -622,6 +1063,15 @@ public:
     bool failed_ = false;
     std::string lastError_;
     Renderer::BatchObserver observer_;
+    bool cacheMode_ = false;       // GT4_HW_SYNC_MODE: false = write-back reference mode
+    // Decoded-texture cache (IN-341). On in both sync modes: it only skips re-decoding unchanged memory.
+    static constexpr size_t kTextureCacheEntries = 256;
+    bool textureCacheEnabled_ = true;
+    std::array<uint64_t, memory::kPagesTotal> pageWrites_{};
+    uint64_t writeSequence_ = 0;
+    uint64_t textureUses_ = 0;
+    std::unordered_map<uint64_t, CachedTexture> textures_;
+    ResidentSlot slot_[2];         // [0] colour target, [1] depth target
 };
 
 Renderer::Renderer() : impl_(std::make_unique<Impl>()) {}
@@ -678,6 +1128,8 @@ bool Renderer::WritePrivileged(std::uint32_t address, std::uint64_t value) {
 
 void Renderer::ResetGs() {
     Impl& s = *impl_;
+    s.WriteBackAll();  // a GS reset keeps local memory, so resident draws are stored first
+    s.DropAll();
     s.frontEnd_.ResetGs();
     s.frontEnd_.GifReset(7u);
     s.memory_.ResetRead();
@@ -694,6 +1146,7 @@ void Renderer::ResetGs() {
 bool Renderer::BeginAuxiliaryFrame() {
     Impl& s = *impl_;
     if (s.auxiliary_) return false;
+    s.WriteBackAll();  // the snapshot is the guest's memory including resident draws
     const auto bytes = s.memory_.Local().bytes();
     s.auxSnapshot_.assign(bytes.begin(), bytes.end());
     s.auxiliary_ = true;
@@ -703,8 +1156,10 @@ bool Renderer::BeginAuxiliaryFrame() {
 void Renderer::EndAuxiliaryFrame() {
     Impl& s = *impl_;
     if (!s.auxiliary_) return;
+    s.DropAll();  // resident draws of the auxiliary frame are discarded with it
     const auto bytes = s.memory_.Local().bytes();
     std::copy(s.auxSnapshot_.begin(), s.auxSnapshot_.end(), bytes.begin());
+    s.MarkWritten(BlockSpan{0, kAllBlocks});
     s.auxSnapshot_.clear();
     s.auxSnapshot_.shrink_to_fit();
     s.memory_.ResetRead();  // no partial LOCAL->HOST state survives the auxiliary frame
@@ -721,8 +1176,10 @@ const PassTimings& Renderer::TimingTotals() const { return impl_->timingTotals_;
 std::uint64_t Renderer::TimedFrames() const { return impl_->timedFrames_; }
 
 void Renderer::ClearVram() {
+    impl_->DropAll();
     auto bytes = impl_->memory_.Local().bytes();
     std::fill(bytes.begin(), bytes.end(), std::uint8_t{0});
+    impl_->MarkWritten(BlockSpan{0, kAllBlocks});
 }
 
 std::size_t Renderer::ReadFifo(void* destination, std::size_t byteCount) {
@@ -735,6 +1192,7 @@ std::size_t Renderer::ReadFifo(void* destination, std::size_t byteCount) {
     if (byteCount == 0) return 0;
     // The first FIFO access observes every earlier draw and upload (10.2).
     s.frontEnd_.FlushBatch(FlushReason::Transfer);
+    s.WriteBackAll();  // the read observes every draw, resident or not
     bool overrun = false;
     const std::vector<uint8_t> data = s.memory_.ReadLocalToHost(byteCount, overrun);
     if (overrun) s.counters.fifoOverruns++;
@@ -755,6 +1213,10 @@ void Renderer::Flush() {
     s.frameTimings_ = PassTimings{};
     ++s.timedFrames_;
     ++s.vblanks_;  // the next compose computes this VBlank's display layout (13.2)
+    // Submit the frame's recorded chunks without waiting (IN-342): the GPU draws while the CPU composes and
+    // starts the next frame; the next recording waits for it before reusing the rings.
+    std::string error;
+    if (s.gpu_.Ready() && !s.gpu_.Flush(false, error)) s.Fail(error);
 }
 
 FrameOutput Renderer::Compose(ComposeKind kind) {
@@ -827,6 +1289,7 @@ display::Image ReadCircuit(const memory::LocalMemory& local, const display::Circ
 
 void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
     Impl& s = *impl_;
+    s.WriteBackAll();  // the display reads the shadow memory
     out.valid = false;
     out.width = 0;
     out.height = 0;
@@ -933,7 +1396,20 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
 
 void Renderer::SetBatchObserver(BatchObserver observer) { impl_->observer_ = std::move(observer); }
 
-const std::uint8_t* Renderer::Slm() const { return impl_->memory_.Local().bytes().data(); }
+const std::uint8_t* Renderer::Slm() const {
+    impl_->WriteBackAll();  // a caller reading the shadow memory sees every draw (M7 coherence)
+    return impl_->memory_.Local().bytes().data();
+}
+
+void Renderer::SetSyncMode(bool cache) {
+    if (!cache) {
+        impl_->WriteBackAll();
+        impl_->DropAll();
+    }
+    impl_->cacheMode_ = cache;
+}
+
+bool Renderer::CacheMode() const { return impl_->cacheMode_; }
 
 const Counters& Renderer::GetCounters() const { return impl_->counters; }
 

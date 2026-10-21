@@ -1944,3 +1944,18 @@ Incremental rebuild of the slice228 tree. No pin or launcher change.
 - Confirmed: `GT4_RENDERER=hw` headless 1,200 frames with `GT4_HW_DUMP_SOURCE=scanout`, 0 faults, card copy
   unchanged; garage menu combing 2.08, static screens identical between VBlanks outside the edge rows
   (`private/slice230-evidence/hwr-scanout-1200/`). Phase study: `private/slice230-deint/`.
+
+## Local slice231 - M7 resident targets and decoded-texture cache (05, 04, 12.8, IN-340/IN-341)
+
+Incremental rebuild of the slice228 tree. No pin or launcher change.
+
+- Confirmed: new fixture `hw_cache_equals_writeback` passes (5 frames, identical images and memory hashes in both
+  sync modes; resident 30, fallback 5, loads 25, write-backs 30); `hw_replay_parity_double_buffer`,
+  `hw_readback_pending_draw` pass.
+- Confirmed: `hw_writeback_replay --sync-mode writeback|cache --slm-hashes` on `menu-v2.gscap`: both modes give the
+  slice228 memory hash on all 1,101 frames. Per frame with deferred submission (IN-342): writeback 12.7 + 20.9 ms,
+  cache 15.3 + 5.5 ms (translate + execute); textures cached 7,504 / 14,364.
+- Confirmed: `GT4_RENDERER=hw` headless 4,200 frames (cache mode, the default): 0 faults, 151.5 s (slice228: 416 s),
+  42 dumps byte-identical to slice228, card copy unchanged (`private/slice231-evidence/hwr-dumps-cache/`).
+- Confirmed: 179 HWR/CPU-library CTests pass (Q-07 skipped); Python 631 tests, 46 skips, only the expected
+  distribution-pin error.

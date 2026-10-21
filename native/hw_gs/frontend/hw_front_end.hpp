@@ -5,6 +5,8 @@
 // Written from the TASK-026 specification (docs/hw-renderer-spec) (clean room).
 #pragma once
 
+#include <functional>
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -57,6 +59,11 @@ public:
 
     // Local memory image (4 MiB) used by CLUT loads. Defaults to zeros.
     void SetLocalMemory(const uint8_t* localMemory);
+
+    // Called just before a CLUT load reads the local memory image (after the batch flush of 07.3), with a
+    // conservative block range covering the palette. A renderer that keeps drawn pixels outside the image
+    // (the M7 resident targets) writes them back here. Empty = no call.
+    void SetBeforeLocalRead(std::function<void(const BlockRange&)> callback);
 
     // Feeds whole qwords to a GIF path (1..3).
     void GifTransfer(uint32_t path, const Qword* qwords, size_t count);
@@ -134,6 +141,7 @@ private:
     TransferUnit transfers_;
 
     const uint8_t* localMemory_ = nullptr;
+    std::function<void(const BlockRange&)> beforeLocalRead_;
     std::vector<uint8_t> zeroMemory_;
 
     Batch batch_;

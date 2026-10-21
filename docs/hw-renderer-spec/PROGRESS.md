@@ -15,7 +15,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
 | M6 output | Done except owner test 1: display library, presentation interfaces (IN-331) with `end_frame`/`present_slot`, HWR frame dumps (IN-332; `vram` = reference image, `scanout` = presentation image, IN-338), replay tool (IN-333/IN-334), odd-frame draw loss fixed (IN-335), field offset and deinterlace in the presentation (IN-338) with the adaptive rule corrected (IN-337). Open: IN-336 (triangle precision, inside the gate) | local slice229: `hw_presentation_field_phase`, `display_hw_deint_adaptive`; 42/42 `vram` dumps inside the 2D gate and byte-identical to slice228; presentation replay of the menu capture bob-free on static screens |
-| M7 cache | Bookkeeping core done | cache CTest |
+| M7 cache | Started: resident colour + depth target (IN-340) and the decoded-texture cache (IN-341) in `GT4_HW_SYNC_MODE=cache`, gated by `hw_cache_equals_writeback` and the per-frame memory hashes of the menu capture (equal in both modes), plus deferred submission (IN-342). Open: target lists, display lookup from targets, preload, dirty lists, clears, GPU moves | local slice231: menu replay per frame translate + execute 15.9 + 33.2 -> 15.3 + 5.5 ms; headless 4,200 frames 416 s -> 152 s, 42/42 dumps unchanged |
 | M8, M12, M14, M15, M17, M19 | Not started | |
 | M9-M11, M13, M16, M18 | Pure references only (decide, lod, replace) | decide, lod, `hw_replace_*` CTest |
 
@@ -274,3 +274,23 @@ while a game is open, and never touches the owner's card.
   `tests/python/test_hw_presentation_capture.py` (passes; fails with the old phase).
 - `hw_writeback_replay --deinterlace <mode>[_bff]` added for these studies.
 - Next: owner look at the menus again (same command), then M7.
+
+## 2026-10-21 M7 first step: resident targets and decoded-texture cache (local slice231, IN-340/IN-341) - Claude
+
+- `GT4_HW_SYNC_MODE=cache` keeps one colour and one depth target resident on the GPU between batches; coherence
+  by conservative block spans (reads write back drawn ranges, writes drop loaded ranges, aliasing batches fall back
+  to the write-back path). Decoded textures are cached and invalidated by per-page write sequence numbers.
+- Gate: `hw_cache_equals_writeback` (synthetic capture: depth targets, target switches, feedback texture, upload into
+  a drawn target, local->local move, local->host read, CLUT load from drawn memory, colour/depth aliasing; identical
+  images and memory hashes per frame in both modes). It caught a real defect while being written (the fallback
+  upload overwrote the resident depth target). Menu capture: memory hashes per frame equal the slice228 write-back
+  run on all 1,101 frames in both modes.
+- Deferred submission (IN-342): chunks are recorded into one command buffer and submitted at readbacks, full rings
+  and each VBlank (no wait), instead of one synchronous submit per batch.
+- Measured on the menu capture replay (per frame, CPU): write-back mode translate 12.7 / execute 20.9 ms; cache
+  mode 15.3 / 5.5 ms (before this step: 15.9 / 33.2 ms). Headless game, 4,200 frames with `GT4_RENDERER=hw` (cache
+  is the default): 416 s -> 152 s, 0 faults, 42/42 dumps byte-identical to slice228, card copy unchanged.
+- Tests: 179 HWR/CPU-library CTests pass (Q-07 skip); Python 631 tests, 46 skips, only the expected
+  distribution-pin error; `test_hw_presentation_capture.py` passes.
+- Next M7 steps: display compose read from the resident target (no per-VBlank write-back), two colour slots for the
+  double buffer, then target lists per chapter 05; M9: one draw per primitive with barriers is the next cost.

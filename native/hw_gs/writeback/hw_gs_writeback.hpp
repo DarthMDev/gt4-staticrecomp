@@ -41,6 +41,14 @@ struct Counters {
     std::uint64_t writebackPixels = 0;          // changed frame words written back to the SLM (IN-335)
     std::uint64_t writebackDepthWords = 0;      // changed depth words written back to the SLM (IN-335)
     std::uint64_t fifoOverruns = 0;             // FIFO reads past the end of the LOCAL->HOST data (10.2)
+    // M7 resident targets (IN-340).
+    std::uint64_t cacheResidentBatches = 0;   // batches drawn into resident targets (no per-batch transfer)
+    std::uint64_t cacheFallbackBatches = 0;   // batches that took the write-back path in cache mode
+    std::uint64_t cacheLoads = 0;             // target loads from the shadow memory
+    std::uint64_t cacheLoadWords = 0;
+    std::uint64_t cacheWritebacks = 0;        // drawn rectangles stored back into the shadow memory
+    std::uint64_t cacheWritebackWords = 0;
+    std::uint64_t texturesCached = 0;         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
     std::uint64_t presentationFrames = 0;     // presentation composes with an image
     std::uint64_t blankFrames = 0;            // VBlanks with no image (unknown mode or kept previous)
@@ -176,7 +184,13 @@ public:
     using BatchObserver = std::function<void(const Batch &, const BatchTranslation &)>;
     void SetBatchObserver(BatchObserver observer);
 
-    // CPU view of the SLM (4 MiB, GS layout).
+    // GT4_HW_SYNC_MODE (12.8): true = `cache` (M7 resident targets, IN-340), false = `writeback` (the
+    // reference mode: every batch uploads and reads back its rectangle). The default is the reference mode;
+    // the backend and the replay tool set the option's value.
+    void SetSyncMode(bool cache);
+    bool CacheMode() const;
+
+    // CPU view of the SLM (4 MiB, GS layout). Resident draws are written back first.
     const std::uint8_t *Slm() const;
 
     const Counters &GetCounters() const;

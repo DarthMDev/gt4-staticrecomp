@@ -750,6 +750,9 @@ bool Backend::init(const Options &options, std::string &error) {
   output.bottomFieldFirst = options.deinterlace.bottom_field_first;
   output.antiBlur = options.antiblur;
   s.renderer->SetOutputSettings(output);
+  // GT4_HW_SYNC_MODE (12.8): `cache` keeps resident targets on the GPU (M7, IN-340), `writeback` is the
+  // reference mode.
+  s.renderer->SetSyncMode(options.sync_mode == SyncMode::cache);
   s.initialised = true;
   return true;
 }

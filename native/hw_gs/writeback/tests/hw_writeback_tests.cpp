@@ -1321,6 +1321,192 @@ int TestPresentationFieldPhase() {
     return failures == 0 ? 0 : 1;
 }
 
+// M7 gate (15.2: cache mode equals write-back mode), IN-340. A synthetic capture drives both sync modes of the
+// GPU renderer through the same replay reader; every frame must give the same composed image and the same
+// 4 MiB local memory hash. The frames exercise every coherence path of the resident targets:
+//   - depth-tested draws with a separate depth buffer (colour and depth targets resident),
+//   - a colour target switch (buffer A to buffer B) and back,
+//   - a texture read from a target drawn in the same frame (feedback: written back before decoding),
+//   - a host -> local upload into a drawn target (write back, then drop),
+//   - a local -> local move out of a drawn target into another,
+//   - a local -> host readback of a drawn target,
+//   - a CLUT load from memory a draw just wrote, used by a T8 texture,
+//   - a draw whose ZBUF shares the colour buffer's pages (the IN-335 case: write-back fallback).
+// It also proves the cache is in use (resident batches, loads, write-backs) so a silently disabled cache fails.
+int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
+    constexpr uint32_t kFrames = 5;
+    constexpr uint64_t kA = 0, kB = 2, kZ = 8, kT8 = 12, kClut = 14;  // pages
+    auto rgbaq = [](uint32_t colour) { return uint64_t{colour} | (uint64_t{0x3F800000u} << 32); };
+    auto xyz = [](uint32_t x, uint32_t y, uint32_t z = 0) {
+        return uint64_t{x * 16} | (uint64_t{y * 16} << 16) | (uint64_t{z} << 32);
+    };
+    auto uv = [](uint32_t u, uint32_t v) { return uint64_t{u * 16} | (uint64_t{v * 16} << 16); };
+    auto frameReg = [](uint64_t page) { return page | (uint64_t{1} << 16); };  // FBW 1, CT32
+    auto zbufReg = [](uint64_t page, bool masked) { return page | (masked ? (uint64_t{1} << 32) : 0); };  // Z32
+    auto tex0 = [](uint64_t blocks, uint64_t psm, uint64_t log2, uint64_t cbpBlocks, bool load) {
+        return blocks | (uint64_t{1} << 14) | (psm << 20) | (log2 << 26) | (log2 << 30) | (uint64_t{1} << 34) |
+               (cbpBlocks << 37) | (uint64_t{load ? 1u : 0u} << 61);  // TBW 1, TCC, TFX modulate, CPSM CT32, CSM1
+    };
+    const uint64_t kSprite = 6, kTriangle = 3, kIip = 1u << 3, kTme = 1u << 4, kFst = 1u << 8;
+
+    cpuref::CaptureWriter capture;
+    capture.Privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));                // PMODE: RC1, MMOD 1, ALP 255
+    capture.Privileged(0x12000010u, uint64_t{2} << 13);                             // SMODE1: NTSC
+    capture.Privileged(0x12000070u, uint64_t{kA * 32} | (uint64_t{1} << 9));        // DISPFB1: buffer A
+    capture.Privileged(0x12000080u, (uint64_t{63} << 32) | (uint64_t{63} << 44));  // DISPLAY1: 64 x 64
+    auto ad = [&](const std::vector<uint64_t>& words) {
+        capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(words.size() / 2), true, false, 0, 0, {0xE},
+                                                     words));
+    };
+    auto image = [&](const std::vector<uint64_t>& data) {
+        capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(data.size() / 2), true, false, 0, 2, {}, data));
+    };
+    auto blit = [](uint64_t sbp, uint64_t spsm, uint64_t dbp, uint64_t dpsm) {
+        return sbp | (uint64_t{1} << 16) | (spsm << 24) | (dbp << 32) | (uint64_t{1} << 48) | (dpsm << 56);
+    };
+    // Common state: scissor 0..63, no offset, depth test GEQUAL with writes (separate Z buffer).
+    const std::vector<uint64_t> common = {(uint64_t{63} << 16) | (uint64_t{63} << 48), 0x40, 0, 0x18,
+                                          (uint64_t{1} << 16) | (uint64_t{2} << 17), 0x47,  // TEST: ZTE, GEQUAL
+                                          0, 0x42};                                          // ALPHA_1 (unused)
+    // T8 texture data (64 x 64, one page) uploaded once: index = (x + 3y) & 255.
+    {
+        std::vector<uint64_t> words = {blit(0, 0, kT8 * 32, 0x13), 0x50, 0, 0x51, uint64_t{64} | (uint64_t{64} << 32), 0x52,
+                                       0, 0x53};
+        ad(words);
+        std::vector<uint64_t> data;
+        for (uint32_t i = 0; i < 64 * 64 / 8; ++i) {
+            uint64_t word = 0;
+            for (uint32_t b = 0; b < 8; ++b) {
+                const uint32_t p = i * 8 + b;
+                word |= uint64_t{((p % 64) + 3 * (p / 64)) & 255u} << (8 * b);
+            }
+            data.push_back(word);
+        }
+        image(data);
+    }
+    for (uint32_t frame = 0; frame < kFrames; ++frame) {
+        std::vector<uint64_t> w = common;
+        // 1. Buffer A, depth buffer Z: a clear sprite and two depth-tested Gouraud triangles.
+        w.insert(w.end(), {frameReg(kA), 0x4C, zbufReg(kZ, false), 0x4E, kSprite, 0x00,
+                           rgbaq(0x80102030u + frame), 0x01, xyz(0, 0, 0), 0x05, xyz(64, 64, 0), 0x05,
+                           kTriangle | kIip, 0x00, rgbaq(0x80FF0000u), 0x01, xyz(3, 2, 500 + frame), 0x05,
+                           rgbaq(0x8000FF00u), 0x01, xyz(60, 10, 900), 0x05, rgbaq(0x800000FFu), 0x01,
+                           xyz(20 + frame, 61, 700), 0x05});
+        // 2. Buffer B: clear, then a sprite textured from buffer A (drawn above, this frame).
+        w.insert(w.end(), {frameReg(kB), 0x4C, zbufReg(kZ, true), 0x4E, kSprite, 0x00, rgbaq(0x80405060u), 0x01,
+                           xyz(0, 0), 0x05, xyz(64, 64), 0x05, tex0(kA * 32, 0x00, 6, 0, false), 0x06, 0, 0x08,
+                           kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(8, 8), 0x05,
+                           uv(48, 48), 0x03, xyz(56, 56), 0x05});
+        // 3. A palette drawn into memory (CT32 16 x 16 at page kClut), then a T8 texture using it, into A.
+        w.insert(w.end(), {frameReg(kClut), 0x4C, kSprite | kIip, 0x00, rgbaq(0x80000000u | (frame * 0x111111u)), 0x01,
+                           xyz(0, 0), 0x05, rgbaq(0x80FFFFFFu - frame), 0x01, xyz(16, 16), 0x05,
+                           frameReg(kA), 0x4C, tex0(kT8 * 32, 0x13, 6, kClut * 32, true), 0x06,
+                           kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(30, 30), 0x05,
+                           uv(30, 30), 0x03, xyz(60, 60), 0x05});
+        ad(w);
+        // 4. Host -> local: 8 x 8 CT32 block into buffer A at (4 + frame, 4).
+        ad({blit(0, 0, kA * 32, 0x00), 0x50, (uint64_t{4 + frame} << 32) | (uint64_t{4} << 48), 0x51,
+            uint64_t{8} | (uint64_t{8} << 32), 0x52, 0, 0x53});
+        std::vector<uint64_t> block;
+        for (uint32_t i = 0; i < 32; ++i) block.push_back((uint64_t{0x11223344u + i + frame} << 32) | (0x55667788u - i));
+        image(block);
+        // 5. Local -> local: A (0,0) 16 x 16 to B (40, 40).
+        ad({blit(kA * 32, 0x00, kB * 32, 0x00), 0x50, uint64_t{0} | (uint64_t{40} << 32) | (uint64_t{40} << 48), 0x51,
+            uint64_t{16} | (uint64_t{16} << 32), 0x52, 2, 0x53});
+        // 6. Local -> host: 8 x 8 of B at (36, 36) (drawn by the textured sprite).
+        ad({blit(kB * 32, 0x00, 0, 0x00), 0x50, uint64_t{36} | (uint64_t{36} << 16), 0x51,
+            uint64_t{8} | (uint64_t{8} << 32), 0x52, 1, 0x53});
+        capture.FifoRead(16);
+        // 7. A draw into A whose ZBUF is A itself with Z written (test ALWAYS): the write-back fallback.
+        ad({frameReg(kA), 0x4C, zbufReg(kA, false), 0x4E, uint64_t{1} << 16 | (uint64_t{1} << 17), 0x47, kSprite, 0x00,
+            rgbaq(0x80EEDDCCu), 0x01, xyz(50, 2), 0x05, xyz(62, 12), 0x05});
+        capture.FrameEnd(frame);
+    }
+
+    struct FrameRecord {
+        bool valid = false;
+        std::vector<uint8_t> rgb;
+        uint64_t slmHash = 0;
+        std::vector<uint8_t> slm;
+    };
+    auto replay = [&](bool cacheMode, std::vector<FrameRecord>& out, writeback::Counters& counters,
+                      std::string& error) -> bool {
+        writeback::Renderer renderer;
+        if (!renderer.Init(handles, error)) return false;
+        renderer.SetSyncMode(cacheMode);
+        writeback::WritebackReplayTarget target(renderer);
+        cpuref::ReplaySummary summary;
+        const bool ok = cpuref::ReplayCapture(capture.Bytes(), target, summary,
+                                              [&](uint64_t, const cpuref::FrameImage& image) {
+                                                  FrameRecord r;
+                                                  r.valid = image.valid;
+                                                  for (const display::Rgba8& p : image.image.pixels) {
+                                                      r.rgb.push_back(p.r);
+                                                      r.rgb.push_back(p.g);
+                                                      r.rgb.push_back(p.b);
+                                                  }
+                                                  const uint8_t* slm = renderer.Slm();
+                                                  r.slmHash = cpuref::HashLocalMemory(slm, 4u * 1024u * 1024u);
+                                                  r.slm.assign(slm, slm + 4u * 1024u * 1024u);
+                                                  out.push_back(std::move(r));
+                                              },
+                                              error);
+        counters = renderer.GetCounters();
+        if (renderer.Failed()) error += " " + renderer.LastError();
+        return ok && !renderer.Failed();
+    };
+    std::vector<FrameRecord> reference;
+    std::vector<FrameRecord> cached;
+    writeback::Counters referenceCounters;
+    writeback::Counters cacheCounters;
+    std::string error;
+    if (!replay(false, reference, referenceCounters, error) || !replay(true, cached, cacheCounters, error)) {
+        std::printf("hw_cache_equals_writeback: replay failed: %s\n", error.c_str());
+        return 1;
+    }
+    int failures = 0;
+    if (reference.size() != kFrames || cached.size() != kFrames) {
+        std::printf("hw_cache_equals_writeback: frame counts %zu / %zu\n", reference.size(), cached.size());
+        return 1;
+    }
+    for (uint32_t frame = 0; frame < kFrames; ++frame) {
+        const bool image = reference[frame].valid == cached[frame].valid && reference[frame].rgb == cached[frame].rgb;
+        const bool memory = reference[frame].slmHash == cached[frame].slmHash;
+        std::printf("  frame %u: image %s, memory %016llx / %016llx %s\n", frame, image ? "equal" : "DIFFERENT",
+                    static_cast<unsigned long long>(reference[frame].slmHash),
+                    static_cast<unsigned long long>(cached[frame].slmHash), memory ? "equal" : "DIFFERENT");
+        if (!memory) {
+            // Name the 8 KiB GS pages that differ, so a failure points at the buffer involved.
+            std::string pages;
+            for (uint32_t page = 0; page < 512; ++page) {
+                const size_t base = static_cast<size_t>(page) * 8192u;
+                if (std::memcmp(reference[frame].slm.data() + base, cached[frame].slm.data() + base, 8192) != 0) {
+                    pages += " " + std::to_string(page);
+                }
+            }
+            std::printf("    differing pages:%s\n", pages.c_str());
+        }
+        if (!image || !memory) ++failures;
+        if (frame > 0 && reference[frame].slmHash == reference[frame - 1].slmHash) {
+            std::printf("  frame %u left memory unchanged (fixture is blind)\n", frame);
+            ++failures;
+        }
+    }
+    std::printf("  cache: resident %llu, fallback %llu, loads %llu, write-backs %llu\n",
+                static_cast<unsigned long long>(cacheCounters.cacheResidentBatches),
+                static_cast<unsigned long long>(cacheCounters.cacheFallbackBatches),
+                static_cast<unsigned long long>(cacheCounters.cacheLoads),
+                static_cast<unsigned long long>(cacheCounters.cacheWritebacks));
+    if (cacheCounters.cacheResidentBatches == 0 || cacheCounters.cacheFallbackBatches == 0 ||
+        cacheCounters.cacheLoads == 0 || cacheCounters.cacheWritebacks == 0 ||
+        referenceCounters.cacheResidentBatches != 0) {
+        std::printf("  the cache paths were not all exercised (fixture is blind)\n");
+        ++failures;
+    }
+    std::printf("hw_cache_equals_writeback: %u frames, %d failures\n", kFrames, failures);
+    return failures == 0 ? 0 : 1;
+}
+
 int TestGouraudReport(gpu::GpuDrawer& drawer) {
     // Report only (IN-500): Gouraud interpolation rounding is not asserted yet.
     Setup s;
@@ -1380,6 +1566,7 @@ int main(int argc, char** argv) {
     if (name == "hw_gpu_writeback_aliased_depth") return TestWritebackAliasedDepth(drawer);
     if (name == "hw_readback_pending_draw") return TestReadbackObservesPendingDraw(handles);
     if (name == "hw_replay_parity_double_buffer") return TestReplayParityDoubleBuffer(handles);
+    if (name == "hw_cache_equals_writeback") return TestCacheEqualsWriteback(handles);
     std::printf("unknown test: %s\n", name.c_str());
     return 2;
 }
