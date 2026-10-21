@@ -13,9 +13,11 @@
 
 #include "hw_gs_vulkan_loader.hpp" // Vulkan names renamed to gt4_hw_*; pointers loaded at run time
 #include "writeback/hw_gs_vulkan_device_table.hpp"
+#include "writeback/hw_gs_present_scheduler.hpp"
 #include "writeback/hw_gs_writeback.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <array>
 #include <cstdlib>
 #include <memory>
@@ -115,6 +117,17 @@ struct Backend::Impl {
 
   // M4: GS front end, shadow local memory and the GPU write-back drawer (writeback/).
   std::unique_ptr<hwgs::writeback::Renderer> renderer;
+
+  // M6 interface: the frame end composes into `frame`, the scheduler decides whether it reaches the
+  // display, and `shownFrame` is what the display currently holds (a hold re-presents exactly this).
+  hwgs::present::Scheduler scheduler;
+  hwgs::writeback::FrameOutput frame;
+  hwgs::writeback::FrameOutput shownFrame;
+  std::uint64_t guestFrames = 0;
+  double uploadUs = 0;
+  double presentUs = 0;
+  double composeTotalUs = 0;        // session sum behind stats().compose_us
+  std::uint64_t composedFrames = 0;
 
   // Present path: staging buffer and RGBA8 image for the composed display frame (recreated on resize).
   struct FrameUpload {
@@ -655,6 +668,7 @@ struct Backend::Impl {
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(cmd, &begin);
+    const auto upload_start = std::chrono::steady_clock::now();
     if (frame && frame->valid && ensure_upload(frame->width, frame->height)) {
       // The staging buffer is reused across presents: let the previous copy finish first.
       vkDeviceWaitIdle(device);
@@ -663,6 +677,7 @@ struct Backend::Impl {
     } else {
       record_black(cmd, index);
     }
+    uploadUs = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - upload_start).count();
     vkEndCommandBuffer(cmd);
 
     VkPipelineStageFlags wait_stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -848,7 +863,6 @@ void Backend::resize_window(std::uint32_t width, std::uint32_t height) {
 }
 
 void Backend::present(PresentPhase phase) {
-  (void)phase;
   Impl &s = *impl_;
   s.stats.presents++;
   if (!s.window) return; // headless: counted, nothing displayed
@@ -859,9 +873,34 @@ void Backend::present(PresentPhase phase) {
       return;
     }
   }
-  if (!s.swapchain) return;
-  const hwgs::writeback::FrameOutput frame = s.renderer->Compose();
-  s.present_frame(frame.valid ? &frame : nullptr);
+  if (!s.swapchain || !s.renderer) return;
+
+  // Frame end (chapter 12.5) with the present decision separated from it (M6 interface): compose once
+  // into the reusable buffer, hand the stamp to the scheduler, and present only if it says so. The
+  // default policy presents every VBlank, so the parity path is unchanged.
+  s.renderer->ComposeFrame(s.frame);
+  s.composeTotalUs += s.renderer->Timings().composeUs;
+  ++s.composedFrames;
+  hwgs::present::FrameStamp stamp;
+  stamp.guestFrame = ++s.guestFrames;
+  stamp.phase = phase == PresentPhase::field_odd    ? hwgs::present::Phase::FieldOdd
+                : phase == PresentPhase::field_even ? hwgs::present::Phase::FieldEven
+                                                    : hwgs::present::Phase::Progressive;
+  stamp.hasImage = s.frame.valid;
+  s.scheduler.SubmitFrame(stamp);
+  const hwgs::present::Action action = s.scheduler.Tick();
+  if (action == hwgs::present::Action::none) return;  // holding: the display keeps what it has
+  if (action == hwgs::present::Action::presentNew) {
+    // Keep the presented image: a later hold re-presents exactly these pixels.
+    s.shownFrame.valid = s.frame.valid;
+    s.shownFrame.width = s.frame.width;
+    s.shownFrame.height = s.frame.height;
+    s.shownFrame.pixels.assign(s.frame.pixels.begin(), s.frame.pixels.end());
+  }
+  const auto start = std::chrono::steady_clock::now();
+  s.present_frame(s.shownFrame.valid ? &s.shownFrame : nullptr);
+  const std::chrono::duration<double, std::micro> elapsed = std::chrono::steady_clock::now() - start;
+  s.presentUs = elapsed.count();
 }
 
 bool Backend::has_window() const { return impl_->window != nullptr; }
@@ -870,6 +909,26 @@ const Options &Backend::options() const { return impl_->options; }
 
 const DeviceReport &Backend::device_report() const { return impl_->report; }
 
-Stats Backend::stats() const { return impl_->stats; }
+Stats Backend::stats() const {
+  Stats out = impl_->stats;
+  if (impl_->renderer) {
+    // Averages per frame: a single last-frame number is too noisy to compare with the roadmap budget.
+    const hwgs::writeback::PassTimings &totals = impl_->renderer->TimingTotals();
+    const std::uint64_t frames = impl_->renderer->TimedFrames();
+    if (frames != 0) {
+      out.translate_us = totals.translateUs / static_cast<double>(frames);
+      out.execute_us = totals.executeUs / static_cast<double>(frames);
+    }
+    if (impl_->composedFrames != 0) {
+      out.compose_us = impl_->composeTotalUs / static_cast<double>(impl_->composedFrames);
+    }
+    out.auxiliary_frames = impl_->renderer->GetCounters().auxiliaryFrames;
+  }
+  out.held_presents = impl_->scheduler.presentedHeld();
+  out.dropped_frames = impl_->scheduler.dropped();
+  out.upload_us = impl_->uploadUs;
+  out.present_us = impl_->presentUs;
+  return out;
+}
 
 } // namespace gt4::hw

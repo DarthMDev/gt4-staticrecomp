@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstring>
 #include <optional>
 
@@ -446,6 +447,24 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
     }
 }
 
+// Wall-clock stage timer of one pass (roadmap requirement 4). CPU only: the GPU timestamp pool is a
+// later step, and PassTimings::executeGpuUs stays 0 so a reader never mistakes it for a measurement.
+class StageTimer {
+public:
+    explicit StageTimer(double& accumulator) : accumulator_(accumulator), start_(Clock::now()) {}
+    ~StageTimer() {
+        const std::chrono::duration<double, std::micro> elapsed = Clock::now() - start_;
+        accumulator_ += elapsed.count();
+    }
+    StageTimer(const StageTimer&) = delete;
+    StageTimer& operator=(const StageTimer&) = delete;
+
+private:
+    using Clock = std::chrono::steady_clock;
+    double& accumulator_;
+    Clock::time_point start_;
+};
+
 } // namespace
 
 bool ExecuteBatch(gpu::GpuDrawer &gpu, const BatchTranslation &t, memory::LocalMemory &local, Counters &counters,
@@ -530,7 +549,10 @@ public:
             return;
         }
         Translation t;
-        Translate(batch, memory_.Local(), frontEnd_.Clut(), t, counters);
+        {
+            StageTimer timer(frameTimings_.translateUs);
+            Translate(batch, memory_.Local(), frontEnd_.Clut(), t, counters);
+        }
         if (t.skippedTexture) {
             counters.primitivesSkippedTexture += batch.prims.size();
             counters.batchesSkippedTexture++;
@@ -542,7 +564,10 @@ public:
             return;
         }
         std::string error;
-        if (!ExecuteBatch(gpu_, t, memory_.Local(), counters, error)) Fail(error);
+        {
+            StageTimer timer(frameTimings_.executeUs);
+            if (!ExecuteBatch(gpu_, t, memory_.Local(), counters, error)) Fail(error);
+        }
     }
 
     bool OnSync(SyncKind, uint32_t, uint32_t) override { return false; }
@@ -556,6 +581,12 @@ public:
     FrontEnd frontEnd_;
     gpu::GpuDrawer gpu_;
     Counters counters;
+    PassTimings timings_;        // last completed frame
+    PassTimings frameTimings_;   // being accumulated
+    PassTimings timingTotals_;   // session sums
+    std::uint64_t timedFrames_ = 0;
+    std::vector<std::uint8_t> auxSnapshot_;  // guest SLM at BeginAuxiliaryFrame()
+    bool auxiliary_ = false;
     display::DisplayRegisters displayRegs_;
     std::array<uint32_t, 2> previousDby_{};
     std::array<uint8_t, 3> background_{};
@@ -614,12 +645,46 @@ bool Renderer::WritePrivileged(std::uint32_t address, std::uint64_t value) {
 
 void Renderer::ResetGs() { impl_->frontEnd_.ResetGs(); }
 
+bool Renderer::BeginAuxiliaryFrame() {
+    Impl& s = *impl_;
+    if (s.auxiliary_) return false;
+    const auto bytes = s.memory_.Local().bytes();
+    s.auxSnapshot_.assign(bytes.begin(), bytes.end());
+    s.auxiliary_ = true;
+    return true;
+}
+
+void Renderer::EndAuxiliaryFrame() {
+    Impl& s = *impl_;
+    if (!s.auxiliary_) return;
+    const auto bytes = s.memory_.Local().bytes();
+    std::copy(s.auxSnapshot_.begin(), s.auxSnapshot_.end(), bytes.begin());
+    s.auxSnapshot_.clear();
+    s.auxSnapshot_.shrink_to_fit();
+    s.memory_.ResetRead();  // no partial LOCAL->HOST state survives the auxiliary frame
+    s.auxiliary_ = false;
+    s.counters.auxiliaryFrames++;
+}
+
+bool Renderer::AuxiliaryActive() const { return impl_->auxiliary_; }
+
+const PassTimings& Renderer::Timings() const { return impl_->timings_; }
+
+const PassTimings& Renderer::TimingTotals() const { return impl_->timingTotals_; }
+
+std::uint64_t Renderer::TimedFrames() const { return impl_->timedFrames_; }
+
 void Renderer::ClearVram() {
     auto bytes = impl_->memory_.Local().bytes();
     std::fill(bytes.begin(), bytes.end(), std::uint8_t{0});
 }
 
 std::size_t Renderer::ReadFifo(void* destination, std::size_t byteCount) {
+    if (impl_->auxiliary_) {
+        // A guest readback is never answered from an auxiliary frame (roadmap requirement 2).
+        impl_->counters.auxiliaryReadRefused++;
+        return 0;
+    }
     std::vector<uint8_t> data = impl_->memory_.TakeLocalToHostData();
     const std::size_t limit = byteCount;
     if (data.size() > limit) data.resize(limit);
@@ -628,15 +693,37 @@ std::size_t Renderer::ReadFifo(void* destination, std::size_t byteCount) {
 }
 
 void Renderer::Flush() {
-    impl_->frontEnd_.VBlank(&kEverything, 1);
-    impl_->frontEnd_.FlushBatch(FlushReason::VBlank);
+    Impl& s = *impl_;
+    s.frontEnd_.VBlank(&kEverything, 1);
+    s.frontEnd_.FlushBatch(FlushReason::VBlank);
+    // Frame end: publish the CPU cost of the passes that just ran (roadmap requirement 4), so a run
+    // without a window still reports translate and execute.
+    s.timings_ = s.frameTimings_;
+    s.timingTotals_.translateUs += s.frameTimings_.translateUs;
+    s.timingTotals_.executeUs += s.frameTimings_.executeUs;
+    s.frameTimings_ = PassTimings{};
+    ++s.timedFrames_;
 }
 
 FrameOutput Renderer::Compose() {
-    Impl& s = *impl_;
     FrameOutput out;
+    ComposeFrame(out);
+    return out;
+}
+
+void Renderer::ComposeFrame(FrameOutput& out) {
+    Impl& s = *impl_;
+    out.valid = false;
+    out.width = 0;
+    out.height = 0;
+    double composeUs = 0.0;
+    {
+        StageTimer timer(composeUs);
+        const auto body = [&] {
     const display::DisplayLayout layout = display::compute_layout(s.displayRegs_, s.previousDby_);
-    if (!layout.valid) return out;
+    if (!layout.valid) {
+        return;
+    }
     const display::PmodeFields pmode = display::decode_pmode(s.displayRegs_.pmode);
     std::array<display::Image, 2> sources{};
     std::array<bool, 2> available{false, false};
@@ -685,7 +772,7 @@ FrameOutput Renderer::Compose() {
                                      (static_cast<uint32_t>(p.b) << 16) | (static_cast<uint32_t>(p.a) << 24));
             }
         }
-        return out;
+        return;
     }
     const display::OutputSize size = display::merge_output_size(layout, true, 1);
     const display::SourcePlacement rc1{available[0] ? &sources[0] : nullptr, layout.circuits[0].screen_x,
@@ -707,8 +794,14 @@ FrameOutput Renderer::Compose() {
         out.pixels.push_back(static_cast<uint32_t>(p.r) | (static_cast<uint32_t>(p.g) << 8) |
                              (static_cast<uint32_t>(p.b) << 16) | (static_cast<uint32_t>(p.a) << 24));
     }
-    s.lastImage_ = std::move(merged);
-    return out;
+    if (!s.auxiliary_) {
+        s.lastImage_ = std::move(merged);  // an auxiliary frame never replaces the guest's history
+    }
+        };  // end of the timed compose body
+        body();
+    }
+    s.timings_.composeUs = composeUs;
+    s.timings_.executeGpuUs = 0.0;  // reserved for GPU timestamps (not measured yet)
 }
 
 const std::uint8_t* Renderer::Slm() const { return impl_->memory_.Local().bytes().data(); }

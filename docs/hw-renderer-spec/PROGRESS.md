@@ -14,7 +14,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M3 front end, CLUT | Done; A+D vertex kicks fixed (IN-326) | CTest `m3_*`, `m3_hw_gif_ad_xyz` |
 | M4 reference I | CPU reference done; the GPU write-back path is ported from `task/027-m4-gpuref`, built, wired into the backend and green in 11 fixtures (IN-329). The S-01/S-02 parity replay is still missing (no HWR replay tool) | CTest `cpuref_*`, `hw_flat_provoking`, `hw_sprite_corners`, `hw_gpu_coverage_vectors`, `hw_gpu_equivalence_*` |
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
-| M6 output | Display library done; CPU VRAM diagnostic added; IN-315 comparison resolved and IN-316 closed (garage samples pass after IN-326); game dumps still pending | slice222:76/76 CPU-library tests; 11/11 aligned menu samples inside the 2D gate, worst 0.2051% / 45.992 dB |
+| M6 output | Display library done; CPU VRAM diagnostic added; IN-315/IN-316 closed; presentation interfaces decided (IN-331: present scheduler, hold/re-present, auxiliary-frame isolation, per-pass timers); HWR frame dumps and the windowed scheduler wiring still pending | slice225: 212 CTests (210 pass, Q-07 skip, known pin failure); 5 interface fixtures; 11/11 aligned menu samples inside the 2D gate |
 | M7 cache | Bookkeeping core done | cache CTest |
 | M8, M12, M14, M15, M17, M19 | Not started | |
 | M9-M11, M13, M16, M18 | Pure references only (decide, lod, replace) | decide, lod, `hw_replace_*` CTest |
@@ -40,9 +40,10 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 
 ## Next step
 
-**Parity replay and first playable**: add the HWR replay tool (the capture reader over the GPU write-back
-renderer) and record S-01/S-02 against the donor frames, as 15.2 M4/M5 ask; then M6 (HWR frame dumps from the
-sink and the first owner look at 1x). Then M5 (blending in the raster path: ABE is currently
+**M6 first playable**: wire the present scheduler into the sink for the windowed path, add the HWR frame dumps
+(GT4_HW_DUMP_SOURCE=vram|scanout) so the 42-dump schedule can run with GT4_RENDERER=hw, then record the
+S-01/S-02 parity (the HWR replay tool) and ask the owner for the first look at 1x. The interface work decided
+in IN-331 is done; what remains is the dump/present plumbing, not new pixel behaviour. Then M5 (blending in the raster path: ABE is currently
 drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at 1x). The front-end equivalent of the old `.inc` copy is not needed: the sink no longer uses donor memory for output. S-03..S-11 still need owner gameplay captures.
 
 ## 2026-10-21 replay checkpoint (slice219)
@@ -100,3 +101,12 @@ drawn opaque, IN-500) and M6 (HWR frame dumps from the sink, first owner look at
 - Confirmed: full native CTest 205 pass + Q-07 skip + the known distribution-pin failure (207 selected). Default renderer headless 4,200 frames: 42/42 dumps equal slice214, card copy unchanged.
 - Confirmed: `GT4_RENDERER=hw` headless 600 frames with blending enabled: 0 faults, 37.0 s (about 62 ms per guest frame; blending costs about 7% over the previous 33.2 s). No frame dump yet.
 - Open: DATE in CT24 writes nothing (read as High confidence in 08.7 and mirrored by both sides); the S-01/S-02 parity replay still needs the HWR replay tool.
+
+## 2026-10-21 M6 presentation interface checkpoint (IN-331)
+
+- Audit against docs/COREGS2-ROADMAP.md: M5 does not conflict. The draw path holds no per-frame target (writes back per chunk) and reads the destination at draw time, so holding a frame or running an auxiliary pass cannot corrupt blending. Two real gaps: presentation composed inside the VBlank and owned no image; and write-back always landed in guest memory.
+- Decided and implemented as interfaces: `present::Scheduler` (stamp per frame end, `presentNew` / `presentHeld` / `none`, newest-wins backlog, late-input hook), a reused compose buffer plus the kept shown image, `BeginAuxiliaryFrame`/`EndAuxiliaryFrame` (4 MiB snapshot and restore, readbacks refused, guest display history untouched) and per-pass CPU timers with session totals (`executeGpuUs` reserved at 0).
+- Parity: default policy presents every VBlank, so the windowed path and the donor renderer are unchanged; default headless 42/42 dumps equal slice214 with the card copy unchanged.
+- Confirmed: 212 CTests, 210 pass, Q-07 skip and only the known `python_native_contracts` distribution pin failure. Five new fixtures cover the scheduler (new/held/dropped, hold off, 2x rate + hook calls), the auxiliary-frame contract (guest SLM hash identical, readback refused, nested begin refused) and the timers (compose measured, draw timers 0 without a device, GPU field reserved).
+- Confirmed: headless HWR 600 frames, 0 faults, 33.7 s; per-frame CPU average translate 16.1 ms and execute 34.8 ms, which is the synchronous per-primitive submit that M7/M9 must attack.
+- Not done yet: windowed scheduler wiring (tick per host present slot), HWR frame dumps and the S-01/S-02 replay. Deferred deliberately: parity first.

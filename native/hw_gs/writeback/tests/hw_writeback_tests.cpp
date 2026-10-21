@@ -21,6 +21,7 @@
 #include "../../frontend/hw_gs_types.hpp"
 #include "../../hw_gs_vulkan_loader.hpp"
 #include "../hw_gs_vulkan_device_table.hpp"
+#include "../hw_gs_present_scheduler.hpp"
 #include "../hw_gs_writeback.hpp"
 
 namespace {
@@ -743,6 +744,255 @@ int TestRasterFrameWrites(gpu::GpuDrawer& drawer) {
     return failures ? 1 : 0;
 }
 
+// ---- M6 interface: present scheduler, auxiliary frames, per-pass timings ------------------------
+
+// Default policy: a frame end is presented once and then re-presented on later ticks without a queue.
+int TestPresentScheduler() {
+    present::Scheduler s;
+    if (s.Tick() != present::Action::none) {
+        std::printf("hw_present_scheduler: a tick without any frame presented something\n");
+        return 1;
+    }
+    present::FrameStamp first;
+    first.guestFrame = 7;
+    first.hasImage = true;
+    s.SubmitFrame(first);
+    if (s.Tick() != present::Action::presentNew || s.lastShown().guestFrame != 7) {
+        std::printf("hw_present_scheduler: the submitted frame was not presented\n");
+        return 1;
+    }
+    if (s.Tick() != present::Action::presentHeld) {
+        std::printf("hw_present_scheduler: the held image was not re-presented\n");
+        return 1;
+    }
+    if (s.presentedNew() != 1 || s.presentedHeld() != 1 || s.dropped() != 0) {
+        std::printf("hw_present_scheduler: counters %llu/%llu/%llu\n",
+                    static_cast<unsigned long long>(s.presentedNew()),
+                    static_cast<unsigned long long>(s.presentedHeld()),
+                    static_cast<unsigned long long>(s.dropped()));
+        return 1;
+    }
+    // A frame end without a guest image still reaches the display (chapter 12.4 shows black).
+    present::FrameStamp blank;
+    blank.guestFrame = 8;
+    blank.hasImage = false;
+    s.SubmitFrame(blank);
+    if (s.Tick() != present::Action::presentNew || s.hasImage()) {
+        std::printf("hw_present_scheduler: an image-less frame end was mishandled\n");
+        return 1;
+    }
+    std::printf("hw_present_scheduler: new/held/dropped = 2/1/0, newest frame %llu\n",
+                static_cast<unsigned long long>(s.lastShown().guestFrame));
+    return 0;
+}
+
+// Holding disabled: nothing is presented until a new frame end arrives, and a backlog keeps only the
+// newest frame (never a queue).
+int TestPresentSchedulerHold() {
+    present::Scheduler s;
+    present::Policy policy;
+    policy.hold_last_image = false;
+    s.SetPolicy(policy);
+    present::FrameStamp stamp;
+    stamp.hasImage = true;
+    stamp.guestFrame = 1;
+    s.SubmitFrame(stamp);
+    if (s.Tick() != present::Action::presentNew) {
+        std::printf("hw_present_scheduler_hold: first frame not presented\n");
+        return 1;
+    }
+    if (s.Tick() != present::Action::none) {
+        std::printf("hw_present_scheduler_hold: presented again with holding disabled\n");
+        return 1;
+    }
+    stamp.guestFrame = 2;
+    s.SubmitFrame(stamp);
+    stamp.guestFrame = 3;
+    s.SubmitFrame(stamp);
+    if (s.dropped() != 1) {
+        std::printf("hw_present_scheduler_hold: backlog was not collapsed (dropped %llu)\n",
+                    static_cast<unsigned long long>(s.dropped()));
+        return 1;
+    }
+    if (s.Tick() != present::Action::presentNew || s.lastShown().guestFrame != 3) {
+        std::printf("hw_present_scheduler_hold: the newest frame did not win\n");
+        return 1;
+    }
+    std::printf("hw_present_scheduler_hold: hold=none, newest wins, 1 dropped\n");
+    return 0;
+}
+
+// Host rate above the guest rate: two ticks per guest frame give one new present and one re-present,
+// and the late-input hook runs on every tick.
+int TestPresentSchedulerRate() {
+    present::Scheduler s;
+    int hookCalls = 0;
+    s.SetLateInputHook([](void* context) { ++*static_cast<int*>(context); }, &hookCalls);
+    uint64_t newPresents = 0;
+    uint64_t heldPresents = 0;
+    for (uint64_t frame = 10; frame < 13; ++frame) {
+        present::FrameStamp stamp;
+        stamp.guestFrame = frame;
+        stamp.hasImage = true;
+        s.SubmitFrame(stamp);
+        for (int tick = 0; tick < 2; ++tick) {
+            const present::Action action = s.Tick();
+            if (action == present::Action::presentNew) ++newPresents;
+            if (action == present::Action::presentHeld) ++heldPresents;
+        }
+    }
+    if (newPresents != 3 || heldPresents != 3) {
+        std::printf("hw_present_scheduler_rate: %llu new / %llu held at 2x\n",
+                    static_cast<unsigned long long>(newPresents),
+                    static_cast<unsigned long long>(heldPresents));
+        return 1;
+    }
+    if (hookCalls != 6) {
+        std::printf("hw_present_scheduler_rate: late input hook ran %d times, expected 6\n", hookCalls);
+        return 1;
+    }
+    std::printf("hw_present_scheduler_rate: 3 frames over 6 ticks = 3 new + 3 held, 6 late-input calls\n");
+    return 0;
+}
+
+// GIF packet helpers for the auxiliary-frame test: one A+D packet writing registers, then an IMAGE
+// packet carrying host->local data (chapter 02.1).
+Qword PackedTag(uint32_t nloop, bool eop, uint32_t format, const std::vector<uint8_t>& regs) {
+    Qword tag;
+    tag.lo = uint64_t{nloop} | (uint64_t{eop ? 1u : 0u} << 15) | (uint64_t{format} << 58);
+    tag.hi = 0;
+    for (size_t i = 0; i < regs.size() && i < 16; ++i) {
+        tag.hi |= uint64_t{regs[i]} << (4 * i);
+    }
+    if (!regs.empty()) {
+        tag.lo |= uint64_t{static_cast<uint32_t>(regs.size())} << 60;
+    }
+    return tag;
+}
+
+// Uploads `bytes` (qword multiple) to GS page 0 with an 8x8 CT32 transfer.
+void UploadToPage0(writeback::Renderer& renderer, uint32_t value) {
+    std::vector<Qword> stream;
+    stream.push_back(PackedTag(4, false, 0, {0xE}));
+    const uint64_t bitbltbuf = (uint64_t{1} << 16) | (uint64_t{1} << 48);  // SBW = DBW = 1, CT32
+    const uint64_t trxpos = 0;
+    const uint64_t trxreg = uint64_t{8} | (uint64_t{8} << 32);
+    stream.push_back(Qword{bitbltbuf, 0x50});
+    stream.push_back(Qword{trxpos, 0x51});
+    stream.push_back(Qword{trxreg, 0x52});
+    stream.push_back(Qword{0, 0x53});  // TRXDIR = 0: host -> local
+    const uint32_t qwords = 16;        // 8 x 8 CT32 = 256 bytes
+    stream.push_back(PackedTag(qwords, true, 2, {}));
+    for (uint32_t i = 0; i < qwords; ++i) {
+        Qword data;
+        data.lo = uint64_t{value} | (uint64_t{value} << 32);
+        data.hi = uint64_t{value} | (uint64_t{value} << 32);
+        stream.push_back(data);
+    }
+    renderer.GifTransfer(1, reinterpret_cast<const uint8_t*>(stream.data()), stream.size() * sizeof(Qword));
+    renderer.Flush();
+}
+
+uint64_t SlmHash(const writeback::Renderer& renderer) {
+    const std::uint8_t* bytes = renderer.Slm();
+    uint64_t hash = 1469598103934665603ull;  // FNV-1a
+    for (size_t i = 0; i < 4u * 1024u * 1024u; ++i) {
+        hash ^= bytes[i];
+        hash *= 1099511628211ull;
+    }
+    return hash;
+}
+
+// Requirement 2: an auxiliary frame may draw, upload and clear, but the guest's memory is restored and
+// a guest readback is never answered from it.
+int TestAuxFrameGuestUntouched() {
+    writeback::Renderer renderer;
+    UploadToPage0(renderer, 0x11223344u);
+    const uint64_t before = SlmHash(renderer);
+    if (!renderer.BeginAuxiliaryFrame()) {
+        std::printf("hw_aux_frame_guest_untouched: begin refused\n");
+        return 1;
+    }
+    UploadToPage0(renderer, 0xAABBCCDDu);
+    if (SlmHash(renderer) == before) {
+        std::printf("hw_aux_frame_guest_untouched: the auxiliary upload changed nothing (test is blind)\n");
+        renderer.EndAuxiliaryFrame();
+        return 1;
+    }
+    std::uint8_t scratch[64] = {};
+    if (renderer.ReadFifo(scratch, 4) != 0 || renderer.GetCounters().auxiliaryReadRefused != 1) {
+        std::printf("hw_aux_frame_guest_untouched: a readback during an auxiliary frame was answered\n");
+        renderer.EndAuxiliaryFrame();
+        return 1;
+    }
+    renderer.EndAuxiliaryFrame();
+    if (SlmHash(renderer) != before) {
+        std::printf("hw_aux_frame_guest_untouched: guest memory differs after the auxiliary frame\n");
+        return 1;
+    }
+    if (renderer.AuxiliaryActive() || renderer.GetCounters().auxiliaryFrames != 1) {
+        std::printf("hw_aux_frame_guest_untouched: state not restored\n");
+        return 1;
+    }
+    if (!renderer.BeginAuxiliaryFrame() || renderer.BeginAuxiliaryFrame()) {
+        std::printf("hw_aux_frame_guest_untouched: nested auxiliary frame was accepted\n");
+        return 1;
+    }
+    renderer.EndAuxiliaryFrame();
+    std::printf("hw_aux_frame_guest_untouched: guest SLM identical, readback refused, nested begin refused\n");
+    return 0;
+}
+
+// Requirement 4: per-pass CPU timers exist and are honest. Without a Vulkan device the drawer refuses
+// the batch before any GPU work, so nothing is timed and the failure is reported instead of a fake zero
+// being presented as a measurement. The compose pass is measured on its own.
+int TestPassTimings() {
+    writeback::Renderer renderer;
+    UploadToPage0(renderer, 0x55AA55AAu);
+    writeback::FrameOutput frame;
+    renderer.ComposeFrame(frame);
+    const writeback::PassTimings timings = renderer.Timings();  // copy: a later flush overwrites it
+    if (!(timings.composeUs > 0.0)) {
+        std::printf("hw_pass_timings: compose was not measured (%.3f us)\n", timings.composeUs);
+        return 1;
+    }
+    if (timings.executeGpuUs != 0.0) {
+        std::printf("hw_pass_timings: the GPU field is reserved and must stay 0\n");
+        return 1;
+    }
+
+    // A draw without a device must fail cleanly and leave the draw timers at zero.
+    std::vector<Qword> draw;
+    draw.push_back(PackedTag(7, true, 0, {0xE}));
+    draw.push_back(Qword{3, 0x00});                                          // PRIM = triangle
+    draw.push_back(Qword{uint64_t{639} << 16 | uint64_t{447} << 48, 0x40});  // SCISSOR_1
+    draw.push_back(Qword{uint64_t{1} << 16, 0x4C});                          // FRAME_1: FBW 1
+    draw.push_back(Qword{0, 0x18});                                          // XYOFFSET_1
+    draw.push_back(Qword{uint64_t{20} | (uint64_t{20} << 16) | (uint64_t{0x100} << 32), 0x05});
+    draw.push_back(Qword{uint64_t{80} | (uint64_t{20} << 16) | (uint64_t{0x100} << 32), 0x05});
+    draw.push_back(Qword{uint64_t{20} | (uint64_t{80} << 16) | (uint64_t{0x100} << 32), 0x05});
+    renderer.GifTransfer(1, reinterpret_cast<const std::uint8_t *>(draw.data()), draw.size() * sizeof(Qword));
+    renderer.Flush();
+    if (!renderer.Failed() || renderer.LastError().empty()) {
+        std::printf("hw_pass_timings: a draw without a device was not reported as a failure\n");
+        return 1;
+    }
+    const writeback::PassTimings afterDraw = renderer.Timings();
+    if (afterDraw.translateUs != 0.0 || afterDraw.executeUs != 0.0) {
+        std::printf("hw_pass_timings: draw timers moved without a device (%.3f/%.3f us)\n",
+                    afterDraw.translateUs, afterDraw.executeUs);
+        return 1;
+    }
+    if (renderer.TimedFrames() < 2) {
+        std::printf("hw_pass_timings: %llu timed frames, expected at least 2\n",
+                    static_cast<unsigned long long>(renderer.TimedFrames()));
+        return 1;
+    }
+    std::printf("hw_pass_timings: compose %.1f us, draw timers 0 without a device, %llu timed frames\n",
+                timings.composeUs, static_cast<unsigned long long>(renderer.TimedFrames()));
+    return 0;
+}
+
 int TestGouraudReport(gpu::GpuDrawer& drawer) {
     // Report only (IN-500): Gouraud interpolation rounding is not asserted yet.
     Setup s;
@@ -761,6 +1011,11 @@ int main(int argc, char** argv) {
     const std::string name = argc > 1 ? argv[1] : "";
     if (name == "hw_flat_provoking") return TestFlatProvoking();
     if (name == "hw_sprite_corners") return TestSpriteCorners();
+    if (name == "hw_present_scheduler") return TestPresentScheduler();
+    if (name == "hw_present_scheduler_hold") return TestPresentSchedulerHold();
+    if (name == "hw_present_scheduler_rate") return TestPresentSchedulerRate();
+    if (name == "hw_aux_frame_guest_untouched") return TestAuxFrameGuestUntouched();
+    if (name == "hw_pass_timings") return TestPassTimings();
 
     Headless headless;
     std::string error;

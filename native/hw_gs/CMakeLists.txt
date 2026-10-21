@@ -46,7 +46,8 @@ target_compile_options(gt4_hw_gpu PRIVATE /W4)
 target_compile_definitions(gt4_hw_gpu PRIVATE _CRT_SECURE_NO_WARNINGS)
 
 # Renderer of the write-back mode: front end, batch translation, GPU draw, SLM write-back, display.
-add_library(gt4_hw_writeback STATIC writeback/hw_gs_writeback.cpp)
+add_library(gt4_hw_writeback STATIC writeback/hw_gs_writeback.cpp
+    writeback/hw_gs_present_scheduler.cpp)
 target_link_libraries(gt4_hw_writeback PUBLIC gt4_hw_core gt4_hw_gpu)
 target_compile_options(gt4_hw_writeback PRIVATE /W4)
 
@@ -57,7 +58,9 @@ target_include_directories(hw_writeback_tests PRIVATE "${GT4_HW_VULKAN_SDK}/Incl
 target_link_libraries(hw_writeback_tests PRIVATE gt4_hw_writeback gt4_hw_vulkan_loader "${GT4_HW_VULKAN_SDK}/Lib/vulkan-1.lib")
 target_compile_options(hw_writeback_tests PRIVATE /W4 -Wno-missing-field-initializers)
 target_compile_definitions(hw_writeback_tests PRIVATE _CRT_SECURE_NO_WARNINGS)
-foreach(hw_writeback_test IN ITEMS hw_flat_provoking hw_sprite_corners hw_gpu_coverage_vectors
+foreach(hw_writeback_test IN ITEMS hw_flat_provoking hw_sprite_corners hw_present_scheduler
+        hw_present_scheduler_hold hw_present_scheduler_rate hw_aux_frame_guest_untouched
+        hw_pass_timings hw_gpu_coverage_vectors
         hw_gpu_equivalence_flat hw_gpu_equivalence_texture hw_gpu_equivalence_region
         hw_gpu_equivalence_bilinear hw_gpu_equivalence_tfx_fog hw_gpu_equivalence_depth_alpha
         hw_gpu_equivalence_scissor hw_gpu_raster_blend hw_gpu_raster_pabe hw_gpu_raster_atest

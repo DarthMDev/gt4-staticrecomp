@@ -108,6 +108,14 @@ void finish(std::FILE *output) {
                static_cast<unsigned long long>(stats.gif_bytes),
                static_cast<unsigned long long>(stats.privileged_writes),
                static_cast<unsigned long long>(g_unmirrored_privileged), static_cast<unsigned long long>(stats.faults));
+  std::fprintf(output,
+               "[hw] m6: flushes=%llu held_presents=%llu dropped_frames=%llu auxiliary_frames=%llu translate_us=%.1f "
+               "execute_us=%.1f compose_us=%.1f upload_us=%.1f present_us=%.1f\n",
+               static_cast<unsigned long long>(stats.flushes),
+               static_cast<unsigned long long>(stats.held_presents),
+               static_cast<unsigned long long>(stats.dropped_frames),
+               static_cast<unsigned long long>(stats.auxiliary_frames), stats.translate_us, stats.execute_us,
+               stats.compose_us, stats.upload_us, stats.present_us);
   std::fflush(output);
 }
 

@@ -44,6 +44,18 @@ struct Stats {
   std::uint64_t black_presents = 0;     // presents that displayed a black frame
   std::uint64_t swapchain_recreations = 0;
   std::uint64_t faults = 0;             // out-of-range reads and writes
+
+  // M6 interface: presentation decisions, auxiliary passes and the per-pass CPU budget of the last
+  // frame (docs/COREGS2-ROADMAP.md requirements 1, 2 and 4). GPU timestamps are a later step; there is
+  // no field here that could be mistaken for one.
+  std::uint64_t held_presents = 0;      // re-presented images (no new frame this VBlank)
+  std::uint64_t dropped_frames = 0;     // frame ends replaced before they reached the display
+  std::uint64_t auxiliary_frames = 0;   // render-only passes that restored guest memory
+  double translate_us = 0;              // batch translation, last frame
+  double execute_us = 0;                // GPU drawer submission, last frame
+  double compose_us = 0;                // display composition, last frame
+  double upload_us = 0;                 // composed image upload, last present
+  double present_us = 0;                // swapchain acquire, submit and present, last present
 };
 
 // Result of the feature report (chapter 12.6).

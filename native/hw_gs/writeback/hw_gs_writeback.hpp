@@ -39,6 +39,18 @@ struct Counters {
     std::uint64_t writebackPixels = 0;          // frame pixels written back to the SLM
     std::uint64_t flatDeindexedPrimitives = 0;  // IIP = 0 primitives (de-indexed, 03.2)
     std::uint64_t spritesExpanded = 0;
+    std::uint64_t auxiliaryFrames = 0;        // render-only passes that restored guest memory
+    std::uint64_t auxiliaryReadRefused = 0;   // LOCAL->HOST reads refused during an auxiliary frame
+};
+
+// CPU cost of the passes of the last frame, in microseconds (roadmap requirement 4: per-pass budget).
+// `executeGpuUs` is reserved for GPU timestamps and stays 0 until the query pool lands, so a reader
+// never mistakes it for a measurement.
+struct PassTimings {
+    double translateUs = 0.0;
+    double executeUs = 0.0;
+    double composeUs = 0.0;
+    double executeGpuUs = 0.0;
 };
 
 // Output of the display path for one VBlank (13.1 to 13.3, no deinterlace, no post-fx yet).
@@ -99,8 +111,27 @@ public:
 
     // VBlank: commits pending transfers and flushes the batch (chapter 02.8).
     void Flush();
-    // Composes the display image from the SLM and the display registers.
+    // Composes the display image from the SLM and the display registers. ComposeFrame() writes into a
+    // caller-owned buffer and keeps its capacity, so a steady frame rate does not reallocate 1.1 MiB
+    // every VBlank; Compose() returns a fresh copy for tests and one-shot callers.
+    void ComposeFrame(FrameOutput &out);
     FrameOutput Compose();
+
+    // Render-only pass with no guest-visible side effect (roadmap requirement 2, chapter 00 write-back
+    // mode): the whole SLM is snapshotted on begin and restored on end, so transfers, draws and clears
+    // of an auxiliary frame can never reach the guest's memory, and LOCAL->HOST reads are refused while
+    // it runs. Signals and FINISH are never answered from it. Returns false when one is already active.
+    bool BeginAuxiliaryFrame();
+    void EndAuxiliaryFrame();
+    bool AuxiliaryActive() const;
+
+    // CPU timings of the last completed frame (translate, execute, compose).
+    const PassTimings &Timings() const;
+
+    // Session sums of the same passes plus the number of completed frames. A single last-frame number is
+    // too noisy to compare against the roadmap's per-pass budget, so callers report the average.
+    const PassTimings &TimingTotals() const;
+    std::uint64_t TimedFrames() const;
 
     // CPU view of the SLM (4 MiB, GS layout).
     const std::uint8_t *Slm() const;
