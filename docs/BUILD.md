@@ -1749,3 +1749,33 @@ Checks (2026-10-21):
 - Pins: `docs/inputs/slice214-pcsx2.json` (mode `pcsx2`; `pcsx2-slice213` kept). Distribution `private/slice214-dist`.
 - Launcher (same round): the CPU minimum is SSE4.1 with SSE3/SSSE3 (owner decision), and the Vulkan check requires only
   `VK_KHR_surface` and `VK_KHR_win32_surface`.
+
+## Slice 216 - TASK-027 CoreGS 2.0 development build (`task/027-coregs2`, no pins)
+
+Check build of the merge that resumes TASK-027 (worktree `C:\Antigravity\gt4-wt-027-coregs2`): `main` 1.0.0 plus the
+TASK-027 work, without paraLLEl-GS. Not offered to the owner; no pin, no launcher mode, `--mode pcsx2` unchanged.
+Recipe = slice214 (`private/slice216-scripts/build-game-216.bat`) plus `-DGT4_HW_GS=ON` and
+`-DCMAKE_C_COMPILER=clang-cl` (the HWR `replace/` library compiles C). Vulkan SDK 1.4.341.1 (`VULKAN_SDK`), pinned
+glslangValidator 16.2.0.
+
+- `GT4_HW_GS=ON` builds `native/hw_gs` (backend, options, smoke, shaders, cpuref with memory/clut/frontend/pixel/
+  display, cache, decide, lod, replace) and links the in-process sink into `gt4_gs_stream_client`
+  (`GT4_GS_STREAM_HW`): `GT4_RENDERER=hw` then feeds the GS stream hooks to the HWR backend (no GS process, no donor
+  Vulkan renderer); `GT4_GS_CAPTURE` is refused in that mode. With the option OFF the client refuses `hw` as before.
+- Executable `private/slice216-coregs2-build/build/gt4vulkan.exe`, 97,291,264 bytes, sha256 `c89ba26d7ae334c673165823df35276f40ca4e5cd7996b47935a8a95af17cd81`.
+
+Checks (2026-10-21):
+- CTest 179 tests: 176 passed, 1 skipped (`hw_replace_q07_pcsx2_dumps`, pending Q-07), 2 failed
+  (`private/slice216-scripts/ctest-216.log`):
+  - `hw_gpu_pixel_directed`: 8 of 1,048,576 TEXA sweep cases differ (GPU alpha 0, CPU 0x20/0x80). The CPU pixel
+    reference took the IN-07 AEM rule (A bit first) in 2434e1d after the GPU shader was verified; the shader still has
+    the old rule. Pre-existing on `task/027-hw-renderer` (High confidence, from the commit history; not rerun there).
+  - `python_native_contracts`: one error, `test_make_distribution` refuses the executable because it differs from the
+    slice214 release pin. Expected for an unpinned development build.
+- Python with `GT4_NATIVE_BUILD` = slice216: 627 run, 44 skipped, the same single error (`python-216.log`).
+- Headless, the slice214 arguments on a copy of the widescreen seed card (`run-headless-216.sh`):
+  - default renderer (`GT4_RENDERER` unset): exit 0, 42/42 frame dumps identical to slice214 `h214-default`
+    (`private/slice216-smoke/h216-default`, `sha-h216-default.txt`); no `no translated code`; card copy unchanged.
+  - `GT4_RENDERER=hw`: exit 0 after 4,200 frames; `[hw] session: vsyncs=4200 frames=4200 gif_bytes=2546704448
+    privileged=20987 unmirrored_privileged=0 faults=0`; 0 frame dumps (the donor display path is off in a non-donor
+    mode; HWR frame dumps are M6 work) (`private/slice216-smoke/h216-hw`).

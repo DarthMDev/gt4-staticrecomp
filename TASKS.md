@@ -62,7 +62,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
 | TASK‑026 | CoreGS 2.0, part 1: clean-room specification of the PCSX2 hardware renderer | ✅ Done (docs/hw-renderer-spec, PR #17) |
-| TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | ⏸️ Paused (unchanged) · pure libraries done on `task/027-hw-renderer` |
+| TASK‑027 | CoreGS 2.0, part 2: MIT implementation from the specification (3x-6x, texture packs) | 🔄 Resumed (owner, 2026-10-21) on `task/027-coregs2` (main 1.0.0 + the 027 work) · external agent GPT 6.1 Sol, clean room · brief `AGENT-BRIEF-COREGS2.md` |
 | TASK‑028 | CoreGS 1.1: upscaling, interlaced-only deinterlace, FXAA-class AA, FSR 1.0 | ⏸️ Paused by the owner: 3x shows native-size aliasing on 3D models; stays the built-in fallback renderer (`task/028-donor-upscale`, latest slice186) |
 | TASK‑029 | Controller and keyboard mapping (binding table, XInput LT/RT as L2/R2 pressure, controls file for the launcher) | ✅ Done (2026-10-21) · merged with the launcher; owner tested remapping in game |
 | TASK‑030 | Night-race readback wait (CoreGS 1.1) | ⏸️ Paused: owner test 59.07 FPS, wait unchanged at 4.3 ms because the page is drawn the same frame (`task/030-night-readback`) |
@@ -546,6 +546,16 @@ State (2026-10-15): specification complete in `docs/hw-renderer-spec/`
 TASK-027 starts after approval and the answers to Q-01 to Q-03.
 
 ### TASK-027 — Own hardware renderer (CoreGS 2.0): implementation
+**Resumed on 2026-10-21 (owner decision)** on branch `task/027-coregs2` (worktree
+`C:\Antigravity\gt4-wt-027-coregs2`): `main` at release 1.0.0 (slice214) merged with
+`task/027-hw-renderer` and the `task/027-cpuref` docs checkpoint. paraLLEl-GS code, pins and launcher modes
+were left out (decision 0070); `GT4_RENDERER=hw` now runs through main's GS stream seam into the in-process
+HWR backend (`GT4_HW_GS=ON` builds only; black output). `task/027-m4-gpuref` (e31fcc4, GPU write-back WIP)
+is not merged. Implementation continues with the external agent **GPT 6.1 Sol** as the only writer of the
+branch, clean room from `docs/hw-renderer-spec` (brief `AGENT-BRIEF-COREGS2.md`, progress in
+`docs/hw-renderer-spec/PROGRESS.md` and ai-memory `decisions/coregs2-implementation`). No pins until a
+candidate is offered to the owner. History of the pause follows.
+
 **Paused by the owner on 2026-10-15** to focus on release 1.0.0. State on the
 integration branch `task/027-hw-renderer`: CPU-verified pure libraries for GS
 memory/swizzle (M2), GIF front end and CLUT (M3), exact pixel arithmetic (M5),
