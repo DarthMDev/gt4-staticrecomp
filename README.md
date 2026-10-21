@@ -9,6 +9,7 @@ No JIT, no emulator window, full speed.
 ![No JIT](https://img.shields.io/badge/guest%20JIT-none-2ea44f?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows%20x64-Vulkan-1f6feb?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/license-MIT-1f6feb?style=for-the-badge)
+![Release](https://img.shields.io/badge/release-1.0.0-2ea44f?style=for-the-badge)
 
 ![EE](https://img.shields.io/badge/EE%20(main%20CPU)-100%25%20AOT-2ea44f)
 ![VU0 macro](https://img.shields.io/badge/VU0%20macro-100%25%20AOT-2ea44f)
@@ -46,7 +47,9 @@ while the game runs, which is also what makes future **Android and iOS** builds 
 - 🎨 **PCSX2 GS renderer** in its own process: crisp deinterlaced menus, FXAA and sharpening, and a built-in
   performance overlay. **CoreGS 1.1** is built in as the fallback.
 - 💾 **Crash-safe memory card:** saves survive a crash or a forced close.
-- 🚀 **Next:** a one-click **launcher and installer**, then the first stable release, **1.0.0**.
+- 🚀 **Release 1.0.0:** a one-click **installer** and a **launcher** that sets the game up from your own disc
+  image, with settings, saves, controller remapping and update checks.
+- 🎮 **Any controller through SDL3** (Xbox, DualShock 4, DualSense, Switch Pro...) and a modern keyboard layout.
 
 ## 📊 Performance
 
@@ -69,7 +72,10 @@ to a steady **60 FPS at full speed**.
 
 - **Some license demos and menu backgrounds do not play**; every license test is playable. This matches
   PCSX2 with default settings ([why](docs/LICENSE-DEMO-CIPHER.md)).
-- Racing wheels and long sessions are not fully qualified yet.
+- Racing wheels are not supported yet, and long sessions are not fully qualified.
+- Ultrawide and other screen ratios are not supported yet: the game shows 16:9 (planned after 1.0.0).
+- The installer is not code-signed: Windows SmartScreen may warn on the first start ("More info", "Run anyway").
+- Most testing was on an AMD GPU; NVIDIA and Intel GPUs have had less testing.
 
 ## 🗺️ Roadmap
 
@@ -90,35 +96,57 @@ IOP system services are native. Frames are paced by one high-resolution clock wi
 This is a **hybrid recompilation**: PS2 hardware is still modeled in software, so we do not claim zero
 emulation or full PS2 fidelity. Details: [Architecture](docs/ARCHITECTURE.md).
 
-## 🎮 Playing and development
+## 💻 Requirements
 
-The project currently needs a **development environment with your own game files** (see the
-[Build guide](docs/BUILD.md)); the planned launcher replaces this with an installer and a Play button.
-This repository does not include game files, disc images, BIOS dumps or save files.
+- **Windows 10 or 11, 64-bit.**
+- **A processor with AVX2** (Intel 4th gen Core / AMD Ryzen or newer).
+- **A graphics card with Vulkan 1.2** and current drivers (NVIDIA, AMD or Intel).
+- **Your own disc image of Gran Turismo 4 USA v2.00 (SCUS-97328)** as a plain `.iso`.
+- **About 6 GB free:** the launcher keeps a copy of your disc image (5.3 GB) next to the program.
+
+The launcher checks the processor and Vulkan before setup and before Play, and says what is missing.
+
+## 📦 Install
+
+1. Download **`GT4Recomp-Setup-1.0.0.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
+   and run it. It installs for your Windows user only, without administrator rights. If the Microsoft Edge WebView2
+   Runtime is missing (Windows 10), the installer downloads it from Microsoft.
+2. Start **Gran Turismo 4** from the Start menu and choose your disc image. The launcher copies and checks it and
+   downloads the PCSX2 GS renderer (CoreGS 1.1 is used if you are offline).
+3. Press **Play**.
+
+Saves, replays and settings live in `%LOCALAPPDATA%\GT4Recomp`; uninstalling keeps them unless you tick the box.
+This repository does not include game files, disc images, BIOS dumps or save files. Building from source needs your
+own game files and a development environment: see the [Build guide](docs/BUILD.md).
 
 ### 🕹️ Controls
 
-**XInput controllers** (Xbox and compatible pads) work out of the box, mapped automatically to the
-DualShock 2 layout: no setup needed.
+**Controllers** (Xbox, DualShock 4, DualSense, Switch Pro and others, through SDL3) work out of the box, mapped to the
+DualShock 2 layout, and can be remapped in the launcher (Settings > Controls).
 
 | Controller | PS2 | Notes |
 |---|---|---|
-| A · B · X · Y | ✕ · ○ · □ · △ | Face buttons |
+| A · B · X · Y (✕ · ○ · □ · △ on PlayStation pads) | ✕ · ○ · □ · △ | Face buttons |
 | LB · RB | L1 · R1 | |
 | **LT · RT** | **L2 · R2** | **Analog triggers with pressure**, for progressive throttle and brake |
 | Left / right stick | Left / right analog stick | With dead zones; L3 · R3 on stick click |
 | D-pad | D-pad | |
 | Start · Back | Start · Select | |
 
-The keyboard works too:
+The keyboard has a fixed layout:
 
-| Key | Action |
+| Key | Action (PS2 button) |
 |---|---|
-| Arrow keys | Navigate / Steer |
-| Z | Confirm / Accelerate |
-| A | Brake |
-| S / X | Triangle / Circle |
-| Enter | Start / Pause |
+| W · Enter | Accelerate, confirm (✕) |
+| S | Brake (□) |
+| Space | Handbrake (○) |
+| A · D · arrow keys | Steer, navigate (D-pad); E is also D-pad up |
+| Backspace · Esc | Back (△) |
+| Shift | Nitro (R1) |
+| R · F | Gear up · gear down (R2 · L2) |
+| Q | Look back (L1) |
+| C · Tab | Camera (Select) |
+| P | Start / Pause |
 | Alt+Enter, F11 | Borderless fullscreen |
 
 ## 🙏 Credits

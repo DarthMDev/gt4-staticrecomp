@@ -1,6 +1,22 @@
 # Current Status
 
-## Current state (2026-10-17)
+## Current state (2026-10-21)
+
+**TASK-081 release 1.0.0 hardening (branch `task/081-release-1-0-0`, waiting for the owner's installer test):**
+- Game: slice213 = the slice211 recipe with `-DGT4_RELEASE_DISTRIBUTION=ON` (no build-time shader folder in the
+  executable; shaders only from `<exe folder>\shaders`). `--mode pcsx2` = slice213, `pcsx2-slice211` kept. String scan
+  clean; headless 42/42 frames identical to slice211; CTest and Python green ([BUILD](BUILD.md) slice 213).
+- Launcher: release build through `launcher/tools/build-release.ps1` (`--remap-path-prefix`; no user or build path in
+  `GT4Recomp.exe`); processor (AVX2 policy) and Vulkan 1.2 checks before setup and Play; the controls crate's built-in
+  keyboard keys now match the TASK-076 layout (they were the old Z/X table, which a remap would have written to
+  `controls.toml`).
+- Installer: WebView2 detection plus Microsoft's Evergreen bootstrapper, name `GT4Recomp-Setup-1.0.0.exe`, the
+  uninstaller removes `SDL3.dll`. Built in `private/release-100-out` with `SHA256SUMS`; draft GitHub release v1.0.0
+  (not published). Release notes: [1.0.0](release-notes/1.0.0.md); steps: [RELEASES](RELEASES.md).
+- Next: the owner installs from the draft and tests end to end (ideally also an NVIDIA or Intel PC and a fresh Windows
+  user), approves, then the merge and the publish.
+
+## Earlier state (2026-10-17)
 
 **TASK-044 (packaging, docs only, branch `task/044-packaging`):** release 1.0.0 ships gt4-gs 1.0.1 (`gt4gs-v1.0.1`, the
 renderer already pinned for `--mode pcsx2`). The fork's release notes were edited (upstream base PCSX2 v2.8.2, commit

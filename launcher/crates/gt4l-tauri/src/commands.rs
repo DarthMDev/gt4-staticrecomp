@@ -253,6 +253,13 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
 #[tauri::command]
 pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let shared: Shared = shared.inner().clone();
+    // TASK-081: the processor and Vulkan checks before the game starts (`gt4l_core::system_check`).
+    if let Some(problem) = gt4l_platform::system::requirements_problem() {
+        let mut state = lock(&shared);
+        state::log(&state.dirs, &format!("system requirement not met: {problem}"));
+        state.home_message = problem.clone();
+        return Err(problem);
+    }
     let inputs = prepare_play(&shared, &program_directory()).inspect_err(|message| {
         lock(&shared).home_message = message.clone();
     })?;

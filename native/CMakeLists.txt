@@ -599,8 +599,17 @@ elseif(GT4_PERF_RUNTIME_SOURCE AND GT4_PERF_RUNTIME_SOURCE MATCHES "slice160-vu0
 endif()
 target_include_directories(ps2runtime_vulkan PUBLIC "${DONOR}/runtime/include" "${DONOR}/runtime/src"
                            "${DONOR}/runtime/src/gs" "${CMAKE_CURRENT_SOURCE_DIR}" "${VULKAN_HEADERS}")
+# TASK-081: a release (distribution) build embeds no build-machine path. The build-time shader fallback is empty, so
+# the executable loads shaders only from <executable folder>\shaders and stops with a clear message when that folder
+# is missing. The build tree gets its own shaders\ copy (POST_BUILD below), so CTest and headless runs still work.
+option(GT4_RELEASE_DISTRIBUTION "Release build: no build-time shader folder in the executable" OFF)
+if(GT4_RELEASE_DISTRIBUTION)
+    set(GT4_EMBEDDED_SHADER_DIR "")
+else()
+    set(GT4_EMBEDDED_SHADER_DIR "${SHADERS}")
+endif()
 target_compile_definitions(ps2runtime_vulkan PUBLIC PS2_GPU _CRT_SECURE_NO_WARNINGS
-                           GT4_VULKAN_SHADER_DIR="${SHADERS}")
+                           GT4_VULKAN_SHADER_DIR="${GT4_EMBEDDED_SHADER_DIR}")
 target_compile_options(ps2runtime_vulkan PRIVATE /W4)
 add_executable(gs_submit_ring_fixture gs_submit_ring_fixture.cpp)
 target_compile_options(gs_submit_ring_fixture PRIVATE /W4)
@@ -670,6 +679,20 @@ target_link_libraries(gt4vulkan PRIVATE
 # TASK-075: SDL3.dll and its licence next to the executables that load it (the build tree; make_distribution ships them).
 add_custom_command(TARGET gt4vulkan POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GT4_SDL3_ROOT}/${GT4_SDL3_RUNTIME_DLL}" "$<TARGET_FILE_DIR:gt4vulkan>/SDL3.dll")
+if(GT4_RELEASE_DISTRIBUTION)
+    # The nine compute shaders of native_vulkan.cpp (install_paths.cpp kShaderNames), copied from the verified shader
+    # capsule next to the build-tree executables, the same layout as the distribution folder.
+    set(gt4_release_shader_files "")
+    foreach(shader_name IN ITEMS upload copy_read copy_write load_clut display raster resolve snapshot decode)
+        if(NOT EXISTS "${SHADERS}/${shader_name}.spv")
+            message(FATAL_ERROR "GT4_RELEASE_DISTRIBUTION: missing shader ${SHADERS}/${shader_name}.spv")
+        endif()
+        list(APPEND gt4_release_shader_files "${SHADERS}/${shader_name}.spv")
+    endforeach()
+    add_custom_command(TARGET gt4vulkan POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:gt4vulkan>/shaders"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${gt4_release_shader_files} "$<TARGET_FILE_DIR:gt4vulkan>/shaders")
+endif()
 add_executable(vulkan_fixture fixture.cpp)
 target_include_directories(vulkan_fixture PRIVATE "${PORT}")
 target_link_libraries(vulkan_fixture PRIVATE ps2runtime_vulkan user32)

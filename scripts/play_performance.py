@@ -71,7 +71,10 @@ License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profil
 The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
 Diagnostic only: the run is not a performance measurement.
 
-TASK-079 (slice211): --mode pcsx2 runs the slice211 build: GT4_FORCE_WIDESCREEN is on by default (the game wide flag is held
+TASK-081 (slice213): --mode pcsx2 runs the slice213 release build (the slice211 recipe with no build-time shader folder
+in the executable; shaders come from shaders next to it, which the build tree has). The slice211 build stays as
+--mode pcsx2-slice211.
+TASK-079 (slice211): --mode pcsx2 ran the slice211 build: GT4_FORCE_WIDESCREEN is on by default (the game wide flag is held
 at 16:9); GT4_FORCE_WIDESCREEN=0 leaves the game's own Wide setting. The slice210 build stays as --mode pcsx2-slice210.
 TASK-075/076 (slice210): --mode pcsx2 ran the slice210 build (SDL3 gamepad input, GT4_INPUT=sdl by default; the TASK-076
 keyboard table). The slice209 build stays as --mode pcsx2-slice209.

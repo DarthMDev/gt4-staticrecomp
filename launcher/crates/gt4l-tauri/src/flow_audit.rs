@@ -139,13 +139,13 @@ fn walk_pages(shared: &Shared, card: &Path) -> Vec<String> {
     let swapped = commands::assign_binding_of("cross".into(), "key:Q".into(), true, shared).expect("swap");
     assert_eq!(swapped["swapped_with"], json!("l1"));
     let file = fs::read_to_string(lock(shared).controls_path()).expect("controls file written");
-    assert!(file.contains("cross = [\"xinput:A\", \"key:Q\"]") && file.contains("l1 = [\"xinput:LB\", \"key:Z\"]"), "{file}");
+    assert!(file.contains("cross = [\"xinput:A\", \"key:Q\"]") && file.contains("l1 = [\"xinput:LB\", \"key:W\"]"), "{file}");
     commands::set_setting_of("lstick_deadzone".into(), json!(10), shared).expect("stick deadzone");
     let tuned = fs::read_to_string(lock(shared).controls_path()).unwrap();
     assert!(tuned.contains("xinput:LX | deadzone=0.100"), "{tuned}");
     let reset = commands::reset_all_bindings_of(shared).expect("reset all");
     let cross = reset["controls"].as_array().unwrap().iter().find(|row| row["id"] == "cross").unwrap().clone();
-    assert_eq!(cross["key"], json!("Z"));
+    assert_eq!(cross["key"], json!("W"));
     log.push(format!("controls: {} inputs, cross reset, swap with l1, stick deadzone, reset all", controls["controls"].as_array().unwrap().len()));
 
     let about = commands::about_info_of(shared).expect("about");

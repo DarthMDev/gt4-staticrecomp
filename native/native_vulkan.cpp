@@ -196,6 +196,14 @@ void Context::initialize(const std::filesystem::path &build_time_shaders) {
   // TASK-059: <executable folder>\shaders when installed, else the build-time folder (install_paths.cpp).
   const std::filesystem::path shaders = gt4::install::choose_shader_directory(build_time_shaders);
   std::fprintf(stderr, "[vulkan] shader folder: %s\n", shaders.string().c_str());
+  {
+    // TASK-081: a release build has no build-time fallback, so a missing installed folder stops here with a clear
+    // message instead of a later per-file error.
+    std::error_code folder_error;
+    if (shaders.empty() || !std::filesystem::is_directory(shaders, folder_error))
+      throw std::runtime_error("The game's shader folder is missing (" + shaders.string() +
+                               "). Reinstall GT4Recomp.");
+  }
   aspect_ = Aspect::widescreen;
   // Unknown names throw here; support on this surface is checked at swapchain creation.
   present_mode_ = gt4::pacing::parse_present_mode(std::getenv("GT4_PRESENT_MODE"));

@@ -106,6 +106,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑078 | Graphics settings inside GT4's own Options menu (output resolution 480p to 8K replacing the 480i/480p/1080i row, fullscreen, anti-aliasing); game fixed at 480p | 📋 Planned (after 1.0.0), study done (docs/INGAME-SETTINGS-STUDY.md) |
 | TASK‑079 | Force 16:9 at boot: `GT4_FORCE_WIDESCREEN` holds the game's own Wide flag at 16:9 (slice211); launcher setting "Widescreen 16:9", default on | ✅ Done (2026-10-21) · slice211, GT4_FORCE_WIDESCREEN default on, launcher "Widescreen 16:9"; owner tested (boots 16:9 and 480p; the 100% save loads). The "Load failed!" seen on the way was the launcher card bug, fixed in TASK-019 |
 | TASK‑080 | Native ultrawide and other aspect ratios (16:10, phones, 21:9, 32:9): screen-ratio detection, automatic Width/Aspect for the 3D, HUD/UI fix, renderer stretch | 📋 Planned (after 1.0.0) · study done (docs/ULTRAWIDE-NATIVE-STUDY.md), phases P0-P4 |
+| TASK‑081 | Release 1.0.0 hardening and installer: release game build without build paths (slice213), launcher without user paths, CPU (AVX2) and Vulkan checks before setup and Play, WebView2 bootstrapper in the installer, installer asset name `GT4Recomp-Setup-X.Y.Z.exe`, release notes and draft release | 🧪 Waiting for owner test (2026-10-21) · branch `task/081-release-1-0-0`; installer `GT4Recomp-Setup-1.0.0.exe` built, draft release v1.0.0 (not published) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -313,6 +314,27 @@ constants. Menus, FMV and photo stay pillarboxed 16:9. gt4-gs needs "Stretch" an
 new gt4-gs release). Plan: P0 a decision superseding the 0055 lines; P1 auto 3D aspect plus a launcher row; P1b
 gt4-gs stretch; P2 HUD; P3 progressive menus (TASK-078); P4 optional true-FOV mode. After 1.0.0; seven owner
 decisions listed in the study.
+
+### TASK-081 — Release 1.0.0 hardening and installer
+Release audit 2026-10-21. Branch `task/081-release-1-0-0` (from main 26f83b8). Not PCSX2-tainted.
+- Game: CMake `GT4_RELEASE_DISTRIBUTION=ON` drops the build-time shader folder from the executable; shaders load only
+  from `<exe folder>\shaders` (the build tree gets its own copy) and a missing folder stops with a clear message.
+  slice213 = the slice211 recipe plus the switch; `--mode pcsx2` = slice213 (`docs/inputs/slice213-pcsx2.json`),
+  slice211 kept as `pcsx2-slice211`. String scan: no absolute path or user name left.
+- Launcher: `launcher/tools/build-release.ps1` builds with `--remap-path-prefix` (Cargo trim-paths is unstable) and
+  fails on any user or build path left. The launcher already links the VC runtime statically (Tauri default); it
+  imports only the Windows UCRT (`api-ms-win-crt-*`, part of Windows 10/11).
+- Requirement checks before setup and Play (`gt4l_core::system_check`, pure and tested; `gt4l_platform::system`
+  reads CPUID/XCR0 and probes `vulkan-1.dll`): AVX2 + FMA + BMI1/2 with the OS AVX state (owner policy; the game
+  executable itself is baseline x86-64, so it has no own check), and a GPU with Vulkan 1.2 plus the game's four
+  instance extensions (the PCSX2 GS renders with Vulkan too, so the check is always on).
+- Installer: detects the Evergreen WebView2 Runtime (HKLM WOW6432Node, HKLM, HKCU `pv`) and runs Microsoft's
+  bootstrapper (embedded, Authenticode-checked) only when it is missing; default name `GT4Recomp-Setup-X.Y.Z.exe`;
+  the uninstaller also removes `SDL3.dll`.
+- Launcher controls: the built-in keyboard keys of the `gt4controls` crate now match the TASK-076 layout (they were
+  the old Z/X table; a remap wrote them into `controls.toml`). `cargo test --workspace` green again (233 passed).
+- Release: README for 1.0.0, `docs/release-notes/1.0.0.md`, draft GitHub release v1.0.0 with the installer and
+  `SHA256SUMS`. The owner tests the installer end to end before the merge and the publish.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback

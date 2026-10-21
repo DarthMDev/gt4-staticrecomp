@@ -32,8 +32,15 @@ std::filesystem::path choose_shader_directory(const std::filesystem::path &build
     std::error_code error;
     const std::filesystem::path beside_executable = directory / "shaders";
     if (std::filesystem::is_directory(beside_executable, error)) return beside_executable;
+    // TASK-081: a release build has no build-time folder. The installed folder is the only answer; the caller
+    // reports it as missing.
+    if (build_time_directory.empty()) return beside_executable;
   }
   return build_time_directory;
+}
+
+bool has_build_time_fallback(const std::filesystem::path &build_time_directory) {
+  return !build_time_directory.empty();
 }
 
 std::filesystem::path installed_gs_process() {
@@ -48,10 +55,17 @@ std::filesystem::path installed_gs_process() {
 int run_portable_check(const std::filesystem::path &build_time_shaders) {
   const std::filesystem::path executable = executable_directory();
   const std::filesystem::path shaders = choose_shader_directory(build_time_shaders);
-  const bool installed_shaders = shaders == executable / "shaders";
+  std::error_code folder_error;
+  const bool installed_shaders =
+      shaders == executable / "shaders" && std::filesystem::is_directory(shaders, folder_error);
+  const bool fallback = has_build_time_fallback(build_time_shaders);
   std::printf("[portable] executable folder: %s\n", narrow(executable).c_str());
   std::printf("[portable] shader folder: %s (%s)\n", narrow(shaders).c_str(),
-              installed_shaders ? "installed, next to the executable" : "build-time fallback");
+              installed_shaders ? "installed, next to the executable"
+              : fallback        ? "build-time fallback"
+                                : "missing; a release build has no build-time fallback");
+  std::printf("[portable] build-time shader fallback: %s\n",
+              fallback ? "present (development build)" : "none (release build)");
 
   int missing = 0;
   for (const char *name : kShaderNames) {
