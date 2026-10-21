@@ -22,6 +22,7 @@
     "allow-replays-import",
     "allow-replays-delete",
     "allow-get-controls",
+    "allow-pad-status",
     "allow-capture-binding",
     "allow-cancel-capture",
     "allow-reset-binding",

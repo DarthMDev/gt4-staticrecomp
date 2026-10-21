@@ -385,6 +385,8 @@
           }
         });
         return tableView();
+      case "pad_status":
+        return padStatusPayload();
       case "get_controls":
         return controlsView();
       case "capture_binding":
@@ -467,6 +469,33 @@
   function emit(name, payload) {
     (eventHandlers[name] || []).forEach(function (handler) { handler(payload); });
   }
+  // Pad events in the shape of the Rust pad service: pad-status on change, pad-live every 50 ms while a pad is
+  // connected. The source is the dev Gamepad-like object (?pad=, ?pads=, ?nopad=); the app itself never reads one.
+  function devSummary() {
+    var pads = root.GT4.devGamepads ? root.GT4.devGamepads() : [];
+    return root.GT4.controlsModel.padSummary(pads);
+  }
+  function padStatusPayload() {
+    var summary = devSummary();
+    return { available: true, connected: summary.connected, name: summary.connected ? summary.name : "",
+      kind: summary.connected ? "xbox360" : "", player_index: summary.connected ? 0 : null, count: summary.count, error: "" };
+  }
+  var lastPadStatus = "";
+  setInterval(function () {
+    if (!root.GT4.controlsModel) {
+      return;
+    }
+    var status = padStatusPayload();
+    var key = JSON.stringify(status);
+    if (key !== lastPadStatus) {
+      lastPadStatus = key;
+      emit("pad-status", status);
+    }
+    var summary = devSummary();
+    if (summary.connected) {
+      emit("pad-live", root.GT4.controlsModel.padLive(summary.pad));
+    }
+  }, 50);
   root.GT4_MOCK = { invoke: invoke, listen: listen, emit: emit };
   if (query.get("update") === "1") {
     setTimeout(function () { emit("update-available", { offers: DEMO_OFFERS }); }, 900);

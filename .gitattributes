@@ -1,0 +1,2 @@
+# Pinned text inputs are hashed byte for byte: never convert their line endings.
+docs/inputs/*.txt -text

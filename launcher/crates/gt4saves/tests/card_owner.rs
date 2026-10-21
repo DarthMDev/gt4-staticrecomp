@@ -2,7 +2,7 @@
 // private/manual-play/card.ps2 into a scratch directory; the tests skip when it is missing.
 // Override the path with GT4SAVES_TEST_CARD.
 
-use gt4saves::card::{Node, IMAGE_WITHOUT_ECC, IMAGE_WITH_ECC};
+use gt4saves::card::{DirEntry, Node, IMAGE_WITHOUT_ECC, IMAGE_WITH_ECC, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
 use gt4saves::{ecc, Card};
 use std::path::PathBuf;
 
@@ -90,4 +90,50 @@ fn fresh_superblock_matches_the_owner_card() {
     let owner = Card::from_image(&bytes).unwrap();
     let blank = Card::blank();
     assert_eq!(blank.page(0), owner.page(0), "superblock data bytes");
+}
+/// For every sub-directory in the root: (name, its index in the root, the index its "." entry holds).
+fn dot_entry_indices(card: &Card) -> Vec<(String, u32, u32)> {
+    let root_count = card.read_dir(0, 1).unwrap()[0].length() as usize;
+    let root = card.read_dir(0, root_count).unwrap();
+    let mut found = Vec::new();
+    for (index, entry) in root.iter().enumerate().skip(2) {
+        if entry.exists() && entry.is_dir() {
+            let own = card.read_dir(entry.cluster(), entry.length() as usize).unwrap();
+            found.push((entry.name(), index as u32, own[0].dir_entry()));
+        }
+    }
+    found
+}
+
+#[test]
+fn owner_card_dot_entries_hold_the_directory_index() {
+    let Some(bytes) = owner_card_bytes() else {
+        return;
+    };
+    let card = Card::from_image(&bytes).unwrap();
+    let found = dot_entry_indices(&card);
+    assert!(!found.is_empty());
+    for (name, index, held) in &found {
+        assert_eq!(held, index, "{name}: the game's own card holds the directory index in \".\"");
+    }
+    // The rebuilt card must do the same, or GT4 shows "Load failed!" (2026-10-21).
+    let rebuilt = Card::build(&card.root().unwrap()).unwrap();
+    for (name, index, held) in dot_entry_indices(&rebuilt) {
+        assert_eq!(held, index, "{name}: rebuilt \".\" entry");
+    }
+}
+
+#[test]
+fn built_card_dot_entries_hold_the_directory_index() {
+    const STAMP: [u8; 8] = [0, 0, 0, 12, 21, 10, 0xEA, 0x07];
+    let save = |name: &str| {
+        let file = Node::file(DirEntry::new("icon.sys", MODE_FILE_DEFAULT, STAMP, STAMP).unwrap(), vec![1; 964]);
+        Node::dir(DirEntry::new(name, MODE_DIR_DEFAULT, STAMP, STAMP).unwrap(), vec![file])
+    };
+    let card = Card::build(&[save("BASCUS-97328GAMEDATA"), save("BASCUS-97328REPLAY00"), save("BASCUS-97328REPLAY01")]).unwrap();
+    let found = dot_entry_indices(&card);
+    assert_eq!(found.iter().map(|(_, index, _)| *index).collect::<Vec<_>>(), vec![2, 3, 4]);
+    for (name, index, held) in found {
+        assert_eq!(held, index, "{name}");
+    }
 }

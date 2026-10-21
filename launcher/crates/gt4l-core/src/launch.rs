@@ -110,6 +110,7 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
 ///   `fsr_sharpness` -> `GT4_FSR_SHARPNESS` with the FSR filter; `deinterlacing` -> `GT4_DEINTERLACE`;
 ///   `anti_aliasing` -> `GT4_AA`. These are hidden in the UI (decision 0070) and keep their defaults.
 /// - `fullscreen` -> `GT4_FULLSCREEN` (1/0).
+/// - `widescreen` -> `GT4_FORCE_WIDESCREEN` (1/0): the game's wide flag is held at 16:9 (TASK-079).
 /// - `vsync` -> `GT4_PRESENT_MODE` (on = fifo, fast = mailbox, off = immediate).
 /// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
 /// - `performance_report` on -> `GT4_PERF=1`.
@@ -171,6 +172,7 @@ pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String
 /// The variables shared by both renderers: display mode, present mode, async GS and diagnostics.
 fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Settings) {
     variables.insert("GT4_FULLSCREEN", flag(settings.is_on("fullscreen")));
+    variables.insert("GT4_FORCE_WIDESCREEN", flag(settings.is_on("widescreen")));
     variables.insert(
         "GT4_PRESENT_MODE",
         match settings.get("vsync") {

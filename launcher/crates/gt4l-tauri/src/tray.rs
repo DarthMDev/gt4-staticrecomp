@@ -135,6 +135,14 @@ pub fn handle<R: Runtime>(app: &AppHandle<R>, event: Event) {
         (action, quit_enabled(&state))
     };
     let _ = control.quit_item.set_enabled(enabled);
+    // The gamepad service reads the pad only while the window is shown (a hidden launcher leaves the game its input).
+    if let Some(pads) = app.try_state::<crate::pad_service::Handle>() {
+        match &action {
+            Action::Hide => pads.set_active(false),
+            Action::Show { .. } => pads.set_active(true),
+            _ => {}
+        }
+    }
     let window = app.get_webview_window("main");
     match action {
         Action::Hide => {

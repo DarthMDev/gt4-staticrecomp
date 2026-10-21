@@ -209,20 +209,20 @@
     { id: "r2", sources: ["xinput:RT | deadzone=0.000 curve=quadratic", "key:2"] },
     { id: "dpad_up", sources: ["xinput:DpadUp", "key:Up"] }, { id: "select", sources: ["xinput:Back"] }
   ];
-  var live = CM.liveState(fakePad(["A", "DpadUp"], { LT: 0.6 }, [0.5, -0.25, -1, 1]), defaults, {});
+  var live = CM.liveState(CM.padLive(fakePad(["A", "DpadUp"], { LT: 0.6 }, [0.5, -0.25, -1, 1])), defaults, {});
   same("pad A lights Cross", live.buttons.cross.pressed, true);
   same("pad B up leaves Circle dark", live.buttons.circle.pressed, false);
   same("D-pad up lights the D-pad up arm", live.buttons.dpad_up.pressed, true);
   same("LT at 60% fills L2 to 60%", Math.round(live.buttons.l2.value * 100), 60);
   same("L2 reads the game's pressure past the 30/255 deadzone: (153 - 30) * 255 / 225", Math.round(live.buttons.l2.output * 255), 139);
   same("sticks keep their raw position", [live.sticks.left.x, live.sticks.left.y, live.sticks.right.x, live.sticks.right.y], [0.5, -0.25, -1, 1]);
-  var swapped = CM.liveState(fakePad(["A"]), [{ id: "circle", sources: ["xinput:A"] }, { id: "cross", sources: ["xinput:B"] }], {});
+  var swapped = CM.liveState(CM.padLive(fakePad(["A"])), [{ id: "circle", sources: ["xinput:A"] }, { id: "cross", sources: ["xinput:B"] }], {});
   same("after a swap, pad A lights Circle, not Cross", [swapped.buttons.circle.pressed, swapped.buttons.cross.pressed], [true, false]);
   same("a key lights the button it drives", CM.liveState(null, defaults, { Q: true }).buttons.l1.pressed, true);
   same("no pad and no key: nothing is pressed", CM.liveState(null, defaults, {}).buttons.cross.pressed, false);
-  var light = CM.liveState(fakePad([], { LT: 0.1 }), defaults, {});
+  var light = CM.liveState(CM.padLive(fakePad([], { LT: 0.1 })), defaults, {});
   same("a trigger inside its deadzone fills but does not press", [light.buttons.l2.value > 0, light.buttons.l2.pressed], [true, false]);
-  same("R2 options (curve) shape the output", Math.round(CM.liveState(fakePad([], { RT: 0.5 }), defaults, {}).buttons.r2.output * 100), 25);
+  same("R2 options (curve) shape the output", Math.round(CM.liveState(CM.padLive(fakePad([], { RT: 0.5 })), defaults, {}).buttons.r2.output * 100), 25);
 
   same("trigger output: linear 255 is full", CM.triggerOutput(1, 30 / 255, "linear"), 1);
   same("trigger output: at the deadzone it is 0", CM.triggerOutput(30 / 255, 30 / 255, "linear"), 0);
@@ -234,7 +234,7 @@
   same("Numpad4 is Num4", CM.keyFromEvent({ code: "Numpad4", key: "4" }), { name: "Num4" });
   same("ArrowUp is Up", CM.keyFromEvent({ code: "ArrowUp", key: "ArrowUp" }), { name: "Up" });
   same("right Shift is Shift", CM.keyFromEvent({ code: "ShiftRight", key: "Shift" }), { name: "Shift" });
-  same("Esc cancels", CM.keyFromEvent({ code: "Escape", key: "Escape" }), { cancel: true });
+  same("Esc cancels and is named Esc", CM.keyFromEvent({ code: "Escape", key: "Escape" }), { cancel: true, name: "Esc" });
   same("F9 is reserved for the game window", CM.keyFromEvent({ code: "F9", key: "F9" }), { reserved: "F9" });
   same("F5 is a key name", CM.keyFromEvent({ code: "F5", key: "F5" }), { name: "F5" });
   same("a key with no name is refused", CM.keyFromEvent({ code: "Semicolon", key: ";" }), { unsupported: ";" });
@@ -250,6 +250,19 @@
   var two = CM.padSummary([null, { id: "Pad One (XInput STANDARD GAMEPAD)", index: 1, connected: true }, { id: "Pad Two", index: 2, connected: true }]);
   same("two pads: the first connected one is shown and counted", [two.connected, two.name, two.index, two.count], [true, "Pad One", 1, 2]);
   same("no pad: not connected", CM.padSummary([null, null]).connected, false);
+  // Fixed keyboard layout (TASK-076, read only) and the pad-live shape from the Rust service (SDL3).
+  same("keyboard: W lights Cross", CM.liveState(null, defaults, { W: true }).buttons.cross.pressed, true);
+  same("keyboard: Enter lights Cross too", CM.liveState(null, defaults, { Enter: true }).buttons.cross.pressed, true);
+  same("keyboard: Space lights Circle", CM.liveState(null, defaults, { Space: true }).buttons.circle.pressed, true);
+  same("keyboard: E lights D-pad up (ghost)", CM.liveState(null, defaults, { E: true }).buttons.dpad_up.pressed, true);
+  same("keyboard: the fixed triangle keys are Backspace and Esc", CM.KEYBOARD_LAYOUT.triangle, ["Backspace", "Esc"]);
+  same("keyboard: same table as the game (slice 210)", [CM.KEYBOARD_LAYOUT.r1, CM.KEYBOARD_LAYOUT.r2, CM.KEYBOARD_LAYOUT.l2,
+    CM.KEYBOARD_LAYOUT.l1, CM.KEYBOARD_LAYOUT.select, CM.KEYBOARD_LAYOUT.start], [["Shift"], ["R"], ["F"], ["Q"], ["C", "Tab"], ["P"]]);
+  same("keyboard: C lights Select (camera)", CM.liveState(null, defaults, { C: true }).buttons.select.pressed, true);
+  same("keyboard: P lights Start", CM.liveState(null, [{ id: "start", sources: ["xinput:Start"] }], { P: true }).buttons.start.pressed, true);
+  var sdlLive = CM.liveState({ sources: { "xinput:A": 1, "xinput:LT": 0.5 }, sticks: { left: { x: 0.5, y: -0.25 }, right: { x: 0, y: 1 } } }, defaults, {});
+  same("pad-live: A presses Cross, LT fills L2, the left stick keeps its place", [sdlLive.buttons.cross.pressed, Math.round(sdlLive.buttons.l2.value * 100), sdlLive.sticks.left.x, sdlLive.sticks.left.y], [true, 50, 0.5, -0.25]);
+  same("pad-live: no sources, nothing pressed", CM.liveState({ sources: {}, sticks: {} }, defaults, {}).buttons.cross.pressed, false);
 
   // Spatial navigation between DS2 buttons, on the drawing's own layout (js/controller-svg.js).
   var LAYOUT = root.GT4.controllerSvg.LAYOUT;

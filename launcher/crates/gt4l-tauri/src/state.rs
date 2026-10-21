@@ -35,10 +35,8 @@ pub struct AppState {
     pub setup_outcome: SetupOutcome,
     /// The running game's child process (shared with the watcher thread and Stop).
     pub game_child: Option<Arc<Mutex<Option<Child>>>>,
-    /// Input name while a controller or key capture waits for a press.
+    /// Control name while a rebind waits for a press from the pad service (`pad_service`).
     pub capturing: Option<String>,
-    /// Cancels the XInput polling thread of the current capture.
-    pub capture_cancel: Option<Arc<AtomicBool>>,
     /// Message shown on Home, e.g. why the last start failed.
     pub home_message: String,
     /// Status line of the Controls page.
@@ -146,7 +144,6 @@ impl AppState {
             setup_outcome: SetupOutcome::None,
             game_child: None,
             capturing: None,
-            capture_cancel: None,
             home_message: String::new(),
             controls_status: String::new(),
             saves_status: String::new(),

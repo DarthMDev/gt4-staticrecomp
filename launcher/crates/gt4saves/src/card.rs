@@ -154,6 +154,16 @@ impl DirEntry {
         self.raw[0x10..0x14].copy_from_slice(&cluster.to_le_bytes());
     }
 
+    /// In a sub-directory's "." entry: the directory's own index in its parent directory.
+    /// GT4 refuses to load a save whose "." entry does not hold it ("Load failed!").
+    pub fn dir_entry(&self) -> u32 {
+        u32::from_le_bytes(self.raw[0x14..0x18].try_into().unwrap())
+    }
+
+    pub fn set_dir_entry(&mut self, index: u32) {
+        self.raw[0x14..0x18].copy_from_slice(&index.to_le_bytes());
+    }
+
     pub fn is_dir(&self) -> bool {
         self.mode() & MODE_SUBDIR != 0
     }
@@ -510,10 +520,12 @@ impl Builder {
     /// lengths set.
     fn write_children(&mut self, items: &[Node], parent_cluster: u32) -> Result<Vec<DirEntry>, CardError> {
         let mut entries = Vec::with_capacity(items.len());
-        for item in items {
+        for (position, item) in items.iter().enumerate() {
             let mut entry = item.entry.clone();
             if item.entry.is_dir() {
-                let (cluster, count) = self.write_directory(item, parent_cluster)?;
+                // Entries 0 and 1 of every directory are "." and "..".
+                let index_in_parent = position as u32 + 2;
+                let (cluster, count) = self.write_directory(item, parent_cluster, index_in_parent)?;
                 entry.set_cluster(cluster);
                 entry.set_length(count as u32);
             } else {
@@ -528,15 +540,17 @@ impl Builder {
     }
 
     /// Writes one sub-directory and its children. Returns its first cluster and entry count.
-    fn write_directory(&mut self, node: &Node, parent_cluster: u32) -> Result<(u32, usize), CardError> {
+    fn write_directory(&mut self, node: &Node, parent_cluster: u32, index_in_parent: u32) -> Result<(u32, usize), CardError> {
         let count = node.children.len() + 2;
         let blocks = (count * DIRENT_BYTES).div_ceil(CLUSTER_BYTES);
         let clusters = self.allocate(blocks)?;
         let children = self.write_children(&node.children, clusters[0])?;
 
-        // Sub-directory "." and ".." carry no length and "." no cluster (owner's card).
+        // Sub-directory "." and ".." carry no length and "." no cluster; "." holds the
+        // directory's index in its parent (owner's card; GT4 checks it when loading).
         let mut dot = DirEntry::new(".", MODE_DIR_DEFAULT, node.entry.created(), node.entry.modified())?;
         dot.set_cluster(0);
+        dot.set_dir_entry(index_in_parent);
         let mut dotdot = DirEntry::new("..", MODE_DIR_DEFAULT, node.entry.created(), node.entry.modified())?;
         dotdot.set_cluster(parent_cluster);
 

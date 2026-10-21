@@ -33,14 +33,15 @@ fn an_unversioned_dev_build_file_is_backed_up_and_migrated_to_schema_one() {
     let (loaded, notes) = config::load(&path);
     assert_eq!(loaded.settings.get("vsync"), "fast", "the values survive the migration");
     assert_eq!(loaded.disc_path.as_deref(), Some(Path::new("D:/gt4.iso")));
-    assert!(notes.iter().any(|note| note.contains("migrated from schema 0 to 2")), "{notes:?}");
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 0 to 3")), "{notes:?}");
 
     let copies = backups(&directory, "settings.toml.bak-schema0-");
     assert_eq!(copies.len(), 1, "exactly one backup");
     assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original, "the backup is the untouched original");
 
     let rewritten = fs::read_to_string(&path).unwrap();
-    assert!(rewritten.contains("schema_version = 2"), "{rewritten}");
+    assert!(rewritten.contains("schema_version = 3"), "{rewritten}");
+    assert!(rewritten.contains("widescreen = \"on\""), "{rewritten}");
     assert!(!rewritten.contains("\r\r"));
 }
 
@@ -126,7 +127,7 @@ vsync = \"fast\"
     let (loaded, notes) = config::load(&path);
     assert_eq!(loaded.settings.get("fullscreen"), "on", "the old windowed default is replaced");
     assert_eq!(loaded.settings.get("vsync"), "fast", "other values survive");
-    assert!(notes.iter().any(|note| note.contains("migrated from schema 1 to 2")), "{notes:?}");
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 1 to 3")), "{notes:?}");
 
     let copies = backups(&directory, "settings.toml.bak-schema1-");
     assert_eq!(copies.len(), 1, "exactly one backup of the schema 1 file");

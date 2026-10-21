@@ -29,6 +29,8 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     // Differences with the Python launcher, approved in LAUNCHER-PLAN section 6:
     assert!(!environment.contains_key("GT4_PERF"), "Performance report is off by default");
     assert_eq!(environment["GT4_FULLSCREEN"], "1");
+    // TASK-079: Widescreen 16:9 is on by default and is always stated (the game's native default is on too).
+    assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "1");
     assert_eq!(environment["GT4_PRESENT_MODE"], "fifo");
     // Asynchronous GS is the default, so GT4_GS_SYNC stays unset.
     assert!(!environment.contains_key("GT4_GS_SYNC"));
@@ -37,7 +39,7 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
     // CoreGS 1.1 defaults also send deinterlacing (auto) and anti-aliasing (off).
     assert_eq!(environment["GT4_DEINTERLACE"], "auto");
     assert_eq!(environment["GT4_AA"], "off");
-    assert_eq!(environment.len(), 8);
+    assert_eq!(environment.len(), 9, "the eight variables of slice210 plus GT4_FORCE_WIDESCREEN");
 }
 
 #[test]
@@ -108,6 +110,9 @@ fn settings_map_to_their_variables() {
     assert_eq!(environment["GT4_VU1_VERIFY"], "1000");
     assert_eq!(environment["GT4_VU0_VERIFY"], "1000");
 
+    settings.set("widescreen", "off").unwrap();
+    let environment = env_map(&launch::game_environment(&settings));
+    assert_eq!(environment["GT4_FORCE_WIDESCREEN"], "0", "Widescreen 16:9 off leaves the game's own setting");
     settings.set("vsync", "off").unwrap();
     let environment = env_map(&launch::game_environment(&settings));
     assert_eq!(environment["GT4_PRESENT_MODE"], "immediate");

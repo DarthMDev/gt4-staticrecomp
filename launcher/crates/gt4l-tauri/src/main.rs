@@ -10,6 +10,8 @@ mod contract;
 #[cfg(test)]
 mod flow_audit;
 mod model;
+mod pad_nav;
+mod pad_service;
 mod saves;
 mod setup;
 mod state;
@@ -55,6 +57,9 @@ fn main() {
         .manage(shared)
         .setup(|app| {
             tray::install(app)?;
+            // The gamepad service (SDL3) runs on its own thread for the whole session.
+            let pads = pad_service::spawn(app.handle().clone());
+            app.manage(pads);
             // Every launch: version file, first gt4-gs install if needed, and the update check (never blocks Play).
             let launch_shared = app.state::<state::Shared>().inner().clone();
             let launch_app = app.handle().clone();
@@ -88,6 +93,7 @@ fn main() {
             commands::replays_import,
             commands::replays_delete,
             commands::get_controls,
+            commands::pad_status,
             commands::capture_binding,
             commands::cancel_capture,
             commands::reset_binding,
