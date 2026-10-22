@@ -166,7 +166,7 @@ class DisplayAspectLauncherTests(unittest.TestCase):
     def test_mode_pcsx2_is_slice218_and_older_builds_are_history(self):
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
-        self.assertEqual((name, runtime), ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'))
+        self.assertEqual((name, runtime), ('slice240-pcsx2.json', 'private/slice240-game-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice217'],
                          ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'],
@@ -178,7 +178,7 @@ class DisplayAspectLauncherTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 218)
+        self.assertEqual(manifest['slice'], 240)
         self.assertEqual(manifest['license_guard_capsule'], PIN['capsule'])
         self.assertEqual(manifest['license_guard_source_sha256'], PIN['source_sha256'])
         self.assertEqual(manifest['license_guard_receipt_sha256'], PIN['receipt_sha256'])

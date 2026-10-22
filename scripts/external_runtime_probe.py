@@ -119,9 +119,12 @@ PERF_PROFILES = {
     # TASK-019 launcher test (slice209): the slice208 coverage build (accepted EE library, 1,105 seeds) plus the
     # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
     # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
+    # TASK-088 (release 1.2.0 test build): the slice218 build with the black game window background (native/window.cpp).
+    # Mode pcsx2 points here.
+    'pcsx2': ('slice240-pcsx2.json', 'private/slice240-game-build/build/gt4vulkan.exe'),
     # TASK-080 addendum (slice218): the slice217 build plus the seamless display host code (GT4_OUTPUT_SIZE gives the
-    # auto aspect, GT4_MONITOR the monitor, per-monitor DPI awareness). Mode pcsx2 points here.
-    'pcsx2': ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'),
+    # auto aspect, GT4_MONITOR the monitor, per-monitor DPI awareness).
+    'pcsx2-slice218': ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'),
     # TASK-080 P2 (slice217): the slice215 build plus the race HUD for other ratios (HUD canvas hook in the slice217
     # license guard capsule, HUD parameter block, EE library profile "aspect" re-translated from the ELF patch table,
     # protocol 1.3 fill target). History.
@@ -172,7 +175,8 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
                      'slice212b-pcsx2.json',
-                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json')
+                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json',
+                     'slice240-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
@@ -182,7 +186,8 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mt
                      'slice203-pcsx2.json', 'slice205-license-guard.json', 'slice206-pcsx2.json', 'slice208-pcsx2.json',
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
                      'slice212b-pcsx2.json',
-                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json')
+                     'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json',
+                     'slice240-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}

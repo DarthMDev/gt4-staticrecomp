@@ -29,16 +29,18 @@ pub fn settings_table(settings: &Settings, controls: &Controls) -> Value {
     settings_table_with_monitors(settings, controls, &[])
 }
 
-/// The Monitor row's choices: one per connected monitor ("DELL U3419W - 3440x1440 (primary)"), stored by identifier
-/// (`display::monitor_id`); without monitors, one "Primary monitor" entry. `current` is the monitor the game would
-/// open on now.
+/// The Monitor row's choices: one per connected monitor, labelled by its name ("DELL U3419W"; a second one with the same
+/// name is "DELL U3419W 2"), stored by identifier (`display::monitor_id`); without monitors, one "Primary monitor"
+/// entry. `current` is the monitor the game would open on now (the primary one until another is chosen).
 fn fill_monitor_row(row: &mut Value, settings: &Settings, monitors: &[Monitor]) {
     match display::resolve_monitor(monitors, settings.get("monitor")) {
         Some(chosen) => {
+            let labels = display::monitor_labels(monitors);
             row["values"] = Value::Array(
                 monitors
                     .iter()
-                    .map(|monitor| json!({ "value": display::monitor_id(monitor), "label": display::monitor_label(monitor) }))
+                    .zip(labels)
+                    .map(|(monitor, label)| json!({ "value": display::monitor_id(monitor), "label": label }))
                     .collect(),
             );
             row["current"] = json!(display::monitor_id(chosen));
@@ -67,7 +69,8 @@ fn fill_resolution_row(row: &mut Value, settings: &Settings, monitors: &[Monitor
                     .collect(),
             );
             row["current"] = json!(display::resolve_resolution(monitor, settings.get("resolution")).text());
-            row["default"] = json!(monitor.desktop.text());
+            // The default is the symbol "desktop": it means the monitor's desktop mode at each start, not a stored size.
+            row["default"] = json!(display::DESKTOP);
         }
         None => {
             row["values"] = json!([{ "value": display::DESKTOP, "label": "Desktop resolution" }]);
@@ -535,6 +538,9 @@ pub fn licenses_text() -> &'static str {
      The launcher interface is built with Tauri 2 (MIT or Apache-2.0) and runs in Microsoft Edge WebView2, \
      the Windows system web view (Microsoft WebView2 terms).\n\n\
      Typefaces: Roboto and Roboto Condensed (Apache-2.0), bundled in the launcher.\n\n\
+     GSdx is the PCSX2 GS renderer of the PCSX2 project (https://pcsx2.net), licensed GPL-3.0-or-later. It is the \
+     gt4-gs.exe program, downloaded only when it is selected, and it runs in its own process; it is not part of \
+     GT4Recomp's MIT code. Its source and licence are in the gt4-gs release.\n\n\
      The launcher uses the Rust crates listed in launcher/Cargo.lock. paraLLEl-GS (LGPL-3.0-or-later) is \
      a separate library and is not part of the launcher's interface."
 }
@@ -661,9 +667,12 @@ mod table_tests {
         assert_eq!(monitor_row["control"], "dropdown");
         assert_eq!(monitor_row["current"], r"\\.\DISPLAY1@1920x1080", "the primary monitor by default");
         let labels: Vec<&str> = monitor_row["values"].as_array().unwrap().iter().map(|v| v["label"].as_str().unwrap()).collect();
-        assert_eq!(labels, ["TV \u{2013} 1920x1080 (primary)", "DELL U3419W \u{2013} 3440x1440"]);
+        // TASK-088 (1.2.0): the friendly name only; no resolution and no "(primary)".
+        assert_eq!(labels, ["TV", "DELL U3419W"]);
         let resolution = row(&table, "resolution");
         assert_eq!(resolution["current"], "1920x1080");
+        // TASK-088 (1.2.0): the default is the symbol "desktop" (the monitor's desktop mode at each start).
+        assert_eq!(resolution["default"], "desktop");
         let modes: Vec<&str> = resolution["values"].as_array().unwrap().iter().map(|v| v["value"].as_str().unwrap()).collect();
         assert_eq!(modes, ["1920x1080", "1280x720"]);
 

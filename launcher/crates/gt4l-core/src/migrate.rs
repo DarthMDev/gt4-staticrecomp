@@ -118,13 +118,14 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 5,
+    current: 6,
     steps: &[
         Step { from: 0, apply: settings_0_to_1 },
         Step { from: 1, apply: settings_1_to_2 },
         Step { from: 2, apply: settings_2_to_3 },
         Step { from: 3, apply: settings_3_to_4 },
         Step { from: 4, apply: settings_4_to_5 },
+        Step { from: 5, apply: settings_5_to_6 },
     ],
 };
 
@@ -208,6 +209,32 @@ fn settings_4_to_5(document: &mut Value) -> Result<(), String> {
     if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
         gs.remove("upscale");
         gs.remove("aspect");
+    }
+    Ok(())
+}
+
+/// Schema 6 (TASK-088, gt4-gs 1.2.0). Two changes, both in this one step (schema 6 is not released yet):
+///
+/// - Custom textures: the Load custom textures row (`[gs] texture_load`, default on) and the Precache row
+///   (`[gs] texture_precache`, default off) are gs-table rows. A value is kept in `[gs]` only when the user changed it,
+///   and an absent key takes the table default, so nothing is rewritten for them.
+/// - Resolution follows the desktop (owner, 2026-10-21). A stored Resolution equal to the desktop size of the stored
+///   Monitor becomes "desktop", so it follows the monitor's desktop at each start. The desktop size is known only from
+///   the Monitor identifier (`\\.\DISPLAY2@3440x1440` records the desktop when it was chosen, `display::desktop_at_save`).
+///   A file whose Monitor is "primary" records no desktop size: its Resolution is kept as it was (it cannot be told
+///   apart from a deliberate choice of that size). The rule is recorded here so that later readers know why.
+///
+/// The backup of the old file is made by `config::prepare`, as for every step.
+fn settings_5_to_6(document: &mut Value) -> Result<(), String> {
+    let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) else {
+        return Ok(());
+    };
+    let monitor = settings.get("monitor").and_then(Value::as_str).unwrap_or("primary").to_string();
+    let resolution = settings.get("resolution").and_then(Value::as_str).unwrap_or("desktop").to_string();
+    if let Some(desktop) = crate::display::desktop_at_save(&monitor) {
+        if crate::display::Size::parse(&resolution) == Some(desktop) {
+            settings.insert("resolution".to_string(), Value::from("desktop"));
+        }
     }
     Ok(())
 }
@@ -336,7 +363,7 @@ mod tests {
     fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(5));
+        assert_eq!(document["schema_version"], json!(6));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
         assert!(document["settings"].get("widescreen").is_none(), "added by step 3, dropped by step 4");
         assert!(document["settings"].get("aspect_ratio").is_none(), "added by step 4, dropped by step 5");
@@ -358,7 +385,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 3);
-        assert_eq!(released["schema_version"], json!(5));
+        assert_eq!(released["schema_version"], json!(6));
         assert!(released["settings"].get("aspect_ratio").is_none());
         assert_eq!(released["settings"]["monitor"], json!("primary"));
         assert_eq!(released["settings"]["resolution"], json!("desktop"));
@@ -388,7 +415,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut file).unwrap(), 4);
-        assert_eq!(file["schema_version"], json!(5));
+        assert_eq!(file["schema_version"], json!(6));
         for gone in ["aspect_ratio", "aspect_custom"] {
             assert!(file["settings"].get(gone).is_none(), "{gone} dropped from [settings]");
             assert!(file["choices"].get(gone).is_none(), "{gone} dropped from [choices]");
@@ -422,7 +449,7 @@ mod tests {
 
         let mut chained = json!({"schema_version": 2, "settings": {"vsync": "on"}});
         assert_eq!(migrate(&SETTINGS, &mut chained).unwrap(), 2);
-        assert_eq!(chained["schema_version"], json!(5));
+        assert_eq!(chained["schema_version"], json!(6));
     }
 
     #[test]

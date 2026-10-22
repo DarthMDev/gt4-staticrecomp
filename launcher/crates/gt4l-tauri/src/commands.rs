@@ -138,8 +138,13 @@ pub fn get_settings_table_with_monitors(shared: &Shared, monitors: &[display_rul
 /// a stick row (`lstick_deadzone`, `rstick_deadzone`).
 /// A refused value leaves the setting unchanged and returns the reason.
 #[tauri::command]
-pub fn set_setting(id: String, value: Value, shared: State<'_, Shared>) -> Result<(), String> {
-    set_setting_of(id, value, shared.inner())
+pub fn set_setting(app: AppHandle, id: String, value: Value, shared: State<'_, Shared>) -> Result<(), String> {
+    set_setting_of(id.clone(), value, shared.inner())?;
+    // TASK-089 extension (1.2.0): choosing GSdx installs it at once when it is missing (renderer_switch.rs).
+    if id == "renderer" {
+        crate::renderer_switch::start(app, shared.inner().clone());
+    }
+    Ok(())
 }
 
 pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), String> {
@@ -151,6 +156,21 @@ pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), S
         if id == "monitor" {
             // Another monitor has other modes: the Resolution goes back to that monitor's desktop mode.
             state.config.settings.set("resolution", display_rules::DESKTOP).map_err(|error| error.to_string())?;
+        }
+        if id == "resolution" {
+            // TASK-088 (1.2.0): a size equal to the monitor's desktop is stored as "desktop" (it then follows the desktop
+            // at every start). Any other size is stored with the monitor's identifier, which records the desktop size at
+            // the time of the choice (`display::desktop_at_save`).
+            let monitors = gt4l_platform::display::monitors();
+            if let Some(monitor) = display_rules::resolve_monitor(&monitors, state.config.settings.get("monitor")) {
+                let desktop_choice = text == display_rules::DESKTOP || display_rules::Size::parse(&text) == Some(monitor.desktop);
+                if desktop_choice {
+                    state.config.settings.set("resolution", display_rules::DESKTOP).map_err(|error| error.to_string())?;
+                } else {
+                    let identifier = display_rules::monitor_id(monitor);
+                    state.config.settings.set("monitor", &identifier).map_err(|error| error.to_string())?;
+                }
+            }
         }
     } else if let Some((trigger, field)) = id.split_once('_').filter(|(name, _)| ["l2", "r2"].contains(name)) {
         let current = state.controls.trigger_tuning(trigger);
@@ -244,17 +264,32 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
     }
     // Decision 0070: PCSX2 GS when it is installed and selected; otherwise CoreGS 1.1 with a message.
     let settings = state.config.settings.clone();
-    let installed = gs_release::installed(&updates::renderer_root(&dirs));
+    let installed = if launch::needs_external_renderer(&settings) {
+        gs_release::installed(&updates::renderer_root(&dirs))
+    } else {
+        None
+    };
     let (pcsx2, notice) = match launch::choose_renderer(&settings, installed.as_ref()) {
         launch::RendererChoice::Pcsx2 => (installed.clone(), None),
         launch::RendererChoice::CoreGs11 { reason } => (None, reason),
     };
     // TASK-080 addendum: the stored Monitor and Resolution against the monitors connected now.
-    let display = display_rules::resolve_target(
-        &gt4l_platform::display::monitors(),
-        settings.get("monitor"),
-        settings.get("resolution"),
-    );
+    let monitors = gt4l_platform::display::monitors();
+    let display = display_rules::resolve_target(&monitors, settings.get("monitor"), settings.get("resolution"));
+    // TASK-088 (1.2.0): a stored size the monitor no longer has plays at its desktop mode, and the log says so.
+    if let Some(monitor) = display_rules::resolve_monitor(&monitors, settings.get("monitor")) {
+        if let Some(desktop) = display_rules::resolution_fallback(monitor, settings.get("resolution")) {
+            state::log(
+                &dirs,
+                &format!(
+                    "display: resolution {} is not a mode of {} now; playing at its desktop {}",
+                    settings.get("resolution"),
+                    monitor.device,
+                    desktop.text()
+                ),
+            );
+        }
+    }
     let plan = launch::session_plan(&settings, display.as_ref());
     state::log(
         &dirs,
@@ -302,7 +337,9 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, notice, display, extra } = inputs;
     let card = dirs.runtime_card();
     saves::prepare_card(&lock(&shared).library, &card)?;
-    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), display.as_ref(), &extra)?;
+    let textures = lock(&shared).user_dirs.textures();
+    paths::ensure_texture_folders(&textures).map_err(|error| format!("texture folder: {error}"))?;
+    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), display.as_ref(), &textures, &extra)?;
     {
         let mut state = lock(&shared);
         state.game_child = Some(running.child.clone());
@@ -322,9 +359,9 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
                 break outcome;
             }
             // The player chose "restart with the built-in renderer" after a PCSX2 GS failure (TASK-038).
-            state::log(&dirs, "PCSX2 GS asked for a restart; starting CoreGS 1.1");
+            state::log(&dirs, "GSdx asked for a restart; starting CoreGS 1.1");
             drop(running);
-            match game::start(&dirs, &executable, &elf, &disc, &settings, None, display.as_ref(), &extra) {
+            match game::start(&dirs, &executable, &elf, &disc, &settings, None, display.as_ref(), &textures, &extra) {
                 Ok(next) => {
                     lock(&shared).game_child = Some(next.child.clone());
                     running = next;
@@ -765,6 +802,15 @@ pub fn open_saves_folder(shared: State<'_, Shared>) -> Result<(), String> {
 #[tauri::command]
 pub fn open_replays_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let folder = lock(shared.inner()).user_dirs.replays();
+    open_folder(&folder)
+}
+
+/// Opens the custom texture folder (`Documents\Gran Turismo 4\Textures`) in Explorer. Its `replacements` folder is
+/// made first, so the owner can drop a pack in (TASK-088).
+#[tauri::command]
+pub fn open_textures_folder(shared: State<'_, Shared>) -> Result<(), String> {
+    let folder = lock(shared.inner()).user_dirs.textures();
+    paths::ensure_texture_folders(&folder).map_err(|error| error.to_string())?;
     open_folder(&folder)
 }
 

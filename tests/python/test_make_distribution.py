@@ -17,7 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BUILD = os.environ.get('GT4_NATIVE_BUILD')
 ASSETS = Path(os.environ.get('GT4_ASSETS_ROOT', 'C:/Antigravity/gt4-staticrecomp')).resolve()
-PIN = ROOT / 'docs/inputs/slice218-pcsx2.json'
+PIN = ROOT / 'docs/inputs/slice240-pcsx2.json'
 
 spec = importlib.util.spec_from_file_location('make_distribution', ROOT / 'scripts/make_distribution.py')
 dist = importlib.util.module_from_spec(spec)
@@ -32,7 +32,7 @@ def executable():
 
 
 @unittest.skipUnless(executable() and PIN.exists() and (ASSETS / 'private/references/ps2-web-recomp/LICENSE').exists(),
-                     'GT4_NATIVE_BUILD, the slice218 pin or the donor licence is not available')
+                     'GT4_NATIVE_BUILD, the slice240 pin or the donor licence is not available')
 class MakeDistributionTest(unittest.TestCase):
     def setUp(self):
         self.output = ASSETS / 'private' / f'slice218-dist-test-{uuid.uuid4().hex[:8]}'

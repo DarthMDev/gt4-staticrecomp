@@ -113,6 +113,8 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑085 | Launcher self-update: the setup starts outside the launcher's kill-on-close job | ✅ Done (2026-10-21) · PR #67; v1.1.0 republished with the fix; launchers 1.0.0 update by running the setup |
 | TASK‑086 | Progressive 480p everywhere (menus and races at 480p through ELF patches) | ⏸️ Shelved (owner, 2026-10-21) · owner test broke the car select and the race load; branch `task/086-progressive-480p` kept |
 | TASK‑087 | GS readbacks without stalls, in CoreGS 2.0 (GPU-driven flare visibility, no EE wait) | 📋 Planned (owner, 2026-10-21) · study done (docs/GS-READBACK-STUDY.md); CoreGS 2.0 only, gt4-gs frozen |
+| TASK‑088 | Release 1.2.0: custom textures (gt4-gs texture replacements from `Documents\Gran Turismo 4\Textures`, two launcher options), 2-row bottom crop, black window from the first frame, monitor names, desktop resolution, every gt4-gs value enabled, GSdx setup choice and switch | ✅ Done (2026-10-22) · owner tested and approved; released as GT4Recomp v1.2.0 with gt4-gs 1.2.0 (fork PR #9, tag `gt4gs-v1.2.0`) |
+| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0 |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -522,6 +524,29 @@ download in the gt4-gs fork (PCSX2-tainted agent; expected 60 FPS with flares at
 after M8/M9 (owner's idea: the renderer multiplies the marked flare draws by the visibility texel on the GPU; zero
 readbacks per frame). Corrections: `updateFlare` does not read the result (NATIVE-VARIABLE-FPS-STUDY), and deferral
 moves the flare from 0 to 1 frame late, not 1 to 2 (FRAME-COST-STUDY).
+
+### TASK-088 — Release 1.2.0: custom textures, crop, black start
+**Done 2026-10-22: owner approved ("1.2.0 pronta pra lançamento"); released as GT4Recomp v1.2.0 and gt4-gs 1.2.0.**
+Owner decisions (2026-10-21). Release 1.2.0 of both the game/launcher and gt4-gs; the work is one branch per repository
+(`task/088-custom-textures-120` in this repository, `gt4gs/textures-1.2.0` in `moesuito/gt4recomp-gs`).
+- **Custom textures (gt4-gs 1.2.0).** PCSX2's replacement loader was already compiled into gt4-gs; the fork now reads the
+  pack from `[Folders] Textures` directly (`replacements` inside it, no game-serial folder) and never dumps (load only;
+  the Dump keys are refused and forced off). The launcher sets `[Folders] Textures` to `Documents\Gran Turismo 4\Textures`
+  and creates `Textures\replacements` on demand. Keys: `LoadTextureReplacements` (Graphics, "Load custom textures", default on,
+  always written) and `PrecacheTextureReplacements` (Advanced, "Precache custom textures", default off). An "Open textures
+  folder" button sits in Graphics. Settings schema 6 (no value changes; the backup of schema 5 is kept as before).
+- **Crop.** The GT4 display crop is 2 native pixels at the bottom (was 1) and 1 at the right; a log line states it.
+- **White start.** The gt4-gs window had `COLOR_WINDOW` as its background and erased nothing, and the game window had no
+  background brush, so both showed white until the first frame. Now black (class brush, `WM_ERASEBKGND` paints black
+  in gt4-gs; `window.cpp` class brush black in the game). A new game build (slice240) carries the game change.
+- **Versions.** gt4-gs 1.2.0; GT4Recomp 1.2.0 (Cargo workspace, `tauri.conf.json`, NSIS default). The launcher's minimum
+  gt4-gs is 1.2.0, so an older gt4-gs is replaced at launch by the existing `needs_install` path.
+- **Checks so far.** `cargo test --workspace` (launcher) all green; new tests in `launcher/crates/gt4l-core/tests/textures.rs`
+  and the migration test for schema 5 to 6. Browser UI: nav-test 150 of 150; focus-check 92 of 100 on this checkout and on
+  the baseline copy (the same 8 tab-highlight checks fail on both: a headless timing difference, not this change).
+  Game build slice240 (`private/slice240-game-build`): see `docs/BUILD.md` slice 240.
+- **Status.** Waiting for the owner's test. Nothing is tagged, released, drafted or merged; gt4-gs 1.2.0 is a local package
+  until the owner approves it.
 
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
@@ -1204,3 +1229,26 @@ exactly; frames 900 and 1100 do not, and the PCSX2 output is 480 rows against th
 Recommendation: GO for TASK-033 and TASK-035; conditional GO for TASK-036 (open: the vertical scale, the 900/1100
 differences, a freeze state). Details and numbers: [docs/GS-PCSX2-POC.md](docs/GS-PCSX2-POC.md). Clean room:
 PCSX2-tainted work, not touching CoreGS 2.0. Owner review: the side-by-side images and frames 900 and 1100.
+
+
+### TASK-089 — Independent CoreGS launcher path
+
+**Done (2026-10-21) in release 1.2.0.** Contribution by JulioHeroZ (PR #72, branch `task/089-coregs-independent-launcher`, based on main `6422988`), merged into `task/088-custom-textures-120` with a merge commit so their commits and authorship are kept. The launcher review of the diff found no problem. Added on the 1.2.0 branch: the setup dialog chooses GSdx (recommended) or CoreGS 1.1 (built in, no download) before setup starts; choosing GSdx in Settings installs it at once when it is missing (inline progress, "GSdx installed successfully", and a failure keeps CoreGS 1.1 selected); every user-facing "PCSX2 GS" string now says GSdx (settings keys and file names unchanged).
+
+Original branch description:
+
+Branch `task/089-coregs-independent-launcher`, based on main `6422988` (2026-10-21).
+A saved `renderer = "coregs11"` choice skips the external renderer installer during setup,
+its automatic missing/outdated-package repair at startup and its background release-list request.
+The automatic launcher update check still runs. The explicit Check for updates and renderer
+update actions continue to include the optional package. Play prepares a built-in renderer session
+without reading or pinning an unused external executable.
+
+Acceptance: synthetic setup completes without invoking the injected external installer, preserves the
+choice across a launcher restart and prepares `GT4_RENDERER=donor` without an external process;
+injected update requests query only launcher releases for CoreGS, while default PCSX2 startup and
+explicit manual checks retain both streams. Full Rust launcher workspace passed on Windows (Tauri: 53 passed, one real-disc flow ignored).
+Maintainer launcher acceptance remains pending.
+Owner test: select CoreGS 1.1, restart the launcher with no gt4-gs package, launch a game and confirm
+there is no renderer download; switch back to PCSX2 and confirm its existing setup/update path.
+This changes package management, not rendering fidelity, performance or CoreGS 2.0 readiness.

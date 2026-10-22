@@ -127,7 +127,7 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         import external_runtime_probe as probe
         name, runtime = probe.PERF_PROFILES['pcsx2']
         # TASK-080 addendum (slice218): the slice217 capsule and library with the seamless display host code.
-        self.assertEqual((name, runtime), ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'))
+        self.assertEqual((name, runtime), ('slice240-pcsx2.json', 'private/slice240-game-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'], ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'], ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice213'], ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'))
@@ -137,7 +137,7 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         manifest = json.loads((ROOT / 'docs/inputs' / name).read_text(encoding='utf-8'))
         self.assertEqual(manifest['measurement_mode'], 'pcsx2')
         self.assertEqual(manifest['runtime']['path'], runtime)
-        self.assertEqual(manifest['slice'], 218)
+        self.assertEqual(manifest['slice'], 240)
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice217'], ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))
         # The slice217 capsule is the slice206 guard plus the aspect hooks: kernel.cpp and cdvdfsv.cpp are unchanged.
         aspect_pin = json.loads((ROOT / 'docs/inputs/slice217-license-guard-runtime.json').read_text(encoding='utf-8'))

@@ -12,6 +12,7 @@ mod flow_audit;
 mod model;
 mod pad_nav;
 mod pad_service;
+mod renderer_switch;
 mod saves;
 mod setup;
 mod state;
@@ -113,6 +114,7 @@ fn main() {
             commands::open_player_folder,
             commands::open_saves_folder,
             commands::open_replays_folder,
+            commands::open_textures_folder,
             updates::check_updates,
             updates::apply_update,
             updates::skip_update,

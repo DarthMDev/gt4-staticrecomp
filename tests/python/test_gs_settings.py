@@ -36,7 +36,9 @@ LEGACY_BASE = ('; gt4-gs.ini written by scripts/external_runtime_probe.py (TASK-
                # performance overlay).
                'OsdShowFPS = false\n'
                'OsdShowGPU = false\n'
-               'OsdShowResolution = false\n')
+               'OsdShowResolution = false\n'
+               # TASK-088 (gt4-gs 1.2.0): Load custom textures is on by default and always written.
+               'LoadTextureReplacements = true\n')
 # TASK-064: ProhibitDynamicCode is always written; its default is false (overlays work out of the box).
 PROHIBIT_LINE = 'ProhibitDynamicCode = false\n'
 LEGACY_DEFAULT = LEGACY_BASE + '\n[GT4GS]\n' + PROHIBIT_LINE
@@ -59,8 +61,9 @@ def by_id():
 class TableSchemaTests(unittest.TestCase):
     def test_table_loads_and_has_one_row_per_setting(self):
         table = rows()
-        self.assertEqual(len(table), 71)
-        self.assertEqual(len({row['id'] for row in table}), 71)
+        # 71 rows, plus textures_folder (TASK-088, launcher row).
+        self.assertEqual(len(table), 72)
+        self.assertEqual(len({row['id'] for row in table}), 72)
 
     def test_every_row_has_the_documented_columns(self):
         for row in rows():
@@ -122,7 +125,7 @@ class TableSchemaTests(unittest.TestCase):
             'preset height not a number': lambda data: row(data, 'upscale')['choices'][0].update(height='tall'),
             'accept_ini with duplicate ini values': lambda data: row(data, 'upscale')['choices'][1].update(ini='1'),
             'default outside range': lambda data: row(data, 'upscale').update(default='13'),
-            'always row not ok': lambda data: row(data, 'filter').update(written='always'),
+            'always row not ok': lambda data: row(data, 'adapter').update(written='always'),
             'path row set by user': lambda data: row(data, 'cache_folder').update(written='when-set'),
             'bool default': lambda data: row(data, 'fxaa').update(default='yes'),
             'launcher-only with an INI key': lambda data: row(data, 'gs_engine').update(
@@ -233,12 +236,10 @@ class ValueTests(unittest.TestCase):
 
     def test_tbd_choices_and_rows_are_refused(self):
         renderer = by_id()['renderer']
-        with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet'):
-            gs_settings.parse_value(renderer, 'd3d12')
-        with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet'):
-            gs_settings.parse_value(by_id()['filter'], 'bilinear-ps2')
-        with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet'):
-            gs_settings.parse_value(by_id()['hw_download_mode'], 'enabled-force-full')
+        # TASK-088 (1.2.0): these values are enabled now (the binary accepts them).
+        self.assertEqual(gs_settings.parse_value(renderer, 'd3d12'), 'd3d12')
+        self.assertEqual(gs_settings.parse_value(by_id()['filter'], 'bilinear-ps2'), 'bilinear-ps2')
+        self.assertEqual(gs_settings.parse_value(by_id()['hw_download_mode'], 'enabled-force-full'), 'enabled-force-full')
 
     def test_path_values_are_single_line(self):
         self.assertEqual(gs_settings.parse_value(by_id()['cache_folder'], 'C:/cache'), 'C:/cache')
@@ -273,7 +274,8 @@ class IniTests(unittest.TestCase):
             gs_settings.INI_HEADER, '[EmuCore/GS]', 'Renderer = 14', 'upscale_multiplier = 6',
             'accurate_blending_unit = 3', 'deinterlace_mode = 0', 'AspectRatio = 16:9', 'VsyncEnable = true',
             'DisableMailboxPresentation = true', 'HWDownloadMode = 0', 'fxaa = true', 'OsdShowFPS = false',
-            'OsdShowGPU = false', 'OsdShowResolution = false', '', '[GT4GS]', 'ProhibitDynamicCode = false'])
+            'OsdShowGPU = false', 'OsdShowResolution = false', 'LoadTextureReplacements = true', '', '[GT4GS]',
+            'ProhibitDynamicCode = false'])
 
     def test_sections_follow_the_fixed_order(self):
         settings = {'game_fixes': 'false', 'upscale': '2'}
@@ -350,13 +352,14 @@ class OfferedTests(unittest.TestCase):
         self.assertNotIn('aspect', offered)
         # TASK-080 addendum: the internal resolution follows the launcher's Resolution and Render scale.
         self.assertNotIn('upscale', offered)
-        for identifier in ('filter', 'cas_mode', 'cas_sharpness', 'texture_load', 'adapter',
+        self.assertTrue({'texture_load', 'texture_precache'} <= offered)
+        for identifier in ('adapter',
                            'cache_folder', 'headless_dump_dir', 'manual_hacks'):
             self.assertNotIn(identifier, offered, identifier)
         for row in gs_settings.offered(rows()):
             if row['type'] == 'enum':
                 self.assertTrue(gs_settings.offered_choices(row), row['id'])
-        self.assertEqual(gs_settings.offered_choices(by_id()['renderer']), ['vulkan'])
+        self.assertEqual(gs_settings.offered_choices(by_id()['renderer']), ['vulkan', 'd3d12', 'd3d11'])
 
 
 class PlayPerformanceTests(unittest.TestCase):
@@ -385,7 +388,6 @@ class PlayPerformanceTests(unittest.TestCase):
         for arguments in (['--mode', 'main', '--gs-setting', 'upscale=2'],
                           ['--mode', 'pcsx2', '--gs-setting', 'nope=1'],
                           ['--mode', 'pcsx2', '--gs-setting', 'upscale=13'],
-                          ['--mode', 'pcsx2', '--gs-setting', 'renderer=d3d12'],
                           ['--mode', 'pcsx2', '--gs-setting', 'gt4_readback=accurate'],
                           ['--mode', 'pcsx2', '--gs-setting', 'hw_download_mode=accurate', '--gs-readback', 'unsynchronized'],
                           ['--mode', 'pcsx2', '--gs-setting', 'upscale=2', '--gs-scale', '3']):
@@ -513,8 +515,7 @@ class ResolvedValueTests(unittest.TestCase):
         statuses = {row['id']: row['status'] for row in rows()}
         self.assertNotIn('TBD-fork', statuses.values())
         self.assertEqual({identifier for identifier, status in statuses.items() if status.startswith('pending')},
-                         {'texture_load', 'texture_load_async', 'texture_precache', 'texture_dump',
-                          'texture_dump_mipmaps', 'texture_dump_fmv', 'user_hacks'})
+                         {'texture_dump', 'texture_dump_mipmaps', 'texture_dump_fmv', 'user_hacks'})
 
     def test_enum_keys_names_and_ini_values(self):
         for identifier, (key, expected, default) in ENUM_EXPECTED.items():
@@ -557,9 +558,11 @@ class ResolvedValueTests(unittest.TestCase):
             value = str(row['min']) if row['type'] == 'int' else row['default']
             with self.assertRaisesRegex(gs_settings.SettingsError, 'not settable yet', msg=row['id']):
                 gs_settings.parse_value(row, value)
-        self.assertEqual(gs_settings.offered_choices(by_id()['deinterlace']), ['automatic'])
-        self.assertEqual(gs_settings.offered_choices(by_id()['blending']), ['high'])
-        self.assertEqual(gs_settings.offered_choices(by_id()['renderer']), ['vulkan'])
+        # TASK-088 (1.2.0): every gt4-gs value the binary accepts is offered.
+        self.assertEqual(gs_settings.offered_choices(by_id()['deinterlace'])[0], 'automatic')
+        self.assertEqual(len(gs_settings.offered_choices(by_id()['deinterlace'])), 10)
+        self.assertEqual(gs_settings.offered_choices(by_id()['blending']), ['minimum', 'basic', 'medium', 'high', 'full', 'maximum'])
+        self.assertEqual(gs_settings.offered_choices(by_id()['renderer']), ['vulkan', 'd3d12', 'd3d11'])
 
     def test_resolved_values_stay_out_of_the_default_ini(self):
         text = gs_settings.render_ini(rows())
@@ -582,7 +585,7 @@ class ResolvedValueTests(unittest.TestCase):
 class PageLayoutTests(unittest.TestCase):
     def test_graphics_page_is_basic_only(self):
         basic = [row['id'] for row in rows() if row['page'] == 'basic']
-        self.assertEqual(basic, ['gs_engine', 'fxaa', 'cas_mode', 'cas_sharpness'])
+        self.assertEqual(basic, ['gs_engine', 'fxaa', 'cas_mode', 'cas_sharpness', 'texture_load'])
         upscale = by_id()['upscale']
         self.assertEqual((upscale['control'], upscale['type'], upscale['default']), ('dropdown', 'enum', '1080p'))
         # TASK-080 addendum (owner, 2026-10-21): hidden, always written, set by the launcher from the display plan;
@@ -597,9 +600,9 @@ class PageLayoutTests(unittest.TestCase):
 
     def test_advanced_page_holds_the_rest_of_the_user_options(self):
         advanced = [row for row in rows() if row['page'] == 'advanced']
-        # 45 + prohibit_dynamic_code (TASK-064) - the six PCSX2 OSD rows, hidden since 2026-10-21
-        self.assertEqual(len(advanced), 40)
-        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 41)))
+        # 45 + prohibit_dynamic_code (TASK-064) - the six PCSX2 OSD rows, hidden since 2026-10-21; + precache (TASK-088)
+        self.assertEqual(len(advanced), 42)
+        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 43)))
         self.assertTrue({'renderer', 'deinterlace', 'shade_boost', 'linear_present', 'tv_shader', 'perf_overlay',
                          'hw_download_mode', 'filter', 'trilinear', 'anisotropic'} <= {row['id'] for row in advanced})
 
@@ -615,8 +618,7 @@ class PageLayoutTests(unittest.TestCase):
             if row['page'] in ('mods', 'hidden'):
                 self.assertNotIn(row['id'], offered_ids, row['id'])
         self.assertEqual(sorted(row['id'] for row in rows() if row['page'] == 'mods'),
-                         sorted(['texture_load', 'texture_load_async', 'texture_precache', 'texture_dump',
-                                 'texture_dump_mipmaps', 'texture_dump_fmv']))
+                         sorted(['texture_dump', 'texture_dump_mipmaps', 'texture_dump_fmv']))
 
     def test_renderer_choice_is_the_only_coregs_option(self):
         choices = [choice['name'] for choice in by_id()['gs_engine']['choices']]
@@ -643,7 +645,7 @@ class ResetToDefaultsTests(unittest.TestCase):
             row = by_id()[identifier]
             self.assertEqual(row['status'], 'ok', identifier)
             self.assertNotIn(row['written'], ('never', 'launcher'), identifier)
-        for identifier in ('gs_engine', 'cache_folder', 'data_root', 'filter', 'texture_load'):
+        for identifier in ('gs_engine', 'cache_folder', 'data_root'):
             self.assertNotIn(identifier, settings)
 
     def test_defaults_profile_is_in_the_table(self):

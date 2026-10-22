@@ -16,7 +16,7 @@
 ; %LOCALAPPDATA%\GT4Recomp and are kept by the uninstaller unless the user ticks the box on the uninstall page.
 
 !ifndef VERSION
-  !define VERSION "1.1.0"
+  !define VERSION "1.2.0"
 !endif
 !ifndef LAUNCHER_EXE
   !error "Define LAUNCHER_EXE=<path to GT4Recomp.exe>"

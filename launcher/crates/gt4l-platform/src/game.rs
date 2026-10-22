@@ -45,6 +45,7 @@ pub fn start(
     settings: &Settings,
     pcsx2: Option<&Installed>,
     display: Option<&DisplayTarget>,
+    textures: &Path,
     extra_environment: &[(String, String)],
 ) -> Result<Running, String> {
     let lock = GameLock::acquire(&dirs.runtime_card().with_file_name("launcher.lock"))
@@ -69,7 +70,7 @@ pub fn start(
     };
     let mut plan = match pcsx2 {
         Some(installed) => {
-            let paths = Pcsx2Paths::for_session(installed, &dirs.root().join("gs"), &session_dir);
+            let paths = Pcsx2Paths::for_session(installed, &dirs.root().join("gs"), &session_dir, textures);
             let text = launch::gs_config_text(settings, &paths, display)?;
             gs_table::write_ini_atomic(&paths.config, &text).map_err(|error| format!("gt4-gs.ini: {error}"))?;
             launch::plan_pcsx2_launch(&inputs, settings, &paths, display, &inherited)

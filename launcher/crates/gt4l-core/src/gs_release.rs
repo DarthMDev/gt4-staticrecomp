@@ -332,8 +332,8 @@ mod tests {
     }
 
     #[test]
-    fn the_minimum_is_1_1_0_with_the_real_asset_name() {
-        assert_eq!(MINIMUM_VERSION, Version(1, 1, 0));
-        assert_eq!(package_name(Version(1, 1, 0)), "gt4-gs-1.1.0-windows-x64.zip");
+    fn the_minimum_is_1_2_0_with_the_real_asset_name() {
+        assert_eq!(MINIMUM_VERSION, Version(1, 2, 0));
+        assert_eq!(package_name(Version(1, 2, 0)), "gt4-gs-1.2.0-windows-x64.zip");
     }
 }

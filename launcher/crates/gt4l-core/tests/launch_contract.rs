@@ -245,16 +245,18 @@ fn anti_aliasing_maps_off_and_fxaa() {
 #[test]
 fn renderer_choice_is_pcsx2_when_installed_and_coregs11_otherwise() {
     let mut settings = Settings::default();
-    assert_eq!(settings.get("renderer"), "pcsx2", "PCSX2 GS is the default when installed");
+    assert!(launch::needs_external_renderer(&settings));
+    assert_eq!(settings.get("renderer"), "pcsx2", "GSdx is the default when installed");
     assert_eq!(
         launch::choose_renderer(&settings, None),
         launch::RendererChoice::CoreGs11 {
-            reason: Some("PCSX2 GS is not installed yet; this session uses CoreGS 1.1.".to_string())
+            reason: Some("GSdx is not installed yet; this session uses CoreGS 1.1.".to_string())
         }
     );
     let installed = installed_fixture();
     assert_eq!(launch::choose_renderer(&settings, Some(&installed)), launch::RendererChoice::Pcsx2);
     settings.set("renderer", "coregs11").unwrap();
+    assert!(!launch::needs_external_renderer(&settings));
     assert_eq!(launch::choose_renderer(&settings, Some(&installed)), launch::RendererChoice::CoreGs11 { reason: None });
     assert!(settings.set("renderer", "coregs20").is_err(), "coming soon is not selectable");
 }
@@ -374,6 +376,7 @@ fn pcsx2_paths() -> launch::Pcsx2Paths {
         config: PathBuf::from("C:/session/gt4-gs.ini"),
         cache: PathBuf::from("C:/gs/cache"),
         data_root: PathBuf::from("C:/gs/data"),
+        textures: PathBuf::from("C:/Users/x/Documents/Gran Turismo 4/Textures"),
     }
 }
 

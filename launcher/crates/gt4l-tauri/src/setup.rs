@@ -1,6 +1,6 @@
-//! Setup commands: pick the disc image, then copy it, check it, prepare the game files and install the PCSX2 GS
-//! renderer (docs/launcher/FLOW-AUDIT.md). The work runs on a thread. The page polls `app_state` (which carries the
-//! step, the fraction and the bytes) and also gets `setup-progress` and `setup-finished` events.
+//! Setup commands: pick the disc image, then copy it, check it, prepare the game files and install the optional
+//! PCSX2 GS renderer when selected (docs/launcher/FLOW-AUDIT.md). The work runs on a thread. The page polls
+//! `app_state` (which carries the step, the fraction and the bytes) and also gets `setup-progress` and `setup-finished` events.
 //!
 //! The command bodies are plain functions over [`Shared`] (`choose_disc_path`, `start_with`) so the flow test
 //! (`flow_audit.rs`) drives exactly the code the page drives, without a window.
@@ -236,54 +236,7 @@ pub fn start_with(
             ),
         );
 
-        // TASK-043: the PCSX2 GS renderer is part of setup (decision 0070). A failure (offline) is not a setup
-        // failure: CoreGS 1.1 is used and the launch check installs gt4-gs on a later start.
-        {
-            let mut state = lock(&shared);
-            state.setup_run = SetupRun { step: "renderer".into(), renderer_step: "listing".into(), ..SetupRun::default() };
-        }
-        let renderer_shared = shared.clone();
-        let renderer_notify = notify.clone();
-        let mut last_percent = -1i64;
-        let result = renderer(&dirs, &mut |step| {
-            let mut state = lock(&renderer_shared);
-            match step {
-                Step::Transfer { done, total } => {
-                    state.setup_run.renderer_step = "downloading".into();
-                    state.setup_run.bytes_done = done;
-                    state.setup_run.bytes_total = total.unwrap_or(0);
-                    state.setup_run.fraction = total.filter(|total| *total > 0).map(|total| done as f32 / total as f32).unwrap_or(0.0);
-                    let percent = (state.setup_run.fraction * 100.0) as i64;
-                    if percent != last_percent {
-                        last_percent = percent;
-                        renderer_notify(
-                            "renderer-progress",
-                            json!({ "step": "downloading", "percent": percent, "bytesDone": done, "bytesTotal": total }),
-                        );
-                    }
-                }
-                other => {
-                    let name = updates::step_name(other);
-                    state.setup_run.renderer_step = name.into();
-                    if other == Step::Installing {
-                        state.setup_run.fraction = 1.0;
-                    }
-                    renderer_notify("renderer-progress", json!({ "step": name }));
-                }
-            }
-        });
-        let renderer_note = match result {
-            Ok(version) => {
-                notify("renderer-progress", json!({ "step": "done", "version": version }));
-                String::new()
-            }
-            Err(message) => {
-                state::log(&dirs, &format!("PCSX2 GS not installed during setup: {message}"));
-                notify("renderer-progress", json!({ "step": "failed", "message": message }));
-                "PCSX2 GS could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start."
-                    .to_string()
-            }
-        };
+        let renderer_note = prepare_renderer(&shared, &dirs, &notify, &renderer);
         {
             let mut state = lock(&shared);
             state.setup_busy = false;
@@ -294,6 +247,68 @@ pub fn start_with(
         notify("setup-finished", json!({ "ok": true, "message": "" }));
     });
     Ok(handle)
+}
+
+/// Installs the optional package only when the player selected the external renderer.
+/// Read the current choice after the disc work: a setup retry must respect a changed setting as well.
+fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer: &RendererInstaller) -> String {
+    let settings = lock(shared).config.settings.clone();
+    if !gt4l_core::launch::needs_external_renderer(&settings) {
+        state::log(dirs, "CoreGS 1.1 selected; no external renderer download needed");
+        return String::new();
+    }
+    // TASK-088 (1.2.0): a GSdx that is installed and meets the minimum (for example a local package) is kept, with no
+    // download attempt and no misleading note.
+    if !gt4l_core::gs_release::needs_install(&updates::renderer_root(dirs)) {
+        state::log(dirs, "GSdx already installed; setup keeps it");
+        return String::new();
+    }
+    {
+        let mut state = lock(shared);
+        state.setup_run = SetupRun { step: "renderer".into(), renderer_step: "listing".into(), ..SetupRun::default() };
+    }
+    let renderer_shared = shared.clone();
+    let renderer_notify = notify.clone();
+    let mut last_percent = -1i64;
+    let result = renderer(dirs, &mut |step| {
+        let mut state = lock(&renderer_shared);
+        match step {
+            Step::Transfer { done, total } => {
+                state.setup_run.renderer_step = "downloading".into();
+                state.setup_run.bytes_done = done;
+                state.setup_run.bytes_total = total.unwrap_or(0);
+                state.setup_run.fraction = total.filter(|total| *total > 0).map(|total| done as f32 / total as f32).unwrap_or(0.0);
+                let percent = (state.setup_run.fraction * 100.0) as i64;
+                if percent != last_percent {
+                    last_percent = percent;
+                    renderer_notify(
+                        "renderer-progress",
+                        json!({ "step": "downloading", "percent": percent, "bytesDone": done, "bytesTotal": total }),
+                    );
+                }
+            }
+            other => {
+                let name = updates::step_name(other);
+                state.setup_run.renderer_step = name.into();
+                if other == Step::Installing {
+                    state.setup_run.fraction = 1.0;
+                }
+                renderer_notify("renderer-progress", json!({ "step": name }));
+            }
+        }
+    });
+    match result {
+        Ok(version) => {
+            notify("renderer-progress", json!({ "step": "done", "version": version }));
+            String::new()
+        }
+        Err(message) => {
+            state::log(dirs, &format!("GSdx not installed during setup: {message}"));
+            notify("renderer-progress", json!({ "step": "failed", "message": message }));
+            "GSdx could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start."
+                .to_string()
+        }
+    }
 }
 
 /// Asks the setup thread to stop after its current chunk. The copy and the staging folder are removed.

@@ -63,17 +63,20 @@ pub struct Pcsx2Paths {
     pub cache: PathBuf,
     /// Data folder of the GS process (`%LOCALAPPDATA%\GT4Recomp\gs\data`).
     pub data_root: PathBuf,
+    /// The custom texture folder, `Documents\Gran Turismo 4\Textures` (TASK-088, gt4-gs `[Folders] Textures`).
+    pub textures: PathBuf,
 }
 
 impl Pcsx2Paths {
     /// The paths of an installed renderer, with the cache and data folders under the renderer root.
-    pub fn for_session(installed: &Installed, renderer_root: &Path, session_dir: &Path) -> Pcsx2Paths {
+    pub fn for_session(installed: &Installed, renderer_root: &Path, session_dir: &Path, textures: &Path) -> Pcsx2Paths {
         Pcsx2Paths {
             executable: installed.executable.clone(),
             executable_sha256: installed.executable_sha256.clone(),
             config: session_dir.join("gt4-gs.ini"),
             cache: renderer_root.join("cache"),
             data_root: renderer_root.join("data"),
+            textures: textures.to_path_buf(),
         }
     }
 }
@@ -87,6 +90,12 @@ pub enum RendererChoice {
     CoreGs11 { reason: Option<String> },
 }
 
+/// Whether the selected renderer needs the external PCSX2 GS package. CoreGS is built in, so choosing it
+/// must not trigger an automatic package download or release check.
+pub fn needs_external_renderer(settings: &Settings) -> bool {
+    settings.get("renderer") == settings::PCSX2_GS
+}
+
 /// Chooses the renderer of a session. PCSX2 GS is used when selected and installed; otherwise CoreGS 1.1 starts
 /// with a message. CoreGS 2.0 is not built, so it also starts CoreGS 1.1.
 pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> RendererChoice {
@@ -94,7 +103,7 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
         settings::PCSX2_GS => match installed {
             Some(_) => RendererChoice::Pcsx2,
             None => RendererChoice::CoreGs11 {
-                reason: Some("PCSX2 GS is not installed yet; this session uses CoreGS 1.1.".to_string()),
+                reason: Some("GSdx is not installed yet; this session uses CoreGS 1.1.".to_string()),
             },
         },
         _ => RendererChoice::CoreGs11 { reason: None },
@@ -241,6 +250,7 @@ pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths, display: Option<&
     let mut launcher: BTreeMap<String, String> = BTreeMap::new();
     launcher.insert("cache_folder".to_string(), paths.cache.display().to_string());
     launcher.insert("data_root".to_string(), paths.data_root.display().to_string());
+    launcher.insert("textures_folder".to_string(), paths.textures.display().to_string());
     gs_table::render_ini(&user, &launcher).map_err(|error| error.to_string())
 }
 

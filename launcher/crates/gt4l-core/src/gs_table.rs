@@ -468,9 +468,11 @@ mod tests {
         assert_eq!(check_user_value("upscale", "9").unwrap(), "9x");
         assert!(check_user_value("upscale", "13").is_err());
         assert!(check_user_value("upscale", "x").is_err());
-        assert!(check_user_value("renderer", "d3d12").is_err(), "resolved choices are not settable");
+        // TASK-088 (1.2.0): every gt4-gs value the binary accepts is settable (the resolved ones were enabled).
+        assert!(check_user_value("renderer", "d3d12").is_ok());
         assert!(check_user_value("renderer", "vulkan").is_ok());
-        assert!(check_user_value("filter", "nearest").is_err(), "resolved rows are not settable");
+        assert!(check_user_value("filter", "nearest").is_ok());
+        assert!(check_user_value("renderer", "opengl").is_err(), "not a value of the table");
         assert!(check_user_value("cache_folder", "C:/x").is_err(), "launcher rows are not user settings");
         assert!(check_user_value("vsync", "yes").is_err());
     }

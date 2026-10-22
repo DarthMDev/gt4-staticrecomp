@@ -73,7 +73,7 @@ pub const CORE_GS_11: &str = "coregs11";
 pub const CORE_GS_20: &str = "coregs20";
 
 const RENDERER_CHOICES: &[Choice] = &[
-    Choice { value: PCSX2_GS, label: "PCSX2 GS", selectable: true },
+    Choice { value: PCSX2_GS, label: "GSdx", selectable: true },
     Choice { value: CORE_GS_11, label: "CoreGS 1.1", selectable: true },
     Choice { value: CORE_GS_20, label: "CoreGS 2.0 (coming soon)", selectable: false },
 ];
