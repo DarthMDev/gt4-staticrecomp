@@ -118,6 +118,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | TASK‑095 | Ultrawide: undistorted 2D overlay on the pre-race menu (race lobby), as TASK-080 P2 does for the race HUD | 📋 Planned (owner, 2026-10-22) · study first; idea only |
+| TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
@@ -536,6 +537,22 @@ findings afterwards. None is reachable from the launcher, which sets neither var
   pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
+
+### TASK-097 — Self-sufficient game executable
+Planned (owner, 2026-10-22) for release 1.2.4, after the 1.2.3 hotfix. Principle: the game runs on its own with the
+same defaults every time; the launcher is only an easier way to start it and to manage settings. Today a double click
+on gt4vulkan.exe does not start the game: the launcher passes about 14 arguments and variables (ELF, disc, card,
+window; GT4_RENDERER, GT4_GS_PROCESS(_SHA256), GT4_GS_CONFIG; GT4_FORCE_480P, GT4_FORCE_WIDESCREEN,
+GT4_DISPLAY_ASPECT; GT4_FULLSCREEN, GT4_PRESENT_MODE, GT4_MONITOR, GT4_OUTPUT_SIZE, ...). Plan:
+- Built-in defaults: GSdx (pcsx2 renderer), 480p race display, 16:9 hold with the automatic ultrawide correction,
+  fullscreen, vsync. The variables stay as developer/test overrides; test harnesses and pins that assume today's
+  defaults set them explicitly.
+- Paths from the exe folder (`<install>\data`): prepared ELF, disc copy, runtime card, the gt4-gs version in use
+  (`data\gs\current.txt`), checked as the launcher checks them.
+- Settings: the launcher writes the player's choices (monitor, resolution, GSdx options, the gt4-gs.ini) to
+  `%APPDATA%\GT4Recomp\config`; the game reads them at start, so a direct start honours them.
+- Missing pieces (no prepared files, no GSdx): a clear message that says to open the launcher once.
+- New game slice with the frame identity checks, launcher changes, tests.
 
 ### TASK-095 — Ultrawide: undistorted pre-race menu overlay
 Planned (owner, 2026-10-22), idea to study later. At ratios wider than 16:9 (owner screenshot at 3440x1440, Time Trial
