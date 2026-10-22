@@ -1,5 +1,13 @@
 # Current Status
 
+## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
+
+Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only
+(CoreGS 1.1 removed from the launcher, CoreGS 2.0 shown as coming soon), textures straight in `data\Textures` with
+gt4-gs 1.2.1 (published earlier the same day), desktop shortcut from the installer. Installer
+`GT4Recomp-Setup-1.2.3.exe` (sha256 `475defe07926f6e41e8f8c91fd4bb3565a17d6aac92f5c8fc857d0a143530a0b`). Owner tested.
+Notes: [1.2.3](release-notes/1.2.3.md). Next: 1.2.4 (TASK-097, 098, 099), 1.3.0 wheels, 1.4.0 Spec II.
+
 ## TASK-096 on branch (2026-10-22, for launcher 1.2.3, waiting for the owner test)
 
 Branch `task/096-remove-coregs11`: the launcher no longer starts CoreGS 1.1. GSdx is the only renderer; a missing or
