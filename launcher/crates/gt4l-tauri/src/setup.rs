@@ -257,6 +257,12 @@ fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer:
         state::log(dirs, "CoreGS 1.1 selected; no external renderer download needed");
         return String::new();
     }
+    // TASK-088 (1.2.0): a GSdx that is installed and meets the minimum (for example a local package) is kept, with no
+    // download attempt and no misleading note.
+    if !gt4l_core::gs_release::needs_install(&updates::renderer_root(dirs)) {
+        state::log(dirs, "GSdx already installed; setup keeps it");
+        return String::new();
+    }
     {
         let mut state = lock(shared);
         state.setup_run = SetupRun { step: "renderer".into(), renderer_step: "listing".into(), ..SetupRun::default() };
