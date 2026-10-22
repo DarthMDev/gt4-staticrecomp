@@ -391,3 +391,20 @@ while a game is open, and never touches the owner's card.
 - IN-356: presentation into the 16:9 rectangle of 13.6; `hw_smoke_window` checks it. Ultrawide / TASK-080 fill:
   later, in the CoreGS 2.0 ultrawide and UI-layer work (hook: the present rectangle in `record_frame`).
 - Next: M8 readbacks starting with the flare (P0 per-call-site logging), then the GIF front end and the CPU compose.
+
+## 2026-10-22 M8 flare readback (local slice240, IN-357..IN-359) - Claude
+
+- Night schedule added to the local run script (FRAME-COST-STUDY night race, flare read every frame from VBlank 9,000);
+  night capture `private/slice240-capture/night-10000.gscap` (121 frames, 121 FIFO reads, donor-recorded) with
+  write-back reference hashes `night-10000-wb.txt`.
+- P0 found the cost: every FIFO read wrote back every resident target (7 per frame, each a submission and wait). Now
+  only the transfer's source is made coherent, through one batched GLM download (IN-357); the recording is
+  submitted every 64 chunks so the GPU keeps up (IN-358); GPU timestamps per category (IN-359).
+- Headless night race in game: 20-28 -> 11-19 ms per vsync (heaviest 500-frame interval 18.9 ms; most below 16.7).
+  Flare replies byte-identical in every mode; memory hashes identical on all four captures; 224/224 non-Python
+  CTests in both interlock modes; menu 42/42 dumps byte-identical to slice228; race schedule identical to slice235
+  and inside the 3D gate; default renderer 42/42 = slice214.
+- GPU busy about 8.2-9.4 ms per night frame. The remaining cost of the heaviest frames is CPU: the GIF front end
+  (about 7-8 ms of the GS stream on the heaviest interval) and translate/execute (about 4.5 ms).
+- Next: the GIF front end (step 3), then the CPU compose; the GPU-driven flare (R3) remains a later, producer-side step.
+

@@ -90,6 +90,9 @@ struct RenderCounters {
   double cache_load_us = 0.0;
   double gif_us = 0.0;     // the whole GS stream (front end, translate, execute, transfers)
   double upload_us = 0.0;  // EE->GS uploads
+  std::uint64_t gpu_busy_ns = 0;            // GT4_HW_GPU_TIMING: GPU busy time (first to last timestamp)
+  std::uint64_t gpu_ns[6] = {};             // pass, decode, clut, swizzle, upload, download
+  std::uint64_t gpu_early_submissions = 0;  // mid-frame submissions (IN-358)
   std::uint64_t textures_cached = 0;
   std::uint64_t cache_writebacks = 0;
   std::uint64_t cache_loads = 0;

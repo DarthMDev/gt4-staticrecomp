@@ -9,7 +9,8 @@
 //        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>] [--compose reference|presentation]
 //        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]] [--sync-mode cache|writeback] [--no-interlock]
 //        [--no-target-textures] [--no-glm] [--no-cpu-sprites] [--no-gpu-clut] [--no-glm-park] [--no-gpu-uploads]
-//        [--no-runs] [--single-buffer] [--async-present]
+//        [--no-runs] [--single-buffer] [--async-present] [--no-batched-writebacks] [--gpu-timing]
+//        [--chunks-per-submission N]
 // --sync-mode selects GT4_HW_SYNC_MODE (default cache, as in the game; writeback is the reference mode).
 // --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
 // the default `auto`) instead of the reference image (12.9 `vram`, the CPU reference's image).
@@ -167,10 +168,13 @@ int main(int argc, char** argv) {
             std::strcmp(argv[i], "--no-glm") == 0 || std::strcmp(argv[i], "--no-cpu-sprites") == 0 ||
             std::strcmp(argv[i], "--no-gpu-clut") == 0 || std::strcmp(argv[i], "--no-glm-park") == 0 ||
             std::strcmp(argv[i], "--no-gpu-uploads") == 0 || std::strcmp(argv[i], "--no-runs") == 0 ||
-            std::strcmp(argv[i], "--single-buffer") == 0 || std::strcmp(argv[i], "--async-present") == 0) {
+            std::strcmp(argv[i], "--single-buffer") == 0 || std::strcmp(argv[i], "--async-present") == 0 ||
+            std::strcmp(argv[i], "--no-batched-writebacks") == 0 ||
+            std::strcmp(argv[i], "--gpu-timing") == 0) {
             --i;  // a flag without a value
             continue;
         }
+        if (std::strcmp(argv[i], "--chunks-per-submission") == 0) continue;  // applied after Init
         if (std::strcmp(argv[i], "--every") == 0) {
             const long value = std::strtol(argv[i + 1], nullptr, 10);
             if (value > 0) every = static_cast<std::uint64_t>(value);
@@ -252,6 +256,11 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--no-runs") == 0) renderer.SetRuns(false);                            // IN-352 A/B
         if (std::strcmp(argv[i], "--single-buffer") == 0) renderer.SetDoubleBuffering(false);           // IN-354 A/B
         if (std::strcmp(argv[i], "--async-present") == 0) renderer.SetAsyncPresentation(true);          // IN-355
+        if (std::strcmp(argv[i], "--no-batched-writebacks") == 0) renderer.SetBatchedWritebacks(false); // IN-357
+        if (std::strcmp(argv[i], "--gpu-timing") == 0) renderer.SetGpuTiming(true);                     // 12.8
+        if (std::strcmp(argv[i], "--chunks-per-submission") == 0 && i + 1 < argc) {                   // IN-358 A/B
+            renderer.SetChunksPerSubmission(static_cast<std::uint32_t>(std::strtoul(argv[i + 1], nullptr, 10)));
+        }
     }
 
     // Frame counter for the trace: EndFrame of frame N is the N-th call (0-based), as in onFrame.
@@ -363,6 +372,13 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(gpuStats.submissions),
                     static_cast<unsigned long long>(gpuStats.runs),
                     static_cast<unsigned long long>(gpuStats.runChunks));
+        const std::uint64_t frameCount = renderer.TimedFrames();
+        if (gpuStats.gpuBusyNs != 0 && frameCount != 0) {
+            const double n = static_cast<double>(frameCount) * 1e6;
+            std::printf("gpu_ms_per_frame busy=%.2f pass=%.2f decode=%.2f clut=%.2f swizzle=%.2f upload=%.2f download=%.2f\n",
+                        gpuStats.gpuBusyNs / n, gpuStats.gpuNs[0] / n, gpuStats.gpuNs[1] / n, gpuStats.gpuNs[2] / n,
+                        gpuStats.gpuNs[3] / n, gpuStats.gpuNs[4] / n, gpuStats.gpuNs[5] / n);
+        }
     }
     std::printf("textures_cached=%llu textures_from_targets=%llu textures_from_glm=%llu glm_uploads=%llu glm_swizzles=%llu "
                 "cpu_sprite_batches=%llu gpu_clut_loads=%llu glm_parks=%llu glm_slot_loads=%llu glm_downloads=%llu "
@@ -400,6 +416,8 @@ int main(int argc, char** argv) {
                     counters.textureDecodeUs / frames / 1000.0);
     }
     std::printf("images_written=%llu\n", static_cast<unsigned long long>(written));
+    std::printf("fifo_reads=%llu fifo_hash=%016llx\n", static_cast<unsigned long long>(target.FifoReads()),
+                static_cast<unsigned long long>(target.FifoHash()));
     if (renderer.Failed()) {
         std::fprintf(stderr, "GPU write-back renderer failed: %s\n", renderer.LastError().c_str());
         return 1;

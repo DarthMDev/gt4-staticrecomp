@@ -2029,3 +2029,16 @@ The owner test script `build/hwr-play.ps1` (local, ignored) now runs this build 
 Note (2026-10-22): for disk space the evidence folders of local slices 229, 230, 232, 234, 237 and 238 named above
 were deleted; their results are recorded here and in PROGRESS.md, and the gate references they were compared with
 remain.
+
+## Local slice240 - aspect, FIFO-read coherence, mid-frame submissions, GPU timing (IN-356..IN-359)
+
+Incremental rebuild of the slice228 tree. No pin or launcher change. Evidence in `private/slice240-*` (never staged).
+The local run script gained the `night` schedule (FRAME-COST-STUDY Clubman Stage Route 5).
+
+- Confirmed: 224/224 non-Python CTests, also with `GT4_HW_TEST_NO_INTERLOCK=1`; `hw_smoke_window` checks the 16:9
+  present rectangle.
+- Confirmed: memory hashes identical to the write-back mode on the menu (1,101, = slice228), car, race and night
+  captures; the night capture's 121 flare replies (`fifo_hash`) identical in every mode.
+- Confirmed: headless menu 42/42 dumps byte-identical to slice228; race schedule 42/42 identical to slice235 and inside
+  the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
+- Measured: headless night race 11-19 ms per vsync (slice239: 20-28 ms); GPU busy 8.2-9.4 ms per frame.

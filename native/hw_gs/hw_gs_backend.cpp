@@ -769,6 +769,8 @@ bool Backend::init(const Options &options, std::string &error) {
   s.renderer->SetSyncMode(options.sync_mode == SyncMode::cache);
   // GT4_HW_GLM (12.8, chapter 04.9): textures over GPU-newer targets decode from the GPU memory mirror.
   s.renderer->SetGlm(options.glm);
+  // GT4_HW_GPU_TIMING (12.8): GPU timestamps per category, reported on the GT4_HW_PROFILE_EVERY line.
+  s.renderer->SetGpuTiming(options.gpu_timing);
   s.initialised = true;
   return true;
 }
@@ -1013,6 +1015,9 @@ RenderCounters Backend::render_counters() const {
   const hwgs::gpu::GpuStats &gpu = impl_->renderer->GpuCounters();
   out.gpu_submissions = gpu.submissions;
   out.gpu_barriers = gpu.barriers;
+  out.gpu_busy_ns = gpu.gpuBusyNs;
+  for (int i = 0; i < 6; ++i) out.gpu_ns[i] = gpu.gpuNs[i];
+  out.gpu_early_submissions = gpu.earlySubmissions;
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;
 }

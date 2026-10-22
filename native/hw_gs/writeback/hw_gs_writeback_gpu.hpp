@@ -132,6 +132,12 @@ struct GpuStats {
     std::uint64_t submissions = 0;  // queue submissions (IN-342: several chunks per submission)
     std::uint64_t runs = 0;         // render passes holding batched chunks (IN-352)
     std::uint64_t runChunks = 0;    // chunks drawn inside runs
+    std::uint64_t earlySubmissions = 0;  // submissions in mid-frame (IN-358)
+    // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
+    // recorded operation; the interval since the previous timestamp is charged to the operation's category
+    // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.
+    std::uint64_t gpuNs[6] = {};    // pass, decode, clut, swizzle (both directions), upload, download
+    std::uint64_t gpuBusyNs = 0;
 };
 
 class GpuDrawer {
@@ -208,6 +214,10 @@ public:
     // IN-354 A/B switch: submissions alternate between two sets of rings and command buffers (CPU records the
     // next frame while the GPU executes the previous one). Off: every recording waits for the last submission.
     void SetDoubleBuffering(bool enabled);
+    // GT4_HW_GPU_TIMING: per-category GPU timestamps (GpuStats::gpuNs). Off by default.
+    void SetGpuTiming(bool enabled);
+    // IN-358 A/B: submit the recording every `chunks` chunks (0: only at VBlank, a full ring or a readback).
+    void SetChunksPerSubmission(std::uint32_t chunks);
 
     const GpuStats &Stats() const;
 

@@ -1010,7 +1010,7 @@ public:
         MarkWritten(destination);
     }
     void BeginLocalToHost(const LocalToHostSetup& r) override {
-
+        pendingReadSpan_ = SpanOfTransfer(r.sbp, r.sbw, r.spsm, r.ssax, r.ssay, r.rrw, r.rrh);
         {
             ReasonScope scope(writebackReason_, WritebackReason::Transfer);
             CoherentForRead(SpanOfTransfer(r.sbp, r.sbw, r.spsm, r.ssax, r.ssay, r.rrw, r.rrh));
@@ -1100,10 +1100,90 @@ public:
     // The shadow memory of `span` becomes current for a CPU reader: drawn slots are written back, GLM-owned
     // pages are downloaded.
     void CoherentForRead(const BlockSpan& span) {
+        if (GlmParkingActive() && glmBatchedWritebacks_) {
+            std::vector<ResidentSlot*> slots;
+            for (ResidentSlot& slot : slots_) {
+                if (!slot.drawn.Empty() && SpansOverlap(SpanOfRect(slot.view, slot.drawn), span)) {
+                    slots.push_back(&slot);
+                }
+            }
+            WriteBackViaGlm(slots, span);
+            return;
+        }
         for (ResidentSlot& slot : slots_) {
             if (!slot.drawn.Empty() && SpansOverlap(SpanOfRect(slot.view, slot.drawn), span)) WriteBack(slot);
         }
         Materialise(span);
+    }
+
+    // IN-357: the drawn rectangles of `slots` and the GLM-owned pages of `span` reach the shadow memory through
+    // ONE GLM download (one submission and one wait) instead of one readback per slot: the stale pages are
+    // uploaded, the slots swizzled into the GLM (skipped when it already holds them), then every page that may
+    // differ from the shadow memory (the slots' drawn pages and the GLM-owned pages of `span`) is downloaded. The
+    // slots stay resident with nothing GPU-newer, as after WriteBack. A slot whose drawn rectangle is wider than
+    // its buffer (aliasing addresses) takes the per-slot WriteBack.
+    void WriteBackViaGlm(const std::vector<ResidentSlot*>& slots, const BlockSpan& span) {
+        if (failed_) return;
+        std::vector<ResidentSlot*> batched;
+        for (ResidentSlot* slot : slots) {
+            if (slot->drawn.Empty()) continue;
+            const int32_t bufferWidth = static_cast<int32_t>(std::max<uint32_t>(slot->view.bufferWidth, 1u) * 64u);
+            if (slot->drawn.x1 >= bufferWidth) {
+                WriteBack(*slot);
+                continue;
+            }
+            batched.push_back(slot);
+        }
+        if (batched.empty() && !AnyGlmOwned(span)) return;
+        StageTimer timer(counters.cacheWritebackUs);
+        for (ResidentSlot* slot : batched) {
+            if (!SwizzleSlotIntoGlm(*slot)) return;  // uploads the stale pages under it first
+        }
+        std::vector<bool> wanted(memory::kPagesTotal, false);
+        for (ResidentSlot* slot : batched) {
+            ForEachPage(SpanOfRect(slot->view, slot->drawn), [&](uint32_t page) { wanted[page] = true; });
+        }
+        ForEachPage(span, [&](uint32_t page) {
+            if (glmOwned_[page]) wanted[page] = true;
+        });
+        // Every wanted page must be current in the GLM before it is downloaded (pages under a slot's drawn
+        // rectangle were uploaded by its swizzle; GLM-owned pages are current by definition).
+        std::vector<std::pair<uint32_t, uint32_t>> ranges;
+        std::vector<uint32_t> pages;
+        for (uint32_t page = 0; page < memory::kPagesTotal; ++page) {
+            if (!wanted[page]) continue;
+            if (!glmOwned_[page] && (glmPageSequence_[page] == 0 || glmPageSequence_[page] < pageWrites_[page] + 1)) {
+                Fail("GLM page " + std::to_string(page) + " is stale at a batched write-back");
+                return;
+            }
+            const uint32_t offset = page * 8192u;
+            if (!ranges.empty() && ranges.back().first + ranges.back().second == offset) {
+                ranges.back().second += 8192u;
+            } else {
+                ranges.push_back({offset, 8192u});
+            }
+            pages.push_back(page);
+        }
+        std::string error;
+        if (!gpu_.DownloadGlm(ranges, memory_.Local().bytes().data(), error)) {
+            Fail(error);
+            return;
+        }
+        for (uint32_t page : pages) {
+            if (glmOwned_[page]) {
+                glmOwned_[page] = false;
+                --glmOwnedPages_;
+            }
+            MarkWritten(BlockSpan{page * kBlocksPerPage, kBlocksPerPage});  // decoded-texture cache entries expire
+            glmPageSequence_[page] = pageWrites_[page] + 1;                  // the GLM equals the shadow memory
+        }
+        for (ResidentSlot* slot : batched) {
+            counters.cacheWritebackByReason[static_cast<size_t>(writebackReason_)]++;
+            counters.cacheWritebacks++;
+            slot->drawn = PixelRect{};
+        }
+        counters.glmBatchedWritebacks++;
+        counters.glmPagesDownloaded += pages.size();
     }
 
     // Every slot that holds memory in `span` (except `keep`, may be null) gives it up. For a CPU writer
@@ -1826,6 +1906,8 @@ public:
     bool gpuClutEnabled_ = true;                   // IN-349 (off for A/B runs)
     bool glmParking_ = true;                       // IN-350 (off for A/B runs: evictions and overlaps write back)
     bool glmLoadsAlways_ = false;                  // IN-350 fixtures: every slot load goes through the GLM
+    BlockSpan pendingReadSpan_{0, kAllBlocks};    // source of the last LOCAL->HOST transfer (10.2)
+    bool glmBatchedWritebacks_ = true;             // IN-357 (off for A/B runs: one readback per slot)
     bool gpuUploads_ = true;                       // IN-351 (off for A/B runs: uploads written on the CPU)
     std::array<bool, memory::kPagesTotal> glmOwned_{};  // newest content only in the GLM (IN-350)
     uint32_t glmOwnedPages_ = 0;
@@ -1962,9 +2044,12 @@ std::size_t Renderer::ReadFifo(void* destination, std::size_t byteCount) {
     if (byteCount == 0) return 0;
     // The first FIFO access observes every earlier draw and upload (10.2).
     s.frontEnd_.FlushBatch(FlushReason::Transfer);
-    {
+    if (s.memory_.LocalToHostPending()) {
+        // IN-357: the first FIFO access takes the transfer's data from the shadow memory; only its source
+        // rectangle must be current there (draws since TRXDIR included). It used to write back every resident
+        // target on every FIFO read (GT4's lens flare: about 7 per frame, each a submission and a wait).
         ReasonScope scope(s.writebackReason_, WritebackReason::Transfer);
-        s.WriteBackAll();  // the read observes every draw, resident or not
+        s.CoherentForRead(s.pendingReadSpan_);
     }
     bool overrun = false;
     const std::vector<uint8_t> data = s.memory_.ReadLocalToHost(byteCount, overrun);
@@ -2246,6 +2331,12 @@ void Renderer::SetGlmLoadsAlways(bool enabled) { impl_->glmLoadsAlways_ = enable
 void Renderer::SetGpuUploads(bool enabled) { impl_->gpuUploads_ = enabled; }
 
 void Renderer::SetRuns(bool enabled) { impl_->gpu_.SetRuns(enabled); }
+
+void Renderer::SetBatchedWritebacks(bool enabled) { impl_->glmBatchedWritebacks_ = enabled; }
+
+void Renderer::SetGpuTiming(bool enabled) { impl_->gpu_.SetGpuTiming(enabled); }
+
+void Renderer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->gpu_.SetChunksPerSubmission(chunks); }
 
 void Renderer::SetDoubleBuffering(bool enabled) { impl_->gpu_.SetDoubleBuffering(enabled); }
 

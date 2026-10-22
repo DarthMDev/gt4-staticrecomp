@@ -71,6 +71,7 @@ struct Counters {
     std::uint64_t glmPagesDownloaded = 0;
     std::uint64_t glmUploadMerges = 0;        // EE uploads merged into GLM-owned pages on the GPU (IN-350)
     std::uint64_t glmHostUploads = 0;         // EE uploads written into the GLM by the upload kernel (IN-351)
+    std::uint64_t glmBatchedWritebacks = 0;   // write-backs made as one GLM download (IN-357)
     std::uint64_t displayCaptures = 0;        // display downloads recorded at Flush (IN-355)
     std::uint64_t presentationsFromCapture = 0;  // presentation composes made from a capture (IN-355)
     std::uint64_t glmMergedWords = 0;
@@ -241,6 +242,12 @@ public:
     void SetGpuUploads(bool enabled);
     // IN-352 A/B switch: interlocked chunks batched into runs (one render pass per run).
     void SetRuns(bool enabled);
+    // IN-357 A/B switch: CPU readers get the drawn targets and GLM-owned pages over their span in one download.
+    void SetBatchedWritebacks(bool enabled);
+    // GT4_HW_GPU_TIMING: GPU timestamps per category (GpuCounters().gpuNs).
+    void SetGpuTiming(bool enabled);
+    // IN-358 A/B: mid-frame submissions every `chunks` chunks (0 = off).
+    void SetChunksPerSubmission(std::uint32_t chunks);
     // IN-354 A/B switch: double-buffered GPU submission.
     void SetDoubleBuffering(bool enabled);
     // IN-355: presentation composes show the previous VBlank's display, downloaded asynchronously (no CPU wait

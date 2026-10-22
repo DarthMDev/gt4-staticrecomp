@@ -33,8 +33,15 @@ public:
         // Same shape as the CPU reference: the requested qwords, zero-filled past the real data.
         std::vector<std::uint8_t> data(static_cast<std::size_t>(qwords) * 16u, 0);
         renderer_.ReadFifo(data.data(), data.size());
+        for (const std::uint8_t byte : data) {  // FNV-1a over every reply byte (readback answers are gated too)
+            fifoHash_ = (fifoHash_ ^ byte) * 1099511628211ull;
+        }
+        ++fifoReads_;
         return data;
     }
+    std::uint64_t FifoHash() const { return fifoHash_; }
+    std::uint64_t FifoReads() const { return fifoReads_; }
+
     cpuref::FrameImage EndFrame() override {
         renderer_.Flush();
         FrameOutput out;
@@ -70,6 +77,8 @@ public:
 private:
     Renderer& renderer_;
     ComposeKind kind_;
+    std::uint64_t fifoHash_ = 1469598103934665603ull;
+    std::uint64_t fifoReads_ = 0;
     bool oddField_ = false;
 };
 

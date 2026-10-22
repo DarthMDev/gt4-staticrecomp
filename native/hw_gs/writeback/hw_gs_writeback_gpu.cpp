@@ -255,6 +255,64 @@ struct GpuDrawer::Impl {
   bool wait_all(std::string &error);
   bool create_second_frame(std::string &error);
 
+  // IN-358: the recording is submitted every kChunksPerSubmission chunks (with double buffering), so the GPU
+  // draws the frame while the CPU records the rest of it. Without this nothing reached the GPU before the VBlank
+  // or a readback, and a readback in mid-frame (GT4's lens flare) waited for the GPU to draw the whole scene so far.
+  static constexpr std::uint32_t kChunksPerSubmission = 64;
+  std::uint32_t chunksSinceSubmission = 0;
+  std::uint32_t chunksPerSubmission = kChunksPerSubmission;  // 0 = only at VBlank, ring full and readbacks
+  bool note_chunk(std::string &error) {
+    ++chunksSinceSubmission;
+    if (doubleBuffered && chunksPerSubmission != 0 && chunksSinceSubmission >= chunksPerSubmission) {
+      ++stats.earlySubmissions;
+      return submit(false, error);
+    }
+    return true;
+  }
+
+  // ---- GPU timing (GT4_HW_GPU_TIMING) ----
+  enum TimeCategory : std::uint8_t { kTimePass, kTimeDecode, kTimeClut, kTimeSwizzle, kTimeUpload, kTimeDownload,
+                                     kTimeStart };
+  static constexpr std::uint32_t kQueries = 32768;
+  struct QueryState {
+    VkQueryPool pool = VK_NULL_HANDLE;
+    std::uint32_t count = 0;
+    std::vector<std::uint8_t> categories;
+  };
+  bool gpuTiming = false;
+  double timestampPeriodNs = 1.0;
+  QueryState queries[2];
+  std::uint32_t recordingSet = 0;  // the frame set the open recording belongs to
+
+  void mark(TimeCategory category) {
+    if (!gpuTiming || !recording) return;
+    QueryState &q = queries[recordingSet];
+    if (!q.pool || q.count >= kQueries) return;
+    gt4_hwd_vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, q.pool, q.count);
+    q.categories[q.count] = category;
+    ++q.count;
+  }
+  // The submission of `set` has completed: its timestamps are charged to their categories.
+  void collect_timing(std::uint32_t set) {
+    QueryState &q = queries[set];
+    if (!q.pool || q.count < 2) {
+      q.count = 0;
+      return;
+    }
+    std::vector<std::uint64_t> stamps(q.count);
+    if (gt4_hwd_vkGetQueryPoolResults(device, q.pool, 0, q.count, stamps.size() * sizeof(std::uint64_t), stamps.data(),
+                                      sizeof(std::uint64_t), VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+      for (std::uint32_t i = 1; i < q.count; ++i) {
+        if (stamps[i] < stamps[i - 1] || q.categories[i] >= kTimeStart) continue;
+        stats.gpuNs[q.categories[i]] += static_cast<std::uint64_t>((stamps[i] - stamps[i - 1]) * timestampPeriodNs);
+      }
+      if (stamps[q.count - 1] > stamps[0]) {
+        stats.gpuBusyNs += static_cast<std::uint64_t>((stamps[q.count - 1] - stamps[0]) * timestampPeriodNs);
+      }
+    }
+    q.count = 0;
+  }
+
   // Submission serials (IN-355): serial of the current set's last submission (mirror; FrameResources::serial
   // for the other set) and the highest serial known complete.
   std::uint64_t serial = 0;
@@ -503,6 +561,10 @@ struct GpuDrawer::Impl {
         }
         if (f.fence) gt4_hw_vkDestroyFence(device, f.fence, nullptr);
         f = FrameResources{};
+      }
+      for (QueryState &q : queries) {
+        if (q.pool) gt4_hwd_vkDestroyQueryPool(device, q.pool, nullptr);
+        q = QueryState{};
       }
       for (Resource &buffer : downloads) {
         if (buffer.mapped) gt4_hwd_vkUnmapMemory(device, buffer.memory);
@@ -896,6 +958,7 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
     ++stats.draws;
   }
   gt4_hwd_vkCmdEndRenderPass(cmd);
+  mark(kTimePass);
   full_barrier_with_fragment();  // the run's draws -> anything after (target reads, the next run's atlas writes)
   ++stats.runs;
   stats.runChunks += runDraws.size();
@@ -915,6 +978,7 @@ bool GpuDrawer::Impl::submit(bool wait, std::string &error) {
     recording = false;
     inFlight = true;
     ++stats.submissions;
+    chunksSinceSubmission = 0;
     serial = stats.submissions;
     if (doubleBuffered) {
       save_frame(currentFrame);
@@ -939,6 +1003,7 @@ bool GpuDrawer::Impl::wait_all(std::string &error) {
       }
       other.inFlight = false;
       completedSerial = std::max(completedSerial, other.serial);
+      collect_timing(currentFrame ^ 1u);
     }
   }
   return wait_idle(error);
@@ -1030,6 +1095,20 @@ bool GpuDrawer::Impl::create_second_frame(std::string &error) {
       return false;
     }
   }
+  {
+    VkPhysicalDeviceProperties properties{};
+    gt4_hw_vkGetPhysicalDeviceProperties(physical, &properties);
+    timestampPeriodNs = properties.limits.timestampPeriod > 0.0f ? properties.limits.timestampPeriod : 1.0;
+    VkQueryPoolCreateInfo queryInfo{VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO};
+    queryInfo.queryType = VK_QUERY_TYPE_TIMESTAMP;
+    queryInfo.queryCount = kQueries;
+    for (QueryState &q : queries) {
+      if (!check(gt4_hwd_vkCreateQueryPool(device, &queryInfo, nullptr, &q.pool), "vkCreateQueryPool", error)) {
+        return false;
+      }
+      q.categories.assign(kQueries, kTimeStart);
+    }
+  }
   secondFrameReady = true;
   doubleBuffered = true;
   load_frame(0);
@@ -1041,6 +1120,7 @@ bool GpuDrawer::Impl::wait_idle(std::string &error) {
     if (!check(gt4_hw_vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) return false;
     inFlight = false;
     completedSerial = std::max(completedSerial, serial);
+    collect_timing(currentFrame);
   }
   stagingUsed = 0;
   vertexUsed = 0;
@@ -1056,12 +1136,27 @@ bool GpuDrawer::Impl::begin_recording(std::string &error) {
   begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
   recording = true;
+  recordingSet = currentFrame;
+  if (gpuTiming && queries[recordingSet].pool) {
+    gt4_hwd_vkCmdResetQueryPool(cmd, queries[recordingSet].pool, 0, kQueries);
+    queries[recordingSet].count = 0;
+    mark(kTimeStart);
+  }
   return true;
 }
 
 bool GpuDrawer::Flush(bool wait, std::string &error) { return impl_->submit(wait, error); }
 
 void GpuDrawer::SetRuns(bool enabled) { impl_->runsEnabled = enabled; }
+
+void GpuDrawer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->chunksPerSubmission = chunks; }
+
+void GpuDrawer::SetGpuTiming(bool enabled) {
+  Impl &s = *impl_;
+  std::string error;
+  s.submit(true, error);  // timing starts at the next recording
+  s.gpuTiming = enabled;
+}
 
 void GpuDrawer::SetDoubleBuffering(bool enabled) {
   Impl &s = *impl_;
@@ -1231,6 +1326,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
       texCopy.imageExtent = {chunk.texWidth, chunk.texHeight, 1};
       gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.texels.image, VK_IMAGE_LAYOUT_GENERAL, 1, &texCopy);
     }
+    if (chunk.hasTexture) s.mark(textureFromGlm ? Impl::kTimeDecode : Impl::kTimeUpload);
     std::int32_t x0 = kGpuSurface, y0 = kGpuSurface, x1 = -1, y1 = -1;
     std::uint32_t firstVertex = UINT32_MAX, endVertex = 0;
     for (const GpuDraw &draw : chunk.draws) {
@@ -1256,7 +1352,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     s.stats.executions++;
     s.stats.vertices += chunk.vertices.size();
     s.stats.uploadBytes += stagingNeeded + chunk.vertices.size() * sizeof(GpuVertex);
-    return true;
+    return s.note_chunk(error);
   }
 
   // Earlier chunks of this or a previous submission wrote the frame, depth and texel images (copies and shader
@@ -1396,12 +1492,13 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     }
     gt4_hwd_vkCmdEndRenderPass(s.cmd);
   }
+  s.mark(drawing ? Impl::kTimePass : Impl::kTimeUpload);
 
   s.stats.executions++;
   s.stats.vertices += chunk.vertices.size();
   s.stats.uploadBytes += stagingNeeded + chunk.vertices.size() * sizeof(GpuVertex);
 
-  if (!(chunk.readbackFrame || chunk.readbackDepth)) return true;  // recorded; submitted later (IN-342)
+  if (!(chunk.readbackFrame || chunk.readbackDepth)) return s.note_chunk(error);  // submitted later (IN-342)
 
   // Readback: make the shader and copy writes visible to the copies, copy, then submit and wait.
   VkMemoryBarrier toReadback{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -1463,6 +1560,7 @@ bool GpuDrawer::UploadGlm(const std::uint8_t *localMemory,
   s.full_barrier();  // earlier GLM readers finish before the bytes change
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.staging.buffer, s.glm.buffer, static_cast<std::uint32_t>(copies.size()),
                           copies.data());
+  s.mark(Impl::kTimeUpload);
   s.full_barrier();
   s.stats.uploadBytes += total;
   return true;
@@ -1489,6 +1587,7 @@ bool GpuDrawer::SwizzleToGlm(bool depthSlot, std::uint32_t slot, std::uint32_t b
                                  0u};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
   gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
+  s.mark(Impl::kTimeSwizzle);
   s.full_barrier();
   return true;
 }
@@ -1515,6 +1614,7 @@ bool GpuDrawer::LoadSlotFromGlm(bool depthSlot, std::uint32_t slot, std::uint32_
                                  0u};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
   gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
+  s.mark(Impl::kTimeSwizzle);
   s.full_barrier();
   return true;
 }
@@ -1544,6 +1644,7 @@ bool GpuDrawer::MergeIntoGlm(const std::vector<std::uint32_t> &triples, std::str
   const std::uint32_t push[2] = {base, count};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
   gt4_hwd_vkCmdDispatch(s.cmd, (count + 63) / 64, 1, 1);
+  s.mark(Impl::kTimeUpload);
   s.full_barrier();
   s.stats.uploadBytes += bytes;
   return true;
@@ -1580,6 +1681,7 @@ bool GpuDrawer::UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_
   const std::uint32_t push[9] = {bp, bw, psm, x0, y0, width, pixels, bpp, base};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
   gt4_hwd_vkCmdDispatch(s.cmd, (pixels + 63) / 64, 1, 1);
+  s.mark(Impl::kTimeUpload);
   s.full_barrier();
   s.stats.uploadBytes += byteCount;
   return true;
@@ -1610,6 +1712,7 @@ GpuDrawer::DownloadTicket GpuDrawer::RecordGlmDownload(
     s.full_barrier();
     gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.downloads[buffer].buffer, static_cast<std::uint32_t>(copies.size()),
                             copies.data());
+  s.mark(Impl::kTimeDownload);
     VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
     done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
@@ -1640,6 +1743,7 @@ bool GpuDrawer::CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *
       }
       s.inFlight = false;
       s.completedSerial = std::max(s.completedSerial, s.serial);
+      s.collect_timing(s.currentFrame);
     }
     if (s.completedSerial < ticket.serial && other.serial >= ticket.serial && other.inFlight) {
       if (!check(gt4_hw_vkWaitForFences(s.device, 1, &other.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) {
@@ -1647,6 +1751,7 @@ bool GpuDrawer::CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *
       }
       other.inFlight = false;
       s.completedSerial = std::max(s.completedSerial, other.serial);
+      s.collect_timing(s.currentFrame ^ 1u);
     }
     if (s.completedSerial < ticket.serial) s.completedSerial = ticket.serial;  // neither set in flight: complete
   }
@@ -1680,6 +1785,7 @@ bool GpuDrawer::DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint
   s.full_barrier();
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.readback.buffer, static_cast<std::uint32_t>(copies.size()),
                           copies.data());
+  s.mark(Impl::kTimeDownload);
   VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
   done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
   done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
@@ -1707,6 +1813,7 @@ bool GpuDrawer::LoadClutFromGlm(std::uint32_t cbp, std::uint32_t cpsm, std::uint
   const std::uint32_t push[8] = {cbp, cpsm, csm, csa, eightBit, cbw, cou, cov};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
   gt4_hwd_vkCmdDispatch(s.cmd, eightBit ? 4u : 1u, 1, 1);
+  s.mark(Impl::kTimeClut);
   s.full_barrier();
   return true;
 }
@@ -1721,6 +1828,7 @@ bool GpuDrawer::UploadClut(const std::uint16_t *halfwords, std::string &error) {
   const VkBufferCopy copy{s.stagingUsed, 0, kClutBytes};
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.staging.buffer, s.clut.buffer, 1, &copy);
   s.stagingUsed += kClutBytes;
+  s.mark(Impl::kTimeClut);
   s.full_barrier();
   return true;
 }

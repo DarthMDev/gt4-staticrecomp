@@ -59,6 +59,11 @@
 #define vkMapMemory gt4_hwd_vkMapMemory
 #define vkUnmapMemory gt4_hwd_vkUnmapMemory
 #define vkUpdateDescriptorSets gt4_hwd_vkUpdateDescriptorSets
+#define vkCreateQueryPool gt4_hwd_vkCreateQueryPool
+#define vkDestroyQueryPool gt4_hwd_vkDestroyQueryPool
+#define vkCmdResetQueryPool gt4_hwd_vkCmdResetQueryPool
+#define vkCmdWriteTimestamp gt4_hwd_vkCmdWriteTimestamp
+#define vkGetQueryPoolResults gt4_hwd_vkGetQueryPoolResults
 
 inline PFN_vkAllocateDescriptorSets gt4_hwd_vkAllocateDescriptorSets = nullptr;
 inline PFN_vkAllocateMemory gt4_hwd_vkAllocateMemory = nullptr;
@@ -107,6 +112,11 @@ inline PFN_vkGetPhysicalDeviceMemoryProperties gt4_hwd_vkGetPhysicalDeviceMemory
 inline PFN_vkMapMemory gt4_hwd_vkMapMemory = nullptr;
 inline PFN_vkUnmapMemory gt4_hwd_vkUnmapMemory = nullptr;
 inline PFN_vkUpdateDescriptorSets gt4_hwd_vkUpdateDescriptorSets = nullptr;
+inline PFN_vkCreateQueryPool gt4_hwd_vkCreateQueryPool = nullptr;
+inline PFN_vkDestroyQueryPool gt4_hwd_vkDestroyQueryPool = nullptr;
+inline PFN_vkCmdResetQueryPool gt4_hwd_vkCmdResetQueryPool = nullptr;
+inline PFN_vkCmdWriteTimestamp gt4_hwd_vkCmdWriteTimestamp = nullptr;
+inline PFN_vkGetQueryPoolResults gt4_hwd_vkGetQueryPoolResults = nullptr;
 
 namespace gt4::hw::vulkan_device {
 

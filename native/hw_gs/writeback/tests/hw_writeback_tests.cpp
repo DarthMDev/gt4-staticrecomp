@@ -1566,7 +1566,7 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         cacheCounters.cacheLoads == 0 || cacheCounters.cacheWritebacks == 0 || cacheCounters.cacheEvictions == 0 ||
         referenceCounters.cacheResidentBatches != 0 || cpuSpriteCounters.cpuSpriteBatches == 0 ||
         cacheCounters.gpuClutLoads == 0 || cacheCounters.texturesFromGlm == 0 || cacheCounters.glmParks == 0 ||
-        cacheCounters.glmSlotLoads == 0 || cacheCounters.glmDownloads == 0 || cpuSpriteCounters.glmUploadMerges == 0 ||
+        cacheCounters.glmSlotLoads == 0 || cacheCounters.glmDownloads == 0 || cpuSpriteCounters.glmUploadMerges == 0 || cacheCounters.glmBatchedWritebacks == 0 ||
         cacheCounters.glmHostUploads == 0 ||
         cpuSpriteCounters.glmSlotLoads < cpuSpriteCounters.cacheLoads) {
         std::printf("  the cache paths were not all exercised (fixture is blind)\n");
