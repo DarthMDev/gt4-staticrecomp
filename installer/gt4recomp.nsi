@@ -373,10 +373,26 @@ Section "Install" SecInstall
 
   ; A silent self-update (/S /UPDATE, TASK-091) has no finish page: the launcher starts here instead, as the player
   ; (Explorer), so the player gets the updated program back. Without /UPDATE, or when interactive, nothing changes.
+  ; Diagnostics for the self-update path (TASK-091): what this run saw, appended to data\logs\setup.log.
+  StrCpy $R5 "interactive"
+  ${If} ${Silent}
+    StrCpy $R5 "silent"
+  ${EndIf}
+  CreateDirectory "$INSTDIR\data\logs"
+  ClearErrors
+  FileOpen $R6 "$INSTDIR\data\logs\setup.log" a
+  ${IfNot} ${Errors}
+    FileSeek $R6 0 END
+    FileWrite $R6 "setup ${VERSION}: mode $R5, update flag $UpdateRun, command line: $CMDLINE$\r$\n"
+  ${EndIf}
   ${If} $UpdateRun == 1
   ${AndIf} ${Silent}
     Call StartLauncherAsPlayer
+    ${IfNot} ${Errors}
+      FileWrite $R6 "setup ${VERSION}: launcher start requested through Explorer$\r$\n"
+    ${EndIf}
   ${EndIf}
+  FileClose $R6
 SectionEnd
 
 Section "Uninstall"
