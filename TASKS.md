@@ -117,6 +117,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0 |
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
+| TASK‑095 | Ultrawide: undistorted 2D overlay on the pre-race menu (race lobby), as TASK-080 P2 does for the race HUD | 📋 Planned (owner, 2026-10-22) · study first; idea only |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
@@ -535,6 +536,18 @@ findings afterwards. None is reachable from the launcher, which sets neither var
   pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
+
+### TASK-095 — Ultrawide: undistorted pre-race menu overlay
+Planned (owner, 2026-10-22), idea to study later. At ratios wider than 16:9 (owner screenshot at 3440x1440, Time Trial
+on Trial Mountain) the pre-race menu (race lobby: car name, CV/kg/tires table, Session Record, the icon row, the
+car spec line) is a 2D overlay drawn over the live 3D track. The 3D background is already correct (the TASK-080
+race camera hook widens the projection), but the overlay is stretched horizontally with the screen. In the race
+itself the HUD is right, because TASK-080 P2 draws it as an undistorted, centred layer (RaceDisplay canvas, ELF
+constants). Idea: apply the same inverse horizontal scale to the pre-race menu overlay, centred, keeping the 3D
+stretched. Study first: which code draws this overlay (it is not the race HUD path), whether the P2 canvas hook or
+a per-scene display control covers it, and how the other race menus (pause, results, replay menu) behave. Same
+guard rails as TASK-080 (decision 0071): 16:9 frames stay byte-identical, no save-data writes, hooks listed with
+tests.
 
 ### TASK-091 — Release 1.2.1: per-machine install, data beside the program, user data in AppData
 ✅ **Done (2026-10-22): owner tested and approved; released as v1.2.1.** Branch `task/091-install-layout-121`. Owner decisions 2026-10-22:
