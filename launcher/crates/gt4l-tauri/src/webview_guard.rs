@@ -247,6 +247,8 @@ pub struct Guard {
     pub page: PageReady,
     pub dirs: DataDirs,
     pub user_root: PathBuf,
+    /// When the process started (for the "ui ready after N ms" log line, TASK-091 1.2.1).
+    pub started: std::time::Instant,
 }
 
 /// Why the web view could not show the launcher.
@@ -267,7 +269,7 @@ pub fn ui_ready(app: AppHandle) -> Result<(), String> {
         return Ok(());
     }
     if guard.page.mark() {
-        log(&guard.dirs, "the launcher page drew its first screen");
+        log(&guard.dirs, &format!("the launcher page drew its first screen; ui ready after {} ms", guard.started.elapsed().as_millis()));
     }
     show_main_window(&app);
     Ok(())

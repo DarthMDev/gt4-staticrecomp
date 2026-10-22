@@ -99,6 +99,21 @@ Var WebView2Version
 Var UpdateRun
 ; The result of this run, written to data\logs\setup.log: ok, locked: <file>, extract failed, swap failed ... (TASK-091).
 Var SetupResult
+; TASK-091 (1.2.1): phase timings in ms (GetTickCount deltas), appended to the setup.log line.
+Var TickNow
+Var TickPrev
+Var TickDelta
+Var SetupTimings
+Var DataExisted
+
+; Adds "NAME=<ms since the previous mark>" to $SetupTimings.
+!macro TimingMark NAME
+  System::Call 'kernel32::GetTickCount()i.s'
+  Pop $TickNow
+  IntOp $TickDelta $TickNow - $TickPrev
+  StrCpy $SetupTimings "$SetupTimings ${NAME}=$TickDelta"
+  StrCpy $TickPrev $TickNow
+!macroend
 
 ; Sets $WebView2Version to the installed Evergreen WebView2 Runtime version, or "" when it is missing. Microsoft's rule:
 ; the runtime is present when the "pv" value of its client key exists and is neither empty nor 0.0.0.0. Per-machine
@@ -132,6 +147,9 @@ FunctionEnd
 ; The launcher's self-update passes "/S /UPDATE /D=<install folder>" (TASK-091, updates.rs setup_arguments): silent,
 ; into the folder of the running launcher, which is then started again as the player (see the Install section).
 Function .onInit
+  System::Call 'kernel32::GetTickCount()i.s'
+  Pop $TickPrev
+  StrCpy $SetupTimings ""
   ${IfNot} ${RunningX64}
     MessageBox MB_OK|MB_ICONSTOP "GT4Recomp needs 64-bit Windows." /SD IDOK
     Abort
@@ -169,6 +187,7 @@ Function .onInit
       Call WaitForInstallFree
     ${EndWhile}
   ${EndIf}
+  !insertmacro TimingMark "onInitWait"
 FunctionEnd
 
 ; ---- Safe update helpers (TASK-091, slice 255) ----
@@ -259,7 +278,8 @@ Function LogSetupResult
   FileOpen $R3 "$INSTDIR\data\logs\setup.log" a
   ${IfNot} ${Errors}
     FileSeek $R3 0 END
-    FileWrite $R3 "setup ${VERSION}: mode $R4, update flag $UpdateRun, result: $SetupResult$\r$\n"
+    FileWrite $R3 "setup ${VERSION}: mode $R4, update flag $UpdateRun, result: $SetupResult, timings ms:$SetupTimings$\r$\n"
+    StrCpy $SetupTimings ""
     FileClose $R3
   ${EndIf}
 FunctionEnd
@@ -462,12 +482,10 @@ Function NormalizeFolder
   ${EndIf}
 FunctionEnd
 
-; A reinstall into another folder (TASK-091): the program folder of the previous per-machine install (HKLM InstallDir,
-; 64-bit view) is removed, its program files only, then the folder itself when it is empty. Its data folder is never
-; touched: when it exists, PreviousDataDir (HKLM) names it, and the launcher moves its large data into this install's
-; data folder at its first start. Nothing happens when the previous folder is this one (an update) or does not hold
-; GT4Recomp.exe.
-Function RemovePreviousProgramFolder
+; Sets $R5 to the program folder of the previous per-machine install (HKLM InstallDir, 64-bit view) when it is another
+; folder that holds GT4Recomp.exe. $R5 = "" otherwise (nothing installed, or the same folder: an update).
+Function FindPreviousProgramFolder
+  StrCpy $R5 ""
   SetRegView 64
   ReadRegStr $R5 HKLM "${APP_KEY}" "InstallDir"
   ${If} $R5 == ""
@@ -479,16 +497,35 @@ Function RemovePreviousProgramFolder
   StrCpy $0 $INSTDIR
   Call NormalizeFolder
   ${If} $R5 == $0
+    StrCpy $R5 ""
     Return
   ${EndIf}
   ${IfNot} ${FileExists} "$R5\GT4Recomp.exe"
+    StrCpy $R5 ""
+  ${EndIf}
+FunctionEnd
+
+; Before the launcher starts (TASK-091, 1.2.1): a reinstall into another folder records the previous data folder, which
+; the launcher moves at its first start. That data folder is not touched here.
+Function RecordPreviousDataDir
+  Call FindPreviousProgramFolder
+  ${If} $R5 == ""
     Return
   ${EndIf}
-  DetailPrint "The previous install in $R5 is replaced by $INSTDIR"
   ${If} ${FileExists} "$R5\data\*.*"
     WriteRegStr HKLM "${APP_KEY}" "PreviousDataDir" "$R5\data"
     DetailPrint "Its data folder $R5\data is kept; the launcher moves it into $INSTDIR\data at its first start"
   ${EndIf}
+FunctionEnd
+
+; After the launcher has started (TASK-091, 1.2.1): the program files of the previous per-machine folder go, then the
+; folder itself when it is empty. Its data folder is never touched (see RecordPreviousDataDir).
+Function RemovePreviousProgramFolder
+  Call FindPreviousProgramFolder
+  ${If} $R5 == ""
+    Return
+  ${EndIf}
+  DetailPrint "The previous install in $R5 is replaced by $INSTDIR"
   ; The launcher of the previous install may still be closing: its file is retried briefly.
   StrCpy $R6 0
   ${Do}
@@ -512,6 +549,41 @@ Function RemovePreviousProgramFolder
   RMDir /r "$R5\game"
   ; Not recursive: the folder goes only when it is empty (a data folder that stays keeps it).
   RMDir "$R5"
+FunctionEnd
+
+; $R0 = "1" when the data folder accepts a new file (one is created and deleted again), "0" otherwise (TASK-091, 1.2.1).
+Function ProbeDataWritable
+  StrCpy $R0 "0"
+  ClearErrors
+  FileOpen $R9 "$INSTDIR\data\.write-probe" w
+  ${IfNot} ${Errors}
+    FileClose $R9
+    Delete "$INSTDIR\data\.write-probe"
+    StrCpy $R0 "1"
+  ${EndIf}
+FunctionEnd
+
+; Gives the local Users group Modify on the data folder (inherited by its files), so the launcher can write it as any
+; player. A fresh install runs it; an update runs it only when the probe fails (TASK-091, 1.2.1).
+Function GrantDataModify
+  nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR\data" /grant *${USERS_SID}:(OI)(CI)M'
+  Pop $0
+  ${If} $0 != 0
+    DetailPrint "icacls exit code $0: the data folder may not be writable for players"
+    MessageBox MB_OK|MB_ICONEXCLAMATION "The permissions of $INSTDIR\data could not be set (icacls exit code $0). GT4Recomp will keep its data in your AppData folder instead." /SD IDOK
+  ${EndIf}
+FunctionEnd
+
+; Appends the timings of the phases after the launcher start to setup.log (TASK-091, 1.2.1).
+Function LogTimings
+  CreateDirectory "$INSTDIR\data\logs"
+  ClearErrors
+  FileOpen $R3 "$INSTDIR\data\logs\setup.log" a
+  ${IfNot} ${Errors}
+    FileSeek $R3 0 END
+    FileWrite $R3 "setup ${VERSION}: after the launcher start, timings ms:$SetupTimings$\r$\n"
+    FileClose $R3
+  ${EndIf}
 FunctionEnd
 
 !insertmacro MUI_UNPAGE_WELCOME
@@ -564,6 +636,8 @@ Section "Install" SecInstall
     DetailPrint "WebView2 Runtime $WebView2Version found."
   ${EndIf}
 
+  !insertmacro TimingMark "webview2"
+
   ; Stage (TASK-091): every program file is extracted into .update-staging first. The live files are not touched here.
   SetOutPath "$INSTDIR"
   RMDir /r "$INSTDIR\.update-staging"
@@ -583,6 +657,7 @@ Section "Install" SecInstall
     StrCpy $R2 4
     Call FailInstall
   ${EndIf}
+  !insertmacro TimingMark "stage"
 
   ; Swap (TASK-091): each live item goes to .update-old and its staged copy takes its place. A failed rename rolls back.
   SetOutPath "$INSTDIR"
@@ -605,17 +680,10 @@ Section "Install" SecInstall
     StrCpy $R2 3
     Call FailInstall
   ${EndIf}
-  ; The swap is complete: the marker goes first, then the previous copies and the staging folder. The data folder was
-  ; never touched.
+  ; The swap is complete: the marker goes first. The previous copies and the staging folder go after the launcher
+  ; starts (below). The data folder was never touched.
   Delete "$INSTDIR\.update-swapping"
-  RMDir /r "$INSTDIR\.update-old"
-  RMDir /r "$INSTDIR\.update-staging"
-
-  ; The old per-user program files and a previous per-machine folder go only now, after the new program is in place.
-  Call RemoveOldPerUserInstall
-  ; A reinstall into another folder: the previous program folder goes, its data is recorded for the launcher (TASK-091).
-  Call RemovePreviousProgramFolder
-  SetShellVarContext all
+  !insertmacro TimingMark "swap"
 
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -626,18 +694,30 @@ Section "Install" SecInstall
   FileWrite $0 '{"schema": 1, "gt4recomp": "${VERSION}", "gt4gs": null, "settings_schema": 1}$\r$\n'
   FileClose $0
 
-  ; The large data folder. Created when missing; an upgrade never writes into it. The local Users group gets Modify on
-  ; this folder (inherited by its files) so the launcher, running as any player, can write it; the rest of the program
-  ; folder stays protected.
-  ${IfNot} ${FileExists} "$INSTDIR\data\*.*"
+  !insertmacro TimingMark "files"
+
+  ; The large data folder (TASK-091, 1.2.1). A fresh install creates it and gives the local Users group Modify (inherited
+  ; by its files), so the launcher can write it as any player. An update keeps that grant: it only checks, with a write
+  ; probe, that the folder accepts a file, and runs icacls again only when the probe fails. The rest of the program folder
+  ; stays protected.
+  ${If} ${FileExists} "$INSTDIR\data\*.*"
+    StrCpy $DataExisted 1
+  ${Else}
+    StrCpy $DataExisted 0
+  ${EndIf}
+  ${If} $DataExisted == 0
     CreateDirectory "$INSTDIR\data"
+    Call GrantDataModify
+  ${Else}
+    Call ProbeDataWritable
+    ${If} $R0 != "1"
+      DetailPrint "The data folder does not accept files: its permissions are set again"
+      Call GrantDataModify
+    ${EndIf}
   ${EndIf}
-  nsExec::ExecToLog '"$SYSDIR\icacls.exe" "$INSTDIR\data" /grant *${USERS_SID}:(OI)(CI)M'
-  Pop $0
-  ${If} $0 != 0
-    DetailPrint "icacls exit code $0: the data folder may not be writable for players"
-    MessageBox MB_OK|MB_ICONEXCLAMATION "The permissions of $INSTDIR\data could not be set (icacls exit code $0). GT4Recomp will keep its data in your AppData folder instead." /SD IDOK
-  ${EndIf}
+  !insertmacro TimingMark "data"
+
+  SetShellVarContext all
 
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
   CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\GT4Recomp.exe" "" "$INSTDIR\GT4Recomp.exe" 0
@@ -653,22 +733,41 @@ Section "Install" SecInstall
   WriteRegStr HKLM "${UNINSTALL_KEY}" "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
   WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoModify" 1
   WriteRegDWORD HKLM "${UNINSTALL_KEY}" "NoRepair" 1
-  ; EstimatedSize (KiB): the program files plus the expected data, whatever the data folder holds today.
-  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
-  ${GetSize} "$INSTDIR\data" "/S=0K" $3 $1 $2
-  IntOp $0 $0 - $3
+  !insertmacro TimingMark "shortcuts_registry"
+  ; EstimatedSize (KiB): the program files plus the expected data (TASK-091, 1.2.1). The data folder is not walked: the
+  ; game folder is summed with its subfolders, the top-level files without them (/G=0).
+  ${GetSize} "$INSTDIR\game" "/S=0K" $0 $1 $2
+  ${GetSize} "$INSTDIR" "/M=*.* /S=0K /G=0" $3 $1 $2
+  IntOp $0 $0 + $3
   IntOp $0 $0 + ${EXPECTED_DATA_KB}
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKLM "${UNINSTALL_KEY}" "EstimatedSize" $0
+  ; A reinstall into another folder: the previous data folder is recorded before the launcher starts (TASK-091).
+  Call RecordPreviousDataDir
+  !insertmacro TimingMark "estimated_size"
 
-  ; A silent self-update (/S /UPDATE, TASK-091) has no finish page: the launcher starts here instead, as the player
+  ; The result is logged first. A silent self-update (/S /UPDATE, TASK-091) then starts the launcher here, as the player
   ; (Explorer), so the player gets the updated program back. Without /UPDATE, or when interactive, nothing changes.
   StrCpy $SetupResult "ok"
   Call LogSetupResult
   ${If} $UpdateRun == 1
   ${AndIf} ${Silent}
     Call StartLauncherAsPlayer
+    !insertmacro TimingMark "relaunch_request"
   ${EndIf}
+
+  ; After the start: the previous copies, the old per-user install and a previous program folder. None of these files is
+  ; needed by the launcher that was just started; a failure here is only logged.
+  RMDir /r "$INSTDIR\.update-old"
+  RMDir /r "$INSTDIR\.update-staging"
+  !insertmacro TimingMark "old_copies"
+  SetShellVarContext current
+  Call RemoveOldPerUserInstall
+  !insertmacro TimingMark "old_user_install"
+  Call RemovePreviousProgramFolder
+  SetShellVarContext all
+  !insertmacro TimingMark "previous_folder"
+  Call LogTimings
 SectionEnd
 
 Section "Uninstall"

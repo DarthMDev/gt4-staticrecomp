@@ -30,7 +30,7 @@ mod windows_impl {
 
     /// The launcher's job handle (as an integer, so it can live in a static). Kept open until the process exits.
     static JOB: OnceLock<isize> = OnceLock::new();
-    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE};
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, IsWindowVisible, SetForegroundWindow, ShowWindow, SW_RESTORE};
 
     /// Title of the launcher window (the window title set by the UI shell). Not the game title: the game window is
     /// "Gran Turismo 4", and focusing it from a second launcher would bring the game forward.
@@ -55,10 +55,18 @@ mod windows_impl {
         false
     }
 
-    /// Brings the running launcher's window forward.
+    /// Brings the running launcher's window forward, only when that window is already shown. The window starts hidden
+    /// and shows itself when its page is ready (`ui_ready`); a second start must not show it half ready (TASK-091,
+    /// 1.2.1). When it is still hidden, nothing is shown here: the first launcher shows itself.
     fn focus_running_launcher() {
         // SAFETY: FindWindowW with a null class name looks up the title only.
-        if let Ok(window) = unsafe { FindWindowW(PCWSTR::null(), WINDOW_TITLE) } {
+        let window = unsafe { FindWindowW(PCWSTR::null(), WINDOW_TITLE) }.ok();
+        // SAFETY: a found handle is a window handle returned by FindWindowW; IsWindowVisible only reads its state.
+        let visible = window.map(|window| unsafe { IsWindowVisible(window).as_bool() }).unwrap_or(false);
+        if !super::should_bring_forward(window.is_some(), visible) {
+            return;
+        }
+        if let Some(window) = window {
             // SAFETY: `window` is a window handle returned by FindWindowW.
             unsafe {
                 let _ = ShowWindow(window, SW_RESTORE);
@@ -272,6 +280,33 @@ pub fn command_with_arguments(program: &std::path::Path, arguments: Option<&str>
         }
     }
     command
+}
+
+/// The decision of a second launcher start: bring the running launcher's window forward only when that window exists
+/// and is already shown. A hidden window (not ready yet) is left to the first launcher, which shows it on `ui_ready`.
+pub fn should_bring_forward(window_found: bool, window_visible: bool) -> bool {
+    window_found && window_visible
+}
+
+#[cfg(test)]
+mod single_instance_tests {
+    use super::should_bring_forward;
+
+    #[test]
+    fn a_shown_window_is_brought_forward() {
+        assert!(should_bring_forward(true, true));
+    }
+
+    #[test]
+    fn a_hidden_window_is_not_shown_by_a_second_start() {
+        assert!(!should_bring_forward(true, false), "the page is not ready yet: the first launcher shows it");
+    }
+
+    #[test]
+    fn no_window_means_nothing_to_bring_forward() {
+        assert!(!should_bring_forward(false, false));
+        assert!(!should_bring_forward(false, true));
+    }
 }
 
 #[cfg(not(windows))]

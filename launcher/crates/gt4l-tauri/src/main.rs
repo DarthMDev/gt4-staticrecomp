@@ -24,12 +24,15 @@ mod webview_guard;
 mod visual;
 
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use tauri::Manager;
 
 use gt4l_core::LAUNCHER_VERSION;
 
 fn main() {
+    // TASK-091 (1.2.1 start-up timings): the time from this point to `ui_ready` is logged, with the steps before the window.
+    let started = Instant::now();
     // A second launcher brings the first window forward instead of starting. A restart in safe mode (TASK-091) waits
     // for the launcher that is exiting instead.
     let restarted = webview_guard::restart_requested(std::env::args().skip(1));
@@ -57,12 +60,12 @@ fn main() {
     let dirs = startup.layout.data.clone();
     let _ = std::fs::create_dir_all(dirs.root());
     state::log(&dirs, &format!("GT4Recomp {LAUNCHER_VERSION} starting from {}", exe_dir.display()));
+    state::log(&dirs, &format!("start-up: data layout and relocation ready after {} ms", started.elapsed().as_millis()));
     for line in &startup.log {
         state::log(&dirs, line);
     }
-    for line in relocation::clean_old_install(&exe_dir) {
-        state::log(&dirs, &line);
-    }
+    // The old per-user install clean-up is not needed to draw the first screen: it runs after the window is created
+    // (see the setup closure below).
     if let Err(message) = gt4l_platform::process::join_kill_on_close_job() {
         state::log(&dirs, &format!("the game would not end with the launcher: {message}"));
     }
@@ -88,7 +91,9 @@ fn main() {
         page: webview_guard::PageReady::default(),
         dirs: dirs.clone(),
         user_root,
+        started,
     });
+    let settings_started = Instant::now();
     let mut app_state = match state::AppState::load(dirs.clone(), startup.user.clone(), startup.layout.legacy.local.clone()) {
         Ok(app_state) => app_state,
         Err(message) => {
@@ -96,11 +101,13 @@ fn main() {
             return;
         }
     };
+    state::log(&dirs, &format!("start-up: settings loaded in {} ms", settings_started.elapsed().as_millis()));
     if let Some((notice, problem)) = startup.notice.clone() {
         app_state.migration.notice = notice;
         app_state.migration.problem = problem;
     }
     let legacy = startup.layout.legacy.clone();
+    let clean_exe_dir = exe_dir.clone();
     #[cfg(feature = "visual-check")]
     visual::seed(&app_state);
 
@@ -125,6 +132,15 @@ fn main() {
             std::thread::spawn(move || {
                 relocation::move_large_data(&launch_shared, &legacy);
                 updates::check_on_launch(launch_app, launch_shared);
+            });
+            // TASK-091 (1.2.1): the old per-user install clean-up runs in the background, after the window exists.
+            let clean_dirs = dirs_for_setup.clone();
+            std::thread::spawn(move || {
+                let began = Instant::now();
+                for line in relocation::clean_old_install(&clean_exe_dir) {
+                    state::log(&clean_dirs, &line);
+                }
+                state::log(&clean_dirs, &format!("start-up: old install clean-up finished in {} ms", began.elapsed().as_millis()));
             });
             // TASK-081: probe the processor and Vulkan once in the background, so Play does not wait for the driver
             // to load; a problem is logged here and shown when the player starts setup or Play.
