@@ -4,6 +4,8 @@
 #include "mtvu_runtime.hpp"
 
 #include <cstdio>
+#include <cstring>
+#include <new>
 #include <stdexcept>
 
 namespace {
@@ -63,13 +65,28 @@ void check_defaults_and_switch_off() {
   require(!vblank_journal_active(verify_on), "GT4_MTVU_VERIFY=1 must not activate the VBlank journal");
 }
 
+void check_donor_starts_null() {
+  // 1.2.2 bug: donor mode (CoreGS 1.1) declares `Donor donor;` and never sets post_vsync, so a callback without an
+  // initialiser kept whatever the stack held and vblank_sync called it at the first VBlank. Default-initialise a Donor
+  // over memory filled with 0xFF: every callback must still read null.
+  alignas(Donor) unsigned char storage[sizeof(Donor)];
+  std::memset(storage, 0xFF, sizeof(storage));
+  const Donor *donor = new (storage) Donor;
+  require(donor->worker_vif_packet == nullptr && donor->worker_vif_write == nullptr &&
+              donor->worker_vu_reset == nullptr && donor->render_gs == nullptr && donor->vif1_state_hash == nullptr &&
+              donor->apply_signal == nullptr && donor->post_vsync == nullptr,
+          "a default-initialised Donor must have every callback null");
+  donor->~Donor();
+}
+
 }  // namespace
 
 int main() {
   try {
     check_truth_table();
     check_defaults_and_switch_off();
-    std::puts("native_mtvu_switches: ok (8 combinations, environment defaults)");
+    check_donor_starts_null();
+    std::puts("native_mtvu_switches: ok (8 combinations, environment defaults, null donor callbacks)");
     return 0;
   } catch (const std::exception &error) {
     std::fprintf(stderr, "native_mtvu_switches: %s\n", error.what());

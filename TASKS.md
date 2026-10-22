@@ -542,6 +542,13 @@ the new pins (a slice264 pin set) need an owner decision on the release path. CT
   pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
+- 1.2.2 bug found by the CoreGS 2.0 agent (2026-10-22), fixed here: donor mode (CoreGS 1.1) crashed at the first
+  guest VBlank (exit 0xC0000005; slice262 and slice264 crash, slice240 runs). `mtvu_bridge.cpp` declares `Donor donor;`
+  and sets `post_vsync` only in pcsx2/hw mode; the struct had no initialisers, so `vblank_sync` took the TASK-084
+  deferred path and called stack garbage. Every `Donor` callback is now `= nullptr`; `native_mtvu_switches` checks a
+  Donor default-initialised over 0xFF memory. slice268 (O:\gt4recomp-scratch\slice268-build, the slice264 recipe):
+  CTest 40/40; headless menus with `--renderer donor` and `pcsx2` both run (exit 0). The launcher drops CoreGS 1.1 in
+  1.2.3 (TASK-096); the fix stays as protection for runs without the launcher and the built-in restart path.
 
 ### TASK-091 — Release 1.2.1: per-machine install, data beside the program, user data in AppData
 ✅ **Done (2026-10-22): owner tested and approved; released as v1.2.1.** Branch `task/091-install-layout-121`. Owner decisions 2026-10-22:

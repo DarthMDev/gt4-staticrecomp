@@ -68,19 +68,21 @@ bool queue_privileged(std::uint32_t address, std::uint64_t value);
 std::uint64_t take_privileged_wait_us();
 
 // Donor operations. The worker callbacks run on the worker thread; render_gs runs on the EE thread.
+// Every callback starts null (1.2.2 bug, TASK-092): donor mode never sets post_vsync, and an uninitialised pointer
+// sent vblank_sync into the TASK-084 deferred path and a call through stack garbage at the first VBlank.
 struct Donor {
-  void (*worker_vif_packet)(const std::uint8_t *data, std::uint32_t qwc);
-  void (*worker_vif_write)(std::uint32_t reg, std::uint32_t value);
-  void (*worker_vu_reset)();
-  void (*render_gs)(int path, const std::uint8_t *data, std::uint32_t qwc);
+  void (*worker_vif_packet)(const std::uint8_t *data, std::uint32_t qwc) = nullptr;
+  void (*worker_vif_write)(std::uint32_t reg, std::uint32_t value) = nullptr;
+  void (*worker_vu_reset)() = nullptr;
+  void (*render_gs)(int path, const std::uint8_t *data, std::uint32_t qwc) = nullptr;
   // Hash of the VIF1 state: the worker side (true) or the EE shadow (false). Called on the EE after a sync.
-  std::uint64_t (*vif1_state_hash)(bool worker_side);
+  std::uint64_t (*vif1_state_hash)(bool worker_side) = nullptr;
   // gs::signal (SIGNAL/FINISH/LABEL), applied on the EE when a PATH2/PATH3 packet is accepted (docs section 12).
-  void (*apply_signal)(std::uint32_t reg, std::uint64_t value);
+  void (*apply_signal)(std::uint32_t reg, std::uint64_t value) = nullptr;
   // TASK-084 step 3 (pcsx2 mode only; null in donor mode): posts the VSYNC the client held at the guest VBlank.
   // Returns false when no VSYNC was held. Called from the journal drain, so the record lands after the frame's GIF
   // output in stream order.
-  bool (*post_vsync)();
+  bool (*post_vsync)() = nullptr;
 };
 
 // Starts the worker when settings.enabled (EE thread, before emulation). Verify hashing works either way.
