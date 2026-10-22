@@ -379,3 +379,15 @@ while a game is open, and never touches the owner's card.
 - Ready for owner test 3: License Center 3D car, GT Mode garage and a Time Trial race
   (`& "C:\Antigravity\gt4-wt-027-coregs2\build\hwr-play.ps1"`).
 
+## 2026-10-22 owner test 3, disk, aspect (local slice240, IN-356) - Claude
+
+- Owner test 3: License Center 3D car locked 60 FPS; Nordschleife Time Trial 39-42 FPS, lower facing the sun
+  (lens-flare readbacks: 7 transfer write-backs per frame, each a submit and wait; GIF front end 13.4 ms on heavy
+  frames). The window showed 16:9 squeezed into 4:3.
+- Disk: about 10.7 GB of local intermediates deleted (slice229/230 replay and evidence dirs, slice232/234/237/238
+  evidence, PPM folders of replay outputs, race profile frame dumps, build dirs slice224/225). Kept: the
+  slice228 build and its gate references (slice228 menu dumps and replay hashes, slice233 captures and donor race,
+  slice235 race schedule, slice239 evidence), every dir this file names.
+- IN-356: presentation into the 16:9 rectangle of 13.6; `hw_smoke_window` checks it. Ultrawide / TASK-080 fill:
+  later, in the CoreGS 2.0 ultrawide and UI-layer work (hook: the present rectangle in `record_frame`).
+- Next: M8 readbacks starting with the flare (P0 per-call-site logging), then the GIF front end and the CPU compose.

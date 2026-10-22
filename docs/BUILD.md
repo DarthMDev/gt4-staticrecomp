@@ -2025,3 +2025,7 @@ The owner test script `build/hwr-play.ps1` (local, ignored) now runs this build 
 - Confirmed: headless menu 42/42 dumps byte-identical to slice228; race schedule 42/42 identical to slice235 and inside
   the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
 - Measured: headless race 17-18.6 ms per vsync without dumps (slice238: 25-26 ms). Not measured windowed.
+
+Note (2026-10-22): for disk space the evidence folders of local slices 229, 230, 232, 234, 237 and 238 named above
+were deleted; their results are recorded here and in PROGRESS.md, and the gate references they were compared with
+remain.

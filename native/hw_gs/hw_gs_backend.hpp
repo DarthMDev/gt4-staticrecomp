@@ -56,6 +56,9 @@ struct Stats {
   double compose_us = 0;                // display composition, last frame
   double upload_us = 0;                 // composed image upload, last present
   double present_us = 0;                // swapchain acquire, submit and present, last present
+  // Destination rectangle of the last presented image inside the swapchain (chapter 13.6: always the largest
+  // centred 16:9 rectangle; GT4 draws its forced 16:9 picture anamorphically into 640 x 448, TASK-079).
+  std::uint32_t present_left = 0, present_top = 0, present_width = 0, present_height = 0;
 };
 
 // Renderer counters of chapter 12.7, flattened so the backend header stays free of the write-back

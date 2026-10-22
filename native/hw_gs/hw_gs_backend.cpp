@@ -600,17 +600,19 @@ struct Backend::Impl {
       to_copy.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
       vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
                            nullptr, 1, &to_copy);
-      // Keeps the frame's aspect ratio inside the swapchain (letterbox or pillarbox, centred).
-      const std::uint64_t sw = extent.width, sh = extent.height;
-      const std::uint64_t fw = upload.width, fh = upload.height;
-      std::uint64_t dw = sw, dh = sh;
-      if (fw * sh > fh * sw) {
-        dh = sw * fh / fw;
-      } else {
-        dw = sh * fw / fh;
-      }
-      const std::int32_t left = static_cast<std::int32_t>((sw - dw) / 2);
-      const std::int32_t top = static_cast<std::int32_t>((sh - dh) / 2);
+      // Chapter 13.6 (fixed 16:9, the presentation contract of the default renderer and gt4-gs): the composed
+      // frame (640 x 448 for GT4, an anamorphic 16:9 picture with the game's forced widescreen, TASK-079) is
+      // stretched into the largest centred 16:9 rectangle. Keeping the frame's own 640:448 ratio showed the
+      // 16:9 game squeezed into 4:3 with side bars (owner test 3). Other screen ratios (TASK-080 fill,
+      // ultrawide) are a later CoreGS 2.0 step: this rectangle is the place to change.
+      const PresentRect rect = present_rect_widescreen(extent.width, extent.height);
+      const std::uint32_t dw = rect.width, dh = rect.height;
+      const std::int32_t left = static_cast<std::int32_t>(rect.left);
+      const std::int32_t top = static_cast<std::int32_t>(rect.top);
+      stats.present_left = rect.left;
+      stats.present_top = rect.top;
+      stats.present_width = rect.width;
+      stats.present_height = rect.height;
       VkImageBlit blit{};
       blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
       blit.srcOffsets[1] = {static_cast<std::int32_t>(upload.width), static_cast<std::int32_t>(upload.height), 1};

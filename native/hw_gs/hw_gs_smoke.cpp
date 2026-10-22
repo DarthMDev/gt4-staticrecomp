@@ -170,6 +170,13 @@ int main(int argc, char **argv) {
               static_cast<unsigned long long>(stats.black_presents), static_cast<unsigned long long>(stats.gif_bytes),
               static_cast<unsigned long long>(stats.swapchain_recreations),
               static_cast<unsigned long long>(stats.faults));
+  if (use_window) {
+    // 13.6: the image goes into a 16:9 rectangle (within one pixel of rounding), never the frame's own ratio.
+    const std::uint64_t w = stats.present_width, h = stats.present_height;
+    const bool widescreen = w > 0 && h > 0 && (w * 9 >= h * 16 ? w * 9 - h * 16 : h * 16 - w * 9) <= 16;
+    std::printf("present_rect=%u,%u %ux%u present_16x9=%d\n", stats.present_left, stats.present_top,
+                stats.present_width, stats.present_height, widescreen ? 1 : 0);
+  }
 
   if (use_window) {
     backend.detach_window();

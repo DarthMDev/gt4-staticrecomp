@@ -135,7 +135,7 @@ if(GT4_HW_GS)
     # composed background image (BGCOLOR 0, black) and none is an image-less black present (IN-333).
     add_test(NAME hw_smoke_window COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 120 --window)
     set_tests_properties(hw_smoke_window PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
-        PASS_REGULAR_EXPRESSION "frames=120 presents=120 black_presents=0 gif_bytes=0 swapchain_recreations=0 faults=0")
+        PASS_REGULAR_EXPRESSION "frames=120 presents=120 black_presents=0 gif_bytes=0 swapchain_recreations=0 faults=0\npresent_rect=[0-9]+,[0-9]+ [0-9]+x[0-9]+ present_16x9=1")
     # Fullscreen-style toggles on the hidden window: resize flag, swapchain rebuild, every present under 100 ms.
     add_test(NAME hw_smoke_resize COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1 --resize-toggles 5)
     set_tests_properties(hw_smoke_resize PROPERTIES ENVIRONMENT "GT4_RENDERER=hw" PASS_REGULAR_EXPRESSION "resize_toggles=5")
