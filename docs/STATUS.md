@@ -1,5 +1,11 @@
 # Current Status
 
+## Release 1.2.2 published (2026-10-22, TASK-084, PR #82)
+
+Launcher 1.2.1 at version 1.2.2 with the TASK-084 game build slice262 (owner tested and approved). Installer
+`GT4Recomp-Setup-1.2.2.exe` (28,862,899 bytes, sha256 `6ecab016197fa2869261f9d3fd4ca099cb974b576ff05e1dc7b284847628a35f`),
+gt4-gs unchanged (1.2.0). Release notes: [1.2.2](release-notes/1.2.2.md). Follow-up: TASK-092 (MTVU test switches).
+
 ## Frame cost, runtime side (2026-10-22, TASK-084, DONE, branch `task/084-frame-cost-122`, owner approved)
 
 The study's missing F8 instrumentation and items 2-4 are implemented; item 1 (deferred flare readback) stays out
