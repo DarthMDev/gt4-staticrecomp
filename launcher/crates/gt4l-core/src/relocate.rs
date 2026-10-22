@@ -118,6 +118,12 @@ fn has_files(path: &Path) -> bool {
     }
 }
 
+/// Removes a folder tree that holds no file (the old data folder after its move). Fails, removing nothing more, when
+/// a file exists. A missing folder is done.
+pub fn remove_empty_folder(folder: &Path) -> io::Result<()> {
+    remove_empty_tree(folder)
+}
+
 /// Removes a folder tree that holds no file. Fails, removing nothing more, when a file exists.
 fn remove_empty_tree(folder: &Path) -> io::Result<()> {
     if !folder.exists() {
@@ -634,12 +640,16 @@ pub enum UnitResult {
 
 /// The inputs of the large-data move.
 pub struct LargeMove<'a> {
-    /// The 1.2.0 data folder (`%LOCALAPPDATA%\GT4Recomp`).
+    /// The folder the large data moves from, in the layout of 1.2.0 (`%LOCALAPPDATA%\GT4Recomp`) or of an earlier
+    /// 1.2.1 install's data folder (`PreviousDataDir`): disc, prepared, gs, runtime, sessions, logs, Textures.
     pub local: &'a Path,
     /// The 1.2.1 data folder (`<install>\data`).
     pub data_root: &'a Path,
-    /// Where 1.2.0 custom textures may be (`Documents\Gran Turismo 4\Textures` and the renamed folder's).
+    /// Where custom textures may be: under the source folder (`Textures`) or, for 1.2.0, in `Documents`.
     pub textures_sources: Vec<PathBuf>,
+    /// The folder under `logs` that keeps a source's logs, sessions and runtime card when the new folder has its own
+    /// (`from-1.2.0`, or `from-previous-install`).
+    pub old_copy_folder: &'a str,
     pub marker: PathBuf,
     pub game_running: bool,
     pub stamp: &'a str,
@@ -766,7 +776,7 @@ fn move_game_files(request: &LargeMove<'_>, ops: &FsOps<'_>, progress: &mut dyn 
     }
     if names.iter().any(|name| has_files(&request.data_root.join(name))) {
         return UnitResult::Kept(format!(
-            "{} already has game files; the 1.2.0 copy in {} is not used and may be deleted",
+            "{} already has game files; the older copy in {} is not used and may be deleted",
             request.data_root.display(),
             request.local.display()
         ));
@@ -892,13 +902,13 @@ pub fn migrate_large_data(request: &LargeMove<'_>, ops: &FsOps<'_>, progress: &m
         if has_files(&destination) {
             if !overflow {
                 return UnitResult::Kept(format!(
-                    "{} already has it; the 1.2.0 copy in {} is not used and may be deleted",
+                    "{} already has it; the older copy in {} is not used and may be deleted",
                     destination.display(),
                     source.display()
                 ));
             }
             // Logs, sessions and the runtime card of 1.2.0 are kept for reference beside the new ones.
-            destination = request.data_root.join("logs").join("from-1.2.0").join(name);
+            destination = request.data_root.join("logs").join(request.old_copy_folder).join(name);
             if has_files(&destination) {
                 return UnitResult::Kept(format!("{} already has it", destination.display()));
             }

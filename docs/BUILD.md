@@ -2127,3 +2127,47 @@ Review fixes on slice 250 (all in `task/091-install-layout-121`):
   `private\slice251-installer\GT4Recomp-Setup-1.2.1-test.exe`): 28,844,147 bytes, sha256
   `102753faf5bbdd77a25f35d224d0d6079f8d73100e1453389394f3bef4d320ab`. 7-Zip extraction: `GT4Recomp.exe` equals the
   new build, `SDL3.dll` equals its source; the extraction folder was deleted. Not run on this PC.
+
+## Slice 252 - TASK-091 release 1.2.1: silent self-update, reinstall moves the data
+
+Changes (branch `task/091-install-layout-121`):
+
+- Launcher self-update (`gt4l-tauri` `updates.rs`, `setup_arguments`): when the running `GT4Recomp.exe` is in the
+  registered install folder (HKLM `Software\GT4Recomp` `InstallDir`, 64-bit view; case-insensitive, one trailing
+  backslash ignored), the setup starts with `/S /UPDATE /D=<folder of GT4Recomp.exe>`. Elsewhere (a portable copy,
+  no registration) it starts with no arguments, interactively. The arguments reach `ShellExecuteExW` (`lpParameters`,
+  `runas`) and the direct start (`raw_arg`, so `/D=` stays last and unquoted). The Explorer fallback cannot pass them:
+  that update stays interactive and the log says so (`gt4l-platform` `process.rs`, `start_setup`).
+- Installer (`installer/gt4recomp.nsi`): `/UPDATE` (FileFunc `GetOptions`) together with `${Silent}` starts the
+  launcher as the player (Explorer) at the end of the install section. A reinstall into another folder: the previous
+  program folder (HKLM `InstallDir`, when it is another folder and holds `GT4Recomp.exe`) loses `GT4Recomp.exe`,
+  `SDL3.dll`, `NOTICE.md`, `LICENSE.txt`, `version.json`, `uninstall.exe` and `game\`, then a non-recursive `RMDir`
+  (it stays while its `data` folder is there). Its `data` folder is never touched: HKLM `Software\GT4Recomp`
+  `PreviousDataDir` = `<old folder>\data` is written when that folder exists. The old Start-menu shortcuts are
+  rewritten by the install itself. All three `MessageBox` calls have `/SD IDOK`.
+- Launcher, first start (`gt4l-platform` `install_record.rs` reads `PreviousDataDir`; `gt4l-core` `paths.rs` and
+  `relocate.rs`; `gt4l-tauri` `relocation.rs`): the previous data folder is a read layer until its large data has
+  moved, and a source of the large-data move, run after the 1.2.0 one. The move is the 1.2.0 move (units `game files`,
+  `gt4-gs`, `runtime`, `sessions`, `logs`, `textures`; same volume a rename, another volume a checked copy, never while
+  the game runs, a failure keeps the old place and retries). Its marker is per source folder:
+  `<data>\migration-from-<key>.json`, the key being the first 8 bytes of the SHA-256 of the normalised old path
+  (`DataDirs::previous_data_marker`). Logs, sessions and the runtime card that collide go to `logs\from-previous-install`.
+  An old data folder left empty is removed afterwards (`relocate::remove_empty_folder`).
+- Tests: `process.rs` (arguments reach both starts; Explorer logs that it cannot pass them; the command line stays one
+  raw string), `updates.rs` (registered, portable and no registration), `paths.rs` (previous data is a read layer with
+  its own marker; the test overrides keep it out), `gt4l-core\tests\relocate.rs` (same volume; another volume; the
+  marker stops a second run; a missing folder is skipped; game files already in the install folder are kept and the
+  old logs go beside them). 343 tests in all (was 332).
+
+Builds (all paths absolute):
+
+- Launcher: `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target`, `GT4_SDL3_ROOT` as in slice 250, and
+  `powershell -ExecutionPolicy Bypass -File launcher\tools\build-release.ps1`. `GT4Recomp.exe` 16,333,312 bytes,
+  sha256 `0b8d004b2a99273b382c15a79c12554d761d384bbdca5f299f2357cbe5953a83`, at
+  `O:\gt4recomp-scratch\slice250-cargo-target\release\GT4Recomp.exe`.
+- Installer: the slice 251 recipe with `/DLAUNCHER_EXE` pointing at that build, and
+  `makensis` from `C:\Program Files (x86)\NSIS`:
+  `/DOUTFILE=C:\Antigravity\gt4-staticrecomp\private\slice252-installer\GT4Recomp-Setup-1.2.1-test.exe`
+  gives 28,845,242 bytes, sha256 `2FD43DCF6D18FDAE981AF0CD22D79E259E7175ED08DFF41AE3007802A1CF42FF`. 7-Zip
+  extraction: `GT4Recomp.exe` equals the release build (extraction folder deleted). Not run on this PC.
+- Checks: `cargo test --workspace` (from `launcher\`): 343 passed, 0 failed, 4 ignored.

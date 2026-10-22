@@ -20,6 +20,9 @@
 ; - User data per Windows user in %APPDATA%\GT4Recomp (settings, controls, saves, replays), written by the launcher.
 ; The launcher, not this script, moves the files of 1.2.0 (%LOCALAPPDATA%\GT4Recomp, Documents\Gran Turismo 4) at its
 ; first start, running as the player. This script only removes the old per-user program install (never its data).
+; A reinstall into another folder (TASK-091, slice 252) removes the previous program folder's files and records its
+; data folder as PreviousDataDir (HKLM); the launcher moves that data at its first start. A self-update runs silently
+; with /S /UPDATE /D=<install folder> and starts the launcher again as the player.
 
 !ifndef VERSION
   !define VERSION "1.2.1"
@@ -88,6 +91,8 @@ BrandingText "${APP_NAME} ${VERSION}"
 Var DeleteDataCheckbox
 Var DeleteDataState
 Var WebView2Version
+; 1 when /UPDATE was given: the launcher's self-update (TASK-091). Silent with /S, it starts the launcher when done.
+Var UpdateRun
 
 ; Sets $WebView2Version to the installed Evergreen WebView2 Runtime version, or "" when it is missing. Microsoft's rule:
 ; the runtime is present when the "pv" value of its client key exists and is neither empty nor 0.0.0.0. Per-machine
@@ -118,6 +123,8 @@ FunctionEnd
 
 ; The launcher starts this setup from an update and exits at once. A short pause lets it release GT4Recomp.exe
 ; before the files are replaced. An earlier per-machine install is upgraded in its own folder (unless /D= was given).
+; The launcher's self-update passes "/S /UPDATE /D=<install folder>" (TASK-091, updates.rs setup_arguments): silent,
+; into the folder of the running launcher, which is then started again as the player (see the Install section).
 Function .onInit
   Sleep 1500
   ${IfNot} ${RunningX64}
@@ -129,6 +136,13 @@ Function .onInit
   ${If} $0 != ""
   ${AndIf} $INSTDIR == "$PROGRAMFILES64\${INTERNAL_NAME}"
     StrCpy $INSTDIR $0
+  ${EndIf}
+  StrCpy $UpdateRun 0
+  ClearErrors
+  ${GetParameters} $R0
+  ${GetOptions} $R0 "/UPDATE" $R1
+  ${IfNot} ${Errors}
+    StrCpy $UpdateRun 1
   ${EndIf}
 FunctionEnd
 
@@ -208,6 +222,70 @@ Function RemoveOldPerUserInstall
   DeleteRegKey HKCU "${APP_KEY}"
 FunctionEnd
 
+; Normalises the folder in $0 for comparisons: one trailing backslash is dropped (a root such as C:\ keeps it). The
+; comparisons of NSIS strings (StrCmp, LogicLib ==) ignore case.
+Function NormalizeFolder
+  StrLen $1 $0
+  ${If} $1 > 3
+    StrCpy $2 $0 1 -1
+    ${If} $2 == "\"
+      StrCpy $0 $0 -1
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; A reinstall into another folder (TASK-091): the program folder of the previous per-machine install (HKLM InstallDir,
+; 64-bit view) is removed, its program files only, then the folder itself when it is empty. Its data folder is never
+; touched: when it exists, PreviousDataDir (HKLM) names it, and the launcher moves its large data into this install's
+; data folder at its first start. Nothing happens when the previous folder is this one (an update) or does not hold
+; GT4Recomp.exe.
+Function RemovePreviousProgramFolder
+  SetRegView 64
+  ReadRegStr $R5 HKLM "${APP_KEY}" "InstallDir"
+  ${If} $R5 == ""
+    Return
+  ${EndIf}
+  StrCpy $0 $R5
+  Call NormalizeFolder
+  StrCpy $R5 $0
+  StrCpy $0 $INSTDIR
+  Call NormalizeFolder
+  ${If} $R5 == $0
+    Return
+  ${EndIf}
+  ${IfNot} ${FileExists} "$R5\GT4Recomp.exe"
+    Return
+  ${EndIf}
+  DetailPrint "The previous install in $R5 is replaced by $INSTDIR"
+  ${If} ${FileExists} "$R5\data\*.*"
+    WriteRegStr HKLM "${APP_KEY}" "PreviousDataDir" "$R5\data"
+    DetailPrint "Its data folder $R5\data is kept; the launcher moves it into $INSTDIR\data at its first start"
+  ${EndIf}
+  ; The launcher of the previous install may still be closing: its file is retried briefly.
+  StrCpy $R6 0
+  ${Do}
+    ClearErrors
+    Delete "$R5\GT4Recomp.exe"
+    ${IfNot} ${Errors}
+      ${Break}
+    ${EndIf}
+    IntOp $R6 $R6 + 1
+    ${If} $R6 >= 10
+      DetailPrint "$R5\GT4Recomp.exe is in use; it stays there"
+      ${Break}
+    ${EndIf}
+    Sleep 500
+  ${Loop}
+  Delete "$R5\SDL3.dll"
+  Delete "$R5\NOTICE.md"
+  Delete "$R5\LICENSE.txt"
+  Delete "$R5\version.json"
+  Delete "$R5\uninstall.exe"
+  RMDir /r "$R5\game"
+  ; Not recursive: the folder goes only when it is empty (a data folder that stays keeps it).
+  RMDir "$R5"
+FunctionEnd
+
 !insertmacro MUI_UNPAGE_WELCOME
 UninstPage custom un.DataPageCreate un.DataPageLeave
 !insertmacro MUI_UNPAGE_INSTFILES
@@ -217,6 +295,8 @@ UninstPage custom un.DataPageCreate un.DataPageLeave
 Section "Install" SecInstall
   SetRegView 64
   Call RemoveOldPerUserInstall
+  ; A reinstall into another folder: the previous program folder goes, its data is recorded for the launcher (TASK-091).
+  Call RemovePreviousProgramFolder
   SetShellVarContext all
 
   ; The launcher needs the Microsoft Edge WebView2 Runtime (built into Windows 11, usually present on Windows 10).
@@ -290,6 +370,13 @@ Section "Install" SecInstall
   IntOp $0 $0 + ${EXPECTED_DATA_KB}
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKLM "${UNINSTALL_KEY}" "EstimatedSize" $0
+
+  ; A silent self-update (/S /UPDATE, TASK-091) has no finish page: the launcher starts here instead, as the player
+  ; (Explorer), so the player gets the updated program back. Without /UPDATE, or when interactive, nothing changes.
+  ${If} $UpdateRun == 1
+  ${AndIf} ${Silent}
+    Call StartLauncherAsPlayer
+  ${EndIf}
 SectionEnd
 
 Section "Uninstall"

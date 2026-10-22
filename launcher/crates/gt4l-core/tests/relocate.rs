@@ -8,7 +8,7 @@ use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
-use gt4l_core::paths::{LegacyLocations, UserDirs, UserRootSource, MOVED_USER_FOLDER_NAME, USER_FOLDER_NAME};
+use gt4l_core::paths::{DataDirs, LegacyLocations, UserDirs, UserRootSource, MOVED_USER_FOLDER_NAME, USER_FOLDER_NAME};
 use gt4l_core::relocate::{
     self, marker_status, FsOps, LargeMove, LargeOutcome, UnitResult, UserMove, UserOutcome, ERROR_NOT_SAME_DEVICE, KEPT_FOLDER_NAME,
     README_NAME,
@@ -50,7 +50,11 @@ impl Fixture {
     }
 
     fn legacy(&self) -> LegacyLocations {
-        LegacyLocations { local: Some(self.local.clone()), documents_player: Some(self.documents.join(USER_FOLDER_NAME)) }
+        LegacyLocations {
+            local: Some(self.local.clone()),
+            documents_player: Some(self.documents.join(USER_FOLDER_NAME)),
+            previous_data: None,
+        }
     }
 
     fn user(&self) -> UserDirs {
@@ -106,6 +110,7 @@ impl Fixture {
             game_running,
             stamp: STAMP,
             check_game_files: check,
+            old_copy_folder: "from-1.2.0",
         }
     }
 }
@@ -488,4 +493,120 @@ fn large_data_is_not_moved_while_the_game_runs() {
     assert!(matches!(outcome, LargeOutcome::Deferred(_)), "{outcome:?}");
     assert!(fixture.local.join("disc").exists() && !fixture.data.join("disc").exists());
     let _ = &fixture.base;
+}
+
+// Previous install's data (a reinstall into another folder, TASK-091) ---------------------------------------------------
+
+/// The large data an earlier install left in its data folder: the same layout as 1.2.0's large data, with the
+/// textures directly under the folder.
+fn previous_data(previous: &Path) {
+    write(&previous.join("disc").join("SCUS-97328.iso"), &vec![0x6Bu8; 2 * 1024 * 1024 + 5]);
+    write(&previous.join("prepared").join("prepare.json"), b"{\"image\":\"SCUS-97328.iso\"}");
+    write(&previous.join("prepared").join("CORE.GT4"), b"core");
+    write(&previous.join("gs").join("current.txt"), b"1.2.1");
+    write(&previous.join("gs").join("1.2.1").join("gt4-gs.exe"), b"gs");
+    write(&previous.join("runtime").join("card.ps2"), &[2u8; 512]);
+    write(&previous.join("logs").join("launcher.log"), b"previous log");
+    write(&previous.join("Textures").join("replacements").join("b.png"), b"previous texture");
+}
+
+/// The move of `previous` into the fixture's data folder, with its own marker.
+fn previous_move<'a>(fixture: &'a Fixture, previous: &'a Path, check: &'a dyn Fn(&Path, &BTreeMap<PathBuf, String>) -> Result<(), String>) -> LargeMove<'a> {
+    LargeMove {
+        local: previous,
+        data_root: &fixture.data,
+        textures_sources: vec![previous.join("Textures")],
+        marker: DataDirs::new(fixture.data.clone()).previous_data_marker(previous),
+        game_running: false,
+        stamp: STAMP,
+        check_game_files: check,
+        old_copy_folder: "from-previous-install",
+    }
+}
+
+#[test]
+fn a_previous_data_folder_moves_on_the_same_volume_and_is_emptied() {
+    let fixture = Fixture::new("previous-same-volume");
+    let previous = fixture.base.join("Old Install").join("data");
+    previous_data(&previous);
+    let check = |folder: &Path, hashes: &BTreeMap<PathBuf, String>| {
+        assert!(hashes.is_empty(), "a rename copies nothing");
+        assert!(folder.join("prepared").join("prepare.json").exists());
+        Ok(())
+    };
+    let outcome = relocate::migrate_large_data(&previous_move(&fixture, &previous, &check), &FsOps::real(), &mut |_| {});
+    assert!(!outcome.failed(), "{outcome:?}");
+    assert!(outcome.moved());
+    assert_eq!(read(&fixture.data.join("disc").join("SCUS-97328.iso")).len(), 2 * 1024 * 1024 + 5);
+    assert_eq!(read(&fixture.data.join("gs").join("current.txt")), b"1.2.1");
+    assert_eq!(read(&fixture.data.join("runtime").join("card.ps2")), vec![2u8; 512]);
+    assert_eq!(read(&fixture.data.join("Textures").join("replacements").join("b.png")), b"previous texture");
+    assert!(no_file_under(&previous), "the previous folder gives up every file");
+    assert_eq!(marker_status(&DataDirs::new(fixture.data.clone()).previous_data_marker(&previous)).as_deref(), Some("migrated"));
+    // The 1.2.0 marker is a different file: the previous install does not count as a 1.2.0 move.
+    assert!(!fixture.data.join("migration-1.2.1.json").exists());
+}
+
+#[test]
+fn a_previous_data_folder_moves_across_volumes_checked_and_then_removed() {
+    let fixture = Fixture::new("previous-cross-volume");
+    let previous = fixture.base.join("Old Install").join("data");
+    previous_data(&previous);
+    let iso_bytes = read(&previous.join("disc").join("SCUS-97328.iso"));
+    let check = |_: &Path, hashes: &BTreeMap<PathBuf, String>| {
+        if hashes.contains_key(&Path::new("disc").join("SCUS-97328.iso")) {
+            Ok(())
+        } else {
+            Err("the disc image was not copied".to_string())
+        }
+    };
+    let ops = FsOps { rename: &cross_volume_rename, open: &real_open };
+    let outcome = relocate::migrate_large_data(&previous_move(&fixture, &previous, &check), &ops, &mut |_| {});
+    assert!(!outcome.failed(), "{outcome:?}");
+    assert_eq!(read(&fixture.data.join("disc").join("SCUS-97328.iso")), iso_bytes);
+    assert_eq!(read(&fixture.data.join("Textures").join("replacements").join("b.png")), b"previous texture");
+    assert!(no_file_under(&previous), "the source is deleted after the checked copy");
+    assert!(!fixture.data.join(".game-files.migrating").exists());
+}
+
+#[test]
+fn the_marker_stops_a_second_move_of_the_same_previous_folder() {
+    let fixture = Fixture::new("previous-marker");
+    let previous = fixture.base.join("Old Install").join("data");
+    previous_data(&previous);
+    let outcome = relocate::migrate_large_data(&previous_move(&fixture, &previous, &no_check), &FsOps::real(), &mut |_| {});
+    assert!(!outcome.failed(), "{outcome:?}");
+    // Something left behind later is not taken: the marker says this folder was done.
+    write(&previous.join("logs").join("late.log"), b"late");
+    let again = relocate::migrate_large_data(&previous_move(&fixture, &previous, &no_check), &FsOps::real(), &mut |_| {});
+    assert_eq!(again, LargeOutcome::AlreadyMoved);
+    assert!(previous.join("logs").join("late.log").exists());
+    assert!(!fixture.data.join("logs").join("late.log").exists());
+}
+
+#[test]
+fn a_missing_previous_folder_is_skipped_without_a_marker() {
+    let fixture = Fixture::new("previous-missing");
+    let previous = fixture.base.join("Never There").join("data");
+    let marker = DataDirs::new(fixture.data.clone()).previous_data_marker(&previous);
+    let outcome = relocate::migrate_large_data(&previous_move(&fixture, &previous, &no_check), &FsOps::real(), &mut |_| {});
+    assert!(!outcome.failed());
+    assert!(outcome.units().is_empty(), "{outcome:?}");
+    assert!(!marker.exists(), "nothing to mark: the folder may appear later");
+}
+
+#[test]
+fn game_files_already_in_the_install_folder_are_kept_and_old_logs_go_beside_them() {
+    let fixture = Fixture::new("previous-existing");
+    let previous = fixture.base.join("Old Install").join("data");
+    previous_data(&previous);
+    write(&fixture.data.join("prepared").join("prepare.json"), b"newer");
+    write(&fixture.data.join("logs").join("launcher.log"), b"new log");
+    let outcome = relocate::migrate_large_data(&previous_move(&fixture, &previous, &no_check), &FsOps::real(), &mut |_| {});
+    assert!(!outcome.failed(), "{outcome:?}");
+    assert!(matches!(&outcome.units()[0].1, UnitResult::Kept(_)), "{outcome:?}");
+    assert_eq!(read(&fixture.data.join("prepared").join("prepare.json")), b"newer");
+    assert!(previous.join("disc").join("SCUS-97328.iso").exists(), "the older copy is left in place");
+    assert_eq!(read(&fixture.data.join("logs").join("launcher.log")), b"new log");
+    assert_eq!(read(&fixture.data.join("logs").join("from-previous-install").join("logs").join("launcher.log")), b"previous log");
 }

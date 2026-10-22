@@ -108,9 +108,15 @@ body.is-home.input-keys #hints { display: none; }
 .toast.is-error { background: var(--error); color: var(--white); }
 /* TASK-091: progress of the first-start move of the game files (not focusable, never covers the hint bar). */
 .migration {
-  position: absolute; left: 24px; bottom: 60px; padding: 8px 14px; background: var(--paper); color: var(--paper-ink);
-  border-radius: 3px; pointer-events: none; z-index: 40; max-width: 50%;
+  position: absolute; right: 24px; bottom: 60px; width: 340px; padding: 10px 14px; background: var(--paper);
+  color: var(--paper-ink); border-radius: 3px; pointer-events: none; z-index: 40;
 }
+.migration-head { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9em; }
+.migration-bar { margin-top: 8px; height: 4px; border-radius: 2px; background: rgba(0, 0, 0, 0.15); overflow: hidden; }
+.migration-fill { height: 100%; width: 0; background: currentColor; transition: width 0.4s ease; }
+/* A move inside one drive is a rename with no byte count: the bar slides instead of filling. */
+.migration-bar.indeterminate .migration-fill { width: 30%; animation: migration-slide 1.2s ease-in-out infinite; }
+@keyframes migration-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
 /* ---------- buttons ---------- */
 .btn {

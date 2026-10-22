@@ -518,10 +518,11 @@ interlaced fallback stays. Owner decisions open: progressive by default, CT16 or
   old per-user install; the installer removes the old per-user program install;
 - the self-update starts the elevated setup (`runas`); uninstall removes `<install>\data`, and the "also delete" box
   acts only for the current user.
+- the setup of a self-update from 1.2.1 on is silent (`/S /UPDATE /D=<install folder>`, one UAC prompt) and the launcher starts again as the player; a reinstall into another folder records the old data folder (`PreviousDataDir`) and the launcher moves its large data at its first start.
 
 Acceptance: `cargo test --workspace` green with the new path, move, cleanup, elevation and settings tests; UI checks;
 installer compiled and extracted; owner test of a fresh install, the 1.2.0 update, the move, a portable copy and the
-uninstall. Result so far: 330 Rust tests passed; owner test installer `private/slice250-installer/GT4Recomp-Setup-1.2.1-test.exe`.
+uninstall. Result so far: 330 Rust tests passed; owner test installer `private/slice250-installer/GT4Recomp-Setup-1.2.1-test.exe`. Slice 251 (review fixes): 332 passed. Slice 252: 343 passed; installer `private\slice252-installer\GT4Recomp-Setup-1.2.1-test.exe` (28,845,242 bytes, sha256 `2FD43DCF6D18FDAE981AF0CD22D79E259E7175ED08DFF41AE3007802A1CF42FF`), not run yet: owner test of the silent update from 1.2.1 and of a reinstall into another folder (data moved from `PreviousDataDir`).
 Details: BUILD.md slice 250, [release notes 1.2.1](docs/release-notes/1.2.1.md).
 
 ### TASK-090 — CoreGS 3.0: modern render pipeline

@@ -13,9 +13,15 @@
 //! Launchers 1.0.0 to 1.2.0 kept the large data in `%LOCALAPPDATA%\GT4Recomp` and the save library in
 //! `Documents\Gran Turismo 4`. The launcher moves both at its first start ([`crate::relocate`]); until that has
 //! happened (a failed copy, or the game running), the old places stay in use ([`LegacyLocations`]).
+//!
+//! A reinstall into another folder leaves the data of the old folder behind; the setup records it as
+//! `PreviousDataDir` (HKLM), and the launcher moves its large data the same way at its first start
+//! ([`LegacyLocations::previous_data`]). Until then that folder is a read layer too.
 
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
+
+use sha2::{Digest, Sha256};
 
 /// Development and tests: replaces `<install>\data` (no read-only layer, no 1.2.0 folders unless given).
 pub const DATA_DIR_OVERRIDE_VAR: &str = "GT4RECOMP_DATA_DIR";
@@ -192,6 +198,19 @@ impl DataDirs {
     pub fn relocation_marker(&self) -> PathBuf {
         self.root.join("migration-1.2.1.json")
     }
+
+    /// Marker of the move of the large data of an earlier install's data folder (`previous`). One marker per source
+    /// folder, named from a hash of its path, so the move runs once per folder and a second reinstall elsewhere
+    /// gets its own.
+    pub fn previous_data_marker(&self, previous: &Path) -> PathBuf {
+        self.root.join(format!("migration-from-{}.json", source_key(previous)))
+    }
+}
+
+/// A short, stable key of a folder: the first 16 hex digits of the SHA-256 of its normalised path.
+fn source_key(folder: &Path) -> String {
+    let digest = Sha256::digest(normalized(folder).join("\\").as_bytes());
+    digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect()
 }
 
 /// How the user data folder was found.
@@ -316,6 +335,9 @@ pub struct LegacyLocations {
     pub local: Option<PathBuf>,
     /// `Documents\Gran Turismo 4`: Saves, Replays and Textures.
     pub documents_player: Option<PathBuf>,
+    /// The data folder of an earlier 1.2.1 install in another folder (`PreviousDataDir`, TASK-091). Its large data is
+    /// moved like the 1.2.0 folder's, with a marker of its own per folder.
+    pub previous_data: Option<PathBuf>,
 }
 
 impl LegacyLocations {
@@ -345,10 +367,13 @@ pub struct LayoutInputs {
     pub local_app_data: Option<PathBuf>,
     /// The Documents known folder as Windows reports it (`None` when the call failed).
     pub known_documents: Option<PathBuf>,
+    /// The `PreviousDataDir` the setup recorded (HKLM), read by the caller; ignored under the test overrides.
+    pub previous_data: Option<PathBuf>,
 }
 
 impl LayoutInputs {
-    /// Reads the variables of this process. `known_documents` comes from the Windows known-folder API.
+    /// Reads the variables of this process. `known_documents` comes from the Windows known-folder API. The caller
+    /// sets `previous_data` from the registry (`gt4l_platform::install_record`).
     pub fn from_environment(exe_dir: &Path, known_documents: Option<PathBuf>) -> LayoutInputs {
         let non_empty = |name: &str| std::env::var_os(name).filter(|value| !value.is_empty());
         LayoutInputs {
@@ -360,6 +385,7 @@ impl LayoutInputs {
             app_data: non_empty("APPDATA").map(PathBuf::from),
             local_app_data: non_empty("LOCALAPPDATA").map(PathBuf::from),
             known_documents,
+            previous_data: None,
         }
     }
 }
@@ -403,7 +429,9 @@ pub fn resolve_layout(inputs: &LayoutInputs, writable: &dyn Fn(&Path) -> bool) -
             .map(|documents| documents.join(USER_FOLDER_NAME)),
         (None, true) => None,
     };
-    let legacy = LegacyLocations { local: local.clone(), documents_player };
+    // The previous install's data is taken over only outside the test overrides (they name every folder themselves).
+    let previous_data = if testing { None } else { inputs.previous_data.clone() };
+    let legacy = LegacyLocations { local: local.clone(), documents_player, previous_data: previous_data.clone() };
 
     let mut data = match &inputs.data_override {
         Some(value) => DataDirs::new(PathBuf::from(value)),
@@ -431,6 +459,10 @@ pub fn resolve_layout(inputs: &LayoutInputs, writable: &dyn Fn(&Path) -> bool) -
     // Until its move has finished, the 1.2.0 folder still serves the game files and the renderer it holds.
     if let Some(local) = &local {
         data.add_read_layer(local.clone());
+    }
+    // The same for the data folder of an earlier install in another folder, until its large data has moved.
+    if let Some(previous) = &previous_data {
+        data.add_read_layer(previous.clone());
     }
 
     let (user_root, user_source) = match (&inputs.user_override, &inputs.data_override) {
@@ -538,6 +570,26 @@ mod tests {
             known_documents: None,
             ..LayoutInputs::default()
         }
+    }
+
+    #[test]
+    fn a_previous_install_data_folder_is_a_read_layer_with_its_own_marker() {
+        let base = scratch("previous");
+        let exe_dir = base.join("Games").join("GT4Recomp");
+        let previous = base.join("Program Files").join("GT4Recomp").join("data");
+        let mut with_previous = inputs(&exe_dir, &base);
+        with_previous.previous_data = Some(previous.clone());
+        let layout = resolve_layout(&with_previous, &probe_writable).unwrap();
+        assert_eq!(layout.legacy.previous_data, Some(previous.clone()));
+        assert!(layout.data.read_layers().contains(&previous), "read until its large data has moved");
+        let other = base.join("Old Place").join("data");
+        assert_ne!(layout.data.previous_data_marker(&previous), layout.data.previous_data_marker(&other), "one marker per folder");
+        let upper = PathBuf::from(previous.to_string_lossy().to_uppercase());
+        assert_eq!(layout.data.previous_data_marker(&upper), layout.data.previous_data_marker(&previous), "case does not count");
+        assert_eq!(layout.data.previous_data_marker(&previous).parent(), Some(layout.data.root()));
+        with_previous.data_override = Some(base.join("test-data").into_os_string());
+        assert_eq!(resolve_layout(&with_previous, &probe_writable).unwrap().legacy.previous_data, None, "the test overrides keep it out");
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     fn receipt(folder: &Path) {

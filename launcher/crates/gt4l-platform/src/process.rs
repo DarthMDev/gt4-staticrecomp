@@ -157,10 +157,11 @@ mod windows_impl {
         }
     }
 
-    /// `ShellExecuteExW` with the `runas` verb: Windows shows the UAC prompt and starts `program` elevated. Waits
-    /// until the start is handed over (`SEE_MASK_NOASYNC`), as the launcher exits right after. `Err` is the Win32
-    /// error (`ERROR_CANCELLED` when the prompt was declined).
-    pub fn shell_run_as_admin(program: &std::path::Path) -> Result<(), u32> {
+    /// `ShellExecuteExW` with the `runas` verb: Windows shows the UAC prompt and starts `program` elevated, with
+    /// `arguments` as its command line when given (`lpParameters`, passed unchanged). Waits until the start is
+    /// handed over (`SEE_MASK_NOASYNC`), as the launcher exits right after. `Err` is the Win32 error
+    /// (`ERROR_CANCELLED` when the prompt was declined).
+    pub fn shell_run_as_admin(program: &std::path::Path, arguments: Option<&str>) -> Result<(), u32> {
         use std::os::windows::ffi::OsStrExt;
         use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
         use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
@@ -170,11 +171,14 @@ mod windows_impl {
             .parent()
             .map(|folder| folder.as_os_str().encode_wide().chain(std::iter::once(0)).collect())
             .unwrap_or_else(|| vec![0]);
+        let parameters: Vec<u16> = arguments.unwrap_or("").encode_utf16().chain(std::iter::once(0)).collect();
+        let parameters_ptr = if arguments.is_some() { PCWSTR(parameters.as_ptr()) } else { PCWSTR::null() };
         let mut info = SHELLEXECUTEINFOW {
             cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
             fMask: SEE_MASK_NOASYNC,
             lpVerb: w!("runas"),
             lpFile: PCWSTR(file.as_ptr()),
+            lpParameters: parameters_ptr,
             lpDirectory: PCWSTR(directory.as_ptr()),
             nShow: SW_SHOWNORMAL.0,
             ..Default::default()
@@ -219,6 +223,24 @@ pub fn spawn_outside_job(command: &mut std::process::Command) -> std::io::Result
     command.spawn()
 }
 
+/// The command to start `program` with `arguments` given as one string, passed to the command line unchanged. NSIS
+/// needs `/D=` last and unquoted, so the text is not split into arguments and quoted one by one. None adds nothing.
+pub fn command_with_arguments(program: &std::path::Path, arguments: Option<&str>) -> std::process::Command {
+    let mut command = std::process::Command::new(program);
+    if let Some(arguments) = arguments {
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.raw_arg(arguments);
+        }
+        #[cfg(not(windows))]
+        {
+            command.arg(arguments);
+        }
+    }
+    command
+}
+
 #[cfg(not(windows))]
 pub fn claim_single_instance() -> bool {
     true
@@ -245,7 +267,7 @@ pub fn process_running(_names: &[&str]) -> bool {
 }
 
 #[cfg(not(windows))]
-pub fn shell_run_as_admin(_program: &std::path::Path) -> Result<(), u32> {
+pub fn shell_run_as_admin(_program: &std::path::Path, _arguments: Option<&str>) -> Result<(), u32> {
     Err(ERROR_ELEVATION_REQUIRED)
 }
 
@@ -270,10 +292,12 @@ pub enum SetupStart {
 }
 
 /// The three ways to start the setup, so the order and the error rules are testable without a UAC prompt.
+/// `arguments` is the command line after the program (a self-update passes `/S /UPDATE /D=<folder>`). The Explorer
+/// way cannot pass arguments, so it does not get them.
 pub trait SetupStarter {
     /// `Err` is the Win32 error of the elevated start.
-    fn run_as_admin(&self, program: &std::path::Path) -> Result<(), u32>;
-    fn spawn_outside_job(&self, program: &std::path::Path) -> std::io::Result<()>;
+    fn run_as_admin(&self, program: &std::path::Path, arguments: Option<&str>) -> Result<(), u32>;
+    fn spawn_outside_job(&self, program: &std::path::Path, arguments: Option<&str>) -> std::io::Result<()>;
     fn via_explorer(&self, program: &std::path::Path) -> std::io::Result<()>;
 }
 
@@ -281,12 +305,12 @@ pub trait SetupStarter {
 pub struct WindowsSetupStarter;
 
 impl SetupStarter for WindowsSetupStarter {
-    fn run_as_admin(&self, program: &std::path::Path) -> Result<(), u32> {
-        shell_run_as_admin(program)
+    fn run_as_admin(&self, program: &std::path::Path, arguments: Option<&str>) -> Result<(), u32> {
+        shell_run_as_admin(program, arguments)
     }
 
-    fn spawn_outside_job(&self, program: &std::path::Path) -> std::io::Result<()> {
-        spawn_outside_job(&mut std::process::Command::new(program)).map(|_| ())
+    fn spawn_outside_job(&self, program: &std::path::Path, arguments: Option<&str>) -> std::io::Result<()> {
+        spawn_outside_job(&mut command_with_arguments(program, arguments)).map(|_| ())
     }
 
     fn via_explorer(&self, program: &std::path::Path) -> std::io::Result<()> {
@@ -294,20 +318,29 @@ impl SetupStarter for WindowsSetupStarter {
     }
 }
 
-/// Starts the setup program: elevated first; when the elevated start fails for another reason than a declined
-/// prompt, a direct start outside the job, then Explorer. A declined prompt is final (the player said no).
+/// Starts the setup program with `arguments` (None: none): elevated first; when the elevated start fails for another
+/// reason than a declined prompt, a direct start outside the job, then Explorer. Explorer cannot pass the arguments,
+/// so that update shows the setup pages (the log says so). A declined prompt is final (the player said no).
 /// `log` gets one line per failed attempt.
-pub fn start_setup(program: &std::path::Path, starter: &dyn SetupStarter, log: &mut dyn FnMut(String)) -> Result<SetupStart, String> {
-    match starter.run_as_admin(program) {
+pub fn start_setup(
+    program: &std::path::Path,
+    arguments: Option<&str>,
+    starter: &dyn SetupStarter,
+    log: &mut dyn FnMut(String),
+) -> Result<SetupStart, String> {
+    match starter.run_as_admin(program, arguments) {
         Ok(()) => return Ok(SetupStart::Elevated),
         Err(ERROR_CANCELLED) => {
             return Err("The administrator prompt was declined, so GT4Recomp was not updated.".to_string());
         }
         Err(code) => log(format!("the elevated start of the setup failed (Win32 error {code}); trying a direct start")),
     }
-    match starter.spawn_outside_job(program) {
+    match starter.spawn_outside_job(program, arguments) {
         Ok(()) => return Ok(SetupStart::OutsideJob),
         Err(error) => log(format!("setup could not start directly ({error}); asking Explorer to start it")),
+    }
+    if arguments.is_some() {
+        log("Explorer cannot pass the setup arguments, so this update shows the setup pages".to_string());
     }
     starter
         .via_explorer(program)
@@ -321,21 +354,26 @@ mod tests {
     use std::cell::RefCell;
     use std::path::Path;
 
-    /// Records the calls; each way succeeds or fails as told.
+    /// Records the calls and the arguments each way got; each way succeeds or fails as told.
     struct FakeStarter {
         admin: Result<(), u32>,
         direct: bool,
         explorer: bool,
-        calls: RefCell<Vec<&'static str>>,
+        calls: RefCell<Vec<String>>,
+    }
+
+    /// The arguments as a starter recorded them (`-` for none).
+    fn args_text(arguments: Option<&str>) -> &str {
+        arguments.unwrap_or("-")
     }
 
     impl SetupStarter for FakeStarter {
-        fn run_as_admin(&self, _: &Path) -> Result<(), u32> {
-            self.calls.borrow_mut().push("runas");
+        fn run_as_admin(&self, _: &Path, arguments: Option<&str>) -> Result<(), u32> {
+            self.calls.borrow_mut().push(format!("runas {}", args_text(arguments)));
             self.admin
         }
-        fn spawn_outside_job(&self, _: &Path) -> std::io::Result<()> {
-            self.calls.borrow_mut().push("direct");
+        fn spawn_outside_job(&self, _: &Path, arguments: Option<&str>) -> std::io::Result<()> {
+            self.calls.borrow_mut().push(format!("direct {}", args_text(arguments)));
             if self.direct {
                 Ok(())
             } else {
@@ -343,7 +381,7 @@ mod tests {
             }
         }
         fn via_explorer(&self, _: &Path) -> std::io::Result<()> {
-            self.calls.borrow_mut().push("explorer");
+            self.calls.borrow_mut().push("explorer".to_string());
             if self.explorer {
                 Ok(())
             } else {
@@ -356,32 +394,62 @@ mod tests {
         FakeStarter { admin, direct, explorer, calls: RefCell::new(Vec::new()) }
     }
 
+    const SILENT: &str = "/S /UPDATE /D=C:\\Program Files\\GT4Recomp";
+
     #[test]
     fn the_setup_starts_elevated_first() {
         let starter = fake(Ok(()), true, true);
-        assert_eq!(start_setup(Path::new("setup.exe"), &starter, &mut |_| {}), Ok(SetupStart::Elevated));
-        assert_eq!(*starter.calls.borrow(), vec!["runas"]);
+        assert_eq!(start_setup(Path::new("setup.exe"), None, &starter, &mut |_| {}), Ok(SetupStart::Elevated));
+        assert_eq!(*starter.calls.borrow(), vec!["runas -"]);
+    }
+
+    #[test]
+    fn the_arguments_reach_the_elevated_start() {
+        let starter = fake(Ok(()), true, true);
+        assert_eq!(start_setup(Path::new("setup.exe"), Some(SILENT), &starter, &mut |_| {}), Ok(SetupStart::Elevated));
+        assert_eq!(*starter.calls.borrow(), vec![format!("runas {SILENT}")]);
     }
 
     #[test]
     fn a_declined_prompt_is_final() {
         let starter = fake(Err(ERROR_CANCELLED), true, true);
-        let result = start_setup(Path::new("setup.exe"), &starter, &mut |_| {});
+        let result = start_setup(Path::new("setup.exe"), Some(SILENT), &starter, &mut |_| {});
         assert!(result.unwrap_err().contains("declined"));
-        assert_eq!(*starter.calls.borrow(), vec!["runas"], "no other start after the player said no");
+        assert_eq!(*starter.calls.borrow(), vec![format!("runas {SILENT}")], "no other start after the player said no");
     }
 
     #[test]
     fn other_failures_fall_back_to_a_direct_start_then_explorer() {
         let mut lines = Vec::new();
         let starter = fake(Err(2), false, true);
-        assert_eq!(start_setup(Path::new("setup.exe"), &starter, &mut |line| lines.push(line)), Ok(SetupStart::Explorer));
-        assert_eq!(*starter.calls.borrow(), vec!["runas", "direct", "explorer"]);
+        assert_eq!(start_setup(Path::new("setup.exe"), None, &starter, &mut |line| lines.push(line)), Ok(SetupStart::Explorer));
+        assert_eq!(*starter.calls.borrow(), vec!["runas -", "direct -", "explorer"]);
         assert_eq!(lines.len(), 2);
         let starter = fake(Err(2), true, true);
-        assert_eq!(start_setup(Path::new("setup.exe"), &starter, &mut |_| {}), Ok(SetupStart::OutsideJob));
+        assert_eq!(start_setup(Path::new("setup.exe"), Some(SILENT), &starter, &mut |_| {}), Ok(SetupStart::OutsideJob));
+        assert_eq!(*starter.calls.borrow(), vec![format!("runas {SILENT}"), format!("direct {SILENT}")]);
         let starter = fake(Err(2), false, false);
-        assert!(start_setup(Path::new("setup.exe"), &starter, &mut |_| {}).is_err());
+        assert!(start_setup(Path::new("setup.exe"), None, &starter, &mut |_| {}).is_err());
+    }
+
+    #[test]
+    fn explorer_starts_without_arguments_and_the_log_says_the_update_is_interactive() {
+        let mut lines = Vec::new();
+        let starter = fake(Err(2), false, true);
+        let started = start_setup(Path::new("setup.exe"), Some(SILENT), &starter, &mut |line| lines.push(line));
+        assert_eq!(started, Ok(SetupStart::Explorer));
+        assert_eq!(*starter.calls.borrow(), vec![format!("runas {SILENT}"), format!("direct {SILENT}"), "explorer".to_string()]);
+        assert!(lines.iter().any(|line| line.contains("cannot pass the setup arguments")), "{lines:?}");
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_arguments_are_one_command_line_text_not_split_arguments() {
+        let command = command_with_arguments(Path::new("setup.exe"), Some(SILENT));
+        assert_eq!(command.get_program(), "setup.exe");
+        let args: Vec<_> = command.get_args().collect();
+        assert_eq!(args, vec![std::ffi::OsStr::new(SILENT)], "one raw item: the text, unquoted, with /D= last");
+        assert_eq!(command_with_arguments(Path::new("setup.exe"), None).get_args().count(), 0);
     }
 
     #[test]

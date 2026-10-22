@@ -104,11 +104,32 @@
   // shown once per notice text.
   var migrationBox = null;
   var shownNotice = "";
-  function migrationLine(migration) {
+  // The status box: a label with the percentage on the right and a bar under it. Without a byte count (a move
+  // inside one drive) the bar slides and no percentage is shown.
+  function renderMigration(box, migration) {
     var done = migration.bytes_done || 0;
     var total = migration.bytes_total || 0;
-    var percent = total > 0 ? " " + Math.floor((done * 100) / total) + "%" : "";
-    return "Moving " + (migration.item || "game files") + " to the install folder…" + percent;
+    var percent = total > 0 ? Math.min(100, Math.floor((done * 100) / total)) : -1;
+    if (!box.firstChild) {
+      var head = document.createElement("div");
+      head.className = "migration-head";
+      head.appendChild(document.createElement("span"));
+      head.appendChild(document.createElement("span"));
+      var bar = document.createElement("div");
+      bar.className = "migration-bar";
+      var fill = document.createElement("div");
+      fill.className = "migration-fill";
+      bar.appendChild(fill);
+      box.appendChild(head);
+      box.appendChild(bar);
+    }
+    var label = box.firstChild.firstChild;
+    var number = box.firstChild.lastChild;
+    var barNode = box.lastChild;
+    label.textContent = "Moving " + (migration.item || "game files") + " to the install folder…";
+    number.textContent = percent >= 0 ? percent + "%" : "";
+    barNode.classList.toggle("indeterminate", percent < 0);
+    barNode.firstChild.style.width = percent >= 0 ? percent + "%" : "";
   }
   function showMigration(appState) {
     var migration = appState && appState.migration;
@@ -123,7 +144,7 @@
         migrationBox.setAttribute("aria-live", "polite");
         document.body.appendChild(migrationBox);
       }
-      migrationBox.textContent = migrationLine(migration);
+      renderMigration(migrationBox, migration);
       root.setTimeout(function () {
         GT4.backend.call("app_state").then(showMigration, function () {});
       }, 700);

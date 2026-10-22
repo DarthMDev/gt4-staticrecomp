@@ -325,6 +325,25 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
     .map_err(|error| error.to_string())?
 }
 
+/// The command line of the setup of a self-update (TASK-091): `/S /UPDATE /D=<install folder>`, so the update is
+/// silent, and the installer starts the launcher again as the player. `/D=` must be last and unquoted (NSIS), so the
+/// folder is passed as it is. Only when this launcher runs from the registered per-machine install: a portable copy
+/// elsewhere, or no registered install, gets `None` (an interactive setup with no arguments), so a portable folder is
+/// never silently turned into an install. `read_registered` is the registry read (`InstallDir`), faked in tests.
+pub fn setup_arguments(exe_dir: &Path, read_registered: &dyn Fn() -> Option<String>) -> Option<String> {
+    let registered = read_registered()?;
+    if folder_key(&exe_dir.to_string_lossy()) == folder_key(&registered) {
+        Some(format!("/S /UPDATE /D={}", exe_dir.display()))
+    } else {
+        None
+    }
+}
+
+/// A folder compared the way Windows compares it: case-insensitive, one trailing backslash (or slash) ignored.
+fn folder_key(folder: &str) -> String {
+    folder.trim().trim_end_matches(['\\', '/']).to_ascii_lowercase()
+}
+
 /// Downloads the GT4Recomp setup program of the newest stable release, checks it, starts it, and ends the launcher.
 fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, String> {
     let list = fetch(Stream::Launcher)?;
@@ -358,7 +377,10 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
     if let Err(message) = gt4l_platform::process::release_kill_on_close() {
         state::log(dirs, &format!("kill-on-close not cleared ({message}); the setup is started outside the job"));
     }
-    let started = match gt4l_platform::process::start_setup(&path, &gt4l_platform::process::WindowsSetupStarter, &mut |line| {
+    // Silent, with this folder as the install folder, when this launcher is the registered install (see setup_arguments).
+    let arguments = setup_arguments(&install_directory(), &gt4l_platform::install_record::registered_install_folder);
+    state::log(dirs, &format!("setup arguments: {}", arguments.as_deref().unwrap_or("none (interactive)")));
+    let started = match gt4l_platform::process::start_setup(&path, arguments.as_deref(), &gt4l_platform::process::WindowsSetupStarter, &mut |line| {
         state::log(dirs, &line)
     }) {
         Ok(started) => started,
@@ -384,6 +406,24 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_registered_install_updates_silently_into_its_own_folder() {
+        let exe_dir = Path::new("C:\\Program Files\\GT4Recomp");
+        let registered = || Some("c:\\program files\\gt4recomp\\".to_string());
+        assert_eq!(setup_arguments(exe_dir, &registered).as_deref(), Some("/S /UPDATE /D=C:\\Program Files\\GT4Recomp"));
+        let plain = || Some("C:\\Program Files\\GT4Recomp".to_string());
+        assert_eq!(setup_arguments(exe_dir, &plain), setup_arguments(exe_dir, &registered));
+    }
+
+    #[test]
+    fn a_portable_copy_or_no_registration_stays_interactive() {
+        let portable = Path::new("D:\\Games\\GT4Recomp");
+        let registered = || Some("C:\\Program Files\\GT4Recomp".to_string());
+        assert_eq!(setup_arguments(portable, &registered), None, "a portable folder is never turned into an install");
+        let nothing = || None;
+        assert_eq!(setup_arguments(Path::new("C:\\Program Files\\GT4Recomp"), &nothing), None);
+    }
 
     #[test]
     fn the_offer_view_names_both_versions_and_the_update_flag() {

@@ -14,7 +14,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use gt4l_core::paths::{self, Layout, LayoutInputs, LegacyLocations, UserDirs, TEXTURES_FOLDER_NAME};
+use gt4l_core::paths::{self, DataDirs, Layout, LayoutInputs, LegacyLocations, UserDirs, TEXTURES_FOLDER_NAME};
 use gt4l_core::relocate::{self, FsOps, LargeMove, LargeOutcome, UnitResult, UserMove};
 use gt4l_disc::setup::{self as disc_setup, Installed};
 use gt4l_disc::Pins;
@@ -54,7 +54,9 @@ pub fn legacy_user_dirs(layout: &Layout, reason: String) -> UserDirs {
 
 /// Step 1. `Err` only when no data or user folder can be named at all.
 pub fn prepare(exe_dir: &Path) -> Result<Startup, String> {
-    let inputs = LayoutInputs::from_environment(exe_dir, gt4l_platform::known_folder::documents());
+    let mut inputs = LayoutInputs::from_environment(exe_dir, gt4l_platform::known_folder::documents());
+    // The data folder of an earlier install in another folder, as the setup recorded it (TASK-091).
+    inputs.previous_data = gt4l_platform::install_record::previous_data_dir();
     let layout = paths::resolve_layout(&inputs, &paths::probe_writable)?;
     let mut log = layout.notices.clone();
     log.push(format!(
@@ -160,40 +162,102 @@ fn inherit_permissions(dirs_root: &Path, moved: &Path) -> Option<String> {
     }
 }
 
-/// Step 3, on a background thread. Updates `migration` in the state for the page; leaves Play and setup blocked
-/// while it runs.
+/// One folder the large data moves from, with what its move needs.
+struct LargeSource {
+    /// The folder holding the 1.2.0 layout (disc, prepared, gs, runtime, sessions, logs).
+    local: PathBuf,
+    /// Where its custom textures may be.
+    textures: Vec<PathBuf>,
+    /// The marker of this move (one per source folder).
+    marker: PathBuf,
+    /// The folder under `logs` for kept logs, sessions and runtime card (see `LargeMove::old_copy_folder`).
+    old_copy_folder: &'static str,
+    /// The data folder of an earlier install: it is removed once its move has emptied it.
+    is_previous_install: bool,
+}
+
+/// The folders the large data moves from, in order: the 1.2.0 folder, then the data folder of an earlier install in
+/// another folder (`PreviousDataDir`, TASK-091). A folder that is the data folder itself, or is missing, is left out.
+fn large_sources(legacy: &LegacyLocations, dirs: &DataDirs) -> Vec<LargeSource> {
+    let mut sources = Vec::new();
+    if let Some(local) = legacy.local.clone() {
+        // The data folder could not be written, so the 1.2.0 folder is the write folder itself: nothing moves.
+        if !paths::same_path(&local, dirs.root()) {
+            let textures = [legacy.documents_player.clone(), legacy.documents_moved()]
+                .into_iter()
+                .flatten()
+                .map(|player| player.join(TEXTURES_FOLDER_NAME))
+                .collect();
+            sources.push(LargeSource {
+                local,
+                textures,
+                marker: dirs.relocation_marker(),
+                old_copy_folder: "from-1.2.0",
+                is_previous_install: false,
+            });
+        }
+    }
+    if let Some(previous) = legacy.previous_data.clone() {
+        if previous.is_dir() && !paths::same_path(&previous, dirs.root()) {
+            sources.push(LargeSource {
+                textures: vec![previous.join(TEXTURES_FOLDER_NAME)],
+                marker: dirs.previous_data_marker(&previous),
+                local: previous,
+                old_copy_folder: "from-previous-install",
+                is_previous_install: true,
+            });
+        }
+    }
+    sources
+}
+
+/// Step 3, on a background thread. Moves each large-data source (`large_sources`) with its own marker. Updates
+/// `migration` in the state for the page; leaves Play and setup blocked while it runs.
 pub fn move_large_data(shared: &Shared, legacy: &LegacyLocations) {
     let (dirs, pins) = {
         let state = lock(shared);
         (state.dirs.clone(), state.pins.clone())
     };
-    let Some(local) = legacy.local.clone() else {
-        return;
-    };
-    if paths::same_path(&local, dirs.root()) {
-        // The data folder could not be written, so the 1.2.0 folder is the write folder itself: nothing moves.
+    let sources = large_sources(legacy, &dirs);
+    if sources.is_empty() {
         return;
     }
-    let textures_sources: Vec<PathBuf> = [legacy.documents_player.clone(), legacy.documents_moved()]
-        .into_iter()
-        .flatten()
-        .map(|player| player.join(TEXTURES_FOLDER_NAME))
-        .collect();
+    lock(shared).migration.running = true;
+    let mut notices: Vec<String> = Vec::new();
+    let mut problem = false;
+    for source in &sources {
+        let (notice, failed) = move_source(shared, &dirs, &pins, source);
+        if !notice.is_empty() {
+            notices.push(notice);
+        }
+        problem |= failed;
+    }
+    let mut state = lock(shared);
+    state.migration = crate::state::MigrationRun {
+        running: false,
+        notice: if notices.is_empty() { state.migration.notice.clone() } else { notices.join(" ") },
+        problem: problem || state.migration.problem,
+        ..Default::default()
+    };
+}
+
+/// Moves one source. Returns the page sentence (empty when nothing happened) and whether it reports a problem.
+fn move_source(shared: &Shared, dirs: &DataDirs, pins: &Pins, source: &LargeSource) -> (String, bool) {
+    let local = &source.local;
     let source_ready = matches!(
-        disc_setup::check_installed(&local.join("prepared"), &local.join("disc"), &pins),
+        disc_setup::check_installed(&local.join("prepared"), &local.join("disc"), pins),
         Installed::Ready { .. }
     );
-    let running = game_running();
-    lock(shared).migration.running = true;
-    let check = |folder: &Path, hashes: &BTreeMap<PathBuf, String>| check_moved_game_files(folder, hashes, &pins, source_ready);
+    let check = |folder: &Path, hashes: &BTreeMap<PathBuf, String>| check_moved_game_files(folder, hashes, pins, source_ready);
     let request = LargeMove {
-        local: &local,
+        local,
         data_root: dirs.root(),
-        textures_sources: textures_sources.clone(),
-        marker: dirs.relocation_marker(),
-        game_running: running,
+        textures_sources: source.textures.clone(),
+        marker: source.marker.clone(),
+        game_running: game_running(),
         stamp: &gt4saves::timestamp(),
         check_game_files: &check,
+        old_copy_folder: source.old_copy_folder,
     };
     let mut last_permille = u64::MAX;
     let outcome = relocate::migrate_large_data(&request, &FsOps::real(), &mut |progress| {
@@ -208,7 +272,7 @@ pub fn move_large_data(shared: &Shared, legacy: &LegacyLocations) {
         state.migration.bytes_total = progress.bytes_total;
     });
     for line in outcome.log_lines() {
-        state::log(&dirs, &line);
+        state::log(dirs, &line);
     }
     for (name, result) in outcome.units() {
         if let UnitResult::Moved { destination, renamed: true, .. } = result {
@@ -219,25 +283,27 @@ pub fn move_large_data(shared: &Shared, legacy: &LegacyLocations) {
             };
             for folder in moved {
                 if let Some(problem) = inherit_permissions(dirs.root(), &folder) {
-                    state::log(&dirs, &problem);
+                    state::log(dirs, &problem);
                 }
             }
         }
     }
     let textures_failed = outcome.units().iter().any(|(name, result)| name == "textures" && matches!(result, UnitResult::Failed(_)));
-    let mut state = lock(shared);
     if textures_failed {
         // The textures stay in use where they are until the next start moves them.
-        let in_place = textures_sources.into_iter().find(|source| source.is_dir());
-        state.dirs.set_textures_in_place(in_place);
+        let in_place = source.textures.iter().find(|folder| folder.is_dir()).cloned();
+        lock(shared).dirs.set_textures_in_place(in_place);
     }
-    let (notice, problem) = large_notice(&outcome, &local, dirs.root());
-    state.migration = crate::state::MigrationRun {
-        running: false,
-        notice: if notice.is_empty() { state.migration.notice.clone() } else { notice },
-        problem: problem || state.migration.problem,
-        ..Default::default()
-    };
+    // The old data folder of an earlier install goes once it is empty (the launcher cannot remove Program Files;
+    // the marker keeps the move from running again either way).
+    if source.is_previous_install && !outcome.failed() {
+        match relocate::remove_empty_folder(local) {
+            Ok(()) => {}
+            Err(error) => state::log(dirs, &format!("the old data folder {} is kept: {error}", local.display())),
+        }
+    }
+    let (notice, problem) = large_notice(&outcome, local, dirs.root());
+    (notice, problem)
 }
 
 /// The sentence for the page after the large-data move (empty when nothing happened).
@@ -283,7 +349,7 @@ mod tests {
             data: DataDirs::new(base.join("data")),
             user_root: base.join("Roaming").join("GT4Recomp"),
             user_source: UserRootSource::AppData,
-            legacy: LegacyLocations { local: Some(local), documents_player: Some(player) },
+            legacy: LegacyLocations { local: Some(local), documents_player: Some(player), previous_data: None },
             notices: Vec::new(),
         }
     }
