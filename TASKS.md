@@ -461,7 +461,7 @@ an unthrottled guest clock while a loading or save screen is active (the TASK-07
 with audio muted or kept at the right pace; hooks or ELF patches that shorten fixed waits and per-frame save
 chunking. Never during races or replays; physics, lap times and replays untouched. After 1.0.0.
 
-### TASK-084 — Frame cost optimisation (in progress, owner test pending)
+### TASK-084 — Frame cost optimisation (Done 2026-10-22)
 Owner request 2026-10-21. Study: docs/FRAME-COST-STUDY.md (slice211, headless, timed only with no builds running).
 In the day race the EE thread takes 8.2 ms per frame, of which the translated game code is 2.9 ms; the rest is VIF1
 job posting (about 5,200 MTVU jobs per frame, one doorbell), the journal GS front end, stream writes, IOP, run loop and
@@ -472,14 +472,22 @@ wake-ups only when waiting (-1 to -2 ms); (3) no EE wait for the VU1 worker at e
 (4) drop the second GIF walk and a copy (-0.4 to -0.8 ms); then compiler flags, run-loop fast paths, VU1 speed. Add the
 missing F8 instrumentation first (pacing-sleep scope, fixed summary formula, per-readback records). Each step: its
 own slice, headless frame identity, CTest and Python, owner F8 check. Feeds TASK-082 (a render pass must fit 7.3 ms for
-120 Hz) and weaker PCs. After 1.0.0. **State 2026-10-22:** items 2-4 and the missing instrumentation are implemented
-on branch `task/084-frame-cost-122` (release 1.2.2 candidate, build `slice262`, pin
-`docs/inputs/slice262-pcsx2.json`). Item 1 (deferred flare readback) stays out: the owner moved readback work to
-CoreGS 2.0. Switches: `GT4_MTVU_CHAIN` (one job per VIF1 DMA chain), `GT4_GIF_FASTPATH` (no second GS stream walk),
-`GT4_MTVU_VBLANK_JOURNAL` (VBlank as a journal entry in pcsx2 mode), `GT4_PERF_COUNTERS` (the new counters). Checks:
-CTest 40/40, the Python suite with `test_frame_cost.py`, title/day/night frame dumps and the GS stream session hash
-identical to release 1.2.0 (slice240), `GT4_MTVU_VERIFY=1` with 0 mismatches in 4,200 frames. Build, numbers and the
-owner F7/F8 checklist: docs/BUILD.md `Slice 260/262`. Owner in-game test pending; no PR before approval.
+120 Hz) and weaker PCs. After 1.0.0. **Done 2026-10-22** (branch `task/084-frame-cost-122`, build `slice262`, pin
+`docs/inputs/slice262-pcsx2.json`; PR into main opened the same day). Owner in-game test, session
+`private/manual-play/session-20261022-163408-808184`, `--mode pcsx2`, 0 late frames in every scene, picture
+unchanged, approved:
+- Showroom: frame median 16.689 ms, p99 19.056; critical path 6.06 ms/frame; vif jobs/frame 35.8; EE wait 0.000.
+- Nordschleife Time Trial (Supra Wood One, 480p): median 16.664, p99 18.304; critical path 6.13; jobs/frame 58.6;
+  EE wait 1.135 (download), readback 0.68.
+- Night race, Clubman Stage Route 5, 5 AI: median 16.663, p99 18.565; critical path 9.97 (TASK-041 owner baseline
+  11.8); jobs/frame 80.4; EE wait 3.052 (download), readback 1.30; 0 audio underruns.
+Headless (slice262, this PC): day race 12.07 -> 10.38 ms, night 13.21 -> 12.08, showroom 9.88 -> 8.61, menu
+1.54 -> 1.41; frame dumps and the GS stream session hash identical to release 1.2.0 (slice240);
+`GT4_MTVU_VERIFY=1` 0 mismatches in 4,200 frames; CTest 40/40; Python 640 tests OK (42 skipped). Switches:
+`GT4_MTVU_CHAIN` (one VIF1 job per DMA chain), `GT4_GIF_FASTPATH` (no second GS stream walk),
+`GT4_MTVU_VBLANK_JOURNAL` (VBlank as a journal entry in pcsx2 mode), `GT4_PERF_COUNTERS`. Note: the night-race
+download wait and the GS readbacks stay out of scope (TASK-041 Performance Mode and CoreGS 2.0 cover them). Build,
+numbers and the owner checklist: docs/BUILD.md "Slice 260/262".
 
 ### TASK-085 — Launcher self-update starts the setup outside its job
 Done 2026-10-21 (branch `task/085-launcher-self-update`). Owner report: launcher 1.0.0 offered 1.1.0, downloaded it,

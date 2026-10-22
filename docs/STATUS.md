@@ -1,6 +1,6 @@
 # Current Status
 
-## Frame cost, runtime side (2026-10-22, TASK-084, branch `task/084-frame-cost-122`, owner test pending)
+## Frame cost, runtime side (2026-10-22, TASK-084, DONE, branch `task/084-frame-cost-122`, owner approved)
 
 The study's missing F8 instrumentation and items 2-4 are implemented; item 1 (deferred flare readback) stays out
 by owner decision (readback work belongs to CoreGS 2.0). New runtime switches, all on by default:
@@ -9,8 +9,13 @@ by owner decision (readback work belongs to CoreGS 2.0). New runtime switches, a
 (pin `docs/inputs/slice262-pcsx2.json`; mode `pcsx2` points at it for the owner test). Checks: CTest 40/40; the
 Python suite with the new `tests/python/test_frame_cost.py`; menus 41/41, day race 15/15 and night race 15/15 frame
 dumps and the GS stream session hash identical to release 1.2.0 (slice240); `GT4_MTVU_VERIFY=1` with 0
-mismatches in 4,200 frames. Numbers, build recipe and the owner F7/F8 checklist: [BUILD slice 260/262](BUILD.md).
-No PR before the owner approves.
+mismatches in 4,200 frames. **Owner in-game test 2026-10-22 approved** (session
+`session-20261022-163408-808184`, 0 late frames in every scene, picture unchanged): showroom critical path
+6.06 ms/frame with 35.8 VIF jobs/frame, Nordschleife TT 480p 6.13 with 58.6, night race 9.97 with 80.4 (the
+TASK-041 owner baseline was 11.8). The night-race download wait and the GS readbacks stay out of scope
+(TASK-041 Performance Mode and CoreGS 2.0). Numbers, build recipe and the owner F7/F8 checklist:
+[BUILD slice 260/262](BUILD.md). PR into main opened; the reviewer merges main (launcher 1.2.1) and builds
+release 1.2.2.
 
 ## Release 1.2.0 prepared (2026-10-21, TASK-088, branch `task/088-custom-textures-120`, waiting for owner test)
 
