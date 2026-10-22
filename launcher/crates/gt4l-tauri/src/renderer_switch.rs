@@ -51,7 +51,7 @@ pub fn run(settings: &mut Settings, home_ready: bool, installed: bool, install: 
 pub fn start(app: AppHandle, shared: Shared) {
     let (dirs, mut settings, home_ready, installed) = {
         let state = lock(&shared);
-        let installed = !gt4l_core::gs_release::needs_install(&updates::renderer_root(&state.dirs));
+        let installed = !gt4l_core::gs_release::needs_install(&state.dirs.renderer_root());
         (state.dirs.clone(), state.config.settings.clone(), state.home_ready(), installed)
     };
     if !needs_install(settings.get("renderer"), home_ready, installed) {

@@ -106,6 +106,11 @@ body.is-home.input-keys #hints { display: none; }
 }
 .toast.is-shown { opacity: 1; }
 .toast.is-error { background: var(--error); color: var(--white); }
+/* TASK-091: progress of the first-start move of the game files (not focusable, never covers the hint bar). */
+.migration {
+  position: absolute; left: 24px; bottom: 60px; padding: 8px 14px; background: var(--paper); color: var(--paper-ink);
+  border-radius: 3px; pointer-events: none; z-index: 40; max-width: 50%;
+}
 
 /* ---------- buttons ---------- */
 .btn {

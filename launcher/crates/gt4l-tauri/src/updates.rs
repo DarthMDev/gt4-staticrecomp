@@ -11,7 +11,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 
 use gt4l_core::gs_release::{self, Outcome, Step};
@@ -29,9 +28,9 @@ use crate::state::{self, lock, Shared};
 /// One renderer install at a time: the launch check, setup and an update must not write the same folder.
 static RENDERER_INSTALL: Mutex<()> = Mutex::new(());
 
-/// The renderer root under the data folder: `<data>\gs`.
+/// The installed renderer in use: `<data>\gs`, or a read-only or 1.2.0 folder that still has it (see `DataDirs`).
 pub fn renderer_root(dirs: &DataDirs) -> PathBuf {
-    dirs.root().join("gs")
+    dirs.renderer_root()
 }
 
 /// The folder of `GT4Recomp.exe` (the install folder).
@@ -146,7 +145,8 @@ fn check_with(
 /// Installs the newest gt4-gs (first install or update). Records the version in `version.json`.
 pub fn install_renderer(dirs: &DataDirs, progress: &mut dyn FnMut(Step)) -> Result<Outcome, String> {
     let _serial = RENDERER_INSTALL.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let root = renderer_root(dirs);
+    // Installs and updates always write the data folder's root; a renderer read from elsewhere is left as it is.
+    let root = dirs.renderer_install_root();
     let source = GithubSource::for_stream(Stream::Renderer);
     let outcome = gs_release::install_latest_reporting(&source as &dyn ReleaseSource, &root, progress)?;
     let location = version_location(dirs);
@@ -351,15 +351,19 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
         let _ = fs::remove_file(&path);
     })?;
     state::log(dirs, &format!("GT4Recomp {} setup verified; starting it", version.text()));
-    // The setup must outlive the launcher: it leaves the launcher's kill-on-close job (gt4l_platform::process).
-    // A job that the launcher itself was started in may forbid that; then the Windows shell (the running Explorer,
-    // outside every job of ours) starts it, and the launcher waits a moment so the hand-over completes first.
-    if let Err(error) = gt4l_platform::process::spawn_outside_job(&mut Command::new(&path)) {
-        state::log(dirs, &format!("setup could not leave the launcher job ({error}); asking Explorer to start it"));
-        Command::new("explorer.exe")
-            .arg(&path)
-            .spawn()
-            .map_err(|error| format!("could not start the setup: {error}"))?;
+    // The 1.2.1 setup installs per machine and needs administrator rights (TASK-091): CreateProcess cannot start it
+    // (ERROR_ELEVATION_REQUIRED). The launcher first clears kill-on-close on its job, so nothing it starts dies when
+    // it exits (the game is not running here), then asks Windows to start the setup elevated (`runas`, the UAC
+    // prompt). The breakaway start and the Explorer fallback stay behind it (gt4l_platform::process::start_setup).
+    if let Err(message) = gt4l_platform::process::release_kill_on_close() {
+        state::log(dirs, &format!("kill-on-close not cleared ({message}); the setup is started outside the job"));
+    }
+    let started = gt4l_platform::process::start_setup(&path, &gt4l_platform::process::WindowsSetupStarter, &mut |line| {
+        state::log(dirs, &line)
+    })?;
+    state::log(dirs, &format!("setup started ({started:?})"));
+    if started == gt4l_platform::process::SetupStart::Explorer {
+        // Explorer starts it a moment later; the launcher waits so the hand-over completes first.
         std::thread::sleep(std::time::Duration::from_secs(3));
     }
     let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Setup started." }));

@@ -7,6 +7,12 @@
 //! The job allows breakaway: a process the launcher must outlive on purpose (the GT4Recomp setup program of a
 //! self-update) is started with `spawn_outside_job`. Without it, the setup joined the job and Windows ended it the
 //! moment the launcher exited to let it replace the program files (launcher 1.0.0 bug, 2026-10-21).
+//!
+//! From 1.2.1 the setup is per-machine and needs administrator rights (TASK-091). `CreateProcess` cannot start such
+//! a program (`ERROR_ELEVATION_REQUIRED`, 740), so a self-update first clears kill-on-close on the launcher's job
+//! ([`release_kill_on_close`]; the game is not running at that point) and then asks Windows to start the setup
+//! elevated (`ShellExecuteExW` with the `runas` verb, which shows the UAC prompt). [`start_setup`] keeps the
+//! breakaway start and the Explorer fallback behind it.
 
 #[cfg(windows)]
 mod windows_impl {
@@ -20,6 +26,10 @@ mod windows_impl {
         JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JOB_OBJECT_LIMIT_BREAKAWAY_OK, JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
     };
     use windows::Win32::System::Threading::{CreateMutexW, GetCurrentProcess};
+    use std::sync::OnceLock;
+
+    /// The launcher's job handle (as an integer, so it can live in a static). Kept open until the process exits.
+    static JOB: OnceLock<isize> = OnceLock::new();
     use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, SetForegroundWindow, ShowWindow, SW_RESTORE};
 
     /// Title of the launcher window (the window title set by the UI shell). Not the game title: the game window is
@@ -71,13 +81,104 @@ mod windows_impl {
                 return Err(format!("job assignment: {error}"));
             }
             // The handle is not closed: it closes at exit, and then Windows ends the game.
+            let _ = JOB.set(job.0 as isize);
         }
         Ok(())
+    }
+
+    /// Clears kill-on-close on the launcher's job, so every process it started keeps running after it exits. Used
+    /// only right before a self-update hands over to the setup (the game is not running then). No job: nothing to do.
+    pub fn release_kill_on_close() -> Result<(), String> {
+        let Some(raw) = JOB.get() else {
+            return Ok(());
+        };
+        let job = windows::Win32::Foundation::HANDLE(*raw as *mut c_void);
+        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+        // SAFETY: `job` is the job handle created above and never closed; `limits` lives for the call.
+        unsafe {
+            SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &limits as *const _ as *const c_void,
+                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+        }
+        .map_err(|error| format!("job limits: {error}"))
+    }
+
+    /// Whether a process with one of these executable names runs (case-insensitive). A failed snapshot counts as
+    /// "running", so a move never starts blind.
+    pub fn process_running(names: &[&str]) -> bool {
+        use windows::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+        };
+        let wanted: Vec<String> = names.iter().map(|name| name.to_ascii_lowercase()).collect();
+        // SAFETY: the snapshot handle is closed below; `entry` lives for each call and has its size set.
+        unsafe {
+            let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+                return true;
+            };
+            let mut entry = PROCESSENTRY32W { dwSize: size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
+            let mut found = false;
+            let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
+            while more {
+                let length = entry.szExeFile.iter().position(|unit| *unit == 0).unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..length]).to_ascii_lowercase();
+                if wanted.contains(&name) {
+                    found = true;
+                    break;
+                }
+                more = Process32NextW(snapshot, &mut entry).is_ok();
+            }
+            let _ = CloseHandle(snapshot);
+            found
+        }
+    }
+
+    /// `ShellExecuteExW` with the `runas` verb: Windows shows the UAC prompt and starts `program` elevated. Waits
+    /// until the start is handed over (`SEE_MASK_NOASYNC`), as the launcher exits right after. `Err` is the Win32
+    /// error (`ERROR_CANCELLED` when the prompt was declined).
+    pub fn shell_run_as_admin(program: &std::path::Path) -> Result<(), u32> {
+        use std::os::windows::ffi::OsStrExt;
+        use windows::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED, COINIT_DISABLE_OLE1DDE};
+        use windows::Win32::UI::Shell::{ShellExecuteExW, SEE_MASK_NOASYNC, SHELLEXECUTEINFOW};
+        use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let file: Vec<u16> = program.as_os_str().encode_wide().chain(std::iter::once(0)).collect();
+        let directory: Vec<u16> = program
+            .parent()
+            .map(|folder| folder.as_os_str().encode_wide().chain(std::iter::once(0)).collect())
+            .unwrap_or_else(|| vec![0]);
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOASYNC,
+            lpVerb: w!("runas"),
+            lpFile: PCWSTR(file.as_ptr()),
+            lpDirectory: PCWSTR(directory.as_ptr()),
+            nShow: SW_SHOWNORMAL.0,
+            ..Default::default()
+        };
+        // SAFETY: COM is initialised for this thread as ShellExecuteEx asks (a second call is harmless); `info` and
+        // the wide strings it points at live for the call.
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+            ShellExecuteExW(&mut info).map_err(|error| win32_code(error.code().0))
+        }
+    }
+
+    /// The Win32 error inside an HRESULT_FROM_WIN32 value (other HRESULTs are returned as they are).
+    fn win32_code(hresult: i32) -> u32 {
+        let value = hresult as u32;
+        if value & 0xFFFF_0000 == 0x8007_0000 {
+            value & 0xFFFF
+        } else {
+            value
+        }
     }
 }
 
 #[cfg(windows)]
-pub use windows_impl::{claim_single_instance, join_kill_on_close_job};
+pub use windows_impl::{claim_single_instance, join_kill_on_close_job, process_running, release_kill_on_close, shell_run_as_admin};
 
 /// `CREATE_BREAKAWAY_FROM_JOB`: the new process is not a member of the launcher's kill-on-close job.
 #[cfg(windows)]
@@ -102,4 +203,164 @@ pub fn claim_single_instance() -> bool {
 #[cfg(not(windows))]
 pub fn join_kill_on_close_job() -> Result<(), String> {
     Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn release_kill_on_close() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn process_running(_names: &[&str]) -> bool {
+    false
+}
+
+#[cfg(not(windows))]
+pub fn shell_run_as_admin(_program: &std::path::Path) -> Result<(), u32> {
+    Err(ERROR_ELEVATION_REQUIRED)
+}
+
+/// Executable names of the game and its renderer process: neither may run while files move.
+pub const GAME_PROCESS_NAMES: &[&str] = &["gt4vulkan.exe", "gt4-gs.exe"];
+
+/// `ERROR_CANCELLED`: the UAC prompt was declined.
+pub const ERROR_CANCELLED: u32 = 1223;
+
+/// `ERROR_ELEVATION_REQUIRED`: `CreateProcess` refused a program whose manifest asks for administrator rights.
+pub const ERROR_ELEVATION_REQUIRED: u32 = 740;
+
+/// How the setup program of a self-update was started.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SetupStart {
+    /// Elevated through the UAC prompt (`runas`): the 1.2.1 path.
+    Elevated,
+    /// Started directly outside the job (a setup that needs no administrator rights).
+    OutsideJob,
+    /// Started by the Windows shell (Explorer), which shows the UAC prompt itself when the setup needs it.
+    Explorer,
+}
+
+/// The three ways to start the setup, so the order and the error rules are testable without a UAC prompt.
+pub trait SetupStarter {
+    /// `Err` is the Win32 error of the elevated start.
+    fn run_as_admin(&self, program: &std::path::Path) -> Result<(), u32>;
+    fn spawn_outside_job(&self, program: &std::path::Path) -> std::io::Result<()>;
+    fn via_explorer(&self, program: &std::path::Path) -> std::io::Result<()>;
+}
+
+/// The starter of the launcher.
+pub struct WindowsSetupStarter;
+
+impl SetupStarter for WindowsSetupStarter {
+    fn run_as_admin(&self, program: &std::path::Path) -> Result<(), u32> {
+        shell_run_as_admin(program)
+    }
+
+    fn spawn_outside_job(&self, program: &std::path::Path) -> std::io::Result<()> {
+        spawn_outside_job(&mut std::process::Command::new(program)).map(|_| ())
+    }
+
+    fn via_explorer(&self, program: &std::path::Path) -> std::io::Result<()> {
+        std::process::Command::new("explorer.exe").arg(program).spawn().map(|_| ())
+    }
+}
+
+/// Starts the setup program: elevated first; when the elevated start fails for another reason than a declined
+/// prompt, a direct start outside the job, then Explorer. A declined prompt is final (the player said no).
+/// `log` gets one line per failed attempt.
+pub fn start_setup(program: &std::path::Path, starter: &dyn SetupStarter, log: &mut dyn FnMut(String)) -> Result<SetupStart, String> {
+    match starter.run_as_admin(program) {
+        Ok(()) => return Ok(SetupStart::Elevated),
+        Err(ERROR_CANCELLED) => {
+            return Err("The administrator prompt was declined, so GT4Recomp was not updated.".to_string());
+        }
+        Err(code) => log(format!("the elevated start of the setup failed (Win32 error {code}); trying a direct start")),
+    }
+    match starter.spawn_outside_job(program) {
+        Ok(()) => return Ok(SetupStart::OutsideJob),
+        Err(error) => log(format!("setup could not start directly ({error}); asking Explorer to start it")),
+    }
+    starter
+        .via_explorer(program)
+        .map(|_| SetupStart::Explorer)
+        .map_err(|error| format!("could not start the setup: {error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::path::Path;
+
+    /// Records the calls; each way succeeds or fails as told.
+    struct FakeStarter {
+        admin: Result<(), u32>,
+        direct: bool,
+        explorer: bool,
+        calls: RefCell<Vec<&'static str>>,
+    }
+
+    impl SetupStarter for FakeStarter {
+        fn run_as_admin(&self, _: &Path) -> Result<(), u32> {
+            self.calls.borrow_mut().push("runas");
+            self.admin
+        }
+        fn spawn_outside_job(&self, _: &Path) -> std::io::Result<()> {
+            self.calls.borrow_mut().push("direct");
+            if self.direct {
+                Ok(())
+            } else {
+                Err(std::io::Error::from_raw_os_error(ERROR_ELEVATION_REQUIRED as i32))
+            }
+        }
+        fn via_explorer(&self, _: &Path) -> std::io::Result<()> {
+            self.calls.borrow_mut().push("explorer");
+            if self.explorer {
+                Ok(())
+            } else {
+                Err(std::io::Error::other("no shell"))
+            }
+        }
+    }
+
+    fn fake(admin: Result<(), u32>, direct: bool, explorer: bool) -> FakeStarter {
+        FakeStarter { admin, direct, explorer, calls: RefCell::new(Vec::new()) }
+    }
+
+    #[test]
+    fn the_setup_starts_elevated_first() {
+        let starter = fake(Ok(()), true, true);
+        assert_eq!(start_setup(Path::new("setup.exe"), &starter, &mut |_| {}), Ok(SetupStart::Elevated));
+        assert_eq!(*starter.calls.borrow(), vec!["runas"]);
+    }
+
+    #[test]
+    fn a_declined_prompt_is_final() {
+        let starter = fake(Err(ERROR_CANCELLED), true, true);
+        let result = start_setup(Path::new("setup.exe"), &starter, &mut |_| {});
+        assert!(result.unwrap_err().contains("declined"));
+        assert_eq!(*starter.calls.borrow(), vec!["runas"], "no other start after the player said no");
+    }
+
+    #[test]
+    fn other_failures_fall_back_to_a_direct_start_then_explorer() {
+        let mut lines = Vec::new();
+        let starter = fake(Err(2), false, true);
+        assert_eq!(start_setup(Path::new("setup.exe"), &starter, &mut |line| lines.push(line)), Ok(SetupStart::Explorer));
+        assert_eq!(*starter.calls.borrow(), vec!["runas", "direct", "explorer"]);
+        assert_eq!(lines.len(), 2);
+        let starter = fake(Err(2), true, true);
+        assert_eq!(start_setup(Path::new("setup.exe"), &starter, &mut |_| {}), Ok(SetupStart::OutsideJob));
+        let starter = fake(Err(2), false, false);
+        assert!(start_setup(Path::new("setup.exe"), &starter, &mut |_| {}).is_err());
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn this_test_process_is_seen_and_a_made_up_name_is_not() {
+        let me = std::env::current_exe().unwrap();
+        let name = me.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(process_running(&[&name.to_uppercase()]));
+        assert!(!process_running(&["gt4-no-such-process-091.exe"]));
+    }
 }

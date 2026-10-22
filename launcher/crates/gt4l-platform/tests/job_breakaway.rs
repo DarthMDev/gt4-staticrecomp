@@ -22,6 +22,11 @@ fn run_child_role() -> bool {
     helper.raw_arg(format!("/d /c ping -n 3 127.0.0.1 >nul & echo survived>\"{marker}\""));
     let started = match mode.as_str() {
         "outside" => gt4l_platform::process::spawn_outside_job(&mut helper),
+        "released" => {
+            // TASK-091: before the elevated setup start, kill-on-close is cleared; a plain child then survives too.
+            gt4l_platform::process::release_kill_on_close().expect("clear kill-on-close");
+            helper.spawn()
+        }
         _ => helper.spawn(),
     };
     started.expect("start the helper");
@@ -75,4 +80,15 @@ fn a_process_started_inside_the_job_ends_with_the_launcher() {
     let marker = marker_path("inside");
     run_child("a_process_started_inside_the_job_ends_with_the_launcher", &marker, "inside");
     assert!(!marker_appears(&marker, Duration::from_secs(5)), "a child in the job outlived the launcher");
+}
+
+#[test]
+fn after_the_hand_over_release_a_child_in_the_job_survives_the_launcher_exit() {
+    if run_child_role() {
+        return;
+    }
+    let marker = marker_path("released");
+    run_child("after_the_hand_over_release_a_child_in_the_job_survives_the_launcher_exit", &marker, "released");
+    assert!(marker_appears(&marker, Duration::from_secs(10)), "a child died although kill-on-close was cleared");
+    let _ = std::fs::remove_file(&marker);
 }

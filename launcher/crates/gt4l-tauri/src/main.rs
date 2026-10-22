@@ -12,6 +12,7 @@ mod flow_audit;
 mod model;
 mod pad_nav;
 mod pad_service;
+mod relocation;
 mod renderer_switch;
 mod saves;
 mod setup;
@@ -25,7 +26,6 @@ use std::sync::{Arc, Mutex};
 
 use tauri::Manager;
 
-use gt4l_core::paths::DataDirs;
 use gt4l_core::LAUNCHER_VERSION;
 
 fn main() {
@@ -33,22 +33,40 @@ fn main() {
     if !gt4l_platform::process::claim_single_instance() {
         return;
     }
-    let Some(dirs) = DataDirs::from_environment() else {
-        eprintln!("LOCALAPPDATA is not set and GT4RECOMP_DATA_DIR is not given");
-        return;
+    // TASK-091: large data in `<exe dir>\data` (portable), user data in `%APPDATA%\GT4Recomp`. The 1.2.0 user
+    // data moves here, before the window; the large data moves in the background below.
+    let exe_dir = updates::install_directory();
+    let startup = match relocation::prepare(&exe_dir) {
+        Ok(startup) => startup,
+        Err(message) => {
+            eprintln!("GT4Recomp cannot find its folders: {message}");
+            return;
+        }
     };
+    let dirs = startup.layout.data.clone();
     let _ = std::fs::create_dir_all(dirs.root());
-    state::log(&dirs, &format!("GT4Recomp {LAUNCHER_VERSION} starting"));
+    state::log(&dirs, &format!("GT4Recomp {LAUNCHER_VERSION} starting from {}", exe_dir.display()));
+    for line in &startup.log {
+        state::log(&dirs, line);
+    }
+    for line in relocation::clean_old_install(&exe_dir) {
+        state::log(&dirs, &line);
+    }
     if let Err(message) = gt4l_platform::process::join_kill_on_close_job() {
         state::log(&dirs, &format!("the game would not end with the launcher: {message}"));
     }
-    let app_state = match state::AppState::load(dirs.clone()) {
+    let mut app_state = match state::AppState::load(dirs.clone(), startup.user.clone(), startup.layout.legacy.local.clone()) {
         Ok(app_state) => app_state,
         Err(message) => {
             state::log(&dirs, &format!("the launcher could not start: {message}"));
             return;
         }
     };
+    if let Some((notice, problem)) = startup.notice.clone() {
+        app_state.migration.notice = notice;
+        app_state.migration.problem = problem;
+    }
+    let legacy = startup.layout.legacy.clone();
     #[cfg(feature = "visual-check")]
     visual::seed(&app_state);
 
@@ -65,7 +83,11 @@ fn main() {
             // Every launch: version file, first gt4-gs install if needed, and the update check (never blocks Play).
             let launch_shared = app.state::<state::Shared>().inner().clone();
             let launch_app = app.handle().clone();
-            std::thread::spawn(move || updates::check_on_launch(launch_app, launch_shared));
+            // The 1.2.0 large data moves first (Play and setup wait for it), then the version file and update check.
+            std::thread::spawn(move || {
+                relocation::move_large_data(&launch_shared, &legacy);
+                updates::check_on_launch(launch_app, launch_shared);
+            });
             // TASK-081: probe the processor and Vulkan once in the background, so Play does not wait for the driver
             // to load; a problem is logged here and shown when the player starts setup or Play.
             let check_dirs = dirs_for_setup.clone();

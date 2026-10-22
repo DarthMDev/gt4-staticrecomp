@@ -25,7 +25,6 @@ use crate::model;
 use crate::pad_service;
 use crate::setup;
 use crate::saves::{self, Item};
-use crate::updates;
 use crate::state::{self, lock, AppState, SetupOutcome, Shared};
 
 /// `app_state()` (ui/dev/README.md):
@@ -91,6 +90,14 @@ pub fn app_state_of(state: &AppState) -> Value {
         },
         "game_running": state.game_child.is_some(),
         "game_files": state.dirs.disc_folder().display().to_string(),
+        "migration": {
+            "running": state.migration.running,
+            "item": state.migration.item,
+            "bytes_done": state.migration.bytes_done,
+            "bytes_total": state.migration.bytes_total,
+            "notice": state.migration.notice,
+            "problem": state.migration.problem,
+        },
         "visual_page": visual_page(),
     })
 }
@@ -244,6 +251,9 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
     if state.game_child.is_some() {
         return Err("The game is already running.".into());
     }
+    if state.migration.running {
+        return Err("GT4Recomp is moving its game files to the install folder. Wait until it has finished.".into());
+    }
     let disc = match state.installed() {
         Installed::Ready { image, .. } => image,
         Installed::Missing { reason } => {
@@ -258,14 +268,14 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         return Err("The game program is missing. Reinstall GT4Recomp.".into());
     }
     let mut extra: Vec<(String, String)> = Vec::new();
-    let controls_path = dirs.root().join(gt4controls::CONTROLS_FILE_NAME);
+    let controls_path = state.user_dirs.controls_file();
     if controls_path.exists() {
         extra.push(("GT4_CONTROLS_FILE".into(), controls_path.display().to_string()));
     }
     // Decision 0070: PCSX2 GS when it is installed and selected; otherwise CoreGS 1.1 with a message.
     let settings = state.config.settings.clone();
     let installed = if launch::needs_external_renderer(&settings) {
-        gs_release::installed(&updates::renderer_root(&dirs))
+        gs_release::installed(&dirs.renderer_root())
     } else {
         None
     };
@@ -337,7 +347,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, notice, display, extra } = inputs;
     let card = dirs.runtime_card();
     saves::prepare_card(&lock(&shared).library, &card)?;
-    let textures = lock(&shared).user_dirs.textures();
+    let textures = lock(&shared).dirs.textures();
     paths::ensure_texture_folders(&textures).map_err(|error| format!("texture folder: {error}"))?;
     let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), display.as_ref(), &textures, &extra)?;
     {
@@ -741,9 +751,9 @@ pub struct AboutInfo {
     pub gt4gs: String,
     /// Where the game files live: the copy of the disc image (`<data>\disc`). The picked file is not needed.
     pub game_files: String,
-    /// The data folder (settings, prepared files, renderer, logs).
+    /// The large data folder (`<install>\data`: disc copy, prepared files, renderer, logs).
     pub data_folder: String,
-    /// The player's folder with the saves and replays (`Documents\Gran Turismo 4`).
+    /// The user data folder with the settings, saves and replays (`%APPDATA%\GT4Recomp`).
     pub saves_folder: String,
 }
 
@@ -754,7 +764,7 @@ pub fn about_info(shared: State<'_, Shared>) -> Result<AboutInfo, String> {
 
 pub fn about_info_of(shared: &Shared) -> Result<AboutInfo, String> {
     let state = lock(shared);
-    let renderer = gs_release::installed(&updates::renderer_root(&state.dirs))
+    let renderer = gs_release::installed(&state.dirs.renderer_root())
         .map(|installed| installed.version.text())
         .unwrap_or_else(|| "not installed".to_string());
     Ok(AboutInfo {
@@ -784,32 +794,32 @@ pub fn open_game_files_folder(shared: State<'_, Shared>) -> Result<(), String> {
     open_folder(&folder)
 }
 
-/// Opens the player's folder (`Documents\Gran Turismo 4`, with Saves and Replays) in Explorer.
+/// Opens the user data folder (`%APPDATA%\GT4Recomp`, with Saves and Replays) in Explorer.
 #[tauri::command]
 pub fn open_player_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let folder = lock(shared.inner()).user_dirs.root().to_path_buf();
     open_folder(&folder)
 }
 
-/// Opens the Saves folder of the player's folder (`Documents\Gran Turismo 4\Saves`) in Explorer.
+/// Opens the Saves folder of the user data folder (`%APPDATA%\GT4Recomp\Saves`) in Explorer.
 #[tauri::command]
 pub fn open_saves_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let folder = lock(shared.inner()).user_dirs.saves();
     open_folder(&folder)
 }
 
-/// Opens the Replays folder of the player's folder (`Documents\Gran Turismo 4\Replays`) in Explorer.
+/// Opens the Replays folder of the user data folder (`%APPDATA%\GT4Recomp\Replays`) in Explorer.
 #[tauri::command]
 pub fn open_replays_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let folder = lock(shared.inner()).user_dirs.replays();
     open_folder(&folder)
 }
 
-/// Opens the custom texture folder (`Documents\Gran Turismo 4\Textures`) in Explorer. Its `replacements` folder is
+/// Opens the custom texture folder (`<install>\data\Textures`) in Explorer. Its `replacements` folder is
 /// made first, so the owner can drop a pack in (TASK-088).
 #[tauri::command]
 pub fn open_textures_folder(shared: State<'_, Shared>) -> Result<(), String> {
-    let folder = lock(shared.inner()).user_dirs.textures();
+    let folder = lock(shared.inner()).dirs.textures();
     paths::ensure_texture_folders(&folder).map_err(|error| error.to_string())?;
     open_folder(&folder)
 }

@@ -21,12 +21,16 @@ $launcher = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $checkout = (Resolve-Path (Join-Path $launcher "..")).Path
 $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
 $rustupHome = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $env:USERPROFILE ".rustup" }
+# CARGO_TARGET_DIR may put the build on another drive (C: short of space, TASK-091); its path is remapped and scanned
+# like the others.
+$targetDir = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { Join-Path $launcher "target" }
 
 # Broad prefix first: when several prefixes match a path, rustc uses the last one, so the user-profile entry only
 # catches what the narrower Cargo and rustup entries do not.
 $remaps = @(
     @($env:USERPROFILE, "/home"),
     @($checkout, "/gt4recomp"),
+    @($targetDir, "/target"),
     @($rustupHome, "/rustup"),
     @($cargoHome, "/cargo")
 )
@@ -54,12 +58,12 @@ try {
     }
 }
 
-$exe = Join-Path $launcher "target\release\GT4Recomp.exe"
+$exe = Join-Path $targetDir "release\GT4Recomp.exe"
 $bytes = [System.IO.File]::ReadAllBytes($exe)
 $ascii = [System.Text.Encoding]::ASCII.GetString($bytes)
 $utf16 = [System.Text.Encoding]::Unicode.GetString($bytes)
 $utf16Odd = [System.Text.Encoding]::Unicode.GetString($bytes, 1, $bytes.Length - 1)
-$needles = @($env:USERPROFILE, $cargoHome, $rustupHome, $checkout, $env:USERNAME, "\Users\", "Antigravity") |
+$needles = @($env:USERPROFILE, $cargoHome, $rustupHome, $checkout, $targetDir, $env:USERNAME, "\Users\", "Antigravity") |
     Where-Object { $_ -and $_.Length -ge 4 } | Select-Object -Unique
 $hits = 0
 foreach ($needle in $needles) {

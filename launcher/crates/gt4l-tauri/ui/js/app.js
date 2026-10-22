@@ -99,7 +99,49 @@
     }
   });
 
+  // TASK-091 (1.2.1): the first start moves the files of GT4Recomp 1.2.0 to the new folders. While the game files
+  // move (in the background), a small status line shows the progress; Play and setup wait. The result is a toast,
+  // shown once per notice text.
+  var migrationBox = null;
+  var shownNotice = "";
+  function migrationLine(migration) {
+    var done = migration.bytes_done || 0;
+    var total = migration.bytes_total || 0;
+    var percent = total > 0 ? " " + Math.floor((done * 100) / total) + "%" : "";
+    return "Moving " + (migration.item || "game files") + " to the install folder…" + percent;
+  }
+  function showMigration(appState) {
+    var migration = appState && appState.migration;
+    if (!migration) {
+      return;
+    }
+    if (migration.running) {
+      if (!migrationBox) {
+        migrationBox = document.createElement("div");
+        migrationBox.className = "migration";
+        migrationBox.setAttribute("role", "status");
+        migrationBox.setAttribute("aria-live", "polite");
+        document.body.appendChild(migrationBox);
+      }
+      migrationBox.textContent = migrationLine(migration);
+      root.setTimeout(function () {
+        GT4.backend.call("app_state").then(showMigration, function () {});
+      }, 700);
+      return;
+    }
+    if (migrationBox) {
+      migrationBox.parentNode.removeChild(migrationBox);
+      migrationBox = null;
+    }
+    if (migration.notice && migration.notice !== shownNotice) {
+      shownNotice = migration.notice;
+      GT4.ui.toast(migration.notice, !!migration.problem);
+    }
+  }
+  GT4.showMigration = showMigration;
+
   GT4.backend.call("app_state").then(function (appState) {
+    showMigration(appState);
     var route = parseRoute();
     if (!route.name) {
       go(appState.setup && appState.setup.state === "done" ? "#/home" : "#/setup");

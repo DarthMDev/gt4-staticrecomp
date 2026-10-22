@@ -371,7 +371,8 @@
 
   function appState() {
     return { setup: JSON.parse(JSON.stringify(setup)), game_running: gameRunning,
-      game_files: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp\\disc" };
+      game_files: "C:\\Program Files\\GT4Recomp\\data\\disc",
+      migration: { running: false, item: "", bytes_done: 0, bytes_total: 0, notice: "", problem: false } };
   }
 
   function invoke(command, args) {
@@ -478,9 +479,9 @@
           gt4recomp: "1.1.0",
           gt4gs: "1.1.0",
           disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso",
-          game_files: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp\\disc",
-          data_folder: "C:\\Users\\Player\\AppData\\Local\\GT4Recomp",
-          saves_folder: "C:\\Users\\Player\\Documents\\Gran Turismo 4"
+          game_files: "C:\\Program Files\\GT4Recomp\\data\\disc",
+          data_folder: "C:\\Program Files\\GT4Recomp\\data",
+          saves_folder: "C:\\Users\\Player\\AppData\\Roaming\\GT4Recomp"
         };
       case "open_log_folder":
       case "open_game_files_folder":

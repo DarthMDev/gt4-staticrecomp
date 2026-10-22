@@ -441,7 +441,7 @@
         var graphics = section(ctx, "graphics", "Graphics", basic.filter(function (row) {
           return (row.group || "graphics") === "graphics";
         }));
-        // TASK-088: opens Documents\Gran Turismo 4\Textures (its replacements folder is made first). Next to the texture options.
+        // TASK-088: opens <install>\data\Textures (TASK-091; its replacements folder is made first). Next to the texture options.
         if (graphics) {
           // Inline progress of a switch to GSdx (renderer-progress events; app.js sets the text).
           var rendererStatus = h("p", { class: "note renderer-status", role: "status", data: { action: "renderer-status" }, text: "" });
@@ -532,7 +532,7 @@
         ]),
         h("div", { class: "ctl" }, [openGameFiles])
       ]));
-      // The player's saves and replays live in Documents\Gran Turismo 4 (kept by the uninstaller).
+      // The player's settings, saves and replays live in %APPDATA%\GT4Recomp (kept by the uninstaller).
       var openSaves = h("button", {
         class: "btn small",
         type: "button",
