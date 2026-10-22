@@ -36,8 +36,11 @@ while the game runs, which is also what makes future **Android and iOS** builds 
 - **Native ultrawide and any aspect ratio (1.1.0):** 21:9, 32:9, 16:10 or a phone shape, automatic from the output
   resolution. The 3D view widens Hor+/Vert+, the HUD stays centred 16:9 and menus are pillarboxed; the internal
   resolution follows automatically, with a Render scale of 50-200%.
-- **GSdx renderer** (the PCSX2 GS) in its own process: crisp deinterlaced menus, every GSdx option in the launcher,
-  **custom texture packs** (1.2.0) and a built-in performance overlay. **CoreGS 1.1** is built in as the fallback.
+- **GSdx renderer** (the PCSX2 GS) in its own process: crisp deinterlaced menus, every GSdx option in the launcher
+  and a built-in performance overlay. **CoreGS 1.1** is built in as the fallback.
+- **Custom texture packs (1.2.0):** drop a pack's `replacements` folder into `Documents\Gran Turismo 4\Textures`
+  and switch on **Load custom textures** in Settings > Graphics (on by default). HD textures and mods from the PCSX2
+  community work without renaming folders.
 - **Crash-safe memory card:** saves survive a crash or a forced close.
 - **Release 1.2.0:** a one-click **installer** and a **launcher** that sets the game up from your own disc
   image, with settings, saves, controller remapping and update checks.
