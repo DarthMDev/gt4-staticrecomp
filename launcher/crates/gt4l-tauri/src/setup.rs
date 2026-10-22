@@ -297,9 +297,9 @@ fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer:
             String::new()
         }
         Err(message) => {
-            state::log(dirs, &format!("PCSX2 GS not installed during setup: {message}"));
+            state::log(dirs, &format!("GSdx not installed during setup: {message}"));
             notify("renderer-progress", json!({ "step": "failed", "message": message }));
-            "PCSX2 GS could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start."
+            "GSdx could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start."
                 .to_string()
         }
     }

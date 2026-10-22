@@ -47,7 +47,7 @@ description = "Reset to defaults: GT4 default for every settable row (owner deci
 [[setting]]
 id = "gs_engine"
 label = "Renderer"
-help = "Which renderer draws the game: the PCSX2 GS (default) or CoreGS 1.1 (secondary)."
+help = "Which renderer draws the game: GSdx (default; the PCSX2 GS renderer, GPL-3.0) or CoreGS 1.1 (built in, no download)."
 page = "basic"
 order = 1
 control = "dropdown"
@@ -59,15 +59,15 @@ written = "never"
 status = "ok"
 env = "GT4_GS_ENGINE"
 choices = [
-  { name = "pcsx2", ini = "", status = "ok", label = "PCSX2 GS" },
+  { name = "pcsx2", ini = "", status = "ok", label = "GSdx" },
   { name = "coregs-1.1", ini = "", status = "ok", label = "CoreGS 1.1 (secondary)" },
 ]
 notes = "Owner decision 2026-10-16 (TASK-049, item 1). Launcher-only: pcsx2 = gt4-gs.exe (`--mode pcsx2`); coregs-1.1 = the built-in CoreGS 1.1 fallback (`--mode main`). Its upscale, FSR, FXAA and deinterlace options are hidden (owner decision 5). The launcher reads GT4_GS_ENGINE (TASK-019/043); it is never written to gt4-gs.ini."
 
 [[setting]]
 id = "renderer"
-label = "Graphics API (PCSX2 GS)"
-help = "Graphics API for the PCSX2 GS. Vulkan is the GT4 renderer; D3D12 and D3D11 show after the owner checks them."
+label = "Graphics API (GSdx)"
+help = "Graphics API for GSdx. Vulkan is the GT4 renderer; D3D12 and D3D11 show after the owner checks them."
 page = "advanced"
 order = 1
 control = "dropdown"
@@ -847,7 +847,7 @@ notes = "TASK-060. Launcher-only: the game reads GT4_CURSOR_AUTOHIDE (unset or 1
 [[setting]]
 id = "shader_compile_notice"
 label = "Show \"Compiling shaders\" notice"
-help = "Small text in the bottom-left corner while the PCSX2 GS compiles shaders or pipelines (not when they come from the cache)."
+help = "Small text in the bottom-left corner while GSdx compiles shaders or pipelines (not when they come from the cache)."
 page = "advanced"
 order = 32
 control = "toggle"

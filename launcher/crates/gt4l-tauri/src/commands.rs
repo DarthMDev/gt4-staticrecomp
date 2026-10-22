@@ -138,8 +138,13 @@ pub fn get_settings_table_with_monitors(shared: &Shared, monitors: &[display_rul
 /// a stick row (`lstick_deadzone`, `rstick_deadzone`).
 /// A refused value leaves the setting unchanged and returns the reason.
 #[tauri::command]
-pub fn set_setting(id: String, value: Value, shared: State<'_, Shared>) -> Result<(), String> {
-    set_setting_of(id, value, shared.inner())
+pub fn set_setting(app: AppHandle, id: String, value: Value, shared: State<'_, Shared>) -> Result<(), String> {
+    set_setting_of(id.clone(), value, shared.inner())?;
+    // TASK-089 extension (1.2.0): choosing GSdx installs it at once when it is missing (renderer_switch.rs).
+    if id == "renderer" {
+        crate::renderer_switch::start(app, shared.inner().clone());
+    }
+    Ok(())
 }
 
 pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), String> {
@@ -354,7 +359,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
                 break outcome;
             }
             // The player chose "restart with the built-in renderer" after a PCSX2 GS failure (TASK-038).
-            state::log(&dirs, "PCSX2 GS asked for a restart; starting CoreGS 1.1");
+            state::log(&dirs, "GSdx asked for a restart; starting CoreGS 1.1");
             drop(running);
             match game::start(&dirs, &executable, &elf, &disc, &settings, None, display.as_ref(), &textures, &extra) {
                 Ok(next) => {

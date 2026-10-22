@@ -171,7 +171,7 @@ pub fn step_name(step: Step) -> &'static str {
 }
 
 /// Emits a step change; the per-chunk byte counts are not sent from here (the setup page polls them).
-fn emit_step(app: &AppHandle, step: Step) {
+pub fn emit_step(app: &AppHandle, step: Step) {
     if !matches!(step, Step::Transfer { .. }) {
         emit_progress(app, step_name(step));
     }

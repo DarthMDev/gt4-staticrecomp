@@ -14,7 +14,7 @@
 
   var NAMES = {
     launcher: "GT4Recomp",
-    renderer: "gt4-gs (PCSX2 GS renderer)"
+    renderer: "gt4-gs (GSdx renderer)"
   };
 
   function errorText(err) {

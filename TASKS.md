@@ -113,8 +113,8 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑085 | Launcher self-update: the setup starts outside the launcher's kill-on-close job | ✅ Done (2026-10-21) · PR #67; v1.1.0 republished with the fix; launchers 1.0.0 update by running the setup |
 | TASK‑086 | Progressive 480p everywhere (menus and races at 480p through ELF patches) | ⏸️ Shelved (owner, 2026-10-21) · owner test broke the car select and the race load; branch `task/086-progressive-480p` kept |
 | TASK‑087 | GS readbacks without stalls, in CoreGS 2.0 (GPU-driven flare visibility, no EE wait) | 📋 Planned (owner, 2026-10-21) · study done (docs/GS-READBACK-STUDY.md); CoreGS 2.0 only, gt4-gs frozen |
-| TASK‑088 | Release 1.2.0: custom textures (gt4-gs texture replacements from `Documents\Gran Turismo 4\Textures`, two launcher options), 2-row bottom crop, black window from the first frame | 🧪 Waiting for owner test (local gt4-gs 1.2.0 and GT4Recomp 1.2.0 test installer; not published) |
-| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance | 🔄 Candidate (2026-10-21), `task/089-coregs-independent-launcher`: skip optional PCSX2 package installation and background release requests; launcher updates and explicit manual renderer updates remain available; full Rust launcher workspace passed; maintainer launcher acceptance pending |
+| TASK‑088 | Release 1.2.0: custom textures (gt4-gs texture replacements from `Documents\Gran Turismo 4\Textures`, two launcher options), 2-row bottom crop, black window from the first frame, monitor names, desktop resolution, every gt4-gs value enabled, GSdx setup choice and switch | 🧪 Waiting for owner test (local gt4-gs 1.2.0 and GT4Recomp 1.2.0 test installer; not published) |
+| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner test pending |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -1231,6 +1231,10 @@ PCSX2-tainted work, not touching CoreGS 2.0. Owner review: the side-by-side imag
 
 
 ### TASK-089 — Independent CoreGS launcher path
+
+**Done (2026-10-21) in release 1.2.0.** Contribution by JulioHeroZ (PR #72, branch `task/089-coregs-independent-launcher`, based on main `6422988`), merged into `task/088-custom-textures-120` with a merge commit so their commits and authorship are kept. The launcher review of the diff found no problem. Added on the 1.2.0 branch: the setup dialog chooses GSdx (recommended) or CoreGS 1.1 (built in, no download) before setup starts; choosing GSdx in Settings installs it at once when it is missing (inline progress, "GSdx installed successfully", and a failure keeps CoreGS 1.1 selected); every user-facing "PCSX2 GS" string now says GSdx (settings keys and file names unchanged).
+
+Original branch description:
 
 Branch `task/089-coregs-independent-launcher`, based on main `6422988` (2026-10-21).
 A saved `renderer = "coregs11"` choice skips the external renderer installer during setup,

@@ -538,6 +538,9 @@ pub fn licenses_text() -> &'static str {
      The launcher interface is built with Tauri 2 (MIT or Apache-2.0) and runs in Microsoft Edge WebView2, \
      the Windows system web view (Microsoft WebView2 terms).\n\n\
      Typefaces: Roboto and Roboto Condensed (Apache-2.0), bundled in the launcher.\n\n\
+     GSdx is the PCSX2 GS renderer of the PCSX2 project (https://pcsx2.net), licensed GPL-3.0-or-later. It is the \
+     gt4-gs.exe program, downloaded only when it is selected, and it runs in its own process; it is not part of \
+     GT4Recomp's MIT code. Its source and licence are in the gt4-gs release.\n\n\
      The launcher uses the Rust crates listed in launcher/Cargo.lock. paraLLEl-GS (LGPL-3.0-or-later) is \
      a separate library and is not part of the launcher's interface."
 }

@@ -443,6 +443,10 @@
         }));
         // TASK-088: opens Documents\Gran Turismo 4\Textures (its replacements folder is made first). Next to the texture options.
         if (graphics) {
+          // Inline progress of a switch to GSdx (renderer-progress events; app.js sets the text).
+          var rendererStatus = h("p", { class: "note renderer-status", role: "status", data: { action: "renderer-status" }, text: "" });
+          GT4.setRendererStatus = function (text) { rendererStatus.textContent = text || ""; };
+          graphics.appendChild(rendererStatus);
           var textures = h("button", {
             class: "btn",
             type: "button",

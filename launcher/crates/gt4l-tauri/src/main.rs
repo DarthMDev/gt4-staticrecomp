@@ -12,6 +12,7 @@ mod flow_audit;
 mod model;
 mod pad_nav;
 mod pad_service;
+mod renderer_switch;
 mod saves;
 mod setup;
 mod state;

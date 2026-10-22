@@ -51,7 +51,7 @@
     setup.disc_name = "";
     setup.problem = "Game files missing (SCUS-97328.iso is missing). Choose your disc image again.";
   } else if (setupStart === "offline") {
-    setup.note = "PCSX2 GS could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start.";
+    setup.note = "GSdx could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start.";
   }
 
   // setup_start: walk the steps on a timer, like the Rust thread.
@@ -86,7 +86,7 @@
     { id: "renderer", label: "Renderer", help: "PCSX2 GS (the default) draws the game on your GPU in its own process. CoreGS 1.1 is the launcher's built-in renderer, a secondary choice. CoreGS 2.0 is in development.",
       page: "basic", group: "graphics", control: "dropdown",
       values: [
-        { value: "pcsx2", label: "PCSX2 GS" },
+        { value: "pcsx2", label: "GSdx" },
         { value: "coregs-1.1", label: "CoreGS 1.1 (secondary)" },
         { value: "coregs-2.0", label: "CoreGS 2.0 (coming soon)", disabled: true }
       ],

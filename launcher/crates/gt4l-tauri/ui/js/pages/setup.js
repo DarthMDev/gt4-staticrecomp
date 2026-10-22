@@ -23,7 +23,7 @@
     { id: "copying", label: "Copying game files", detail: "a copy of your disc image for GT4Recomp" },
     { id: "checking", label: "Checking disc", detail: null },
     { id: "preparing", label: "Preparing game files", detail: null },
-    { id: "renderer", label: "Graphics renderer", detail: "PCSX2 GS (gt4-gs) from GitHub" }
+    { id: "renderer", label: "Graphics renderer", detail: "GSdx (gt4-gs) from GitHub" }
   ];
   var RENDERER_TEXT = {
     listing: "finding the latest version",
@@ -209,12 +209,35 @@
     call("setup_choose_disc").then(function (info) {
       busyChoosing = false;
       if (info) {
-        startSetup();
+        chooseRenderer();
       } else {
         poll();
       }
     }, function () {
       busyChoosing = false;
+      poll();
+    });
+  }
+
+  // TASK-089 extension (1.2.0): the renderer is chosen before setup starts. GSdx is the recommendation and the first
+  // (primary) choice; CoreGS 1.1 needs no download. The choice is saved as the Renderer setting, then setup runs.
+  function chooseRenderer() {
+    GT4.ui.openDialog({
+      title: "Graphics renderer",
+      text: "GSdx draws the game on your graphics card, in its own process. CoreGS 1.1 is built in and needs no download. You can change this later in Settings, Graphics.",
+      buttons: [
+        { label: "GSdx — Recommended", primary: true, run: function () { useRenderer("pcsx2"); } },
+        { label: "CoreGS 1.1 — Built in, no download", run: function () { useRenderer("coregs11"); } },
+        { label: "Back", run: function () { poll(); } }
+      ]
+    });
+  }
+
+  function useRenderer(value) {
+    call("set_setting", { id: "renderer", value: value }).then(function () {
+      startSetup();
+    }, function (err) {
+      GT4.ui.toast(GT4.errorText(err), true);
       poll();
     });
   }

@@ -103,7 +103,7 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
         settings::PCSX2_GS => match installed {
             Some(_) => RendererChoice::Pcsx2,
             None => RendererChoice::CoreGs11 {
-                reason: Some("PCSX2 GS is not installed yet; this session uses CoreGS 1.1.".to_string()),
+                reason: Some("GSdx is not installed yet; this session uses CoreGS 1.1.".to_string()),
             },
         },
         _ => RendererChoice::CoreGs11 { reason: None },
