@@ -71,6 +71,11 @@ fn main() {
     let safe_mode = webview_guard::apply_safe_mode_environment(&user_root);
     let webview_version = tauri::webview_version().unwrap_or_else(|_| "unknown".to_string());
     state::log(&dirs, &format!("WebView2 runtime version: {webview_version}"));
+    // TASK-091 (issue #80): a missing runtime is reported before any window exists, not after the watchdog's wait.
+    if webview_guard::check_webview2_at_start(&dirs) {
+        webview_guard::show_failure(&dirs, webview_guard::Problem::Missing);
+        return;
+    }
     if safe_mode {
         state::log(&dirs, "WebView2 safe mode (GPU acceleration off)");
     } else {

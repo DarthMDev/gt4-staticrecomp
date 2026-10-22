@@ -183,6 +183,33 @@ pub fn test_never_ready() -> bool {
     std::env::var(TEST_NEVER_READY_VAR).map(|value| value == "1").unwrap_or(false)
 }
 
+/// Test only: when this variable is `1`, the start-up check reports WebView2 as missing, so the native message can be
+/// seen on a PC that has the runtime. Not for players.
+pub const TEST_WEBVIEW2_MISSING_VAR: &str = "GT4RECOMP_TEST_WEBVIEW2_MISSING";
+/// A fixed-version WebView2 runtime folder; when it is set, the registry check is skipped (see `gt4l_platform::webview2`).
+pub const WEBVIEW2_FIXED_FOLDER_VAR: &str = "WEBVIEW2_BROWSER_EXECUTABLE_FOLDER";
+
+/// Test only (see [`TEST_WEBVIEW2_MISSING_VAR`]).
+pub fn test_webview2_missing() -> bool {
+    std::env::var(TEST_WEBVIEW2_MISSING_VAR).map(|value| value == "1").unwrap_or(false)
+}
+
+/// The start-up check of the WebView2 runtime (TASK-091, issue #80). Runs before the Tauri builder, so a missing
+/// runtime is reported at once, not after the watchdog's wait. Returns `true` when the runtime is missing; the caller
+/// shows [`show_failure`] with [`Problem::Missing`] and exits.
+pub fn check_webview2_at_start(dirs: &DataDirs) -> bool {
+    let fixed = gt4l_platform::webview2::fixed_runtime_folder_set(std::env::var(WEBVIEW2_FIXED_FOLDER_VAR).ok().as_deref());
+    let check = gt4l_platform::webview2::check_installed(fixed, test_webview2_missing());
+    match &check.version {
+        Some(version) => log(dirs, &format!("WebView2 runtime found in the registry: {version}")),
+        None => log(dirs, "WebView2 runtime not found in the registry"),
+    }
+    if check.missing {
+        log(dirs, "WebView2 is missing: the native message is shown before any window");
+    }
+    check.missing
+}
+
 /// Set by `ui_ready` once the first screen has drawn.
 #[derive(Default)]
 pub struct PageReady {
