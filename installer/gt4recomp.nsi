@@ -23,6 +23,10 @@
 ; A reinstall into another folder (TASK-091, slice 252) removes the previous program folder's files and records its
 ; data folder as PreviousDataDir (HKLM); the launcher moves that data at its first start. A self-update runs silently
 ; with /S /UPDATE /D=<install folder> and starts the launcher again as the player.
+; Updates are safe (TASK-091, slice 255): .onInit waits for the files of an existing install to be free (up to 30 s);
+; the new program is first extracted into $INSTDIR\.update-staging, then swapped in item by item, and a failed rename
+; rolls the previous files back (see SwapStagedIn and RollbackSwap). data\ is never touched by the swap. Each run
+; appends one line to data\logs\setup.log.
 
 !ifndef VERSION
   !define VERSION "1.2.1"
@@ -93,6 +97,8 @@ Var DeleteDataState
 Var WebView2Version
 ; 1 when /UPDATE was given: the launcher's self-update (TASK-091). Silent with /S, it starts the launcher when done.
 Var UpdateRun
+; The result of this run, written to data\logs\setup.log: ok, locked: <file>, extract failed, swap failed ... (TASK-091).
+Var SetupResult
 
 ; Sets $WebView2Version to the installed Evergreen WebView2 Runtime version, or "" when it is missing. Microsoft's rule:
 ; the runtime is present when the "pv" value of its client key exists and is neither empty nor 0.0.0.0. Per-machine
@@ -121,12 +127,11 @@ Function WebView2Present
   ${EndIf}
 FunctionEnd
 
-; The launcher starts this setup from an update and exits at once. A short pause lets it release GT4Recomp.exe
-; before the files are replaced. An earlier per-machine install is upgraded in its own folder (unless /D= was given).
+; The launcher starts this setup from an update and exits at once. The files of an existing install are waited for
+; below (no fixed pause). An earlier per-machine install is upgraded in its own folder (unless /D= was given).
 ; The launcher's self-update passes "/S /UPDATE /D=<install folder>" (TASK-091, updates.rs setup_arguments): silent,
 ; into the folder of the running launcher, which is then started again as the player (see the Install section).
 Function .onInit
-  Sleep 1500
   ${IfNot} ${RunningX64}
     MessageBox MB_OK|MB_ICONSTOP "GT4Recomp needs 64-bit Windows." /SD IDOK
     Abort
@@ -144,6 +149,229 @@ Function .onInit
   ${IfNot} ${Errors}
     StrCpy $UpdateRun 1
   ${EndIf}
+
+  ; Waits for the files this install replaces to be free (TASK-091), instead of a fixed pause. Nothing is changed yet.
+  ; Silent: logged, then aborted with error level 2. Interactive: Retry waits again, Cancel aborts.
+  ${If} ${FileExists} "$INSTDIR\GT4Recomp.exe"
+    Call WaitForInstallFree
+    ${While} $R8 != ""
+      StrCpy $SetupResult "locked: $R8"
+      ${If} ${Silent}
+        Call LogSetupResult
+        SetErrorLevel 2
+        Abort
+      ${EndIf}
+      MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Gran Turismo 4 is still running ($R8). Close it and press Retry." /SD IDCANCEL IDRETRY lockedRetry
+      Call LogSetupResult
+      SetErrorLevel 2
+      Abort
+    lockedRetry:
+      Call WaitForInstallFree
+    ${EndWhile}
+  ${EndIf}
+FunctionEnd
+
+; ---- Safe update helpers (TASK-091, slice 255) ----
+; All helpers work on the install in $INSTDIR. Registers: $R1 first item that could not be rolled back, $R2 error
+; level, $R3..$R6 scratch, $R7 folder, $R8 first locked or failed item, $R9 item or file path.
+
+!macro SwapStep ITEM
+  StrCpy $R9 "${ITEM}"
+  Call SwapItem
+  ${If} $R8 != ""
+    Return
+  ${EndIf}
+!macroend
+
+!macro RollbackStep ITEM
+  StrCpy $R9 "${ITEM}"
+  Call RollbackItem
+!macroend
+
+; $R7 = a folder, $R9 = an item name. $R6 = "1" when the item (file or folder) exists in that folder.
+Function ItemIn
+  StrCpy $R6 "0"
+  ${If} ${FileExists} "$R7\$R9"
+  ${OrIf} ${FileExists} "$R7\$R9\*.*"
+    StrCpy $R6 "1"
+  ${EndIf}
+FunctionEnd
+
+; $R9 = a file. $R8 takes its path when the file exists but cannot be opened for writing (it runs, or it is locked).
+Function TestFileFree
+  ${If} ${FileExists} "$R9"
+    ClearErrors
+    FileOpen $R5 "$R9" a
+    ${If} ${Errors}
+    ${OrIf} $R5 == ""
+      ${If} $R8 == ""
+        StrCpy $R8 $R9
+      ${EndIf}
+    ${Else}
+      FileClose $R5
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; Sets $R8 to the first file the install replaces that is locked, or "" when all are free: the launcher, the SDL3 DLL,
+; the game executable and every game\*.dll. A file that does not exist counts as free.
+Function FindLockedInstallFile
+  StrCpy $R8 ""
+  StrCpy $R9 "$INSTDIR\GT4Recomp.exe"
+  Call TestFileFree
+  StrCpy $R9 "$INSTDIR\SDL3.dll"
+  Call TestFileFree
+  StrCpy $R9 "$INSTDIR\game\gt4vulkan.exe"
+  Call TestFileFree
+  FindFirst $R0 $R1 "$INSTDIR\game\*.dll"
+  ${DoWhile} $R1 != ""
+    StrCpy $R9 "$INSTDIR\game\$R1"
+    Call TestFileFree
+    FindNext $R0 $R1
+  ${Loop}
+  FindClose $R0
+FunctionEnd
+
+; Waits up to 30 s (60 checks, 500 ms apart) for the files to be free. $R8 = the first locked file, or "".
+Function WaitForInstallFree
+  StrCpy $R7 0
+  ${Do}
+    Call FindLockedInstallFile
+    ${If} $R8 == ""
+      ${Break}
+    ${EndIf}
+    IntOp $R7 $R7 + 1
+    ${If} $R7 >= 60
+      ${Break}
+    ${EndIf}
+    Sleep 500
+  ${Loop}
+FunctionEnd
+
+; Appends one line to data\logs\setup.log: the version, the mode, the update flag and $SetupResult.
+Function LogSetupResult
+  StrCpy $R4 "interactive"
+  ${If} ${Silent}
+    StrCpy $R4 "silent"
+  ${EndIf}
+  CreateDirectory "$INSTDIR\data\logs"
+  ClearErrors
+  FileOpen $R3 "$INSTDIR\data\logs\setup.log" a
+  ${IfNot} ${Errors}
+    FileSeek $R3 0 END
+    FileWrite $R3 "setup ${VERSION}: mode $R4, update flag $UpdateRun, result: $SetupResult$\r$\n"
+    FileClose $R3
+  ${EndIf}
+FunctionEnd
+
+; Ends a failed run: logs $SetupResult, tells an interactive user, then aborts with the error level in $R2.
+Function FailInstall
+  Call LogSetupResult
+  ${IfNot} ${Silent}
+    MessageBox MB_OK|MB_ICONSTOP "GT4Recomp could not update its program files ($SetupResult). Details: $INSTDIR\data\logs\setup.log" /SD IDOK
+  ${EndIf}
+  SetErrorLevel $R2
+  Abort
+FunctionEnd
+
+; Checks the extracted copy in .update-staging: $R8 = "extract failed" when an extraction error was flagged or a key
+; file is missing, "" otherwise.
+Function CheckStagedFiles
+  StrCpy $R8 ""
+  ${If} ${Errors}
+  ${OrIfNot} ${FileExists} "$INSTDIR\.update-staging\GT4Recomp.exe"
+  ${OrIfNot} ${FileExists} "$INSTDIR\.update-staging\SDL3.dll"
+  ${OrIfNot} ${FileExists} "$INSTDIR\.update-staging\game\gt4vulkan.exe"
+    StrCpy $R8 "extract failed"
+  ${EndIf}
+FunctionEnd
+
+; Moves one live item to .update-old and its staged copy into its place. $R9 = the item. $R8 = the item when a rename
+; fails (the caller rolls back), "" otherwise.
+Function SwapItem
+  StrCpy $R8 ""
+  StrCpy $R7 "$INSTDIR"
+  Call ItemIn
+  ${If} $R6 == "1"
+    ClearErrors
+    Rename "$INSTDIR\$R9" "$INSTDIR\.update-old\$R9"
+    ${If} ${Errors}
+      StrCpy $R8 $R9
+      Return
+    ${EndIf}
+  ${EndIf}
+  ClearErrors
+  Rename "$INSTDIR\.update-staging\$R9" "$INSTDIR\$R9"
+  ${If} ${Errors}
+    StrCpy $R8 $R9
+  ${EndIf}
+FunctionEnd
+
+; Swaps the staged program in, in this order: GT4Recomp.exe, SDL3.dll, NOTICE.md, LICENSE.txt, game. $R8 = the item
+; whose rename failed, or "".
+Function SwapStagedIn
+  StrCpy $R8 ""
+  !insertmacro SwapStep "GT4Recomp.exe"
+  !insertmacro SwapStep "SDL3.dll"
+  !insertmacro SwapStep "NOTICE.md"
+  !insertmacro SwapStep "LICENSE.txt"
+  !insertmacro SwapStep "game"
+FunctionEnd
+
+Function RollbackItemFailed
+  ${If} $R1 == ""
+    StrCpy $R1 $R9
+  ${EndIf}
+FunctionEnd
+
+; Restores one item after a failed swap, from the state it is in. $R9 = the item.
+; - A previous copy in .update-old goes back in place; the new copy now in place (if any) returns to staging first.
+; - A new item with no previous copy goes back to staging (it is not in the previous install).
+Function RollbackItem
+  StrCpy $R7 "$INSTDIR\.update-old"
+  Call ItemIn
+  StrCpy $R3 $R6
+  StrCpy $R7 "$INSTDIR"
+  Call ItemIn
+  StrCpy $R4 $R6
+  StrCpy $R7 "$INSTDIR\.update-staging"
+  Call ItemIn
+  StrCpy $R2 $R6
+  ${If} $R3 == "1"
+    ${If} $R4 == "1"
+      Delete "$INSTDIR\.update-staging\$R9"
+      RMDir /r "$INSTDIR\.update-staging\$R9"
+      ClearErrors
+      Rename "$INSTDIR\$R9" "$INSTDIR\.update-staging\$R9"
+      ${If} ${Errors}
+        Call RollbackItemFailed
+        Return
+      ${EndIf}
+    ${EndIf}
+    ClearErrors
+    Rename "$INSTDIR\.update-old\$R9" "$INSTDIR\$R9"
+    ${If} ${Errors}
+      Call RollbackItemFailed
+    ${EndIf}
+  ${ElseIf} $R4 == "1"
+    ${If} $R2 != "1"
+      ClearErrors
+      Rename "$INSTDIR\$R9" "$INSTDIR\.update-staging\$R9"
+      ${If} ${Errors}
+        Call RollbackItemFailed
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+FunctionEnd
+
+; Restores every item (see RollbackItem). $R1 = the first item that could not be restored, or "".
+Function RollbackSwap
+  StrCpy $R1 ""
+  !insertmacro RollbackStep "GT4Recomp.exe"
+  !insertmacro RollbackStep "SDL3.dll"
+  !insertmacro RollbackStep "NOTICE.md"
+  !insertmacro RollbackStep "LICENSE.txt"
+  !insertmacro RollbackStep "game"
 FunctionEnd
 
 ; Explorer runs the launcher with the rights of the signed-in player, not this elevated setup's.
@@ -294,10 +522,21 @@ UninstPage custom un.DataPageCreate un.DataPageLeave
 
 Section "Install" SecInstall
   SetRegView 64
-  Call RemoveOldPerUserInstall
-  ; A reinstall into another folder: the previous program folder goes, its data is recorded for the launcher (TASK-091).
-  Call RemovePreviousProgramFolder
-  SetShellVarContext all
+
+  ; An interrupted earlier update may have left .update-old behind (TASK-091). Its files are the previous install, so
+  ; they are put back before anything else. The staging folder of that run is kept: its files are the new copies.
+  ${If} ${FileExists} "$INSTDIR\.update-old\*.*"
+    DetailPrint "An interrupted update was found: restoring the previous install"
+    CreateDirectory "$INSTDIR\.update-staging"
+    Call RollbackSwap
+    RMDir /r "$INSTDIR\.update-staging"
+    ${If} $R1 != ""
+      StrCpy $SetupResult "rollback of an interrupted update failed at $R1"
+      StrCpy $R2 3
+      Call FailInstall
+    ${EndIf}
+    RMDir /r "$INSTDIR\.update-old"
+  ${EndIf}
 
   ; The launcher needs the Microsoft Edge WebView2 Runtime (built into Windows 11, usually present on Windows 10).
   ; When it is missing, Microsoft's Evergreen bootstrapper (embedded) downloads and installs it.
@@ -318,14 +557,51 @@ Section "Install" SecInstall
     DetailPrint "WebView2 Runtime $WebView2Version found."
   ${EndIf}
 
+  ; Stage (TASK-091): every program file is extracted into .update-staging first. The live files are not touched here.
   SetOutPath "$INSTDIR"
+  RMDir /r "$INSTDIR\.update-staging"
+  ClearErrors
+  SetOutPath "$INSTDIR\.update-staging"
   File "/oname=GT4Recomp.exe" "${LAUNCHER_EXE}"
   File "/oname=SDL3.dll" "${SDL3_DLL}"
   File "/oname=NOTICE.md" "${__FILEDIR__}\..\NOTICE.md"
   File "/oname=LICENSE.txt" "${__FILEDIR__}\..\LICENSE"
-
-  SetOutPath "$INSTDIR\game"
+  SetOutPath "$INSTDIR\.update-staging\game"
   File /r "${GAME_DIR}\*.*"
+  Call CheckStagedFiles
+  ${If} $R8 != ""
+    StrCpy $SetupResult "extract failed"
+    SetOutPath "$INSTDIR"
+    RMDir /r "$INSTDIR\.update-staging"
+    StrCpy $R2 4
+    Call FailInstall
+  ${EndIf}
+
+  ; Swap (TASK-091): each live item goes to .update-old and its staged copy takes its place. A failed rename rolls back.
+  SetOutPath "$INSTDIR"
+  CreateDirectory "$INSTDIR\.update-old"
+  Call SwapStagedIn
+  ${If} $R8 != ""
+    StrCpy $SetupResult "swap failed at $R8, rolled back"
+    Call RollbackSwap
+    ${If} $R1 != ""
+      StrCpy $SetupResult "swap failed at $R8, rollback failed at $R1"
+    ${Else}
+      RMDir /r "$INSTDIR\.update-old"
+    ${EndIf}
+    RMDir /r "$INSTDIR\.update-staging"
+    StrCpy $R2 3
+    Call FailInstall
+  ${EndIf}
+  ; The swap is complete: the previous copies and the staging folder go. The data folder was never touched.
+  RMDir /r "$INSTDIR\.update-old"
+  RMDir /r "$INSTDIR\.update-staging"
+
+  ; The old per-user program files and a previous per-machine folder go only now, after the new program is in place.
+  Call RemoveOldPerUserInstall
+  ; A reinstall into another folder: the previous program folder goes, its data is recorded for the launcher (TASK-091).
+  Call RemovePreviousProgramFolder
+  SetShellVarContext all
 
   SetOutPath "$INSTDIR"
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -373,26 +649,12 @@ Section "Install" SecInstall
 
   ; A silent self-update (/S /UPDATE, TASK-091) has no finish page: the launcher starts here instead, as the player
   ; (Explorer), so the player gets the updated program back. Without /UPDATE, or when interactive, nothing changes.
-  ; Diagnostics for the self-update path (TASK-091): what this run saw, appended to data\logs\setup.log.
-  StrCpy $R5 "interactive"
-  ${If} ${Silent}
-    StrCpy $R5 "silent"
-  ${EndIf}
-  CreateDirectory "$INSTDIR\data\logs"
-  ClearErrors
-  FileOpen $R6 "$INSTDIR\data\logs\setup.log" a
-  ${IfNot} ${Errors}
-    FileSeek $R6 0 END
-    FileWrite $R6 "setup ${VERSION}: mode $R5, update flag $UpdateRun, command line: $CMDLINE$\r$\n"
-  ${EndIf}
+  StrCpy $SetupResult "ok"
+  Call LogSetupResult
   ${If} $UpdateRun == 1
   ${AndIf} ${Silent}
     Call StartLauncherAsPlayer
-    ${IfNot} ${Errors}
-      FileWrite $R6 "setup ${VERSION}: launcher start requested through Explorer$\r$\n"
-    ${EndIf}
   ${EndIf}
-  FileClose $R6
 SectionEnd
 
 Section "Uninstall"

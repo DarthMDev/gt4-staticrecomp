@@ -2181,3 +2181,33 @@ Builds (all paths absolute):
 - Installer (slice 252 recipe, `/DLAUNCHER_EXE` = that copy):
   `private\slice253-installer\GT4Recomp-Setup-1.2.1-test.exe` 28,850,750 bytes, sha256
   `e67f29470ce4d882cd6aa3bd5606961ab09723243f9bcb6d12806e7327a6650f`. Not run on this PC.
+
+### Slice 255 (safe updates)
+- TASK-091 (1.2.1): the installer no longer overwrites a live install in place (`installer/gt4recomp.nsi`).
+- Wait (`.onInit`): the fixed `Sleep 1500` is gone. For an existing install, the files it replaces (`GT4Recomp.exe`,
+  `SDL3.dll`, `game\gt4vulkan.exe`, every `game\*.dll`) are waited for: up to 30 s, 60 checks 500 ms apart. A file is
+  free when it does not exist or opens for writing (`FileOpen ... a`). Still locked, silent: `locked: <file>` is logged
+  and the run aborts with error level 2, before anything is changed. Interactive: Retry/Cancel (`/SD IDCANCEL`); Retry
+  waits again, Cancel aborts with error level 2.
+- Staging: every program file is extracted into `$INSTDIR\.update-staging` first (the whole `game` folder included). A
+  flagged extraction error or a missing key file (`GT4Recomp.exe`, `SDL3.dll`, `game\gt4vulkan.exe`) deletes the staging
+  folder and aborts with error level 4; no live file is touched.
+- Swap: each live item goes to `$INSTDIR\.update-old`, then its staged copy is renamed into place, in the order
+  `GT4Recomp.exe`, `SDL3.dll`, `NOTICE.md`, `LICENSE.txt`, `game`. A failed rename rolls the items back (the previous copies
+  return from `.update-old`, a new copy goes back to staging) and aborts with error level 3. On success `.update-old` and
+  `.update-staging` are removed. A `.update-old` left by an interrupted run is rolled back first, before the new run.
+- `data\` is never touched by the swap. The old per-user and previous-folder removal now runs after the swap, so a failed
+  swap removes nothing from an earlier install. The uninstaller write, `version.json`, registry, shortcuts, `icacls`,
+  EstimatedSize and the `/UPDATE` relaunch are unchanged.
+- `data\logs\setup.log`: one line per run, `setup 1.2.1: mode <silent|interactive>, update flag <0|1>, result: <ok |
+  locked: <file> | extract failed | swap failed at <item>, rolled back | swap failed at <item>, rollback failed at <item>>`.
+  The command-line echo is gone.
+- Error levels: 2 locked, 3 swap or rollback failed, 4 extract failed. Every MessageBox keeps a `/SD` default.
+- Build: the slice 254 recipe with `/DLAUNCHER_EXE` = `private\slice253-launcher\GT4Recomp.exe` (launcher unchanged, no
+  cargo run) and output `private\slice255-installer\GT4Recomp-Setup-1.2.1-test.exe`: 28,848,063 bytes, sha256 `b982802e9b979a8a333f8f00fbeee752ce28afc760f4e601734442cfcce772d5`.
+  7-Zip extraction: `.update-staging\GT4Recomp.exe`, `SDL3.dll`, `NOTICE.md`, `LICENSE.txt` and `game\gt4vulkan.exe` equal
+  their sources; the extraction folder was deleted. Not run on this PC.
+- Not verified: the installer has not been run (no locked-file, disk-full or rollback test). Known limits: `uninstall.exe`
+  and `version.json` are still written in place after the swap (not rolled back); a read-only file in the install folder
+  counts as locked for the full 30 s; if a rollback rename fails, the run reports `rollback failed at <item>` and the next
+  run restores `.update-old` first.
