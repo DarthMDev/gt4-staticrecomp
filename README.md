@@ -8,7 +8,7 @@ No JIT, no emulator window, full speed.
 ![60 FPS](https://img.shields.io/badge/60%20FPS-100%25%20game%20speed-2ea44f?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows%20x64-Vulkan-2ea44f?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/license-MIT-1f6feb?style=for-the-badge)
-![Release](https://img.shields.io/badge/release-1.2.2-2ea44f?style=for-the-badge)
+![Release](https://img.shields.io/badge/release-1.2.3-2ea44f?style=for-the-badge)
 ![Ultrawide](https://img.shields.io/badge/ultrawide-any%20aspect%20ratio-2ea44f?style=for-the-badge)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/moesuito)
 
@@ -37,8 +37,8 @@ while the game runs, which is also what makes future **Android and iOS** builds 
   resolution. The 3D view widens Hor+/Vert+, the HUD stays centred 16:9 and menus are pillarboxed; the internal
   resolution follows automatically, with a Render scale of 50-200%.
 - **GSdx renderer** (the PCSX2 GS) in its own process: crisp deinterlaced menus, every GSdx option in the launcher
-  and a built-in performance overlay. **CoreGS 1.1** is built in as the fallback.
-- **Custom texture packs (1.2.0):** drop a pack's `replacements` folder into the `data\Textures` folder of your
+  and a built-in performance overlay. **CoreGS 2.0**, our own renderer, is in development.
+- **Custom texture packs:** drop a pack's files straight into the `data\Textures` folder of your
   GT4Recomp install (Settings > Graphics > **Open textures folder**); **Load custom textures** is on by default. HD textures and mods from the PCSX2
   community work without renaming folders.
 - **Crash-safe memory card:** saves survive a crash or a forced close.
@@ -78,7 +78,7 @@ the graphics process, so the night race needs about 2 ms less CPU time per frame
 
 | Phase | Release | Platform | Renderer | Status |
 |---|---|---|---|---|
-| **1** | 1.x | Windows PC | GSdx (PCSX2 GS, separate process) · CoreGS 1.1 built in | Done (1.0.0; current 1.2.0) |
+| **1** | 1.x | Windows PC | GSdx (PCSX2 GS, separate process) | Done (1.0.0; current 1.2.0) |
 | **2** | 2.0.0 | Windows PC | **CoreGS 2.0** (our own renderer) as the default · GSdx as the fallback | In progress |
 | **3** | after 2.0.0 | Linux (native) | CoreGS 2.0 | Planned |
 | **4** | after 2.0.0 | Android | CoreGS 2.0 (Vulkan) | Planned |
@@ -108,12 +108,12 @@ The launcher checks the processor and Vulkan before setup and before Play, and s
 
 ## Install
 
-1. Download **`GT4Recomp-Setup-1.2.2.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
+1. Download **`GT4Recomp-Setup-1.2.3.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
    and run it. It installs to `C:\Program Files\GT4Recomp` by default (Windows asks for administrator approval), or to
    any folder or drive you choose. If the Microsoft Edge WebView2 Runtime is missing (Windows 10), the installer
    downloads it from Microsoft.
 2. Start **Gran Turismo 4** from the Start menu and choose your disc image. The launcher copies and checks it and
-   downloads the GSdx renderer, the recommended choice (CoreGS 1.1 is built in and used if you are offline).
+   downloads the GSdx renderer, which runs the game (the game needs GSdx and does not start without it).
 3. Press **Play**.
 
 Everything large stays together in the install folder, in `data` (the copy of your disc image, GSdx, custom textures

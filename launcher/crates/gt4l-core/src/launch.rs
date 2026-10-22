@@ -5,9 +5,10 @@
 //! - the working directory is the session folder;
 //! - inherited `GT4_*` and `PS2_*` variables are removed, then only the variables below are set.
 //!
-//! Two renderers (decision 0070): CoreGS 1.1 (`GT4_RENDERER=donor`, the built-in renderer) and the PCSX2 GS
-//! (`GT4_RENDERER=pcsx2`, the downloaded `gt4-gs.exe` in its own process, see [`pcsx2_environment`]).
-//! Only the child process gets these variables. Nothing is written to the user or system environment.
+//! The renderer is the PCSX2 GS (`GT4_RENDERER=pcsx2`, the downloaded `gt4-gs.exe` in its own process, see
+//! [`pcsx2_environment`], decision 0070). CoreGS 1.1 is still inside the game executable, but the launcher never
+//! starts it (TASK-096, owner 2026-10-22). Only the child process gets these variables. Nothing is written to the
+//! user or system environment.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -15,15 +16,20 @@ use std::path::{Path, PathBuf};
 use crate::display::{self, DisplayTarget};
 use crate::gs_release::Installed;
 use crate::gs_table;
-use crate::settings::{self, Settings};
+use crate::settings::Settings;
 
 /// Inherited variables with these prefixes are removed before the game starts.
 pub const SCRUBBED_PREFIXES: &[&str] = &["GT4_", "PS2_"];
 
-/// Printed by the game when the player chose "restart with the built-in renderer" after a GS process failure.
-/// The launcher then starts the game again with `GT4_RENDERER=donor` (scripts/external_runtime_probe.py,
-/// `GS_RESTART_MARKER`).
+/// Printed by the game when the player asked for "restart with the built-in renderer" after a GS process failure.
+/// The launcher no longer starts CoreGS 1.1 (TASK-096): it ends the session and shows the GSdx error instead.
 pub const GS_RESTART_MARKER: &str = "[gs-ipc] restart requested: renderer donor (CoreGS 1.1)";
+
+/// The reason shown when the PCSX2 GS (GSdx) is not installed or its files fail verification.
+pub const GSDX_NOT_INSTALLED: &str = "GSdx is not installed yet";
+
+/// The reason shown when GSdx stopped and asked for a restart with CoreGS 1.1.
+pub const GSDX_RESTART_REQUESTED: &str = "GSdx stopped while playing";
 
 /// Everything needed to start one game session.
 #[derive(Clone, Debug)]
@@ -81,73 +87,20 @@ impl Pcsx2Paths {
     }
 }
 
-/// Which renderer a session starts with.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RendererChoice {
-    /// The PCSX2 GS, installed and checked.
-    Pcsx2,
-    /// CoreGS 1.1. `reason` is the message shown to the player when it replaces the PCSX2 GS.
-    CoreGs11 { reason: Option<String> },
+/// Chooses the renderer of a session. Only GSdx runs the game (owner, 2026-10-22): when it is not installed, or its
+/// files failed verification, the session does not start and the error says why and where the log is. There is no
+/// CoreGS 1.1 fallback.
+pub fn choose_renderer<'a>(installed: Option<&'a Installed>, log_folder: &Path) -> Result<&'a Installed, String> {
+    installed.ok_or_else(|| gsdx_unavailable_message(GSDX_NOT_INSTALLED, log_folder))
 }
 
-/// Whether the selected renderer needs the external PCSX2 GS package. CoreGS is built in, so choosing it
-/// must not trigger an automatic package download or release check.
-pub fn needs_external_renderer(settings: &Settings) -> bool {
-    settings.get("renderer") == settings::PCSX2_GS
-}
-
-/// Chooses the renderer of a session. PCSX2 GS is used when selected and installed; otherwise CoreGS 1.1 starts
-/// with a message. CoreGS 2.0 is not built, so it also starts CoreGS 1.1.
-pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> RendererChoice {
-    match settings.get("renderer") {
-        settings::PCSX2_GS => match installed {
-            Some(_) => RendererChoice::Pcsx2,
-            None => RendererChoice::CoreGs11 {
-                reason: Some("GSdx is not installed yet; this session uses CoreGS 1.1.".to_string()),
-            },
-        },
-        _ => RendererChoice::CoreGs11 { reason: None },
-    }
-}
-
-/// The variables the settings require, sorted by name, for CoreGS 1.1 (`GT4_RENDERER=donor`).
-/// Only connected options emit anything.
-///
-/// Mapping (setting -> variable):
-/// - Always `GT4_FORCE_480P=1`: the game always runs at 480p (owner, 2026-10-21; there is no setting).
-/// - Always `GT4_FORCE_WIDESCREEN=1`: the game's wide flag is held at 16:9 (owner, 2026-10-21; TASK-079 hold, there
-///   is no setting). Other screen shapes come from `aspect_ratio` on top of it.
-/// - `internal_scale` -> `PS2_SCALE=1|2|3`; `present_filter` -> `GT4_PRESENT_FILTER` (`auto` sends nothing);
-///   `fsr_sharpness` -> `GT4_FSR_SHARPNESS` with the FSR filter; `deinterlacing` -> `GT4_DEINTERLACE`;
-///   `anti_aliasing` -> `GT4_AA`. These are hidden in the UI (decision 0070) and keep their defaults.
-/// - `fullscreen` -> `GT4_FULLSCREEN` (1/0): borderless fullscreen on the chosen monitor (there is no exclusive mode).
-/// - Always `GT4_DISPLAY_ASPECT=auto` (TASK-080 addendum, owner 2026-10-21: there is no aspect setting). With
-///   `GT4_OUTPUT_SIZE` (see [`display_environment`]) the game takes the ratio of the output size; the game's own 16:9
-///   stays the base (`GT4_FORCE_WIDESCREEN=1`) and Hor+/Vert+ is applied on top of it at other ratios.
-/// - `monitor` and `resolution` -> `GT4_MONITOR` and `GT4_OUTPUT_SIZE`, resolved against the connected monitors by the
-///   caller ([`display::resolve_target`]) and added by [`plan_launch`] / [`plan_pcsx2_launch`].
-/// - `vsync` -> `GT4_PRESENT_MODE` (on = fifo, fast = mailbox, off = immediate).
-/// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
-/// - `performance_report` on -> `GT4_PERF=1`.
-/// - `check_vu_code` 100 / 1000 -> `GT4_VU1_VERIFY=N` and `GT4_VU0_VERIFY=N`.
-pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
-    let mut variables: BTreeMap<&'static str, String> = BTreeMap::new();
-    variables.insert("GT4_RENDERER", "donor".to_string());
-    variables.insert("PS2_GS", "gpu".to_string());
-    variables.insert("PS2_SCALE", settings.get("internal_scale").to_string());
-
-    let filter = settings.get("present_filter");
-    if filter != "auto" {
-        variables.insert("GT4_PRESENT_FILTER", filter.to_string());
-    }
-    if filter == "fsr" {
-        variables.insert("GT4_FSR_SHARPNESS", settings.get("fsr_sharpness").to_string());
-    }
-    variables.insert("GT4_DEINTERLACE", settings.get("deinterlacing").to_string());
-    variables.insert("GT4_AA", settings.get("anti_aliasing").to_string());
-
-    add_common(&mut variables, settings);
-    variables.into_iter().map(|(name, value)| (name.to_string(), value)).collect()
+/// The message of a session GSdx cannot run: the reason, what to do, and the log folder. Shown on the home page and in
+/// the tray, so the player is never left without a reason.
+pub fn gsdx_unavailable_message(reason: &str, log_folder: &Path) -> String {
+    format!(
+        "GSdx could not run the game: {reason}. Check your internet connection and try again. Details are in the log folder: {}.",
+        log_folder.display()
+    )
 }
 
 /// The variables of a PCSX2 GS session: `GT4_RENDERER=pcsx2`, the process and its pin, the session INI, the
@@ -164,7 +117,7 @@ pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String
     variables.into_iter().map(|(name, value)| (name.to_string(), value)).collect()
 }
 
-/// The variables shared by both renderers: the fixed 480p and 16:9 holds, display mode, present mode, async GS and
+/// The variables of a GSdx session: the fixed 480p and 16:9 holds, display mode, present mode, async GS and
 /// diagnostics.
 fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Settings) {
     // Fixed (owner, 2026-10-21): the game always runs at 480p with its own 16:9. No setting changes these, and no stored
@@ -254,7 +207,8 @@ pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths, display: Option<&
     gs_table::render_ini(&user, &launcher).map_err(|error| error.to_string())
 }
 
-/// Whether the game asked for a restart with the built-in renderer (its log holds the marker line).
+/// Whether the game asked for a restart with the built-in renderer (its log holds the marker line). The launcher
+/// answers with the GSdx error, not with a restart (TASK-096).
 pub fn restart_requested(log_text: &str) -> bool {
     log_text.lines().any(|line| line.contains(GS_RESTART_MARKER))
 }
@@ -272,16 +226,6 @@ pub const PASSED_THROUGH: &[&str] = &["GT4_ASPECT_FOV_EXTRA"];
 /// Whether an inherited variable must be removed for the game process.
 pub fn is_scrubbed(name: &str) -> bool {
     !PASSED_THROUGH.contains(&name) && SCRUBBED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
-}
-
-/// Plans one CoreGS 1.1 launch. Pure: it creates no files and starts no process.
-pub fn plan_launch(
-    inputs: &LaunchInputs<'_>,
-    settings: &Settings,
-    display: Option<&DisplayTarget>,
-    inherited_names: &[String],
-) -> LaunchPlan {
-    plan_with(inputs, with_display(game_environment(settings), display), inherited_names)
 }
 
 /// Plans one PCSX2 GS launch. Pure: the caller writes `paths.config` (see [`gs_config_text`]) before starting.

@@ -22,7 +22,7 @@ GT4Recomp.exe start
       |      failed ......... reason + "Try again" / "Choose another file"
       |      files_missing .. "Game files missing" + "Choose disc image"
       |      checking ....... copying -> checking -> preparing -> renderer when selected (bars, bytes, Cancel)
-      |      done ........... "Ready" + Finish (opens Home; note when CoreGS 1.1 is used)
+      |      done ........... "Ready" + Finish (opens Home; note when GSdx could not be downloaded, TASK-096)
       |
       +-- setup.state == done --> #/home (slideshow, logo, Play, gear)
              Play -> prepare_play -> game::start -> tray hides the window
@@ -161,7 +161,7 @@ NEEDS-OWNER = needs a person (real pad, touch screen, Play, native file picker).
 | 17 | SHA256SUMS verified | PASS | the package line is checked (the real SHA256SUMS has no `gt4-gs.exe` line; the exe hash is recorded at install) |
 | 18 | version.json records gt4-gs | PASS | `{"schema":1,"gt4recomp":"1.0.0","gt4gs":"1.0.1","settings_schema":1}` next to the exe |
 | 19 | Renderer install at launch did not race setup | FIXED | before: the launch thread installed gt4-gs before setup, unseen, and `setup_start` started a second install in parallel; now setup owns the first install and launch only retries after an offline setup |
-| 20 | Offline renderer: setup still finishes, CoreGS 1.1 note | PASS | flow test `offline_renderer`; `audit-setup-done-offline-960x600.png` |
+| 20 | Offline renderer: setup still finishes, GSdx note; Play refuses until GSdx is installed (TASK-096) | PASS | flow test `offline_renderer`; `audit-setup-done-offline-960x600.png` |
 | 21 | Setup ends on "Ready" with Play | PASS | real run `state: done` |
 | 22 | Setup screen not replaced by Home before the renderer step ends | FIXED | before: `app_state` said `done` as soon as the prepared folder existed, while the renderer still downloaded |
 | 23 | Later launch opens Home directly, no re-verification | PASS | real exe second launch: `audit-tauri-second-launch-home.png`; `app_state` done in 1-2 ms |
@@ -254,7 +254,7 @@ The owner ran the real `GT4Recomp.exe` (setup, Play and the return to Home worke
 ### 7.2 Setup offered only Play (Bug 2)
 
 - The setup page's done state now shows **Finish**, which goes to Home (`#/home`). It is the primary button: focused on
-  the pad, A activates it, and touch and mouse click it. It starts no game. A "done offline" setup (CoreGS 1.1 used)
+  the pad, A activates it, and touch and mouse click it. It starts no game. A "done offline" setup (GSdx missing; Play refuses, TASK-096)
   shows the same Finish. A later launch with setup done still opens Home directly (`app.js`).
 - Check: the dev mock with `?setup=done` renders one primary `Finish` button, focused.
 
@@ -402,7 +402,7 @@ real `set_setting` round trip (the mock answers at once).
   `library.migrated-<t>`, a second start logs "already moved". Play was not pressed.
 
 
-## TASK-089 addendum — Explicit CoreGS choice (2026-10-21, candidate)
+## TASK-089 addendum — Explicit CoreGS choice (2026-10-21, candidate; superseded by TASK-096 in 1.2.3: no CoreGS 1.1 fallback)
 
 A saved CoreGS 1.1 selection makes the external PCSX2 GS package optional throughout setup and
 startup: setup emits no renderer download progress and finishes normally; startup performs no package

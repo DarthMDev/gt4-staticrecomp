@@ -1,5 +1,35 @@
 # Current Status
 
+## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
+
+Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only
+(CoreGS 1.1 removed from the launcher, CoreGS 2.0 shown as coming soon), textures straight in `data\Textures` with
+gt4-gs 1.2.1 (published earlier the same day), desktop shortcut from the installer. Installer
+`GT4Recomp-Setup-1.2.3.exe` (sha256 `475defe07926f6e41e8f8c91fd4bb3565a17d6aac92f5c8fc857d0a143530a0b`). Owner tested.
+Notes: [1.2.3](release-notes/1.2.3.md). Next: 1.2.4 (TASK-097, 098, 099), 1.3.0 wheels, 1.4.0 Spec II.
+
+## TASK-096 on branch (2026-10-22, for launcher 1.2.3, waiting for the owner test)
+
+Branch `task/096-remove-coregs11`: the launcher no longer starts CoreGS 1.1. GSdx is the only renderer; a missing or
+unverified GSdx stops Play with a message that names the log folder, and a GSdx restart request does the same. A stored
+CoreGS 1.1 choice becomes GSdx in settings schema 7. CoreGS 1.1 stays in the game executable, unused by the launcher.
+Not merged.
+
+## TASK-093 on branch (2026-10-22, waiting for gt4-gs 1.2.1 and the owner test)
+
+Branch `task/093-textures-root`: custom textures go straight in `data\Textures`; the launcher no longer creates
+`replacements`, `RENDERER_MINIMUM` is gt4-gs 1.2.1, and an old `replacements` folder is flattened into `Textures` at
+start once gt4-gs 1.2.1 is in use (`gt4l-core/src/textures.rs`). Workspace tests and the Python gs suite pass. Not
+merged; planned for release 1.2.3 with TASK-092.
+
+## MTVU test switches fixed (2026-10-22, TASK-092, branch `task/092-mtvu-test-switches`, waiting for release)
+
+Slice264 (not the player path): `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode work again. One condition,
+`vblank_journal_active()` (journal on, worker on, verify off), decides the GS client VSYNC deferral and the VBlank
+drain. The doorbell handshake uses seq_cst. Default path identical to slice262 (dump hashes and GS stream hash equal in
+menus and night). Open: two `gt4vulkan.exe` pin tests still point at slice262's executable; a slice264 pin set needs an
+owner decision. Details: BUILD.md "Slice 264".
+
 ## Release 1.2.2 published (2026-10-22, TASK-084, PR #82)
 
 Launcher 1.2.1 at version 1.2.2 with the TASK-084 game build slice262 (owner tested and approved). Installer

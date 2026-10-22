@@ -18,7 +18,7 @@ use gt4l_core::paths::DataDirs;
 use gt4l_core::releases::{self, GithubSource, ReleaseSource, Stream};
 use gt4l_core::update::{self, Offer};
 use gt4l_core::versions::{self, VersionFile};
-use gt4l_core::{launch, Settings, Version, LAUNCHER_VERSION};
+use gt4l_core::{Version, LAUNCHER_VERSION};
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
@@ -90,21 +90,10 @@ fn fetch(stream: Stream) -> Result<Vec<releases::Release>, String> {
     releases::parse_releases(&source.releases_json()?, stream)
 }
 
-/// An explicit update check includes both streams, even when the player uses CoreGS.
+/// An explicit update check includes both streams. GSdx is the only renderer (TASK-096), so every check covers it.
 /// Blocking: run it on a worker thread.
 pub fn check(dirs: &DataDirs, skipped_launcher: Option<Version>, skipped_renderer: Option<Version>) -> Check {
     check_with(dirs, skipped_launcher, skipped_renderer, true, fetch)
-}
-
-/// Automatic checks keep launcher updates enabled but leave the unselected renderer alone.
-fn check_for_settings(
-    dirs: &DataDirs,
-    settings: &Settings,
-    skipped_launcher: Option<Version>,
-    skipped_renderer: Option<Version>,
-    fetch_releases: impl FnMut(Stream) -> Result<Vec<releases::Release>, String>,
-) -> Check {
-    check_with(dirs, skipped_launcher, skipped_renderer, launch::needs_external_renderer(settings), fetch_releases)
 }
 
 /// The injected fetcher lets tests verify which network requests an automatic check actually makes.
@@ -216,8 +205,8 @@ pub fn ensure_version_file(dirs: &DataDirs) {
 }
 
 /// The startup repair applies only to a prepared game using the external renderer.
-fn needs_renderer_install(dirs: &DataDirs, settings: &Settings, set_up: bool) -> bool {
-    set_up && launch::needs_external_renderer(settings) && gs_release::needs_install(&renderer_root(dirs))
+fn needs_renderer_install(dirs: &DataDirs, set_up: bool) -> bool {
+    set_up && gs_release::needs_install(&renderer_root(dirs))
 }
 
 /// The background work at every launch: version file, the selected external renderer install when none exists or
@@ -231,14 +220,14 @@ pub fn check_on_launch(app: AppHandle, shared: Shared) {
     ensure_version_file(&dirs);
     // Before the first setup the renderer is installed by setup itself, with its progress on the setup page. Here it
     // is the retry after a setup that was offline, or the update of a version below the minimum.
-    if needs_renderer_install(&dirs, &config.settings, set_up) {
+    if needs_renderer_install(&dirs, set_up) {
         let progress_app = app.clone();
         match install_renderer(&dirs, &mut |step| emit_step(&progress_app, step)) {
             Ok(_) => emit_progress(&app, "done"),
             Err(message) => state::log(&dirs, &format!("gt4-gs not installed at launch: {message}")),
         }
     }
-    let result = check_for_settings(&dirs, &config.settings, config.skipped_launcher, config.skipped_renderer, fetch);
+    let result = check_with(&dirs, config.skipped_launcher, config.skipped_renderer, true, fetch);
     let offers: Vec<OfferView> = result.offers.iter().filter(|offer| offer.is_update()).map(OfferView::of).collect();
     if !offers.is_empty() {
         let _ = app.emit("update-available", json!({ "offers": offers }));
@@ -448,34 +437,13 @@ mod tests {
     }
 
     #[test]
-    fn coregs_startup_checks_the_launcher_without_requesting_renderer_releases() {
-        let root = std::env::temp_dir().join(format!("gt4l-coregs-check-{}", std::process::id()));
+    fn gsdx_startup_repairs_missing_packages_and_checks_both_streams() {
+        let root = std::env::temp_dir().join(format!("gt4l-gsdx-check-{}", std::process::id()));
         let dirs = DataDirs::new(&root);
-        let mut settings = Settings::default();
-        settings.set("renderer", gt4l_core::settings::CORE_GS_11).unwrap();
+        assert!(!needs_renderer_install(&dirs, false), "setup owns the first install");
+        assert!(needs_renderer_install(&dirs, true), "a prepared game repairs its missing package");
         let mut requested = Vec::new();
-        let result = check_for_settings(&dirs, &settings, None, None, |stream| {
-            requested.push(stream);
-            assert_eq!(stream, Stream::Launcher, "CoreGS must not request the external renderer's release list");
-            releases::parse_releases(r#"[{"tag_name":"v99.0.0","draft":false,"prerelease":false,"assets":[]}]"#, stream)
-        });
-        assert_eq!(requested, vec![Stream::Launcher]);
-        assert!(result.errors.is_empty());
-        assert_eq!(result.offers.len(), 1);
-        assert_eq!(result.offers[0].stream, Stream::Launcher);
-        assert!(!needs_renderer_install(&dirs, &settings, true), "missing gt4-gs does not require installation");
-        let _ = fs::remove_dir_all(root);
-    }
-
-    #[test]
-    fn pcsx2_startup_still_repairs_missing_packages_and_checks_both_streams() {
-        let root = std::env::temp_dir().join(format!("gt4l-pcsx2-check-{}", std::process::id()));
-        let dirs = DataDirs::new(&root);
-        let settings = Settings::default();
-        assert!(!needs_renderer_install(&dirs, &settings, false), "setup owns the first install");
-        assert!(needs_renderer_install(&dirs, &settings, true), "a prepared game repairs its missing package");
-        let mut requested = Vec::new();
-        let result = check_for_settings(&dirs, &settings, None, None, |stream| {
+        let result = check_with(&dirs, None, None, true, |stream| {
             requested.push(stream);
             Ok(Vec::new())
         });

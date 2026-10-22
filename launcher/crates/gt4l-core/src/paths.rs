@@ -51,7 +51,7 @@ pub const MOVED_USER_FOLDER_NAME: &str = "Gran Turismo 4 (moved to AppData)";
 /// Name of the game executable inside the game folder.
 pub const GAME_EXECUTABLE: &str = "gt4vulkan.exe";
 
-/// Name of the custom texture folder (TASK-088). gt4-gs reads its `replacements` subfolder.
+/// Name of the custom texture folder (TASK-088; TASK-093: gt4-gs 1.2.1 reads the folder itself).
 pub const TEXTURES_FOLDER_NAME: &str = "Textures";
 
 /// The setup receipt name (`gt4l_disc::setup::RECEIPT_FILE`), repeated here so the paths need no disc crate.
@@ -178,7 +178,7 @@ impl DataDirs {
     }
 
     /// The custom texture folder (TASK-088): one not moved yet, else the first folder that has `Textures`, else the
-    /// root's. The texture pack goes in its `replacements` subfolder.
+    /// root's. The texture pack goes straight in this folder (gt4-gs 1.2.1, TASK-093).
     pub fn textures(&self) -> PathBuf {
         if let Some(folder) = &self.textures_in_place {
             return folder.clone();
@@ -487,10 +487,10 @@ pub fn probe_writable(folder: &Path) -> bool {
     written
 }
 
-/// Creates the custom texture folders on demand: `Textures` and `Textures\replacements` (empty when new). The
-/// launcher never writes the player's texture files; it only makes these two folders so a pack can be dropped in.
+/// Creates the custom texture folder on demand: `Textures` (empty when new). The launcher never writes the player's
+/// texture files; it only makes this folder so a pack can be dropped in (gt4-gs 1.2.1 reads it directly, TASK-093).
 pub fn ensure_texture_folders(textures: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(textures.join("replacements"))
+    std::fs::create_dir_all(textures)
 }
 
 /// Folder that holds `gt4vulkan.exe`: `<program folder>\game` for an installed copy, or the

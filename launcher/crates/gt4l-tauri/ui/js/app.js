@@ -75,7 +75,7 @@
       GT4.setRendererStatus(labels[step]);
     }
     if (step === "failed") {
-      GT4.ui.toast("GSdx could not be installed. CoreGS 1.1 will be used.", true);
+      GT4.ui.toast("GSdx could not be installed. The game cannot start until it is installed.", true);
     } else if (step === "done") {
       GT4.ui.toast("gt4-gs is ready.");
     }

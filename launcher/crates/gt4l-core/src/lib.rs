@@ -16,6 +16,7 @@ pub mod releases;
 pub mod relocate;
 pub mod settings;
 pub mod system_check;
+pub mod textures;
 pub mod update;
 pub mod version;
 pub mod versions;

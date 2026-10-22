@@ -171,14 +171,9 @@ fn play_plan(shared: &Shared, program_dir: &Path) -> Result<launch::LaunchPlan, 
         session_dir: &session,
     };
     let inherited: Vec<String> = std::env::vars().map(|(name, _)| name).collect();
-    Ok(match &inputs.pcsx2 {
-        Some(installed) => {
-            let textures = crate::state::lock(shared).dirs.textures();
-            let paths = launch::Pcsx2Paths::for_session(installed, &inputs.dirs.root().join("gs"), &session, &textures);
-            launch::plan_pcsx2_launch(&launch_inputs, &inputs.settings, &paths, inputs.display.as_ref(), &inherited)
-        }
-        None => launch::plan_launch(&launch_inputs, &inputs.settings, inputs.display.as_ref(), &inherited),
-    })
+    let textures = crate::state::lock(shared).dirs.textures();
+    let paths = launch::Pcsx2Paths::for_session(&inputs.pcsx2, &inputs.dirs.root().join("gs"), &session, &textures);
+    Ok(launch::plan_pcsx2_launch(&launch_inputs, &inputs.settings, &paths, inputs.display.as_ref(), &inherited))
 }
 
 #[test]
@@ -259,15 +254,14 @@ fn synthetic_flow_end_to_end() {
     let log = walk_pages(&second, &root.join("test-card.ps2"));
     assert_eq!(log.len(), 4);
 
-    // Play: only the plan. The stand-in program is a text file; nothing is started.
+    // Play: GSdx is not installed in this test, so Play refuses with the GSdx error and starts nothing. The stand-in
+    // program is a text file. The GSdx launch line is covered by the launch contract tests.
     let program = root.join("program");
     fs::create_dir_all(program.join("game")).unwrap();
     fs::write(program.join("game").join("gt4vulkan.exe"), b"stand-in, never started").unwrap();
-    let plan = play_plan(&second, &program).expect("plan");
-    let disc_index = plan.arguments.iter().position(|argument| argument == "--disc").unwrap();
-    assert_eq!(PathBuf::from(&plan.arguments[disc_index + 1]), data.join("disc").join("SCUS-97328.iso"));
-    assert_eq!(PathBuf::from(&plan.arguments[0]), data.join("prepared").join("SCUS_973.28"));
-    assert!(plan.environment.iter().any(|(name, value)| name == "GT4_RENDERER" && value == "donor"), "no gt4-gs installed here: CoreGS 1.1");
+    let refusal = play_plan(&second, &program).unwrap_err();
+    assert!(refusal.starts_with("GSdx could not run the game: GSdx is not installed yet"), "{refusal}");
+    assert!(refusal.contains("log folder"), "{refusal}");
 
     // The player cleaned the data folder: Home is not shown, Play refuses, Setup offers to choose the disc again.
     fs::remove_file(data.join("disc").join("SCUS-97328.iso")).unwrap();
@@ -277,14 +271,15 @@ fn synthetic_flow_end_to_end() {
     assert!(view["setup"]["problem"].as_str().unwrap().contains("Choose your disc image again"));
     assert!(play_plan(&third, &program).unwrap_err().contains("Game files missing"));
 
-    // Offline renderer: setup still finishes, with the note; CoreGS 1.1 is used.
+    // Offline renderer: setup still finishes, with the note; Play then refuses until GSdx is installed.
     let picked_again = root.join("again.iso");
     fs::write(&picked_again, &good).unwrap();
     setup::choose_disc_path(&third, &picked_again).unwrap();
     run_setup(&third, &Recorder::default(), offline_renderer());
     let view = screen(&third);
     assert_eq!(view["setup"]["state"], "done");
-    assert!(view["setup"]["note"].as_str().unwrap().contains("CoreGS 1.1"));
+    assert!(view["setup"]["note"].as_str().unwrap().contains("cannot start yet"));
+    assert!(play_plan(&third, &root.join("program")).unwrap_err().contains("GSdx could not run the game"));
 
     // Cancel: back to a failed run with nothing half-written, and the earlier copy stays usable.
     let shared = launch(&dirs, &pins);
@@ -332,8 +327,8 @@ fn settings_store_no_absolute_path_inside_the_install_folder() {
 }
 
 #[test]
-fn coregs_setup_and_play_need_no_external_renderer_package() {
-    let root = scratch("coregs-independent");
+fn without_gsdx_setup_finishes_and_play_refuses_with_the_log_folder() {
+    let root = scratch("gsdx-required");
     let dirs = DataDirs::new(root.join("data"));
     let game = synthetic_game(0x0010_0000, 0x0010_0008, b"synthetic guest code, not game data, 0123456789abcdef");
     let image = build_iso(
@@ -348,35 +343,25 @@ fn coregs_setup_and_play_need_no_external_renderer_package() {
     let picked = root.join("disc.iso");
     fs::write(&picked, image).unwrap();
     let shared = launch(&dirs, &pins);
-    {
-        let mut state = lock(&shared);
-        state.config.settings.set("renderer", gt4l_core::settings::CORE_GS_11).unwrap();
-        state.save_config();
-    }
     setup::choose_disc_path(&shared, &picked).unwrap();
     let recorder = Recorder::default();
-    let forbidden_installer: RendererInstaller = Arc::new(|_, _| {
-        panic!("CoreGS setup must not invoke the external renderer installer");
-    });
-    run_setup(&shared, &recorder, forbidden_installer);
+    run_setup(&shared, &recorder, offline_renderer());
     let view = screen(&shared);
     assert_eq!(view["setup"]["state"], "done");
-    assert_eq!(view["setup"]["note"], "", "an intentional CoreGS choice is not a download failure");
-    assert!(recorder.names("renderer-progress").is_empty(), "no external download steps are emitted");
+    assert!(view["setup"]["note"].as_str().unwrap().contains("cannot start yet"));
     assert_eq!(recorder.names("setup-finished"), vec![json!({ "ok": true, "message": "" })]);
-    assert!(!dirs.root().join("gs").exists(), "setup creates no external package folder");
 
     let second = launch(&dirs, &pins);
-    assert_eq!(lock(&second).config.settings.get("renderer"), gt4l_core::settings::CORE_GS_11);
     let program = root.join("program");
     fs::create_dir_all(program.join("game")).unwrap();
     fs::write(program.join("game").join("gt4vulkan.exe"), b"stand-in, never started").unwrap();
-    let inputs = commands::prepare_play(&second, &program).unwrap();
-    assert!(inputs.pcsx2.is_none());
-    assert!(inputs.notice.is_none());
-    let plan = play_plan(&second, &program).unwrap();
-    assert!(plan.environment.iter().any(|(name, value)| name == "GT4_RENDERER" && value == "donor"));
-    assert!(!plan.environment.iter().any(|(name, _)| name.starts_with("GT4_GS_PROCESS")));
+    let refusal = play_plan(&second, &program).unwrap_err();
+    assert_eq!(
+        refusal,
+        launch::gsdx_unavailable_message(launch::GSDX_NOT_INSTALLED, &dirs.logs()),
+        "the reason, what to do and the log folder"
+    );
+    assert!(refusal.contains("Check your internet connection and try again"), "{refusal}");
     let _ = fs::remove_dir_all(root);
 }
 

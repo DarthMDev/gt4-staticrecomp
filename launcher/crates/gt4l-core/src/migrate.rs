@@ -118,7 +118,7 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 6,
+    current: 7,
     steps: &[
         Step { from: 0, apply: settings_0_to_1 },
         Step { from: 1, apply: settings_1_to_2 },
@@ -126,6 +126,7 @@ pub const SETTINGS: Chain = Chain {
         Step { from: 3, apply: settings_3_to_4 },
         Step { from: 4, apply: settings_4_to_5 },
         Step { from: 5, apply: settings_5_to_6 },
+        Step { from: 6, apply: settings_6_to_7 },
     ],
 };
 
@@ -246,6 +247,20 @@ fn settings_5_to_6(document: &mut Value) -> Result<(), String> {
     if let Some(desktop) = crate::display::desktop_at_save(&monitor) {
         if crate::display::Size::parse(&resolution) == Some(desktop) {
             settings.insert("resolution".to_string(), Value::from("desktop"));
+        }
+    }
+    Ok(())
+}
+
+/// Schema 7 (TASK-096, launcher 1.2.3, owner 2026-10-22): CoreGS 1.1 is no longer started by the launcher. A stored
+/// renderer of "coregs11" becomes "pcsx2" (GSdx), the only renderer the game runs with now. The CoreGS 1.1 rows
+/// (internal resolution, scaling filter, FSR sharpness, deinterlacing, anti-aliasing) need no step: they are listed in
+/// `settings::RETIRED_SETTINGS` and ignored on load. The `[choices]` flag of the renderer is kept as it was.
+/// The id is literal on purpose (see `settings_3_to_4`).
+fn settings_6_to_7(document: &mut Value) -> Result<(), String> {
+    if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        if settings.get("renderer").and_then(Value::as_str) == Some("coregs11") {
+            settings.insert("renderer".to_string(), Value::from("pcsx2"));
         }
     }
     Ok(())
@@ -375,7 +390,7 @@ mod tests {
     fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(6));
+        assert_eq!(document["schema_version"], json!(7));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
         assert!(document["settings"].get("widescreen").is_none(), "added by step 3, dropped by step 4");
         assert!(document["settings"].get("aspect_ratio").is_none(), "added by step 4, dropped by step 5");
@@ -397,7 +412,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 3);
-        assert_eq!(released["schema_version"], json!(6));
+        assert_eq!(released["schema_version"], json!(7));
         assert!(released["settings"].get("aspect_ratio").is_none());
         assert_eq!(released["settings"]["monitor"], json!("primary"));
         assert_eq!(released["settings"]["resolution"], json!("desktop"));
@@ -427,7 +442,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut file).unwrap(), 4);
-        assert_eq!(file["schema_version"], json!(6));
+        assert_eq!(file["schema_version"], json!(7));
         for gone in ["aspect_ratio", "aspect_custom"] {
             assert!(file["settings"].get(gone).is_none(), "{gone} dropped from [settings]");
             assert!(file["choices"].get(gone).is_none(), "{gone} dropped from [choices]");
@@ -461,7 +476,7 @@ mod tests {
 
         let mut chained = json!({"schema_version": 2, "settings": {"vsync": "on"}});
         assert_eq!(migrate(&SETTINGS, &mut chained).unwrap(), 2);
-        assert_eq!(chained["schema_version"], json!(6));
+        assert_eq!(chained["schema_version"], json!(7));
     }
 
     #[test]
@@ -473,6 +488,24 @@ mod tests {
         let mut chosen = json!({"schema_version": 1, "settings": {"fullscreen": "off"}, "choices": {"fullscreen": true}});
         migrate(&SETTINGS, &mut chosen).unwrap();
         assert_eq!(chosen["settings"]["fullscreen"], json!("off"));
+    }
+
+    #[test]
+    fn a_stored_coregs11_renderer_becomes_gsdx_in_schema_7() {
+        let mut document = json!({"schema_version": 6, "settings": {"renderer": "coregs11", "vsync": "fast"}, "choices": {"renderer": true}});
+        assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 6);
+        assert_eq!(document["schema_version"], json!(7));
+        assert_eq!(document["settings"]["renderer"], json!("pcsx2"), "CoreGS 1.1 is gone: GSdx");
+        assert_eq!(document["settings"]["vsync"], json!("fast"), "other values survive");
+        assert_eq!(document["choices"]["renderer"], json!(true), "the choice flag is kept");
+
+        let mut gsdx = json!({"schema_version": 6, "settings": {"renderer": "pcsx2"}});
+        migrate(&SETTINGS, &mut gsdx).unwrap();
+        assert_eq!(gsdx["settings"]["renderer"], json!("pcsx2"));
+
+        let mut from_zero = json!({"settings": {"renderer": "coregs11"}});
+        migrate(&SETTINGS, &mut from_zero).unwrap();
+        assert_eq!(from_zero["settings"]["renderer"], json!("pcsx2"), "a file of any older schema takes the step too");
     }
 
     #[test]
