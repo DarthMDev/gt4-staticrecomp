@@ -2029,3 +2029,82 @@ OK, 24 skipped (the same skips as before); CTest 39 tests (the Python suite runs
 - Checks: `cargo test --workspace` green; Python suite (slice240 build) 629 tests OK, 24 skipped; UI nav-test 150 of 150;
   focus-check 92 of 100 (the same 8 pre-existing tab-highlight failures as the baseline).
 - Merge of PR #72 (TASK-089, JulioHeroZ) with a merge commit on this branch.
+
+## Slice 250 - TASK-091 release 1.2.1: per-machine install, data beside the program, user data in AppData
+
+Launcher and installer only: the game executable, its pins and gt4-gs 1.2.0 are unchanged (game files
+`private\slice240-dist`, as in 1.2.0). Branch `task/091-install-layout-121` from
+main `ca0c262`. Owner decisions 2026-10-22 (TASKS.md TASK-091, release notes [1.2.1](release-notes/1.2.1.md)).
+
+Path model (`launcher\crates\gt4l-core\src\paths.rs`):
+
+| Item | 1.2.0 | 1.2.1 |
+|---|---|---|
+| Program files | `%LOCALAPPDATA%\Programs\GT4Recomp` (per user) | `C:\Program Files\GT4Recomp` (per machine, any folder) |
+| Disc copy `disc\`, prepared files `prepared\` | `%LOCALAPPDATA%\GT4Recomp` | `<exe dir>\data` |
+| gt4-gs versions, `current.txt`, `cache\`, `data\` | `%LOCALAPPDATA%\GT4Recomp\gs` | `<exe dir>\data\gs` |
+| Runtime card and lock `runtime\`, `sessions\`, `logs\` | `%LOCALAPPDATA%\GT4Recomp` | `<exe dir>\data` (1.2.0 copies under `data\logs\from-1.2.0` when the new folder exists) |
+| `version.json` | install folder | install folder (installer); `data\version.json` when the install folder is read-only |
+| Custom textures | `Documents\Gran Turismo 4\Textures` | `<exe dir>\data\Textures` |
+| `config\settings.toml` (+ backups), `library-migration.json` | `%LOCALAPPDATA%\GT4Recomp\config` | `%APPDATA%\GT4Recomp\config` |
+| `controls.toml` (+ backups) | `%LOCALAPPDATA%\GT4Recomp` | `%APPDATA%\GT4Recomp` |
+| Save library `Saves\`, `Replays\` | `Documents\Gran Turismo 4` (fallback `%LOCALAPPDATA%\GT4Recomp\Gran Turismo 4`) | `%APPDATA%\GT4Recomp` |
+| Card backups | `%LOCALAPPDATA%\GT4Recomp\library\backups` | `%APPDATA%\GT4Recomp\backups` |
+| Pre-1.0 library (`library\memcard`, ...) and its parked folders | `%LOCALAPPDATA%\GT4Recomp` | stays there (migrated into `%APPDATA%` by the existing rule) |
+
+- The data folder is `<dir of GT4Recomp.exe>\data`, never a registry value or a stored absolute path. When it cannot be
+  written (probe file), it becomes a read layer and writes go to `%LOCALAPPDATA%\GT4Recomp` (logged). The 1.2.0
+  folder is a read layer too, so game files and gt4-gs that could not be moved stay in use.
+- `settings.toml` stores a path inside the install folder relative to it (`disc_path`, `[dev] game_dir`); other paths
+  (the disc image the player picked elsewhere) are kept as picked.
+- Overrides for tests and development: `GT4RECOMP_DATA_DIR` (data folder; user folder `<it>\user`; no 1.2.0 folders),
+  `GT4RECOMP_USER_DIR` (`%APPDATA%\GT4Recomp`), `GT4RECOMP_LOCAL_DIR` (`%LOCALAPPDATA%\GT4Recomp`),
+  `GT4RECOMP_DOCUMENTS_DIR` (Documents). Under any of the first two the old-install cleanup is skipped.
+
+Move from 1.2.0 (`launcher\crates\gt4l-core\src\relocate.rs`, driven by `gt4l-tauri\src\relocation.rs`): user data
+before the window (copy to a staging folder, size and SHA-256 per file, place, marker
+`%APPDATA%\GT4Recomp\config\migration-1.2.1.json`, then rename the old player folders to
+`Gran Turismo 4 (moved to AppData)` with `README.txt`); large data on a background thread (rename on the same volume,
+on `ERROR_NOT_SAME_DEVICE` a checked copy keeping modified times, the game files checked with `check_installed` and the
+receipt and pinned disc SHA-256, then the source removed; marker `data\migration-1.2.1.json`; moved folders get
+`icacls /reset` so they inherit the data folder's permissions). Not while `gt4vulkan.exe` or `gt4-gs.exe` runs. Play and
+setup wait for the background move; the page shows a progress line and a result toast (`app_state().migration`).
+
+Old per-user install (`launcher\crates\gt4l-platform\src\legacy_install.rs`): the launcher removes the 1.0.0-1.2.0
+program files it can see (registry `InstallDir`, uninstall `InstallLocation`, `%LOCALAPPDATA%\Programs\GT4Recomp`),
+the per-user Start-menu shortcuts and `HKCU\Software\GT4Recomp` and the HKCU uninstall entry; never a folder holding
+`data`, never the folder it runs from; registry only after the files are gone.
+
+Self-update (`gt4l-platform\src\process.rs`): `release_kill_on_close` clears kill-on-close on the launcher job, then
+`start_setup` uses `ShellExecuteExW` `runas` (UAC), with the breakaway start and the Explorer fallback behind it; a
+declined prompt is final. 1.2.0 to 1.2.1 harness (`O:\gt4recomp-scratch\elevation-harness`, deleted after the run; a
+copy of 1.2.0's start code in a kill-on-close job): `CreateProcess` with `CREATE_BREAKAWAY_FROM_JOB` of a
+`requireAdministrator` exe and of the real 1.2.1 setup fails with `ERROR_ELEVATION_REQUIRED` (740); the fallback
+`explorer.exe <program>` started a windowless stand-in that outlived the launcher's job (marker "survived"). The UAC
+prompt itself was not shown on this PC (Hypothesis, high confidence: Explorer elevates a `requireAdministrator` setup).
+
+Builds:
+
+- Launcher: `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target` (C: had under 5 GB free) and
+  `powershell -ExecutionPolicy Bypass -File launcher\tools\build-release.ps1` (the script now honours
+  `CARGO_TARGET_DIR` and remaps and scans its path too). `GT4Recomp.exe` 16,299,520 bytes, sha256
+  `575ab7568c2e077f5b4ce401d4291ba3db11ba9294ca3fbf5b75bdb20f06706c`, path scan clean; copy in
+  `private\slice250-launcher\GT4Recomp.exe`.
+- Installer (all paths absolute):
+  `makensis /DVERSION=1.2.1 /DLAUNCHER_EXE=C:\Antigravity\gt4-staticrecomp\private\slice250-launcher\GT4Recomp.exe
+  /DGAME_DIR=C:\Antigravity\gt4-staticrecomp\private\slice240-dist
+  /DSDL3_DLL=C:\Antigravity\gt4-staticrecomp\private\tooling\sdl3-3.4.18\runtime\SDL3.dll
+  /DWEBVIEW2_BOOTSTRAPPER=C:\Antigravity\gt4-staticrecomp\private\release-100-webview2\MicrosoftEdgeWebview2Setup.exe
+  /DOUTFILE=C:\Antigravity\gt4-staticrecomp\private\slice250-installer\GT4Recomp-Setup-1.2.1-test.exe
+  C:\Antigravity\gt4-wt-091-install\installer\gt4recomp.nsi` gives 28,838,764 bytes, sha256
+  `333d72bcbc05066f020244b32c1c0a1e890da635451f757586498c1bf7316fb6` (manifest `requireAdministrator`). 7-Zip
+  extraction: `GT4Recomp.exe` and `SDL3.dll` equal their sources, `game\` equal to `private\slice240-dist` (19 files,
+  sha256 each), `$PLUGINSDIR` holds the WebView2 bootstrapper, nsDialogs, nsExec and System. Not run on this PC.
+- Checks: `cargo test --workspace` (with `GT4_TEST_SECOND_VOLUME` on O:) 330 passed, 0 failed, 4 ignored; new tests in
+  `gt4l-core\tests\relocate.rs` (14: same volume, simulated and real cross volume C: to O:, disk-full failure and
+  resume, OneDrive-offline read failure and resume, existing destination, game running, resumed placement, the 1.2.0
+  fallback library), `paths.rs` (portable copy, read-only data folder, empty AppData, overrides, relative settings
+  paths), `legacy_install.rs` (5, scratch registry), `process.rs` (setup start order, process detection),
+  `job_breakaway.rs` (a child survives after `release_kill_on_close`), `flow_audit.rs` (settings store no absolute path
+  inside the install folder). UI nav-test 150 of 150; focus-check 92 of 100 (the 8 known tab-highlight failures). The
+  Python suite does not cover the launcher and was not run.

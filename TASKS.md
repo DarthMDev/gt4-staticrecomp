@@ -505,6 +505,25 @@ replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRend
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
 
+### TASK-091 — Release 1.2.1: per-machine install, data beside the program, user data in AppData
+🧪 **Waiting for owner test (2026-10-22).** Branch `task/091-install-layout-121`. Owner decisions 2026-10-22:
+- the installer installs per machine in `C:\Program Files\GT4Recomp` (administrator rights; the folder page stays);
+- the large data (disc copy, prepared files, gt4-gs, caches, sessions, logs, custom textures) lives in
+  `<install>\data`, found relative to `GT4Recomp.exe` (portable: the folder can be copied to another drive or PC; a
+  read-only copy is read and writes go to `%LOCALAPPDATA%\GT4Recomp`); the installer gives the Users group
+  (`S-1-5-32-545`) Modify on that folder only;
+- settings, controls, saves and replays live per Windows user in `%APPDATA%\GT4Recomp`;
+- the launcher, not the installer, moves the 1.2.0 files at its first start (checked copies, Documents folder renamed
+  with a README, nothing overwritten, never while the game runs, retried after a failure) and removes leftovers of the
+  old per-user install; the installer removes the old per-user program install;
+- the self-update starts the elevated setup (`runas`); uninstall removes `<install>\data`, and the "also delete" box
+  acts only for the current user.
+
+Acceptance: `cargo test --workspace` green with the new path, move, cleanup, elevation and settings tests; UI checks;
+installer compiled and extracted; owner test of a fresh install, the 1.2.0 update, the move, a portable copy and the
+uninstall. Result so far: 330 Rust tests passed; owner test installer `private/slice250-installer/GT4Recomp-Setup-1.2.1-test.exe`.
+Details: BUILD.md slice 250, [release notes 1.2.1](docs/release-notes/1.2.1.md).
+
 ### TASK-090 — CoreGS 3.0: modern render pipeline
 Planned (owner, 2026-10-22), after CoreGS 2.0. The VU1 work (the PS2's vertex shader, today AOT C++ on the MTVU
 thread) moves onto the GPU and the game renders natively. It may first run the whole game with some effects missing
