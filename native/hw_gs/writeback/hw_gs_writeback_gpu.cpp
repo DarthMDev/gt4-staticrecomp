@@ -203,6 +203,67 @@ struct GpuDrawer::Impl {
 
   bool flush_run(std::string &error);
 
+  // ---- Double-buffered submission (IN-354) ----
+  // Two sets of the per-submission resources (command buffer, fence, staging, vertex, uniform and palette rings
+  // and the descriptor sets that point at the rings). A submission switches to the other set, so the CPU records
+  // the next frame while the GPU executes the previous one; a recording waits only for the submission that last
+  // used the same set. The fields cmd, fence, inFlight, staging, vertices, uniforms, palettes, descriptorSets and
+  // computeSets always describe the current set.
+  struct FrameResources {
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    VkFence fence = VK_NULL_HANDLE;
+    bool inFlight = false;
+    std::uint64_t serial = 0;
+    Resource staging;
+    Resource vertices;
+    Resource uniforms;
+    Resource palettes;
+    VkDescriptorSet descriptorSets[kGpuColourSlots * kGpuDepthSlots] = {};
+    VkDescriptorSet computeSets[kGpuColourSlots + kGpuDepthSlots] = {};
+  };
+  FrameResources frameSets[2];
+  std::uint32_t currentFrame = 0;
+  bool secondFrameReady = false;  // frame set 1 exists
+  bool doubleBuffered = false;    // submissions alternate between the two sets
+
+  void save_frame(std::uint32_t index) {
+    FrameResources &f = frameSets[index];
+    f.cmd = cmd;
+    f.fence = fence;
+    f.inFlight = inFlight;
+    f.serial = serial;
+    f.staging = staging;
+    f.vertices = vertices;
+    f.uniforms = uniforms;
+    f.palettes = palettes;
+    std::copy(std::begin(descriptorSets), std::end(descriptorSets), std::begin(f.descriptorSets));
+    std::copy(std::begin(computeSets), std::end(computeSets), std::begin(f.computeSets));
+  }
+  void load_frame(std::uint32_t index) {
+    const FrameResources &f = frameSets[index];
+    cmd = f.cmd;
+    fence = f.fence;
+    inFlight = f.inFlight;
+    serial = f.serial;
+    staging = f.staging;
+    vertices = f.vertices;
+    uniforms = f.uniforms;
+    palettes = f.palettes;
+    std::copy(std::begin(f.descriptorSets), std::end(f.descriptorSets), std::begin(descriptorSets));
+    std::copy(std::begin(f.computeSets), std::end(f.computeSets), std::begin(computeSets));
+  }
+  bool wait_all(std::string &error);
+  bool create_second_frame(std::string &error);
+
+  // Submission serials (IN-355): serial of the current set's last submission (mirror; FrameResources::serial
+  // for the other set) and the highest serial known complete.
+  std::uint64_t serial = 0;
+  std::uint64_t completedSerial = 0;
+  // Asynchronous download buffers (IN-355): two host buffers, with the copies recorded into each.
+  Resource downloads[2];
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> downloadRanges[2];
+  std::uint32_t nextDownload = 0;
+
   VkPipeline make_compute(VkShaderModule module, std::string &error) {
     VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
     info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -431,6 +492,28 @@ struct GpuDrawer::Impl {
       submit(true, ignored);  // recorded work completes before the resources go
     }
     if (device) gt4_hw_vkDeviceWaitIdle(device);
+    if (device && secondFrameReady) {
+      // Both frame sets' rings and fences (the current-set fields are copies; cleared so they are not freed twice).
+      save_frame(currentFrame);
+      for (FrameResources &f : frameSets) {
+        for (Resource *resource : {&f.staging, &f.vertices, &f.uniforms, &f.palettes}) {
+          if (resource->mapped) gt4_hwd_vkUnmapMemory(device, resource->memory);
+          if (resource->buffer) gt4_hwd_vkDestroyBuffer(device, resource->buffer, nullptr);
+          if (resource->memory) gt4_hwd_vkFreeMemory(device, resource->memory, nullptr);
+        }
+        if (f.fence) gt4_hw_vkDestroyFence(device, f.fence, nullptr);
+        f = FrameResources{};
+      }
+      for (Resource &buffer : downloads) {
+        if (buffer.mapped) gt4_hwd_vkUnmapMemory(device, buffer.memory);
+        if (buffer.buffer) gt4_hwd_vkDestroyBuffer(device, buffer.buffer, nullptr);
+        if (buffer.memory) gt4_hwd_vkFreeMemory(device, buffer.memory, nullptr);
+        buffer = Resource{};
+      }
+      staging = vertices = uniforms = palettes = Resource{};
+      fence = VK_NULL_HANDLE;
+      secondFrameReady = doubleBuffered = false;
+    }
     if (device) {
       for (VkPipeline &pipeline : pipelines) {
         if (pipeline) gt4_hwd_vkDestroyPipeline(device, pipeline, nullptr);
@@ -582,10 +665,10 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   if (!check(gt4_hwd_vkCreatePipelineLayout(s.device, &layoutInfo, nullptr, &s.pipelineLayout), "vkCreatePipelineLayout", error)) return false;
 
   constexpr std::uint32_t kSets = kGpuColourSlots * kGpuDepthSlots;
-  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, kSets},
-                                   {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 * kSets}};
+  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 2 * kSets},
+                                   {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * 3 * kSets}};
   VkDescriptorPoolCreateInfo poolSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolSetInfo.maxSets = kSets;
+  poolSetInfo.maxSets = 2 * kSets;  // two frame sets (IN-354)
   poolSetInfo.poolSizeCount = 2;
   poolSetInfo.pPoolSizes = sizes;
   if (!check(gt4_hwd_vkCreateDescriptorPool(s.device, &poolSetInfo, nullptr, &s.descriptorPool), "vkCreateDescriptorPool", error)) return false;
@@ -716,10 +799,10 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     if (!check(gt4_hwd_vkCreatePipelineLayout(s.device, &computeLayoutInfo, nullptr, &s.computeLayout),
                "vkCreatePipelineLayout", error)) return false;
     constexpr std::uint32_t kComputeSets = kGpuColourSlots + kGpuDepthSlots;
-    VkDescriptorPoolSize computeSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4 * kComputeSets},
-                                            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * kComputeSets}};
+    VkDescriptorPoolSize computeSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * 4 * kComputeSets},
+                                            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * 2 * kComputeSets}};
     VkDescriptorPoolCreateInfo computePoolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    computePoolInfo.maxSets = kComputeSets;
+    computePoolInfo.maxSets = 2 * kComputeSets;  // two frame sets (IN-354)
     computePoolInfo.poolSizeCount = 2;
     computePoolInfo.pPoolSizes = computeSizes;
     if (!check(gt4_hwd_vkCreateDescriptorPool(s.device, &computePoolInfo, nullptr, &s.computePool),
@@ -781,6 +864,7 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     s.hostUploadPipeline = s.make_compute(s.hostUploadModule, error);
     if (!s.hostUploadPipeline) return false;
   }
+  if (!s.create_second_frame(error)) return false;
   s.ready = true;
   return true;
 }
@@ -831,8 +915,124 @@ bool GpuDrawer::Impl::submit(bool wait, std::string &error) {
     recording = false;
     inFlight = true;
     ++stats.submissions;
+    serial = stats.submissions;
+    if (doubleBuffered) {
+      save_frame(currentFrame);
+      currentFrame ^= 1u;
+      load_frame(currentFrame);
+      stagingUsed = 0;  // the new set's rings; begin_recording waits for their last submission
+      vertexUsed = 0;
+      uniformUsed = 0;
+      paletteUsed = 0;
+    }
   }
-  if (wait) return wait_idle(error);
+  if (wait) return wait_all(error);
+  return true;
+}
+
+bool GpuDrawer::Impl::wait_all(std::string &error) {
+  if (secondFrameReady) {
+    FrameResources &other = frameSets[currentFrame ^ 1u];
+    if (other.inFlight) {
+      if (!check(gt4_hw_vkWaitForFences(device, 1, &other.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) {
+        return false;
+      }
+      other.inFlight = false;
+      completedSerial = std::max(completedSerial, other.serial);
+    }
+  }
+  return wait_idle(error);
+}
+
+bool GpuDrawer::Impl::create_second_frame(std::string &error) {
+  save_frame(0);
+  VkCommandBufferAllocateInfo allocate{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
+  allocate.commandPool = pool;
+  allocate.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocate.commandBufferCount = 1;
+  FrameResources &f = frameSets[1];
+  if (!check(gt4_hw_vkAllocateCommandBuffers(device, &allocate, &f.cmd), "vkAllocateCommandBuffers", error)) return false;
+  VkFenceCreateInfo fenceInfo{VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+  if (!check(gt4_hw_vkCreateFence(device, &fenceInfo, nullptr, &f.fence), "vkCreateFence", error)) return false;
+  const VkMemoryPropertyFlags hostCoherent = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  if (!make_buffer(f.staging, kStagingBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                   hostCoherent, 0, true, error) ||
+      !make_buffer(f.vertices, kVertexBytes, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, hostCoherent, 0, true, error) ||
+      !make_buffer(f.uniforms, kUniformRingBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, hostCoherent, 0, true, error) ||
+      !make_buffer(f.palettes, kPaletteRingBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, hostCoherent, 0, true, error)) {
+    return false;
+  }
+  constexpr std::uint32_t kSets = kGpuColourSlots * kGpuDepthSlots;
+  constexpr std::uint32_t kComputeSets = kGpuColourSlots + kGpuDepthSlots;
+  VkDescriptorSetLayout layouts[kSets];
+  for (VkDescriptorSetLayout &layout : layouts) layout = setLayout;
+  VkDescriptorSetAllocateInfo setAllocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  setAllocate.descriptorPool = descriptorPool;
+  setAllocate.descriptorSetCount = kSets;
+  setAllocate.pSetLayouts = layouts;
+  if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &setAllocate, f.descriptorSets), "vkAllocateDescriptorSets", error)) {
+    return false;
+  }
+  VkDescriptorSetLayout computeLayouts[kComputeSets];
+  for (VkDescriptorSetLayout &layout : computeLayouts) layout = computeSetLayout;
+  VkDescriptorSetAllocateInfo computeAllocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  computeAllocate.descriptorPool = computePool;
+  computeAllocate.descriptorSetCount = kComputeSets;
+  computeAllocate.pSetLayouts = computeLayouts;
+  if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &computeAllocate, f.computeSets), "vkAllocateDescriptorSets",
+             error)) {
+    return false;
+  }
+  // Same images and shared buffers as set 0 (copied), own rings (written).
+  const FrameResources &first = frameSets[0];
+  VkDescriptorBufferInfo uniformInfo{f.uniforms.buffer, 0, kUniformBytes};
+  for (std::uint32_t i = 0; i < kSets; ++i) {
+    VkCopyDescriptorSet copies[3]{};
+    for (std::uint32_t b = 0; b < 3; ++b) {
+      copies[b].sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+      copies[b].srcSet = first.descriptorSets[i];
+      copies[b].srcBinding = b + 1;
+      copies[b].dstSet = f.descriptorSets[i];
+      copies[b].dstBinding = b + 1;
+      copies[b].descriptorCount = 1;
+    }
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = f.descriptorSets[i];
+    write.dstBinding = 0;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+    write.pBufferInfo = &uniformInfo;
+    gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 3, copies);
+  }
+  VkDescriptorBufferInfo paletteInfo{f.palettes.buffer, 0, kPaletteRingBytes};
+  for (std::uint32_t i = 0; i < kComputeSets; ++i) {
+    VkCopyDescriptorSet copies[5]{};
+    const std::uint32_t copied[5] = {0, 1, 3, 4, 5};
+    for (std::uint32_t c = 0; c < 5; ++c) {
+      copies[c].sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+      copies[c].srcSet = first.computeSets[i];
+      copies[c].srcBinding = copied[c];
+      copies[c].dstSet = f.computeSets[i];
+      copies[c].dstBinding = copied[c];
+      copies[c].descriptorCount = 1;
+    }
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = f.computeSets[i];
+    write.dstBinding = 2;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    write.pBufferInfo = &paletteInfo;
+    gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 5, copies);
+  }
+  for (Resource &buffer : downloads) {
+    if (!make_buffer(buffer, kGlmBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, hostCoherent, VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+                     true, error)) {
+      return false;
+    }
+  }
+  secondFrameReady = true;
+  doubleBuffered = true;
+  load_frame(0);
   return true;
 }
 
@@ -840,6 +1040,7 @@ bool GpuDrawer::Impl::wait_idle(std::string &error) {
   if (inFlight) {
     if (!check(gt4_hw_vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) return false;
     inFlight = false;
+    completedSerial = std::max(completedSerial, serial);
   }
   stagingUsed = 0;
   vertexUsed = 0;
@@ -861,6 +1062,14 @@ bool GpuDrawer::Impl::begin_recording(std::string &error) {
 bool GpuDrawer::Flush(bool wait, std::string &error) { return impl_->submit(wait, error); }
 
 void GpuDrawer::SetRuns(bool enabled) { impl_->runsEnabled = enabled; }
+
+void GpuDrawer::SetDoubleBuffering(bool enabled) {
+  Impl &s = *impl_;
+  if (!s.secondFrameReady) return;
+  std::string error;
+  s.submit(true, error);  // both sets idle; the current set stays current
+  s.doubleBuffered = enabled;
+}
 
 bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   Impl &s = *impl_;
@@ -928,7 +1137,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
       (textureFromGlm && chunk.glmIndexed && !chunk.glmGpuClut) ? 256 * sizeof(std::uint32_t) : 0;
   if (s.stagingUsed + stagingNeeded > kStagingBytes || s.vertexUsed + vertexNeeded > kGpuMaxVertices ||
       s.uniformUsed + s.uniformStride > kUniformRingBytes || s.paletteUsed + paletteNeeded > kPaletteRingBytes) {
-    if (!s.submit(true, error)) return false;
+    if (!s.submit(false, error)) return false;  // the next recording waits for the rings it reuses
   }
   if (!s.begin_recording(error)) return false;
   std::uint32_t originX = 0;
@@ -1236,7 +1445,7 @@ bool GpuDrawer::UploadGlm(const std::uint8_t *localMemory,
     error = "GLM upload larger than the staging ring";
     return false;
   }
-  if (s.stagingUsed + total > kStagingBytes && !s.submit(true, error)) return false;
+  if (s.stagingUsed + total > kStagingBytes && !s.submit(false, error)) return false;
   if (!s.begin_recording(error)) return false;
   std::vector<VkBufferCopy> copies;
   copies.reserve(ranges.size());
@@ -1322,7 +1531,7 @@ bool GpuDrawer::MergeIntoGlm(const std::vector<std::uint32_t> &triples, std::str
     error = "GLM merge list larger than the ring";
     return false;
   }
-  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(true, error)) return false;
+  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
   if (!s.begin_recording(error)) return false;
   const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
   std::memcpy(static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed, triples.data(), bytes);
@@ -1357,7 +1566,7 @@ bool GpuDrawer::UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_
     error = "GLM host upload larger than the ring";
     return false;
   }
-  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(true, error)) return false;
+  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
   if (!s.begin_recording(error)) return false;
   const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
   auto *ring = static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed;
@@ -1373,6 +1582,78 @@ bool GpuDrawer::UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_
   gt4_hwd_vkCmdDispatch(s.cmd, (pixels + 63) / 64, 1, 1);
   s.full_barrier();
   s.stats.uploadBytes += byteCount;
+  return true;
+}
+
+GpuDrawer::DownloadTicket GpuDrawer::RecordGlmDownload(
+    const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges, std::string &error) {
+  Impl &s = *impl_;
+  DownloadTicket ticket;
+  if (!s.secondFrameReady) {
+    error = "asynchronous downloads need the second frame set";
+    return ticket;
+  }
+  std::vector<VkBufferCopy> copies;
+  for (const auto &range : ranges) {
+    if (range.second == 0) continue;
+    if (static_cast<VkDeviceSize>(range.first) + range.second > kGlmBytes) {
+      error = "GLM download range outside the 4 MiB memory";
+      return ticket;
+    }
+    copies.push_back(VkBufferCopy{range.first, range.first, range.second});  // same offsets in the host buffer
+  }
+  if (!s.begin_recording(error)) return ticket;
+  if (!s.flush_run(error)) return ticket;  // pending draws come first in command order
+  const std::uint32_t buffer = s.nextDownload;
+  s.nextDownload ^= 1u;
+  if (!copies.empty()) {
+    s.full_barrier();
+    gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.downloads[buffer].buffer, static_cast<std::uint32_t>(copies.size()),
+                            copies.data());
+    VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0,
+                                nullptr, 0, nullptr);
+    s.stats.barriers += 2;
+  }
+  s.downloadRanges[buffer] = ranges;
+  ticket.valid = true;
+  ticket.buffer = buffer;
+  ticket.serial = s.stats.submissions + 1;  // the submission that will end this recording
+  return ticket;
+}
+
+bool GpuDrawer::CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *localMemory, std::string &error) {
+  Impl &s = *impl_;
+  if (!ticket.valid) {
+    error = "invalid download ticket";
+    return false;
+  }
+  if (ticket.serial > s.stats.submissions && !s.submit(false, error)) return false;  // still being recorded
+  if (s.completedSerial < ticket.serial) {
+    // The set that holds the submission (or a later one on the same queue, which completes after it).
+    Impl::FrameResources &other = s.frameSets[s.currentFrame ^ 1u];
+    if (s.serial >= ticket.serial && s.inFlight) {
+      if (!check(gt4_hw_vkWaitForFences(s.device, 1, &s.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) {
+        return false;
+      }
+      s.inFlight = false;
+      s.completedSerial = std::max(s.completedSerial, s.serial);
+    }
+    if (s.completedSerial < ticket.serial && other.serial >= ticket.serial && other.inFlight) {
+      if (!check(gt4_hw_vkWaitForFences(s.device, 1, &other.fence, VK_TRUE, UINT64_MAX), "vkWaitForFences", error)) {
+        return false;
+      }
+      other.inFlight = false;
+      s.completedSerial = std::max(s.completedSerial, other.serial);
+    }
+    if (s.completedSerial < ticket.serial) s.completedSerial = ticket.serial;  // neither set in flight: complete
+  }
+  const auto *bytes = static_cast<const std::uint8_t *>(s.downloads[ticket.buffer].mapped);
+  for (const auto &range : s.downloadRanges[ticket.buffer]) {
+    std::memcpy(localMemory + range.first, bytes + range.first, range.second);
+  }
   return true;
 }
 
@@ -1432,7 +1713,7 @@ bool GpuDrawer::LoadClutFromGlm(std::uint32_t cbp, std::uint32_t cpsm, std::uint
 
 bool GpuDrawer::UploadClut(const std::uint16_t *halfwords, std::string &error) {
   Impl &s = *impl_;
-  if (s.stagingUsed + kClutBytes > kStagingBytes && !s.submit(true, error)) return false;
+  if (s.stagingUsed + kClutBytes > kStagingBytes && !s.submit(false, error)) return false;
   if (!s.begin_recording(error)) return false;
   auto *staging = reinterpret_cast<std::uint32_t *>(static_cast<std::uint8_t *>(s.staging.mapped) + s.stagingUsed);
   for (std::uint32_t i = 0; i < 512; ++i) staging[i] = halfwords[i];

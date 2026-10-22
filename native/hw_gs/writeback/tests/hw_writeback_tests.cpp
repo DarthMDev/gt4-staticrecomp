@@ -1572,6 +1572,70 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         std::printf("  the cache paths were not all exercised (fixture is blind)\n");
         ++failures;
     }
+    // IN-355: presentation from the asynchronous capture equals the synchronous presentation one VBlank later
+    // (nothing is shown at the first VBlank), and memory is unchanged by it.
+    {
+        auto present = [&](bool async, std::vector<FrameRecord>& out, writeback::Counters& counters,
+                           std::string& error) -> bool {
+            writeback::Renderer renderer;
+            if (!renderer.Init(handles, error)) return false;
+            renderer.SetSyncMode(true);
+            renderer.SetAsyncPresentation(async);
+            writeback::WritebackReplayTarget target(renderer, writeback::ComposeKind::Presentation);
+            cpuref::ReplaySummary summary;
+            const bool ok = cpuref::ReplayCapture(capture.Bytes(), target, summary,
+                                                  [&](uint64_t, const cpuref::FrameImage& image) {
+                                                      FrameRecord r;
+                                                      r.valid = image.valid;
+                                                      for (const display::Rgba8& p : image.image.pixels) {
+                                                          r.rgb.push_back(p.r);
+                                                          r.rgb.push_back(p.g);
+                                                          r.rgb.push_back(p.b);
+                                                      }
+                                                      r.slmHash = cpuref::HashLocalMemory(renderer.Slm(),
+                                                                                          4u * 1024u * 1024u);
+                                                      out.push_back(std::move(r));
+                                                  },
+                                                  error);
+            counters = renderer.GetCounters();
+            if (renderer.Failed()) error += " " + renderer.LastError();
+            return ok && !renderer.Failed();
+        };
+        std::vector<FrameRecord> sync;
+        std::vector<FrameRecord> async;
+        writeback::Counters syncCounters;
+        writeback::Counters asyncCounters;
+        if (!present(false, sync, syncCounters, error) || !present(true, async, asyncCounters, error)) {
+            std::printf("  async presentation: replay failed: %s\n", error.c_str());
+            ++failures;
+        } else if (sync.size() != kFrames || async.size() != kFrames) {
+            std::printf("  async presentation: frame counts %zu / %zu\n", sync.size(), async.size());
+            ++failures;
+        } else {
+            if (async[0].valid) {
+                std::printf("  async presentation: frame 0 shows an image (expected none)\n");
+                ++failures;
+            }
+            for (uint32_t frame = 0; frame < kFrames; ++frame) {
+                const bool memory = sync[frame].slmHash == async[frame].slmHash;
+                const bool image = frame == 0 || (async[frame].valid == sync[frame - 1].valid &&
+                                                  async[frame].rgb == sync[frame - 1].rgb);
+                std::printf("  async presentation frame %u: image %s previous VBlank's, memory %s\n", frame,
+                            image ? "equals" : "DIFFERS from", memory ? "equal" : "DIFFERS");
+                if (!image || !memory) ++failures;
+            }
+            uint32_t changing = 0;  // the shift is only visible when consecutive frames differ
+            for (uint32_t frame = 1; frame < kFrames; ++frame) changing += sync[frame].rgb != sync[frame - 1].rgb ? 1u : 0u;
+            if (changing < kFrames - 1 || asyncCounters.displayCaptures == 0 ||
+                asyncCounters.presentationsFromCapture + 1 != kFrames ||
+                syncCounters.presentationsFromCapture != 0) {
+                std::printf("  async presentation: captures %llu, composes from captures %llu (fixture is blind)\n",
+                            static_cast<unsigned long long>(asyncCounters.displayCaptures),
+                            static_cast<unsigned long long>(asyncCounters.presentationsFromCapture));
+                ++failures;
+            }
+        }
+    }
     std::printf("hw_cache_equals_writeback: %u frames, %d failures\n", kFrames, failures);
     return failures == 0 ? 0 : 1;
 }

@@ -1240,6 +1240,77 @@ public:
         counters.glmPagesDownloaded += pages.size();
     }
 
+    // The memory a display circuit reads (13.2 read rectangle; a wrapping or unknown read reports all memory).
+    static BlockSpan DisplayCircuitSpan(const display::CircuitRect& circuit) {
+        const auto psm = memory::decodePsm(circuit.psm);
+        if (!psm) return BlockSpan{0, kAllBlocks};
+        return SpanOfRect(memory::BufferView{memory::blockOfPage(circuit.fbp), circuit.fbw, *psm}, circuit.dbx,
+                          circuit.dby, circuit.dbx + static_cast<int32_t>(circuit.read_width) - 1,
+                          circuit.dby + static_cast<int32_t>(circuit.read_height) - 1);
+    }
+
+    // This VBlank's display layout (13.2), computed once per VBlank (it advances the DBY history).
+    void EnsureLayout() {
+        if (layoutVblank_ != vblanks_ || !layoutValid_) {
+            layout_ = display::compute_layout(displayRegs_, previousDby_);
+            layoutVblank_ = vblanks_;
+            layoutValid_ = true;
+        }
+    }
+
+    // IN-355: records the download of the displayed memory into the current recording (before the frame's
+    // submission). The GLM is made current for it first: stale pages uploaded, drawn targets swizzled.
+    void CaptureDisplay() {
+        captureShown_ = std::move(captureNext_);
+        captureNext_ = DisplayCapture{};
+        EnsureLayout();
+        DisplayCapture capture;
+        capture.layout = layout_;
+        capture.regs = displayRegs_;
+        capture.background = background_;
+        capture.oddField = oddField_;
+        std::vector<std::pair<uint32_t, uint32_t>> ranges;
+        if (layout_.valid) {
+            for (const display::CircuitRect& circuit : layout_.circuits) {
+                if (!circuit.enabled || circuit.read_width == 0 || circuit.read_height == 0) continue;
+                const BlockSpan span = DisplayCircuitSpan(circuit);
+                if (!UploadStalePages(span)) return;
+                for (ResidentSlot& slot : slots_) {
+                    if (slot.drawn.Empty() || !SpansOverlap(SpanOfRect(slot.view, slot.drawn), span)) continue;
+                    const int32_t bufferWidth =
+                        static_cast<int32_t>(std::max<uint32_t>(slot.view.bufferWidth, 1u) * 64u);
+                    if (slot.drawn.x1 >= bufferWidth) {
+                        ReasonScope scope(writebackReason_, WritebackReason::Display);
+                        WriteBack(slot);
+                        if (!UploadStalePages(span)) return;
+                        continue;
+                    }
+                    if (!SwizzleSlotIntoGlm(slot)) return;
+                }
+                ForEachPage(span, [&](uint32_t page) {
+                    const uint32_t offset = page * 8192u;
+                    for (const auto& range : ranges) {
+                        if (offset >= range.first && offset < range.first + range.second) return;
+                    }
+                    if (!ranges.empty() && ranges.back().first + ranges.back().second == offset) {
+                        ranges.back().second += 8192u;
+                    } else {
+                        ranges.push_back({offset, 8192u});
+                    }
+                });
+            }
+        }
+        std::string error;
+        capture.ticket = gpu_.RecordGlmDownload(ranges, error);
+        if (!capture.ticket.valid) {
+            Fail(error);
+            return;
+        }
+        capture.valid = true;
+        captureNext_ = std::move(capture);
+        counters.displayCaptures++;
+    }
+
     // The shadow memory replaced wholesale (auxiliary frame end, VRAM clear): GLM-owned content is discarded.
     void DiscardGlmOwned() {
         glmOwned_.fill(false);
@@ -1716,6 +1787,25 @@ public:
     std::uint64_t layoutVblank_ = 0;               // VBlank whose layout is cached in layout_
     bool layoutValid_ = false;
     display::DisplayLayout layout_;
+
+    // ---- Asynchronous presentation source (IN-355) ----
+    // With a window, each Flush records a download of the displayed memory (made current in the GLM) into the
+    // frame's own submission; the presentation compose of the next VBlank composes that capture once the GPU has
+    // finished the frame (one frame of presentation latency), so the CPU never waits for the frame it just
+    // submitted. Reference composes (dumps) stay synchronous and exact for their own VBlank.
+    struct DisplayCapture {
+        bool valid = false;
+        display::DisplayLayout layout;
+        display::DisplayRegisters regs;
+        std::array<uint8_t, 3> background{};
+        bool oddField = false;
+        gpu::GpuDrawer::DownloadTicket ticket;
+        bool completed = false;
+    };
+    bool asyncPresentation_ = false;
+    DisplayCapture captureNext_;   // recorded at the last Flush
+    DisplayCapture captureShown_;  // recorded at the Flush before; composed by this VBlank's presentation
+    memory::LocalMemory displayMemory_;
     bool failed_ = false;
     std::string lastError_;
     Renderer::BatchObserver observer_;
@@ -1896,6 +1986,9 @@ void Renderer::Flush() {
     s.frameTimings_ = PassTimings{};
     ++s.timedFrames_;
     ++s.vblanks_;  // the next compose computes this VBlank's display layout (13.2)
+    if (s.asyncPresentation_ && s.cacheMode_ && s.glmEnabled_ && s.gpu_.Ready() && !s.failed_ && !s.auxiliary_) {
+        s.CaptureDisplay();  // IN-355: into this frame's submission, composed at the next VBlank
+    }
     // Submit the frame's recorded chunks without waiting (IN-342): the GPU draws while the CPU composes and
     // starts the next frame; the next recording waits for it before reusing the rings.
     std::string error;
@@ -1989,13 +2082,35 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
         StageTimer timer(composeUs);
         // 13.2 once per VBlank: compute_layout advances the DBY history, so a second compose of the
         // same VBlank (a dump next to a present) must reuse the layout instead of recomputing it.
-        if (s.layoutVblank_ != s.vblanks_ || !s.layoutValid_) {
-            s.layout_ = display::compute_layout(s.displayRegs_, s.previousDby_);
-            s.layoutVblank_ = s.vblanks_;
-            s.layoutValid_ = true;
-        }
-        const display::DisplayLayout& layout = s.layout_;
+        s.EnsureLayout();
         const bool presentation = kind == ComposeKind::Presentation;
+        // IN-355: a presentation compose with asynchronous presentation composes the previous VBlank's capture
+        // (its download is complete once the GPU finished that frame; nothing waits for the frame just submitted).
+        Impl::DisplayCapture& capture = s.captureShown_;
+        bool fromCapture = presentation && s.asyncPresentation_ && capture.valid;
+        if (fromCapture && !capture.completed) {
+            std::string error;
+            if (!s.gpu_.CompleteGlmDownload(capture.ticket, s.displayMemory_.bytes().data(), error)) {
+                s.Fail(error);
+                fromCapture = false;
+            } else {
+                capture.completed = true;
+            }
+        }
+        if (presentation && s.asyncPresentation_ && !fromCapture && s.captureNext_.valid) {
+            // The first capture is recorded but not composable yet (the first VBlank of asynchronous
+            // presentation): nothing to show this VBlank. The deinterlacer and the presentation history are not
+            // touched, so the composed frames are the synchronous sequence one VBlank later. Without any capture
+            // (presents without a Flush between them) the compose stays synchronous.
+            s.timings_.composeUs = 0.0;
+            return;
+        }
+        const display::DisplayLayout& layout = fromCapture ? capture.layout : s.layout_;
+        const display::DisplayRegisters& regs = fromCapture ? capture.regs : s.displayRegs_;
+        const std::array<uint8_t, 3>& background = fromCapture ? capture.background : s.background_;
+        const bool displayField = fromCapture ? capture.oddField : s.oddField_;
+        const memory::LocalMemory& source = fromCapture ? s.displayMemory_ : s.memory_.Local();
+        if (fromCapture) s.counters.presentationsFromCapture++;
         const auto blank = [&] {
             if (presentation) {
                 s.counters.blankFrames++;
@@ -2007,26 +2122,19 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
                 blank();
                 return;
             }
-            const display::PmodeFields pmode = display::decode_pmode(s.displayRegs_.pmode);
+            const display::PmodeFields pmode = display::decode_pmode(regs.pmode);
             std::array<display::Image, 2> sources{};
             std::array<bool, 2> available{false, false};
             for (std::size_t i = 0; i < 2; ++i) {
                 const display::CircuitRect& circuit = layout.circuits[i];
                 if (!circuit.enabled || circuit.read_width == 0 || circuit.read_height == 0) continue;
-                {
+                if (!fromCapture) {
                     // The display reads this circuit's rectangle from the shadow memory: GPU-newer targets there
                     // are written back first (only those; a wrapping read rectangle reports all memory).
                     ReasonScope scope(s.writebackReason_, WritebackReason::Display);
-                    const auto psm = memory::decodePsm(circuit.psm);
-                    const BlockSpan span =
-                        psm ? SpanOfRect(memory::BufferView{memory::blockOfPage(circuit.fbp), circuit.fbw, *psm},
-                                         circuit.dbx, circuit.dby,
-                                         circuit.dbx + static_cast<int32_t>(circuit.read_width) - 1,
-                                         circuit.dby + static_cast<int32_t>(circuit.read_height) - 1)
-                            : BlockSpan{0, kAllBlocks};
-                    s.CoherentForRead(span);
+                    s.CoherentForRead(Impl::DisplayCircuitSpan(circuit));
                 }
-                sources[i] = ReadCircuit(s.memory_.Local(), circuit);
+                sources[i] = ReadCircuit(source, circuit);
                 available[i] = true;
             }
             const display::MergePlan plan =
@@ -2042,14 +2150,14 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
             display::DeinterlaceMode effective = display::DeinterlaceMode::Off;
             if (presentation) {
                 effective = s.settings_.deinterlace == display::DeinterlaceMode::Auto
-                                ? display::resolve_auto_deinterlace(layout, layout.ffmd, s.displayRegs_.scanmsk_active)
+                                ? display::resolve_auto_deinterlace(layout, layout.ffmd, regs.scanmsk_active)
                                 : s.settings_.deinterlace;
             }
             // IN-339: the display field of a frame (VSYNC field = CSR.FIELD, 1 = odd) maps to the LOWER row
             // phase when it is 0 and to the upper one when it is 1: GT4 draws its CSR.FIELD = 1 frames half a
             // line higher, so with the IN-35 reading (field 1 shifted down) every woven menu line landed two
             // rows from its partner. `_bff` still inverts the result.
-            const int vblankField = RowFieldOfDisplayField(s.oddField_);
+            const int vblankField = RowFieldOfDisplayField(displayField);
             const int fieldPhase = vblankField ^ (s.settings_.bottomFieldFirst ? 1 : 0);
             const int32_t offsetRows =
                 presentation ? display::interlace_offset_rows(layout.really_interlaced, layout.ffmd, effective, 1,
@@ -2065,8 +2173,8 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
                                                layout.circuits[1].screen_y,
                                                static_cast<int32_t>(layout.circuits[1].display_width),
                                                static_cast<int32_t>(layout.circuits[1].display_height)};
-            display::Image merged = display::compose_merge(plan, pmode, s.background_[0], s.background_[1],
-                                                           s.background_[2], size.width, size.height, 1, offsetRows,
+            display::Image merged = display::compose_merge(plan, pmode, background[0], background[1],
+                                                           background[2], size.width, size.height, 1, offsetRows,
                                                            rc1, rc2);
             if (presentation) {
                 if (plan.use_rc1 && plan.use_rc2 && !pmode.mmod) s.counters.mergeAlphaFromTexel++;  // V-01-12
@@ -2138,6 +2246,14 @@ void Renderer::SetGlmLoadsAlways(bool enabled) { impl_->glmLoadsAlways_ = enable
 void Renderer::SetGpuUploads(bool enabled) { impl_->gpuUploads_ = enabled; }
 
 void Renderer::SetRuns(bool enabled) { impl_->gpu_.SetRuns(enabled); }
+
+void Renderer::SetDoubleBuffering(bool enabled) { impl_->gpu_.SetDoubleBuffering(enabled); }
+
+void Renderer::SetAsyncPresentation(bool enabled) {
+    impl_->asyncPresentation_ = enabled;
+    impl_->captureNext_ = Impl::DisplayCapture{};
+    impl_->captureShown_ = Impl::DisplayCapture{};
+}
 
 void Renderer::SetCpuSmallSprites(bool enabled) { impl_->cpuSmallSprites_ = enabled; }
 

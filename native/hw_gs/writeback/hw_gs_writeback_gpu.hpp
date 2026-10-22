@@ -173,6 +173,19 @@ public:
     bool UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_t psm, std::uint32_t x0, std::uint32_t y0,
                          std::uint32_t width, std::uint32_t pixels, std::uint32_t bpp, const std::uint8_t *data,
                          std::size_t byteCount, std::string &error);
+    // IN-355 asynchronous downloads: the copy of the given GLM byte ranges is recorded into the current
+    // recording (it runs after everything recorded before it) into one of two host buffers; Complete waits only
+    // for the submission that holds it (submitting it first if it is still being recorded) and copies the bytes
+    // into `localMemory` at the same offsets. A ticket's buffer is reused two downloads later, so a ticket must
+    // be completed (or dropped) before the second next one is recorded.
+    struct DownloadTicket {
+        bool valid = false;
+        std::uint32_t buffer = 0;
+        std::uint64_t serial = 0;  // the submission that holds the copy
+    };
+    DownloadTicket RecordGlmDownload(const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges,
+                                     std::string &error);
+    bool CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *localMemory, std::string &error);
     // Copies the given byte ranges of the GLM into `localMemory` at the same offsets (IN-350: pages whose newest
     // content lives only in the GLM, before the CPU reads or writes them). Submits and waits.
     bool DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges, std::uint8_t *localMemory,
@@ -192,6 +205,9 @@ public:
     // IN-352 A/B switch: chunks of triangles drawn with the pixel interlock are batched into runs (one render
     // pass, texture preparation recorded before it, no barrier between the chunks). Off: one pass per chunk.
     void SetRuns(bool enabled);
+    // IN-354 A/B switch: submissions alternate between two sets of rings and command buffers (CPU records the
+    // next frame while the GPU executes the previous one). Off: every recording waits for the last submission.
+    void SetDoubleBuffering(bool enabled);
 
     const GpuStats &Stats() const;
 

@@ -9,7 +9,7 @@
 //        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>] [--compose reference|presentation]
 //        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]] [--sync-mode cache|writeback] [--no-interlock]
 //        [--no-target-textures] [--no-glm] [--no-cpu-sprites] [--no-gpu-clut] [--no-glm-park] [--no-gpu-uploads]
-//        [--no-runs]
+//        [--no-runs] [--single-buffer] [--async-present]
 // --sync-mode selects GT4_HW_SYNC_MODE (default cache, as in the game; writeback is the reference mode).
 // --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
 // the default `auto`) instead of the reference image (12.9 `vram`, the CPU reference's image).
@@ -166,7 +166,8 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--no-interlock") == 0 || std::strcmp(argv[i], "--no-target-textures") == 0 ||
             std::strcmp(argv[i], "--no-glm") == 0 || std::strcmp(argv[i], "--no-cpu-sprites") == 0 ||
             std::strcmp(argv[i], "--no-gpu-clut") == 0 || std::strcmp(argv[i], "--no-glm-park") == 0 ||
-            std::strcmp(argv[i], "--no-gpu-uploads") == 0 || std::strcmp(argv[i], "--no-runs") == 0) {
+            std::strcmp(argv[i], "--no-gpu-uploads") == 0 || std::strcmp(argv[i], "--no-runs") == 0 ||
+            std::strcmp(argv[i], "--single-buffer") == 0 || std::strcmp(argv[i], "--async-present") == 0) {
             --i;  // a flag without a value
             continue;
         }
@@ -249,6 +250,8 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--no-glm-park") == 0) renderer.SetGlmParking(false);                  // IN-350 A/B
         if (std::strcmp(argv[i], "--no-gpu-uploads") == 0) renderer.SetGpuUploads(false);              // IN-351 A/B
         if (std::strcmp(argv[i], "--no-runs") == 0) renderer.SetRuns(false);                            // IN-352 A/B
+        if (std::strcmp(argv[i], "--single-buffer") == 0) renderer.SetDoubleBuffering(false);           // IN-354 A/B
+        if (std::strcmp(argv[i], "--async-present") == 0) renderer.SetAsyncPresentation(true);          // IN-355
     }
 
     // Frame counter for the trace: EndFrame of frame N is the N-th call (0-based), as in onFrame.

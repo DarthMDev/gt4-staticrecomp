@@ -2011,3 +2011,17 @@ helper (`build/prof/sampler.exe`) were used to find the CPU costs; neither is pa
 - Confirmed: headless menu 42/42 dumps byte-identical to slice228; race schedule 42/42 identical to slice235 and inside
   the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
 - Measured: headless race 25-26 ms per vsync (slice237: 38 ms). Replay switch `--no-runs`.
+
+## Local slice239 - double-buffered submission and asynchronous presentation (IN-354/IN-355)
+
+Incremental rebuild of the slice228 tree. No pin or launcher change. Evidence in `private/slice239-*` (never staged).
+The owner test script `build/hwr-play.ps1` (local, ignored) now runs this build from `private/hwr-play-239` with
+`GT4_HW_PROFILE_EVERY=600`; `-SyncPresent` sets `GT4_HW_ASYNC_PRESENT=0`.
+
+- Confirmed: 224/224 non-Python CTests, also with `GT4_HW_TEST_NO_INTERLOCK=1`; the asynchronous presentation check
+  in `hw_cache_equals_writeback`.
+- Confirmed: per-frame memory hashes identical to the write-back mode on the menu (1,101, = slice228), car and race
+  captures.
+- Confirmed: headless menu 42/42 dumps byte-identical to slice228; race schedule 42/42 identical to slice235 and inside
+  the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
+- Measured: headless race 17-18.6 ms per vsync without dumps (slice238: 25-26 ms). Not measured windowed.

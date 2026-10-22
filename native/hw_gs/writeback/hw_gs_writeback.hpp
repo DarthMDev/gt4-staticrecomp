@@ -71,6 +71,8 @@ struct Counters {
     std::uint64_t glmPagesDownloaded = 0;
     std::uint64_t glmUploadMerges = 0;        // EE uploads merged into GLM-owned pages on the GPU (IN-350)
     std::uint64_t glmHostUploads = 0;         // EE uploads written into the GLM by the upload kernel (IN-351)
+    std::uint64_t displayCaptures = 0;        // display downloads recorded at Flush (IN-355)
+    std::uint64_t presentationsFromCapture = 0;  // presentation composes made from a capture (IN-355)
     std::uint64_t glmMergedWords = 0;
     std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
@@ -239,6 +241,11 @@ public:
     void SetGpuUploads(bool enabled);
     // IN-352 A/B switch: interlocked chunks batched into runs (one render pass per run).
     void SetRuns(bool enabled);
+    // IN-354 A/B switch: double-buffered GPU submission.
+    void SetDoubleBuffering(bool enabled);
+    // IN-355: presentation composes show the previous VBlank's display, downloaded asynchronously (no CPU wait
+    // for the frame just submitted). Needs the cache mode and the GLM; Reference composes are unaffected.
+    void SetAsyncPresentation(bool enabled);
     bool CacheMode() const;
 
     // CPU view of the SLM (4 MiB, GS layout). Resident draws are written back first.

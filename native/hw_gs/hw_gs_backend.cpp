@@ -678,8 +678,12 @@ struct Backend::Impl {
     vkBeginCommandBuffer(cmd, &begin);
     const auto upload_start = std::chrono::steady_clock::now();
     if (frame && frame->valid && ensure_upload(frame->width, frame->height)) {
-      // The staging buffer is reused across presents: let the previous copy finish first.
-      vkDeviceWaitIdle(device);
+      // The staging buffer is reused across presents: the previous present's copy finishes first (its fence;
+      // IN-355: not the whole device, which would also wait for the frame the renderer just submitted).
+      if (submissions > 0) {
+        const std::uint32_t previous = static_cast<std::uint32_t>((submissions - 1) % frame_slots);
+        vkWaitForFences(device, 1, &fences[previous], VK_TRUE, UINT64_MAX);
+      }
       std::memcpy(upload.mapped, frame->pixels.data(), frame->pixels.size() * sizeof(std::uint32_t));
       record_frame(cmd, index, *frame);
     } else {
@@ -889,12 +893,19 @@ bool Backend::attach_window(void *hwnd, std::string &error) {
     error = "graphics queue cannot present to this surface";
     return false;
   }
-  return s.create_swapchain(error);
+  if (!s.create_swapchain(error)) return false;
+  // IN-355: with a window the presentation shows the previous VBlank's display, downloaded asynchronously, so
+  // the CPU never waits for the frame it just submitted. GT4_HW_ASYNC_PRESENT=0 (diagnostic, not a 12.8 option)
+  // composes synchronously.
+  const char *async = std::getenv("GT4_HW_ASYNC_PRESENT");
+  if (s.renderer) s.renderer->SetAsyncPresentation(!(async && std::string(async) == "0"));
+  return true;
 }
 
 void Backend::detach_window() {
   Impl &s = *impl_;
   if (!s.device) return;
+  if (s.renderer) s.renderer->SetAsyncPresentation(false);
   vkDeviceWaitIdle(s.device);
   s.destroy_swapchain();
   if (s.surface) vkDestroySurfaceKHR(s.instance, s.surface, nullptr);

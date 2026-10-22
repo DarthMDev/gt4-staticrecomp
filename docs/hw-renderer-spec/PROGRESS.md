@@ -365,3 +365,17 @@ while a game is open, and never touches the owner's card.
   still the CPU waiting for the previous frame's GPU work (one command buffer); next: double-buffered submission so
   the CPU records frame N+1 while the GPU draws frame N.
 
+## 2026-10-21 double-buffered submission and asynchronous presentation (local slice239, IN-354/IN-355) - Claude
+
+- IN-354: two sets of command buffer, fence and rings; the CPU records frame N+1 while the GPU draws frame N.
+  Headless race 25-26 -> 17-18.6 ms per vsync (about 55-58 FPS without a window; GS stream about 11-12 ms of it).
+- IN-355: with a window, the displayed memory is downloaded asynchronously inside each frame's submission and the
+  next VBlank composes it (one frame of presentation latency), so the CPU never waits for the frame it just
+  submitted; the present no longer waits for the whole device. Race replay with presentation composes 31 -> 22 ms
+  per frame. Not run windowed here (rules); the owner's test is the check, with `-SyncPresent` as a fallback.
+- Gates: memory hashes identical on the three captures; 224/224 non-Python CTests in both interlock modes;
+  async-presentation fixture; menu 42/42 dumps byte-identical to slice228; race schedule identical to slice235 and
+  inside the 3D gate; default renderer 42/42 = slice214.
+- Ready for owner test 3: License Center 3D car, GT Mode garage and a Time Trial race
+  (`& "C:\Antigravity\gt4-wt-027-coregs2\build\hwr-play.ps1"`).
+
