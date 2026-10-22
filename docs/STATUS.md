@@ -2,6 +2,12 @@
 
 ## Current state (2026-10-21)
 
+**TASK-027 CoreGS 2.0 (2026-10-21, Claude):** local slice239 waits for owner test 3: 3D scenes now run in
+the HWR with resident targets, interlock batching in runs, the GLM (GPU CLUT, GLM-owned pages, GPU uploads),
+double-buffered submission and an asynchronous presentation source; headless race 17-18.6 ms per frame (300 ms
+before the 3D work), memory and dumps unchanged against the reference paths ([PROGRESS](hw-renderer-spec/PROGRESS.md),
+IN-340..IN-355).
+
 **TASK-027 CoreGS 2.0 resumed (owner decision, 2026-10-21):** development branch `task/027-coregs2` (worktree
 `C:\Antigravity\gt4-wt-027-coregs2`) = `main` 1.0.0 + the paused TASK-027 work, without paraLLEl-GS. With
 `GT4_HW_GS=ON`, `GT4_RENDERER=hw` sends main's GS stream hooks to the in-process HWR backend (black output; nothing
