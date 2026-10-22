@@ -13,6 +13,7 @@
 #include "hw_gs_backend.hpp"
 #include "hw_gs_options.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -25,6 +26,10 @@ Backend *g_backend = nullptr;
 bool g_odd_field = false;
 std::uint64_t g_vsyncs = 0;
 std::uint64_t g_unmirrored_privileged = 0;
+// GT4_HW_PROFILE_EVERY state (see maybe_profile).
+std::uint32_t g_profile_every = 0;
+RenderCounters g_profile_last;
+std::chrono::steady_clock::time_point g_profile_wall;
 
 // M6 frame dumps (chapter 12.9 asks for them; the donor renderer cannot provide them in this mode).
 // GT4_HW_DUMP_DIR=<folder> writes P6 PPM files, GT4_HW_DUMP_EVERY=<n> the interval in VBlanks (default
@@ -88,6 +93,11 @@ bool start_backend(std::string &error) {
     return false;
   }
   read_dump_options();
+  if (const char *every = std::getenv("GT4_HW_PROFILE_EVERY")) {
+    const long value = std::strtol(every, nullptr, 10);
+    g_profile_every = value > 0 ? static_cast<std::uint32_t>(value) : 0u;
+    g_profile_wall = std::chrono::steady_clock::now();
+  }
   // Created once and never destroyed: the Vulkan device must not be torn down during process exit.
   auto *created = new Backend;
   if (!created->init(options, error)) return false;
@@ -119,6 +129,37 @@ void read_fifo(std::uint8_t *data, std::uint32_t qwords) {
 }
 
 // Once per guest VBlank: submit the recorded work, then present (window) or close the frame (headless).
+// GT4_HW_PROFILE_EVERY=<n>: every n VBlanks, one stderr line with the interval's per-frame averages (CPU ms per
+// pass and work counts), so heavy scenes (3D cars, races) can be profiled from a headless run (M9 work).
+
+void maybe_profile(Backend &hw) {
+  if (g_profile_every == 0 || g_vsyncs % g_profile_every != 0) return;
+  const RenderCounters now = hw.render_counters();
+  const RenderCounters &was = g_profile_last;
+  const double n = static_cast<double>(g_profile_every);
+  const auto wall = std::chrono::steady_clock::now();
+  const double wallMs = std::chrono::duration<double, std::milli>(wall - g_profile_wall).count() / n;
+  std::fprintf(stderr,
+               "[hw] profile vsync=%llu wall_ms=%.2f translate_ms=%.2f execute_ms=%.2f decode_ms=%.2f "
+               "writeback_ms=%.2f load_ms=%.2f batches=%.1f prims=%.1f draws=%.1f chunks=%.1f textures=%.1f "
+               "cached=%.1f texels=%.0f writebacks=%.2f loads=%.2f submissions=%.2f barriers=%.1f\n",
+               static_cast<unsigned long long>(g_vsyncs), wallMs, (now.translate_us - was.translate_us) / n / 1000.0,
+               (now.execute_us - was.execute_us) / n / 1000.0, (now.decode_us - was.decode_us) / n / 1000.0,
+               (now.cache_writeback_us - was.cache_writeback_us) / n / 1000.0,
+               (now.cache_load_us - was.cache_load_us) / n / 1000.0, static_cast<double>(now.batches - was.batches) / n,
+               static_cast<double>(now.primitives - was.primitives) / n,
+               static_cast<double>(now.gpu_draws - was.gpu_draws) / n, static_cast<double>(now.gpu_chunks - was.gpu_chunks) / n,
+               static_cast<double>(now.textures - was.textures) / n,
+               static_cast<double>(now.textures_cached - was.textures_cached) / n,
+               static_cast<double>(now.texels - was.texels) / n,
+               static_cast<double>(now.cache_writebacks - was.cache_writebacks) / n,
+               static_cast<double>(now.cache_loads - was.cache_loads) / n,
+               static_cast<double>(now.gpu_submissions - was.gpu_submissions) / n,
+               static_cast<double>(now.gpu_barriers - was.gpu_barriers) / n);
+  g_profile_last = now;
+  g_profile_wall = wall;
+}
+
 void vsync(bool odd_field) {
   Backend &hw = backend();
   g_odd_field = odd_field;
@@ -128,6 +169,7 @@ void vsync(bool odd_field) {
   hw.next_frame();  // one guest frame per VBlank, windowed or headless (the session line's `frames`)
   if (hw.has_window()) hw.present(odd_field ? PresentPhase::field_odd : PresentPhase::field_even);
   maybe_dump(hw);
+  maybe_profile(hw);
 }
 
 void gs_reset() {

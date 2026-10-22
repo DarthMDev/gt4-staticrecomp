@@ -18,6 +18,12 @@
 
 #version 450
 #extension GL_GOOGLE_include_directive : require
+#if HWR_INTERLOCK
+// IN-345: with pixel interlock the read-modify-write of the frame and depth words below runs in primitive
+// order for overlapping fragments, so a whole batch is one draw with no barriers between its primitives.
+#extension GL_ARB_fragment_shader_interlock : require
+layout(pixel_interlock_ordered) in;
+#endif
 #include "hw_pixel_core.glsl"
 
 #if HWR_FLAT_COLOUR
@@ -59,7 +65,7 @@ layout(std140, set = 0, binding = 0) uniform PixelStateBlock {
     uint tex_on;
     uint tfx;
     uint tcc;
-    uint texel_kind;   // reserved: texels are RGBA8 in M4 (CPU-expanded)
+    uint texel_kind;   // HW_TEXEL_RGBA8 (CPU-expanded) or raw CT16/CT24 copied from a target (IN-346)
     uint ta0;
     uint ta1;
     uint aem;
@@ -79,8 +85,14 @@ layout(std140, set = 0, binding = 0) uniform PixelStateBlock {
     uint tex_log2_h;   // TH
 } state;
 
+#if HWR_INTERLOCK
+// Inside the interlock the next fragment of the same pixel must see this one's stores: coherent images.
+layout(set = 0, binding = 1, r32ui) coherent uniform uimage2D hw_frame;
+layout(set = 0, binding = 2, r32ui) coherent uniform uimage2D hw_depth;
+#else
 layout(set = 0, binding = 1, r32ui) uniform uimage2D hw_frame;
 layout(set = 0, binding = 2, r32ui) uniform uimage2D hw_depth;
+#endif
 layout(set = 0, binding = 3, r32ui) uniform readonly uimage2D hw_texels;
 
 // CPU ToTexel104: floor of the scaled coordinate, saturated far outside the 1024 range.
@@ -103,9 +115,11 @@ int wrap_texel(int texel, uint log2_size, uint mode, uint minimum, uint maximum)
     return (texel & int(minimum)) | int(maximum);
 }
 
+// Texel colour: RGBA8 words decoded on the CPU, or (IN-346) raw CT16/CT24 words copied from a resident target
+// on the GPU, expanded here with TEXA exactly as the CPU decode does (hw_texel_colour, verified bit-exact).
 ivec4 fetch_texel(int x, int y) {
     uint raw = imageLoad(hw_texels, ivec2(x, y)).x;
-    return ivec4(int(raw & 0xFFu), int((raw >> 8) & 0xFFu), int((raw >> 16) & 0xFFu), int((raw >> 24) & 0xFFu));
+    return hw_texel_colour(state.texel_kind, raw, state.ta0, state.ta1, state.aem != 0u);
 }
 
 // SampleTexture of the CPU reference: nearest, or bilinear with the 4-bit weights (IN-305).
@@ -198,6 +212,9 @@ void main() {
     f.colour = colour;
     f.z = uint(clamp(in_z, 0.0, 4294967040.0));
 
+#if HWR_INTERLOCK
+    beginInvocationInterlockARB();
+#endif
     uint frame_old = imageLoad(hw_frame, pixel).x;
     uint depth_old = imageLoad(hw_depth, pixel).x;
     HwOutcome o = hw_process_pixel(s, f, frame_old, depth_old);
@@ -207,4 +224,7 @@ void main() {
     if (o.depth_written) {
         imageStore(hw_depth, pixel, uvec4(o.depth_stored));
     }
+#if HWR_INTERLOCK
+    endInvocationInterlockARB();
+#endif
 }

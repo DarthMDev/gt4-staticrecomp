@@ -22,6 +22,7 @@
 #define vkCmdBindVertexBuffers gt4_hwd_vkCmdBindVertexBuffers
 #define vkCmdBlitImage gt4_hwd_vkCmdBlitImage
 #define vkCmdCopyBufferToImage gt4_hwd_vkCmdCopyBufferToImage
+#define vkCmdCopyImage gt4_hwd_vkCmdCopyImage
 #define vkCmdCopyImageToBuffer gt4_hwd_vkCmdCopyImageToBuffer
 #define vkCmdDraw gt4_hwd_vkCmdDraw
 #define vkCmdEndRenderPass gt4_hwd_vkCmdEndRenderPass
@@ -66,6 +67,7 @@ inline PFN_vkCmdBindPipeline gt4_hwd_vkCmdBindPipeline = nullptr;
 inline PFN_vkCmdBindVertexBuffers gt4_hwd_vkCmdBindVertexBuffers = nullptr;
 inline PFN_vkCmdBlitImage gt4_hwd_vkCmdBlitImage = nullptr;
 inline PFN_vkCmdCopyBufferToImage gt4_hwd_vkCmdCopyBufferToImage = nullptr;
+inline PFN_vkCmdCopyImage gt4_hwd_vkCmdCopyImage = nullptr;
 inline PFN_vkCmdCopyImageToBuffer gt4_hwd_vkCmdCopyImageToBuffer = nullptr;
 inline PFN_vkCmdDraw gt4_hwd_vkCmdDraw = nullptr;
 inline PFN_vkCmdEndRenderPass gt4_hwd_vkCmdEndRenderPass = nullptr;

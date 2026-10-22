@@ -7,7 +7,8 @@
 //
 // Usage: hw_writeback_replay <capture> <out-dir> [--every N] [--slm-frame N] [--trace-frame N]
 //        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>] [--compose reference|presentation]
-//        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]] [--sync-mode cache|writeback]
+//        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]] [--sync-mode cache|writeback] [--no-interlock]
+//        [--no-target-textures]
 // --sync-mode selects GT4_HW_SYNC_MODE (default cache, as in the game; writeback is the reference mode).
 // --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
 // the default `auto`) instead of the reference image (12.9 `vram`, the CPU reference's image).
@@ -39,6 +40,8 @@ struct HeadlessDevice {
     VkDevice device = VK_NULL_HANDLE;
     VkQueue queue = VK_NULL_HANDLE;
     std::uint32_t family = 0;
+    bool wantInterlock = true;
+    bool interlock = false;
 
     bool Create(std::string& error) {
         if (!gt4::hw::vulkan_loader::load_loader(error)) return false;
@@ -87,9 +90,21 @@ struct HeadlessDevice {
         queueInfo.queueFamilyIndex = family;
         queueInfo.queueCount = 1;
         queueInfo.pQueuePriorities = &priority;
+        // IN-345: enable pixel interlock when the device has it (the batch-per-draw path), unless the
+        // caller asked for the per-primitive path (A/B: --no-interlock / GT4_HW_TEST_NO_INTERLOCK=1).
+        interlock = wantInterlock && gt4::hw::vulkan_loader::pixel_interlock_supported(physical);
+        VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT interlockFeatures{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT};
+        interlockFeatures.fragmentShaderPixelInterlock = VK_TRUE;
+        const char* interlockExtension = VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME;
         VkDeviceCreateInfo deviceInfo{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         deviceInfo.queueCreateInfoCount = 1;
         deviceInfo.pQueueCreateInfos = &queueInfo;
+        if (interlock) {
+            deviceInfo.pNext = &interlockFeatures;
+            deviceInfo.enabledExtensionCount = 1;
+            deviceInfo.ppEnabledExtensionNames = &interlockExtension;
+        }
         if (gt4_hw_vkCreateDevice(physical, &deviceInfo, nullptr, &device) != VK_SUCCESS) {
             error = "vkCreateDevice failed";
             return false;
@@ -147,6 +162,10 @@ int main(int argc, char** argv) {
     bool cacheMode = true;                     // --sync-mode
     PixelRect traceRect{0, 0, 2047, 2047};
     for (int i = 3; i + 1 < argc; i += 2) {
+        if (std::strcmp(argv[i], "--no-interlock") == 0 || std::strcmp(argv[i], "--no-target-textures") == 0) {
+            --i;  // a flag without a value
+            continue;
+        }
         if (std::strcmp(argv[i], "--every") == 0) {
             const long value = std::strtol(argv[i + 1], nullptr, 10);
             if (value > 0) every = static_cast<std::uint64_t>(value);
@@ -195,6 +214,9 @@ int main(int argc, char** argv) {
                 stream.size() >= 8 ? reinterpret_cast<const char*>(stream.data()) : "",
                 stream.size() >= 8 && std::memcmp(stream.data(), "GSSTREAM", 8) == 0 ? 1 : 0);
     HeadlessDevice headless;
+    for (int i = 3; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--no-interlock") == 0) headless.wantInterlock = false;  // IN-345 A/B
+    }
     std::string error;
     if (!headless.Create(error)) {
         std::fprintf(stderr, "skipped: %s\n", error.c_str());
@@ -207,12 +229,17 @@ int main(int argc, char** argv) {
     handles.device = headless.device;
     handles.queue = headless.queue;
     handles.queueFamily = headless.family;
+    handles.pixelInterlock = headless.interlock;
+    std::printf("pixel_interlock=%d\n", headless.interlock ? 1 : 0);
     if (!renderer.Init(handles, error)) {
         std::fprintf(stderr, "GPU drawer init failed: %s\n", error.c_str());
         return 1;
     }
     renderer.SetOutputSettings(outputSettings);
     renderer.SetSyncMode(cacheMode);
+    for (int i = 3; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--no-target-textures") == 0) renderer.SetTextureFromTargets(false);  // IN-346 A/B
+    }
 
     // Frame counter for the trace: EndFrame of frame N is the N-th call (0-based), as in onFrame.
     std::uint64_t currentFrame = 0;
@@ -303,7 +330,17 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(counters.writebackPixels),
                 static_cast<unsigned long long>(counters.writebackDepthWords),
                 static_cast<unsigned long long>(counters.fifoOverruns), renderer.Failed() ? 1 : 0);
-    std::printf("textures_cached=%llu ", static_cast<unsigned long long>(counters.texturesCached));
+    std::printf("writeback_reasons other=%llu texture=%llu clut=%llu transfer=%llu display=%llu eviction=%llu "
+                "load_overlap=%llu\n",
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[0]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[1]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[2]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[3]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[4]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[5]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[6]));
+    std::printf("textures_cached=%llu textures_from_targets=%llu ", static_cast<unsigned long long>(counters.texturesCached),
+                static_cast<unsigned long long>(counters.texturesFromTargets));
     std::printf("sync_mode=%s resident_batches=%llu fallback_batches=%llu loads=%llu load_words=%llu writebacks=%llu "
                 "writeback_words=%llu\n",
                 cacheMode ? "cache" : "writeback", static_cast<unsigned long long>(counters.cacheResidentBatches),

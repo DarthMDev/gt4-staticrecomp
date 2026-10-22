@@ -114,4 +114,9 @@ bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &m
 // missing names when one did not resolve; used by the M4 fixtures and headless runs.
 bool load_headless_entry_points(VkInstance instance, std::vector<std::string> &missing);
 
+// VK_EXT_fragment_shader_interlock with fragmentShaderPixelInterlock on `physical` (IN-345). A device that
+// has it is created with the extension and the feature (see interlock_features) so the HWR pixel shader can
+// order the read-modify-write of overlapping fragments in primitive order inside one draw.
+bool pixel_interlock_supported(VkPhysicalDevice physical);
+
 } // namespace gt4::hw::vulkan_loader

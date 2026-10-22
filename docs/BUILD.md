@@ -1969,3 +1969,16 @@ Incremental rebuild of the slice228 tree. No pin or launcher change.
   slice228, card copy unchanged (`private/slice232-evidence/hwr-dumps-cache/`). Default renderer 42/42 = slice214
   (`private/slice232-evidence/default-parity/`).
 - Confirmed: menu capture memory hashes per frame unchanged (cache mode); per frame translate 5.5 ms, execute 2.7 ms.
+
+## Local slice234 - target slots, pixel interlock, textures from targets (05, 08.8, 09, IN-344..IN-346)
+
+Incremental rebuild of the slice228 tree. No pin or launcher change.
+
+- Confirmed: 180 HWR/CPU-library CTests pass (Q-07 skip); the GPU fixtures also pass with
+  `GT4_HW_TEST_NO_INTERLOCK=1` (26/26).
+- Confirmed: memory hash per frame identical between cache + interlock + target textures and write-back +
+  per-primitive on `menu-v2.gscap` (1,101 frames, also = slice228), the car capture (121) and the race capture (121)
+  (`private/slice233-capture/`, recorded with `GT4_GS_CAPTURE` from the donor renderer, never staged).
+- Confirmed: headless `GT4_RENDERER=hw` menu schedule 42/42 dumps byte-identical to slice228; race schedule (10,500
+  frames) 42/42 inside the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
+- Measured (headless, per frame): car menu 100 ms, race 113 ms (slice232: 255 / 300 ms).

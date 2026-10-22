@@ -48,11 +48,15 @@ struct Counters {
     std::uint64_t cacheLoadWords = 0;
     std::uint64_t cacheWritebacks = 0;        // drawn rectangles stored back into the shadow memory
     std::uint64_t cacheWritebackWords = 0;
+    std::uint64_t cacheEvictions = 0;
+    // Write-backs by reason: other, texture read, CLUT load, transfer, display, eviction, load overlap.
+    std::uint64_t cacheWritebackByReason[7] = {};         // resident targets evicted for another (least recently used)
     // CPU microseconds spent in the M7 coherence work and the texture decode (report only, per session).
     double cacheWritebackUs = 0.0;
     double cacheLoadUs = 0.0;
     double textureDecodeUs = 0.0;
-    std::uint64_t texturesCached = 0;         // batches whose texels came from the decoded-texture cache (IN-341)
+    std::uint64_t texturesCached = 0;
+    std::uint64_t texturesFromTargets = 0;    // batches whose texels were copied from a resident target (IN-346)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
     std::uint64_t presentationFrames = 0;     // presentation composes with an image
     std::uint64_t blankFrames = 0;            // VBlanks with no image (unknown mode or kept previous)
@@ -106,6 +110,8 @@ struct BatchTranslation {
     memory::BufferView frameView{0, 0, memory::Psm::Ct32};
     memory::BufferView zView{0, 0, memory::Psm::Z32};
     PixelRect rect;  // union of the draw scissors: the rectangle read and written back
+    PixelRect scissor;  // the context's scissor clipped to the surface (the M7 load rectangle, IN-344)
+    int32_t textureSlot = -1;  // IN-346: GPU colour slot the texels are copied from (-1: decoded texels)
     gpu::GpuPixelState state;
     bool hasTexture = false;
     uint32_t texWidth = 0;
@@ -192,6 +198,8 @@ public:
     // reference mode: every batch uploads and reads back its rectangle). The default is the reference mode;
     // the backend and the replay tool set the option's value.
     void SetSyncMode(bool cache);
+    // IN-346 A/B switch: textures that are resident colour targets are copied on the GPU (default on).
+    void SetTextureFromTargets(bool enabled);
     bool CacheMode() const;
 
     // CPU view of the SLM (4 MiB, GS layout). Resident draws are written back first.

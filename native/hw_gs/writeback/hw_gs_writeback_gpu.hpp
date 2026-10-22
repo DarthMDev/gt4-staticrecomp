@@ -23,6 +23,8 @@ struct VulkanHandles {
     void *device = nullptr;
     void *queue = nullptr;
     std::uint32_t queueFamily = 0;
+    // The device was created with VK_EXT_fragment_shader_interlock and fragmentShaderPixelInterlock (IN-345).
+    bool pixelInterlock = false;
 };
 
 // Vertex record of chapter 03.3 (32 bytes). X and Y are 12.4 two's complement values.
@@ -72,12 +74,21 @@ static_assert(Count <= 48, "GpuPixelState has 48 fields");
 
 // One chunk of work. The frame and depth rectangles are inclusive and equal; words are the raw
 // stored values of the 32-bit view (SLM readPixel), row-major with width = rect width.
+// Target slots (IN-344): GPU images that hold resident colour and depth targets. The last slot of each kind is
+// the write-back mode's scratch pair, so a write-back batch never disturbs a resident target.
+constexpr std::uint32_t kGpuColourSlots = 6;
+constexpr std::uint32_t kGpuDepthSlots = 3;
+constexpr std::uint32_t kGpuScratchColourSlot = kGpuColourSlots - 1;
+constexpr std::uint32_t kGpuScratchDepthSlot = kGpuDepthSlots - 1;
+
 // The four transfer flags select what Execute moves between the words and the frame/depth images over the
 // rectangle: the write-back mode sets all four (upload, draw, read back); the resident-target cache (M7,
 // IN-340) uploads only when a target is loaded, draws with no transfer, and reads back only when the shadow
 // memory must become coherent (a chunk with no draws is a pure transfer).
 struct GpuChunk {
     std::int32_t rectX0 = 0, rectY0 = 0, rectX1 = -1, rectY1 = -1;
+    std::uint32_t colourSlot = 0;  // kGpuColourSlots images; the write-back mode uses the scratch slots
+    std::uint32_t depthSlot = 0;
     bool uploadFrame = true;
     bool uploadDepth = true;
     bool readbackFrame = true;
@@ -85,6 +96,9 @@ struct GpuChunk {
     std::vector<std::uint32_t> frameWords;   // uploaded and/or read back per the flags
     std::vector<std::uint32_t> depthWords;
     bool hasTexture = false;
+    // IN-346: when >= 0, the texels are copied on the GPU from this colour slot's image (rectangle 0,0 to
+    // texWidth x texHeight) instead of being uploaded from `texels`.
+    std::int32_t textureSlot = -1;
     std::uint32_t texWidth = 0;              // texels (power of two up to 1024 or region extent)
     std::uint32_t texHeight = 0;
     std::vector<std::uint32_t> texels;       // RGBA8 packed as R | G<<8 | B<<16 | A<<24

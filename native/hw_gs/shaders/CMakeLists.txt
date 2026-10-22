@@ -71,6 +71,8 @@ endfunction()
 hw_add_shader(hw_vertex_smooth "${HW_SHADER_DIR}/hw_vertex.vert" vert DEFINES HWR_FLAT_COLOUR=0)
 hw_add_shader(hw_vertex_flat "${HW_SHADER_DIR}/hw_vertex.vert" vert DEFINES HWR_FLAT_COLOUR=1)
 hw_add_shader(hw_pixel_uber_smooth "${HW_SHADER_DIR}/hw_pixel_uber.frag" frag DEFINES HWR_FLAT_COLOUR=0)
+hw_add_shader(hw_pixel_uber_smooth_interlock "${HW_SHADER_DIR}/hw_pixel_uber.frag" frag
+              DEFINES HWR_FLAT_COLOUR=0 HWR_INTERLOCK=1)
 hw_add_shader(hw_pixel_uber_flat "${HW_SHADER_DIR}/hw_pixel_uber.frag" frag DEFINES HWR_FLAT_COLOUR=1)
 hw_add_shader(hw_blend_exact "${HW_SHADER_DIR}/hw_blend_exact.comp" comp)
 hw_add_shader(hw_pixel_exact "${HW_SHADER_DIR}/hw_pixel_exact.comp" comp)

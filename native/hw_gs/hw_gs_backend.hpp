@@ -79,6 +79,18 @@ struct RenderCounters {
   std::uint64_t merge_alpha_from_texel = 0;
   std::uint64_t writeback_depth_words = 0;
   std::uint64_t fifo_overruns = 0;
+  // Session totals for interval profiles (GT4_HW_PROFILE_EVERY): CPU microseconds and work counts.
+  double translate_us = 0.0;
+  double execute_us = 0.0;
+  double decode_us = 0.0;
+  double cache_writeback_us = 0.0;
+  double cache_load_us = 0.0;
+  std::uint64_t textures_cached = 0;
+  std::uint64_t cache_writebacks = 0;
+  std::uint64_t cache_loads = 0;
+  std::uint64_t gpu_chunks = 0;
+  std::uint64_t gpu_submissions = 0;
+  std::uint64_t gpu_barriers = 0;
 };
 
 // Result of the feature report (chapter 12.6).

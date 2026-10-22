@@ -4,6 +4,8 @@
 
 #include "hw_gs_vulkan_loader.hpp"
 
+#include <cstring>
+
 namespace gt4::hw::vulkan_loader {
 namespace {
 
@@ -93,6 +95,25 @@ bool load_instance_entry_points(VkInstance instance, std::vector<std::string> &m
   resolve_headless(instance, missing);
   resolve_surface(instance, missing);
   return missing.empty();
+}
+
+bool pixel_interlock_supported(VkPhysicalDevice physical) {
+  if (!gt4_hw_vkEnumerateDeviceExtensionProperties || !gt4_hw_vkGetPhysicalDeviceFeatures2) return false;
+  std::uint32_t count = 0;
+  gt4_hw_vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, nullptr);
+  std::vector<VkExtensionProperties> extensions(count);
+  gt4_hw_vkEnumerateDeviceExtensionProperties(physical, nullptr, &count, extensions.data());
+  bool present = false;
+  for (const VkExtensionProperties &extension : extensions) {
+    if (std::strcmp(extension.extensionName, VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME) == 0) present = true;
+  }
+  if (!present) return false;
+  VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT interlock{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT};
+  VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2};
+  features.pNext = &interlock;
+  gt4_hw_vkGetPhysicalDeviceFeatures2(physical, &features);
+  return interlock.fragmentShaderPixelInterlock == VK_TRUE;
 }
 
 bool load_headless_entry_points(VkInstance instance, std::vector<std::string> &missing) {

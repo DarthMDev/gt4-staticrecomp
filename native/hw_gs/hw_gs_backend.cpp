@@ -121,6 +121,7 @@ struct Backend::Impl {
   // M6 interface: the frame end composes into `frame`, the scheduler decides whether it reaches the
   // display, and `shownFrame` is what the display currently holds (a hold re-presents exactly this).
   hwgs::present::Scheduler scheduler;
+  bool pixel_interlock = false;  // VK_EXT_fragment_shader_interlock enabled on the device (IN-345)
   std::uint64_t presentedVblank = UINT64_MAX;  // flush count of the VBlank whose presentation image is in `frame`
   hwgs::writeback::FrameOutput frame;
   hwgs::writeback::FrameOutput shownFrame;
@@ -397,12 +398,18 @@ struct Backend::Impl {
     features2.features.dualSrcBlend = VK_TRUE;
     features2.features.fragmentStoresAndAtomics = VK_TRUE;
 
-    const char *extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+    // IN-345: pixel interlock lets the GPU path draw a batch of triangles in one draw (no barriers).
+    pixel_interlock = gt4::hw::vulkan_loader::pixel_interlock_supported(physical);
+    VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT interlock{
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT};
+    interlock.fragmentShaderPixelInterlock = VK_TRUE;
+    if (pixel_interlock) v12.pNext = &interlock;
+    const char *extensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME};
     VkDeviceCreateInfo info{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
     info.pNext = &features2;
     info.queueCreateInfoCount = 1;
     info.pQueueCreateInfos = &queue_info;
-    info.enabledExtensionCount = 1;
+    info.enabledExtensionCount = pixel_interlock ? 2u : 1u;
     info.ppEnabledExtensionNames = extensions;
     const VkResult result = vkCreateDevice(physical, &info, nullptr, &device);
     if (result != VK_SUCCESS) {
@@ -732,7 +739,8 @@ bool Backend::init(const Options &options, std::string &error) {
   }
   // M4: the GS front end and the write-back drawer run on this device (no silent fallback on failure).
   s.renderer = std::make_unique<hwgs::writeback::Renderer>();
-  const hwgs::gpu::VulkanHandles handles{s.instance, s.physical, s.device, s.queue, s.queue_family};
+  hwgs::gpu::VulkanHandles handles{s.instance, s.physical, s.device, s.queue, s.queue_family};
+  handles.pixelInterlock = s.pixel_interlock;
   if (!s.renderer->Init(handles, error)) {
     s.shutdown();
     return false;
@@ -975,6 +983,19 @@ RenderCounters Backend::render_counters() const {
   out.merge_alpha_from_texel = c.mergeAlphaFromTexel;
   out.writeback_depth_words = c.writebackDepthWords;
   out.fifo_overruns = c.fifoOverruns;
+  const hwgs::writeback::PassTimings &totals = impl_->renderer->TimingTotals();
+  out.translate_us = totals.translateUs;
+  out.execute_us = totals.executeUs;
+  out.decode_us = c.textureDecodeUs;
+  out.cache_writeback_us = c.cacheWritebackUs;
+  out.cache_load_us = c.cacheLoadUs;
+  out.textures_cached = c.texturesCached;
+  out.cache_writebacks = c.cacheWritebacks;
+  out.cache_loads = c.cacheLoads;
+  out.gpu_chunks = c.gpuChunks;
+  const hwgs::gpu::GpuStats &gpu = impl_->renderer->GpuCounters();
+  out.gpu_submissions = gpu.submissions;
+  out.gpu_barriers = gpu.barriers;
   return out;
 }
 

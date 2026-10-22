@@ -39,6 +39,8 @@ struct Headless {
     VkDevice device = VK_NULL_HANDLE;
     VkQueue queue = VK_NULL_HANDLE;
     uint32_t family = 0;
+    bool wantInterlock = true;
+    bool interlock = false;
 
     bool Create(std::string& error) {
         if (!gt4::hw::vulkan_loader::load_loader(error)) return false;
@@ -87,9 +89,21 @@ struct Headless {
         queue.queueFamilyIndex = family;
         queue.queueCount = 1;
         queue.pQueuePriorities = &priority;
+        // IN-345: enable pixel interlock when the device has it (the batch-per-draw path), unless the
+        // caller asked for the per-primitive path (A/B: --no-interlock / GT4_HW_TEST_NO_INTERLOCK=1).
+        interlock = wantInterlock && gt4::hw::vulkan_loader::pixel_interlock_supported(physical);
+        VkPhysicalDeviceFragmentShaderInterlockFeaturesEXT interlockFeatures{
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADER_INTERLOCK_FEATURES_EXT};
+        interlockFeatures.fragmentShaderPixelInterlock = VK_TRUE;
+        const char* interlockExtension = VK_EXT_FRAGMENT_SHADER_INTERLOCK_EXTENSION_NAME;
         VkDeviceCreateInfo dev{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
         dev.queueCreateInfoCount = 1;
         dev.pQueueCreateInfos = &queue;
+        if (interlock) {
+            dev.pNext = &interlockFeatures;
+            dev.enabledExtensionCount = 1;
+            dev.ppEnabledExtensionNames = &interlockExtension;
+        }
         if (gt4_hw_vkCreateDevice(physical, &dev, nullptr, &device) != VK_SUCCESS) {
             error = "vkCreateDevice failed";
             return false;
@@ -1403,6 +1417,15 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                            frameReg(kA), 0x4C, tex0(kT8 * 32, 0x13, 6, kClut * 32, true), 0x06,
                            kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(30, 30), 0x05,
                            uv(30, 30), 0x03, xyz(60, 60), 0x05});
+        // 3b. Seven more small colour targets (pages 20, 24, ..., 44): more targets than resident slots, so the
+        //     least recently used ones are evicted (written back) and reloaded; then one is read as a texture.
+        for (uint64_t k = 0; k < 7; ++k) {
+            w.insert(w.end(), {frameReg(20 + 4 * k), 0x4C, kSprite, 0x00, rgbaq(0x80000000u + 0x0F0F0Fu * (k + 1) + frame),
+                               0x01, xyz(2 * k, 1), 0x05, xyz(20 + 2 * k, 20), 0x05});
+        }
+        w.insert(w.end(), {frameReg(kA), 0x4C, tex0(20 * 32, 0x00, 5, 0, false), 0x06, kSprite | kTme | kFst, 0x00,
+                           rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(40, 40), 0x05, uv(24, 24), 0x03,
+                           xyz(64, 64), 0x05});
         ad(w);
         // 4. Host -> local: 8 x 8 CT32 block into buffer A at (4 + frame, 4).
         ad({blit(0, 0, kA * 32, 0x00), 0x50, (uint64_t{4 + frame} << 32) | (uint64_t{4} << 48), 0x51,
@@ -1497,8 +1520,9 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                 static_cast<unsigned long long>(cacheCounters.cacheFallbackBatches),
                 static_cast<unsigned long long>(cacheCounters.cacheLoads),
                 static_cast<unsigned long long>(cacheCounters.cacheWritebacks));
+    std::printf("  cache: evictions %llu\n", static_cast<unsigned long long>(cacheCounters.cacheEvictions));
     if (cacheCounters.cacheResidentBatches == 0 || cacheCounters.cacheFallbackBatches == 0 ||
-        cacheCounters.cacheLoads == 0 || cacheCounters.cacheWritebacks == 0 ||
+        cacheCounters.cacheLoads == 0 || cacheCounters.cacheWritebacks == 0 || cacheCounters.cacheEvictions == 0 ||
         referenceCounters.cacheResidentBatches != 0) {
         std::printf("  the cache paths were not all exercised (fixture is blind)\n");
         ++failures;
@@ -1534,6 +1558,9 @@ int main(int argc, char** argv) {
 
     Headless headless;
     std::string error;
+    if (const char* off = std::getenv("GT4_HW_TEST_NO_INTERLOCK"); off && std::strcmp(off, "1") == 0) {
+        headless.wantInterlock = false;  // IN-345: run the per-primitive path
+    }
     if (!headless.Create(error)) {
         std::printf("%s: skipped (%s)\n", name.c_str(), error.c_str());
         return 77;
@@ -1544,6 +1571,7 @@ int main(int argc, char** argv) {
     handles.device = headless.device;
     handles.queue = headless.queue;
     handles.queueFamily = headless.family;
+    handles.pixelInterlock = headless.interlock;
     gpu::GpuDrawer drawer;
     if (!drawer.Init(handles, error)) {
         std::printf("%s: GPU drawer init failed: %s\n", name.c_str(), error.c_str());

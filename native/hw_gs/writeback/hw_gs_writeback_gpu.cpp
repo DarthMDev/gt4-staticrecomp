@@ -77,10 +77,16 @@ struct GpuDrawer::Impl {
   VkDescriptorSetLayout setLayout = VK_NULL_HANDLE;
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
-  VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+  // One descriptor set per (colour slot, depth slot) pair (IN-344).
+  VkDescriptorSet descriptorSets[kGpuColourSlots * kGpuDepthSlots] = {};
   VkRenderPass renderPass = VK_NULL_HANDLE;
   VkFramebuffer framebuffer = VK_NULL_HANDLE;
   VkPipeline pipelines[3] = {VK_NULL_HANDLE, VK_NULL_HANDLE, VK_NULL_HANDLE};
+  // IN-345: triangle pipeline whose pixel shader orders overlapping fragments with pixel interlock, so a
+  // chunk of triangles is one draw without barriers. Null when the device lacks the feature.
+  bool interlock = false;
+  VkShaderModule interlockModule = VK_NULL_HANDLE;
+  VkPipeline interlockTriangles = VK_NULL_HANDLE;
 
   struct Resource {
     VkBuffer buffer = VK_NULL_HANDLE;
@@ -98,8 +104,8 @@ struct GpuDrawer::Impl {
   Resource readback;
   Resource vertices;
   Resource uniforms;
-  Image frame;
-  Image depth;
+  Image frames[kGpuColourSlots];  // colour target slots (IN-344); the last one is the write-back mode's
+  Image depths[kGpuDepthSlots];   // depth target slots; the last one is the write-back mode's
   Image texels;
 
   bool ready = false;
@@ -204,7 +210,7 @@ struct GpuDrawer::Impl {
     return module;
   }
 
-  VkPipeline make_pipeline(VkPrimitiveTopology topology, std::string &error) {
+  VkPipeline make_pipeline(VkPrimitiveTopology topology, std::string &error, VkShaderModule fragment = VK_NULL_HANDLE) {
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -212,7 +218,7 @@ struct GpuDrawer::Impl {
     stages[0].pName = "main";
     stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    stages[1].module = fragmentModule;
+    stages[1].module = fragment ? fragment : fragmentModule;
     stages[1].pName = "main";
 
     VkVertexInputBindingDescription binding{};
@@ -281,9 +287,13 @@ struct GpuDrawer::Impl {
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
-    VkImageMemoryBarrier barriers[3]{};
-    VkImage images[3] = {frame.image, depth.image, texels.image};
-    for (int i = 0; i < 3; ++i) {
+    constexpr int kImages = static_cast<int>(kGpuColourSlots + kGpuDepthSlots + 1);
+    VkImageMemoryBarrier barriers[kImages]{};
+    VkImage images[kImages] = {};
+    for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) images[i] = frames[i].image;
+    for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) images[kGpuColourSlots + i] = depths[i].image;
+    images[kImages - 1] = texels.image;
+    for (int i = 0; i < kImages; ++i) {
       barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
       barriers[i].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
       barriers[i].newLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -295,7 +305,7 @@ struct GpuDrawer::Impl {
                                   VK_ACCESS_TRANSFER_WRITE_BIT;
     }
     gt4_hw_vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
-                                nullptr, 0, nullptr, 3, barriers);
+                                nullptr, 0, nullptr, kImages, barriers);
     if (!check(gt4_hw_vkEndCommandBuffer(cmd), "vkEndCommandBuffer", error)) return false;
     VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount = 1;
@@ -317,6 +327,10 @@ struct GpuDrawer::Impl {
         if (pipeline) gt4_hwd_vkDestroyPipeline(device, pipeline, nullptr);
         pipeline = VK_NULL_HANDLE;
       }
+      if (interlockTriangles) gt4_hwd_vkDestroyPipeline(device, interlockTriangles, nullptr);
+      interlockTriangles = VK_NULL_HANDLE;
+      if (interlockModule) gt4_hwd_vkDestroyShaderModule(device, interlockModule, nullptr);
+      interlockModule = VK_NULL_HANDLE;
       if (framebuffer) gt4_hwd_vkDestroyFramebuffer(device, framebuffer, nullptr);
       if (renderPass) gt4_hwd_vkDestroyRenderPass(device, renderPass, nullptr);
       if (descriptorPool) gt4_hwd_vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -324,11 +338,14 @@ struct GpuDrawer::Impl {
       if (setLayout) gt4_hwd_vkDestroyDescriptorSetLayout(device, setLayout, nullptr);
       if (vertexModule) gt4_hwd_vkDestroyShaderModule(device, vertexModule, nullptr);
       if (fragmentModule) gt4_hwd_vkDestroyShaderModule(device, fragmentModule, nullptr);
-      for (Image *image : {&frame, &depth, &texels}) {
+      auto destroyImage = [&](Image *image) {
         if (image->view) gt4_hwd_vkDestroyImageView(device, image->view, nullptr);
         if (image->image) gt4_hwd_vkDestroyImage(device, image->image, nullptr);
         if (image->memory) gt4_hwd_vkFreeMemory(device, image->memory, nullptr);
-      }
+      };
+      for (Image &image : frames) destroyImage(&image);
+      for (Image &image : depths) destroyImage(&image);
+      destroyImage(&texels);
       for (Resource *resource : {&staging, &readback, &vertices, &uniforms}) {
         if (resource->mapped) gt4_hwd_vkUnmapMemory(device, resource->memory);
         if (resource->buffer) gt4_hwd_vkDestroyBuffer(device, resource->buffer, nullptr);
@@ -346,8 +363,8 @@ struct GpuDrawer::Impl {
     fragmentModule = VK_NULL_HANDLE;
     fence = VK_NULL_HANDLE;
     pool = VK_NULL_HANDLE;
-    frame = Image{};
-    depth = Image{};
+    for (Image &image : frames) image = Image{};
+    for (Image &image : depths) image = Image{};
     texels = Image{};
     staging = Resource{};
     readback = Resource{};
@@ -423,17 +440,21 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   layoutInfo.pPushConstantRanges = &push;
   if (!check(gt4_hwd_vkCreatePipelineLayout(s.device, &layoutInfo, nullptr, &s.pipelineLayout), "vkCreatePipelineLayout", error)) return false;
 
-  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1}, {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3}};
+  constexpr std::uint32_t kSets = kGpuColourSlots * kGpuDepthSlots;
+  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, kSets},
+                                   {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 * kSets}};
   VkDescriptorPoolCreateInfo poolSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolSetInfo.maxSets = 1;
+  poolSetInfo.maxSets = kSets;
   poolSetInfo.poolSizeCount = 2;
   poolSetInfo.pPoolSizes = sizes;
   if (!check(gt4_hwd_vkCreateDescriptorPool(s.device, &poolSetInfo, nullptr, &s.descriptorPool), "vkCreateDescriptorPool", error)) return false;
   VkDescriptorSetAllocateInfo setAllocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
   setAllocate.descriptorPool = s.descriptorPool;
-  setAllocate.descriptorSetCount = 1;
-  setAllocate.pSetLayouts = &s.setLayout;
-  if (!check(gt4_hwd_vkAllocateDescriptorSets(s.device, &setAllocate, &s.descriptorSet), "vkAllocateDescriptorSets", error)) return false;
+  VkDescriptorSetLayout layouts[kSets];
+  for (VkDescriptorSetLayout &layout : layouts) layout = s.setLayout;
+  setAllocate.descriptorSetCount = kSets;
+  setAllocate.pSetLayouts = layouts;
+  if (!check(gt4_hwd_vkAllocateDescriptorSets(s.device, &setAllocate, s.descriptorSets), "vkAllocateDescriptorSets", error)) return false;
 
   if (!s.make_buffer(s.staging, kStagingBytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, true, error)) return false;
@@ -451,31 +472,40 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   if (!s.make_buffer(s.uniforms, kUniformRingBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, true, error)) return false;
 
-  if (!s.make_image(s.frame, kSurfaceSize, kSurfaceSize, error)) return false;
-  if (!s.make_image(s.depth, kSurfaceSize, kSurfaceSize, error)) return false;
+  for (Impl::Image &image : s.frames) {
+    if (!s.make_image(image, kSurfaceSize, kSurfaceSize, error)) return false;
+  }
+  for (Impl::Image &image : s.depths) {
+    if (!s.make_image(image, kSurfaceSize, kSurfaceSize, error)) return false;
+  }
   if (!s.make_image(s.texels, kTextureMax, kTextureMax, error)) return false;
 
   VkDescriptorBufferInfo uniformInfo{s.uniforms.buffer, 0, kUniformBytes};
-  VkDescriptorImageInfo imageInfos[3] = {
-      {VK_NULL_HANDLE, s.frame.view, VK_IMAGE_LAYOUT_GENERAL},
-      {VK_NULL_HANDLE, s.depth.view, VK_IMAGE_LAYOUT_GENERAL},
-      {VK_NULL_HANDLE, s.texels.view, VK_IMAGE_LAYOUT_GENERAL}};
-  VkWriteDescriptorSet writes[4]{};
-  writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  writes[0].dstSet = s.descriptorSet;
-  writes[0].dstBinding = 0;
-  writes[0].descriptorCount = 1;
-  writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
-  writes[0].pBufferInfo = &uniformInfo;
-  for (int i = 0; i < 3; ++i) {
-    writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writes[i + 1].dstSet = s.descriptorSet;
-    writes[i + 1].dstBinding = static_cast<std::uint32_t>(i + 1);
-    writes[i + 1].descriptorCount = 1;
-    writes[i + 1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    writes[i + 1].pImageInfo = &imageInfos[i];
+  for (std::uint32_t colour = 0; colour < kGpuColourSlots; ++colour) {
+    for (std::uint32_t depth = 0; depth < kGpuDepthSlots; ++depth) {
+      const VkDescriptorSet set = s.descriptorSets[colour * kGpuDepthSlots + depth];
+      VkDescriptorImageInfo imageInfos[3] = {
+          {VK_NULL_HANDLE, s.frames[colour].view, VK_IMAGE_LAYOUT_GENERAL},
+          {VK_NULL_HANDLE, s.depths[depth].view, VK_IMAGE_LAYOUT_GENERAL},
+          {VK_NULL_HANDLE, s.texels.view, VK_IMAGE_LAYOUT_GENERAL}};
+      VkWriteDescriptorSet writes[4]{};
+      writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      writes[0].dstSet = set;
+      writes[0].dstBinding = 0;
+      writes[0].descriptorCount = 1;
+      writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+      writes[0].pBufferInfo = &uniformInfo;
+      for (int i = 0; i < 3; ++i) {
+        writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i + 1].dstSet = set;
+        writes[i + 1].dstBinding = static_cast<std::uint32_t>(i + 1);
+        writes[i + 1].descriptorCount = 1;
+        writes[i + 1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[i + 1].pImageInfo = &imageInfos[i];
+      }
+      gt4_hwd_vkUpdateDescriptorSets(s.device, 4, writes, 0, nullptr);
+    }
   }
-  gt4_hwd_vkUpdateDescriptorSets(s.device, 4, writes, 0, nullptr);
 
   VkSubpassDescription subpass{};
   subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
@@ -495,6 +525,14 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   s.pipelines[1] = s.make_pipeline(VK_PRIMITIVE_TOPOLOGY_LINE_LIST, error);
   s.pipelines[2] = s.make_pipeline(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, error);
   if (!s.pipelines[0] || !s.pipelines[1] || !s.pipelines[2]) return false;
+  if (handles.pixelInterlock) {
+    s.interlockModule = s.make_module(hwgs::shaders::hw_pixel_uber_smooth_interlock_words,
+                                      hwgs::shaders::hw_pixel_uber_smooth_interlock_word_count, error);
+    if (!s.interlockModule) return false;
+    s.interlockTriangles = s.make_pipeline(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, error, s.interlockModule);
+    if (!s.interlockTriangles) return false;
+    s.interlock = true;
+  }
 
   if (!s.make_images_general(error)) return false;
   s.ready = true;
@@ -551,6 +589,12 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   }
   const bool anyTransfer = chunk.uploadFrame || chunk.uploadDepth || chunk.readbackFrame || chunk.readbackDepth;
   if (chunk.draws.empty() && !anyTransfer) return true;
+  if (chunk.colourSlot >= kGpuColourSlots || chunk.depthSlot >= kGpuDepthSlots) {
+    error = "chunk names a target slot that does not exist";
+    return false;
+  }
+  const VkImage frameImage = s.frames[chunk.colourSlot].image;
+  const VkImage depthImage = s.depths[chunk.depthSlot].image;
   if (chunk.vertices.size() > kGpuMaxVertices) {
     error = "chunk exceeds the vertex buffer (the caller must split it)";
     return false;
@@ -568,16 +612,23 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     error = "frame or depth word count does not match the rectangle";
     return false;
   }
+  const bool textureFromSlot = chunk.hasTexture && chunk.textureSlot >= 0;
+  if (textureFromSlot && chunk.textureSlot >= static_cast<std::int32_t>(kGpuColourSlots)) {
+    error = "texture source slot does not exist";
+    return false;
+  }
   if (chunk.hasTexture && (chunk.texWidth == 0 || chunk.texHeight == 0 || chunk.texWidth > kTextureMax ||
                            chunk.texHeight > kTextureMax ||
-                           chunk.texels.size() != static_cast<std::size_t>(chunk.texWidth) * chunk.texHeight)) {
+                           (!textureFromSlot &&
+                            chunk.texels.size() != static_cast<std::size_t>(chunk.texWidth) * chunk.texHeight))) {
     error = "texture size is outside the texel image";
     return false;
   }
 
   // Ring space this chunk needs (IN-342): the staging bytes of its uploads, its vertices and one uniform slot.
   const VkDeviceSize frameBytes = static_cast<VkDeviceSize>(words) * 4;
-  const VkDeviceSize textureBytes = chunk.hasTexture ? static_cast<VkDeviceSize>(chunk.texels.size()) * 4 : 0;
+  const VkDeviceSize textureBytes =
+      (chunk.hasTexture && !textureFromSlot) ? static_cast<VkDeviceSize>(chunk.texels.size()) * 4 : 0;
   const VkDeviceSize stagingNeeded =
       (chunk.uploadFrame ? frameBytes : 0) + (chunk.uploadDepth ? frameBytes : 0) + textureBytes;
   const VkDeviceSize vertexNeeded = chunk.vertices.size();
@@ -600,7 +651,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     s.stagingUsed += frameBytes;
   }
   const VkDeviceSize textureOffset = s.stagingUsed;
-  if (chunk.hasTexture) {
+  if (chunk.hasTexture && !textureFromSlot) {
     std::memcpy(stagingBase + s.stagingUsed, chunk.texels.data(), textureBytes);
     s.stagingUsed += textureBytes;
   }
@@ -654,12 +705,20 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   depthCopy.bufferOffset = depthOffset;
   const bool anyUpload = chunk.uploadFrame || chunk.uploadDepth || chunk.hasTexture;
   if (chunk.uploadFrame) {
-    gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.frame.image, VK_IMAGE_LAYOUT_GENERAL, 1, &frameCopy);
+    gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, frameImage, VK_IMAGE_LAYOUT_GENERAL, 1, &frameCopy);
   }
   if (chunk.uploadDepth) {
-    gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.depth.image, VK_IMAGE_LAYOUT_GENERAL, 1, &depthCopy);
+    gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, depthImage, VK_IMAGE_LAYOUT_GENERAL, 1, &depthCopy);
   }
-  if (chunk.hasTexture) {
+  if (textureFromSlot) {
+    // IN-346: the texture is (part of) a resident colour target: copy its words on the GPU.
+    VkImageCopy region{};
+    region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    region.extent = {chunk.texWidth, chunk.texHeight, 1};
+    gt4_hwd_vkCmdCopyImage(s.cmd, s.frames[chunk.textureSlot].image, VK_IMAGE_LAYOUT_GENERAL, s.texels.image,
+                           VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+  } else if (chunk.hasTexture) {
     VkBufferImageCopy texCopy{};
     texCopy.bufferOffset = textureOffset;
     texCopy.bufferRowLength = chunk.texWidth;
@@ -684,7 +743,8 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     pass.framebuffer = s.framebuffer;
     pass.renderArea = {{0, 0}, {kSurfaceSize, kSurfaceSize}};
     gt4_hwd_vkCmdBeginRenderPass(s.cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
-    gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelineLayout, 0, 1, &s.descriptorSet, 1,
+    gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelineLayout, 0, 1,
+                                    &s.descriptorSets[chunk.colourSlot * kGpuDepthSlots + chunk.depthSlot], 1,
                                     &uniformOffset);
     gt4_hwd_vkCmdPushConstants(s.cmd, s.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, kPushBytes, pushWords);
     VkViewport viewport{0.0f, 0.0f, static_cast<float>(kSurfaceSize), static_cast<float>(kSurfaceSize), 0.0f, 1.0f};
@@ -692,8 +752,33 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     VkDeviceSize vertexBufferOffset = vertexOffsetBytes;
     gt4_hwd_vkCmdBindVertexBuffers(s.cmd, 0, 1, &s.vertices.buffer, &vertexBufferOffset);
 
+    bool allTriangles = s.interlock;
+    for (const GpuDraw &draw : chunk.draws) allTriangles = allTriangles && draw.topology == GpuTopology::Triangles;
+    if (allTriangles) {
+      // IN-345: one draw for the whole chunk. Pixel interlock orders overlapping fragments in primitive order,
+      // as the per-primitive barriers did. A triangle never covers a pixel outside its own coverage rectangle,
+      // so the union of the per-primitive scissors clips exactly what they clipped.
+      std::int32_t x0 = kGpuSurface, y0 = kGpuSurface, x1 = -1, y1 = -1;
+      std::uint32_t firstVertex = UINT32_MAX, endVertex = 0;
+      for (const GpuDraw &draw : chunk.draws) {
+        if (draw.count == 0 || draw.first + draw.count > chunk.vertices.size()) continue;
+        x0 = std::min(x0, std::max<std::int32_t>(0, draw.x0));
+        y0 = std::min(y0, std::max<std::int32_t>(0, draw.y0));
+        x1 = std::max(x1, std::min<std::int32_t>(kGpuSurface - 1, draw.x1));
+        y1 = std::max(y1, std::min<std::int32_t>(kGpuSurface - 1, draw.y1));
+        firstVertex = std::min(firstVertex, draw.first);
+        endVertex = std::max(endVertex, draw.first + draw.count);
+      }
+      if (x1 >= x0 && y1 >= y0 && endVertex > firstVertex) {
+        VkRect2D scissor{{x0, y0}, {static_cast<std::uint32_t>(x1 - x0 + 1), static_cast<std::uint32_t>(y1 - y0 + 1)}};
+        gt4_hwd_vkCmdSetScissor(s.cmd, 0, 1, &scissor);
+        gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.interlockTriangles);
+        gt4_hwd_vkCmdDraw(s.cmd, endVertex - firstVertex, 1, firstVertex, 0);
+        s.stats.draws++;
+      }
+    }
     bool anyDraw = false;
-    for (std::size_t i = 0; i < chunk.draws.size(); ++i) {
+    for (std::size_t i = 0; !allTriangles && i < chunk.draws.size(); ++i) {
       const GpuDraw &draw = chunk.draws[i];
       if (draw.count == 0 || draw.first + draw.count > chunk.vertices.size()) continue;
       const std::int32_t x0 = std::max<std::int32_t>(0, draw.x0);
@@ -740,10 +825,10 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   VkBufferImageCopy depthReadback = frameCopy;
   depthReadback.bufferOffset = frameBytes;
   if (chunk.readbackFrame) {
-    gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.frame.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &frameReadback);
+    gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, frameImage, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &frameReadback);
   }
   if (chunk.readbackDepth) {
-    gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.depth.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1,
+    gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, depthImage, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1,
                                    &depthReadback);
   }
   VkMemoryBarrier readbackDone{VK_STRUCTURE_TYPE_MEMORY_BARRIER};

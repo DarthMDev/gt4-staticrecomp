@@ -22,6 +22,9 @@ extern const std::uint32_t hw_pixel_uber_smooth_words[];
 extern const std::size_t hw_pixel_uber_smooth_word_count;
 extern const std::uint32_t hw_pixel_uber_flat_words[];
 extern const std::size_t hw_pixel_uber_flat_word_count;
+// Smooth variant with ordered pixel interlock (IN-345; VK_EXT_fragment_shader_interlock).
+extern const std::uint32_t hw_pixel_uber_smooth_interlock_words[];
+extern const std::size_t hw_pixel_uber_smooth_interlock_word_count;
 
 // Exactness compute entry points (fixture only; never linked into the game).
 extern const std::uint32_t hw_blend_exact_words[];

@@ -305,3 +305,21 @@ while a game is open, and never touches the owner's card.
 - Tests: 180 HWR/CPU-library CTests pass (Q-07 skip); default renderer 42/42 = slice214, card copy unchanged.
 - Next: an owner look at the speed and the menus (`build\hwr-play.ps1`), then the remaining M7 items (target lists,
   display from targets, preload, dirty lists, clears, GPU moves) and M9 batching.
+
+## 2026-10-21 owner test 2 and the 3D cost (local slice234, IN-344..IN-346) - Claude
+
+- Owner test 2 (coordinator relay): 2D menus run in real time and look clean; GT Mode with light 3D is somewhat slow;
+  the License Center (3D car) collapses.
+- Profiled headless (`GT4_HW_PROFILE_EVERY`, new): the 3D car scene drew 30k primitives per frame as 30k draws with
+  barriers and spent most of its time in ~100 target write-backs and ~90 reloads per frame (a single resident colour
+  target); the race 1,100 batches, 700 write-backs and 700 reloads per frame, and 143 batches per frame on the
+  write-back path because adjacent colour and depth buffers looked aliased.
+- Fixed: several target slots with LRU eviction (IN-344), page-exact block spans (IN-344), one draw per chunk of
+  triangles with an ordered pixel interlock (IN-345), textures copied on the GPU from resident targets (IN-346).
+  Every step keeps memory hashes identical to the write-back mode on the menu, car and race captures.
+- Headless in-game (`run-game.py race`, 10,500 frames): car menu 255 -> 100 ms per frame, race 300 -> 113 ms.
+  2D menus 14 ms. 42/42 menu dumps byte-identical to slice228; 42/42 race-schedule dumps inside the 14.4 3D gate vs
+  the donor (worst pct_bad 0.96%, PSNR 36.0 dB); default renderer 42/42 = slice214.
+- Remaining race costs per frame: CPU texture decode ~25 ms; write-backs ~33 ms, of which about 70 per frame are CLUT
+  loads from palettes the game draws on the GPU (07.7 GPU CLUT) and about 70 texture reads of frame-buffer pages
+  through other formats (09 shuffles / M10 GLM).
