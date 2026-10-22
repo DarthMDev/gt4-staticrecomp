@@ -52,11 +52,28 @@ pub fn legacy_user_dirs(layout: &Layout, reason: String) -> UserDirs {
     UserDirs::legacy(local, &player, reason)
 }
 
+/// `PreviousDataDir` applies only when this launcher runs from the registered install folder.
+fn previous_data_for(
+    exe_dir: &Path,
+    read_registered: &dyn Fn() -> Option<String>,
+    read_previous: &dyn Fn() -> Option<PathBuf>,
+) -> Option<PathBuf> {
+    let registered = read_registered()?;
+    let key = |folder: &str| folder.trim().trim_end_matches(['\\', '/']).to_ascii_lowercase();
+    if key(&exe_dir.to_string_lossy()) != key(&registered) {
+        return None;
+    }
+    read_previous()
+}
+
 /// Step 1. `Err` only when no data or user folder can be named at all.
 pub fn prepare(exe_dir: &Path) -> Result<Startup, String> {
     let mut inputs = LayoutInputs::from_environment(exe_dir, gt4l_platform::known_folder::documents());
-    // The data folder of an earlier install in another folder, as the setup recorded it (TASK-091).
-    inputs.previous_data = gt4l_platform::install_record::previous_data_dir();
+    // The data folder of an earlier install in another folder, as the setup recorded it (TASK-091). Only the
+    // registered install takes it: a portable copy started on the same PC must never move the installed data.
+    inputs.previous_data = previous_data_for(exe_dir, &gt4l_platform::install_record::registered_install_folder, &|| {
+        gt4l_platform::install_record::previous_data_dir()
+    });
     let layout = paths::resolve_layout(&inputs, &paths::probe_writable)?;
     let mut log = layout.notices.clone();
     log.push(format!(
@@ -336,6 +353,18 @@ pub fn large_notice(outcome: &LargeOutcome, local: &Path, data_root: &Path) -> (
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_the_registered_install_takes_the_previous_data_folder() {
+        let previous = || Some(PathBuf::from(r"C:\Program Files\Old\data"));
+        let registered = || Some(r"C:\Program Files\GT4Recomp\".to_string());
+        assert_eq!(
+            super::previous_data_for(Path::new(r"c:\program files\gt4recomp"), &registered, &previous),
+            previous()
+        );
+        assert_eq!(super::previous_data_for(Path::new(r"E:\Portable\GT4Recomp"), &registered, &previous), None);
+        assert_eq!(super::previous_data_for(Path::new(r"C:\Program Files\GT4Recomp"), &|| None, &previous), None);
+    }
+
     use super::*;
     use gt4l_core::paths::{DataDirs, UserRootSource};
 

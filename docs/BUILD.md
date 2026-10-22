@@ -2171,3 +2171,13 @@ Builds (all paths absolute):
   gives 28,845,242 bytes, sha256 `2FD43DCF6D18FDAE981AF0CD22D79E259E7175ED08DFF41AE3007802A1CF42FF`. 7-Zip
   extraction: `GT4Recomp.exe` equals the release build (extraction folder deleted). Not run on this PC.
 - Checks: `cargo test --workspace` (from `launcher\`): 343 passed, 0 failed, 4 ignored.
+
+### Slice 253 (coordinator review fix)
+- `PreviousDataDir` is taken only when the launcher runs from the registered install folder (HKLM `InstallDir`), so a
+  portable copy on the same PC never moves the installed data (`relocation::previous_data_for`, test
+  `only_the_registered_install_takes_the_previous_data_folder`). `cargo test --workspace`: 344 passed, 0 failed, 4 ignored.
+- Launcher `private\slice253-launcher\GT4Recomp.exe` 16,318,976 bytes, sha256
+  `015f2ba390edff95ed4c007fc01069ca80988697dadfa66f809ac2c130cb0efe`, path scan clean.
+- Installer (slice 252 recipe, `/DLAUNCHER_EXE` = that copy):
+  `private\slice253-installer\GT4Recomp-Setup-1.2.1-test.exe` 28,850,750 bytes, sha256
+  `e67f29470ce4d882cd6aa3bd5606961ab09723243f9bcb6d12806e7327a6650f`. Not run on this PC.
