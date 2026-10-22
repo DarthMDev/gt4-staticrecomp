@@ -63,7 +63,8 @@ class AsyncProfileTests(unittest.TestCase):
                                              'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json',
                                              'slice212b-pcsx2.json', 'slice213-pcsx2.json', 'slice214-pcsx2.json',
                                              'slice215-pcsx2.json', 'slice217-pcsx2.json',
-                                             'slice218-pcsx2.json', 'slice240-pcsx2.json', 'slice260-pcsx2.json', 'slice262-pcsx2.json'})
+                                             'slice218-pcsx2.json', 'slice240-pcsx2.json', 'slice260-pcsx2.json', 'slice262-pcsx2.json',
+                                             'slice268-pcsx2.json'})
 
 
 class AsyncManifestTests(unittest.TestCase):
