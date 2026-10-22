@@ -119,6 +119,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | TASK‑095 | Ultrawide: undistorted 2D overlay on the pre-race menu (race lobby), as TASK-080 P2 does for the race HUD | 📋 Planned (owner, 2026-10-22) · study first; idea only |
 | TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
+| TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 📋 Planned (owner, 2026-10-22) · release 1.2.4 with TASK-097 |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
@@ -537,6 +538,47 @@ findings afterwards. None is reachable from the launcher, which sets neither var
   pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
+
+### TASK-098 — Portable build (zip) beside the installer
+Planned (owner, 2026-10-22) for release 1.2.4, together with TASK-097. Two launcher builds from one source: the
+installer build (as today) and a portable build shipped as a zip. The portable copy keeps everything in its own
+folder, so it can be carried to another PC as one folder. No path is hardcoded: every folder is found from the
+folder of `GT4Recomp.exe`.
+
+Layout of the portable folder:
+- `GT4Recomp.exe` (portable build), `SDL3.dll`, `game\` (game executable, shaders, runtimes), licences.
+- `user\`: what the installer build keeps in `%APPDATA%\GT4Recomp`: `config\settings.toml`, `controls.toml`,
+  `Saves`, `Replays`, `backups`. Shipped in the zip (empty).
+- `data\`: as in the installer build: disc copy, prepared files, `gs\` (gt4-gs versions and caches), runtime card,
+  sessions, logs, `Textures`.
+
+Map of the work:
+- Build kind: a Cargo feature (`portable`) gives a compile-time build kind; `build-release.ps1` builds both
+  (`-Portable`); Settings > About shows "Portable".
+- Paths (`gt4l-core/src/paths.rs`, `resolve_layout`): in the portable build `UserDirs` = `<exe dir>\user` (a new
+  `UserRootSource::Portable`) and `DataDirs` = `<exe dir>\data`, with no read layers and no `%LOCALAPPDATA%` write
+  fallback: a folder that cannot be written (for example a copy inside Program Files) gives a clear message to move
+  the folder somewhere writable. `UserDirs::new` already builds the standard layout under one root.
+- No registry and no system places in the portable build: no `InstallDir`/`PreviousDataDir` reads
+  (`relocation.rs` `previous_data_for`), no 1.2.0 legacy migration from `%LOCALAPPDATA%` and Documents
+  (`relocate.rs`; an optional "import saves from the installed GT4Recomp" button can come later), no
+  `clean_old_install`, no Start-menu or desktop shortcuts, no uninstall entry.
+- Self-update for the portable build (`updates.rs`, `releases.rs`): the launcher stream gets a second asset,
+  `GT4Recomp-<version>-portable.zip`, listed in the release `SHA256SUMS`. The portable launcher downloads it, checks
+  it, extracts it to `<exe dir>\.update-staging`, renames the running `GT4Recomp.exe` aside (Windows allows renaming
+  a running exe), swaps the program files in (never `user\` or `data\`), restarts itself, and removes the old copy at
+  the next start; a failure rolls back as the installer's swap does (TASK-091). No administrator prompt.
+- gt4-gs: unchanged; it is downloaded into `data\gs` as today (portable already; check its caches stay in `data\gs`).
+- Single instance: the lock is per folder, so two portable copies (or a portable and the installed one) on one PC do
+  not block each other but one copy cannot start twice.
+- WebView2: the portable zip cannot install it; the TASK-091 detection message (with the download link) covers it.
+- Game executable (TASK-097): one game build for both. When it starts on its own it reads the settings from
+  `<install>\user\config` if that folder exists, else from `%APPDATA%\GT4Recomp\config`; the installer never creates
+  `user\`.
+- Release: `scripts/make_distribution.py` or a new script makes the zip (with the empty `user\` and `data\`
+  folders) from the same files as the installer; release notes and README explain both downloads.
+- Tests: `cargo test --workspace` for both builds (`--features portable`); path resolution, no registry use, the
+  portable self-update swap and rollback with an injected file system, the per-folder lock.
 
 ### TASK-097 — Self-sufficient game executable
 Planned (owner, 2026-10-22) for release 1.2.4, after the 1.2.3 hotfix. Principle: the game runs on its own with the
