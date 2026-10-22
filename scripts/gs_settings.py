@@ -114,6 +114,8 @@ def _row_errors(row):
     elif row['written'] == 'launcher':
         if row['control'] != 'none':
             errors.append(f'{name}: launcher-supplied rows have control none')
+    elif row['type'] == 'enum' and row['control'] == 'toggle' and len(row.get('choices', [])) == 2:
+        pass  # TASK-091: a two-choice enum may be a toggle (first choice Off, second On), e.g. performance_mode.
     elif row['type'] in CONTROL_FOR_TYPE and row['control'] != CONTROL_FOR_TYPE[row['type']]:
         errors.append(f'{name}: a {row["type"]} row needs control {CONTROL_FOR_TYPE[row["type"]]}')
     if row['written'] not in WRITTEN:

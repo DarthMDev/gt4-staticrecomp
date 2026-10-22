@@ -6,7 +6,7 @@
  * Table shape (returned by get_settings_table as {max_upscale, rows}):
  *   row = {id, label, help, page: "basic"|"advanced"|"mods"|"hidden",
  *          group?: "graphics"|"display" (the Display or Graphics section of the Graphics tab), control: "slider"|"toggle"|"dropdown",
- *          values, default, current, disabled?, visible_when?: {id, equals}}
+ *          values, default, current, disabled?, note? (a hint shown under the label), visible_when?: {id, equals}}
  *   slider values   = {min, max, step, unit?, limit?: "max_upscale", scale?: shown value = stored / scale,
  *                      labels?: {value: readout} (TASK-080 Render scale: "100% · 4x · 2560x1792")}
  *   dropdown values = [{value, label, disabled?, note?}]
@@ -303,6 +303,10 @@
     var keyNodes = [h("span", { text: row.label }), infoButton(row)];
     if (control.limited) {
       keyNodes.push(h("span", { class: "hint-text", text: "Limited to " + control.limited + " on this GPU" }));
+    }
+    if (row.note) {
+      // A row that is shown but not available now (Performance Mode with CoreGS 1.1: "GSdx only").
+      keyNodes.push(h("span", { class: "hint-text", text: row.note }));
     }
     return h("div", { class: "row" + (row.disabled ? " is-disabled" : ""), data: { row: row.id } }, [
       h("div", { class: "k" }, keyNodes),

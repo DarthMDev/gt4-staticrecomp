@@ -99,6 +99,8 @@
       default: 100, current: 100, visible_when: { id: "renderer", equals: "pcsx2" } },
     { id: "fxaa", label: "Anti-aliasing (FXAA)", help: "Smooths jagged edges with a fast filter. It softens fine detail a little. Off by default.",
       page: "basic", group: "graphics", control: "toggle", values: null, default: false, current: false },
+    { id: "performance_mode", label: "Performance Mode", help: "Faster on weaker PCs. Some effects that read the image back are skipped, such as headlight and sun flares and the car icons next to the gap time. Applies the next time you play.",
+      page: "basic", group: "graphics", control: "toggle", values: null, default: false, current: false },
     { id: "cas_mode", label: "Sharpening (CAS)", help: "FidelityFX Contrast Adaptive Sharpening. Off leaves the picture as the game drew it.",
       page: "basic", group: "graphics", control: "dropdown",
       values: [

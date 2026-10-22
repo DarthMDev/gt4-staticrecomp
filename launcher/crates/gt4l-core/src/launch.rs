@@ -152,7 +152,7 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
 
 /// The variables of a PCSX2 GS session: `GT4_RENDERER=pcsx2`, the process and its pin, the session INI, the
 /// folders, and the fixed 480p and 16:9 holds (see `add_common`). Readback is accurate unless the table row
-/// `hw_download_mode` says otherwise; it is written into the INI, so no variable is needed.
+/// `performance_mode` (Performance Mode, TASK-091) is On; it is written into the INI, so no variable is needed.
 pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String, String)> {
     let mut variables: BTreeMap<&'static str, String> = BTreeMap::new();
     variables.insert("GT4_RENDERER", "pcsx2".to_string());

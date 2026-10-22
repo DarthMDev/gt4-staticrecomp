@@ -217,8 +217,8 @@ pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), S
         return change_controls(&mut state, |controls| {
             controls.set_stick_deadzone(stick, percent as f32 / 100.0).map_err(|error| error.to_string())
         });
-    } else if model::pcsx2_table_rows().iter().any(|row| row.id == id) {
-        let text = model::value_text(&value, false).ok_or_else(|| format!("'{id}' needs a plain value"))?;
+    } else if let Some(row) = model::pcsx2_table_rows().into_iter().find(|row| row.id == id) {
+        let text = model::gs_value_text(row, &value).ok_or_else(|| format!("'{id}' needs a plain value"))?;
         state.config.settings.set_gs(&id, &text).map_err(|error| error.to_string())?;
     } else {
         return Err(format!("unknown setting '{id}'"));
