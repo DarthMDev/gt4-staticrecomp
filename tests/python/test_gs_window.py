@@ -48,10 +48,10 @@ def evidence(digest, files, data_root=True):
 
 class ReadbackModeTests(unittest.TestCase):
     def test_modes_map_to_the_pcsx2_hardware_download_mode(self):
-        self.assertEqual(probe.GS_READBACK_MODES, {'accurate': 0, 'unsynchronized': 3})
+        self.assertEqual(probe.GS_READBACK_MODES, {'accurate': 0, 'no-readbacks': 2})
         self.assertIn('HWDownloadMode = 0\n', probe.gs_config_text({}))
         self.assertIn('HWDownloadMode = 0\n', probe.gs_config_text({'GT4_GS_READBACK': 'accurate'}))
-        self.assertIn('HWDownloadMode = 3\n', probe.gs_config_text({'GT4_GS_READBACK': 'unsynchronized'}))
+        self.assertIn('HWDownloadMode = 2\n', probe.gs_config_text({'GT4_GS_READBACK': 'no-readbacks'}))
 
     def test_bad_readback_and_acquire_values_are_refused(self):
         for name, value in (('GT4_GS_READBACK', 'fast'), ('GT4_GS_READBACK', '3'), ('GT4_GS_EAGER_ACQUIRE', 'yes')):
@@ -70,13 +70,13 @@ class ReadbackModeTests(unittest.TestCase):
             digest, files = make_package(workspace / PACKAGE)
             run = workspace / 'private/run'
             run.mkdir(parents=True)
-            environment = {'GT4_GS_READBACK': 'unsynchronized', 'GT4_RENDERER': 'donor'}
+            environment = {'GT4_GS_READBACK': 'no-readbacks', 'GT4_RENDERER': 'donor'}
             recorded = probe.gs_stream_environment(environment, evidence(digest, files), workspace, True,
                                                    run_directory=run, headless=False)
-            self.assertEqual(recorded['gs_readback_mode'], 'unsynchronized')
-            self.assertEqual(recorded['gs_stream_environment']['GT4_GS_READBACK'], 'unsynchronized')
+            self.assertEqual(recorded['gs_readback_mode'], 'no-readbacks')
+            self.assertEqual(recorded['gs_stream_environment']['GT4_GS_READBACK'], 'no-readbacks')
             text = (run / 'gt4-gs.ini').read_text(encoding='utf-8')
-            self.assertIn('HWDownloadMode = 3\n', text)
+            self.assertIn('HWDownloadMode = 2\n', text)
             self.assertIn(f'Cache = {(workspace / probe.GS_SHADER_CACHE).resolve()}\n', text)
             self.assertIn(f'DataRoot = {(workspace / probe.GS_DATA_ROOT).resolve()}\n', text)
             self.assertTrue((workspace / probe.GS_DATA_ROOT).is_dir())
@@ -103,9 +103,9 @@ class ReadbackModeTests(unittest.TestCase):
         with patch.object(performance, 'play') as play, patch.dict(os.environ, {}, clear=False):
             os.environ.pop('GT4_GS_READBACK', None)
             with patch.object(sys, 'argv', ['play_performance.py', '--assets-root', str(root), '--mode', 'pcsx2',
-                                            '--gs-readback', 'unsynchronized']):
+                                            '--gs-readback', 'no-readbacks']):
                 self.assertEqual(performance.main(), 0)
-            self.assertEqual(os.environ['GT4_GS_READBACK'], 'unsynchronized')
+            self.assertEqual(os.environ['GT4_GS_READBACK'], 'no-readbacks')
             play.assert_called_once()
         with patch.object(performance, 'play') as play:
             with patch.object(sys, 'argv', ['play_performance.py', '--assets-root', str(root), '--mode', 'main',
@@ -125,7 +125,7 @@ class RestartTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
             digest, files = make_package(workspace / PACKAGE)
-            environment = {'GT4_GS_SCALE': '6', 'GT4_GS_READBACK': 'unsynchronized'}
+            environment = {'GT4_GS_SCALE': '6', 'GT4_GS_READBACK': 'no-readbacks'}
             recorded = probe.gs_stream_environment(environment, evidence(digest, files), workspace, True,
                                                    run_directory=workspace, headless=False, renderer_override='donor')
             self.assertEqual(environment['GT4_RENDERER'], 'donor')

@@ -3,7 +3,7 @@
  *   saves:   saves_list, saves_import, saves_activate({id}), saves_delete({id})
  *   replays: replays_list, replays_import, replays_delete({id})
  * Item = {id (library name, sent back to activate/delete), name (shown), modified (ISO 8601), active (saves only)}. The list result also has `folder`: the
- * player's folder that holds the files (Documents\Gran Turismo 4\Saves or \Replays), shown with
+ * user data folder that holds the files (%APPDATA%\GT4Recomp\Saves or \Replays), shown with
  * "Open folder" (open_saves_folder / open_replays_folder).
  * saves_import / replays_import return the new list, or null when cancelled.
  *
@@ -216,7 +216,7 @@
       importButton
     ]));
     content.appendChild(list);
-    // Where the files are: the player's folder in Documents, easy to find and back up.
+    // Where the files are: the user data folder (%APPDATA%\GT4Recomp), easy to open and back up.
     content.appendChild(h("div", { class: "row lib-folder" }, [
       h("div", { class: "k" }, [h("span", { text: "Folder" }), folderText]),
       h("div", { class: "ctl" }, [

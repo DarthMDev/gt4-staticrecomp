@@ -3,7 +3,7 @@
 //! The fixtures in tests/fixtures/gs were written by scripts/gs_settings.py (Python in text mode on Windows, so the
 //! lines end with CRLF). Regenerate them only with that script; never edit them by hand.
 //! Commands used (repository root, Python from private/tooling-venv):
-//!   python -I scripts/gs_settings.py ini --set upscale=2 --set hw_download_mode=unsynchronized
+//!   python -I scripts/gs_settings.py ini --set upscale=2 --set performance_mode=no-readbacks
 //!       --set fxaa=true --set mipmap=false --set blending=high --out <file>
 //!   (regenerated 2026-10-21: aspect is fixed at 16:9 and the PCSX2 OSD rows are always written off, so aspect=4:3
 //!   is no longer accepted and both files gained the OsdShow* lines)
@@ -37,13 +37,26 @@ fn default_session_ini_matches_the_python_writer_byte_for_byte() {
 fn user_settings_ini_matches_the_python_writer_byte_for_byte() {
     let settings = map(&[
         ("upscale", "2"),
-        ("hw_download_mode", "unsynchronized"),
+        ("performance_mode", "no-readbacks"),
         ("fxaa", "true"),
         ("mipmap", "false"),
         ("blending", "high"),
     ]);
     let text = gs_table::render_ini(&settings, &BTreeMap::new()).expect("render");
     assert_eq!(gs_table::ini_file_bytes(&text), include_bytes!("fixtures/gs/user-settings.ini").to_vec());
+}
+
+#[test]
+fn performance_mode_toggle_round_trips_to_the_gt4gs_ini_readback_key() {
+    // TASK-091: Off is Accurate (HWDownloadMode 0, the default and always written); On is NoReadbacks (2).
+    let off = gs_table::render_ini(&BTreeMap::new(), &BTreeMap::new()).expect("render");
+    assert!(off.contains("HWDownloadMode = 0\n"), "{off}");
+    let on = gs_table::render_ini(&map(&[("performance_mode", "no-readbacks")]), &BTreeMap::new()).expect("render");
+    assert!(on.contains("HWDownloadMode = 2\n"), "{on}");
+    assert_eq!(on.matches("HWDownloadMode").count(), 1, "the key is written once");
+    let accurate = gs_table::render_ini(&map(&[("performance_mode", "accurate")]), &BTreeMap::new()).expect("render");
+    assert!(accurate.contains("HWDownloadMode = 0\n"));
+    assert!(gs_table::render_ini(&map(&[("hw_download_mode", "accurate")]), &BTreeMap::new()).is_err(), "the old row is gone");
 }
 
 #[test]

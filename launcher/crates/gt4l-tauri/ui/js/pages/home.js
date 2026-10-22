@@ -83,8 +83,9 @@
       playButton.addEventListener("click", play);
       stopButton.addEventListener("click", stop);
 
+      // Settings: a square button beside Play with the same look and focus (owner, 1.2.1).
       var gear = h("button", {
-        class: "gear",
+        class: "play play-square",
         type: "button",
         "aria-label": "Settings",
         title: "Settings",
@@ -103,11 +104,9 @@
       call("about_info").then(function (info) {
         versionLabel.textContent = "GT4Recomp " + (info.version || "");
       }, function () {});
-      page.appendChild(gear);
       page.appendChild(h("div", { class: "home-bottom" }, [
         h("img", { class: "home-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
-        playButton,
-        running
+        h("div", { class: "home-actions" }, [playButton, running, gear])
       ]));
       root.appendChild(page);
       document.body.classList.add("is-home");

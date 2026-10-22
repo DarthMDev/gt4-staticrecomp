@@ -76,7 +76,7 @@ fn config_round_trip_keeps_values_and_paths() {
     config.settings.set("monitor", r"\\.\DISPLAY2@3440x1440").unwrap();
     config.settings.set("resolution", "2560x1080").unwrap();
     config.settings.set("render_scale", "175").unwrap();
-    config.settings.set_gs("hw_download_mode", "unsynchronized").unwrap();
+    config.settings.set_gs("performance_mode", "no-readbacks").unwrap();
     config.disc_path = Some(r#"D:\Games\Gran Turismo 4 "quoted" (USA).iso"#.into());
     config.dev_game_dir = Some(r"C:\Antigravity\build\game".into());
     let text = config::render(&config);

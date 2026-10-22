@@ -12,7 +12,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use gt4controls::{self as controls_file, Controls, CONTROLS_FILE_NAME};
 use gt4l_core::config::{self, ConfigFile};
-use gt4l_core::paths::{DataDirs, UserDirs, DOCUMENTS_DIR_OVERRIDE_VAR};
+use gt4l_core::paths::{self, DataDirs, UserDirs};
 use gt4l_disc::setup as disc_setup;
 use gt4l_disc::Pins;
 use gt4saves::library::Library;
@@ -24,8 +24,12 @@ pub struct AppState {
     pub pins: Pins,
     pub config: ConfigFile,
     pub controls: Controls,
-    /// The player's folder in use (`Documents\Gran Turismo 4`, or its data-folder fallback).
+    /// The user data in use: `%APPDATA%\GT4Recomp`, or the 1.2.0 places until their move has happened.
     pub user_dirs: UserDirs,
+    /// The folder of `GT4Recomp.exe`: stored paths inside it are kept relative (portable copies).
+    pub install_dir: PathBuf,
+    /// The move of the 1.2.0 large data, while it runs and its result (TASK-091).
+    pub migration: MigrationRun,
     pub library: Library,
     /// Set by the Cancel button of setup; the setup thread checks it between steps.
     pub setup_cancel: Arc<AtomicBool>,
@@ -51,6 +55,20 @@ pub struct AppState {
 }
 
 pub type Shared = Arc<Mutex<AppState>>;
+
+/// The background move of the 1.2.0 large data. The page polls it through `app_state` and shows a notice.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct MigrationRun {
+    pub running: bool,
+    /// The unit being moved (`game files`, `gt4-gs`, `textures`, ...).
+    pub item: String,
+    pub bytes_done: u64,
+    pub bytes_total: u64,
+    /// The result for the player, shown once (empty when there is nothing to say).
+    pub notice: String,
+    /// Whether the notice reports a problem.
+    pub problem: bool,
+}
 
 /// The step setup is on and how far it is. `step` is `copying`, `checking`, `preparing` or `renderer`.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -96,27 +114,25 @@ pub fn log(dirs: &DataDirs, message: &str) {
 }
 
 impl AppState {
-    /// Loads the settings and controls from the data folder and the save library from the player's folder
-    /// (`Documents\Gran Turismo 4`, found through the Windows known-folder API).
-    pub fn load(dirs: DataDirs) -> Result<AppState, String> {
+    /// Loads the settings and controls from the user data folder and opens the save library there.
+    /// `pre_1_0_root` is the 1.2.0 `%LOCALAPPDATA%\GT4Recomp`, which may still hold a library of launchers before 1.0.0.
+    pub fn load(dirs: DataDirs, user: UserDirs, pre_1_0_root: Option<PathBuf>) -> Result<AppState, String> {
         let pins = Pins::embedded()?;
-        let user = UserDirs::resolve(
-            std::env::var_os(DOCUMENTS_DIR_OVERRIDE_VAR),
-            gt4l_platform::known_folder::documents(),
-            &dirs,
-        );
-        AppState::load_with(dirs, pins, user)
+        AppState::load_with(dirs, pins, user, pre_1_0_root, crate::updates::install_directory())
     }
 
-    /// [`AppState::load`] with given pins and player's folder (the flow test uses synthetic pins for a synthetic
-    /// disc and a scratch stand-in for Documents).
-    pub fn load_with(dirs: DataDirs, pins: Pins, user: UserDirs) -> Result<AppState, String> {
+    /// [`AppState::load`] with given pins, user folder and install folder (the flow test uses synthetic pins for a
+    /// synthetic disc and scratch folders).
+    pub fn load_with(dirs: DataDirs, pins: Pins, user: UserDirs, pre_1_0_root: Option<PathBuf>, install_dir: PathBuf) -> Result<AppState, String> {
         std::fs::create_dir_all(dirs.root()).map_err(|error| format!("data folder: {error}"))?;
-        let (config, warnings) = config::load(&dirs.config_file());
+        let (mut config, warnings) = config::load(&user.config_file());
         for warning in &warnings {
             log(&dirs, &format!("settings: {warning}"));
         }
-        let controls_path = dirs.root().join(CONTROLS_FILE_NAME);
+        // Stored paths inside the install folder are relative (see `save_config`); resolve them here.
+        config.disc_path = config.disc_path.map(|path| paths::resolve_portable(&path, &install_dir));
+        config.dev_game_dir = config.dev_game_dir.map(|path| paths::resolve_portable(&path, &install_dir));
+        let controls_path = user.controls_file();
         let mut controls_locked = false;
         let controls = match controls_file::load(&controls_path) {
             Ok(Some(controls)) => controls,
@@ -138,7 +154,7 @@ impl AppState {
                 Controls::default()
             }
         };
-        let opened = saves::open(&dirs, &user)?;
+        let opened = saves::open(&dirs, &user, pre_1_0_root.as_deref())?;
         for line in &opened.log {
             log(&dirs, line);
         }
@@ -148,6 +164,8 @@ impl AppState {
             config,
             controls,
             user_dirs: opened.user,
+            install_dir,
+            migration: MigrationRun::default(),
             library: opened.library,
             setup_cancel: Arc::new(AtomicBool::new(false)),
             setup_busy: false,
@@ -173,8 +191,13 @@ impl AppState {
         !self.setup_busy && matches!(self.installed(), disc_setup::Installed::Ready { .. })
     }
 
+    /// Writes the settings to the user data folder. A path inside the install folder is stored relative to it, so a
+    /// copied install folder (another drive or PC) still finds it; no absolute data path is stored.
     pub fn save_config(&self) {
-        if let Err(error) = config::save(&self.dirs.config_file(), &self.config) {
+        let mut stored = self.config.clone();
+        stored.disc_path = stored.disc_path.map(|path| paths::portable_path(&path, &self.install_dir));
+        stored.dev_game_dir = stored.dev_game_dir.map(|path| paths::portable_path(&path, &self.install_dir));
+        if let Err(error) = config::save(&self.user_dirs.config_file(), &stored) {
             log(&self.dirs, &format!("settings not saved: {error}"));
         }
     }
@@ -182,7 +205,7 @@ impl AppState {
     /// The controls file. Commands write it through `commands::change_controls`, which refuses while
     /// `controls_locked` is set and keeps the change only when the write succeeded.
     pub fn controls_path(&self) -> PathBuf {
-        self.dirs.root().join(CONTROLS_FILE_NAME)
+        self.user_dirs.controls_file()
     }
 
     pub fn disc_path(&self) -> Option<&Path> {

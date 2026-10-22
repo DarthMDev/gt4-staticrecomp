@@ -8,7 +8,7 @@ No JIT, no emulator window, full speed.
 ![60 FPS](https://img.shields.io/badge/60%20FPS-100%25%20game%20speed-2ea44f?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows%20x64-Vulkan-2ea44f?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/license-MIT-1f6feb?style=for-the-badge)
-![Release](https://img.shields.io/badge/release-1.2.0-2ea44f?style=for-the-badge)
+![Release](https://img.shields.io/badge/release-1.2.1-2ea44f?style=for-the-badge)
 ![Ultrawide](https://img.shields.io/badge/ultrawide-any%20aspect%20ratio-2ea44f?style=for-the-badge)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/moesuito)
 
@@ -38,11 +38,11 @@ while the game runs, which is also what makes future **Android and iOS** builds 
   resolution follows automatically, with a Render scale of 50-200%.
 - **GSdx renderer** (the PCSX2 GS) in its own process: crisp deinterlaced menus, every GSdx option in the launcher
   and a built-in performance overlay. **CoreGS 1.1** is built in as the fallback.
-- **Custom texture packs (1.2.0):** drop a pack's `replacements` folder into `Documents\Gran Turismo 4\Textures`
-  and switch on **Load custom textures** in Settings > Graphics (on by default). HD textures and mods from the PCSX2
+- **Custom texture packs (1.2.0):** drop a pack's `replacements` folder into the `data\Textures` folder of your
+  GT4Recomp install (Settings > Graphics > **Open textures folder**); **Load custom textures** is on by default. HD textures and mods from the PCSX2
   community work without renaming folders.
 - **Crash-safe memory card:** saves survive a crash or a forced close.
-- **Release 1.2.0:** a one-click **installer** and a **launcher** that sets the game up from your own disc
+- **Release 1.2.1:** a one-click **installer** and a **launcher** that sets the game up from your own disc
   image, with settings, saves, controller remapping and update checks.
 - **Any controller through SDL3** (Xbox, DualShock 4, DualSense, Switch Pro...) and a modern keyboard layout.
 
@@ -107,17 +107,19 @@ The launcher checks the processor and Vulkan before setup and before Play, and s
 
 ## Install
 
-1. Download **`GT4Recomp-Setup-1.2.0.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
-   and run it. It installs for your Windows user only, without administrator rights. If the Microsoft Edge WebView2
-   Runtime is missing (Windows 10), the installer downloads it from Microsoft.
+1. Download **`GT4Recomp-Setup-1.2.1.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
+   and run it. It installs to `C:\Program Files\GT4Recomp` by default (Windows asks for administrator approval), or to
+   any folder or drive you choose. If the Microsoft Edge WebView2 Runtime is missing (Windows 10), the installer
+   downloads it from Microsoft.
 2. Start **Gran Turismo 4** from the Start menu and choose your disc image. The launcher copies and checks it and
    downloads the GSdx renderer, the recommended choice (CoreGS 1.1 is built in and used if you are offline).
 3. Press **Play**.
 
-Your saves and replays live in `Documents\Gran Turismo 4` (`Saves`, `Replays`): easy to find and back up, and the
-uninstaller always keeps them. Settings, the copy of your disc image and other data live in `%LOCALAPPDATA%\GT4Recomp`;
-uninstalling keeps them unless you tick the box. A save library from an earlier launcher moves to Documents at the
-first start (copied and checked; the old folder is renamed, never deleted).
+Everything large stays together in the install folder, in `data` (the copy of your disc image, GSdx, custom textures
+and logs), so the whole folder can be moved or copied to another drive and still works. Your settings, saves and
+replays are per Windows user in `%APPDATA%\GT4Recomp`, and the uninstaller keeps them unless you tick the box.
+Updates from the launcher install silently after one Windows approval and reopen the launcher. Coming from 1.2.0, the
+first start moves your files to these places (copied and checked; the old Documents folder is renamed, never deleted).
 This repository does not include game files, disc images, BIOS dumps or save files. Building from source needs your
 own game files and a development environment: see the [Build guide](docs/BUILD.md).
 

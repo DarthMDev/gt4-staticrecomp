@@ -224,8 +224,20 @@ fn settings_4_to_5(document: &mut Value) -> Result<(), String> {
 ///   A file whose Monitor is "primary" records no desktop size: its Resolution is kept as it was (it cannot be told
 ///   apart from a deliberate choice of that size). The rule is recorded here so that later readers know why.
 ///
+/// - Performance Mode (TASK-091, release 1.2.1, owner 2026-10-22): the Readbacks row (`[gs] hw_download_mode`) is
+///   replaced by the Performance Mode toggle (`[gs] performance_mode`). A stored readback mode other than "accurate"
+///   becomes Performance Mode On ("no-readbacks"); "accurate", or no value, is Off, the default, which needs no key.
+///   The old key is dropped in both cases.
+///
 /// The backup of the old file is made by `config::prepare`, as for every step.
 fn settings_5_to_6(document: &mut Value) -> Result<(), String> {
+    if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
+        if let Some(old) = gs.remove("hw_download_mode") {
+            if old.as_str() != Some("accurate") {
+                gs.insert("performance_mode".to_string(), Value::from("no-readbacks"));
+            }
+        }
+    }
     let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) else {
         return Ok(());
     };
@@ -461,5 +473,28 @@ mod tests {
         let mut chosen = json!({"schema_version": 1, "settings": {"fullscreen": "off"}, "choices": {"fullscreen": true}});
         migrate(&SETTINGS, &mut chosen).unwrap();
         assert_eq!(chosen["settings"]["fullscreen"], json!("off"));
+    }
+
+    #[test]
+    fn a_non_accurate_readback_mode_becomes_performance_mode_on_and_the_old_key_goes() {
+        for old in ["unsynchronized", "no-readbacks", "enabled-force-full", "disabled"] {
+            let mut document = json!({"schema_version": 5, "gs": {"hw_download_mode": old, "fxaa": "true"}});
+            assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 5, "{old}: returns the schema it started from");
+            assert_eq!(document["gs"]["performance_mode"], json!("no-readbacks"), "{old}");
+            assert!(document["gs"].get("hw_download_mode").is_none(), "{old}");
+            assert_eq!(document["gs"]["fxaa"], json!("true"), "other values are kept");
+        }
+    }
+
+    #[test]
+    fn an_accurate_or_missing_readback_mode_leaves_performance_mode_off() {
+        let mut accurate = json!({"schema_version": 5, "gs": {"hw_download_mode": "accurate"}});
+        migrate(&SETTINGS, &mut accurate).unwrap();
+        assert!(accurate["gs"].get("hw_download_mode").is_none(), "the old key is dropped");
+        assert!(accurate["gs"].get("performance_mode").is_none(), "absent is Off, the default");
+
+        let mut missing = json!({"schema_version": 5, "gs": {"fxaa": "false"}});
+        migrate(&SETTINGS, &mut missing).unwrap();
+        assert!(missing["gs"].get("performance_mode").is_none());
     }
 }

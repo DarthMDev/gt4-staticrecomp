@@ -116,6 +116,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑088 | Release 1.2.0: custom textures (gt4-gs texture replacements from `Documents\Gran Turismo 4\Textures`, two launcher options), 2-row bottom crop, black window from the first frame, monitor names, desktop resolution, every gt4-gs value enabled, GSdx setup choice and switch | ✅ Done (2026-10-22) · owner tested and approved; released as GT4Recomp v1.2.0 with gt4-gs 1.2.0 (fork PR #9, tag `gt4gs-v1.2.0`) |
 | TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0 |
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
+| TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -504,6 +505,28 @@ menus. Checks: SMODE gate, the 42-dump headless run, owner pass on menus, garage
 replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRenderContextPS2__virtual_67`), 16-bit
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
+
+### TASK-091 — Release 1.2.1: per-machine install, data beside the program, user data in AppData
+✅ **Done (2026-10-22): owner tested and approved; released as v1.2.1.** Branch `task/091-install-layout-121`. Owner decisions 2026-10-22:
+- the installer installs per machine in `C:\Program Files\GT4Recomp` (administrator rights; the folder page stays);
+- the large data (disc copy, prepared files, gt4-gs, caches, sessions, logs, custom textures) lives in
+  `<install>\data`, found relative to `GT4Recomp.exe` (portable: the folder can be copied to another drive or PC; a
+  read-only copy is read and writes go to `%LOCALAPPDATA%\GT4Recomp`); the installer gives the Users group
+  (`S-1-5-32-545`) Modify on that folder only;
+- settings, controls, saves and replays live per Windows user in `%APPDATA%\GT4Recomp`;
+- the launcher, not the installer, moves the 1.2.0 files at its first start (checked copies, Documents folder renamed
+  with a README, nothing overwritten, never while the game runs, retried after a failure) and removes leftovers of the
+  old per-user install; the installer removes the old per-user program install;
+- the self-update starts the elevated setup (`runas`); uninstall removes `<install>\data`, and the "also delete" box
+  acts only for the current user.
+- the setup of a self-update from 1.2.1 on is silent (`/S /UPDATE /D=<install folder>`, one UAC prompt) and the launcher starts again as the player; a reinstall into another folder records the old data folder (`PreviousDataDir`) and the launcher moves its large data at its first start.
+
+Acceptance: `cargo test --workspace` green with the new path, move, cleanup, elevation and settings tests; UI checks;
+installer compiled and extracted; owner test of a fresh install, the 1.2.0 update, the move, a portable copy and the
+uninstall. Result so far: 330 Rust tests passed; owner test installer `private/slice250-installer/GT4Recomp-Setup-1.2.1-test.exe`. Slice 251 (review fixes): 332 passed. Slice 252: 343 passed; installer `private\slice252-installer\GT4Recomp-Setup-1.2.1-test.exe` (28,845,242 bytes, sha256 `2FD43DCF6D18FDAE981AF0CD22D79E259E7175ED08DFF41AE3007802A1CF42FF`), not run yet: owner test of the silent update from 1.2.1 and of a reinstall into another folder (data moved from `PreviousDataDir`).
+Slice 257 (GitHub issue #80, blank white launcher window): the window starts hidden and shows on `ui_ready`; a 12 s watchdog restarts the launcher in WebView2 safe mode (`--disable-gpu`, flag `webview-safe-mode`, Settings toggle "Launcher GPU acceleration"), then a native message offers the WebView2 download page or the log folder. `cargo test --workspace` 351 passed. Installer `private\slice257-installer\GT4Recomp-Setup-1.2.1-test.exe` (28,859,313 bytes, sha256 `51998294e3ccd9b0b80b6175e5c6e3b969d89c6236f4669878dcf274c6bbb70a`), not run yet: owner test with `GT4RECOMP_TEST_UI_NEVER_READY=1`.
+Slice 258 (1.2.1 final candidate): a missing WebView2 runtime is detected before any window (registry as the installer checks it, `GT4RECOMP_TEST_WEBVIEW2_MISSING=1` for tests); the update path is faster (no icacls on an update unless its probe fails, EstimatedSize without the data tree, the launcher starts before the old copies are removed; phase timings in setup.log); the launcher clean-up runs after the window exists; a second start never shows the hidden window. Slice 259: **Performance Mode** (Settings > Graphics, Off by default; On = GSdx hardware downloads NoReadbacks, replaces the Readbacks row; CoreGS 1.1 shows it disabled). Installer `private\slice259-installer\GT4Recomp-Setup-1.2.1-test.exe` (28,859,775 bytes). Not run on this PC; owner test pending.
+Details: BUILD.md slice 250, [release notes 1.2.1](docs/release-notes/1.2.1.md).
 
 ### TASK-090 — CoreGS 3.0: modern render pipeline
 Planned (owner, 2026-10-22), after CoreGS 2.0. The VU1 work (the PS2's vertex shader, today AOT C++ on the MTVU

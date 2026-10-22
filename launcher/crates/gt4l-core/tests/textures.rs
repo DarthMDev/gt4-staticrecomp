@@ -1,4 +1,4 @@
-//! Custom textures (TASK-088, gt4-gs 1.2.0): the Textures folder of the player's folder, the folders the launcher
+//! Custom textures (TASK-088, gt4-gs 1.2.0; TASK-091 moved the folder to `<install>\data\Textures`): the Textures folder, the folders the launcher
 //! makes on demand, and the two Graphics rows (Load custom textures on by default, Precache off by default).
 
 use std::collections::BTreeMap;
@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use gt4l_core::gs_table;
-use gt4l_core::paths::{ensure_texture_folders, UserDirs, UserRootSource};
+use gt4l_core::paths::{ensure_texture_folders, DataDirs};
 
 fn scratch(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("gt4l-textures-{}-{name}", std::process::id()));
@@ -16,11 +16,20 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 #[test]
-fn the_textures_folder_is_inside_the_player_folder_with_no_serial_folder() {
-    let documents = scratch("root");
-    let user = UserDirs::new(documents.join("Gran Turismo 4"), UserRootSource::Override);
-    assert_eq!(user.textures(), documents.join("Gran Turismo 4").join("Textures"));
-    assert!(!user.textures().exists(), "resolving creates nothing");
+fn the_textures_folder_is_inside_the_data_folder_with_no_serial_folder() {
+    let install = scratch("root");
+    let dirs = DataDirs::new(install.join("data"));
+    assert_eq!(dirs.textures(), install.join("data").join("Textures"));
+    assert!(!dirs.textures().exists(), "resolving creates nothing");
+}
+
+#[test]
+fn a_textures_folder_not_moved_yet_stays_in_use() {
+    let base = scratch("in-place");
+    let mut dirs = DataDirs::new(base.join("data"));
+    let documents = base.join("Documents").join("Gran Turismo 4").join("Textures");
+    dirs.set_textures_in_place(Some(documents.clone()));
+    assert_eq!(dirs.textures(), documents);
 }
 
 #[test]

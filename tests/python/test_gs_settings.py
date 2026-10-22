@@ -85,12 +85,13 @@ class TableSchemaTests(unittest.TestCase):
         self.assertEqual(len(pairs), len(set(pairs)))
 
     def test_readback_row_is_a_written_setting(self):
-        row = by_id()['hw_download_mode']
-        self.assertEqual((row['key'], row['written'], row['status']), ('HWDownloadMode', 'always', 'ok'))
+        # TASK-091: the Readbacks row became Performance Mode (a toggle): Off = accurate, On = no-readbacks.
+        row = by_id()['performance_mode']
+        self.assertEqual((row['key'], row['written'], row['status'], row['control']), ('HWDownloadMode', 'always', 'ok', 'toggle'))
         self.assertEqual(row['default'], 'accurate')
-        self.assertEqual({choice['name']: choice['status'] for choice in row['choices']
-                          if choice['name'] in ('accurate', 'unsynchronized')},
-                         {'accurate': 'ok', 'unsynchronized': 'ok'})
+        self.assertEqual({choice['name']: choice['status'] for choice in row['choices']},
+                         {'accurate': 'ok', 'no-readbacks': 'ok'})
+        self.assertNotIn('hw_download_mode', by_id())
         self.assertNotIn('gt4_readback', by_id())
 
     def test_validator_refuses_bad_tables(self):
@@ -239,7 +240,7 @@ class ValueTests(unittest.TestCase):
         # TASK-088 (1.2.0): these values are enabled now (the binary accepts them).
         self.assertEqual(gs_settings.parse_value(renderer, 'd3d12'), 'd3d12')
         self.assertEqual(gs_settings.parse_value(by_id()['filter'], 'bilinear-ps2'), 'bilinear-ps2')
-        self.assertEqual(gs_settings.parse_value(by_id()['hw_download_mode'], 'enabled-force-full'), 'enabled-force-full')
+        self.assertEqual(gs_settings.parse_value(by_id()['performance_mode'], 'no-readbacks'), 'no-readbacks')
 
     def test_path_values_are_single_line(self):
         self.assertEqual(gs_settings.parse_value(by_id()['cache_folder'], 'C:/cache'), 'C:/cache')
@@ -389,7 +390,7 @@ class PlayPerformanceTests(unittest.TestCase):
                           ['--mode', 'pcsx2', '--gs-setting', 'nope=1'],
                           ['--mode', 'pcsx2', '--gs-setting', 'upscale=13'],
                           ['--mode', 'pcsx2', '--gs-setting', 'gt4_readback=accurate'],
-                          ['--mode', 'pcsx2', '--gs-setting', 'hw_download_mode=accurate', '--gs-readback', 'unsynchronized'],
+                          ['--mode', 'pcsx2', '--gs-setting', 'performance_mode=accurate', '--gs-readback', 'no-readbacks'],
                           ['--mode', 'pcsx2', '--gs-setting', 'upscale=2', '--gs-scale', '3']):
             with patch.dict(os.environ, {}, clear=False):
                 code, play = self.run_main(arguments)
@@ -443,12 +444,12 @@ class ProbeEnvironmentTests(unittest.TestCase):
             probe.gs_config_text({'GT4_PRESENT_MODE': 'adaptive'})
 
     def test_readback_shortcut_and_json_conflict(self):
-        self.assertIn('HWDownloadMode = 3\n', probe.gs_config_text({'GT4_GS_READBACK': 'unsynchronized'}))
+        self.assertIn('HWDownloadMode = 2\n', probe.gs_config_text({'GT4_GS_READBACK': 'no-readbacks'}))
         self.assertIn('HWDownloadMode = 0\n',
-                      probe.gs_config_text({'GT4_GS_SETTINGS': '{"hw_download_mode": "accurate"}'}))
-        with self.assertRaisesRegex(ValueError, 'both set hw_download_mode'):
+                      probe.gs_config_text({'GT4_GS_SETTINGS': '{"performance_mode": "accurate"}'}))
+        with self.assertRaisesRegex(ValueError, 'both set performance_mode'):
             probe.gs_config_text({'GT4_GS_READBACK': 'accurate',
-                                  'GT4_GS_SETTINGS': '{"hw_download_mode": "unsynchronized"}'})
+                                  'GT4_GS_SETTINGS': '{"performance_mode": "no-readbacks"}'})
         with self.assertRaisesRegex(ValueError, 'GT4_GS_READBACK must be one of'):
             probe.gs_config_text({'GT4_GS_READBACK': '3'})
 
@@ -478,8 +479,7 @@ ENUM_EXPECTED = {
     'cas_mode': ('CASMode', {'off': '0', 'sharpen-only': '1', 'sharpen-and-resize': '2'}, 'off'),
     'tv_shader': ('TVShader', {'none': '0', 'scanline': '1', 'diagonal': '2', 'triangular': '3', 'wave': '4',
                                'lottes-crt': '5', 'rgss-4x': '6', 'agss-nx': '7'}, 'none'),
-    'hw_download_mode': ('HWDownloadMode', {'accurate': '0', 'enabled-force-full': '1', 'no-readbacks': '2',
-                                            'unsynchronized': '3', 'disabled': '4'}, 'accurate'),
+    'performance_mode': ('HWDownloadMode', {'accurate': '0', 'no-readbacks': '2'}, 'accurate'),
     'osd_messages_pos': ('OsdMessagesPos', {'none': '0', 'top-left': '1', 'top-center': '2', 'top-right': '3',
                                             'center-left': '4', 'center': '5', 'center-right': '6',
                                             'bottom-left': '7', 'bottom-center': '8', 'bottom-right': '9'},
@@ -541,13 +541,13 @@ class ResolvedValueTests(unittest.TestCase):
         self.assertEqual(by_id()['adapter']['default'], '')
 
     def test_hardware_readback_mapping(self):
-        choices = {choice['name']: choice for choice in by_id()['hw_download_mode']['choices']}
+        choices = {choice['name']: choice for choice in by_id()['performance_mode']['choices']}
         self.assertEqual(choices['accurate']['ini'], '0')
-        self.assertEqual(choices['unsynchronized']['ini'], '3')
-        self.assertEqual(choices['unsynchronized']['status'], 'ok')
-        self.assertEqual(gs_settings.ini_value(by_id()['hw_download_mode'],
-                                               gs_settings.parse_value(by_id()['hw_download_mode'],
-                                                                       'unsynchronized')), '3')
+        self.assertEqual(choices['no-readbacks']['ini'], '2')
+        self.assertEqual(choices['no-readbacks']['status'], 'ok')
+        self.assertEqual(gs_settings.ini_value(by_id()['performance_mode'],
+                                               gs_settings.parse_value(by_id()['performance_mode'],
+                                                                       'no-readbacks')), '2')
 
     def test_resolved_rows_are_not_settable_or_offered(self):
         offered_ids = {row['id'] for row in gs_settings.offered(rows())}
@@ -585,7 +585,7 @@ class ResolvedValueTests(unittest.TestCase):
 class PageLayoutTests(unittest.TestCase):
     def test_graphics_page_is_basic_only(self):
         basic = [row['id'] for row in rows() if row['page'] == 'basic']
-        self.assertEqual(basic, ['gs_engine', 'fxaa', 'cas_mode', 'cas_sharpness', 'texture_load'])
+        self.assertEqual(basic, ['gs_engine', 'performance_mode', 'fxaa', 'cas_mode', 'cas_sharpness', 'texture_load'])
         upscale = by_id()['upscale']
         self.assertEqual((upscale['control'], upscale['type'], upscale['default']), ('dropdown', 'enum', '1080p'))
         # TASK-080 addendum (owner, 2026-10-21): hidden, always written, set by the launcher from the display plan;
@@ -600,11 +600,12 @@ class PageLayoutTests(unittest.TestCase):
 
     def test_advanced_page_holds_the_rest_of_the_user_options(self):
         advanced = [row for row in rows() if row['page'] == 'advanced']
-        # 45 + prohibit_dynamic_code (TASK-064) - the six PCSX2 OSD rows, hidden since 2026-10-21; + precache (TASK-088)
-        self.assertEqual(len(advanced), 42)
-        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 43)))
+        # 45 + prohibit_dynamic_code (TASK-064) - the six PCSX2 OSD rows, hidden since 2026-10-21; + precache (TASK-088);
+        # - the Readbacks row (TASK-091: Performance Mode is a basic row)
+        self.assertEqual(len(advanced), 41)
+        self.assertEqual(sorted(row['order'] for row in advanced), list(range(1, 42)))
         self.assertTrue({'renderer', 'deinterlace', 'shade_boost', 'linear_present', 'tv_shader', 'perf_overlay',
-                         'hw_download_mode', 'filter', 'trilinear', 'anisotropic'} <= {row['id'] for row in advanced})
+                         'filter', 'trilinear', 'anisotropic'} <= {row['id'] for row in advanced})
 
     def test_orders_are_unique_per_page(self):
         seen = set()
@@ -701,7 +702,7 @@ class ProhibitDynamicCodeTests(unittest.TestCase):
         row = by_id()['prohibit_dynamic_code']
         self.assertEqual((row['page'], row['order'], row['control'], row['type'], row['section'], row['key'],
                           row['default'], row['written'], row['status']),
-                         ('advanced', 40, 'toggle', 'bool', 'GT4GS', 'ProhibitDynamicCode', 'false', 'always', 'ok'))
+                         ('advanced', 39, 'toggle', 'bool', 'GT4GS', 'ProhibitDynamicCode', 'false', 'always', 'ok'))
         self.assertEqual(row['label'], 'Block third-party overlays (Arbitrary Code Guard)')
         self.assertIn('prohibit_dynamic_code', {offered_row['id'] for offered_row in gs_settings.offered(rows())})
 

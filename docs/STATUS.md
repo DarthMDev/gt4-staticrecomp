@@ -1,5 +1,17 @@
 # Current Status
 
+## Release 1.2.1 prepared (2026-10-22, TASK-091, branch `task/091-install-layout-121`, waiting for owner test)
+
+Owner decisions: per-machine install in `C:\Program Files\GT4Recomp` (administrator rights, any folder allowed); the
+large data in `<install>\data` (found relative to `GT4Recomp.exe`, so the folder is portable; Users get Modify on that
+folder only); settings, controls, saves and replays per Windows user in `%APPDATA%\GT4Recomp`. The launcher moves the
+1.2.0 files at its first start (user data copied and checked, the Documents folder renamed with a README; game files
+renamed or copied, checked and then removed) and removes the old per-user program install; the self-update starts the
+elevated setup through the UAC prompt. Game build and gt4-gs unchanged (slice240, gt4-gs 1.2.0). Owner test installer
+`private/slice250-installer/GT4Recomp-Setup-1.2.1-test.exe` (28,838,764 bytes, sha256
+`333d72bcbc05066f020244b32c1c0a1e890da635451f757586498c1bf7316fb6`), not run on this PC; nothing published. Details:
+[BUILD slice 250](BUILD.md), [TASK-091](../TASKS.md), [release notes 1.2.1](release-notes/1.2.1.md), journal 2026-10-22.
+
 ## Release 1.2.0 prepared (2026-10-21, TASK-088, branch `task/088-custom-textures-120`, waiting for owner test)
 
 Owner decisions: custom textures in gt4-gs (load only; folder `Documents\Gran Turismo 4\Textures`, Graphics option

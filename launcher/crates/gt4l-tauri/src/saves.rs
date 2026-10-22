@@ -1,9 +1,9 @@
 //! The Saves and Replays pages and the card around each Play, on top of the `gt4saves` library.
 //!
-//! The library lives in the player's folder `Documents\Gran Turismo 4` (`Saves`, `Replays`; TASK-081, owner
-//! 2026-10-21). Before a start the launcher writes the card the game reads (`runtime\card.ps2`, in the AppData data
-//! folder) from the library; after the game exits it harvests that card back into the library. So the game never
-//! writes into Documents, and OneDrive never syncs a card while it is being written. Imports never overwrite;
+//! The library lives in the user data folder `%APPDATA%\GT4Recomp` (`Saves`, `Replays`; TASK-091, owner 2026-10-22;
+//! 1.0.0 to 1.2.0 used `Documents\Gran Turismo 4`). Before a start the launcher writes the card the game reads
+//! (`runtime\card.ps2`, in the large data folder) from the library; after the game exits it harvests that card back
+//! into the library. So the game never writes into the library while it runs. Imports never overwrite;
 //! deletes go to the Recycle Bin (see `recycle`).
 
 use std::fs;
@@ -29,19 +29,20 @@ pub struct OpenedLibrary {
     pub notice: Option<String>,
 }
 
-/// Moves an old AppData library to the player's folder once (see `gt4saves::migration`), then opens the library
-/// there. When the player's folder cannot be used, the data-folder fallback is used, so Play never fails on it.
-pub fn open(dirs: &DataDirs, user: &UserDirs) -> Result<OpenedLibrary, String> {
+/// Moves a library of launchers before 1.0.0 (`library\memcard` and friends in `pre_1_0_root`, the old
+/// `%LOCALAPPDATA%\GT4Recomp`) into the library once (see `gt4saves::migration`), then opens the library. When the
+/// library folder cannot be used, the data-folder fallback is used, so Play never fails on it.
+pub fn open(dirs: &DataDirs, user: &UserDirs, pre_1_0_root: Option<&Path>) -> Result<OpenedLibrary, String> {
     let mut log = Vec::new();
     if let UserRootSource::Fallback(reason) = user.source() {
         log.push(format!("save library: WARNING {reason}; using {}", user.root().display()));
     }
-    match open_at(dirs, user, &mut log) {
+    match open_at(user, pre_1_0_root, &mut log) {
         Ok((library, notice)) => Ok(OpenedLibrary { library, user: user.clone(), log, notice }),
         Err(error) if !matches!(user.source(), UserRootSource::Fallback(_)) => {
-            let fallback = UserDirs::new(dirs.fallback_user_root(), UserRootSource::Fallback(error.clone()));
+            let fallback = user.with_library_at(&dirs.fallback_user_root(), UserRootSource::Fallback(error.clone()));
             log.push(format!("save library: WARNING {} cannot be used ({error}); using {}", user.root().display(), fallback.root().display()));
-            let (library, notice) = open_at(dirs, &fallback, &mut log)?;
+            let (library, notice) = open_at(&fallback, pre_1_0_root, &mut log)?;
             let notice = notice.or_else(|| Some(format!("Saves are kept in {} because {} could not be used.", fallback.root().display(), user.root().display())));
             Ok(OpenedLibrary { library, user: fallback, log, notice })
         }
@@ -49,32 +50,36 @@ pub fn open(dirs: &DataDirs, user: &UserDirs) -> Result<OpenedLibrary, String> {
     }
 }
 
-fn open_at(dirs: &DataDirs, user: &UserDirs, log: &mut Vec<String>) -> Result<(Library, Option<String>), String> {
+fn open_at(user: &UserDirs, pre_1_0_root: Option<&Path>, log: &mut Vec<String>) -> Result<(Library, Option<String>), String> {
     guard::protect_user_library(user.root());
-    let targets = Targets { saves: user.saves(), replays: user.replays() };
-    let outcome = migration::migrate(
-        &LegacySources::of_data_root(dirs.root()),
-        &targets,
-        dirs.root(),
-        &dirs.library_migration_marker(),
-        &gt4saves::timestamp(),
-        &migration::copy_file,
-    );
-    log.push(outcome.describe(&targets));
-    let notice = match &outcome {
-        Outcome::Conflict { .. } => Some(format!(
-            "An older save library is still in {}. It was not merged; the saves shown here are in {}.",
-            dirs.legacy_library().display(),
-            user.root().display()
-        )),
-        Outcome::Failed(_) => Some(format!(
-            "Your saves could not be moved to {}. They are safe in {}; the launcher tries again at the next start.",
-            user.root().display(),
-            dirs.legacy_library().display()
-        )),
-        _ => None,
-    };
-    let paths = LibraryPaths { saves: user.saves(), replays: user.replays(), backups: dirs.card_backups() };
+    let mut notice = None;
+    if let Some(old_root) = pre_1_0_root {
+        let targets = Targets { saves: user.saves(), replays: user.replays() };
+        let outcome = migration::migrate(
+            &LegacySources::of_data_root(old_root),
+            &targets,
+            old_root,
+            &user.library_migration_marker(),
+            &gt4saves::timestamp(),
+            &migration::copy_file,
+        );
+        log.push(outcome.describe(&targets));
+        let old_library = old_root.join("library");
+        notice = match &outcome {
+            Outcome::Conflict { .. } => Some(format!(
+                "An older save library is still in {}. It was not merged; the saves shown here are in {}.",
+                old_library.display(),
+                user.root().display()
+            )),
+            Outcome::Failed(_) => Some(format!(
+                "Your saves could not be moved to {}. They are safe in {}; the launcher tries again at the next start.",
+                user.root().display(),
+                old_library.display()
+            )),
+            _ => None,
+        };
+    }
+    let paths = LibraryPaths { saves: user.saves(), replays: user.replays(), backups: user.card_backups() };
     let library = Library::open_paths(&paths).map_err(|error| format!("save library: {error}"))?;
     Ok((library, notice))
 }
@@ -239,7 +244,7 @@ mod tests {
     fn open_scratch(data: &Path) -> (UserDirs, Library) {
         let dirs = DataDirs::new(data);
         let user = UserDirs::new(data.join("Documents").join("Gran Turismo 4"), UserRootSource::Override);
-        let opened = open(&dirs, &user).unwrap();
+        let opened = open(&dirs, &user, Some(data)).unwrap();
         (opened.user, opened.library)
     }
 
@@ -394,7 +399,7 @@ mod migration_tests {
         let save = old_save(&data);
         let dirs = DataDirs::new(&data);
         let user = UserDirs::new(data.join("Docs").join("Gran Turismo 4"), UserRootSource::Override);
-        let opened = open(&dirs, &user).unwrap();
+        let opened = open(&dirs, &user, Some(&data)).unwrap();
         assert!(opened.notice.is_none());
         assert!(opened.log.iter().any(|line| line.contains("moved 3 files")), "{:?}", opened.log);
         assert_eq!(saves(&opened.library).unwrap()[0].label, "Active save");
@@ -418,8 +423,8 @@ mod migration_tests {
         // A file where the folder should be: the library cannot be made there.
         let blocked = data.join("blocked-docs");
         fs::write(&blocked, b"not a folder").unwrap();
-        let user = UserDirs::new(blocked.join("Gran Turismo 4"), UserRootSource::Documents);
-        let opened = open(&dirs, &user).unwrap();
+        let user = UserDirs::new(blocked.join("Gran Turismo 4"), UserRootSource::AppData);
+        let opened = open(&dirs, &user, Some(&data)).unwrap();
         assert_eq!(opened.user.root(), data.join("Gran Turismo 4"));
         assert!(opened.notice.is_some());
         assert_eq!(saves(&opened.library).unwrap().len(), 1, "the old save was moved to the fallback folder");
