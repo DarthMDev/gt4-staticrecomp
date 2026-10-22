@@ -32,6 +32,9 @@ struct FrontEndOptions {
     // Chapter 02.9 vertex trace per batch (Batch::trace). No consumer reads it yet (the decision layer is not
     // wired); the write-back renderer turns it off (IN-353).
     bool vertexTrace = true;
+    // IN-366 A/B switch: strip runs decoded at once, no candidate copy for non-drawing kicks, the flush decision
+    // reused while nothing it reads changed. Off: the generic per-register path (the fixture's oracle).
+    bool fastPaths = true;
 };
 
 enum class SyncKind : uint8_t { Signal, Finish, Label };
@@ -96,6 +99,7 @@ public:
     const RegisterFile& Registers() const { return registers_; }
     const clut::ClutUnit& Clut() const { return clut_; }
     const CounterSet& Counters() const { return counters_; }
+    uint64_t FastStripVertices() const { return parser_.FastStripVertices(); }  // IN-366
     uint64_t FlushReasonCount(FlushReason reason) const {
         return flushCounts_[static_cast<size_t>(reason)];
     }
@@ -107,6 +111,7 @@ public:
     void Kick(const GifKick& kick) override;
     void ImageQword(uint32_t path, const Qword& qword) override;
     void ImageQwords(uint32_t path, const Qword* qwords, size_t count) override;
+    void StripVertices(const StripVertex* vertices, size_t count) override;
 
 private:
     struct Candidate {
@@ -157,7 +162,41 @@ private:
     std::vector<uint8_t> zeroMemory_;
 
     Batch batch_;
-    std::vector<Vertex> queue_;
+    // IN-366: the vertex queue holds at most 3 vertices (strips keep 2, fans keep the centre and the last, lists and
+    // sprites clear), so a fixed array replaces the vector (no erase of the first element per strip vertex).
+    class VertexQueue {
+    public:
+        size_t size() const { return count_; }
+        bool empty() const { return count_ == 0; }
+        const Vertex& operator[](size_t index) const { return items_[index]; }
+        void clear() { count_ = 0; }
+        void push_back(const Vertex& vertex) {
+            if (count_ == items_.size()) {  // never with the GS primitive rules; kept as a vector-like fallback
+                for (size_t k = 1; k < count_; ++k) items_[k - 1] = items_[k];
+                --count_;
+                ++overflows_;
+            }
+            items_[count_++] = vertex;
+        }
+        void erase_first() {
+            if (count_ == 0) return;
+            for (size_t k = 1; k < count_; ++k) items_[k - 1] = items_[k];
+            --count_;
+        }
+        void keep_first_and_last() {  // the fan rule: centre and last
+            if (count_ < 3) return;
+            items_[1] = items_[count_ - 1];
+            count_ = 2;
+        }
+        uint64_t overflows() const { return overflows_; }
+
+    private:
+        std::array<Vertex, 8> items_{};
+        size_t count_ = 0;
+        uint64_t overflows_ = 0;
+    };
+    VertexQueue queue_;
+    bool flushDecisionStale_ = true;  // IN-366: registers or the snapshot changed since the last "no flush" decision
 
     uint64_t rgbaq_ = 0;
     uint64_t st_ = 0;

@@ -13,6 +13,10 @@
 #include "hw_gs_backend.hpp"
 #include "hw_gs_options.hpp"
 
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
@@ -184,6 +188,39 @@ void maybe_profile(Backend &hw) {
                  (now.gpu_ns[2] - was.gpu_ns[2]) / n / 1e6, (now.gpu_ns[3] - was.gpu_ns[3]) / n / 1e6,
                  (now.gpu_ns[4] - was.gpu_ns[4]) / n / 1e6, (now.gpu_ns[5] - was.gpu_ns[5]) / n / 1e6,
                  static_cast<double>(now.gpu_early_submissions - was.gpu_early_submissions) / n);
+  }
+  // IN-367 efficiency line (owner principle 2026-10-22: measure cost, not only FPS): CPU time of the thread that
+  // runs the GS stream (the GS worker, or the EE thread with GT4_HW_GS_THREAD=0) and of the whole process (all
+  // threads: EE, VU1 worker, GS worker, audio, driver), in ms per frame; render passes, barriers and bytes moved
+  // between CPU and GPU per frame.
+  {
+    static double lastThreadMs = 0.0;
+    static double lastProcessMs = 0.0;
+    static bool primed = false;
+    auto filetime_ms = [](const FILETIME &kernel, const FILETIME &user) {
+      const auto ticks = [](const FILETIME &t) {
+        return (static_cast<unsigned long long>(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+      };
+      return static_cast<double>(ticks(kernel) + ticks(user)) / 10000.0;  // 100 ns units
+    };
+    FILETIME created{}, exited{}, kernel{}, user{};
+    double threadMs = 0.0, processMs = 0.0;
+    if (GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user)) threadMs = filetime_ms(kernel, user);
+    if (GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user)) processMs = filetime_ms(kernel, user);
+    if (primed) {
+      std::fprintf(stderr,
+                   "[hw] cost vsync=%llu gs_thread_cpu_ms=%.2f process_cpu_core_ms=%.2f render_passes=%.1f "
+                   "barriers=%.1f upload_mb=%.2f readback_mb=%.3f\n",
+                   static_cast<unsigned long long>(g_vsyncs), (threadMs - lastThreadMs) / n,
+                   (processMs - lastProcessMs) / n,
+                   static_cast<double>(now.gpu_render_passes - was.gpu_render_passes) / n,
+                   static_cast<double>(now.gpu_barriers - was.gpu_barriers) / n,
+                   static_cast<double>(now.gpu_upload_bytes - was.gpu_upload_bytes) / n / 1e6,
+                   static_cast<double>(now.gpu_readback_bytes - was.gpu_readback_bytes) / n / 1e6);
+    }
+    primed = true;
+    lastThreadMs = threadMs;
+    lastProcessMs = processMs;
   }
   g_profile_last = now;
   g_profile_wall = wall;

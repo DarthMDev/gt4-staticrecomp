@@ -143,6 +143,7 @@ struct GpuStats {
     std::uint64_t runs = 0;         // render passes holding batched chunks (IN-352)
     std::uint64_t runChunks = 0;    // chunks drawn inside runs
     std::uint64_t earlySubmissions = 0;  // submissions in mid-frame (IN-358)
+    std::uint64_t renderPasses = 0;      // render pass instances (runs and per-chunk passes; IN-367 efficiency)
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
     // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.

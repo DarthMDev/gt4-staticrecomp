@@ -1397,6 +1397,92 @@ void TestClutCopyFree() {
                 static_cast<unsigned long long>(countersA.Get(Counter::ClutLoadsSkipped)));
 }
 
+// IN-366: the fast paths (strip runs decoded at once, no candidate copy for non-drawing kicks, the flush decision
+// reused while nothing it reads changed) give exactly the generic path's batches, sync events, transfers and
+// counters. Streams: GT4-like strip tags (PACKED STQ, RGBA, XYZF2 with PRE triangle strip, fan or list; random ADC,
+// NLOOP 1-60) between A+D material changes that often repeat the current value, XYOFFSET, PRIM and scissor changes,
+// plus the generic fuzz packets; every stream is fed in random transfer splits (strip tags cut across transfers
+// take the generic path).
+void TestFastPaths() {
+    int streams = 0;
+    uint64_t fastVertices = 0;
+    for (uint32_t seed = 1; seed <= 40; ++seed) {
+        std::mt19937_64 rng(seed * 7919u);
+        std::vector<Qword> stream;
+        AppendBaseline(stream);
+        const uint64_t tex0s[2] = {0x10u | (uint64_t{10} << 14) | (uint64_t{4} << 26) | (uint64_t{4} << 30),
+                                   0x40u | (uint64_t{10} << 14) | (uint64_t{4} << 26) | (uint64_t{4} << 30)};
+        uint64_t currentTex0 = tex0s[0];
+        for (int packet = 0; packet < 120; ++packet) {
+            const uint32_t kind = static_cast<uint32_t>(rng() % 10u);
+            if (kind < 6u) {  // strip-shaped tag
+                const uint32_t nloop = 1u + static_cast<uint32_t>(rng() % 60u);
+                const uint32_t primType = (rng() % 6u == 0u) ? 5u : (rng() % 8u == 0u ? 3u : 4u);  // fan / list / strip
+                const uint32_t prim = primType | (1u << 3) | (1u << 4) | ((rng() & 1u) << 5) | ((rng() & 1u) << 6);
+                stream.push_back(Tag(nloop, (rng() & 1u) != 0u, (rng() % 5u) != 0u, prim, kPacked, 3, {0x2, 0x1, 0x4}));
+                const uint32_t adcPercent = static_cast<uint32_t>(rng() % 100u);
+                for (uint32_t v = 0; v < nloop; ++v) {
+                    Qword stq;
+                    stq.lo = (uint64_t{0x3F000000u + static_cast<uint32_t>(rng() % 0x800000u)}) |
+                             (uint64_t{0x3E800000u + static_cast<uint32_t>(rng() % 0x800000u)} << 32);
+                    stq.hi = (rng() % 16u == 0u) ? 0u : (0x3F800000u + static_cast<uint32_t>(rng() % 0x100000u));
+                    Qword rgba;
+                    rgba.lo = (rng() & 0xFFu) | ((rng() & 0xFFu) << 32);
+                    rgba.hi = (rng() & 0xFFu) | ((rng() & 0xFFu) << 32);
+                    Qword xyz;
+                    const uint32_t x = static_cast<uint32_t>(rng() % 12000u);
+                    const uint32_t y = static_cast<uint32_t>(rng() % 8000u);
+                    xyz.lo = static_cast<uint64_t>(x) | (static_cast<uint64_t>(y) << 32);
+                    xyz.hi = (static_cast<uint64_t>(rng() & 0xFFFFFFu) << 4) | ((rng() & 0xFFu) << 36) |
+                             ((static_cast<uint32_t>(rng() % 100u) < adcPercent) ? (uint64_t{1} << 47) : 0u);
+                    stream.push_back(stq);
+                    stream.push_back(rgba);
+                    stream.push_back(xyz);
+                }
+            } else if (kind < 9u) {  // material change: often the same TEX0 again, CLAMP/TEX1, sometimes XYOFFSET
+                std::vector<std::pair<uint8_t, uint64_t>> writes;
+                if (rng() % 3u != 0u) currentTex0 = tex0s[rng() % 2u];
+                writes.push_back({reg::kTex0One, currentTex0});
+                writes.push_back({reg::kClampOne, rng() % 2u == 0u ? 0u : 5u});
+                writes.push_back({0x14, rng() % 2u == 0u ? 0u : 0x60u});  // TEX1_1
+                if (rng() % 10u == 0u) writes.push_back({reg::kXyoffsetOne, (rng() % 4u) * 16u});
+                if (rng() % 12u == 0u) writes.push_back({reg::kPrim, 4u | (1u << 4)});
+                if (rng() % 15u == 0u) {
+                    writes.push_back({reg::kScissorOne, (uint64_t{(rng() % 640u)} << 16) | (uint64_t{447} << 48)});
+                }
+                AppendAd(stream, writes);
+            } else {  // generic fuzz packets
+                const std::vector<Qword> fuzz = BuildFuzzStream(static_cast<uint32_t>(rng()));
+                stream.insert(stream.end(), fuzz.begin(), fuzz.end());  // whole packets
+            }
+        }
+        FrontEndOptions fastOptions;
+        FrontEndOptions slowOptions;
+        slowOptions.fastPaths = false;
+        World fast(fastOptions);
+        World slow(slowOptions);
+        size_t offset = 0;
+        while (offset < stream.size()) {
+            const size_t take = std::min<size_t>(stream.size() - offset, 1u + static_cast<size_t>(rng() % 3000u));
+            fast.fe.GifTransfer(1, stream.data() + offset, take);
+            slow.fe.GifTransfer(1, stream.data() + offset, take);
+            offset += take;
+        }
+        fast.fe.VBlank(nullptr, 0);
+        slow.fe.VBlank(nullptr, 0);
+        CHECK(fast.log == slow.log);
+        CHECK_EQ(fast.batches.emitted.size(), slow.batches.emitted.size());
+        for (size_t c = 0; c < CounterSet::kCount; ++c) {
+            CHECK_EQ(fast.fe.Counters().Get(static_cast<Counter>(c)), slow.fe.Counters().Get(static_cast<Counter>(c)));
+        }
+        fastVertices += fast.fe.FastStripVertices();
+        ++streams;
+    }
+    CHECK(fastVertices > 20000);
+    std::printf("hw_front_end_fast_paths: %d streams, %llu strip vertices on the fast path\n", streams,
+                static_cast<unsigned long long>(fastVertices));
+}
+
 int main(int argc, char** argv) {
     const std::string name = argc > 1 ? argv[1] : "";
     struct Entry {
@@ -1413,6 +1499,7 @@ int main(int argc, char** argv) {
         {"hw_clut_load", [] { TestClutLoad(); }},
         {"hw_clut_snapshot", [] { TestClutSnapshot(); }},
         {"hw_clut_copy_free", [] { TestClutCopyFree(); }},
+        {"hw_front_end_fast_paths", [] { TestFastPaths(); }},
         {"hw_block_ranges_overlap", [] { TestBlockRangesOverlap(); }},
         {"hw_transfers", [] { TestTransfers(); }},
         {"hw_counters", [] { TestCounters(); }},

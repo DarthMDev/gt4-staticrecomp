@@ -97,6 +97,36 @@ void GifParser::Transfer(uint32_t path, const Qword* qwords, size_t count, GifSi
             }
             continue;
         }
+        // IN-366: a PACKED STQ, RGBA, XYZF2 tag whose remaining data is all in this transfer (GT4's VU1 strips,
+        // about 85,000 vertices per 480p race frame) is decoded in one loop: the same register values, Q latch and
+        // kicks in the same order as ConsumePacked, handed to the sink at once.
+        if (fastStrips_ && state.tag.format == GifFormat::Packed && state.descriptorIndex == 0 && state.tag.nreg == 3 &&
+            state.tag.regs[0] == 0x2 && state.tag.regs[1] == 0x1 && state.tag.regs[2] == 0x4 &&
+            state.remainingItems % 3u == 0u && count - i >= state.remainingItems) {
+            const size_t vertices = state.remainingItems / 3u;
+            strip_.resize(vertices);
+            for (size_t v = 0; v < vertices; ++v) {
+                const Qword& stq = qwords[i + 3 * v];
+                const Qword& rgba = qwords[i + 3 * v + 1];
+                const Qword& xyz = qwords[i + 3 * v + 2];
+                qLatch_ = BitsToFloat(SanitiseStQ(static_cast<uint32_t>(stq.hi & 0xFFFFFFFFu)));
+                GifSink::StripVertex& out = strip_[v];
+                out.st = stq.lo;
+                out.rgbaq = BitRange(rgba.lo, 0, 7) | (BitRange(rgba.lo, 32, 39) << 8) | (BitRange(rgba.hi, 0, 7) << 16) |
+                            (BitRange(rgba.hi, 32, 39) << 24) | (uint64_t{FloatToBits(qLatch_)} << 32);
+                out.kick = DecodePackedXyz(xyz, true, true);
+            }
+            counters_.Add(Counter::PackedItems, state.remainingItems);
+            i += state.remainingItems - 1;
+            state.remainingItems = 0;
+            state.inPacket = false;
+            if (state.tag.eop) {
+                counters_.Add(Counter::GifPacketsEnded);
+            }
+            fastStripVertices_ += vertices;
+            sink.StripVertices(strip_.data(), vertices);
+            continue;
+        }
         switch (state.tag.format) {
             case GifFormat::Packed:
                 ConsumePacked(state, qword, sink);

@@ -1008,6 +1008,7 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
   pass.framebuffer = framebuffer;
   pass.renderArea = {{0, 0}, {kSurfaceSize, kSurfaceSize}};
   gt4_hwd_vkCmdBeginRenderPass(cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
+  ++stats.renderPasses;
   gt4_hwd_vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, interlockTriangles);
   VkViewport viewport{0.0f, 0.0f, static_cast<float>(kSurfaceSize), static_cast<float>(kSurfaceSize), 0.0f, 1.0f};
   gt4_hwd_vkCmdSetViewport(cmd, 0, 1, &viewport);
@@ -1503,6 +1504,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     pass.framebuffer = s.framebuffer;
     pass.renderArea = {{0, 0}, {kSurfaceSize, kSurfaceSize}};
     gt4_hwd_vkCmdBeginRenderPass(s.cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
+    ++s.stats.renderPasses;
     gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelineLayout, 0, 1,
                                     &s.descriptorSets[chunk.colourSlot * kGpuDepthSlots + chunk.depthSlot], 1,
                                     &uniformOffset);

@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "hw_gs_counters.hpp"
 #include "hw_gs_types.hpp"
@@ -54,6 +55,20 @@ public:
     virtual void ImageQwords(uint32_t path, const Qword* qwords, size_t count) {
         for (size_t i = 0; i < count; ++i) ImageQword(path, qwords[i]);
     }
+    // IN-366: the vertices of a PACKED STQ, RGBA, XYZF2 run (GT4's VU1 strip shape), decoded by the parser. Same
+    // effect as WriteRegister(ST), WriteRegister(RGBAQ) and Kick for each vertex in order.
+    struct StripVertex {
+        uint64_t st = 0;
+        uint64_t rgbaq = 0;
+        GifKick kick;
+    };
+    virtual void StripVertices(const StripVertex* vertices, size_t count) {
+        for (size_t i = 0; i < count; ++i) {
+            WriteRegister(0x02u, vertices[i].st);     // ST
+            WriteRegister(0x01u, vertices[i].rgbaq);  // RGBAQ
+            Kick(vertices[i].kick);
+        }
+    }
 };
 
 class GifParser {
@@ -75,6 +90,10 @@ public:
 
     float QLatch() const { return qLatch_; }
 
+    // IN-366 A/B switch: PACKED STQ, RGBA, XYZF2 runs decoded in one loop (default on).
+    void SetFastStrips(bool enabled) { fastStrips_ = enabled; }
+    uint64_t FastStripVertices() const { return fastStripVertices_; }
+
 private:
     struct PathState {
         bool inPacket = false;       // current tag still has data to consume
@@ -84,6 +103,9 @@ private:
     };
 
     void ReadTag(uint32_t path, const Qword& qword, GifSink& sink);
+    bool fastStrips_ = true;
+    uint64_t fastStripVertices_ = 0;
+    std::vector<GifSink::StripVertex> strip_;
     void ConsumePacked(PathState& state, const Qword& qword, GifSink& sink);
     void ConsumeRegList(PathState& state, const Qword& qword, GifSink& sink);
     void ConsumeImage(uint32_t path, PathState& state, const Qword& qword, GifSink& sink);

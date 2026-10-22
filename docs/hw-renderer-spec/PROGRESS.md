@@ -476,3 +476,35 @@ Upscaling therefore has to be added as a second representation, not a change of 
 Order: 1 -> 2 (colour/depth at scale, write-back by sub-sample) -> 5 (see it) -> 3 -> 4 -> 6 -> 7. Then step 4
 (anti-aliasing: FXAA as a present pass first, SMAA from the roadmap).
 
+
+## 2026-10-22 S1 strip decoder and cost metrics (local slice245, IN-366/IN-367) - Claude
+
+- IN-366 (study S1): the GIF parser decodes a whole PACKED STQ+RGBA+XYZF2 strip run in one loop and hands the vertices
+  to the front end in one call; the front end keeps its vertex queue in a fixed array, re-evaluates its flush rules
+  only after a register change, and skips the setup of kicks that draw nothing. Generic path kept as fallback
+  (`FrontEndOptions::fastPaths`). Gates: memory hashes on all five captures identical (night `fifo_hash=3a2fe617a174e7e7`,
+  121 reads), menu dumps 42/42, race calibration identical, default parity 42/42, 227/227 non-Python CTests (with and
+  without interlock); new fixture `hw_front_end_fast_paths` (40 random streams with ADC vertices, repeated A+D writes,
+  material, offset and scissor changes and random splits; fast and slow worlds must give the same log and counters;
+  83,673 fast-path vertices). Headless 480p race 10.8-12.9 ms per frame, 480p night race 8.1-12.0 ms.
+- IN-367: a `[hw] cost` line next to `[hw] profile` (same interval): CPU ms of the thread that runs the GS stream,
+  CPU core-ms of the whole process, render passes, barriers and MB uploaded/read back, per frame.
+  `GT4_HW_GPU_TIMING=1` roughly doubles the GS thread cost (timestamp queries): never measure CPU with it on.
+
+### Efficiency table (headless, launcher video mode, slice245, no GPU timing)
+
+| Scene | GS thread CPU ms/frame | Process CPU core-ms/frame | Render passes | Barriers | Upload MB | Readback MB | GPU busy ms |
+|---|---|---|---|---|---|---|---|
+| Menu (480i) | 0.5 | 1.9 | 1 | 220 | 0.66 | 0 | 0.5 |
+| 480p race (Nordschleife) | 10.7-11.1 | 27.7-29.0 | 330-345 | 5,180-5,270 | 5.5 | 0.002 | 11.7-12.1 |
+| 480p night race (Route 5) | 12.4-15.4 | 28.8-38.5 | 380-430 | 5,220-5,730 | 4.0-4.7 | 0.008 | 11.9-13.0 |
+
+Budget (owner): GS worker <= 6 ms and renderer CPU <= 8 core-ms per 480p race frame. The GS worker is about 2x over.
+The process column includes the EE and VU1 emulation threads (about 17-23 core-ms), so the renderer share is the GS
+thread plus the driver's own threads. Car view not yet measured (no headless car schedule in this build). GPU busy is
+taken from a separate `GT4_HW_GPU_TIMING=1` run. Spinning: none in the renderer by default (`GT4_HW_READBACK_SPIN` is an off-by-default
+diagnostic). Largest remaining costs: about 5,200 barriers and 330-430 render passes per frame, the GPU CLUT loads
+(about 1,660 per frame, two barriers each, about 3 ms of GS thread CPU) and batch translate/execute (about 4.8 ms).
+
+Mobile note: the fast path relies on fragment shader interlock (ordered pixel access). Mobile GPUs mostly lack it, so
+phase 2 will need another fast path (for example a tile-local path). PC focus now; nothing mobile-specific is built.

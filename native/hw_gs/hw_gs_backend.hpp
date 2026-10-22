@@ -96,6 +96,9 @@ struct RenderCounters {
   std::uint64_t vblanks_interlaced = 0;     // SMODE2.INT = 1 (480i)
   std::uint64_t vblanks_progressive = 0;    // SMODE2.INT = 0 (480p)
   std::uint64_t gpu_composed_frames = 0;    // presentation frames composed on the GPU (IN-364)
+  std::uint64_t gpu_render_passes = 0;      // IN-367 efficiency counters
+  std::uint64_t gpu_upload_bytes = 0;
+  std::uint64_t gpu_readback_bytes = 0;
   std::uint64_t textures_cached = 0;
   std::uint64_t cache_writebacks = 0;
   std::uint64_t cache_loads = 0;

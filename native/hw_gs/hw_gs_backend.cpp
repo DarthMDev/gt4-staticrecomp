@@ -1053,6 +1053,9 @@ RenderCounters Backend::render_counters() const {
   const hwgs::gpu::GpuStats &gpu = impl_->renderer->GpuCounters();
   out.gpu_submissions = gpu.submissions;
   out.gpu_barriers = gpu.barriers;
+  out.gpu_render_passes = gpu.renderPasses;
+  out.gpu_upload_bytes = gpu.uploadBytes;
+  out.gpu_readback_bytes = gpu.readbackBytes;
   out.gpu_busy_ns = gpu.gpuBusyNs;
   for (int i = 0; i < 6; ++i) out.gpu_ns[i] = gpu.gpuNs[i];
   out.gpu_early_submissions = gpu.earlySubmissions;

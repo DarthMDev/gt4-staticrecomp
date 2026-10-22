@@ -128,6 +128,7 @@ FrontEnd::FrontEnd(FrontEndOptions options, BatchSink& batches, SyncSink& sync, 
       clut_(counters_),
       transfers_(memory_, MakeTransferHooks(), counters_) {
     zeroMemory_.assign(kLocalMemoryBytes, 0);
+    parser_.SetFastStrips(options_.fastPaths);  // IN-366
     localMemory_ = zeroMemory_.data();
     clut_.SetAlwaysLoad(options.clutAlwaysLoad);
 }
@@ -231,11 +232,20 @@ void FrontEnd::ImageQwords(uint32_t path, const Qword* qwords, size_t count) {
     }
 }
 
+void FrontEnd::StripVertices(const StripVertex* vertices, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        st_ = vertices[i].st;  // WriteRegister(ST) and WriteRegister(RGBAQ) only store these
+        rgbaq_ = vertices[i].rgbaq;
+        Kick(vertices[i].kick);
+    }
+}
+
 void FrontEnd::WriteRegister(uint8_t address, uint64_t data) {
     switch (address) {
         case reg::kPrim:
             registers_.Write(address, data, counters_);
             queue_.clear();  // a PRIM write discards a partial primitive
+            flushDecisionStale_ = true;
             return;
         case reg::kRgbaq:
             rgbaq_ = data;
@@ -312,6 +322,7 @@ void FrontEnd::WriteRegister(uint8_t address, uint64_t data) {
     const uint32_t oldTbp = isTex0 ? tex0::Tbp0(registers_.Context(contextIndex).tex0) : 0u;
 
     const RegisterWriteResult result = registers_.Write(address, data, counters_);
+    flushDecisionStale_ = true;
     if (!result.recognised) {
         return;
     }
@@ -393,10 +404,30 @@ void FrontEnd::Kick(const GifKick& kick) {
         const bool classChanged = ClassOfType(typeBits) != batch_.cls;
         const bool xyoffsetDirty = Dirty(liveSnapCtx.xyoffset, batch_.state.ctx.xyoffset, kXyoffsetMask);
         if (kick.drawing || classChanged || xyoffsetDirty) {
-            if (const std::optional<FlushReason> reason = DecideFlush()) {
-                FlushBatch(*reason);
+            // IN-366: DecideFlush reads only the registers and the batch snapshot; while neither changed since it last
+            // answered "no flush", it would answer the same.
+            if (!options_.fastPaths || flushDecisionStale_) {
+                if (const std::optional<FlushReason> reason = DecideFlush()) {
+                    FlushBatch(*reason);
+                } else {
+                    flushDecisionStale_ = false;
+                }
             }
         }
+    }
+
+    if (options_.fastPaths && !kick.drawing) {
+        // IN-366: a non-drawing kick (ADC, about 70-80% of GT4's strip vertices) only advances the queue once the
+        // primitive has its vertices, exactly as below without the candidate copy and the cull.
+        const size_t needed = type == PrimType::Point ? 1u
+                              : (type == PrimType::Line || type == PrimType::LineStrip || type == PrimType::Sprite) ? 2u
+                                                                                                                     : 3u;
+        if (queue_.size() < needed) {
+            return;
+        }
+        counters_.Add(Counter::PrimsSkipped);
+        AdvanceQueue(type);
+        return;
     }
 
     Candidate candidate;
@@ -487,14 +518,10 @@ void FrontEnd::AdvanceQueue(PrimType type) {
     switch (type) {
         case PrimType::LineStrip:
         case PrimType::TriangleStrip:
-            if (!queue_.empty()) {
-                queue_.erase(queue_.begin());  // advance by one vertex
-            }
+            queue_.erase_first();  // advance by one vertex
             break;
         case PrimType::TriangleFan:
-            if (queue_.size() >= 3u) {
-                queue_.erase(queue_.begin() + 1, queue_.end() - 1);  // keep centre and last
-            }
+            queue_.keep_first_and_last();  // keep centre and last
             break;
         default:
             queue_.clear();  // lists and sprites drop the queued vertices
@@ -573,6 +600,7 @@ bool FrontEnd::ShouldDraw(const Candidate& candidate, PrimType type, uint32_t co
 }
 
 void FrontEnd::TakeSnapshot(uint32_t contextIndex) {
+    flushDecisionStale_ = true;
     batch_.state.env = registers_.Env();
     batch_.state.ctx = registers_.Context(contextIndex);
     batch_.state.contextIndex = contextIndex;
@@ -947,6 +975,7 @@ void FrontEnd::ResetGs() {
     batch_ = Batch{};
     queue_.clear();
     registers_.Reset();
+    flushDecisionStale_ = true;
     clut_.Reset();
     transfers_.Reset();
     texflushPending_ = false;
