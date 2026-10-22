@@ -120,6 +120,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑095 | Ultrawide: undistorted 2D overlay on the pre-race menu (race lobby), as TASK-080 P2 does for the race HUD | 📋 Planned (owner, 2026-10-22) · study first; idea only |
 | TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
 | TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 📋 Planned (owner, 2026-10-22) · release 1.2.4 with TASK-097 |
+| TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
@@ -538,6 +539,32 @@ findings afterwards. None is reachable from the launcher, which sets neither var
   pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
+
+### TASK-099 — Patch notes panel on the launcher home screen
+Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new
+block on the right shows the patch notes of the installed version, rendered from Markdown, in a light, minimal
+glassmorphism card (translucent background with a backdrop blur, thin border, soft shadow) that matches the current
+dark theme.
+
+Plan:
+- Source: the release notes the project already writes, `docs/release-notes/<version>.md` (the same text as the
+  GitHub release body). The launcher build embeds the file of its own version (`include_str!` from the version in
+  `Cargo.toml`, with a build check that the file exists), so it works offline, in the installer and the portable
+  build (TASK-098), and can never be missing or edited by accident. A file beside the launcher is not needed.
+- When an update is available, the panel can also show the new version's notes, read from the GitHub release body
+  that the update check already downloads (`releases.rs`), with the update button next to them. Optional, after
+  the basic panel.
+- Rendering: a small Markdown subset (headings, paragraphs, bold/italic, inline code, lists, links, tables if
+  cheap) converted to HTML in Rust with an MIT crate (for example pulldown-cmark), raw HTML disabled and the output
+  escaped; links open in the default browser through the existing opener, never inside the web view. A link at the
+  bottom: "All release notes on GitHub".
+- UI (`ui/js/pages/home.js`, `ui/css/app.css`): the right-side card scrolls on its own; on narrow windows it moves
+  under the buttons or hides behind a "What's new" button; keyboard and gamepad focus can reach and scroll it; the
+  WebView2 safe mode (no GPU) falls back to a plain translucent background without blur.
+- Release notes style: start each file with a short "Highlights" list so the panel reads well; the long sections
+  stay below.
+- Tests: Rust tests for the Markdown conversion (escaping, links, no raw HTML) and the embedded version; the UI mock
+  shows the panel with real notes; the owner checks the look.
 
 ### TASK-098 — Portable build (zip) beside the installer
 Planned (owner, 2026-10-22) for release 1.2.4, together with TASK-097. Two launcher builds from one source: the
