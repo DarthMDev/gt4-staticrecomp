@@ -10,6 +10,8 @@ release-request controls pass: the full Rust launcher workspace passes on Window
 (one real-disc flow ignored). Maintainer launcher acceptance remains pending. Branch audit and limits:
 [renderer independence](reverse-engineering/renderer-independence-2026-10-21.md).
 No renderer implementation, game executable, input pins or saves changed. CoreGS 2.0 is not enabled by this change.
+Contribution: [PR #72](https://github.com/moesuito/gt4-staticrecomp/pull/72), from the
+`JulioHeroZ/gt4-staticrecomp` fork; implementation commit `aa51f2a`. Awaiting maintainer acceptance.
 
 
 ## Launcher self-update fixed (2026-10-21, TASK-085, branch `task/085-launcher-self-update`)
