@@ -1205,7 +1205,13 @@ ARM64 build, iOS host layers, signing/installation on iPhone 15 Pro Max and
 ## Ideas (not scheduled)
 
 LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
-settings menus, Spec II as a second target or data source (docs/SPEC2-STUDY.md).
+settings menus.
+
+**Spec II is a second target** (owner, 2026-10-22): support means the SCUS-97436
+Public Beta lineage ISO with its own target executable, not a content merge into
+v2.00. Recorded, not scheduled: [decision 0072](docs/decisions/0072-spec2-second-target.md).
+The asset-merge variant is closed by the 2026-10-22 file study (same audio and
+art already in v2.00; menus are Adhoc v7 against v5).
 
 A decompilation-based source port (native renderer, changing the game's physics
 timing, remaster) is out of scope for this repository and would be a
