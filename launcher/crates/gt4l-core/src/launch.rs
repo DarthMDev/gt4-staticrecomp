@@ -63,17 +63,20 @@ pub struct Pcsx2Paths {
     pub cache: PathBuf,
     /// Data folder of the GS process (`%LOCALAPPDATA%\GT4Recomp\gs\data`).
     pub data_root: PathBuf,
+    /// The custom texture folder, `Documents\Gran Turismo 4\Textures` (TASK-088, gt4-gs `[Folders] Textures`).
+    pub textures: PathBuf,
 }
 
 impl Pcsx2Paths {
     /// The paths of an installed renderer, with the cache and data folders under the renderer root.
-    pub fn for_session(installed: &Installed, renderer_root: &Path, session_dir: &Path) -> Pcsx2Paths {
+    pub fn for_session(installed: &Installed, renderer_root: &Path, session_dir: &Path, textures: &Path) -> Pcsx2Paths {
         Pcsx2Paths {
             executable: installed.executable.clone(),
             executable_sha256: installed.executable_sha256.clone(),
             config: session_dir.join("gt4-gs.ini"),
             cache: renderer_root.join("cache"),
             data_root: renderer_root.join("data"),
+            textures: textures.to_path_buf(),
         }
     }
 }
@@ -241,6 +244,7 @@ pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths, display: Option<&
     let mut launcher: BTreeMap<String, String> = BTreeMap::new();
     launcher.insert("cache_folder".to_string(), paths.cache.display().to_string());
     launcher.insert("data_root".to_string(), paths.data_root.display().to_string());
+    launcher.insert("textures_folder".to_string(), paths.textures.display().to_string());
     gs_table::render_ini(&user, &launcher).map_err(|error| error.to_string())
 }
 

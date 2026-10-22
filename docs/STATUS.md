@@ -1,5 +1,17 @@
 # Current Status
 
+## Release 1.2.0 prepared (2026-10-21, TASK-088, branch `task/088-custom-textures-120`, waiting for owner test)
+
+Owner decisions: custom textures in gt4-gs (load only; folder `Documents\Gran Turismo 4\Textures`, Graphics option
+"Load custom textures" on by default, Advanced "Precache custom textures" off, "Open textures folder"), the bottom crop
+of 2 native rows, and a black window from the first frame. Versions: GT4Recomp 1.2.0 and gt4-gs 1.2.0 (the launcher needs
+gt4-gs 1.2.0 at least). Settings schema 6 (backup kept). Game build `slice240` (`docs/inputs/slice240-pcsx2.json`).
+Local artifacts, nothing published: gt4-gs package `private/slice240-gt4gs-120/gt4-gs-1.2.0-windows-x64.zip`
+(branch `gt4gs/textures-1.2.0`, commit `c9dc54e93`); owner installer `private/slice240-installer/GT4Recomp-Setup-1.2.0-test.exe`
+(28,765,729 bytes, sha256 `0edcfefe3a143c180bdc1255357780d414aac9cd1e60bf65fc6b583648187ec7`); helper
+`private/slice240-gt4gs-120/install-gt4gs-1.2.0-test.ps1` for the local gt4-gs. Details: [BUILD slice 240](BUILD.md),
+[TASK-088](../TASKS.md), journal 2026-10-21. Owner test pending: white start, crop, the texture folder with a real pack.
+
 ## Launcher self-update fixed (2026-10-21, TASK-085, branch `task/085-launcher-self-update`)
 
 Owner report: launcher 1.0.0 offered 1.1.0, closed after the download and installed nothing. The setup joined the

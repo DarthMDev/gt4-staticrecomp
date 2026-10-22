@@ -113,6 +113,7 @@ fn main() {
             commands::open_player_folder,
             commands::open_saves_folder,
             commands::open_replays_folder,
+            commands::open_textures_folder,
             updates::check_updates,
             updates::apply_update,
             updates::skip_update,

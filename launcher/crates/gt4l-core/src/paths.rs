@@ -159,6 +159,21 @@ impl UserDirs {
     pub fn replays(&self) -> PathBuf {
         self.root.join("Replays")
     }
+
+    /// `Textures`: the custom texture folder (TASK-088). The texture pack goes in its `replacements` subfolder; gt4-gs
+    /// reads it there with no game-serial folder.
+    pub fn textures(&self) -> PathBuf {
+        self.root.join(TEXTURES_FOLDER_NAME)
+    }
+}
+
+/// Name of the custom texture folder inside the player's folder (TASK-088).
+pub const TEXTURES_FOLDER_NAME: &str = "Textures";
+
+/// Creates the custom texture folders on demand: `Textures` and `Textures\replacements` (empty when new). The
+/// launcher never writes the player's texture files; it only makes these two folders so a pack can be dropped in.
+pub fn ensure_texture_folders(textures: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(textures.join("replacements"))
 }
 
 /// Folder that holds `gt4vulkan.exe`: `<program folder>\game` for an installed copy, or the

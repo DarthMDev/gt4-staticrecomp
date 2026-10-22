@@ -487,6 +487,7 @@
       case "open_player_folder":
       case "open_saves_folder":
       case "open_replays_folder":
+      case "open_textures_folder":
         return null;
       case "check_updates":
         // Demo: ?update=1 offers both streams; otherwise nothing is new.

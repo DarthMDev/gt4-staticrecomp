@@ -302,7 +302,9 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, notice, display, extra } = inputs;
     let card = dirs.runtime_card();
     saves::prepare_card(&lock(&shared).library, &card)?;
-    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), display.as_ref(), &extra)?;
+    let textures = lock(&shared).user_dirs.textures();
+    paths::ensure_texture_folders(&textures).map_err(|error| format!("texture folder: {error}"))?;
+    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), display.as_ref(), &textures, &extra)?;
     {
         let mut state = lock(&shared);
         state.game_child = Some(running.child.clone());
@@ -324,7 +326,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
             // The player chose "restart with the built-in renderer" after a PCSX2 GS failure (TASK-038).
             state::log(&dirs, "PCSX2 GS asked for a restart; starting CoreGS 1.1");
             drop(running);
-            match game::start(&dirs, &executable, &elf, &disc, &settings, None, display.as_ref(), &extra) {
+            match game::start(&dirs, &executable, &elf, &disc, &settings, None, display.as_ref(), &textures, &extra) {
                 Ok(next) => {
                     lock(&shared).game_child = Some(next.child.clone());
                     running = next;
@@ -765,6 +767,15 @@ pub fn open_saves_folder(shared: State<'_, Shared>) -> Result<(), String> {
 #[tauri::command]
 pub fn open_replays_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let folder = lock(shared.inner()).user_dirs.replays();
+    open_folder(&folder)
+}
+
+/// Opens the custom texture folder (`Documents\Gran Turismo 4\Textures`) in Explorer. Its `replacements` folder is
+/// made first, so the owner can drop a pack in (TASK-088).
+#[tauri::command]
+pub fn open_textures_folder(shared: State<'_, Shared>) -> Result<(), String> {
+    let folder = lock(shared.inner()).user_dirs.textures();
+    paths::ensure_texture_folders(&folder).map_err(|error| error.to_string())?;
     open_folder(&folder)
 }
 

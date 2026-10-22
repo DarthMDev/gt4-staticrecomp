@@ -30,6 +30,7 @@ open_game_files_folder
 open_player_folder
 open_saves_folder
 open_replays_folder
+open_textures_folder
 check_updates
 apply_update
 skip_update

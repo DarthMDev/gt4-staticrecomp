@@ -374,6 +374,7 @@ fn pcsx2_paths() -> launch::Pcsx2Paths {
         config: PathBuf::from("C:/session/gt4-gs.ini"),
         cache: PathBuf::from("C:/gs/cache"),
         data_root: PathBuf::from("C:/gs/data"),
+        textures: PathBuf::from("C:/Users/x/Documents/Gran Turismo 4/Textures"),
     }
 }
 

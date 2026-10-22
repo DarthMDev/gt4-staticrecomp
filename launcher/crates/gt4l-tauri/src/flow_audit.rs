@@ -171,7 +171,8 @@ fn play_plan(shared: &Shared, program_dir: &Path) -> Result<launch::LaunchPlan, 
     let inherited: Vec<String> = std::env::vars().map(|(name, _)| name).collect();
     Ok(match &inputs.pcsx2 {
         Some(installed) => {
-            let paths = launch::Pcsx2Paths::for_session(installed, &inputs.dirs.root().join("gs"), &session);
+            let textures = crate::state::lock(shared).user_dirs.textures();
+            let paths = launch::Pcsx2Paths::for_session(installed, &inputs.dirs.root().join("gs"), &session, &textures);
             launch::plan_pcsx2_launch(&launch_inputs, &inputs.settings, &paths, inputs.display.as_ref(), &inherited)
         }
         None => launch::plan_launch(&launch_inputs, &inputs.settings, inputs.display.as_ref(), &inherited),

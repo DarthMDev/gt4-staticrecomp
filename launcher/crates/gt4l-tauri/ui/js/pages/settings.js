@@ -438,9 +438,19 @@
         section(ctx, "display", "Display", basic.filter(function (row) {
           return row.group === "display";
         }));
-        section(ctx, "graphics", "Graphics", basic.filter(function (row) {
+        var graphics = section(ctx, "graphics", "Graphics", basic.filter(function (row) {
           return (row.group || "graphics") === "graphics";
         }));
+        // TASK-088: opens Documents\Gran Turismo 4\Textures (its replacements folder is made first). Next to the texture options.
+        if (graphics) {
+          var textures = h("button", {
+            class: "btn",
+            type: "button",
+            data: { action: "open-textures-folder" },
+            on: { click: function () { call("open_textures_folder").catch(function (err) { GT4.ui.toast(errorText(err), true); }); } }
+          }, "Open textures folder");
+          graphics.appendChild(h("div", { class: "advanced-foot" }, [textures]));
+        }
         var advanced = section(ctx, "advanced", "Advanced", ctx.table.rows.filter(function (row) {
           return row.page === "advanced";
         }), true);

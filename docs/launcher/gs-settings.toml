@@ -966,18 +966,18 @@ notes = "TASK-062. The F8 [gs-ipc] summary line, live: EE thread CPU, VU1 worker
 
 [[setting]]
 id = "texture_load"
-label = "Load texture replacements"
-help = "Load texture packs from the GT4Recomp texture folder. Mods page (TASK-048)."
-page = "mods"
-order = 1
+label = "Load custom textures"
+help = "Load the texture pack in the Textures folder of your Gran Turismo 4 folder (an empty folder changes nothing)."
+page = "basic"
+order = 2
 control = "toggle"
 section = "EmuCore/GS"
 key = "LoadTextureReplacements"
 type = "bool"
-default = "false"
-written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 default Off. Folder layout in D.3; verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1026."
+default = "true"
+written = "always"
+status = "ok"
+notes = "TASK-088 (gt4-gs 1.2.0, owner 2026-10-21): default On, always written. Load only: gt4-gs reads Textures/replacements directly (no serial subfolder, GSTextureReplacements.cpp GetGameTextureDirectory). PCSX2 loader pcsx2/Pcsx2Config.cpp:1026."
 
 [[setting]]
 id = "texture_load_async"
@@ -996,18 +996,18 @@ notes = "D.1 default On. Verified in TASK-040."
 
 [[setting]]
 id = "texture_precache"
-label = "Precache replacements"
-help = "Load all texture replacements before the game starts. Mods page (TASK-048)."
-page = "mods"
-order = 3
+label = "Precache custom textures"
+help = "Load the whole texture pack into memory when the game starts (more memory, no loading during play)."
+page = "advanced"
+order = 41
 control = "toggle"
 section = "EmuCore/GS"
 key = "PrecacheTextureReplacements"
 type = "bool"
 default = "false"
 written = "when-set"
-status = "pending-TASK-040"
-notes = "D.1 default Off. Verified in TASK-040. Loader pcsx2/Pcsx2Config.cpp:1028."
+status = "ok"
+notes = "TASK-088 (gt4-gs 1.2.0): default Off. PCSX2 loader pcsx2/Pcsx2Config.cpp:1028."
 
 [[setting]]
 id = "texture_dump"
@@ -1128,6 +1128,21 @@ default = ""
 written = "launcher"
 status = "ok"
 notes = "Written only when the launcher supplies a folder (the probe passes the pinned cache directory). D.2 also names Textures and Snapshots; not added yet."
+
+[[setting]]
+id = "textures_folder"
+label = "Custom textures folder"
+help = "Custom texture folder, set by the launcher (Documents/Gran Turismo 4/Textures)."
+page = "hidden"
+order = 23
+control = "none"
+section = "Folders"
+key = "Textures"
+type = "path"
+default = ""
+written = "launcher"
+status = "ok"
+notes = "TASK-088 (gt4-gs 1.2.0): the player folder Documents/Gran Turismo 4/Textures; the replacements are read from its replacements subfolder with no serial folder. Written only when the launcher supplies it."
 
 [[setting]]
 id = "data_root"

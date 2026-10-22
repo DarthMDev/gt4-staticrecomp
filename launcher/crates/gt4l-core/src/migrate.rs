@@ -118,13 +118,14 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 5,
+    current: 6,
     steps: &[
         Step { from: 0, apply: settings_0_to_1 },
         Step { from: 1, apply: settings_1_to_2 },
         Step { from: 2, apply: settings_2_to_3 },
         Step { from: 3, apply: settings_3_to_4 },
         Step { from: 4, apply: settings_4_to_5 },
+        Step { from: 5, apply: settings_5_to_6 },
     ],
 };
 
@@ -209,6 +210,14 @@ fn settings_4_to_5(document: &mut Value) -> Result<(), String> {
         gs.remove("upscale");
         gs.remove("aspect");
     }
+    Ok(())
+}
+
+/// Schema 6: custom textures (TASK-088, gt4-gs 1.2.0). The Load custom textures row (`[gs] texture_load`, default on)
+/// and the Precache row (`[gs] texture_precache`, default off) are gs-table rows: a value is kept in `[gs]` only when
+/// the user changed it, and an absent key takes the table default. So this step changes no value: a schema 5 file keeps
+/// its settings and gets the new defaults. The backup of the old file is made by `config::prepare`, as for every step.
+fn settings_5_to_6(_document: &mut Value) -> Result<(), String> {
     Ok(())
 }
 
@@ -336,7 +345,7 @@ mod tests {
     fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(5));
+        assert_eq!(document["schema_version"], json!(6));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
         assert!(document["settings"].get("widescreen").is_none(), "added by step 3, dropped by step 4");
         assert!(document["settings"].get("aspect_ratio").is_none(), "added by step 4, dropped by step 5");
@@ -358,7 +367,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 3);
-        assert_eq!(released["schema_version"], json!(5));
+        assert_eq!(released["schema_version"], json!(6));
         assert!(released["settings"].get("aspect_ratio").is_none());
         assert_eq!(released["settings"]["monitor"], json!("primary"));
         assert_eq!(released["settings"]["resolution"], json!("desktop"));
@@ -388,7 +397,7 @@ mod tests {
             "install": {"disc_path": "D:/gt4.iso"}
         });
         assert_eq!(migrate(&SETTINGS, &mut file).unwrap(), 4);
-        assert_eq!(file["schema_version"], json!(5));
+        assert_eq!(file["schema_version"], json!(6));
         for gone in ["aspect_ratio", "aspect_custom"] {
             assert!(file["settings"].get(gone).is_none(), "{gone} dropped from [settings]");
             assert!(file["choices"].get(gone).is_none(), "{gone} dropped from [choices]");
@@ -422,7 +431,7 @@ mod tests {
 
         let mut chained = json!({"schema_version": 2, "settings": {"vsync": "on"}});
         assert_eq!(migrate(&SETTINGS, &mut chained).unwrap(), 2);
-        assert_eq!(chained["schema_version"], json!(5));
+        assert_eq!(chained["schema_version"], json!(6));
     }
 
     #[test]

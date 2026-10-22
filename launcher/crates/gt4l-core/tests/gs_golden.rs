@@ -8,7 +8,7 @@
 //!   (regenerated 2026-10-21: aspect is fixed at 16:9 and the PCSX2 OSD rows are always written off, so aspect=4:3
 //!   is no longer accepted and both files gained the OsdShow* lines)
 //!   default-session.ini: render_ini(rows, {vsync: true, mailbox: true}, {cache_folder, data_root}) with the
-//!   cache and data folders C:/gs/cache and C:/gs/data.
+//!   cache and data folders C:/gs/cache and C:/gs/data, and the textures folder (TASK-088).
 
 use std::collections::BTreeMap;
 
@@ -21,7 +21,11 @@ fn map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
 #[test]
 fn default_session_ini_matches_the_python_writer_byte_for_byte() {
     let settings = map(&[("vsync", "true"), ("mailbox", "true")]);
-    let launcher = map(&[("cache_folder", "C:/gs/cache"), ("data_root", "C:/gs/data")]);
+    let launcher = map(&[
+        ("cache_folder", "C:/gs/cache"),
+        ("data_root", "C:/gs/data"),
+        ("textures_folder", "C:/Users/x/Documents/Gran Turismo 4/Textures"),
+    ]);
     let text = gs_table::render_ini(&settings, &launcher).expect("render");
     assert_eq!(
         gs_table::ini_file_bytes(&text),

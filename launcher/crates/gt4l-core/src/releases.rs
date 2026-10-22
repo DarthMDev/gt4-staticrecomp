@@ -27,9 +27,9 @@ pub const CHECKSUM_ASSET: &str = "SHA256SUMS";
 pub const MAX_NOTES_CHARS: usize = 6000;
 /// Lowest stable GT4Recomp version the launcher offers.
 pub const LAUNCHER_MINIMUM: Version = Version(1, 0, 0);
-/// Lowest stable gt4-gs version the launcher installs. 1.1.0 (TASK-080, release 1.1.0): the ultrawide fill needs its
-/// protocol 1.3 consumer. An older install is replaced at the next launch (`gs_release::needs_install`).
-pub const RENDERER_MINIMUM: Version = Version(1, 1, 0);
+/// Lowest stable gt4-gs version the launcher installs. 1.2.0 (TASK-088, release 1.2.0): the custom texture loading and the
+/// 2-row bottom crop. An older install is replaced at the next launch (`gs_release::needs_install`).
+pub const RENDERER_MINIMUM: Version = Version(1, 2, 0);
 /// Longest time a download may take. The gt4-gs package is far below the size limit of the install code.
 pub const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 /// Longest time the release list may take at launch. The check never blocks Play.
@@ -343,7 +343,7 @@ mod tests {
         let json = r#"[
           {"tag_name":"gt4gs-v1.2.0","prerelease":false,"draft":true,"assets":[]},
           {"tag_name":"gt4gs-v1.1.1","prerelease":true,"draft":false,"assets":[]},
-          {"tag_name":"gt4gs-v1.1.0","prerelease":false,"draft":false,"assets":[]},
+          {"tag_name":"gt4gs-v1.2.0","prerelease":false,"draft":false,"assets":[]},
           {"tag_name":"gt4gs-v1.0.1","prerelease":false,"draft":false,"assets":[]},
           {"tag_name":"gt4gs-v1.10.0","prerelease":false,"draft":false,"assets":[]},
           {"tag_name":"gt4gs-v1.9.0","prerelease":false,"draft":false,"assets":[]}

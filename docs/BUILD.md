@@ -1967,3 +1967,44 @@ sha256 `9b039d61289c0d307fd2c3a91449f5cef4001e8960c02dbfbdb3f387097a0df3` (`make
 `private/slice218-dist`; the slice217 installer moved to `superseded-slice217\`). Portable copy refreshed in
 `private/ultrawide-test-portable` (7-Zip extraction, no `$PLUGINSDIR`, no uninstaller; launcher and game executables
 equal to their sources). No GitHub release, draft or tag.
+
+## Slice 240 - TASK-088 release 1.2.0: custom textures, 2-row crop, black start (`--mode pcsx2`)
+
+slice240 = the slice218 recipe (same capsule, EE library, port, shaders, SDL3 and gt4-gs package layout) with one
+host change: `native/window.cpp` gives the game window a black class background brush (it had none, so a new window
+showed white until its first frame). Build: `private/slice240-game-scripts/build-game-240.bat <build dir> aspect`
+(the slice218 script with the source worktree `C:\Antigravity\gt4-wt-088-textures`), build dir
+`private/slice240-game-build/build`. `gt4vulkan.exe` 97,221,120 bytes, sha256
+`1623af1ef2c456457b9e87cd2c7d3d014a0d05761d1e30ae1077216ab4e5d700` (slice218: `e96f3549...`).
+
+- Pin: `docs/inputs/slice240-pcsx2.json` (new file; `slice218-pcsx2.json` kept as history). `PERF_PROFILES['pcsx2']`
+  points at slice240; `pcsx2-slice218` keeps the old entry. The gt4-gs package in the pin is still the slice203 1.0.1
+  package (the dev run only; the owner's launcher uses its own gt4-gs, see below).
+- CTest 38 of 39 passed on the first run (`python_native_contracts` ran the Python suite and failed on the pin
+  and default-INI expectations, fixed in this branch); see the re-run line below.
+- Python suite: `GT4_NATIVE_BUILD=C:\Antigravity\gt4-staticrecomp\private\slice240-game-build\build`, pin tests point at
+  slice240. New expectations: the default gt4-gs.ini has `LoadTextureReplacements = true` (always written, Load custom
+  textures on); the gs table has 72 rows (`textures_folder` added); the Advanced page has 41 rows (`texture_precache`).
+- Settings: schema 6 (`launcher\crates\gt4l-core\src\migrate.rs`, `settings_5_to_6`: no value changes; the schema 5
+  file is backed up as before). The gs-table rows: `texture_load` (Graphics, default on, always written) and
+  `texture_precache` (Advanced, default off, when set); `textures_folder` (launcher-supplied `[Folders] Textures`,
+  `Documents\Gran Turismo 4\Textures`, created on play by `paths::ensure_texture_folders`). Command
+  `open_textures_folder` (commands.list, capabilities/default.json, main.rs; UI button in the Graphics section).
+- Launcher: `cargo test --workspace` green (new tests `launcher/crates/gt4l-core/tests/textures.rs`, the schema 5 to 6
+  migration test, the gt4-gs 1.2.0 minimum). UI nav-test 150 of 150. focus-check 92 of 100 on this checkout and on the
+  baseline copy of 6422988 (the same 8 tab-highlight checks fail on both in the browser pane; not caused by this change).
+- Distribution `private/slice240-dist` (18 files): `python scripts\make_distribution.py private\slice240-dist ...
+  --exe private\slice240-game-build\build\gt4vulkan.exe --runtime-manifest docs\inputs\slice240-pcsx2.json`;
+  `gt4vulkan.exe --portable-check` `result: ok`.
+- gt4-gs 1.2.0 (`gt4recomp-gs` branch `gt4gs/textures-1.2.0`, commit `c9dc54e93`): see `gt4gs/BUILD.md` "Release 1.2.0".
+  Replay test `gt4gs/tests/test_textures_1_2.py` (log checks: the replacement folder without serial, zero replacements
+  for a missing folder, refused Dump and CropBottom keys, the 2-row crop). Offline replays of this build end after VM
+  initialization (exit -16843010, as in 1.1.0), so the frame comparison is skipped; the checks read the startup log.
+  `gt4-gs.exe` 1.2.0 package: `private/slice240-gt4gs-120/gt4-gs-1.2.0-windows-x64.zip`, `check-nojit.ps1` passed.
+- Owner install helper for the local gt4-gs 1.2.0 (not run by the agent): `private/slice240-gt4gs-120/install-gt4gs-1.2.0-test.ps1`.
+  It checks the zip against `SHA256SUMS`, writes `%LOCALAPPDATA%\GT4Recomp\gs\1.2.0\` (with `sha256.txt`) and sets
+  `current.txt` to 1.2.0; 1.1.0 stays as the fallback. A dry run in a scratch `LOCALAPPDATA` passed.
+
+Limits (not checked here): the white start and the 2-row crop are visible only on the owner's screen (no window was
+opened on the desktop; the checks are the build, the log and the code path). A texture pack's effect is not checked on
+a real pack. Launcher release build and installer: see the next entry.
