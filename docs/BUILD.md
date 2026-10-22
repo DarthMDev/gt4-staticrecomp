@@ -2211,3 +2211,11 @@ Builds (all paths absolute):
   and `version.json` are still written in place after the swap (not rolled back); a read-only file in the install folder
   counts as locked for the full 30 s; if a rollback rename fails, the run reports `rollback failed at <item>` and the next
   run restores `.update-old` first.
+
+### Slice 256 (coordinator review of slice 255)
+- A marker `.update-swapping` exists only while a swap runs. The next run restores `.update-old` only when the marker
+  is there (an interrupted swap); a leftover `.update-old` without it (a completed swap whose clean-up was blocked) is
+  just removed, so a finished update is never reverted. The uninstaller also removes `.update-staging`,
+  `.update-old` and the marker.
+- Installer `private\slice256-installer\GT4Recomp-Setup-1.2.1-test.exe` 28849390 bytes, sha256
+  `a0543753539ce45b236033e249579103b32c55443da691d2a0279af45b367317` (slice 255 recipe, launcher slice253). Not run on this PC.

@@ -523,9 +523,15 @@ UninstPage custom un.DataPageCreate un.DataPageLeave
 Section "Install" SecInstall
   SetRegView 64
 
-  ; An interrupted earlier update may have left .update-old behind (TASK-091). Its files are the previous install, so
-  ; they are put back before anything else. The staging folder of that run is kept: its files are the new copies.
-  ${If} ${FileExists} "$INSTDIR\.update-old\*.*"
+  ; An update interrupted in the middle of its swap left the marker .update-swapping (TASK-091): .update-old then holds
+  ; the previous install, which is put back before anything else. Without the marker the swap had completed and only
+  ; the clean-up was blocked (an antivirus scan, say), so a leftover .update-old is simply removed.
+  ${IfNot} ${FileExists} "$INSTDIR\.update-swapping"
+  ${AndIf} ${FileExists} "$INSTDIR\.update-old\*.*"
+    RMDir /r "$INSTDIR\.update-old"
+  ${EndIf}
+  ${If} ${FileExists} "$INSTDIR\.update-swapping"
+  ${AndIf} ${FileExists} "$INSTDIR\.update-old\*.*"
     DetailPrint "An interrupted update was found: restoring the previous install"
     CreateDirectory "$INSTDIR\.update-staging"
     Call RollbackSwap
@@ -537,6 +543,7 @@ Section "Install" SecInstall
     ${EndIf}
     RMDir /r "$INSTDIR\.update-old"
   ${EndIf}
+  Delete "$INSTDIR\.update-swapping"
 
   ; The launcher needs the Microsoft Edge WebView2 Runtime (built into Windows 11, usually present on Windows 10).
   ; When it is missing, Microsoft's Evergreen bootstrapper (embedded) downloads and installs it.
@@ -580,20 +587,27 @@ Section "Install" SecInstall
   ; Swap (TASK-091): each live item goes to .update-old and its staged copy takes its place. A failed rename rolls back.
   SetOutPath "$INSTDIR"
   CreateDirectory "$INSTDIR\.update-old"
+  ; The marker says "a swap is in progress" until it completes; the next run uses it to tell a half swap from a done one.
+  FileOpen $R6 "$INSTDIR\.update-swapping" w
+  FileClose $R6
   Call SwapStagedIn
   ${If} $R8 != ""
     StrCpy $SetupResult "swap failed at $R8, rolled back"
     Call RollbackSwap
     ${If} $R1 != ""
+      ; The marker stays: the next run restores .update-old first.
       StrCpy $SetupResult "swap failed at $R8, rollback failed at $R1"
     ${Else}
       RMDir /r "$INSTDIR\.update-old"
+      Delete "$INSTDIR\.update-swapping"
     ${EndIf}
     RMDir /r "$INSTDIR\.update-staging"
     StrCpy $R2 3
     Call FailInstall
   ${EndIf}
-  ; The swap is complete: the previous copies and the staging folder go. The data folder was never touched.
+  ; The swap is complete: the marker goes first, then the previous copies and the staging folder. The data folder was
+  ; never touched.
+  Delete "$INSTDIR\.update-swapping"
   RMDir /r "$INSTDIR\.update-old"
   RMDir /r "$INSTDIR\.update-staging"
 
@@ -667,6 +681,9 @@ Section "Uninstall"
   ; The program folder, its data folder included (the disc copy can be made again from the player's own image).
   RMDir /r "$INSTDIR\game"
   RMDir /r "$INSTDIR\data"
+  RMDir /r "$INSTDIR\.update-staging"
+  RMDir /r "$INSTDIR\.update-old"
+  Delete "$INSTDIR\.update-swapping"
   Delete "$INSTDIR\GT4Recomp.exe"
   Delete "$INSTDIR\SDL3.dll"
   Delete "$INSTDIR\NOTICE.md"
