@@ -57,7 +57,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | ✅ Done (2026-10-16) · license demo guard on both demo loaders (slice206, `--mode pcsx2`): licenses playable, demos that decrypt wrong are skipped as in PCSX2 default; root cause moved to TASK‑063 |
-| TASK‑018 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑018 | Racing wheels with force feedback: the game sees a Logitech Driving Force GT, force feedback through SDL3, a Wheel tab in the launcher | 📋 Planned · release 1.3.0 (owner, 2026-10-22) |
 | TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ✅ Launcher merged into main (2026-10-21): setup with disc copy, gt4-gs download, settings, saves, controls (SDL3), tray, updates; owner tested end to end. Still for 1.0.0: NSIS installer build and the v1.0.0 release |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
@@ -121,6 +121,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
 | TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 📋 Planned (owner, 2026-10-22) · release 1.2.4 with TASK-097 |
 | TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
+| TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072), plugin injector mapped, hooks remapped | 📋 Planned (owner, 2026-10-22) · release 1.4.0 |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
@@ -540,6 +541,25 @@ findings afterwards. None is reachable from the launcher, which sets neither var
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
 
+### TASK-100 — Spec II support (release 1.4.0)
+Planned (owner, 2026-10-22) for release 1.4.0, the release after the wheel release (1.3.0). Scope as decision 0072:
+the SCUS-97436 Public Beta lineage image with its own target executable, not a content merge into v2.00. Identity
+study: docs/SPEC2-STUDY.md. Expected to be most of the work at the start; once one Spec II build runs, keeping it
+working should be much cheaper. Work to map first:
+- How Spec II's plugin injector puts its code and scripts into the game at start (where the injected MIPS code and
+  data come from, when it runs, what it patches). Everything the EE runs must be compiled ahead of time (no JIT), so
+  the injected code has to be captured and translated like the rest of the ELF, or its effects reproduced natively.
+- A second EE pipeline: `SCUS_974.36` (no `CORE.GT4`) through the donor translator into its own pinned library,
+  with its own manifests, coverage runs and "no translated code" hunt.
+- Our own game-side hooks are bound to v2.00 addresses and must be remapped (decomp names where gt4-decomp helps):
+  the 16:9 hold (TASK-079), the aspect/race camera and HUD hooks (TASK-080), the 480p race display (GT4_FORCE_480P),
+  the license demo guard, the memory card store, the MTVU/VU1 AOT (Spec II VU1 microcode image and its keys), VU0
+  AOT, the IOP IRX set, and every pinned constant in docs/inputs.
+- Adhoc v7 scripts and the natives Spec II registers (menus, GT mode, `projects/%s/%s`), the `GT4_PREMIUM_US2560`
+  spec database, `/sound_gt` and `carsound` paths: data the game reads, so they need no translation, but every native
+  the scripts call must exist in the translated executable.
+- Launcher: a second game target (disc identity check, setup, saves kept apart from v2.00), chosen per disc image.
+
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new
 block on the right shows the patch notes of the installed version, rendered from Markdown, in a light, minimal
@@ -712,6 +732,11 @@ Owner decisions (2026-10-21). Release 1.2.0 of both the game/launcher and gt4-gs
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
+Release 1.3.0 (owner, 2026-10-22): the game must recognise the connected wheel as a Logitech Driving Force GT
+(900-degree range and force feedback in GT4), whatever wheel SDL3 finds (Logitech, Thrustmaster, Fanatec); the
+game's force-feedback commands go to SDL3 haptics. The launcher gets a new Wheel tab (detection, rotation, force
+feedback strength, pedals and buttons, a live test). Study first: the GT4 USB stack (USBD, PDIUSB, LGDEV IRX,
+docs/IOP-MAP.md), where to answer as a DFGT, and the force-feedback command set.
 
 ### TASK-075 — Input layer on SDL3
 Owner decision 2026-10-21. Replace the game's XInput-only pad code (native/host_io.cpp) with one input layer on
@@ -1358,6 +1383,10 @@ ARM64 build, iOS host layers, signing/installation on iPhone 15 Pro Max and
 
 LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
 settings menus.
+
+**Release plan (owner, 2026-10-22):** big features take a minor version, intermediate updates and hotfixes the
+patch number: 1.2.3 hotfix, 1.2.4 (TASK-097, 098, 099), 1.3.0 wheels (TASK-018), 1.4.0 Spec II (TASK-100);
+2.0.0 is CoreGS 2.0 (phase 2).
 
 **Spec II is a second target** (owner, 2026-10-22): support means the SCUS-97436
 Public Beta lineage ISO with its own target executable, not a content merge into
