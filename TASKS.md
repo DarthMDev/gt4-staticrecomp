@@ -110,6 +110,9 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑082 | Native variable frame rate: fixed 60 Hz simulation, render at any rate (render skip below 60, extra render-only passes above 60 with the game's own render time t) | 📋 Planned (after 1.0.0) · study done (docs/NATIVE-VARIABLE-FPS-STUDY.md) |
 | TASK‑083 | Faster loading and saves: instant disc reads (deeper than PCSX2 Fast CDVD) and loading/save speed-ups in our runtime and game code; gameplay untouched | 📋 Future study (owner, 2026-10-21) |
 | TASK‑084 | Frame cost optimisation: cut the emulation-side EE overhead and the night-race readback (target about 6 ms per race frame headless) | 📋 Planned (after 1.0.0) · study done (docs/FRAME-COST-STUDY.md) |
+| TASK‑085 | Launcher self-update: the setup starts outside the launcher's kill-on-close job | ✅ Done (2026-10-21) · PR #67; v1.1.0 republished with the fix; launchers 1.0.0 update by running the setup |
+| TASK‑086 | Progressive 480p everywhere (menus and races at 480p through ELF patches) | ⏸️ Shelved (owner, 2026-10-21) · owner test broke the car select and the race load; branch `task/086-progressive-480p` kept |
+| TASK‑087 | GS readbacks without stalls, in CoreGS 2.0 (GPU-driven flare visibility, no EE wait) | 📋 Planned (owner, 2026-10-21) · study done (docs/GS-READBACK-STUDY.md); CoreGS 2.0 only, gt4-gs frozen |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -500,6 +503,11 @@ banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and fi
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
 
 ### TASK-087 — GS readbacks without stalls
+**Owner decision 2026-10-21: CoreGS 2.0 only.** gt4-gs (the PCSX2 GS fork) gets no more feature work; at most texture
+replacement is switched on (its implementation already exists) with a launcher option (TASK-048). So the gt4-gs steps
+below (S1 protocol hint, S3 asynchronous download in the fork) are dropped. The readback work lands in CoreGS 2.0:
+S4 GPU-driven flare after M8/M9, with P0/P1 as its proofs and the one-shot captures kept on the GPU. Removing EE-side
+waits in our runtime (S2 deferral, TASK-084) stays the general goal: optimise where possible and remove the waits.
 Planned (owner, 2026-10-21). Study: [docs/GS-READBACK-STUDY.md](docs/GS-READBACK-STUDY.md). Owner report: at 8x
 (5120x2160) on gt4-gs a night race drops to 40 FPS when the headlight flares show; "unsynchronized" readbacks run
 smoothly but lose the flares, the loading-screen logo and the car icon beside the gap time. Findings (Confirmed): all
@@ -980,6 +988,8 @@ State (2026-10-16, slice196): built; owner check pending, no PR.
   `private/slice196-deinterlace-samples`; details [GS-LIVE](docs/GS-LIVE.md) section 8.
 
 ### TASK-048 — Mod manager in the launcher (umbrella)
+Owner, 2026-10-21: gt4-gs is frozen apart from this; texture replacement is the one feature still to switch on there
+(the PCSX2 GS implementation exists; enable it and expose it in the launcher).
 Plan: [MOD-MANAGER-PLAN](docs/launcher/MOD-MANAGER-PLAN.md).
 Goal: a Mods page where users install, enable, order and remove mods; texture packs for the PCSX2 GS first.
 Texture replacement is not a graphics setting: the launcher writes the GS keys from the enabled mods.
