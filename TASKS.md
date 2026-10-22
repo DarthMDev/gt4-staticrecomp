@@ -118,6 +118,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
+| TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done on branch `task/093-textures-root` (2026-10-22) · waiting for gt4-gs 1.2.1 (not published yet) and the owner test · planned for release 1.2.3 with TASK-092 |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -521,6 +522,21 @@ menus. Checks: SMODE gate, the 42-dump headless run, owner pass on menus, garage
 replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRenderContextPS2__virtual_67`), 16-bit
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
+
+### TASK-093 — Custom textures straight in the Textures folder
+State (2026-10-22): done on branch `task/093-textures-root`; waiting for gt4-gs 1.2.1 (not published yet) and the owner
+test. Planned for release 1.2.3 with TASK-092.
+- gt4-gs 1.2.1 reads the `Textures` folder itself, recursively (`Textures\replacements\...` still works). A pack goes
+  straight into `<install>\data\Textures`.
+- The launcher creates only `Textures` (no `replacements`). `RENDERER_MINIMUM` is 1.2.1: an installed gt4-gs 1.2.0 is
+  replaced at the next launch (`gs_release::needs_install`, as before with 1.0.1 and 1.2.0).
+- One-time flatten at start, after the large-data move, on the same thread (`relocation::flatten_textures`): only when
+  gt4-gs 1.2.1+ is in use (`current.txt`), only when `replacements` is a real folder (junctions and links are skipped),
+  each child renames up into `Textures`, a name already there stays in `replacements` (logged), `replacements` is
+  removed only when empty, and the first error stops the rest until the next start. Nothing is deleted or overwritten.
+  Pure logic and tests: `gt4l-core/src/textures.rs`.
+- Text: `docs/launcher/gs-settings.toml` (`texture_load`, `textures_folder` notes), the Open textures folder comment,
+  README bullet. The 1.2.1 release notes stay as history.
 
 ### TASK-092 — MTVU test switches after TASK-084
 Planned (owner, 2026-10-22): release 1.2.2 ships the owner-tested slice262 build; this fixes the TASK-084 review

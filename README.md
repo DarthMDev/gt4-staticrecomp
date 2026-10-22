@@ -38,7 +38,7 @@ while the game runs, which is also what makes future **Android and iOS** builds 
   resolution follows automatically, with a Render scale of 50-200%.
 - **GSdx renderer** (the PCSX2 GS) in its own process: crisp deinterlaced menus, every GSdx option in the launcher
   and a built-in performance overlay. **CoreGS 1.1** is built in as the fallback.
-- **Custom texture packs (1.2.0):** drop a pack's `replacements` folder into the `data\Textures` folder of your
+- **Custom texture packs:** drop a pack's files straight into the `data\Textures` folder of your
   GT4Recomp install (Settings > Graphics > **Open textures folder**); **Load custom textures** is on by default. HD textures and mods from the PCSX2
   community work without renaming folders.
 - **Crash-safe memory card:** saves survive a crash or a forced close.

@@ -1,5 +1,12 @@
 # Current Status
 
+## TASK-093 on branch (2026-10-22, waiting for gt4-gs 1.2.1 and the owner test)
+
+Branch `task/093-textures-root`: custom textures go straight in `data\Textures`; the launcher no longer creates
+`replacements`, `RENDERER_MINIMUM` is gt4-gs 1.2.1, and an old `replacements` folder is flattened into `Textures` at
+start once gt4-gs 1.2.1 is in use (`gt4l-core/src/textures.rs`). Workspace tests and the Python gs suite pass. Not
+merged; planned for release 1.2.3 with TASK-092.
+
 ## Release 1.2.2 published (2026-10-22, TASK-084, PR #82)
 
 Launcher 1.2.1 at version 1.2.2 with the TASK-084 game build slice262 (owner tested and approved). Installer

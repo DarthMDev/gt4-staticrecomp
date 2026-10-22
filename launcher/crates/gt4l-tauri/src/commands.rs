@@ -828,8 +828,8 @@ pub fn open_replays_folder(shared: State<'_, Shared>) -> Result<(), String> {
     open_folder(&folder)
 }
 
-/// Opens the custom texture folder (`<install>\data\Textures`) in Explorer. Its `replacements` folder is
-/// made first, so the owner can drop a pack in (TASK-088).
+/// Opens the custom texture folder (`<install>\data\Textures`) in Explorer. It is made first, so the owner can
+/// drop a pack in (TASK-088; TASK-093: the pack goes straight in, no replacements subfolder).
 #[tauri::command]
 pub fn open_textures_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let folder = lock(shared.inner()).dirs.textures();
