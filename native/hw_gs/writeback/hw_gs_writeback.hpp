@@ -57,7 +57,10 @@ struct Counters {
     double textureDecodeUs = 0.0;
     double gifUs = 0.0;     // all of GifTransfer (front end, translate, execute, transfers): the GS stream cost
     double uploadUs = 0.0;  // EE->GS uploads into the shadow memory (and GLM merges, IN-350)
-    double batchUs = 0.0;   // all of OnBatch (translate, execute and the batch bookkeeping around them)
+    double batchUs = 0.0;
+    double composeUs = 0.0;  // all ComposeFrame calls (display read, merge, deinterlace, copy)
+    std::uint64_t vblanksInterlaced = 0;   // VBlanks with SMODE2.INT = 1 (480i, the menus)
+    std::uint64_t vblanksProgressive = 0;  // VBlanks with SMODE2.INT = 0 (480p races with GT4_FORCE_480P=1)   // all of OnBatch (translate, execute and the batch bookkeeping around them)
     std::uint64_t texturesCached = 0;
     std::uint64_t texturesFromTargets = 0;    // batches whose texels were copied from a resident target (IN-346)
     std::uint64_t texturesFromGlm = 0;        // batches whose texels were decoded from the GLM (IN-347)

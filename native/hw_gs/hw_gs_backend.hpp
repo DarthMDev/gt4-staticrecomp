@@ -93,6 +93,8 @@ struct RenderCounters {
   std::uint64_t gpu_busy_ns = 0;            // GT4_HW_GPU_TIMING: GPU busy time (first to last timestamp)
   std::uint64_t gpu_ns[6] = {};             // pass, decode, clut, swizzle, upload, download
   std::uint64_t gpu_early_submissions = 0;  // mid-frame submissions (IN-358)
+  std::uint64_t vblanks_interlaced = 0;     // SMODE2.INT = 1 (480i)
+  std::uint64_t vblanks_progressive = 0;    // SMODE2.INT = 0 (480p)
   std::uint64_t textures_cached = 0;
   std::uint64_t cache_writebacks = 0;
   std::uint64_t cache_loads = 0;

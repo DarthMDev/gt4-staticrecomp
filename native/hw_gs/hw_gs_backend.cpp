@@ -1018,6 +1018,8 @@ RenderCounters Backend::render_counters() const {
   out.gpu_busy_ns = gpu.gpuBusyNs;
   for (int i = 0; i < 6; ++i) out.gpu_ns[i] = gpu.gpuNs[i];
   out.gpu_early_submissions = gpu.earlySubmissions;
+  out.vblanks_interlaced = c.vblanksInterlaced;
+  out.vblanks_progressive = c.vblanksProgressive;
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;
 }

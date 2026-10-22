@@ -4,6 +4,7 @@
 #include "mtvu_journal.hpp"
 #include "mtvu_measure.hpp"
 #include "mtvu_ring.hpp"
+#include "race_display.hpp"
 #include "race_widescreen.hpp"
 #include "perf_probe.hpp"
 
@@ -468,6 +469,21 @@ void pump() {
 void vblank_sync() {
   // TASK-079: GT4_FORCE_WIDESCREEN holds the 16:9 state at every guest VBlank (windowed and headless).
   gt4::display::widescreen_hold_at_guest_vblank(ps2::g_ram, 32u << 20);
+  // Slice164 GT4_FORCE_480P, also headless (TASK-027 owner request 2026-10-22: test runs use the launcher's 480p
+  // races). The windowed path holds it in window.cpp as well; the hold writes only while the index is 0 (normal),
+  // so running both changes nothing.
+  {
+    static const bool force480p = [] {
+      try {
+        return gt4::display::parse_force_480p(std::getenv("GT4_FORCE_480P"));
+      } catch (const std::exception &error) {
+        std::fprintf(stderr, "[display] %s; the 480p hold is off\n", error.what());
+        return false;
+      }
+    }();
+    static gt4::display::Force480pState state;
+    if (force480p) gt4::display::force_race_480p_at_vblank(ps2::g_ram, 32u << 20, state);
+  }
   Runtime &r = rt();
   if (!r.started) return;
   sync("vblank");

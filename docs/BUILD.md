@@ -2049,3 +2049,10 @@ Incremental rebuild. Confirmed: 225/225 non-Python CTests (new `m3_hw_block_rang
 memory hashes identical on the menu, car, race and night captures, night `fifo_hash` unchanged; headless menu 42/42
 dumps byte-identical to slice228; race schedule identical to slice235; default renderer 42/42 = slice214. Measured
 headless (no dumps): night race 10.4-17.2 ms, day race 15.2-16.7 ms per vsync.
+
+## Local slice242 - compose speed, headless 480p hold, video-mode counter (IN-361)
+
+Incremental rebuild. Confirmed: 225/225 non-Python CTests; memory hashes identical on the four captures; headless menu
+42/42 dumps byte-identical to slice228; race schedule identical to slice235; default renderer 42/42 = slice214 (also
+after the headless 480p hold, which is environment-gated). New capture `private/slice242-capture/race480p-10000.gscap`
+(480p El Capitan race, write-back hashes `race480p-10000-wb.txt`).

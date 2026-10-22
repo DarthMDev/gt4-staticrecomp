@@ -411,3 +411,15 @@ while a game is open, and never touches the owner's card.
   field is the 17.2 interval), day race 15.2-16.7 ms. Gates as above (local slice241), 225/225 non-Python CTests.
   Next: the presentation compose (3-4 ms of CPU per windowed frame).
 
+## 2026-10-22 480p test setup and compose (local slice242, IN-361) - Claude
+
+- Owner request: tests boot like the shipped launcher, 16:9 and 480p races (menus stay 480i). `GT4_FORCE_480P=1`
+  is the launcher's mechanism; its hold was windowed-only and `hwr-play.ps1` did not pass it, so owner test 3 raced
+  at 480i. Now `hwr-play.ps1` passes `GT4_FORCE_WIDESCREEN=1` and `GT4_FORCE_480P=1` and prints the `[display]`
+  hold line and `[hw] video: vblanks_480i/vblanks_480p`; the hold also runs headless. Performance runs from now on
+  use the 480p race (`run-game.py ... race ... GT4_FORCE_480P=1 GT4_FORCE_WIDESCREEN=1`, capture
+  `private/slice242-capture/race480p-10000.gscap` with write-back hashes); the gate references stay 480i.
+- 480p race headless: 19.6-21.5 ms per vsync (480i: 15.2-16.7). Replay: about 1,930 batches, 1,660 CLUT loads and
+  1,860 GLM decodes per frame; GPU busy about 11.5 ms; GS stream 17.6 ms (front end about 11 ms).
+- Compose 3.3 -> 2.5 ms (IN-361). Next: the 480p race front end and GPU CLUT/decode costs.
+

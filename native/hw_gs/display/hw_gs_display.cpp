@@ -477,15 +477,25 @@ Image compose_merge(const MergePlan& plan, const PmodeFields& pmode, std::uint8_
         const std::int64_t top = std::max<std::int64_t>(0, y0);
         const std::int64_t right = std::min<std::int64_t>(out_width, x0 + w);
         const std::int64_t bottom = std::min<std::int64_t>(out_height, y0 + h);
+        if (right <= left || bottom <= top) {
+            return;
+        }
+        // Nearest sampling of the source (IN-34). The source column of every output column is computed once
+        // per draw (the same expression; IN-360 performance only).
+        std::vector<std::uint32_t> columns(static_cast<std::size_t>(right - left));
+        for (std::int64_t x = left; x < right; ++x) {
+            std::int64_t sx = (x - x0) * source.width / w;
+            columns[static_cast<std::size_t>(x - left)] =
+                static_cast<std::uint32_t>(std::clamp<std::int64_t>(sx, 0, source.width - 1));
+        }
         for (std::int64_t y = top; y < bottom; ++y) {
-            // Nearest sampling of the source (IN-34).
             std::int64_t sy = (y - y0) * source.height / h;
             sy = std::clamp<std::int64_t>(sy, 0, source.height - 1);
+            const Rgba8* sourceRow = source.pixels.data() + static_cast<std::size_t>(sy) * source.width;
+            Rgba8* outRow = out.pixels.data() + static_cast<std::size_t>(y) * out_width;
             for (std::int64_t x = left; x < right; ++x) {
-                std::int64_t sx = (x - x0) * source.width / w;
-                sx = std::clamp<std::int64_t>(sx, 0, source.width - 1);
-                const Rgba8 texel = source.at(static_cast<std::uint32_t>(sx), static_cast<std::uint32_t>(sy));
-                Rgba8& dst = out.at(static_cast<std::uint32_t>(x), static_cast<std::uint32_t>(y));
+                const Rgba8 texel = sourceRow[columns[static_cast<std::size_t>(x - left)]];
+                Rgba8& dst = outRow[x];
                 if (!blend) {
                     dst = texel;
                     continue;

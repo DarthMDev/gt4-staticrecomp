@@ -407,9 +407,10 @@ int main(int argc, char** argv) {
     {
         const writeback::PassTimings& totals = renderer.TimingTotals();
         const double frames = renderer.TimedFrames() ? static_cast<double>(renderer.TimedFrames()) : 1.0;
-        std::printf("per_frame_ms gif=%.2f batch=%.2f translate=%.2f execute=%.2f upload=%.2f writeback=%.2f load=%.2f "
+        std::printf("per_frame_ms compose=%.2f gif=%.2f batch=%.2f translate=%.2f execute=%.2f upload=%.2f writeback=%.2f load=%.2f "
                     "decode=%.2f\n",
-                    counters.gifUs / frames / 1000.0, counters.batchUs / frames / 1000.0,
+                    counters.composeUs / frames / 1000.0, counters.gifUs / frames / 1000.0,
+                    counters.batchUs / frames / 1000.0,
                     totals.translateUs / frames / 1000.0,
                     totals.executeUs / frames / 1000.0, counters.uploadUs / frames / 1000.0,
                     counters.cacheWritebackUs / frames / 1000.0, counters.cacheLoadUs / frames / 1000.0,

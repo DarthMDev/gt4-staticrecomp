@@ -2104,6 +2104,11 @@ void Renderer::Flush() {
     s.frameTimings_ = PassTimings{};
     ++s.timedFrames_;
     ++s.vblanks_;  // the next compose computes this VBlank's display layout (13.2)
+    if (s.displayRegs_.smode2 & 1u) {  // SMODE2.INT: which video mode the guest ran this VBlank
+        ++s.counters.vblanksInterlaced;
+    } else {
+        ++s.counters.vblanksProgressive;
+    }
     if (s.asyncPresentation_ && s.cacheMode_ && s.glmEnabled_ && s.gpu_.Ready() && !s.failed_ && !s.auxiliary_) {
         s.CaptureDisplay();  // IN-355: into this frame's submission, composed at the next VBlank
     }
@@ -2141,11 +2146,11 @@ void CopyImage(const display::Image& image, FrameOutput& out) {
     out.valid = image.width > 0 && image.height > 0;
     out.width = image.width;
     out.height = image.height;
-    out.pixels.clear();
-    out.pixels.reserve(image.pixels.size());
+    out.pixels.resize(image.pixels.size());
+    uint32_t* dst = out.pixels.data();
     for (const display::Rgba8& p : image.pixels) {
-        out.pixels.push_back(static_cast<uint32_t>(p.r) | (static_cast<uint32_t>(p.g) << 8) |
-                             (static_cast<uint32_t>(p.b) << 16) | (static_cast<uint32_t>(p.a) << 24));
+        *dst++ = static_cast<uint32_t>(p.r) | (static_cast<uint32_t>(p.g) << 8) | (static_cast<uint32_t>(p.b) << 16) |
+                 (static_cast<uint32_t>(p.a) << 24);
     }
 }
 
@@ -2172,13 +2177,15 @@ display::Image ReadCircuit(const memory::LocalMemory& local, const display::Circ
         local.readRect(view, static_cast<uint32_t>(circuit.dbx), static_cast<uint32_t>(circuit.dby), circuit.read_width,
                        circuit.read_height, words.data());
     }
+    display::Rgba8* pixels = image.pixels.data();
     for (uint32_t y = 0; y < circuit.read_height; ++y) {
         for (uint32_t x = 0; x < circuit.read_width; ++x) {
             const uint32_t sx = static_cast<uint32_t>(circuit.dbx + static_cast<int32_t>(x)) & 2047u;
             const uint32_t sy = static_cast<uint32_t>(circuit.dby + static_cast<int32_t>(y)) & 2047u;
-            const uint32_t stored = wraps ? local.readPixel(view, sx, sy) : words[static_cast<size_t>(y) * circuit.read_width + x];
+            const size_t index = static_cast<size_t>(y) * circuit.read_width + x;
+            const uint32_t stored = wraps ? local.readPixel(view, sx, sy) : words[index];
             const pixel::Colour colour = pixel::frame_word_to_colour(pixel::unpack_frame_word(format, stored));
-            display::Rgba8& dst = image.at(x, y);
+            display::Rgba8& dst = pixels[index];
             dst.r = static_cast<uint8_t>(colour.r);
             dst.g = static_cast<uint8_t>(colour.g);
             dst.b = static_cast<uint8_t>(colour.b);
@@ -2321,6 +2328,7 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
         body();
     }
     s.timings_.composeUs = composeUs;
+    s.counters.composeUs += composeUs;
     s.timings_.executeGpuUs = 0.0;  // reserved for GPU timestamps (not measured yet)
 }
 

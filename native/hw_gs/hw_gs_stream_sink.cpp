@@ -253,6 +253,13 @@ void finish(std::FILE *output) {
                static_cast<unsigned long long>(counters.writeback_pixels),
                static_cast<unsigned long long>(counters.flat_deindexed),
                static_cast<unsigned long long>(counters.sprites));
+  {
+    const RenderCounters &video = counters;
+    std::fprintf(output, "[hw] video: vblanks_480i=%llu vblanks_480p=%llu (SMODE2.INT; menus are 480i, races 480p with "
+                         "GT4_FORCE_480P=1)\n",
+                 static_cast<unsigned long long>(video.vblanks_interlaced),
+                 static_cast<unsigned long long>(video.vblanks_progressive));
+  }
   std::fprintf(output,
                "[hw] output: presentation_frames=%llu blank_frames=%llu deinterlaced_frames=%llu "
                "interlace_offset_frames=%llu merge_alpha_from_texel=%llu writeback_depth_words=%llu "
