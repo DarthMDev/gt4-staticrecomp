@@ -203,6 +203,20 @@ struct GpuDrawer::Impl {
 
   bool flush_run(std::string &error);
 
+  // IN-362: compute bindings persist in a command buffer; rebinding the same pipeline or set is skipped.
+  VkPipeline boundComputePipeline = VK_NULL_HANDLE;
+  VkDescriptorSet boundComputeSet = VK_NULL_HANDLE;
+  void bind_compute(VkPipeline pipeline, VkDescriptorSet set) {
+    if (pipeline != boundComputePipeline) {
+      gt4_hwd_vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+      boundComputePipeline = pipeline;
+    }
+    if (set != boundComputeSet) {
+      gt4_hwd_vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, computeLayout, 0, 1, &set, 0, nullptr);
+      boundComputeSet = set;
+    }
+  }
+
   // ---- Double-buffered submission (IN-354) ----
   // Two sets of the per-submission resources (command buffer, fence, staging, vertex, uniform and palette rings
   // and the descriptor sets that point at the rings). A submission switches to the other set, so the CPU records
@@ -948,13 +962,26 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
   gt4_hwd_vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, interlockTriangles);
   VkViewport viewport{0.0f, 0.0f, static_cast<float>(kSurfaceSize), static_cast<float>(kSurfaceSize), 0.0f, 1.0f};
   gt4_hwd_vkCmdSetViewport(cmd, 0, 1, &viewport);
+  // IN-362: the vertex ring is bound once (draws use absolute first vertices); push constants and the scissor are
+  // set only when they change. The descriptor set is bound per draw (its dynamic uniform offset is the chunk's).
+  const VkDeviceSize ringStart = 0;
+  gt4_hwd_vkCmdBindVertexBuffers(cmd, 0, 1, &vertices.buffer, &ringStart);
+  const std::uint32_t *lastPush = nullptr;
+  VkRect2D lastScissor{{-1, -1}, {0, 0}};
   for (const PendingDraw &draw : runDraws) {
     gt4_hwd_vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
                                     &descriptorSets[draw.descriptorSet], 1, &draw.uniformOffset);
-    gt4_hwd_vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, kPushBytes, draw.push);
-    gt4_hwd_vkCmdBindVertexBuffers(cmd, 0, 1, &vertices.buffer, &draw.vertexOffsetBytes);
-    gt4_hwd_vkCmdSetScissor(cmd, 0, 1, &draw.scissor);
-    gt4_hwd_vkCmdDraw(cmd, draw.vertexCount, 1, draw.firstVertex, 0);
+    if (!lastPush || std::memcmp(lastPush, draw.push, sizeof(draw.push)) != 0) {
+      gt4_hwd_vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, kPushBytes, draw.push);
+      lastPush = draw.push;
+    }
+    if (std::memcmp(&lastScissor, &draw.scissor, sizeof(VkRect2D)) != 0) {
+      gt4_hwd_vkCmdSetScissor(cmd, 0, 1, &draw.scissor);
+      lastScissor = draw.scissor;
+    }
+    const std::uint32_t ringFirst =
+        static_cast<std::uint32_t>(draw.vertexOffsetBytes / sizeof(GpuVertex)) + draw.firstVertex;
+    gt4_hwd_vkCmdDraw(cmd, draw.vertexCount, 1, ringFirst, 0);
     ++stats.draws;
   }
   gt4_hwd_vkCmdEndRenderPass(cmd);
@@ -1137,6 +1164,8 @@ bool GpuDrawer::Impl::begin_recording(std::string &error) {
   if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
   recording = true;
   recordingSet = currentFrame;
+  boundComputePipeline = VK_NULL_HANDLE;  // a new command buffer has no bindings
+  boundComputeSet = VK_NULL_HANDLE;
   if (gpuTiming && queries[recordingSet].pool) {
     gt4_hwd_vkCmdResetQueryPool(cmd, queries[recordingSet].pool, 0, kQueries);
     queries[recordingSet].count = 0;
@@ -1307,9 +1336,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   if (runnable) {
     // IN-352: texture preparation now, into the chunk's atlas region; the draw is recorded when the run closes.
     if (textureFromGlm) {
-      gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.decodePipeline);
-      gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0],
-                                      0, nullptr);
+      s.bind_compute(s.decodePipeline, s.computeSets[0]);
       const std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
       const std::uint32_t push[14] = {chunk.glmBp,  chunk.glmBw,   chunk.glmPsm,  chunk.texWidth, chunk.texHeight,
                                       indexedMode,  paletteBase,   chunk.glmCpsm, chunk.glmCsa,   chunk.glmTa0,
@@ -1385,9 +1412,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   if (textureFromGlm) {
     // IN-347: decode the texels from the GLM with the texture's addressing (the caller made the GLM current).
     s.full_barrier();
-    gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.decodePipeline);
-    gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
-                                    nullptr);
+    s.bind_compute(s.decodePipeline, s.computeSets[0]);
     const std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
     const std::uint32_t push[14] = {chunk.glmBp,  chunk.glmBw,   chunk.glmPsm,  chunk.texWidth,
                                     chunk.texHeight, indexedMode, paletteBase,  chunk.glmCpsm,
@@ -1578,9 +1603,7 @@ bool GpuDrawer::SwizzleToGlm(bool depthSlot, std::uint32_t slot, std::uint32_t b
   if (!s.flush_run(error)) return false;  // the swizzle reads the target image the run draws into
   const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
   s.full_barrier();  // the target's draws and the GLM's earlier writes are complete
-  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.swizzlePipeline);
-  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[set], 0,
-                                  nullptr);
+  s.bind_compute(s.swizzlePipeline, s.computeSets[set]);
   const std::uint32_t width = static_cast<std::uint32_t>(x1 - x0 + 1);
   const std::uint32_t height = static_cast<std::uint32_t>(y1 - y0 + 1);
   const std::uint32_t push[8] = {bp, bw, psm, static_cast<std::uint32_t>(x0), static_cast<std::uint32_t>(y0), width, height,
@@ -1605,9 +1628,7 @@ bool GpuDrawer::LoadSlotFromGlm(bool depthSlot, std::uint32_t slot, std::uint32_
   if (!s.flush_run(error)) return false;  // the load writes the target image the run may draw into
   const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
   s.full_barrier();  // earlier draws into the slot and the GLM's writes are complete
-  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.unswizzlePipeline);
-  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[set], 0,
-                                  nullptr);
+  s.bind_compute(s.unswizzlePipeline, s.computeSets[set]);
   const std::uint32_t width = static_cast<std::uint32_t>(x1 - x0 + 1);
   const std::uint32_t height = static_cast<std::uint32_t>(y1 - y0 + 1);
   const std::uint32_t push[8] = {bp, bw, psm, static_cast<std::uint32_t>(x0), static_cast<std::uint32_t>(y0), width, height,
@@ -1637,9 +1658,7 @@ bool GpuDrawer::MergeIntoGlm(const std::vector<std::uint32_t> &triples, std::str
   std::memcpy(static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed, triples.data(), bytes);
   s.paletteUsed += bytes;
   s.full_barrier();  // earlier GLM readers and writers finish first
-  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.mergePipeline);
-  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
-                                  nullptr);
+  s.bind_compute(s.mergePipeline, s.computeSets[0]);
   const std::uint32_t count = static_cast<std::uint32_t>(triples.size() / 3);
   const std::uint32_t push[2] = {base, count};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
@@ -1675,9 +1694,7 @@ bool GpuDrawer::UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_
   std::memset(ring + byteCount, 0, static_cast<std::size_t>(bytes) - byteCount);
   s.paletteUsed += bytes;
   s.full_barrier();  // earlier GLM readers and writers finish first
-  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.hostUploadPipeline);
-  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
-                                  nullptr);
+  s.bind_compute(s.hostUploadPipeline, s.computeSets[0]);
   const std::uint32_t push[9] = {bp, bw, psm, x0, y0, width, pixels, bpp, base};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
   gt4_hwd_vkCmdDispatch(s.cmd, (pixels + 63) / 64, 1, 1);
@@ -1806,9 +1823,7 @@ bool GpuDrawer::LoadClutFromGlm(std::uint32_t cbp, std::uint32_t cpsm, std::uint
   Impl &s = *impl_;
   if (!s.begin_recording(error)) return false;
   s.full_barrier();
-  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.clutPipeline);
-  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
-                                  nullptr);
+  s.bind_compute(s.clutPipeline, s.computeSets[0]);
   const std::uint32_t eightBit = (psm & 7u) == 3u ? 1u : 0u;
   const std::uint32_t push[8] = {cbp, cpsm, csm, csa, eightBit, cbw, cou, cov};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);

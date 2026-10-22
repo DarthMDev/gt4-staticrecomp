@@ -14,10 +14,15 @@
 #include "hw_gs_options.hpp"
 
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
+#include <mutex>
 #include <string>
+#include <thread>
+#include <vector>
 
 namespace gt4::hw {
 namespace {
@@ -84,6 +89,8 @@ void maybe_dump(Backend &hw) {
   }
 }
 
+void start_gs_worker();
+
 bool start_backend(std::string &error) {
   Options options;
   try {
@@ -103,6 +110,7 @@ bool start_backend(std::string &error) {
   if (!created->init(options, error)) return false;
   g_backend = created;
   std::fprintf(stderr, "[hw] GT4_RENDERER=hw: HWR backend started in process, no GS process and no donor Vulkan renderer\n");
+  start_gs_worker();
   for (const std::string &line : describe_options(options)) std::fprintf(stderr, "[hw] %s\n", line.c_str());
   return true;
 }
@@ -115,15 +123,13 @@ Backend &backend() {
   return *g_backend;
 }
 
-void gif(int path, const std::uint8_t *data, std::uint32_t qwc) {
-  backend().gif_transfer(path, data, static_cast<std::size_t>(qwc) * 16);
-}
+void gif_now(int path, const std::uint8_t *data, std::size_t bytes) { backend().gif_transfer(path, data, bytes); }
 
-void privileged(std::uint32_t address, std::uint64_t value) {
+void privileged_now(std::uint32_t address, std::uint64_t value) {
   if (!backend().write_privileged(address, value)) ++g_unmirrored_privileged;
 }
 
-void read_fifo(std::uint8_t *data, std::uint32_t qwords) {
+void read_fifo_now(std::uint8_t *data, std::uint32_t qwords) {
   const std::size_t filled = backend().read_transfer_fifo(data, qwords);
   if (filled < qwords) std::memset(data + filled * 16, 0, (static_cast<std::size_t>(qwords) - filled) * 16);
 }
@@ -183,7 +189,7 @@ void maybe_profile(Backend &hw) {
   g_profile_wall = wall;
 }
 
-void vsync(bool odd_field) {
+void vsync_now(bool odd_field) {
   Backend &hw = backend();
   g_odd_field = odd_field;
   ++g_vsyncs;
@@ -195,16 +201,196 @@ void vsync(bool odd_field) {
   maybe_profile(hw);
 }
 
-void gs_reset() {
+void gs_reset_now() {
   Backend &hw = backend();
   hw.reset_context();
   hw.reset_gif_paths();
   hw.clear_vram();
 }
 
-void gif_reset() { backend().reset_gif_paths(); }
+void gif_reset_now() { backend().reset_gif_paths(); }
+
+// ---- GS worker thread (IN-363) ----
+// The game's EE thread used to run the whole GS stream (parse, translate, record, submit, compose, present)
+// synchronously. Now it queues the stream, in order, to one worker thread, which runs exactly the calls above in
+// the same order, so results are unchanged; the EE continues while the GS work of the frame runs. The calls that
+// return data or change the window (LOCAL->HOST FIFO reads, window attach and resize, the end of the session)
+// first wait until the worker has executed everything queued before them, then run under the lock the worker
+// holds for each command. At a VBlank the EE waits while kFramesAhead VBlanks are still queued (back-pressure).
+// GT4_HW_GS_THREAD=0 keeps the synchronous path (diagnostic switch, not a 12.8 option).
+struct GsCommand {
+  enum class Kind : std::uint8_t { Gif, Privileged, Vsync, GsReset, GifReset } kind = Kind::Gif;
+  int path = 0;
+  std::vector<std::uint8_t> bytes;
+  std::uint32_t address = 0;
+  std::uint64_t value = 0;
+  bool oddField = false;
+};
+
+class GsWorker {
+public:
+  static constexpr std::size_t kFramesAhead = 2;
+
+  void start() {
+    thread_ = std::thread([this] { run(); });
+  }
+
+  void push(GsCommand &&command) {
+    std::unique_lock<std::mutex> lock(queueMutex_);
+    if (command.kind == GsCommand::Kind::Vsync) {
+      canQueue_.wait(lock, [this] { return queuedVsyncs_ < kFramesAhead; });
+      ++queuedVsyncs_;
+    }
+    queue_.push_back(std::move(command));
+    hasWork_.notify_one();
+  }
+
+  // A recycled byte buffer for a GIF command (no allocation per packet once warm).
+  std::vector<std::uint8_t> buffer() {
+    std::lock_guard<std::mutex> lock(queueMutex_);
+    if (spare_.empty()) return {};
+    std::vector<std::uint8_t> bytes = std::move(spare_.back());
+    spare_.pop_back();
+    return bytes;
+  }
+
+  // Waits until every queued command has executed; the caller then runs with the backend lock held.
+  std::unique_lock<std::mutex> drain() {
+    std::unique_lock<std::mutex> lock(queueMutex_);
+    drained_.wait(lock, [this] { return queue_.empty() && !busy_; });
+    lock.unlock();
+    return std::unique_lock<std::mutex>(backendMutex_);
+  }
+
+private:
+  void run() {
+    for (;;) {
+      GsCommand command;
+      {
+        std::unique_lock<std::mutex> lock(queueMutex_);
+        hasWork_.wait(lock, [this] { return !queue_.empty(); });
+        command = std::move(queue_.front());
+        queue_.pop_front();
+        busy_ = true;
+      }
+      {
+        std::lock_guard<std::mutex> backendLock(backendMutex_);
+        switch (command.kind) {
+          case GsCommand::Kind::Gif: gif_now(command.path, command.bytes.data(), command.bytes.size()); break;
+          case GsCommand::Kind::Privileged: privileged_now(command.address, command.value); break;
+          case GsCommand::Kind::Vsync: vsync_now(command.oddField); break;
+          case GsCommand::Kind::GsReset: gs_reset_now(); break;
+          case GsCommand::Kind::GifReset: gif_reset_now(); break;
+        }
+      }
+      {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        busy_ = false;
+        if (command.kind == GsCommand::Kind::Vsync) {
+          --queuedVsyncs_;
+          canQueue_.notify_all();
+        }
+        if (command.kind == GsCommand::Kind::Gif && spare_.size() < 4096) {
+          command.bytes.clear();
+          spare_.push_back(std::move(command.bytes));
+        }
+        if (queue_.empty()) drained_.notify_all();
+      }
+    }
+  }
+
+  std::thread thread_;
+  std::mutex queueMutex_;
+  std::mutex backendMutex_;
+  std::condition_variable hasWork_;
+  std::condition_variable canQueue_;
+  std::condition_variable drained_;
+  std::deque<GsCommand> queue_;
+  std::vector<std::vector<std::uint8_t>> spare_;
+  std::size_t queuedVsyncs_ = 0;
+  bool busy_ = false;
+};
+
+GsWorker *g_worker = nullptr;  // null: synchronous (GT4_HW_GS_THREAD=0)
+
+void start_gs_worker() {
+  const char *thread = std::getenv("GT4_HW_GS_THREAD");
+  if (!(thread && std::string(thread) == "0")) {
+    g_worker = new GsWorker;  // never destroyed, like the backend
+    g_worker->start();
+    std::fprintf(stderr, "[hw] GS stream on its own worker thread (IN-363; GT4_HW_GS_THREAD=0 for the EE thread)\n");
+  }
+}
+
+void gif(int path, const std::uint8_t *data, std::uint32_t qwc) {
+  const std::size_t bytes = static_cast<std::size_t>(qwc) * 16;
+  if (!g_worker) {
+    gif_now(path, data, bytes);
+    return;
+  }
+  GsCommand command;
+  command.kind = GsCommand::Kind::Gif;
+  command.path = path;
+  command.bytes = g_worker->buffer();
+  command.bytes.assign(data, data + bytes);
+  g_worker->push(std::move(command));
+}
+
+void privileged(std::uint32_t address, std::uint64_t value) {
+  if (!g_worker) {
+    privileged_now(address, value);
+    return;
+  }
+  GsCommand command;
+  command.kind = GsCommand::Kind::Privileged;
+  command.address = address;
+  command.value = value;
+  g_worker->push(std::move(command));
+}
+
+void read_fifo(std::uint8_t *data, std::uint32_t qwords) {
+  if (!g_worker) {
+    read_fifo_now(data, qwords);
+    return;
+  }
+  const std::unique_lock<std::mutex> lock = g_worker->drain();  // the read observes everything queued before it
+  read_fifo_now(data, qwords);
+}
+
+void vsync(bool odd_field) {
+  if (!g_worker) {
+    vsync_now(odd_field);
+    return;
+  }
+  GsCommand command;
+  command.kind = GsCommand::Kind::Vsync;
+  command.oddField = odd_field;
+  g_worker->push(std::move(command));
+}
+
+void gs_reset() {
+  if (!g_worker) {
+    gs_reset_now();
+    return;
+  }
+  GsCommand command;
+  command.kind = GsCommand::Kind::GsReset;
+  g_worker->push(std::move(command));
+}
+
+void gif_reset() {
+  if (!g_worker) {
+    gif_reset_now();
+    return;
+  }
+  GsCommand command;
+  command.kind = GsCommand::Kind::GifReset;
+  g_worker->push(std::move(command));
+}
 
 bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t height) {
+  std::unique_lock<std::mutex> lock;
+  if (g_worker) lock = g_worker->drain();
   std::string error;
   if (!backend().attach_window(reinterpret_cast<void *>(window), error)) {
     std::fprintf(stderr, "[hw] window presentation refused: %s\n", error.c_str());
@@ -215,12 +401,18 @@ bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t heig
   return true;
 }
 
-void resize_window(std::uint32_t width, std::uint32_t height) { backend().resize_window(width, height); }
+void resize_window(std::uint32_t width, std::uint32_t height) {
+  std::unique_lock<std::mutex> lock;
+  if (g_worker) lock = g_worker->drain();
+  backend().resize_window(width, height);
+}
 
 RenderCounters stats_counters() { return g_backend ? g_backend->render_counters() : RenderCounters{}; }
 
 void finish(std::FILE *output) {
   if (!g_backend) return;
+  std::unique_lock<std::mutex> lock;
+  if (g_worker) lock = g_worker->drain();
   g_backend->wait_idle();
   const Stats stats = g_backend->stats();
   std::fprintf(output,

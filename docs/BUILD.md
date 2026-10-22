@@ -2056,3 +2056,11 @@ Incremental rebuild. Confirmed: 225/225 non-Python CTests; memory hashes identic
 42/42 dumps byte-identical to slice228; race schedule identical to slice235; default renderer 42/42 = slice214 (also
 after the headless 480p hold, which is environment-gated). New capture `private/slice242-capture/race480p-10000.gscap`
 (480p El Capitan race, write-back hashes `race480p-10000-wb.txt`).
+
+## Local slice243 - fewer Vulkan calls, GS stream worker thread (IN-362/IN-363)
+
+Incremental rebuild. Confirmed: 225/225 non-Python CTests, also without interlock; memory hashes identical to the
+write-back mode on the menu (= slice228), car, race, night and 480p race captures; headless menu 42/42 dumps
+byte-identical to slice228; race schedule identical to slice235 and inside the 3D gate; default renderer 42/42 =
+slice214. Measured headless with the launcher's holds (`GT4_FORCE_480P=1 GT4_FORCE_WIDESCREEN=1`): 480p race
+14.4-14.8 ms per vsync, 480p night race (flare read every frame) 8.7-13.6 ms.

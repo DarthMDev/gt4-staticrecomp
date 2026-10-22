@@ -422,4 +422,7 @@ while a game is open, and never touches the owner's card.
 - 480p race headless: 19.6-21.5 ms per vsync (480i: 15.2-16.7). Replay: about 1,930 batches, 1,660 CLUT loads and
   1,860 GLM decodes per frame; GPU busy about 11.5 ms; GS stream 17.6 ms (front end about 11 ms).
 - Compose 3.3 -> 2.5 ms (IN-361). Next: the 480p race front end and GPU CLUT/decode costs.
+- IN-362 fewer Vulkan calls per run and dispatch; IN-363 the GS stream runs on its own worker thread (same calls in
+  the same order; FIFO reads and window calls drain it first). Headless 480p race (the launcher's mode):
+  19.6-21.5 -> 14.4-14.8 ms per vsync. Night race and gates: see BUILD local slice243.
 
