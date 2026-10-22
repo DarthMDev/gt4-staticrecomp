@@ -499,6 +499,22 @@ replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRend
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
 
+### TASK-087 — GS readbacks without stalls
+Planned (owner, 2026-10-21). Study: [docs/GS-READBACK-STUDY.md](docs/GS-READBACK-STUDY.md). Owner report: at 8x
+(5120x2160) on gt4-gs a night race drops to 40 FPS when the headlight flares show; "unsynchronized" readbacks run
+smoothly but lose the flares, the loading-screen logo and the car icon beside the gap time. Findings (Confirmed): all
+readbacks go through `func_004A5178` (4 call sites), queued in the pgl display list; the EE never reads the flare pixels.
+The GS reduces each light's depth-tested square to one visibility pixel in a 64x8 table, the table is copied back and
+pointed at by a DMA REF to VU1, which scales the flare sprite in the same frame. The other readbacks are one-shots
+(`CarIconMaker::render` icons at race load, `func_00104B68` loading-screen capture, a 64x64 thumbnail) plus photo mode
+(8x4 depth autofocus, tile capture). Plan: P0 per-call-site readback log and game-state hash, accurate vs zero-filled;
+P1 VU1 flare program checked over visibility 0..255; S1 protocol 1.4 per-call-site hint so one-shots stay accurate;
+S2 deferred flare readback (TASK-084) with a per-light remap (about -4.2 ms per night frame at 1x); S3 asynchronous
+download in the gt4-gs fork (PCSX2-tainted agent; expected 60 FPS with flares at 8x); S4 GPU-driven flare in CoreGS 2.0
+after M8/M9 (owner's idea: the renderer multiplies the marked flare draws by the visibility texel on the GPU; zero
+readbacks per frame). Corrections: `updateFlare` does not read the result (NATIVE-VARIABLE-FPS-STUDY), and deferral
+moves the flare from 0 to 1 frame late, not 1 to 2 (FRAME-COST-STUDY).
+
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
