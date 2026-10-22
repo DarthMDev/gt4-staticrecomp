@@ -8,7 +8,7 @@ No JIT, no emulator window, full speed.
 ![60 FPS](https://img.shields.io/badge/60%20FPS-100%25%20game%20speed-2ea44f?style=for-the-badge)
 ![Windows](https://img.shields.io/badge/Windows%20x64-Vulkan-2ea44f?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/license-MIT-1f6feb?style=for-the-badge)
-![Release](https://img.shields.io/badge/release-1.2.1-2ea44f?style=for-the-badge)
+![Release](https://img.shields.io/badge/release-1.2.2-2ea44f?style=for-the-badge)
 ![Ultrawide](https://img.shields.io/badge/ultrawide-any%20aspect%20ratio-2ea44f?style=for-the-badge)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/moesuito)
 
@@ -61,7 +61,8 @@ Every tested scene holds **60 FPS at 100% game speed** on the GSdx renderer
 
 **How we got here:** the first native build ran at **30 FPS and 51% speed**. Compiling the VU1 microcode
 ahead of time, submitting GPU work asynchronously and pacing every frame from a single clock brought it
-to a steady **60 FPS at full speed**.
+to a steady **60 FPS at full speed**. Release 1.2.2 batches the work handed to the VU1 thread and
+the graphics process, so the night race needs about 2 ms less CPU time per frame.
 
 ## Known issues
 
@@ -107,7 +108,7 @@ The launcher checks the processor and Vulkan before setup and before Play, and s
 
 ## Install
 
-1. Download **`GT4Recomp-Setup-1.2.1.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
+1. Download **`GT4Recomp-Setup-1.2.2.exe`** from [Releases](https://github.com/moesuito/gt4-staticrecomp/releases)
    and run it. It installs to `C:\Program Files\GT4Recomp` by default (Windows asks for administrator approval), or to
    any folder or drive you choose. If the Microsoft Edge WebView2 Runtime is missing (Windows 10), the installer
    downloads it from Microsoft.

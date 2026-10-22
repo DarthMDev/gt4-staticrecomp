@@ -17,6 +17,9 @@ enum class Category : std::size_t {
 #ifdef GT4_VU0_AOT
   vu0_aot,  // generated VU0 execution (VU0 AOT overlay only, slice 160)
 #endif
+  // TASK-084 step 0 (slice260, docs/FRAME-COST-STUDY.md section 6): the pacer's sleep and the run-loop scopes, so the
+  // F8 interval separates work from sleep and splits ee_dispatch/unattributed. Printed in the legacy lines.
+  pacing_wait, run_due_events, kernel_service, guest_idle, syscall_dispatch,
 #ifdef GT4_MTVU_RUNTIME
   // TASK-011 step 3 (slice171): EE waits for the VU1 worker, by sync reason; GS front end executed from the journal;
   // worker-side GIF output (PATH1/PATH2 bytes). Reported only in the [mtvu] section, never in the legacy lines.
@@ -27,6 +30,8 @@ enum class Category : std::size_t {
   // waits for ring space or frames in flight, the VSYNC post, and READ_FIFO round trips. Reported only in the
   // [gs-ipc] section.
   gs_ipc_write, gs_ipc_backpressure, gs_ipc_vsync_post, gs_ipc_readback_wait,
+  // TASK-084 (slice260): the GS stream's path walk in pcsx2 mode (the StreamSink that applies signals not pre-applied).
+  gif_walk,
 #endif
   count
 };

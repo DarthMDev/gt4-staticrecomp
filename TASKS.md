@@ -109,7 +109,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑081 | Release 1.0.0 hardening and installer: release game build without build paths (slice213), launcher without user paths, CPU (SSE4.1) and Vulkan checks before setup and Play, game Vulkan baseline path for older drivers (slice214), WebView2 bootstrapper in the installer, installer asset name `GT4Recomp-Setup-X.Y.Z.exe`, release notes and draft release | ✅ Done (2026-10-21) · owner tested and approved the installer; released as v1.0.0 |
 | TASK‑082 | Native variable frame rate: fixed 60 Hz simulation, render at any rate (render skip below 60, extra render-only passes above 60 with the game's own render time t) | 📋 Planned (after 1.0.0) · study done (docs/NATIVE-VARIABLE-FPS-STUDY.md) |
 | TASK‑083 | Faster loading and saves: instant disc reads (deeper than PCSX2 Fast CDVD) and loading/save speed-ups in our runtime and game code; gameplay untouched | 📋 Future study (owner, 2026-10-21) |
-| TASK‑084 | Frame cost optimisation: cut the emulation-side EE overhead and the night-race readback (target about 6 ms per race frame headless) | 📋 Planned (after 1.0.0) · study done (docs/FRAME-COST-STUDY.md) |
+| TASK‑084 | Frame cost optimisation: cut the emulation-side EE overhead (VIF1 chain jobs, GIF fast path, VBlank journal) | ✅ Done (2026-10-22) · owner test approved, night race critical path 11.8 → 10.0 ms; release 1.2.2 (PR #82); flare readback moved to CoreGS 2.0 (TASK-087) |
 | TASK‑085 | Launcher self-update: the setup starts outside the launcher's kill-on-close job | ✅ Done (2026-10-21) · PR #67; v1.1.0 republished with the fix; launchers 1.0.0 update by running the setup |
 | TASK‑086 | Progressive 480p everywhere (menus and races at 480p through ELF patches) | ⏸️ Shelved (owner, 2026-10-21) · owner test broke the car select and the race load; branch `task/086-progressive-480p` kept |
 | TASK‑087 | GS readbacks without stalls, in CoreGS 2.0 (GPU-driven flare visibility, no EE wait) | 📋 Planned (owner, 2026-10-21) · study done (docs/GS-READBACK-STUDY.md); CoreGS 2.0 only, gt4-gs frozen |
@@ -117,6 +117,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0 |
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
+| TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -462,7 +463,7 @@ an unthrottled guest clock while a loading or save screen is active (the TASK-07
 with audio muted or kept at the right pace; hooks or ELF patches that shorten fixed waits and per-frame save
 chunking. Never during races or replays; physics, lap times and replays untouched. After 1.0.0.
 
-### TASK-084 — Frame cost optimisation
+### TASK-084 — Frame cost optimisation (Done 2026-10-22)
 Owner request 2026-10-21. Study: docs/FRAME-COST-STUDY.md (slice211, headless, timed only with no builds running).
 In the day race the EE thread takes 8.2 ms per frame, of which the translated game code is 2.9 ms; the rest is VIF1
 job posting (about 5,200 MTVU jobs per frame, one doorbell), the journal GS front end, stream writes, IOP, run loop and
@@ -473,7 +474,22 @@ wake-ups only when waiting (-1 to -2 ms); (3) no EE wait for the VU1 worker at e
 (4) drop the second GIF walk and a copy (-0.4 to -0.8 ms); then compiler flags, run-loop fast paths, VU1 speed. Add the
 missing F8 instrumentation first (pacing-sleep scope, fixed summary formula, per-readback records). Each step: its
 own slice, headless frame identity, CTest and Python, owner F8 check. Feeds TASK-082 (a render pass must fit 7.3 ms for
-120 Hz) and weaker PCs. After 1.0.0.
+120 Hz) and weaker PCs. After 1.0.0. **Done 2026-10-22** (branch `task/084-frame-cost-122`, build `slice262`, pin
+`docs/inputs/slice262-pcsx2.json`; PR into main opened the same day). Owner in-game test, session
+`private/manual-play/session-20261022-163408-808184`, `--mode pcsx2`, 0 late frames in every scene, picture
+unchanged, approved:
+- Showroom: frame median 16.689 ms, p99 19.056; critical path 6.06 ms/frame; vif jobs/frame 35.8; EE wait 0.000.
+- Nordschleife Time Trial (Supra Wood One, 480p): median 16.664, p99 18.304; critical path 6.13; jobs/frame 58.6;
+  EE wait 1.135 (download), readback 0.68.
+- Night race, Clubman Stage Route 5, 5 AI: median 16.663, p99 18.565; critical path 9.97 (TASK-041 owner baseline
+  11.8); jobs/frame 80.4; EE wait 3.052 (download), readback 1.30; 0 audio underruns.
+Headless (slice262, this PC): day race 12.07 -> 10.38 ms, night 13.21 -> 12.08, showroom 9.88 -> 8.61, menu
+1.54 -> 1.41; frame dumps and the GS stream session hash identical to release 1.2.0 (slice240);
+`GT4_MTVU_VERIFY=1` 0 mismatches in 4,200 frames; CTest 40/40; Python 640 tests OK (42 skipped). Switches:
+`GT4_MTVU_CHAIN` (one VIF1 job per DMA chain), `GT4_GIF_FASTPATH` (no second GS stream walk),
+`GT4_MTVU_VBLANK_JOURNAL` (VBlank as a journal entry in pcsx2 mode), `GT4_PERF_COUNTERS`. Note: the night-race
+download wait and the GS readbacks stay out of scope (TASK-041 Performance Mode and CoreGS 2.0 cover them). Build,
+numbers and the owner checklist: docs/BUILD.md "Slice 260/262".
 
 ### TASK-085 — Launcher self-update starts the setup outside its job
 Done 2026-10-21 (branch `task/085-launcher-self-update`). Owner report: launcher 1.0.0 offered 1.1.0, downloaded it,
@@ -505,6 +521,20 @@ menus. Checks: SMODE gate, the 42-dump headless run, owner pass on menus, garage
 replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRenderContextPS2__virtual_67`), 16-bit
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
+
+### TASK-092 — MTVU test switches after TASK-084
+Planned (owner, 2026-10-22): release 1.2.2 ships the owner-tested slice262 build; this fixes the TASK-084 review
+findings afterwards. None is reachable from the launcher, which sets neither variable.
+- `GT4_MTVU=0` in pcsx2 mode crashes at the first VBlank (Confirmed by reading): `mtvu_bridge.cpp` sets
+  `set_vsync_deferral(settings.vblank_journal)` without checking `enabled()`, `start()` returns before the journal
+  exists, and `vblank_sync()` calls `r.journal->append_vblank_flush()` on a null journal.
+- `GT4_MTVU_VERIFY=1` in pcsx2 mode sends no VSYNC (Confirmed by reading): `vblank_sync()` keeps the blocking drain,
+  but the GS stream client still holds the field and nothing calls `post_pending_vsync`.
+- Fix: one condition, `vblank_journal && enabled() && !verify`, for both the client deferral and `defer`.
+- Doorbell sleeper handshake (`ring` / `wait_changed`): seq_cst on the four operations so the store-then-load
+  pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
+- Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
+  the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
 
 ### TASK-091 — Release 1.2.1: per-machine install, data beside the program, user data in AppData
 ✅ **Done (2026-10-22): owner tested and approved; released as v1.2.1.** Branch `task/091-install-layout-121`. Owner decisions 2026-10-22:

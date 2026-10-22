@@ -308,6 +308,8 @@ void release_frame() {
   if (pacing_mode == gt4::pacing::Mode::paced) {
     if (!frame_pacer->anchored())
       frame_pacer->anchor(frame_clock->now());
+    // TASK-084 step 0: the sleep is its own category, so F8 ee_dispatch and unattributed mean work, not sleep.
+    GT4_PERF_SCOPE(gt4::perf::Category::pacing_wait);
     frame_clock->wait_until(frame_pacer->deadline());
   }
   const std::int64_t released = frame_clock->now();

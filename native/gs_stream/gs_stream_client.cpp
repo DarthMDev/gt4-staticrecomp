@@ -31,6 +31,11 @@
 namespace gt4::gs_stream {
 namespace {
 
+// TASK-084 step 3: when the MTVU journal owns the VBlank, the client holds the field here instead of posting.
+bool g_defer_vsync = false;
+bool g_pending_vsync = false;
+bool g_has_pending_vsync = false;
+
 namespace proto = ::gs_stream;
 namespace ipc = ::gs_stream::ipc;
 using proto::RecordType;
@@ -582,6 +587,7 @@ class Client {
       sample.stream_write_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_write);
       sample.readback_wait_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_readback_wait);
       sample.backpressure_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_backpressure);
+      sample.pacing_sleep_us = probe.cumulative_exclusive_us(gt4::perf::Category::pacing_wait);
       for (gt4::perf::Category wait : {gt4::perf::Category::mtvu_wait_vblank, gt4::perf::Category::mtvu_wait_download,
                                        gt4::perf::Category::mtvu_wait_gs_privileged, gt4::perf::Category::mtvu_wait_vu_memory,
                                        gt4::perf::Category::mtvu_wait_gif_reset, gt4::perf::Category::mtvu_wait_reset,
@@ -766,6 +772,8 @@ class Client {
     }
     if (stream()) {
       FrameCosts costs;
+      costs.frame_wall_ms = interval.elapsed_us / scale;
+      costs.pacing_sleep_ms = ms(gt4::perf::Category::pacing_wait);
       costs.ee_cpu_ms = gt4::perf::Probe::shared().report_cpu_ms_per_frame();
       for (gt4::perf::Category wait : {gt4::perf::Category::mtvu_wait_vblank, gt4::perf::Category::mtvu_wait_download,
                                        gt4::perf::Category::mtvu_wait_gs_privileged, gt4::perf::Category::mtvu_wait_vu_memory,
@@ -1042,24 +1050,28 @@ const char *privileged_register_name(int index) {
 }
 
 std::string format_frame_summary(const FrameCosts &costs) {
-  char line[512];
+  char line[640];
   const double waits = costs.vu1_worker_wait_ms + costs.readback_wait_ms + costs.backpressure_ms;
   char gs[96] = "GS process CPU thread Unknown";
   if (costs.gs_cpu_thread_ms >= 0.0)
     std::snprintf(gs, sizeof gs, "GS process CPU thread %.2f ms/frame", costs.gs_cpu_thread_ms);
-  if (costs.ee_cpu_ms < 0.0) {
+  // TASK-084 step 0: the critical path is the EE frame's wall time minus the pacer's sleep, the study's formula
+  // (docs/FRAME-COST-STUDY.md section 6 item 2). The old "EE CPU + waits" double-counted the CPU spent inside waits.
+  if (costs.frame_wall_ms < 0.0) {
     std::snprintf(line, sizeof line,
-                  "[gs-ipc] summary: EE critical path Unknown (EE CPU not measured); EE waits %.2f ms/frame (VU1 worker "
-                  "%.2f, readbacks %.2f, GS back-pressure %.2f) of the %.2f ms frame budget; %s",
+                  "[gs-ipc] summary: EE critical path Unknown (frame wall not measured); EE waits %.2f ms/frame (VU1 "
+                  "worker %.2f, readbacks %.2f, GS back-pressure %.2f) of the %.2f ms frame budget; %s",
                   waits, costs.vu1_worker_wait_ms, costs.readback_wait_ms, costs.backpressure_ms, costs.budget_ms, gs);
     return line;
   }
-  const double path = costs.ee_cpu_ms + waits;
+  const double path = costs.frame_wall_ms - costs.pacing_sleep_ms;
   std::snprintf(line, sizeof line,
-                "[gs-ipc] summary: EE critical path %.2f ms/frame of %.2f budget (%.0f%%) = EE CPU %.2f + waits for the "
-                "VU1 worker %.2f + readbacks %.2f + GS back-pressure %.2f; headroom %.2f ms; %s",
-                path, costs.budget_ms, path / costs.budget_ms * 100.0, costs.ee_cpu_ms, costs.vu1_worker_wait_ms,
-                costs.readback_wait_ms, costs.backpressure_ms, costs.budget_ms - path, gs);
+                "[gs-ipc] summary: EE critical path %.2f ms/frame of %.2f budget (%.0f%%) = frame wall %.2f minus "
+                "pacing sleep %.2f; inside it: EE CPU %.2f, of which VU1 worker wait %.2f, readbacks %.2f, GS "
+                "back-pressure %.2f (waits are part of the path, not added); headroom %.2f ms; %s",
+                path, costs.budget_ms, path / costs.budget_ms * 100.0, costs.frame_wall_ms, costs.pacing_sleep_ms,
+                costs.ee_cpu_ms, costs.vu1_worker_wait_ms, costs.readback_wait_ms, costs.backpressure_ms,
+                costs.budget_ms - path, gs);
   return line;
 }
 
@@ -1069,7 +1081,22 @@ bool read_fifo(std::uint8_t *data, std::uint32_t qwords) {
 }
 
 void on_vsync(bool odd_field) {
+  if (g_defer_vsync) {
+    g_pending_vsync = odd_field;
+    g_has_pending_vsync = true;
+    return;
+  }
   if (Client *c = client()) c->vsync(odd_field);
+}
+
+void set_vsync_deferral(bool defer) { g_defer_vsync = defer; }
+
+bool post_pending_vsync() {
+  if (!g_has_pending_vsync) return false;
+  g_has_pending_vsync = false;
+  const bool field = g_pending_vsync;
+  if (Client *c = client()) c->vsync(field);
+  return true;
 }
 
 void on_gs_reset() {
@@ -1159,9 +1186,10 @@ proto::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &e
     payload.worker_wait_us = per_frame(begin.worker_wait_us, end.worker_wait_us);
     payload.valid |= proto::kOsdStatStreamCosts | proto::kOsdStatWorkerWait;
     if (cpu_known) {
-      // The F8 summary formula (format_frame_summary): EE CPU plus the EE waits for the worker, readbacks and the GS.
-      payload.critical_path_us = payload.main_thread_cpu_us + payload.worker_wait_us + payload.readback_wait_us +
-                                 payload.backpressure_us;
+      // TASK-084 step 0: the same formula as format_frame_summary: the frame wall minus the pacer's sleep. The waits
+      // below are already inside the wall time, so they are reported, not added.
+      const std::uint32_t pacing = per_frame(begin.pacing_sleep_us, end.pacing_sleep_us);
+      payload.critical_path_us = payload.frame_time_avg_us > pacing ? payload.frame_time_avg_us - pacing : 0;
       payload.frame_budget_us = static_cast<std::uint32_t>(budget_ms * 1000.0 + 0.5);
       payload.valid |= proto::kOsdStatCriticalPath;
     }

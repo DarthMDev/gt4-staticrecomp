@@ -357,6 +357,11 @@ void check_privileged_table_and_summary() {
               std::string(client::privileged_register_name(client::privileged_register_index(0x11000000u))) == "other",
           "unknown addresses");
   client::FrameCosts costs;
+  // TASK-084 step 0: the critical path is the frame wall minus the pacing sleep; the waits are inside the wall time.
+  // The owner's night-race numbers (EE CPU 8.761, VU1 wait 3.481, readback 0.776) inside a paced 19.50 ms frame with
+  // 6.48 ms of pacer sleep give the same 13.02 ms path the old "CPU + waits" formula produced by accident.
+  costs.frame_wall_ms = 19.50;
+  costs.pacing_sleep_ms = 6.48;
   costs.ee_cpu_ms = 8.761;
   costs.vu1_worker_wait_ms = 3.481;
   costs.readback_wait_ms = 0.776;
@@ -365,15 +370,17 @@ void check_privileged_table_and_summary() {
   const std::string line = client::format_frame_summary(costs);
   std::printf("[fixture] %s\n", line.c_str());
   require(line.find("EE critical path 13.02 ms/frame of 16.68 budget (78%)") != std::string::npos &&
-              line.find("headroom 3.67 ms") != std::string::npos &&
+              line.find("frame wall 19.50 minus pacing sleep 6.48") != std::string::npos &&
+              line.find("headroom 3.66 ms") != std::string::npos &&
               line.find("GS process CPU thread 0.95 ms/frame") != std::string::npos,
-          "summary of the owner's night-race numbers");
+          "summary of the owner's night-race numbers inside a paced frame");
+  costs.frame_wall_ms = -1.0;
   costs.ee_cpu_ms = -1.0;
   costs.gs_cpu_thread_ms = -1.0;
   const std::string unknown = client::format_frame_summary(costs);
   require(unknown.find("EE critical path Unknown") != std::string::npos &&
               unknown.find("GS process CPU thread Unknown") != std::string::npos,
-          "summary without CPU times");
+          "summary without a frame wall or CPU times");
   std::puts("[fixture] privileged register table and summary ok");
 }
 
@@ -393,6 +400,8 @@ void check_osd_stats() {
   end.worker_wait_us = 30 * 3481;
   end.readback_wait_us = 30 * 776;
   end.stream_write_us = 30 * 590;
+  // TASK-084 step 0: the paced frame wall includes 3.66 ms of pacer sleep, so the critical path is 16683 - 3663 us.
+  end.pacing_sleep_us = 30 * 3663;
   const OsdStatsPayload stats = client::make_osd_stats(begin, end, 17100);
   require(stats.valid == (kOsdStatFrameTimes | kOsdStatMainThreadCpu | kOsdStatWorkerBusy | kOsdStatStreamCosts |
                           kOsdStatWorkerWait | kOsdStatCriticalPath),
@@ -403,8 +412,8 @@ void check_osd_stats() {
   require(stats.main_thread_cpu_us == 8761 && stats.worker_busy_us == 6100 && stats.worker_wait_us == 3481 &&
               stats.readback_wait_us == 776 && stats.stream_write_us == 590 && stats.backpressure_us == 0,
           "OSD per-frame costs");
-  require(stats.critical_path_us == 8761 + 3481 + 776 && stats.frame_budget_us == 16683,
-          "OSD critical path and budget (the F8 summary formula: 13.02 of 16.68 ms)");
+  require(stats.critical_path_us == 16683 - 3663 && stats.frame_budget_us == 16683,
+          "OSD critical path is the frame wall minus the pacer's sleep (13.02 of 16.68 ms)");
   // Without the accounting only the frame times and the EE CPU are known; an empty interval is not valid at all.
   begin.accounting = end.accounting = false;
   const OsdStatsPayload partial = client::make_osd_stats(begin, end, 17100);

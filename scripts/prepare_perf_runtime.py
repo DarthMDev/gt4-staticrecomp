@@ -250,6 +250,37 @@ MTVU_PATCHES.update({
     ],
 })
 
+# TASK-084 step 0 (slice260): kernel-side counters. The release build replaces donor kernel.cpp with the license guard
+# capsule (scripts/prepare_license_guard.py), so the counters are applied there (--frame-counters), on top of the halt
+# dump. Both hooks are increments; nothing guest-visible changes.
+KERNEL_FRAME_COUNTER_PATCHES = [
+    ('#include "ps2/system.hpp"\n', '#include "ps2/system.hpp"\n#include "perf_probe.hpp"\n'),
+    ('void switch_to(Cpu &c, Thread *next) {\n',
+     'void switch_to(Cpu &c, Thread *next) {\n    gt4::perf::count_thread_switch();\n'),
+    ('void handle_syscall(Cpu &c, std::uint32_t pc) {\n    std::uint32_t n = c.r[3].w[0];\n',
+     'void handle_syscall(Cpu &c, std::uint32_t pc) {\n'
+     '    gt4::perf::SyscallScope gt4_syscall_scope(c.r[3].w[0]);\n'
+     '    std::uint32_t n = c.r[3].w[0];\n'),
+]
+
+
+def apply_kernel_frame_counters(source):
+    """Adds the TASK-084 kernel counters; checks that removing them restores the input."""
+    result = source
+    for before, after in KERNEL_FRAME_COUNTER_PATCHES:
+        if result.count(before) != 1:
+            raise ValueError('Expected one qualified kernel frame-counter site')
+        result = result.replace(before, after)
+    inverse = result
+    for before, after in reversed(KERNEL_FRAME_COUNTER_PATCHES):
+        if inverse.count(after) != 1:
+            raise ValueError('Unexpected kernel frame-counter reversal')
+        inverse = inverse.replace(after, before)
+    if inverse != source:
+        raise ValueError('Kernel frame counters do not reverse to the input')
+    return result
+
+
 # TASK-035 (slice191): GS stream hooks, applied on top of the --mtvu derivation of gif.cpp and hw.cpp. Same rules:
 # each anchor is one unique text of the MTVU-derived source and removing the replacements restores it.
 GS_STREAM_PREFIX = '#include "gs_stream_client.hpp"\n'
@@ -411,15 +442,103 @@ def apply_mtvu_runtime(name, source):
     return result
 
 
-def derive_mtvu_runtime_source(name, source, gs_stream=False):
+# TASK-084 (slice260): the frame-cost instrumentation hooks (docs/FRAME-COST-STUDY.md section 6). They are applied only
+# with --frame-cost, on top of the --mtvu (and --gs-stream) derivation, so every capsule before slice260 stays
+# reproducible byte for byte from this script. Each site is a scope or a counter; nothing guest-visible changes.
+FRAME_COST_PATCHES = {
+    'system.cpp': [
+        # The run loop: events, interrupt service and guest idle get their own scopes (they were inside ee_dispatch
+        # or unattributed).
+        ('void run_due_events() {\n    gt4::mtvu::pump();\n    sync_iop();\n',
+         'void run_due_events() {\n'
+         '    gt4::perf::Scope perf_events(gt4::perf::Category::run_due_events);\n'
+         '    gt4::mtvu::pump();\n    sync_iop();\n'),
+        ('        c.pc &= ~kUnwind;\n        run_due_events();\n        kernel::service(c);\n',
+         '        c.pc &= ~kUnwind;\n        run_due_events();\n        {\n'
+         '            gt4::perf::Scope perf_service(gt4::perf::Category::kernel_service);\n'
+         '            kernel::service(c);\n        }\n'),
+        ('void idle(Cpu &c) {\n    std::uint64_t next = next_event_time();\n',
+         'void idle(Cpu &c) {\n'
+         '    gt4::perf::Scope perf_idle(gt4::perf::Category::guest_idle);\n'
+         '    std::uint64_t next = next_event_time();\n'),
+    ],
+    'dmac.cpp': [
+        # TASK-084 step 1 (slice261): the VIF1 chain's packets travel as one job. The batch closes at the chain start
+        # (counted, for the job-shape report), at a stall, and at the chain end.
+        ('void start(int ch) {\n    Channel &c = g_ch[ch];\n',
+         'void start(int ch) {\n    Channel &c = g_ch[ch];\n'
+         '    if (ch == 1) gt4::mtvu::note_vif_chain();\n'),
+        ('void pause(int ch, bool end) {\n',
+         'void pause(int ch, bool end) {\n'
+         '    if (ch == 1) gt4::mtvu::flush_vif_chain();\n'),
+        ('void finish(int ch) {\n    Channel &c = g_ch[ch];\n',
+         'void finish(int ch) {\n    Channel &c = g_ch[ch];\n'
+         '    if (ch == 1) gt4::mtvu::flush_vif_chain();\n'),
+    ],
+}
+
+# The GS stream walk (pcsx2 mode) is skipped when the packet's signals were already applied at acceptance (TASK-084
+# step 2) and gets a scope so the [frame] section shows its share of gs_drain.
+FRAME_COST_GS_STREAM_PATCHES = {
+    'gif.cpp': [
+        ('        StreamSink stream_sink{path};\n        walk(g_paths[path], data, qwc, stream_sink);\n',
+         '        if (gt4::mtvu::stream_signals_pre_applied(path)) return;\n'
+         '        StreamSink stream_sink{path};\n'
+         '        gt4::perf::Scope perf_walk(gt4::perf::Category::gif_walk);\n'
+         '        walk(g_paths[path], data, qwc, stream_sink);\n'),
+    ],
+}
+
+
+def apply_frame_cost(name, source):
+    """Adds the TASK-084 instrumentation hooks; checks that removing them restores the input."""
+    result = source
+    for before, after in FRAME_COST_PATCHES.get(name, ()):
+        if result.count(before) != 1:
+            raise ValueError(f'Expected one qualified TASK-084 frame-cost site in {name}')
+        result = result.replace(before, after)
+    inverse = result
+    for before, after in reversed(FRAME_COST_PATCHES.get(name, ())):
+        if inverse.count(after) != 1:
+            raise ValueError(f'Unexpected TASK-084 frame-cost reversal in {name}')
+        inverse = inverse.replace(after, before)
+    if inverse != source:
+        raise ValueError(f'TASK-084 frame-cost hooks do not reverse to the input: {name}')
+    return result
+
+
+def apply_frame_cost_gs_stream(name, source):
+    """Adds the TASK-084 GS stream scope; checks that removing it restores the input."""
+    result = source
+    for before, after in FRAME_COST_GS_STREAM_PATCHES.get(name, ()):
+        if result.count(before) != 1:
+            raise ValueError(f'Expected one qualified TASK-084 GS stream site in {name}')
+        result = result.replace(before, after)
+    inverse = result
+    for before, after in reversed(FRAME_COST_GS_STREAM_PATCHES.get(name, ())):
+        if inverse.count(after) != 1:
+            raise ValueError(f'Unexpected TASK-084 GS stream reversal in {name}')
+        inverse = inverse.replace(after, before)
+    if inverse != source:
+        raise ValueError(f'TASK-084 GS stream scope does not reverse to the input: {name}')
+    return result
+
+
+def derive_mtvu_runtime_source(name, source, gs_stream=False, frame_cost=False):
     """Derives one extra --mtvu source (gif.cpp, memory.cpp, hw.cpp, dmac.cpp): hooks only."""
     derived = apply_mtvu_runtime(name, source)
+    if frame_cost:
+        derived = apply_frame_cost(name, derived)
     if gs_stream and name in GS_STREAM_PATCHES:
-        return PREFIX + MTVU_PREFIX + GS_STREAM_PREFIX + apply_gs_stream(name, derived)
+        derived = apply_gs_stream(name, derived)
+        if frame_cost:
+            derived = apply_frame_cost_gs_stream(name, derived)
+        return PREFIX + MTVU_PREFIX + GS_STREAM_PREFIX + derived
     return PREFIX + MTVU_PREFIX + derived
 
 
-def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False, mtvu=False):
+def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False, mtvu=False,
+           frame_cost=False):
     original = source
     patches = [(before, after.replace('gt4::perf::Category::vu_interpret',
                 'gt4::perf::vu_interpreter_category(unit)') if split_vu else after)
@@ -445,14 +564,19 @@ def derive(name, source, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_m
             source = apply_mtvu_measure(name, source)
         return PREFIX + MTVU_MEASURE_PREFIX + source
     if mtvu and name in MTVU_PATCHES:
-        return PREFIX + MTVU_PREFIX + apply_mtvu_runtime(name, source)
+        source = apply_mtvu_runtime(name, source)
+        if frame_cost:
+            source = apply_frame_cost(name, source)
+        return PREFIX + MTVU_PREFIX + source
     return PREFIX + source
 
 
 def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=False, mtvu_measure=False,
-            mtvu=False, gs_stream=False, fsv_trace=False, halt_dump=False):
+            mtvu=False, gs_stream=False, fsv_trace=False, halt_dump=False, frame_cost=False):
     if gs_stream:
         mtvu = True
+    if frame_cost and not mtvu:
+        raise ValueError('--frame-cost is derived on top of --mtvu')
     if mtvu and mtvu_measure:
         raise ValueError('--mtvu and --mtvu-measure are separate capsules')
     if mtvu:
@@ -478,7 +602,7 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
             raise ValueError(f'Qualified donor source differs: {name}')
         text = data.decode('utf-8').replace('\r\n', '\n')
         sources[name] = derive(name, text, split_vu=split_vu, vu1_aot=vu1_aot, vu0_aot=vu0_aot,
-                               mtvu_measure=mtvu_measure, mtvu=mtvu)
+                               mtvu_measure=mtvu_measure, mtvu=mtvu, frame_cost=frame_cost)
     if mtvu_measure:
         for name, (donor_path, expected) in MTVU_MEASURE_SOURCES.items():
             data = (donor / donor_path).read_bytes()
@@ -490,7 +614,8 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
             data = (donor / donor_path).read_bytes()
             if hashlib.sha256(data).hexdigest() != expected:
                 raise ValueError(f'Qualified donor source differs: {donor_path}')
-            sources[name] = derive_mtvu_runtime_source(name, data.decode('utf-8').replace('\r\n', '\n'), gs_stream)
+            sources[name] = derive_mtvu_runtime_source(name, data.decode('utf-8').replace('\r\n', '\n'), gs_stream,
+                                                       frame_cost)
     fsv_sources = {}
     if fsv_trace:
         for name, expected in FSV_PIN.items():
@@ -534,7 +659,9 @@ def prepare(output, assets_root=None, *, split_vu=False, vu1_aot=False, vu0_aot=
         receipt['mtvu_measure_profile'] = 'step0-counters-v1'
         receipt['mtvu_measure_donor_sha256'] = {name: expected for name, (_, expected) in MTVU_MEASURE_SOURCES.items()}
     if mtvu:
-        receipt['mtvu_runtime_profile'] = 'step4-runtime-v2'
+        # TASK-084 (slice260): the profile names the chain-batched VIF1 jobs and the per-direction doorbells; the
+        # capsules before slice260 keep their pinned receipts.
+        receipt['mtvu_runtime_profile'] = 'task084-frame-cost-v1' if frame_cost else 'step4-runtime-v2'
         receipt['mtvu_runtime_donor_sha256'] = {name: expected for name, (_, expected) in MTVU_RUNTIME_SOURCES.items()}
     if gs_stream:
         receipt['gs_stream_profile'] = 'task035-seam-v1'
@@ -559,7 +686,9 @@ if __name__ == '__main__':
     parser.add_argument('--gs-stream', action='store_true')
     parser.add_argument('--fsv-trace', action='store_true')
     parser.add_argument('--halt-dump', action='store_true')
+    parser.add_argument('--frame-cost', action='store_true',
+                        help='TASK-084: also add the frame-cost instrumentation hooks (run loop, VIF1 chain, GIF walk)')
     args = parser.parse_args()
     prepare(args.output, args.assets_root, split_vu=args.split_vu, vu1_aot=args.vu1_aot, vu0_aot=args.vu0_aot,
             mtvu_measure=args.mtvu_measure, mtvu=args.mtvu, gs_stream=args.gs_stream, fsv_trace=args.fsv_trace,
-            halt_dump=args.halt_dump)
+            halt_dump=args.halt_dump, frame_cost=args.frame_cost)

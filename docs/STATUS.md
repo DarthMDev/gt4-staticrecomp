@@ -1,5 +1,28 @@
 # Current Status
 
+## Release 1.2.2 published (2026-10-22, TASK-084, PR #82)
+
+Launcher 1.2.1 at version 1.2.2 with the TASK-084 game build slice262 (owner tested and approved). Installer
+`GT4Recomp-Setup-1.2.2.exe` (28,862,899 bytes, sha256 `6ecab016197fa2869261f9d3fd4ca099cb974b576ff05e1dc7b284847628a35f`),
+gt4-gs unchanged (1.2.0). Release notes: [1.2.2](release-notes/1.2.2.md). Follow-up: TASK-092 (MTVU test switches).
+
+## Frame cost, runtime side (2026-10-22, TASK-084, DONE, branch `task/084-frame-cost-122`, owner approved)
+
+The study's missing F8 instrumentation and items 2-4 are implemented; item 1 (deferred flare readback) stays out
+by owner decision (readback work belongs to CoreGS 2.0). New runtime switches, all on by default:
+`GT4_MTVU_CHAIN` (one MTVU job per VIF1 DMA chain), `GT4_GIF_FASTPATH` (no second GS stream walk),
+`GT4_MTVU_VBLANK_JOURNAL` (VBlank as a journal entry in pcsx2 mode). Release-candidate build `slice262`
+(pin `docs/inputs/slice262-pcsx2.json`; mode `pcsx2` points at it for the owner test). Checks: CTest 40/40; the
+Python suite with the new `tests/python/test_frame_cost.py`; menus 41/41, day race 15/15 and night race 15/15 frame
+dumps and the GS stream session hash identical to release 1.2.0 (slice240); `GT4_MTVU_VERIFY=1` with 0
+mismatches in 4,200 frames. **Owner in-game test 2026-10-22 approved** (session
+`session-20261022-163408-808184`, 0 late frames in every scene, picture unchanged): showroom critical path
+6.06 ms/frame with 35.8 VIF jobs/frame, Nordschleife TT 480p 6.13 with 58.6, night race 9.97 with 80.4 (the
+TASK-041 owner baseline was 11.8). The night-race download wait and the GS readbacks stay out of scope
+(TASK-041 Performance Mode and CoreGS 2.0). Numbers, build recipe and the owner F7/F8 checklist:
+[BUILD slice 260/262](BUILD.md). PR into main opened; the reviewer merges main (launcher 1.2.1) and builds
+release 1.2.2.
+
 ## Release 1.2.1 prepared (2026-10-22, TASK-091, branch `task/091-install-layout-121`, waiting for owner test)
 
 Owner decisions: per-machine install in `C:\Program Files\GT4Recomp` (administrator rights, any folder allowed); the

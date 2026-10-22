@@ -2310,3 +2310,198 @@ Builds (all paths absolute):
   Not run on this PC.
 - Measured: the launcher start timings (`ui ready after N ms`, phases before the window) and the installer phases
   (setup.log `timings ms:`) come from the owner's run. No launcher window was opened here.
+## Slice 260/262 - TASK-084 frame cost, runtime side (`--mode pcsx2`)
+
+Owner request 2026-10-21; study `docs/FRAME-COST-STUDY.md`. Item 1 of the study (deferred flare readback) is out by
+owner decision: readback work belongs to CoreGS 2.0 (`decisions/gt4-gs-frozen`). This slice implements the study's
+missing instrumentation (section 6) and items 2-4, each with a runtime A/B switch, and keeps the GS stream
+byte-identical.
+
+- **slice260** = the instrumentation + item 2 (one MTVU job per VIF1 DMA chain).
+- **slice262** = the same plus item 4 (no second GS stream walk; worker output forwarded straight from the ring) and
+  item 3 (VBlank as a journal entry in pcsx2 mode). slice262 is the release 1.2.2 candidate.
+
+### What changed
+
+Host code (`native/`):
+
+- `perf_accounting.hpp`, `perf_probe.*`: categories `pacing_wait`, `run_due_events`, `kernel_service`, `guest_idle`,
+  `syscall_dispatch` and `gif_walk`; a `[frame]` F8 section with GIF bytes/records per path, VIF1 packets/jobs/bytes,
+  DMA chains, syscalls by number with their wall time, thread switches and the pacer's sleep; the study's fixed
+  critical-path formula (frame wall minus pacing sleep) in `format_frame_summary` and in the GS-stream OSD.
+- `window.cpp`: the pacer's sleep is its own scope, so `ee_dispatch`/`unattributed` mean work.
+- `mtvu_ring.hpp`: one doorbell per direction with a sleeper count (a ring only notifies a peer that sleeps), ring
+  statistics, and `try_peek`/`release` so the EE can forward a worker record without copying it.
+- `mtvu_journal.*`: separate input/output bells; the producer waits for "worker progress", which also covers a worker
+  blocked on a full output ring (the old single bell provided that wake-up by accident); worker records execute
+  straight from the ring, and only chunked records are reassembled.
+- `mtvu_runtime.*`: `VifBatch` chain jobs, `flush_vif_chain()` at the chain end, at a stall and before any journal or
+  sync operation; `GT4_MTVU_CHAIN`, `GT4_GIF_FASTPATH`, `GT4_MTVU_VBLANK_JOURNAL`; the `[mtvu]` job-shape, doorbell
+  and forwarded-bytes lines; `after_vblank_output()` moved to the drain when the VBlank is deferred.
+- `mtvu_vif_batch.hpp`: the batch payload (packet count, then per packet `qwc` + `qwc*16` bytes) with the
+  `native_mtvu_vif_batch` fixture.
+- `gs_stream/gs_stream_client.*`: the client can hold the VSYNC (`set_vsync_deferral`, `post_pending_vsync`) so the
+  journal can post it in stream order; the OSD critical path uses the same wall-minus-sleep formula.
+- `mtvu_bridge.cpp`: in pcsx2 mode it installs the deferral and the callback that posts the held VSYNC.
+
+Runtime capsule (`scripts/prepare_perf_runtime.py --mtvu --gs-stream --frame-cost`): run-loop scopes in `system.cpp`,
+the VIF1 chain hooks in `dmac.cpp`, and the GS stream fast path plus its scope in `gif.cpp`. `--frame-cost` is opt-in,
+so every earlier capsule still derives byte for byte (checked by `tests/python/test_frame_cost.py`).
+
+License guard (`scripts/prepare_license_guard.py --display-aspect --frame-counters`): syscall and thread-switch
+counters in `kernel.cpp`, on top of the halt dump.
+
+### Switches (all on by default)
+
+| variable | on | off (A/B) |
+|---|---|---|
+| `GT4_MTVU_CHAIN` | one job per VIF1 DMA chain, posted at the chain end, a stall, or before any journal/sync operation | one job per packet (pre-TASK-084) |
+| `GT4_GIF_FASTPATH` | pcsx2 + MTVU: no second GS stream walk (PATH2/PATH3 signals were applied at accept) | walk every packet |
+| `GT4_MTVU_VBLANK_JOURNAL` | pcsx2: the VSYNC is a journal entry after the frame's output; the EE does not drain at VBlank | blocking drain at VBlank |
+| `GT4_PERF_COUNTERS` | the `[frame]` counters | counters off (zero overhead) |
+
+### Build
+
+```
+private\slice260-scripts\build-game-260.bat <build dir> aspect <runtime capsule> <guard capsule>
+```
+
+which configures, in a VS x64 shell:
+
+```
+cmake -S C:\Antigravity\gt4-wt-084-frame-cost -B <build dir> -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=aspect ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_SDL3_ROOT=<assets>/private/tooling/sdl3-3.4.18 ^
+  -DGT4_PERF_RUNTIME_SOURCE=<assets>/private/<runtime capsule> ^
+  -DGT4_PORT_DIR=<assets>/private/slice200-port -DGT4_SHADER_DIR=<assets>/private/slice153-pacing-shaders ^
+  -DGT4_VU_CORPUS_DIR=<assets>/private/slice155-vu1-full-corpus ^
+  -DGT4_VU1_GENERATED_DIR=<assets>/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=<assets>/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=<assets>/private/slice160-vu0-image/vu0_image.bin ^
+  -DGT4_MEMCARD_RUNTIME_SOURCE=<assets>/private/slice200-memcard-runtime ^
+  -DGT4_LICENSE_GUARD_SOURCE=<assets>/private/<guard capsule> -DGT4_RELEASE_DISTRIBUTION=ON
+```
+
+Pins:
+
+- slice260: capsule `private/slice260-instrument-runtime` (`docs/inputs/slice260-instrument-runtime.json`), guard
+  `private/slice260-license-guard-runtime` (`docs/inputs/slice260-license-guard-runtime.json`), launcher profile
+  `docs/inputs/slice260-pcsx2.json`.
+- slice262: capsule `private/slice262-frame-cost-runtime` (`docs/inputs/slice262-frame-cost-runtime.json`), guard
+  `private/slice262-license-guard-runtime` (`docs/inputs/slice262-license-guard-runtime.json`), launcher profile
+  `docs/inputs/slice262-pcsx2.json` (mode `pcsx2` while the owner tests it).
+
+### Checks (slice262)
+
+- CTest: 40 of 40 pass (new `native_mtvu_vif_batch`; `native_mtvu_ring` adds the doorbell policy and
+  `try_peek`/`release`).
+- Python: 639 tests OK, 42 skipped, with `GT4_NATIVE_BUILD` = slice262 (the new `tests/python/test_frame_cost.py`
+  adds 10).
+- Frame identity against release 1.2.0 (slice240), same schedules and seed cards, headless 1x: menus 41/41 dumps,
+  day race 15/15, night race 15/15; the GS stream session hash (`GT4_GS_STREAM_HASH=1`) is identical in all three
+  scenes. The dumps come from the GS process (`DumpEvery`), because in pcsx2 mode the game process has no framebuffer.
+- `GT4_MTVU_VERIFY=1`: 4,200 frames, 0 shadow/worker mismatches (the verify path keeps the blocking drain because it
+  compares both VIF1 states while idle).
+- Headless harness: `scripts/frame_cost_headless.py` (scenes, gt4-gs.ini, hashes, conditions, builder check).
+- Distribution `private/slice262-dist` (18 files) from `scripts/make_distribution.py` with
+  `--runtime-manifest docs/inputs/slice262-pcsx2.json`: `gt4vulkan.exe --portable-check` prints `result: ok`
+  (9 of 9 shaders, release build without a build-time shader fallback, no GS process in the folder).
+
+### Headless numbers, before and after each step
+
+One build (slice262), four configurations, `GT4_MTVU_REPORT_EVERY=500`, 1x, no dumps, no stream hash, on this PC
+(Ryzen 7 5700X). `base` = all three switches off (pre-TASK-084); `s1` = `GT4_MTVU_CHAIN=1`; `s2` = plus
+`GT4_GIF_FASTPATH=1`; `s3` = plus `GT4_MTVU_VBLANK_JOURNAL=1` (the defaults). Averages of the steady intervals:
+menus i=0-7 (VBlanks 0-4,000), day race i=19-31 (VBlanks 9,500-16,000), night race i=18-25 (flare readbacks on),
+showroom i=12-13 (the car showroom inside the day-race schedule). All times ms per VBlank.
+
+Summary (frame wall, ms per VBlank; the deltas are against `base`, same build and schedule):
+
+| scene | base | +item 2 (chain jobs) | +item 4 (GIF fast path) | +item 3 (VBlank journal) | total |
+|---|---|---|---|---|---|
+| menus | 1.54 | 1.41 | 1.38 | 1.41 | **-0.13** |
+| day race | 12.07 | 11.01 | 11.07 | 10.38 | **-1.69** |
+| night race (flare readback) | 13.21 | 11.84 | 11.95 | 12.08 | **-1.13** |
+| showroom | 9.88 | 9.36 | 9.14 | 8.61 | **-1.27** |
+
+Reading: item 2 does most of the work (day race EE CPU 10.3 -> 9.3 ms, `vif_gif` 1.32 -> 0.89, doorbell rings 11283 -> 349 per frame, jobs 5555 -> 88); item 4 removes the second GS
+stream walk and its copy; item 3 removes the VBlank wait in the scenes that had one (day race `wait vblank` 3.43 -> 0.00, showroom 4.44 -> 0.00), while the night race keeps its
+flare-readback `download` wait (4.97 ms) because item 1 is out of scope. The night `EE wait` falls from 6.02 to 4.97 ms because the
+chain jobs leave less to drain per download. VU1 worker busy is unchanged (8.50 -> 8.03 ms day), so after these items the worker is
+the critical path of the day race.
+
+### menus
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 1.54 | 1.54 | 0.89 | 0.19 | 0.03 | 649.88 | 1332.81 | 18.10 | 2582.04 | 0.04 | 0.00 | 0.00 | 0.00 | 0.62 |
+| s1 | 1.41 | 1.40 | 0.89 | 0.07 | 0.03 | 17.62 | 68.33 | 12.46 | 685.29 | 0.02 | 0.00 | 0.00 | 0.00 | 0.62 |
+| s2 | 1.38 | 1.38 | 0.89 | 0.07 | 0.02 | 17.62 | 68.33 | 8.69 | 685.29 | 0.02 | 0.00 | 0.00 | 0.00 | 0.62 |
+| s3 | 1.41 | 1.39 | 0.91 | 0.07 | 0.02 | 17.62 | 68.33 | 8.24 | 685.29 | 0.02 | 0.00 | 0.00 | 0.00 | 0.62 |
+
+### day
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 12.07 | 10.34 | 3.01 | 1.32 | 0.39 | 5554.80 | 11283.05 | 2.43 | 22047.18 | 8.50 | 4.09 | 3.43 | 0.66 | 6.91 |
+| s1 | 11.01 | 8.94 | 3.04 | 0.90 | 0.39 | 88.07 | 349.86 | 3.52 | 5651.34 | 8.47 | 3.37 | 2.84 | 0.54 | 6.91 |
+| s2 | 11.07 | 9.38 | 3.04 | 0.91 | 0.38 | 88.12 | 350.06 | 3.42 | 5652.52 | 8.52 | 3.44 | 2.92 | 0.52 | 6.91 |
+| s3 | 10.38 | 9.31 | 2.96 | 0.89 | 0.37 | 87.99 | 348.69 | 1.44 | 5586.01 | 8.03 | 2.84 | 0.00 | 0.57 | 6.84 |
+
+### night
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 13.21 | 9.62 | 2.44 | 1.31 | 0.33 | 6043.46 | 12270.52 | 8.61 | 22646.60 | 6.13 | 6.02 | 0.00 | 6.02 | 4.35 |
+| s1 | 11.84 | 8.55 | 2.47 | 0.86 | 0.33 | 92.34 | 369.27 | 7.21 | 4807.31 | 5.91 | 4.95 | 0.00 | 4.95 | 4.35 |
+| s2 | 11.95 | 8.58 | 2.54 | 0.87 | 0.32 | 92.24 | 368.98 | 7.20 | 4803.54 | 5.95 | 5.03 | 0.00 | 5.03 | 4.34 |
+| s3 | 12.08 | 8.54 | 2.66 | 0.88 | 0.32 | 92.65 | 370.57 | 7.17 | 4815.46 | 5.96 | 4.97 | 0.00 | 4.97 | 4.35 |
+
+### showroom
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 9.88 | 7.67 | 1.82 | 1.17 | 0.25 | 5092.00 | 10259.25 | 16.80 | 18746.85 | 6.80 | 4.44 | 4.44 | 0.00 | 3.74 |
+| s1 | 9.36 | 6.99 | 2.01 | 0.78 | 0.27 | 39.90 | 154.95 | 16.35 | 3578.00 | 7.06 | 4.01 | 4.01 | 0.00 | 3.72 |
+| s2 | 9.14 | 6.80 | 1.95 | 0.74 | 0.25 | 39.85 | 154.90 | 11.65 | 3573.00 | 6.90 | 3.99 | 3.99 | 0.00 | 3.71 |
+| s3 | 8.61 | 6.58 | 1.87 | 0.76 | 0.25 | 39.90 | 154.95 | 10.65 | 3582.35 | 6.58 | 3.49 | 0.00 | 0.00 | 3.71 |
+
+### Owner F7/F8 check (paced, windowed)
+
+From the repository root (PowerShell), with the release candidate build (mode `pcsx2` = slice262):
+
+```
+private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2
+```
+
+Mode pcsx2 reads the pinned slice262 profile. Check one scene per F7/F8 interval (F7 when the scene has settled, F8 after about
+30 s):
+
+1. **Time Trial, Nordschleife, Toyota Supra Wood One, in-game video 480p** (the reference scene).
+2. **Night race** (Arcade -> Single Race -> City Courses -> Clubman Stage Route 5, 5 AI).
+3. **Showroom or garage** (the car rotating).
+
+Report lines to compare with the tables above (same scene, this build):
+
+- `[perf] frame ms: median ... p99 ...` - the frame time; should not be worse than 1.2.0 in the same scene.
+- `[frame] ... critical path ...` - the EE frame minus the pacer's sleep (the study's formula).
+- `[mtvu] vif jobs/frame ... doorbells/frame ...` - jobs per frame and wake-ups; the doorbell rings should be in the
+  hundreds, not the thousands.
+- `[mtvu] EE wait ms/frame: vblank=...` - at VBlank it should be near zero in pcsx2 mode (`vblank_deferred` in the
+  `[mtvu] sync` lines); the night race keeps its flare-readback `download` wait (item 1 is out of scope).
+- `[mtvu] worker ms/frame: vu1_program=... busy=...` - the VU1 worker; it is now the critical path of the day race.
+
+A/B in the same scene, if wanted: `$env:GT4_MTVU_CHAIN="0"`, `$env:GT4_GIF_FASTPATH="0"` or
+`$env:GT4_MTVU_VBLANK_JOURNAL="0"` before the launch (the probe records them in `result.json`).
+
+### Limits
+
+- The measurements come from a machine that also ran other agents' work; the A/B deltas within one matrix are the
+  usable result, not the absolute values (the study's slice211 baseline was 8.2 ms day / 9.9 ms night with the same
+  1x gt4-gs and no probe).
+- In pcsx2 mode the `[gif] path 2/3 tags` session counters stay zero with the fast path on: the walk that filled them
+  is exactly what the fast path removes. They are diagnostics only; nothing reads them.
+- The last VSYNC before shutdown can be posted after the GS process's session summary (it is harmless: the window is
+  closing). Frame dumps and the session hash of full runs are unaffected.
+- The mode-3 (interlaced) and 3x cases are not re-measured here; the switches do not depend on the resolution.
+

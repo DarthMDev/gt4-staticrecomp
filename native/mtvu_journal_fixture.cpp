@@ -78,10 +78,11 @@ std::vector<Output> outputs_for_job(std::uint64_t job, const std::vector<std::ui
 
 struct WorkerRun {
   // Worker thread body. Exceptions are captured and rethrown on the EE thread at join (section 5.6).
-  static void run(SpscByteRing &input, SpscByteRing &output, Doorbell &bell, std::uint64_t seed,
+  static void run(SpscByteRing &input, SpscByteRing &output, Doorbell &input_bell, Doorbell &output_bell,
+                  std::uint64_t seed,
                   std::exception_ptr &failure) {
     try {
-      WorkerEnd end(input, output, bell);
+      WorkerEnd end(input, output, input_bell, output_bell);
       std::mt19937_64 rng(seed);
       RecordHeader header;
       std::vector<std::uint8_t> payload;
@@ -106,14 +107,14 @@ struct WorkerRun {
 // One random script. Returns the number of operations, and checks the GS log against the serial model.
 void run_script(std::uint64_t seed, std::size_t input_bytes, std::size_t output_bytes, int operations,
                 std::uint64_t &jobs_out, std::uint64_t &fast_path_out) {
-  Doorbell bell;
-  SpscByteRing input(input_bytes, bell);
-  SpscByteRing output(output_bytes, bell);
+  Doorbell input_bell, output_bell;
+  SpscByteRing input(input_bytes, input_bell);
+  SpscByteRing output(output_bytes, output_bell);
   RecordingSink sink;
-  EeJournal journal(input, output, bell, sink);
+  EeJournal journal(input, output, input_bell, output_bell, sink);
 
   std::exception_ptr failure;
-  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(bell), seed * 7919u + 1u,
+  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(input_bell), std::ref(output_bell), seed * 7919u + 1u,
                      std::ref(failure));
 
   std::mt19937_64 rng(seed);
@@ -216,13 +217,13 @@ void check_random_scripts() {
 void check_tiny_ring_deadlock() {
   // 500 jobs with 200-byte inputs and up to 400-byte outputs through 128-byte rings: both sides must keep
   // draining each other or this never finishes (CTest TIMEOUT catches a hang).
-  Doorbell bell;
-  SpscByteRing input(128, bell);
-  SpscByteRing output(128, bell);
+  Doorbell input_bell, output_bell;
+  SpscByteRing input(128, input_bell);
+  SpscByteRing output(128, output_bell);
   RecordingSink sink;
-  EeJournal journal(input, output, bell, sink);
+  EeJournal journal(input, output, input_bell, output_bell, sink);
   std::exception_ptr failure;
-  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(bell), std::uint64_t{99},
+  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(input_bell), std::ref(output_bell), std::uint64_t{99},
                      std::ref(failure));
   std::vector<Event> expected;
   std::mt19937_64 rng(5);
@@ -241,13 +242,13 @@ void check_tiny_ring_deadlock() {
 }
 
 void check_blocking_drain_waits_for_worker() {
-  Doorbell bell;
-  SpscByteRing input(4096, bell);
-  SpscByteRing output(4096, bell);
+  Doorbell input_bell, output_bell;
+  SpscByteRing input(4096, input_bell);
+  SpscByteRing output(4096, output_bell);
   RecordingSink sink;
-  EeJournal journal(input, output, bell, sink);
+  EeJournal journal(input, output, input_bell, output_bell, sink);
   std::exception_ptr failure;
-  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(bell), std::uint64_t{7},
+  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(input_bell), std::ref(output_bell), std::uint64_t{7},
                      std::ref(failure));
   std::vector<std::uint8_t> payload(64, 0x5A);
   journal.post_job(RecordKind::VifPacket, 1, payload.data(), payload.size());
@@ -264,13 +265,13 @@ void check_blocking_drain_waits_for_worker() {
 }
 
 void check_shutdown_after_jobs() {
-  Doorbell bell;
-  SpscByteRing input(256, bell);
-  SpscByteRing output(256, bell);
+  Doorbell input_bell, output_bell;
+  SpscByteRing input(256, input_bell);
+  SpscByteRing output(256, output_bell);
   RecordingSink sink;
-  EeJournal journal(input, output, bell, sink);
+  EeJournal journal(input, output, input_bell, output_bell, sink);
   std::exception_ptr failure;
-  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(bell), std::uint64_t{3},
+  std::thread worker(WorkerRun::run, std::ref(input), std::ref(output), std::ref(input_bell), std::ref(output_bell), std::uint64_t{3},
                      std::ref(failure));
   std::vector<Event> expected;
   for (std::uint64_t job = 1; job <= 10; ++job) {
@@ -290,14 +291,14 @@ void check_shutdown_after_jobs() {
 
 void check_worker_protocol_error_is_reported() {
   // A worker that sends an unexpected record kind must be caught on the EE side, not silently accepted.
-  Doorbell bell;
-  SpscByteRing input(256, bell);
-  SpscByteRing output(256, bell);
+  Doorbell input_bell, output_bell;
+  SpscByteRing input(256, input_bell);
+  SpscByteRing output(256, output_bell);
   RecordingSink sink;
-  EeJournal journal(input, output, bell, sink);
+  EeJournal journal(input, output, input_bell, output_bell, sink);
   RecordHeader bogus;
   bogus.kind = static_cast<std::uint16_t>(RecordKind::VifWrite);
-  WorkerEnd end(input, output, bell);
+  WorkerEnd end(input, output, input_bell, output_bell);
   std::vector<std::uint8_t> payload(8, 1);
   journal.post_job(RecordKind::VifPacket, 1, payload.data(), payload.size());
   // Write a wrong-kind output record directly into the output ring, as a broken worker would.

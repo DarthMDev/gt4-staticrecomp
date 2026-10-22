@@ -120,8 +120,11 @@ PERF_PROFILES = {
     # GT4_FULLSCREEN start (native/window.cpp open_window). Mode pcsx2 points here since the owner approved the coverage
     # build as the default (TASK-014). Only the window start changes from slice208; the guest frames are the same.
     # TASK-088 (release 1.2.0 test build): the slice218 build with the black game window background (native/window.cpp).
-    # Mode pcsx2 points here.
-    'pcsx2': ('slice240-pcsx2.json', 'private/slice240-game-build/build/gt4vulkan.exe'),
+    # Kept as history; mode pcsx2 now points at the TASK-084 frame-cost candidate.
+    'pcsx2-slice240': ('slice240-pcsx2.json', 'private/slice240-game-build/build/gt4vulkan.exe'),
+    # TASK-084 (release 1.2.2 candidate): the slice240 recipe with the frame-cost runtime (instrumentation, VIF1 chain
+    # jobs, GIF fast path, VBlank journal). Mode pcsx2 points here for the owner F8 check of docs/FRAME-COST-STUDY.md.
+    'pcsx2': ('slice262-pcsx2.json', 'private/slice262-build/build/gt4vulkan.exe'),
     # TASK-080 addendum (slice218): the slice217 build plus the seamless display host code (GT4_OUTPUT_SIZE gives the
     # auto aspect, GT4_MONITOR the monitor, per-monitor DPI awareness).
     'pcsx2-slice218': ('slice218-pcsx2.json', 'private/slice218-build/build/gt4vulkan.exe'),
@@ -176,7 +179,7 @@ VU1_AOT_MANIFESTS = ('slice151-vu1-aot.json', GS_ASYNC_MANIFEST, PACING_MANIFEST
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
                      'slice212b-pcsx2.json',
                      'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json',
-                     'slice240-pcsx2.json')
+                     'slice240-pcsx2.json', 'slice260-pcsx2.json', 'slice262-pcsx2.json')
 # Manifests whose binaries contain the VU0 AOT table and accept --vu0-verify.
 VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mtvu-measure.json', 'slice170-mtvu.json',
                      'slice171-mtvu.json', 'slice172-mtvu.json', 'slice178-main.json', 'slice191-pcsx2-stream.json',
@@ -187,7 +190,7 @@ VU0_AOT_MANIFESTS = ('slice160-vu0-aot.json', 'slice166-main.json', 'slice169-mt
                      'slice209-pcsx2.json', 'slice210-pcsx2.json', 'slice211-pcsx2.json', 'slice213-pcsx2.json',
                      'slice212b-pcsx2.json',
                      'slice214-pcsx2.json', 'slice215-pcsx2.json', 'slice217-pcsx2.json', 'slice218-pcsx2.json',
-                     'slice240-pcsx2.json')
+                     'slice240-pcsx2.json', 'slice260-pcsx2.json', 'slice262-pcsx2.json')
 # Host pacing overrides, forwarded unchanged and recorded in run evidence.
 PACING_OVERRIDES = {'GT4_PACING': ('paced', 'audio'),
                     'GT4_PRESENT_MODE': ('fifo', 'mailbox', 'immediate')}
@@ -281,7 +284,9 @@ def monitor_device(value):
 MTVU_MEASURE_VALUES = ('0', '1')
 # TASK-011 step 2 (slice170): worker runtime switches. Unset means the default shown; forwarded and recorded.
 # GT4_MTVU_PRIV_ASYNC (TASK-041, slice198): privileged GS writes queued in the MTVU journal in pcsx2 mode (default on).
-MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0', 'GT4_MTVU_PRIV_ASYNC': '1'}
+MTVU_SWITCHES = {'GT4_MTVU': '1', 'GT4_MTVU_VERIFY': '0', 'GT4_MTVU_STRICT': '0', 'GT4_MTVU_PRIV_ASYNC': '1',
+                 # TASK-084 (slice260): frame-cost switches, all on by default (0 is the pre-TASK-084 behaviour).
+                 'GT4_MTVU_CHAIN': '1', 'GT4_GIF_FASTPATH': '1', 'GT4_MTVU_VBLANK_JOURNAL': '1'}
 # GT4_MTVU_REPORT_EVERY (slice171): VBlank count for the headless [mtvu] F8-equivalent report; unset means off.
 MTVU_REPORT_EVERY = 'GT4_MTVU_REPORT_EVERY'
 # TASK-035 (slice191): GS stream settings (native/gs_stream/gs_stream_client.hpp, tools/gs_stream_record).
@@ -370,6 +375,14 @@ def pacing_overrides(environment):
     return {'pacing_environment': recorded} if recorded else {}
 
 
+# Keyboard identities a performance candidate may carry: the slice136 digital-only fix, and the TASK-076 keyboard
+# table that every pcsx2 manifest from slice210 on records (without it, --mode pcsx2 was refused).
+PERFORMANCE_KEYBOARD_FIXES = (
+    'digital_only_slice136',
+    'TASK-076 keyboard table (controls.cpp default_controls, docs/CONTROLS.md keyboard-default); digital only',
+)
+
+
 def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
@@ -377,7 +390,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
             (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2', 'license-guard', 'pcsx2-coverage') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
-            evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
+            evidence.get('keyboard_input_fix') not in PERFORMANCE_KEYBOARD_FIXES or
             evidence.get('runtime', {}).get('path') != expected_runtime or
             evidence.get('capture_activation_implemented') is not False):
         raise ValueError('Performance test requires the qualified corrected candidate')
