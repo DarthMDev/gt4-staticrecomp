@@ -42,13 +42,15 @@ do not reintroduce it here.
 
 GT4Recomp is a static recompilation of Gran Turismo 4 NTSC-U (SCUS-97328, disc
 labeled v2.00; its CORE.GT4 is byte-identical to the gt4-decomp target) for
-Windows x86-64 + Vulkan first, then Android (phase 2) and iOS (phase 3). **No JIT ever**: guest code
+Windows x86-64 + Vulkan first, then native Linux and Android (phases below). **No JIT ever**: guest code
 (EE, VU, IOP) is compiled ahead of time per target; interpreters may remain only
 as explicit, counted fallbacks. GPU driver shader compilation is allowed. Never
 claim zero emulation or full PS2 fidelity.
 
-- **Phase 1 (current):** fast, stable recompiled port: 60 FPS at 100% game speed,
-  smooth frametime, no interpreter on the normal path.
+- **Phase 1 (done, release 1.0.0; 1.x updates):** fast, stable recompiled port: 60 FPS
+  at 100% game speed, smooth frametime, no interpreter on the normal path.
+- **Phase 2 (current):** CoreGS 2.0 (TASK-027); when it is ready, release 2.0.0 with
+  CoreGS 2.0 as the default renderer and GSdx as the fallback.
 - **Out of scope here:** a decompilation-based source port, changes to the game's
   physics timing and remaster features will be a separate project, possibly a fork.
   This repository's goal is the original game running natively, optimized and as
@@ -80,15 +82,17 @@ claim zero emulation or full PS2 fidelity.
   owner, 2026-10-15).
 - **Renderer focus now:** TASK-032..044 (PCSX2 GS in a separate process, decision
   0070; CoreGS 1.1 built in as the fallback).
-- **Phases:** Phase 1 = Windows PC (current), Phase 2 = Android, Phase 3 = iOS.
+- **Phases (owner, 2026-10-22):** Phase 1 = Windows PC, 1.x (done); Phase 2 = CoreGS 2.0
+  and release 2.0.0 (current); Phase 3 = native Linux; Phase 4 = Android (only when the
+  owner asks; the focus is PC until then). Phases 3 and 4 start after 2.0.0.
 - **Graphics:** PC renderers = the **PCSX2 GS** in a separate GPL process
   (`gt4-gs.exe`, built from our fork `moesuito/gt4recomp-gs`, downloaded by the
   launcher) plus **CoreGS 1.1** built in (MIT, fallback and offline default), with
   **CoreGS 2.0** in development (our own MIT hardware GS renderer, TASK-026 clean-room
   spec, TASK-027 implementation; 3x-6x and texture packs; it enters the launcher only
   when at least equivalent to GSdx, a beta needs upscaling and anti-aliasing), then
-  **CoreGS 3.0** (TASK-090, the modern pipeline above). Mobile = **ARMSX2 GS
-  pipeline** (Vulkan on Android, Metal on iOS) without ARMSX2's JIT. See
+  **CoreGS 3.0** (TASK-090, the modern pipeline above). Linux and Android use
+  **CoreGS 2.0** (the ARMSX2 GS pipeline is no longer the mobile plan). See
   `docs/GS-RENDERER-OPTIONS.md` and `docs/GSDX-PLAN.md`.
 - **No GPL code in the release executable** (it contains game code): the game
   executable never contains or links GPL code; the PCSX2 GS lives only in the
