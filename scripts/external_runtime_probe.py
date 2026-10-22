@@ -375,6 +375,14 @@ def pacing_overrides(environment):
     return {'pacing_environment': recorded} if recorded else {}
 
 
+# Keyboard identities a performance candidate may carry: the slice136 digital-only fix, and the TASK-076 keyboard
+# table that every pcsx2 manifest from slice210 on records (without it, --mode pcsx2 was refused).
+PERFORMANCE_KEYBOARD_FIXES = (
+    'digital_only_slice136',
+    'TASK-076 keyboard table (controls.cpp default_controls, docs/CONTROLS.md keyboard-default); digital only',
+)
+
+
 def verify_performance_profile(manifest, evidence, runtime_workspace):
     expected_runtime, expected_mode = expected_performance_pin(manifest, runtime_workspace)
     if ((expected_mode is None and manifest != (runtime_workspace / 'docs/inputs' / PERF_MANIFEST).resolve()) or
@@ -382,7 +390,7 @@ def verify_performance_profile(manifest, evidence, runtime_workspace):
             (expected_mode in ('vu-split', 'vu1-aot', 'gs-async', 'pacing', 'vu1-flags', 'vu1-full', 'quickfix', 'vu1-all', 'quickfix2', 'quickfix3', 'vu0-aot', 'main', 'mtvu-measure', 'mtvu', 'pcsx2-stream', 'pcsx2', 'license-guard', 'pcsx2-coverage') and evidence.get('vu_scope_profile') != 'unit_split_run_fast_only') or
             evidence.get('profile') != 'performance' or
             type(evidence.get('perf_schema_version')) is not int or evidence['perf_schema_version'] != 1 or
-            evidence.get('keyboard_input_fix') != 'digital_only_slice136' or
+            evidence.get('keyboard_input_fix') not in PERFORMANCE_KEYBOARD_FIXES or
             evidence.get('runtime', {}).get('path') != expected_runtime or
             evidence.get('capture_activation_implemented') is not False):
         raise ValueError('Performance test requires the qualified corrected candidate')
