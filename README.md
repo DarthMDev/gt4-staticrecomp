@@ -6,27 +6,14 @@
 No JIT, no emulator window, full speed.
 
 ![60 FPS](https://img.shields.io/badge/60%20FPS-100%25%20game%20speed-2ea44f?style=for-the-badge)
-![No JIT](https://img.shields.io/badge/guest%20JIT-none-2ea44f?style=for-the-badge)
-![Windows](https://img.shields.io/badge/Windows%20x64-Vulkan-1f6feb?style=for-the-badge)
+![Windows](https://img.shields.io/badge/Windows%20x64-Vulkan-2ea44f?style=for-the-badge)
 ![MIT](https://img.shields.io/badge/license-MIT-1f6feb?style=for-the-badge)
 ![Release](https://img.shields.io/badge/release-1.2.0-2ea44f?style=for-the-badge)
 ![Ultrawide](https://img.shields.io/badge/ultrawide-any%20aspect%20ratio-2ea44f?style=for-the-badge)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/moesuito)
 
-![EE](https://img.shields.io/badge/EE%20(main%20CPU)-100%25%20AOT-2ea44f)
-![VU0 macro](https://img.shields.io/badge/VU0%20macro-100%25%20AOT-2ea44f)
-![VU1 micro](https://img.shields.io/badge/VU1%20microcode-100%25%20AOT%20%C2%B7%202%2C048%2F2%2C048-2ea44f)
-![VU0 micro](https://img.shields.io/badge/VU0%20microcode-100%25%20AOT%20%C2%B7%2014%2F14-2ea44f)
-![IOP](https://img.shields.io/badge/IOP%20system%20libraries-native-2ea44f)
+![Code](https://img.shields.io/badge/code-EE%20%C2%B7%20VU0%20%C2%B7%20VU1%20100%25%20AOT%20%C2%B7%20IOP%20libraries%20native-2ea44f)
 ![GS](https://img.shields.io/badge/GS-GSdx%20%2B%20CoreGS%201.1-1f6feb)
-
-![Time Trial](https://img.shields.io/badge/time%20trial-60%20FPS-2ea44f)
-![AI race](https://img.shields.io/badge/AI%20race-60%20FPS-2ea44f)
-![Night race](https://img.shields.io/badge/night%20race-60%20FPS-2ea44f)
-![Rally](https://img.shields.io/badge/rally-60%20FPS-2ea44f)
-![Showroom](https://img.shields.io/badge/showroom-60%20FPS-2ea44f)
-![Frame pacing](https://img.shields.io/badge/frame%20pacing-16.7%20ms%20flat-2ea44f)
-![Licenses](https://img.shields.io/badge/license%20tests-playable-2ea44f)
 
 <br>
 
