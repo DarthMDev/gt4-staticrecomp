@@ -17,6 +17,7 @@
 #include "../shaders/hw_shader_blobs.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 
 namespace {
@@ -192,9 +193,44 @@ struct GpuDrawer::Impl {
     full_barrier_with_fragment();
     runOpen = true;
     atlasX = atlasY = atlasShelf = 0;
+    runDecodes.clear();
+  }
+
+  // IN-368: true while the last command recorded is a full barrier. Every recorded work command (copy, dispatch,
+  // draw, render pass) calls recorded_work() first; a full barrier right after another one is skipped, since both
+  // carry the same stages and access masks. A new command buffer starts with false.
+  bool barrierIsLast = false;
+  void recorded_work() {
+    barrierIsLast = false;
+    ++workGeneration;
+  }
+
+  // IN-369: GLM texture decodes of the open run. A chunk whose decode parameters equal an earlier decode of the run
+  // reuses that atlas region when no other GPU work (a GLM write, a CLUT load, a copy, a submission) was recorded
+  // since: `workGeneration` changes on every recorded command except the run's own decodes (recorded_decode).
+  struct RunDecode {
+    std::array<std::uint32_t, 12> key{};  // the decode push constants without the atlas origin
+    std::uint32_t x = 0, y = 0;
+    std::uint64_t generation = 0;
+  };
+  bool decodeReuse = true;
+  std::uint64_t workGeneration = 0;
+  std::vector<RunDecode> runDecodes;
+  void recorded_decode() { barrierIsLast = false; }
+  const RunDecode *find_run_decode(const std::array<std::uint32_t, 12> &key) const {
+    for (auto it = runDecodes.rbegin(); it != runDecodes.rend(); ++it) {
+      if (it->generation != workGeneration) break;  // older entries are older still
+      if (it->key == key) return &*it;
+    }
+    return nullptr;
   }
 
   void full_barrier_with_fragment() {
+    if (barrierIsLast) {  // IN-368: a second barrier with no work in between adds no dependency
+      ++stats.barriersElided;
+      return;
+    }
+    barrierIsLast = true;
     VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT |
@@ -386,6 +422,11 @@ struct GpuDrawer::Impl {
 
   // Every earlier GPU write (copies, compute and fragment shaders) is visible to every later read or write.
   void full_barrier() {
+    if (barrierIsLast) {  // IN-368: a second barrier with no work in between adds no dependency
+      ++stats.barriersElided;
+      return;
+    }
+    barrierIsLast = true;
     VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
     barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
     barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT |
@@ -1007,6 +1048,7 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
   pass.renderPass = renderPass;
   pass.framebuffer = framebuffer;
   pass.renderArea = {{0, 0}, {kSurfaceSize, kSurfaceSize}};
+  recorded_work();
   gt4_hwd_vkCmdBeginRenderPass(cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
   ++stats.renderPasses;
   gt4_hwd_vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, interlockTriangles);
@@ -1031,9 +1073,11 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
     }
     const std::uint32_t ringFirst =
         static_cast<std::uint32_t>(draw.vertexOffsetBytes / sizeof(GpuVertex)) + draw.firstVertex;
+    recorded_work();
     gt4_hwd_vkCmdDraw(cmd, draw.vertexCount, 1, ringFirst, 0);
     ++stats.draws;
   }
+  recorded_work();
   gt4_hwd_vkCmdEndRenderPass(cmd);
   mark(kTimePass);
   full_barrier_with_fragment();  // the run's draws -> anything after (target reads, the next run's atlas writes)
@@ -1215,6 +1259,8 @@ bool GpuDrawer::Impl::begin_recording(std::string &error) {
   if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
   recording = true;
   recordingSet = currentFrame;
+  barrierIsLast = false;
+  ++workGeneration;
   boundComputePipeline = VK_NULL_HANDLE;  // a new command buffer has no bindings
   boundComputeSet = VK_NULL_HANDLE;
   if (gpuTiming && queries[recordingSet].pool) {
@@ -1228,6 +1274,7 @@ bool GpuDrawer::Impl::begin_recording(std::string &error) {
 bool GpuDrawer::Flush(bool wait, std::string &error) { return impl_->submit(wait, error); }
 
 void GpuDrawer::SetRuns(bool enabled) { impl_->runsEnabled = enabled; }
+void GpuDrawer::SetDecodeReuse(bool enabled) { impl_->decodeReuse = enabled; }
 
 void GpuDrawer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->chunksPerSubmission = chunks; }
 
@@ -1317,9 +1364,23 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   if (!s.begin_recording(error)) return false;
   std::uint32_t originX = 0;
   std::uint32_t originY = 0;
+  // IN-369: the decode parameters (push constants of hw_glm_decode without the palette base and the atlas origin).
+  // A CPU palette (indexed mode 1) lives in the palette ring and is never reused.
+  const std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
+  const std::array<std::uint32_t, 12> decodeKey = {chunk.glmBp,   chunk.glmBw,   chunk.glmPsm, chunk.texWidth,
+                                                   chunk.texHeight, indexedMode, chunk.glmCpsm, chunk.glmCsa,
+                                                   chunk.glmTa0,  chunk.glmTa1,  chunk.glmAem, 0u};
+  bool decodeReused = false;
   if (runnable) {
     s.open_run();
-    if (chunk.hasTexture && !s.atlas_alloc(chunk.texWidth, chunk.texHeight, originX, originY)) {
+    if (textureFromGlm && s.decodeReuse && indexedMode != 1u) {
+      if (const Impl::RunDecode *earlier = s.find_run_decode(decodeKey)) {
+        originX = earlier->x;
+        originY = earlier->y;
+        decodeReused = true;
+      }
+    }
+    if (chunk.hasTexture && !decodeReused && !s.atlas_alloc(chunk.texWidth, chunk.texHeight, originX, originY)) {
       if (!s.flush_run(error)) return false;  // atlas full: close the run, start a new one
       s.open_run();
       if (!s.atlas_alloc(chunk.texWidth, chunk.texHeight, originX, originY)) {
@@ -1386,14 +1447,17 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
 
   if (runnable) {
     // IN-352: texture preparation now, into the chunk's atlas region; the draw is recorded when the run closes.
-    if (textureFromGlm) {
+    if (decodeReused) {
+      ++s.stats.decodesReused;
+    } else if (textureFromGlm) {
       s.bind_compute(s.decodePipeline, s.computeSets[0]);
-      const std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
       const std::uint32_t push[14] = {chunk.glmBp,  chunk.glmBw,   chunk.glmPsm,  chunk.texWidth, chunk.texHeight,
                                       indexedMode,  paletteBase,   chunk.glmCpsm, chunk.glmCsa,   chunk.glmTa0,
                                       chunk.glmTa1, chunk.glmAem,  originX,       originY};
       gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+      s.recorded_decode();
       gt4_hwd_vkCmdDispatch(s.cmd, (chunk.texWidth + 7) / 8, (chunk.texHeight + 7) / 8, 1);
+      if (indexedMode != 1u) s.runDecodes.push_back({decodeKey, originX, originY, s.workGeneration});
     } else if (chunk.hasTexture) {
       VkBufferImageCopy texCopy{};
       texCopy.bufferOffset = textureOffset;
@@ -1402,9 +1466,10 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
       texCopy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
       texCopy.imageOffset = {static_cast<std::int32_t>(originX), static_cast<std::int32_t>(originY), 0};
       texCopy.imageExtent = {chunk.texWidth, chunk.texHeight, 1};
+      s.recorded_work();
       gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.texels.image, VK_IMAGE_LAYOUT_GENERAL, 1, &texCopy);
     }
-    if (chunk.hasTexture) s.mark(textureFromGlm ? Impl::kTimeDecode : Impl::kTimeUpload);
+    if (chunk.hasTexture && !decodeReused) s.mark(textureFromGlm ? Impl::kTimeDecode : Impl::kTimeUpload);
     std::int32_t x0 = kGpuSurface, y0 = kGpuSurface, x1 = -1, y1 = -1;
     std::uint32_t firstVertex = UINT32_MAX, endVertex = 0;
     for (const GpuDraw &draw : chunk.draws) {
@@ -1455,9 +1520,11 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   depthCopy.bufferOffset = depthOffset;
   const bool anyUpload = chunk.uploadFrame || chunk.uploadDepth || chunk.hasTexture;
   if (chunk.uploadFrame) {
+    s.recorded_work();
     gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, frameImage, VK_IMAGE_LAYOUT_GENERAL, 1, &frameCopy);
   }
   if (chunk.uploadDepth) {
+    s.recorded_work();
     gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, depthImage, VK_IMAGE_LAYOUT_GENERAL, 1, &depthCopy);
   }
   if (textureFromGlm) {
@@ -1469,6 +1536,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
                                     chunk.texHeight, indexedMode, paletteBase,  chunk.glmCpsm,
                                     chunk.glmCsa, chunk.glmTa0,  chunk.glmTa1,  chunk.glmAem, 0u, 0u};
     gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+    s.recorded_work();
     gt4_hwd_vkCmdDispatch(s.cmd, (chunk.texWidth + 7) / 8, (chunk.texHeight + 7) / 8, 1);
     s.full_barrier();
   } else if (textureFromSlot) {
@@ -1477,6 +1545,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     region.extent = {chunk.texWidth, chunk.texHeight, 1};
+    s.recorded_work();
     gt4_hwd_vkCmdCopyImage(s.cmd, s.frames[chunk.textureSlot].image, VK_IMAGE_LAYOUT_GENERAL, s.texels.image,
                            VK_IMAGE_LAYOUT_GENERAL, 1, &region);
   } else if (chunk.hasTexture) {
@@ -1486,6 +1555,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     texCopy.bufferImageHeight = chunk.texHeight;
     texCopy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
     texCopy.imageExtent = {chunk.texWidth, chunk.texHeight, 1};
+    s.recorded_work();
     gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, s.texels.image, VK_IMAGE_LAYOUT_GENERAL, 1, &texCopy);
   }
   if (anyUpload) {
@@ -1503,6 +1573,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     pass.renderPass = s.renderPass;
     pass.framebuffer = s.framebuffer;
     pass.renderArea = {{0, 0}, {kSurfaceSize, kSurfaceSize}};
+    s.recorded_work();
     gt4_hwd_vkCmdBeginRenderPass(s.cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
     ++s.stats.renderPasses;
     gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelineLayout, 0, 1,
@@ -1535,6 +1606,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
         VkRect2D scissor{{x0, y0}, {static_cast<std::uint32_t>(x1 - x0 + 1), static_cast<std::uint32_t>(y1 - y0 + 1)}};
         gt4_hwd_vkCmdSetScissor(s.cmd, 0, 1, &scissor);
         gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.interlockTriangles);
+        s.recorded_work();
         gt4_hwd_vkCmdDraw(s.cmd, endVertex - firstVertex, 1, firstVertex, 0);
         s.stats.draws++;
       }
@@ -1563,10 +1635,12 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
                                         : draw.topology == GpuTopology::Lines ? 1
                                                                               : 2;
       gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelines[pipelineIndex]);
+      s.recorded_work();
       gt4_hwd_vkCmdDraw(s.cmd, draw.count, 1, draw.first, 0);
       anyDraw = true;
       s.stats.draws++;
     }
+    s.recorded_work();
     gt4_hwd_vkCmdEndRenderPass(s.cmd);
   }
   s.mark(drawing ? Impl::kTimePass : Impl::kTimeUpload);
@@ -1588,9 +1662,11 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   VkBufferImageCopy depthReadback = frameCopy;
   depthReadback.bufferOffset = frameBytes;
   if (chunk.readbackFrame) {
+    s.recorded_work();
     gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, frameImage, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &frameReadback);
   }
   if (chunk.readbackDepth) {
+    s.recorded_work();
     gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, depthImage, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1,
                                    &depthReadback);
   }
@@ -1635,6 +1711,7 @@ bool GpuDrawer::UploadGlm(const std::uint8_t *localMemory,
     s.stagingUsed += range.second;
   }
   s.full_barrier();  // earlier GLM readers finish before the bytes change
+  s.recorded_work();
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.staging.buffer, s.glm.buffer, static_cast<std::uint32_t>(copies.size()),
                           copies.data());
   s.mark(Impl::kTimeUpload);
@@ -1661,6 +1738,7 @@ bool GpuDrawer::SwizzleToGlm(bool depthSlot, std::uint32_t slot, std::uint32_t b
   const std::uint32_t push[8] = {bp, bw, psm, static_cast<std::uint32_t>(x0), static_cast<std::uint32_t>(y0), width, height,
                                  0u};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  s.recorded_work();
   gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
   s.mark(Impl::kTimeSwizzle);
   s.full_barrier();
@@ -1686,6 +1764,7 @@ bool GpuDrawer::LoadSlotFromGlm(bool depthSlot, std::uint32_t slot, std::uint32_
   const std::uint32_t push[8] = {bp, bw, psm, static_cast<std::uint32_t>(x0), static_cast<std::uint32_t>(y0), width, height,
                                  0u};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  s.recorded_work();
   gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
   s.mark(Impl::kTimeSwizzle);
   s.full_barrier();
@@ -1714,6 +1793,7 @@ bool GpuDrawer::MergeIntoGlm(const std::vector<std::uint32_t> &triples, std::str
   const std::uint32_t count = static_cast<std::uint32_t>(triples.size() / 3);
   const std::uint32_t push[2] = {base, count};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  s.recorded_work();
   gt4_hwd_vkCmdDispatch(s.cmd, (count + 63) / 64, 1, 1);
   s.mark(Impl::kTimeUpload);
   s.full_barrier();
@@ -1749,6 +1829,7 @@ bool GpuDrawer::UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_
   s.bind_compute(s.hostUploadPipeline, s.computeSets[0]);
   const std::uint32_t push[9] = {bp, bw, psm, x0, y0, width, pixels, bpp, base};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  s.recorded_work();
   gt4_hwd_vkCmdDispatch(s.cmd, (pixels + 63) / 64, 1, 1);
   s.mark(Impl::kTimeUpload);
   s.full_barrier();
@@ -1779,6 +1860,7 @@ GpuDrawer::DownloadTicket GpuDrawer::RecordGlmDownload(
   s.nextDownload ^= 1u;
   if (!copies.empty()) {
     s.full_barrier();
+    s.recorded_work();
     gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.downloads[buffer].buffer, static_cast<std::uint32_t>(copies.size()),
                             copies.data());
   s.mark(Impl::kTimeDownload);
@@ -1849,6 +1931,7 @@ bool GpuDrawer::ComposeDisplay(const std::vector<std::uint32_t> &parameters, std
   s.bind_compute(s.displayPipeline, s.displaySets[s.currentFrame]);
   const std::uint32_t push[3] = {base, outWidth, outHeight};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  s.recorded_work();
   gt4_hwd_vkCmdDispatch(s.cmd, (outWidth + 7) / 8, (outHeight + 7) / 8, 1);
   s.mark(Impl::kTimeDownload);
   s.full_barrier();
@@ -1872,6 +1955,7 @@ bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vect
   copy.bufferImageHeight = height;
   copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
   copy.imageExtent = {width, height, 1};
+  s.recorded_work();
   gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.display.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &copy);
   VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
   done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -1905,6 +1989,7 @@ bool GpuDrawer::DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint
   }
   if (!s.begin_recording(error)) return false;
   s.full_barrier();
+  s.recorded_work();
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.readback.buffer, static_cast<std::uint32_t>(copies.size()),
                           copies.data());
   s.mark(Impl::kTimeDownload);
@@ -1932,6 +2017,7 @@ bool GpuDrawer::LoadClutFromGlm(std::uint32_t cbp, std::uint32_t cpsm, std::uint
   const std::uint32_t eightBit = (psm & 7u) == 3u ? 1u : 0u;
   const std::uint32_t push[8] = {cbp, cpsm, csm, csa, eightBit, cbw, cou, cov};
   gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  s.recorded_work();
   gt4_hwd_vkCmdDispatch(s.cmd, eightBit ? 4u : 1u, 1, 1);
   s.mark(Impl::kTimeClut);
   s.full_barrier();
@@ -1946,6 +2032,7 @@ bool GpuDrawer::UploadClut(const std::uint16_t *halfwords, std::string &error) {
   for (std::uint32_t i = 0; i < 512; ++i) staging[i] = halfwords[i];
   s.full_barrier();
   const VkBufferCopy copy{s.stagingUsed, 0, kClutBytes};
+  s.recorded_work();
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.staging.buffer, s.clut.buffer, 1, &copy);
   s.stagingUsed += kClutBytes;
   s.mark(Impl::kTimeClut);
@@ -1958,6 +2045,7 @@ bool GpuDrawer::ReadClut(std::vector<std::uint16_t> &halfwords, std::string &err
   if (!s.begin_recording(error)) return false;
   s.full_barrier();
   const VkBufferCopy copy{0, 0, kClutBytes};
+  s.recorded_work();
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.clut.buffer, s.readback.buffer, 1, &copy);
   VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
   done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -1976,6 +2064,7 @@ bool GpuDrawer::ReadGlm(std::vector<std::uint32_t> &words, std::string &error) {
   if (!s.begin_recording(error)) return false;
   s.full_barrier();
   const VkBufferCopy copy{0, 0, kGlmBytes};
+  s.recorded_work();
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.readback.buffer, 1, &copy);
   VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
   done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -2002,6 +2091,7 @@ bool GpuDrawer::ReadTexels(std::uint32_t width, std::uint32_t height, std::vecto
   copy.bufferImageHeight = height;
   copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
   copy.imageExtent = {width, height, 1};
+  s.recorded_work();
   gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.texels.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &copy);
   VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
   done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;

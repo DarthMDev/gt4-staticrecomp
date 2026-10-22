@@ -143,6 +143,8 @@ struct GpuStats {
     std::uint64_t runs = 0;         // render passes holding batched chunks (IN-352)
     std::uint64_t runChunks = 0;    // chunks drawn inside runs
     std::uint64_t earlySubmissions = 0;  // submissions in mid-frame (IN-358)
+    std::uint64_t barriersElided = 0;    // full barriers skipped right after another (IN-368)
+    std::uint64_t decodesReused = 0;     // GLM texture decodes skipped: same texture earlier in the run (IN-369)
     std::uint64_t renderPasses = 0;      // render pass instances (runs and per-chunk passes; IN-367 efficiency)
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
@@ -237,6 +239,7 @@ public:
     void SetDoubleBuffering(bool enabled);
     // GT4_HW_GPU_TIMING: per-category GPU timestamps (GpuStats::gpuNs). Off by default.
     void SetGpuTiming(bool enabled);
+    void SetDecodeReuse(bool enabled);  // IN-369
     // IN-358 A/B: submit the recording every `chunks` chunks (0: only at VBlank, a full ring or a readback).
     void SetChunksPerSubmission(std::uint32_t chunks);
 

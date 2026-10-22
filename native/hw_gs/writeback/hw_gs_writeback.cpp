@@ -2403,6 +2403,7 @@ void Renderer::SetRuns(bool enabled) { impl_->gpu_.SetRuns(enabled); }
 void Renderer::SetBatchedWritebacks(bool enabled) { impl_->glmBatchedWritebacks_ = enabled; }
 
 void Renderer::SetGpuTiming(bool enabled) { impl_->gpu_.SetGpuTiming(enabled); }
+void Renderer::SetDecodeReuse(bool enabled) { impl_->gpu_.SetDecodeReuse(enabled); }
 
 void Renderer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->gpu_.SetChunksPerSubmission(chunks); }
 

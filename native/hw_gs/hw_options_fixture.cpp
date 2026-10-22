@@ -78,6 +78,7 @@ int main() {
   expect(defaults.game_fixes, "default game fixes on");
   expect(defaults.dump_source == DumpSource::vram, "default dump source vram");
   expect(!defaults.gpu_timing && !defaults.gpu_decode, "default GPU timing and decode off");
+  expect(defaults.decode_reuse, "default decode reuse on");
 
   // Empty values behave as unset.
   const Options empties = parse_options(env_of({{"GT4_HW_SCALE", ""}, {"GT4_HW_GLM", ""}}));
@@ -116,6 +117,7 @@ int main() {
       {"GT4_HW_GAME_FIXES", "0"},
       {"GT4_HW_DUMP_SOURCE", "scanout"},
       {"GT4_HW_GPU_TIMING", "1"},
+      {"GT4_HW_DECODE_REUSE", "0"},
       {"GT4_HW_GPU_DECODE", "1"},
   }));
   expect(chosen.scale == 4, "scale 4");
@@ -140,6 +142,7 @@ int main() {
   expect(chosen.dump_textures == DumpTextures::mips && chosen.dump_format == DumpFormat::p, "dump options");
   expect(!chosen.game_fixes && chosen.dump_source == DumpSource::scanout, "fixes off, scanout");
   expect(chosen.gpu_timing && chosen.gpu_decode, "gpu timing and decode");
+  expect(!chosen.decode_reuse, "decode reuse off");
 
   // Invalid values abort (throw), one per kind.
   expect(rejected("GT4_HW_SCALE", "0"), "scale 0 rejected");
@@ -160,7 +163,7 @@ int main() {
   expect(rejected("GT4_HW_BLEND", "HIGH"), "case-sensitive blend rejected");
 
   // Names and descriptions (result.json, F8 header).
-  expect(option_names().size() == 32, "32 runtime GT4_HW_* variables in chapter 12.8 (GT4_HW_GS is CMake only)");
+  expect(option_names().size() == 33, "33 runtime GT4_HW_* variables: chapter 12.8 plus GT4_HW_DECODE_REUSE (IN-369; GT4_HW_GS is CMake only)");
   const auto lines = describe_options(defaults);
   expect(lines.size() == option_names().size(), "one description line per option");
   for (std::size_t i = 0; i < lines.size() && i < option_names().size(); ++i) {

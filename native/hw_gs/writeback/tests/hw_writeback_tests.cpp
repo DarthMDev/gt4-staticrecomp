@@ -1428,7 +1428,21 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         w.insert(w.end(), {frameReg(kA), 0x4C, tex0(20 * 32, 0x00, 5, 0, false), 0x06, kSprite | kTme | kFst, 0x00,
                            rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(40, 40), 0x05, uv(24, 24), 0x03,
                            xyz(64, 64), 0x05});
+        // 3c. The same texture again after a state change (blending on, PRIM.ABE): a new batch whose GLM decode
+        //     equals the previous one (IN-369 decode reuse).
+        w.insert(w.end(), {kSprite | kTme | kFst | (uint64_t{1} << 6), 0x00, rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03,
+                           xyz(0, 16), 0x05, uv(24, 14), 0x03, xyz(24, 30), 0x05});
         ad(w);
+        // 3d. An upload into that texture's page, then the texture once more (blending off again): the decode must
+        //     not be reused, since the GLM changed in between (IN-369).
+        ad({blit(0, 0, 20 * 32, 0x00), 0x50, uint64_t{0}, 0x51, uint64_t{8} | (uint64_t{8} << 32), 0x52, 0, 0x53});
+        {
+            std::vector<uint64_t> texels;
+            for (uint32_t i = 0; i < 32; ++i) texels.push_back((uint64_t{0x80A0B0C0u ^ (i * 0x01030507u)} << 32) | (0x80405060u + i + frame));
+            image(texels);
+        }
+        ad({kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(54, 22), 0x05, uv(10, 10), 0x03,
+            xyz(64, 32), 0x05});
         // 4. Host -> local: 8 x 8 CT32 block into buffer A at (4 + frame, 4).
         ad({blit(0, 0, kA * 32, 0x00), 0x50, (uint64_t{4 + frame} << 32) | (uint64_t{4} << 48), 0x51,
             uint64_t{8} | (uint64_t{8} << 32), 0x52, 0, 0x53});
@@ -1469,6 +1483,7 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         uint64_t slmHash = 0;
         std::vector<uint8_t> slm;
     };
+    uint64_t decodesReused = 0;  // IN-369, cache run
     auto replay = [&](bool cacheMode, bool cpuSprites, std::vector<FrameRecord>& out, writeback::Counters& counters,
                       std::string& error) -> bool {
         writeback::Renderer renderer;
@@ -1495,6 +1510,7 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                                               },
                                               error);
         counters = renderer.GetCounters();
+        if (cacheMode && !cpuSprites) decodesReused = renderer.GpuCounters().decodesReused;
         if (renderer.Failed()) error += " " + renderer.LastError();
         return ok && !renderer.Failed();
     };
@@ -1557,6 +1573,7 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                 static_cast<unsigned long long>(cacheCounters.glmSlotLoads),
                 static_cast<unsigned long long>(cpuSpriteCounters.glmSlotLoads),
                 static_cast<unsigned long long>(cacheCounters.glmDownloads));
+    std::printf("  cache: GLM decodes reused %llu\n", static_cast<unsigned long long>(decodesReused));
     std::printf("  cache: evictions %llu, GPU CLUT loads %llu, GLM textures %llu, CPU sprite batches %llu\n",
                 static_cast<unsigned long long>(cacheCounters.cacheEvictions),
                 static_cast<unsigned long long>(cacheCounters.gpuClutLoads),
@@ -1568,6 +1585,7 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         cacheCounters.gpuClutLoads == 0 || cacheCounters.texturesFromGlm == 0 || cacheCounters.glmParks == 0 ||
         cacheCounters.glmSlotLoads == 0 || cacheCounters.glmDownloads == 0 || cpuSpriteCounters.glmUploadMerges == 0 || cacheCounters.glmBatchedWritebacks == 0 ||
         cacheCounters.glmHostUploads == 0 ||
+        (handles.pixelInterlock && decodesReused == 0) ||  // runs (and their decode reuse) need interlock
         cpuSpriteCounters.glmSlotLoads < cpuSpriteCounters.cacheLoads) {
         std::printf("  the cache paths were not all exercised (fixture is blind)\n");
         ++failures;

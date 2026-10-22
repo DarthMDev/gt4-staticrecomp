@@ -508,3 +508,12 @@ diagnostic). Largest remaining costs: about 5,200 barriers and 330-430 render pa
 
 Mobile note: the fast path relies on fragment shader interlock (ordered pixel access). Mobile GPUs mostly lack it, so
 phase 2 will need another fast path (for example a tile-local path). PC focus now; nothing mobile-specific is built.
+
+## 2026-10-22 fewer barriers, decode reuse (local slice246, IN-368/IN-369) - Claude
+
+- IN-368: repeated full barriers with nothing in between are skipped (480p race: about 5,200 -> 4,050 barriers per
+  frame). IN-369: a run reuses an identical GLM texture decode (15% of decodes in the 480p race; about 0.8 ms less GPU
+  time per frame). GS thread CPU unchanged at about 10-11 ms per 480p race frame: recording barriers is cheap; the CPU
+  cost of the GPU CLUT loads is elsewhere (next: defer CLUT loads and apply several in one dispatch).
+- Gates: hashes identical on all five captures (night `fifo_hash=3a2fe617a174e7e7`), menu dumps 42/42, race frames
+  42/42 identical, default parity 42/42, 227/227 non-Python CTests with and without interlock.

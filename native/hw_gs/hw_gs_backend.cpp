@@ -792,6 +792,7 @@ bool Backend::init(const Options &options, std::string &error) {
   s.renderer->SetGlm(options.glm);
   // GT4_HW_GPU_TIMING (12.8): GPU timestamps per category, reported on the GT4_HW_PROFILE_EVERY line.
   s.renderer->SetGpuTiming(options.gpu_timing);
+  s.renderer->SetDecodeReuse(options.decode_reuse);
   // IN-358 diagnostic (not a 12.8 option): GT4_HW_CHUNKS_PER_SUBMIT=<n> mid-frame submission interval (0 = off).
   if (const char *chunks = std::getenv("GT4_HW_CHUNKS_PER_SUBMIT")) {
     s.renderer->SetChunksPerSubmission(static_cast<std::uint32_t>(std::strtoul(chunks, nullptr, 10)));

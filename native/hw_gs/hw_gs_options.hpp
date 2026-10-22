@@ -99,6 +99,7 @@ struct Options {
   DumpSource dump_source = DumpSource::vram;
   bool gpu_timing = false;
   bool gpu_decode = false;
+  bool decode_reuse = true;  // IN-369: a run reuses an identical GLM texture decode
 };
 
 // Parses every GT4_HW_* variable through `lookup`. Unset or empty values take

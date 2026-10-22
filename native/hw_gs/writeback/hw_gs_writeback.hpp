@@ -267,6 +267,8 @@ public:
     void SetBatchedWritebacks(bool enabled);
     // GT4_HW_GPU_TIMING: GPU timestamps per category (GpuCounters().gpuNs).
     void SetGpuTiming(bool enabled);
+    // IN-369: a run reuses the atlas region of an identical GLM texture decode (default on).
+    void SetDecodeReuse(bool enabled);
     // IN-358 A/B: mid-frame submissions every `chunks` chunks (0 = off).
     void SetChunksPerSubmission(std::uint32_t chunks);
     // IN-354 A/B switch: double-buffered GPU submission.
