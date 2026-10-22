@@ -72,11 +72,14 @@ to a steady **60 FPS at full speed**.
 
 ## Roadmap
 
-| Phase | Platform | Renderer |
-|---|---|---|
-| **1** (current) | Windows PC | GSdx (PCSX2 GS, separate process) · CoreGS 1.1 built in · CoreGS 2.0 in development |
-| **2** | Android | ARMSX2 GS pipeline (Vulkan) |
-| **3** | iOS | ARMSX2 GS pipeline (Metal) |
+| Phase | Release | Platform | Renderer | Status |
+|---|---|---|---|---|
+| **1** | 1.x | Windows PC | GSdx (PCSX2 GS, separate process) · CoreGS 1.1 built in | Done (1.0.0; current 1.2.0) |
+| **2** | 2.0.0 | Windows PC | **CoreGS 2.0** (our own renderer) as the default · GSdx as the fallback | In progress |
+| **3** | after 2.0.0 | Linux (native) | CoreGS 2.0 | Planned |
+| **4** | after 2.0.0 | Android | CoreGS 2.0 (Vulkan) | Planned |
+
+Phases 3 and 4 start once CoreGS 2.0 is ready and GT4Recomp 2.0.0 is out.
 
 Every piece of work is a numbered task in [TASKS.md](TASKS.md), tested in game before it is merged.
 
@@ -165,7 +168,6 @@ possible.
 | [Nenkai's GT research](https://github.com/Nenkai) | Nenkai | File formats and the VU1 microcode encryption scheme ([details](docs/VU1-MICROCODE-SOURCE.md)). |
 | [GT4FS](https://github.com/Razer2015/GT4FS) | Razer2015 | GT4 volume file-system research. |
 | [PCSX2](https://github.com/PCSX2/pcsx2) (GPL-3.0) | PCSX2 team | Decades of PS2 knowledge; its GS runs only in the separate `gt4-gs.exe`. |
-| [ARMSX2](https://github.com/ARMSX2/ARMSX2) (GPL-3.0) | ARMSX2 team | The mobile GS pipeline planned for Android and iOS. |
 | [naga](https://github.com/gfx-rs/wgpu/tree/trunk/naga) · [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) | gfx-rs · Khronos | Shader compilation at build time · Vulkan API headers. |
 
 Exact revisions and licenses: [THIRD_PARTY.md](native/THIRD_PARTY.md).
