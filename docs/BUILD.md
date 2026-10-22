@@ -2284,3 +2284,29 @@ Builds (all paths absolute):
   `.update-staging\GT4Recomp.exe` equals the launcher; the extraction folder was deleted. Not run on this PC.
 - Measured timings: the installer phases come from the owner's silent update (setup.log). `ui ready after N ms` comes
   from the owner's launch (not run here: no launcher window was opened on this PC).
+
+
+### Slice 259 (1.2.1 final candidate: Performance Mode; slice 258 included)
+- Performance Mode replaces the Readbacks row (`hw_download_mode`, five values) by a toggle `performance_mode` in
+  `docs/launcher/gs-settings.toml` (page basic, Graphics; default Off). Off = `accurate` (HWDownloadMode 0, always
+  written); On = `no-readbacks` (HWDownloadMode 2). The table validator (`scripts/gs_settings.py`, `check`) accepts a
+  two-choice enum with `control = "toggle"`; the Rust table reads the same file. Launcher: `gs_row` (model.rs) sends a
+  toggle, and with CoreGS 1.1 the row is disabled with the note "GSdx only" (GSDX_ONLY_ROWS). `set_setting` maps the
+  toggle to the choice names (`gs_value_text`). The UI shows a row `note` as a hint.
+- Settings schema 5 to 6 (`migrate.rs` settings_5_to_6, one step, schema 6 not released): a stored `hw_download_mode` other
+  than accurate becomes `performance_mode = "no-readbacks"`; accurate or none stays Off; the old key is dropped. The backup
+  (`settings.toml.bak-schema5-<time>`) is made as for every step.
+- The allow-list JSON is generated from the table (`gs_settings.py allowlist --write`): HWDownloadMode values are now 0
+  and 2 only. The golden fixture `user-settings.ini` gained `HWDownloadMode = 2` (regenerated with the script).
+- Dev tooling: `--gs-readback accurate|no-readbacks` and `GT4_GS_READBACK` map to `performance_mode`; `unsynchronized` is refused
+  (it left the table). `tests/python/test_gs_*` updated; the full Python suite passes (tooling venv).
+- Checks: `cargo test --workspace` (from `launcher\`) 371 passed, 0 failed, 4 ignored (364 before: +2 migration, +4 model,
+  +1 golden). UI nav-test 150 of 150; focus-check `pass` (headless Edge through Playwright, `channel: msedge`).
+- Launcher `private\slice259-launcher\GT4Recomp.exe`, 16,365,568 bytes, sha256
+  `e87dd78c935f51c931b5f99c0296cbefcf60cff0c9fd274915f4e294d7dc8d8f` (`launcher\tools\build-release.ps1`, path scan clean).
+- Installer `private\slice259-installer\GT4Recomp-Setup-1.2.1-test.exe`, 28,859,775 bytes, sha256
+  `78597e4da89af9b64e78fdf2d5bed58078b02ad909ff6f46fcebfc51f13b194f` (makensis, slice 257 recipe, `/DLAUNCHER_EXE` = the copy
+  above). 7-Zip extraction: `.update-staging\GT4Recomp.exe` equals the launcher; the extraction folder was deleted.
+  Not run on this PC.
+- Measured: the launcher start timings (`ui ready after N ms`, phases before the window) and the installer phases
+  (setup.log `timings ms:`) come from the owner's run. No launcher window was opened here.
