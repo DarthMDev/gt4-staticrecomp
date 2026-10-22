@@ -122,9 +122,9 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 📋 Planned (owner, 2026-10-22) · release 1.2.4 with TASK-097 |
 | TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
 | TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072), plugin injector mapped, hooks remapped | 📋 Planned (owner, 2026-10-22) · release 1.4.0 |
-| TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done on branch `task/093-textures-root` (2026-10-22) · waiting for gt4-gs 1.2.1 (not published yet) and the owner test · planned for release 1.2.3 with TASK-092 |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done on branch `task/096-remove-coregs11` (2026-10-22) · not merged; owner test and approval pending |
+| TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 🟡 Done on branch, waiting for release (2026-10-22) · `task/092-mtvu-test-switches`; not on the player path; 2 pin tests open (see section) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -564,8 +564,15 @@ test. Planned for release 1.2.3 with TASK-092.
   README bullet. The 1.2.1 release notes stay as history.
 
 ### TASK-092 — MTVU test switches after TASK-084
-Planned (owner, 2026-10-22): release 1.2.2 ships the owner-tested slice262 build; this fixes the TASK-084 review
-findings afterwards. None is reachable from the launcher, which sets neither variable.
+🟡 **Done on branch (2026-10-22), waiting for release.** Branch `task/092-mtvu-test-switches`, slice264 (build recipe
+in BUILD.md "Slice 264"). Owner decisions 2026-10-22: release 1.2.2 ships the owner-tested slice262 build; this fixes
+the TASK-084 review findings afterwards. None is reachable from the launcher, which sets neither variable.
+Result: `GT4_MTVU=0` in pcsx2 mode no longer crashes (slice262: access violation, no frames; slice264: 4,200 frames,
+41 dumps, 4,200 VSYNCs at the GS); `GT4_MTVU_VERIFY=1` sends its VSYNCs (4,200 frames, 0 mismatches); the default path
+is identical to slice262 (dump hashes and GS stream session hash equal in menus and night). Open before merge: the
+`gt4vulkan.exe` pin tests (`test_make_distribution`, `test_portable_install`) still point at slice262's executable;
+the new pins (a slice264 pin set) need an owner decision on the release path. CTest 40 of 41 pass (the 41st is
+`python_native_contracts`, the same two pin tests).
 - `GT4_MTVU=0` in pcsx2 mode crashes at the first VBlank (Confirmed by reading): `mtvu_bridge.cpp` sets
   `set_vsync_deferral(settings.vblank_journal)` without checking `enabled()`, `start()` returns before the journal
   exists, and `vblank_sync()` calls `r.journal->append_vblank_flush()` on a null journal.
@@ -576,6 +583,13 @@ findings afterwards. None is reachable from the launcher, which sets neither var
   pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
+- 1.2.2 bug found by the CoreGS 2.0 agent (2026-10-22), fixed here: donor mode (CoreGS 1.1) crashed at the first
+  guest VBlank (exit 0xC0000005; slice262 and slice264 crash, slice240 runs). `mtvu_bridge.cpp` declares `Donor donor;`
+  and sets `post_vsync` only in pcsx2/hw mode; the struct had no initialisers, so `vblank_sync` took the TASK-084
+  deferred path and called stack garbage. Every `Donor` callback is now `= nullptr`; `native_mtvu_switches` checks a
+  Donor default-initialised over 0xFF memory. slice268 (O:\gt4recomp-scratch\slice268-build, the slice264 recipe):
+  CTest 40/40; headless menus with `--renderer donor` and `pcsx2` both run (exit 0). The launcher drops CoreGS 1.1 in
+  1.2.3 (TASK-096); the fix stays as protection for runs without the launcher and the built-in restart path.
 
 ### TASK-100 — Spec II support (release 1.4.0)
 Planned (owner, 2026-10-22) for release 1.4.0, the release after the wheel release (1.3.0). Scope as decision 0072:

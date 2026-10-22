@@ -66,19 +66,22 @@ class Doorbell {
 
   std::uint32_t snapshot() const { return value_.load(std::memory_order_acquire); }
 
+  // TASK-092: ring() (store value, then load sleepers_) and wait_changed() (store sleepers_, then load value) form a
+  // store-then-load (Dekker) pattern. Only sequential consistency rules out a lost wakeup on weakly ordered CPUs
+  // (ARM, Android); x86 locked RMWs already order it. Keep every operation of the handshake seq_cst.
   void ring() {
     rings_.fetch_add(1, std::memory_order_relaxed);
-    value_.fetch_add(1, std::memory_order_release);
+    value_.fetch_add(1, std::memory_order_seq_cst);
     // Only wake a peer that is asleep; while it runs, the next snapshot/re-check sees the new value anyway.
-    if (sleepers_.load(std::memory_order_acquire) > 0) value_.notify_all();
+    if (sleepers_.load(std::memory_order_seq_cst) > 0) value_.notify_all();
   }
 
   // Returns once the counter differs from `seen`, or at once when it already changed. `slept` reports whether the
   // call really blocked. Callers re-check their condition in a loop.
   bool wait_changed(std::uint32_t seen, bool &slept) {
     waits_.fetch_add(1, std::memory_order_relaxed);
-    sleepers_.fetch_add(1, std::memory_order_acq_rel);
-    if (value_.load(std::memory_order_acquire) != seen) {
+    sleepers_.fetch_add(1, std::memory_order_seq_cst);
+    if (value_.load(std::memory_order_seq_cst) != seen) {
       sleepers_.fetch_sub(1, std::memory_order_acq_rel);
       slept = false;
       return false;

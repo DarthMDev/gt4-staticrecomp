@@ -14,6 +14,14 @@ Branch `task/093-textures-root`: custom textures go straight in `data\Textures`;
 start once gt4-gs 1.2.1 is in use (`gt4l-core/src/textures.rs`). Workspace tests and the Python gs suite pass. Not
 merged; planned for release 1.2.3 with TASK-092.
 
+## MTVU test switches fixed (2026-10-22, TASK-092, branch `task/092-mtvu-test-switches`, waiting for release)
+
+Slice264 (not the player path): `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode work again. One condition,
+`vblank_journal_active()` (journal on, worker on, verify off), decides the GS client VSYNC deferral and the VBlank
+drain. The doorbell handshake uses seq_cst. Default path identical to slice262 (dump hashes and GS stream hash equal in
+menus and night). Open: two `gt4vulkan.exe` pin tests still point at slice262's executable; a slice264 pin set needs an
+owner decision. Details: BUILD.md "Slice 264".
+
 ## Release 1.2.2 published (2026-10-22, TASK-084, PR #82)
 
 Launcher 1.2.1 at version 1.2.2 with the TASK-084 game build slice262 (owner tested and approved). Installer
