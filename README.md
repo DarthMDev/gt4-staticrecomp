@@ -37,7 +37,7 @@ while the game runs, which is also what makes future **Android and iOS** builds 
   resolution. The 3D view widens Hor+/Vert+, the HUD stays centred 16:9 and menus are pillarboxed; the internal
   resolution follows automatically, with a Render scale of 50-200%.
 - **GSdx renderer** (the PCSX2 GS) in its own process: crisp deinterlaced menus, every GSdx option in the launcher
-  and a built-in performance overlay. **CoreGS 1.1** is built in as the fallback.
+  and a built-in performance overlay. **CoreGS 2.0**, our own renderer, is in development.
 - **Custom texture packs:** drop a pack's files straight into the `data\Textures` folder of your
   GT4Recomp install (Settings > Graphics > **Open textures folder**); **Load custom textures** is on by default. HD textures and mods from the PCSX2
   community work without renaming folders.
@@ -78,7 +78,7 @@ the graphics process, so the night race needs about 2 ms less CPU time per frame
 
 | Phase | Release | Platform | Renderer | Status |
 |---|---|---|---|---|
-| **1** | 1.x | Windows PC | GSdx (PCSX2 GS, separate process) · CoreGS 1.1 built in | Done (1.0.0; current 1.2.0) |
+| **1** | 1.x | Windows PC | GSdx (PCSX2 GS, separate process) | Done (1.0.0; current 1.2.0) |
 | **2** | 2.0.0 | Windows PC | **CoreGS 2.0** (our own renderer) as the default · GSdx as the fallback | In progress |
 | **3** | after 2.0.0 | Linux (native) | CoreGS 2.0 | Planned |
 | **4** | after 2.0.0 | Android | CoreGS 2.0 (Vulkan) | Planned |
@@ -113,7 +113,7 @@ The launcher checks the processor and Vulkan before setup and before Play, and s
    any folder or drive you choose. If the Microsoft Edge WebView2 Runtime is missing (Windows 10), the installer
    downloads it from Microsoft.
 2. Start **Gran Turismo 4** from the Start menu and choose your disc image. The launcher copies and checks it and
-   downloads the GSdx renderer, the recommended choice (CoreGS 1.1 is built in and used if you are offline).
+   downloads the GSdx renderer, which runs the game (the game needs GSdx and does not start without it).
 3. Press **Play**.
 
 Everything large stays together in the install folder, in `data` (the copy of your disc image, GSdx, custom textures

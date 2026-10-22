@@ -256,14 +256,9 @@ pub fn start_with(
     Ok(handle)
 }
 
-/// Installs the optional package only when the player selected the external renderer.
-/// Read the current choice after the disc work: a setup retry must respect a changed setting as well.
+/// Installs GSdx, the only renderer (TASK-096), unless it is already there. The returned text is the setup note (empty
+/// when there is nothing to report).
 fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer: &RendererInstaller) -> String {
-    let settings = lock(shared).config.settings.clone();
-    if !gt4l_core::launch::needs_external_renderer(&settings) {
-        state::log(dirs, "CoreGS 1.1 selected; no external renderer download needed");
-        return String::new();
-    }
     // TASK-088 (1.2.0): a GSdx that is installed and meets the minimum (for example a local package) is kept, with no
     // download attempt and no misleading note.
     if !gt4l_core::gs_release::needs_install(&dirs.renderer_root()) {
@@ -312,7 +307,7 @@ fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer:
         Err(message) => {
             state::log(dirs, &format!("GSdx not installed during setup: {message}"));
             notify("renderer-progress", json!({ "step": "failed", "message": message }));
-            "GSdx could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start."
+            "GSdx could not be downloaded, so the game cannot start yet. GT4Recomp tries again at the next start."
                 .to_string()
         }
     }

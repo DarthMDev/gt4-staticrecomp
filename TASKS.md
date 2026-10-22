@@ -114,11 +114,12 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑086 | Progressive 480p everywhere (menus and races at 480p through ELF patches) | ⏸️ Shelved (owner, 2026-10-21) · owner test broke the car select and the race load; branch `task/086-progressive-480p` kept |
 | TASK‑087 | GS readbacks without stalls, in CoreGS 2.0 (GPU-driven flare visibility, no EE wait) | 📋 Planned (owner, 2026-10-21) · study done (docs/GS-READBACK-STUDY.md); CoreGS 2.0 only, gt4-gs frozen |
 | TASK‑088 | Release 1.2.0: custom textures (gt4-gs texture replacements from `Documents\Gran Turismo 4\Textures`, two launcher options), 2-row bottom crop, black window from the first frame, monitor names, desktop resolution, every gt4-gs value enabled, GSdx setup choice and switch | ✅ Done (2026-10-22) · owner tested and approved; released as GT4Recomp v1.2.0 with gt4-gs 1.2.0 (fork PR #9, tag `gt4gs-v1.2.0`) |
-| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0 |
+| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0; superseded by TASK‑096 in 1.2.3 |
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done on branch `task/093-textures-root` (2026-10-22) · waiting for gt4-gs 1.2.1 (not published yet) and the owner test · planned for release 1.2.3 with TASK-092 |
+| TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done on branch `task/096-remove-coregs11` (2026-10-22) · not merged; owner test and approval pending |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -522,6 +523,25 @@ menus. Checks: SMODE gate, the 42-dump headless run, owner pass on menus, garage
 replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRenderContextPS2__virtual_67`), 16-bit
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
+
+### TASK-096 — Remove CoreGS 1.1 from the launcher
+
+State (2026-10-22): done on branch `task/096-remove-coregs11` for launcher release 1.2.3. Not merged; waiting for the owner test and approval.
+Owner decision (2026-10-22): CoreGS 1.1 is removed from the launcher. Only GSdx (the external PCSX2 GS process `gt4-gs.exe`) runs
+the game. CoreGS 1.1 stays inside the game executable (no native change) and the launcher never starts it.
+- Renderer: the choice lists GSdx (selected) and CoreGS 2.0 (coming soon, disabled). `launch::choose_renderer` refuses to start
+  the session when GSdx is not installed or fails verification; Play does not start the game.
+- Error text: "GSdx could not run the game: {reason}. Check your internet connection and try again. Details are in the log
+  folder: {folder}." Reasons: "GSdx is not installed yet", and "GSdx stopped while playing" for a restart request.
+- Restart: the game's restart-with-CoreGS-1.1 request (`GS_RESTART_MARKER`) ends the session with that error; nothing restarts.
+- Settings schema 7 (`migrate::settings_6_to_7`): a stored `renderer = "coregs11"` becomes `pcsx2`. The CoreGS 1.1 rows
+  (Internal resolution, Scaling filter, FSR sharpness, Deinterlacing, Anti-aliasing) are retired: ignored on load, dropped at the next write.
+- Setup: the renderer chooser dialog is gone; setup installs GSdx. A failed download finishes setup with a note, and Play
+  refuses until GSdx is installed.
+- Docs: README, `docs/launcher/gs-settings.toml` (`gs_engine` lists GSdx only), `docs/launcher/FLOW-AUDIT.md`. Old plans and
+  release notes keep their history.
+- Supersedes TASK-089 (its CoreGS 1.1 path no longer exists).
+- Checks: `cargo test --workspace` all green (launcher tests with the new migration, renderer-choice, restart and renderer-switch tests).
 
 ### TASK-093 — Custom textures straight in the Textures folder
 State (2026-10-22): done on branch `task/093-textures-root`; waiting for gt4-gs 1.2.1 (not published yet) and the owner

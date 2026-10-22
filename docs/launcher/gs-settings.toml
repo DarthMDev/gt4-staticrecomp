@@ -47,7 +47,7 @@ description = "Reset to defaults: GT4 default for every settable row (owner deci
 [[setting]]
 id = "gs_engine"
 label = "Renderer"
-help = "Which renderer draws the game: GSdx (default; the PCSX2 GS renderer, GPL-3.0) or CoreGS 1.1 (built in, no download)."
+help = "Which renderer draws the game: GSdx, the PCSX2 GS renderer (GPL-3.0, downloaded). It is the only renderer the launcher starts (TASK-096)."
 page = "basic"
 order = 1
 control = "dropdown"
@@ -60,9 +60,8 @@ status = "ok"
 env = "GT4_GS_ENGINE"
 choices = [
   { name = "pcsx2", ini = "", status = "ok", label = "GSdx" },
-  { name = "coregs-1.1", ini = "", status = "ok", label = "CoreGS 1.1 (secondary)" },
 ]
-notes = "Owner decision 2026-10-16 (TASK-049, item 1). Launcher-only: pcsx2 = gt4-gs.exe (`--mode pcsx2`); coregs-1.1 = the built-in CoreGS 1.1 fallback (`--mode main`). Its upscale, FSR, FXAA and deinterlace options are hidden (owner decision 5). The launcher reads GT4_GS_ENGINE (TASK-019/043); it is never written to gt4-gs.ini."
+notes = "Owner decision 2026-10-16 (TASK-049, item 1). Launcher-only: pcsx2 = gt4-gs.exe (`--mode pcsx2`). Owner decision 2026-10-22 (TASK-096, launcher 1.2.3): the CoreGS 1.1 choice is removed from the launcher; the built-in CoreGS 1.1 stays in the game executable unused by the launcher. The launcher reads GT4_GS_ENGINE (TASK-019/043); it is never written to gt4-gs.ini."
 
 [[setting]]
 id = "renderer"

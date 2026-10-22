@@ -250,9 +250,8 @@ pub struct PlayInputs {
     pub elf: PathBuf,
     pub executable: PathBuf,
     pub settings: Settings,
-    pub pcsx2: Option<gs_release::Installed>,
-    /// Why CoreGS 1.1 is used instead of the PCSX2 GS, if it is.
-    pub notice: Option<String>,
+    /// The installed GSdx (the only renderer, TASK-096); Play does not start without it.
+    pub pcsx2: gs_release::Installed,
     /// The resolved Monitor and Resolution (TASK-080 addendum); `None` when no monitor could be read.
     pub display: Option<DisplayTarget>,
     pub extra: Vec<(String, String)>,
@@ -285,17 +284,10 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
     if controls_path.exists() {
         extra.push(("GT4_CONTROLS_FILE".into(), controls_path.display().to_string()));
     }
-    // Decision 0070: PCSX2 GS when it is installed and selected; otherwise CoreGS 1.1 with a message.
+    // Only GSdx runs the game (decision 0070, TASK-096): without a verified GSdx, Play stops here with the error.
     let settings = state.config.settings.clone();
-    let installed = if launch::needs_external_renderer(&settings) {
-        gs_release::installed(&dirs.renderer_root())
-    } else {
-        None
-    };
-    let (pcsx2, notice) = match launch::choose_renderer(&settings, installed.as_ref()) {
-        launch::RendererChoice::Pcsx2 => (installed.clone(), None),
-        launch::RendererChoice::CoreGs11 { reason } => (None, reason),
-    };
+    let installed = gs_release::installed(&dirs.renderer_root());
+    let pcsx2 = launch::choose_renderer(installed.as_ref(), &dirs.logs())?.clone();
     // TASK-080 addendum: the stored Monitor and Resolution against the monitors connected now.
     let monitors = gt4l_platform::display::monitors();
     let display = display_rules::resolve_target(&monitors, settings.get("monitor"), settings.get("resolution"));
@@ -337,7 +329,6 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         executable,
         settings,
         pcsx2,
-        notice,
         extra,
     })
 }
@@ -357,47 +348,27 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let inputs = prepare_play(&shared, &program_directory()).inspect_err(|message| {
         lock(&shared).home_message = message.clone();
     })?;
-    let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, notice, display, extra } = inputs;
+    let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, display, extra } = inputs;
     let card = dirs.runtime_card();
     saves::prepare_card(&lock(&shared).library, &card)?;
     let textures = lock(&shared).dirs.textures();
     paths::ensure_texture_folders(&textures).map_err(|error| format!("texture folder: {error}"))?;
-    let running = game::start(&dirs, &executable, &elf, &disc, &settings, pcsx2.as_ref(), display.as_ref(), &textures, &extra)?;
+    let running = game::start(&dirs, &executable, &elf, &disc, &settings, &pcsx2, display.as_ref(), &textures, &extra)?;
     {
         let mut state = lock(&shared);
         state.game_child = Some(running.child.clone());
-        state.home_message = notice.unwrap_or_default();
+        state.home_message.clear();
     }
     state::log(&dirs, &format!("game started, session {}", running.session_dir.display()));
     let _ = app.emit("game-state", json!({ "running": true, "message": "" }));
     crate::tray::handle(&app, crate::tray::Event::GameStarted);
 
-    let mut pcsx2_used = pcsx2.is_some();
     std::thread::spawn(move || {
-        let mut running = running;
-        let outcome = loop {
-            let outcome = game::wait_for_exit(&running);
-            let log_text = fs::read_to_string(&running.log_path).unwrap_or_default();
-            if !(pcsx2_used && launch::restart_requested(&log_text)) {
-                break outcome;
-            }
-            // The player chose "restart with the built-in renderer" after a PCSX2 GS failure (TASK-038).
-            state::log(&dirs, "GSdx asked for a restart; starting CoreGS 1.1");
-            drop(running);
-            match game::start(&dirs, &executable, &elf, &disc, &settings, None, display.as_ref(), &textures, &extra) {
-                Ok(next) => {
-                    lock(&shared).game_child = Some(next.child.clone());
-                    running = next;
-                    pcsx2_used = false;
-                }
-                Err(message) => {
-                    lock(&shared).game_child = None;
-                    lock(&shared).home_message = message.clone();
-                    crate::tray::handle(&app, crate::tray::Event::GameEnded { message });
-                    return;
-                }
-            }
-        };
+        let outcome = game::wait_for_exit(&running);
+        // TASK-096: a GSdx restart request ends the session with the GSdx error. CoreGS 1.1 is never started.
+        let log_text = fs::read_to_string(&running.log_path).unwrap_or_default();
+        let gsdx_error = launch::restart_requested(&log_text)
+            .then(|| launch::gsdx_unavailable_message(launch::GSDX_RESTART_REQUESTED, &dirs.logs()));
         match saves::harvest_card(&lock(&shared).library, &card) {
             Ok(report) => state::log(&dirs, &format!("card harvested: {report:?}")),
             Err(error) => state::log(&dirs, &format!("card not harvested: {error}")),
@@ -406,9 +377,13 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         drop(running);
         lock(&shared).game_child = None;
         state::log(&dirs, &format!("game ended: {outcome:?} (log {})", log_path.display()));
-        let message = match &outcome {
-            Outcome::NormalClose => String::new(),
-            Outcome::Crashed { .. } => exit::user_message(&outcome),
+        let message = match (gsdx_error, &outcome) {
+            (Some(error), _) => {
+                state::log(&dirs, "GSdx asked for a restart; the launcher does not start CoreGS 1.1");
+                error
+            }
+            (None, Outcome::NormalClose) => String::new(),
+            (None, Outcome::Crashed { .. }) => exit::user_message(&outcome),
         };
         lock(&shared).home_message = message.clone();
         crate::tray::handle(&app, crate::tray::Event::GameEnded { message });

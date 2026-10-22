@@ -17,14 +17,34 @@ fn every_definition_id_is_unique_and_has_a_valid_default() {
 }
 
 #[test]
-fn renderer_defaults_to_pcsx2_gs_and_coregs_2_0_cannot_be_selected() {
+fn renderer_is_gsdx_and_neither_coregs_build_can_be_selected() {
     let mut settings = Settings::default();
     assert_eq!(settings.get("renderer"), "pcsx2");
     assert_eq!(
         settings.set("renderer", "coregs20"),
         Err(SettingError::InvalidValue { id: "renderer".into(), value: "coregs20".into() })
     );
+    assert_eq!(
+        settings.set("renderer", "coregs11"),
+        Err(SettingError::InvalidValue { id: "renderer".into(), value: "coregs11".into() }),
+        "CoreGS 1.1 is no longer a choice (TASK-096)"
+    );
     assert_eq!(settings.get("renderer"), "pcsx2", "a refused value leaves the state unchanged");
+}
+
+#[test]
+fn a_stored_coregs11_renderer_loads_as_gsdx() {
+    let text = "schema_version = 6
+
+[settings]
+renderer = \"coregs11\"
+vsync = \"fast\"
+";
+    let (config, _warnings) = config::parse(text).expect("parse");
+    assert_eq!(config.settings.get("renderer"), "pcsx2", "schema 7 maps CoreGS 1.1 to GSdx");
+    assert_eq!(config.settings.get("vsync"), "fast");
+    let written = config::render(&config);
+    assert!(written.contains("renderer = \"pcsx2\""), "{written}");
 }
 
 #[test]
@@ -68,9 +88,6 @@ fn retired_and_forced_values_of_an_old_file_are_ignored_and_dropped_at_the_next_
 fn config_round_trip_keeps_values_and_paths() {
     let mut config = ConfigFile::default();
     config.settings.set("vsync", "fast").unwrap();
-    config.settings.set("renderer", "coregs11").unwrap();
-    config.settings.set("fsr_sharpness", "30").unwrap();
-    config.settings.set("internal_scale", "3").unwrap();
     config.settings.set_gs("fxaa", "true").unwrap();
     // TASK-080 addendum: the monitor identifier holds backslashes; it must survive the TOML round trip.
     config.settings.set("monitor", r"\\.\DISPLAY2@3440x1440").unwrap();

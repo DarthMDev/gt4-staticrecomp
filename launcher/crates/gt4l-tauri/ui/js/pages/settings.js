@@ -305,7 +305,7 @@
       keyNodes.push(h("span", { class: "hint-text", text: "Limited to " + control.limited + " on this GPU" }));
     }
     if (row.note) {
-      // A row that is shown but not available now (Performance Mode with CoreGS 1.1: "GSdx only").
+      // A row that is shown but not available now (the launcher sends `note` only for such a row).
       keyNodes.push(h("span", { class: "hint-text", text: row.note }));
     }
     return h("div", { class: "row" + (row.disabled ? " is-disabled" : ""), data: { row: row.id } }, [
