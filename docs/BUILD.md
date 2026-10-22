@@ -2007,4 +2007,13 @@ showed white until its first frame). Build: `private/slice240-game-scripts/build
 
 Limits (not checked here): the white start and the 2-row crop are visible only on the owner's screen (no window was
 opened on the desktop; the checks are the build, the log and the code path). A texture pack's effect is not checked on
-a real pack. Launcher release build and installer: see the next entry.
+a real pack.
+
+Launcher and owner test installer (2026-10-21): `launcher\tools\build-release.ps1` gives `GT4Recomp.exe` 16,028,160 bytes,
+sha256 `d5d881278f768bdf8dddc5fac61ba3133069373ada38aed3abac97ea5c4fe272`, path scan clean. `makensis /DVERSION=1.2.0`
+with `GAME_DIR` `private\slice240-dist` gives `private\slice240-installer\GT4Recomp-Setup-1.2.0-test.exe`, 28,765,729 bytes,
+sha256 `0edcfefe3a143c180bdc1255357780d414aac9cd1e60bf65fc6b583648187ec7`. The WebView2 bootstrapper is the one of
+release 1.0.0 (`private\release-100-webview2`). Not published: no tag, release or draft.
+
+Checks on the final tree: `cargo test --workspace` green; Python suite `unittest discover` with the slice240 build: 629 tests,
+OK, 24 skipped (the same skips as before); CTest 39 tests (the Python suite runs inside `python_native_contracts`).
