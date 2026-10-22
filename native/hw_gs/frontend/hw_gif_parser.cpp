@@ -82,6 +82,21 @@ void GifParser::Transfer(uint32_t path, const Qword* qwords, size_t count, GifSi
             ReadTag(path, qword, sink);
             continue;
         }
+        if (state.tag.format == GifFormat::Image) {
+            // IN-353: the image qwords of this packet that are in this transfer go to the sink at once.
+            const size_t run = std::min<size_t>(state.remainingItems, count - i);
+            state.remainingItems -= static_cast<uint32_t>(run);
+            counters_.Add(Counter::ImageQwords, run);
+            sink.ImageQwords(path, &qwords[i], run);
+            i += run - 1;
+            if (state.remainingItems == 0) {
+                state.inPacket = false;
+                if (state.tag.eop) {
+                    counters_.Add(Counter::GifPacketsEnded);
+                }
+            }
+            continue;
+        }
         switch (state.tag.format) {
             case GifFormat::Packed:
                 ConsumePacked(state, qword, sink);

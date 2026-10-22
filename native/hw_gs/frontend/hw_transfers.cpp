@@ -136,6 +136,21 @@ void TransferUnit::AcceptData(const uint8_t* bytes, size_t count) {
     }
 }
 
+size_t TransferUnit::AcceptImageQwords(const uint8_t* bytes, size_t qwords) {
+    if (!active_ || regs_.xdir != 0u) {
+        counters_.Add(Counter::ImageDiscarded);
+        return 1;
+    }
+    const size_t room = totalBytes_ - buffer_.size();
+    const size_t take = std::min(room, qwords * 16);
+    buffer_.insert(buffer_.end(), bytes, bytes + take);
+    const size_t used = std::max<size_t>(1, (take + 15) / 16);
+    if (buffer_.size() == totalBytes_) {
+        Commit(true, TransferReason::Complete);
+    }
+    return std::min(used, qwords);
+}
+
 void TransferUnit::CommitPending(TransferReason reason) {
     if (active_ && !buffer_.empty()) {
         Commit(false, reason);

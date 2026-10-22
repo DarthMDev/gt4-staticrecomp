@@ -171,6 +171,8 @@ ClutUnit::ClutUnit(CounterSet& counters) : counters_(counters) {}
 
 void ClutUnit::Reset() {
     std::fill(std::begin(halfwords_), std::end(halfwords_), uint16_t{0});
+    sourceFirst_ = kBlocksTotal;
+    sourceLast_ = 0;
     cbp0_ = 0;
     cbp1_ = 0;
     haveLast_ = false;
@@ -262,6 +264,8 @@ void ClutUnit::Copy(const Tex0Write& write, const uint8_t* localMemory) {
     }
 
     sourceBlocks_.reset();
+    sourceFirst_ = kBlocksTotal;
+    sourceLast_ = 0;
     for (uint32_t e = 0; e < entryCount; ++e) {
         uint32_t x = 0;
         uint32_t y = 0;
@@ -280,6 +284,9 @@ void ClutUnit::Copy(const Tex0Write& write, const uint8_t* localMemory) {
             continue;
         }
         sourceBlocks_.set(location.block);
+        sourceFirst_ = std::min(sourceFirst_, location.block);
+        sourceLast_ = std::max(sourceLast_, location.block);
+        if (!copiesData_) continue;
         const uint8_t* source = localMemory + location.PhysicalByte();
 
         if (is32) {
@@ -304,9 +311,23 @@ void ClutUnit::Copy(const Tex0Write& write, const uint8_t* localMemory) {
     last_ = write;
 }
 
+void ClutUnit::SetHalfwords(const uint16_t* halfwords) {
+    std::copy(halfwords, halfwords + 512, std::begin(halfwords_));
+    ++generation_;
+}
+
 void ClutUnit::NoteBlocksWritten(uint32_t blockBegin, uint32_t blockCount) {
-    if (!haveLast_ || stale_) {
+    if (!haveLast_ || stale_ || sourceFirst_ > sourceLast_) {
         return;
+    }
+    // Early-out: the written range [blockBegin, blockBegin + blockCount) (wrapping at kBlocksTotal) misses
+    // [sourceFirst_, sourceLast_] entirely.
+    if (blockCount < kBlocksTotal) {
+        const uint32_t begin = blockBegin % kBlocksTotal;
+        const uint32_t end = begin + blockCount;  // exclusive; may pass kBlocksTotal (wraps)
+        const bool missesLow = end <= kBlocksTotal ? (end <= sourceFirst_ || begin > sourceLast_)
+                                                   : (begin > sourceLast_ && end - kBlocksTotal <= sourceFirst_);
+        if (missesLow) return;
     }
     for (uint32_t i = 0; i < blockCount; ++i) {
         const uint32_t block = (blockBegin + i) % kBlocksTotal;

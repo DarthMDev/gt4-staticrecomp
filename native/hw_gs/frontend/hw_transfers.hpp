@@ -89,6 +89,10 @@ public:
 
     // IMAGE qwords and HWREG writes for host->local (XDIR must be 0).
     void AcceptData(const uint8_t* bytes, size_t count);
+    // IN-353: up to `qwords` image qwords (16 bytes each) at once. Takes what the transfer still needs, commits it
+    // when complete, and returns how many qwords were used (at least 1; an inactive or local->host transfer
+    // discards one qword and counts it), exactly as AcceptData on each qword in turn.
+    size_t AcceptImageQwords(const uint8_t* bytes, size_t qwords);
 
     // Commits buffered data (batch flush, CLUT load, VBlank, reset).
     void CommitPending(TransferReason reason);

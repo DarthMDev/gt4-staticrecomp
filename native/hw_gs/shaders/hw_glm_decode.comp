@@ -35,6 +35,8 @@ layout(push_constant) uniform DecodeParameters {
     uint ta0;
     uint ta1;
     uint aem;
+    uint origin_x;      // the texture's region in the texel atlas (IN-352)
+    uint origin_y;
 } pc;
 
 // clut::ClutUnit::Decode for one entry from the GPU CLUT buffer.
@@ -71,5 +73,5 @@ void main() {
         uint e = value & 255u;
         value = e < count ? gpu_palette_entry(e) : 0u;
     }
-    imageStore(hw_texels, ivec2(texel), uvec4(value));
+    imageStore(hw_texels, ivec2(texel) + ivec2(pc.origin_x, pc.origin_y), uvec4(value));
 }

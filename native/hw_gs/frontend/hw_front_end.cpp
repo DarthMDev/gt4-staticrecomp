@@ -207,6 +207,21 @@ void FrontEnd::ImageQword(uint32_t path, const Qword& qword) {
     transfers_.AcceptData(bytes, sizeof(bytes));
 }
 
+// IN-353: a run of image qwords is packed once and handed to the transfer unit in as few calls as possible
+// (one per transfer it completes); the bytes, commits and discard counts equal ImageQword per qword.
+void FrontEnd::ImageQwords(uint32_t path, const Qword* qwords, size_t count) {
+    (void)path;
+    imageBytes_.resize(count * 16);
+    for (size_t i = 0; i < count; ++i) {
+        PackLe64(qwords[i].lo, imageBytes_.data() + 16 * i);
+        PackLe64(qwords[i].hi, imageBytes_.data() + 16 * i + 8);
+    }
+    size_t done = 0;
+    while (done < count) {
+        done += transfers_.AcceptImageQwords(imageBytes_.data() + 16 * done, count - done);
+    }
+}
+
 void FrontEnd::WriteRegister(uint8_t address, uint64_t data) {
     switch (address) {
         case reg::kPrim:
@@ -863,13 +878,16 @@ void FrontEnd::FlushBatch(FlushReason reason) {
             }
             ApplyStRounding(batch_, constantZ);
 
-            clut::Palette palette;
-            const clut::Palette* palettePtr = nullptr;
-            if (textured && IsIndexedPsm(tex0::Psm(ctx.tex0))) {
-                palette = clut_.Decode(tex0::Psm(ctx.tex0), tex0::Cpsm(ctx.tex0), tex0::Csa(ctx.tex0), batch_.state.env.texa);
-                palettePtr = &palette;
+            if (options_.vertexTrace) {
+                clut::Palette palette;
+                const clut::Palette* palettePtr = nullptr;
+                if (textured && IsIndexedPsm(tex0::Psm(ctx.tex0))) {
+                    palette = clut_.Decode(tex0::Psm(ctx.tex0), tex0::Cpsm(ctx.tex0), tex0::Csa(ctx.tex0),
+                                           batch_.state.env.texa);
+                    palettePtr = &palette;
+                }
+                batch_.trace = ComputeVertexTrace(batch_, palettePtr);
             }
-            batch_.trace = ComputeVertexTrace(batch_, palettePtr);
             NoteBatchWritesToClut();
 
             batch_.reason = reason;

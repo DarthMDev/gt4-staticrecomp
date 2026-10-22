@@ -49,6 +49,11 @@ public:
     virtual void Kick(const GifKick& kick) = 0;
     // One IMAGE qword (16 bytes) for the host to local transfer on the path.
     virtual void ImageQword(uint32_t path, const Qword& qword) = 0;
+    // A run of IMAGE qwords of one packet (the parser hands them over at once; IN-353). Same effect as
+    // ImageQword on each, in order.
+    virtual void ImageQwords(uint32_t path, const Qword* qwords, size_t count) {
+        for (size_t i = 0; i < count; ++i) ImageQword(path, qwords[i]);
+    }
 };
 
 class GifParser {

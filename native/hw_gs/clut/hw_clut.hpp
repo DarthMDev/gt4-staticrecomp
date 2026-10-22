@@ -94,6 +94,12 @@ public:
 
     // Marks loaded data stale when memory it read was written (chapter 07.2).
     void NoteBlocksWritten(uint32_t blockBegin, uint32_t blockCount);
+    // IN-353: with false, a performed load still takes every decision and records its source blocks but does not
+    // copy the entries (the GPU CLUT is authoritative, IN-349); the CPU buffer is then not meaningful until
+    // SetHalfwords.
+    void SetCopiesData(bool copies) { copiesData_ = copies; }
+    bool CopiesData() const { return copiesData_; }
+    void SetHalfwords(const uint16_t* halfwords);
 
     // Decodes the palette a draw sees (chapter 07.5). psm is the draw's format.
     Palette Decode(uint32_t psm, uint32_t cpsm, uint32_t csa, uint64_t texa) const;
@@ -125,6 +131,9 @@ private:
     bool stale_ = true;
     Tex0Write last_{};
     std::bitset<kBlocksTotal> sourceBlocks_;
+    uint32_t sourceFirst_ = kBlocksTotal;  // lowest and highest block set in sourceBlocks_ (IN-353 early-out)
+    uint32_t sourceLast_ = 0;
+    bool copiesData_ = true;
 };
 
 }  // namespace clut

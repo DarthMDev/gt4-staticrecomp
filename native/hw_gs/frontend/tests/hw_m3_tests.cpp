@@ -1285,6 +1285,97 @@ void TestCounters() {
 
 }  // namespace
 
+// IN-353: the CLUT unit's written-range early-out and its copy-free mode change no decision. Three units see the
+// same random sequence of TEX0 writes and memory writes: A notes each write as one range, R notes it block by
+// block (the reference: a single block cannot be mis-classified by a range test), B notes ranges and does not
+// copy entries. Every load decision, every counter and A's entries must equal R's; B's decisions must equal A's.
+void TestClutCopyFree() {
+    std::vector<uint8_t> memory(kLocalMemoryBytes);
+    uint64_t state = 0xC1A7u;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    for (uint8_t& byte : memory) byte = static_cast<uint8_t>(next());
+    CounterSet countersA, countersR, countersB;
+    clut::ClutUnit unitA(countersA), unitR(countersR), unitB(countersB);
+    unitB.SetCopiesData(false);
+    const uint32_t bases[] = {0u, 32u, 4096u, 14528u, 14560u, 16352u};
+    int loadsPerformed = 0;
+    for (int step = 0; step < 4000; ++step) {
+        if (next() % 3u == 0u) {
+            uint32_t begin = 0;
+            uint32_t count = 1;
+            switch (next() % 4u) {
+                case 0: begin = bases[next() % 6u] + next() % 64u; count = 1u + next() % 64u; break;
+                case 1: begin = 16384u - 1u - next() % 40u; count = 1u + next() % 200u; break;  // wraps
+                case 2: begin = next() % 16384u; count = 4480u; break;                           // a frame buffer
+                default: begin = next() % 16384u; count = 16384u + next() % 10u; break;           // everything
+            }
+            unitA.NoteBlocksWritten(begin, count);
+            unitB.NoteBlocksWritten(begin, count);
+            for (uint32_t i = 0; i < count; ++i) unitR.NoteBlocksWritten((begin + i) % 16384u, 1);
+            continue;
+        }
+        // Half the loads repeat one of four fixed keys (CLD 1), so redundant loads and stale sources both occur.
+        clut::Tex0Write w;
+        const uint32_t preset = next() % 8u;
+        const bool fixed = preset < 4u;
+        w.psm = fixed ? (preset & 1u ? 0x13u : 0x14u) : ((next() & 1u) ? 0x13u : 0x14u);
+        w.cpsm = fixed ? 0x00u : ((next() & 1u) ? 0x00u : 0x02u);
+        w.cbp = fixed ? bases[2 + preset] : bases[next() % 6u] + (next() & 1u) * 4u;
+        w.csm = fixed ? 0u : (next() % 8u == 0u ? 1u : 0u);
+        w.csa = fixed ? preset : (next() & 31u);
+        w.cld = fixed ? 1u : 1u + next() % 5u;
+        w.texclutCbw = 1u + next() % 4u;
+        w.texclutCou = next() % 4u;
+        w.texclutCov = next() % 64u;
+        for (int repeat = 0; repeat < (fixed ? 2 : 1); ++repeat) {  // a fixed key twice: the second is redundant
+            const bool loadA = unitA.ProcessWrite(w, memory.data(), {});
+            const bool loadR = unitR.ProcessWrite(w, memory.data(), {});
+            const bool loadB = unitB.ProcessWrite(w, memory.data(), {});
+            CHECK_EQ(loadA, loadR);
+            CHECK_EQ(loadA, loadB);
+            loadsPerformed += loadA ? 1 : 0;
+        }
+    }
+    for (size_t c = 0; c < CounterSet::kCount; ++c) {
+        CHECK_EQ(countersA.Get(static_cast<Counter>(c)), countersR.Get(static_cast<Counter>(c)));
+        CHECK_EQ(countersA.Get(static_cast<Counter>(c)), countersB.Get(static_cast<Counter>(c)));
+    }
+    for (uint32_t i = 0; i < 512; ++i) CHECK_EQ(unitA.Halfwords()[i], unitR.Halfwords()[i]);
+    CHECK(loadsPerformed > 100);
+    // Deterministic sweep around one palette's source blocks (a 16 x 16 CT32 palette at block 4096, also the
+    // wrap at the top of memory): every range that starts or ends at a boundary block.
+    int staleSeen = 0;
+    for (const uint32_t cbp : {4096u, 16352u}) {
+        for (uint32_t offset = 0; offset < 48; ++offset) {
+            for (const uint32_t count : {1u, 2u, 3u, 8u, 40u}) {
+                CounterSet ca, cr;
+                clut::ClutUnit a(ca), r(cr);
+                clut::Tex0Write w;
+                w.psm = 0x13u;
+                w.cpsm = 0x00u;
+                w.cbp = cbp;
+                w.cld = 1u;
+                a.ProcessWrite(w, memory.data(), {});
+                r.ProcessWrite(w, memory.data(), {});
+                const uint32_t begin = (cbp + 16384u - 8u + offset) % 16384u;
+                a.NoteBlocksWritten(begin, count);
+                for (uint32_t i = 0; i < count; ++i) r.NoteBlocksWritten((begin + i) % 16384u, 1);
+                const bool reloadA = a.ProcessWrite(w, memory.data(), {});
+                const bool reloadR = r.ProcessWrite(w, memory.data(), {});
+                CHECK_EQ(reloadA, reloadR);
+                staleSeen += reloadR ? 1 : 0;
+            }
+        }
+    }
+    CHECK(staleSeen > 0);
+    CHECK(countersA.Get(Counter::ClutLoadsSkipped) > 0);
+    std::printf("hw_clut_copy_free: %d loads performed, %llu skipped as redundant\n", loadsPerformed,
+                static_cast<unsigned long long>(countersA.Get(Counter::ClutLoadsSkipped)));
+}
+
 int main(int argc, char** argv) {
     const std::string name = argc > 1 ? argv[1] : "";
     struct Entry {
@@ -1300,6 +1391,7 @@ int main(int argc, char** argv) {
         {"hw_st_rounding", [] { TestStRounding(); }},
         {"hw_clut_load", [] { TestClutLoad(); }},
         {"hw_clut_snapshot", [] { TestClutSnapshot(); }},
+        {"hw_clut_copy_free", [] { TestClutCopyFree(); }},
         {"hw_transfers", [] { TestTransfers(); }},
         {"hw_counters", [] { TestCounters(); }},
     };

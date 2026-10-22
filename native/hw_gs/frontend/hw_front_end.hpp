@@ -29,6 +29,9 @@ enum class AutoflushMode : uint8_t { Sprites, All, Off };
 struct FrontEndOptions {
     AutoflushMode autoflush = AutoflushMode::Sprites;
     bool clutAlwaysLoad = false;  // GT4_HW_CLUT_ALWAYS_LOAD=1
+    // Chapter 02.9 vertex trace per batch (Batch::trace). No consumer reads it yet (the decision layer is not
+    // wired); the write-back renderer turns it off (IN-353).
+    bool vertexTrace = true;
 };
 
 enum class SyncKind : uint8_t { Signal, Finish, Label };
@@ -67,6 +70,8 @@ public:
 
     // Called after the CLUT unit performed a load (not for skipped or refused ones), with its TEX0/TEXCLUT
     // fields, so a renderer can repeat the load on its GPU CLUT copy (chapter 07.7, IN-349). Empty = no call.
+    // IN-353: CPU CLUT entry copies on or off (off while the GPU CLUT is authoritative, IN-349).
+    clut::ClutUnit& MutableClut() { return clut_; }
     void SetClutLoaded(std::function<void(const clut::Tex0Write&)> callback);
 
     // Feeds whole qwords to a GIF path (1..3).
@@ -101,6 +106,7 @@ public:
     void WriteRegister(uint8_t address, uint64_t data) override;
     void Kick(const GifKick& kick) override;
     void ImageQword(uint32_t path, const Qword& qword) override;
+    void ImageQwords(uint32_t path, const Qword* qwords, size_t count) override;
 
 private:
     struct Candidate {
@@ -143,6 +149,7 @@ private:
     GifParser parser_;
     clut::ClutUnit clut_;
     TransferUnit transfers_;
+    std::vector<uint8_t> imageBytes_;  // packed image qwords (IN-353)
 
     const uint8_t* localMemory_ = nullptr;
     std::function<void(const BlockRange&)> beforeLocalRead_;

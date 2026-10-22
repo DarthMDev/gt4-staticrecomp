@@ -66,7 +66,7 @@ enum : std::uint32_t {
     Format, Fbmsk, Fba, Dither, DimxLo, DimxHi, Ate, Atst, Afail, Aref, DateOn, Datm, Ztest, Ztst, Zmsk,
     Zformat, BlendOn, Pabe, BlendA, BlendB, BlendC, BlendD, Fix, Colclamp, TexOn, Tfx, Tcc, TexelKind,
     Ta0, Ta1, Aem, FogOn, FogR, FogG, FogB, TexFst, TexLinear, WrapS, WrapT, WrapMinS, WrapMaxS,
-    WrapMinT, WrapMaxT, TexLog2W, TexLog2H,
+    WrapMinT, WrapMaxT, TexLog2W, TexLog2H, TexOriginX, TexOriginY,
     Count
 };
 static_assert(Count <= 48, "GpuPixelState has 48 fields");
@@ -119,7 +119,8 @@ struct GpuChunk {
 // Limits of one Execute() call (the caller splits larger batches).
 constexpr std::uint32_t kGpuMaxVertices = 1u << 20;   // 32 MiB of vertex data
 constexpr std::int32_t kGpuSurface = 2048;             // GS window size: frame and depth images
-constexpr std::uint32_t kGpuMaxTextureSide = 1024;     // texel image side (region modes may use less)
+constexpr std::uint32_t kGpuMaxTextureSide = 1024;     // largest texture side (region modes may use less)
+constexpr std::uint32_t kGpuTexelAtlasSide = 4096;      // texel atlas: one region per textured chunk of a run (IN-352)
 
 struct GpuStats {
     std::uint64_t executions = 0;
@@ -129,6 +130,8 @@ struct GpuStats {
     std::uint64_t readbackBytes = 0;
     std::uint64_t barriers = 0;
     std::uint64_t submissions = 0;  // queue submissions (IN-342: several chunks per submission)
+    std::uint64_t runs = 0;         // render passes holding batched chunks (IN-352)
+    std::uint64_t runChunks = 0;    // chunks drawn inside runs
 };
 
 class GpuDrawer {
@@ -185,6 +188,10 @@ public:
     // Fixtures: read the whole GLM, or the texel image's top-left width x height words (submits and waits).
     bool ReadGlm(std::vector<std::uint32_t> &words, std::string &error);
     bool ReadTexels(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words, std::string &error);
+
+    // IN-352 A/B switch: chunks of triangles drawn with the pixel interlock are batched into runs (one render
+    // pass, texture preparation recorded before it, no barrier between the chunks). Off: one pass per chunk.
+    void SetRuns(bool enabled);
 
     const GpuStats &Stats() const;
 

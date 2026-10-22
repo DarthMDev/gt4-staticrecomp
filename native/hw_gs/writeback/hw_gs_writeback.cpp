@@ -177,10 +177,15 @@ bool BuildTexture(const BatchState& state, const clut::ClutUnit& clut, TextureUn
     out.tcc = tex0::Tcc(tex0Register) != 0;
     out.tfx = static_cast<pixel::Tfx>(tex0::Tfx(tex0Register) & 3u);
     out.texa = clut::TexaState::FromRegister(state.env.texa);
-    if (out.cls == TexClass::Indexed) {
-        out.palette = clut.Decode(psmCode, tex0::Cpsm(tex0Register), tex0::Csa(tex0Register), state.env.texa);
-    }
     return true;
+}
+
+// The CPU palette of an indexed texture (CLUT buffer through CPSM, CSA and TEXA). Only the CPU decode and the
+// palette-ring GLM decode need it; with the GPU CLUT (IN-349) the GPU expands the indices (IN-353: not decoded).
+void DecodePalette(const BatchState& state, const clut::ClutUnit& clut, TextureUnit& texture) {
+    const uint64_t tex0Register = state.ctx.tex0;
+    texture.palette = clut.Decode(tex0::Psm(tex0Register), tex0::Cpsm(tex0Register), tex0::Csa(tex0Register),
+                                  state.env.texa);
 }
 
 // Colour of one stored texel value after TEXA and palette expansion, packed RGBA8 (the GPU's texel format).
@@ -377,6 +382,7 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
             out.glmPsm = static_cast<uint32_t>(texture.view.psm);
             out.glmIndexed = texture.cls == TexClass::Indexed;
             if (out.glmIndexed && !out.glmGpuClut) {
+                DecodePalette(state, clut, texture);
                 out.palette.assign(texture.palette.entries, texture.palette.entries + 256);
             }
             counters.texturesFromGlm++;
@@ -386,6 +392,7 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
             if (out.textureSlot >= 0) counters.texturesFromTargets++;
         } else {
         if (beforeTextureRead) beforeTextureRead(texture.view, width, height);
+        if (texture.cls == TexClass::Indexed) DecodePalette(state, clut, texture);
         TextureKey key;
         key.tbp = texture.view.basePointer;
         key.tbw = texture.view.bufferWidth;
@@ -830,7 +837,31 @@ public:
         textures_[KeyHash(key)] = std::move(entry);
     }
 
-    Impl() : frontEnd_(FrontEndOptions{}, *this, *this, *this) {
+    static FrontEndOptions RendererFrontEndOptions() {
+        FrontEndOptions options;
+        options.vertexTrace = false;  // no consumer yet (IN-353)
+        return options;
+    }
+
+    // IN-353: the CPU CLUT copies entries only while the GPU CLUT is not authoritative. Leaving GPU CLUT mode
+    // reads the GPU CLUT back into the CPU unit so it is exact again.
+    void UpdateClutCopies() {
+        clut::ClutUnit& unit = frontEnd_.MutableClut();
+        const bool copies = !GpuClutActive();
+        if (copies == unit.CopiesData()) return;
+        if (copies && gpuClutSynced_ && gpu_.Ready()) {
+            std::vector<uint16_t> halfwords;
+            std::string error;
+            if (!gpu_.ReadClut(halfwords, error)) {
+                Fail(error);
+                return;
+            }
+            unit.SetHalfwords(halfwords.data());
+        }
+        unit.SetCopiesData(copies);
+    }
+
+    Impl() : frontEnd_(RendererFrontEndOptions(), *this, *this, *this) {
         frontEnd_.SetLocalMemory(memory_.Local().bytes().data());
         InitSlots();
         frontEnd_.SetClutLoaded([this](const clut::Tex0Write& write) { OnClutLoaded(write); });
@@ -1577,6 +1608,7 @@ public:
     }
 
     void OnBatch(Batch&& batch) override {
+        StageTimer batchTimer(counters.batchUs);
         counters.batches++;
         if (!gpu_.Ready()) {
             Fail("GPU drawer is not initialised");
@@ -1718,7 +1750,11 @@ Renderer::Renderer() : impl_(std::make_unique<Impl>()) {}
 
 Renderer::~Renderer() = default;
 
-bool Renderer::Init(const gpu::VulkanHandles& handles, std::string& error) { return impl_->gpu_.Init(handles, error); }
+bool Renderer::Init(const gpu::VulkanHandles& handles, std::string& error) {
+    if (!impl_->gpu_.Init(handles, error)) return false;
+    impl_->UpdateClutCopies();
+    return true;
+}
 
 bool Renderer::GifTransfer(std::uint32_t path, const std::uint8_t* bytes, std::size_t byteCount) {
     if (path == 0 || path > 3) return false;  // IN-312
@@ -2075,15 +2111,22 @@ void Renderer::SetSyncMode(bool cache) {
         impl_->DropAll();
     }
     impl_->cacheMode_ = cache;
+    impl_->UpdateClutCopies();
 }
 
 bool Renderer::CacheMode() const { return impl_->cacheMode_; }
 
 void Renderer::SetTextureFromTargets(bool enabled) { impl_->textureFromTargets_ = enabled; }
 
-void Renderer::SetGlm(bool enabled) { impl_->glmEnabled_ = enabled; }
+void Renderer::SetGlm(bool enabled) {
+    impl_->glmEnabled_ = enabled;
+    impl_->UpdateClutCopies();
+}
 
-void Renderer::SetGpuClut(bool enabled) { impl_->gpuClutEnabled_ = enabled; }
+void Renderer::SetGpuClut(bool enabled) {
+    impl_->gpuClutEnabled_ = enabled;
+    impl_->UpdateClutCopies();
+}
 
 void Renderer::SetGlmParking(bool enabled) {
     if (!enabled) impl_->WriteBackAll();  // GLM-owned pages go back to the shadow memory
@@ -2093,6 +2136,8 @@ void Renderer::SetGlmParking(bool enabled) {
 void Renderer::SetGlmLoadsAlways(bool enabled) { impl_->glmLoadsAlways_ = enabled; }
 
 void Renderer::SetGpuUploads(bool enabled) { impl_->gpuUploads_ = enabled; }
+
+void Renderer::SetRuns(bool enabled) { impl_->gpu_.SetRuns(enabled); }
 
 void Renderer::SetCpuSmallSprites(bool enabled) { impl_->cpuSmallSprites_ = enabled; }
 

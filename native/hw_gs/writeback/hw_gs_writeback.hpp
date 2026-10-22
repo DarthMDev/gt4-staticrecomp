@@ -57,6 +57,7 @@ struct Counters {
     double textureDecodeUs = 0.0;
     double gifUs = 0.0;     // all of GifTransfer (front end, translate, execute, transfers): the GS stream cost
     double uploadUs = 0.0;  // EE->GS uploads into the shadow memory (and GLM merges, IN-350)
+    double batchUs = 0.0;   // all of OnBatch (translate, execute and the batch bookkeeping around them)
     std::uint64_t texturesCached = 0;
     std::uint64_t texturesFromTargets = 0;    // batches whose texels were copied from a resident target (IN-346)
     std::uint64_t texturesFromGlm = 0;        // batches whose texels were decoded from the GLM (IN-347)
@@ -236,6 +237,8 @@ public:
     void SetGlmLoadsAlways(bool enabled);
     // IN-351 A/B switch: EE uploads are written into the GLM on the GPU (pages become GLM-owned).
     void SetGpuUploads(bool enabled);
+    // IN-352 A/B switch: interlocked chunks batched into runs (one render pass per run).
+    void SetRuns(bool enabled);
     bool CacheMode() const;
 
     // CPU view of the SLM (4 MiB, GS layout). Resident draws are written back first.

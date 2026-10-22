@@ -17,7 +17,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M6 output | Done except owner test 1: display library, presentation interfaces (IN-331) with `end_frame`/`present_slot`, HWR frame dumps (IN-332; `vram` = reference image, `scanout` = presentation image, IN-338), replay tool (IN-333/IN-334), odd-frame draw loss fixed (IN-335), field offset and deinterlace in the presentation (IN-338) with the adaptive rule corrected (IN-337). Open: IN-336 (triangle precision, inside the gate) | local slice229: `hw_presentation_field_phase`, `display_hw_deint_adaptive`; 42/42 `vram` dumps inside the 2D gate and byte-identical to slice228; presentation replay of the menu capture bob-free on static screens |
 | M7 cache | In progress: resident target slots with LRU (IN-340/IN-344), decoded-texture cache (IN-341), deferred submission (IN-342), textures from targets (IN-346), CPU small sprites (IN-348), GPU CLUT (IN-349), GLM-owned pages instead of write-backs for evictions, overlaps and uploads (IN-350/IN-351); gated by `hw_cache_equals_writeback` and per-frame memory hashes of the menu, car and race captures (identical to the write-back mode). Open: target lists per chapter 05, display from targets, preload, dirty lists, clears, GPU moves | local slice237: race replay 1 write-back per frame (display) instead of 12; headless race 65 -> 38 ms per vsync |
 | M8, M12, M14, M15, M17, M19 | Not started | |
-| M9 batching | Started: one draw per chunk of triangles with an ordered pixel interlock (IN-345). Open: several batches per render pass (barriers are about 12 ms of GPU time per race frame, measured) | `hw_cache_equals_writeback` and the GPU fixtures in both interlock modes |
+| M9 batching | In progress: one draw per chunk of triangles with an ordered pixel interlock (IN-345); runs of chunks in one render pass with texture preparation hoisted into a texel atlas (IN-352). Open: CLUT loads and GLM operations still cost two barriers each; double-buffered submission (CPU and GPU overlap) | `hw_cache_equals_writeback` and the GPU fixtures in both interlock modes; race barriers 9,500 -> 3,230 per frame |
 | M10 GLM | Started: GLM, decode, swizzle, unswizzle, CLUT, merge and upload kernels (IN-347, IN-349..IN-351) | `hw_glm_decode`, `hw_glm_swizzle`, `hw_glm_unswizzle`, `hw_glm_clut`, `hw_glm_upload_merge`, `hw_glm_host_upload` |
 | M11, M13, M16, M18 | Pure references only (lod, replace) | lod, `hw_replace_*` CTest |
 
@@ -350,4 +350,18 @@ while a game is open, and never touches the owner's card.
 - Spec question for the TASK-026 team (IN-350): 04.9 keeps targets authoritative and the GLM a pure function of
   SLM + targets. Parking moves a target's content into the GLM, which then owns those pages until a CPU user needs
   them. Is that acceptable as the M7/M10 coherence model, or should the parked content stay in a target image?
+
+## 2026-10-21 runs and CPU front-end savings (local slice238, IN-352/IN-353) - Claude
+
+- Runs (IN-352): interlocked chunks share one render pass; texture preparation goes into a texel atlas before it.
+  Race replay barriers 6,900 -> 3,230 per frame, display wait 15.6 -> 8.7 ms.
+- CPU (IN-353, found with a local sampling profiler): the CPU CLUT unit no longer copies entries while the GPU CLUT is
+  authoritative, its write tracking has a range early-out, palettes and the 02.9 vertex trace are computed only when
+  needed. Race replay GS stream 17.3 -> 11.5 ms per frame.
+- Gates: memory hashes identical on the three captures; 224/224 non-Python CTests in both interlock modes (new
+  `m3_hw_clut_copy_free`); menu 42/42 dumps byte-identical to slice228; race schedule identical to slice235 and inside
+  the 3D gate; default renderer 42/42 = slice214.
+- Headless in-game race: 35 -> 25-26 ms per vsync (65 ms at the start of the day's 3D work). About 7.6 ms per frame is
+  still the CPU waiting for the previous frame's GPU work (one command buffer); next: double-buffered submission so
+  the CPU records frame N+1 while the GPU draws frame N.
 

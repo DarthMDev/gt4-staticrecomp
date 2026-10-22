@@ -1999,3 +1999,15 @@ Incremental rebuilds of the slice228 tree. No pin or launcher change. Evidence i
 - Measured: headless race 65 -> 38 ms per vsync (`GT4_HW_PROFILE_EVERY=250`); race replay GS stream 45 -> 17 ms per
   frame. Replay A/B switches: `--no-glm`, `--no-gpu-clut`, `--no-cpu-sprites`, `--no-glm-park`, `--no-gpu-uploads`.
 
+## Local slice238 - runs and CPU front-end savings (IN-352/IN-353)
+
+Incremental rebuild of the slice228 tree. No pin or launcher change. Evidence in `private/slice238-*` (never staged).
+A local profiling build (`build/slice238-prof`, RelWithDebInfo with a fixed image base, never shipped) and a sampling
+helper (`build/prof/sampler.exe`) were used to find the CPU costs; neither is part of the repository.
+
+- Confirmed: 224/224 non-Python CTests, also with `GT4_HW_TEST_NO_INTERLOCK=1` (new `m3_hw_clut_copy_free`).
+- Confirmed: per-frame memory hashes identical to the write-back mode on the menu (1,101, = slice228), car and race
+  captures.
+- Confirmed: headless menu 42/42 dumps byte-identical to slice228; race schedule 42/42 identical to slice235 and inside
+  the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
+- Measured: headless race 25-26 ms per vsync (slice237: 38 ms). Replay switch `--no-runs`.

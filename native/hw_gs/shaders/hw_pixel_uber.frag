@@ -83,6 +83,8 @@ layout(std140, set = 0, binding = 0) uniform PixelStateBlock {
     uint wrap_max_t;   // MAXV
     uint tex_log2_w;   // TW
     uint tex_log2_h;   // TH
+    uint tex_origin_x; // the chunk's region in the texel atlas (IN-352)
+    uint tex_origin_y;
 } state;
 
 #if HWR_INTERLOCK
@@ -118,7 +120,7 @@ int wrap_texel(int texel, uint log2_size, uint mode, uint minimum, uint maximum)
 // Texel colour: RGBA8 words decoded on the CPU, or (IN-346) raw CT16/CT24 words copied from a resident target
 // on the GPU, expanded here with TEXA exactly as the CPU decode does (hw_texel_colour, verified bit-exact).
 ivec4 fetch_texel(int x, int y) {
-    uint raw = imageLoad(hw_texels, ivec2(x, y)).x;
+    uint raw = imageLoad(hw_texels, ivec2(x + int(state.tex_origin_x), y + int(state.tex_origin_y))).x;
     return hw_texel_colour(state.texel_kind, raw, state.ta0, state.ta1, state.aem != 0u);
 }
 
