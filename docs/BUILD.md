@@ -2251,3 +2251,36 @@ Builds (all paths absolute):
   `/DLAUNCHER_EXE` = the copy above, `GAME_DIR` slice240-dist, SDL3 and WebView2 bootstrapper as before, script
   `C:\Antigravity\gt4-wt-091-install\installer\gt4recomp.nsi`). 7-Zip extraction: `.update-staging\GT4Recomp.exe`
   equals the launcher; the extraction folder was deleted. Not run on this PC.
+
+
+### Slice 258 (WebView2 check at start, update restart speed; issue #80, release 1.2.1)
+- WebView2 check before any window (`gt4l_platform::webview2`, `webview_guard::check_webview2_at_start`): the `pv` of
+  client `{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` is read as the installer does (HKLM WOW6432Node, HKLM, HKCU; empty or
+  `0.0.0.0` is absent). A missing runtime shows the native message (`Problem::Missing`) at once, not after the 12 s
+  watchdog. A fixed-version runtime (`WEBVIEW2_BROWSER_EXECUTABLE_FOLDER` set) skips the registry check. The log gets
+  `WebView2 runtime found in the registry: <pv>` or `not found`, next to the `tauri::webview_version` line.
+- Test only: `GT4RECOMP_TEST_WEBVIEW2_MISSING=1` forces the absent result (the version is still logged). Not for players.
+- Launcher start-up: `ui ready after N ms` (from process start, logged by `ui_ready`); `start-up: data layout and
+  relocation ready after N ms`; `start-up: settings loaded in N ms`; `start-up: old install clean-up finished in N ms`
+  (the clean-up now runs on a background thread after the window is created).
+- Single instance: a second start brings the running window forward only when that window is shown
+  (`gt4l_platform::process::should_bring_forward`); a hidden window (page not ready yet) is left to the first launcher.
+- Installer 1.2.1 update path (`installer\gt4recomp.nsi`): setup.log gets phase timings in ms (`onInitWait`, `webview2`,
+  `stage`, `swap`, `files`, `data`, `shortcuts_registry`, `estimated_size`, `relaunch_request`, and after the start
+  `old_copies`, `old_user_install`, `previous_folder` in a second line). The data folder gets icacls only on a fresh
+  install or when a write probe fails (an update keeps the grant). EstimatedSize sums `game` and the top-level files
+  (`/G=0`), not the data tree. The launcher starts (silent `/UPDATE`) before the old copies and per-user leftovers are
+  removed; the previous data folder is recorded before the start (the launcher moves it).
+- Known limit: the write probe runs in the elevated setup, so it can pass while a player cannot write the data folder.
+  The grant of a fresh install is unchanged.
+- Checks: `cargo test --workspace` (from `launcher\`) 364 passed, 0 failed, 4 ignored (351 before; 10 WebView2 unit tests
+  and 3 single-instance tests). UI nav-test 150 of 150; focus-check `pass` (100 checks; headless Edge through Playwright,
+  `channel: msedge`, run from a temporary script outside the repository).
+- Launcher `private\slice258-launcher\GT4Recomp.exe`, 16,355,328 bytes, sha256
+  `5db4e04f6b2b59f8ec0481630a945561faa1f7bcc789a664fc065e67c3d2c60a` (`launcher\tools\build-release.ps1`, path scan clean).
+- Installer `private\slice258-installer\GT4Recomp-Setup-1.2.1-test.exe`, 28,857,248 bytes, sha256
+  `24d9b4050ddd5b936bf96c56a7ee5524e360a774d199eef64ae078f533431bf3` (makensis, the slice 257 recipe with
+  `/DLAUNCHER_EXE` = the copy above, `GAME_DIR` slice240-dist, SDL3 and WebView2 bootstrapper as before). 7-Zip extraction:
+  `.update-staging\GT4Recomp.exe` equals the launcher; the extraction folder was deleted. Not run on this PC.
+- Measured timings: the installer phases come from the owner's silent update (setup.log). `ui ready after N ms` comes
+  from the owner's launch (not run here: no launcher window was opened on this PC).
