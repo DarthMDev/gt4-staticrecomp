@@ -49,10 +49,26 @@ claim zero emulation or full PS2 fidelity.
 
 - **Phase 1 (current):** fast, stable recompiled port: 60 FPS at 100% game speed,
   smooth frametime, no interpreter on the normal path.
-- **Out of scope here:** a decompilation-based source port, a native (non-GS)
-  renderer, changes to the game's physics timing and remaster features will be a
-  separate project, possibly a fork. This repository's goal is the original game
-  running natively, optimized and as faithful as possible.
+- **Out of scope here:** a decompilation-based source port, changes to the game's
+  physics timing and remaster features will be a separate project, possibly a fork.
+  This repository's goal is the original game running natively, optimized and as
+  faithful as possible.
+- **Modern render pipeline is in scope as an option** (owner, 2026-10-22): the render
+  pipeline is modernised in stages. CoreGS 2.0 optimises as far as possible inside the
+  VU1 + GS model. **CoreGS 3.0** then moves the VU1 work onto the GPU and renders
+  natively: it may first run the whole game with some effects missing or approximate,
+  and restores them one by one in a native way (for example flares through occlusion
+  queries instead of GS readbacks). Rules:
+  - **Faithful by default:** a faithful renderer (GSdx today, CoreGS 2.0 later) stays the
+    default and the reference; the modern pipeline is opt-in until it beats it in owner
+    tests.
+  - **Fidelity is a measured target there, not a bit-exact gate:** per-scene visual
+    checks (night, rain, rally, replays, photo, split screen) and a list of effects to
+    restore. CoreGS 2.0 keeps its 1x identity gates where practical and relaxes one only
+    explicitly, for a named optimisation.
+  - **Game logic never changes:** physics, timing, AI, saves, and anything the EE or IOP
+    reads back that affects gameplay stay exact (decisions/coregs3-modern-pipeline in
+    ai-memory).
 - **Aspect ratios are in scope** (owner, 2026-10-21; TASK-079, TASK-080): 16:9 forced
   at boot, and native support for other screen ratios (16:10, phones, 21:9, 32:9):
   the renderer stretches to the screen, the game's own projection values (Width and
@@ -68,8 +84,10 @@ claim zero emulation or full PS2 fidelity.
 - **Graphics:** PC renderers = the **PCSX2 GS** in a separate GPL process
   (`gt4-gs.exe`, built from our fork `moesuito/gt4recomp-gs`, downloaded by the
   launcher) plus **CoreGS 1.1** built in (MIT, fallback and offline default), with
-  **CoreGS 2.0** planned (our own MIT hardware GS renderer, TASK-026 clean-room
-  spec, TASK-027 implementation; 3x-6x and texture packs). Mobile = **ARMSX2 GS
+  **CoreGS 2.0** in development (our own MIT hardware GS renderer, TASK-026 clean-room
+  spec, TASK-027 implementation; 3x-6x and texture packs; it enters the launcher only
+  when at least equivalent to GSdx, a beta needs upscaling and anti-aliasing), then
+  **CoreGS 3.0** (TASK-090, the modern pipeline above). Mobile = **ARMSX2 GS
   pipeline** (Vulkan on Android, Metal on iOS) without ARMSX2's JIT. See
   `docs/GS-RENDERER-OPTIONS.md` and `docs/GSDX-PLAN.md`.
 - **No GPL code in the release executable** (it contains game code): the game
