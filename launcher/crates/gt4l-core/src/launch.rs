@@ -90,6 +90,12 @@ pub enum RendererChoice {
     CoreGs11 { reason: Option<String> },
 }
 
+/// Whether the selected renderer needs the external PCSX2 GS package. CoreGS is built in, so choosing it
+/// must not trigger an automatic package download or release check.
+pub fn needs_external_renderer(settings: &Settings) -> bool {
+    settings.get("renderer") == settings::PCSX2_GS
+}
+
 /// Chooses the renderer of a session. PCSX2 GS is used when selected and installed; otherwise CoreGS 1.1 starts
 /// with a message. CoreGS 2.0 is not built, so it also starts CoreGS 1.1.
 pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> RendererChoice {

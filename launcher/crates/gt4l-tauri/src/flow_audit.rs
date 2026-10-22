@@ -299,6 +299,55 @@ fn synthetic_flow_end_to_end() {
 }
 
 #[test]
+fn coregs_setup_and_play_need_no_external_renderer_package() {
+    let root = scratch("coregs-independent");
+    let dirs = DataDirs::new(root.join("data"));
+    let game = synthetic_game(0x0010_0000, 0x0010_0008, b"synthetic guest code, not game data, 0123456789abcdef");
+    let image = build_iso(
+        "GT4 USA",
+        &[
+            ("SYSTEM.CNF;1", system_cnf("SCUS_973.28", "2.00", "NTSC")),
+            ("CORE.GT4;1", game.core.clone()),
+            ("SCUS_973.28;1", vec![0xA5; 3000]),
+        ],
+    );
+    let pins = pins_for(&image, &game, "SCUS-97328", "2.00");
+    let picked = root.join("disc.iso");
+    fs::write(&picked, image).unwrap();
+    let shared = launch(&dirs, &pins);
+    {
+        let mut state = lock(&shared);
+        state.config.settings.set("renderer", gt4l_core::settings::CORE_GS_11).unwrap();
+        state.save_config();
+    }
+    setup::choose_disc_path(&shared, &picked).unwrap();
+    let recorder = Recorder::default();
+    let forbidden_installer: RendererInstaller = Arc::new(|_, _| {
+        panic!("CoreGS setup must not invoke the external renderer installer");
+    });
+    run_setup(&shared, &recorder, forbidden_installer);
+    let view = screen(&shared);
+    assert_eq!(view["setup"]["state"], "done");
+    assert_eq!(view["setup"]["note"], "", "an intentional CoreGS choice is not a download failure");
+    assert!(recorder.names("renderer-progress").is_empty(), "no external download steps are emitted");
+    assert_eq!(recorder.names("setup-finished"), vec![json!({ "ok": true, "message": "" })]);
+    assert!(!dirs.root().join("gs").exists(), "setup creates no external package folder");
+
+    let second = launch(&dirs, &pins);
+    assert_eq!(lock(&second).config.settings.get("renderer"), gt4l_core::settings::CORE_GS_11);
+    let program = root.join("program");
+    fs::create_dir_all(program.join("game")).unwrap();
+    fs::write(program.join("game").join("gt4vulkan.exe"), b"stand-in, never started").unwrap();
+    let inputs = commands::prepare_play(&second, &program).unwrap();
+    assert!(inputs.pcsx2.is_none());
+    assert!(inputs.notice.is_none());
+    let plan = play_plan(&second, &program).unwrap();
+    assert!(plan.environment.iter().any(|(name, value)| name == "GT4_RENDERER" && value == "donor"));
+    assert!(!plan.environment.iter().any(|(name, _)| name.starts_with("GT4_GS_PROCESS")));
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 #[ignore = "real discs, a real copy of the image and a real download; see the module comment"]
 fn real_flow_end_to_end() {
     let data = PathBuf::from(std::env::var("GT4_AUDIT_DATA_DIR").expect("set GT4_AUDIT_DATA_DIR"));

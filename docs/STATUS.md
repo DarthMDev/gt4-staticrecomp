@@ -11,6 +11,19 @@ Local artifacts, nothing published: gt4-gs package `private/slice240-gt4gs-120/g
 (28,765,729 bytes, sha256 `0edcfefe3a143c180bdc1255357780d414aac9cd1e60bf65fc6b583648187ec7`); helper
 `private/slice240-gt4gs-120/install-gt4gs-1.2.0-test.ps1` for the local gt4-gs. Details: [BUILD slice 240](BUILD.md),
 [TASK-088](../TASKS.md), journal 2026-10-21. Owner test pending: white start, crop, the texture folder with a real pack.
+## CoreGS independent launcher candidate (2026-10-21, TASK-089)
+
+Branch `task/089-coregs-independent-launcher`, baseline main `6422988`. Selecting CoreGS 1.1 now
+skips the optional PCSX2 GS installer during setup, automatic package repair at startup and background
+renderer release queries. Launcher updates and explicit manual renderer updates remain available.
+Play also avoids inspecting an unused external renderer executable. Synthetic setup/launch and injected
+release-request controls pass: the full Rust launcher workspace passes on Windows, including 53 Tauri tests
+(one real-disc flow ignored). Maintainer launcher acceptance remains pending. Branch audit and limits:
+[renderer independence](reverse-engineering/renderer-independence-2026-10-21.md).
+No renderer implementation, game executable, input pins or saves changed. CoreGS 2.0 is not enabled by this change.
+Contribution: [PR #72](https://github.com/moesuito/gt4-staticrecomp/pull/72), from the
+`JulioHeroZ/gt4-staticrecomp` fork; implementation commit `aa51f2a`. Awaiting maintainer acceptance.
+
 
 ## Launcher self-update fixed (2026-10-21, TASK-085, branch `task/085-launcher-self-update`)
 

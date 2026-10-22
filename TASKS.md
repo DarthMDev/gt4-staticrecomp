@@ -114,6 +114,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑086 | Progressive 480p everywhere (menus and races at 480p through ELF patches) | ⏸️ Shelved (owner, 2026-10-21) · owner test broke the car select and the race load; branch `task/086-progressive-480p` kept |
 | TASK‑087 | GS readbacks without stalls, in CoreGS 2.0 (GPU-driven flare visibility, no EE wait) | 📋 Planned (owner, 2026-10-21) · study done (docs/GS-READBACK-STUDY.md); CoreGS 2.0 only, gt4-gs frozen |
 | TASK‑088 | Release 1.2.0: custom textures (gt4-gs texture replacements from `Documents\Gran Turismo 4\Textures`, two launcher options), 2-row bottom crop, black window from the first frame | 🧪 Waiting for owner test (local gt4-gs 1.2.0 and GT4Recomp 1.2.0 test installer; not published) |
+| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance | 🔄 Candidate (2026-10-21), `task/089-coregs-independent-launcher`: skip optional PCSX2 package installation and background release requests; launcher updates and explicit manual renderer updates remain available; full Rust launcher workspace passed; maintainer launcher acceptance pending |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -1227,3 +1228,22 @@ exactly; frames 900 and 1100 do not, and the PCSX2 output is 480 rows against th
 Recommendation: GO for TASK-033 and TASK-035; conditional GO for TASK-036 (open: the vertical scale, the 900/1100
 differences, a freeze state). Details and numbers: [docs/GS-PCSX2-POC.md](docs/GS-PCSX2-POC.md). Clean room:
 PCSX2-tainted work, not touching CoreGS 2.0. Owner review: the side-by-side images and frames 900 and 1100.
+
+
+### TASK-089 — Independent CoreGS launcher path
+
+Branch `task/089-coregs-independent-launcher`, based on main `6422988` (2026-10-21).
+A saved `renderer = "coregs11"` choice skips the external renderer installer during setup,
+its automatic missing/outdated-package repair at startup and its background release-list request.
+The automatic launcher update check still runs. The explicit Check for updates and renderer
+update actions continue to include the optional package. Play prepares a built-in renderer session
+without reading or pinning an unused external executable.
+
+Acceptance: synthetic setup completes without invoking the injected external installer, preserves the
+choice across a launcher restart and prepares `GT4_RENDERER=donor` without an external process;
+injected update requests query only launcher releases for CoreGS, while default PCSX2 startup and
+explicit manual checks retain both streams. Full Rust launcher workspace passed on Windows (Tauri: 53 passed, one real-disc flow ignored).
+Maintainer launcher acceptance remains pending.
+Owner test: select CoreGS 1.1, restart the launcher with no gt4-gs package, launch a game and confirm
+there is no renderer download; switch back to PCSX2 and confirm its existing setup/update path.
+This changes package management, not rendering fidelity, performance or CoreGS 2.0 readiness.

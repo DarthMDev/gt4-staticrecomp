@@ -245,6 +245,7 @@ fn anti_aliasing_maps_off_and_fxaa() {
 #[test]
 fn renderer_choice_is_pcsx2_when_installed_and_coregs11_otherwise() {
     let mut settings = Settings::default();
+    assert!(launch::needs_external_renderer(&settings));
     assert_eq!(settings.get("renderer"), "pcsx2", "PCSX2 GS is the default when installed");
     assert_eq!(
         launch::choose_renderer(&settings, None),
@@ -255,6 +256,7 @@ fn renderer_choice_is_pcsx2_when_installed_and_coregs11_otherwise() {
     let installed = installed_fixture();
     assert_eq!(launch::choose_renderer(&settings, Some(&installed)), launch::RendererChoice::Pcsx2);
     settings.set("renderer", "coregs11").unwrap();
+    assert!(!launch::needs_external_renderer(&settings));
     assert_eq!(launch::choose_renderer(&settings, Some(&installed)), launch::RendererChoice::CoreGs11 { reason: None });
     assert!(settings.set("renderer", "coregs20").is_err(), "coming soon is not selectable");
 }
