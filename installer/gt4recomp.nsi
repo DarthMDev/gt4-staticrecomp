@@ -29,7 +29,7 @@
 ; appends one line to data\logs\setup.log.
 
 !ifndef VERSION
-  !define VERSION "1.2.1"
+  !define VERSION "1.2.2"
 !endif
 !ifndef LAUNCHER_EXE
   !error "Define LAUNCHER_EXE=<path to GT4Recomp.exe>"
