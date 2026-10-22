@@ -2017,3 +2017,15 @@ release 1.0.0 (`private\release-100-webview2`). Not published: no tag, release o
 
 Checks on the final tree: `cargo test --workspace` green; Python suite `unittest discover` with the slice240 build: 629 tests,
 OK, 24 skipped (the same skips as before); CTest 39 tests (the Python suite runs inside `python_native_contracts`).
+
+### Round 2 of release 1.2.0 (2026-10-21): monitors, desktop resolution, every gt4-gs value, GSdx choice
+
+- Launcher `launcher\tools\build-release.ps1`: `GT4Recomp.exe` 16,078,336 bytes, sha256
+  `49d25309ab5c804680842fc7a817375c14e701ef47e79f2897deed353b9a7121`, path scan clean.
+- Owner test installer in a new folder: `private\slice243-installer\GT4Recomp-Setup-1.2.0-test.exe`, 28,771,288 bytes,
+  sha256 `92666e14386d92fa5098f69a0aab4ae452c1e8978e3329abfd606ed606f0e585` (game files `private\slice240-dist`, unchanged).
+- gt4-gs is unchanged (zip `private\slice240-gt4gs-120\gt4-gs-1.2.0-windows-x64.zip`); the acceptance test
+  `gt4gs/tests/test_enabled_values_1_2.py` accepts all 78 enabled values (12 rounds, VM initialization reached).
+- Checks: `cargo test --workspace` green; Python suite (slice240 build) 629 tests OK, 24 skipped; UI nav-test 150 of 150;
+  focus-check 92 of 100 (the same 8 pre-existing tab-highlight failures as the baseline).
+- Merge of PR #72 (TASK-089, JulioHeroZ) with a merge commit on this branch.

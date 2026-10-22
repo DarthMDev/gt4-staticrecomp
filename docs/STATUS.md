@@ -761,3 +761,8 @@ launcher constraints, hypotheses to test, fresh producer/manifest requirements,
 manual feedback iterations and save protection. Initial source baseline is
 cbccf80; executing agent must recheck HEAD. No profiling, build or game run occurred
 while preparing this handoff. Maintain documentation and new comments in en-US.
+
+**Round 2 (same day):** launcher `49d25309...` and owner installer `private\slice243-installer\GT4Recomp-Setup-1.2.0-test.exe`
+(28,771,288 bytes, sha256 `92666e14386d92fa5098f69a0aab4ae452c1e8978e3329abfd606ed606f0e585`). Adds: monitor names
+without resolution, Resolution default "desktop" (follows the desktop at each start), every gt4-gs value enabled, the
+renderer choice in setup and the GSdx switch in Settings, the GSdx naming, and PR #72 (TASK-089) merged.
