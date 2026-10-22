@@ -1,6 +1,7 @@
 #include "window.hpp"
 #include "race_display.hpp"
 #include "race_widescreen.hpp"
+#include "display_aspect.hpp"
 #include "ps2/memory.hpp"
 #include "gpu.hpp"
 #include "gs/gs.hpp"
@@ -85,6 +86,50 @@ void update_cursor() {
     SetCursor(nullptr);
   else if (!hide && was_hidden && over_picture)
     SetCursor(arrow_cursor);
+}
+
+// TASK-080 addendum: the monitor named by GT4_MONITOR (a GDI device name such as \\.\DISPLAY2).
+struct MonitorSearch {
+  const std::wstring *device;
+  HMONITOR found;
+};
+
+BOOL CALLBACK find_monitor(HMONITOR monitor, HDC, LPRECT, LPARAM data) {
+  auto *search = reinterpret_cast<MonitorSearch *>(data);
+  MONITORINFOEXW info{};
+  info.cbSize = sizeof info;
+  if (GetMonitorInfoW(monitor, &info) && *search->device == info.szDevice) {
+    search->found = monitor;
+    return FALSE;
+  }
+  return TRUE;
+}
+
+// The chosen monitor, or the primary monitor when none is named or the named one is not connected.
+HMONITOR chosen_monitor(const std::string &device) {
+  const HMONITOR primary = MonitorFromPoint(POINT{0, 0}, MONITOR_DEFAULTTOPRIMARY);
+  if (device.empty())
+    return primary;
+  const std::wstring wide(device.begin(), device.end());  // printable ASCII only (parse_monitor)
+  MonitorSearch search{&wide, nullptr};
+  EnumDisplayMonitors(nullptr, nullptr, find_monitor, reinterpret_cast<LPARAM>(&search));
+  if (search.found)
+    return search.found;
+  std::fprintf(stderr, "[window] GT4_MONITOR %s is not connected; using the primary monitor\n", device.c_str());
+  return primary;
+}
+
+// Per-monitor DPI awareness (v2) before any window exists, so window sizes, the monitor rectangle and the swapchain are
+// physical pixels on scaled desktops too (the launcher reads the modes in physical pixels).
+void declare_dpi_awareness() {
+  using SetContext = BOOL(WINAPI *)(DPI_AWARENESS_CONTEXT);
+  const HMODULE user32 = GetModuleHandleW(L"user32.dll");
+  const auto set_context =
+      user32 ? reinterpret_cast<SetContext>(GetProcAddress(user32, "SetProcessDpiAwarenessContext")) : nullptr;
+  const bool aware = set_context && set_context(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+  if (!aware)
+    SetProcessDPIAware();
+  std::fprintf(stderr, "[window] DPI awareness %s\n", aware ? "per-monitor v2" : "system");
 }
 
 void apply_pad(const PadState &pad) {
@@ -218,11 +263,28 @@ LRESULT CALLBACK window_procedure(HWND window, UINT message, WPARAM first,
     if (ps2::g_options.presses.empty())
       apply_pad({});
   }
+  // TASK-080: GT4_DISPLAY_ASPECT=auto follows the client area (windowed, fullscreen, Alt+Enter, resize).
+  if (message == WM_SIZE)
+    gt4::display_aspect::set_window_client_size(LOWORD(second), HIWORD(second));
   if (message == WM_SIZE && surface_attached) {
     ps2::gs::resize_window(LOWORD(second), HIWORD(second));
     return 0;
   }
   return DefWindowProcW(window, message, first, second);
+}
+
+// TASK-080 presentation sink (native/display_aspect.hpp, EE thread): CoreGS 1.1 fills a rectangle of the race
+// projection ratio; the PCSX2 GS process gets CONTROL display_aspect (protocol 1.3; only a 1.3 consumer is sent it).
+void present_race_view(bool fill, double ratio) {
+#ifdef GT4_GS_STREAM_CLIENT
+  if (gt4::gs_stream::stream_renderer()) {
+    gt4::gs_stream::set_display_aspect_mode(fill ? gt4::gs_stream::DisplayAspectMode::fill
+                                                 : gt4::gs_stream::DisplayAspectMode::game_aspect,
+                                            fill ? gt4::gs_stream::aspect_millionths(ratio) : 0);
+    return;
+  }
+#endif
+  gt4::vulkan::set_race_view_presentation(fill, ratio);
 }
 
 bool pump_messages() {
@@ -246,6 +308,8 @@ void release_frame() {
   if (pacing_mode == gt4::pacing::Mode::paced) {
     if (!frame_pacer->anchored())
       frame_pacer->anchor(frame_clock->now());
+    // TASK-084 step 0: the sleep is its own category, so F8 ee_dispatch and unattributed mean work, not sleep.
+    GT4_PERF_SCOPE(gt4::perf::Category::pacing_wait);
     frame_clock->wait_until(frame_pacer->deadline());
   }
   const std::int64_t released = frame_clock->now();
@@ -317,6 +381,17 @@ bool open_window(bool fullscreen) {
     return false;
   }
   keyboard_keys = gt4::controls::keyboard_bindings(active_controls);
+  // TASK-080: an invalid GT4_DISPLAY_ASPECT, GT4_OUTPUT_SIZE or GT4_ASPECT_FOV_EXTRA stops the start here (prints and
+  // exits).
+  gt4::display_aspect::configured_setting();
+  const gt4::display_aspect::OutputSize output = gt4::display_aspect::configured_output_size();
+  std::string monitor_device;
+  try {
+    monitor_device = gt4::window_mode::parse_monitor(std::getenv("GT4_MONITOR"));
+  } catch (const std::invalid_argument &error) {
+    std::fprintf(stderr, "[window] %s, game not started\n", error.what());
+    return false;
+  }
   try {
     input_backend = gt4::pad::parse_backend(std::getenv("GT4_INPUT"));
   } catch (const std::invalid_argument &error) {
@@ -332,27 +407,66 @@ bool open_window(bool fullscreen) {
   window_class.hInstance = GetModuleHandleW(nullptr);
   window_class.lpszClassName = L"GT4NativeVulkanPilot";
   window_class.hCursor = LoadCursorW(nullptr, MAKEINTRESOURCEW(32512));
+  // TASK-088: a black background, not none. With no brush Windows shows the new window white until the first frame
+  // (the start before the Sony logo); the game paints every frame, so only the first frames show it.
+  window_class.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
   // Icon from the executable resource (gt4vulkan.rc, IDI 1 = game.ico from launcher/assets/brand).
   window_class.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(1));
   arrow_cursor = window_class.hCursor;
   if (!RegisterClassW(&window_class))
     throw std::runtime_error("Cannot register native window class");
-  // The presentation is fixed 16:9: the client area is 960x540.
+  // Without GT4_MONITOR and GT4_OUTPUT_SIZE (headless tools, older launchers): a 960x540 client area where Windows puts
+  // it, as before. With them (TASK-080 addendum): a client area of the output size (shrunk with its shape when it does
+  // not fit the work area) centred on the chosen monitor; fullscreen covers that monitor (set_fullscreen).
+  const bool placed = output.known() || !monitor_device.empty();
+  if (placed)
+    declare_dpi_awareness();
   RECT window_bounds{0, 0, 960, 540};
+  int left = CW_USEDEFAULT, top = CW_USEDEFAULT;
+  HMONITOR monitor = nullptr;
+  MONITORINFO monitor_info{};
+  monitor_info.cbSize = sizeof monitor_info;
+  if (placed) {
+    monitor = chosen_monitor(monitor_device);
+    if (!GetMonitorInfoW(monitor, &monitor_info))
+      throw std::runtime_error("Cannot read the chosen monitor");
+    RECT frame{0, 0, 0, 0};
+    AdjustWindowRectEx(&frame, WS_OVERLAPPEDWINDOW, FALSE, 0);
+    const RECT work = monitor_info.rcWork;
+    const auto client = gt4::window_mode::fit_client(
+        output.known() ? output.width : 960u, output.known() ? output.height : 540u,
+        (work.right - work.left) - (frame.right - frame.left), (work.bottom - work.top) - (frame.bottom - frame.top));
+    window_bounds = RECT{0, 0, client.width, client.height};
+  }
   if (!AdjustWindowRectEx(&window_bounds, WS_OVERLAPPEDWINDOW, FALSE, 0))
     throw std::runtime_error("Cannot size native game window");
+  const int window_width = window_bounds.right - window_bounds.left;
+  const int window_height = window_bounds.bottom - window_bounds.top;
+  if (placed) {
+    const auto box = gt4::window_mode::centred(to_rect(monitor_info.rcWork), window_width, window_height);
+    left = box.left;
+    top = box.top;
+  }
   game_window = CreateWindowExW(
       0, window_class.lpszClassName, window_title,
-      WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT, CW_USEDEFAULT,
-      window_bounds.right - window_bounds.left,
-      window_bounds.bottom - window_bounds.top, nullptr, nullptr,
+      WS_OVERLAPPEDWINDOW | WS_VISIBLE, left, top, window_width, window_height, nullptr, nullptr,
       window_class.hInstance, nullptr);
   if (!game_window)
     throw std::runtime_error("Cannot create native game window");
   // Start in borderless fullscreen on the window's monitor: the same path as Alt+Enter and F11.
   if (start_fullscreen)
     set_fullscreen(true);
+  RECT client{};
+  if (GetClientRect(game_window, &client))
+    gt4::display_aspect::set_window_client_size(static_cast<std::uint32_t>(client.right),
+                                                static_cast<std::uint32_t>(client.bottom));
   std::fprintf(stderr, "[window] %s start (GT4_FULLSCREEN)\n", start_fullscreen ? "fullscreen" : "windowed");
+  if (placed) {
+    const RECT &area = monitor_info.rcMonitor;
+    std::fprintf(stderr, "[window] monitor %s (%ldx%ld at %ld,%ld), output size %ux%u, client %ldx%ld\n",
+                 monitor_device.empty() ? "primary" : monitor_device.c_str(), area.right - area.left,
+                 area.bottom - area.top, area.left, area.top, output.width, output.height, client.right, client.bottom);
+  }
   return true;
 }
 
@@ -441,8 +555,9 @@ int run_window(const std::function<int()> &emulate) {
                                 nullptr, nullptr, bounds.right, bounds.bottom))
       throw std::runtime_error("Native Vulkan presentation refused window");
     surface_attached = true;
-    // The presentation is fixed 16:9.
+    // The presentation is 16:9 pillarbox; TASK-080 fills the screen in the race view at other ratios.
     ps2::gs::gpu::set_widescreen(true);
+    gt4::display_aspect::set_presentation_sink(present_race_view);
     std::fprintf(stderr,
                  "[window] real guest GPU output through native Vulkan\n");
     // shortcut: one thread and FIFO presentation, qualify pipelining later.

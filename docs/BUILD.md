@@ -1677,6 +1677,68 @@ build (`launcher/target/release/GT4Recomp.exe` on `task/019-launcher`). `version
 
 Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`.
 
+## Slice 212b - TASK-080 P1 native display aspect ratios (`--mode pcsx2`)
+
+The slice211 build plus native aspect ratios (decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md),
+design [ULTRAWIDE-NATIVE-STUDY](ULTRAWIDE-NATIVE-STUDY.md)). Source: branch `task/080-aspect-ratios` (from main 26f83b8),
+worktree `C:\Antigravity\gt4-wt-080`. Build script `private/slice212b-scripts/build-game-212b.bat` (the slice211 recipe,
+clang-cl 22.1.3, serial) with `GT4_LICENSE_GUARD_SOURCE=private/slice212c-license-guard-runtime`. Executable
+`private/slice212b-build/build/gt4vulkan.exe`, 97,197,056 bytes, sha256 `d222a64772cba742...`. Game library, port,
+shaders, runtime and memcard capsules, VU tables and the gt4-gs 1.0.1 package are the slice211 inputs.
+(`private/slice212-scripts` and `private/slice212-smoke` belong to an earlier investigation; `private/slice212b-license-guard-runtime`
+is a first derivation without the RaceDisplay::render marker, never pinned or shipped.)
+
+Changes against slice211:
+- `native/display_aspect.{hpp,cpp}` (new, in `gt4_quickfix`): `GT4_DISPLAY_ASPECT` (unset/`auto` = the game window's
+  client area, followed on WM_SIZE and Alt+Enter, 16:9 headless; `16:9`, `4:3`, `W:H`, or a decimal 0.5..8; anything
+  else refuses the start) and the hidden `GT4_ASPECT_FOV_EXTRA` (0.5..3.0, default 1.0); 16:9 snap within 0.5%;
+  Hor+/Vert+ factors; the matrix scale; the scene policy and the runtime glue.
+- Capsule `private/slice212c-license-guard-runtime` (`scripts/prepare_license_guard.py --display-aspect`, overlay
+  `scripts/display_aspect_overlay.inc` on top of the slice206 guard; pin `docs/inputs/slice212c-license-guard-runtime.json`;
+  kernel.cpp and cdvdfsv.cpp byte-identical to slice206). Two hook lines in `dispatch`:
+  - the race camera call of `RaceBase::initMonitor` (return label 0x00388B38, a1 = sp = the 4x4 monitor matrix): Hor+
+    for R >= 16:9 scales the x output column (m[0], m[4], m[8], m[12]) by (16/9)/(R f); Vert+ below 16:9 scales the y
+    column by R/(16/9) and x by 1/f. Nothing is written when the factor is 1. a1 must equal sp. Photo pause
+    (`func_003C49C8`) reaches the same call;
+  - every dispatch of `RaceDisplay::render` (0x0039F498, the race HUD, only reached through vtables) marks the race view.
+- Scene policy: race view = the HUD rendered in the last 30 VBlanks and no photo/movie display request (row 2 of
+  `func_001074D0`, struct 0x006184D0; cleared by the next camera hook or request); 3-VBlank hysteresis. The first plan
+  (requests only) failed in the headless race trace: 480i races and menus make identical requests.
+- Presentation: CoreGS 1.1 fills a rectangle of the race projection ratio with linear filtering in the race view
+  (`native_vulkan.cpp` `presentation_rect_ratio`, `set_race_view_presentation`), 16:9 pillarbox and nearest elsewhere.
+  PCSX2 GS: protocol 1.3 producer, CONTROL kind 7 `display_aspect` (mode 0 game aspect, 1 fill) after a VSYNC when the
+  mode changes, only to a consumer whose READY minor is 3 or more (`docs/GS-STREAM-PROTOCOL.md` 1.3; header
+  `kVersionMinor = 3`, `ErrorCode::bad_argument = 7`). Nothing is ever sent while the projection ratio is 16:9.
+- TASK-079 hardening (`native/race_widescreen.*`): the hold writes only after the game-data pointer settled (moved from
+  the boot object and stable 30 VBlanks; 600 VBlanks if no move is seen). Headless: pointer 0 -> 0x0096E360 at VBlank 12,
+  -> 0x00A0CC10 at VBlank 20, settled at 50; the boot object is no longer written. Card I/O is not visible to the host
+  (it would need a new memcard capsule); not detected.
+- `native/window.cpp` (validation at start, client size, presentation sink), `native/mtvu_runtime.cpp` (VBlank tick),
+  `scripts/external_runtime_probe.py` (validation, forwarding and `display_aspect_environment`; mode `pcsx2` = slice212b,
+  `pcsx2-slice211` history), tests (`native_display_aspect`, fixtures in `native_race_widescreen`, `native_gs_stream_client`
+  1.3 scenario, `vulkan_fixture` ratio rectangles, `tests/python/test_display_aspect.py`).
+
+Checks (2026-10-21):
+- CTest 37 of 37 (`private/slice212b-scripts/ctest-212b-final.log`).
+- Python `unittest discover`, `GT4_NATIVE_BUILD` = slice212b: 612 tests OK, 23 skipped (`python-212b.log`).
+- Headless donor runs (`private/slice212b-scripts/run-headless-212b.sh`, stderr filtered on the fly because the
+  `--trace-syscalls` log is about 1 GB per race run):
+  - (a) menus, 4,200 frames, widescreen seed copy, `GT4_DISPLAY_ASPECT=16:9`: 42 of 42 dumps identical to slice211 (b, force on).
+  - (b) the same, unset (auto, headless 16:9): 42 of 42 identical.
+  - (d) menus, 4:3 card copy (name-control4), auto: 42 of 42 identical to slice211 (d3): the hardened hold gives the same frames.
+  - (c) race schedule (Arcade, El Capitan, Ford Ka, 5 AI; 16,000 frames, the TASK-041 presses), 4:3 card copy:
+    16:9 = no write, no presentation change; 21:9 and 32:9: 84 of 160 dumps differ from 16:9, the first at frame 7700
+    (camera hook at VBlank 7638 and 8335, matrix at sp 0x01FFF810 / 0x01FFF800, x factor 0.761905 = 16/21 and 0.5;
+    HUD from VBlank 7667, fill from 7670, no pillarbox gap with the 30-VBlank window). Run dirs `private/slice212b-smoke/f-*`. Also 4:3 (y 0.75) and 32:9 with `GT4_ASPECT_FOV_EXTRA=1.25` (x 0.4).
+- Headless pcsx2 (probe, race schedule 10,000 frames, `GT4_DISPLAY_ASPECT=21:9`): gt4-gs 1.0.1 (protocol 1.2, the pinned
+  package, same exe as `%LOCALAPPDATA%\GT4Recomp\gs\1.0.1`): no CONTROL display_aspect sent ("needs 1.3" logged once),
+  exit 0; gt4-gs 1.1.0 (protocol 1.3, `private/gt4gs-110-release-pkg`, read only): "CONTROL display_aspect 1 (fill) from
+  frame 7670", no ERROR, exit 0.
+- Pins: `docs/inputs/slice212b-pcsx2.json` (runtime above; license guard fields = slice212c) and
+  `docs/inputs/slice212c-license-guard-runtime.json`; every other input as slice211.
+
+Owner command: `python scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2`
+(set `GT4_DISPLAY_ASPECT` / `GT4_ASPECT_FOV_EXTRA` before it to test).
 ## Slice 213 - TASK-081 release build for 1.0.0 (`--mode pcsx2`)
 
 The slice211 recipe plus `-DGT4_RELEASE_DISTRIBUTION=ON`. Source: branch `task/081-release-1-0-0` (from main 26f83b8).
@@ -1749,6 +1811,699 @@ Checks (2026-10-21):
 - Pins: `docs/inputs/slice214-pcsx2.json` (mode `pcsx2`; `pcsx2-slice213` kept). Distribution `private/slice214-dist`.
 - Launcher (same round): the CPU minimum is SSE4.1 with SSE3/SSSE3 (owner decision), and the Vulkan check requires only
   `VK_KHR_surface` and `VK_KHR_win32_surface`.
+
+## Slice 215 - TASK-080 native aspect ratios on the 1.0.0 release recipe (`--mode pcsx2`)
+
+The slice214 recipe (release distribution switch on, Vulkan baseline path) with the TASK-080 work of slice212b on top.
+Source: branch `task/080-aspect-ratios` after merging main db99f9e (release 1.0.0), worktree `C:\Antigravity\gt4-wt-080`.
+Build script `private/slice215-scripts/build-game-215.bat` = `build-game-214.bat` with the worktree source and
+`GT4_LICENSE_GUARD_SOURCE=private/slice212c-license-guard-runtime` (clang-cl 22.1.3, `--parallel 4`). Executable
+`private/slice215-build/build/gt4vulkan.exe`, 97,207,808 bytes, sha256
+`3c9c252d6ac68b675290da55d7390b29978b2e1db4968f23e05ac8c0765b305a`; `SDL3.dll` and `shaders\` beside it.
+String scan (ASCII and UTF-16: `Antigravity`, `Alano`, `gt4-wt`, `Users\`, `staticrecomp`, `private\slice`,
+`private/slice`, `.cargo`, `AppData`): no match.
+
+Game-side changes against slice214: exactly the slice212b list (display_aspect, the slice212c capsule hooks, race-view
+fill, protocol 1.3 producer, TASK-079 settle rule). `GT4_FORCE_WIDESCREEN` stays on: the game's own 16:9 is the base
+and Hor+/Vert+ is applied on top of it. The gt4-gs.ini aspect stays forced 16:9; the per-scene fill reaches gt4-gs only
+through protocol 1.3 `display_aspect`.
+
+Launcher (same branch): the Aspect ratio row (Auto / 16:9 / 4:3 / Custom, Custom ratio 1.00-6.00) is the only aspect
+control; Input resolution and Widescreen stay retired (`GT4_FORCE_480P=1`, `GT4_FORCE_WIDESCREEN=1` always).
+Settings schema 4 migrates the 1.0.0 schema 3 file (drops `input_resolution`, `widescreen`, `[gs] aspect`; adds
+`aspect_ratio = "auto"`, `aspect_custom = "233"`; see [MIGRATIONS](launcher/MIGRATIONS.md)). The hidden owner test knob
+`GT4_ASPECT_FOV_EXTRA` is passed through from the launcher's environment (`launch::PASSED_THROUGH`); every other
+inherited `GT4_`/`PS2_` variable is still scrubbed.
+
+Checks (2026-10-21):
+- CTest 39/39 (`private/slice215-scripts/ctest-215-final.log`); Python `unittest discover` with `GT4_NATIVE_BUILD` =
+  slice215: 616 tests OK, 24 skipped (`python-215.log`); `cargo test --workspace` 256 passed; UI nav-test 150/150,
+  focus-check 93/93 (headless Edge).
+- Headless donor runs (`private/slice215-scripts/run-headless-215.sh`, stderr filtered on the fly; card copies only):
+  - menus, 4,200 frames, widescreen seed copy: `GT4_DISPLAY_ASPECT=16:9` and unset (auto, headless 16:9): 42 of 42
+    dumps identical to slice214 (`private/slice214-smoke/h214-default`); the card copy is unchanged.
+  - race schedule (Arcade, El Capitan, Ford Ka, 5 AI; 16,000 frames), 4:3 card copy: 21:9 and 32:9 runs are 160 of 160
+    identical to the slice212b runs; 84 of 160 differ from the 16:9 race, the first at frame 7700. Camera hook at VBlank
+    7638 and 8335 (matrix at sp 0x01FFF810 / 0x01FFF800, x factor 0.761905 and 0.5), fill from VBlank 7670.
+- Headless pcsx2 (probe, race schedule 10,000 frames, `GT4_DISPLAY_ASPECT=21:9`, pin `slice215-pcsx2.json`):
+  gt4-gs 1.0.1 (the pinned package): "protocol 1.2: display aspect mode 1 not sent (needs 1.3)", exit 0;
+  gt4-gs 1.1.0 (`private/gt4gs-110-release-pkg`, gt4-gs.exe sha256 48ecec53... = the exe in the published zip
+  cd07f5a2...): "CONTROL display_aspect 1 (fill) from frame 7670", no ERROR, exit 0. Both gt4-gs.ini files say
+  `AspectRatio = 16:9`. The 0.9 GB probe logs were reduced to `probe-filtered.log`.
+- Distribution `private/slice215-dist` (`scripts/make_distribution.py`, 18 files): `--portable-check` `result: ok`.
+- Pins: `docs/inputs/slice215-pcsx2.json` (mode `pcsx2`; `pcsx2-slice214`, `pcsx2-slice213`, `pcsx2-slice212b`,
+  `pcsx2-slice211` kept as history). License guard fields = slice212c; every other input as slice214.
+
+Owner test installer (not a release): `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`, 28,733,896
+bytes, sha256 `18dad203399dddd8ded9c2d9ebdbf7b3ad8dc3428fe75beea0bd34d3ecf83f46` (the 1.0.0 recipe of
+[RELEASES](RELEASES.md): `launcher/tools/build-release.ps1`, GT4Recomp.exe sha256 744c19dd..., path scan clean; the
+1.0.0 WebView2 bootstrapper receipt `private/release-100-webview2`; `makensis /DVERSION=1.0.0`). The launcher refuses
+SemVer pre-release tags, so the app version stays 1.0.0 and only the file name says "ultrawide-test": the updater never
+offers it, and an installed 1.0.0 is not offered an update by it. 7-Zip extraction: launcher and game executable equal
+to their sources. No GitHub release, draft or tag.
+
+## Slice 217 - TASK-080 P2: race HUD at other aspect ratios (`--mode pcsx2`)
+
+slice217 = the slice215 recipe with three changes: the license guard capsule `private/slice217-license-guard-runtime`
+(`scripts/prepare_license_guard.py ... --display-aspect`, profile `task017-guard-v2+task080-aspect-v2`: the
+`RaceDisplay::render` marker also runs the HUD canvas hook on a0), the P2 host code (`native/display_aspect.*`: HUD canvas
+hook, HUD parameter block at guest 0x7F00, split screen pillarboxed; `gs_stream_client`: fill target in `args[1]`) and
+the EE library profile `aspect`.
+
+EE library `aspect` (decision 0071 P2 table; `scripts/aspect_elf_patch.py`):
+1. `python scripts/aspect_elf_patch.py produce --assets-root C:/Antigravity/gt4-staticrecomp --output C:/Antigravity/gt4-staticrecomp/private/slice217-ee-aspect-producer`
+   (`ee_producer.py prepare`, the verified ELF sha256 `10f82e22...`, the patched derivative `SCUS_973.28.aspect.elf`
+   sha256 `f10a568f...`, the slice208 accepted seed set and translator; 138,813 entries as slice208; changed units
+   `unit_008F.cpp` and `unit_00A7.cpp`, one line each: `set32(c.r[8], ld32((0u + 32516u)))` for `640u` and
+   `set32(c.r[1], ld32((0u + 32512u)))` for `0x3F400000u`).
+2. `private/slice217-scripts/build-library-217.cmd` (the slice208 recipe: `tools/ee_producer`, portable clang-cl 23.1.2,
+   one worker, about 11 minutes).
+3. `python scripts/aspect_elf_patch.py record-library --output <same>`: `ps2game.lib` 70,693,756 bytes, sha256
+   `8e671a10667cdb3e20ad70367fe4021763309446cd525fc6c5f8d0dec57c129b`; changed objects against the slice208 library:
+   exactly `unit_008F.cpp.obj` and `unit_00A7.cpp.obj`. Pin `docs/inputs/slice217-ee-libraries.json`; CMake
+   `-DGT4_EE_PROFILE=aspect`.
+
+Game: `private/slice217-scripts/build-game-217.bat <build dir> aspect` (clang-cl 22.1.3, release distribution, the
+slice215 inputs otherwise). `private/slice217-build/build/gt4vulkan.exe` 97,212,416 bytes, sha256
+`593803cd6281431d7aab038fd1fcb300a20863796b7077d9f29bc2db9b49ec2b`; `SDL3.dll` and `shaders\` beside it. String scan
+(ASCII and UTF-16 of `Antigravity`, `Alano`, `gt4-wt`, `Users\`, `staticrecomp`, `private\slice`, `private/slice`,
+`.cargo`, `AppData`): no match. An experiment build with the slice208 library (`slice217x1`, canvas hook only) showed
+the dials fixed and the text and mirror still stretched; it was deleted after the check.
+
+Checks (2026-10-21):
+- CTest 39/39 (`private/slice217-scripts/ctest-217.log`); Python with `GT4_NATIVE_BUILD` = slice217: 627 tests OK,
+  24 skipped (`python-217.log`); new: `tests/python/test_aspect_elf_patch.py`, HUD canvas harness tests, fixture
+  `test_hud_canvas` / `test_hud_parameters`, letterbox rectangles 1920x1080 at 2.44 and 32:9, fill target 2,440,000.
+- Headless donor runs (`private/slice217-scripts/run-all-headless-217.sh`, card copies only):
+  - menus 16:9 and auto (widescreen seed copy): 42 of 42 identical to slice215; the card copy is unchanged;
+  - race 16:9 (4:3 card copy, race schedule, 16,000 frames): 160 of 160 identical to slice212b `f-c-race-16x9` (the
+    hook writes nothing; the parameter block holds 0.75 and 640);
+  - race 21:9, 2.44, 32:9, 16:10: HUD canvas -240..880, -265.6..905.6, -533.3..1173.3, and top/bottom
+    506.7/-26.7 (16:10, Vert+); parameter block 0x3F124925/840, 0x3F0BE406/878, 0x3EC00000/1280, 0x3F555555/640.
+  - Tachometer dial (template match against the 16:9 frame, frames 9000 and 10000; aspect = presented width / height
+    relative to 16:9; the 16:9 frame against itself gives 1.005 / 1.010, the method's own bias): 21:9 1.010 / 1.010,
+    2.44 1.010 / 1.010, 32:9 1.005 / 1.000 (slice215 P1: 21:9 1.313 / 1.320, the stretch s = 1.3125); pivot 0.213
+    screen heights right of the screen centre at every ratio, as at 16:9 (P1: 0.279 at 21:9, 0.425 at 32:9). 16:10
+    (frame 9000): 0.896 x 0.891 of the 16:9 size, aspect 1.005 (the 16:9 box shrinks to fit the narrower screen).
+- Headless pcsx2 (probe, pins verified, race 10,000 frames, 21:9): gt4-gs 1.0.1 (pinned) gets no kind 7; gt4-gs 1.1.0
+  logs "CONTROL display_aspect 1 (fill) from frame 7670", no ERROR (it accepts the new `args[1]` and ignores it). The
+  0.9 GB probe logs were reduced to `probe-filtered.log`.
+- Distribution `private/slice217-dist` (18 files): `--portable-check` `result: ok`.
+- Pins: `docs/inputs/slice217-pcsx2.json` (mode `pcsx2`; `pcsx2-slice215` kept as history),
+  `docs/inputs/slice217-license-guard-runtime.json`, `docs/inputs/slice217-ee-libraries.json`.
+
+Owner test build (not a release): `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`, 28,735,702 bytes,
+sha256 `65965f0199a760a6106f63d4b723df59a9807aef9062e6c949e9629b581a7d7a` (same launcher 744c19dd..., same recipe as
+slice215; the slice215 installer moved to `superseded-slice215\`). Portable copy: the installer extracted with 7-Zip into
+`private/ultrawide-test-portable` (no `$PLUGINSDIR`, no uninstaller; game executable sha256 593803cd...). No GitHub
+release, draft or tag.
+
+## Slice 218 - TASK-080 addendum: seamless display (`--mode pcsx2`)
+
+slice218 = the slice217 recipe (license guard capsule `private/slice217-license-guard-runtime`, EE library profile
+`aspect`, port slice200, shaders slice153, gt4-gs 1.0.1 package, SDL3) with new host code only (decision 0071 addendum):
+
+- `native/display_aspect.*`: `GT4_OUTPUT_SIZE=WxH` (each side 320..16384, ratio 1:2..8:1, anything else refuses the
+  start); with `GT4_DISPLAY_ASPECT` auto (or unset) the ratio is the output size's, fixed for the session, also headless.
+  A fixed `GT4_DISPLAY_ASPECT` still wins (developer knob).
+- `native/window.cpp`, `native/window_mode.*`: `GT4_MONITOR` (a GDI device name such as `\\.\DISPLAY2`; malformed
+  refuses the start, not connected falls back to the primary monitor with a log line); with either variable set the
+  process declares per-monitor DPI awareness v2, the windowed client area is the output size (shrunk with its shape to
+  the work area) centred on that monitor, and borderless fullscreen covers that monitor. Without both variables the
+  window starts as before (960x540 where Windows puts it).
+
+Build: `private/slice218-scripts/build-game-218.bat <build dir> aspect` (the slice217 script with the same inputs).
+`private/slice218-build/build/gt4vulkan.exe` 97,221,120 bytes, sha256
+`e96f3549108d7943d9d5544fddb1584f4e5327599aec1209910e7a7b82b6881e`; `SDL3.dll` and `shaders\` beside it.
+
+Checks (2026-10-21):
+- CTest 39/39 (`private/slice218-scripts/ctest-218.log`; new fixture checks: `GT4_OUTPUT_SIZE` parsing and the auto
+  ratio, `GT4_MONITOR` parsing, client fit and centring). Python with `GT4_NATIVE_BUILD` = slice218: 629 tests OK,
+  24 skipped (`python-218.log`; new: overlay harness `test_output_size_drives_auto` and the refusal, probe validators
+  for `GT4_OUTPUT_SIZE` and `GT4_MONITOR`).
+- Headless donor runs (`private/slice218-scripts/run-all-headless-218.sh`, `GT4_DISPLAY_ASPECT` unset = auto with
+  `GT4_OUTPUT_SIZE`, card copies only; stderr filtered on the fly, logs under 5 KB):
+  - 1920x1080 menus (widescreen seed copy): 42 of 42 frame dumps identical to slice217 `m-16x9`;
+  - 1920x1080 race (4:3 card copy, race schedule, 16,000 frames): 160 of 160 identical to slice217 `r-16x9`; camera
+    hooks at VBlank 7638 and 8335 "unchanged", parameter block 0.75 / 640;
+  - 2560x1080 race: auto 21.33:9 (2.3704); hook 1 at VBlank 7638 scaled x 0.750000; parameter block 0x3F100000 / 853;
+    HUD canvas -248.889..888.889; presentation fill from VBlank 7670;
+  - 3440x1440 race: auto 21.50:9 (2.3889); hook scaled x 0.744186; parameter block 0x3F0EE23C / 860; HUD canvas
+    -253.333..893.333; fill from VBlank 7670.
+- Distribution `private/slice218-dist` (18 files): `--portable-check` `result: ok`.
+- Pins: `docs/inputs/slice218-pcsx2.json` (mode `pcsx2`; `pcsx2-slice217` kept as history); all 18 pinned files
+  verified by size and sha256 in the main checkout.
+
+Launcher (same branch): `gt4l-core::display` (`display_plan`, monitor identifiers and resolving), settings schema 5,
+Monitor / Resolution / Render scale rows, `GT4_MONITOR` and `GT4_OUTPUT_SIZE`, `upscale_multiplier` from the plan.
+`cargo test --workspace` 270 passed; UI nav-test 150/150, focus-check 100/100. Release build
+`launcher/tools/build-release.ps1`: GT4Recomp.exe 16,040,448 bytes, sha256 `87c08add...`, path scan clean. A
+`visual-check` build of the same code (scratchpad target dir) on a scratch data and Documents folder listed the real
+monitor ("Legacy Moonli...", the Moonlight virtual display, 1920x1080 primary) and its modes (3840x2160 down to
+640x480); Play was not pressed.
+
+Owner test build (not a release): `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`, 28,764,515 bytes,
+sha256 `9b039d61289c0d307fd2c3a91449f5cef4001e8960c02dbfbdb3f387097a0df3` (`makensis /DVERSION=1.0.0`, GAME_DIR
+`private/slice218-dist`; the slice217 installer moved to `superseded-slice217\`). Portable copy refreshed in
+`private/ultrawide-test-portable` (7-Zip extraction, no `$PLUGINSDIR`, no uninstaller; launcher and game executables
+equal to their sources). No GitHub release, draft or tag.
+
+## Slice 240 - TASK-088 release 1.2.0: custom textures, 2-row crop, black start (`--mode pcsx2`)
+
+slice240 = the slice218 recipe (same capsule, EE library, port, shaders, SDL3 and gt4-gs package layout) with one
+host change: `native/window.cpp` gives the game window a black class background brush (it had none, so a new window
+showed white until its first frame). Build: `private/slice240-game-scripts/build-game-240.bat <build dir> aspect`
+(the slice218 script with the source worktree `C:\Antigravity\gt4-wt-088-textures`), build dir
+`private/slice240-game-build/build`. `gt4vulkan.exe` 97,221,120 bytes, sha256
+`1623af1ef2c456457b9e87cd2c7d3d014a0d05761d1e30ae1077216ab4e5d700` (slice218: `e96f3549...`).
+
+- Pin: `docs/inputs/slice240-pcsx2.json` (new file; `slice218-pcsx2.json` kept as history). `PERF_PROFILES['pcsx2']`
+  points at slice240; `pcsx2-slice218` keeps the old entry. The gt4-gs package in the pin is still the slice203 1.0.1
+  package (the dev run only; the owner's launcher uses its own gt4-gs, see below).
+- CTest 38 of 39 passed on the first run (`python_native_contracts` ran the Python suite and failed on the pin
+  and default-INI expectations, fixed in this branch); see the re-run line below.
+- Python suite: `GT4_NATIVE_BUILD=C:\Antigravity\gt4-staticrecomp\private\slice240-game-build\build`, pin tests point at
+  slice240. New expectations: the default gt4-gs.ini has `LoadTextureReplacements = true` (always written, Load custom
+  textures on); the gs table has 72 rows (`textures_folder` added); the Advanced page has 41 rows (`texture_precache`).
+- Settings: schema 6 (`launcher\crates\gt4l-core\src\migrate.rs`, `settings_5_to_6`: no value changes; the schema 5
+  file is backed up as before). The gs-table rows: `texture_load` (Graphics, default on, always written) and
+  `texture_precache` (Advanced, default off, when set); `textures_folder` (launcher-supplied `[Folders] Textures`,
+  `Documents\Gran Turismo 4\Textures`, created on play by `paths::ensure_texture_folders`). Command
+  `open_textures_folder` (commands.list, capabilities/default.json, main.rs; UI button in the Graphics section).
+- Launcher: `cargo test --workspace` green (new tests `launcher/crates/gt4l-core/tests/textures.rs`, the schema 5 to 6
+  migration test, the gt4-gs 1.2.0 minimum). UI nav-test 150 of 150. focus-check 92 of 100 on this checkout and on the
+  baseline copy of 6422988 (the same 8 tab-highlight checks fail on both in the browser pane; not caused by this change).
+- Distribution `private/slice240-dist` (18 files): `python scripts\make_distribution.py private\slice240-dist ...
+  --exe private\slice240-game-build\build\gt4vulkan.exe --runtime-manifest docs\inputs\slice240-pcsx2.json`;
+  `gt4vulkan.exe --portable-check` `result: ok`.
+- gt4-gs 1.2.0 (`gt4recomp-gs` branch `gt4gs/textures-1.2.0`, commit `c9dc54e93`): see `gt4gs/BUILD.md` "Release 1.2.0".
+  Replay test `gt4gs/tests/test_textures_1_2.py` (log checks: the replacement folder without serial, zero replacements
+  for a missing folder, refused Dump and CropBottom keys, the 2-row crop). Offline replays of this build end after VM
+  initialization (exit -16843010, as in 1.1.0), so the frame comparison is skipped; the checks read the startup log.
+  `gt4-gs.exe` 1.2.0 package: `private/slice240-gt4gs-120/gt4-gs-1.2.0-windows-x64.zip`, `check-nojit.ps1` passed.
+- Owner install helper for the local gt4-gs 1.2.0 (not run by the agent): `private/slice240-gt4gs-120/install-gt4gs-1.2.0-test.ps1`.
+  It checks the zip against `SHA256SUMS`, writes `%LOCALAPPDATA%\GT4Recomp\gs\1.2.0\` (with `sha256.txt`) and sets
+  `current.txt` to 1.2.0; 1.1.0 stays as the fallback. A dry run in a scratch `LOCALAPPDATA` passed.
+
+Limits (not checked here): the white start and the 2-row crop are visible only on the owner's screen (no window was
+opened on the desktop; the checks are the build, the log and the code path). A texture pack's effect is not checked on
+a real pack.
+
+Launcher and owner test installer (2026-10-21): `launcher\tools\build-release.ps1` gives `GT4Recomp.exe` 16,028,160 bytes,
+sha256 `d5d881278f768bdf8dddc5fac61ba3133069373ada38aed3abac97ea5c4fe272`, path scan clean. `makensis /DVERSION=1.2.0`
+with `GAME_DIR` `private\slice240-dist` gives `private\slice240-installer\GT4Recomp-Setup-1.2.0-test.exe`, 28,765,729 bytes,
+sha256 `0edcfefe3a143c180bdc1255357780d414aac9cd1e60bf65fc6b583648187ec7`. The WebView2 bootstrapper is the one of
+release 1.0.0 (`private\release-100-webview2`). Not published: no tag, release or draft.
+
+Checks on the final tree: `cargo test --workspace` green; Python suite `unittest discover` with the slice240 build: 629 tests,
+OK, 24 skipped (the same skips as before); CTest 39 tests (the Python suite runs inside `python_native_contracts`).
+
+### Round 2 of release 1.2.0 (2026-10-21): monitors, desktop resolution, every gt4-gs value, GSdx choice
+
+- Launcher `launcher\tools\build-release.ps1`: `GT4Recomp.exe` 16,078,336 bytes, sha256
+  `49d25309ab5c804680842fc7a817375c14e701ef47e79f2897deed353b9a7121`, path scan clean.
+- Owner test installer in a new folder: `private\slice243-installer\GT4Recomp-Setup-1.2.0-test.exe`, 28,771,288 bytes,
+  sha256 `92666e14386d92fa5098f69a0aab4ae452c1e8978e3329abfd606ed606f0e585` (game files `private\slice240-dist`, unchanged).
+- gt4-gs is unchanged (zip `private\slice240-gt4gs-120\gt4-gs-1.2.0-windows-x64.zip`); the acceptance test
+  `gt4gs/tests/test_enabled_values_1_2.py` accepts all 78 enabled values (12 rounds, VM initialization reached).
+- Checks: `cargo test --workspace` green; Python suite (slice240 build) 629 tests OK, 24 skipped; UI nav-test 150 of 150;
+  focus-check 92 of 100 (the same 8 pre-existing tab-highlight failures as the baseline).
+- Merge of PR #72 (TASK-089, JulioHeroZ) with a merge commit on this branch.
+
+## Slice 250 - TASK-091 release 1.2.1: per-machine install, data beside the program, user data in AppData
+
+Launcher and installer only: the game executable, its pins and gt4-gs 1.2.0 are unchanged (game files
+`private\slice240-dist`, as in 1.2.0). Branch `task/091-install-layout-121` from
+main `ca0c262`. Owner decisions 2026-10-22 (TASKS.md TASK-091, release notes [1.2.1](release-notes/1.2.1.md)).
+
+Path model (`launcher\crates\gt4l-core\src\paths.rs`):
+
+| Item | 1.2.0 | 1.2.1 |
+|---|---|---|
+| Program files | `%LOCALAPPDATA%\Programs\GT4Recomp` (per user) | `C:\Program Files\GT4Recomp` (per machine, any folder) |
+| Disc copy `disc\`, prepared files `prepared\` | `%LOCALAPPDATA%\GT4Recomp` | `<exe dir>\data` |
+| gt4-gs versions, `current.txt`, `cache\`, `data\` | `%LOCALAPPDATA%\GT4Recomp\gs` | `<exe dir>\data\gs` |
+| Runtime card and lock `runtime\`, `sessions\`, `logs\` | `%LOCALAPPDATA%\GT4Recomp` | `<exe dir>\data` (1.2.0 copies under `data\logs\from-1.2.0` when the new folder exists) |
+| `version.json` | install folder | install folder (installer); `data\version.json` when the install folder is read-only |
+| Custom textures | `Documents\Gran Turismo 4\Textures` | `<exe dir>\data\Textures` |
+| `config\settings.toml` (+ backups), `library-migration.json` | `%LOCALAPPDATA%\GT4Recomp\config` | `%APPDATA%\GT4Recomp\config` |
+| `controls.toml` (+ backups) | `%LOCALAPPDATA%\GT4Recomp` | `%APPDATA%\GT4Recomp` |
+| Save library `Saves\`, `Replays\` | `Documents\Gran Turismo 4` (fallback `%LOCALAPPDATA%\GT4Recomp\Gran Turismo 4`) | `%APPDATA%\GT4Recomp` |
+| Card backups | `%LOCALAPPDATA%\GT4Recomp\library\backups` | `%APPDATA%\GT4Recomp\backups` |
+| Pre-1.0 library (`library\memcard`, ...) and its parked folders | `%LOCALAPPDATA%\GT4Recomp` | stays there (migrated into `%APPDATA%` by the existing rule) |
+
+- The data folder is `<dir of GT4Recomp.exe>\data`, never a registry value or a stored absolute path. When it cannot be
+  written (probe file), it becomes a read layer and writes go to `%LOCALAPPDATA%\GT4Recomp` (logged). The 1.2.0
+  folder is a read layer too, so game files and gt4-gs that could not be moved stay in use.
+- `settings.toml` stores a path inside the install folder relative to it (`disc_path`, `[dev] game_dir`); other paths
+  (the disc image the player picked elsewhere) are kept as picked.
+- Overrides for tests and development: `GT4RECOMP_DATA_DIR` (data folder; user folder `<it>\user`; no 1.2.0 folders),
+  `GT4RECOMP_USER_DIR` (`%APPDATA%\GT4Recomp`), `GT4RECOMP_LOCAL_DIR` (`%LOCALAPPDATA%\GT4Recomp`),
+  `GT4RECOMP_DOCUMENTS_DIR` (Documents). Under any of the first two the old-install cleanup is skipped.
+
+Move from 1.2.0 (`launcher\crates\gt4l-core\src\relocate.rs`, driven by `gt4l-tauri\src\relocation.rs`): user data
+before the window (copy to a staging folder, size and SHA-256 per file, place, marker
+`%APPDATA%\GT4Recomp\config\migration-1.2.1.json`, then rename the old player folders to
+`Gran Turismo 4 (moved to AppData)` with `README.txt`); large data on a background thread (rename on the same volume,
+on `ERROR_NOT_SAME_DEVICE` a checked copy keeping modified times, the game files checked with `check_installed` and the
+receipt and pinned disc SHA-256, then the source removed; marker `data\migration-1.2.1.json`; moved folders get
+`icacls /reset` so they inherit the data folder's permissions). Not while `gt4vulkan.exe` or `gt4-gs.exe` runs. Play and
+setup wait for the background move; the page shows a progress line and a result toast (`app_state().migration`).
+
+Old per-user install (`launcher\crates\gt4l-platform\src\legacy_install.rs`): the launcher removes the 1.0.0-1.2.0
+program files it can see (registry `InstallDir`, uninstall `InstallLocation`, `%LOCALAPPDATA%\Programs\GT4Recomp`),
+the per-user Start-menu shortcuts and `HKCU\Software\GT4Recomp` and the HKCU uninstall entry; never a folder holding
+`data`, never the folder it runs from; registry only after the files are gone.
+
+Self-update (`gt4l-platform\src\process.rs`): `release_kill_on_close` clears kill-on-close on the launcher job, then
+`start_setup` uses `ShellExecuteExW` `runas` (UAC), with the breakaway start and the Explorer fallback behind it; a
+declined prompt is final. 1.2.0 to 1.2.1 harness (`O:\gt4recomp-scratch\elevation-harness`, deleted after the run; a
+copy of 1.2.0's start code in a kill-on-close job): `CreateProcess` with `CREATE_BREAKAWAY_FROM_JOB` of a
+`requireAdministrator` exe and of the real 1.2.1 setup fails with `ERROR_ELEVATION_REQUIRED` (740); the fallback
+`explorer.exe <program>` started a windowless stand-in that outlived the launcher's job (marker "survived"). The UAC
+prompt itself was not shown on this PC (Hypothesis, high confidence: Explorer elevates a `requireAdministrator` setup).
+
+Builds:
+
+- Launcher: `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target` (C: had under 5 GB free) and
+  `powershell -ExecutionPolicy Bypass -File launcher\tools\build-release.ps1` (the script now honours
+  `CARGO_TARGET_DIR` and remaps and scans its path too). `GT4Recomp.exe` 16,299,520 bytes, sha256
+  `575ab7568c2e077f5b4ce401d4291ba3db11ba9294ca3fbf5b75bdb20f06706c`, path scan clean; copy in
+  `private\slice250-launcher\GT4Recomp.exe`.
+- Installer (all paths absolute):
+  `makensis /DVERSION=1.2.1 /DLAUNCHER_EXE=C:\Antigravity\gt4-staticrecomp\private\slice250-launcher\GT4Recomp.exe
+  /DGAME_DIR=C:\Antigravity\gt4-staticrecomp\private\slice240-dist
+  /DSDL3_DLL=C:\Antigravity\gt4-staticrecomp\private\tooling\sdl3-3.4.18\runtime\SDL3.dll
+  /DWEBVIEW2_BOOTSTRAPPER=C:\Antigravity\gt4-staticrecomp\private\release-100-webview2\MicrosoftEdgeWebview2Setup.exe
+  /DOUTFILE=C:\Antigravity\gt4-staticrecomp\private\slice250-installer\GT4Recomp-Setup-1.2.1-test.exe
+  C:\Antigravity\gt4-wt-091-install\installer\gt4recomp.nsi` gives 28,838,764 bytes, sha256
+  `333d72bcbc05066f020244b32c1c0a1e890da635451f757586498c1bf7316fb6` (manifest `requireAdministrator`). 7-Zip
+  extraction: `GT4Recomp.exe` and `SDL3.dll` equal their sources, `game\` equal to `private\slice240-dist` (19 files,
+  sha256 each), `$PLUGINSDIR` holds the WebView2 bootstrapper, nsDialogs, nsExec and System. Not run on this PC.
+- Checks: `cargo test --workspace` (with `GT4_TEST_SECOND_VOLUME` on O:) 330 passed, 0 failed, 4 ignored; new tests in
+  `gt4l-core\tests\relocate.rs` (14: same volume, simulated and real cross volume C: to O:, disk-full failure and
+  resume, OneDrive-offline read failure and resume, existing destination, game running, resumed placement, the 1.2.0
+  fallback library), `paths.rs` (portable copy, read-only data folder, empty AppData, overrides, relative settings
+  paths), `legacy_install.rs` (5, scratch registry), `process.rs` (setup start order, process detection),
+  `job_breakaway.rs` (a child survives after `release_kill_on_close`), `flow_audit.rs` (settings store no absolute path
+  inside the install folder). UI nav-test 150 of 150; focus-check 92 of 100 (the 8 known tab-highlight failures). The
+  Python suite does not cover the launcher and was not run.
+
+## Slice 251 (review fixes) - TASK-091 release 1.2.1
+
+Review fixes on slice 250 (all in `task/091-install-layout-121`):
+
+- Launcher: `restore_kill_on_close` (`gt4l-platform`) sets kill-on-close again when the self-update's setup does not
+  start (UAC declined, or every start fails); `start_launcher_setup` calls it and logs the result. Test:
+  `job_breakaway.rs` "after_a_restore..." (a child in the job ends with the launcher).
+- User-data move: every placement (free places and taken items) goes through `ops.rename`; a failed placement puts
+  back what this run placed (or removes it), removes the staging folder and returns `Failed`, with no marker. Test:
+  `relocate.rs` "a_failed_placement_puts_back...".
+- Installer: `RemoveOldFolder` drops one trailing backslash before comparing with `$INSTDIR`.
+- Checks: `cargo test --workspace` 332 passed, 0 failed, 4 ignored (was 330; the two new tests).
+- Launcher `GT4Recomp.exe` 16,304,128 bytes, sha256 `bd0a6f859c27f8c15bca9619cc08e1b64877be367c67d1e09e62f0d4390d5333`
+  (`CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target`; copy in `private\slice251-launcher\GT4Recomp.exe`).
+- Installer (same makensis recipe as slice 250, `/DVERSION=1.2.1`, output
+  `private\slice251-installer\GT4Recomp-Setup-1.2.1-test.exe`): 28,844,147 bytes, sha256
+  `102753faf5bbdd77a25f35d224d0d6079f8d73100e1453389394f3bef4d320ab`. 7-Zip extraction: `GT4Recomp.exe` equals the
+  new build, `SDL3.dll` equals its source; the extraction folder was deleted. Not run on this PC.
+
+## Slice 252 - TASK-091 release 1.2.1: silent self-update, reinstall moves the data
+
+Changes (branch `task/091-install-layout-121`):
+
+- Launcher self-update (`gt4l-tauri` `updates.rs`, `setup_arguments`): when the running `GT4Recomp.exe` is in the
+  registered install folder (HKLM `Software\GT4Recomp` `InstallDir`, 64-bit view; case-insensitive, one trailing
+  backslash ignored), the setup starts with `/S /UPDATE /D=<folder of GT4Recomp.exe>`. Elsewhere (a portable copy,
+  no registration) it starts with no arguments, interactively. The arguments reach `ShellExecuteExW` (`lpParameters`,
+  `runas`) and the direct start (`raw_arg`, so `/D=` stays last and unquoted). The Explorer fallback cannot pass them:
+  that update stays interactive and the log says so (`gt4l-platform` `process.rs`, `start_setup`).
+- Installer (`installer/gt4recomp.nsi`): `/UPDATE` (FileFunc `GetOptions`) together with `${Silent}` starts the
+  launcher as the player (Explorer) at the end of the install section. A reinstall into another folder: the previous
+  program folder (HKLM `InstallDir`, when it is another folder and holds `GT4Recomp.exe`) loses `GT4Recomp.exe`,
+  `SDL3.dll`, `NOTICE.md`, `LICENSE.txt`, `version.json`, `uninstall.exe` and `game\`, then a non-recursive `RMDir`
+  (it stays while its `data` folder is there). Its `data` folder is never touched: HKLM `Software\GT4Recomp`
+  `PreviousDataDir` = `<old folder>\data` is written when that folder exists. The old Start-menu shortcuts are
+  rewritten by the install itself. All three `MessageBox` calls have `/SD IDOK`.
+- Launcher, first start (`gt4l-platform` `install_record.rs` reads `PreviousDataDir`; `gt4l-core` `paths.rs` and
+  `relocate.rs`; `gt4l-tauri` `relocation.rs`): the previous data folder is a read layer until its large data has
+  moved, and a source of the large-data move, run after the 1.2.0 one. The move is the 1.2.0 move (units `game files`,
+  `gt4-gs`, `runtime`, `sessions`, `logs`, `textures`; same volume a rename, another volume a checked copy, never while
+  the game runs, a failure keeps the old place and retries). Its marker is per source folder:
+  `<data>\migration-from-<key>.json`, the key being the first 8 bytes of the SHA-256 of the normalised old path
+  (`DataDirs::previous_data_marker`). Logs, sessions and the runtime card that collide go to `logs\from-previous-install`.
+  An old data folder left empty is removed afterwards (`relocate::remove_empty_folder`).
+- Tests: `process.rs` (arguments reach both starts; Explorer logs that it cannot pass them; the command line stays one
+  raw string), `updates.rs` (registered, portable and no registration), `paths.rs` (previous data is a read layer with
+  its own marker; the test overrides keep it out), `gt4l-core\tests\relocate.rs` (same volume; another volume; the
+  marker stops a second run; a missing folder is skipped; game files already in the install folder are kept and the
+  old logs go beside them). 343 tests in all (was 332).
+
+Builds (all paths absolute):
+
+- Launcher: `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target`, `GT4_SDL3_ROOT` as in slice 250, and
+  `powershell -ExecutionPolicy Bypass -File launcher\tools\build-release.ps1`. `GT4Recomp.exe` 16,333,312 bytes,
+  sha256 `0b8d004b2a99273b382c15a79c12554d761d384bbdca5f299f2357cbe5953a83`, at
+  `O:\gt4recomp-scratch\slice250-cargo-target\release\GT4Recomp.exe`.
+- Installer: the slice 251 recipe with `/DLAUNCHER_EXE` pointing at that build, and
+  `makensis` from `C:\Program Files (x86)\NSIS`:
+  `/DOUTFILE=C:\Antigravity\gt4-staticrecomp\private\slice252-installer\GT4Recomp-Setup-1.2.1-test.exe`
+  gives 28,845,242 bytes, sha256 `2FD43DCF6D18FDAE981AF0CD22D79E259E7175ED08DFF41AE3007802A1CF42FF`. 7-Zip
+  extraction: `GT4Recomp.exe` equals the release build (extraction folder deleted). Not run on this PC.
+- Checks: `cargo test --workspace` (from `launcher\`): 343 passed, 0 failed, 4 ignored.
+
+### Slice 253 (coordinator review fix)
+- `PreviousDataDir` is taken only when the launcher runs from the registered install folder (HKLM `InstallDir`), so a
+  portable copy on the same PC never moves the installed data (`relocation::previous_data_for`, test
+  `only_the_registered_install_takes_the_previous_data_folder`). `cargo test --workspace`: 344 passed, 0 failed, 4 ignored.
+- Launcher `private\slice253-launcher\GT4Recomp.exe` 16,318,976 bytes, sha256
+  `015f2ba390edff95ed4c007fc01069ca80988697dadfa66f809ac2c130cb0efe`, path scan clean.
+- Installer (slice 252 recipe, `/DLAUNCHER_EXE` = that copy):
+  `private\slice253-installer\GT4Recomp-Setup-1.2.1-test.exe` 28,850,750 bytes, sha256
+  `e67f29470ce4d882cd6aa3bd5606961ab09723243f9bcb6d12806e7327a6650f`. Not run on this PC.
+
+### Slice 255 (safe updates)
+- TASK-091 (1.2.1): the installer no longer overwrites a live install in place (`installer/gt4recomp.nsi`).
+- Wait (`.onInit`): the fixed `Sleep 1500` is gone. For an existing install, the files it replaces (`GT4Recomp.exe`,
+  `SDL3.dll`, `game\gt4vulkan.exe`, every `game\*.dll`) are waited for: up to 30 s, 60 checks 500 ms apart. A file is
+  free when it does not exist or opens for writing (`FileOpen ... a`). Still locked, silent: `locked: <file>` is logged
+  and the run aborts with error level 2, before anything is changed. Interactive: Retry/Cancel (`/SD IDCANCEL`); Retry
+  waits again, Cancel aborts with error level 2.
+- Staging: every program file is extracted into `$INSTDIR\.update-staging` first (the whole `game` folder included). A
+  flagged extraction error or a missing key file (`GT4Recomp.exe`, `SDL3.dll`, `game\gt4vulkan.exe`) deletes the staging
+  folder and aborts with error level 4; no live file is touched.
+- Swap: each live item goes to `$INSTDIR\.update-old`, then its staged copy is renamed into place, in the order
+  `GT4Recomp.exe`, `SDL3.dll`, `NOTICE.md`, `LICENSE.txt`, `game`. A failed rename rolls the items back (the previous copies
+  return from `.update-old`, a new copy goes back to staging) and aborts with error level 3. On success `.update-old` and
+  `.update-staging` are removed. A `.update-old` left by an interrupted run is rolled back first, before the new run.
+- `data\` is never touched by the swap. The old per-user and previous-folder removal now runs after the swap, so a failed
+  swap removes nothing from an earlier install. The uninstaller write, `version.json`, registry, shortcuts, `icacls`,
+  EstimatedSize and the `/UPDATE` relaunch are unchanged.
+- `data\logs\setup.log`: one line per run, `setup 1.2.1: mode <silent|interactive>, update flag <0|1>, result: <ok |
+  locked: <file> | extract failed | swap failed at <item>, rolled back | swap failed at <item>, rollback failed at <item>>`.
+  The command-line echo is gone.
+- Error levels: 2 locked, 3 swap or rollback failed, 4 extract failed. Every MessageBox keeps a `/SD` default.
+- Build: the slice 254 recipe with `/DLAUNCHER_EXE` = `private\slice253-launcher\GT4Recomp.exe` (launcher unchanged, no
+  cargo run) and output `private\slice255-installer\GT4Recomp-Setup-1.2.1-test.exe`: 28,848,063 bytes, sha256 `b982802e9b979a8a333f8f00fbeee752ce28afc760f4e601734442cfcce772d5`.
+  7-Zip extraction: `.update-staging\GT4Recomp.exe`, `SDL3.dll`, `NOTICE.md`, `LICENSE.txt` and `game\gt4vulkan.exe` equal
+  their sources; the extraction folder was deleted. Not run on this PC.
+- Not verified: the installer has not been run (no locked-file, disk-full or rollback test). Known limits: `uninstall.exe`
+  and `version.json` are still written in place after the swap (not rolled back); a read-only file in the install folder
+  counts as locked for the full 30 s; if a rollback rename fails, the run reports `rollback failed at <item>` and the next
+  run restores `.update-old` first.
+
+### Slice 256 (coordinator review of slice 255)
+- A marker `.update-swapping` exists only while a swap runs. The next run restores `.update-old` only when the marker
+  is there (an interrupted swap); a leftover `.update-old` without it (a completed swap whose clean-up was blocked) is
+  just removed, so a finished update is never reverted. The uninstaller also removes `.update-staging`,
+  `.update-old` and the marker.
+- Installer `private\slice256-installer\GT4Recomp-Setup-1.2.1-test.exe` 28849390 bytes, sha256
+  `a0543753539ce45b236033e249579103b32c55443da691d2a0279af45b367317` (slice 255 recipe, launcher slice253). Not run on this PC.
+
+### Slice 257 (WebView2 guard, issue #80)
+- Blank white launcher window (GitHub issue #80, GTX 750 Ti, Windows 10). The window starts hidden
+  (`tauri.conf.json` `visible: false`, `backgroundColor` = `--carbon` `#13161b`). The page calls `ui_ready` after the
+  first frame (or after 250 ms when the window is hidden), and the backend shows the window. `ui_ready` is idempotent.
+- Watchdog (`src/webview_guard.rs`, `start_watchdog`): 12 s for `ui_ready`. Not ready and safe mode off: the flag
+  `%APPDATA%\GT4Recomp\webview-safe-mode` (date and reason) is written, a new launcher starts with `--webview-restart`
+  outside the kill-on-close job, and this process exits. The restarted launcher claims the single-instance mutex for up
+  to 10 s (every 250 ms) instead of focusing the old window (`gt4l_platform::process::claim_single_instance_retrying`).
+- Safe mode at start (before the web view exists): `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` gets `--disable-gpu` appended
+  (not twice); the log says `WebView2 safe mode (GPU acceleration off)`. Not ready in safe mode: the window is hidden and a
+  native Win32 message (`gt4l_platform::dialog`, `MessageBoxW`, no WebView2) offers Yes = WebView2 download page
+  (`https://go.microsoft.com/fwlink/p/?LinkId=2124703`), No = log folder, Cancel = close. Then the launcher exits.
+- WebView2 missing or failing to start (`tauri::Builder::run` returns an error): the same native message, worded for
+  "missing or could not start".
+- Startup log: `WebView2 runtime version: <tauri::webview_version(), or unknown>` and the safe mode line.
+- Settings > Graphics > Advanced > **Launcher GPU acceleration** (`get_settings_table` appends the row; `set_setting`
+  with id `launcher_gpu`): shown Off while the flag exists; On deletes the flag, Off writes it; takes effect at the next
+  start.
+- Test only: `GT4RECOMP_TEST_UI_NEVER_READY=1` makes `ui_ready` ignored, so the watchdog and the native message can be
+  seen (the launcher then shows nothing for 12 s, restarts, and shows the message in safe mode). Not for players.
+- Checks: `cargo test --workspace` (from `launcher\`) 351 passed, 0 failed, 4 ignored (344 before; 7 new in
+  `webview_guard`). UI nav-test 150 of 150; focus-check 100 of 100 (headless Edge through Playwright, `channel: msedge`;
+  `scenario=advanced` only sets the state for a screenshot and writes no result).
+- Launcher `private\slice257-launcher\GT4Recomp.exe` 16,387,584 bytes, sha256
+  `58fb30f99fb201bcba4f4977c9f71356a983e6f00e0c3e71584e8cb4ad090994` (`launcher\tools\build-release.ps1`,
+  `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target`): no user or build path found.
+- Installer `private\slice257-installer\GT4Recomp-Setup-1.2.1-test.exe` 28,859,313 bytes, sha256
+  `51998294e3ccd9b0b80b6175e5c6e3b969d89c6236f4669878dcf274c6bbb70a` (the slice 255 recipe: `makensis /DVERSION=1.2.1`,
+  `/DLAUNCHER_EXE` = the copy above, `GAME_DIR` slice240-dist, SDL3 and WebView2 bootstrapper as before, script
+  `C:\Antigravity\gt4-wt-091-install\installer\gt4recomp.nsi`). 7-Zip extraction: `.update-staging\GT4Recomp.exe`
+  equals the launcher; the extraction folder was deleted. Not run on this PC.
+
+
+### Slice 258 (WebView2 check at start, update restart speed; issue #80, release 1.2.1)
+- WebView2 check before any window (`gt4l_platform::webview2`, `webview_guard::check_webview2_at_start`): the `pv` of
+  client `{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}` is read as the installer does (HKLM WOW6432Node, HKLM, HKCU; empty or
+  `0.0.0.0` is absent). A missing runtime shows the native message (`Problem::Missing`) at once, not after the 12 s
+  watchdog. A fixed-version runtime (`WEBVIEW2_BROWSER_EXECUTABLE_FOLDER` set) skips the registry check. The log gets
+  `WebView2 runtime found in the registry: <pv>` or `not found`, next to the `tauri::webview_version` line.
+- Test only: `GT4RECOMP_TEST_WEBVIEW2_MISSING=1` forces the absent result (the version is still logged). Not for players.
+- Launcher start-up: `ui ready after N ms` (from process start, logged by `ui_ready`); `start-up: data layout and
+  relocation ready after N ms`; `start-up: settings loaded in N ms`; `start-up: old install clean-up finished in N ms`
+  (the clean-up now runs on a background thread after the window is created).
+- Single instance: a second start brings the running window forward only when that window is shown
+  (`gt4l_platform::process::should_bring_forward`); a hidden window (page not ready yet) is left to the first launcher.
+- Installer 1.2.1 update path (`installer\gt4recomp.nsi`): setup.log gets phase timings in ms (`onInitWait`, `webview2`,
+  `stage`, `swap`, `files`, `data`, `shortcuts_registry`, `estimated_size`, `relaunch_request`, and after the start
+  `old_copies`, `old_user_install`, `previous_folder` in a second line). The data folder gets icacls only on a fresh
+  install or when a write probe fails (an update keeps the grant). EstimatedSize sums `game` and the top-level files
+  (`/G=0`), not the data tree. The launcher starts (silent `/UPDATE`) before the old copies and per-user leftovers are
+  removed; the previous data folder is recorded before the start (the launcher moves it).
+- Known limit: the write probe runs in the elevated setup, so it can pass while a player cannot write the data folder.
+  The grant of a fresh install is unchanged.
+- Checks: `cargo test --workspace` (from `launcher\`) 364 passed, 0 failed, 4 ignored (351 before; 10 WebView2 unit tests
+  and 3 single-instance tests). UI nav-test 150 of 150; focus-check `pass` (100 checks; headless Edge through Playwright,
+  `channel: msedge`, run from a temporary script outside the repository).
+- Launcher `private\slice258-launcher\GT4Recomp.exe`, 16,355,328 bytes, sha256
+  `5db4e04f6b2b59f8ec0481630a945561faa1f7bcc789a664fc065e67c3d2c60a` (`launcher\tools\build-release.ps1`, path scan clean).
+- Installer `private\slice258-installer\GT4Recomp-Setup-1.2.1-test.exe`, 28,857,248 bytes, sha256
+  `24d9b4050ddd5b936bf96c56a7ee5524e360a774d199eef64ae078f533431bf3` (makensis, the slice 257 recipe with
+  `/DLAUNCHER_EXE` = the copy above, `GAME_DIR` slice240-dist, SDL3 and WebView2 bootstrapper as before). 7-Zip extraction:
+  `.update-staging\GT4Recomp.exe` equals the launcher; the extraction folder was deleted. Not run on this PC.
+- Measured timings: the installer phases come from the owner's silent update (setup.log). `ui ready after N ms` comes
+  from the owner's launch (not run here: no launcher window was opened on this PC).
+
+
+### Slice 259 (1.2.1 final candidate: Performance Mode; slice 258 included)
+- Performance Mode replaces the Readbacks row (`hw_download_mode`, five values) by a toggle `performance_mode` in
+  `docs/launcher/gs-settings.toml` (page basic, Graphics; default Off). Off = `accurate` (HWDownloadMode 0, always
+  written); On = `no-readbacks` (HWDownloadMode 2). The table validator (`scripts/gs_settings.py`, `check`) accepts a
+  two-choice enum with `control = "toggle"`; the Rust table reads the same file. Launcher: `gs_row` (model.rs) sends a
+  toggle, and with CoreGS 1.1 the row is disabled with the note "GSdx only" (GSDX_ONLY_ROWS). `set_setting` maps the
+  toggle to the choice names (`gs_value_text`). The UI shows a row `note` as a hint.
+- Settings schema 5 to 6 (`migrate.rs` settings_5_to_6, one step, schema 6 not released): a stored `hw_download_mode` other
+  than accurate becomes `performance_mode = "no-readbacks"`; accurate or none stays Off; the old key is dropped. The backup
+  (`settings.toml.bak-schema5-<time>`) is made as for every step.
+- The allow-list JSON is generated from the table (`gs_settings.py allowlist --write`): HWDownloadMode values are now 0
+  and 2 only. The golden fixture `user-settings.ini` gained `HWDownloadMode = 2` (regenerated with the script).
+- Dev tooling: `--gs-readback accurate|no-readbacks` and `GT4_GS_READBACK` map to `performance_mode`; `unsynchronized` is refused
+  (it left the table). `tests/python/test_gs_*` updated; the full Python suite passes (tooling venv).
+- Checks: `cargo test --workspace` (from `launcher\`) 371 passed, 0 failed, 4 ignored (364 before: +2 migration, +4 model,
+  +1 golden). UI nav-test 150 of 150; focus-check `pass` (headless Edge through Playwright, `channel: msedge`).
+- Launcher `private\slice259-launcher\GT4Recomp.exe`, 16,365,568 bytes, sha256
+  `e87dd78c935f51c931b5f99c0296cbefcf60cff0c9fd274915f4e294d7dc8d8f` (`launcher\tools\build-release.ps1`, path scan clean).
+- Installer `private\slice259-installer\GT4Recomp-Setup-1.2.1-test.exe`, 28,859,775 bytes, sha256
+  `78597e4da89af9b64e78fdf2d5bed58078b02ad909ff6f46fcebfc51f13b194f` (makensis, slice 257 recipe, `/DLAUNCHER_EXE` = the copy
+  above). 7-Zip extraction: `.update-staging\GT4Recomp.exe` equals the launcher; the extraction folder was deleted.
+  Not run on this PC.
+- Measured: the launcher start timings (`ui ready after N ms`, phases before the window) and the installer phases
+  (setup.log `timings ms:`) come from the owner's run. No launcher window was opened here.
+## Slice 260/262 - TASK-084 frame cost, runtime side (`--mode pcsx2`)
+
+Owner request 2026-10-21; study `docs/FRAME-COST-STUDY.md`. Item 1 of the study (deferred flare readback) is out by
+owner decision: readback work belongs to CoreGS 2.0 (`decisions/gt4-gs-frozen`). This slice implements the study's
+missing instrumentation (section 6) and items 2-4, each with a runtime A/B switch, and keeps the GS stream
+byte-identical.
+
+- **slice260** = the instrumentation + item 2 (one MTVU job per VIF1 DMA chain).
+- **slice262** = the same plus item 4 (no second GS stream walk; worker output forwarded straight from the ring) and
+  item 3 (VBlank as a journal entry in pcsx2 mode). slice262 is the release 1.2.2 candidate.
+
+### What changed
+
+Host code (`native/`):
+
+- `perf_accounting.hpp`, `perf_probe.*`: categories `pacing_wait`, `run_due_events`, `kernel_service`, `guest_idle`,
+  `syscall_dispatch` and `gif_walk`; a `[frame]` F8 section with GIF bytes/records per path, VIF1 packets/jobs/bytes,
+  DMA chains, syscalls by number with their wall time, thread switches and the pacer's sleep; the study's fixed
+  critical-path formula (frame wall minus pacing sleep) in `format_frame_summary` and in the GS-stream OSD.
+- `window.cpp`: the pacer's sleep is its own scope, so `ee_dispatch`/`unattributed` mean work.
+- `mtvu_ring.hpp`: one doorbell per direction with a sleeper count (a ring only notifies a peer that sleeps), ring
+  statistics, and `try_peek`/`release` so the EE can forward a worker record without copying it.
+- `mtvu_journal.*`: separate input/output bells; the producer waits for "worker progress", which also covers a worker
+  blocked on a full output ring (the old single bell provided that wake-up by accident); worker records execute
+  straight from the ring, and only chunked records are reassembled.
+- `mtvu_runtime.*`: `VifBatch` chain jobs, `flush_vif_chain()` at the chain end, at a stall and before any journal or
+  sync operation; `GT4_MTVU_CHAIN`, `GT4_GIF_FASTPATH`, `GT4_MTVU_VBLANK_JOURNAL`; the `[mtvu]` job-shape, doorbell
+  and forwarded-bytes lines; `after_vblank_output()` moved to the drain when the VBlank is deferred.
+- `mtvu_vif_batch.hpp`: the batch payload (packet count, then per packet `qwc` + `qwc*16` bytes) with the
+  `native_mtvu_vif_batch` fixture.
+- `gs_stream/gs_stream_client.*`: the client can hold the VSYNC (`set_vsync_deferral`, `post_pending_vsync`) so the
+  journal can post it in stream order; the OSD critical path uses the same wall-minus-sleep formula.
+- `mtvu_bridge.cpp`: in pcsx2 mode it installs the deferral and the callback that posts the held VSYNC.
+
+Runtime capsule (`scripts/prepare_perf_runtime.py --mtvu --gs-stream --frame-cost`): run-loop scopes in `system.cpp`,
+the VIF1 chain hooks in `dmac.cpp`, and the GS stream fast path plus its scope in `gif.cpp`. `--frame-cost` is opt-in,
+so every earlier capsule still derives byte for byte (checked by `tests/python/test_frame_cost.py`).
+
+License guard (`scripts/prepare_license_guard.py --display-aspect --frame-counters`): syscall and thread-switch
+counters in `kernel.cpp`, on top of the halt dump.
+
+### Switches (all on by default)
+
+| variable | on | off (A/B) |
+|---|---|---|
+| `GT4_MTVU_CHAIN` | one job per VIF1 DMA chain, posted at the chain end, a stall, or before any journal/sync operation | one job per packet (pre-TASK-084) |
+| `GT4_GIF_FASTPATH` | pcsx2 + MTVU: no second GS stream walk (PATH2/PATH3 signals were applied at accept) | walk every packet |
+| `GT4_MTVU_VBLANK_JOURNAL` | pcsx2: the VSYNC is a journal entry after the frame's output; the EE does not drain at VBlank | blocking drain at VBlank |
+| `GT4_PERF_COUNTERS` | the `[frame]` counters | counters off (zero overhead) |
+
+### Build
+
+```
+private\slice260-scripts\build-game-260.bat <build dir> aspect <runtime capsule> <guard capsule>
+```
+
+which configures, in a VS x64 shell:
+
+```
+cmake -S C:\Antigravity\gt4-wt-084-frame-cost -B <build dir> -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" -DGT4_EE_PROFILE=aspect ^
+  -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_SDL3_ROOT=<assets>/private/tooling/sdl3-3.4.18 ^
+  -DGT4_PERF_RUNTIME_SOURCE=<assets>/private/<runtime capsule> ^
+  -DGT4_PORT_DIR=<assets>/private/slice200-port -DGT4_SHADER_DIR=<assets>/private/slice153-pacing-shaders ^
+  -DGT4_VU_CORPUS_DIR=<assets>/private/slice155-vu1-full-corpus ^
+  -DGT4_VU1_GENERATED_DIR=<assets>/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=<assets>/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=<assets>/private/slice160-vu0-image/vu0_image.bin ^
+  -DGT4_MEMCARD_RUNTIME_SOURCE=<assets>/private/slice200-memcard-runtime ^
+  -DGT4_LICENSE_GUARD_SOURCE=<assets>/private/<guard capsule> -DGT4_RELEASE_DISTRIBUTION=ON
+```
+
+Pins:
+
+- slice260: capsule `private/slice260-instrument-runtime` (`docs/inputs/slice260-instrument-runtime.json`), guard
+  `private/slice260-license-guard-runtime` (`docs/inputs/slice260-license-guard-runtime.json`), launcher profile
+  `docs/inputs/slice260-pcsx2.json`.
+- slice262: capsule `private/slice262-frame-cost-runtime` (`docs/inputs/slice262-frame-cost-runtime.json`), guard
+  `private/slice262-license-guard-runtime` (`docs/inputs/slice262-license-guard-runtime.json`), launcher profile
+  `docs/inputs/slice262-pcsx2.json` (mode `pcsx2` while the owner tests it).
+
+### Checks (slice262)
+
+- CTest: 40 of 40 pass (new `native_mtvu_vif_batch`; `native_mtvu_ring` adds the doorbell policy and
+  `try_peek`/`release`).
+- Python: 639 tests OK, 42 skipped, with `GT4_NATIVE_BUILD` = slice262 (the new `tests/python/test_frame_cost.py`
+  adds 10).
+- Frame identity against release 1.2.0 (slice240), same schedules and seed cards, headless 1x: menus 41/41 dumps,
+  day race 15/15, night race 15/15; the GS stream session hash (`GT4_GS_STREAM_HASH=1`) is identical in all three
+  scenes. The dumps come from the GS process (`DumpEvery`), because in pcsx2 mode the game process has no framebuffer.
+- `GT4_MTVU_VERIFY=1`: 4,200 frames, 0 shadow/worker mismatches (the verify path keeps the blocking drain because it
+  compares both VIF1 states while idle).
+- Headless harness: `scripts/frame_cost_headless.py` (scenes, gt4-gs.ini, hashes, conditions, builder check).
+- Distribution `private/slice262-dist` (18 files) from `scripts/make_distribution.py` with
+  `--runtime-manifest docs/inputs/slice262-pcsx2.json`: `gt4vulkan.exe --portable-check` prints `result: ok`
+  (9 of 9 shaders, release build without a build-time shader fallback, no GS process in the folder).
+
+### Headless numbers, before and after each step
+
+One build (slice262), four configurations, `GT4_MTVU_REPORT_EVERY=500`, 1x, no dumps, no stream hash, on this PC
+(Ryzen 7 5700X). `base` = all three switches off (pre-TASK-084); `s1` = `GT4_MTVU_CHAIN=1`; `s2` = plus
+`GT4_GIF_FASTPATH=1`; `s3` = plus `GT4_MTVU_VBLANK_JOURNAL=1` (the defaults). Averages of the steady intervals:
+menus i=0-7 (VBlanks 0-4,000), day race i=19-31 (VBlanks 9,500-16,000), night race i=18-25 (flare readbacks on),
+showroom i=12-13 (the car showroom inside the day-race schedule). All times ms per VBlank.
+
+Summary (frame wall, ms per VBlank; the deltas are against `base`, same build and schedule):
+
+| scene | base | +item 2 (chain jobs) | +item 4 (GIF fast path) | +item 3 (VBlank journal) | total |
+|---|---|---|---|---|---|
+| menus | 1.54 | 1.41 | 1.38 | 1.41 | **-0.13** |
+| day race | 12.07 | 11.01 | 11.07 | 10.38 | **-1.69** |
+| night race (flare readback) | 13.21 | 11.84 | 11.95 | 12.08 | **-1.13** |
+| showroom | 9.88 | 9.36 | 9.14 | 8.61 | **-1.27** |
+
+Reading: item 2 does most of the work (day race EE CPU 10.3 -> 9.3 ms, `vif_gif` 1.32 -> 0.89, doorbell rings 11283 -> 349 per frame, jobs 5555 -> 88); item 4 removes the second GS
+stream walk and its copy; item 3 removes the VBlank wait in the scenes that had one (day race `wait vblank` 3.43 -> 0.00, showroom 4.44 -> 0.00), while the night race keeps its
+flare-readback `download` wait (4.97 ms) because item 1 is out of scope. The night `EE wait` falls from 6.02 to 4.97 ms because the
+chain jobs leave less to drain per download. VU1 worker busy is unchanged (8.50 -> 8.03 ms day), so after these items the worker is
+the critical path of the day race.
+
+### menus
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 1.54 | 1.54 | 0.89 | 0.19 | 0.03 | 649.88 | 1332.81 | 18.10 | 2582.04 | 0.04 | 0.00 | 0.00 | 0.00 | 0.62 |
+| s1 | 1.41 | 1.40 | 0.89 | 0.07 | 0.03 | 17.62 | 68.33 | 12.46 | 685.29 | 0.02 | 0.00 | 0.00 | 0.00 | 0.62 |
+| s2 | 1.38 | 1.38 | 0.89 | 0.07 | 0.02 | 17.62 | 68.33 | 8.69 | 685.29 | 0.02 | 0.00 | 0.00 | 0.00 | 0.62 |
+| s3 | 1.41 | 1.39 | 0.91 | 0.07 | 0.02 | 17.62 | 68.33 | 8.24 | 685.29 | 0.02 | 0.00 | 0.00 | 0.00 | 0.62 |
+
+### day
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 12.07 | 10.34 | 3.01 | 1.32 | 0.39 | 5554.80 | 11283.05 | 2.43 | 22047.18 | 8.50 | 4.09 | 3.43 | 0.66 | 6.91 |
+| s1 | 11.01 | 8.94 | 3.04 | 0.90 | 0.39 | 88.07 | 349.86 | 3.52 | 5651.34 | 8.47 | 3.37 | 2.84 | 0.54 | 6.91 |
+| s2 | 11.07 | 9.38 | 3.04 | 0.91 | 0.38 | 88.12 | 350.06 | 3.42 | 5652.52 | 8.52 | 3.44 | 2.92 | 0.52 | 6.91 |
+| s3 | 10.38 | 9.31 | 2.96 | 0.89 | 0.37 | 87.99 | 348.69 | 1.44 | 5586.01 | 8.03 | 2.84 | 0.00 | 0.57 | 6.84 |
+
+### night
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 13.21 | 9.62 | 2.44 | 1.31 | 0.33 | 6043.46 | 12270.52 | 8.61 | 22646.60 | 6.13 | 6.02 | 0.00 | 6.02 | 4.35 |
+| s1 | 11.84 | 8.55 | 2.47 | 0.86 | 0.33 | 92.34 | 369.27 | 7.21 | 4807.31 | 5.91 | 4.95 | 0.00 | 4.95 | 4.35 |
+| s2 | 11.95 | 8.58 | 2.54 | 0.87 | 0.32 | 92.24 | 368.98 | 7.20 | 4803.54 | 5.95 | 5.03 | 0.00 | 5.03 | 4.34 |
+| s3 | 12.08 | 8.54 | 2.66 | 0.88 | 0.32 | 92.65 | 370.57 | 7.17 | 4815.46 | 5.96 | 4.97 | 0.00 | 4.97 | 4.35 |
+
+### showroom
+
+| config | frame wall | EE CPU | ee_dispatch | vif_gif | gs_drain | jobs/frame | rings in | wakeups in | rings out | worker busy | EE wait | wait vblank | wait download | stream MB |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| base | 9.88 | 7.67 | 1.82 | 1.17 | 0.25 | 5092.00 | 10259.25 | 16.80 | 18746.85 | 6.80 | 4.44 | 4.44 | 0.00 | 3.74 |
+| s1 | 9.36 | 6.99 | 2.01 | 0.78 | 0.27 | 39.90 | 154.95 | 16.35 | 3578.00 | 7.06 | 4.01 | 4.01 | 0.00 | 3.72 |
+| s2 | 9.14 | 6.80 | 1.95 | 0.74 | 0.25 | 39.85 | 154.90 | 11.65 | 3573.00 | 6.90 | 3.99 | 3.99 | 0.00 | 3.71 |
+| s3 | 8.61 | 6.58 | 1.87 | 0.76 | 0.25 | 39.90 | 154.95 | 10.65 | 3582.35 | 6.58 | 3.49 | 0.00 | 0.00 | 3.71 |
+
+### Owner F7/F8 check (paced, windowed)
+
+From the repository root (PowerShell), with the release candidate build (mode `pcsx2` = slice262):
+
+```
+private\tooling-venv\Scripts\python.exe scripts\play_performance.py --assets-root C:\Antigravity\gt4-staticrecomp --mode pcsx2
+```
+
+Mode pcsx2 reads the pinned slice262 profile. Check one scene per F7/F8 interval (F7 when the scene has settled, F8 after about
+30 s):
+
+1. **Time Trial, Nordschleife, Toyota Supra Wood One, in-game video 480p** (the reference scene).
+2. **Night race** (Arcade -> Single Race -> City Courses -> Clubman Stage Route 5, 5 AI).
+3. **Showroom or garage** (the car rotating).
+
+Report lines to compare with the tables above (same scene, this build):
+
+- `[perf] frame ms: median ... p99 ...` - the frame time; should not be worse than 1.2.0 in the same scene.
+- `[frame] ... critical path ...` - the EE frame minus the pacer's sleep (the study's formula).
+- `[mtvu] vif jobs/frame ... doorbells/frame ...` - jobs per frame and wake-ups; the doorbell rings should be in the
+  hundreds, not the thousands.
+- `[mtvu] EE wait ms/frame: vblank=...` - at VBlank it should be near zero in pcsx2 mode (`vblank_deferred` in the
+  `[mtvu] sync` lines); the night race keeps its flare-readback `download` wait (item 1 is out of scope).
+- `[mtvu] worker ms/frame: vu1_program=... busy=...` - the VU1 worker; it is now the critical path of the day race.
+
+A/B in the same scene, if wanted: `$env:GT4_MTVU_CHAIN="0"`, `$env:GT4_GIF_FASTPATH="0"` or
+`$env:GT4_MTVU_VBLANK_JOURNAL="0"` before the launch (the probe records them in `result.json`).
+
+### Limits
+
+- The measurements come from a machine that also ran other agents' work; the A/B deltas within one matrix are the
+  usable result, not the absolute values (the study's slice211 baseline was 8.2 ms day / 9.9 ms night with the same
+  1x gt4-gs and no probe).
+- In pcsx2 mode the `[gif] path 2/3 tags` session counters stay zero with the fast path on: the walk that filled them
+  is exactly what the fast path removes. They are diagnostics only; nothing reads them.
+- The last VSYNC before shutdown can be posted after the GS process's session summary (it is harmless: the window is
+  closing). Frame dumps and the session hash of full runs are unaffected.
+- The mode-3 (interlaced) and 3x cases are not re-measured here; the switches do not depend on the resolution.
 
 ## Slice 216 - TASK-027 CoreGS 2.0 development build (`task/027-coregs2`, no pins)
 
@@ -2082,3 +2837,20 @@ slice214. Local helpers (ignored): `build/gates-hash.sh <tag>` and `build/gates-
 `private/gates/<tag>` and `private/<tag>-evidence`. Note: the replay's `--slm-hashes <file>` WRITES that file; never
 pass a reference file to it. Measure CPU without `GT4_HW_GPU_TIMING=1` (timestamps roughly double the GS thread cost).
 
+## Local slice248/slice249 - merge of main 1.2.2 into task/027-coregs2
+
+Fresh build trees on `O:` (C: is short of space), recipe script `build/slice248-coregs2/build.bat <build dir>
+<EE profile> <runtime capsule> <guard capsule>` (the slice247 configure line with those three as arguments, plus
+`-DGT4_HW_GS=ON`):
+
+- slice248: `O:\gt4recomp-scratch\coregs2-slice248-mergeuild coverage slice191-gs-stream-runtime
+  slice206-license-guard-runtime` (the slice247 recipe: identity against the slice247 references);
+- slice249: `O:\gt4recomp-scratch\coregs2-slice249-r122uild aspect slice262-frame-cost-runtime
+  slice262-license-guard-runtime` (the release 1.2.2 recipe).
+
+Gates (`build/gates2/gates.sh <tag> <build dir>`, outputs under `O:\gt4recomp-scratch\coregs2-evidence` and
+`coregs2-gates`): CTest 230/230 non-Python with and without interlock (new `hw_stream_sink_deferred_vsync`); Python
+673 tests, only the expected distribution-pin error (`test_portable_install` failed once inside CTest with empty
+output and passed on every rerun); memory hashes identical on the five captures; menu dumps 42/42 = slice228; race
+frames 42/42 = slice235; default renderer 42/42 = slice214 after the `mtvu::Donor` fix (before it, donor mode crashed
+at the first VBlank, as main's slice262 build does).

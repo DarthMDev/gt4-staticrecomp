@@ -33,15 +33,17 @@ fn an_unversioned_dev_build_file_is_backed_up_and_migrated_to_schema_one() {
     let (loaded, notes) = config::load(&path);
     assert_eq!(loaded.settings.get("vsync"), "fast", "the values survive the migration");
     assert_eq!(loaded.disc_path.as_deref(), Some(Path::new("D:/gt4.iso")));
-    assert!(notes.iter().any(|note| note.contains("migrated from schema 0 to 3")), "{notes:?}");
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 0 to 6")), "{notes:?}");
 
     let copies = backups(&directory, "settings.toml.bak-schema0-");
     assert_eq!(copies.len(), 1, "exactly one backup");
     assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original, "the backup is the untouched original");
 
     let rewritten = fs::read_to_string(&path).unwrap();
-    assert!(rewritten.contains("schema_version = 3"), "{rewritten}");
-    assert!(rewritten.contains("widescreen = \"on\""), "{rewritten}");
+    assert!(rewritten.contains("schema_version = 6"), "{rewritten}");
+    assert!(!rewritten.contains("widescreen"), "{rewritten}");
+    assert!(!rewritten.contains("aspect_"), "{rewritten}");
+    assert!(rewritten.contains("render_scale = \"100\""), "{rewritten}");
     assert!(!rewritten.contains("\r\r"));
 }
 
@@ -127,7 +129,7 @@ vsync = \"fast\"
     let (loaded, notes) = config::load(&path);
     assert_eq!(loaded.settings.get("fullscreen"), "on", "the old windowed default is replaced");
     assert_eq!(loaded.settings.get("vsync"), "fast", "other values survive");
-    assert!(notes.iter().any(|note| note.contains("migrated from schema 1 to 3")), "{notes:?}");
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 1 to 6")), "{notes:?}");
 
     let copies = backups(&directory, "settings.toml.bak-schema1-");
     assert_eq!(copies.len(), 1, "exactly one backup of the schema 1 file");
@@ -167,4 +169,141 @@ fullscreen = true"), "{text}");
     let (loaded, _) = config::load(&path);
     assert_eq!(loaded.settings.get("fullscreen"), "off");
     assert!(loaded.settings.was_chosen("fullscreen"));
+}
+
+#[test]
+fn a_release_1_0_0_schema_3_file_is_backed_up_and_migrated_to_schema_five() {
+    // The settings file of the 1.0.0 launcher, with the keys it retired by a load-time rule still stored.
+    let directory = scratch("v3-release-100");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 3\n\n",
+        "[settings]\nrenderer = \"pcsx2\"\ninput_resolution = \"480p\"\nwidescreen = \"on\"\nvsync = \"fast\"\n\n",
+        "[choices]\nwidescreen = true\nvsync = true\n\n",
+        "[gs]\naspect = \"16:9\"\nfxaa = \"true\"\n\n",
+        "[install]\ndisc_path = \"D:/gt4.iso\"\n",
+    );
+    fs::write(&path, original).unwrap();
+
+    let (loaded, notes) = config::load(&path);
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 3 to 6")), "{notes:?}");
+    assert!(!notes.iter().any(|note| note.contains("no longer used")), "the steps already dropped them: {notes:?}");
+    assert_eq!(loaded.settings.get("vsync"), "fast");
+    assert_eq!(loaded.settings.get("monitor"), "primary");
+    assert_eq!(loaded.settings.get("resolution"), "desktop");
+    assert_eq!(loaded.settings.get("render_scale"), "100");
+    assert_eq!(loaded.settings.gs_value("fxaa"), "true");
+    assert_eq!(loaded.settings.gs_value("aspect"), "16:9", "the GS settings-file aspect stays forced");
+    assert_eq!(loaded.disc_path.as_deref(), Some(Path::new("D:/gt4.iso")));
+
+    let copies = backups(&directory, "settings.toml.bak-schema3-");
+    assert_eq!(copies.len(), 1, "exactly one backup");
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original);
+    let rewritten = fs::read_to_string(&path).unwrap();
+    assert!(rewritten.contains("schema_version = 6"), "{rewritten}");
+    for retired in ["input_resolution", "widescreen", "aspect = ", "aspect_"] {
+        assert!(!rewritten.contains(retired), "{retired} in {rewritten}");
+    }
+}
+
+#[test]
+fn an_ultrawide_test_schema_4_file_is_backed_up_and_migrated_to_schema_five() {
+    // The owner's real file from the TASK-080 test builds: a custom ratio and a chosen internal resolution.
+    let directory = scratch("v4-ultrawide-test");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 4\n\n",
+        "[settings]\nrenderer = \"pcsx2\"\naspect_ratio = \"custom\"\naspect_custom = \"244\"\nvsync = \"fast\"\n\n",
+        "[choices]\naspect_ratio = true\naspect_custom = true\nvsync = true\n\n",
+        "[gs]\nupscale = \"4K\"\nfxaa = \"true\"\n\n",
+        "[install]\ndisc_path = \"D:/gt4.iso\"\n",
+    );
+    fs::write(&path, original).unwrap();
+
+    let (loaded, notes) = config::load(&path);
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 4 to 6")), "{notes:?}");
+    assert!(!notes.iter().any(|note| note.contains("no longer used") || note.contains("set by the launcher")), "{notes:?}");
+    assert_eq!(loaded.settings.get("vsync"), "fast");
+    assert!(loaded.settings.was_chosen("vsync"));
+    assert_eq!(loaded.settings.get("render_scale"), "100");
+    assert_eq!(loaded.settings.gs_value("fxaa"), "true");
+    assert!(!loaded.settings.gs_overrides().contains_key("upscale"), "the old internal resolution is gone");
+
+    let copies = backups(&directory, "settings.toml.bak-schema4-");
+    assert_eq!(copies.len(), 1, "exactly one backup");
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original);
+    let rewritten = fs::read_to_string(&path).unwrap();
+    assert!(rewritten.contains("schema_version = 6"), "{rewritten}");
+    for gone in ["aspect_", "upscale"] {
+        assert!(!rewritten.contains(gone), "{gone} in {rewritten}");
+    }
+    for added in ["monitor = \"primary\"", "resolution = \"desktop\"", "render_scale = \"100\""] {
+        assert!(rewritten.contains(added), "{added} in {rewritten}");
+    }
+}
+
+#[test]
+fn a_schema_five_file_keeps_its_values_and_gets_the_texture_defaults_with_a_backup() {
+    // TASK-088 (gt4-gs 1.2.0): schema 6 adds no value. The texture rows are gs-table rows with table defaults: an
+    // absent key means Load custom textures on and Precache off, and a chosen value is kept.
+    let directory = scratch("v5-textures");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 5\n\n",
+        "[settings]\nvsync = \"fast\"\nrender_scale = \"100\"\n\n",
+        "[gs]\nfxaa = \"true\"\ntexture_load = \"false\"\n\n",
+        "[install]\ndisc_path = \"D:/gt4.iso\"\n",
+    );
+    fs::write(&path, original).unwrap();
+
+    let (loaded, notes) = config::load(&path);
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 5 to 6")), "{notes:?}");
+    assert_eq!(loaded.settings.get("vsync"), "fast");
+    assert_eq!(loaded.settings.gs_value("fxaa"), "true");
+    assert!(!loaded.settings.gs_overrides().contains_key("texture_precache"), "absent key: table default");
+
+    let copies = backups(&directory, "settings.toml.bak-schema5-");
+    assert_eq!(copies.len(), 1, "exactly one backup");
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original);
+    let rewritten = fs::read_to_string(&path).unwrap();
+    assert!(rewritten.contains("schema_version = 6"), "{rewritten}");
+}
+
+#[test]
+fn a_schema_five_resolution_equal_to_the_monitor_desktop_becomes_desktop() {
+    // TASK-088 (schema 6): the Monitor identifier records the desktop size when it was chosen. A Resolution equal to
+    // it follows the desktop from now on; a different size is a deliberate choice and stays.
+    let directory = scratch("v5-resolution-desktop");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 5\n\n",
+        "[settings]\nmonitor = '\\\\.\\DISPLAY2@3440x1440'\nresolution = \"3440x1440\"\n\n",
+        "[install]\ndisc_path = \"D:/gt4.iso\"\n",
+    );
+    fs::write(&path, original).unwrap();
+    let (loaded, notes) = config::load(&path);
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 5 to 6")), "{notes:?}");
+    assert_eq!(loaded.settings.get("resolution"), "desktop");
+    assert_eq!(loaded.settings.get("monitor"), r"\\.\DISPLAY2@3440x1440", "the identifier is kept");
+    let copies = backups(&directory, "settings.toml.bak-schema5-");
+    assert_eq!(copies.len(), 1, "exactly one backup");
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original);
+}
+
+#[test]
+fn a_schema_five_resolution_that_differs_or_has_no_recorded_desktop_is_kept() {
+    let directory = scratch("v5-resolution-kept");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 5\n\n",
+        "[settings]\nmonitor = '\\\\.\\DISPLAY2@5120x2160'\nresolution = \"3440x1440\"\n",
+    );
+    fs::write(&path, original).unwrap();
+    let (loaded, _) = config::load(&path);
+    assert_eq!(loaded.settings.get("resolution"), "3440x1440", "a deliberate size of another mode");
+
+    let primary = directory.join("primary.toml");
+    fs::write(&primary, "schema_version = 5\n\n[settings]\nmonitor = \"primary\"\nresolution = \"3440x1440\"\n").unwrap();
+    let (loaded, _) = config::load(&primary);
+    assert_eq!(loaded.settings.get("resolution"), "3440x1440", "no desktop size is recorded for primary");
 }

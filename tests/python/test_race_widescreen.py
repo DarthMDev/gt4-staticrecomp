@@ -89,9 +89,12 @@ class WidescreenProbeTests(unittest.TestCase):
                     run.assert_not_called()
                 self.assertFalse((root / 'private/unknown').exists())
 
-    def test_pcsx2_mode_is_slice214_and_slice213_slice211_slice210_are_history(self):
-        # TASK-081: slice213 is the slice211 recipe as a release build; it keeps GT4_FORCE_WIDESCREEN.
-        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
+    def test_pcsx2_mode_is_slice217_and_older_builds_are_history(self):
+        # TASK-080 (slice215, P2 slice217): the TASK-079 hold is still in it (hardened: settle rule); GT4_FORCE_WIDESCREEN
+        # stays.
+        self.assertEqual(probe.PERF_PROFILES['pcsx2'], ('slice262-pcsx2.json', 'private/slice262-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'], ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
+        self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'], ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice213'], ('slice213-pcsx2.json', 'private/slice213-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice211'], ('slice211-pcsx2.json', 'private/slice211-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice210'],

@@ -3,6 +3,9 @@
 // sends its hooks to the in-process HWR backend. This drives the hooks in the order the spliced donor sources call
 // them (reset, SetGsCrt, one GIF packet, a FIFO read, three VSYNCs, finish) and lets CTest check the session line.
 // Headless: no window is attached, so each VSYNC closes one HWR frame. Written from docs/hw-renderer-spec (clean room).
+// `--deferred-vsync` (TASK-084 merge): the MTVU VBlank journal holds the VSYNC at the guest VBlank and posts it from the
+// journal drain after the frame's output (set_vsync_deferral / post_pending_vsync). The hw sink must receive exactly
+// one VSYNC per post, none at the hold, and a post with nothing held must report false.
 
 #include "gs_stream/gs_stream_client.hpp"
 
@@ -10,8 +13,9 @@
 #include <cstdio>
 #include <cstring>
 
-int main() {
+int main(int argc, char **argv) {
   namespace stream = gt4::gs_stream;
+  const bool deferred = argc > 1 && std::strcmp(argv[1], "--deferred-vsync") == 0;
   if (!stream::stream_renderer()) {
     std::printf("FAIL: GT4_RENDERER=hw did not select a non-donor renderer\n");
     return 1;
@@ -48,7 +52,31 @@ int main() {
     }
   }
 
-  for (int frame = 0; frame < 3; ++frame) stream::on_vsync(frame & 1);
+  if (deferred) {
+    stream::set_vsync_deferral(true);
+    if (stream::post_pending_vsync()) {
+      std::puts("FAIL: a VSYNC was posted with nothing held");
+      return 1;
+    }
+    for (int frame = 0; frame < 3; ++frame) {
+      stream::on_vsync(frame & 1);           // held: the sink must not see it yet
+      if (!stream::on_gif_render(1, packet, 2)) {  // the frame's late output still reaches the sink first
+        std::puts("FAIL: GIF chunk refused while a VSYNC was held");
+        return 1;
+      }
+      if (!stream::post_pending_vsync()) {
+        std::puts("FAIL: the held VSYNC was not posted");
+        return 1;
+      }
+      if (stream::post_pending_vsync()) {
+        std::puts("FAIL: one held VSYNC was posted twice");
+        return 1;
+      }
+    }
+    stream::set_vsync_deferral(false);
+  } else {
+    for (int frame = 0; frame < 3; ++frame) stream::on_vsync(frame & 1);
+  }
   stream::finish(stdout);
   std::printf("PASS: hw stream sink\n");
   return 0;

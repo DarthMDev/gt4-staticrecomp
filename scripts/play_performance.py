@@ -71,7 +71,18 @@ License halt dump (--mode license-halt, slice204, TASK-017): the slice181 profil
 The mode sets GT4_HALT_DUMP=1 and GT4_FSV_TRACE=1 for the game; the [halt-dump] lines are written at the halt.
 Diagnostic only: the run is not a performance measurement.
 
-TASK-081 round 2 (slice214): --mode pcsx2 runs the slice214 release build (the slice213 build plus the Vulkan
+TASK-080 addendum (slice218): --mode pcsx2 runs the slice218 build: slice217 plus GT4_OUTPUT_SIZE=WxH (the aspect
+follows the output size when GT4_DISPLAY_ASPECT is auto) and GT4_MONITOR (the monitor's GDI device name, e.g. DISPLAY2 with its device prefix),
+as the launcher sends them; both unset = the window's client area on the primary monitor. slice217 stays as
+--mode pcsx2-slice217.
+TASK-080 P2 (slice217): --mode pcsx2 ran the slice217 build: slice215 plus the race HUD kept as an undistorted, centred
+16:9 layout at other ratios (HUD canvas hook, HUD parameter block, EE library profile "aspect"). slice215 stays as
+--mode pcsx2-slice215.
+TASK-080 (slice215): --mode pcsx2 ran the slice215 build: the slice214 release build plus native display aspect ratios.
+GT4_DISPLAY_ASPECT (unset or auto = the window's client area; 16:9, 4:3, W:H or a decimal) widens the race camera for
+the display ratio and fills the screen in races; menus stay 16:9. GT4_ASPECT_FOV_EXTRA (default 1.0) is the hidden FOV
+comparison factor. The slice214 build stays as --mode pcsx2-slice214 and slice212b as --mode pcsx2-slice212b.
+TASK-081 round 2 (slice214): --mode pcsx2 ran the slice214 release build (the slice213 build plus the Vulkan
 baseline path for older drivers; GT4_VULKAN_FORCE_BASELINE=1 forces it). The slice213 build stays as
 --mode pcsx2-slice213.
 TASK-081 (slice213): --mode pcsx2 ran the slice213 release build (the slice211 recipe with no build-time shader folder
@@ -150,9 +161,9 @@ def main():
     parser.add_argument('--gs-setting', action='append', default=[], metavar='ID=VALUE',
                         help='pcsx2 only: set a GS option from docs/launcher/gs-settings.toml (repeatable; '
                              'checked against the table; docs/GS-SETTINGS.md)')
-    parser.add_argument('--gs-readback', choices=('accurate', 'unsynchronized'), default=None,
-                        help='pcsx2 only: GS readback mode. accurate (default, owner choice 2026-10-16); unsynchronized: '
-                             'faster, may drop effects (night race: headlight flares missing; GT4_GS_READBACK)')
+    parser.add_argument('--gs-readback', choices=('accurate', 'no-readbacks'), default=None,
+                        help='pcsx2 only: GS readback mode, the Performance Mode row (TASK-091). accurate (default); '
+                             'no-readbacks: faster, some effects that read the image back are skipped (GT4_GS_READBACK)')
     parser.add_argument('--play-card', type=Path, default=None, metavar='PATH',
                         help='play on this existing card inside private/ instead of the owner card '
                              '(never private/manual-play/card.ps2); backed up and locked the same way, recorded in result.json')
@@ -190,8 +201,8 @@ def main():
             if args.gs_scale is not None and 'upscale' in settings:
                 raise ValueError('--gs-scale (or --gs-resolution) and --gs-setting upscale=... both set the internal '
                                  'resolution')
-            if args.gs_readback is not None and 'hw_download_mode' in settings:
-                raise ValueError('--gs-readback and --gs-setting hw_download_mode=... both set the readback mode')
+            if args.gs_readback is not None and 'performance_mode' in settings:
+                raise ValueError('--gs-readback and --gs-setting performance_mode=... both set the readback mode')
             os.environ[GS_SETTINGS_ENV] = gs_settings.settings_to_json(settings)
         if args.gs_readback is not None:
             if args.mode not in PCSX2_MODES:

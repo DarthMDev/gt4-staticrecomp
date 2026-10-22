@@ -76,6 +76,11 @@ bool read_fifo(std::uint8_t *data, std::uint32_t qwords);
 // The donor toggles the field together with INTC VBLANK_S, before the game's VBLANK_S handler runs, so this is also
 // the display field of the frame that ends here (protocol 1.1 VSYNC.field; docs/GS-STREAM-PROTOCOL.md 6.1).
 void on_vsync(bool odd_field);
+// TASK-084 step 3 (slice263): VBlank as an MTVU journal entry. With deferral on, on_vsync() holds the field instead
+// of posting; post_pending_vsync() (called from the journal drain, EE thread) posts it after the frame's GIF output,
+// so the GS process sees the frame complete before its VSYNC. Without deferral both calls behave as before.
+void set_vsync_deferral(bool defer);
+bool post_pending_vsync();
 // GS hard reset (donor render_reset) and GIF path reset.
 void on_gs_reset();
 void on_gif_reset();
@@ -88,6 +93,22 @@ bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t heig
 // Call before attach_window; attach_window then sends CONTROL cursor to a 1.2 consumer, so the GS child window hides the
 // cursor over the picture with the same rule. Default: auto-hide on, 3000 ms.
 void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms);
+// TASK-080 (protocol 1.3): how the GS process fits the picture into the window: the game's aspect (pillarbox, the
+// default) or fill (stretched to the window, the race view at a display ratio other than 16:9). Any thread; the client
+// posts CONTROL display_aspect after the next VSYNC when the mode changed, and only to a consumer whose READY minor is
+// 3 or more (a 1.2 consumer is never sent it and keeps the game's aspect).
+//
+// P2 (slice217): with fill, `fill_aspect_millionths` = the target aspect (width / height) x 1e6 of the rectangle the
+// picture fills: the largest centred rectangle of that aspect inside the window (letterbox or pillarbox bars), so a
+// custom ratio wider or narrower than the window is never stretched to the window. 0 = the whole window. It is sent as
+// args[1] of the record (GS-STREAM-PROTOCOL 6.7); a consumer from before P2 (gt4-gs 1.1.0) ignores it and fills the
+// whole window. A change of the target alone also posts a record.
+enum class DisplayAspectMode : std::uint32_t { game_aspect = 0, fill = 1 };
+void set_display_aspect_mode(DisplayAspectMode mode, std::uint32_t fill_aspect_millionths = 0);
+// The protocol value of a ratio: round(ratio x 1e6), or 0 (the whole window) outside kMinFillAspect..kMaxFillAspect.
+inline constexpr double kMinFillAspect = 0.5;
+inline constexpr double kMaxFillAspect = 8.0;
+std::uint32_t aspect_millionths(double ratio);
 // TASK-062 (protocol 1.2): cumulative busy time of the VU1 worker in microseconds (installed by the MTVU bridge in
 // pcsx2 mode); read for the OSD_STATS records. Null: the worker field is not sent.
 void set_worker_busy_source(std::uint64_t (*worker_busy_us)());
@@ -102,6 +123,10 @@ void finish(std::FILE *output);
 // for readback replies and for the GS process (ring space, frames in flight). Spin time inside those waits is also
 // CPU time, so the sum may count a few microseconds twice; the pacer's sleep is in neither.
 struct FrameCosts {
+  // TASK-084 step 0 (slice260): the EE frame's wall time and the pacer's sleep inside it. The critical path is
+  // frame_wall_ms - pacing_sleep_ms; the waits below are already inside that wall time.
+  double frame_wall_ms = -1.0;      // wall ms per VBlank of the interval; negative: Unknown
+  double pacing_sleep_ms = 0.0;     // pacer sleep inside frame_wall_ms (pacing_wait category)
   double ee_cpu_ms = -1.0;          // measured EE thread CPU; negative: Unknown
   double vu1_worker_wait_ms = 0.0;  // MTVU syncs, every reason
   double readback_wait_ms = 0.0;
@@ -123,6 +148,8 @@ struct OsdSample {
   std::uint64_t worker_busy_us = UINT64_MAX;  // VU1 worker busy; UINT64_MAX: unknown
   bool accounting = false;  // the perf accounting (GT4_PERF=1 or F7) is on: the four waits below are measured
   std::uint64_t stream_write_us = 0, readback_wait_us = 0, backpressure_us = 0, worker_wait_us = 0;
+  // TASK-084 step 0: the pacer's sleep, so the critical path is the frame wall minus the sleep (the F8 formula).
+  std::uint64_t pacing_sleep_us = 0;
 };
 ::gs_stream::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &end, std::uint64_t max_frame_us,
                                             double budget_ms = 1000.0 / 59.94);

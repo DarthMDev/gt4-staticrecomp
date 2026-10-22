@@ -1,4 +1,4 @@
-# GS stream protocol, version 1.2 (normative)
+# GS stream protocol, version 1.3 (normative)
 
 Status: implemented in TASK-035 (slice191, branch `task/035-gs-stream`), 2026-10-15. Decision
 [0070](decisions/0070-pcsx2-gs-separate-process.md), plan [GSDX-PLAN](GSDX-PLAN.md) section C.
@@ -15,13 +15,24 @@ Version 1.1 (TASK-047, 2026-10-16) changes only the meaning of VSYNC `field` (se
 SetGsCrt writes (section 7); layouts are unchanged and a 1.0 producer of this repository sent the same field values.
 The 1.1 text was written by a PCSX2-tainted agent of the GS fork task; it states PS2 hardware behavior and our own
 producer's timing, and contains no PCSX2 code. History: 1.0 (TASK-035, slice191), 1.1 (TASK-047, slice196), 1.2
-(TASK-060/062, slice201).
+(TASK-060/062, slice201), 1.3 (TASK-080, slice212b).
 
 Version 1.2 (TASK-060 and TASK-062, 2026-10-16) adds, without changing any existing layout or meaning: CONTROL kind 6
 `cursor` (section 6.1), the record type 11 `OSD_STATS` (section 6.5) and the READY flag 8 `kReadyFlagOsdStats`
 (section 6.2). A producer sends them only to a consumer whose READY `version_minor` is 2 or more, so a 1.2 producer
 works with a 1.1 consumer (gt4-gs 0.4.0) and a 1.2 consumer with a 1.1 producer (the slice199 game). The 1.2 text
 was written by a PCSX2-tainted agent of the GS fork task; it describes our own records only and contains no PCSX2 code.
+
+Version 1.3 (TASK-080, 2026-10-21) adds, without changing any existing layout or meaning: CONTROL kind 7
+`display_aspect` (sections 6.1 and 6.7) and the ERROR code 7 `bad_argument` (section 6.2). The consumer's READY
+`version_minor` is 3; a producer sends kind 7 only to a consumer whose READY minor is 3 or more, so 1.2 consumers
+(gt4-gs 1.0.x) keep working with a 1.3 producer and never receive it. The 1.3 text was written by an agent that is not
+PCSX2-tainted, from our own records only.
+
+Version 1.3, P2 amendment (TASK-080 P2, slice217, 2026-10-21): `display_aspect` mode 1 carries a fill target in
+`args[1]` (the target aspect x 1e6; 0 = the whole window, the earlier meaning). Before it, `args[1]` was reserved and
+sent as 0, so a consumer that ignores it (gt4-gs 1.1.0) keeps the earlier behaviour (fill the whole window), and the
+READY minor stays 3. Written by an agent that is not PCSX2-tainted.
 
 ## 1. Scope
 
@@ -70,7 +81,7 @@ Ring capacities MUST be multiples of 4,096 bytes. The response capacity MUST be 
 | Offset | Field | Writer | Notes |
 |---|---|---|---|
 | 0 | `magic` u32 = `0x54535347` ("GSST") | producer | |
-| 4 | `version_major` u16 = 1, `version_minor` u16 (2 since version 1.2) | producer | |
+| 4 | `version_major` u16 = 1, `version_minor` u16 (3 since version 1.3) | producer | |
 | 8 | `control_block_bytes` u32 = 4096, `record_header_bytes` u32 = 16 | producer | layout check |
 | 16 | `producer_pid`, `consumer_pid` u32 | each side | consumer writes its pid at the handshake |
 | 24 | `state` u32 (atomic bits) | both | 1 producer ready, 2 consumer ready, 4 fatal, 8 exiting |
@@ -143,7 +154,7 @@ timeout error.
 | VSYNC | 3 | `VsyncPayload {u64 frame; u8 field; u8 reserved[3]; u32 flags}` | Start of a vertical blank: every earlier record belongs to the frame that ends here. `frame` counts from 0. When `flags` bit 0 is set, `field` is the **display field** of the frame that ends here: the CSR FIELD bit (bit 13, 1 = odd) a consumer MUST use when it presents that frame, i.e. the field the game prepared that frame's display for. The consumer uses it as is (no shift by one VSYNC). Without bit 0 the consumer alternates the field. (1.0 described it as "the CSR FIELD bit the producer reports to the EE after this VSync"; see section 7 for why both are the same value for our producer.) |
 | READ_FIFO | 4 | `ReadFifoPayload {u32 qwords; u32 reserved; u64 request_id}` | Local-to-host transfer read (the TRXDIR = 1 setup came earlier in the stream). Section 6.4. |
 | RESET | 5 | `ResetPayload {u32 kind; u32 path_mask; u64 reserved}` | kind 1: GS hard reset (power-on state, local memory cleared); kind 2: GIF path parsers in `path_mask` (bit N = path N) return to "waiting for a tag". |
-| CONTROL | 6 | `ControlPayload {u32 kind; u32 reserved; u64 args[3]}` | kind 1 shutdown; 2 attach_window (native parent window handle, width, height); 3 resize (width, height); 4 reload_config; 5 snapshot (id, width, height; 0 = native); 6 cursor (version 1.2: flags, hide delay in ms 1..60000, 0; flag bit 0 `kCursorFlagAutoHide`): the mouse cursor policy for the consumer's window over the picture (section 6.6). |
+| CONTROL | 6 | `ControlPayload {u32 kind; u32 reserved; u64 args[3]}` | kind 1 shutdown; 2 attach_window (native parent window handle, width, height); 3 resize (width, height); 4 reload_config; 5 snapshot (id, width, height; 0 = native); 6 cursor (version 1.2: flags, hide delay in ms 1..60000, 0; flag bit 0 `kCursorFlagAutoHide`): the mouse cursor policy for the consumer's window over the picture (section 6.6); 7 display_aspect (version 1.3: mode, 0, 0): how the consumer fits the picture into its window (section 6.7). |
 | STATE_SAVE, STATE_LOAD, AUX_FRAME_BEGIN, AUX_FRAME_END | 7-10 | reserved | Not used in 1.0 to 1.2. A consumer answers ERROR `unsupported_record` (not fatal) and ignores them. |
 | OSD_STATS | 11 | `OsdStatsPayload` (64 bytes, section 6.5) | Version 1.2: producer performance numbers for the consumer's on-screen display. Sent only to a consumer that set `kReadyFlagOsdStats`. Not GS traffic: it never changes the picture and is never written to a `.gscap` file. A payload larger than 64 bytes (a later minor version) keeps the 64-byte layout at its start. |
 
@@ -155,7 +166,7 @@ Any other type is a protocol error: the consumer posts a fatal ERROR `bad_record
 |---|---|---|
 | READY | 0x81 | `ReadyPayload {u16 version_major, version_minor; u32 consumer_pid; u32 flags; u32 reserved; char consumer[32]; char renderer[32]; char version[64]}`. Flags: 1 readbacks are zero-filled (no VRAM), 2 the consumer presents frames, 4 the consumer records the stream, 8 (version 1.2) the consumer draws a performance overlay and wants OSD_STATS records. |
 | STATS | 0x82 | `StatsPayload {u64 vsyncs, records, bytes, readbacks, readbacks_zero_filled, busy_us, wait_us, reserved}`, cumulative since READY; posted at least every 500 VSYNCs and at shutdown. |
-| ERROR | 0x83 | `ErrorPayload {u32 code; u32 fatal; char text[248]}`; codes 1 version mismatch, 2 layout mismatch, 3 bad record, 4 unsupported record, 5 device failure, 6 internal. |
+| ERROR | 0x83 | `ErrorPayload {u32 code; u32 fatal; char text[248]}`; codes 1 version mismatch, 2 layout mismatch, 3 bad record, 4 unsupported record, 5 device failure, 6 internal, 7 bad argument (version 1.3: a known record or CONTROL kind with an argument outside its range; not fatal). |
 | SNAPSHOT_DONE | 0x84 | `SnapshotDonePayload {u64 id; u32 width, height; u64 response_offset; u64 bytes}` (RGBA8 in the response area). |
 | WINDOW | 0x85 | `WindowPayload {u32 state; ...}`: 1 lost, 2 restored. |
 | EXITING | 0x86 | `ExitingPayload {u32 exit_code; ...}`; last record before the consumer exits. |
@@ -207,6 +218,37 @@ over its window and has not moved for the delay, shows it again on any movement,
 without the flag (or without the record) it never changes the cursor. The producer applies the same rule to its own
 client area, so the two processes agree.
 
+### 6.7 Display aspect (version 1.3)
+
+`ControlPayload {u32 kind = 7; u32 reserved; u64 args[3]}`:
+
+| Argument | Meaning |
+|---|---|
+| `args[0]` mode | 0 = game aspect: the aspect ratio of the consumer's settings file (16:9 by default) inside the window, pillarbox or letterbox, the behaviour before 1.3; 1 = fill: the picture is stretched to the fill rectangle (`args[1]`) |
+| `args[1]` fill target | mode 1 only (P2 amendment, slice217): the target aspect (width / height) x 1e6 of the fill rectangle, the largest rectangle of that aspect centred in the window, with black bars on the two other sides (letterbox when the target is wider than the window, pillarbox when narrower). 0 = the whole window. Example: a custom ratio 2.44 in a 1920x1080 window is 2440000, a 1920x787 band at y = 146. The producer sends 0 with mode 0 and a value in 500000..8000000 (or 0) with mode 1 |
+| `args[2]` | reserved: the producer sends 0, the consumer ignores it |
+
+Rules:
+
+- The consumer applies the mode from the **next presented frame**; it stays until the next display_aspect. Every
+  session starts in mode 0.
+- Any other mode is answered with a non-fatal ERROR `bad_argument` (code 7, new in 1.3); the consumer keeps its
+  current mode and the stream continues. So is a mode 1 `args[1]` other than 0 or 500000..8000000.
+- A record with the same mode and a different `args[1]` is a change (the producer sends it, for example when the window
+  ratio changes in auto mode); the consumer applies the new rectangle from the next presented frame.
+- The fill rectangle never stretches the picture to a window of another ratio: that was the 2026-10-21 owner report
+  (Custom 2.44 on a 1920x1080 monitor stretched to 16:9 by gt4-gs 1.1.0, which fills the whole window). A consumer that
+  predates the amendment ignores `args[1]` and fills the whole window; that is correct only when the target equals the
+  window's ratio (auto mode).
+- The consumer's READY `version_minor` is 3. The producer sends kind 7 only when the consumer's READY minor is 3 or
+  more; a 1.2 consumer never receives it and always presents the game aspect.
+- The producer (the game) sends a record only when the mode changes, right after a VSYNC record. Its policy (TASK-080,
+  `native/display_aspect.hpp`): fill while the race view is shown at a display ratio other than 16:9 (the race camera
+  projection was widened or heightened for that ratio); game aspect in menus, FMVs and photo mode. It never sends a
+  record while the display ratio is 16:9, so a 16:9 player's stream is unchanged.
+- Like CONTROL cursor, the record is part of the stream (it reaches a `.gscap` capture of a live session); it does not
+  change GS state.
+
 ## 7. Producer rules (the game, `native/gs_stream/gs_stream_client.cpp`)
 
 - `GT4_RENDERER` unset or `donor`: the donor renderer runs and every hook returns at once (byte-identical donor
@@ -247,6 +289,13 @@ client area, so the two processes agree.
   times of `gs_ipc_write`, `gs_ipc_readback_wait`, `gs_ipc_backpressure` and the MTVU waits; the critical path is the
   F8 summary formula (EE CPU plus those waits). Cost on the EE thread (measured, slice201): 0.3 us per VSYNC and
   2-3 us per record.
+- Version 1.3 (slice212b): after a VSYNC, when the display aspect mode wanted by the game
+  (`set_display_aspect_mode`, driven by the TASK-080 scene policy) differs from the last mode sent, the game posts
+  CONTROL display_aspect to a consumer whose READY minor is 3 or more. A 1.2 consumer is never sent it; the game logs
+  once that the picture keeps the game's aspect.
+- P2 amendment (slice217): with mode 1 the game sends the race projection ratio as the fill target, `args[1]` =
+  round(ratio x 1e6) (`aspect_millionths`, `native/gs_stream/gs_stream_client.hpp`); a change of the target alone is a
+  new record. CoreGS 1.1 applies the same rectangle in-process (`presentation_rect_ratio`).
 
 ## 8. Consumer rules
 
@@ -293,7 +342,7 @@ dump. Version 1 (`GT4_PGS_CAPTURE`, task/012) has no header and single-letter re
 - New record types, new flag bits and new control kinds bump `kVersionMinor`. A consumer that sees an unknown
   type below 0x80 answers ERROR `unsupported_record` and skips it only if the type is in the reserved list;
   otherwise the stream is malformed. A producer therefore sends a newer record type or control kind only to a
-  consumer whose READY minor version has it (1.2: CONTROL cursor and OSD_STATS).
+  consumer whose READY minor version has it (1.2: CONTROL cursor and OSD_STATS; 1.3: CONTROL display_aspect).
 - `.gscap` files carry the protocol version of their records.
 
 ## 12. Implementation and tests (slice191)
@@ -305,7 +354,7 @@ dump. Version 1 (`GT4_PGS_CAPTURE`, task/012) has no header and single-letter re
 | `.gscap` v2 writer/reader | `native/gs_stream/gs_stream_file.{hpp,cpp}` |
 | Game-side client and hooks | `native/gs_stream/gs_stream_client.{hpp,cpp}`; splices in `scripts/prepare_external_vulkan.py --gs-stream-hooks` (gs.cpp) and `scripts/prepare_perf_runtime.py --gs-stream` (gif.cpp, hw.cpp) |
 | Test consumer (recorder / null consumer) | `tools/gs_stream_record` |
-| CTest | `native_gs_stream_ipc` (10^6 random records, wrap, back-pressure, split, readback, frames in flight, spurious wakes, fatal flag, child-process handshake, handshake timeout, peer death both ways); `native_gs_stream_client` (donor capture == pcsx2 capture == recorder file, refusals, consumer death; 1.2: OSD_STATS values, a 1.2 consumer that asks for them receives about two per second and the CONTROL cursor policy, and the capture holds no OSD_STATS) |
+| CTest | `native_gs_stream_ipc` (10^6 random records, wrap, back-pressure, split, readback, frames in flight, spurious wakes, fatal flag, child-process handshake, handshake timeout, peer death both ways); `native_gs_stream_client` (donor capture == pcsx2 capture == recorder file, refusals, consumer death; 1.2: OSD_STATS values, a 1.2 consumer that asks for them receives about two per second and the CONTROL cursor policy, and the capture holds no OSD_STATS; 1.3: a 1.3 consumer receives CONTROL display_aspect once per change right after the VSYNC and a 1.2 consumer receives none) |
 | Python | `tests/python/test_gs_stream.py`, version 2 cases in `tests/python/test_gscap_to_gsdump.py` |
 
 ## 13. Open points for the consumer side (TASK-036)

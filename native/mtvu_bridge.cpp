@@ -34,7 +34,15 @@ void apply_signal(std::uint32_t reg, std::uint64_t value) { ps2::gs::signal(reg,
 
 std::uint64_t vif1_state_hash(bool worker_side) { return ps2::vif::verify_hash(worker_side); }
 
+#ifdef GT4_GS_STREAM_CLIENT
+// TASK-084 step 3: posts the VSYNC the client held at the guest VBlank, from the journal drain.
+bool post_vsync() { return gt4::gs_stream::post_pending_vsync(); }
+#endif
+
 }  // namespace
+
+// The donor-mode crash of release 1.2.2 (an indeterminate post_vsync pointer): every callback must start null.
+static_assert(Donor{}.post_vsync == nullptr && Donor{}.render_gs == nullptr, "Donor callbacks start null");
 
 void start_with_donor(const Settings &settings) {
   Donor donor;
@@ -52,6 +60,9 @@ void start_with_donor(const Settings &settings) {
     gt4::gs_stream::set_privileged_ordering({&queue_privileged, &take_privileged_wait_us, &privileged_async});
     // TASK-062: the VU1 worker busy time for the GS process's performance overlay (OSD_STATS).
     gt4::gs_stream::set_worker_busy_source(&worker_busy_us);
+    // TASK-084 step 3: the VSYNC becomes a journal entry after the frame's VU1 output (GT4_MTVU_VBLANK_JOURNAL).
+    gt4::gs_stream::set_vsync_deferral(settings.vblank_journal);
+    donor.post_vsync = &post_vsync;
   }
 #endif
   start(settings, donor);

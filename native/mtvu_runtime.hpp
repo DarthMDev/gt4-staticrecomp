@@ -23,6 +23,18 @@ struct Settings {
   // consumer is registered (the GS stream in pcsx2 mode); they are queued in the journal behind the outstanding
   // worker output instead. No effect in donor mode (no consumer registered).
   bool privileged_async = kPrivilegedAsyncDefault;
+  // GT4_MTVU_CHAIN (TASK-084 step 1, slice261): coalesce the VIF1 packets of one DMA chain into one worker job
+  // (posted at the chain end, at a stall, or before any other journal or sync operation). 1 = on (default), 0 = one
+  // job per packet, the pre-TASK-084 behaviour, for A/B measurement.
+  bool chain_jobs = true;
+  // GT4_GIF_FASTPATH (TASK-084 step 2, slice262): in pcsx2 mode with MTVU on, PATH2/PATH3 signals are applied when the
+  // packet is accepted, so the GS stream no longer re-walks every qword to find them again. 1 = on (default), 0 = the
+  // pre-TASK-084 walk, for A/B measurement. PATH1 always walks (its signals are never pre-applied).
+  bool gif_fast_path = true;
+  // GT4_MTVU_VBLANK_JOURNAL (TASK-084 step 3, slice263): in pcsx2 mode the VSYNC becomes a journal entry after the
+  // frame's VU1 output, so the EE no longer drains at VBlank. 1 = on (default), 0 = the blocking drain. Donor mode
+  // always drains (the CoreGS 1.1 present needs the output).
+  bool vblank_journal = true;
 
   static constexpr bool kPrivilegedAsyncDefault = true;
 };
@@ -30,7 +42,8 @@ struct Settings {
 // Each switch accepts unset, "0" or "1"; GT4_MTVU_REPORT_EVERY accepts unset or a VBlank count. Any other value
 // throws std::invalid_argument naming the variable.
 Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every,
-                        const char *privileged_async = nullptr);
+                        const char *privileged_async = nullptr, const char *chain_jobs = nullptr,
+                        const char *gif_fast_path = nullptr, const char *vblank_journal = nullptr);
 Settings settings_from_environment();
 
 // TASK-041: ordered privileged GS writes. The GS stream (GT4_RENDERER=pcsx2) needs privileged writes only in stream
@@ -48,14 +61,20 @@ std::uint64_t take_privileged_wait_us();
 
 // Donor operations. The worker callbacks run on the worker thread; render_gs runs on the EE thread.
 struct Donor {
-  void (*worker_vif_packet)(const std::uint8_t *data, std::uint32_t qwc);
-  void (*worker_vif_write)(std::uint32_t reg, std::uint32_t value);
-  void (*worker_vu_reset)();
-  void (*render_gs)(int path, const std::uint8_t *data, std::uint32_t qwc);
+  // Every callback starts null: a caller that sets only some of them (start_with_donor sets post_vsync only in
+  // pcsx2/hw mode) must never leave an indeterminate pointer behind (the 1.2.2 donor-mode crash at the first VBlank).
+  void (*worker_vif_packet)(const std::uint8_t *data, std::uint32_t qwc) = nullptr;
+  void (*worker_vif_write)(std::uint32_t reg, std::uint32_t value) = nullptr;
+  void (*worker_vu_reset)() = nullptr;
+  void (*render_gs)(int path, const std::uint8_t *data, std::uint32_t qwc) = nullptr;
   // Hash of the VIF1 state: the worker side (true) or the EE shadow (false). Called on the EE after a sync.
-  std::uint64_t (*vif1_state_hash)(bool worker_side);
+  std::uint64_t (*vif1_state_hash)(bool worker_side) = nullptr;
   // gs::signal (SIGNAL/FINISH/LABEL), applied on the EE when a PATH2/PATH3 packet is accepted (docs section 12).
-  void (*apply_signal)(std::uint32_t reg, std::uint64_t value);
+  void (*apply_signal)(std::uint32_t reg, std::uint64_t value) = nullptr;
+  // TASK-084 step 3 (pcsx2 mode only; null in donor mode): posts the VSYNC the client held at the guest VBlank.
+  // Returns false when no VSYNC was held. Called from the journal drain, so the record lands after the frame's GIF
+  // output in stream order.
+  bool (*post_vsync)() = nullptr;
 };
 
 // Starts the worker when settings.enabled (EE thread, before emulation). Verify hashing works either way.
@@ -74,11 +93,19 @@ std::uint64_t worker_busy_us();
 
 // EE entry points (no-ops when not enabled, except gif_transfer which renders directly).
 void post_vif_packet(const std::uint8_t *data, std::uint32_t qwc);
+// TASK-084 step 1: closes the pending VIF1 batch and posts it as one job. Called by the DMA chain end, a VIF1 stall,
+// and before any other journal or sync operation; a no-op when nothing is batched or GT4_MTVU_CHAIN=0.
+void flush_vif_chain();
+// Counts one VIF1 DMA chain start (the denominator of "jobs per DMA chain").
+void note_vif_chain();
 void post_vif_write(std::uint32_t reg, std::uint32_t value);
 // EE GIF transfer (PATH3 from DMA, or any path on the EE). Scans signals; a signal forces a synchronous drain.
 void gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc);
 // Shadow VIF1 DIRECT/DIRECTHL data (the worker emits it): scans signals; a signal forces a synchronous drain.
 void shadow_direct(int path, const std::uint8_t *data, std::uint32_t qwc);
+// True when a PATH2/PATH3 packet's SIGNAL/FINISH/LABEL writes were applied when the packet was accepted, so the GS
+// stream must not walk the packet again to find them (TASK-084 step 2). False for PATH1 and with MTVU off.
+bool stream_signals_pre_applied(int path);
 // GIF reset: synchronous drain, then the EE scanners restart.
 void gif_reset();
 // True when a PATH2/PATH3 PACKED A+D write to `address` (0x60-0x62) was already applied on the EE by gif_transfer or

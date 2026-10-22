@@ -34,9 +34,11 @@
     "allow-open-player-folder",
     "allow-open-saves-folder",
     "allow-open-replays-folder",
+    "allow-open-textures-folder",
     "allow-check-updates",
     "allow-apply-update",
     "allow-skip-update",
-    "allow-confirm-close"
+    "allow-confirm-close",
+    "allow-ui-ready"
   ]
 }

@@ -60,6 +60,17 @@ Changes from upstream are kept to `gt4gs/` (README, BUILD, NOTICE), the trimmed 
   `bad_argument`). Zip `gt4-gs-1.1.0-windows-x64.zip`, SHA-256
   `cd07f5a226c6f521187b17cda7af703a18cab47f6566124aa2ff5ad2ea5064e6`. A 1.2 producer (slice211) works unchanged.
 
+- `gt4gs-v1.2.0` (TASK-088, 2026-10-21; branch `gt4gs/textures-1.2.0`, commit `c9dc54e93`; **not tagged, not published**,
+  waiting for the owner's test): custom texture loading from `[Folders] Textures` + `replacements` (no game-serial folder,
+  load only: dumping compiled out and the Dump keys refused), the GT4 display crop of 2 native rows at the bottom (right stays
+  1), a black window from the first frame (was white: `COLOR_WINDOW` class brush). The vendored allow-list gains
+  `[Folders] Textures` (`3rdparty/gt4recomp-gs-stream/SHA256SUMS` updated). Protocol unchanged (1.3). Local zip
+  `private/slice240-gt4gs-120/gt4-gs-1.2.0-windows-x64.zip` (13,356,845 bytes, SHA-256
+  `16342dd7b7908d8f736b193d75411b11ee62702303822f1b559707cd914d9c22`); source archive
+  `gt4recomp-gs-1.2.0-source.zip` (25,144,252 bytes, SHA-256 `199b38421ff51f31f0b4fd438ccc437da80ac94679d76d8b1332471a69caf52f`)
+  of commit `c9dc54e93`. Built by hand from the 1.1.0 recipe (the local release script needs a tag; the tag is for the
+  owner's approval). Owner install helper: `private/slice240-gt4gs-120/install-gt4gs-1.2.0-test.ps1`.
+
 The release contents are:
   - `gt4-gs-<version>-windows-x64.zip`: `gt4-gs.exe` (the stock `pcsx2-gsrunner`, renamed), the DLLs it
     needs, `resources/`, `COPYING.GPLv3`, `NOTICE`, `README.md` and `SOURCE.txt` (tag and commit);

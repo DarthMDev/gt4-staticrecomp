@@ -1,5 +1,5 @@
-//! Update checks and installs (owner rules, 2026-10-20). The launcher checks both release streams on every launch in
-//! the background, with a short timeout, and never blocks Play. It offers an update; it never installs one by
+//! Update checks and installs (owner rules, 2026-10-20). Background checks cover launcher releases and the selected
+//! external renderer, with a short timeout, and never block Play. It offers an update; it never installs one by
 //! itself. The one exception is the first gt4-gs install, which has nothing to replace.
 //!
 //! - gt4-gs: installed into a new version folder with the same staging rules as setup (`gs_release`), then
@@ -11,7 +11,6 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::sync::Mutex;
 
 use gt4l_core::gs_release::{self, Outcome, Step};
@@ -19,7 +18,7 @@ use gt4l_core::paths::DataDirs;
 use gt4l_core::releases::{self, GithubSource, ReleaseSource, Stream};
 use gt4l_core::update::{self, Offer};
 use gt4l_core::versions::{self, VersionFile};
-use gt4l_core::{Version, LAUNCHER_VERSION};
+use gt4l_core::{launch, Settings, Version, LAUNCHER_VERSION};
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
@@ -29,9 +28,9 @@ use crate::state::{self, lock, Shared};
 /// One renderer install at a time: the launch check, setup and an update must not write the same folder.
 static RENDERER_INSTALL: Mutex<()> = Mutex::new(());
 
-/// The renderer root under the data folder: `<data>\gs`.
+/// The installed renderer in use: `<data>\gs`, or a read-only or 1.2.0 folder that still has it (see `DataDirs`).
 pub fn renderer_root(dirs: &DataDirs) -> PathBuf {
-    dirs.root().join("gs")
+    dirs.renderer_root()
 }
 
 /// The folder of `GT4Recomp.exe` (the install folder).
@@ -91,8 +90,31 @@ fn fetch(stream: Stream) -> Result<Vec<releases::Release>, String> {
     releases::parse_releases(&source.releases_json()?, stream)
 }
 
-/// Checks both streams. Blocking: run it on a worker thread.
+/// An explicit update check includes both streams, even when the player uses CoreGS.
+/// Blocking: run it on a worker thread.
 pub fn check(dirs: &DataDirs, skipped_launcher: Option<Version>, skipped_renderer: Option<Version>) -> Check {
+    check_with(dirs, skipped_launcher, skipped_renderer, true, fetch)
+}
+
+/// Automatic checks keep launcher updates enabled but leave the unselected renderer alone.
+fn check_for_settings(
+    dirs: &DataDirs,
+    settings: &Settings,
+    skipped_launcher: Option<Version>,
+    skipped_renderer: Option<Version>,
+    fetch_releases: impl FnMut(Stream) -> Result<Vec<releases::Release>, String>,
+) -> Check {
+    check_with(dirs, skipped_launcher, skipped_renderer, launch::needs_external_renderer(settings), fetch_releases)
+}
+
+/// The injected fetcher lets tests verify which network requests an automatic check actually makes.
+fn check_with(
+    dirs: &DataDirs,
+    skipped_launcher: Option<Version>,
+    skipped_renderer: Option<Version>,
+    include_renderer: bool,
+    mut fetch_releases: impl FnMut(Stream) -> Result<Vec<releases::Release>, String>,
+) -> Check {
     let mut offers = Vec::new();
     let mut errors = Vec::new();
     let renderer_installed = gs_release::installed(&renderer_root(dirs)).map(|installed| installed.version);
@@ -102,7 +124,10 @@ pub fn check(dirs: &DataDirs, skipped_launcher: Option<Version>, skipped_rendere
         (Stream::Renderer, renderer_installed, skipped_renderer),
     ];
     for (stream, installed, skipped) in streams {
-        match fetch(stream) {
+        if stream == Stream::Renderer && !include_renderer {
+            continue;
+        }
+        match fetch_releases(stream) {
             Ok(list) => {
                 if let Some(offer) = update::decide(stream, installed, &list, skipped) {
                     offers.push(offer);
@@ -120,7 +145,8 @@ pub fn check(dirs: &DataDirs, skipped_launcher: Option<Version>, skipped_rendere
 /// Installs the newest gt4-gs (first install or update). Records the version in `version.json`.
 pub fn install_renderer(dirs: &DataDirs, progress: &mut dyn FnMut(Step)) -> Result<Outcome, String> {
     let _serial = RENDERER_INSTALL.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let root = renderer_root(dirs);
+    // Installs and updates always write the data folder's root; a renderer read from elsewhere is left as it is.
+    let root = dirs.renderer_install_root();
     let source = GithubSource::for_stream(Stream::Renderer);
     let outcome = gs_release::install_latest_reporting(&source as &dyn ReleaseSource, &root, progress)?;
     let location = version_location(dirs);
@@ -145,7 +171,7 @@ pub fn step_name(step: Step) -> &'static str {
 }
 
 /// Emits a step change; the per-chunk byte counts are not sent from here (the setup page polls them).
-fn emit_step(app: &AppHandle, step: Step) {
+pub fn emit_step(app: &AppHandle, step: Step) {
     if !matches!(step, Step::Transfer { .. }) {
         emit_progress(app, step_name(step));
     }
@@ -155,8 +181,10 @@ pub fn emit_progress(app: &AppHandle, step: &str) {
     let _ = app.emit("renderer-progress", json!({ "step": step }));
 }
 
-/// Makes sure `version.json` exists and is readable. A damaged file is replaced by a fresh one (the damaged copy is
-/// kept as `version.json.bad`). The launcher version stays the Cargo version.
+/// Makes sure `version.json` exists, is readable and names what is installed. A damaged file is replaced by a fresh
+/// one (the damaged copy is kept as `version.json.bad`). The launcher version stays the Cargo version; a file that
+/// disagrees (after an upgrade the installer writes a null renderer) is rewritten with the Cargo version and the checked
+/// gt4-gs install (`versions::reconciled`).
 pub fn ensure_version_file(dirs: &DataDirs) {
     let location = version_location(dirs);
     match versions::read(&location.path) {
@@ -164,6 +192,12 @@ pub fn ensure_version_file(dirs: &DataDirs) {
             let (_, warning) = versions::reconcile_launcher_version(Some(&file), LAUNCHER_VERSION);
             if let Some(warning) = warning {
                 state::log(dirs, &warning);
+            }
+            let renderer = gs_release::installed(&renderer_root(dirs)).map(|installed| installed.version);
+            if let Some(next) = versions::reconciled(&file, LAUNCHER_VERSION, renderer) {
+                if let Err(message) = versions::write(&location.path, location.path.parent().unwrap_or(dirs.root()), &next) {
+                    state::log(dirs, &format!("version.json not updated: {message}"));
+                }
             }
         }
         Ok(None) => {
@@ -181,8 +215,14 @@ pub fn ensure_version_file(dirs: &DataDirs) {
     }
 }
 
-/// The background work at every launch: version file, the first renderer install when none exists, and the update
-/// check. Failures are logged only. Emits `update-available` when there is something to offer.
+/// The startup repair applies only to a prepared game using the external renderer.
+fn needs_renderer_install(dirs: &DataDirs, settings: &Settings, set_up: bool) -> bool {
+    set_up && launch::needs_external_renderer(settings) && gs_release::needs_install(&renderer_root(dirs))
+}
+
+/// The background work at every launch: version file, the selected external renderer install when none exists or
+/// the installed one is below the minimum (gt4-gs 1.0.1 under launcher 1.1.0 is replaced by the newest stable release),
+/// and the update check. Failures are logged only. Emits `update-available` when there is something to offer.
 pub fn check_on_launch(app: AppHandle, shared: Shared) {
     let (dirs, config, set_up) = {
         let state = lock(&shared);
@@ -190,15 +230,15 @@ pub fn check_on_launch(app: AppHandle, shared: Shared) {
     };
     ensure_version_file(&dirs);
     // Before the first setup the renderer is installed by setup itself, with its progress on the setup page. Here it
-    // is only the retry after a setup that was offline.
-    if set_up && gs_release::installed(&renderer_root(&dirs)).is_none() {
+    // is the retry after a setup that was offline, or the update of a version below the minimum.
+    if needs_renderer_install(&dirs, &config.settings, set_up) {
         let progress_app = app.clone();
         match install_renderer(&dirs, &mut |step| emit_step(&progress_app, step)) {
             Ok(_) => emit_progress(&app, "done"),
             Err(message) => state::log(&dirs, &format!("gt4-gs not installed at launch: {message}")),
         }
     }
-    let result = check(&dirs, config.skipped_launcher, config.skipped_renderer);
+    let result = check_for_settings(&dirs, &config.settings, config.skipped_launcher, config.skipped_renderer, fetch);
     let offers: Vec<OfferView> = result.offers.iter().filter(|offer| offer.is_update()).map(OfferView::of).collect();
     if !offers.is_empty() {
         let _ = app.emit("update-available", json!({ "offers": offers }));
@@ -271,6 +311,10 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
                 }
             }
             "launcher" => {
+                // Updating ends the launcher, and the game ends with it (kill-on-close job).
+                if game_running {
+                    return Err("Close the game before updating GT4Recomp.".to_string());
+                }
                 let message = start_launcher_setup(&app, &dirs)?;
                 Ok(json!({ "ok": true, "message": message }))
             }
@@ -279,6 +323,25 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
     })
     .await
     .map_err(|error| error.to_string())?
+}
+
+/// The command line of the setup of a self-update (TASK-091): `/S /UPDATE /D=<install folder>`, so the update is
+/// silent, and the installer starts the launcher again as the player. `/D=` must be last and unquoted (NSIS), so the
+/// folder is passed as it is. Only when this launcher runs from the registered per-machine install: a portable copy
+/// elsewhere, or no registered install, gets `None` (an interactive setup with no arguments), so a portable folder is
+/// never silently turned into an install. `read_registered` is the registry read (`InstallDir`), faked in tests.
+pub fn setup_arguments(exe_dir: &Path, read_registered: &dyn Fn() -> Option<String>) -> Option<String> {
+    let registered = read_registered()?;
+    if folder_key(&exe_dir.to_string_lossy()) == folder_key(&registered) {
+        Some(format!("/S /UPDATE /D={}", exe_dir.display()))
+    } else {
+        None
+    }
+}
+
+/// A folder compared the way Windows compares it: case-insensitive, one trailing backslash (or slash) ignored.
+fn folder_key(folder: &str) -> String {
+    folder.trim().trim_end_matches(['\\', '/']).to_ascii_lowercase()
 }
 
 /// Downloads the GT4Recomp setup program of the newest stable release, checks it, starts it, and ends the launcher.
@@ -307,7 +370,34 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
         let _ = fs::remove_file(&path);
     })?;
     state::log(dirs, &format!("GT4Recomp {} setup verified; starting it", version.text()));
-    Command::new(&path).spawn().map_err(|error| format!("could not start the setup: {error}"))?;
+    // The 1.2.1 setup installs per machine and needs administrator rights (TASK-091): CreateProcess cannot start it
+    // (ERROR_ELEVATION_REQUIRED). The launcher first clears kill-on-close on its job, so nothing it starts dies when
+    // it exits (the game is not running here), then asks Windows to start the setup elevated (`runas`, the UAC
+    // prompt). The breakaway start and the Explorer fallback stay behind it (gt4l_platform::process::start_setup).
+    if let Err(message) = gt4l_platform::process::release_kill_on_close() {
+        state::log(dirs, &format!("kill-on-close not cleared ({message}); the setup is started outside the job"));
+    }
+    // Silent, with this folder as the install folder, when this launcher is the registered install (see setup_arguments).
+    let arguments = setup_arguments(&install_directory(), &gt4l_platform::install_record::registered_install_folder);
+    state::log(dirs, &format!("setup arguments: {}", arguments.as_deref().unwrap_or("none (interactive)")));
+    let started = match gt4l_platform::process::start_setup(&path, arguments.as_deref(), &gt4l_platform::process::WindowsSetupStarter, &mut |line| {
+        state::log(dirs, &line)
+    }) {
+        Ok(started) => started,
+        Err(message) => {
+            // No setup runs, so the launcher goes back to ending the game with it.
+            match gt4l_platform::process::restore_kill_on_close() {
+                Ok(()) => state::log(dirs, "kill-on-close restored after the setup did not start"),
+                Err(restore) => state::log(dirs, &format!("kill-on-close not restored ({restore})")),
+            }
+            return Err(message);
+        }
+    };
+    state::log(dirs, &format!("setup started ({started:?})"));
+    if started == gt4l_platform::process::SetupStart::Explorer {
+        // Explorer starts it a moment later; the launcher waits so the hand-over completes first.
+        std::thread::sleep(std::time::Duration::from_secs(3));
+    }
     let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Setup started." }));
     app.exit(0);
     Ok(format!("GT4Recomp {} setup started.", version.text()))
@@ -316,6 +406,24 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_registered_install_updates_silently_into_its_own_folder() {
+        let exe_dir = Path::new("C:\\Program Files\\GT4Recomp");
+        let registered = || Some("c:\\program files\\gt4recomp\\".to_string());
+        assert_eq!(setup_arguments(exe_dir, &registered).as_deref(), Some("/S /UPDATE /D=C:\\Program Files\\GT4Recomp"));
+        let plain = || Some("C:\\Program Files\\GT4Recomp".to_string());
+        assert_eq!(setup_arguments(exe_dir, &plain), setup_arguments(exe_dir, &registered));
+    }
+
+    #[test]
+    fn a_portable_copy_or_no_registration_stays_interactive() {
+        let portable = Path::new("D:\\Games\\GT4Recomp");
+        let registered = || Some("C:\\Program Files\\GT4Recomp".to_string());
+        assert_eq!(setup_arguments(portable, &registered), None, "a portable folder is never turned into an install");
+        let nothing = || None;
+        assert_eq!(setup_arguments(Path::new("C:\\Program Files\\GT4Recomp"), &nothing), None);
+    }
 
     #[test]
     fn the_offer_view_names_both_versions_and_the_update_flag() {
@@ -337,5 +445,56 @@ mod tests {
     fn the_renderer_folder_lives_under_the_data_folder() {
         let dirs = DataDirs::new("C:/data/GT4Recomp");
         assert_eq!(renderer_root(&dirs), PathBuf::from("C:/data/GT4Recomp").join("gs"));
+    }
+
+    #[test]
+    fn coregs_startup_checks_the_launcher_without_requesting_renderer_releases() {
+        let root = std::env::temp_dir().join(format!("gt4l-coregs-check-{}", std::process::id()));
+        let dirs = DataDirs::new(&root);
+        let mut settings = Settings::default();
+        settings.set("renderer", gt4l_core::settings::CORE_GS_11).unwrap();
+        let mut requested = Vec::new();
+        let result = check_for_settings(&dirs, &settings, None, None, |stream| {
+            requested.push(stream);
+            assert_eq!(stream, Stream::Launcher, "CoreGS must not request the external renderer's release list");
+            releases::parse_releases(r#"[{"tag_name":"v99.0.0","draft":false,"prerelease":false,"assets":[]}]"#, stream)
+        });
+        assert_eq!(requested, vec![Stream::Launcher]);
+        assert!(result.errors.is_empty());
+        assert_eq!(result.offers.len(), 1);
+        assert_eq!(result.offers[0].stream, Stream::Launcher);
+        assert!(!needs_renderer_install(&dirs, &settings, true), "missing gt4-gs does not require installation");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn pcsx2_startup_still_repairs_missing_packages_and_checks_both_streams() {
+        let root = std::env::temp_dir().join(format!("gt4l-pcsx2-check-{}", std::process::id()));
+        let dirs = DataDirs::new(&root);
+        let settings = Settings::default();
+        assert!(!needs_renderer_install(&dirs, &settings, false), "setup owns the first install");
+        assert!(needs_renderer_install(&dirs, &settings, true), "a prepared game repairs its missing package");
+        let mut requested = Vec::new();
+        let result = check_for_settings(&dirs, &settings, None, None, |stream| {
+            requested.push(stream);
+            Ok(Vec::new())
+        });
+        assert_eq!(requested, vec![Stream::Launcher, Stream::Renderer]);
+        assert!(result.errors.is_empty());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn an_explicit_check_can_still_query_the_optional_renderer() {
+        let root = std::env::temp_dir().join(format!("gt4l-explicit-check-{}", std::process::id()));
+        let dirs = DataDirs::new(&root);
+        let mut requested = Vec::new();
+        let result = check_with(&dirs, None, None, true, |stream| {
+            requested.push(stream);
+            Ok(Vec::new())
+        });
+        assert_eq!(requested, vec![Stream::Launcher, Stream::Renderer]);
+        assert!(result.errors.is_empty());
+        let _ = fs::remove_dir_all(root);
     }
 }

@@ -537,3 +537,19 @@ phase 2 will need another fast path (for example a tile-local path). PC focus no
 
 Still over the owner's 6 ms GS-worker budget in the race. Largest remaining CPU parts (replay): batch translate
 1.8 ms, execute 3.3 ms, front end about 2.4 ms, and 330-430 render passes per frame.
+
+## 2026-10-22 owner test 5 and the merge of main 1.2.2 (local slice248/249) - Claude
+
+- Owner test 5 (slice247) approved: flat 60 FPS in the Nordschleife Time Trial, a night race and Opera Paris, 0 dropped
+  frames, picture as GSdx at 1x. Measured windowed: GS thread 8.9-11.3 ms CPU per frame (gif 8.7-10.0, translate
+  1.6-1.8, execute 3.1-3.5), process 21-27 core-ms, 1,600-1,800 barriers and 315-340 render passes per frame, GPU
+  nearly idle. GSdx's own CPU thread: about 1.7 ms per night frame.
+- `main` 1.2.2 merged. TASK-084's VBlank journal now holds the VSYNC for the hw sink as well and posts it after the
+  frame's VU1 output (`hw_stream_sink_deferred_vsync`). Identity: hw memory hashes on the five captures, menu dumps
+  42/42 and race frames 42/42 identical to slice247's references; CTest 230/230 non-Python with and without
+  interlock; default renderer 42/42 = slice214 after fixing the 1.2.2 donor-mode crash (indeterminate
+  `mtvu::Donor::post_vsync`; main needs the same fix).
+- Local builds: slice248 = merged source on the slice247 recipe (coverage, slice191 capsule, slice206 guard);
+  slice249 = the release 1.2.2 recipe (aspect, slice262 capsule and guard). Build trees on
+  `O:\gt4recomp-scratch\coregs2-slice248-merge` and `coregs2-slice249-r122`; local gate helper `build/gates2/gates.sh`.
+- Next: M12 upscaling (step 3 plan above), then anti-aliasing.

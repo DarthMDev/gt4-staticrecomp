@@ -46,9 +46,11 @@ impl Recorder {
 }
 
 fn launch(dirs: &DataDirs, pins: &Pins) -> Shared {
-    // A stand-in for Documents inside the sandbox: the flow never touches the real player's folder.
-    let user = UserDirs::new(dirs.root().join("documents-stand-in").join(USER_FOLDER_NAME), UserRootSource::Override);
-    Arc::new(Mutex::new(AppState::load_with(dirs.clone(), pins.clone(), user).expect("state loads")))
+    // A stand-in for %APPDATA%\GT4Recomp inside the sandbox: the flow never touches the real user folder. The
+    // sandbox itself stands in for the install folder (the data folder is its `data`).
+    let user = UserDirs::new(dirs.root().join("appdata-stand-in").join(USER_FOLDER_NAME), UserRootSource::Override);
+    let install = dirs.root().parent().map(Path::to_path_buf).unwrap_or_else(|| dirs.root().to_path_buf());
+    Arc::new(Mutex::new(AppState::load_with(dirs.clone(), pins.clone(), user, None, install).expect("state loads")))
 }
 
 fn screen(shared: &Shared) -> Value {
@@ -171,10 +173,11 @@ fn play_plan(shared: &Shared, program_dir: &Path) -> Result<launch::LaunchPlan, 
     let inherited: Vec<String> = std::env::vars().map(|(name, _)| name).collect();
     Ok(match &inputs.pcsx2 {
         Some(installed) => {
-            let paths = launch::Pcsx2Paths::for_session(installed, &inputs.dirs.root().join("gs"), &session);
-            launch::plan_pcsx2_launch(&launch_inputs, &inputs.settings, &paths, &inherited)
+            let textures = crate::state::lock(shared).dirs.textures();
+            let paths = launch::Pcsx2Paths::for_session(installed, &inputs.dirs.root().join("gs"), &session, &textures);
+            launch::plan_pcsx2_launch(&launch_inputs, &inputs.settings, &paths, inputs.display.as_ref(), &inherited)
         }
-        None => launch::plan_launch(&launch_inputs, &inputs.settings, &inherited),
+        None => launch::plan_launch(&launch_inputs, &inputs.settings, inputs.display.as_ref(), &inherited),
     })
 }
 
@@ -228,7 +231,11 @@ fn synthetic_flow_end_to_end() {
     assert_eq!(info.name, "Gran Turismo 4 \u{b7} USA \u{b7} v2.00");
     let recorder = Recorder::default();
     let seen = run_setup(&shared, &recorder, fake_renderer());
-    assert!(seen.iter().all(|label| label.starts_with("\"checking\"")), "the page shows setup until it ends: {seen:?}");
+    // The poll can catch the final state ("done") between the last state write and the thread's exit (it still sends
+    // setup-finished), so only the last label may be the final one.
+    let (last, before) = seen.split_last().expect("at least one label");
+    assert!(before.iter().all(|label| label.starts_with("\"checking\"")), "the page shows setup until it ends: {seen:?}");
+    assert!(last.starts_with("\"checking\"") || last.starts_with("\"done\""), "the page shows setup until it ends: {seen:?}");
     let view = screen(&shared);
     assert_eq!(view["setup"]["state"], "done", "{view}");
     assert_eq!(view["setup"]["note"], "");
@@ -291,6 +298,86 @@ fn synthetic_flow_end_to_end() {
     assert!(!data.join("disc").join("SCUS-97328.iso.tmp").exists());
     assert!(!data.join("prepared.tmp").exists());
     let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn settings_store_no_absolute_path_inside_the_install_folder() {
+    // TASK-091: a copied install folder (another drive or PC) must still find what the settings name.
+    let root = scratch("portable-settings");
+    let dirs = DataDirs::new(root.join("data"));
+    let game = synthetic_game(0x0010_0000, 0x0010_0008, b"synthetic guest code, not game data, 0123456789abcdef");
+    let image = build_iso("GT4 USA", &[("SYSTEM.CNF;1", system_cnf("SCUS_973.28", "2.00", "NTSC")), ("CORE.GT4;1", game.core.clone())]);
+    let pins = pins_for(&image, &game, "SCUS-97328", "2.00");
+    let picked = root.join("images").join("gt4.iso");
+    fs::create_dir_all(picked.parent().unwrap()).unwrap();
+    fs::write(&picked, &image).unwrap();
+    let shared = launch(&dirs, &pins);
+    setup::choose_disc_path(&shared, &picked).expect("accepted");
+    {
+        let mut state = lock(&shared);
+        state.config.dev_game_dir = Some(root.join("game-build"));
+        state.save_config();
+    }
+    let file = lock(&shared).user_dirs.config_file();
+    let text = fs::read_to_string(&file).unwrap();
+    // TOML doubles each backslash, so the stored form of the sandbox path is checked too.
+    let root_text = root.display().to_string().replace('\\', "\\\\");
+    assert!(!text.contains(&root_text) && !text.contains(&root.display().to_string()), "{text}");
+    assert!(text.contains("disc_path = \"images\\\\gt4.iso\""), "{text}");
+    // The next start resolves it against the install folder again.
+    let again = launch(&dirs, &pins);
+    assert_eq!(lock(&again).config.disc_path.as_deref(), Some(picked.as_path()));
+    assert_eq!(lock(&again).config.dev_game_dir.as_deref(), Some(root.join("game-build").as_path()));
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn coregs_setup_and_play_need_no_external_renderer_package() {
+    let root = scratch("coregs-independent");
+    let dirs = DataDirs::new(root.join("data"));
+    let game = synthetic_game(0x0010_0000, 0x0010_0008, b"synthetic guest code, not game data, 0123456789abcdef");
+    let image = build_iso(
+        "GT4 USA",
+        &[
+            ("SYSTEM.CNF;1", system_cnf("SCUS_973.28", "2.00", "NTSC")),
+            ("CORE.GT4;1", game.core.clone()),
+            ("SCUS_973.28;1", vec![0xA5; 3000]),
+        ],
+    );
+    let pins = pins_for(&image, &game, "SCUS-97328", "2.00");
+    let picked = root.join("disc.iso");
+    fs::write(&picked, image).unwrap();
+    let shared = launch(&dirs, &pins);
+    {
+        let mut state = lock(&shared);
+        state.config.settings.set("renderer", gt4l_core::settings::CORE_GS_11).unwrap();
+        state.save_config();
+    }
+    setup::choose_disc_path(&shared, &picked).unwrap();
+    let recorder = Recorder::default();
+    let forbidden_installer: RendererInstaller = Arc::new(|_, _| {
+        panic!("CoreGS setup must not invoke the external renderer installer");
+    });
+    run_setup(&shared, &recorder, forbidden_installer);
+    let view = screen(&shared);
+    assert_eq!(view["setup"]["state"], "done");
+    assert_eq!(view["setup"]["note"], "", "an intentional CoreGS choice is not a download failure");
+    assert!(recorder.names("renderer-progress").is_empty(), "no external download steps are emitted");
+    assert_eq!(recorder.names("setup-finished"), vec![json!({ "ok": true, "message": "" })]);
+    assert!(!dirs.root().join("gs").exists(), "setup creates no external package folder");
+
+    let second = launch(&dirs, &pins);
+    assert_eq!(lock(&second).config.settings.get("renderer"), gt4l_core::settings::CORE_GS_11);
+    let program = root.join("program");
+    fs::create_dir_all(program.join("game")).unwrap();
+    fs::write(program.join("game").join("gt4vulkan.exe"), b"stand-in, never started").unwrap();
+    let inputs = commands::prepare_play(&second, &program).unwrap();
+    assert!(inputs.pcsx2.is_none());
+    assert!(inputs.notice.is_none());
+    let plan = play_plan(&second, &program).unwrap();
+    assert!(plan.environment.iter().any(|(name, value)| name == "GT4_RENDERER" && value == "donor"));
+    assert!(!plan.environment.iter().any(|(name, _)| name.starts_with("GT4_GS_PROCESS")));
+    let _ = fs::remove_dir_all(root);
 }
 
 #[test]

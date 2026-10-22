@@ -7,6 +7,7 @@
 #include "gs_stream_ipc.hpp"
 #include "perf_probe.hpp"
 #include "../install_paths.hpp"
+#include "../display_aspect.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -16,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <exception>
@@ -29,6 +31,11 @@
 
 namespace gt4::gs_stream {
 namespace {
+
+// TASK-084 step 3: when the MTVU journal owns the VBlank, the client holds the field here instead of posting.
+bool g_defer_vsync = false;
+bool g_pending_vsync = false;
+bool g_has_pending_vsync = false;
 
 namespace proto = ::gs_stream;
 namespace ipc = ::gs_stream::ipc;
@@ -72,6 +79,9 @@ std::uint64_t (*g_worker_busy_us)() = nullptr;
 // TASK-060: cursor policy of the game window, sent to a 1.2 consumer after attach_window (set by window.cpp).
 bool g_cursor_auto_hide = true;
 std::uint32_t g_cursor_hide_delay_ms = 3000;
+// TASK-080: display aspect wanted by the game (set_display_aspect_mode), posted after a VSYNC to a 1.3 consumer.
+// Low 32 bits: the mode; high 32 bits: the fill target aspect x 1e6 (0 = the whole window; P2, slice217).
+std::atomic<std::uint64_t> g_display_aspect_wanted{0};
 
 // CPU time of the calling thread in microseconds (UINT64_MAX when unavailable).
 std::uint64_t thread_cpu_us() {
@@ -227,7 +237,15 @@ class Client {
 
   void start() {
     open_capture();
-    if (renderer_ == Renderer::pcsx2) start_process();
+    if (renderer_ == Renderer::pcsx2) {
+      start_process();
+      // TASK-080: in pcsx2 mode the race-view presentation goes to the GS process (CONTROL display_aspect). Installed
+      // here so headless runs exercise it too; the game window (window.cpp) installs an equivalent sink later.
+      gt4::display_aspect::set_presentation_sink([](bool fill, double ratio) {
+        set_display_aspect_mode(fill ? DisplayAspectMode::fill : DisplayAspectMode::game_aspect,
+                                fill ? aspect_millionths(ratio) : 0);
+      });
+    }
     gt4::perf::Probe::set_gs_ipc_hooks(&Client::report_interval_hook, &Client::reset_interval_hook);
   }
 
@@ -329,6 +347,7 @@ class Client {
     if (osd_wanted_) osd_after_vsync();
     const std::uint64_t resize = pending_resize_.exchange(0);
     if ((resize >> 63) && stream()) control(proto::ControlKind::resize, (resize >> 32) & 0x7FFFFFFFu, resize & 0xFFFFFFFFu, 0);
+    post_display_aspect();
   }
 
   void reset(proto::ResetKind kind, std::uint32_t mask) {
@@ -353,6 +372,27 @@ class Client {
     // would answer an unknown CONTROL kind with an error, so it is not sent there (that consumer never hides it).
     if (session_ && ready_.version_minor >= 2)
       control(proto::ControlKind::cursor, g_cursor_auto_hide ? proto::kCursorFlagAutoHide : 0, g_cursor_hide_delay_ms, 0);
+  }
+
+  // TASK-080 (protocol 1.3): CONTROL display_aspect when the wanted mode or fill target differs from the last one sent
+  // (the consumer starts in game_aspect). Effective from the next presented frame. A consumer below 1.3 is never sent
+  // it. args[1] = the fill target aspect x 1e6 (P2, slice217; 0 = the whole window), see GS-STREAM-PROTOCOL 6.7.
+  void post_display_aspect() {
+    const std::uint64_t wanted_both = g_display_aspect_wanted.load();
+    if (wanted_both == display_aspect_sent_ || !session_ || dead_) return;
+    const std::uint32_t wanted = static_cast<std::uint32_t>(wanted_both);
+    const std::uint32_t target = static_cast<std::uint32_t>(wanted_both >> 32);
+    if (ready_.version_minor < 3) {
+      if (!display_aspect_refused_logged_) {
+        display_aspect_refused_logged_ = true;
+        std::fprintf(stderr, "[gs-ipc] GS process speaks protocol 1.%u: display aspect mode %u not sent (needs 1.3); "
+                     "the picture keeps the game's aspect\n", ready_.version_minor, wanted);
+      }
+      return;
+    }
+    control(proto::ControlKind::display_aspect, wanted, target, 0);
+    display_aspect_sent_ = wanted_both;
+    ++display_aspect_controls_;
   }
 
   void request_resize(std::uint32_t width, std::uint32_t height) {
@@ -548,6 +588,7 @@ class Client {
       sample.stream_write_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_write);
       sample.readback_wait_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_readback_wait);
       sample.backpressure_us = probe.cumulative_exclusive_us(gt4::perf::Category::gs_ipc_backpressure);
+      sample.pacing_sleep_us = probe.cumulative_exclusive_us(gt4::perf::Category::pacing_wait);
       for (gt4::perf::Category wait : {gt4::perf::Category::mtvu_wait_vblank, gt4::perf::Category::mtvu_wait_download,
                                        gt4::perf::Category::mtvu_wait_gs_privileged, gt4::perf::Category::mtvu_wait_vu_memory,
                                        gt4::perf::Category::mtvu_wait_gif_reset, gt4::perf::Category::mtvu_wait_reset,
@@ -732,6 +773,8 @@ class Client {
     }
     if (stream()) {
       FrameCosts costs;
+      costs.frame_wall_ms = interval.elapsed_us / scale;
+      costs.pacing_sleep_ms = ms(gt4::perf::Category::pacing_wait);
       costs.ee_cpu_ms = gt4::perf::Probe::shared().report_cpu_ms_per_frame();
       for (gt4::perf::Category wait : {gt4::perf::Category::mtvu_wait_vblank, gt4::perf::Category::mtvu_wait_download,
                                        gt4::perf::Category::mtvu_wait_gs_privileged, gt4::perf::Category::mtvu_wait_vu_memory,
@@ -790,6 +833,9 @@ class Client {
   std::unique_ptr<ipc::Session> session_;
   ipc::ChildProcess child_;
   proto::ReadyPayload ready_{};
+  std::uint64_t display_aspect_sent_ = 0;  // mode | target << 32 last sent; game_aspect is the consumer's default
+  bool display_aspect_refused_logged_ = false;
+  std::uint64_t display_aspect_controls_ = 0;
   proto::FileWriter capture_;
   std::uint64_t capture_first_ = 0, capture_last_ = ~std::uint64_t(0);
   std::uint64_t sequence_ = 0;
@@ -1047,24 +1093,28 @@ const char *privileged_register_name(int index) {
 }
 
 std::string format_frame_summary(const FrameCosts &costs) {
-  char line[512];
+  char line[640];
   const double waits = costs.vu1_worker_wait_ms + costs.readback_wait_ms + costs.backpressure_ms;
   char gs[96] = "GS process CPU thread Unknown";
   if (costs.gs_cpu_thread_ms >= 0.0)
     std::snprintf(gs, sizeof gs, "GS process CPU thread %.2f ms/frame", costs.gs_cpu_thread_ms);
-  if (costs.ee_cpu_ms < 0.0) {
+  // TASK-084 step 0: the critical path is the EE frame's wall time minus the pacer's sleep, the study's formula
+  // (docs/FRAME-COST-STUDY.md section 6 item 2). The old "EE CPU + waits" double-counted the CPU spent inside waits.
+  if (costs.frame_wall_ms < 0.0) {
     std::snprintf(line, sizeof line,
-                  "[gs-ipc] summary: EE critical path Unknown (EE CPU not measured); EE waits %.2f ms/frame (VU1 worker "
-                  "%.2f, readbacks %.2f, GS back-pressure %.2f) of the %.2f ms frame budget; %s",
+                  "[gs-ipc] summary: EE critical path Unknown (frame wall not measured); EE waits %.2f ms/frame (VU1 "
+                  "worker %.2f, readbacks %.2f, GS back-pressure %.2f) of the %.2f ms frame budget; %s",
                   waits, costs.vu1_worker_wait_ms, costs.readback_wait_ms, costs.backpressure_ms, costs.budget_ms, gs);
     return line;
   }
-  const double path = costs.ee_cpu_ms + waits;
+  const double path = costs.frame_wall_ms - costs.pacing_sleep_ms;
   std::snprintf(line, sizeof line,
-                "[gs-ipc] summary: EE critical path %.2f ms/frame of %.2f budget (%.0f%%) = EE CPU %.2f + waits for the "
-                "VU1 worker %.2f + readbacks %.2f + GS back-pressure %.2f; headroom %.2f ms; %s",
-                path, costs.budget_ms, path / costs.budget_ms * 100.0, costs.ee_cpu_ms, costs.vu1_worker_wait_ms,
-                costs.readback_wait_ms, costs.backpressure_ms, costs.budget_ms - path, gs);
+                "[gs-ipc] summary: EE critical path %.2f ms/frame of %.2f budget (%.0f%%) = frame wall %.2f minus "
+                "pacing sleep %.2f; inside it: EE CPU %.2f, of which VU1 worker wait %.2f, readbacks %.2f, GS "
+                "back-pressure %.2f (waits are part of the path, not added); headroom %.2f ms; %s",
+                path, costs.budget_ms, path / costs.budget_ms * 100.0, costs.frame_wall_ms, costs.pacing_sleep_ms,
+                costs.ee_cpu_ms, costs.vu1_worker_wait_ms, costs.readback_wait_ms, costs.backpressure_ms,
+                costs.budget_ms - path, gs);
   return line;
 }
 
@@ -1078,8 +1128,29 @@ bool read_fifo(std::uint8_t *data, std::uint32_t qwords) {
 }
 
 void on_vsync(bool odd_field) {
+  // TASK-084 step 3 holds the VSYNC until the frame's VU1 output is in stream order; this applies to the in-process
+  // hw sink as well (TASK-027), whose VSYNC flushes and presents the frame.
+  if (g_defer_vsync) {
+    g_pending_vsync = odd_field;
+    g_has_pending_vsync = true;
+    return;
+  }
   if (const InProcessSink *sink = hw_sink()) return sink->vsync(odd_field);
   if (Client *c = client()) c->vsync(odd_field);
+}
+
+void set_vsync_deferral(bool defer) { g_defer_vsync = defer; }
+
+bool post_pending_vsync() {
+  if (!g_has_pending_vsync) return false;
+  g_has_pending_vsync = false;
+  const bool field = g_pending_vsync;
+  if (const InProcessSink *sink = hw_sink()) {
+    sink->vsync(field);
+    return true;
+  }
+  if (Client *c = client()) c->vsync(field);
+  return true;
 }
 
 void on_gs_reset() {
@@ -1131,6 +1202,16 @@ void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms) {
   g_cursor_hide_delay_ms = std::clamp<std::uint32_t>(hide_delay_ms, 1, 60000);
 }
 
+void set_display_aspect_mode(DisplayAspectMode mode, std::uint32_t fill_aspect_millionths) {
+  const std::uint32_t target = mode == DisplayAspectMode::fill ? fill_aspect_millionths : 0;
+  g_display_aspect_wanted.store(static_cast<std::uint64_t>(mode) | (static_cast<std::uint64_t>(target) << 32));
+}
+
+std::uint32_t aspect_millionths(double ratio) {
+  if (!(ratio >= kMinFillAspect && ratio <= kMaxFillAspect)) return 0;
+  return static_cast<std::uint32_t>(std::floor(ratio * 1e6 + 0.5));
+}
+
 void set_worker_busy_source(std::uint64_t (*worker_busy_us)()) { g_worker_busy_us = worker_busy_us; }
 
 proto::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &end, std::uint64_t max_frame_us,
@@ -1168,9 +1249,10 @@ proto::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &e
     payload.worker_wait_us = per_frame(begin.worker_wait_us, end.worker_wait_us);
     payload.valid |= proto::kOsdStatStreamCosts | proto::kOsdStatWorkerWait;
     if (cpu_known) {
-      // The F8 summary formula (format_frame_summary): EE CPU plus the EE waits for the worker, readbacks and the GS.
-      payload.critical_path_us = payload.main_thread_cpu_us + payload.worker_wait_us + payload.readback_wait_us +
-                                 payload.backpressure_us;
+      // TASK-084 step 0: the same formula as format_frame_summary: the frame wall minus the pacer's sleep. The waits
+      // below are already inside the wall time, so they are reported, not added.
+      const std::uint32_t pacing = per_frame(begin.pacing_sleep_us, end.pacing_sleep_us);
+      payload.critical_path_us = payload.frame_time_avg_us > pacing ? payload.frame_time_avg_us - pacing : 0;
       payload.frame_budget_us = static_cast<std::uint32_t>(budget_ms * 1000.0 + 0.5);
       payload.valid |= proto::kOsdStatCriticalPath;
     }

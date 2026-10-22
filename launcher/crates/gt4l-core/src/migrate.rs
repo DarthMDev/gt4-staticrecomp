@@ -118,11 +118,14 @@ pub const SETTINGS: Chain = Chain {
     file: "settings.toml",
     key: "schema_version",
     first: 0,
-    current: 3,
+    current: 6,
     steps: &[
         Step { from: 0, apply: settings_0_to_1 },
         Step { from: 1, apply: settings_1_to_2 },
         Step { from: 2, apply: settings_2_to_3 },
+        Step { from: 3, apply: settings_3_to_4 },
+        Step { from: 4, apply: settings_4_to_5 },
+        Step { from: 5, apply: settings_5_to_6 },
     ],
 };
 
@@ -153,6 +156,97 @@ fn settings_1_to_2(document: &mut Value) -> Result<(), String> {
 fn settings_2_to_3(document: &mut Value) -> Result<(), String> {
     if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
         settings.entry("widescreen".to_string()).or_insert_with(|| Value::from("on"));
+    }
+    Ok(())
+}
+
+/// Schema 4: the Aspect ratio and Custom ratio rows (TASK-080, `GT4_DISPLAY_ASPECT`). A file of schema 3 has neither
+/// key; it gets the defaults written out ("auto" and 233 hundredths), so the file records what the game is sent. Values
+/// already present are kept.
+///
+/// A schema 3 file written by the 1.0.0 launcher may still hold the settings that 1.0.0 retired by a load-time rule
+/// (`settings::RETIRED_SETTINGS`): `input_resolution` and `widescreen` in `[settings]` and `[choices]`, and the PCSX2 GS
+/// `aspect` in `[gs]`. The Aspect ratio row replaces all of them, so this step drops them; the old 16:9/4:3 value is
+/// not carried over (1.0.0 always ran 16:9, and Auto is the new default). The ids are literal here on purpose: a
+/// migration step describes the files of its own time and never changes with later tables.
+fn settings_3_to_4(document: &mut Value) -> Result<(), String> {
+    if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        settings.remove("input_resolution");
+        settings.remove("widescreen");
+        settings.entry("aspect_ratio".to_string()).or_insert_with(|| Value::from("auto"));
+        settings.entry("aspect_custom".to_string()).or_insert_with(|| Value::from("233"));
+    }
+    if let Some(choices) = document.get_mut("choices").and_then(Value::as_object_mut) {
+        choices.remove("input_resolution");
+        choices.remove("widescreen");
+    }
+    if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
+        gs.remove("aspect");
+    }
+    Ok(())
+}
+
+/// Schema 5: seamless display (TASK-080 addendum, owner 2026-10-21). There is no aspect choice and no internal
+/// resolution choice any more: the aspect is the Resolution's shape and the internal resolution follows the
+/// Resolution and the Render scale (`display::display_plan`). This step drops `aspect_ratio` and `aspect_custom`
+/// (written by the schema 4 ultrawide test builds) from `[settings]` and `[choices]`, and the PCSX2 GS `upscale`
+/// (the old "Internal resolution" row) and `aspect` from `[gs]`; it adds `monitor` = "primary", `resolution` =
+/// "desktop" and `render_scale` = "100", so the file records what the game is sent. A schema 3 file (release 1.0.0)
+/// reaches this step through 3 -> 4 first, so both kinds of file end the same. Ids are literal on purpose (see
+/// `settings_3_to_4`).
+fn settings_4_to_5(document: &mut Value) -> Result<(), String> {
+    if let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) {
+        settings.remove("aspect_ratio");
+        settings.remove("aspect_custom");
+        settings.entry("monitor".to_string()).or_insert_with(|| Value::from("primary"));
+        settings.entry("resolution".to_string()).or_insert_with(|| Value::from("desktop"));
+        settings.entry("render_scale".to_string()).or_insert_with(|| Value::from("100"));
+    }
+    if let Some(choices) = document.get_mut("choices").and_then(Value::as_object_mut) {
+        choices.remove("aspect_ratio");
+        choices.remove("aspect_custom");
+    }
+    if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
+        gs.remove("upscale");
+        gs.remove("aspect");
+    }
+    Ok(())
+}
+
+/// Schema 6 (TASK-088, gt4-gs 1.2.0). Two changes, both in this one step (schema 6 is not released yet):
+///
+/// - Custom textures: the Load custom textures row (`[gs] texture_load`, default on) and the Precache row
+///   (`[gs] texture_precache`, default off) are gs-table rows. A value is kept in `[gs]` only when the user changed it,
+///   and an absent key takes the table default, so nothing is rewritten for them.
+/// - Resolution follows the desktop (owner, 2026-10-21). A stored Resolution equal to the desktop size of the stored
+///   Monitor becomes "desktop", so it follows the monitor's desktop at each start. The desktop size is known only from
+///   the Monitor identifier (`\\.\DISPLAY2@3440x1440` records the desktop when it was chosen, `display::desktop_at_save`).
+///   A file whose Monitor is "primary" records no desktop size: its Resolution is kept as it was (it cannot be told
+///   apart from a deliberate choice of that size). The rule is recorded here so that later readers know why.
+///
+/// - Performance Mode (TASK-091, release 1.2.1, owner 2026-10-22): the Readbacks row (`[gs] hw_download_mode`) is
+///   replaced by the Performance Mode toggle (`[gs] performance_mode`). A stored readback mode other than "accurate"
+///   becomes Performance Mode On ("no-readbacks"); "accurate", or no value, is Off, the default, which needs no key.
+///   The old key is dropped in both cases.
+///
+/// The backup of the old file is made by `config::prepare`, as for every step.
+fn settings_5_to_6(document: &mut Value) -> Result<(), String> {
+    if let Some(gs) = document.get_mut("gs").and_then(Value::as_object_mut) {
+        if let Some(old) = gs.remove("hw_download_mode") {
+            if old.as_str() != Some("accurate") {
+                gs.insert("performance_mode".to_string(), Value::from("no-readbacks"));
+            }
+        }
+    }
+    let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) else {
+        return Ok(());
+    };
+    let monitor = settings.get("monitor").and_then(Value::as_str).unwrap_or("primary").to_string();
+    let resolution = settings.get("resolution").and_then(Value::as_str).unwrap_or("desktop").to_string();
+    if let Some(desktop) = crate::display::desktop_at_save(&monitor) {
+        if crate::display::Size::parse(&resolution) == Some(desktop) {
+            settings.insert("resolution".to_string(), Value::from("desktop"));
+        }
     }
     Ok(())
 }
@@ -281,21 +375,93 @@ mod tests {
     fn settings_schema_zero_reaches_the_current_schema_and_keeps_its_values() {
         let mut document = json!({"settings": {"vsync": "fast"}});
         assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 0);
-        assert_eq!(document["schema_version"], json!(3));
+        assert_eq!(document["schema_version"], json!(6));
         assert_eq!(document["settings"]["vsync"], json!("fast"));
-        assert_eq!(document["settings"]["widescreen"], json!("on"));
+        assert!(document["settings"].get("widescreen").is_none(), "added by step 3, dropped by step 4");
+        assert!(document["settings"].get("aspect_ratio").is_none(), "added by step 4, dropped by step 5");
+        assert!(document["settings"].get("aspect_custom").is_none(), "added by step 4, dropped by step 5");
+        assert_eq!(document["settings"]["monitor"], json!("primary"));
+        assert_eq!(document["settings"]["resolution"], json!("desktop"));
+        assert_eq!(document["settings"]["render_scale"], json!("100"));
     }
 
     #[test]
-    fn schema_two_gets_widescreen_on_and_keeps_a_value_already_written() {
-        let mut missing = json!({"schema_version": 2, "settings": {"vsync": "on"}});
-        assert_eq!(migrate(&SETTINGS, &mut missing).unwrap(), 2);
-        assert_eq!(missing["schema_version"], json!(3));
+    fn a_release_1_0_0_file_drops_the_retired_keys_and_gets_aspect_auto() {
+        // A schema 3 file as the 1.0.0 launcher could leave it: the retired rows still stored (an older 1.0.0
+        // candidate wrote them, and 1.0.0 only ignores them on load), plus a GS aspect value.
+        let mut released = json!({
+            "schema_version": 3,
+            "settings": {"vsync": "fast", "input_resolution": "1080i", "widescreen": "off", "fullscreen": "on"},
+            "choices": {"input_resolution": true, "widescreen": true, "vsync": true},
+            "gs": {"aspect": "4:3", "fxaa": "true", "osd_fps": "true"},
+            "install": {"disc_path": "D:/gt4.iso"}
+        });
+        assert_eq!(migrate(&SETTINGS, &mut released).unwrap(), 3);
+        assert_eq!(released["schema_version"], json!(6));
+        assert!(released["settings"].get("aspect_ratio").is_none());
+        assert_eq!(released["settings"]["monitor"], json!("primary"));
+        assert_eq!(released["settings"]["resolution"], json!("desktop"));
+        assert_eq!(released["settings"]["render_scale"], json!("100"));
+        for retired in ["input_resolution", "widescreen"] {
+            assert!(released["settings"].get(retired).is_none(), "{retired} dropped from [settings]");
+            assert!(released["choices"].get(retired).is_none(), "{retired} dropped from [choices]");
+        }
+        assert!(released["gs"].get("aspect").is_none(), "the GS aspect is replaced by the Aspect ratio row");
+        assert_eq!(released["settings"]["vsync"], json!("fast"), "other values survive");
+        assert_eq!(released["choices"]["vsync"], json!(true));
+        assert_eq!(released["gs"]["fxaa"], json!("true"));
+        assert_eq!(released["gs"]["osd_fps"], json!("true"), "forced GS rows stay with the load-time rule");
+        assert_eq!(released["install"]["disc_path"], json!("D:/gt4.iso"));
+
+    }
+
+    #[test]
+    fn an_ultrawide_test_build_file_drops_aspect_and_upscale_and_gets_the_display_rows() {
+        // A schema 4 file as the TASK-080 test builds wrote it (the owner's real file): a custom ratio and a chosen
+        // internal resolution.
+        let mut file = json!({
+            "schema_version": 4,
+            "settings": {"aspect_ratio": "custom", "aspect_custom": "244", "vsync": "on", "fullscreen": "off"},
+            "choices": {"aspect_ratio": true, "aspect_custom": true, "fullscreen": true},
+            "gs": {"upscale": "4K", "fxaa": "true"},
+            "install": {"disc_path": "D:/gt4.iso"}
+        });
+        assert_eq!(migrate(&SETTINGS, &mut file).unwrap(), 4);
+        assert_eq!(file["schema_version"], json!(6));
+        for gone in ["aspect_ratio", "aspect_custom"] {
+            assert!(file["settings"].get(gone).is_none(), "{gone} dropped from [settings]");
+            assert!(file["choices"].get(gone).is_none(), "{gone} dropped from [choices]");
+        }
+        assert!(file["gs"].get("upscale").is_none(), "the internal resolution follows the Resolution now");
+        assert_eq!(file["gs"]["fxaa"], json!("true"));
+        assert_eq!(file["settings"]["monitor"], json!("primary"));
+        assert_eq!(file["settings"]["resolution"], json!("desktop"));
+        assert_eq!(file["settings"]["render_scale"], json!("100"));
+        assert_eq!(file["settings"]["fullscreen"], json!("off"), "other values survive");
+        assert_eq!(file["choices"]["fullscreen"], json!(true));
+        assert_eq!(file["install"]["disc_path"], json!("D:/gt4.iso"));
+
+        // Values already present (a file edited by hand) are kept.
+        let mut kept = json!({"schema_version": 4, "settings": {"render_scale": "150", "resolution": "2560x1080"}});
+        migrate(&SETTINGS, &mut kept).unwrap();
+        assert_eq!(kept["settings"]["render_scale"], json!("150"));
+        assert_eq!(kept["settings"]["resolution"], json!("2560x1080"));
+    }
+
+    #[test]
+    fn schema_two_step_adds_widescreen_on_and_keeps_a_value_already_written() {
+        // The 2 -> 3 step as shipped; step 4 removes the key again (tested above).
+        let mut missing = json!({"settings": {"vsync": "on"}});
+        settings_2_to_3(&mut missing).unwrap();
         assert_eq!(missing["settings"]["widescreen"], json!("on"));
 
-        let mut off = json!({"schema_version": 2, "settings": {"widescreen": "off"}});
-        migrate(&SETTINGS, &mut off).unwrap();
+        let mut off = json!({"settings": {"widescreen": "off"}});
+        settings_2_to_3(&mut off).unwrap();
         assert_eq!(off["settings"]["widescreen"], json!("off"));
+
+        let mut chained = json!({"schema_version": 2, "settings": {"vsync": "on"}});
+        assert_eq!(migrate(&SETTINGS, &mut chained).unwrap(), 2);
+        assert_eq!(chained["schema_version"], json!(6));
     }
 
     #[test]
@@ -307,5 +473,28 @@ mod tests {
         let mut chosen = json!({"schema_version": 1, "settings": {"fullscreen": "off"}, "choices": {"fullscreen": true}});
         migrate(&SETTINGS, &mut chosen).unwrap();
         assert_eq!(chosen["settings"]["fullscreen"], json!("off"));
+    }
+
+    #[test]
+    fn a_non_accurate_readback_mode_becomes_performance_mode_on_and_the_old_key_goes() {
+        for old in ["unsynchronized", "no-readbacks", "enabled-force-full", "disabled"] {
+            let mut document = json!({"schema_version": 5, "gs": {"hw_download_mode": old, "fxaa": "true"}});
+            assert_eq!(migrate(&SETTINGS, &mut document).unwrap(), 5, "{old}: returns the schema it started from");
+            assert_eq!(document["gs"]["performance_mode"], json!("no-readbacks"), "{old}");
+            assert!(document["gs"].get("hw_download_mode").is_none(), "{old}");
+            assert_eq!(document["gs"]["fxaa"], json!("true"), "other values are kept");
+        }
+    }
+
+    #[test]
+    fn an_accurate_or_missing_readback_mode_leaves_performance_mode_off() {
+        let mut accurate = json!({"schema_version": 5, "gs": {"hw_download_mode": "accurate"}});
+        migrate(&SETTINGS, &mut accurate).unwrap();
+        assert!(accurate["gs"].get("hw_download_mode").is_none(), "the old key is dropped");
+        assert!(accurate["gs"].get("performance_mode").is_none(), "absent is Off, the default");
+
+        let mut missing = json!({"schema_version": 5, "gs": {"fxaa": "false"}});
+        migrate(&SETTINGS, &mut missing).unwrap();
+        assert!(missing["gs"].get("performance_mode").is_none());
     }
 }

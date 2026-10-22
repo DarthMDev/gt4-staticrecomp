@@ -1,12 +1,113 @@
 # Current Status
 
+## Release 1.2.2 published (2026-10-22, TASK-084, PR #82)
+
+Launcher 1.2.1 at version 1.2.2 with the TASK-084 game build slice262 (owner tested and approved). Installer
+`GT4Recomp-Setup-1.2.2.exe` (28,862,899 bytes, sha256 `6ecab016197fa2869261f9d3fd4ca099cb974b576ff05e1dc7b284847628a35f`),
+gt4-gs unchanged (1.2.0). Release notes: [1.2.2](release-notes/1.2.2.md). Follow-up: TASK-092 (MTVU test switches).
+
+## Frame cost, runtime side (2026-10-22, TASK-084, DONE, branch `task/084-frame-cost-122`, owner approved)
+
+The study's missing F8 instrumentation and items 2-4 are implemented; item 1 (deferred flare readback) stays out
+by owner decision (readback work belongs to CoreGS 2.0). New runtime switches, all on by default:
+`GT4_MTVU_CHAIN` (one MTVU job per VIF1 DMA chain), `GT4_GIF_FASTPATH` (no second GS stream walk),
+`GT4_MTVU_VBLANK_JOURNAL` (VBlank as a journal entry in pcsx2 mode). Release-candidate build `slice262`
+(pin `docs/inputs/slice262-pcsx2.json`; mode `pcsx2` points at it for the owner test). Checks: CTest 40/40; the
+Python suite with the new `tests/python/test_frame_cost.py`; menus 41/41, day race 15/15 and night race 15/15 frame
+dumps and the GS stream session hash identical to release 1.2.0 (slice240); `GT4_MTVU_VERIFY=1` with 0
+mismatches in 4,200 frames. **Owner in-game test 2026-10-22 approved** (session
+`session-20261022-163408-808184`, 0 late frames in every scene, picture unchanged): showroom critical path
+6.06 ms/frame with 35.8 VIF jobs/frame, Nordschleife TT 480p 6.13 with 58.6, night race 9.97 with 80.4 (the
+TASK-041 owner baseline was 11.8). The night-race download wait and the GS readbacks stay out of scope
+(TASK-041 Performance Mode and CoreGS 2.0). Numbers, build recipe and the owner F7/F8 checklist:
+[BUILD slice 260/262](BUILD.md). PR into main opened; the reviewer merges main (launcher 1.2.1) and builds
+release 1.2.2.
+
+## Release 1.2.1 prepared (2026-10-22, TASK-091, branch `task/091-install-layout-121`, waiting for owner test)
+
+Owner decisions: per-machine install in `C:\Program Files\GT4Recomp` (administrator rights, any folder allowed); the
+large data in `<install>\data` (found relative to `GT4Recomp.exe`, so the folder is portable; Users get Modify on that
+folder only); settings, controls, saves and replays per Windows user in `%APPDATA%\GT4Recomp`. The launcher moves the
+1.2.0 files at its first start (user data copied and checked, the Documents folder renamed with a README; game files
+renamed or copied, checked and then removed) and removes the old per-user program install; the self-update starts the
+elevated setup through the UAC prompt. Game build and gt4-gs unchanged (slice240, gt4-gs 1.2.0). Owner test installer
+`private/slice250-installer/GT4Recomp-Setup-1.2.1-test.exe` (28,838,764 bytes, sha256
+`333d72bcbc05066f020244b32c1c0a1e890da635451f757586498c1bf7316fb6`), not run on this PC; nothing published. Details:
+[BUILD slice 250](BUILD.md), [TASK-091](../TASKS.md), [release notes 1.2.1](release-notes/1.2.1.md), journal 2026-10-22.
+
+## Release 1.2.0 prepared (2026-10-21, TASK-088, branch `task/088-custom-textures-120`, waiting for owner test)
+
+Owner decisions: custom textures in gt4-gs (load only; folder `Documents\Gran Turismo 4\Textures`, Graphics option
+"Load custom textures" on by default, Advanced "Precache custom textures" off, "Open textures folder"), the bottom crop
+of 2 native rows, and a black window from the first frame. Versions: GT4Recomp 1.2.0 and gt4-gs 1.2.0 (the launcher needs
+gt4-gs 1.2.0 at least). Settings schema 6 (backup kept). Game build `slice240` (`docs/inputs/slice240-pcsx2.json`).
+Local artifacts, nothing published: gt4-gs package `private/slice240-gt4gs-120/gt4-gs-1.2.0-windows-x64.zip`
+(branch `gt4gs/textures-1.2.0`, commit `c9dc54e93`); owner installer `private/slice240-installer/GT4Recomp-Setup-1.2.0-test.exe`
+(28,765,729 bytes, sha256 `0edcfefe3a143c180bdc1255357780d414aac9cd1e60bf65fc6b583648187ec7`); helper
+`private/slice240-gt4gs-120/install-gt4gs-1.2.0-test.ps1` for the local gt4-gs. Details: [BUILD slice 240](BUILD.md),
+[TASK-088](../TASKS.md), journal 2026-10-21. Owner test pending: white start, crop, the texture folder with a real pack.
+## CoreGS independent launcher candidate (2026-10-21, TASK-089)
+
+Branch `task/089-coregs-independent-launcher`, baseline main `6422988`. Selecting CoreGS 1.1 now
+skips the optional PCSX2 GS installer during setup, automatic package repair at startup and background
+renderer release queries. Launcher updates and explicit manual renderer updates remain available.
+Play also avoids inspecting an unused external renderer executable. Synthetic setup/launch and injected
+release-request controls pass: the full Rust launcher workspace passes on Windows, including 53 Tauri tests
+(one real-disc flow ignored). Maintainer launcher acceptance remains pending. Branch audit and limits:
+[renderer independence](reverse-engineering/renderer-independence-2026-10-21.md).
+No renderer implementation, game executable, input pins or saves changed. CoreGS 2.0 is not enabled by this change.
+Contribution: [PR #72](https://github.com/moesuito/gt4-staticrecomp/pull/72), from the
+`JulioHeroZ/gt4-staticrecomp` fork; implementation commit `aa51f2a`. Awaiting maintainer acceptance.
+
+
+## Launcher self-update fixed (2026-10-21, TASK-085, branch `task/085-launcher-self-update`)
+
+Owner report: launcher 1.0.0 offered 1.1.0, closed after the download and installed nothing. The setup joined the
+launcher's kill-on-close job and died with it; now it leaves the job (`CREATE_BREAKAWAY_FROM_JOB`, Explorer fallback).
+Release v1.1.0 went back to draft (0 installer downloads) and was rebuilt: launcher GT4Recomp.exe 16,010,752 bytes,
+sha256 `884f4e9b4a17e54ead031bca744534ca9f50e8b94d988e0ff92b83f897979c77`; installer
+`private/release-110b-out/GT4Recomp-Setup-1.1.0.exe` 28,761,196 bytes, sha256
+`6ad624307370998142bdfcacbd330f6cbe6a17e70e35c8ab5a2d44db8097da0d` (same game files, slice218). Launchers 1.0.0 cannot
+self-update; the release notes tell those users to run the setup.
+
+## Release 1.1.0 prepared (2026-10-21, branch `task/080-aspect-ratios`, draft release, not merged)
+
+TASK-080 is done: the owner tested slice218 on ultrawide and approved ("funcionou perfeitamente"). Release prep on the
+branch: version 1.1.0 (Cargo workspace, `tauri.conf.json`, NSIS default; release notes
+[1.1.0](release-notes/1.1.0.md)); the launcher's Settings has no Display tab any more (Graphics holds the Display,
+Graphics and Advanced sections; `#/settings/display` falls back to Graphics); the launcher's gt4-gs minimum is 1.1.0 and
+an older install is replaced at launch (`gs_release::needs_install`); `version.json` is brought in line with the
+installed versions at start. Game executable unchanged (slice218, pin `docs/inputs/slice218-pcsx2.json`). Installer
+`private/release-110-out/GT4Recomp-Setup-1.1.0.exe` (sha256 `2ca0f80f8eb28023ffabe2446a30ffcdb6a139a0d96ac101fd6bc56fa7dd19de`) on a draft GitHub release v1.1.0; the coordinator
+merges and publishes. Open follow-ups: P3 progressive menus (with TASK-078); split screen and photo mode in ultrawide
+unverified. README: ultrawide headline, no emojis.
+
+## TASK-080 ultrawide (2026-10-21, branch `task/080-aspect-ratios`, not merged)
+
+Rebuilt on the 1.0.0 release recipe after merging main db99f9e: slice215 = `--mode pcsx2` on the branch (slice214 plus
+native display aspect ratios: `GT4_DISPLAY_ASPECT`, auto by default; race camera Hor+/Vert+ hook; race view filled,
+menus 16:9; protocol 1.3 for gt4-gs 1.1.0; launcher Aspect ratio row, settings schema 4 migrating the 1.0.0 file).
+16:9 frames byte-identical to slice214. Owner test installer `private/release-110-test-out/GT4Recomp-Setup-ultrawide-test.exe`
+(app version 1.0.0, no GitHub release). Waiting for the owner tests and approval; planned as GT4Recomp 1.1.0. Details:
+[BUILD](BUILD.md) slice 215 (and 212b), decision [0071](decisions/0071-native-aspect-ratios-runtime-hooks.md).
+
+P2 (slice217, `--mode pcsx2` on the branch): the race HUD stays the game's 16:9 layout, undistorted and centred, at any
+ratio (HUD canvas hook at `RaceDisplay::render`; race font x scale and mirror divisor through the ELF patch table and the
+re-translated library profile `aspect`); split screen stays 16:9. Protocol 1.3 fill carries the target aspect so a custom
+ratio is letterboxed (CoreGS 1.1 already was; gt4-gs needs a release that reads it). 16:9 byte-identical (menus 42/42,
+race 160/160). New owner installer and the portable folder `private/ultrawide-test-portable`. Details: [BUILD](BUILD.md)
+slice 217.
+
+Addendum (slice218, `--mode pcsx2` on the branch, owner design 2026-10-21): seamless display. No Aspect ratio and no
+Internal resolution rows: the aspect is always the chosen Resolution's shape (16:9 unchanged; other ratios turn P1/P2
+on), Display has Monitor and Resolution (real monitors and modes), Graphics has Render scale 50-200% with the resulting
+internal resolution (k = ceil(max(W/640, H/448)), whole multipliers 1..12). Game: `GT4_OUTPUT_SIZE`, `GT4_MONITOR`,
+per-monitor DPI awareness. Settings schema 5. 16:9 byte-identical (menus 42/42, race 160/160). New owner installer and
+portable folder. Details: [BUILD](BUILD.md) slice 218, decision 0071 addendum.
+
 ## Current state (2026-10-21)
 
-**TASK-027 CoreGS 2.0 (2026-10-22, Claude):** local slice247 waits for owner test 5 (windowed, flat 60 FPS check):
-owner test 4 gave 60 FPS with about 18 ms spikes; since then the GS stream runs on its own thread, progressive frames
-are composed on the GPU, the GIF strip decoder (study S1), fewer barriers, decode reuse and deferred CLUT loads
-(IN-363..IN-370). Headless 480p race: GS thread 10.3-11.2 ms CPU per frame, GPU busy about 6.9 ms; memory, dumps and
-race frames identical to the reference paths ([PROGRESS](hw-renderer-spec/PROGRESS.md), efficiency table).
+**TASK-027 CoreGS 2.0 (2026-10-22, Claude):** owner test 5 on local slice247 approved (flat 60 FPS in the Nordschleife Time Trial, a night race and Opera Paris; 0 dropped frames; colours, textures and flares as GSdx at 1x). The branch now merges `main` 1.2.2 (TASK-084 VBlank journal, chain jobs, GIF fast path): the held VSYNC reaches the hw sink in stream order (fixture `hw_stream_sink_deferred_vsync`); hw memory hashes, menu dumps and race frames identical to slice247 on local slice248. The merge also fixes a donor-mode crash present in release 1.2.2 (an uninitialised `post_vsync` callback in `mtvu::Donor`: `GT4_RENDERER` unset crashed at the first VBlank; default renderer 42/42 = slice214 again). Next: upscaling and anti-aliasing (M12), see [PROGRESS](hw-renderer-spec/PROGRESS.md).
 
 **TASK-027 CoreGS 2.0 resumed (owner decision, 2026-10-21):** development branch `task/027-coregs2` (worktree
 `C:\Antigravity\gt4-wt-027-coregs2`) = `main` 1.0.0 + the paused TASK-027 work, without paraLLEl-GS. With
@@ -703,3 +804,8 @@ launcher constraints, hypotheses to test, fresh producer/manifest requirements,
 manual feedback iterations and save protection. Initial source baseline is
 cbccf80; executing agent must recheck HEAD. No profiling, build or game run occurred
 while preparing this handoff. Maintain documentation and new comments in en-US.
+
+**Round 2 (same day):** launcher `49d25309...` and owner installer `private\slice243-installer\GT4Recomp-Setup-1.2.0-test.exe`
+(28,771,288 bytes, sha256 `92666e14386d92fa5098f69a0aab4ae452c1e8978e3329abfd606ed606f0e585`). Adds: monitor names
+without resolution, Resolution default "desktop" (follows the desktop at each start), every gt4-gs value enabled, the
+renderer choice in setup and the GSdx switch in Settings, the GSdx naming, and PR #72 (TASK-089) merged.

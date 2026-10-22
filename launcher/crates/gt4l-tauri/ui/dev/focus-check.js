@@ -4,17 +4,20 @@
  * page and body[data-focus-check] is "pass" or "fail".
  *
  *   (no query)          the sidebar walk over every tab, Saves and Replays entry, B back, value changes, the
- *                       Advanced section inside Graphics (no Advanced tab; the D-pad reaches its rows), and the
+ *                       Display, Graphics and Advanced sections inside Graphics (no Display or Advanced tab; the
+ *                       D-pad walks through all three), and the
  *                       Controls page (entry on the DS2, spatial moves, rebind and cancel, conflict and swap, live
  *                       input from a still dev pad, Y reset, X reset all)
  *   ?scenario=4k        only sets the state for docs/launcher/shots/graphics-4k-updated.png (4K chosen, row shown)
  *   ?scenario=advanced  only sets the state for docs/launcher/shots/graphics-advanced-section.png (pad focus on the
  *                       first Advanced row inside Graphics)
+ *   ?scenario=render    only sets the state for docs/launcher/shots/graphics-sections.png (pad focus on Render scale,
+ *                       the Graphics section in view)
  */
 (function (root) {
   "use strict";
   var GT4 = root.GT4;
-  var TABS = ["graphics", "display", "controls", "saves", "replays", "about"];
+  var TABS = ["graphics", "controls", "saves", "replays", "about"];
   var lines = [];
   var failures = 0;
 
@@ -149,8 +152,34 @@
   // Changed values show on screen at once and stay after the table is read again.
   async function valueChecks() {
     await setHash("#/settings/graphics");
-    var select = document.querySelector("button.select[data-setting=\"upscale\"]");
-    check("internal resolution is on the Graphics tab", !!select, "no control");
+    // TASK-080 addendum: no Internal resolution or Aspect ratio row; Render scale shows the resulting resolution.
+    var gone = document.querySelector(".content [data-setting=\"upscale\"], .content [data-setting=\"aspect_ratio\"], " +
+      ".content [data-setting=\"aspect_custom\"]");
+    check("no internal resolution or aspect row is shown", !gone, gone ? gone.getAttribute("data-setting") : "");
+    var scale = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+    check("render scale is a slider on the Graphics tab", !!scale, "no control");
+    var readout = scale && scale.parentNode.querySelector(".val");
+    check("the render scale readout shows the resulting resolution", !!readout && readout.textContent === "100% \u00B7 3x \u00B7 1920x1344",
+      readout ? readout.textContent : "none");
+    if (scale) {
+      scale.focus({ preventScroll: true });
+      scale.dispatchEvent(new CustomEvent("gt4-adjust", { detail: { delta: 1 } }));
+      await wait(300);
+      var after = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+      var afterReadout = after && after.parentNode.querySelector(".val");
+      check("one step right gives 125% and 4x", !!afterReadout && afterReadout.textContent === "125% \u00B7 4x \u00B7 2560x1792",
+        afterReadout ? afterReadout.textContent : "none");
+      var scaleFocus = document.activeElement && document.activeElement.getAttribute("data-setting");
+      check("focus stays on the render scale slider", scaleFocus === "render_scale", "focus " + scaleFocus);
+      after.dispatchEvent(new CustomEvent("gt4-adjust", { detail: { delta: -1 } }));
+      await wait(300);
+    }
+
+    await setHash("#/settings/graphics");
+    var select = document.querySelector("[data-section=\"display\"] button.select[data-setting=\"resolution\"]");
+    check("resolution is in the Display section of Graphics", !!select, "no control");
+    check("monitor is in the Display section of Graphics",
+      !!document.querySelector("[data-section=\"display\"] button.select[data-setting=\"monitor\"]"), "no control");
     if (!select) {
       return;
     }
@@ -159,20 +188,25 @@
     select.click();
     await wait(150);
     var option = Array.prototype.filter.call(document.querySelectorAll(".modal .option"), function (item) {
-      return item.textContent.indexOf("4K (6x)") === 0;
+      return item.textContent.indexOf("1280x720") === 0;
     })[0];
-    check("the resolution list offers 4K", !!option, "no 4K option");
+    check("the resolution list offers the monitor's modes", !!option, "no 1280x720 option");
     if (option) {
       option.click();
       await wait(300);
     }
-    var label = document.querySelector("button.select[data-setting=\"upscale\"] span");
-    check("the resolution row shows 4K (6x) after the change", !!label && label.textContent === "4K (6x)", label ? label.textContent : "none");
+    var label = document.querySelector("button.select[data-setting=\"resolution\"] span");
+    check("the resolution row shows 1280x720 after the change", !!label && label.textContent === "1280x720", label ? label.textContent : "none");
     var table = await GT4.backend.call("get_settings_table");
-    var row = GT4.settingsModel.findRow(table, "upscale");
-    check("the table holds 4K after the change", !!row && row.current === "4K", row ? String(row.current) : "no row");
+    var row = GT4.settingsModel.findRow(table, "resolution");
+    check("the table holds 1280x720 after the change", !!row && row.current === "1280x720", row ? String(row.current) : "no row");
+    var scaleRow = GT4.settingsModel.findRow(table, "render_scale");
+    check("the render scale readout follows the resolution", scaleRow.values.labels["100"] === "100% \u00B7 2x \u00B7 1280x896",
+      scaleRow.values.labels["100"]);
     var focused = document.activeElement && document.activeElement.getAttribute("data-setting");
-    check("focus stays on the changed control", focused === "upscale", "focus " + focused);
+    check("focus stays on the changed control", focused === "resolution", "focus " + focused);
+    await GT4.backend.call("set_setting", { id: "resolution", value: "1920x1080" });
+    await setHash("#/settings/graphics");
 
     var toggle = document.querySelector("button.toggle[data-setting=\"fxaa\"]");
     check("anti-aliasing is a toggle on Graphics", !!toggle, "no control");
@@ -208,39 +242,69 @@
 
   async function advancedSectionChecks() {
     check("the tab list has no Advanced tab", !sideButton("advanced"), "an Advanced tab is shown");
+    check("the tab list has no Display tab", !sideButton("display"), "a Display tab is shown");
     await setHash("#/settings/advanced");
     check("#/settings/advanced falls back to Graphics", shownTab() === "graphics", "shown " + shownTab());
+    await setHash("#/settings/display");
+    check("#/settings/display falls back to Graphics", shownTab() === "graphics", "shown " + shownTab());
     await setHash("#/settings/graphics");
-    var head = document.querySelector(".content .section-head");
-    check("Graphics shows an Advanced section heading", !!head && head.textContent === "Advanced", head ? head.textContent : "none");
-    var firstAdvanced = document.querySelector(".content .settings-section [data-setting]");
+    var heads = Array.prototype.map.call(document.querySelectorAll(".content .section-head"), function (item) {
+      return item.textContent;
+    }).join("|");
+    check("Graphics shows the Display, Graphics and Advanced sections in order", heads === "Display|Graphics|Advanced", heads);
+    var displayIds = Array.prototype.map.call(document.querySelectorAll("[data-section=\"display\"] .row"), function (item) {
+      return item.getAttribute("data-row");
+    }).join("|");
+    check("the Display section holds Monitor, Resolution, Fullscreen and VSync", displayIds === "monitor|resolution|fullscreen|vsync", displayIds);
+    var graphicsSection = document.querySelector("[data-section=\"graphics\"]");
+    var inGraphics = !!graphicsSection && ["renderer", "render_scale", "fxaa"].every(function (id) {
+      return !!graphicsSection.querySelector("[data-row=\"" + id + "\"]");
+    });
+    check("the Graphics section holds Renderer, Render scale and FXAA", inGraphics, "missing rows");
+    var looseRows = document.querySelectorAll(".content > .row").length;
+    check("every Graphics row sits in a section", looseRows === 0, looseRows + " loose rows");
+    var firstAdvanced = document.querySelector("[data-section=\"advanced\"] [data-setting]");
     var firstId = firstAdvanced ? firstAdvanced.getAttribute("data-setting") : null;
     check("the Advanced section holds the advanced rows", firstId === "async_gs", "first " + firstId);
     press("ArrowRight");
     await wait(200);
+    // Without a remembered row, A enters on the first control of the tab (settings.js focusRow): Monitor, at the top of
+    // Display. Earlier checks left a remembered row, so the walk starts from Monitor explicitly.
+    var firstControl = document.querySelector(".content .ctl [data-setting]");
+    var firstControlId = firstControl ? firstControl.getAttribute("data-setting") : null;
+    check("the first control of Graphics is Monitor, at the top of Display", firstControlId === "monitor", "first " + firstControlId);
+    if (firstControl) {
+      firstControl.focus({ preventScroll: true });
+    }
     var reached = false;
     var reset = false;
+    var passedGraphics = false;
     var walk = [];
-    for (var i = 0; i < 30 && !reset; i++) {
+    for (var i = 0; i < 60 && !reset; i++) {
       press("ArrowDown");
       await wait(80);
       var id = focusedSetting();
       walk.push(id || (document.activeElement ? document.activeElement.className : "none"));
       var active = document.activeElement;
-      if (active && active.closest && active.closest(".settings-section .row")) {
+      if (active && active.closest && active.closest("[data-section=\"graphics\"] .row")) {
+        passedGraphics = true; // a control or the "i" button of a Graphics row
+      }
+      if (active && active.closest && active.closest("[data-section=\"advanced\"] .row")) {
         reached = true; // a control or the "i" button of an Advanced row
       }
       if (id === "reset-defaults") {
         reset = true;
       }
     }
+    check("D-pad down from the Display rows passes through the Graphics rows", passedGraphics, "walk " + walk.join(" > "));
     check("D-pad down from the Graphics rows reaches the Advanced rows", reached, "walk " + walk.join(" > "));
     check("D-pad down reaches Reset to defaults at the end of the section", reset, "focus " + focusedSetting());
     check("the Graphics content footer offers Y Reset", /Reset/.test(footerText()), footerText());
-    var inSection = document.querySelector(".content .settings-section [data-setting=\"perf_overlay\"]");
+    var inSection = document.querySelector("[data-section=\"advanced\"] [data-setting=\"perf_overlay\"]");
     check("our performance overlay row is in the Advanced section", !!inSection, "no perf_overlay row");
     var osd = document.querySelector(".content [data-setting=\"osd_fps\"], .content [data-setting=\"aspect\"], " +
-      ".content [data-setting=\"input_resolution\"], .content [data-setting=\"widescreen\"]");
+      ".content [data-setting=\"input_resolution\"], .content [data-setting=\"widescreen\"], " +
+      ".content [data-setting=\"aspect_ratio\"], .content [data-setting=\"upscale\"]");
     check("no PCSX2 OSD, aspect, input resolution or widescreen row is shown", !osd, osd ? osd.getAttribute("data-setting") : "");
     press("ArrowUp");
     await wait(80);
@@ -254,10 +318,25 @@
     await setHash("#/settings/graphics");
     press("ArrowRight");
     await wait(200);
-    var first = document.querySelector(".content .settings-section [data-setting]");
+    var first = document.querySelector("[data-section=\"advanced\"] [data-setting]");
     if (first) {
       first.focus();
       first.scrollIntoView({ block: "center" });
+    }
+    await wait(300);
+  }
+
+  // The screenshot state of docs/launcher/shots/graphics-sections.png: pad focus on Render scale, centred, so the end
+  // of the Display section, the Graphics section and the start of Advanced are in view.
+  async function scenarioRender() {
+    GT4.nav.setMode("pad");
+    await setHash("#/settings/graphics");
+    press("ArrowRight");
+    await wait(200);
+    var scale = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+    if (scale) {
+      scale.focus();
+      scale.scrollIntoView({ block: "center" });
     }
     await wait(300);
   }
@@ -406,21 +485,22 @@
     delete GT4.devGamepads;
   }
 
-  // The screenshot state: Graphics with 4K chosen, the resolution row focused in pad mode.
+  // The screenshot state (scenario "4k", name kept for the screenshot list): Graphics with Render scale at 200%, the
+  // slider focused in pad mode (TASK-080 addendum: there is no Internal resolution row any more).
   async function scenario4k() {
     GT4.nav.setMode("pad");
     await setHash("#/settings/graphics");
     press("ArrowRight");
     await wait(200);
-    var select = document.querySelector("button.select[data-setting=\"upscale\"]");
-    select.focus({ preventScroll: true });
-    select.click();
-    await wait(150);
-    var option = Array.prototype.filter.call(document.querySelectorAll(".modal .option"), function (item) {
-      return item.textContent.indexOf("4K (6x)") === 0;
-    })[0];
-    if (option) {
-      option.click();
+    var scale = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+    if (scale) {
+      scale.focus({ preventScroll: true });
+      for (var i = 0; i < 4; i++) {
+        var current = document.querySelector("input[type=range][data-setting=\"render_scale\"]");
+        current.focus({ preventScroll: true });
+        current.dispatchEvent(new CustomEvent("gt4-adjust", { detail: { delta: 1 } }));
+        await wait(250);
+      }
     }
     await wait(400);
   }
@@ -435,6 +515,10 @@
       }
       if (scenario === "advanced") {
         await scenarioAdvanced();
+        return;
+      }
+      if (scenario === "render") {
+        await scenarioRender();
         return;
       }
       await routeChecks();

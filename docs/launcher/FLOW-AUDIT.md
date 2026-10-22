@@ -13,7 +13,7 @@ GT4Recomp.exe start
   single instance? (no: bring the first window forward, exit)
   data folder = GT4RECOMP_DATA_DIR or %LOCALAPPDATA%\GT4Recomp
   AppState::load: settings.toml (migrations), controls.toml, save library, pins
-  background thread check_on_launch: version.json; gt4-gs retry install (only when set up); update check
+  background thread check_on_launch: version.json; gt4-gs retry install (only when set up and selected); update check
   page boots -> app_state
       |
       +-- setup.state != done --> #/setup
@@ -21,13 +21,13 @@ GT4Recomp.exe start
       |      wrong_disc ..... reason + "Choose another file"
       |      failed ......... reason + "Try again" / "Choose another file"
       |      files_missing .. "Game files missing" + "Choose disc image"
-      |      checking ....... copying -> checking -> preparing -> renderer (bars, bytes, Cancel)
+      |      checking ....... copying -> checking -> preparing -> renderer when selected (bars, bytes, Cancel)
       |      done ........... "Ready" + Finish (opens Home; note when CoreGS 1.1 is used)
       |
       +-- setup.state == done --> #/home (slideshow, logo, Play, gear)
              Play -> prepare_play -> game::start -> tray hides the window
              game ends -> card harvested -> window back on Home with any message
-             Settings: Graphics, Advanced, Display, Controls, Saves, Replays, About
+             Settings: Graphics (Display, Graphics, Advanced sections), Controls, Saves, Replays, About
 ```
 
 ### Screens, commands and events
@@ -37,7 +37,7 @@ GT4Recomp.exe start
 | Boot (`app.js`) | `app_state` | `update-available`, `close-confirm`, `update-finished`, `renderer-progress` (toasts outside setup), `game-state` |
 | Setup | `app_state` (polled every 400 ms), `setup_choose_disc`, `setup_start`, `setup_cancel` (Finish runs no command) | (polls; `setup-progress`, `setup-finished` and `renderer-progress` are also emitted) |
 | Home | `app_state` (game_running), `about_info` (version label), `play`, `stop_game` | `game-state` |
-| Settings: Graphics, Advanced, Display | `get_settings_table`, `set_setting`, `reset_gs_settings_to_defaults` | |
+| Settings: Graphics (Display, Graphics, Advanced sections) | `get_settings_table`, `set_setting`, `reset_gs_settings_to_defaults` | |
 | Settings: Controls | `get_controls`, `capture_binding`, `cancel_capture`, `reset_binding`, `set_setting` (triggers) | `gamepad` (optional) |
 | Settings: Saves, Replays | `saves_list`, `saves_import`, `saves_activate`, `saves_delete`, `replays_list`, `replays_import`, `replays_delete` | |
 | Settings: About | `about_info`, `check_updates`, `open_game_files_folder`, `open_log_folder` | |
@@ -367,7 +367,8 @@ Screenshots (headless Edge, `--force-prefers-reduced-motion`, 1280 x 720, dev mo
 
 - `docs/launcher/shots/pad-sidebar-on-saves.png`: highlight on Saves, focus still in the tab list.
 - `docs/launcher/shots/pad-saves-entered.png`: after A, the first save is focused.
-- `docs/launcher/shots/graphics-4k-updated.png`: 4K chosen, the Internal resolution row shows 4K (6x).
+- `docs/launcher/shots/graphics-4k-updated.png`: regenerated 2026-10-21 (TASK-080 addendum): Render scale at 200%, the readout shows the resulting internal resolution (there is no Internal resolution row any more).
+- `docs/launcher/shots/graphics-sections.png`, `display-monitor-resolution.png`, `graphics-advanced-section.png`: regenerated 2026-10-21 (release 1.1.0): the Graphics tab with its Display, Graphics and Advanced sections; there is no Display tab.
 
 Build: `cargo tauri build --no-bundle` (no Cargo.toml change). Owner test copy replaced:
 `private/owner-test-launcher/GT4Recomp.exe`, SHA-256 `53a0ad0b36eeedcae865efe78c278bd867d3278e013f17a2df3b74c9c86450bd`
@@ -399,3 +400,20 @@ real `set_setting` round trip (the mock answers at once).
   item shape). Real exe run against a scratch `GT4RECOMP_DATA_DIR` holding a copy of the owner's old library and a
   scratch `GT4RECOMP_DOCUMENTS_DIR`: 6 files (1,533,775 bytes) moved and checked, old folders in
   `library.migrated-<t>`, a second start logs "already moved". Play was not pressed.
+
+
+## TASK-089 addendum — Explicit CoreGS choice (2026-10-21, candidate)
+
+A saved CoreGS 1.1 selection makes the external PCSX2 GS package optional throughout setup and
+startup: setup emits no renderer download progress and finishes normally; startup performs no package
+repair or external renderer release-list request. It still checks launcher releases. The player's
+explicit Check for updates and apply-update actions keep the existing optional renderer update path.
+Selecting PCSX2 retains its existing default setup, repair and release checks. Play does not inspect an
+external renderer executable when CoreGS is selected.
+
+New controls in `flow_audit::coregs_setup_and_play_need_no_external_renderer_package` use a synthetic
+ISO and an installer that panics if invoked, persist the choice, reload state and inspect the built-in
+launch plan. `updates::tests` inject release fetchers to assert the requested streams, preserve launcher
+offers and retain default PCSX2 repair/manual-check behavior. The full Rust workspace passed on Windows,
+including 53 Tauri tests (one real-disc flow ignored). Maintainer launcher acceptance remains pending;
+this addendum does not qualify renderer quality or a new game executable.

@@ -10,7 +10,7 @@ Launcher-owned files:
 
 | File | Where | Schema key | Schema today | Chain |
 |---|---|---|---|---|
-| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 3 | `migrate::SETTINGS` (first schema 0; schema 3 adds `widescreen`, TASK-079, retired again on 2026-10-21 by a load-time rule, see below) |
+| `settings.toml` | `%LOCALAPPDATA%\GT4Recomp\config\` | `schema_version` | 5 | `migrate::SETTINGS` (first schema 0; schema 3 adds `widescreen`, TASK-079, retired again on 2026-10-21 by a load-time rule, see below; schema 4 adds `aspect_ratio` = "auto" and `aspect_custom` = "233" and drops the retired keys, TASK-080; schema 5 drops the aspect keys and `[gs] upscale` and adds `monitor`, `resolution` and `render_scale`, TASK-080 addendum) |
 | `controls.toml` | `%LOCALAPPDATA%\GT4Recomp\` | `schema` | 1 (the file format is owned by `gt4controls`) | `migrate::CONTROLS` (first schema 1) |
 | `version.json` | install folder, or data folder when read-only | `schema` | 1 | `migrate::VERSION_FILE` (first schema 1) |
 | save library | `%LOCALAPPDATA%\GT4Recomp\library\` | none | a folder, not a single index file | not applicable yet; see below |
@@ -133,6 +133,50 @@ change). The owner fixed the game at 480p and 16:9 (until the ultrawide update),
 
 The schema 2 to 3 step (`settings_2_to_3`, adds `widescreen = "on"`) is kept as shipped ("never edit an old step"):
 its key is dropped by the rule above.
+
+## Schema 3 to 4: Aspect ratio (TASK-080, ultrawide update)
+
+`settings_3_to_4` (`migrate.rs`) reads the schema 3 file of the 1.0.0 launcher, including the keys 1.0.0 retired:
+
+- adds `aspect_ratio = "auto"` and `aspect_custom = "233"` (2.33:1) unless already present;
+- drops `input_resolution` and `widescreen` from `[settings]` and `[choices]`, and `aspect` from `[gs]`: the Aspect
+  ratio row is now the only aspect control. The old value is not carried over (1.0.0 always ran 16:9; Auto is the new
+  default). The ids are literal in the step, so later table changes never change what the step does;
+- keeps everything else, including the forced GS OSD rows (still dropped by the load-time rule above) and `[install]`.
+
+The launcher still always sends `GT4_FORCE_480P=1` and `GT4_FORCE_WIDESCREEN=1` (the game's own 16:9 is the base;
+Hor+/Vert+ is applied on top of it), and the gt4-gs.ini keeps `AspectRatio = 16:9`; the per-scene fill comes only from
+protocol 1.3 `display_aspect`. As every migration, the original is copied to `settings.toml.bak-schema3-<unix seconds>`
+first. Downgrade: the 1.0.0 launcher sees schema 4 as newer, uses its defaults in memory and never rewrites the file.
+Tests: `migrate.rs::a_release_1_0_0_file_drops_the_retired_keys_and_gets_aspect_auto`, `tests/config_migration.rs`,
+`tests/launch_contract.rs::settings_map_to_their_variables`.
+
+## Schema 4 to 5: seamless display (TASK-080 addendum, owner 2026-10-21)
+
+The owner removed every aspect and internal-resolution choice: the aspect is always the shape of the chosen Resolution
+and the internal resolution follows the Resolution and the Render scale (`gt4l_core::display::display_plan`).
+`settings_4_to_5` (`migrate.rs`):
+
+- drops `aspect_ratio` and `aspect_custom` from `[settings]` and `[choices]` (the schema 4 ultrawide test builds wrote
+  them; the owner's real file is one of these), and `upscale` (the old "Internal resolution" row) and `aspect` from
+  `[gs]`;
+- adds `monitor = "primary"`, `resolution = "desktop"` and `render_scale = "100"` unless already present, so the file
+  records what the game is sent;
+- keeps everything else (other `[gs]` values, `[choices]`, `[install]`, `[updates]`).
+
+A schema 3 file (release 1.0.0) runs 3 -> 4 and then 4 -> 5, so both kinds of file end the same. The original is
+copied to `settings.toml.bak-schema3-<t>` or `settings.toml.bak-schema4-<t>` first, as every migration. Load-time
+safety nets: `aspect_ratio` and `aspect_custom` are in `settings::RETIRED_SETTINGS` (ignored with a log line if a
+hand-edited schema 5 file holds them), and `Settings::set_gs` refuses `upscale` ("set by the launcher"); the gt4-gs.ini
+always gets `upscale_multiplier` from the display plan. Downgrade: a schema 4 launcher sees schema 5 as newer, uses
+defaults in memory and never rewrites the file. Tests: `migrate.rs::an_ultrawide_test_build_file_drops_aspect_and_upscale_and_gets_the_display_rows`,
+`tests/config_migration.rs::an_ultrawide_test_schema_4_file_is_backed_up_and_migrated_to_schema_five` and
+`::a_release_1_0_0_schema_3_file_is_backed_up_and_migrated_to_schema_five`.
+
+`monitor` holds `primary` or a stable identifier `<GDI device>@<W>x<H>` (the device name plus the monitor's desktop
+size, `display::monitor_id`), never an index; it resolves to the same device, then a monitor with the same desktop size,
+then the primary monitor. `resolution` holds `desktop` or `<W>x<H>`; a size the monitor does not support resolves to its
+desktop mode. Choosing another monitor resets `resolution` to `desktop`.
 
 ## What the migrations do not do
 

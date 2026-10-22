@@ -2,8 +2,9 @@
  * Router and boot. Routes (location.hash):
  *   #/setup                  first run (also shown until setup is done)
  *   #/home                   Play and Settings
- *   #/settings/<tab>         graphics | display | controls | saves | replays | about (mods only when GT4.features.mods;
- *                            Advanced is a section of Graphics, so #/settings/advanced falls back to graphics)
+ *   #/settings/<tab>         graphics | controls | saves | replays | about (mods only when GT4.features.mods;
+ *                            Display and Advanced are sections of Graphics, so #/settings/display and
+ *                            #/settings/advanced fall back to graphics)
  * Each page mounts into #app and sets GT4.hooks for the input layer.
  */
 (function (root) {
@@ -67,10 +68,26 @@
     if (parseRoute().name === "setup") {
       return;
     }
-    if (payload && payload.step === "failed") {
-      GT4.ui.toast("gt4-gs could not be installed. CoreGS 1.1 will be used.", true);
-    } else if (payload && payload.step === "done") {
+    var step = payload && payload.step;
+    // TASK-089 extension (1.2.0): a switch in Settings shows its progress inline, under the Renderer row.
+    var labels = { listing: "Finding GSdx…", downloading: "Downloading GSdx…", installing: "Installing…" };
+    if (GT4.setRendererStatus && labels[step]) {
+      GT4.setRendererStatus(labels[step]);
+    }
+    if (step === "failed") {
+      GT4.ui.toast("GSdx could not be installed. CoreGS 1.1 will be used.", true);
+    } else if (step === "done") {
       GT4.ui.toast("gt4-gs is ready.");
+    }
+  });
+  GT4.backend.listen("renderer-switched", function (payload) {
+    // Choosing GSdx in Settings finished: the notice, and the page shows the saved choice again.
+    if (GT4.setRendererStatus) {
+      GT4.setRendererStatus("");
+    }
+    GT4.ui.toast(payload && payload.message ? payload.message : "GSdx", !(payload && payload.ok));
+    if (parseRoute().name === "settings") {
+      GT4.go(root.location.hash);
     }
   });
   GT4.backend.listen("game-state", function (payload) {
@@ -82,15 +99,96 @@
     }
   });
 
+  // TASK-091 (1.2.1): the first start moves the files of GT4Recomp 1.2.0 to the new folders. While the game files
+  // move (in the background), a small status line shows the progress; Play and setup wait. The result is a toast,
+  // shown once per notice text.
+  var migrationBox = null;
+  var shownNotice = "";
+  // The status box: a label with the percentage on the right and a bar under it. Without a byte count (a move
+  // inside one drive) the bar slides and no percentage is shown.
+  function renderMigration(box, migration) {
+    var done = migration.bytes_done || 0;
+    var total = migration.bytes_total || 0;
+    var percent = total > 0 ? Math.min(100, Math.floor((done * 100) / total)) : -1;
+    if (!box.firstChild) {
+      var head = document.createElement("div");
+      head.className = "migration-head";
+      head.appendChild(document.createElement("span"));
+      head.appendChild(document.createElement("span"));
+      var bar = document.createElement("div");
+      bar.className = "migration-bar";
+      var fill = document.createElement("div");
+      fill.className = "migration-fill";
+      bar.appendChild(fill);
+      box.appendChild(head);
+      box.appendChild(bar);
+    }
+    var label = box.firstChild.firstChild;
+    var number = box.firstChild.lastChild;
+    var barNode = box.lastChild;
+    label.textContent = "Moving " + (migration.item || "game files") + " to the install folder…";
+    number.textContent = percent >= 0 ? percent + "%" : "";
+    barNode.classList.toggle("indeterminate", percent < 0);
+    barNode.firstChild.style.width = percent >= 0 ? percent + "%" : "";
+  }
+  function showMigration(appState) {
+    var migration = appState && appState.migration;
+    if (!migration) {
+      return;
+    }
+    if (migration.running) {
+      if (!migrationBox) {
+        migrationBox = document.createElement("div");
+        migrationBox.className = "migration";
+        migrationBox.setAttribute("role", "status");
+        migrationBox.setAttribute("aria-live", "polite");
+        document.body.appendChild(migrationBox);
+      }
+      renderMigration(migrationBox, migration);
+      root.setTimeout(function () {
+        GT4.backend.call("app_state").then(showMigration, function () {});
+      }, 700);
+      return;
+    }
+    if (migrationBox) {
+      migrationBox.parentNode.removeChild(migrationBox);
+      migrationBox = null;
+    }
+    if (migration.notice && migration.notice !== shownNotice) {
+      shownNotice = migration.notice;
+      GT4.ui.toast(migration.notice, !!migration.problem);
+    }
+  }
+  GT4.showMigration = showMigration;
+
+  // TASK-091 (1.2.1, WebView2 guard): the window stays hidden until the first screen has drawn. ui_ready is sent after
+  // the next animation frame, or after a short timer when the window is still hidden (a hidden web view may not run
+  // animation frames). The backend shows the window; a second call does nothing.
+  var readySent = false;
+  function signalReady() {
+    function send() {
+      if (readySent) {
+        return;
+      }
+      readySent = true;
+      GT4.backend.call("ui_ready").catch(function () {});
+    }
+    root.requestAnimationFrame(send);
+    root.setTimeout(send, 250);
+  }
+
   GT4.backend.call("app_state").then(function (appState) {
+    showMigration(appState);
     var route = parseRoute();
     if (!route.name) {
       go(appState.setup && appState.setup.state === "done" ? "#/home" : "#/setup");
     } else {
       render();
     }
+    signalReady();
   }, function (err) {
     render();
     GT4.ui.toast(GT4.errorText(err), true);
+    signalReady();
   });
 })(window);

@@ -122,6 +122,13 @@ class ProbeTests(unittest.TestCase):
                                 window=True, interactive=True, performance=True)
             self.assertFalse((root / 'private/perf').exists())
 
+    def test_performance_accepts_the_task076_keyboard_identity(self):
+        root = Path(__file__).resolve().parents[2]
+        manifest = (root / 'docs/inputs/slice262-pcsx2.json').resolve()
+        evidence = json.loads(manifest.read_text(encoding='utf-8'))
+        self.assertIn(evidence['keyboard_input_fix'], probe.PERFORMANCE_KEYBOARD_FIXES)
+        probe.verify_performance_profile(manifest, evidence, root)
+
     def capture_manifest(self, root):
         evidence = json.loads((root / 'docs/inputs/slice114-native-base.json').read_text())
         qualified = root / probe.CAPTURE_RUNTIME

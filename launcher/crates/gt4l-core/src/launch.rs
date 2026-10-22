@@ -12,6 +12,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use crate::display::{self, DisplayTarget};
 use crate::gs_release::Installed;
 use crate::gs_table;
 use crate::settings::{self, Settings};
@@ -62,17 +63,20 @@ pub struct Pcsx2Paths {
     pub cache: PathBuf,
     /// Data folder of the GS process (`%LOCALAPPDATA%\GT4Recomp\gs\data`).
     pub data_root: PathBuf,
+    /// The custom texture folder, `Documents\Gran Turismo 4\Textures` (TASK-088, gt4-gs `[Folders] Textures`).
+    pub textures: PathBuf,
 }
 
 impl Pcsx2Paths {
     /// The paths of an installed renderer, with the cache and data folders under the renderer root.
-    pub fn for_session(installed: &Installed, renderer_root: &Path, session_dir: &Path) -> Pcsx2Paths {
+    pub fn for_session(installed: &Installed, renderer_root: &Path, session_dir: &Path, textures: &Path) -> Pcsx2Paths {
         Pcsx2Paths {
             executable: installed.executable.clone(),
             executable_sha256: installed.executable_sha256.clone(),
             config: session_dir.join("gt4-gs.ini"),
             cache: renderer_root.join("cache"),
             data_root: renderer_root.join("data"),
+            textures: textures.to_path_buf(),
         }
     }
 }
@@ -86,6 +90,12 @@ pub enum RendererChoice {
     CoreGs11 { reason: Option<String> },
 }
 
+/// Whether the selected renderer needs the external PCSX2 GS package. CoreGS is built in, so choosing it
+/// must not trigger an automatic package download or release check.
+pub fn needs_external_renderer(settings: &Settings) -> bool {
+    settings.get("renderer") == settings::PCSX2_GS
+}
+
 /// Chooses the renderer of a session. PCSX2 GS is used when selected and installed; otherwise CoreGS 1.1 starts
 /// with a message. CoreGS 2.0 is not built, so it also starts CoreGS 1.1.
 pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> RendererChoice {
@@ -93,7 +103,7 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
         settings::PCSX2_GS => match installed {
             Some(_) => RendererChoice::Pcsx2,
             None => RendererChoice::CoreGs11 {
-                reason: Some("PCSX2 GS is not installed yet; this session uses CoreGS 1.1.".to_string()),
+                reason: Some("GSdx is not installed yet; this session uses CoreGS 1.1.".to_string()),
             },
         },
         _ => RendererChoice::CoreGs11 { reason: None },
@@ -105,12 +115,17 @@ pub fn choose_renderer(settings: &Settings, installed: Option<&Installed>) -> Re
 ///
 /// Mapping (setting -> variable):
 /// - Always `GT4_FORCE_480P=1`: the game always runs at 480p (owner, 2026-10-21; there is no setting).
-/// - Always `GT4_FORCE_WIDESCREEN=1`: the game's wide flag is held at 16:9 until the ultrawide update (owner,
-///   2026-10-21; TASK-079 hold, there is no setting).
+/// - Always `GT4_FORCE_WIDESCREEN=1`: the game's wide flag is held at 16:9 (owner, 2026-10-21; TASK-079 hold, there
+///   is no setting). Other screen shapes come from `aspect_ratio` on top of it.
 /// - `internal_scale` -> `PS2_SCALE=1|2|3`; `present_filter` -> `GT4_PRESENT_FILTER` (`auto` sends nothing);
 ///   `fsr_sharpness` -> `GT4_FSR_SHARPNESS` with the FSR filter; `deinterlacing` -> `GT4_DEINTERLACE`;
 ///   `anti_aliasing` -> `GT4_AA`. These are hidden in the UI (decision 0070) and keep their defaults.
-/// - `fullscreen` -> `GT4_FULLSCREEN` (1/0).
+/// - `fullscreen` -> `GT4_FULLSCREEN` (1/0): borderless fullscreen on the chosen monitor (there is no exclusive mode).
+/// - Always `GT4_DISPLAY_ASPECT=auto` (TASK-080 addendum, owner 2026-10-21: there is no aspect setting). With
+///   `GT4_OUTPUT_SIZE` (see [`display_environment`]) the game takes the ratio of the output size; the game's own 16:9
+///   stays the base (`GT4_FORCE_WIDESCREEN=1`) and Hor+/Vert+ is applied on top of it at other ratios.
+/// - `monitor` and `resolution` -> `GT4_MONITOR` and `GT4_OUTPUT_SIZE`, resolved against the connected monitors by the
+///   caller ([`display::resolve_target`]) and added by [`plan_launch`] / [`plan_pcsx2_launch`].
 /// - `vsync` -> `GT4_PRESENT_MODE` (on = fifo, fast = mailbox, off = immediate).
 /// - `async_gs` off -> `GT4_GS_SYNC=1`; on leaves it unset (asynchronous is the default).
 /// - `performance_report` on -> `GT4_PERF=1`.
@@ -137,7 +152,7 @@ pub fn game_environment(settings: &Settings) -> Vec<(String, String)> {
 
 /// The variables of a PCSX2 GS session: `GT4_RENDERER=pcsx2`, the process and its pin, the session INI, the
 /// folders, and the fixed 480p and 16:9 holds (see `add_common`). Readback is accurate unless the table row
-/// `hw_download_mode` says otherwise; it is written into the INI, so no variable is needed.
+/// `performance_mode` (Performance Mode, TASK-091) is On; it is written into the INI, so no variable is needed.
 pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String, String)> {
     let mut variables: BTreeMap<&'static str, String> = BTreeMap::new();
     variables.insert("GT4_RENDERER", "pcsx2".to_string());
@@ -152,11 +167,12 @@ pub fn pcsx2_environment(settings: &Settings, paths: &Pcsx2Paths) -> Vec<(String
 /// The variables shared by both renderers: the fixed 480p and 16:9 holds, display mode, present mode, async GS and
 /// diagnostics.
 fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Settings) {
-    // Fixed (owner, 2026-10-21): the game always runs at 480p and 16:9. No setting changes these, and no stored
+    // Fixed (owner, 2026-10-21): the game always runs at 480p with its own 16:9. No setting changes these, and no stored
     // value of the retired `input_resolution` or `widescreen` settings is read (settings::RETIRED_SETTINGS).
     variables.insert("GT4_FORCE_480P", "1".to_string());
     variables.insert("GT4_FORCE_WIDESCREEN", "1".to_string());
     variables.insert("GT4_FULLSCREEN", flag(settings.is_on("fullscreen")));
+    variables.insert("GT4_DISPLAY_ASPECT", "auto".to_string());
     variables.insert(
         "GT4_PRESENT_MODE",
         match settings.get("vsync") {
@@ -185,11 +201,43 @@ fn add_common(variables: &mut BTreeMap<&'static str, String>, settings: &Setting
     }
 }
 
+/// `GT4_MONITOR` (the monitor's device name) and `GT4_OUTPUT_SIZE` (`WxH`) for a resolved display target; nothing
+/// when no monitor is known (the game then opens on the primary monitor at its desktop size).
+pub fn display_environment(display: Option<&DisplayTarget>) -> Vec<(String, String)> {
+    match display {
+        Some(target) => vec![
+            ("GT4_MONITOR".to_string(), target.device.clone()),
+            ("GT4_OUTPUT_SIZE".to_string(), target.output.text()),
+        ],
+        None => Vec::new(),
+    }
+}
+
+/// The render plan of a session (TASK-080 addendum): the output size of the display target (1920 x 1080 when none is
+/// known) and the Render scale, for the PCSX2 GS. Never fails: an output the plan refuses falls back to 1920 x 1080.
+pub fn session_plan(settings: &Settings, display: Option<&DisplayTarget>) -> display::DisplayPlan {
+    let scale = settings.get("render_scale").parse::<u32>().unwrap_or(display::RENDER_SCALE_DEFAULT);
+    let output = display.map(|target| target.output).unwrap_or(display::FALLBACK_OUTPUT);
+    let fallback = || {
+        display::display_plan(
+            display::FALLBACK_OUTPUT.width,
+            display::FALLBACK_OUTPUT.height,
+            display::RENDER_SCALE_DEFAULT,
+            display::PCSX2_GS_CAPS,
+        )
+        .expect("1920x1080 at 100% is a valid plan")
+    };
+    display::display_plan(output.width, output.height, scale, display::PCSX2_GS_CAPS).unwrap_or_else(|_| fallback())
+}
+
 /// The gt4-gs.ini text of a session, rendered from the table (`gs_table::render_ini`, same rules as
 /// scripts/gs_settings.py). The vsync and mailbox rows follow the present mode the way the probe does:
-/// fifo writes both true, mailbox writes mailbox false, immediate writes vsync false.
-pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths) -> Result<String, String> {
+/// fifo writes both true, mailbox writes mailbox false, immediate writes vsync false. `upscale_multiplier` comes from
+/// the session plan ([`session_plan`]); a stored `upscale` value is never used (there is no such setting). With no
+/// display known and Render scale 100% the plan gives 3x, the table default, so that INI is unchanged.
+pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths, display: Option<&DisplayTarget>) -> Result<String, String> {
     let mut user: BTreeMap<String, String> = settings.gs_overrides().clone();
+    user.insert("upscale".to_string(), session_plan(settings, display).multiplier.to_string());
     let present = match settings.get("vsync") {
         "fast" => "mailbox",
         "off" => "immediate",
@@ -202,6 +250,7 @@ pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths) -> Result<String,
     let mut launcher: BTreeMap<String, String> = BTreeMap::new();
     launcher.insert("cache_folder".to_string(), paths.cache.display().to_string());
     launcher.insert("data_root".to_string(), paths.data_root.display().to_string());
+    launcher.insert("textures_folder".to_string(), paths.textures.display().to_string());
     gs_table::render_ini(&user, &launcher).map_err(|error| error.to_string())
 }
 
@@ -214,14 +263,25 @@ fn flag(on: bool) -> String {
     if on { "1" } else { "0" }.to_string()
 }
 
+/// Inherited variables that are passed through to the game although they carry a scrubbed prefix. Each one is a
+/// hidden owner test knob that the game validates itself (an invalid value refuses the start):
+/// - `GT4_ASPECT_FOV_EXTRA` (TASK-080 owner test T1, 0.5..3.0, default 1.0): an extra horizontal FOV factor on top of
+///   the geometry-correct Hor+ widening, to compare roundness. It is not a setting and no row writes it.
+pub const PASSED_THROUGH: &[&str] = &["GT4_ASPECT_FOV_EXTRA"];
+
 /// Whether an inherited variable must be removed for the game process.
 pub fn is_scrubbed(name: &str) -> bool {
-    SCRUBBED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
+    !PASSED_THROUGH.contains(&name) && SCRUBBED_PREFIXES.iter().any(|prefix| name.starts_with(prefix))
 }
 
 /// Plans one CoreGS 1.1 launch. Pure: it creates no files and starts no process.
-pub fn plan_launch(inputs: &LaunchInputs<'_>, settings: &Settings, inherited_names: &[String]) -> LaunchPlan {
-    plan_with(inputs, game_environment(settings), inherited_names)
+pub fn plan_launch(
+    inputs: &LaunchInputs<'_>,
+    settings: &Settings,
+    display: Option<&DisplayTarget>,
+    inherited_names: &[String],
+) -> LaunchPlan {
+    plan_with(inputs, with_display(game_environment(settings), display), inherited_names)
 }
 
 /// Plans one PCSX2 GS launch. Pure: the caller writes `paths.config` (see [`gs_config_text`]) before starting.
@@ -229,9 +289,16 @@ pub fn plan_pcsx2_launch(
     inputs: &LaunchInputs<'_>,
     settings: &Settings,
     paths: &Pcsx2Paths,
+    display: Option<&DisplayTarget>,
     inherited_names: &[String],
 ) -> LaunchPlan {
-    plan_with(inputs, pcsx2_environment(settings, paths), inherited_names)
+    plan_with(inputs, with_display(pcsx2_environment(settings, paths), display), inherited_names)
+}
+
+fn with_display(mut environment: Vec<(String, String)>, display: Option<&DisplayTarget>) -> Vec<(String, String)> {
+    environment.extend(display_environment(display));
+    environment.sort();
+    environment
 }
 
 fn plan_with(inputs: &LaunchInputs<'_>, environment: Vec<(String, String)>, inherited_names: &[String]) -> LaunchPlan {

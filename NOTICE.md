@@ -20,3 +20,10 @@ retrieval date, size and SHA-256 in `launcher/assets/brand/brand.toml`.
 - The derived files `logo-gt4.png`, `emblem-gt.png`, `cover-front.png`, `game.ico` and `launcher.ico`.
 
 A de-branded build replaces that folder with `launcher/assets/brand-neutral/`.
+
+## GSdx (the PCSX2 GS renderer)
+
+GSdx is the PCSX2 GS renderer of the PCSX2 project (https://pcsx2.net; the project made the emulator and its GS). The
+launcher offers it as the Graphics renderer "GSdx". It is the separate program `gt4-gs.exe`, built from the GPL-3.0-or-later
+fork `moesuito/gt4recomp-gs` (based on PCSX2 v2.8.2), downloaded only when it is selected. It runs in its own process and
+is not part of GT4Recomp's MIT code; the release archive carries its licence and source.

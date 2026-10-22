@@ -28,6 +28,7 @@ enum class RecordKind : std::uint16_t {
   VuReset = 3,    // EE -> worker: VU1 reset for a job
   Fence = 4,      // EE -> worker: state sync point for a job
   Stop = 5,       // EE -> worker: finish and exit
+  VifBatch = 6,   // TASK-084: EE -> worker: u32 count, then per packet a u32 qwc and qwc*16 bytes, one job
   Gif = 16,       // worker -> EE: GIF bytes for path `path`, in emission order
   JobDone = 17,   // worker -> EE: the last output of `job`
 };
@@ -50,20 +51,54 @@ constexpr std::size_t align_record(std::size_t bytes) { return (bytes + kRecordA
 constexpr std::size_t record_bytes(std::size_t payload) { return kRecordHeaderBytes + align_record(payload); }
 
 // Shared wakeup counter. Every publish or release calls ring(); waiters snapshot first, then check, then wait.
+// TASK-084 step 1 (slice261): one doorbell per direction and a sleeper count, so a ring only wakes the peer when the
+// peer is actually asleep; the caller can then wait for "my job N is done" on the other direction's bell. The wakeup
+// handshake is the standard count-flag / re-check / wait sequence, so a ring between the caller's check and the wait
+// cannot be lost. The count (not a flag) matters because two callers can legitimately share one bell: the EE waits for
+// worker progress while the worker can wait in emit_job_done for output space.
 class Doorbell {
  public:
+  struct Stats {
+    std::uint64_t rings = 0;    // ring() calls (every publish or release)
+    std::uint64_t waits = 0;    // wait_changed() calls
+    std::uint64_t wakeups = 0;  // wait_changed() calls that actually slept
+  };
+
   std::uint32_t snapshot() const { return value_.load(std::memory_order_acquire); }
 
   void ring() {
+    rings_.fetch_add(1, std::memory_order_relaxed);
     value_.fetch_add(1, std::memory_order_release);
-    value_.notify_all();
+    // Only wake a peer that is asleep; while it runs, the next snapshot/re-check sees the new value anyway.
+    if (sleepers_.load(std::memory_order_acquire) > 0) value_.notify_all();
   }
 
-  // Returns once the counter differs from `seen` (or spuriously); callers re-check their condition in a loop.
-  void wait_changed(std::uint32_t seen) const { value_.wait(seen, std::memory_order_acquire); }
+  // Returns once the counter differs from `seen`, or at once when it already changed. `slept` reports whether the
+  // call really blocked. Callers re-check their condition in a loop.
+  bool wait_changed(std::uint32_t seen, bool &slept) {
+    waits_.fetch_add(1, std::memory_order_relaxed);
+    sleepers_.fetch_add(1, std::memory_order_acq_rel);
+    if (value_.load(std::memory_order_acquire) != seen) {
+      sleepers_.fetch_sub(1, std::memory_order_acq_rel);
+      slept = false;
+      return false;
+    }
+    value_.wait(seen, std::memory_order_acquire);
+    sleepers_.fetch_sub(1, std::memory_order_acq_rel);
+    wakeups_.fetch_add(1, std::memory_order_relaxed);
+    slept = true;
+    return true;
+  }
+
+  Stats stats() const {
+    return Stats{rings_.load(std::memory_order_relaxed), waits_.load(std::memory_order_relaxed),
+                 wakeups_.load(std::memory_order_relaxed)};
+  }
 
  private:
   std::atomic<std::uint32_t> value_{0};
+  std::atomic<int> sleepers_{0};  // callers currently inside wait_changed (a count: two callers may share one bell)
+  std::atomic<std::uint64_t> rings_{0}, waits_{0}, wakeups_{0};
 };
 
 class SpscByteRing {
@@ -145,12 +180,42 @@ class SpscByteRing {
     return false;
   }
 
+  // Consumer only, TASK-084 step 2: borrows the next record without copying its payload. The bytes stay valid until
+  // release(); the consumer holds the tail, so no other record moves. Skips wrap fillers. Returns false when empty.
+  bool try_peek(RecordHeader &header, const std::uint8_t *&payload) {
+    for (;;) {
+      const std::uint64_t tail = tail_.load(std::memory_order_relaxed);
+      const std::uint64_t head = head_.load(std::memory_order_acquire);
+      if (tail == head) return false;
+      const std::size_t offset = static_cast<std::size_t>(tail % capacity_);
+      std::memcpy(&header, storage_.data() + offset, kRecordHeaderBytes);
+      const std::size_t total = record_bytes(header.bytes);
+      if (header.kind == static_cast<std::uint16_t>(RecordKind::Wrap)) {
+        tail_.store(tail + total, std::memory_order_release);
+        bell_.ring();
+        continue;
+      }
+      payload = storage_.data() + offset + kRecordHeaderBytes;
+      peeked_bytes_ = total;
+      return true;
+    }
+  }
+
+  // Consumer only: releases the record returned by the last successful try_peek.
+  void release() {
+    const std::uint64_t tail = tail_.load(std::memory_order_relaxed);
+    tail_.store(tail + peeked_bytes_, std::memory_order_release);
+    peeked_bytes_ = 0;
+    bell_.ring();
+  }
+
  private:
   std::size_t capacity_;
   Doorbell &bell_;
   std::vector<std::uint8_t> storage_;
   alignas(64) std::atomic<std::uint64_t> head_{0};
   alignas(64) std::atomic<std::uint64_t> tail_{0};
+  std::size_t peeked_bytes_ = 0;  // consumer only: bytes of the record lent by try_peek
 };
 
 }  // namespace gt4::mtvu

@@ -7,6 +7,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use gt4l_core::display::DisplayTarget;
 use gt4l_core::exit::{self, Outcome};
 use gt4l_core::gs_release::Installed;
 use gt4l_core::gs_table;
@@ -33,6 +34,9 @@ pub struct Running {
 /// Starts a session. The disc and the prepared ELF must already be verified by the caller.
 /// `pcsx2` is the installed PCSX2 GS (decision 0070): when given, the session runs with `GT4_RENDERER=pcsx2`
 /// and writes its own gt4-gs.ini; when `None`, it runs with the built-in renderer (CoreGS 1.1).
+/// `display` is the resolved Monitor and Resolution (TASK-080 addendum): `GT4_MONITOR`, `GT4_OUTPUT_SIZE` and the
+/// gt4-gs internal resolution follow it; `None` when no monitor could be read.
+#[allow(clippy::too_many_arguments)]
 pub fn start(
     dirs: &DataDirs,
     game_executable: &Path,
@@ -40,6 +44,8 @@ pub fn start(
     disc: &Path,
     settings: &Settings,
     pcsx2: Option<&Installed>,
+    display: Option<&DisplayTarget>,
+    textures: &Path,
     extra_environment: &[(String, String)],
 ) -> Result<Running, String> {
     let lock = GameLock::acquire(&dirs.runtime_card().with_file_name("launcher.lock"))
@@ -64,12 +70,12 @@ pub fn start(
     };
     let mut plan = match pcsx2 {
         Some(installed) => {
-            let paths = Pcsx2Paths::for_session(installed, &dirs.root().join("gs"), &session_dir);
-            let text = launch::gs_config_text(settings, &paths)?;
+            let paths = Pcsx2Paths::for_session(installed, &dirs.root().join("gs"), &session_dir, textures);
+            let text = launch::gs_config_text(settings, &paths, display)?;
             gs_table::write_ini_atomic(&paths.config, &text).map_err(|error| format!("gt4-gs.ini: {error}"))?;
-            launch::plan_pcsx2_launch(&inputs, settings, &paths, &inherited)
+            launch::plan_pcsx2_launch(&inputs, settings, &paths, display, &inherited)
         }
-        None => launch::plan_launch(&inputs, settings, &inherited),
+        None => launch::plan_launch(&inputs, settings, display, &inherited),
     };
     plan.environment.extend(extra_environment.iter().cloned());
     let child = spawn(&plan)?;

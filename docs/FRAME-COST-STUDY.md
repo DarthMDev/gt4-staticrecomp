@@ -5,6 +5,10 @@
 PCSX2-tainted** (no PCSX2 source, no `gt4recomp-gs` fork, no `private/tooling/pcsx2-*`, no `slice189-pcsx2-ref`
 was opened). Labels: **Confirmed** (measured or read in code), **High confidence**, **Hypothesis**, **Unknown**.
 
+**Implementation status (2026-10-22):** section 6 and items 2-4 are implemented on `task/084-frame-cost-122`
+(build `slice262`); item 1 is out by owner decision. Build, switches, before/after numbers and the owner F7/F8
+checklist: `docs/BUILD.md`, "Slice 260/262".
+
 Build under test: slice211 `private/slice211-build/build/gt4vulkan.exe` (97,186,816 bytes, sha256 `2fecda70...`,
 pin `docs/inputs/slice211-pcsx2.json`), runtime capsule `private/slice191-gs-stream-runtime`, port
 `private/slice200-port`, gt4-gs 1.0.1 (`private/slice203-gt4gs-release-pkg/gt4-gs.exe`, sha256 `bda98d49...`,

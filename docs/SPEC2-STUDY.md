@@ -3,6 +3,10 @@
 2026-10-14, slice 151. Read-only study of the owner's ISO (not distributed).
 [C] = Confirmed, [H] = Hypothesis, [U] = Unknown.
 
+**Status (2026-10-22):** the owner decided that Spec II support means a second target on the
+SCUS-97436 Public Beta lineage ISO, with its own executable, not a merge into v2.00. Recorded,
+not scheduled: [decision 0072](decisions/0072-spec2-second-target.md).
+
 ## Identity [C]
 
 - ISO SHA-256 `6a3484b9672c10a92154ecee6faa5bbcfd4ed8cd538d8283e429c3fe6e1704b2`,

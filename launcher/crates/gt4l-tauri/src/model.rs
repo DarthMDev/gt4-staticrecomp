@@ -2,6 +2,7 @@
 //! Nothing here touches the disk or a window, so every rule is tested without the UI.
 
 use gt4controls::{Controls, Curve, Stick, TriggerTuning, BUTTON_INPUTS};
+use gt4l_core::display::{self, Monitor};
 use gt4l_core::gs_table;
 use gt4l_core::settings::{self, Kind, Page, SettingDef, Settings, SETTINGS};
 use serde::Serialize;
@@ -14,7 +15,8 @@ pub const MAX_UPSCALE_DEFAULT: u32 = 12;
 
 /// Settings rows that are never sent to the UI: the PCSX2 renderer's own Renderer API, and the present-mode rows the
 /// launcher derives from `vsync` (scripts/gs_settings.py, gs_table::render_ini callers).
-const DERIVED_TABLE_IDS: &[&str] = &["renderer", "vsync", "mailbox"];
+/// `upscale` follows the Resolution and the Render scale (TASK-080 addendum, `display::display_plan`).
+const DERIVED_TABLE_IDS: &[&str] = &["renderer", "vsync", "mailbox", "upscale"];
 
 /// The rows of the PCSX2 GS table the UI may show: offered, not mods (release 1.1.0), not derived.
 pub fn pcsx2_table_rows() -> Vec<&'static gs_table::Row> {
@@ -24,12 +26,93 @@ pub fn pcsx2_table_rows() -> Vec<&'static gs_table::Row> {
 /// The payload of `get_settings_table`: `{max_upscale, rows}`. Launcher rows come from `SETTINGS`, PCSX2 GS rows from
 /// the table file; both use the row shape of ui/dev/README.md. Rows of the other renderer are sent with `visible_when`.
 pub fn settings_table(settings: &Settings, controls: &Controls) -> Value {
+    settings_table_with_monitors(settings, controls, &[])
+}
+
+/// The Monitor row's choices: one per connected monitor, labelled by its name ("DELL U3419W"; a second one with the same
+/// name is "DELL U3419W 2"), stored by identifier (`display::monitor_id`); without monitors, one "Primary monitor"
+/// entry. `current` is the monitor the game would open on now (the primary one until another is chosen).
+fn fill_monitor_row(row: &mut Value, settings: &Settings, monitors: &[Monitor]) {
+    match display::resolve_monitor(monitors, settings.get("monitor")) {
+        Some(chosen) => {
+            let labels = display::monitor_labels(monitors);
+            row["values"] = Value::Array(
+                monitors
+                    .iter()
+                    .zip(labels)
+                    .map(|(monitor, label)| json!({ "value": display::monitor_id(monitor), "label": label }))
+                    .collect(),
+            );
+            row["current"] = json!(display::monitor_id(chosen));
+        }
+        None => {
+            row["values"] = json!([{ "value": display::PRIMARY, "label": "Primary monitor" }]);
+            row["current"] = json!(display::PRIMARY);
+        }
+    }
+    row["default"] = json!(display::PRIMARY);
+}
+
+/// The Resolution row's choices: the chosen monitor's modes ("3440x1440 (desktop)" marks its desktop mode); without
+/// monitors, one "Desktop resolution" entry. `current` is the output size the game would use now.
+fn fill_resolution_row(row: &mut Value, settings: &Settings, monitors: &[Monitor]) {
+    match display::resolve_monitor(monitors, settings.get("monitor")) {
+        Some(monitor) => {
+            row["values"] = Value::Array(
+                monitor
+                    .modes
+                    .iter()
+                    .map(|size| {
+                        let label = if *size == monitor.desktop { format!("{} (desktop)", size.text()) } else { size.text() };
+                        json!({ "value": size.text(), "label": label })
+                    })
+                    .collect(),
+            );
+            row["current"] = json!(display::resolve_resolution(monitor, settings.get("resolution")).text());
+            // The default is the symbol "desktop": it means the monitor's desktop mode at each start, not a stored size.
+            row["default"] = json!(display::DESKTOP);
+        }
+        None => {
+            row["values"] = json!([{ "value": display::DESKTOP, "label": "Desktop resolution" }]);
+            row["current"] = json!(display::DESKTOP);
+            row["default"] = json!(display::DESKTOP);
+        }
+    }
+}
+
+/// The Render scale slider's readout per step: "100% · 4x · 2560x1792" for the output size the game would use now
+/// (1920 x 1080 when no monitor is known). Shown only for the PCSX2 GS (CoreGS 1.1 is retired and keeps its own
+/// internal resolution).
+fn fill_render_scale_row(row: &mut Value, settings: &Settings, monitors: &[Monitor]) {
+    let output = display::resolve_target(monitors, settings.get("monitor"), settings.get("resolution"))
+        .map(|target| target.output)
+        .unwrap_or(display::FALLBACK_OUTPUT);
+    let mut labels = serde_json::Map::new();
+    for step in display::render_scale_steps() {
+        if let Ok(plan) = display::display_plan(output.width, output.height, step, display::PCSX2_GS_CAPS) {
+            labels.insert(step.to_string(), json!(format!("{step}% \u{00B7} {}", display::describe_plan(&plan))));
+        }
+    }
+    row["values"]["labels"] = Value::Object(labels);
+    row["values"]["output"] = json!(output.text());
+    row["visible_when"] = json!({ "id": "renderer", "equals": settings::PCSX2_GS });
+}
+
+/// The settings table with the connected monitors (TASK-080 addendum: Monitor, Resolution and Render scale).
+pub fn settings_table_with_monitors(settings: &Settings, controls: &Controls, monitors: &[Monitor]) -> Value {
     let mut rows: Vec<Value> = Vec::new();
     for definition in SETTINGS {
         if !settings.applies(definition.id) {
             continue;
         }
-        rows.push(launcher_row(definition, settings));
+        let mut row = launcher_row(definition, settings);
+        match definition.id {
+            "monitor" => fill_monitor_row(&mut row, settings, monitors),
+            "resolution" => fill_resolution_row(&mut row, settings, monitors),
+            "render_scale" => fill_render_scale_row(&mut row, settings, monitors),
+            _ => {}
+        }
+        rows.push(row);
     }
     for row in pcsx2_table_rows() {
         rows.push(gs_row(row, settings));
@@ -70,6 +153,21 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
             json!(definition.default.parse::<u32>().unwrap_or(0)),
             json!(settings.get(definition.id).parse::<u32>().unwrap_or(0)),
         ),
+        // TASK-080 Render scale: a slider in steps; `labels` (filled by the table) gives the readout per step.
+        Kind::Steps { min, max, step } => (
+            "slider",
+            json!({ "min": min, "max": max, "step": step, "unit": "%" }),
+            json!(definition.default.parse::<u32>().unwrap_or(min)),
+            json!(settings.get(definition.id).parse::<u32>().unwrap_or(min)),
+        ),
+        // TASK-080 Monitor and Resolution: dropdowns whose choices come from the connected monitors (filled by the
+        // table, `fill_monitor_row` / `fill_resolution_row`).
+        Kind::Monitor | Kind::Resolution => (
+            "dropdown",
+            Value::Array(Vec::new()),
+            json!(definition.default),
+            json!(settings.get(definition.id)),
+        ),
     };
     let mut row = json!({
         "id": definition.id,
@@ -88,19 +186,44 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
     row
 }
 
+/// PCSX2 GS rows that only apply to GSdx (the PCSX2 renderer). With CoreGS 1.1 they stay in the table, disabled with a
+/// note; the other GS rows are hidden there (`visible_when`). TASK-091: Performance Mode.
+const GSDX_ONLY_ROWS: &[&str] = &["performance_mode"];
+
+/// The two choices of a toggle over an enum row (table `control = "toggle"`): (Off, On). The first choice is Off.
+pub fn toggle_choices(row: &gs_table::Row) -> Option<(&str, &str)> {
+    if row.kind == "enum" && gs_table::ui_control(row) == "toggle" && row.choices.len() == 2 {
+        Some((row.choices[0].name.as_str(), row.choices[1].name.as_str()))
+    } else {
+        None
+    }
+}
+
+/// The table value text of a PCSX2 GS row from a UI value: a toggle over an enum takes true (On) or false (Off);
+/// every other row takes its plain value.
+pub fn gs_value_text(row: &gs_table::Row, value: &Value) -> Option<String> {
+    match toggle_choices(row) {
+        Some((off, on)) => value.as_bool().map(|is_on| (if is_on { on } else { off }).to_string()),
+        None => value_text(value, false),
+    }
+}
+
 fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
+    let toggle = toggle_choices(row);
     let control = match row.kind.as_str() {
+        _ if toggle.is_some() => "toggle",
         "bool" => "toggle",
         "int" | "float" => "slider",
         _ => "dropdown",
     };
-    let (values, default, current) = match row.kind.as_str() {
-        "bool" => (
+    let (values, default, current) = match (toggle, row.kind.as_str()) {
+        (Some((_, on)), _) => (Value::Null, json!(row.default == on), json!(settings.gs_value(&row.id) == on)),
+        (None, "bool") => (
             Value::Null,
             json!(row.default == "true"),
             json!(settings.gs_value(&row.id) == "true"),
         ),
-        "int" | "float" => {
+        (None, "int" | "float") => {
             let mut bounds = json!({ "min": row.min.unwrap_or(0.0), "max": row.max.unwrap_or(0.0), "step": 1 });
             if row.id == "upscale" {
                 bounds["max"] = json!(row.max.unwrap_or(0.0).min(MAX_UPSCALE_DEFAULT as f64));
@@ -109,7 +232,7 @@ fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
             let number = |text: &str| text.parse::<f64>().ok().map(|n| json!(n)).unwrap_or(Value::Null);
             (bounds, number(&row.default), number(&settings.gs_value(&row.id)))
         }
-        _ => (
+        (None, _) => (
             Value::Array(
                 row.choices
                     .iter()
@@ -129,8 +252,16 @@ fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
         "values": values,
         "default": default,
         "current": current,
-        "visible_when": { "id": "renderer", "equals": settings::PCSX2_GS },
     });
+    if GSDX_ONLY_ROWS.contains(&row.id.as_str()) {
+        let on_gsdx = settings.get("renderer") == settings::PCSX2_GS;
+        out["disabled"] = json!(!on_gsdx);
+        if !on_gsdx {
+            out["note"] = json!("GSdx only");
+        }
+    } else {
+        out["visible_when"] = json!({ "id": "renderer", "equals": settings::PCSX2_GS });
+    }
     match row.page.as_str() {
         "Graphics" => out["group"] = json!("graphics"),
         "Display" => out["group"] = json!("display"),
@@ -440,6 +571,9 @@ pub fn licenses_text() -> &'static str {
      The launcher interface is built with Tauri 2 (MIT or Apache-2.0) and runs in Microsoft Edge WebView2, \
      the Windows system web view (Microsoft WebView2 terms).\n\n\
      Typefaces: Roboto and Roboto Condensed (Apache-2.0), bundled in the launcher.\n\n\
+     GSdx is the PCSX2 GS renderer of the PCSX2 project (https://pcsx2.net), licensed GPL-3.0-or-later. It is the \
+     gt4-gs.exe program, downloaded only when it is selected, and it runs in its own process; it is not part of \
+     GT4Recomp's MIT code. Its source and licence are in the gt4-gs release.\n\n\
      The launcher uses the Rust crates listed in launcher/Cargo.lock. paraLLEl-GS (LGPL-3.0-or-later) is \
      a separate library and is not part of the launcher's interface."
 }
@@ -521,6 +655,132 @@ mod table_tests {
         table["rows"].as_array().unwrap().iter().find(|row| row["id"] == id).unwrap()
     }
 
+    fn monitor(device: &str, name: &str, primary: bool, desktop: display::Size, raw: &[display::Size]) -> Monitor {
+        Monitor {
+            device: device.into(),
+            name: name.into(),
+            primary,
+            desktop,
+            modes: display::tidy_modes(raw, desktop),
+        }
+    }
+
+    fn two_monitors() -> Vec<Monitor> {
+        use display::Size;
+        vec![
+            monitor(r"\\.\DISPLAY1", "TV", true, Size::new(1920, 1080), &[Size::new(1280, 720), Size::new(1920, 1080)]),
+            monitor(
+                r"\\.\DISPLAY2",
+                "DELL U3419W",
+                false,
+                Size::new(3440, 1440),
+                &[Size::new(2560, 1080), Size::new(3440, 1440), Size::new(1920, 1080)],
+            ),
+        ]
+    }
+
+    #[test]
+    fn no_aspect_or_internal_resolution_rows_are_offered() {
+        let listed = ids(&settings_table(&Settings::default(), &Controls::default()));
+        for gone in ["aspect_ratio", "aspect_custom", "upscale", "aspect"] {
+            assert!(!listed.contains(&gone.to_string()), "{gone} must not be offered");
+        }
+        for present in ["monitor", "resolution", "render_scale", "fullscreen", "vsync"] {
+            assert!(listed.contains(&present.to_string()), "{present} is offered");
+        }
+    }
+
+    #[test]
+    fn monitor_and_resolution_list_the_connected_monitors_and_their_modes() {
+        let monitors = two_monitors();
+        let mut settings = Settings::default();
+        let table = settings_table_with_monitors(&settings, &Controls::default(), &monitors);
+        let monitor_row = row(&table, "monitor");
+        assert_eq!(monitor_row["group"], "display");
+        assert_eq!(monitor_row["control"], "dropdown");
+        assert_eq!(monitor_row["current"], r"\\.\DISPLAY1@1920x1080", "the primary monitor by default");
+        let labels: Vec<&str> = monitor_row["values"].as_array().unwrap().iter().map(|v| v["label"].as_str().unwrap()).collect();
+        // TASK-088 (1.2.0): the friendly name only; no resolution and no "(primary)".
+        assert_eq!(labels, ["TV", "DELL U3419W"]);
+        let resolution = row(&table, "resolution");
+        assert_eq!(resolution["current"], "1920x1080");
+        // TASK-088 (1.2.0): the default is the symbol "desktop" (the monitor's desktop mode at each start).
+        assert_eq!(resolution["default"], "desktop");
+        let modes: Vec<&str> = resolution["values"].as_array().unwrap().iter().map(|v| v["value"].as_str().unwrap()).collect();
+        assert_eq!(modes, ["1920x1080", "1280x720"]);
+
+        settings.set("monitor", r"\\.\DISPLAY2@3440x1440").unwrap();
+        settings.set("resolution", "2560x1080").unwrap();
+        let table = settings_table_with_monitors(&settings, &Controls::default(), &monitors);
+        assert_eq!(row(&table, "monitor")["current"], r"\\.\DISPLAY2@3440x1440");
+        let resolution = row(&table, "resolution");
+        assert_eq!(resolution["current"], "2560x1080");
+        assert_eq!(resolution["values"][0]["label"], "3440x1440 (desktop)");
+        // The render scale readout follows the chosen output: 2560x1080 gives k = 4.
+        let scale = row(&table, "render_scale");
+        assert_eq!(scale["values"]["labels"]["100"], "100% \u{00B7} 4x \u{00B7} 2560x1792");
+        assert_eq!(scale["values"]["labels"]["50"], "50% \u{00B7} 2x \u{00B7} 1280x896");
+        assert_eq!(scale["values"]["labels"]["200"], "200% \u{00B7} 8x \u{00B7} 5120x3584");
+    }
+
+    #[test]
+    fn without_monitors_the_rows_fall_back_to_primary_and_desktop() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        assert_eq!(row(&table, "monitor")["current"], "primary");
+        assert_eq!(row(&table, "resolution")["current"], "desktop");
+        let scale = row(&table, "render_scale");
+        assert_eq!(scale["control"], "slider");
+        assert_eq!((scale["values"]["min"].as_u64(), scale["values"]["max"].as_u64(), scale["values"]["step"].as_u64()),
+                   (Some(50), Some(200), Some(25)));
+        assert_eq!(scale["current"], 100);
+        assert_eq!(scale["values"]["labels"]["100"], "100% \u{00B7} 3x \u{00B7} 1920x1344");
+        assert_eq!(scale["visible_when"]["equals"], "pcsx2", "CoreGS 1.1 keeps its own internal resolution");
+        assert_eq!(scale["group"], "graphics");
+    }
+
+    #[test]
+    fn performance_mode_is_a_graphics_toggle_off_by_default() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        let mode = row(&table, "performance_mode");
+        assert_eq!(mode["control"], "toggle");
+        assert_eq!(mode["page"], "basic", "the main Graphics section, not Advanced");
+        assert_eq!(mode["group"], Value::Null);
+        assert_eq!(mode["default"], json!(false));
+        assert_eq!(mode["current"], json!(false));
+        assert_eq!(mode["disabled"], json!(false));
+        assert!(mode.get("visible_when").is_none(), "shown under GSdx without a visibility rule");
+    }
+
+    #[test]
+    fn performance_mode_is_disabled_with_a_gsdx_only_note_under_coregs11() {
+        let mut settings = Settings::default();
+        settings.set("renderer", "coregs11").unwrap();
+        let table = settings_table(&settings, &Controls::default());
+        let mode = row(&table, "performance_mode");
+        assert_eq!(mode["disabled"], json!(true));
+        assert_eq!(mode["note"], "GSdx only");
+        assert!(mode.get("visible_when").is_none(), "shown disabled, not hidden");
+    }
+
+    #[test]
+    fn the_readback_row_is_gone_from_the_table() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        assert!(!ids(&table).contains(&"hw_download_mode".to_string()));
+        assert!(!pcsx2_table_rows().iter().any(|row| row.id == "hw_download_mode"));
+        assert!(!gs_table::rows().iter().any(|row| row.key == "HWDownloadMode" && row.id != "performance_mode"));
+    }
+
+    #[test]
+    fn the_toggle_maps_on_and_off_to_the_two_readback_choices() {
+        let row = pcsx2_table_rows().into_iter().find(|row| row.id == "performance_mode").unwrap();
+        assert_eq!(toggle_choices(row), Some(("accurate", "no-readbacks")));
+        assert_eq!(gs_value_text(row, &json!(true)).as_deref(), Some("no-readbacks"), "On");
+        assert_eq!(gs_value_text(row, &json!(false)).as_deref(), Some("accurate"), "Off");
+        assert_eq!(gs_value_text(row, &json!("accurate")), None, "a toggle takes true or false");
+        let other = pcsx2_table_rows().into_iter().find(|row| row.id == "fxaa").unwrap();
+        assert_eq!(toggle_choices(other), None);
+    }
+
     #[test]
     fn renderer_dropdown_offers_pcsx2_and_coregs11_and_greys_coregs20() {
         let table = settings_table(&Settings::default(), &Controls::default());
@@ -553,17 +813,12 @@ mod table_tests {
     }
 
     #[test]
-    fn pcsx2_rows_show_only_for_the_pcsx2_renderer_and_the_upscale_is_limited() {
+    fn pcsx2_rows_show_only_for_the_pcsx2_renderer() {
         let table = settings_table(&Settings::default(), &Controls::default());
-        let upscale = row(&table, "upscale");
-        // TASK-049 curated the table: upscale is a preset dropdown (480p to 8K), not a slider. The old slider
-        // expectation (max 8, limit max_upscale) encoded the older table. Greying presets above the device limit
-        // is not implemented yet (follow-up): the limit is still MAX_UPSCALE_DEFAULT here.
-        assert_eq!(upscale["control"], "dropdown");
-        let presets: Vec<&str> = upscale["values"].as_array().unwrap().iter().map(|choice| choice["value"].as_str().unwrap()).collect();
-        assert!(presets.contains(&"480p") && presets.contains(&"8K"), "presets: {presets:?}");
-        assert_eq!(upscale["visible_when"]["equals"], "pcsx2");
+        let fxaa = row(&table, "fxaa");
+        assert_eq!(fxaa["visible_when"]["equals"], "pcsx2");
         assert_eq!(table["max_upscale"], MAX_UPSCALE_DEFAULT);
+        assert!(!pcsx2_table_rows().iter().any(|row| row.id == "upscale"), "the internal resolution is derived");
     }
 
     #[test]

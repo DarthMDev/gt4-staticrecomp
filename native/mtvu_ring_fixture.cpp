@@ -3,6 +3,7 @@
 // random record sizes and delays on tiny and small rings, and the oversize rejection.
 #include "mtvu_ring.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <deque>
@@ -156,7 +157,8 @@ void check_threaded_order(std::size_t capacity, std::uint64_t seed, std::uint64_
       for (;;) {
         const std::uint32_t seen = bell.snapshot();
         if (ring.try_push(h, payload.data())) break;
-        bell.wait_changed(seen);
+        bool slept = false;
+        bell.wait_changed(seen, slept);
       }
       if (rng() % 64 == 0) std::this_thread::yield();
     }
@@ -165,7 +167,8 @@ void check_threaded_order(std::size_t capacity, std::uint64_t seed, std::uint64_
     for (;;) {
       const std::uint32_t seen = bell.snapshot();
       if (ring.try_push(stop, nullptr)) break;
-      bell.wait_changed(seen);
+      bool slept = false;
+      bell.wait_changed(seen, slept);
     }
   });
 
@@ -185,11 +188,83 @@ void check_threaded_order(std::size_t capacity, std::uint64_t seed, std::uint64_
       if (rng() % 32 == 0) std::this_thread::sleep_for(std::chrono::microseconds(rng() % 20));
       continue;
     }
-    bell.wait_changed(seen);
+    bool slept = false;
+    bell.wait_changed(seen, slept);
   }
   producer.join();
   require(expected_job == records, "every record delivered once");
   require(ring.empty(), "ring empty after stop");
+}
+
+// TASK-084 step 1: the sleeping-flag wakeup policy and its counters.
+void check_doorbell_policy() {
+  Doorbell bell;
+  Doorbell::Stats stats = bell.stats();
+  require(stats.rings == 0 && stats.waits == 0 && stats.wakeups == 0, "a new doorbell has no traffic");
+
+  // A ring while nobody sleeps must not count a wakeup, and it must move the value.
+  const std::uint32_t before = bell.snapshot();
+  bell.ring();
+  require(bell.snapshot() != before, "a ring moves the doorbell value");
+  stats = bell.stats();
+  require(stats.rings == 1, "a ring is counted");
+  require(stats.wakeups == 0, "a ring with nobody asleep waits for the next snapshot, no wakeup");
+
+  // The re-check path: the value already moved, so the caller must not block.
+  bool slept = true;
+  bell.wait_changed(before, slept);
+  require(!slept, "a wait whose value already moved returns without sleeping");
+  stats = bell.stats();
+  require(stats.waits == 1 && stats.wakeups == 0, "the re-check path counts a wait but no wakeup");
+  require(bell.snapshot() != before, "the re-check path does not consume the value change");
+
+  // A real wait: the peer rings while the waiter sleeps, and the wakeup is counted on both sides.
+  const std::uint32_t seen = bell.snapshot();
+  std::atomic<bool> slept_flag{false};
+  std::thread waiter([&bell, seen, &slept_flag] {
+    bool did_sleep = false;
+    bell.wait_changed(seen, did_sleep);
+    slept_flag.store(did_sleep);
+  });
+  for (int attempt = 0; attempt < 1000 && bell.stats().waits < 2; ++attempt)
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  bell.ring();
+  waiter.join();
+  require(slept_flag.load(), "a wait on an unchanged value really sleeps");
+  stats = bell.stats();
+  require(stats.waits == 2, "the sleeping wait is counted");
+  require(stats.wakeups == 1, "the sleeping wait records one wakeup");
+  require(stats.rings == 2, "both rings are counted");
+}
+
+// TASK-084 step 2: try_peek/release lend the record bytes without a copy; the tail only moves on release.
+void check_peek_release() {
+  Doorbell bell;
+  SpscByteRing ring(256, bell);
+  const auto first = make_payload(40, 1);
+  const auto second = make_payload(64, 2);
+  RecordHeader header;
+  header.kind = static_cast<std::uint16_t>(RecordKind::Gif);
+  header.job = 7;
+  header.bytes = static_cast<std::uint32_t>(first.size());
+  require(ring.try_push(header, first.data()), "peek: first push");
+  header.bytes = static_cast<std::uint32_t>(second.size());
+  header.job = 8;
+  require(ring.try_push(header, second.data()), "peek: second push");
+
+  RecordHeader seen;
+  const std::uint8_t *payload = nullptr;
+  require(ring.try_peek(seen, payload), "peek: first record visible");
+  require(seen.job == 7 && seen.bytes == first.size(), "peek: first header");
+  require(std::vector<std::uint8_t>(payload, payload + seen.bytes) == first, "peek: first payload");
+  require(ring.used() == record_bytes(first.size()) + record_bytes(second.size()), "peek: the tail did not move");
+  ring.release();
+  require(ring.try_peek(seen, payload), "peek: second record visible");
+  require(seen.job == 8 && seen.bytes == second.size(), "peek: second header");
+  require(std::vector<std::uint8_t>(payload, payload + seen.bytes) == second, "peek: second payload");
+  ring.release();
+  require(!ring.try_peek(seen, payload), "peek: ring empty after both releases");
+  require(ring.empty(), "peek: ring reports empty");
 }
 
 }  // namespace
@@ -205,10 +280,12 @@ int main() {
     check_threaded_order(128, 21, 200000);
     check_threaded_order(512, 22, 200000);
     check_threaded_order(64 * 1024, 23, 200000);
+    check_doorbell_policy();
+    check_peek_release();
   } catch (const std::exception &error) {
     std::fprintf(stderr, "native_mtvu_ring failed: %s\n", error.what());
     return 1;
   }
-  std::printf("native_mtvu_ring ok: layout, FIFO, full/empty, oversize, wraparound model (3 rings x 200000 steps), threaded order (3 rings x 200000 records)\n");
+  std::printf("native_mtvu_ring ok: layout, FIFO, full/empty, oversize, wraparound model (3 rings x 200000 steps), threaded order (3 rings x 200000 records), doorbell wakeup policy\n");
   return 0;
 }

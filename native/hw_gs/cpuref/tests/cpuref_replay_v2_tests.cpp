@@ -32,7 +32,7 @@ struct Writer {
     explicit Writer(uint64_t first = 0) {
         proto::FileHeader file{};
         std::memcpy(file.magic, proto::kFileMagic, 8);
-        file.file_version = 2; file.protocol_major = 1; file.protocol_minor = 2;
+        file.file_version = 2; file.protocol_major = 1; file.protocol_minor = proto::kVersionMinor;
         file.header_bytes = 64; file.record_header_bytes = 16; file.first_frame = first;
         std::memcpy(file.serial, "SCUS-97328", 10);
         Append(bytes, file);
@@ -232,7 +232,7 @@ void Malformed() {
         reject({good.bytes.begin(), good.bytes.begin() + static_cast<std::ptrdiff_t>(n)});
     }
     for (const auto [at, value] : std::vector<std::pair<size_t, uint8_t>>{
-            {8, 3}, {10, 2}, {12, 3}, {14, 63}, {16, 15}, {20, 1}, {48, 1},
+            {8, 3}, {10, 2}, {12, static_cast<uint8_t>(proto::kVersionMinor + 1)}, {14, 63}, {16, 15}, {20, 1}, {48, 1},
             {64, 0}, {66, 2}, {68, 15}, {72, 0}, {88, 2}, {89, 1}, {92, 2}, {104, 99}}) {
         auto copy = good.bytes; copy[at] = value; reject(copy);
     }

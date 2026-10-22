@@ -34,7 +34,7 @@ class GsSink {
 // Worker side: receives whole logical input records and emits outputs. Single thread only.
 class WorkerEnd {
  public:
-  WorkerEnd(SpscByteRing &input, SpscByteRing &output, Doorbell &bell);
+  WorkerEnd(SpscByteRing &input, SpscByteRing &output, Doorbell &input_bell, Doorbell &output_bell);
 
   // Blocks until one whole logical record arrived (chunks are reassembled).
   void receive(RecordHeader &header, std::vector<std::uint8_t> &payload);
@@ -45,13 +45,15 @@ class WorkerEnd {
  private:
   SpscByteRing &input_;
   SpscByteRing &output_;
-  Doorbell &bell_;
+  Doorbell &input_bell_;   // the worker sleeps here; the EE rings it when it posts input
+  Doorbell &output_bell_;  // worker progress: output data and freed input space; the EE waits here
 };
 
 // EE side. Not thread safe: one EE thread calls every method.
 class EeJournal {
  public:
-  EeJournal(SpscByteRing &input, SpscByteRing &output, Doorbell &bell, GsSink &sink);
+  EeJournal(SpscByteRing &input, SpscByteRing &output, Doorbell &input_bell, Doorbell &output_bell,
+            GsSink &sink);
 
   // Queues a placeholder for `job`, then sends the input record (blocking for input space).
   void post_job(RecordKind kind, std::uint64_t job, const std::uint8_t *payload, std::size_t bytes);
@@ -79,6 +81,8 @@ class EeJournal {
 
   std::uint64_t jobs_posted() const { return jobs_posted_; }
   std::uint64_t outputs_executed() const { return outputs_executed_; }
+  // TASK-084 step 0: worker output the EE forwarded to the renderer (journalled bytes), for the copy accounting.
+  std::uint64_t executed_bytes() const { return executed_bytes_; }
 
  private:
   enum class EntryKind : std::uint8_t { EeGif, GifReset, VertexReset, VblankFlush, Placeholder, Privileged };
@@ -105,7 +109,8 @@ class EeJournal {
 
   SpscByteRing &input_;
   SpscByteRing &output_;
-  Doorbell &bell_;
+  Doorbell &input_bell_;   // the worker sleeps here; the EE rings it when it posts input
+  Doorbell &output_bell_;  // worker progress: the EE waits for output data and for input space here
   GsSink &sink_;
   std::deque<JournalEntry> journal_;
   std::deque<CompletedEntry> completed_;
@@ -114,6 +119,7 @@ class EeJournal {
   std::uint64_t partial_job_ = 0;
   std::uint64_t jobs_posted_ = 0;
   std::uint64_t outputs_executed_ = 0;
+  std::uint64_t executed_bytes_ = 0;
 };
 
 }  // namespace gt4::mtvu

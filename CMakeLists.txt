@@ -72,6 +72,8 @@ add_test(NAME native_pacing COMMAND $<TARGET_FILE:pacing_fixture>)
 add_test(NAME native_quickfix COMMAND $<TARGET_FILE:quickfix_fixture>)
 add_test(NAME native_race_display COMMAND $<TARGET_FILE:race_display_fixture>)
 add_test(NAME native_race_widescreen COMMAND $<TARGET_FILE:race_widescreen_fixture>)
+# TASK-080: GT4_DISPLAY_ASPECT parse, Hor+/Vert+ factors, matrix scale, scene policy.
+add_test(NAME native_display_aspect COMMAND $<TARGET_FILE:display_aspect_fixture>)
 add_test(NAME native_cursor_autohide COMMAND $<TARGET_FILE:cursor_autohide_fixture>)
 add_test(NAME native_shape_observer COMMAND $<TARGET_FILE:shape_observer_fixture>)
 add_test(NAME native_performance_accounting COMMAND $<TARGET_FILE:perf_accounting_fixture>)
@@ -82,6 +84,8 @@ add_test(NAME native_mtvu_measure COMMAND $<TARGET_FILE:mtvu_measure_fixture>)
 add_test(NAME native_mtvu_ring COMMAND $<TARGET_FILE:mtvu_ring_fixture>)
 add_test(NAME native_mtvu_journal COMMAND $<TARGET_FILE:mtvu_journal_fixture>)
 add_test(NAME native_mtvu_perf COMMAND $<TARGET_FILE:mtvu_perf_fixture>)
+# TASK-084 step 1: the VIF1 chain batch payload (pure host code, round-trips and rejects malformed records).
+add_test(NAME native_mtvu_vif_batch COMMAND $<TARGET_FILE:mtvu_vif_batch_fixture>)
 # TASK-035: GS stream transport (threads and a child process) and the game-side client end to end with the recorder.
 add_test(NAME native_gs_stream_ipc COMMAND $<TARGET_FILE:gs_stream_ipc_fixture>)
 add_test(NAME native_gs_stream_client
@@ -92,7 +96,7 @@ add_test(NAME native_shape_capture_export COMMAND $<TARGET_FILE:shape_capture_ex
 add_test(NAME native_shape_capture_control COMMAND $<TARGET_FILE:shape_capture_control_fixture>)
 add_test(NAME python_native_contracts
     COMMAND "${GT4_PYTHON}" -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/python")
-set_tests_properties(native_mtvu_measure native_mtvu_ring native_mtvu_journal native_mtvu_perf native_quickfix native_race_display native_race_widescreen native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
+set_tests_properties(native_mtvu_measure native_mtvu_ring native_mtvu_journal native_mtvu_perf native_mtvu_vif_batch native_quickfix native_race_display native_race_widescreen native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
 if(TARGET shape_runtime_fixture)
@@ -149,12 +153,16 @@ if(GT4_HW_GS)
     add_test(NAME hw_stream_sink COMMAND $<TARGET_FILE:hw_stream_sink_fixture>)
     set_tests_properties(hw_stream_sink PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
         PASS_REGULAR_EXPRESSION "vsyncs=3 frames=3 presents=0 black_presents=0 gif_bytes=32 .*PASS: hw stream sink")
+    # TASK-084 merge: the VBlank journal holds the VSYNC and posts it after the frame's output; the hw sink gets one per post.
+    add_test(NAME hw_stream_sink_deferred_vsync COMMAND $<TARGET_FILE:hw_stream_sink_fixture> --deferred-vsync)
+    set_tests_properties(hw_stream_sink_deferred_vsync PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
+        PASS_REGULAR_EXPRESSION "vsyncs=3 frames=3 presents=0 black_presents=0 gif_bytes=128 .*PASS: hw stream sink")
     add_test(NAME hw_stream_sink_capture_refused COMMAND $<TARGET_FILE:hw_stream_sink_fixture>)
     set_tests_properties(hw_stream_sink_capture_refused PROPERTIES
         ENVIRONMENT "GT4_RENDERER=hw;GT4_GS_CAPTURE=${CMAKE_BINARY_DIR}/hw-capture-refused.gscap" WILL_FAIL TRUE)
     add_test(NAME hw_smoke_unknown_renderer_refused COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1)
     set_tests_properties(hw_smoke_unknown_renderer_refused PROPERTIES ENVIRONMENT "GT4_RENDERER=vulkan" WILL_FAIL TRUE)
     set_tests_properties(hw_options hw_present_rect hw_smoke_donor hw_smoke_headless hw_smoke_window
-        hw_smoke_parallel_refused hw_smoke_unknown_renderer_refused hw_stream_sink hw_stream_sink_capture_refused
+        hw_smoke_parallel_refused hw_smoke_unknown_renderer_refused hw_stream_sink hw_stream_sink_capture_refused hw_stream_sink_deferred_vsync
         PROPERTIES RUN_SERIAL TRUE TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()

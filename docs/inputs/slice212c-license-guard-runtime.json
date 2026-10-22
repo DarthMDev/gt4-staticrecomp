@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "donor_revision": "1b4808793a12c45125262fd2d5f50a9ec9f7c020",
+  "donor_sha256": {
+    "dispatch.cpp": "691c1d045b928ef789338f0954ec820fc0fd4e938cd2b2940743b3ad6005f995",
+    "kernel.cpp": "003c9e0a0e2c1cb61a6fd8ec846a4798c3027ed933b6825c6377112106f0168a",
+    "iop/cdvdfsv.cpp": "c313e10af0baaf63d9bd31040c168f38936c979c37fdce45afdf060d11560fbe"
+  },
+  "license_guard_profile": "task017-guard-v2+task080-aspect-v1",
+  "license_guard_overlay_sha256": "45b06349a51d476ea6ff6bfeaeafc5376512e9a6fb2d423fc0f44bd0ab7bafe6",
+  "halt_dump_overlay_sha256": "519027e1b425fa99d93c401868b29611001440d3df3b2b090d00b37c03af659c",
+  "fsv_trace_overlay_sha256": "03579b77bb1ae26f040325157f7dcf91d32afd57e484b43b32bd1040dcbc59a0",
+  "source_sha256": {
+    "cdvdfsv.cpp": "0074d14f838d303314cdc7601450993134702cacd59bef9e288ec74e87ffad1d",
+    "dispatch.cpp": "799bbed57953c8be1179e1da09a2ec3d6d8ac4baf2d34a4242dffab7cda5031a",
+    "kernel.cpp": "5661aba49466a7a9b038ed4c1bc50d0d0358664b81d7e695c74329fcdb016be3"
+  },
+  "display_aspect_overlay_sha256": "b47b8142fa49d96c6fad16a1e341b7772094e0986ea358dce55cd3d29601a06f",
+  "receipt_sha256": "ccfc0aed792dc343a50276aa1f0e56302e0e3adbcf15d0f975def663d3770798",
+  "slice": "212c",
+  "date": "2026-10-21",
+  "capsule": "private/slice212c-license-guard-runtime",
+  "derivation": "scripts/prepare_license_guard.py <assets>/private/slice212c-license-guard-runtime --assets-root <assets> --display-aspect",
+  "purpose": "TASK-080 P1 (used by the slice212b game build): the slice206 license guard v2 plus the race camera aspect hook (scripts/display_aspect_overlay.inc) at the camera virtual call of RaceBase::initMonitor (return label 0x00388B38) and the RaceDisplay::render (0x0039F498) race-view marker. kernel.cpp and cdvdfsv.cpp are byte-identical to slice206.",
+  "build_variable": "GT4_LICENSE_GUARD_SOURCE",
+  "supersedes": "slice206-license-guard-runtime for --mode pcsx2 (slice206 stays as history). private/slice212b-license-guard-runtime was a first derivation without the RaceDisplay::render marker; it was never pinned or used by a pinned build."
+}

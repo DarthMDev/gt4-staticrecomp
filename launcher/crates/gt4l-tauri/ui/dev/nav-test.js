@@ -111,7 +111,7 @@
 
   // Two-level focus (js/focus-levels.js): enter, B back, LB/RB keeping the level, the remembered row per tab.
   var FL = root.GT4.focusLevels;
-  var TABS = ["graphics", "display", "controls", "saves"];
+  var TABS = ["graphics", "controls", "saves", "replays"];
   function same(name, actual, expected) {
     expect(name, JSON.stringify(actual), JSON.stringify(expected));
   }
@@ -135,16 +135,16 @@
 
   var lbContent = FL.moveTab(entered, 1, TABS);
   same("LB/RB from content keeps the content level", lbContent.level, FL.CONTENT);
-  same("LB/RB from content moves to the next tab", lbContent.tab, "display");
+  same("LB/RB from content moves to the next tab", lbContent.tab, "controls");
   var lbSide = FL.moveTab(backed, 1, TABS);
   same("LB/RB from the tab list keeps the tab-list level", lbSide.level, FL.SIDE);
   same("the previous tab is remembered per tab", FL.rowFor(FL.moveTab(FL.moveTab(rowed, 1, TABS), -1, TABS)), "fxaa");
   same("another tab has no remembered row yet", FL.rowFor(lbContent), null);
-  same("LB/RB wraps from the last tab to the first", FL.moveTab(FL.select(backed, "saves"), 1, TABS).tab, "graphics");
-  same("RB/LB wraps back from the first tab", FL.moveTab(FL.select(backed, "graphics"), -1, TABS).tab, "saves");
-  same("the preview (select) changes only the tab", FL.select(backed, "display").level, FL.SIDE);
+  same("LB/RB wraps from the last tab to the first", FL.moveTab(FL.select(backed, "replays"), 1, TABS).tab, "graphics");
+  same("RB/LB wraps back from the first tab", FL.moveTab(FL.select(backed, "graphics"), -1, TABS).tab, "replays");
+  same("the preview (select) changes only the tab", FL.select(backed, "controls").level, FL.SIDE);
 
-  var reopened = FL.open(backed, "display");
+  var reopened = FL.open(backed, "controls");
   same("reopening Settings puts focus on the tab list", reopened.level, FL.SIDE);
   same("reopening keeps the remembered rows", FL.rowFor(FL.select(reopened, "graphics")), "fxaa");
 
