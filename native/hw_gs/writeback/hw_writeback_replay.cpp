@@ -8,7 +8,7 @@
 // Usage: hw_writeback_replay <capture> <out-dir> [--every N] [--slm-frame N] [--trace-frame N]
 //        [--trace-rect x0,y0,x1,y1] [--slm-hashes <file>] [--compose reference|presentation]
 //        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]] [--sync-mode cache|writeback] [--no-interlock]
-//        [--no-target-textures]
+//        [--no-target-textures] [--no-glm] [--no-cpu-sprites] [--no-gpu-clut] [--no-glm-park] [--no-gpu-uploads]
 // --sync-mode selects GT4_HW_SYNC_MODE (default cache, as in the game; writeback is the reference mode).
 // --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
 // the default `auto`) instead of the reference image (12.9 `vram`, the CPU reference's image).
@@ -162,7 +162,10 @@ int main(int argc, char** argv) {
     bool cacheMode = true;                     // --sync-mode
     PixelRect traceRect{0, 0, 2047, 2047};
     for (int i = 3; i + 1 < argc; i += 2) {
-        if (std::strcmp(argv[i], "--no-interlock") == 0 || std::strcmp(argv[i], "--no-target-textures") == 0) {
+        if (std::strcmp(argv[i], "--no-interlock") == 0 || std::strcmp(argv[i], "--no-target-textures") == 0 ||
+            std::strcmp(argv[i], "--no-glm") == 0 || std::strcmp(argv[i], "--no-cpu-sprites") == 0 ||
+            std::strcmp(argv[i], "--no-gpu-clut") == 0 || std::strcmp(argv[i], "--no-glm-park") == 0 ||
+            std::strcmp(argv[i], "--no-gpu-uploads") == 0) {
             --i;  // a flag without a value
             continue;
         }
@@ -239,6 +242,11 @@ int main(int argc, char** argv) {
     renderer.SetSyncMode(cacheMode);
     for (int i = 3; i < argc; ++i) {
         if (std::strcmp(argv[i], "--no-target-textures") == 0) renderer.SetTextureFromTargets(false);  // IN-346 A/B
+        if (std::strcmp(argv[i], "--no-glm") == 0) renderer.SetGlm(false);                             // IN-347 A/B
+        if (std::strcmp(argv[i], "--no-cpu-sprites") == 0) renderer.SetCpuSmallSprites(false);          // IN-348 A/B
+        if (std::strcmp(argv[i], "--no-gpu-clut") == 0) renderer.SetGpuClut(false);                     // IN-349 A/B
+        if (std::strcmp(argv[i], "--no-glm-park") == 0) renderer.SetGlmParking(false);                  // IN-350 A/B
+        if (std::strcmp(argv[i], "--no-gpu-uploads") == 0) renderer.SetGpuUploads(false);              // IN-351 A/B
     }
 
     // Frame counter for the trace: EndFrame of frame N is the N-th call (0-based), as in onFrame.
@@ -331,16 +339,40 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(counters.writebackDepthWords),
                 static_cast<unsigned long long>(counters.fifoOverruns), renderer.Failed() ? 1 : 0);
     std::printf("writeback_reasons other=%llu texture=%llu clut=%llu transfer=%llu display=%llu eviction=%llu "
-                "load_overlap=%llu\n",
+                "load_overlap=%llu fallback=%llu cpu_sprite=%llu\n",
                 static_cast<unsigned long long>(counters.cacheWritebackByReason[0]),
                 static_cast<unsigned long long>(counters.cacheWritebackByReason[1]),
                 static_cast<unsigned long long>(counters.cacheWritebackByReason[2]),
                 static_cast<unsigned long long>(counters.cacheWritebackByReason[3]),
                 static_cast<unsigned long long>(counters.cacheWritebackByReason[4]),
                 static_cast<unsigned long long>(counters.cacheWritebackByReason[5]),
-                static_cast<unsigned long long>(counters.cacheWritebackByReason[6]));
-    std::printf("textures_cached=%llu textures_from_targets=%llu ", static_cast<unsigned long long>(counters.texturesCached),
-                static_cast<unsigned long long>(counters.texturesFromTargets));
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[6]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[7]),
+                static_cast<unsigned long long>(counters.cacheWritebackByReason[8]));
+    {
+        const gpu::GpuStats& gpuStats = renderer.GpuCounters();
+        std::printf("gpu executions=%llu vk_draws=%llu barriers=%llu submissions=%llu\n",
+                    static_cast<unsigned long long>(gpuStats.executions),
+                    static_cast<unsigned long long>(gpuStats.draws),
+                    static_cast<unsigned long long>(gpuStats.barriers),
+                    static_cast<unsigned long long>(gpuStats.submissions));
+    }
+    std::printf("textures_cached=%llu textures_from_targets=%llu textures_from_glm=%llu glm_uploads=%llu glm_swizzles=%llu "
+                "cpu_sprite_batches=%llu gpu_clut_loads=%llu glm_parks=%llu glm_slot_loads=%llu glm_downloads=%llu "
+                "glm_pages_downloaded=%llu glm_upload_merges=%llu glm_host_uploads=%llu ",
+                static_cast<unsigned long long>(counters.texturesCached),
+                static_cast<unsigned long long>(counters.texturesFromTargets),
+                static_cast<unsigned long long>(counters.texturesFromGlm),
+                static_cast<unsigned long long>(counters.glmPagesUploaded),
+                static_cast<unsigned long long>(counters.glmSwizzles),
+                static_cast<unsigned long long>(counters.cpuSpriteBatches),
+                static_cast<unsigned long long>(counters.gpuClutLoads),
+                static_cast<unsigned long long>(counters.glmParks),
+                static_cast<unsigned long long>(counters.glmSlotLoads),
+                static_cast<unsigned long long>(counters.glmDownloads),
+                static_cast<unsigned long long>(counters.glmPagesDownloaded),
+                static_cast<unsigned long long>(counters.glmUploadMerges),
+                static_cast<unsigned long long>(counters.glmHostUploads));
     std::printf("sync_mode=%s resident_batches=%llu fallback_batches=%llu loads=%llu load_words=%llu writebacks=%llu "
                 "writeback_words=%llu\n",
                 cacheMode ? "cache" : "writeback", static_cast<unsigned long long>(counters.cacheResidentBatches),
@@ -352,8 +384,10 @@ int main(int argc, char** argv) {
     {
         const writeback::PassTimings& totals = renderer.TimingTotals();
         const double frames = renderer.TimedFrames() ? static_cast<double>(renderer.TimedFrames()) : 1.0;
-        std::printf("per_frame_ms translate=%.2f execute=%.2f writeback=%.2f load=%.2f decode=%.2f\n",
-                    totals.translateUs / frames / 1000.0, totals.executeUs / frames / 1000.0,
+        std::printf("per_frame_ms gif=%.2f translate=%.2f execute=%.2f upload=%.2f writeback=%.2f load=%.2f "
+                    "decode=%.2f\n",
+                    counters.gifUs / frames / 1000.0, totals.translateUs / frames / 1000.0,
+                    totals.executeUs / frames / 1000.0, counters.uploadUs / frames / 1000.0,
                     counters.cacheWritebackUs / frames / 1000.0, counters.cacheLoadUs / frames / 1000.0,
                     counters.textureDecodeUs / frames / 1000.0);
     }

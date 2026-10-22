@@ -13,6 +13,7 @@
 #include "hw_gs_writeback_gpu.hpp"
 
 #include "hw_gs_vulkan_device_table.hpp"
+#include "../memory/hw_memory.hpp"
 #include "../shaders/hw_shader_blobs.hpp"
 
 #include <algorithm>
@@ -39,6 +40,9 @@ constexpr VkDeviceSize kStagingBytes = 2 * kFrameBytes + static_cast<VkDeviceSiz
                                        (static_cast<VkDeviceSize>(32) << 20);
 constexpr VkDeviceSize kReadbackBytes = 2 * kFrameBytes;
 constexpr VkDeviceSize kVertexBytes = static_cast<VkDeviceSize>(kGpuMaxVertices) * sizeof(GpuVertex);
+constexpr VkDeviceSize kGlmBytes = static_cast<VkDeviceSize>(4) << 20;           // GS local memory (IN-347)
+constexpr VkDeviceSize kPaletteRingBytes = static_cast<VkDeviceSize>(4) << 20;   // 4,096 palettes of 256 RGBA8
+constexpr VkDeviceSize kClutBytes = 512 * sizeof(std::uint32_t);                  // GPU CLUT buffer (IN-349)
 constexpr VkDeviceSize kUniformBytes = 256;                   // one pixel-state block
 constexpr VkDeviceSize kUniformRingBytes = static_cast<VkDeviceSize>(4) << 20;  // 16,384 blocks at 256 B
 constexpr std::uint32_t kPushBytes = 28;  // hw_vertex.vert PushConstants
@@ -118,6 +122,55 @@ struct GpuDrawer::Impl {
   VkDeviceSize vertexUsed = 0;   // vertices
   VkDeviceSize uniformUsed = 0;  // bytes
   VkDeviceSize uniformStride = kUniformBytes;
+
+  // GLM (IN-347): device-local mirror of GS memory, address tables, palette ring, compute pipelines. One
+  // descriptor set per target slot (binding 4 = that slot's image; colour slots first, then depth slots).
+  Resource glm;
+  Resource glmTables;
+  Resource palettes;
+  Resource clut;                 // GPU CLUT buffer: 512 halfwords, one per uint (IN-349)
+  VkShaderModule clutModule = VK_NULL_HANDLE;
+  VkPipeline clutPipeline = VK_NULL_HANDLE;
+  VkDeviceSize paletteUsed = 0;  // bytes of the palette ring used by the open recording
+  VkDescriptorSetLayout computeSetLayout = VK_NULL_HANDLE;
+  VkPipelineLayout computeLayout = VK_NULL_HANDLE;
+  VkDescriptorPool computePool = VK_NULL_HANDLE;
+  VkDescriptorSet computeSets[kGpuColourSlots + kGpuDepthSlots] = {};
+  VkShaderModule decodeModule = VK_NULL_HANDLE;
+  VkShaderModule swizzleModule = VK_NULL_HANDLE;
+  VkPipeline decodePipeline = VK_NULL_HANDLE;
+  VkPipeline swizzlePipeline = VK_NULL_HANDLE;
+  VkShaderModule unswizzleModule = VK_NULL_HANDLE;
+  VkPipeline unswizzlePipeline = VK_NULL_HANDLE;
+  VkShaderModule mergeModule = VK_NULL_HANDLE;
+  VkPipeline mergePipeline = VK_NULL_HANDLE;
+  VkShaderModule hostUploadModule = VK_NULL_HANDLE;
+  VkPipeline hostUploadPipeline = VK_NULL_HANDLE;
+
+  VkPipeline make_compute(VkShaderModule module, std::string &error) {
+    VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+    info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    info.stage.module = module;
+    info.stage.pName = "main";
+    info.layout = computeLayout;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    check(gt4_hwd_vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &pipeline),
+          "vkCreateComputePipelines", error);
+    return pipeline;
+  }
+
+  // Every earlier GPU write (copies, compute and fragment shaders) is visible to every later read or write.
+  void full_barrier() {
+    VkMemoryBarrier barrier{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT |
+                            VK_ACCESS_TRANSFER_WRITE_BIT;
+    const VkPipelineStageFlags stages = VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+                                        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    gt4_hw_vkCmdPipelineBarrier(cmd, stages, stages, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+    ++stats.barriers;
+  }
 
   bool submit(bool wait, std::string &error);
   bool wait_idle(std::string &error);
@@ -346,7 +399,35 @@ struct GpuDrawer::Impl {
       for (Image &image : frames) destroyImage(&image);
       for (Image &image : depths) destroyImage(&image);
       destroyImage(&texels);
-      for (Resource *resource : {&staging, &readback, &vertices, &uniforms}) {
+      if (clutPipeline) gt4_hwd_vkDestroyPipeline(device, clutPipeline, nullptr);
+      if (clutModule) gt4_hwd_vkDestroyShaderModule(device, clutModule, nullptr);
+      clutPipeline = VK_NULL_HANDLE;
+      clutModule = VK_NULL_HANDLE;
+      if (unswizzlePipeline) gt4_hwd_vkDestroyPipeline(device, unswizzlePipeline, nullptr);
+      if (unswizzleModule) gt4_hwd_vkDestroyShaderModule(device, unswizzleModule, nullptr);
+      unswizzlePipeline = VK_NULL_HANDLE;
+      unswizzleModule = VK_NULL_HANDLE;
+      if (mergePipeline) gt4_hwd_vkDestroyPipeline(device, mergePipeline, nullptr);
+      if (mergeModule) gt4_hwd_vkDestroyShaderModule(device, mergeModule, nullptr);
+      mergePipeline = VK_NULL_HANDLE;
+      mergeModule = VK_NULL_HANDLE;
+      if (hostUploadPipeline) gt4_hwd_vkDestroyPipeline(device, hostUploadPipeline, nullptr);
+      if (hostUploadModule) gt4_hwd_vkDestroyShaderModule(device, hostUploadModule, nullptr);
+      hostUploadPipeline = VK_NULL_HANDLE;
+      hostUploadModule = VK_NULL_HANDLE;
+      if (decodePipeline) gt4_hwd_vkDestroyPipeline(device, decodePipeline, nullptr);
+      if (swizzlePipeline) gt4_hwd_vkDestroyPipeline(device, swizzlePipeline, nullptr);
+      if (decodeModule) gt4_hwd_vkDestroyShaderModule(device, decodeModule, nullptr);
+      if (swizzleModule) gt4_hwd_vkDestroyShaderModule(device, swizzleModule, nullptr);
+      if (computePool) gt4_hwd_vkDestroyDescriptorPool(device, computePool, nullptr);
+      if (computeLayout) gt4_hwd_vkDestroyPipelineLayout(device, computeLayout, nullptr);
+      if (computeSetLayout) gt4_hwd_vkDestroyDescriptorSetLayout(device, computeSetLayout, nullptr);
+      decodePipeline = swizzlePipeline = VK_NULL_HANDLE;
+      decodeModule = swizzleModule = VK_NULL_HANDLE;
+      computePool = VK_NULL_HANDLE;
+      computeLayout = VK_NULL_HANDLE;
+      computeSetLayout = VK_NULL_HANDLE;
+      for (Resource *resource : {&staging, &readback, &vertices, &uniforms, &glm, &glmTables, &palettes, &clut}) {
         if (resource->mapped) gt4_hwd_vkUnmapMemory(device, resource->memory);
         if (resource->buffer) gt4_hwd_vkDestroyBuffer(device, resource->buffer, nullptr);
         if (resource->memory) gt4_hwd_vkFreeMemory(device, resource->memory, nullptr);
@@ -370,6 +451,10 @@ struct GpuDrawer::Impl {
     readback = Resource{};
     vertices = Resource{};
     uniforms = Resource{};
+    glm = Resource{};
+    glmTables = Resource{};
+    palettes = Resource{};
+    clut = Resource{};
     ready = false;
   }
 };
@@ -535,6 +620,111 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   }
 
   if (!s.make_images_general(error)) return false;
+
+  // ---- GLM (IN-347) ----
+  {
+    const memory::GpuAddressTables tables = memory::gpuAddressTables();
+    std::vector<std::uint32_t> words(tables.directory);
+    words.insert(words.end(), tables.entries.begin(), tables.entries.end());
+    const VkDeviceSize tableBytes = words.size() * sizeof(std::uint32_t);
+    if (!s.make_buffer(s.glm, kGlmBytes,
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, false, error)) return false;
+    if (!s.make_buffer(s.glmTables, tableBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, true, error)) return false;
+    std::memcpy(s.glmTables.mapped, words.data(), tableBytes);
+    if (!s.make_buffer(s.palettes, kPaletteRingBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 0, true, error)) return false;
+    if (!s.make_buffer(s.clut, kClutBytes,
+                       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, false, error)) return false;
+
+    VkDescriptorSetLayoutBinding computeBindings[6]{};
+    computeBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    computeBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    computeBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    computeBindings[3] = {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    computeBindings[4] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    computeBindings[5] = {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+    VkDescriptorSetLayoutCreateInfo computeSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    computeSetInfo.bindingCount = 6;
+    computeSetInfo.pBindings = computeBindings;
+    if (!check(gt4_hwd_vkCreateDescriptorSetLayout(s.device, &computeSetInfo, nullptr, &s.computeSetLayout),
+               "vkCreateDescriptorSetLayout", error)) return false;
+    VkPushConstantRange computePush{VK_SHADER_STAGE_COMPUTE_BIT, 0, 16 * sizeof(std::uint32_t)};
+    VkPipelineLayoutCreateInfo computeLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    computeLayoutInfo.setLayoutCount = 1;
+    computeLayoutInfo.pSetLayouts = &s.computeSetLayout;
+    computeLayoutInfo.pushConstantRangeCount = 1;
+    computeLayoutInfo.pPushConstantRanges = &computePush;
+    if (!check(gt4_hwd_vkCreatePipelineLayout(s.device, &computeLayoutInfo, nullptr, &s.computeLayout),
+               "vkCreatePipelineLayout", error)) return false;
+    constexpr std::uint32_t kComputeSets = kGpuColourSlots + kGpuDepthSlots;
+    VkDescriptorPoolSize computeSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 4 * kComputeSets},
+                                            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * kComputeSets}};
+    VkDescriptorPoolCreateInfo computePoolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    computePoolInfo.maxSets = kComputeSets;
+    computePoolInfo.poolSizeCount = 2;
+    computePoolInfo.pPoolSizes = computeSizes;
+    if (!check(gt4_hwd_vkCreateDescriptorPool(s.device, &computePoolInfo, nullptr, &s.computePool),
+               "vkCreateDescriptorPool", error)) return false;
+    VkDescriptorSetLayout computeLayouts[kComputeSets];
+    for (VkDescriptorSetLayout &layout : computeLayouts) layout = s.computeSetLayout;
+    VkDescriptorSetAllocateInfo computeAllocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    computeAllocate.descriptorPool = s.computePool;
+    computeAllocate.descriptorSetCount = kComputeSets;
+    computeAllocate.pSetLayouts = computeLayouts;
+    if (!check(gt4_hwd_vkAllocateDescriptorSets(s.device, &computeAllocate, s.computeSets), "vkAllocateDescriptorSets",
+               error)) return false;
+    VkDescriptorBufferInfo buffers[3] = {{s.glm.buffer, 0, kGlmBytes},
+                                         {s.glmTables.buffer, 0, tableBytes},
+                                         {s.palettes.buffer, 0, kPaletteRingBytes}};
+    VkDescriptorBufferInfo clutInfo{s.clut.buffer, 0, kClutBytes};
+    for (std::uint32_t set = 0; set < kComputeSets; ++set) {
+      const VkImageView source = set < kGpuColourSlots ? s.frames[set].view : s.depths[set - kGpuColourSlots].view;
+      VkDescriptorImageInfo images[2] = {{VK_NULL_HANDLE, s.texels.view, VK_IMAGE_LAYOUT_GENERAL},
+                                         {VK_NULL_HANDLE, source, VK_IMAGE_LAYOUT_GENERAL}};
+      VkWriteDescriptorSet writes[6]{};
+      for (std::uint32_t i = 0; i < 6; ++i) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = s.computeSets[set];
+        writes[i].dstBinding = i;
+        writes[i].descriptorCount = 1;
+        if (i < 3 || i == 5) {
+          writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+          writes[i].pBufferInfo = i == 5 ? &clutInfo : &buffers[i];
+        } else {
+          writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+          writes[i].pImageInfo = &images[i - 3];
+        }
+      }
+      gt4_hwd_vkUpdateDescriptorSets(s.device, 6, writes, 0, nullptr);
+    }
+    s.decodeModule = s.make_module(hwgs::shaders::hw_glm_decode_words, hwgs::shaders::hw_glm_decode_word_count, error);
+    s.swizzleModule = s.make_module(hwgs::shaders::hw_glm_swizzle_words, hwgs::shaders::hw_glm_swizzle_word_count, error);
+    if (!s.decodeModule || !s.swizzleModule) return false;
+    s.decodePipeline = s.make_compute(s.decodeModule, error);
+    s.swizzlePipeline = s.make_compute(s.swizzleModule, error);
+    if (!s.decodePipeline || !s.swizzlePipeline) return false;
+    s.clutModule = s.make_module(hwgs::shaders::hw_glm_clut_words, hwgs::shaders::hw_glm_clut_word_count, error);
+    if (!s.clutModule) return false;
+    s.clutPipeline = s.make_compute(s.clutModule, error);
+    if (!s.clutPipeline) return false;
+    s.unswizzleModule =
+        s.make_module(hwgs::shaders::hw_glm_unswizzle_words, hwgs::shaders::hw_glm_unswizzle_word_count, error);
+    if (!s.unswizzleModule) return false;
+    s.unswizzlePipeline = s.make_compute(s.unswizzleModule, error);
+    if (!s.unswizzlePipeline) return false;
+    s.mergeModule = s.make_module(hwgs::shaders::hw_glm_merge_words, hwgs::shaders::hw_glm_merge_word_count, error);
+    if (!s.mergeModule) return false;
+    s.mergePipeline = s.make_compute(s.mergeModule, error);
+    if (!s.mergePipeline) return false;
+    s.hostUploadModule =
+        s.make_module(hwgs::shaders::hw_glm_host_upload_words, hwgs::shaders::hw_glm_host_upload_word_count, error);
+    if (!s.hostUploadModule) return false;
+    s.hostUploadPipeline = s.make_compute(s.hostUploadModule, error);
+    if (!s.hostUploadPipeline) return false;
+  }
   s.ready = true;
   return true;
 }
@@ -566,6 +756,7 @@ bool GpuDrawer::Impl::wait_idle(std::string &error) {
   stagingUsed = 0;
   vertexUsed = 0;
   uniformUsed = 0;
+  paletteUsed = 0;
   return true;
 }
 
@@ -587,7 +778,8 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     error = "GpuDrawer::Execute before Init";
     return false;
   }
-  const bool anyTransfer = chunk.uploadFrame || chunk.uploadDepth || chunk.readbackFrame || chunk.readbackDepth;
+  const bool anyTransfer = chunk.uploadFrame || chunk.uploadDepth || chunk.readbackFrame || chunk.readbackDepth ||
+                           (chunk.hasTexture && chunk.glmTexture);
   if (chunk.draws.empty() && !anyTransfer) return true;
   if (chunk.colourSlot >= kGpuColourSlots || chunk.depthSlot >= kGpuDepthSlots) {
     error = "chunk names a target slot that does not exist";
@@ -612,14 +804,15 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     error = "frame or depth word count does not match the rectangle";
     return false;
   }
-  const bool textureFromSlot = chunk.hasTexture && chunk.textureSlot >= 0;
+  const bool textureFromGlm = chunk.hasTexture && chunk.glmTexture;
+  const bool textureFromSlot = chunk.hasTexture && !textureFromGlm && chunk.textureSlot >= 0;
   if (textureFromSlot && chunk.textureSlot >= static_cast<std::int32_t>(kGpuColourSlots)) {
     error = "texture source slot does not exist";
     return false;
   }
   if (chunk.hasTexture && (chunk.texWidth == 0 || chunk.texHeight == 0 || chunk.texWidth > kTextureMax ||
                            chunk.texHeight > kTextureMax ||
-                           (!textureFromSlot &&
+                           (!textureFromSlot && !textureFromGlm &&
                             chunk.texels.size() != static_cast<std::size_t>(chunk.texWidth) * chunk.texHeight))) {
     error = "texture size is outside the texel image";
     return false;
@@ -627,14 +820,17 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
 
   // Ring space this chunk needs (IN-342): the staging bytes of its uploads, its vertices and one uniform slot.
   const VkDeviceSize frameBytes = static_cast<VkDeviceSize>(words) * 4;
-  const VkDeviceSize textureBytes =
-      (chunk.hasTexture && !textureFromSlot) ? static_cast<VkDeviceSize>(chunk.texels.size()) * 4 : 0;
+  const VkDeviceSize textureBytes = (chunk.hasTexture && !textureFromSlot && !textureFromGlm)
+                                         ? static_cast<VkDeviceSize>(chunk.texels.size()) * 4
+                                         : 0;
   const VkDeviceSize stagingNeeded =
       (chunk.uploadFrame ? frameBytes : 0) + (chunk.uploadDepth ? frameBytes : 0) + textureBytes;
   const VkDeviceSize vertexNeeded = chunk.vertices.size();
   const bool drawing = !chunk.draws.empty();
+  const VkDeviceSize paletteNeeded =
+      (textureFromGlm && chunk.glmIndexed && !chunk.glmGpuClut) ? 256 * sizeof(std::uint32_t) : 0;
   if (s.stagingUsed + stagingNeeded > kStagingBytes || s.vertexUsed + vertexNeeded > kGpuMaxVertices ||
-      s.uniformUsed + s.uniformStride > kUniformRingBytes) {
+      s.uniformUsed + s.uniformStride > kUniformRingBytes || s.paletteUsed + paletteNeeded > kPaletteRingBytes) {
     if (!s.submit(true, error)) return false;
   }
   if (!s.begin_recording(error)) return false;
@@ -651,7 +847,16 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     s.stagingUsed += frameBytes;
   }
   const VkDeviceSize textureOffset = s.stagingUsed;
-  if (chunk.hasTexture && !textureFromSlot) {
+  const std::uint32_t paletteBase = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
+  if (paletteNeeded != 0) {
+    if (chunk.palette.size() != 256) {
+      error = "a GLM-decoded indexed texture needs a 256-entry palette";
+      return false;
+    }
+    std::memcpy(static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed, chunk.palette.data(), paletteNeeded);
+    s.paletteUsed += paletteNeeded;
+  }
+  if (chunk.hasTexture && !textureFromSlot && !textureFromGlm) {
     std::memcpy(stagingBase + s.stagingUsed, chunk.texels.data(), textureBytes);
     s.stagingUsed += textureBytes;
   }
@@ -710,7 +915,20 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   if (chunk.uploadDepth) {
     gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, depthImage, VK_IMAGE_LAYOUT_GENERAL, 1, &depthCopy);
   }
-  if (textureFromSlot) {
+  if (textureFromGlm) {
+    // IN-347: decode the texels from the GLM with the texture's addressing (the caller made the GLM current).
+    s.full_barrier();
+    gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.decodePipeline);
+    gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
+                                    nullptr);
+    const std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
+    const std::uint32_t push[12] = {chunk.glmBp,  chunk.glmBw,   chunk.glmPsm,  chunk.texWidth,
+                                    chunk.texHeight, indexedMode, paletteBase,  chunk.glmCpsm,
+                                    chunk.glmCsa, chunk.glmTa0,  chunk.glmTa1,  chunk.glmAem};
+    gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+    gt4_hwd_vkCmdDispatch(s.cmd, (chunk.texWidth + 7) / 8, (chunk.texHeight + 7) / 8, 1);
+    s.full_barrier();
+  } else if (textureFromSlot) {
     // IN-346: the texture is (part of) a resident colour target: copy its words on the GPU.
     VkImageCopy region{};
     region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
@@ -843,6 +1061,283 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   if (chunk.readbackFrame) std::memcpy(chunk.frameWords.data(), readback, frameBytes);
   if (chunk.readbackDepth) std::memcpy(chunk.depthWords.data(), readback + frameBytes, frameBytes);
   s.stats.readbackBytes += frameBytes * ((chunk.readbackFrame ? 1 : 0) + (chunk.readbackDepth ? 1 : 0));
+  return true;
+}
+
+bool GpuDrawer::UploadGlm(const std::uint8_t *localMemory,
+                          const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges, std::string &error) {
+  Impl &s = *impl_;
+  VkDeviceSize total = 0;
+  for (const auto &range : ranges) total += range.second;
+  if (total == 0) return true;
+  if (total > kStagingBytes) {
+    error = "GLM upload larger than the staging ring";
+    return false;
+  }
+  if (s.stagingUsed + total > kStagingBytes && !s.submit(true, error)) return false;
+  if (!s.begin_recording(error)) return false;
+  std::vector<VkBufferCopy> copies;
+  copies.reserve(ranges.size());
+  auto *staging = static_cast<std::uint8_t *>(s.staging.mapped);
+  for (const auto &range : ranges) {
+    if (range.second == 0) continue;
+    if (static_cast<VkDeviceSize>(range.first) + range.second > kGlmBytes) {
+      error = "GLM upload range outside the 4 MiB memory";
+      return false;
+    }
+    std::memcpy(staging + s.stagingUsed, localMemory + range.first, range.second);
+    copies.push_back(VkBufferCopy{s.stagingUsed, range.first, range.second});
+    s.stagingUsed += range.second;
+  }
+  s.full_barrier();  // earlier GLM readers finish before the bytes change
+  gt4_hwd_vkCmdCopyBuffer(s.cmd, s.staging.buffer, s.glm.buffer, static_cast<std::uint32_t>(copies.size()),
+                          copies.data());
+  s.full_barrier();
+  s.stats.uploadBytes += total;
+  return true;
+}
+
+bool GpuDrawer::SwizzleToGlm(bool depthSlot, std::uint32_t slot, std::uint32_t bp, std::uint32_t bw, std::uint32_t psm,
+                             std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1, std::string &error) {
+  Impl &s = *impl_;
+  if ((depthSlot && slot >= kGpuDepthSlots) || (!depthSlot && slot >= kGpuColourSlots) || x1 < x0 || y1 < y0 || x0 < 0 ||
+      y0 < 0 || x1 >= kGpuSurface || y1 >= kGpuSurface) {
+    error = "GLM swizzle outside a slot";
+    return false;
+  }
+  if (!s.begin_recording(error)) return false;
+  const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
+  s.full_barrier();  // the target's draws and the GLM's earlier writes are complete
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.swizzlePipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[set], 0,
+                                  nullptr);
+  const std::uint32_t width = static_cast<std::uint32_t>(x1 - x0 + 1);
+  const std::uint32_t height = static_cast<std::uint32_t>(y1 - y0 + 1);
+  const std::uint32_t push[8] = {bp, bw, psm, static_cast<std::uint32_t>(x0), static_cast<std::uint32_t>(y0), width, height,
+                                 0u};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
+  s.full_barrier();
+  return true;
+}
+
+bool GpuDrawer::LoadSlotFromGlm(bool depthSlot, std::uint32_t slot, std::uint32_t bp, std::uint32_t bw,
+                                std::uint32_t psm, std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1,
+                                std::string &error) {
+  Impl &s = *impl_;
+  if ((depthSlot && slot >= kGpuDepthSlots) || (!depthSlot && slot >= kGpuColourSlots) || x1 < x0 || y1 < y0 || x0 < 0 ||
+      y0 < 0 || x1 >= kGpuSurface || y1 >= kGpuSurface) {
+    error = "GLM load outside a slot";
+    return false;
+  }
+  if (!s.begin_recording(error)) return false;
+  const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
+  s.full_barrier();  // earlier draws into the slot and the GLM's writes are complete
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.unswizzlePipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[set], 0,
+                                  nullptr);
+  const std::uint32_t width = static_cast<std::uint32_t>(x1 - x0 + 1);
+  const std::uint32_t height = static_cast<std::uint32_t>(y1 - y0 + 1);
+  const std::uint32_t push[8] = {bp, bw, psm, static_cast<std::uint32_t>(x0), static_cast<std::uint32_t>(y0), width, height,
+                                 0u};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
+  s.full_barrier();
+  return true;
+}
+
+bool GpuDrawer::MergeIntoGlm(const std::vector<std::uint32_t> &triples, std::string &error) {
+  Impl &s = *impl_;
+  if (triples.empty()) return true;
+  if (triples.size() % 3 != 0) {
+    error = "GLM merge list is not made of triples";
+    return false;
+  }
+  const VkDeviceSize bytes = triples.size() * sizeof(std::uint32_t);
+  if (bytes > kPaletteRingBytes) {
+    error = "GLM merge list larger than the ring";
+    return false;
+  }
+  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(true, error)) return false;
+  if (!s.begin_recording(error)) return false;
+  const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
+  std::memcpy(static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed, triples.data(), bytes);
+  s.paletteUsed += bytes;
+  s.full_barrier();  // earlier GLM readers and writers finish first
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.mergePipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
+                                  nullptr);
+  const std::uint32_t count = static_cast<std::uint32_t>(triples.size() / 3);
+  const std::uint32_t push[2] = {base, count};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  gt4_hwd_vkCmdDispatch(s.cmd, (count + 63) / 64, 1, 1);
+  s.full_barrier();
+  s.stats.uploadBytes += bytes;
+  return true;
+}
+
+bool GpuDrawer::UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_t psm, std::uint32_t x0,
+                                std::uint32_t y0, std::uint32_t width, std::uint32_t pixels, std::uint32_t bpp,
+                                const std::uint8_t *data, std::size_t byteCount, std::string &error) {
+  Impl &s = *impl_;
+  if (pixels == 0) return true;
+  if (width == 0 || (bpp != 32 && bpp != 24 && bpp != 16 && bpp != 8 && bpp != 4) ||
+      static_cast<std::uint64_t>(pixels) * bpp > static_cast<std::uint64_t>(byteCount) * 8u) {
+    error = "GLM host upload with inconsistent size";
+    return false;
+  }
+  // Whole words plus one spare word (a 24-bit texel at the end reads the next word).
+  const VkDeviceSize words = (byteCount + 3) / 4 + 1;
+  const VkDeviceSize bytes = words * sizeof(std::uint32_t);
+  if (bytes > kPaletteRingBytes) {
+    error = "GLM host upload larger than the ring";
+    return false;
+  }
+  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(true, error)) return false;
+  if (!s.begin_recording(error)) return false;
+  const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
+  auto *ring = static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed;
+  std::memcpy(ring, data, byteCount);
+  std::memset(ring + byteCount, 0, static_cast<std::size_t>(bytes) - byteCount);
+  s.paletteUsed += bytes;
+  s.full_barrier();  // earlier GLM readers and writers finish first
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.hostUploadPipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
+                                  nullptr);
+  const std::uint32_t push[9] = {bp, bw, psm, x0, y0, width, pixels, bpp, base};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  gt4_hwd_vkCmdDispatch(s.cmd, (pixels + 63) / 64, 1, 1);
+  s.full_barrier();
+  s.stats.uploadBytes += byteCount;
+  return true;
+}
+
+bool GpuDrawer::DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges,
+                            std::uint8_t *localMemory, std::string &error) {
+  Impl &s = *impl_;
+  std::vector<VkBufferCopy> copies;
+  VkDeviceSize packed = 0;
+  for (const auto &range : ranges) {
+    if (range.second == 0) continue;
+    if (static_cast<VkDeviceSize>(range.first) + range.second > kGlmBytes) {
+      error = "GLM download range outside the 4 MiB memory";
+      return false;
+    }
+    copies.push_back(VkBufferCopy{range.first, packed, range.second});
+    packed += range.second;
+  }
+  if (copies.empty()) return true;
+  if (packed > kReadbackBytes) {
+    error = "GLM download larger than the readback buffer";
+    return false;
+  }
+  if (!s.begin_recording(error)) return false;
+  s.full_barrier();
+  gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.readback.buffer, static_cast<std::uint32_t>(copies.size()),
+                          copies.data());
+  VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+  done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0, nullptr,
+                              0, nullptr);
+  if (!s.submit(true, error)) return false;
+  const auto *bytes = static_cast<const std::uint8_t *>(s.readback.mapped);
+  for (const VkBufferCopy &copy : copies) {
+    std::memcpy(localMemory + copy.srcOffset, bytes + copy.dstOffset, static_cast<std::size_t>(copy.size));
+  }
+  s.stats.readbackBytes += packed;
+  return true;
+}
+
+bool GpuDrawer::LoadClutFromGlm(std::uint32_t cbp, std::uint32_t cpsm, std::uint32_t csm, std::uint32_t csa,
+                                std::uint32_t psm, std::uint32_t cbw, std::uint32_t cou, std::uint32_t cov,
+                                std::string &error) {
+  Impl &s = *impl_;
+  if (!s.begin_recording(error)) return false;
+  s.full_barrier();
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.clutPipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.computeLayout, 0, 1, &s.computeSets[0], 0,
+                                  nullptr);
+  const std::uint32_t eightBit = (psm & 7u) == 3u ? 1u : 0u;
+  const std::uint32_t push[8] = {cbp, cpsm, csm, csa, eightBit, cbw, cou, cov};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  gt4_hwd_vkCmdDispatch(s.cmd, eightBit ? 4u : 1u, 1, 1);
+  s.full_barrier();
+  return true;
+}
+
+bool GpuDrawer::UploadClut(const std::uint16_t *halfwords, std::string &error) {
+  Impl &s = *impl_;
+  if (s.stagingUsed + kClutBytes > kStagingBytes && !s.submit(true, error)) return false;
+  if (!s.begin_recording(error)) return false;
+  auto *staging = reinterpret_cast<std::uint32_t *>(static_cast<std::uint8_t *>(s.staging.mapped) + s.stagingUsed);
+  for (std::uint32_t i = 0; i < 512; ++i) staging[i] = halfwords[i];
+  s.full_barrier();
+  const VkBufferCopy copy{s.stagingUsed, 0, kClutBytes};
+  gt4_hwd_vkCmdCopyBuffer(s.cmd, s.staging.buffer, s.clut.buffer, 1, &copy);
+  s.stagingUsed += kClutBytes;
+  s.full_barrier();
+  return true;
+}
+
+bool GpuDrawer::ReadClut(std::vector<std::uint16_t> &halfwords, std::string &error) {
+  Impl &s = *impl_;
+  if (!s.begin_recording(error)) return false;
+  s.full_barrier();
+  const VkBufferCopy copy{0, 0, kClutBytes};
+  gt4_hwd_vkCmdCopyBuffer(s.cmd, s.clut.buffer, s.readback.buffer, 1, &copy);
+  VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+  done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0, nullptr,
+                              0, nullptr);
+  if (!s.submit(true, error)) return false;
+  const auto *words = static_cast<const std::uint32_t *>(s.readback.mapped);
+  halfwords.resize(512);
+  for (std::uint32_t i = 0; i < 512; ++i) halfwords[i] = static_cast<std::uint16_t>(words[i]);
+  return true;
+}
+
+bool GpuDrawer::ReadGlm(std::vector<std::uint32_t> &words, std::string &error) {
+  Impl &s = *impl_;
+  if (!s.begin_recording(error)) return false;
+  s.full_barrier();
+  const VkBufferCopy copy{0, 0, kGlmBytes};
+  gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.readback.buffer, 1, &copy);
+  VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+  done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0, nullptr,
+                              0, nullptr);
+  if (!s.submit(true, error)) return false;
+  words.resize(kGlmBytes / 4);
+  std::memcpy(words.data(), s.readback.mapped, kGlmBytes);
+  return true;
+}
+
+bool GpuDrawer::ReadTexels(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words,
+                           std::string &error) {
+  Impl &s = *impl_;
+  if (width == 0 || height == 0 || width > kTextureMax || height > kTextureMax) {
+    error = "texel read outside the texel image";
+    return false;
+  }
+  if (!s.begin_recording(error)) return false;
+  s.full_barrier();
+  VkBufferImageCopy copy{};
+  copy.bufferRowLength = width;
+  copy.bufferImageHeight = height;
+  copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  copy.imageExtent = {width, height, 1};
+  gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.texels.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &copy);
+  VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+  done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0, nullptr,
+                              0, nullptr);
+  if (!s.submit(true, error)) return false;
+  words.resize(static_cast<std::size_t>(width) * height);
+  std::memcpy(words.data(), s.readback.mapped, words.size() * sizeof(std::uint32_t));
   return true;
 }
 

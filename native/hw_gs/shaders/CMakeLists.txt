@@ -38,7 +38,7 @@ string(REGEX MATCH "Glslang Version: [^\n]*" GT4_HW_GLSLANG_VERSION_LINE "${GT4_
 message(STATUS "HWR shaders: ${GT4_HW_GLSLANG_VERSION_LINE} (pin ${GT4_HW_GLSLANG_SHA256})")
 
 set(HW_SHADER_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
-set(HW_SHADER_INCLUDES "${HW_SHADER_DIR}/hw_pixel_core.glsl")
+set(HW_SHADER_INCLUDES "${HW_SHADER_DIR}/hw_pixel_core.glsl" "${HW_SHADER_DIR}/hw_glm_common.glsl")
 set(HW_EMBED_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/embed_spirv.cmake")
 
 # hw_add_shader(<symbol> <source> <vert|frag|comp> [DEFINES <macro=value>...])
@@ -74,6 +74,13 @@ hw_add_shader(hw_pixel_uber_smooth "${HW_SHADER_DIR}/hw_pixel_uber.frag" frag DE
 hw_add_shader(hw_pixel_uber_smooth_interlock "${HW_SHADER_DIR}/hw_pixel_uber.frag" frag
               DEFINES HWR_FLAT_COLOUR=0 HWR_INTERLOCK=1)
 hw_add_shader(hw_pixel_uber_flat "${HW_SHADER_DIR}/hw_pixel_uber.frag" frag DEFINES HWR_FLAT_COLOUR=1)
+# M10 GLM kernels (IN-347): texture decode from the GLM and target swizzle into the GLM.
+hw_add_shader(hw_glm_decode "${HW_SHADER_DIR}/hw_glm_decode.comp" comp)
+hw_add_shader(hw_glm_swizzle "${HW_SHADER_DIR}/hw_glm_swizzle.comp" comp)
+hw_add_shader(hw_glm_clut "${HW_SHADER_DIR}/hw_glm_clut.comp" comp)
+hw_add_shader(hw_glm_unswizzle "${HW_SHADER_DIR}/hw_glm_unswizzle.comp" comp)
+hw_add_shader(hw_glm_merge "${HW_SHADER_DIR}/hw_glm_merge.comp" comp)
+hw_add_shader(hw_glm_host_upload "${HW_SHADER_DIR}/hw_glm_host_upload.comp" comp)
 hw_add_shader(hw_blend_exact "${HW_SHADER_DIR}/hw_blend_exact.comp" comp)
 hw_add_shader(hw_pixel_exact "${HW_SHADER_DIR}/hw_pixel_exact.comp" comp)
 

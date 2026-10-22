@@ -65,6 +65,10 @@ public:
     // (the M7 resident targets) writes them back here. Empty = no call.
     void SetBeforeLocalRead(std::function<void(const BlockRange&)> callback);
 
+    // Called after the CLUT unit performed a load (not for skipped or refused ones), with its TEX0/TEXCLUT
+    // fields, so a renderer can repeat the load on its GPU CLUT copy (chapter 07.7, IN-349). Empty = no call.
+    void SetClutLoaded(std::function<void(const clut::Tex0Write&)> callback);
+
     // Feeds whole qwords to a GIF path (1..3).
     void GifTransfer(uint32_t path, const Qword* qwords, size_t count);
     bool GifBusy(uint32_t path) const;
@@ -142,6 +146,7 @@ private:
 
     const uint8_t* localMemory_ = nullptr;
     std::function<void(const BlockRange&)> beforeLocalRead_;
+    std::function<void(const clut::Tex0Write&)> clutLoaded_;
     std::vector<uint8_t> zeroMemory_;
 
     Batch batch_;

@@ -353,6 +353,26 @@ inline const InPageLocation& inPageLocation(const PsmInfo& info, std::uint32_t x
     return kInPageTables.perPsm[index][static_cast<std::size_t>(y) * info.pageWidth + x];
 }
 
+GpuAddressTables gpuAddressTables() {
+    GpuAddressTables tables;
+    tables.directory.assign(64u * 4u, 0u);
+    for (std::size_t index = 0; index < kPsmTable.size(); ++index) {
+        const PsmInfo& info = kPsmTable[index];
+        const std::uint32_t code = static_cast<std::uint32_t>(info.psm) & kPsmCodeMask;
+        tables.directory[code * 4u + 0u] = static_cast<std::uint32_t>(tables.entries.size());
+        tables.directory[code * 4u + 1u] = info.pageWidth;
+        tables.directory[code * 4u + 2u] = info.pageHeight;
+        tables.directory[code * 4u + 3u] = info.zBlockXorApplies ? 1u : 0u;
+        for (const InPageLocation& location : kInPageTables.perPsm[index]) {
+            tables.entries.push_back(static_cast<std::uint32_t>(location.tableBlock) |
+                                     (location.byteInBlock << 5) |
+                                     (static_cast<std::uint32_t>(location.bitShift) << 13) |
+                                     (static_cast<std::uint32_t>(location.bitWidth) << 18));
+        }
+    }
+    return tables;
+}
+
 PixelSlot pixelSlot(const BufferView& buffer, std::uint32_t x, std::uint32_t y, ZBlockXorRule zRule) {
     const PsmInfo& info = psmInfo(buffer.psm);
     const std::uint32_t perRow = std::max<std::uint32_t>(1u, buffer.bufferWidth * 64u / info.pageWidth);

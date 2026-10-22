@@ -178,6 +178,10 @@ void FrontEnd::SetBeforeLocalRead(std::function<void(const BlockRange&)> callbac
     beforeLocalRead_ = std::move(callback);
 }
 
+void FrontEnd::SetClutLoaded(std::function<void(const clut::Tex0Write&)> callback) {
+    clutLoaded_ = std::move(callback);
+}
+
 void FrontEnd::SetLocalMemory(const uint8_t* localMemory) {
     localMemory_ = localMemory != nullptr ? localMemory : zeroMemory_.data();
 }
@@ -314,7 +318,7 @@ void FrontEnd::OnTex0Write(uint32_t contextIndex) {
     write.texclutCou = static_cast<uint32_t>(BitRange(env.texclut, 6, 11));
     write.texclutCov = static_cast<uint32_t>(BitRange(env.texclut, 12, 21));
 
-    clut_.ProcessWrite(write, localMemory_, [this, write]() {
+    const bool loaded = clut_.ProcessWrite(write, localMemory_, [this, write]() {
         // Chapter 07.3 step 1: an indexed textured batch, or one that writes the
         // CLUT source, renders with the old palette, so it is flushed first.
         bool flush = false;
@@ -340,6 +344,7 @@ void FrontEnd::OnTex0Write(uint32_t contextIndex) {
             transfers_.CommitPending(TransferReason::ClutLoad);
         }
     });
+    if (loaded && clutLoaded_) clutLoaded_(write);
 }
 
 void FrontEnd::Kick(const GifKick& kick) {

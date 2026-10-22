@@ -1982,3 +1982,20 @@ Incremental rebuild of the slice228 tree. No pin or launcher change.
 - Confirmed: headless `GT4_RENDERER=hw` menu schedule 42/42 dumps byte-identical to slice228; race schedule (10,500
   frames) 42/42 inside the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
 - Measured (headless, per frame): car menu 100 ms, race 113 ms (slice232: 255 / 300 ms).
+
+## Local slice235..slice237 - GLM, GPU CLUT, GLM-owned pages, uploads on the GPU (04.9, 07.7, IN-347..IN-351)
+
+Incremental rebuilds of the slice228 tree. No pin or launcher change. Evidence in `private/slice235-*`,
+`private/slice236-*`, `private/slice237-evidence/` (never staged).
+
+- Confirmed: 223/224 CTests pass; `python_native_contracts` fails only because the rebuilt `gt4vulkan.exe` differs
+  from its pin (pins are not changed on this branch). All non-Python tests also pass with
+  `GT4_HW_TEST_NO_INTERLOCK=1` (223/223). New fixtures: `hw_glm_decode`, `hw_glm_swizzle`, `hw_glm_unswizzle`,
+  `hw_glm_clut`, `hw_glm_upload_merge`, `hw_glm_host_upload`; `hw_cache_equals_writeback` extended.
+- Confirmed: per-frame memory hashes identical to the write-back mode on `menu-v2.gscap` (1,101, = slice228), the car
+  capture and the race capture (121 each).
+- Confirmed: headless `GT4_RENDERER=hw` menu schedule 42/42 dumps byte-identical to slice228; race schedule 42/42
+  identical to slice235 and inside the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
+- Measured: headless race 65 -> 38 ms per vsync (`GT4_HW_PROFILE_EVERY=250`); race replay GS stream 45 -> 17 ms per
+  frame. Replay A/B switches: `--no-glm`, `--no-gpu-clut`, `--no-cpu-sprites`, `--no-glm-park`, `--no-gpu-uploads`.
+

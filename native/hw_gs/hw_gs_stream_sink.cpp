@@ -140,10 +140,14 @@ void maybe_profile(Backend &hw) {
   const auto wall = std::chrono::steady_clock::now();
   const double wallMs = std::chrono::duration<double, std::milli>(wall - g_profile_wall).count() / n;
   std::fprintf(stderr,
-               "[hw] profile vsync=%llu wall_ms=%.2f translate_ms=%.2f execute_ms=%.2f decode_ms=%.2f "
+               "[hw] profile vsync=%llu wall_ms=%.2f gif_ms=%.2f upload_ms=%.2f translate_ms=%.2f execute_ms=%.2f "
+               "decode_ms=%.2f "
                "writeback_ms=%.2f load_ms=%.2f batches=%.1f prims=%.1f draws=%.1f chunks=%.1f textures=%.1f "
-               "cached=%.1f texels=%.0f writebacks=%.2f loads=%.2f submissions=%.2f barriers=%.1f\n",
-               static_cast<unsigned long long>(g_vsyncs), wallMs, (now.translate_us - was.translate_us) / n / 1000.0,
+               "cached=%.1f texels=%.0f writebacks=%.2f loads=%.2f submissions=%.2f barriers=%.1f "
+               "wb_other=%.2f wb_texture=%.2f wb_clut=%.2f wb_transfer=%.2f wb_display=%.2f wb_evict=%.2f "
+               "wb_overlap=%.2f wb_fallback=%.2f wb_sprite=%.2f\n",
+               static_cast<unsigned long long>(g_vsyncs), wallMs, (now.gif_us - was.gif_us) / n / 1000.0,
+               (now.upload_us - was.upload_us) / n / 1000.0, (now.translate_us - was.translate_us) / n / 1000.0,
                (now.execute_us - was.execute_us) / n / 1000.0, (now.decode_us - was.decode_us) / n / 1000.0,
                (now.cache_writeback_us - was.cache_writeback_us) / n / 1000.0,
                (now.cache_load_us - was.cache_load_us) / n / 1000.0, static_cast<double>(now.batches - was.batches) / n,
@@ -155,7 +159,16 @@ void maybe_profile(Backend &hw) {
                static_cast<double>(now.cache_writebacks - was.cache_writebacks) / n,
                static_cast<double>(now.cache_loads - was.cache_loads) / n,
                static_cast<double>(now.gpu_submissions - was.gpu_submissions) / n,
-               static_cast<double>(now.gpu_barriers - was.gpu_barriers) / n);
+               static_cast<double>(now.gpu_barriers - was.gpu_barriers) / n,
+               static_cast<double>(now.writeback_reasons[0] - was.writeback_reasons[0]) / n,
+               static_cast<double>(now.writeback_reasons[1] - was.writeback_reasons[1]) / n,
+               static_cast<double>(now.writeback_reasons[2] - was.writeback_reasons[2]) / n,
+               static_cast<double>(now.writeback_reasons[3] - was.writeback_reasons[3]) / n,
+               static_cast<double>(now.writeback_reasons[4] - was.writeback_reasons[4]) / n,
+               static_cast<double>(now.writeback_reasons[5] - was.writeback_reasons[5]) / n,
+               static_cast<double>(now.writeback_reasons[6] - was.writeback_reasons[6]) / n,
+               static_cast<double>(now.writeback_reasons[7] - was.writeback_reasons[7]) / n,
+               static_cast<double>(now.writeback_reasons[8] - was.writeback_reasons[8]) / n);
   g_profile_last = now;
   g_profile_wall = wall;
 }

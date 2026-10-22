@@ -24,6 +24,7 @@
 #include "hw_gs_registers.hpp"
 #include "hw_gs_types.hpp"
 #include "hw_memory.hpp"
+#include "../cpuref/cpuref_draw.hpp"
 #include "../cpuref/cpuref_memory.hpp"
 
 namespace hwgs::writeback {
@@ -257,6 +258,11 @@ using TextureReadHook = std::function<void(const memory::BufferView&, uint32_t w
 // (exact view, whole extent loaded), so the texels are copied on the GPU, or -1 to decode from the shadow memory.
 using TextureFromTargetHook = std::function<int32_t(const memory::BufferView&, uint32_t width, uint32_t height)>;
 
+// IN-347: asked next; returns true when the texture overlaps GPU-newer target data and the GLM was made
+// current for it (pages uploaded, targets swizzled), so the texels are decoded from the GLM on the GPU.
+using TextureFromGlmHook =
+    std::function<bool(const memory::BufferView&, uint32_t width, uint32_t height, bool indexed, bool& gpuClut)>;
+
 // Decoded-texture cache (M7 memory sources, chapter 04; IN-341). The key is everything the decode reads
 // besides memory: TBP0, TBW, PSM, the decoded extent, TEXA for 16/24-bit texels and the palette contents
 // for indexed ones. `find` returns texels only when no shadow-memory write touched the texture's pages since
@@ -286,7 +292,8 @@ uint64_t HashPalette(const clut::Palette& palette) {
 
 void Translate(const Batch& batch, const memory::LocalMemory& local, const clut::ClutUnit& clut, Translation& out,
                Counters& counters, const TextureReadHook& beforeTextureRead = {},
-               TextureCacheView* textureCache = nullptr, const TextureFromTargetHook& textureFromTarget = {}) {
+               TextureCacheView* textureCache = nullptr, const TextureFromTargetHook& textureFromTarget = {},
+               const TextureFromGlmHook& textureFromGlm = {}) {
     const BatchState& state = batch.state;
     const EnvironmentRegs& env = state.env;
     const ContextRegs& ctx = state.ctx;
@@ -355,9 +362,28 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
         out.texHeight = height;
         const bool rawKind = texture.cls == TexClass::Ct32 || texture.cls == TexClass::Ct24 || texture.cls == TexClass::Ct16;
         if (rawKind && textureFromTarget) out.textureSlot = textureFromTarget(texture.view, width, height);
-        if (out.textureSlot >= 0) {
-            // Raw stored words on the GPU; the pixel shader expands CT16/CT24 with TEXA (IN-346).
-            counters.texturesFromTargets++;
+        bool gpuClut = false;
+        if (out.textureSlot < 0 && textureFromGlm &&
+            textureFromGlm(texture.view, width, height, texture.cls == TexClass::Indexed, gpuClut)) {
+            out.glmTexture = true;
+            out.glmGpuClut = gpuClut && texture.cls == TexClass::Indexed;
+            out.glmCpsm = tex0::Cpsm(state.ctx.tex0);
+            out.glmCsa = tex0::Csa(state.ctx.tex0);
+            out.glmTa0 = texture.texa.ta0;
+            out.glmTa1 = texture.texa.ta1;
+            out.glmAem = texture.texa.aem ? 1u : 0u;
+            out.glmBp = texture.view.basePointer;
+            out.glmBw = texture.view.bufferWidth;
+            out.glmPsm = static_cast<uint32_t>(texture.view.psm);
+            out.glmIndexed = texture.cls == TexClass::Indexed;
+            if (out.glmIndexed && !out.glmGpuClut) {
+                out.palette.assign(texture.palette.entries, texture.palette.entries + 256);
+            }
+            counters.texturesFromGlm++;
+        }
+        if (out.textureSlot >= 0 || out.glmTexture) {
+            // Raw stored words on the GPU; the pixel shader expands CT16/CT24 with TEXA (IN-346, IN-347).
+            if (out.textureSlot >= 0) counters.texturesFromTargets++;
         } else {
         if (beforeTextureRead) beforeTextureRead(texture.view, width, height);
         TextureKey key;
@@ -420,7 +446,7 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
     // RGBA8 words expanded on the CPU, or raw words copied from a resident target and expanded in the shader
     // with the TEXA fields (IN-346; HW_TEXEL_* of hw_pixel_core.glsl: 0 RGBA8, 1 CT16, 2 CT24).
     st.fields[gpu::gpufield::TexelKind] = 0;
-    if (out.textureSlot >= 0) {
+    if (out.textureSlot >= 0 || (out.glmTexture && !out.glmIndexed)) {
         st.fields[gpu::gpufield::TexelKind] = texture.cls == TexClass::Ct16 ? 1u : texture.cls == TexClass::Ct24 ? 2u : 0u;
     }
     st.fields[gpu::gpufield::Ta0] = texture.texa.ta0;
@@ -635,6 +661,19 @@ bool ExecuteBatch(gpu::GpuDrawer &gpu, const BatchTranslation &t, memory::LocalM
         chunk.depthSlot = gpu::kGpuScratchDepthSlot;
         chunk.state = t.state;
         chunk.hasTexture = t.hasTexture;
+        chunk.textureSlot = t.textureSlot;
+        chunk.glmTexture = t.glmTexture;
+        chunk.glmBp = t.glmBp;
+        chunk.glmBw = t.glmBw;
+        chunk.glmPsm = t.glmPsm;
+        chunk.glmIndexed = t.glmIndexed;
+        chunk.glmGpuClut = t.glmGpuClut;
+        chunk.glmCpsm = t.glmCpsm;
+        chunk.glmCsa = t.glmCsa;
+        chunk.glmTa0 = t.glmTa0;
+        chunk.glmTa1 = t.glmTa1;
+        chunk.glmAem = t.glmAem;
+        chunk.palette = t.palette;
         chunk.texWidth = t.texWidth;
         chunk.texHeight = t.texHeight;
         chunk.texels = t.texels;
@@ -696,7 +735,10 @@ void TranslateBatch(const Batch &batch, const memory::LocalMemory &local, const 
 // ---- Renderer -----------------------------------------------------------------------------------
 
 // Why resident targets are written back (counters only; the M7 tuning needs to know).
-enum class WritebackReason : uint8_t { Other, Texture, Clut, Transfer, Display, Eviction, LoadOverlap, Count };
+// Why a resident target was written back (profile counters; Other = host reads of the whole memory).
+enum class WritebackReason : uint8_t {
+    Other, Texture, Clut, Transfer, Display, Eviction, LoadOverlap, Fallback, CpuSprite, Count
+};
 
 struct ReasonScope {
     WritebackReason& slot;
@@ -791,7 +833,9 @@ public:
     Impl() : frontEnd_(FrontEndOptions{}, *this, *this, *this) {
         frontEnd_.SetLocalMemory(memory_.Local().bytes().data());
         InitSlots();
+        frontEnd_.SetClutLoaded([this](const clut::Tex0Write& write) { OnClutLoaded(write); });
         frontEnd_.SetBeforeLocalRead([this](const BlockRange& range) {
+            if (GpuClutActive()) return;  // IN-349: the GPU repeats the load from the GLM; no write-back
             {
                 ReasonScope scope(writebackReason_, WritebackReason::Clut);
                 CoherentForRead(BlockSpan{range.begin, range.count});
@@ -801,16 +845,130 @@ public:
 
     // ---- Transfers (02.7, 10.2): the resident targets are made coherent, then the shadow memory works ----
     void InvalidateDestination(const UploadCommit& c) override {
-        CoherentForWrite(SpanOfTransfer(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, c.rrh));
+        ReasonScope scope(writebackReason_, WritebackReason::Transfer);
+        // With GLM parking the slots park and CommitUpload merges into GLM-owned pages (IN-350).
+        CoherentForWrite(SpanOfTransfer(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, c.rrh), nullptr,
+                         GlmParkingActive());
         memory_.InvalidateDestination(c);
     }
     void CommitUpload(const UploadCommit& c, const uint8_t* bytes, size_t byteCount) override {
+
         const BlockSpan span = SpanOfTransfer(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, c.rrh);
-        CoherentForWrite(span);
+        StageTimer timer(counters.uploadUs);
+        if (GlmParkingActive()) {
+            {
+                ReasonScope scope(writebackReason_, WritebackReason::Transfer);
+                CoherentForWrite(span, nullptr, true);  // resident slots park (no CPU wait)
+            }
+            if (gpuUploads_ && UploadOnGpu(c, bytes, byteCount, span)) return;
+            if (AnyGlmOwned(span)) {
+                MergeUploadIntoGlm(c, bytes, byteCount, span);
+                return;
+            }
+            memory_.CommitUpload(c, bytes, byteCount);
+            MarkWritten(span);
+            return;
+        }
+        {
+            ReasonScope scope(writebackReason_, WritebackReason::Transfer);
+            CoherentForWrite(span);
+        }
         memory_.CommitUpload(c, bytes, byteCount);
         MarkWritten(span);
     }
+
+    // IN-351: the upload is written into the GLM by a kernel instead of into the shadow memory pixel by pixel on
+    // the CPU (GT4 streams megabytes of textures per race frame). The stale pages of the destination are uploaded
+    // to the GLM first, then the kernel writes the transfer's pixels, and the pages become GLM-owned: GPU users
+    // read them there; a CPU user downloads them first. Only rectangles whose pixels have distinct addresses go
+    // this way (no row wrap inside the buffer width, no coordinate wrap); others take the CPU path.
+    bool UploadOnGpu(const UploadCommit& c, const uint8_t* bytes, size_t byteCount, const BlockSpan& span) {
+        const auto psm = memory::decodePsm(c.dpsm);
+        if (!psm || c.rrw == 0 || c.rrh == 0 || span.count >= kAllBlocks) return false;
+        const memory::PsmInfo& info = memory::psmInfo(*psm);
+        const uint32_t perRow = std::max<uint32_t>(1u, (c.dbw * 64u) / info.pageWidth);
+        const uint32_t rowLimit = std::min<uint32_t>(perRow * info.pageWidth, memory::kTransferCoordinateWrap);
+        if (c.dsax + c.rrw > rowLimit || c.dsay + c.rrh > memory::kTransferCoordinateWrap) return false;
+        const uint64_t available = static_cast<uint64_t>(byteCount) * 8u / info.transferBpp;
+        const uint32_t pixels =
+            static_cast<uint32_t>(std::min<uint64_t>(available, static_cast<uint64_t>(c.rrw) * c.rrh));
+        if (!UploadStalePages(span)) return true;
+        std::string error;
+        if (!gpu_.UploadHostToGlm(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, pixels, info.transferBpp, bytes,
+                                  byteCount, error)) {
+            Fail(error);
+            return true;
+        }
+        ForEachPage(span, [&](uint32_t page) {
+            if (!glmOwned_[page]) {
+                glmOwned_[page] = true;
+                ++glmOwnedPages_;
+            }
+        });
+        counters.glmHostUploads++;
+        return true;
+    }
+
+    // IN-350: an upload whose destination has GLM-owned pages. The exact bytes it writes there are found by
+    // writing it twice into those pages filled with 0x00 and with 0xFF (a bit the upload writes is equal in both
+    // passes); they are merged into the GLM, so the pages stay GLM-owned and need no download. The shadow memory
+    // gets the upload too (the other pages are then exact; GLM-owned pages are replaced on their next download).
+    void MergeUploadIntoGlm(const UploadCommit& c, const uint8_t* bytes, size_t byteCount, const BlockSpan& span) {
+        const auto psm = memory::decodePsm(c.dpsm);
+        if (!psm) return;  // invalid PSM: the transfer is dropped (front-end rule), as in the shadow memory sink
+        const memory::BufferView destination{c.dbp, c.dbw, *psm};
+        const memory::TransferRect rect{c.dsax, c.dsay, c.rrw, c.rrh};
+        std::vector<uint32_t> owned;
+        ForEachPage(span, [&](uint32_t page) {
+            if (glmOwned_[page]) owned.push_back(page);
+        });
+        uint8_t* local = memory_.Local().bytes().data();
+        constexpr size_t kPageBytes = 8192;
+        std::vector<uint8_t> saved(owned.size() * kPageBytes);
+        std::vector<uint8_t> zeros(owned.size() * kPageBytes);
+        for (size_t i = 0; i < owned.size(); ++i) {
+            std::memcpy(saved.data() + i * kPageBytes, local + owned[i] * kPageBytes, kPageBytes);
+            std::memset(local + owned[i] * kPageBytes, 0x00, kPageBytes);
+        }
+        memory::hostToLocal(memory_.Local(), destination, rect, std::span<const uint8_t>(bytes, byteCount));
+        for (size_t i = 0; i < owned.size(); ++i) {
+            std::memcpy(zeros.data() + i * kPageBytes, local + owned[i] * kPageBytes, kPageBytes);
+            std::memset(local + owned[i] * kPageBytes, 0xFF, kPageBytes);
+        }
+        memory::hostToLocal(memory_.Local(), destination, rect, std::span<const uint8_t>(bytes, byteCount));
+        std::vector<uint32_t> triples;
+        for (size_t i = 0; i < owned.size(); ++i) {
+            const uint8_t* ones = local + owned[i] * kPageBytes;
+            const uint8_t* zero = zeros.data() + i * kPageBytes;
+            for (uint32_t word = 0; word < kPageBytes / 4; ++word) {
+                // Bit granularity: a T4 upload writes nibbles, so a written bit is one equal in both passes.
+                uint32_t fromZeros = 0;
+                uint32_t fromOnes = 0;
+                std::memcpy(&fromZeros, zero + word * 4, 4);
+                std::memcpy(&fromOnes, ones + word * 4, 4);
+                const uint32_t mask = ~(fromZeros ^ fromOnes);
+                const uint32_t value = fromZeros & mask;
+                if (mask != 0) {
+                    triples.push_back(owned[i] * static_cast<uint32_t>(kPageBytes / 4) + word);
+                    triples.push_back(value);
+                    triples.push_back(mask);
+                }
+            }
+            std::memcpy(local + owned[i] * kPageBytes, saved.data() + i * kPageBytes, kPageBytes);
+        }
+        memory_.CommitUpload(c, bytes, byteCount);  // the real write (exact for the pages the GLM does not own)
+        std::string error;
+        if (!gpu_.MergeIntoGlm(triples, error)) {
+            Fail(error);
+            return;
+        }
+        MarkWritten(span);  // decoded-texture cache entries expire; pages the GLM does not own become stale there
+        for (uint32_t page : owned) glmPageSequence_[page] = pageWrites_[page] + 1;  // the GLM holds the write
+        counters.glmUploadMerges++;
+        counters.glmMergedWords += triples.size() / 3;
+    }
     void LocalToLocalMove(const LocalMoveCommit& m) override {
+
         {
             ReasonScope scope(writebackReason_, WritebackReason::Transfer);
             CoherentForRead(SpanOfTransfer(m.sbp, m.sbw, m.spsm, m.ssax, m.ssay, m.rrw, m.rrh));
@@ -821,6 +979,7 @@ public:
         MarkWritten(destination);
     }
     void BeginLocalToHost(const LocalToHostSetup& r) override {
+
         {
             ReasonScope scope(writebackReason_, WritebackReason::Transfer);
             CoherentForRead(SpanOfTransfer(r.sbp, r.sbw, r.spsm, r.ssax, r.ssay, r.rrw, r.rrh));
@@ -846,6 +1005,11 @@ public:
         PixelRect loaded;  // empty = nothing loaded
         PixelRect drawn;   // empty = nothing newer than the shadow memory
         uint64_t lastUse = 0;
+        // IN-350: the GLM already holds this slot's drawn pixels when no draw and no GLM page upload under them
+        // happened since its last swizzle (GT4 draws palettes into a target and loads CLUTs from it many times).
+        uint64_t drawSequence = 0;        // bumped by every draw into the slot
+        uint64_t glmSwizzledDraw = ~0ull; // drawSequence at the last swizzle (~0: none)
+        uint64_t glmSwizzledClock = 0;    // glmUploadClock_ at the last swizzle
     };
 
     static constexpr uint32_t kResidentColourSlots = gpu::kGpuColourSlots - 1;
@@ -862,6 +1026,8 @@ public:
 
     void WriteBack(ResidentSlot& slot) {
         if (slot.drawn.Empty() || failed_) return;
+        // The words around the drawn rectangle in GLM-owned pages are newer in the GLM (IN-350).
+        Materialise(SpanOfRect(slot.view, slot.drawn));
         counters.cacheWritebackByReason[static_cast<size_t>(writebackReason_)]++;
         StageTimer timer(counters.cacheWritebackUs);
         const PixelRect r = slot.drawn;
@@ -897,27 +1063,156 @@ public:
         slot.loaded = PixelRect{};
         slot.drawn = PixelRect{};
         slot.hasIdentity = false;
+        slot.glmSwizzledDraw = ~0ull;
     }
 
+    // The shadow memory of `span` becomes current for a CPU reader: drawn slots are written back, GLM-owned
+    // pages are downloaded.
     void CoherentForRead(const BlockSpan& span) {
         for (ResidentSlot& slot : slots_) {
             if (!slot.drawn.Empty() && SpansOverlap(SpanOfRect(slot.view, slot.drawn), span)) WriteBack(slot);
         }
+        Materialise(span);
     }
 
-    // Writes back and drops every slot that holds memory in `span`, except `keep` (may be null).
-    void CoherentForWrite(const BlockSpan& span, const ResidentSlot* keep = nullptr) {
+    // Every slot that holds memory in `span` (except `keep`, may be null) gives it up. For a CPU writer
+    // (`forGpu` false) the slots are written back and GLM-owned pages downloaded, so the shadow memory is
+    // current before it changes. For a GPU consumer (a slot about to load `span`) the slots are parked in the
+    // GLM instead (IN-350): no CPU stall; the consumer then loads those pages from the GLM.
+    void CoherentForWrite(const BlockSpan& span, const ResidentSlot* keep = nullptr, bool forGpu = false) {
+        const bool park = forGpu && GlmParkingActive();
         for (ResidentSlot& slot : slots_) {
             if (&slot == keep) continue;
             if (SpansOverlap(LoadedSpan(slot), span)) {
-                WriteBack(slot);
+                if (park) {
+                    Park(slot);
+                } else {
+                    WriteBack(slot);
+                }
                 Drop(slot);
             }
         }
+        if (!forGpu) Materialise(span);
     }
 
     void WriteBackAll() {
         for (ResidentSlot& slot : slots_) WriteBack(slot);
+        Materialise(BlockSpan{0, kAllBlocks});
+    }
+
+    // ---- GLM-owned pages (IN-350, chapters 04.9 and 05.3) ----------------------------------------------
+    // A page is GLM-owned when its newest content lives only in the GLM: a slot's drawn rectangle was parked
+    // there (swizzled into the GLM at its own layout) instead of being written back. The GLM copy of the rest of
+    // such a page is current (its stale pages were uploaded before the swizzle), so the GLM holds the whole page.
+    // GPU users (slot loads, GLM texture decodes, GPU CLUT loads) read it from the GLM directly; any CPU reader or
+    // writer of the shadow memory downloads it first (Materialise). This is GT4's buffer reuse: the same memory
+    // drawn under other widths and formats (a 640-wide depth buffer, then a 64-wide one at the same base; a
+    // 128-wide target inside the frame buffer) moves between slots on the GPU.
+    bool GlmParkingActive() const { return cacheMode_ && glmEnabled_ && glmParking_; }
+
+    template <typename Visit>
+    static void ForEachPage(const BlockSpan& span, Visit visit) {
+        if (span.count == 0) return;
+        if (span.count >= kAllBlocks) {
+            for (uint32_t page = 0; page < memory::kPagesTotal; ++page) visit(page);
+            return;
+        }
+        const uint32_t first = span.begin / kBlocksPerPage;
+        const uint32_t last = (span.begin + span.count - 1u) / kBlocksPerPage;
+        for (uint32_t page = first; page <= last; ++page) visit(page % memory::kPagesTotal);
+    }
+
+    bool AnyGlmOwned(const BlockSpan& span) const {
+        if (glmOwnedPages_ == 0) return false;
+        bool any = false;
+        ForEachPage(span, [&](uint32_t page) { any = any || glmOwned_[page]; });
+        return any;
+    }
+
+    // Makes the GLM hold the slot's drawn pixels: uploads the stale pages under them, then swizzles, unless the
+    // GLM already holds them (no draw into the slot and no upload of those pages since its last swizzle).
+    bool SwizzleSlotIntoGlm(ResidentSlot& slot) {
+        const BlockSpan span = SpanOfRect(slot.view, slot.drawn);
+        if (!UploadStalePages(span)) return false;
+        bool current = slot.glmSwizzledDraw == slot.drawSequence;
+        if (current) {
+            ForEachPage(span, [&](uint32_t page) {
+                current = current && glmPageUploadClock_[page] <= slot.glmSwizzledClock;
+            });
+        }
+        if (current) {
+            counters.glmSwizzlesSkipped++;
+            return true;
+        }
+        std::string error;
+        if (!gpu_.SwizzleToGlm(slot.depth, slot.gpuIndex, slot.view.basePointer, slot.view.bufferWidth,
+                               static_cast<uint32_t>(slot.view.psm), slot.drawn.x0, slot.drawn.y0, slot.drawn.x1,
+                               slot.drawn.y1, error)) {
+            Fail(error);
+            return false;
+        }
+        slot.glmSwizzledDraw = slot.drawSequence;
+        slot.glmSwizzledClock = glmUploadClock_;
+        counters.glmSwizzles++;
+        return true;
+    }
+
+    // Swizzles the slot's drawn rectangle into the GLM and marks those pages GLM-owned (no CPU wait).
+    void Park(ResidentSlot& slot) {
+        if (slot.drawn.Empty() || failed_) return;
+        const int32_t bufferWidth = static_cast<int32_t>(std::max<uint32_t>(slot.view.bufferWidth, 1u) * 64u);
+        if (slot.drawn.x1 >= bufferWidth) {
+            WriteBack(slot);  // wraps into the next page row: no defined last writer for a parallel swizzle
+            return;
+        }
+        const BlockSpan span = SpanOfRect(slot.view, slot.drawn);
+        if (!SwizzleSlotIntoGlm(slot)) return;
+        ForEachPage(span, [&](uint32_t page) {
+            if (!glmOwned_[page]) {
+                glmOwned_[page] = true;
+                ++glmOwnedPages_;
+            }
+        });
+        counters.glmParks++;
+        slot.drawn = PixelRect{};
+    }
+
+    // Downloads the GLM-owned pages of `span` into the shadow memory (submits and waits).
+    void Materialise(const BlockSpan& span) {
+        if (glmOwnedPages_ == 0 || failed_) return;
+        std::vector<std::pair<uint32_t, uint32_t>> ranges;
+        std::vector<uint32_t> pages;
+        ForEachPage(span, [&](uint32_t page) {
+            if (!glmOwned_[page]) return;
+            const uint32_t offset = page * 8192u;
+            if (!ranges.empty() && ranges.back().first + ranges.back().second == offset) {
+                ranges.back().second += 8192u;
+            } else {
+                ranges.push_back({offset, 8192u});
+            }
+            pages.push_back(page);
+        });
+        if (pages.empty()) return;
+        StageTimer timer(counters.cacheWritebackUs);
+        std::string error;
+        if (!gpu_.DownloadGlm(ranges, memory_.Local().bytes().data(), error)) {
+            Fail(error);
+            return;
+        }
+        for (uint32_t page : pages) {
+            glmOwned_[page] = false;
+            --glmOwnedPages_;
+            MarkWritten(BlockSpan{page * kBlocksPerPage, kBlocksPerPage});  // decoded-texture cache entries expire
+            glmPageSequence_[page] = pageWrites_[page] + 1;                  // the GLM equals the shadow memory
+        }
+        counters.glmDownloads++;
+        counters.glmPagesDownloaded += pages.size();
+    }
+
+    // The shadow memory replaced wholesale (auxiliary frame end, VRAM clear): GLM-owned content is discarded.
+    void DiscardGlmOwned() {
+        glmOwned_.fill(false);
+        glmOwnedPages_ = 0;
     }
 
     void DropAll() {
@@ -944,7 +1239,11 @@ public:
         if (oldest->hasIdentity) counters.cacheEvictions++;
         {
             ReasonScope scope(writebackReason_, WritebackReason::Eviction);
-            WriteBack(*oldest);
+            if (GlmParkingActive()) {
+                Park(*oldest);
+            } else {
+                WriteBack(*oldest);
+            }
         }
         Drop(*oldest);
         oldest->hasIdentity = true;
@@ -954,53 +1253,87 @@ public:
     }
 
     // Makes `slot` hold at least `rect` loaded from the shadow memory.
-    void Load(ResidentSlot& slot, const PixelRect& rect) {
-        if (Contains(slot.loaded, rect)) return;
-        StageTimer timer(counters.cacheLoadUs);
-        // Grow the loaded rectangle. The shadow memory is made current first (this slot and every other slot
-        // that holds part of the new rectangle, which is then dropped: two images never hold the same bytes),
-        // so reloading the union from it keeps every drawn pixel.
-        WriteBack(slot);
-        const PixelRect wanted = slot.loaded.Empty() ? rect : UnionRects(slot.loaded, rect);
-        {
-            ReasonScope scope(writebackReason_, WritebackReason::LoadOverlap);
-            CoherentForWrite(SpanOfRect(slot.view, wanted), &slot);
+    // Fills `rect` of the slot's image from memory: from the GLM when a page under it is GLM-owned (IN-350),
+    // otherwise from the shadow memory.
+    void UploadIntoSlot(ResidentSlot& slot, const PixelRect& rect) {
+        const BlockSpan span = SpanOfRect(slot.view, rect);
+        if (GlmParkingActive() && (glmLoadsAlways_ || AnyGlmOwned(span))) {
+            if (!UploadStalePages(span)) return;
+            std::string error;
+            if (!gpu_.LoadSlotFromGlm(slot.depth, slot.gpuIndex, slot.view.basePointer, slot.view.bufferWidth,
+                                      static_cast<uint32_t>(slot.view.psm), rect.x0, rect.y0, rect.x1, rect.y1, error)) {
+                Fail(error);
+                return;
+            }
+            counters.glmSlotLoads++;
+            return;
         }
         gpu::GpuChunk chunk;
-        chunk.rectX0 = wanted.x0;
-        chunk.rectY0 = wanted.y0;
-        chunk.rectX1 = wanted.x1;
-        chunk.rectY1 = wanted.y1;
+        chunk.rectX0 = rect.x0;
+        chunk.rectY0 = rect.y0;
+        chunk.rectX1 = rect.x1;
+        chunk.rectY1 = rect.y1;
         chunk.colourSlot = slot.depth ? gpu::kGpuScratchColourSlot : slot.gpuIndex;
         chunk.depthSlot = slot.depth ? slot.gpuIndex : gpu::kGpuScratchDepthSlot;
         chunk.uploadFrame = !slot.depth;
         chunk.uploadDepth = slot.depth;
         chunk.readbackFrame = false;
         chunk.readbackDepth = false;
-        const size_t words = static_cast<size_t>(wanted.x1 - wanted.x0 + 1) * static_cast<size_t>(wanted.y1 - wanted.y0 + 1);
+        const size_t words = static_cast<size_t>(rect.x1 - rect.x0 + 1) * static_cast<size_t>(rect.y1 - rect.y0 + 1);
         std::vector<uint32_t>& data = slot.depth ? chunk.depthWords : chunk.frameWords;
         data.resize(words);
-        memory_.Local().readRect(slot.view, static_cast<uint32_t>(wanted.x0), static_cast<uint32_t>(wanted.y0),
-                                 static_cast<uint32_t>(wanted.x1 - wanted.x0 + 1),
-                                 static_cast<uint32_t>(wanted.y1 - wanted.y0 + 1), data.data());
+        memory_.Local().readRect(slot.view, static_cast<uint32_t>(rect.x0), static_cast<uint32_t>(rect.y0),
+                                 static_cast<uint32_t>(rect.x1 - rect.x0 + 1), static_cast<uint32_t>(rect.y1 - rect.y0 + 1),
+                                 data.data());
         std::string error;
         if (!gpu_.Execute(chunk, error)) {
             Fail(error);
             return;
         }
-        slot.loaded = wanted;
-        counters.cacheLoads++;
         counters.cacheLoadWords += words;
     }
 
+    // Makes `slot` hold at least `rect` loaded from the shadow memory. The loaded rectangle grows to the union;
+    // only the part outside the old rectangle is uploaded (IN-350: up to four strips), so the slot's own GPU-newer
+    // pixels stay where they are and no write-back is needed. Every other slot that holds part of the new area is
+    // written back and dropped first (two images never hold the same bytes).
+    void Load(ResidentSlot& slot, const PixelRect& rect) {
+        if (Contains(slot.loaded, rect)) return;
+        StageTimer timer(counters.cacheLoadUs);
+        const PixelRect old = slot.loaded;
+        const PixelRect wanted = old.Empty() ? rect : UnionRects(old, rect);
+        {
+            ReasonScope scope(writebackReason_, WritebackReason::LoadOverlap);
+            CoherentForWrite(SpanOfRect(slot.view, wanted), &slot, true);
+        }
+        if (old.Empty()) {
+            UploadIntoSlot(slot, wanted);
+        } else {
+            // wanted minus old: the rows above and below old over the full width of wanted, then the columns
+            // left and right of old inside old's rows.
+            if (wanted.y0 < old.y0) UploadIntoSlot(slot, PixelRect{wanted.x0, wanted.y0, wanted.x1, old.y0 - 1});
+            if (wanted.y1 > old.y1) UploadIntoSlot(slot, PixelRect{wanted.x0, old.y1 + 1, wanted.x1, wanted.y1});
+            if (wanted.x0 < old.x0) UploadIntoSlot(slot, PixelRect{wanted.x0, old.y0, old.x0 - 1, old.y1});
+            if (wanted.x1 > old.x1) UploadIntoSlot(slot, PixelRect{old.x1 + 1, old.y0, wanted.x1, old.y1});
+        }
+        slot.loaded = wanted;
+        counters.cacheLoads++;
+    }
+
     // The rectangle to load for a batch: its own rectangle, widened to the context's scissor when that is a
-    // plausible buffer (inside the buffer width and at most 512 lines), so later batches of the same target
-    // rarely need to grow it (each growth is a write-back and a reload).
-    static PixelRect LoadRectFor(const Translation& t, const memory::BufferView& view) {
+    // plausible buffer (inside the buffer width, at most 512 lines) and the widened area holds no other resident
+    // target (IN-350: widening into a neighbour, such as GT4's depth buffer right after its colour buffer, would
+    // drop that neighbour on every switch). Later batches of the same target then rarely need to grow it.
+    PixelRect LoadRectFor(const Translation& t, const memory::BufferView& view, const ResidentSlot& slot) const {
         const int32_t bufferWidth = static_cast<int32_t>(std::max<uint32_t>(view.bufferWidth, 1u) * 64u);
         const PixelRect& sc = t.scissor;
         if (sc.Empty() || sc.x1 >= bufferWidth || sc.y1 - sc.y0 >= 512 || sc.y1 >= gpu::kGpuSurface) return t.rect;
-        return UnionRects(t.rect, sc);
+        const PixelRect widened = UnionRects(t.rect, sc);
+        const BlockSpan span = SpanOfRect(view, widened);
+        for (const ResidentSlot& other : slots_) {
+            if (&other != &slot && SpansOverlap(LoadedSpan(other), span)) return t.rect;
+        }
+        return widened;
     }
 
     // IN-346: the resident colour slot holding a texture (exact view, whole extent loaded), or -1. Only in
@@ -1017,6 +1350,147 @@ public:
         return -1;
     }
 
+    // ---- GLM (M10, chapter 04.9, IN-347) ------------------------------------------------------------------
+    // The GPU mirror of local memory. glmPageSequence_[page] is the shadow-memory write sequence the GLM copy of
+    // that page reflects (0: never uploaded). A GLM read of span R: upload every page of R (and of the drawn
+    // rectangles of the targets that overlap R) whose shadow-memory content changed, then swizzle those
+    // targets' drawn rectangles into the GLM; the GLM then holds what the shadow memory would hold after a
+    // write-back, without one.
+    bool UploadStalePages(const BlockSpan& span) {
+        std::vector<std::pair<uint32_t, uint32_t>> ranges;
+        auto stale = [&](uint32_t page) {
+            return glmPageSequence_[page] == 0 || glmPageSequence_[page] < pageWrites_[page] + 1;
+        };
+        auto add = [&](uint32_t page) {
+            if (glmOwned_[page]) {
+                // The shadow memory changed under a GLM-owned page without a download first: a coherence bug.
+                Fail("GLM-owned page " + std::to_string(page) + " changed in the shadow memory");
+                return;
+            }
+            const uint32_t offset = page * 8192u;
+            if (!ranges.empty() && ranges.back().first + ranges.back().second == offset) {
+                ranges.back().second += 8192u;
+            } else {
+                ranges.push_back({offset, 8192u});
+            }
+            glmPageSequence_[page] = pageWrites_[page] + 1;  // +1: 0 means "never uploaded"
+            glmPageUploadClock_[page] = ++glmUploadClock_;
+        };
+        if (span.count >= kAllBlocks) {
+            for (uint32_t page = 0; page < memory::kPagesTotal; ++page) {
+                if (stale(page)) add(page);
+            }
+        } else if (span.count != 0) {
+            const uint32_t first = span.begin / kBlocksPerPage;
+            const uint32_t last = (span.begin + span.count - 1u) / kBlocksPerPage;
+            for (uint32_t page = first; page <= last; ++page) {
+                const uint32_t wrapped = page % memory::kPagesTotal;
+                if (stale(wrapped)) add(wrapped);
+            }
+        }
+        if (failed_) return false;
+        if (ranges.empty()) return true;
+        std::string error;
+        if (!gpu_.UploadGlm(memory_.Local().bytes().data(), ranges, error)) {
+            Fail(error);
+            return false;
+        }
+        counters.glmPagesUploaded += ranges.size();
+        return true;
+    }
+
+    // `force`: the texture must be decoded on the GPU even without GPU-newer data under it (indexed textures
+    // while the GPU CLUT is authoritative, IN-349).
+    bool PrepareGlm(const memory::BufferView& view, uint32_t width, uint32_t height, bool force = false) {
+        if (!cacheMode_ || !glmEnabled_) return false;
+        const BlockSpan span = SpanOfRect(view, 0, 0, static_cast<int32_t>(width) - 1, static_cast<int32_t>(height) - 1);
+        std::vector<ResidentSlot*> sources;
+        for (ResidentSlot& slot : slots_) {
+            if (slot.drawn.Empty() || !SpansOverlap(SpanOfRect(slot.view, slot.drawn), span)) continue;
+            // A drawn rectangle wider than its buffer wraps into the next page row: two pixels share an address
+            // and a parallel swizzle has no defined last writer. Use the write-back path then.
+            const int32_t bufferWidth = static_cast<int32_t>(std::max<uint32_t>(slot.view.bufferWidth, 1u) * 64u);
+            if (slot.drawn.x1 >= bufferWidth) {
+                // Write it back instead (the shadow memory then holds it; the GLM upload below picks it up).
+                ReasonScope scope(writebackReason_, WritebackReason::Texture);
+                WriteBack(slot);
+                if (!force) return false;
+                continue;
+            }
+            sources.push_back(&slot);
+        }
+        if (sources.empty() && !force && !AnyGlmOwned(span)) {
+            return false;  // nothing GPU-newer: the shadow memory decode is exact
+        }
+        if (!UploadStalePages(span)) return false;
+        for (ResidentSlot* slot : sources) {
+            if (!SwizzleSlotIntoGlm(*slot)) return false;
+        }
+        return true;
+    }
+
+    // IN-348 candidates: small untextured sprite batches whose memory no resident target holds (IN-350: a small
+    // sprite on a resident target, such as a HUD box on the frame buffer, stays on the GPU; drawing it on the CPU
+    // would write back and reload the whole target).
+    bool SmallUntexturedSprites(const Batch& batch, const Translation& t) const {
+        if (t.hasTexture || t.rect.Empty()) return false;
+        const int64_t area = static_cast<int64_t>(t.rect.x1 - t.rect.x0 + 1) * (t.rect.y1 - t.rect.y0 + 1);
+        if (area > 64 * 64) return false;
+        for (const PrimRecord& record : batch.prims) {
+            if (record.type != PrimType::Sprite) return false;
+        }
+        const BlockSpan frameSpan = SpanOfRect(t.frameView, t.rect);
+        const BlockSpan depthSpan = SpanOfRect(t.zView, t.rect);
+        if (AnyGlmOwned(frameSpan) || AnyGlmOwned(depthSpan)) return false;  // would need a download (IN-350)
+        for (const ResidentSlot& slot : slots_) {
+            const BlockSpan loaded = LoadedSpan(slot);
+            if (SpansOverlap(loaded, frameSpan) || SpansOverlap(loaded, depthSpan)) return false;
+        }
+        return true;
+    }
+
+    // ---- GPU CLUT (chapter 07.7, IN-349) --------------------------------------------------------------
+    // In cache mode with the GLM, every performed CLUT load is repeated on the GPU from the GLM, the GPU CLUT is
+    // authoritative and indexed textures are expanded from it on the GPU; the CPU CLUT unit still decides when
+    // a load happens. So a palette the game drew on the GPU needs no write-back.
+    bool GpuClutActive() const { return cacheMode_ && glmEnabled_ && gpuClutEnabled_; }
+
+    void OnClutLoaded(const clut::Tex0Write& write) {
+        if (!GpuClutActive() || failed_) return;
+        if (!gpuClutSynced_) SyncGpuClut();
+        const BlockSpan span = write.csm == 0 ? BlockSpan{write.cbp & ~31u, 64u} : BlockSpan{0, kAllBlocks};
+        // Make the GLM current for the palette (stale pages, GPU-newer targets), as PrepareGlm does for textures.
+        if (!UploadStalePages(span)) return;
+        for (ResidentSlot& slot : slots_) {
+            if (slot.drawn.Empty() || !SpansOverlap(SpanOfRect(slot.view, slot.drawn), span)) continue;
+            const int32_t bufferWidth = static_cast<int32_t>(std::max<uint32_t>(slot.view.bufferWidth, 1u) * 64u);
+            if (slot.drawn.x1 >= bufferWidth) {
+                ReasonScope scope(writebackReason_, WritebackReason::Clut);
+                WriteBack(slot);
+                if (!UploadStalePages(SpanOfRect(slot.view, PixelRect{0, 0, bufferWidth - 1, 2047}))) return;
+                continue;
+            }
+            if (!SwizzleSlotIntoGlm(slot)) return;
+        }
+        std::string error;
+        if (!gpu_.LoadClutFromGlm(write.cbp, write.cpsm, write.csm, write.csa, write.psm, write.texclutCbw,
+                                  write.texclutCou, write.texclutCov, error)) {
+            Fail(error);
+            return;
+        }
+        counters.gpuClutLoads++;
+    }
+
+    // The GPU CLUT starts as a copy of the CPU CLUT buffer (start-up, GS reset).
+    void SyncGpuClut() {
+        std::string error;
+        if (!gpu_.UploadClut(frontEnd_.Clut().Halfwords(), error)) {
+            Fail(error);
+            return;
+        }
+        gpuClutSynced_ = true;
+    }
+
     // One translated batch through the resident targets. Returns false (nothing done) when the batch must
     // take the write-back path instead.
     bool ExecuteResident(const Translation& t, std::string& error) {
@@ -1026,13 +1500,14 @@ public:
         if (depthUsed && SpansOverlap(frameSpan, depthSpan)) return false;  // colour and depth share memory
         ResidentSlot& colour = Acquire(false, t.frameView);
         ResidentSlot* depth = depthUsed ? &Acquire(true, t.zView) : nullptr;
-        Load(colour, LoadRectFor(t, t.frameView));
-        if (depth) Load(*depth, LoadRectFor(t, t.zView));
+        Load(colour, LoadRectFor(t, t.frameView, colour));
+        if (depth) Load(*depth, LoadRectFor(t, t.zView, *depth));
         if (failed_) return true;
         // The colour slot's load may have dropped the depth slot (or the reverse) when they overlap; then the
         // batch takes the write-back path with both stored first.
         if (depth && (!colour.hasIdentity || !depth->hasIdentity || colour.loaded.Empty() || depth->loaded.Empty() ||
                       SpansOverlap(LoadedSpan(colour), LoadedSpan(*depth)))) {
+            ReasonScope scope(writebackReason_, WritebackReason::Fallback);
             WriteBack(colour);
             Drop(colour);
             WriteBack(*depth);
@@ -1067,6 +1542,18 @@ public:
             chunk.state = t.state;
             chunk.hasTexture = t.hasTexture;
             chunk.textureSlot = t.textureSlot;
+            chunk.glmTexture = t.glmTexture;
+            chunk.glmBp = t.glmBp;
+            chunk.glmBw = t.glmBw;
+            chunk.glmPsm = t.glmPsm;
+            chunk.glmIndexed = t.glmIndexed;
+            chunk.glmGpuClut = t.glmGpuClut;
+            chunk.glmCpsm = t.glmCpsm;
+            chunk.glmCsa = t.glmCsa;
+            chunk.glmTa0 = t.glmTa0;
+            chunk.glmTa1 = t.glmTa1;
+            chunk.glmAem = t.glmAem;
+            chunk.palette = t.palette;
             chunk.texWidth = t.texWidth;
             chunk.texHeight = t.texHeight;
             chunk.texels = t.texels;
@@ -1082,6 +1569,8 @@ public:
             begin = end;
         }
         colour.drawn = colour.drawn.Empty() ? t.rect : UnionRects(colour.drawn, t.rect);
+        colour.drawSequence++;
+        if (depth) depth->drawSequence++;
         if (depth) depth->drawn = depth->drawn.Empty() ? t.rect : UnionRects(depth->drawn, t.rect);
         counters.cacheResidentBatches++;
         return true;
@@ -1107,6 +1596,11 @@ public:
                       this,
                       [this](const memory::BufferView& view, uint32_t width, uint32_t height) -> int32_t {
                           return TextureSlotFor(view, width, height);
+                      },
+                      [this](const memory::BufferView& view, uint32_t width, uint32_t height, bool indexed,
+                             bool& gpuClut) {
+                          gpuClut = GpuClutActive();
+                          return PrepareGlm(view, width, height, indexed && gpuClut);
                       });
         }
         if (observer_) observer_(batch, t);
@@ -1128,13 +1622,28 @@ public:
         {
             StageTimer timer(frameTimings_.executeUs);
             bool done = false;
-            if (cacheMode_) {
+            if (cacheMode_ && cpuSmallSprites_ && SmallUntexturedSprites(batch, t)) {
+                // IN-348: small flat sprite batches (GT4 draws its palettes this way, chapter 07.8) are drawn
+                // by the CPU reference straight into the shadow memory, which is exact for untextured sprites
+                // (the GPU path draws the same words). A CLUT load from them then needs no GPU write-back.
+                ReasonScope scope(writebackReason_, WritebackReason::CpuSprite);
+                CoherentForWrite(SpanOfRect(t.frameView, t.rect));
+                CoherentForWrite(SpanOfRect(t.zView, t.rect));
+                cpuref::DrawStats stats;
+                cpuref::DrawBatch(batch, memory_.Local(), frontEnd_.Clut(), stats);
+                MarkWritten(SpanOfRect(t.frameView, t.rect));
+                MarkWritten(SpanOfRect(t.zView, t.rect));
+                counters.cpuSpriteBatches++;
+                done = true;
+            }
+            if (!done && cacheMode_) {
                 done = ExecuteResident(t, error);
                 if (done && !error.empty()) Fail(error);
             }
             if (!done) {
                 if (cacheMode_) {
                     // Write-back path for this batch (scratch GPU slots): no resident target may hold its memory.
+                    ReasonScope scope(writebackReason_, WritebackReason::Fallback);
                     CoherentForWrite(SpanOfRect(t.frameView, t.rect));
                     CoherentForWrite(SpanOfRect(t.zView, t.rect));
                     counters.cacheFallbackBatches++;
@@ -1190,6 +1699,18 @@ public:
     WritebackReason writebackReason_ = WritebackReason::Other;  // why the next write-backs happen (counters)
     const ResidentSlot* protectedSlot_ = nullptr;  // texture source of the current batch (IN-346)
     bool textureFromTargets_ = true;               // IN-346 (off for A/B runs)
+    bool cpuSmallSprites_ = true;                  // IN-348 (off for A/B runs)
+    bool glmEnabled_ = true;                       // IN-347 GT4_HW_GLM (off for A/B runs: write-back path)
+    bool gpuClutEnabled_ = true;                   // IN-349 (off for A/B runs)
+    bool glmParking_ = true;                       // IN-350 (off for A/B runs: evictions and overlaps write back)
+    bool glmLoadsAlways_ = false;                  // IN-350 fixtures: every slot load goes through the GLM
+    bool gpuUploads_ = true;                       // IN-351 (off for A/B runs: uploads written on the CPU)
+    std::array<bool, memory::kPagesTotal> glmOwned_{};  // newest content only in the GLM (IN-350)
+    uint32_t glmOwnedPages_ = 0;
+    std::array<uint64_t, memory::kPagesTotal> glmPageUploadClock_{};  // glmUploadClock_ at the page's last upload
+    uint64_t glmUploadClock_ = 0;
+    bool gpuClutSynced_ = false;                   // the GPU CLUT was initialised from the CPU CLUT
+    std::array<uint64_t, memory::kPagesTotal> glmPageSequence_{};
     uint64_t slotUses_ = 0;
 };
 
@@ -1202,6 +1723,7 @@ bool Renderer::Init(const gpu::VulkanHandles& handles, std::string& error) { ret
 bool Renderer::GifTransfer(std::uint32_t path, const std::uint8_t* bytes, std::size_t byteCount) {
     if (path == 0 || path > 3) return false;  // IN-312
     if (byteCount % 16 != 0) return false;
+    StageTimer timer(impl_->counters.gifUs);
     std::vector<Qword> qwords(byteCount / 16);
     for (std::size_t i = 0; i < qwords.size(); ++i) {
         std::memcpy(&qwords[i].lo, bytes + 16 * i, 8);
@@ -1250,6 +1772,7 @@ void Renderer::ResetGs() {
     s.WriteBackAll();  // a GS reset keeps local memory, so resident draws are stored first
     s.DropAll();
     s.frontEnd_.ResetGs();
+    s.gpuClutSynced_ = false;  // the GPU CLUT is re-initialised from the CPU CLUT on its next use (IN-349)
     s.frontEnd_.GifReset(7u);
     s.memory_.ResetRead();
     s.displayRegs_ = {};
@@ -1276,6 +1799,7 @@ void Renderer::EndAuxiliaryFrame() {
     Impl& s = *impl_;
     if (!s.auxiliary_) return;
     s.DropAll();  // resident draws of the auxiliary frame are discarded with it
+    s.DiscardGlmOwned();
     const auto bytes = s.memory_.Local().bytes();
     std::copy(s.auxSnapshot_.begin(), s.auxSnapshot_.end(), bytes.begin());
     s.MarkWritten(BlockSpan{0, kAllBlocks});
@@ -1296,6 +1820,7 @@ std::uint64_t Renderer::TimedFrames() const { return impl_->timedFrames_; }
 
 void Renderer::ClearVram() {
     impl_->DropAll();
+    impl_->DiscardGlmOwned();
     auto bytes = impl_->memory_.Local().bytes();
     std::fill(bytes.begin(), bytes.end(), std::uint8_t{0});
     impl_->MarkWritten(BlockSpan{0, kAllBlocks});
@@ -1420,10 +1945,6 @@ display::Image ReadCircuit(const memory::LocalMemory& local, const display::Circ
 
 void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
     Impl& s = *impl_;
-    {
-        ReasonScope scope(s.writebackReason_, WritebackReason::Display);
-        s.WriteBackAll();  // the display reads the shadow memory
-    }
     out.valid = false;
     out.width = 0;
     out.height = 0;
@@ -1456,6 +1977,19 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
             for (std::size_t i = 0; i < 2; ++i) {
                 const display::CircuitRect& circuit = layout.circuits[i];
                 if (!circuit.enabled || circuit.read_width == 0 || circuit.read_height == 0) continue;
+                {
+                    // The display reads this circuit's rectangle from the shadow memory: GPU-newer targets there
+                    // are written back first (only those; a wrapping read rectangle reports all memory).
+                    ReasonScope scope(s.writebackReason_, WritebackReason::Display);
+                    const auto psm = memory::decodePsm(circuit.psm);
+                    const BlockSpan span =
+                        psm ? SpanOfRect(memory::BufferView{memory::blockOfPage(circuit.fbp), circuit.fbw, *psm},
+                                         circuit.dbx, circuit.dby,
+                                         circuit.dbx + static_cast<int32_t>(circuit.read_width) - 1,
+                                         circuit.dby + static_cast<int32_t>(circuit.read_height) - 1)
+                            : BlockSpan{0, kAllBlocks};
+                    s.CoherentForRead(span);
+                }
                 sources[i] = ReadCircuit(s.memory_.Local(), circuit);
                 available[i] = true;
             }
@@ -1546,6 +2080,21 @@ void Renderer::SetSyncMode(bool cache) {
 bool Renderer::CacheMode() const { return impl_->cacheMode_; }
 
 void Renderer::SetTextureFromTargets(bool enabled) { impl_->textureFromTargets_ = enabled; }
+
+void Renderer::SetGlm(bool enabled) { impl_->glmEnabled_ = enabled; }
+
+void Renderer::SetGpuClut(bool enabled) { impl_->gpuClutEnabled_ = enabled; }
+
+void Renderer::SetGlmParking(bool enabled) {
+    if (!enabled) impl_->WriteBackAll();  // GLM-owned pages go back to the shadow memory
+    impl_->glmParking_ = enabled;
+}
+
+void Renderer::SetGlmLoadsAlways(bool enabled) { impl_->glmLoadsAlways_ = enabled; }
+
+void Renderer::SetGpuUploads(bool enabled) { impl_->gpuUploads_ = enabled; }
+
+void Renderer::SetCpuSmallSprites(bool enabled) { impl_->cpuSmallSprites_ = enabled; }
 
 const Counters& Renderer::GetCounters() const { return impl_->counters; }
 

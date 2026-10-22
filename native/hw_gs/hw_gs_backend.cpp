@@ -761,6 +761,8 @@ bool Backend::init(const Options &options, std::string &error) {
   // GT4_HW_SYNC_MODE (12.8): `cache` keeps resident targets on the GPU (M7, IN-340), `writeback` is the
   // reference mode.
   s.renderer->SetSyncMode(options.sync_mode == SyncMode::cache);
+  // GT4_HW_GLM (12.8, chapter 04.9): textures over GPU-newer targets decode from the GPU memory mirror.
+  s.renderer->SetGlm(options.glm);
   s.initialised = true;
   return true;
 }
@@ -989,6 +991,8 @@ RenderCounters Backend::render_counters() const {
   out.decode_us = c.textureDecodeUs;
   out.cache_writeback_us = c.cacheWritebackUs;
   out.cache_load_us = c.cacheLoadUs;
+  out.gif_us = c.gifUs;
+  out.upload_us = c.uploadUs;
   out.textures_cached = c.texturesCached;
   out.cache_writebacks = c.cacheWritebacks;
   out.cache_loads = c.cacheLoads;
@@ -996,6 +1000,7 @@ RenderCounters Backend::render_counters() const {
   const hwgs::gpu::GpuStats &gpu = impl_->renderer->GpuCounters();
   out.gpu_submissions = gpu.submissions;
   out.gpu_barriers = gpu.barriers;
+  for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;
 }
 

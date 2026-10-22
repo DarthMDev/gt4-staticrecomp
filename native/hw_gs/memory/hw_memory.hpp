@@ -89,6 +89,16 @@ struct PsmInfo {
     bool zBlockXorApplies;         // Z formats: block numbers are XORed with 24
 };
 
+// GPU form of the pixel addressing (M10 GLM, IN-347): the in-page location of every pixel of a page for every
+// PSM, packed one uint32 per pixel (bits 0-4 block number in the page, 5-12 byte in the block, 13-17 bit shift,
+// 18-23 bit width), plus a 64-entry directory indexed by the PSM code: offset of the PSM's table in `entries`,
+// page width, page height and the Z block XOR flag (4 uint32 each). Same numbers as pixelSlot.
+struct GpuAddressTables {
+    std::vector<std::uint32_t> directory;  // 64 x {offset, pageWidth, pageHeight, zXor}
+    std::vector<std::uint32_t> entries;
+};
+GpuAddressTables gpuAddressTables();
+
 // Returns the PSM code if it is one of the documented formats (0x12 and other
 // codes are not valid for HWR).
 std::optional<Psm> decodePsm(std::uint32_t code);

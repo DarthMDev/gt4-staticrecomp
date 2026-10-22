@@ -26,6 +26,20 @@ extern const std::size_t hw_pixel_uber_flat_word_count;
 extern const std::uint32_t hw_pixel_uber_smooth_interlock_words[];
 extern const std::size_t hw_pixel_uber_smooth_interlock_word_count;
 
+// M10 GLM kernels (IN-347).
+extern const std::uint32_t hw_glm_decode_words[];
+extern const std::size_t hw_glm_decode_word_count;
+extern const std::uint32_t hw_glm_swizzle_words[];
+extern const std::size_t hw_glm_swizzle_word_count;
+extern const std::uint32_t hw_glm_unswizzle_words[];
+extern const std::size_t hw_glm_unswizzle_word_count;
+extern const std::uint32_t hw_glm_merge_words[];
+extern const std::size_t hw_glm_merge_word_count;
+extern const std::uint32_t hw_glm_host_upload_words[];
+extern const std::size_t hw_glm_host_upload_word_count;
+extern const std::uint32_t hw_glm_clut_words[];
+extern const std::size_t hw_glm_clut_word_count;
+
 // Exactness compute entry points (fixture only; never linked into the game).
 extern const std::uint32_t hw_blend_exact_words[];
 extern const std::size_t hw_blend_exact_word_count;

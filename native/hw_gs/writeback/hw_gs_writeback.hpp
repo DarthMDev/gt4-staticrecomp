@@ -50,13 +50,28 @@ struct Counters {
     std::uint64_t cacheWritebackWords = 0;
     std::uint64_t cacheEvictions = 0;
     // Write-backs by reason: other, texture read, CLUT load, transfer, display, eviction, load overlap.
-    std::uint64_t cacheWritebackByReason[7] = {};         // resident targets evicted for another (least recently used)
+    std::uint64_t cacheWritebackByReason[9] = {};         // resident targets evicted for another (least recently used)
     // CPU microseconds spent in the M7 coherence work and the texture decode (report only, per session).
     double cacheWritebackUs = 0.0;
     double cacheLoadUs = 0.0;
     double textureDecodeUs = 0.0;
+    double gifUs = 0.0;     // all of GifTransfer (front end, translate, execute, transfers): the GS stream cost
+    double uploadUs = 0.0;  // EE->GS uploads into the shadow memory (and GLM merges, IN-350)
     std::uint64_t texturesCached = 0;
-    std::uint64_t texturesFromTargets = 0;    // batches whose texels were copied from a resident target (IN-346)         // batches whose texels came from the decoded-texture cache (IN-341)
+    std::uint64_t texturesFromTargets = 0;    // batches whose texels were copied from a resident target (IN-346)
+    std::uint64_t texturesFromGlm = 0;        // batches whose texels were decoded from the GLM (IN-347)
+    std::uint64_t glmPagesUploaded = 0;       // contiguous page runs copied into the GLM
+    std::uint64_t glmSwizzles = 0;            // target rectangles swizzled into the GLM
+    std::uint64_t glmSwizzlesSkipped = 0;     // swizzles skipped: the GLM already held the pixels (IN-350)
+    std::uint64_t cpuSpriteBatches = 0;       // small untextured sprite batches drawn on the CPU (IN-348)
+    std::uint64_t glmParks = 0;               // slot drawn rectangles parked in the GLM instead of written back (IN-350)
+    std::uint64_t glmSlotLoads = 0;           // slot rectangles loaded from the GLM (IN-350)
+    std::uint64_t glmDownloads = 0;           // GLM-owned page downloads for CPU users (IN-350; each waits)
+    std::uint64_t glmPagesDownloaded = 0;
+    std::uint64_t glmUploadMerges = 0;        // EE uploads merged into GLM-owned pages on the GPU (IN-350)
+    std::uint64_t glmHostUploads = 0;         // EE uploads written into the GLM by the upload kernel (IN-351)
+    std::uint64_t glmMergedWords = 0;
+    std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
     std::uint64_t presentationFrames = 0;     // presentation composes with an image
     std::uint64_t blankFrames = 0;            // VBlanks with no image (unknown mode or kept previous)
@@ -112,6 +127,13 @@ struct BatchTranslation {
     PixelRect rect;  // union of the draw scissors: the rectangle read and written back
     PixelRect scissor;  // the context's scissor clipped to the surface (the M7 load rectangle, IN-344)
     int32_t textureSlot = -1;  // IN-346: GPU colour slot the texels are copied from (-1: decoded texels)
+    // IN-347: texels decoded on the GPU from the GLM (view below; indexed formats through `palette`).
+    bool glmTexture = false;
+    uint32_t glmBp = 0, glmBw = 0, glmPsm = 0;
+    bool glmIndexed = false;
+    std::vector<uint32_t> palette;
+    bool glmGpuClut = false;  // IN-349: indexed texels expanded from the GPU CLUT (fields below)
+    uint32_t glmCpsm = 0, glmCsa = 0, glmTa0 = 0, glmTa1 = 0, glmAem = 0;
     gpu::GpuPixelState state;
     bool hasTexture = false;
     uint32_t texWidth = 0;
@@ -200,6 +222,20 @@ public:
     void SetSyncMode(bool cache);
     // IN-346 A/B switch: textures that are resident colour targets are copied on the GPU (default on).
     void SetTextureFromTargets(bool enabled);
+    // IN-347 A/B switch (GT4_HW_GLM): textures over GPU-newer target data are decoded from the GLM (default on);
+    // off, the targets are written back and the texture is decoded on the CPU.
+    void SetGlm(bool enabled);
+    // IN-348 A/B switch: small untextured sprite batches are drawn on the CPU in cache mode (default on).
+    void SetCpuSmallSprites(bool enabled);
+    // IN-349 A/B switch: CLUT loads are repeated on the GPU and indexed textures expanded from the GPU CLUT.
+    void SetGpuClut(bool enabled);
+    // IN-350 A/B switch: evicted or overlapped resident targets are parked in the GLM (GPU only) instead of
+    // written back; the pages they leave are GLM-owned until a CPU user downloads them.
+    void SetGlmParking(bool enabled);
+    // IN-350 fixtures: every slot load reads the GLM (exercises the GLM load path on every load).
+    void SetGlmLoadsAlways(bool enabled);
+    // IN-351 A/B switch: EE uploads are written into the GLM on the GPU (pages become GLM-owned).
+    void SetGpuUploads(bool enabled);
     bool CacheMode() const;
 
     // CPU view of the SLM (4 MiB, GS layout). Resident draws are written back first.

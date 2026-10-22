@@ -16,6 +16,8 @@
 
 #include "../../cpuref/cpuref_draw.hpp"
 #include "../../cpuref/cpuref_memory.hpp"
+#include "../../memory/hw_memory.hpp"
+#include "../../clut/hw_clut.hpp"
 #include "../../frontend/hw_gs_registers.hpp"
 #include "../../pixel/hw_gs_pixel.hpp"
 #include "../../frontend/hw_gs_types.hpp"
@@ -1443,6 +1445,21 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         // 7. A draw into A whose ZBUF is A itself with Z written (test ALWAYS): the write-back fallback.
         ad({frameReg(kA), 0x4C, zbufReg(kA, false), 0x4E, uint64_t{1} << 16 | (uint64_t{1} << 17), 0x47, kSprite, 0x00,
             rgbaq(0x80EEDDCCu), 0x01, xyz(50, 2), 0x05, xyz(62, 12), 0x05});
+        // 8. GT4's buffer reuse (IN-350): page 48 drawn 128 wide (FBW 2), then 64 wide at the same base (the first
+        //    target is parked in the GLM and the second loads from it), then partial CT16 and T4 uploads into it
+        //    (merged into the GLM-owned pages), then read as a CT32 texture into A.
+        ad({(uint64_t{1} << 16) | (uint64_t{2} << 17), 0x47, frameReg(48) | (uint64_t{1} << 16), 0x4C,
+            zbufReg(kZ, true), 0x4E, kSprite, 0x00, rgbaq(0x80123456u + frame), 0x01, xyz(0, 0), 0x05, xyz(64, 40), 0x05,
+            frameReg(48), 0x4C, kSprite, 0x00, rgbaq(0x80654321u), 0x01, xyz(5 + frame, 3), 0x05, xyz(30, 50), 0x05});
+        ad({blit(0, 0, 48 * 32, 0x02), 0x50, (uint64_t{10} << 32) | (uint64_t{3 + frame} << 48), 0x51,
+            uint64_t{8} | (uint64_t{4} << 32), 0x52, 0, 0x53});
+        image({0x1111222233334444ull + frame, 0x5555666677778888ull, 0x99990000AAAABBBBull, 0xCCCCDDDDEEEEFFFFull,
+               0x0123456789ABCDEFull, 0xFEDCBA9876543210ull, 0x0F0F0F0FF0F0F0F0ull, 0x1357924680ACE13Bull});
+        ad({blit(0, 0, 48 * 32, 0x14), 0x50, (uint64_t{6} << 32) | (uint64_t{40} << 48), 0x51,
+            uint64_t{8} | (uint64_t{4} << 32), 0x52, 0, 0x53});
+        image({0x89ABCDEF01234567ull ^ frame, 0x76543210FEDCBA98ull});
+        ad({frameReg(kA), 0x4C, tex0(48 * 32, 0x00, 6, 0, false), 0x06, kSprite | kTme | kFst, 0x00,
+            rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(0, 32), 0x05, uv(64, 32), 0x03, xyz(64, 64), 0x05});
         capture.FrameEnd(frame);
     }
 
@@ -1452,11 +1469,14 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         uint64_t slmHash = 0;
         std::vector<uint8_t> slm;
     };
-    auto replay = [&](bool cacheMode, std::vector<FrameRecord>& out, writeback::Counters& counters,
+    auto replay = [&](bool cacheMode, bool cpuSprites, std::vector<FrameRecord>& out, writeback::Counters& counters,
                       std::string& error) -> bool {
         writeback::Renderer renderer;
         if (!renderer.Init(handles, error)) return false;
         renderer.SetSyncMode(cacheMode);
+        renderer.SetCpuSmallSprites(cpuSprites);
+        renderer.SetGlmLoadsAlways(cpuSprites);  // the second cache run loads every slot through the GLM (IN-350)
+        renderer.SetGpuUploads(!cpuSprites);     // ... and writes uploads on the CPU (GLM merges, IN-350/351)
         writeback::WritebackReplayTarget target(renderer);
         cpuref::ReplaySummary summary;
         const bool ok = cpuref::ReplayCapture(capture.Bytes(), target, summary,
@@ -1478,12 +1498,17 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         if (renderer.Failed()) error += " " + renderer.LastError();
         return ok && !renderer.Failed();
     };
+    // The cache run without the CPU sprite path (IN-348) keeps every small target on the GPU (evictions); the
+    // second cache run with it must give the same images and memory too.
     std::vector<FrameRecord> reference;
     std::vector<FrameRecord> cached;
+    std::vector<FrameRecord> cachedCpuSprites;
     writeback::Counters referenceCounters;
     writeback::Counters cacheCounters;
+    writeback::Counters cpuSpriteCounters;
     std::string error;
-    if (!replay(false, reference, referenceCounters, error) || !replay(true, cached, cacheCounters, error)) {
+    if (!replay(false, false, reference, referenceCounters, error) || !replay(true, false, cached, cacheCounters, error) ||
+        !replay(true, true, cachedCpuSprites, cpuSpriteCounters, error)) {
         std::printf("hw_cache_equals_writeback: replay failed: %s\n", error.c_str());
         return 1;
     }
@@ -1494,7 +1519,10 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
     }
     for (uint32_t frame = 0; frame < kFrames; ++frame) {
         const bool image = reference[frame].valid == cached[frame].valid && reference[frame].rgb == cached[frame].rgb;
-        const bool memory = reference[frame].slmHash == cached[frame].slmHash;
+        const bool memory = reference[frame].slmHash == cached[frame].slmHash &&
+                            cachedCpuSprites.size() == kFrames &&
+                            reference[frame].slmHash == cachedCpuSprites[frame].slmHash &&
+                            reference[frame].rgb == cachedCpuSprites[frame].rgb;
         std::printf("  frame %u: image %s, memory %016llx / %016llx %s\n", frame, image ? "equal" : "DIFFERENT",
                     static_cast<unsigned long long>(reference[frame].slmHash),
                     static_cast<unsigned long long>(cached[frame].slmHash), memory ? "equal" : "DIFFERENT");
@@ -1520,14 +1548,494 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                 static_cast<unsigned long long>(cacheCounters.cacheFallbackBatches),
                 static_cast<unsigned long long>(cacheCounters.cacheLoads),
                 static_cast<unsigned long long>(cacheCounters.cacheWritebacks));
-    std::printf("  cache: evictions %llu\n", static_cast<unsigned long long>(cacheCounters.cacheEvictions));
+    std::printf("  cache: GLM upload merges %llu (%llu words, CPU-upload run), GPU host uploads %llu\n",
+                static_cast<unsigned long long>(cpuSpriteCounters.glmUploadMerges),
+                static_cast<unsigned long long>(cpuSpriteCounters.glmMergedWords),
+                static_cast<unsigned long long>(cacheCounters.glmHostUploads));
+    std::printf("  cache: GLM parks %llu, GLM slot loads %llu / %llu (always), GLM downloads %llu\n",
+                static_cast<unsigned long long>(cacheCounters.glmParks),
+                static_cast<unsigned long long>(cacheCounters.glmSlotLoads),
+                static_cast<unsigned long long>(cpuSpriteCounters.glmSlotLoads),
+                static_cast<unsigned long long>(cacheCounters.glmDownloads));
+    std::printf("  cache: evictions %llu, GPU CLUT loads %llu, GLM textures %llu, CPU sprite batches %llu\n",
+                static_cast<unsigned long long>(cacheCounters.cacheEvictions),
+                static_cast<unsigned long long>(cacheCounters.gpuClutLoads),
+                static_cast<unsigned long long>(cacheCounters.texturesFromGlm),
+                static_cast<unsigned long long>(cpuSpriteCounters.cpuSpriteBatches));
     if (cacheCounters.cacheResidentBatches == 0 || cacheCounters.cacheFallbackBatches == 0 ||
         cacheCounters.cacheLoads == 0 || cacheCounters.cacheWritebacks == 0 || cacheCounters.cacheEvictions == 0 ||
-        referenceCounters.cacheResidentBatches != 0) {
+        referenceCounters.cacheResidentBatches != 0 || cpuSpriteCounters.cpuSpriteBatches == 0 ||
+        cacheCounters.gpuClutLoads == 0 || cacheCounters.texturesFromGlm == 0 || cacheCounters.glmParks == 0 ||
+        cacheCounters.glmSlotLoads == 0 || cacheCounters.glmDownloads == 0 || cpuSpriteCounters.glmUploadMerges == 0 ||
+        cacheCounters.glmHostUploads == 0 ||
+        cpuSpriteCounters.glmSlotLoads < cpuSpriteCounters.cacheLoads) {
         std::printf("  the cache paths were not all exercised (fixture is blind)\n");
         ++failures;
     }
     std::printf("hw_cache_equals_writeback: %u frames, %d failures\n", kFrames, failures);
+    return failures == 0 ? 0 : 1;
+}
+
+// hw_glm_unswizzle (IN-350): random local memory in the GLM is loaded into a colour or depth slot at a target
+// layout; the slot must then hold LocalMemory::readRect of the same rectangle (what a load from the shadow memory
+// would upload). Then a GLM download of a few page ranges must give back the GLM bytes at the same offsets.
+int TestGlmUnswizzle(gpu::GpuDrawer& drawer) {
+    struct Case {
+        memory::Psm psm;
+        bool depth;
+        uint32_t bp;
+        uint32_t bw;
+    };
+    const Case cases[] = {{memory::Psm::Ct32, false, 64, 10},  {memory::Psm::Ct24, false, 320, 4},
+                          {memory::Psm::Ct16, false, 1000, 3}, {memory::Psm::Ct16S, false, 37, 3},
+                          {memory::Psm::Z32, true, 640, 10},   {memory::Psm::Z24, true, 2048, 4},
+                          {memory::Psm::Z16, true, 5000, 3},   {memory::Psm::Z16S, true, 7001, 3}};
+    uint64_t state = 0x0B5Eu;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    int failures = 0;
+    memory::LocalMemory local;
+    for (const Case& c : cases) {
+        for (uint32_t address = 0; address < 4u * 1024u * 1024u; address += 4) {
+            const uint32_t word = next();
+            for (uint32_t b = 0; b < 4; ++b) local.setByte(address + b, static_cast<uint8_t>(word >> (8 * b)));
+        }
+        std::string error;
+        if (!drawer.UploadGlm(local.bytes().data(), {{0u, 4u * 1024u * 1024u}}, error)) {
+            std::printf("hw_glm_unswizzle: upload failed: %s\n", error.c_str());
+            return 1;
+        }
+        const int32_t x0 = 3, y0 = 5, x1 = 140, y1 = 77;
+        const uint32_t width = static_cast<uint32_t>(x1 - x0 + 1);
+        const uint32_t height = static_cast<uint32_t>(y1 - y0 + 1);
+        gpu::GpuChunk chunk;
+        chunk.rectX0 = x0;
+        chunk.rectY0 = y0;
+        chunk.rectX1 = x1;
+        chunk.rectY1 = y1;
+        chunk.colourSlot = 2;
+        chunk.depthSlot = 1;
+        chunk.uploadFrame = chunk.uploadDepth = false;
+        chunk.readbackFrame = !c.depth;
+        chunk.readbackDepth = c.depth;
+        (c.depth ? chunk.depthWords : chunk.frameWords).resize(static_cast<size_t>(width) * height);
+        if (!drawer.LoadSlotFromGlm(c.depth, c.depth ? 1u : 2u, c.bp, c.bw, static_cast<uint32_t>(c.psm), x0, y0, x1, y1,
+                                    error) ||
+            !drawer.Execute(chunk, error)) {
+            std::printf("hw_glm_unswizzle: GPU error: %s\n", error.c_str());
+            return 1;
+        }
+        std::vector<uint32_t> expected(static_cast<size_t>(width) * height);
+        local.readRect(memory::BufferView{c.bp, c.bw, c.psm}, static_cast<uint32_t>(x0), static_cast<uint32_t>(y0), width,
+                       height, expected.data());
+        const std::vector<uint32_t>& got = c.depth ? chunk.depthWords : chunk.frameWords;
+        size_t differing = 0;
+        for (size_t i = 0; i < expected.size(); ++i) differing += got[i] != expected[i] ? 1u : 0u;
+        std::printf("  psm %02x (%s slot): %zu of %zu pixels differ from readRect\n", static_cast<unsigned>(c.psm),
+                    c.depth ? "depth" : "colour", differing, expected.size());
+        if (differing != 0) ++failures;
+    }
+    // Download round trip: three page ranges (one at the end of memory) into a zeroed buffer.
+    std::vector<uint8_t> downloaded(4u * 1024u * 1024u, 0);
+    const std::vector<std::pair<uint32_t, uint32_t>> ranges = {
+        {0u, 8192u}, {37u * 8192u, 3u * 8192u}, {4u * 1024u * 1024u - 8192u, 8192u}};
+    std::string error;
+    if (!drawer.DownloadGlm(ranges, downloaded.data(), error)) {
+        std::printf("hw_glm_unswizzle: download failed: %s\n", error.c_str());
+        return 1;
+    }
+    size_t wrong = 0;
+    for (size_t i = 0; i < downloaded.size(); ++i) {
+        bool inside = false;
+        for (const auto& range : ranges) inside = inside || (i >= range.first && i < range.first + range.second);
+        const uint8_t expected = inside ? local.bytes()[i] : uint8_t{0};
+        wrong += downloaded[i] != expected ? 1u : 0u;
+    }
+    std::printf("  download: %zu of %zu bytes wrong\n", wrong, downloaded.size());
+    if (wrong != 0) ++failures;
+    std::printf("hw_glm_unswizzle: %d failing cases\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
+// hw_glm_upload_merge (IN-350): random (word, value, bit mask) triples merged into a random GLM must give
+// glm = (glm & ~mask) | (value & mask) for exactly those words, every other word unchanged.
+int TestGlmUploadMerge(gpu::GpuDrawer& drawer) {
+    uint64_t state = 0x3E26u;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    std::vector<uint8_t> memory(4u * 1024u * 1024u);
+    for (uint8_t& byte : memory) byte = static_cast<uint8_t>(next());
+    std::string error;
+    if (!drawer.UploadGlm(memory.data(), {{0u, 4u * 1024u * 1024u}}, error)) {
+        std::printf("hw_glm_upload_merge: upload failed: %s\n", error.c_str());
+        return 1;
+    }
+    std::vector<uint32_t> expected(memory.size() / 4);
+    std::memcpy(expected.data(), memory.data(), memory.size());
+    std::vector<uint32_t> triples;
+    std::vector<bool> used(expected.size(), false);
+    for (int i = 0; i < 20000; ++i) {
+        const uint32_t word = next() % static_cast<uint32_t>(expected.size());
+        if (used[word]) continue;
+        used[word] = true;
+        const uint32_t masks[] = {0xFFFFFFFFu, 0x0000FFFFu, 0xFFFF0000u, 0x0000000Fu, 0xF0F00F0Fu, next()};
+        const uint32_t mask = masks[next() % 6u];
+        const uint32_t value = next();
+        triples.insert(triples.end(), {word, value, mask});
+        expected[word] = (expected[word] & ~mask) | (value & mask);
+    }
+    std::vector<uint32_t> glm;
+    if (!drawer.MergeIntoGlm(triples, error) || !drawer.ReadGlm(glm, error)) {
+        std::printf("hw_glm_upload_merge: GPU error: %s\n", error.c_str());
+        return 1;
+    }
+    size_t wrong = 0;
+    for (size_t i = 0; i < expected.size(); ++i) wrong += glm[i] != expected[i] ? 1u : 0u;
+    std::printf("  %zu merged words, %zu of %zu GLM words wrong\n", triples.size() / 3, wrong, expected.size());
+    std::printf("hw_glm_upload_merge: %s\n", wrong == 0 ? "pass" : "FAIL");
+    return wrong == 0 ? 0 : 1;
+}
+
+// hw_glm_host_upload (IN-351): EE->GS uploads written into the GLM by the upload kernel must equal
+// memory::hostToLocal on the same bytes, for every transfer size (32, 24, 16, 8, 4 bits, the high-byte and
+// high/low-nibble 32-bit formats, depth formats), odd origins and widths, and a partial transfer that ends inside
+// the rectangle. The whole 4 MiB is compared after each upload.
+int TestGlmHostUpload(gpu::GpuDrawer& drawer) {
+    struct Case {
+        uint32_t psm;
+        uint32_t bp;
+        uint32_t bw;
+        uint32_t x;
+        uint32_t y;
+        uint32_t width;
+        uint32_t height;
+        bool partial;
+    };
+    const Case cases[] = {{0x00, 64, 10, 3, 5, 61, 17, false},   {0x01, 320, 4, 1, 2, 33, 9, false},
+                          {0x02, 1000, 3, 7, 1, 25, 40, false},  {0x0A, 37, 3, 2, 3, 30, 31, true},
+                          {0x13, 2048, 4, 5, 9, 77, 21, false},  {0x14, 5000, 2, 3, 7, 101, 13, false},
+                          {0x1B, 7001, 2, 9, 4, 50, 19, false},  {0x24, 7200, 2, 1, 1, 63, 11, false},
+                          {0x2C, 7400, 2, 4, 6, 64, 8, true},    {0x30, 9000, 10, 6, 3, 300, 12, false},
+                          {0x31, 9400, 4, 2, 2, 129, 7, false},  {0x3A, 9800, 2, 3, 1, 90, 30, false}};
+    uint64_t state = 0x7A11u;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    memory::LocalMemory local;
+    for (uint32_t address = 0; address < 4u * 1024u * 1024u; address += 4) {
+        const uint32_t word = next();
+        for (uint32_t b = 0; b < 4; ++b) local.setByte(address + b, static_cast<uint8_t>(word >> (8 * b)));
+    }
+    std::string error;
+    if (!drawer.UploadGlm(local.bytes().data(), {{0u, 4u * 1024u * 1024u}}, error)) {
+        std::printf("hw_glm_host_upload: upload failed: %s\n", error.c_str());
+        return 1;
+    }
+    int failures = 0;
+    for (const Case& c : cases) {
+        const auto psm = memory::decodePsm(c.psm);
+        if (!psm) {
+            std::printf("  psm %02x: not a PSM\n", c.psm);
+            ++failures;
+            continue;
+        }
+        const uint32_t bpp = memory::psmInfo(*psm).transferBpp;
+        size_t bytes = (static_cast<size_t>(c.width) * c.height * bpp + 7) / 8;
+        if (c.partial) bytes = bytes / 2 + 3;  // ends inside the rectangle, not on a texel boundary
+        std::vector<uint8_t> data(bytes);
+        for (uint8_t& byte : data) byte = static_cast<uint8_t>(next());
+        const uint32_t pixels = static_cast<uint32_t>(
+            std::min<uint64_t>(static_cast<uint64_t>(bytes) * 8u / bpp, static_cast<uint64_t>(c.width) * c.height));
+        if (!drawer.UploadHostToGlm(c.bp, c.bw, c.psm, c.x, c.y, c.width, pixels, bpp, data.data(), data.size(), error)) {
+            std::printf("hw_glm_host_upload: GPU error: %s\n", error.c_str());
+            return 1;
+        }
+        memory::hostToLocal(local, memory::BufferView{c.bp, c.bw, *psm}, memory::TransferRect{c.x, c.y, c.width, c.height},
+                            std::span<const uint8_t>(data.data(), data.size()));
+        std::vector<uint32_t> glm;
+        if (!drawer.ReadGlm(glm, error)) {
+            std::printf("hw_glm_host_upload: read failed: %s\n", error.c_str());
+            return 1;
+        }
+        size_t differing = 0;
+        for (size_t i = 0; i < glm.size(); ++i) {
+            uint32_t expected = 0;
+            std::memcpy(&expected, local.bytes().data() + 4 * i, 4);
+            differing += glm[i] != expected ? 1u : 0u;
+        }
+        std::printf("  psm %02x %ux%u at (%u,%u)%s: %zu GLM words differ from hostToLocal\n", c.psm, c.width, c.height,
+                    c.x, c.y, c.partial ? " partial" : "", differing);
+        if (differing != 0) ++failures;
+    }
+    std::printf("hw_glm_host_upload: %d failing cases\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
+// IN-347 GLM kernels against the CPU memory model (chapter 04.9 fixture hw_glm_equals_writeback, split in two).
+// hw_glm_decode: random local memory uploaded to the GLM; for every PSM, several bases and widths, the GPU
+// decode of a 96 x 80 extent equals LocalMemory::readPixel (indexed formats: through a random palette).
+int TestGlmDecode(gpu::GpuDrawer& drawer) {
+    memory::LocalMemory local;
+    uint64_t state = 0x61A5u;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    for (uint32_t address = 0; address < 4u * 1024u * 1024u; address += 4) {
+        const uint32_t word = next();
+        for (uint32_t b = 0; b < 4; ++b) local.setByte(address + b, static_cast<uint8_t>(word >> (8 * b)));
+    }
+    std::string error;
+    if (!drawer.UploadGlm(local.bytes().data(), {{0u, 4u * 1024u * 1024u}}, error)) {
+        std::printf("hw_glm_decode: upload failed: %s\n", error.c_str());
+        return 1;
+    }
+    std::vector<uint32_t> palette(256);
+    for (uint32_t& entry : palette) entry = next();
+    const memory::Psm psms[] = {memory::Psm::Ct32, memory::Psm::Ct24, memory::Psm::Ct16, memory::Psm::Ct16S,
+                                memory::Psm::T8,   memory::Psm::T4,   memory::Psm::T8H,  memory::Psm::T4Hl,
+                                memory::Psm::T4Hh, memory::Psm::Z32,  memory::Psm::Z24,  memory::Psm::Z16,
+                                memory::Psm::Z16S};
+    const uint32_t bases[] = {0u, 37u, 9000u, 16370u};
+    const uint32_t widths[] = {1u, 2u, 10u};
+    constexpr uint32_t kW = 96, kH = 80;
+    uint64_t compared = 0, mismatches = 0;
+    for (memory::Psm psm : psms) {
+        const bool indexed = memory::psmInfo(psm).isIndexed;
+        for (uint32_t bp : bases) {
+            for (uint32_t bw : widths) {
+                gpu::GpuChunk chunk;
+                chunk.rectX0 = chunk.rectY0 = 0;
+                chunk.rectX1 = chunk.rectY1 = 0;
+                chunk.uploadFrame = chunk.uploadDepth = chunk.readbackFrame = chunk.readbackDepth = false;
+                chunk.hasTexture = true;
+                chunk.glmTexture = true;
+                chunk.glmBp = bp;
+                chunk.glmBw = bw;
+                chunk.glmPsm = static_cast<uint32_t>(psm);
+                chunk.glmIndexed = indexed;
+                chunk.palette = palette;
+                chunk.texWidth = kW;
+                chunk.texHeight = kH;
+                std::vector<uint32_t> texels;
+                if (!drawer.Execute(chunk, error) || !drawer.ReadTexels(kW, kH, texels, error)) {
+                    std::printf("hw_glm_decode: GPU error: %s\n", error.c_str());
+                    return 1;
+                }
+                const memory::BufferView view{bp, bw, psm};
+                for (uint32_t y = 0; y < kH; ++y) {
+                    for (uint32_t x = 0; x < kW; ++x) {
+                        uint32_t expected = local.readPixel(view, x, y);
+                        if (indexed) expected = palette[expected & 255u];
+                        const uint32_t got = texels[static_cast<size_t>(y) * kW + x];
+                        ++compared;
+                        if (got != expected) {
+                            if (mismatches < 4) {
+                                std::printf("  mismatch psm=%02x bp=%u bw=%u at %u,%u: gpu %08X cpu %08X\n",
+                                            static_cast<unsigned>(psm), bp, bw, x, y, got, expected);
+                            }
+                            ++mismatches;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    std::printf("hw_glm_decode: compared %llu texels over 13 PSMs, mismatches %llu\n",
+                static_cast<unsigned long long>(compared), static_cast<unsigned long long>(mismatches));
+    return mismatches == 0 ? 0 : 1;
+}
+
+// hw_glm_swizzle: random target words in a colour or depth slot are swizzled into the GLM at the target's own
+// (BP, BW, PSM); the whole 4 MiB GLM must then equal the local memory after LocalMemory::writeRect of the same
+// words (only the pixel bits change; neighbouring sub-word pixels survive).
+// The rectangle stays inside the buffer width: wider rectangles wrap into the next page row, two pixels then
+// share an address, and the last writer depends on the visiting order (a parallel swizzle has none).
+int TestGlmSwizzle(gpu::GpuDrawer& drawer) {
+    struct Case {
+        memory::Psm psm;
+        bool depth;
+        uint32_t bp;
+        uint32_t bw;
+    };
+    const Case cases[] = {{memory::Psm::Ct32, false, 64, 10},  {memory::Psm::Ct24, false, 320, 4},
+                          {memory::Psm::Ct16, false, 1000, 3}, {memory::Psm::Ct16S, false, 37, 3},
+                          {memory::Psm::Z32, true, 640, 10},   {memory::Psm::Z24, true, 2048, 4},
+                          {memory::Psm::Z16, true, 5000, 3},   {memory::Psm::Z16S, true, 7001, 3}};
+    uint64_t state = 0x5A11u;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    int failures = 0;
+    for (const Case& c : cases) {
+        memory::LocalMemory local;
+        for (uint32_t address = 0; address < 4u * 1024u * 1024u; address += 4) {
+            const uint32_t word = next();
+            for (uint32_t b = 0; b < 4; ++b) local.setByte(address + b, static_cast<uint8_t>(word >> (8 * b)));
+        }
+        std::string error;
+        if (!drawer.UploadGlm(local.bytes().data(), {{0u, 4u * 1024u * 1024u}}, error)) {
+            std::printf("hw_glm_swizzle: upload failed: %s\n", error.c_str());
+            return 1;
+        }
+        const int32_t x0 = 3, y0 = 5, x1 = 140, y1 = 77;
+        const size_t words = static_cast<size_t>(x1 - x0 + 1) * static_cast<size_t>(y1 - y0 + 1);
+        std::vector<uint32_t> values(words);
+        for (uint32_t& v : values) v = next();
+        gpu::GpuChunk chunk;
+        chunk.rectX0 = x0;
+        chunk.rectY0 = y0;
+        chunk.rectX1 = x1;
+        chunk.rectY1 = y1;
+        chunk.colourSlot = 1;
+        chunk.depthSlot = 1;
+        chunk.uploadFrame = !c.depth;
+        chunk.uploadDepth = c.depth;
+        chunk.readbackFrame = chunk.readbackDepth = false;
+        (c.depth ? chunk.depthWords : chunk.frameWords) = values;
+        std::vector<uint32_t> glm;
+        if (!drawer.Execute(chunk, error) ||
+            !drawer.SwizzleToGlm(c.depth, 1, c.bp, c.bw, static_cast<uint32_t>(c.psm), x0, y0, x1, y1, error) ||
+            !drawer.ReadGlm(glm, error)) {
+            std::printf("hw_glm_swizzle: GPU error: %s\n", error.c_str());
+            return 1;
+        }
+        local.writeRect(memory::BufferView{c.bp, c.bw, c.psm}, static_cast<uint32_t>(x0), static_cast<uint32_t>(y0),
+                        static_cast<uint32_t>(x1 - x0 + 1), static_cast<uint32_t>(y1 - y0 + 1), values.data());
+        size_t differing = 0;
+        for (size_t i = 0; i < glm.size(); ++i) {
+            uint32_t expected = 0;
+            std::memcpy(&expected, local.bytes().data() + 4 * i, 4);
+            if (glm[i] != expected) ++differing;
+        }
+        std::printf("  psm %02x (%s slot): %zu of %zu GLM words differ from the write-back\n",
+                    static_cast<unsigned>(c.psm), c.depth ? "depth" : "colour", differing, glm.size());
+        if (differing != 0) ++failures;
+    }
+    std::printf("hw_glm_swizzle: %d failing cases\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
+// IN-349 GPU CLUT (chapter 07.7) against the CPU CLUT unit: a sequence of 40 random CLUT loads (CT32, CT16,
+// CT16S; CSM1 and CSM2; T8 and T4 palettes; CSA 0..31; aligned and unaligned CBP) is applied to the CPU
+// clut::ClutUnit from local memory and to the GPU CLUT buffer from the GLM; after every load the 512 halfwords
+// must be equal. Then a T8 and a T4 texture decoded on the GPU through the GPU CLUT (with TEXA for CT16) must
+// equal the CPU decode through ClutUnit::Decode.
+int TestGlmClut(gpu::GpuDrawer& drawer) {
+    memory::LocalMemory local;
+    uint64_t state = 0xC107u;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    for (uint32_t address = 0; address < 4u * 1024u * 1024u; address += 4) {
+        const uint32_t word = next();
+        for (uint32_t b = 0; b < 4; ++b) local.setByte(address + b, static_cast<uint8_t>(word >> (8 * b)));
+    }
+    std::string error;
+    if (!drawer.UploadGlm(local.bytes().data(), {{0u, 4u * 1024u * 1024u}}, error)) {
+        std::printf("hw_glm_clut: upload failed: %s\n", error.c_str());
+        return 1;
+    }
+    CounterSet counterSet;
+    clut::ClutUnit cpu(counterSet);
+    if (!drawer.UploadClut(cpu.Halfwords(), error)) {
+        std::printf("hw_glm_clut: CLUT upload failed: %s\n", error.c_str());
+        return 1;
+    }
+    const uint32_t cpsms[] = {0x00u, 0x02u, 0x0Au};
+    int failures = 0;
+    clut::Tex0Write last;
+    for (int load = 0; load < 40; ++load) {
+        clut::Tex0Write write;
+        write.psm = (next() & 1u) ? 0x13u : 0x14u;  // T8 or T4
+        write.cpsm = cpsms[next() % 3u];
+        write.cbp = (load % 3 == 0) ? (next() % 16000u) : (next() % 500u) * 32u;
+        write.csm = (load % 5 == 4) ? 1u : 0u;
+        write.csa = next() & 31u;
+        write.cld = 1;
+        write.texclutCbw = 1u + next() % 4u;
+        write.texclutCou = next() % 4u;
+        write.texclutCov = next() % 300u;
+        cpu.ProcessWrite(write, local.bytes().data(), {});
+        if (!drawer.LoadClutFromGlm(write.cbp, write.cpsm, write.csm, write.csa, write.psm, write.texclutCbw,
+                                    write.texclutCou, write.texclutCov, error)) {
+            std::printf("hw_glm_clut: GPU load failed: %s\n", error.c_str());
+            return 1;
+        }
+        std::vector<uint16_t> gpu;
+        if (!drawer.ReadClut(gpu, error)) {
+            std::printf("hw_glm_clut: read failed: %s\n", error.c_str());
+            return 1;
+        }
+        uint32_t differing = 0;
+        for (uint32_t i = 0; i < 512; ++i) differing += gpu[i] != cpu.Halfwords()[i] ? 1u : 0u;
+        if (differing != 0) {
+            std::printf("  load %d (cpsm %02x csm %u csa %u psm %02x cbp %u): %u halfwords differ\n", load, write.cpsm,
+                        write.csm, write.csa, write.psm, write.cbp, differing);
+            ++failures;
+        }
+        last = write;
+    }
+    // Indexed decode through the GPU CLUT equals the CPU palette for both index sizes and both palette formats.
+    const uint64_t texa = uint64_t{0x55} | (uint64_t{1} << 15) | (uint64_t{0xAA} << 32);  // TA0, AEM, TA1
+    const struct {
+        uint32_t psm;
+        uint32_t cpsm;
+        uint32_t csa;
+    } decodes[] = {{0x13u, 0x00u, 3u}, {0x14u, 0x00u, 9u}, {0x13u, 0x02u, 7u}, {0x14u, 0x0Au, 21u}};
+    for (const auto& d : decodes) {
+        clut::Tex0Write write;
+        write.psm = d.psm;
+        write.cpsm = d.cpsm;
+        write.cbp = 4096u;
+        write.csa = d.csa;
+        write.cld = 1;
+        cpu.ProcessWrite(write, local.bytes().data(), {});
+        if (!drawer.LoadClutFromGlm(write.cbp, write.cpsm, 0, write.csa, write.psm, 0, 0, 0, error)) return 1;
+        const clut::Palette palette = cpu.Decode(d.psm, d.cpsm, d.csa, texa);
+        const clut::TexaState texaState = clut::TexaState::FromRegister(texa);
+        gpu::GpuChunk chunk;
+        chunk.rectX0 = chunk.rectY0 = chunk.rectX1 = chunk.rectY1 = 0;
+        chunk.uploadFrame = chunk.uploadDepth = chunk.readbackFrame = chunk.readbackDepth = false;
+        chunk.hasTexture = true;
+        chunk.glmTexture = true;
+        chunk.glmBp = 8000u;
+        chunk.glmBw = 2u;
+        chunk.glmPsm = d.psm;
+        chunk.glmIndexed = true;
+        chunk.glmGpuClut = true;
+        chunk.glmCpsm = d.cpsm;
+        chunk.glmCsa = d.csa;
+        chunk.glmTa0 = texaState.ta0;
+        chunk.glmTa1 = texaState.ta1;
+        chunk.glmAem = texaState.aem ? 1u : 0u;
+        chunk.texWidth = 64;
+        chunk.texHeight = 32;
+        std::vector<uint32_t> texels;
+        if (!drawer.Execute(chunk, error) || !drawer.ReadTexels(64, 32, texels, error)) {
+            std::printf("hw_glm_clut: decode failed: %s\n", error.c_str());
+            return 1;
+        }
+        uint32_t wrong = 0;
+        const memory::BufferView view{8000u, 2u, *memory::decodePsm(d.psm)};
+        for (uint32_t y = 0; y < 32; ++y) {
+            for (uint32_t x = 0; x < 64; ++x) {
+                const uint32_t expected = palette.entries[local.readPixel(view, x, y) & 255u];
+                wrong += texels[static_cast<size_t>(y) * 64 + x] != expected ? 1u : 0u;
+            }
+        }
+        std::printf("  decode psm %02x cpsm %02x csa %u: %u of 2048 texels differ\n", d.psm, d.cpsm, d.csa, wrong);
+        if (wrong != 0) ++failures;
+    }
+    (void)last;
+    std::printf("hw_glm_clut: %d failures\n", failures);
     return failures == 0 ? 0 : 1;
 }
 
@@ -1591,6 +2099,12 @@ int main(int argc, char** argv) {
     if (name == "hw_gpu_raster_date") return TestRasterDate(drawer);
     if (name == "hw_gpu_raster_frame") return TestRasterFrameWrites(drawer);
     if (name == "hw_gpu_gouraud_report") return TestGouraudReport(drawer);
+    if (name == "hw_glm_decode") return TestGlmDecode(drawer);
+    if (name == "hw_glm_swizzle") return TestGlmSwizzle(drawer);
+    if (name == "hw_glm_unswizzle") return TestGlmUnswizzle(drawer);
+    if (name == "hw_glm_upload_merge") return TestGlmUploadMerge(drawer);
+    if (name == "hw_glm_host_upload") return TestGlmHostUpload(drawer);
+    if (name == "hw_glm_clut") return TestGlmClut(drawer);
     if (name == "hw_gpu_writeback_aliased_depth") return TestWritebackAliasedDepth(drawer);
     if (name == "hw_readback_pending_draw") return TestReadbackObservesPendingDraw(handles);
     if (name == "hw_replay_parity_double_buffer") return TestReplayParityDoubleBuffer(handles);

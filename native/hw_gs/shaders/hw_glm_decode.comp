@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: MIT
+//
+// GLM texture decode (TASK-027 M10, chapter 04.9 step 3, IN-347). Copyright (c) 2026 GT4Recomp contributors.
+// Written from docs/hw-renderer-spec chapters 04.9 and 07, clean room (decision 0070).
+//
+// One invocation per texel of the requested extent: the stored value is read from the GLM with the texture's
+// (TBP0, TBW, PSM) addressing and written into the texel image. Direct formats keep the raw stored word (the
+// pixel shader expands CT16/CT24 with TEXA, TexelKind); indexed formats are looked up in the palette the CPU
+// CLUT unit expanded (RGBA8, one 256-entry slot of the palette ring).
+
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#include "hw_glm_common.glsl"
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(std430, set = 0, binding = 2) readonly buffer PaletteRing {
+    uint palettes[];  // 256 RGBA8 entries per slot
+};
+layout(set = 0, binding = 3, r32ui) uniform writeonly uimage2D hw_texels;
+layout(std430, set = 0, binding = 5) readonly buffer ClutHalfwords {
+    uint clut[512];  // GPU copy of the CLUT buffer (IN-349), one halfword per uint
+};
+
+layout(push_constant) uniform DecodeParameters {
+    uint bp;            // TBP0 in blocks
+    uint bw;            // TBW
+    uint psm;           // texture PSM code
+    uint width;         // texels
+    uint height;
+    uint indexed;       // 0: direct; 1: palette ring (CPU CLUT); 2: GPU CLUT buffer (07.7, IN-349)
+    uint palette_base;  // first entry of this decode's palette in the ring (indexed = 1)
+    uint cpsm;          // indexed = 2: TEX0.CPSM, CSA and TEXA, as clut::ClutUnit::Decode uses them
+    uint csa;
+    uint ta0;
+    uint ta1;
+    uint aem;
+} pc;
+
+// clut::ClutUnit::Decode for one entry from the GPU CLUT buffer.
+uint gpu_palette_entry(uint e) {
+    if (pc.cpsm == 0u) {
+        uint group = min((e >> 4) + (pc.csa & 15u), 15u);
+        uint index = 16u * group + (e & 15u);
+        return clut[index] | (clut[index + 256u] << 16);
+    }
+    uint value = clut[(16u * pc.csa + e) & 511u];
+    uint r = (value & 0x1Fu) << 3;
+    uint g = ((value >> 5) & 0x1Fu) << 3;
+    uint b = ((value >> 10) & 0x1Fu) << 3;
+    uint a = pc.ta0;
+    if ((value & 0x8000u) != 0u) {
+        a = pc.ta1;
+    } else if (pc.aem != 0u && r == 0u && g == 0u && b == 0u) {
+        a = 0u;
+    }
+    return r | (g << 8) | (b << 16) | (a << 24);
+}
+
+void main() {
+    uvec2 texel = gl_GlobalInvocationID.xy;
+    if (texel.x >= pc.width || texel.y >= pc.height) {
+        return;
+    }
+    uint value = glm_read(pc.bp, pc.bw, pc.psm, texel.x, texel.y);
+    if (pc.indexed == 1u) {
+        value = palettes[pc.palette_base + (value & 255u)];
+    } else if (pc.indexed == 2u) {
+        // A T4 palette has 16 entries; the CPU decode leaves entries 16..255 at 0 (values never exceed 15).
+        uint count = ((pc.psm & 7u) == 3u) ? 256u : 16u;
+        uint e = value & 255u;
+        value = e < count ? gpu_palette_entry(e) : 0u;
+    }
+    imageStore(hw_texels, ivec2(texel), uvec4(value));
+}

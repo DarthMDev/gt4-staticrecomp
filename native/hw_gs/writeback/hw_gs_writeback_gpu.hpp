@@ -102,6 +102,15 @@ struct GpuChunk {
     std::uint32_t texWidth = 0;              // texels (power of two up to 1024 or region extent)
     std::uint32_t texHeight = 0;
     std::vector<std::uint32_t> texels;       // RGBA8 packed as R | G<<8 | B<<16 | A<<24
+    // IN-347: when set, the texels are decoded on the GPU from the GLM (texture view below; indexed formats
+    // through `palette`) instead of being uploaded or copied. The caller made the GLM current first.
+    bool glmTexture = false;
+    std::uint32_t glmBp = 0, glmBw = 0, glmPsm = 0;
+    bool glmIndexed = false;
+    std::vector<std::uint32_t> palette;      // 256 RGBA8 entries when glmIndexed (CPU CLUT)
+    // IN-349: indexed texels expanded from the GPU CLUT buffer instead of `palette` (Decode's CPSM, CSA, TEXA).
+    bool glmGpuClut = false;
+    std::uint32_t glmCpsm = 0, glmCsa = 0, glmTa0 = 0, glmTa1 = 0, glmAem = 0;
     GpuPixelState state;
     std::vector<GpuVertex> vertices;
     std::vector<GpuDraw> draws;
@@ -140,6 +149,42 @@ public:
 
     // Submits the recorded chunks; with `wait`, also waits for them.
     bool Flush(bool wait, std::string &error);
+
+    // ---- GLM (M10, chapter 04.9, IN-347): a 4 MiB GPU mirror of GS local memory ----
+    // Records copies of the given byte ranges of `localMemory` (the 4 MiB shadow memory) into the GLM.
+    bool UploadGlm(const std::uint8_t *localMemory, const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges,
+                   std::string &error);
+    // Records the swizzle of a resident target's rectangle (inclusive) into the GLM at its own (BP, BW, PSM).
+    bool SwizzleToGlm(bool depthSlot, std::uint32_t slot, std::uint32_t bp, std::uint32_t bw, std::uint32_t psm,
+                      std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1, std::string &error);
+    // Records the inverse (IN-350): the slot's rectangle receives the stored words of (BP, BW, PSM) from the GLM.
+    bool LoadSlotFromGlm(bool depthSlot, std::uint32_t slot, std::uint32_t bp, std::uint32_t bw, std::uint32_t psm,
+                         std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1, std::string &error);
+    // Records a merge of words into the GLM (IN-350): `triples` holds (GLM word index, value, bit mask) per word;
+    // the masked bits of each word take the value. Word indices must be unique.
+    bool MergeIntoGlm(const std::vector<std::uint32_t> &triples, std::string &error);
+
+    // Records an EE->GS upload into the GLM (IN-351): `pixels` texels of `bpp` bits from `data` (host order) are
+    // written at (x0 + i % width, y0 + i / width) of (BP, BW, PSM), each with only its own bits. The rectangle
+    // must not wrap onto itself inside the buffer (distinct addresses).
+    bool UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_t psm, std::uint32_t x0, std::uint32_t y0,
+                         std::uint32_t width, std::uint32_t pixels, std::uint32_t bpp, const std::uint8_t *data,
+                         std::size_t byteCount, std::string &error);
+    // Copies the given byte ranges of the GLM into `localMemory` at the same offsets (IN-350: pages whose newest
+    // content lives only in the GLM, before the CPU reads or writes them). Submits and waits.
+    bool DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges, std::uint8_t *localMemory,
+                     std::string &error);
+    // Records a CLUT load from the GLM into the GPU CLUT buffer (chapter 07.7, IN-349): the same as
+    // clut::ClutUnit::Copy with these TEX0/TEXCLUT fields (cbp in blocks; psm decides 16 or 256 entries).
+    bool LoadClutFromGlm(std::uint32_t cbp, std::uint32_t cpsm, std::uint32_t csm, std::uint32_t csa, std::uint32_t psm,
+                         std::uint32_t cbw, std::uint32_t cou, std::uint32_t cov, std::string &error);
+    // Records an upload of the CPU CLUT buffer (512 halfwords) into the GPU CLUT buffer.
+    bool UploadClut(const std::uint16_t *halfwords, std::string &error);
+    // Fixtures: read the GPU CLUT buffer (512 halfwords; submits and waits).
+    bool ReadClut(std::vector<std::uint16_t> &halfwords, std::string &error);
+    // Fixtures: read the whole GLM, or the texel image's top-left width x height words (submits and waits).
+    bool ReadGlm(std::vector<std::uint32_t> &words, std::string &error);
+    bool ReadTexels(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words, std::string &error);
 
     const GpuStats &Stats() const;
 

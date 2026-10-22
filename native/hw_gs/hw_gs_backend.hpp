@@ -85,12 +85,16 @@ struct RenderCounters {
   double decode_us = 0.0;
   double cache_writeback_us = 0.0;
   double cache_load_us = 0.0;
+  double gif_us = 0.0;     // the whole GS stream (front end, translate, execute, transfers)
+  double upload_us = 0.0;  // EE->GS uploads
   std::uint64_t textures_cached = 0;
   std::uint64_t cache_writebacks = 0;
   std::uint64_t cache_loads = 0;
   std::uint64_t gpu_chunks = 0;
   std::uint64_t gpu_submissions = 0;
   std::uint64_t gpu_barriers = 0;
+  std::uint64_t writeback_reasons[9] = {};  // other, texture, CLUT, transfer, display, eviction, load overlap,
+                                            // fallback batch, CPU sprite
 };
 
 // Result of the feature report (chapter 12.6).
