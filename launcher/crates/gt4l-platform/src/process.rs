@@ -107,6 +107,27 @@ mod windows_impl {
         .map_err(|error| format!("job limits: {error}"))
     }
 
+    /// Sets kill-on-close again on the launcher's job, after a self-update that did not start its setup. Without it
+    /// the launcher would stay open with a game that no longer ends with it. No job: nothing to do.
+    pub fn restore_kill_on_close() -> Result<(), String> {
+        let Some(raw) = JOB.get() else {
+            return Ok(());
+        };
+        let job = windows::Win32::Foundation::HANDLE(*raw as *mut c_void);
+        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
+        // SAFETY: `job` is the job handle created above and never closed; `limits` lives for the call.
+        unsafe {
+            SetInformationJobObject(
+                job,
+                JobObjectExtendedLimitInformation,
+                &limits as *const _ as *const c_void,
+                size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+        }
+        .map_err(|error| format!("job limits: {error}"))
+    }
+
     /// Whether a process with one of these executable names runs (case-insensitive). A failed snapshot counts as
     /// "running", so a move never starts blind.
     pub fn process_running(names: &[&str]) -> bool {
@@ -178,7 +199,10 @@ mod windows_impl {
 }
 
 #[cfg(windows)]
-pub use windows_impl::{claim_single_instance, join_kill_on_close_job, process_running, release_kill_on_close, shell_run_as_admin};
+pub use windows_impl::{
+    claim_single_instance, join_kill_on_close_job, process_running, release_kill_on_close, restore_kill_on_close,
+    shell_run_as_admin,
+};
 
 /// `CREATE_BREAKAWAY_FROM_JOB`: the new process is not a member of the launcher's kill-on-close job.
 #[cfg(windows)]
@@ -207,6 +231,11 @@ pub fn join_kill_on_close_job() -> Result<(), String> {
 
 #[cfg(not(windows))]
 pub fn release_kill_on_close() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(not(windows))]
+pub fn restore_kill_on_close() -> Result<(), String> {
     Ok(())
 }
 

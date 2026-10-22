@@ -120,6 +120,17 @@ fn read(path: &Path) -> Vec<u8> {
     fs::read(path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
 }
 
+/// True when no file lies under `path` (empty folders do not count).
+fn no_file_under(path: &Path) -> bool {
+    match fs::read_dir(path) {
+        Err(_) => true,
+        Ok(entries) => entries.flatten().all(|entry| {
+            let child = entry.path();
+            child.is_dir() && no_file_under(&child)
+        }),
+    }
+}
+
 fn no_check(_: &Path, _: &BTreeMap<PathBuf, String>) -> Result<(), String> {
     Ok(())
 }
@@ -288,6 +299,49 @@ fn the_1_2_0_data_folder_fallback_library_is_moved_too() {
     assert!(matches!(outcome, UserOutcome::Moved { .. }), "{outcome:?}");
     assert_eq!(read(&fixture.appdata.join("Saves").join("Active").join("BASCUS-97328GT4").join("icon.sys")), b"fallback save");
     assert!(fixture.local.join(MOVED_USER_FOLDER_NAME).join(README_NAME).exists());
+}
+
+#[test]
+fn a_failed_placement_puts_back_what_this_run_placed_and_the_next_start_moves_everything() {
+    let fixture = Fixture::new("user-placement-fails");
+    fixture.user_data_120();
+    let (legacy, user) = (fixture.legacy(), fixture.user());
+    let staging = fixture.appdata.join(".migrating-1.2.1");
+    // The second placement (not a staging rename) fails, as a full disk or a locked folder would.
+    let placements = std::cell::Cell::new(0);
+    let failing_second = |from: &Path, to: &Path| {
+        if to.starts_with(&staging) {
+            return fs::rename(from, to);
+        }
+        placements.set(placements.get() + 1);
+        if placements.get() == 2 {
+            return Err(io::Error::other("the disk is full"));
+        }
+        fs::rename(from, to)
+    };
+    let failing = FsOps { rename: &failing_second, open: &real_open };
+    let outcome = relocate::migrate_user_data(&fixture.user_move(&legacy, &user, false), &failing);
+    let UserOutcome::Failed(error) = &outcome else { panic!("{outcome:?}") };
+    assert!(error.contains("disk is full"), "{error}");
+    assert!(placements.get() >= 2, "the first item was placed before the failure");
+    // The new user folder holds no file of this run (folders the run created on the way may stay empty).
+    assert!(no_file_under(&fixture.appdata), "a placed item was left in the new folder");
+    assert!(!staging.exists(), "the staging folder is removed");
+    assert!(!outcome.uses_new_place());
+    assert_eq!(marker_status(&user.relocation_marker()), None, "no marker after a failed move");
+    // The sources are intact and the old place is still in use.
+    assert_eq!(read(&fixture.local.join("config").join("settings.toml")), b"schema_version = 6\n[settings]\nvsync = \"on\"\n");
+    assert_eq!(read(&fixture.player().join("Saves").join("Active").join("BASCUS-97328GT4").join("icon.sys")), b"active save");
+    assert_eq!(read(&fixture.player().join("Replays").join("BASCUS-97328R0001").join("data")), b"replay");
+    // A later run with a working rename moves everything correctly and writes the marker.
+    let outcome = relocate::migrate_user_data(&fixture.user_move(&legacy, &user, false), &FsOps::real());
+    let UserOutcome::Moved { files, kept_both, .. } = &outcome else { panic!("{outcome:?}") };
+    assert_eq!(*files, 7);
+    assert!(kept_both.is_empty(), "{kept_both:?}");
+    assert_eq!(read(&fixture.appdata.join("Saves").join("Active").join("BASCUS-97328GT4").join("icon.sys")), b"active save");
+    assert_eq!(read(&fixture.appdata.join("Saves").join("Save 01").join("BASCUS-97328GT4").join("icon.sys")), b"slot one");
+    assert_eq!(read(&fixture.appdata.join("Replays").join("BASCUS-97328R0001").join("data")), b"replay");
+    assert_eq!(marker_status(&user.relocation_marker()).as_deref(), Some("migrated"));
 }
 
 // Large data --------------------------------------------------------------------------------------------------------

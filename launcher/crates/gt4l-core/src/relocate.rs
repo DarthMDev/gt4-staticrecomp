@@ -526,23 +526,26 @@ pub fn migrate_user_data(request: &UserMove<'_>, ops: &FsOps<'_>) -> UserOutcome
     //    save takes the next slot after every slot the move brings.
     let mut kept_both = Vec::new();
     let mut taken = Vec::new();
+    // Every destination this run placed, with its staging path. A failed placement puts them back (`undo_placements`).
+    let mut placements: Vec<(PathBuf, PathBuf)> = Vec::new();
     for (index, item) in items.iter().enumerate() {
         let staged = staging.join(index.to_string());
         let destination = user.root().join(&item.target);
         if has_files(&destination) {
             if matches!((tree_digest(&staged), tree_digest(&destination)), (Ok(left), Ok(right)) if left == right) {
-                continue; // placed by an earlier run that stopped before its marker
+                continue; // placed by an earlier run that stopped before its marker; this run did not place it
             }
             taken.push(index);
             continue;
         }
         let placed = remove_empty_tree(&destination)
             .and_then(|_| destination.parent().map(fs::create_dir_all).unwrap_or(Ok(())))
-            .and_then(|_| fs::rename(&staged, &destination));
+            .and_then(|_| (ops.rename)(&staged, &destination));
         if let Err(error) = placed {
-            // Items placed so far stay (the next run recognises identical content); the rest is copied again then.
+            undo_placements(&placements, &staging, ops);
             return UserOutcome::Failed(format!("{}: {error}", destination.display()));
         }
+        placements.push((destination, staged));
     }
     for index in taken {
         let item = &items[index];
@@ -551,14 +554,17 @@ pub fn migrate_user_data(request: &UserMove<'_>, ops: &FsOps<'_>) -> UserOutcome
             ItemKind::SaveSlot => next_free_slot(&user.saves()),
             ItemKind::Other => unique_name(&user.root().join(KEPT_FOLDER_NAME).join(&item.target)),
         };
+        let staged = staging.join(index.to_string());
         let placed = alternative
             .parent()
             .map(fs::create_dir_all)
             .unwrap_or(Ok(()))
-            .and_then(|_| fs::rename(staging.join(index.to_string()), &alternative));
+            .and_then(|_| (ops.rename)(&staged, &alternative));
         if let Err(error) = placed {
+            undo_placements(&placements, &staging, ops);
             return UserOutcome::Failed(format!("{}: {error}", alternative.display()));
         }
+        placements.push((alternative.clone(), staged));
         kept_both.push(format!(
             "{} already existed; the 1.2.0 copy from {} is in {}",
             destination.display(),
@@ -587,6 +593,19 @@ pub fn migrate_user_data(request: &UserMove<'_>, ops: &FsOps<'_>) -> UserOutcome
     value["rename_pending"] = still.iter().map(|path| path.display().to_string()).collect::<Vec<_>>().into();
     let _ = write_marker(&marker, &value);
     UserOutcome::Moved { files, bytes, kept_both, notes }
+}
+
+/// Puts back what this run placed after a failed placement, so the new user folder holds none of its items. The
+/// sources were never touched and the staged copies are verified, so a destination that cannot be renamed back is
+/// removed. The staging folder is removed by the caller.
+fn undo_placements(placements: &[(PathBuf, PathBuf)], staging: &Path, ops: &FsOps<'_>) {
+    for (destination, staged) in placements.iter().rev() {
+        if (ops.rename)(destination, staged).is_ok() {
+            continue;
+        }
+        let _ = if destination.is_dir() { fs::remove_dir_all(destination) } else { fs::remove_file(destination) };
+    }
+    let _ = fs::remove_dir_all(staging);
 }
 
 // Large data ------------------------------------------------------------------------------------------------------

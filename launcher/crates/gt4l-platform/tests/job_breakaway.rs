@@ -27,6 +27,12 @@ fn run_child_role() -> bool {
             gt4l_platform::process::release_kill_on_close().expect("clear kill-on-close");
             helper.spawn()
         }
+        "restored" => {
+            // TASK-091 review: a self-update whose setup did not start restores kill-on-close; the child then dies.
+            gt4l_platform::process::release_kill_on_close().expect("clear kill-on-close");
+            gt4l_platform::process::restore_kill_on_close().expect("restore kill-on-close");
+            helper.spawn()
+        }
         _ => helper.spawn(),
     };
     started.expect("start the helper");
@@ -80,6 +86,16 @@ fn a_process_started_inside_the_job_ends_with_the_launcher() {
     let marker = marker_path("inside");
     run_child("a_process_started_inside_the_job_ends_with_the_launcher", &marker, "inside");
     assert!(!marker_appears(&marker, Duration::from_secs(5)), "a child in the job outlived the launcher");
+}
+
+#[test]
+fn after_a_restore_a_child_in_the_job_ends_with_the_launcher() {
+    if run_child_role() {
+        return;
+    }
+    let marker = marker_path("restored");
+    run_child("after_a_restore_a_child_in_the_job_ends_with_the_launcher", &marker, "restored");
+    assert!(!marker_appears(&marker, Duration::from_secs(5)), "a child outlived the launcher after kill-on-close was restored");
 }
 
 #[test]

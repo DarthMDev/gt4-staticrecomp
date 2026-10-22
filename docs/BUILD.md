@@ -2108,3 +2108,22 @@ Builds:
   `job_breakaway.rs` (a child survives after `release_kill_on_close`), `flow_audit.rs` (settings store no absolute path
   inside the install folder). UI nav-test 150 of 150; focus-check 92 of 100 (the 8 known tab-highlight failures). The
   Python suite does not cover the launcher and was not run.
+
+## Slice 251 (review fixes) - TASK-091 release 1.2.1
+
+Review fixes on slice 250 (all in `task/091-install-layout-121`):
+
+- Launcher: `restore_kill_on_close` (`gt4l-platform`) sets kill-on-close again when the self-update's setup does not
+  start (UAC declined, or every start fails); `start_launcher_setup` calls it and logs the result. Test:
+  `job_breakaway.rs` "after_a_restore..." (a child in the job ends with the launcher).
+- User-data move: every placement (free places and taken items) goes through `ops.rename`; a failed placement puts
+  back what this run placed (or removes it), removes the staging folder and returns `Failed`, with no marker. Test:
+  `relocate.rs` "a_failed_placement_puts_back...".
+- Installer: `RemoveOldFolder` drops one trailing backslash before comparing with `$INSTDIR`.
+- Checks: `cargo test --workspace` 332 passed, 0 failed, 4 ignored (was 330; the two new tests).
+- Launcher `GT4Recomp.exe` 16,304,128 bytes, sha256 `bd0a6f859c27f8c15bca9619cc08e1b64877be367c67d1e09e62f0d4390d5333`
+  (`CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target`; copy in `private\slice251-launcher\GT4Recomp.exe`).
+- Installer (same makensis recipe as slice 250, `/DVERSION=1.2.1`, output
+  `private\slice251-installer\GT4Recomp-Setup-1.2.1-test.exe`): 28,844,147 bytes, sha256
+  `102753faf5bbdd77a25f35d224d0d6079f8d73100e1453389394f3bef4d320ab`. 7-Zip extraction: `GT4Recomp.exe` equals the
+  new build, `SDL3.dll` equals its source; the extraction folder was deleted. Not run on this PC.

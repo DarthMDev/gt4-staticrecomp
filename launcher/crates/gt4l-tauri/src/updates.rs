@@ -358,9 +358,19 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
     if let Err(message) = gt4l_platform::process::release_kill_on_close() {
         state::log(dirs, &format!("kill-on-close not cleared ({message}); the setup is started outside the job"));
     }
-    let started = gt4l_platform::process::start_setup(&path, &gt4l_platform::process::WindowsSetupStarter, &mut |line| {
+    let started = match gt4l_platform::process::start_setup(&path, &gt4l_platform::process::WindowsSetupStarter, &mut |line| {
         state::log(dirs, &line)
-    })?;
+    }) {
+        Ok(started) => started,
+        Err(message) => {
+            // No setup runs, so the launcher goes back to ending the game with it.
+            match gt4l_platform::process::restore_kill_on_close() {
+                Ok(()) => state::log(dirs, "kill-on-close restored after the setup did not start"),
+                Err(restore) => state::log(dirs, &format!("kill-on-close not restored ({restore})")),
+            }
+            return Err(message);
+        }
+    };
     state::log(dirs, &format!("setup started ({started:?})"));
     if started == gt4l_platform::process::SetupStart::Explorer {
         // Explorer starts it a moment later; the launcher waits so the hand-over completes first.

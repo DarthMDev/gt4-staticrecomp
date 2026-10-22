@@ -143,6 +143,16 @@ FunctionEnd
 Function RemoveOldFolder
   Exch $R1
   Push $R2
+  Push $R3
+  ; C:\X\ and C:\X are the same folder: one trailing backslash is dropped before the comparison with the install
+  ; folder, so the install being made is never deleted (a root such as C:\ keeps its backslash).
+  StrLen $R3 $R1
+  ${If} $R3 > 3
+    StrCpy $R2 $R1 1 -1
+    ${If} $R2 == "\"
+      StrCpy $R1 $R1 -1
+    ${EndIf}
+  ${EndIf}
   ${If} $R1 != ""
   ${AndIf} $R1 != $INSTDIR
   ${AndIfNot} ${FileExists} "$R1\data\*.*"
@@ -172,6 +182,7 @@ Function RemoveOldFolder
       RMDir "$R1"
     ${EndIf}
   ${EndIf}
+  Pop $R3
   Pop $R2
   Pop $R1
 FunctionEnd
