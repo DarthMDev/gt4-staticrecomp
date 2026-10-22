@@ -2064,3 +2064,10 @@ write-back mode on the menu (= slice228), car, race, night and 480p race capture
 byte-identical to slice228; race schedule identical to slice235 and inside the 3D gate; default renderer 42/42 =
 slice214. Measured headless with the launcher's holds (`GT4_FORCE_480P=1 GT4_FORCE_WIDESCREEN=1`): 480p race
 14.4-14.8 ms per vsync, 480p night race (flare read every frame) 8.7-13.6 ms.
+
+## Local slice244 - GPU presentation compose, fewer per-chunk copies (IN-364/IN-365)
+
+Incremental rebuild. Gates in the commit message of this slice: 226/226 non-Python CTests (new
+`hw_smoke_window_gpu_compose`), also without interlock; memory hashes identical on the five captures; replay
+`--gpu-compose-check` 121/121 identical on four progressive captures; headless menu 42/42 dumps byte-identical to
+slice228; race schedule identical to slice235; default renderer 42/42 = slice214.

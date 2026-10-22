@@ -81,6 +81,7 @@ hw_add_shader(hw_glm_clut "${HW_SHADER_DIR}/hw_glm_clut.comp" comp)
 hw_add_shader(hw_glm_unswizzle "${HW_SHADER_DIR}/hw_glm_unswizzle.comp" comp)
 hw_add_shader(hw_glm_merge "${HW_SHADER_DIR}/hw_glm_merge.comp" comp)
 hw_add_shader(hw_glm_host_upload "${HW_SHADER_DIR}/hw_glm_host_upload.comp" comp)
+hw_add_shader(hw_display_compose "${HW_SHADER_DIR}/hw_display_compose.comp" comp)
 hw_add_shader(hw_blend_exact "${HW_SHADER_DIR}/hw_blend_exact.comp" comp)
 hw_add_shader(hw_pixel_exact "${HW_SHADER_DIR}/hw_pixel_exact.comp" comp)
 

@@ -64,6 +64,7 @@ void print_device(const gt4::hw::DeviceReport &report) {
 int main(int argc, char **argv) {
   bool print_only = false;
   bool use_window = false;
+  bool display = false;  // --display: a 64 x 64 NTSC display on circuit 1, so presents take the GPU compose (IN-364)
   std::uint64_t frames = 4200;
   std::uint64_t resize_toggles = 0;
   for (int i = 1; i < argc; ++i) {
@@ -72,6 +73,8 @@ int main(int argc, char **argv) {
       print_only = true;
     } else if (arg == "--window") {
       use_window = true;
+    } else if (arg == "--display") {
+      display = true;
     } else if (arg == "--frames" && i + 1 < argc) {
       frames = std::strtoull(argv[++i], nullptr, 10);
     } else if (arg == "--resize-toggles" && i + 1 < argc) {
@@ -118,6 +121,12 @@ int main(int argc, char **argv) {
     }
   }
 
+  if (display) {
+    backend.write_privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));             // PMODE: RC1, MMOD, ALP 255
+    backend.write_privileged(0x12000010u, std::uint64_t{2} << 13);                       // SMODE1: NTSC
+    backend.write_privileged(0x12000070u, std::uint64_t{1} << 9);                        // DISPFB1: FBW 1, CT32
+    backend.write_privileged(0x12000080u, (std::uint64_t{63} << 32) | (std::uint64_t{63} << 44));  // 64 x 64
+  }
   for (std::uint64_t frame = 0; frame < frames; ++frame) {
     backend.next_frame();
     backend.present(gt4::hw::PresentPhase::progressive);
@@ -170,6 +179,7 @@ int main(int argc, char **argv) {
               static_cast<unsigned long long>(stats.black_presents), static_cast<unsigned long long>(stats.gif_bytes),
               static_cast<unsigned long long>(stats.swapchain_recreations),
               static_cast<unsigned long long>(stats.faults));
+  std::printf("gpu_composed=%llu\n", static_cast<unsigned long long>(backend.render_counters().gpu_composed_frames));
   if (use_window) {
     // 13.6: the image goes into a 16:9 rectangle (within one pixel of rounding), never the frame's own ratio.
     const std::uint64_t w = stats.present_width, h = stats.present_height;

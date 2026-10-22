@@ -111,6 +111,10 @@ struct GpuDrawer::Impl {
   Image frames[kGpuColourSlots];  // colour target slots (IN-344); the last one is the write-back mode's
   Image depths[kGpuDepthSlots];   // depth target slots; the last one is the write-back mode's
   Image texels;
+  Image display;  // IN-364: GPU-composed presentation frame
+  VkDescriptorSet displaySets[2] = {};  // compute set 0 with binding 4 = the display image, per frame set
+  VkShaderModule displayModule = VK_NULL_HANDLE;
+  VkPipeline displayPipeline = VK_NULL_HANDLE;
 
   bool ready = false;
   GpuStats stats;
@@ -268,6 +272,37 @@ struct GpuDrawer::Impl {
   }
   bool wait_all(std::string &error);
   bool create_second_frame(std::string &error);
+
+  // IN-364: the display set of frame set `index`: a copy of that set's compute set 0 with binding 4 = display.
+  bool make_display_set(std::uint32_t index, VkDescriptorSet source, std::string &error) {
+    VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocate.descriptorPool = computePool;
+    allocate.descriptorSetCount = 1;
+    allocate.pSetLayouts = &computeSetLayout;
+    if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &allocate, &displaySets[index]), "vkAllocateDescriptorSets",
+               error)) {
+      return false;
+    }
+    VkCopyDescriptorSet copies[5]{};
+    const std::uint32_t copied[5] = {0, 1, 2, 3, 5};
+    for (std::uint32_t c = 0; c < 5; ++c) {
+      copies[c].sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+      copies[c].srcSet = source;
+      copies[c].srcBinding = copied[c];
+      copies[c].dstSet = displaySets[index];
+      copies[c].dstBinding = copied[c];
+      copies[c].descriptorCount = 1;
+    }
+    VkDescriptorImageInfo image{VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = displaySets[index];
+    write.dstBinding = 4;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write.pImageInfo = &image;
+    gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 5, copies);
+    return true;
+  }
 
   // IN-358: the recording is submitted every kChunksPerSubmission chunks (with double buffering), so the GPU
   // draws the frame while the CPU records the rest of it. Without this nothing reached the GPU before the VBlank
@@ -529,12 +564,13 @@ struct GpuDrawer::Impl {
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
-    constexpr int kImages = static_cast<int>(kGpuColourSlots + kGpuDepthSlots + 1);
+    constexpr int kImages = static_cast<int>(kGpuColourSlots + kGpuDepthSlots + 2);
     VkImageMemoryBarrier barriers[kImages]{};
     VkImage images[kImages] = {};
     for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) images[i] = frames[i].image;
     for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) images[kGpuColourSlots + i] = depths[i].image;
-    images[kImages - 1] = texels.image;
+    images[kImages - 2] = texels.image;
+    images[kImages - 1] = display.image;
     for (int i = 0; i < kImages; ++i) {
       barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
       barriers[i].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -614,6 +650,7 @@ struct GpuDrawer::Impl {
       for (Image &image : frames) destroyImage(&image);
       for (Image &image : depths) destroyImage(&image);
       destroyImage(&texels);
+      destroyImage(&display);
       if (clutPipeline) gt4_hwd_vkDestroyPipeline(device, clutPipeline, nullptr);
       if (clutModule) gt4_hwd_vkDestroyShaderModule(device, clutModule, nullptr);
       clutPipeline = VK_NULL_HANDLE;
@@ -626,6 +663,10 @@ struct GpuDrawer::Impl {
       if (mergeModule) gt4_hwd_vkDestroyShaderModule(device, mergeModule, nullptr);
       mergePipeline = VK_NULL_HANDLE;
       mergeModule = VK_NULL_HANDLE;
+      if (displayPipeline) gt4_hwd_vkDestroyPipeline(device, displayPipeline, nullptr);
+      if (displayModule) gt4_hwd_vkDestroyShaderModule(device, displayModule, nullptr);
+      displayPipeline = VK_NULL_HANDLE;
+      displayModule = VK_NULL_HANDLE;
       if (hostUploadPipeline) gt4_hwd_vkDestroyPipeline(device, hostUploadPipeline, nullptr);
       if (hostUploadModule) gt4_hwd_vkDestroyShaderModule(device, hostUploadModule, nullptr);
       hostUploadPipeline = VK_NULL_HANDLE;
@@ -662,6 +703,7 @@ struct GpuDrawer::Impl {
     for (Image &image : frames) image = Image{};
     for (Image &image : depths) image = Image{};
     texels = Image{};
+    display = Image{};
     staging = Resource{};
     readback = Resource{};
     vertices = Resource{};
@@ -779,6 +821,7 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     if (!s.make_image(image, kSurfaceSize, kSurfaceSize, error)) return false;
   }
   if (!s.make_image(s.texels, kGpuTexelAtlasSide, kGpuTexelAtlasSide, error)) return false;
+  if (!s.make_image(s.display, kSurfaceSize, kSurfaceSize, error)) return false;
 
   VkDescriptorBufferInfo uniformInfo{s.uniforms.buffer, 0, kUniformBytes};
   for (std::uint32_t colour = 0; colour < kGpuColourSlots; ++colour) {
@@ -875,10 +918,10 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     if (!check(gt4_hwd_vkCreatePipelineLayout(s.device, &computeLayoutInfo, nullptr, &s.computeLayout),
                "vkCreatePipelineLayout", error)) return false;
     constexpr std::uint32_t kComputeSets = kGpuColourSlots + kGpuDepthSlots;
-    VkDescriptorPoolSize computeSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * 4 * kComputeSets},
-                                            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * 2 * kComputeSets}};
+    VkDescriptorPoolSize computeSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * 4 * (kComputeSets + 1)},
+                                            {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * 2 * (kComputeSets + 1)}};
     VkDescriptorPoolCreateInfo computePoolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-    computePoolInfo.maxSets = 2 * kComputeSets;  // two frame sets (IN-354)
+    computePoolInfo.maxSets = 2 * (kComputeSets + 1);  // two frame sets (IN-354), each with a display set (IN-364)
     computePoolInfo.poolSizeCount = 2;
     computePoolInfo.pPoolSizes = computeSizes;
     if (!check(gt4_hwd_vkCreateDescriptorPool(s.device, &computePoolInfo, nullptr, &s.computePool),
@@ -939,6 +982,12 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     if (!s.hostUploadModule) return false;
     s.hostUploadPipeline = s.make_compute(s.hostUploadModule, error);
     if (!s.hostUploadPipeline) return false;
+    s.displayModule =
+        s.make_module(hwgs::shaders::hw_display_compose_words, hwgs::shaders::hw_display_compose_word_count, error);
+    if (!s.displayModule) return false;
+    s.displayPipeline = s.make_compute(s.displayModule, error);
+    if (!s.displayPipeline) return false;
+    if (!s.make_display_set(0, s.computeSets[0], error)) return false;
   }
   if (!s.create_second_frame(error)) return false;
   s.ready = true;
@@ -1136,6 +1185,7 @@ bool GpuDrawer::Impl::create_second_frame(std::string &error) {
       q.categories.assign(kQueries, kTimeStart);
     }
   }
+  if (!make_display_set(1, f.computeSets[0], error)) return false;
   secondFrameReady = true;
   doubleBuffered = true;
   load_frame(0);
@@ -1210,7 +1260,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   }
   const VkImage frameImage = s.frames[chunk.colourSlot].image;
   const VkImage depthImage = s.depths[chunk.depthSlot].image;
-  if (chunk.vertices.size() > kGpuMaxVertices) {
+  if (chunk.VertexCount() > kGpuMaxVertices) {
     error = "chunk exceeds the vertex buffer (the caller must split it)";
     return false;
   }
@@ -1236,7 +1286,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   if (chunk.hasTexture && (chunk.texWidth == 0 || chunk.texHeight == 0 || chunk.texWidth > kTextureMax ||
                            chunk.texHeight > kTextureMax ||
                            (!textureFromSlot && !textureFromGlm &&
-                            chunk.texels.size() != static_cast<std::size_t>(chunk.texWidth) * chunk.texHeight))) {
+                            chunk.TexelCount() != static_cast<std::size_t>(chunk.texWidth) * chunk.texHeight))) {
     error = "texture size is outside the texel image";
     return false;
   }
@@ -1251,11 +1301,11 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   // Ring space this chunk needs (IN-342): the staging bytes of its uploads, its vertices and one uniform slot.
   const VkDeviceSize frameBytes = static_cast<VkDeviceSize>(words) * 4;
   const VkDeviceSize textureBytes = (chunk.hasTexture && !textureFromSlot && !textureFromGlm)
-                                         ? static_cast<VkDeviceSize>(chunk.texels.size()) * 4
+                                         ? static_cast<VkDeviceSize>(chunk.TexelCount()) * 4
                                          : 0;
   const VkDeviceSize stagingNeeded =
       (chunk.uploadFrame ? frameBytes : 0) + (chunk.uploadDepth ? frameBytes : 0) + textureBytes;
-  const VkDeviceSize vertexNeeded = chunk.vertices.size();
+  const VkDeviceSize vertexNeeded = chunk.VertexCount();
   const bool drawing = !chunk.draws.empty();
   const VkDeviceSize paletteNeeded =
       (textureFromGlm && chunk.glmIndexed && !chunk.glmGpuClut) ? 256 * sizeof(std::uint32_t) : 0;
@@ -1300,13 +1350,13 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     s.paletteUsed += paletteNeeded;
   }
   if (chunk.hasTexture && !textureFromSlot && !textureFromGlm) {
-    std::memcpy(stagingBase + s.stagingUsed, chunk.texels.data(), textureBytes);
+    std::memcpy(stagingBase + s.stagingUsed, chunk.TexelData(), textureBytes);
     s.stagingUsed += textureBytes;
   }
   const VkDeviceSize vertexOffsetBytes = s.vertexUsed * sizeof(GpuVertex);
-  if (!chunk.vertices.empty()) {
-    std::memcpy(static_cast<std::uint8_t *>(s.vertices.mapped) + vertexOffsetBytes, chunk.vertices.data(),
-                chunk.vertices.size() * sizeof(GpuVertex));
+  if (chunk.VertexCount() != 0) {
+    std::memcpy(static_cast<std::uint8_t *>(s.vertices.mapped) + vertexOffsetBytes, chunk.VertexData(),
+                chunk.VertexCount() * sizeof(GpuVertex));
     s.vertexUsed += vertexNeeded;
   }
   const std::uint32_t uniformOffset = static_cast<std::uint32_t>(s.uniformUsed);
@@ -1357,7 +1407,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     std::int32_t x0 = kGpuSurface, y0 = kGpuSurface, x1 = -1, y1 = -1;
     std::uint32_t firstVertex = UINT32_MAX, endVertex = 0;
     for (const GpuDraw &draw : chunk.draws) {
-      if (draw.count == 0 || draw.first + draw.count > chunk.vertices.size()) continue;
+      if (draw.count == 0 || draw.first + draw.count > chunk.VertexCount()) continue;
       x0 = std::min(x0, std::max<std::int32_t>(0, draw.x0));
       y0 = std::min(y0, std::max<std::int32_t>(0, draw.y0));
       x1 = std::max(x1, std::min<std::int32_t>(kGpuSurface - 1, draw.x1));
@@ -1377,8 +1427,8 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
       s.runDraws.push_back(pending);
     }
     s.stats.executions++;
-    s.stats.vertices += chunk.vertices.size();
-    s.stats.uploadBytes += stagingNeeded + chunk.vertices.size() * sizeof(GpuVertex);
+    s.stats.vertices += chunk.VertexCount();
+    s.stats.uploadBytes += stagingNeeded + chunk.VertexCount() * sizeof(GpuVertex);
     return s.note_chunk(error);
   }
 
@@ -1471,7 +1521,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
       std::int32_t x0 = kGpuSurface, y0 = kGpuSurface, x1 = -1, y1 = -1;
       std::uint32_t firstVertex = UINT32_MAX, endVertex = 0;
       for (const GpuDraw &draw : chunk.draws) {
-        if (draw.count == 0 || draw.first + draw.count > chunk.vertices.size()) continue;
+        if (draw.count == 0 || draw.first + draw.count > chunk.VertexCount()) continue;
         x0 = std::min(x0, std::max<std::int32_t>(0, draw.x0));
         y0 = std::min(y0, std::max<std::int32_t>(0, draw.y0));
         x1 = std::max(x1, std::min<std::int32_t>(kGpuSurface - 1, draw.x1));
@@ -1490,7 +1540,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     bool anyDraw = false;
     for (std::size_t i = 0; !allTriangles && i < chunk.draws.size(); ++i) {
       const GpuDraw &draw = chunk.draws[i];
-      if (draw.count == 0 || draw.first + draw.count > chunk.vertices.size()) continue;
+      if (draw.count == 0 || draw.first + draw.count > chunk.VertexCount()) continue;
       const std::int32_t x0 = std::max<std::int32_t>(0, draw.x0);
       const std::int32_t y0 = std::max<std::int32_t>(0, draw.y0);
       const std::int32_t x1 = std::min<std::int32_t>(kGpuSurface - 1, draw.x1);
@@ -1520,8 +1570,8 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   s.mark(drawing ? Impl::kTimePass : Impl::kTimeUpload);
 
   s.stats.executions++;
-  s.stats.vertices += chunk.vertices.size();
-  s.stats.uploadBytes += stagingNeeded + chunk.vertices.size() * sizeof(GpuVertex);
+  s.stats.vertices += chunk.VertexCount();
+  s.stats.uploadBytes += stagingNeeded + chunk.VertexCount() * sizeof(GpuVertex);
 
   if (!(chunk.readbackFrame || chunk.readbackDepth)) return s.note_chunk(error);  // submitted later (IN-342)
 
@@ -1776,6 +1826,59 @@ bool GpuDrawer::CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *
   for (const auto &range : s.downloadRanges[ticket.buffer]) {
     std::memcpy(localMemory + range.first, bytes + range.first, range.second);
   }
+  return true;
+}
+
+bool GpuDrawer::ComposeDisplay(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth,
+                               std::uint32_t outHeight, std::string &error) {
+  Impl &s = *impl_;
+  if (outWidth == 0 || outHeight == 0 || outWidth > kSurfaceSize || outHeight > kSurfaceSize) {
+    error = "display compose outside the display image";
+    return false;
+  }
+  const VkDeviceSize bytes = parameters.size() * sizeof(std::uint32_t);
+  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
+  if (!s.begin_recording(error)) return false;
+  if (!s.flush_run(error)) return false;  // the frame's pending draws come first
+  const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
+  std::memcpy(static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed, parameters.data(), bytes);
+  s.paletteUsed += bytes;
+  s.full_barrier_with_fragment();  // GLM swizzles and uploads, and an earlier present's copy, finish first
+  s.bind_compute(s.displayPipeline, s.displaySets[s.currentFrame]);
+  const std::uint32_t push[3] = {base, outWidth, outHeight};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  gt4_hwd_vkCmdDispatch(s.cmd, (outWidth + 7) / 8, (outHeight + 7) / 8, 1);
+  s.mark(Impl::kTimeDownload);
+  s.full_barrier();
+  return true;
+}
+
+std::uint64_t GpuDrawer::DisplayImage() const { return reinterpret_cast<std::uint64_t>(impl_->display.image); }
+
+bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words,
+                            std::string &error) {
+  Impl &s = *impl_;
+  if (width == 0 || height == 0 || width > kSurfaceSize || height > kSurfaceSize) {
+    error = "display read outside the display image";
+    return false;
+  }
+  if (!s.begin_recording(error)) return false;
+  if (!s.flush_run(error)) return false;
+  s.full_barrier();
+  VkBufferImageCopy copy{};
+  copy.bufferRowLength = width;
+  copy.bufferImageHeight = height;
+  copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  copy.imageExtent = {width, height, 1};
+  gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.display.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &copy);
+  VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+  done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+  done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0, nullptr,
+                              0, nullptr);
+  if (!s.submit(true, error)) return false;
+  words.resize(static_cast<std::size_t>(width) * height);
+  std::memcpy(words.data(), s.readback.mapped, words.size() * sizeof(std::uint32_t));
   return true;
 }
 

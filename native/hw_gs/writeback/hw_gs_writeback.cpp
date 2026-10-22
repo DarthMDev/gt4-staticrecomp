@@ -1345,6 +1345,11 @@ public:
         captureShown_ = std::move(captureNext_);
         captureNext_ = DisplayCapture{};
         EnsureLayout();
+        {
+            display::MergePlan plan;
+            std::array<bool, 2> available{};
+            if (GpuComposeApplies(layout_, plan, available)) return;  // composed on the GPU at present (IN-364)
+        }
         DisplayCapture capture;
         capture.layout = layout_;
         capture.regs = displayRegs_;
@@ -1540,7 +1545,8 @@ public:
     // targets' drawn rectangles into the GLM; the GLM then holds what the shadow memory would hold after a
     // write-back, without one.
     bool UploadStalePages(const BlockSpan& span) {
-        std::vector<std::pair<uint32_t, uint32_t>> ranges;
+        std::vector<std::pair<uint32_t, uint32_t>>& ranges = staleRanges_;  // reused (IN-365; ~2,000 calls per frame)
+        ranges.clear();
         auto stale = [&](uint32_t page) {
             return glmPageSequence_[page] == 0 || glmPageSequence_[page] < pageWrites_[page] + 1;
         };
@@ -1640,6 +1646,7 @@ public:
 
     void OnClutLoaded(const clut::Tex0Write& write) {
         if (!GpuClutActive() || failed_) return;
+        StageTimer timer(counters.clutUs);
         if (!gpuClutSynced_) SyncGpuClut();
         const BlockSpan span = write.csm == 0 ? BlockSpan{write.cbp & ~31u, 64u} : BlockSpan{0, kAllBlocks};
         // Make the GLM current for the palette (stale pages, GPU-newer targets), as PrepareGlm does for textures.
@@ -1739,8 +1746,11 @@ public:
             chunk.palette = t.palette;
             chunk.texWidth = t.texWidth;
             chunk.texHeight = t.texHeight;
-            chunk.texels = t.texels;
-            chunk.vertices.assign(t.vertices.begin() + baseVertex, t.vertices.begin() + baseVertex + vertexCount);
+            chunk.texelSpan = t.texels.data();  // IN-365: borrowed, no copy per chunk
+            chunk.texelSpanCount = t.texels.size();
+            chunk.vertexSpan = t.vertices.data() + baseVertex;
+            chunk.vertexSpanCount = vertexCount;
+            chunk.draws.reserve(end - begin);
             for (size_t i = begin; i < end; ++i) {
                 gpu::GpuDraw draw = t.draws[i];
                 draw.first -= baseVertex;
@@ -1900,6 +1910,22 @@ public:
         bool completed = false;
     };
     bool asyncPresentation_ = false;
+    bool gpuCompose_ = true;  // IN-364 (off for A/B runs)
+
+    // IN-364: the GPU compose applies to this VBlank's layout (progressive, a composite plan, GLM mode).
+    bool GpuComposeApplies(const display::DisplayLayout& layout, display::MergePlan& plan,
+                           std::array<bool, 2>& available) const {
+        if (!gpuCompose_ || !cacheMode_ || !glmEnabled_ || auxiliary_ || !layout.valid || layout.really_interlaced) {
+            return false;
+        }
+        for (std::size_t i = 0; i < 2; ++i) {
+            const display::CircuitRect& circuit = layout.circuits[i];
+            available[i] = circuit.enabled && circuit.read_width != 0 && circuit.read_height != 0;
+        }
+        const display::PmodeFields pmode = display::decode_pmode(displayRegs_.pmode);
+        plan = display::plan_merge(pmode, layout.circuits[0], layout.circuits[1], available[0], available[1]);
+        return plan.outcome == display::MergeOutcome::Composite;
+    }
     DisplayCapture captureNext_;   // recorded at the last Flush
     DisplayCapture captureShown_;  // recorded at the Flush before; composed by this VBlank's presentation
     memory::LocalMemory displayMemory_;
@@ -1925,6 +1951,7 @@ public:
     bool glmLoadsAlways_ = false;                  // IN-350 fixtures: every slot load goes through the GLM
     BlockSpan pendingReadSpan_{0, kAllBlocks};    // source of the last LOCAL->HOST transfer (10.2)
     bool glmBatchedWritebacks_ = true;
+    std::vector<std::pair<uint32_t, uint32_t>> staleRanges_;
     std::vector<Qword> gifScratch_;              // IN-360: unaligned GIF packets copied here (reused)
     std::vector<gpu::GpuVertex> spareVertices_;  // IN-360: storage reused by the next batch's translation
     std::vector<gpu::GpuDraw> spareDraws_;
@@ -2380,6 +2407,96 @@ void Renderer::SetGpuTiming(bool enabled) { impl_->gpu_.SetGpuTiming(enabled); }
 void Renderer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->gpu_.SetChunksPerSubmission(chunks); }
 
 void Renderer::SetDoubleBuffering(bool enabled) { impl_->gpu_.SetDoubleBuffering(enabled); }
+
+bool Renderer::ComposeFrameGpu(GpuFrame& out) {
+    Impl& s = *impl_;
+    out = GpuFrame{};
+    double composeUs = 0.0;
+    {
+        StageTimer timer(composeUs);
+        s.EnsureLayout();
+        const display::DisplayLayout& layout = s.layout_;
+        display::MergePlan plan;
+        std::array<bool, 2> available{};
+        if (!s.GpuComposeApplies(layout, plan, available)) return false;
+        const display::PmodeFields pmode = display::decode_pmode(s.displayRegs_.pmode);
+        // The same choices as the CPU presentation compose for a progressive frame: no field offset, deinterlace
+        // never runs (not really interlaced), output size from 13.3.
+        const display::DeinterlaceMode effective =
+            s.settings_.deinterlace == display::DeinterlaceMode::Auto
+                ? display::resolve_auto_deinterlace(layout, layout.ffmd, s.displayRegs_.scanmsk_active)
+                : s.settings_.deinterlace;
+        const display::OutputSize size =
+            display::merge_output_size(layout, effective == display::DeinterlaceMode::Off, 1);
+        if (size.width == 0 || size.height == 0) return false;
+        // The GLM is made current for the circuits (stale pages uploaded, drawn targets swizzled).
+        for (std::size_t i = 0; i < 2; ++i) {
+            if (!available[i]) continue;
+            const BlockSpan span = Impl::DisplayCircuitSpan(layout.circuits[i]);
+            if (!s.UploadStalePages(span)) return false;
+            for (auto& slot : s.slots_) {
+                if (slot.drawn.Empty() || !SpansOverlap(SpanOfRect(slot.view, slot.drawn), span)) continue;
+                const int32_t bufferWidth = static_cast<int32_t>(std::max<uint32_t>(slot.view.bufferWidth, 1u) * 64u);
+                if (slot.drawn.x1 >= bufferWidth) {
+                    ReasonScope scope(s.writebackReason_, WritebackReason::Display);
+                    s.WriteBack(slot);
+                    if (!s.UploadStalePages(span)) return false;
+                    continue;
+                }
+                if (!s.SwizzleSlotIntoGlm(slot)) return false;
+            }
+        }
+        std::vector<uint32_t> parameters(29, 0u);
+        parameters[0] = uint32_t{s.background_[0]} | (uint32_t{s.background_[1]} << 8) |
+                        (uint32_t{s.background_[2]} << 16) | (std::min<uint32_t>(pmode.alp, 255u) << 24);
+        parameters[1] = std::min<uint32_t>(pmode.alp, 255u);
+        parameters[2] = pmode.mmod ? 1u : 0u;
+        parameters[3] = plan.use_rc1 ? 1u : 0u;
+        parameters[4] = plan.use_rc2 ? 1u : 0u;
+        for (std::size_t i = 0; i < 2; ++i) {
+            const display::CircuitRect& circuit = layout.circuits[i];
+            const std::size_t at = i == 0 ? 5u : 17u;
+            const auto psm = memory::decodePsm(circuit.psm);
+            if (!available[i] || !psm) continue;
+            parameters[at + 0] = memory::blockOfPage(circuit.fbp);
+            parameters[at + 1] = circuit.fbw;
+            parameters[at + 2] = circuit.psm;
+            parameters[at + 3] = circuit.psm == 0x01u ? 1u : (circuit.psm == 0x02u || circuit.psm == 0x0Au) ? 2u : 0u;
+            parameters[at + 4] = static_cast<uint32_t>(circuit.dbx);
+            parameters[at + 5] = static_cast<uint32_t>(circuit.dby);
+            parameters[at + 6] = circuit.read_width;
+            parameters[at + 7] = circuit.read_height;
+            parameters[at + 8] = static_cast<uint32_t>(circuit.screen_x);
+            parameters[at + 9] = static_cast<uint32_t>(circuit.screen_y);
+            parameters[at + 10] = circuit.display_width;
+            parameters[at + 11] = circuit.display_height;
+        }
+        std::string error;
+        if (!s.gpu_.ComposeDisplay(parameters, size.width, size.height, error) || !s.gpu_.Flush(false, error)) {
+            s.Fail(error);
+            return false;
+        }
+        if (plan.use_rc1 && plan.use_rc2 && !pmode.mmod) s.counters.mergeAlphaFromTexel++;  // V-01-12
+        s.counters.presentationFrames++;
+        s.counters.gpuComposedFrames++;
+        s.lastPresented_.reset();  // a later KeepPrevious falls back to the CPU history (none: blank)
+        out.valid = true;
+        out.width = size.width;
+        out.height = size.height;
+        out.image = s.gpu_.DisplayImage();
+    }
+    s.timings_.composeUs = composeUs;
+    s.counters.composeUs += composeUs;
+    return true;
+}
+
+void Renderer::SetGpuCompose(bool enabled) { impl_->gpuCompose_ = enabled; }
+
+bool Renderer::ReadGpuFrame(const GpuFrame& frame, std::vector<std::uint32_t>& pixels) {
+    std::string error;
+    if (!frame.valid || !impl_->gpu_.ReadDisplay(frame.width, frame.height, pixels, error)) return false;
+    return true;
+}
 
 void Renderer::SetAsyncPresentation(bool enabled) {
     impl_->asyncPresentation_ = enabled;

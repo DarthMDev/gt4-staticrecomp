@@ -114,6 +114,16 @@ struct GpuChunk {
     GpuPixelState state;
     std::vector<GpuVertex> vertices;
     std::vector<GpuDraw> draws;
+    // IN-365: when set, the chunk's vertices (and texels) are read from these borrowed arrays instead of the vectors
+    // above (no per-chunk copy); they must stay valid until Execute returns.
+    const GpuVertex *vertexSpan = nullptr;
+    std::size_t vertexSpanCount = 0;
+    const std::uint32_t *texelSpan = nullptr;
+    std::size_t texelSpanCount = 0;
+    const GpuVertex *VertexData() const { return vertexSpan ? vertexSpan : vertices.data(); }
+    std::size_t VertexCount() const { return vertexSpan ? vertexSpanCount : vertices.size(); }
+    const std::uint32_t *TexelData() const { return texelSpan ? texelSpan : texels.data(); }
+    std::size_t TexelCount() const { return texelSpan ? texelSpanCount : texels.size(); }
 };
 
 // Limits of one Execute() call (the caller splits larger batches).
@@ -192,6 +202,16 @@ public:
     DownloadTicket RecordGlmDownload(const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges,
                                      std::string &error);
     bool CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *localMemory, std::string &error);
+    // IN-364: records the display compose kernel (13.3, progressive frames) into the display image: `parameters`
+    // is the block hw_display_compose.comp reads (background, merge alpha, the two circuits' sources and
+    // placements), out_width x out_height pixels. The caller made the GLM current for the circuits.
+    bool ComposeDisplay(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth, std::uint32_t outHeight,
+                        std::string &error);
+    // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, kGpuSurface square, GENERAL layout).
+    // As an opaque handle (the VkImage value): this header carries no Vulkan types.
+    std::uint64_t DisplayImage() const;
+    // Fixtures: the top-left width x height words of the display image (submits and waits).
+    bool ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words, std::string &error);
     // Copies the given byte ranges of the GLM into `localMemory` at the same offsets (IN-350: pages whose newest
     // content lives only in the GLM, before the CPU reads or writes them). Submits and waits.
     bool DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges, std::uint8_t *localMemory,

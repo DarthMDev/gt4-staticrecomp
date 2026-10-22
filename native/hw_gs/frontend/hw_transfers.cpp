@@ -143,6 +143,11 @@ size_t TransferUnit::AcceptImageQwords(const uint8_t* bytes, size_t qwords) {
     }
     const size_t room = totalBytes_ - buffer_.size();
     const size_t take = std::min(room, qwords * 16);
+    if (buffer_.empty() && take == totalBytes_) {
+        // IN-365: the whole transfer is here: commit it from the packet bytes (no copy into buffer_).
+        CommitFrom(bytes, take, true);
+        return std::min(std::max<size_t>(1, (take + 15) / 16), qwords);
+    }
     buffer_.insert(buffer_.end(), bytes, bytes + take);
     const size_t used = std::max<size_t>(1, (take + 15) / 16);
     if (buffer_.size() == totalBytes_) {
@@ -159,8 +164,11 @@ void TransferUnit::CommitPending(TransferReason reason) {
 
 void TransferUnit::Commit(bool complete, TransferReason reason) {
     (void)reason;
+    CommitFrom(buffer_.data(), buffer_.size(), complete);
+}
+
+void TransferUnit::CommitFrom(const uint8_t* data, size_t byteCount, bool complete) {
     UploadCommit commit = pending_;
-    const size_t byteCount = buffer_.size();
 
     if (complete) {
         commit.rrh = pending_.rrh;
@@ -180,7 +188,7 @@ void TransferUnit::Commit(bool complete, TransferReason reason) {
         hooks_.beforeUpload(commit);
     }
     sink_.InvalidateDestination(commit);
-    sink_.CommitUpload(commit, buffer_.data(), byteCount);
+    sink_.CommitUpload(commit, data, byteCount);
     if (hooks_.afterUpload) {
         hooks_.afterUpload(commit);
     }

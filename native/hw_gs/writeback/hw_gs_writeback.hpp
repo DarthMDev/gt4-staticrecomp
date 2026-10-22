@@ -59,6 +59,7 @@ struct Counters {
     double uploadUs = 0.0;  // EE->GS uploads into the shadow memory (and GLM merges, IN-350)
     double batchUs = 0.0;
     double composeUs = 0.0;  // all ComposeFrame calls (display read, merge, deinterlace, copy)
+    double clutUs = 0.0;     // GPU CLUT loads (IN-349): GLM preparation and the recorded load
     std::uint64_t vblanksInterlaced = 0;   // VBlanks with SMODE2.INT = 1 (480i, the menus)
     std::uint64_t vblanksProgressive = 0;  // VBlanks with SMODE2.INT = 0 (480p races with GT4_FORCE_480P=1)   // all of OnBatch (translate, execute and the batch bookkeeping around them)
     std::uint64_t texturesCached = 0;
@@ -77,6 +78,7 @@ struct Counters {
     std::uint64_t glmBatchedWritebacks = 0;   // write-backs made as one GLM download (IN-357)
     std::uint64_t displayCaptures = 0;        // display downloads recorded at Flush (IN-355)
     std::uint64_t presentationsFromCapture = 0;  // presentation composes made from a capture (IN-355)
+    std::uint64_t gpuComposedFrames = 0;      // presentation frames composed on the GPU (IN-364)
     std::uint64_t glmMergedWords = 0;
     std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
@@ -118,6 +120,15 @@ struct OutputSettings {
 };
 
 // Output of the display path for one VBlank (13.1 to 13.3, no deinterlace, no post-fx yet).
+// IN-364: a presentation frame composed on the GPU into the drawer's display image (R32_UINT, RGBA8 packed),
+// valid in the top-left width x height pixels.
+struct GpuFrame {
+    bool valid = false;
+    std::uint32_t width = 0;
+    std::uint32_t height = 0;
+    std::uint64_t image = 0;  // the VkImage value (opaque here)
+};
+
 struct FrameOutput {
     bool valid = false;            // false when SMODE1 describes no known mode
     std::uint32_t width = 0;
@@ -194,6 +205,13 @@ public:
     // The display layout (13.2) is computed once per VBlank (Flush), so several composes of the same VBlank
     // (a dump and a present) see the same DBY history.
     void ComposeFrame(FrameOutput &out, ComposeKind kind = ComposeKind::Reference);
+    // IN-364: the presentation compose on the GPU for a progressive VBlank (no field offset, no deinterlace, a
+    // composite plan): the GLM is made current for the circuits and the compose kernel records into the display
+    // image, then the work is submitted. Returns false (nothing done) when the frame needs the CPU path.
+    bool ComposeFrameGpu(GpuFrame &out);
+    void SetGpuCompose(bool enabled);
+    // Fixtures and checks: the pixels of a GPU frame (submits and waits).
+    bool ReadGpuFrame(const GpuFrame &frame, std::vector<std::uint32_t> &pixels);
     FrameOutput Compose(ComposeKind kind = ComposeKind::Reference);
 
     // Display field of the VBlank being closed (CSR.FIELD from the VSYNC record, 12.4, 13.3, 13.4).

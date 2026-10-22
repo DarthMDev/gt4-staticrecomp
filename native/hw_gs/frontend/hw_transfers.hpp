@@ -113,6 +113,9 @@ public:
 
 private:
     void Commit(bool complete, TransferReason reason);
+    // Commit from `data` (byteCount bytes) instead of buffer_: IN-365, a whole transfer that arrived in one run of
+    // image qwords is committed straight from the packet. buffer_ is empty then.
+    void CommitFrom(const uint8_t* data, size_t byteCount, bool complete);
 
     TransferSink& sink_;
     TransferHooks hooks_;

@@ -42,10 +42,24 @@ public:
     std::uint64_t FifoHash() const { return fifoHash_; }
     std::uint64_t FifoReads() const { return fifoReads_; }
 
+    // IN-364 check: every progressive presentation frame is also composed on the GPU and compared with the CPU.
+    void SetGpuComposeCheck(bool enabled) { gpuComposeCheck_ = enabled; }
+    std::uint64_t GpuComposeEqual() const { return gpuComposeEqual_; }
+    std::uint64_t GpuComposeDifferent() const { return gpuComposeDifferent_; }
+
     cpuref::FrameImage EndFrame() override {
         renderer_.Flush();
+        GpuFrame gpuFrame;
+        std::vector<std::uint32_t> gpuPixels;
+        const bool onGpu = gpuComposeCheck_ && kind_ == ComposeKind::Presentation && renderer_.ComposeFrameGpu(gpuFrame) &&
+                           renderer_.ReadGpuFrame(gpuFrame, gpuPixels);
         FrameOutput out;
         renderer_.ComposeFrame(out, kind_);
+        if (onGpu) {
+            const bool same = out.valid && out.width == gpuFrame.width && out.height == gpuFrame.height &&
+                              out.pixels == gpuPixels;
+            ++(same ? gpuComposeEqual_ : gpuComposeDifferent_);
+        }
         cpuref::FrameImage frame;
         frame.valid = out.valid && out.width > 0 && out.height > 0;
         if (!frame.valid) return frame;
@@ -79,6 +93,9 @@ private:
     ComposeKind kind_;
     std::uint64_t fifoHash_ = 1469598103934665603ull;
     std::uint64_t fifoReads_ = 0;
+    bool gpuComposeCheck_ = false;
+    std::uint64_t gpuComposeEqual_ = 0;
+    std::uint64_t gpuComposeDifferent_ = 0;
     bool oddField_ = false;
 };
 

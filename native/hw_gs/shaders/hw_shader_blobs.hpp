@@ -37,6 +37,8 @@ extern const std::uint32_t hw_glm_merge_words[];
 extern const std::size_t hw_glm_merge_word_count;
 extern const std::uint32_t hw_glm_host_upload_words[];
 extern const std::size_t hw_glm_host_upload_word_count;
+extern const std::uint32_t hw_display_compose_words[];
+extern const std::size_t hw_display_compose_word_count;
 extern const std::uint32_t hw_glm_clut_words[];
 extern const std::size_t hw_glm_clut_word_count;
 

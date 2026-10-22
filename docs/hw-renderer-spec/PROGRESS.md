@@ -426,3 +426,53 @@ while a game is open, and never touches the owner's card.
   the same order; FIFO reads and window calls drain it first). Headless 480p race (the launcher's mode):
   19.6-21.5 -> 14.4-14.8 ms per vsync. Night race and gates: see BUILD local slice243.
 
+## 2026-10-22 owner test 4, GPU compose, plans (local slice244, IN-364/IN-365) - Claude
+
+- Owner test 4 (night race 480p, 4 min 43 s, windowed): 60 FPS on the overlay, flares correct, no readback drops,
+  16:9 and 480p confirmed (`vblanks_480p=13738`); frametime spikes of about 18 ms because the GS worker took about
+  16.8 ms per frame (gif 12-13 ms + compose 2.55 ms + present 0.48 ms).
+- IN-364: progressive presentation frames are composed on the GPU from the GLM and copied into the swapchain on the
+  GPU (no CPU compose, no download, no latency); interlaced menus keep the CPU path. IN-365: fewer per-chunk copies.
+  Mid-frame submission interval re-measured in game (64 / 128 / 256 chunks): 64 stays best (submissions are not the
+  cost). Expected windowed worker on the heaviest night frames: about 13-13.5 ms (headless 480p night 10-13 ms).
+- Next CPU target: the GPU CLUT loads (about 3 ms per 480p race frame, two barriers each).
+
+### Step 2 assessment: GPU-driven flare (study R3 / S4)
+
+Not reachable inside the renderer alone. The flare table reaches VU1 through a DMA REF into EE memory; the renderer
+only sees the GIF stream that VU1 produces afterwards. R3 needs, on the producer (game runtime) side: (1) recognising
+the flare readback (`func_00497EF8` / `func_004A5178` at `0x00497F30`) and the REF tags into its buffer in the VIF1
+path, (2) feeding VU1 the full-visibility constant (`D_006AF5D0`) instead of the read bytes, (3) bracketing the flare
+sprites' GIF output with markers carrying (table texel, lane), and (4) the P1 check that the VU1 flare program uses the
+value only as a linear colour/alpha factor. The donor runtime (DMA, VIF1, MTVU) is frozen and changes go through overlay
+capsules (`scripts/prepare_perf_runtime.py`), so this is a separate runtime task (proposed: TASK-087 step S4 with a
+runtime-overlay writer). With IN-357/IN-358 the flare readback costs about 0.3-0.9 ms per night frame and stays exact
+and same-frame, so R3 is now an optimisation and a prerequisite for side-effect-free auxiliary frames (roadmap 2), not
+a frame-rate blocker.
+
+### Step 3 plan: upscaling (M12, chapter 06), 1x parity first
+
+The current design keeps resident targets as exact 1x GS words (`R32_UINT` storage images, exact pixel arithmetic in
+the fragment shader), and the GLM, parking, unswizzle loads, GPU CLUT and display compose all work on 1x words.
+Upscaling therefore has to be added as a second representation, not a change of the 1x one:
+
+1. **Scale option and ceiling (06.1):** `GT4_HW_SCALE` 1..8 (already parsed), s_max from the device, the launcher's
+   display plan k = ceil(max(W/640, H/448)) x render scale mapped onto it. s = 1 must leave every gate unchanged.
+2. **Scaled slot images:** each resident slot gets an s x s image next to its 1x words (or the slot image becomes
+   s x and the 1x words are derived by the top-left sub-sample of 06.8/10). Draws rasterise at s x with the 03.3
+   position mapping and the 06.3 half-pixel modes (`native` default for GT4); points/lines at native thickness; dither
+   indexed by native pixel (06.5).
+3. **Coherence at scale:** write-backs, GLM swizzles and readbacks take the top-left sub-sample (06.8), so the 1x memory
+   model, the gates and the readbacks stay exact. Parking keeps the scaled image alive (a scaled "shadow" keyed by view)
+   so GT4's buffer reuse does not collapse the frame to 1x; a reload from the GLM upsamples only when no scaled shadow
+   exists (counted).
+4. **Textures from targets at scale (06.8):** target textures sample the scaled image with normalised coordinates;
+   index reinterpretation (T8 from CT32) reduces to 1x first; hazard copies at scale with a 1-pixel border.
+5. **Display at scale:** the GPU compose (IN-364) samples the scaled circuit images; the present scales to the window.
+6. **Box downsample (06.7) and native post-effects (06.6, default off).**
+7. **Acceptance (06.9, 14.4):** every 1x gate unchanged at s = 1; box-downsampled 2x/3x/4x frames vs 1x with the PSNR
+   thresholds recorded; owner look at 3x/4x (no seams, bloom aligned, no edge halos).
+
+Order: 1 -> 2 (colour/depth at scale, write-back by sub-sample) -> 5 (see it) -> 3 -> 4 -> 6 -> 7. Then step 4
+(anti-aliasing: FXAA as a present pass first, SMAA from the roadmap).
+

@@ -10,6 +10,7 @@
 //        [--deinterlace auto|off|weave|bob|blend|adaptive[_bff]] [--sync-mode cache|writeback] [--no-interlock]
 //        [--no-target-textures] [--no-glm] [--no-cpu-sprites] [--no-gpu-clut] [--no-glm-park] [--no-gpu-uploads]
 //        [--no-runs] [--single-buffer] [--async-present] [--no-batched-writebacks] [--gpu-timing]
+//        [--gpu-compose-check]
 //        [--chunks-per-submission N]
 // --sync-mode selects GT4_HW_SYNC_MODE (default cache, as in the game; writeback is the reference mode).
 // --compose presentation writes the image the window would show (13.3 field offset, 13.4 deinterlace with
@@ -170,7 +171,7 @@ int main(int argc, char** argv) {
             std::strcmp(argv[i], "--no-gpu-uploads") == 0 || std::strcmp(argv[i], "--no-runs") == 0 ||
             std::strcmp(argv[i], "--single-buffer") == 0 || std::strcmp(argv[i], "--async-present") == 0 ||
             std::strcmp(argv[i], "--no-batched-writebacks") == 0 ||
-            std::strcmp(argv[i], "--gpu-timing") == 0) {
+            std::strcmp(argv[i], "--gpu-timing") == 0 || std::strcmp(argv[i], "--gpu-compose-check") == 0) {
             --i;  // a flag without a value
             continue;
         }
@@ -302,6 +303,9 @@ int main(int argc, char** argv) {
     }
 
     writeback::WritebackReplayTarget target(renderer, composeKind);
+    for (int i = 3; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--gpu-compose-check") == 0) target.SetGpuComposeCheck(true);  // IN-364
+    }
     cpuref::ReplaySummary summary;
     std::uint64_t written = 0;
     const auto onFrame = [&](std::uint64_t frame, const cpuref::FrameImage& image) {
@@ -407,9 +411,10 @@ int main(int argc, char** argv) {
     {
         const writeback::PassTimings& totals = renderer.TimingTotals();
         const double frames = renderer.TimedFrames() ? static_cast<double>(renderer.TimedFrames()) : 1.0;
-        std::printf("per_frame_ms compose=%.2f gif=%.2f batch=%.2f translate=%.2f execute=%.2f upload=%.2f writeback=%.2f load=%.2f "
+        std::printf("per_frame_ms clut=%.2f compose=%.2f gif=%.2f batch=%.2f translate=%.2f execute=%.2f upload=%.2f writeback=%.2f load=%.2f "
                     "decode=%.2f\n",
-                    counters.composeUs / frames / 1000.0, counters.gifUs / frames / 1000.0,
+                    counters.clutUs / frames / 1000.0, counters.composeUs / frames / 1000.0,
+                    counters.gifUs / frames / 1000.0,
                     counters.batchUs / frames / 1000.0,
                     totals.translateUs / frames / 1000.0,
                     totals.executeUs / frames / 1000.0, counters.uploadUs / frames / 1000.0,
@@ -417,6 +422,9 @@ int main(int argc, char** argv) {
                     counters.textureDecodeUs / frames / 1000.0);
     }
     std::printf("images_written=%llu\n", static_cast<unsigned long long>(written));
+    std::printf("gpu_compose_equal=%llu gpu_compose_different=%llu\n",
+                static_cast<unsigned long long>(target.GpuComposeEqual()),
+                static_cast<unsigned long long>(target.GpuComposeDifferent()));
     std::printf("fifo_reads=%llu fifo_hash=%016llx\n", static_cast<unsigned long long>(target.FifoReads()),
                 static_cast<unsigned long long>(target.FifoHash()));
     if (renderer.Failed()) {

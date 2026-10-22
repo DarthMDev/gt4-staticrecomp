@@ -1575,13 +1575,17 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
     // IN-355: presentation from the asynchronous capture equals the synchronous presentation one VBlank later
     // (nothing is shown at the first VBlank), and memory is unchanged by it.
     {
+        uint64_t gpuComposeEqual = 0;
+        uint64_t gpuComposeDifferent = 0;
         auto present = [&](bool async, std::vector<FrameRecord>& out, writeback::Counters& counters,
                            std::string& error) -> bool {
             writeback::Renderer renderer;
             if (!renderer.Init(handles, error)) return false;
             renderer.SetSyncMode(true);
             renderer.SetAsyncPresentation(async);
+            renderer.SetGpuCompose(!async);  // the async run checks the CPU capture path (interlaced frames' path)
             writeback::WritebackReplayTarget target(renderer, writeback::ComposeKind::Presentation);
+            target.SetGpuComposeCheck(!async);  // IN-364: the synchronous run also composes every frame on the GPU
             cpuref::ReplaySummary summary;
             const bool ok = cpuref::ReplayCapture(capture.Bytes(), target, summary,
                                                   [&](uint64_t, const cpuref::FrameImage& image) {
@@ -1598,6 +1602,10 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                                                   },
                                                   error);
             counters = renderer.GetCounters();
+            if (!async) {
+                gpuComposeEqual = target.GpuComposeEqual();
+                gpuComposeDifferent = target.GpuComposeDifferent();
+            }
             if (renderer.Failed()) error += " " + renderer.LastError();
             return ok && !renderer.Failed();
         };
@@ -1624,6 +1632,10 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                             image ? "equals" : "DIFFERS from", memory ? "equal" : "DIFFERS");
                 if (!image || !memory) ++failures;
             }
+            std::printf("  GPU compose (IN-364): %llu frames equal to the CPU compose, %llu different\n",
+                        static_cast<unsigned long long>(gpuComposeEqual),
+                        static_cast<unsigned long long>(gpuComposeDifferent));
+            if (gpuComposeEqual != kFrames || gpuComposeDifferent != 0) ++failures;
             uint32_t changing = 0;  // the shift is only visible when consecutive frames differ
             for (uint32_t frame = 1; frame < kFrames; ++frame) changing += sync[frame].rgb != sync[frame - 1].rgb ? 1u : 0u;
             if (changing < kFrames - 1 || asyncCounters.displayCaptures == 0 ||

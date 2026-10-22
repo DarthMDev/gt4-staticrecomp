@@ -125,6 +125,9 @@ struct Backend::Impl {
   std::uint64_t presentedVblank = UINT64_MAX;  // flush count of the VBlank whose presentation image is in `frame`
   hwgs::writeback::FrameOutput frame;
   hwgs::writeback::FrameOutput shownFrame;
+  bool frameOnGpu = false;  // IN-364: `frame` is the renderer's display image (no pixels on the CPU)
+  bool shownOnGpu = false;
+  VkImage gpuImage = VK_NULL_HANDLE;
   std::uint64_t guestFrames = 0;
   double uploadUs = 0;
   double presentUs = 0;
@@ -589,11 +592,27 @@ struct Backend::Impl {
       to_copy.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
       vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
                            nullptr, 1, &to_copy);
-      VkBufferImageCopy region{};
-      region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-      region.imageExtent = {upload.width, upload.height, 1};
-      gt4_hwd_vkCmdCopyBufferToImage(cmd, upload.buffer, upload.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                                     &region);
+      if (shownOnGpu && gpuImage) {
+        // IN-364: the renderer's display image (written by its compose kernel in an earlier submission on this
+        // queue) is copied into the upload image (same 32-bit texel size, RGBA8 bytes).
+        VkMemoryBarrier composed{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        composed.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        composed.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &composed,
+                             0, nullptr, 0, nullptr);
+        VkImageCopy region{};
+        region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.extent = {upload.width, upload.height, 1};
+        gt4_hwd_vkCmdCopyImage(cmd, gpuImage, VK_IMAGE_LAYOUT_GENERAL, upload.image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+      } else {
+        VkBufferImageCopy region{};
+        region.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+        region.imageExtent = {upload.width, upload.height, 1};
+        gt4_hwd_vkCmdCopyBufferToImage(cmd, upload.buffer, upload.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                                       &region);
+      }
       to_copy.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
       to_copy.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
       to_copy.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -680,13 +699,15 @@ struct Backend::Impl {
     vkBeginCommandBuffer(cmd, &begin);
     const auto upload_start = std::chrono::steady_clock::now();
     if (frame && frame->valid && ensure_upload(frame->width, frame->height)) {
-      // The staging buffer is reused across presents: the previous present's copy finishes first (its fence;
-      // IN-355: not the whole device, which would also wait for the frame the renderer just submitted).
-      if (submissions > 0) {
-        const std::uint32_t previous = static_cast<std::uint32_t>((submissions - 1) % frame_slots);
-        vkWaitForFences(device, 1, &fences[previous], VK_TRUE, UINT64_MAX);
+      if (!shownOnGpu) {
+        // The staging buffer is reused across presents: the previous present's copy finishes first (its fence;
+        // IN-355: not the whole device, which would also wait for the frame the renderer just submitted).
+        if (submissions > 0) {
+          const std::uint32_t previous = static_cast<std::uint32_t>((submissions - 1) % frame_slots);
+          vkWaitForFences(device, 1, &fences[previous], VK_TRUE, UINT64_MAX);
+        }
+        std::memcpy(upload.mapped, frame->pixels.data(), frame->pixels.size() * sizeof(std::uint32_t));
       }
-      std::memcpy(upload.mapped, frame->pixels.data(), frame->pixels.size() * sizeof(std::uint32_t));
       record_frame(cmd, index, *frame);
     } else {
       record_black(cmd, index);
@@ -771,6 +792,10 @@ bool Backend::init(const Options &options, std::string &error) {
   s.renderer->SetGlm(options.glm);
   // GT4_HW_GPU_TIMING (12.8): GPU timestamps per category, reported on the GT4_HW_PROFILE_EVERY line.
   s.renderer->SetGpuTiming(options.gpu_timing);
+  // IN-358 diagnostic (not a 12.8 option): GT4_HW_CHUNKS_PER_SUBMIT=<n> mid-frame submission interval (0 = off).
+  if (const char *chunks = std::getenv("GT4_HW_CHUNKS_PER_SUBMIT")) {
+    s.renderer->SetChunksPerSubmission(static_cast<std::uint32_t>(std::strtoul(chunks, nullptr, 10)));
+  }
   s.initialised = true;
   return true;
 }
@@ -944,7 +969,19 @@ bool Backend::end_frame(PresentPhase phase) {
   // Frame end (chapter 12.5) with the present decision separated from it (M6 interface, IN-331): compose
   // the presentation image once into the reusable buffer and hand its stamp to the scheduler.
   s.renderer->SetDisplayField(phase == PresentPhase::field_odd);
-  s.renderer->ComposeFrame(s.frame, hwgs::writeback::ComposeKind::Presentation);
+  hwgs::writeback::GpuFrame gpuFrame;
+  if (s.renderer->ComposeFrameGpu(gpuFrame)) {
+    // IN-364: composed on the GPU; the present copies the display image (no CPU pixels, no upload).
+    s.frameOnGpu = true;
+    s.gpuImage = reinterpret_cast<VkImage>(gpuFrame.image);
+    s.frame.valid = true;
+    s.frame.width = gpuFrame.width;
+    s.frame.height = gpuFrame.height;
+    s.frame.pixels.clear();
+  } else {
+    s.frameOnGpu = false;
+    s.renderer->ComposeFrame(s.frame, hwgs::writeback::ComposeKind::Presentation);
+  }
   s.presentedVblank = s.stats.flushes;
   s.composeTotalUs += s.renderer->Timings().composeUs;
   ++s.composedFrames;
@@ -972,6 +1009,7 @@ void Backend::present_slot() {
     s.shownFrame.width = s.frame.width;
     s.shownFrame.height = s.frame.height;
     s.shownFrame.pixels.assign(s.frame.pixels.begin(), s.frame.pixels.end());
+    s.shownOnGpu = s.frameOnGpu;
   }
   const auto start = std::chrono::steady_clock::now();
   s.present_frame(s.shownFrame.valid ? &s.shownFrame : nullptr);
@@ -1020,6 +1058,7 @@ RenderCounters Backend::render_counters() const {
   out.gpu_early_submissions = gpu.earlySubmissions;
   out.vblanks_interlaced = c.vblanksInterlaced;
   out.vblanks_progressive = c.vblanksProgressive;
+  out.gpu_composed_frames = c.gpuComposedFrames;
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;
 }
