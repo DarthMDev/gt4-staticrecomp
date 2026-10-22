@@ -13,7 +13,7 @@ GT4Recomp.exe start
   single instance? (no: bring the first window forward, exit)
   data folder = GT4RECOMP_DATA_DIR or %LOCALAPPDATA%\GT4Recomp
   AppState::load: settings.toml (migrations), controls.toml, save library, pins
-  background thread check_on_launch: version.json; gt4-gs retry install (only when set up); update check
+  background thread check_on_launch: version.json; gt4-gs retry install (only when set up and selected); update check
   page boots -> app_state
       |
       +-- setup.state != done --> #/setup
@@ -21,7 +21,7 @@ GT4Recomp.exe start
       |      wrong_disc ..... reason + "Choose another file"
       |      failed ......... reason + "Try again" / "Choose another file"
       |      files_missing .. "Game files missing" + "Choose disc image"
-      |      checking ....... copying -> checking -> preparing -> renderer (bars, bytes, Cancel)
+      |      checking ....... copying -> checking -> preparing -> renderer when selected (bars, bytes, Cancel)
       |      done ........... "Ready" + Finish (opens Home; note when CoreGS 1.1 is used)
       |
       +-- setup.state == done --> #/home (slideshow, logo, Play, gear)
@@ -400,3 +400,20 @@ real `set_setting` round trip (the mock answers at once).
   item shape). Real exe run against a scratch `GT4RECOMP_DATA_DIR` holding a copy of the owner's old library and a
   scratch `GT4RECOMP_DOCUMENTS_DIR`: 6 files (1,533,775 bytes) moved and checked, old folders in
   `library.migrated-<t>`, a second start logs "already moved". Play was not pressed.
+
+
+## TASK-089 addendum — Explicit CoreGS choice (2026-10-21, candidate)
+
+A saved CoreGS 1.1 selection makes the external PCSX2 GS package optional throughout setup and
+startup: setup emits no renderer download progress and finishes normally; startup performs no package
+repair or external renderer release-list request. It still checks launcher releases. The player's
+explicit Check for updates and apply-update actions keep the existing optional renderer update path.
+Selecting PCSX2 retains its existing default setup, repair and release checks. Play does not inspect an
+external renderer executable when CoreGS is selected.
+
+New controls in `flow_audit::coregs_setup_and_play_need_no_external_renderer_package` use a synthetic
+ISO and an installer that panics if invoked, persist the choice, reload state and inspect the built-in
+launch plan. `updates::tests` inject release fetchers to assert the requested streams, preserve launcher
+offers and retain default PCSX2 repair/manual-check behavior. The full Rust workspace passed on Windows,
+including 53 Tauri tests (one real-disc flow ignored). Maintainer launcher acceptance remains pending;
+this addendum does not qualify renderer quality or a new game executable.

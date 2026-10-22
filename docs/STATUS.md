@@ -1,5 +1,17 @@
 # Current Status
 
+## CoreGS independent launcher candidate (2026-10-21, TASK-089)
+
+Branch `task/089-coregs-independent-launcher`, baseline main `6422988`. Selecting CoreGS 1.1 now
+skips the optional PCSX2 GS installer during setup, automatic package repair at startup and background
+renderer release queries. Launcher updates and explicit manual renderer updates remain available.
+Play also avoids inspecting an unused external renderer executable. Synthetic setup/launch and injected
+release-request controls pass: the full Rust launcher workspace passes on Windows, including 53 Tauri tests
+(one real-disc flow ignored). Maintainer launcher acceptance remains pending. Branch audit and limits:
+[renderer independence](reverse-engineering/renderer-independence-2026-10-21.md).
+No renderer implementation, game executable, input pins or saves changed. CoreGS 2.0 is not enabled by this change.
+
+
 ## Launcher self-update fixed (2026-10-21, TASK-085, branch `task/085-launcher-self-update`)
 
 Owner report: launcher 1.0.0 offered 1.1.0, closed after the download and installed nothing. The setup joined the

@@ -244,7 +244,11 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
     }
     // Decision 0070: PCSX2 GS when it is installed and selected; otherwise CoreGS 1.1 with a message.
     let settings = state.config.settings.clone();
-    let installed = gs_release::installed(&updates::renderer_root(&dirs));
+    let installed = if launch::needs_external_renderer(&settings) {
+        gs_release::installed(&updates::renderer_root(&dirs))
+    } else {
+        None
+    };
     let (pcsx2, notice) = match launch::choose_renderer(&settings, installed.as_ref()) {
         launch::RendererChoice::Pcsx2 => (installed.clone(), None),
         launch::RendererChoice::CoreGs11 { reason } => (None, reason),
