@@ -19,6 +19,7 @@ mod setup;
 mod state;
 mod tray;
 mod updates;
+mod webview_guard;
 #[cfg(feature = "visual-check")]
 mod visual;
 
@@ -29,8 +30,18 @@ use tauri::Manager;
 use gt4l_core::LAUNCHER_VERSION;
 
 fn main() {
-    // A second launcher brings the first window forward instead of starting.
-    if !gt4l_platform::process::claim_single_instance() {
+    // A second launcher brings the first window forward instead of starting. A restart in safe mode (TASK-091) waits
+    // for the launcher that is exiting instead.
+    let restarted = webview_guard::restart_requested(std::env::args().skip(1));
+    let claimed = if restarted {
+        gt4l_platform::process::claim_single_instance_retrying(
+            webview_guard::RESTART_CLAIM_TIMEOUT,
+            webview_guard::RESTART_CLAIM_STEP,
+        )
+    } else {
+        gt4l_platform::process::claim_single_instance()
+    };
+    if !claimed {
         return;
     }
     // TASK-091: large data in `<exe dir>\data` (portable), user data in `%APPDATA%\GT4Recomp`. The 1.2.0 user
@@ -55,6 +66,24 @@ fn main() {
     if let Err(message) = gt4l_platform::process::join_kill_on_close_job() {
         state::log(&dirs, &format!("the game would not end with the launcher: {message}"));
     }
+    // TASK-091 WebView2 guard: the safe mode flag decides the WebView2 arguments, before any web view exists.
+    let user_root = startup.user.root().to_path_buf();
+    let safe_mode = webview_guard::apply_safe_mode_environment(&user_root);
+    let webview_version = tauri::webview_version().unwrap_or_else(|_| "unknown".to_string());
+    state::log(&dirs, &format!("WebView2 runtime version: {webview_version}"));
+    if safe_mode {
+        state::log(&dirs, "WebView2 safe mode (GPU acceleration off)");
+    } else {
+        state::log(&dirs, "WebView2 safe mode off (GPU acceleration on)");
+    }
+    if restarted {
+        state::log(&dirs, "started again in WebView2 safe mode after the window did not draw");
+    }
+    let guard = Arc::new(webview_guard::Guard {
+        page: webview_guard::PageReady::default(),
+        dirs: dirs.clone(),
+        user_root,
+    });
     let mut app_state = match state::AppState::load(dirs.clone(), startup.user.clone(), startup.layout.legacy.local.clone()) {
         Ok(app_state) => app_state,
         Err(message) => {
@@ -72,11 +101,15 @@ fn main() {
 
     let shared: state::Shared = Arc::new(Mutex::new(app_state));
     let dirs_for_setup = dirs.clone();
-    tauri::Builder::default()
+    let guard_for_setup = guard.clone();
+    let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(shared)
+        .manage(guard.clone())
         .setup(move |app| {
             tray::install(app)?;
+            // TASK-091: the window is shown by ui_ready; without it in 12 s the watchdog restarts in safe mode.
+            webview_guard::start_watchdog(app.handle().clone(), guard_for_setup);
             // The gamepad service (SDL3) runs on its own thread for the whole session.
             let pads = pad_service::spawn(app.handle().clone());
             app.manage(pads);
@@ -123,6 +156,7 @@ fn main() {
             commands::replays_list,
             commands::replays_import,
             commands::replays_delete,
+            webview_guard::ui_ready,
             commands::get_controls,
             commands::pad_status,
             commands::capture_binding,
@@ -142,6 +176,10 @@ fn main() {
             updates::skip_update,
             tray::confirm_close,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running GT4Recomp");
+        .run(tauri::generate_context!());
+    // TASK-091: a web view that could not start (WebView2 missing) gets the native message, not a silent exit.
+    if let Err(error) = run_result {
+        state::log(&dirs, &format!("WebView2 is missing or could not start: {error}"));
+        webview_guard::show_failure(&dirs, webview_guard::Problem::Missing);
+    }
 }

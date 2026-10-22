@@ -2219,3 +2219,35 @@ Builds (all paths absolute):
   `.update-old` and the marker.
 - Installer `private\slice256-installer\GT4Recomp-Setup-1.2.1-test.exe` 28849390 bytes, sha256
   `a0543753539ce45b236033e249579103b32c55443da691d2a0279af45b367317` (slice 255 recipe, launcher slice253). Not run on this PC.
+
+### Slice 257 (WebView2 guard, issue #80)
+- Blank white launcher window (GitHub issue #80, GTX 750 Ti, Windows 10). The window starts hidden
+  (`tauri.conf.json` `visible: false`, `backgroundColor` = `--carbon` `#13161b`). The page calls `ui_ready` after the
+  first frame (or after 250 ms when the window is hidden), and the backend shows the window. `ui_ready` is idempotent.
+- Watchdog (`src/webview_guard.rs`, `start_watchdog`): 12 s for `ui_ready`. Not ready and safe mode off: the flag
+  `%APPDATA%\GT4Recomp\webview-safe-mode` (date and reason) is written, a new launcher starts with `--webview-restart`
+  outside the kill-on-close job, and this process exits. The restarted launcher claims the single-instance mutex for up
+  to 10 s (every 250 ms) instead of focusing the old window (`gt4l_platform::process::claim_single_instance_retrying`).
+- Safe mode at start (before the web view exists): `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` gets `--disable-gpu` appended
+  (not twice); the log says `WebView2 safe mode (GPU acceleration off)`. Not ready in safe mode: the window is hidden and a
+  native Win32 message (`gt4l_platform::dialog`, `MessageBoxW`, no WebView2) offers Yes = WebView2 download page
+  (`https://go.microsoft.com/fwlink/p/?LinkId=2124703`), No = log folder, Cancel = close. Then the launcher exits.
+- WebView2 missing or failing to start (`tauri::Builder::run` returns an error): the same native message, worded for
+  "missing or could not start".
+- Startup log: `WebView2 runtime version: <tauri::webview_version(), or unknown>` and the safe mode line.
+- Settings > Graphics > Advanced > **Launcher GPU acceleration** (`get_settings_table` appends the row; `set_setting`
+  with id `launcher_gpu`): shown Off while the flag exists; On deletes the flag, Off writes it; takes effect at the next
+  start.
+- Test only: `GT4RECOMP_TEST_UI_NEVER_READY=1` makes `ui_ready` ignored, so the watchdog and the native message can be
+  seen (the launcher then shows nothing for 12 s, restarts, and shows the message in safe mode). Not for players.
+- Checks: `cargo test --workspace` (from `launcher\`) 351 passed, 0 failed, 4 ignored (344 before; 7 new in
+  `webview_guard`). UI nav-test 150 of 150; focus-check 100 of 100 (headless Edge through Playwright, `channel: msedge`;
+  `scenario=advanced` only sets the state for a screenshot and writes no result).
+- Launcher `private\slice257-launcher\GT4Recomp.exe` 16,387,584 bytes, sha256
+  `58fb30f99fb201bcba4f4977c9f71356a983e6f00e0c3e71584e8cb4ad090994` (`launcher\tools\build-release.ps1`,
+  `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice250-cargo-target`): no user or build path found.
+- Installer `private\slice257-installer\GT4Recomp-Setup-1.2.1-test.exe` 28,859,313 bytes, sha256
+  `51998294e3ccd9b0b80b6175e5c6e3b969d89c6236f4669878dcf274c6bbb70a` (the slice 255 recipe: `makensis /DVERSION=1.2.1`,
+  `/DLAUNCHER_EXE` = the copy above, `GAME_DIR` slice240-dist, SDL3 and WebView2 bootstrapper as before, script
+  `C:\Antigravity\gt4-wt-091-install\installer\gt4recomp.nsi`). 7-Zip extraction: `.update-staging\GT4Recomp.exe`
+  equals the launcher; the extraction folder was deleted. Not run on this PC.

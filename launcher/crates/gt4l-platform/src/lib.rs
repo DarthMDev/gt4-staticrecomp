@@ -2,6 +2,7 @@
 //! Recycle Bin, the Documents known folder, the connected monitors and their modes, one launcher at a time, the kill-on-close job, and starting and watching the game.
 //! Nothing here knows about pages, windows or the web view.
 
+pub mod dialog;
 pub mod disk;
 pub mod display;
 pub mod game;

@@ -26,6 +26,7 @@ use crate::pad_service;
 use crate::setup;
 use crate::saves::{self, Item};
 use crate::state::{self, lock, AppState, SetupOutcome, Shared};
+use crate::webview_guard;
 
 /// `app_state()` (ui/dev/README.md):
 /// `{setup: {state, step, progress, bytes_done, bytes_total, renderer_step, disc_name, problem, note}, game_running,
@@ -138,7 +139,13 @@ pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
 
 pub fn get_settings_table_with_monitors(shared: &Shared, monitors: &[display_rules::Monitor]) -> Result<Value, String> {
     let state = lock(shared);
-    Ok(model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors))
+    let mut table = model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors);
+    // TASK-091: the launcher's own row (Graphics > Advanced), not a game setting.
+    let safe_mode = webview_guard::safe_mode_on(state.user_dirs.root());
+    if let Some(rows) = table.get_mut("rows").and_then(Value::as_array_mut) {
+        rows.push(webview_guard::gpu_row(safe_mode));
+    }
+    Ok(table)
 }
 
 /// `set_setting({id, value})`: a launcher row, a PCSX2 GS table row, a trigger row (`l2_deadzone`, `r2_curve`, ...) or
@@ -156,6 +163,12 @@ pub fn set_setting(app: AppHandle, id: String, value: Value, shared: State<'_, S
 
 pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), String> {
     let mut state = lock(shared);
+    if id == webview_guard::GPU_ROW_ID {
+        // TASK-091: the launcher's own toggle; takes effect at the next start.
+        let on = value.as_bool().ok_or_else(|| format!("'{id}' needs on or off"))?;
+        let now = webview_guard::unix_seconds();
+        return webview_guard::set_gpu_acceleration(state.user_dirs.root(), on, now);
+    }
     if let Some(definition) = settings::definition(&id) {
         let text = model::value_text(&value, definition.kind == settings::Kind::Toggle)
             .ok_or_else(|| format!("'{id}' needs a plain value"))?;

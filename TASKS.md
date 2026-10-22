@@ -523,6 +523,7 @@ interlaced fallback stays. Owner decisions open: progressive by default, CT16 or
 Acceptance: `cargo test --workspace` green with the new path, move, cleanup, elevation and settings tests; UI checks;
 installer compiled and extracted; owner test of a fresh install, the 1.2.0 update, the move, a portable copy and the
 uninstall. Result so far: 330 Rust tests passed; owner test installer `private/slice250-installer/GT4Recomp-Setup-1.2.1-test.exe`. Slice 251 (review fixes): 332 passed. Slice 252: 343 passed; installer `private\slice252-installer\GT4Recomp-Setup-1.2.1-test.exe` (28,845,242 bytes, sha256 `2FD43DCF6D18FDAE981AF0CD22D79E259E7175ED08DFF41AE3007802A1CF42FF`), not run yet: owner test of the silent update from 1.2.1 and of a reinstall into another folder (data moved from `PreviousDataDir`).
+Slice 257 (GitHub issue #80, blank white launcher window): the window starts hidden and shows on `ui_ready`; a 12 s watchdog restarts the launcher in WebView2 safe mode (`--disable-gpu`, flag `webview-safe-mode`, Settings toggle "Launcher GPU acceleration"), then a native message offers the WebView2 download page or the log folder. `cargo test --workspace` 351 passed. Installer `private\slice257-installer\GT4Recomp-Setup-1.2.1-test.exe` (28,859,313 bytes, sha256 `51998294e3ccd9b0b80b6175e5c6e3b969d89c6236f4669878dcf274c6bbb70a`), not run yet: owner test with `GT4RECOMP_TEST_UI_NEVER_READY=1`.
 Details: BUILD.md slice 250, [release notes 1.2.1](docs/release-notes/1.2.1.md).
 
 ### TASK-090 — CoreGS 3.0: modern render pipeline

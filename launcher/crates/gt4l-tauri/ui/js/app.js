@@ -161,6 +161,22 @@
   }
   GT4.showMigration = showMigration;
 
+  // TASK-091 (1.2.1, WebView2 guard): the window stays hidden until the first screen has drawn. ui_ready is sent after
+  // the next animation frame, or after a short timer when the window is still hidden (a hidden web view may not run
+  // animation frames). The backend shows the window; a second call does nothing.
+  var readySent = false;
+  function signalReady() {
+    function send() {
+      if (readySent) {
+        return;
+      }
+      readySent = true;
+      GT4.backend.call("ui_ready").catch(function () {});
+    }
+    root.requestAnimationFrame(send);
+    root.setTimeout(send, 250);
+  }
+
   GT4.backend.call("app_state").then(function (appState) {
     showMigration(appState);
     var route = parseRoute();
@@ -169,8 +185,10 @@
     } else {
       render();
     }
+    signalReady();
   }, function (err) {
     render();
     GT4.ui.toast(GT4.errorText(err), true);
+    signalReady();
   });
 })(window);

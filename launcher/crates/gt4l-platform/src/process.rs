@@ -36,17 +36,27 @@ mod windows_impl {
     /// "Gran Turismo 4", and focusing it from a second launcher would bring the game forward.
     const WINDOW_TITLE: PCWSTR = w!("GT4Recomp");
 
-    /// Returns `false` when another launcher already runs; that window is brought forward instead.
-    pub fn claim_single_instance() -> bool {
-        // SAFETY: the name is a static wide string. The handle is kept open until the process exits.
+    /// One attempt at the launcher mutex. `true`: this is the first launcher (the handle is kept until exit). `false`:
+    /// another launcher holds it; the handle is closed here, so a later attempt can succeed once that one has exited.
+    fn attempt_claim() -> bool {
+        // SAFETY: the name is a static wide string. The handle is kept open until the process exits when it is ours.
         let created = unsafe { CreateMutexW(None, true, w!("Local\\GT4Recomp.Launcher")) };
-        if created.is_err() {
+        let Ok(handle) = created else {
             return true; // cannot tell; start anyway
-        }
+        };
         // SAFETY: no arguments; reads the error of the call above on this thread.
         if unsafe { GetLastError() } != ERROR_ALREADY_EXISTS {
             return true;
         }
+        // SAFETY: `handle` was returned by CreateMutexW above and is closed exactly once.
+        unsafe {
+            let _ = CloseHandle(handle);
+        }
+        false
+    }
+
+    /// Brings the running launcher's window forward.
+    fn focus_running_launcher() {
         // SAFETY: FindWindowW with a null class name looks up the title only.
         if let Ok(window) = unsafe { FindWindowW(PCWSTR::null(), WINDOW_TITLE) } {
             // SAFETY: `window` is a window handle returned by FindWindowW.
@@ -55,7 +65,30 @@ mod windows_impl {
                 let _ = SetForegroundWindow(window);
             }
         }
+    }
+
+    /// Returns `false` when another launcher already runs; that window is brought forward instead.
+    pub fn claim_single_instance() -> bool {
+        if attempt_claim() {
+            return true;
+        }
+        focus_running_launcher();
         false
+    }
+
+    /// Like [`claim_single_instance`], but keeps trying every `step` for up to `timeout` while another launcher
+    /// exits (a restart in safe mode, TASK-091). It does not bring the other window forward.
+    pub fn claim_single_instance_retrying(timeout: std::time::Duration, step: std::time::Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            if attempt_claim() {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(step);
+        }
     }
 
     /// Puts this process in a job that ends its members when the launcher exits.
@@ -204,7 +237,7 @@ mod windows_impl {
 
 #[cfg(windows)]
 pub use windows_impl::{
-    claim_single_instance, join_kill_on_close_job, process_running, release_kill_on_close, restore_kill_on_close,
+    claim_single_instance, claim_single_instance_retrying, join_kill_on_close_job, process_running, release_kill_on_close, restore_kill_on_close,
     shell_run_as_admin,
 };
 
@@ -243,6 +276,11 @@ pub fn command_with_arguments(program: &std::path::Path, arguments: Option<&str>
 
 #[cfg(not(windows))]
 pub fn claim_single_instance() -> bool {
+    true
+}
+
+#[cfg(not(windows))]
+pub fn claim_single_instance_retrying(_timeout: std::time::Duration, _step: std::time::Duration) -> bool {
     true
 }
 

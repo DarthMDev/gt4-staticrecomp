@@ -135,7 +135,10 @@
     { id: "perf_overlay_fps", label: "Overlay: FPS", help: "Shows the frame rate in the performance overlay.",
       page: "advanced", control: "toggle", values: null, default: true, current: true },
     { id: "debug_internal", label: "Internal debug", help: "Not shown to users.",
-      page: "hidden", control: "toggle", values: null, default: false, current: true }
+      page: "hidden", control: "toggle", values: null, default: false, current: true },
+    // TASK-091 (1.2.1): the launcher's own row, appended by the Rust table (commands::get_settings_table).
+    { id: "launcher_gpu", label: "Launcher GPU acceleration", help: "Off keeps the launcher window without GPU acceleration, after it failed to draw in WebView2. On takes effect at the next start of the launcher.",
+      page: "advanced", control: "toggle", values: null, default: true, current: true }
   ];
   rows.forEach(function (row) {
     DEFAULTS[row.id] = row.default;
@@ -503,6 +506,7 @@
         return { ok: true, message: args.stream === "launcher" ? "GT4Recomp setup started." : "gt4-gs 1.1.1 is ready." };
       case "skip_update":
       case "confirm_close":
+      case "ui_ready":
         return null;
       default:
         throw new Error("Mock has no command " + command);
