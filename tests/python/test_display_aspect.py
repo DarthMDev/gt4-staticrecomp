@@ -165,7 +165,7 @@ class DisplayAspectLauncherTests(unittest.TestCase):
 
     def test_mode_pcsx2_is_slice218_and_older_builds_are_history(self):
         import external_runtime_probe as probe
-        name, runtime = probe.PERF_PROFILES['pcsx2']
+        name, runtime = probe.PERF_PROFILES['pcsx2-slice240']
         self.assertEqual((name, runtime), ('slice240-pcsx2.json', 'private/slice240-game-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice217'],
                          ('slice217-pcsx2.json', 'private/slice217-build/build/gt4vulkan.exe'))

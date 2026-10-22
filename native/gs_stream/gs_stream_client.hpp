@@ -72,6 +72,11 @@ bool read_fifo(std::uint8_t *data, std::uint32_t qwords);
 // The donor toggles the field together with INTC VBLANK_S, before the game's VBLANK_S handler runs, so this is also
 // the display field of the frame that ends here (protocol 1.1 VSYNC.field; docs/GS-STREAM-PROTOCOL.md 6.1).
 void on_vsync(bool odd_field);
+// TASK-084 step 3 (slice263): VBlank as an MTVU journal entry. With deferral on, on_vsync() holds the field instead
+// of posting; post_pending_vsync() (called from the journal drain, EE thread) posts it after the frame's GIF output,
+// so the GS process sees the frame complete before its VSYNC. Without deferral both calls behave as before.
+void set_vsync_deferral(bool defer);
+bool post_pending_vsync();
 // GS hard reset (donor render_reset) and GIF path reset.
 void on_gs_reset();
 void on_gif_reset();
@@ -114,6 +119,10 @@ void finish(std::FILE *output);
 // for readback replies and for the GS process (ring space, frames in flight). Spin time inside those waits is also
 // CPU time, so the sum may count a few microseconds twice; the pacer's sleep is in neither.
 struct FrameCosts {
+  // TASK-084 step 0 (slice260): the EE frame's wall time and the pacer's sleep inside it. The critical path is
+  // frame_wall_ms - pacing_sleep_ms; the waits below are already inside that wall time.
+  double frame_wall_ms = -1.0;      // wall ms per VBlank of the interval; negative: Unknown
+  double pacing_sleep_ms = 0.0;     // pacer sleep inside frame_wall_ms (pacing_wait category)
   double ee_cpu_ms = -1.0;          // measured EE thread CPU; negative: Unknown
   double vu1_worker_wait_ms = 0.0;  // MTVU syncs, every reason
   double readback_wait_ms = 0.0;
@@ -135,6 +144,8 @@ struct OsdSample {
   std::uint64_t worker_busy_us = UINT64_MAX;  // VU1 worker busy; UINT64_MAX: unknown
   bool accounting = false;  // the perf accounting (GT4_PERF=1 or F7) is on: the four waits below are measured
   std::uint64_t stream_write_us = 0, readback_wait_us = 0, backpressure_us = 0, worker_wait_us = 0;
+  // TASK-084 step 0: the pacer's sleep, so the critical path is the frame wall minus the sleep (the F8 formula).
+  std::uint64_t pacing_sleep_us = 0;
 };
 ::gs_stream::OsdStatsPayload make_osd_stats(const OsdSample &begin, const OsdSample &end, std::uint64_t max_frame_us,
                                             double budget_ms = 1000.0 / 59.94);

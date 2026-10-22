@@ -14,6 +14,44 @@ struct GuestSample {
   std::uint64_t vu1_interpreted = 0;
 };
 
+// TASK-084 step 0 (slice260, docs/FRAME-COST-STUDY.md section 6): cheap per-interval counters that the wall-time
+// scopes cannot show. Every writer is the EE thread (the probe's owner), so plain fields are enough; the probe resets
+// them with its interval. Counters are always compiled in and cost one increment each.
+struct FrameCounters {
+  // GIF traffic at the render point, per path (1 = VU1 PATH1, 2 = VIF1 DIRECT, 3 = DMA ch2).
+  std::uint64_t gif_bytes[4] = {};
+  std::uint64_t gif_records[4] = {};
+  // VIF1 posting: packets offered by the EE shadow, jobs posted to the worker, and DMA chain endings observed.
+  std::uint64_t vif_packets = 0;
+  std::uint64_t vif_jobs = 0;
+  std::uint64_t vif_job_bytes = 0;
+  std::uint64_t vif_chains = 0;
+  // Kernel work: syscalls by number (the low 7 bits, so 0x80..0xFF fold onto 0x00..0x7F), their wall time, and
+  // thread switches.
+  std::uint64_t syscalls = 0;
+  std::uint64_t syscall_us = 0;
+  std::uint64_t syscall_count[128] = {};
+  std::uint64_t thread_switches = 0;
+};
+FrameCounters &frame_counters() noexcept;
+void reset_frame_counters() noexcept;
+
+// Counts one syscall by number and its wall time (RAII: one call per handle_syscall).
+class SyscallScope {
+ public:
+  explicit SyscallScope(std::uint32_t number) noexcept;
+  ~SyscallScope();
+  SyscallScope(const SyscallScope &) = delete;
+  SyscallScope &operator=(const SyscallScope &) = delete;
+
+ private:
+  std::uint64_t start_us_ = 0;
+  std::uint32_t number_ = 0;
+};
+void count_thread_switch() noexcept;
+// One GIF record at the render point (EE thread): bytes per path for the split.
+void count_gif(int path, std::uint64_t bytes) noexcept;
+
 enum class Request { start, report, toggle };
 
 // The optional CPU clock returns UINT64_MAX when unavailable.

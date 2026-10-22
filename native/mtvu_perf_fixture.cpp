@@ -35,8 +35,11 @@ int main() {
     // TASK-035 appends the four GS stream categories after the MTVU ones; both groups stay after the legacy lines.
     require(static_cast<std::size_t>(Category::mtvu_output) + 1 == static_cast<std::size_t>(Category::gs_ipc_write),
             "the GS stream categories follow the MTVU categories");
-    require(static_cast<std::size_t>(Category::gs_ipc_readback_wait) + 1 == static_cast<std::size_t>(Category::count),
-            "the GS stream categories are the last ones");
+    // TASK-084 appends the GS stream path-walk scope after the GS stream categories.
+    require(static_cast<std::size_t>(Category::gs_ipc_readback_wait) + 1 == static_cast<std::size_t>(Category::gif_walk),
+            "the TASK-084 categories follow the GS stream categories");
+    require(static_cast<std::size_t>(Category::gif_walk) + 1 == static_cast<std::size_t>(Category::count),
+            "the TASK-084 categories are the last ones");
 
     Probe &probe = Probe::shared();
     Accounting worker(true);

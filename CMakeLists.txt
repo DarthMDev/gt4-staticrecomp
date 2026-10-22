@@ -82,6 +82,8 @@ add_test(NAME native_mtvu_measure COMMAND $<TARGET_FILE:mtvu_measure_fixture>)
 add_test(NAME native_mtvu_ring COMMAND $<TARGET_FILE:mtvu_ring_fixture>)
 add_test(NAME native_mtvu_journal COMMAND $<TARGET_FILE:mtvu_journal_fixture>)
 add_test(NAME native_mtvu_perf COMMAND $<TARGET_FILE:mtvu_perf_fixture>)
+# TASK-084 step 1: the VIF1 chain batch payload (pure host code, round-trips and rejects malformed records).
+add_test(NAME native_mtvu_vif_batch COMMAND $<TARGET_FILE:mtvu_vif_batch_fixture>)
 # TASK-035: GS stream transport (threads and a child process) and the game-side client end to end with the recorder.
 add_test(NAME native_gs_stream_ipc COMMAND $<TARGET_FILE:gs_stream_ipc_fixture>)
 add_test(NAME native_gs_stream_client
@@ -92,7 +94,7 @@ add_test(NAME native_shape_capture_export COMMAND $<TARGET_FILE:shape_capture_ex
 add_test(NAME native_shape_capture_control COMMAND $<TARGET_FILE:shape_capture_control_fixture>)
 add_test(NAME python_native_contracts
     COMMAND "${GT4_PYTHON}" -m unittest discover -s "${CMAKE_SOURCE_DIR}/tests/python")
-set_tests_properties(native_mtvu_measure native_mtvu_ring native_mtvu_journal native_mtvu_perf native_quickfix native_race_display native_race_widescreen native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
+set_tests_properties(native_mtvu_measure native_mtvu_ring native_mtvu_journal native_mtvu_perf native_mtvu_vif_batch native_quickfix native_race_display native_race_widescreen native_vulkan_pixels native_audio_input native_shape_observer native_performance_accounting native_performance_probe native_shape_capture_export native_shape_capture_control python_native_contracts
     PROPERTIES RUN_SERIAL TRUE TIMEOUT 120
     WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}" ENVIRONMENT "GT4_NATIVE_BUILD=${CMAKE_BINARY_DIR}")
 if(TARGET shape_runtime_fixture)

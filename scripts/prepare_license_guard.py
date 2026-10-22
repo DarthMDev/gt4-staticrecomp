@@ -72,7 +72,7 @@ def overlay_sha256(path):
     return hashlib.sha256(path.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
 
 
-def derive_sources(assets_root=None, display_aspect=False):
+def derive_sources(assets_root=None, display_aspect=False, frame_counters=False):
     """Returns {capsule file name: derived text (LF)}."""
     donor = Path(assets_root or ROOT) / 'private/references/ps2-web-recomp/runtime/src'
     (dispatch_name, dispatch_sha), = DISPATCH_PIN.items()
@@ -81,21 +81,24 @@ def derive_sources(assets_root=None, display_aspect=False):
     dispatch = apply_license_guard(read_pinned(donor, dispatch_name, dispatch_sha))
     if display_aspect:
         dispatch = apply_display_aspect(dispatch)
+    kernel = perf.apply_halt_dump(read_pinned(donor, halt_name, halt_sha))
+    if frame_counters:
+        kernel = perf.apply_kernel_frame_counters(kernel)
     return {
         'dispatch.cpp': PREFIX + dispatch,
-        'kernel.cpp': perf.apply_halt_dump(read_pinned(donor, halt_name, halt_sha)),
+        'kernel.cpp': kernel,
         'cdvdfsv.cpp': perf.apply_fsv_trace(read_pinned(donor, fsv_name, fsv_sha)),
     }
 
 
-def prepare(output, assets_root=None, display_aspect=False):
+def prepare(output, assets_root=None, display_aspect=False, frame_counters=False):
     output = Path(output).absolute()
     private = (Path(assets_root or ROOT) / 'private').resolve()
     if output != output.resolve() or output.parent != private:
         raise ValueError('License guard capsule must be an ordinary immediate private child')
     if output.exists():
         raise ValueError('Preserve existing output; choose a fresh license guard capsule')
-    sources = derive_sources(assets_root, display_aspect)
+    sources = derive_sources(assets_root, display_aspect, frame_counters)
     output.mkdir()
     receipt = {
         'schema_version': 1,
@@ -109,6 +112,9 @@ def prepare(output, assets_root=None, display_aspect=False):
     }
     if display_aspect:
         receipt['display_aspect_overlay_sha256'] = overlay_sha256(ASPECT_OVERLAY_PATH)
+    if frame_counters:
+        # TASK-084 step 0: the kernel counters (syscalls by number, thread switches) on top of the halt dump.
+        receipt['frame_counters_profile'] = 'task084-frame-counters-v1'
     for name in CAPSULE_FILES:
         path = output / name
         path.write_text(sources[name], encoding='utf-8', newline='\n')
@@ -123,5 +129,8 @@ if __name__ == '__main__':
     parser.add_argument('--assets-root', type=Path)
     parser.add_argument('--display-aspect', action='store_true',
                         help='also apply the TASK-080 aspect hooks (current overlay: v2, slice217 capsule)')
+    parser.add_argument('--frame-counters', action='store_true',
+                        help='also apply the TASK-084 kernel counters (syscalls by number, thread switches)')
     options = parser.parse_args()
-    print(json.dumps(prepare(options.output, options.assets_root, options.display_aspect), indent=2))
+    print(json.dumps(prepare(options.output, options.assets_root, options.display_aspect, options.frame_counters),
+                     indent=2))

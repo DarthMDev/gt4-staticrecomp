@@ -125,8 +125,8 @@ class LicenseGuardLauncherPinTests(unittest.TestCase):
         # TASK-080 P2 (slice217, tests/python/test_display_aspect.py): the slice215 build with the slice217 capsule
         # (the slice206 guard plus the race camera aspect hook and the HUD canvas hook); slice218 keeps that capsule.
         import external_runtime_probe as probe
-        name, runtime = probe.PERF_PROFILES['pcsx2']
-        # TASK-080 addendum (slice218): the slice217 capsule and library with the seamless display host code.
+        # This test describes the slice217/218/240 guard history; keep it on the slice240 profile.
+        name, runtime = probe.PERF_PROFILES['pcsx2-slice240']
         self.assertEqual((name, runtime), ('slice240-pcsx2.json', 'private/slice240-game-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice215'], ('slice215-pcsx2.json', 'private/slice215-build/build/gt4vulkan.exe'))
         self.assertEqual(probe.PERF_PROFILES['pcsx2-slice214'], ('slice214-pcsx2.json', 'private/slice214-build/build/gt4vulkan.exe'))

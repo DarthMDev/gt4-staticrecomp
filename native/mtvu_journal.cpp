@@ -2,12 +2,14 @@
 #include "mtvu_journal.hpp"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdio>
 #include <stdexcept>
 
 namespace gt4::mtvu {
 
-WorkerEnd::WorkerEnd(SpscByteRing &input, SpscByteRing &output, Doorbell &bell)
-    : input_(input), output_(output), bell_(bell) {}
+WorkerEnd::WorkerEnd(SpscByteRing &input, SpscByteRing &output, Doorbell &input_bell, Doorbell &output_bell)
+    : input_(input), output_(output), input_bell_(input_bell), output_bell_(output_bell) {}
 
 void WorkerEnd::receive(RecordHeader &header, std::vector<std::uint8_t> &payload) {
   payload.clear();
@@ -15,9 +17,15 @@ void WorkerEnd::receive(RecordHeader &header, std::vector<std::uint8_t> &payload
   for (;;) {
     RecordHeader part;
     for (;;) {
-      const std::uint32_t seen = bell_.snapshot();
-      if (input_.try_pop(part, chunk)) break;
-      bell_.wait_changed(seen);
+      const std::uint32_t seen = input_bell_.snapshot();
+      if (input_.try_pop(part, chunk)) {
+        // TASK-084 step 1: a pop frees input space, which an EE blocked in send_chunks must hear. The EE waits for
+        // "worker progress" on the output bell, so one bell covers output data and freed input space.
+        output_bell_.ring();
+        break;
+      }
+      bool slept = false;
+      input_bell_.wait_changed(seen, slept);
     }
     payload.insert(payload.end(), chunk.begin(), chunk.end());
     if ((part.flags & kFlagMore) == 0) {
@@ -40,9 +48,10 @@ void WorkerEnd::emit_gif(std::uint8_t path, std::uint64_t job, const std::uint8_
     header.bytes = static_cast<std::uint32_t>(chunk);
     header.flags = offset + chunk < bytes ? kFlagMore : 0;
     for (;;) {
-      const std::uint32_t seen = bell_.snapshot();
+      const std::uint32_t seen = output_bell_.snapshot();
       if (output_.try_push(header, data + offset)) break;
-      bell_.wait_changed(seen);
+      bool slept = false;
+      output_bell_.wait_changed(seen, slept);
     }
     offset += chunk;
   } while (offset < bytes);
@@ -53,14 +62,16 @@ void WorkerEnd::emit_job_done(std::uint64_t job) {
   header.kind = static_cast<std::uint16_t>(RecordKind::JobDone);
   header.job = job;
   for (;;) {
-    const std::uint32_t seen = bell_.snapshot();
+    const std::uint32_t seen = output_bell_.snapshot();
     if (output_.try_push(header, nullptr)) return;
-    bell_.wait_changed(seen);
+    bool slept = false;
+    output_bell_.wait_changed(seen, slept);
   }
 }
 
-EeJournal::EeJournal(SpscByteRing &input, SpscByteRing &output, Doorbell &bell, GsSink &sink)
-    : input_(input), output_(output), bell_(bell), sink_(sink) {}
+EeJournal::EeJournal(SpscByteRing &input, SpscByteRing &output, Doorbell &input_bell, Doorbell &output_bell,
+                     GsSink &sink)
+    : input_(input), output_(output), input_bell_(input_bell), output_bell_(output_bell), sink_(sink) {}
 
 std::size_t EeJournal::outstanding_jobs() const {
   return static_cast<std::size_t>(std::count_if(journal_.begin(), journal_.end(), [](const JournalEntry &entry) {
@@ -117,11 +128,13 @@ void EeJournal::append_privileged(std::uint32_t address, std::uint64_t value) {
 
 bool EeJournal::drain(bool blocking) {
   for (;;) {
-    const std::uint32_t seen = bell_.snapshot();
-    pump_output();
+    const std::uint32_t seen = output_bell_.snapshot();
+    // TASK-084 step 2: the normal path executes whole worker records straight from the ring (no EE-side copy);
+    // pump_output() stays only on the input-space wait path (send_chunks), where the ring must be freed.
     if (execute_ready()) return true;
     if (!blocking) return false;
-    bell_.wait_changed(seen);
+    bool slept = false;
+    output_bell_.wait_changed(seen, slept);
   }
 }
 
@@ -138,11 +151,15 @@ void EeJournal::send_chunks(SpscByteRing &ring, RecordHeader header, const std::
     header.bytes = static_cast<std::uint32_t>(chunk);
     header.flags = offset + chunk < bytes ? kFlagMore : 0;
     for (;;) {
-      const std::uint32_t seen = bell_.snapshot();
+      // TASK-084 step 1: the producer waits for "worker progress" (output data or a freed input slot) on the
+      // output bell, because a worker blocked on a full output ring only frees input space after the EE pumps
+      // that ring. The input bell belongs to the worker alone. Both waits are event waits, never spins.
+      const std::uint32_t seen = output_bell_.snapshot();
       if (ring.try_push(header, payload + offset)) break;
-      // Deadlock rule: free the output ring while waiting for input space.
       pump_output();
-      bell_.wait_changed(seen);
+      if (ring.try_push(header, payload + offset)) break;
+      bool slept = false;
+      output_bell_.wait_changed(seen, slept);
     }
     offset += chunk;
   } while (offset < bytes);
@@ -183,7 +200,7 @@ void EeJournal::pump_output() {
       entry.job = header.job;
       completed_.push_back(std::move(entry));
     } else {
-      throw std::logic_error("mtvu worker sent an unexpected output record");
+    throw std::logic_error("mtvu worker sent an unexpected output record");
     }
   }
 }
@@ -195,6 +212,7 @@ bool EeJournal::execute_ready() {
       case EntryKind::EeGif:
         sink_.gif_transfer(entry.path, entry.bytes.data(), entry.bytes.size());
         ++outputs_executed_;
+        executed_bytes_ += entry.bytes.size();
         break;
       case EntryKind::GifReset:
         sink_.gif_reset();
@@ -218,18 +236,72 @@ bool EeJournal::execute_ready() {
 }
 
 bool EeJournal::consume_job(std::uint64_t job) {
-  while (!completed_.empty()) {
-    CompletedEntry &front = completed_.front();
-    if (front.job != job) throw std::logic_error("mtvu output arrived out of job order");
-    if (front.job_done) {
+  for (;;) {
+    if (!completed_.empty()) {
+      CompletedEntry &front = completed_.front();
+      if (front.job != job) throw std::logic_error("mtvu output arrived out of job order");
+      if (front.job_done) {
+        completed_.pop_front();
+        return true;
+      }
+      sink_.gif_transfer(front.path, front.bytes.data(), front.bytes.size());
+      ++outputs_executed_;
+      executed_bytes_ += front.bytes.size();
       completed_.pop_front();
-      return true;
+      continue;
     }
-    sink_.gif_transfer(front.path, front.bytes.data(), front.bytes.size());
-    ++outputs_executed_;
-    completed_.pop_front();
+    // TASK-084 step 2: a whole worker record (the usual case) is forwarded straight from the ring to the sink; the
+    // payload is borrowed until release(), so the EE no longer copies every record into a std::vector. The record must
+    // belong to this job and no earlier chunk of another record may be buffered.
+    RecordHeader header;
+    const std::uint8_t *payload = nullptr;
+    if (!output_.try_peek(header, payload)) return false;
+    if (header.job != job) {
+      output_.release();
+      throw std::logic_error("mtvu output arrived out of job order");
+    }
+    if (header.kind == static_cast<std::uint16_t>(RecordKind::Gif) && (header.flags & kFlagMore) == 0 &&
+        partial_gif_.empty()) {
+      sink_.gif_transfer(header.path, payload, header.bytes);
+      ++outputs_executed_;
+      executed_bytes_ += header.bytes;
+      output_.release();
+      continue;
+    }
+    // A chunked GIF record (only records above the ring's max_payload) or the JobDone marker: copy this chunk; the
+    // reassembly keeps the previous buffered form.
+    std::vector<std::uint8_t> chunk(payload, payload + header.bytes);
+    const bool more = (header.flags & kFlagMore) != 0;
+    const std::uint8_t path = header.path;
+    const std::uint16_t kind = header.kind;
+    output_.release();
+    if (kind == static_cast<std::uint16_t>(RecordKind::Gif)) {
+      if (partial_gif_.empty()) {
+        partial_path_ = path;
+        partial_job_ = job;
+      }
+      partial_gif_.insert(partial_gif_.end(), chunk.begin(), chunk.end());
+      if (!more) {
+        CompletedEntry entry;
+        entry.job_done = false;
+        entry.path = partial_path_;
+        entry.job = partial_job_;
+        entry.bytes = std::move(partial_gif_);
+        partial_gif_.clear();
+        completed_.push_back(std::move(entry));
+      }
+      continue;
+    }
+    if (kind == static_cast<std::uint16_t>(RecordKind::JobDone)) {
+      if (!partial_gif_.empty()) throw std::logic_error("mtvu JobDone inside an unfinished GIF record");
+      CompletedEntry entry;
+      entry.job_done = true;
+      entry.job = job;
+      completed_.push_back(std::move(entry));
+      continue;
+    }
+    throw std::logic_error("mtvu worker sent an unexpected output record");
   }
-  return false;
 }
 
 }  // namespace gt4::mtvu

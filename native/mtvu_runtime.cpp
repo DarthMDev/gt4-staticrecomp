@@ -4,6 +4,7 @@
 #include "mtvu_journal.hpp"
 #include "mtvu_measure.hpp"
 #include "mtvu_ring.hpp"
+#include "mtvu_vif_batch.hpp"
 #include "race_widescreen.hpp"
 #include "display_aspect.hpp"
 #include "perf_probe.hpp"
@@ -38,7 +39,8 @@ thread_local bool t_on_worker = false;
 // Executes journal GS operations on the EE thread through the donor renderer.
 class DonorSink final : public GsSink {
  public:
-  explicit DonorSink(void (*render)(int, const std::uint8_t *, std::uint32_t)) : render_(render) {}
+  DonorSink(void (*render)(int, const std::uint8_t *, std::uint32_t), bool (*post_vsync)())
+      : render_(render), post_vsync_(post_vsync) {}
   void set_privileged_consumer(void (*post)(std::uint32_t, std::uint64_t)) { privileged_ = post; }
   void gif_transfer(std::uint8_t path, const std::uint8_t *data, std::size_t bytes) override {
     gt4::perf::Scope drain(gt4::perf::Category::gs_drain);
@@ -47,7 +49,9 @@ class DonorSink final : public GsSink {
   // The runtime synchronises GIF, VBlank and privileged operations instead of journaling them (section 5.3).
   void gif_reset() override { throw std::logic_error("mtvu journal GIF reset is not used"); }
   void vertex_reset() override { throw std::logic_error("mtvu journal vertex reset is not used"); }
-  void vblank_flush() override { throw std::logic_error("mtvu journal VBlank flush is not used"); }
+  // TASK-084 step 3: the VBlank entry runs after the frame's output in stream order; it posts the held VSYNC and then
+  // runs the F8 boundary / verify work that used to happen inside the blocking drain.
+  void vblank_flush() override;
   // TASK-041: a queued privileged write reaches its ordered consumer (the GS stream) after the earlier GIF output.
   void privileged_write(std::uint32_t address, std::uint64_t value) override {
     if (!privileged_) throw std::logic_error("mtvu journal privileged write without an ordered consumer");
@@ -57,12 +61,18 @@ class DonorSink final : public GsSink {
  private:
   void (*render_)(int, const std::uint8_t *, std::uint32_t);
   void (*privileged_)(std::uint32_t, std::uint64_t) = nullptr;
+  bool (*post_vsync_)() = nullptr;
 };
 
 // Cumulative worker totals, published by the worker after each job (before its JobDone). The EE reads them only
 // after a blocking drain, when the worker is idle, so the release/acquire of the ring orders the reads.
 struct WorkerTotals {
   std::uint64_t idle_us = 0, vu1_us = 0, output_us = 0, jobs = 0;
+  // TASK-084 step 0: the VIF1 job shape and both doorbells (EE-side counters read on the EE thread).
+  std::uint64_t vif_chains = 0, vif_jobs = 0, vif_job_bytes = 0, vif_packets = 0;
+  // TASK-084 step 0: worker GIF records the EE forwarded to the GS stream (the copy accounting).
+  std::uint64_t executed_records = 0, executed_bytes = 0;
+  Doorbell::Stats input_bell{}, output_bell{};
 };
 
 std::uint64_t wall_us() {
@@ -70,19 +80,30 @@ std::uint64_t wall_us() {
       std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
+void after_vblank_output();  // defined below; also called from the journal drain (TASK-084 step 3)
+
+// Largest VIF1 batch payload: below the ring's max_payload/2 so one job never needs splitting and the ring keeps room
+// for the frame's other records. A longer chain is posted as several jobs, still far below one per packet.
+constexpr std::size_t kVifBatchBytes = 512u << 10;
+
 struct Runtime {
   Settings settings;
   Donor donor{};
   bool started = false;
   std::atomic<bool> running{false};  // worker alive and GT4_MTVU on: the EE shadows VIF1
 
-  Doorbell bell;
+  // TASK-084 step 1: one doorbell per direction, so a publish only wakes the peer when the peer sleeps.
+  Doorbell input_bell;   // EE -> worker
+  Doorbell output_bell;  // worker -> EE
   std::unique_ptr<SpscByteRing> input;
   std::unique_ptr<SpscByteRing> output;
   std::unique_ptr<DonorSink> sink;
   std::unique_ptr<EeJournal> journal;     // EE thread only
   std::unique_ptr<WorkerEnd> worker_end;  // worker thread only
   std::thread worker;
+
+  // TASK-084 step 1: the pending VIF1 batch (EE thread only); walk_vif_batch replays it on the worker.
+  VifBatch vif_batch;
 
   std::atomic<bool> worker_failed{false};
   std::exception_ptr worker_error;  // written by the worker before worker_failed is released
@@ -92,12 +113,18 @@ struct Runtime {
   std::vector<SignalWrite> signal_scratch;  // EE thread only: signals of the packet being accepted
 
   std::uint64_t next_job = 1;  // EE thread only
+  // TASK-084 step 3: a deferred VSYNC is queued behind the frame's worker output; never more than one at a time.
+  bool pending_vblank = false;
+  std::uint64_t vblank_posts = 0;
+  // TASK-084 step 0: the job shape and the ring traffic, per interval (EE thread only; the worker's output counts are
+  // published separately).
+  std::uint64_t vif_chains = 0, vif_job_count = 0, vif_job_bytes = 0, vif_packet_count = 0;
   // TASK-041: ordered privileged writes (EE thread only).
   void (*ordered_privileged)(std::uint32_t, std::uint64_t) = nullptr;
   std::uint64_t privileged_queued = 0;   // writes queued behind journal entries
   std::uint64_t privileged_wait_us = 0;  // wait of the last blocking gs_privileged sync, taken by the consumer
   std::uint64_t signals_applied = 0;  // EE thread only: SIGNAL/FINISH/LABEL applied at accept
-  std::uint64_t vif_packets = 0, vif_writes = 0, ee_transfers = 0, direct_transfers = 0, gs_renders = 0;
+  std::uint64_t vif_writes = 0, ee_transfers = 0, direct_transfers = 0, gs_renders = 0;
   std::map<std::string, std::uint64_t> syncs;
   std::atomic<std::uint64_t> path1_signals{0};
   std::uint64_t verify_frames = 0, verify_mismatches = 0, report_frames = 0;
@@ -142,6 +169,13 @@ void run_job(Runtime &r, RecordKind kind, const std::vector<std::uint8_t> &paylo
     case RecordKind::VifPacket:
       r.donor.worker_vif_packet(payload.data(), static_cast<std::uint32_t>(payload.size() / 16));
       break;
+    case RecordKind::VifBatch: {
+      // TASK-084 step 1: replay the chain's packets in order through the single-packet entry point, so the worker runs
+      // exactly the same VIF1 command sequence as before; only the job boundary (and the wake-ups) changed.
+      walk_vif_batch(payload.data(), payload.size(),
+                     [&r](const std::uint8_t *data, std::uint32_t qwc) { r.donor.worker_vif_packet(data, qwc); });
+      break;
+    }
     case RecordKind::VifWrite: {
       if (payload.size() != 8) throw std::logic_error("mtvu VIF1 write record must carry 8 bytes");
       std::uint32_t reg = 0, value = 0;
@@ -204,12 +238,16 @@ void worker_main() {
 }  // namespace
 
 Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every,
-                        const char *privileged_async) {
+                        const char *privileged_async, const char *chain_jobs, const char *gif_fast_path,
+                        const char *vblank_journal) {
   Settings settings;
   settings.enabled = parse_flag("GT4_MTVU", mtvu, true);
   settings.verify = parse_flag("GT4_MTVU_VERIFY", verify, false);
   settings.strict = parse_flag("GT4_MTVU_STRICT", strict, false);
   settings.privileged_async = parse_flag("GT4_MTVU_PRIV_ASYNC", privileged_async, Settings::kPrivilegedAsyncDefault);
+  settings.chain_jobs = parse_flag("GT4_MTVU_CHAIN", chain_jobs, true);
+  settings.gif_fast_path = parse_flag("GT4_GIF_FASTPATH", gif_fast_path, true);
+  settings.vblank_journal = parse_flag("GT4_MTVU_VBLANK_JOURNAL", vblank_journal, true);
   if (report_every != nullptr) {
     const std::string_view digits(report_every);
     if (digits.empty() || digits.find_first_not_of("0123456789") != std::string_view::npos)
@@ -221,7 +259,9 @@ Settings parse_settings(const char *mtvu, const char *verify, const char *strict
 
 Settings settings_from_environment() {
   return parse_settings(std::getenv("GT4_MTVU"), std::getenv("GT4_MTVU_VERIFY"), std::getenv("GT4_MTVU_STRICT"),
-                        std::getenv("GT4_MTVU_REPORT_EVERY"), std::getenv("GT4_MTVU_PRIV_ASYNC"));
+                        std::getenv("GT4_MTVU_REPORT_EVERY"), std::getenv("GT4_MTVU_PRIV_ASYNC"),
+                        std::getenv("GT4_MTVU_CHAIN"), std::getenv("GT4_GIF_FASTPATH"),
+                        std::getenv("GT4_MTVU_VBLANK_JOURNAL"));
 }
 
 WorkerTotals published_totals(const Runtime &r) {
@@ -230,6 +270,16 @@ WorkerTotals published_totals(const Runtime &r) {
   totals.vu1_us = r.published_vu1_us.load(std::memory_order_relaxed);
   totals.output_us = r.published_output_us.load(std::memory_order_relaxed);
   totals.jobs = r.published_jobs.load(std::memory_order_relaxed);
+  totals.vif_chains = r.vif_chains;
+  totals.vif_jobs = r.vif_job_count;
+  totals.vif_job_bytes = r.vif_job_bytes;
+  totals.vif_packets = r.vif_packet_count;
+  totals.input_bell = r.input_bell.stats();
+  totals.output_bell = r.output_bell.stats();
+  if (r.journal) {
+    totals.executed_records = r.journal->outputs_executed();
+    totals.executed_bytes = r.journal->executed_bytes();
+  }
   return totals;
 }
 
@@ -268,6 +318,34 @@ void report_interval(std::FILE *file, const gt4::perf::IntervalTime &ee, std::ui
                vu1, output, busy, idle, (now.jobs - r.baseline.jobs) / static_cast<double>(frames));
   std::fprintf(file, "[mtvu] overlap achieved ms/frame=%.3f (worker busy %.3f minus EE wait for the worker %.3f)\n",
                overlap, busy, wait_total);
+  // TASK-084 step 0: the job shape and the doorbell traffic, so the cost of one job per packet (or per chain) and of
+  // the wake-ups is visible per interval.
+  const double chains = static_cast<double>(now.vif_chains - r.baseline.vif_chains);
+  const double jobs = static_cast<double>(now.vif_jobs - r.baseline.vif_jobs);
+  const double packets = static_cast<double>(now.vif_packets - r.baseline.vif_packets);
+  const double job_bytes = static_cast<double>(now.vif_job_bytes - r.baseline.vif_job_bytes);
+  const double frames_n = static_cast<double>(frames);
+  const auto per_frame = [frames_n](std::uint64_t value, std::uint64_t baseline) {
+    return (static_cast<double>(value) - static_cast<double>(baseline)) / frames_n;
+  };
+  std::fprintf(file,
+               "[mtvu] vif jobs/frame=%.1f chains/frame=%.2f packets/job=%.1f bytes/job=%.0f chain_coalescing=%d\n",
+               jobs / frames_n, chains / frames_n, jobs > 0.0 ? packets / jobs : 0.0,
+               jobs > 0.0 ? job_bytes / jobs : 0.0, r.settings.chain_jobs ? 1 : 0);
+  const auto &in_now = now.input_bell;
+  const auto &in_base = r.baseline.input_bell;
+  const auto &out_now = now.output_bell;
+  const auto &out_base = r.baseline.output_bell;
+  std::fprintf(file,
+               "[mtvu] doorbells/frame: ee_to_worker rings=%.1f waits=%.1f wakeups=%.1f; worker_to_ee rings=%.1f "
+               "waits=%.1f wakeups=%.1f\n",
+               per_frame(in_now.rings, in_base.rings), per_frame(in_now.waits, in_base.waits),
+               per_frame(in_now.wakeups, in_base.wakeups), per_frame(out_now.rings, out_base.rings),
+               per_frame(out_now.waits, out_base.waits), per_frame(out_now.wakeups, out_base.wakeups));
+  // Worker GIF output the EE forwarded to the GS stream: records and bytes per frame (the copy the fast path removes).
+  std::fprintf(file, "[mtvu] worker output executed by the EE/frame: records=%.1f bytes=%.0f\n",
+               per_frame(now.executed_records, r.baseline.executed_records),
+               per_frame(now.executed_bytes, r.baseline.executed_bytes));
 }
 
 void reset_worker_baseline() {
@@ -286,12 +364,12 @@ void start(const Settings &settings, const Donor &donor) {
       !donor.vif1_state_hash || !donor.apply_signal) {
     throw std::logic_error("mtvu needs every donor callback");
   }
-  r.input = std::make_unique<SpscByteRing>(kInputBytes, r.bell);
-  r.output = std::make_unique<SpscByteRing>(kOutputBytes, r.bell);
-  r.sink = std::make_unique<DonorSink>(donor.render_gs);
+  r.input = std::make_unique<SpscByteRing>(kInputBytes, r.input_bell);
+  r.output = std::make_unique<SpscByteRing>(kOutputBytes, r.output_bell);
+  r.sink = std::make_unique<DonorSink>(donor.render_gs, donor.post_vsync);
   r.sink->set_privileged_consumer(r.ordered_privileged);
-  r.journal = std::make_unique<EeJournal>(*r.input, *r.output, r.bell, *r.sink);
-  r.worker_end = std::make_unique<WorkerEnd>(*r.input, *r.output, r.bell);
+  r.journal = std::make_unique<EeJournal>(*r.input, *r.output, r.input_bell, r.output_bell, *r.sink);
+  r.worker_end = std::make_unique<WorkerEnd>(*r.input, *r.output, r.input_bell, r.output_bell);
   r.worker_accounting = gt4::perf::Accounting(gt4::perf::Probe::shared().enabled());
   r.baseline = WorkerTotals{};
   gt4::perf::Probe::set_mtvu_hooks(report_interval, reset_worker_baseline);
@@ -337,16 +415,52 @@ bool on_worker() { return t_on_worker; }
 void post_vif_packet(const std::uint8_t *data, std::uint32_t qwc) {
   Runtime &r = rt();
   if (!enabled()) return;
+  const std::size_t bytes = static_cast<std::size_t>(qwc) * 16;
+  ++r.vif_packet_count;
+  gt4::perf::frame_counters().vif_packets += 1;
+  if (!r.settings.chain_jobs) {
+    const std::uint64_t job = r.next_job++;
+    ++r.vif_job_count;
+    r.vif_job_bytes += 4 + bytes;
+    gt4::perf::frame_counters().vif_jobs += 1;
+    gt4::perf::frame_counters().vif_job_bytes += 4 + bytes;
+    r.journal->post_job(RecordKind::VifPacket, job, data, bytes);
+    r.journal->drain(false);
+    rethrow_worker_error();
+    return;
+  }
+  // TASK-084 step 1: append to the chain's batch. A batch above the size bound is posted as its own job, still far
+  // below one job per packet; the journal placeholder keeps its position in the stream.
+  if (!r.vif_batch.empty() && r.vif_batch.size() + 4 + bytes > kVifBatchBytes) flush_vif_chain();
+  r.vif_batch.append(data, qwc);
+}
+
+void flush_vif_chain() {
+  Runtime &r = rt();
+  if (!enabled() || r.vif_batch.empty()) return;
   const std::uint64_t job = r.next_job++;
-  ++r.vif_packets;
-  r.journal->post_job(RecordKind::VifPacket, job, data, static_cast<std::size_t>(qwc) * 16);
+  ++r.vif_job_count;
+  r.vif_job_bytes += r.vif_batch.size();
+  gt4::perf::frame_counters().vif_jobs += 1;
+  gt4::perf::frame_counters().vif_job_bytes += r.vif_batch.size();
+  r.journal->post_job(RecordKind::VifBatch, job, r.vif_batch.payload(), r.vif_batch.size());
+  r.vif_batch.reset();
   r.journal->drain(false);
   rethrow_worker_error();
+}
+
+void note_vif_chain() {
+  Runtime &r = rt();
+  if (!enabled()) return;
+  ++r.vif_chains;
+  ++gt4::perf::frame_counters().vif_chains;
 }
 
 void post_vif_write(std::uint32_t reg, std::uint32_t value) {
   Runtime &r = rt();
   if (!enabled()) return;
+  // The register write must reach the worker after every packet the shadow already parsed.
+  flush_vif_chain();
   const std::uint64_t job = r.next_job++;
   ++r.vif_writes;
   std::uint8_t payload[8];
@@ -372,6 +486,13 @@ bool signal_pre_applied(int path, std::uint32_t address) {
   return enabled() && pre_applies_signal(path, address);
 }
 
+bool stream_signals_pre_applied(int path) {
+  // TASK-084 step 2: with MTVU on, PATH2 (VIF1 DIRECT) and PATH3 (DMA ch2) signals are applied by gif_transfer /
+  // shadow_direct when the packet is accepted; the GS stream's second walk would only find them again.
+  const Runtime &r = rt();
+  return r.settings.gif_fast_path && enabled() && path != 1;
+}
+
 void gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {
   Runtime &r = rt();
   if (path < 0 || path > 3) throw std::logic_error("mtvu GIF path out of range");
@@ -379,6 +500,8 @@ void gif_transfer(int path, const std::uint8_t *data, std::uint32_t qwc) {
     r.donor.render_gs(path, data, qwc);
     return;
   }
+  // The packet must render after every VIF1 packet the shadow already parsed (TASK-084 step 1).
+  flush_vif_chain();
   ++r.ee_transfers;
   PathCounts counts;
   r.signal_scratch.clear();
@@ -422,6 +545,8 @@ void gif_reset() {
 
 void note_render(int path, const std::uint8_t *data, std::uint32_t qwc) {
   Runtime &r = rt();
+  // TASK-084 step 0: GIF traffic per path, counted at the one point every render passes (both renderer modes).
+  gt4::perf::count_gif(path, static_cast<std::uint64_t>(qwc) * 16);
   if (!r.settings.verify) return;
   const auto path_byte = static_cast<std::uint8_t>(path);
   fnv_bytes(r.frame_hash, &path_byte, 1);
@@ -431,6 +556,8 @@ void note_render(int path, const std::uint8_t *data, std::uint32_t qwc) {
 void sync(const char *reason) {
   Runtime &r = rt();
   if (!enabled() || t_on_worker) return;
+  // The batch must reach the worker before the sync point so the drain covers it (TASK-084 step 1).
+  flush_vif_chain();
   const std::string_view why(reason);
   const bool privileged = why == "gs_privileged";
   if (privileged && privileged_async()) {
@@ -466,14 +593,12 @@ void pump() {
   rethrow_worker_error();
 }
 
-void vblank_sync() {
-  // TASK-079: GT4_FORCE_WIDESCREEN holds the 16:9 state at every guest VBlank (windowed and headless).
-  gt4::display::widescreen_hold_at_guest_vblank(ps2::g_ram, 32u << 20);
-  // TASK-080: the display request sample drives the race view / pillarbox presentation (native/display_aspect.hpp).
-  gt4::display_aspect::at_guest_vblank(ps2::g_ram, 32u << 20);
+namespace {
+// Runs when the frame's output is in stream order: after the blocking drain (pre-TASK-084) or when the deferred
+// VBlank journal entry executes. EE thread. Prints the F8-equivalent report and compares the shadow/worker VIF1 state.
+void after_vblank_output() {
   Runtime &r = rt();
   if (!r.started) return;
-  sync("vblank");
   if (r.settings.report_every) {
     // Headless runs have no window, so the probe's boundary never runs: drive it here (guest counters are zero).
     gt4::perf::Probe &probe = gt4::perf::Probe::shared();
@@ -491,6 +616,41 @@ void vblank_sync() {
                static_cast<unsigned long long>(shadow), static_cast<unsigned long long>(worker), same ? "same" : "MISMATCH");
   if (!same && r.settings.strict) throw std::runtime_error("mtvu strict: shadow and worker VIF1 state differ");
   r.frame_hash = kFnvOffset;
+}
+}  // namespace
+
+void DonorSink::vblank_flush() {
+  Runtime &r = rt();
+  r.pending_vblank = false;
+  // TASK-084 step 3: the held VSYNC lands here, after every earlier record of the frame, in stream order.
+  if (post_vsync_ && post_vsync_()) ++r.vblank_posts;
+  after_vblank_output();
+}
+
+void vblank_sync() {
+  // TASK-079: GT4_FORCE_WIDESCREEN holds the 16:9 state at every guest VBlank (windowed and headless).
+  gt4::display::widescreen_hold_at_guest_vblank(ps2::g_ram, 32u << 20);
+  // TASK-080: the display request sample drives the race view / pillarbox presentation (native/display_aspect.hpp).
+  gt4::display_aspect::at_guest_vblank(ps2::g_ram, 32u << 20);
+  Runtime &r = rt();
+  if (!r.started) return;
+  // TASK-084 step 3: in pcsx2 mode the VSYNC is a journal entry after the frame's VU1 output, so the EE does not
+  // drain here. The verify comparison needs both sides idle, so it keeps the blocking drain; donor mode (CoreGS 1.1)
+  // always drains because its present reads the output.
+  const bool defer = r.settings.vblank_journal && r.donor.post_vsync != nullptr && !r.settings.verify;
+  if (!defer) {
+    sync("vblank");
+    after_vblank_output();
+    return;
+  }
+  flush_vif_chain();
+  if (r.pending_vblank) sync("vblank_pending");  // never queue two VSYNCs behind the worker
+  ++r.syncs["vblank_deferred"];
+  // The entry runs on the next drain, after the guest VBlank handler has stored this frame's field in the client
+  // (hw::vblank_start -> gs::vblank -> on_vsync runs after this function). No drain here: it would execute the entry
+  // before the field exists.
+  r.journal->append_vblank_flush();
+  r.pending_vblank = true;
 }
 
 void worker_gif(int path, const std::uint8_t *data, std::uint32_t qwc) {
@@ -531,11 +691,15 @@ void stop() {
 void report(std::FILE *output) {
   Runtime &r = rt();
   if (!r.started) return;
-  std::fprintf(output, "[mtvu] enabled %d verify %d strict %d worker_failed %d\n", r.settings.enabled ? 1 : 0,
-               r.settings.verify ? 1 : 0, r.settings.strict ? 1 : 0, r.worker_failed.load() ? 1 : 0);
+  std::fprintf(output, "[mtvu] enabled %d verify %d strict %d worker_failed %d chain_jobs %d gif_fastpath %d "
+               "vblank_journal %d; deferred vsyncs %llu\n",
+               r.settings.enabled ? 1 : 0, r.settings.verify ? 1 : 0, r.settings.strict ? 1 : 0,
+               r.worker_failed.load() ? 1 : 0, r.settings.chain_jobs ? 1 : 0, r.settings.gif_fast_path ? 1 : 0,
+               r.settings.vblank_journal ? 1 : 0, static_cast<unsigned long long>(r.vblank_posts));
   if (r.journal) {
     std::fprintf(output, "[mtvu] jobs %llu vif_packets %llu vif_writes %llu ee_transfers %llu direct_transfers %llu renders %llu\n",
-                 static_cast<unsigned long long>(r.journal->jobs_posted()), static_cast<unsigned long long>(r.vif_packets),
+                 static_cast<unsigned long long>(r.journal->jobs_posted()),
+                 static_cast<unsigned long long>(r.vif_packet_count),
                  static_cast<unsigned long long>(r.vif_writes), static_cast<unsigned long long>(r.ee_transfers),
                  static_cast<unsigned long long>(r.direct_transfers), static_cast<unsigned long long>(r.gs_renders));
   }

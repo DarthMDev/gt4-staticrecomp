@@ -1,5 +1,17 @@
 # Current Status
 
+## Frame cost, runtime side (2026-10-22, TASK-084, branch `task/084-frame-cost-122`, owner test pending)
+
+The study's missing F8 instrumentation and items 2-4 are implemented; item 1 (deferred flare readback) stays out
+by owner decision (readback work belongs to CoreGS 2.0). New runtime switches, all on by default:
+`GT4_MTVU_CHAIN` (one MTVU job per VIF1 DMA chain), `GT4_GIF_FASTPATH` (no second GS stream walk),
+`GT4_MTVU_VBLANK_JOURNAL` (VBlank as a journal entry in pcsx2 mode). Release-candidate build `slice262`
+(pin `docs/inputs/slice262-pcsx2.json`; mode `pcsx2` points at it for the owner test). Checks: CTest 40/40; the
+Python suite with the new `tests/python/test_frame_cost.py`; menus 41/41, day race 15/15 and night race 15/15 frame
+dumps and the GS stream session hash identical to release 1.2.0 (slice240); `GT4_MTVU_VERIFY=1` with 0
+mismatches in 4,200 frames. Numbers, build recipe and the owner F7/F8 checklist: [BUILD slice 260/262](BUILD.md).
+No PR before the owner approves.
+
 ## Release 1.2.0 prepared (2026-10-21, TASK-088, branch `task/088-custom-textures-120`, waiting for owner test)
 
 Owner decisions: custom textures in gt4-gs (load only; folder `Documents\Gran Turismo 4\Textures`, Graphics option

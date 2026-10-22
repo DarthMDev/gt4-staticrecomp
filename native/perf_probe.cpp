@@ -13,6 +13,7 @@ __attribute__((weak)) void vu0_aot_report(std::FILE *) {}  // strong definition:
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 #define NOMINMAX
 #include <windows.h>
@@ -49,13 +50,28 @@ constexpr const char *names[] = {
 #ifdef GT4_VU0_AOT
     , "vu0_aot"
 #endif
+    , "pacing_wait", "run_due_events", "kernel_service", "guest_idle", "syscall_dispatch"
 #ifdef GT4_MTVU_RUNTIME
     , "mtvu_wait_vblank", "mtvu_wait_download", "mtvu_wait_gs_privileged", "mtvu_wait_vu_memory",
     "mtvu_wait_gif_reset", "mtvu_wait_reset", "mtvu_wait_state", "mtvu_wait_other", "gs_drain", "mtvu_output",
-    "gs_ipc_write", "gs_ipc_backpressure", "gs_ipc_vsync_post", "gs_ipc_readback_wait"
+    "gs_ipc_write", "gs_ipc_backpressure", "gs_ipc_vsync_post", "gs_ipc_readback_wait",
+    "gif_walk"
 #endif
     };
 static_assert(std::size(names) == static_cast<std::size_t>(Category::count));
+
+FrameCounters g_frame_counters;
+
+// The probe prints the [frame] section when it reports, so the counters are visible in owner F8 and in the headless
+// F8-equivalent runs (GT4_MTVU_REPORT_EVERY). GT4_PERF_COUNTERS=0 disables the increments (A/B without them).
+bool counters_enabled() {
+  static const bool enabled = [] {
+    char value[8]{};
+    const DWORD length = GetEnvironmentVariableA("GT4_PERF_COUNTERS", value, sizeof value);
+    return !(length == 1 && value[0] == '0');
+  }();
+  return enabled;
+}
 }
 
 Probe::Probe(Clocks clocks, bool enabled, std::FILE *output, bool detailed, bool split_vu)
@@ -64,6 +80,31 @@ Probe::Probe(Clocks clocks, bool enabled, std::FILE *output, bool detailed, bool
       accounting_(enabled) {
   last_us_ = clocks_.wall_us();
   accounting_.restart(last_us_);
+}
+
+FrameCounters &frame_counters() noexcept { return g_frame_counters; }
+
+void reset_frame_counters() noexcept { g_frame_counters = FrameCounters{}; }
+
+SyscallScope::SyscallScope(std::uint32_t number) noexcept
+    : start_us_(counters_enabled() ? wall_us() : 0), number_(number & 0x7Fu) {
+  if (counters_enabled()) ++g_frame_counters.syscalls;
+}
+
+SyscallScope::~SyscallScope() {
+  if (start_us_ == 0) return;
+  ++g_frame_counters.syscall_count[number_];
+  g_frame_counters.syscall_us += wall_us() - start_us_;
+}
+
+void count_thread_switch() noexcept {
+  if (counters_enabled()) ++g_frame_counters.thread_switches;
+}
+
+void count_gif(int path, std::uint64_t bytes) noexcept {
+  if (!counters_enabled() || path < 1 || path > 3) return;
+  g_frame_counters.gif_bytes[path] += bytes;
+  ++g_frame_counters.gif_records[path];
 }
 
 Probe &Probe::shared() {
@@ -164,6 +205,7 @@ void Probe::reset(std::uint64_t now, GuestSample guest) noexcept {
   first_frame_ = false;
   cpu_start_ = cpu_at_boundary_;
   cpu_valid_ = cpu_start_ != UINT64_MAX;
+  reset_frame_counters();
 }
 
 void Probe::frame_boundary(GuestSample guest) noexcept {
@@ -218,6 +260,47 @@ void Probe::frame_boundary(GuestSample guest) noexcept {
   pending_toggle_ = pending_start_ = pending_report_ = false;
 }
 
+// TASK-084 step 0: the [frame] section. It separates sleep from work (pacing_wait), splits the run loop, and reports
+// the GIF/VIF/MTVU shape that the wall-time categories cannot show. Every number is per VBlank.
+static void print_frame_counters(std::FILE *file, std::uint64_t frames, std::uint64_t elapsed_us,
+                                 const IntervalTime &interval) {
+  if (!frames || !elapsed_us) return;
+  const FrameCounters &c = g_frame_counters;
+  const double n = static_cast<double>(frames);
+  const double wall_ms = elapsed_us / 1000.0 / n;
+  const double pacing_ms = interval.categories[static_cast<std::size_t>(Category::pacing_wait)].exclusive_us / 1000.0 / n;
+  std::fprintf(file,
+               "[frame] pacing sleep=%.3f ms/frame; EE frame wall=%.3f; critical path=%.3f ms/frame (wall minus "
+               "pacing sleep)\n",
+               pacing_ms, wall_ms, wall_ms - pacing_ms);
+  const auto cat_ms = [&interval, n](Category category) {
+    return interval.categories[static_cast<std::size_t>(category)].exclusive_us / 1000.0 / n;
+  };
+  std::fprintf(file,
+               "[frame] run loop ms/frame: run_due_events=%.3f kernel_service=%.3f guest_idle=%.3f "
+               "syscall_dispatch=%.3f; syscalls/frame=%.1f in %.3f ms; thread_switches/frame=%.1f\n",
+               cat_ms(Category::run_due_events), cat_ms(Category::kernel_service), cat_ms(Category::guest_idle),
+               cat_ms(Category::syscall_dispatch), c.syscalls / n, c.syscall_us / 1000.0 / n, c.thread_switches / n);
+  std::fprintf(file, "[frame] gif bytes/frame: path1=%.0f path2=%.0f path3=%.0f; records/frame: path1=%.1f path2=%.1f "
+               "path3=%.1f\n", c.gif_bytes[1] / n, c.gif_bytes[2] / n, c.gif_bytes[3] / n, c.gif_records[1] / n,
+               c.gif_records[2] / n, c.gif_records[3] / n);
+  std::fprintf(file,
+               "[frame] vif/frame: packets=%.1f jobs=%.1f bytes/job=%.0f dma_chains=%.2f\n",
+               c.vif_packets / n, c.vif_jobs / n, c.vif_jobs ? static_cast<double>(c.vif_job_bytes) / c.vif_jobs : 0.0,
+               c.vif_chains / n);
+  // The six busiest syscalls of the interval, by number, so a change in the guest's kernel traffic is visible.
+  std::array<std::size_t, 128> order{};
+  for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
+  const auto &counts = c.syscall_count;
+  std::partial_sort(order.begin(), order.begin() + 6, order.end(), [&counts](std::size_t a, std::size_t b) {
+    return counts[a] > counts[b];
+  });
+  std::fputs("[frame] syscalls/frame top:", file);
+  for (std::size_t i = 0; i < 6 && c.syscall_count[order[i]] != 0; ++i)
+    std::fprintf(file, " %02zX=%.1f", order[i], c.syscall_count[order[i]] / n);
+  std::fputc('\n', file);
+}
+
 void Probe::print(const char *reason) noexcept {
   if (!enabled()) { std::fprintf(output_, "[perf] %s: disabled\n", reason); return; }
   if (!valid()) {
@@ -257,6 +340,7 @@ void Probe::print(const char *reason) noexcept {
         report_cpu_ms_, double(cpu_now - cpu_start_) / elapsed * 100);
   }
   else std::fputs("[perf] measured_thread_cpu=Unknown\n", output_);
+  print_frame_counters(output_, frames_, elapsed, accounting_.interval());
   if (report_section_)
     report_section_(output_);
   if (g_mtvu_report)

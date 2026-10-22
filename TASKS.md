@@ -461,7 +461,7 @@ an unthrottled guest clock while a loading or save screen is active (the TASK-07
 with audio muted or kept at the right pace; hooks or ELF patches that shorten fixed waits and per-frame save
 chunking. Never during races or replays; physics, lap times and replays untouched. After 1.0.0.
 
-### TASK-084 — Frame cost optimisation
+### TASK-084 — Frame cost optimisation (in progress, owner test pending)
 Owner request 2026-10-21. Study: docs/FRAME-COST-STUDY.md (slice211, headless, timed only with no builds running).
 In the day race the EE thread takes 8.2 ms per frame, of which the translated game code is 2.9 ms; the rest is VIF1
 job posting (about 5,200 MTVU jobs per frame, one doorbell), the journal GS front end, stream writes, IOP, run loop and
@@ -472,7 +472,14 @@ wake-ups only when waiting (-1 to -2 ms); (3) no EE wait for the VU1 worker at e
 (4) drop the second GIF walk and a copy (-0.4 to -0.8 ms); then compiler flags, run-loop fast paths, VU1 speed. Add the
 missing F8 instrumentation first (pacing-sleep scope, fixed summary formula, per-readback records). Each step: its
 own slice, headless frame identity, CTest and Python, owner F8 check. Feeds TASK-082 (a render pass must fit 7.3 ms for
-120 Hz) and weaker PCs. After 1.0.0.
+120 Hz) and weaker PCs. After 1.0.0. **State 2026-10-22:** items 2-4 and the missing instrumentation are implemented
+on branch `task/084-frame-cost-122` (release 1.2.2 candidate, build `slice262`, pin
+`docs/inputs/slice262-pcsx2.json`). Item 1 (deferred flare readback) stays out: the owner moved readback work to
+CoreGS 2.0. Switches: `GT4_MTVU_CHAIN` (one job per VIF1 DMA chain), `GT4_GIF_FASTPATH` (no second GS stream walk),
+`GT4_MTVU_VBLANK_JOURNAL` (VBlank as a journal entry in pcsx2 mode), `GT4_PERF_COUNTERS` (the new counters). Checks:
+CTest 40/40, the Python suite with `test_frame_cost.py`, title/day/night frame dumps and the GS stream session hash
+identical to release 1.2.0 (slice240), `GT4_MTVU_VERIFY=1` with 0 mismatches in 4,200 frames. Build, numbers and the
+owner F7/F8 checklist: docs/BUILD.md `Slice 260/262`. Owner in-game test pending; no PR before approval.
 
 ### TASK-085 — Launcher self-update starts the setup outside its job
 Done 2026-10-21 (branch `task/085-launcher-self-update`). Owner report: launcher 1.0.0 offered 1.1.0, downloaded it,
