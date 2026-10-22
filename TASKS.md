@@ -117,7 +117,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0 |
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
-| TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
+| TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 🟡 Done on branch, waiting for release (2026-10-22) · `task/092-mtvu-test-switches`; not on the player path; 2 pin tests open (see section) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -523,8 +523,15 @@ banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and fi
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
 
 ### TASK-092 — MTVU test switches after TASK-084
-Planned (owner, 2026-10-22): release 1.2.2 ships the owner-tested slice262 build; this fixes the TASK-084 review
-findings afterwards. None is reachable from the launcher, which sets neither variable.
+🟡 **Done on branch (2026-10-22), waiting for release.** Branch `task/092-mtvu-test-switches`, slice264 (build recipe
+in BUILD.md "Slice 264"). Owner decisions 2026-10-22: release 1.2.2 ships the owner-tested slice262 build; this fixes
+the TASK-084 review findings afterwards. None is reachable from the launcher, which sets neither variable.
+Result: `GT4_MTVU=0` in pcsx2 mode no longer crashes (slice262: access violation, no frames; slice264: 4,200 frames,
+41 dumps, 4,200 VSYNCs at the GS); `GT4_MTVU_VERIFY=1` sends its VSYNCs (4,200 frames, 0 mismatches); the default path
+is identical to slice262 (dump hashes and GS stream session hash equal in menus and night). Open before merge: the
+`gt4vulkan.exe` pin tests (`test_make_distribution`, `test_portable_install`) still point at slice262's executable;
+the new pins (a slice264 pin set) need an owner decision on the release path. CTest 40 of 41 pass (the 41st is
+`python_native_contracts`, the same two pin tests).
 - `GT4_MTVU=0` in pcsx2 mode crashes at the first VBlank (Confirmed by reading): `mtvu_bridge.cpp` sets
   `set_vsync_deferral(settings.vblank_journal)` without checking `enabled()`, `start()` returns before the journal
   exists, and `vblank_sync()` calls `r.journal->append_vblank_flush()` on a null journal.

@@ -39,6 +39,14 @@ struct Settings {
   static constexpr bool kPrivilegedAsyncDefault = true;
 };
 
+// TASK-092: the one condition for the VBlank journal (the VSYNC is a journal entry, and the GS client holds the field
+// until the entry runs). It needs the worker (enabled), the switch on, and no verify (verify keeps the blocking drain
+// so both sides are idle). The GS client deferral (mtvu_bridge.cpp) and vblank_sync() both use this function, so the
+// two sites cannot drift apart.
+inline bool vblank_journal_active(const Settings &settings) {
+  return settings.vblank_journal && settings.enabled && !settings.verify;
+}
+
 // Each switch accepts unset, "0" or "1"; GT4_MTVU_REPORT_EVERY accepts unset or a VBlank count. Any other value
 // throws std::invalid_argument naming the variable.
 Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every,
