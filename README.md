@@ -11,13 +11,14 @@ No JIT, no emulator window, full speed.
 ![MIT](https://img.shields.io/badge/license-MIT-1f6feb?style=for-the-badge)
 ![Release](https://img.shields.io/badge/release-1.2.0-2ea44f?style=for-the-badge)
 ![Ultrawide](https://img.shields.io/badge/ultrawide-any%20aspect%20ratio-2ea44f?style=for-the-badge)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/moesuito)
 
 ![EE](https://img.shields.io/badge/EE%20(main%20CPU)-100%25%20AOT-2ea44f)
 ![VU0 macro](https://img.shields.io/badge/VU0%20macro-100%25%20AOT-2ea44f)
 ![VU1 micro](https://img.shields.io/badge/VU1%20microcode-100%25%20AOT%20%C2%B7%202%2C048%2F2%2C048-2ea44f)
 ![VU0 micro](https://img.shields.io/badge/VU0%20microcode-100%25%20AOT%20%C2%B7%2014%2F14-2ea44f)
 ![IOP](https://img.shields.io/badge/IOP%20system%20libraries-native-2ea44f)
-![GS](https://img.shields.io/badge/GS-PCSX2%20GS%20%2B%20CoreGS%201.1-1f6feb)
+![GS](https://img.shields.io/badge/GS-GSdx%20%2B%20CoreGS%201.1-1f6feb)
 
 ![Time Trial](https://img.shields.io/badge/time%20trial-60%20FPS-2ea44f)
 ![AI race](https://img.shields.io/badge/AI%20race-60%20FPS-2ea44f)
@@ -57,7 +58,7 @@ while the game runs, which is also what makes future **Android and iOS** builds 
 
 ## Performance
 
-Every tested scene holds **60 FPS at 100% game speed** on the PCSX2 GS renderer
+Every tested scene holds **60 FPS at 100% game speed** on the GSdx renderer
 (Ryzen 7 5700X + Radeon RX 9060 XT):
 
 | Scene | FPS | Game speed | Frame pacing |
@@ -86,7 +87,7 @@ to a steady **60 FPS at full speed**.
 
 | Phase | Platform | Renderer |
 |---|---|---|
-| **1** (current) | Windows PC | PCSX2 GS (separate process) · CoreGS 1.1 built in · CoreGS 2.0 planned |
+| **1** (current) | Windows PC | GSdx (PCSX2 GS, separate process) · CoreGS 1.1 built in · CoreGS 2.0 in development |
 | **2** | Android | ARMSX2 GS pipeline (Vulkan) |
 | **3** | iOS | ARMSX2 GS pipeline (Metal) |
 
@@ -157,6 +158,17 @@ The keyboard has a fixed layout:
 | P | Start / Pause |
 | Alt+Enter, F11 | Borderless fullscreen |
 
+## Support and contributing
+
+**Want to help?** Contribute to the development or donate: tokens are expensive, and they are what make this project
+possible.
+
+- **Donate:** [ko-fi.com/moesuito](https://ko-fi.com/moesuito). Donations pay for the AI development tools behind
+  GT4Recomp, starting with the plan that keeps CoreGS 2.0 and the next updates moving.
+- **Contribute:** read [CONTRIBUTING.md](CONTRIBUTING.md) for the rules and the pull request template, then pick a
+  task from [TASKS.md](TASKS.md) or an [issue](https://github.com/moesuito/gt4-staticrecomp/issues).
+- **Report bugs:** open an issue with the launcher log (Settings > About > Open log folder).
+
 ## Credits
 
 | Project | Author | What it gives this project |
@@ -183,6 +195,6 @@ Exact revisions and licenses: [THIRD_PARTY.md](native/THIRD_PARTY.md).
 
 ## Documentation
 
-[TASKS](TASKS.md) · [STATUS](docs/STATUS.md) · [BUILD](docs/BUILD.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) ·
+[TASKS](TASKS.md) · [CONTRIBUTING](CONTRIBUTING.md) · [STATUS](docs/STATUS.md) · [BUILD](docs/BUILD.md) · [ARCHITECTURE](docs/ARCHITECTURE.md) ·
 [Renderers](docs/GSDX-PLAN.md) · [Release 1.0.0 plan](docs/RELEASE-1.0.0-PLAN.md) ·
 [Decisions](docs/decisions/) · [Journal](docs/journal/)
