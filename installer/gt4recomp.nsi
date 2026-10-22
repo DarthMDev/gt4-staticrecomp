@@ -23,6 +23,8 @@
 ; A reinstall into another folder (TASK-091, slice 252) removes the previous program folder's files and records its
 ; data folder as PreviousDataDir (HKLM); the launcher moves that data at its first start. A self-update runs silently
 ; with /S /UPDATE /D=<install folder> and starts the launcher again as the player.
+; - A desktop shortcut "Gran Turismo 4" on the all-users desktop (TASK-094, 1.2.3), offered on the finish page and kept
+;   as DesktopShortcut in HKLM (1 created, 0 declined); a silent run follows that choice (see the Desktop shortcut section).
 ; Updates are safe (TASK-091, slice 255): .onInit waits for the files of an existing install to be free (up to 30 s);
 ; the new program is first extracted into $INSTDIR\.update-staging, then swapped in item by item, and a failed rename
 ; rolls the previous files back (see SwapStagedIn and RollbackSwap). data\ is never touched by the swap. Each run
@@ -90,6 +92,13 @@ BrandingText "${APP_NAME} ${VERSION}"
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT "Start ${APP_NAME}"
 !define MUI_FINISHPAGE_RUN_FUNCTION StartLauncherAsPlayer
+; TASK-094 (1.2.3): the desktop shortcut checkbox, ticked by default (no MUI_FINISHPAGE_SHOWREADME_NOTCHECKED). The
+; checkbox is set from the stored choice when the page is shown and saved when the page is left (Desktop shortcut section).
+!define MUI_FINISHPAGE_SHOWREADME
+!define MUI_FINISHPAGE_SHOWREADME_TEXT "Create a desktop shortcut"
+!define MUI_FINISHPAGE_SHOWREADME_FUNCTION CreateDesktopShortcut
+!define MUI_PAGE_CUSTOMFUNCTION_SHOW FinishPageShow
+!define MUI_PAGE_CUSTOMFUNCTION_LEAVE FinishPageLeave
 !insertmacro MUI_PAGE_FINISH
 
 Var DeleteDataCheckbox
@@ -397,6 +406,61 @@ FunctionEnd
 ; Explorer runs the launcher with the rights of the signed-in player, not this elevated setup's.
 Function StartLauncherAsPlayer
   Exec '"$WINDIR\explorer.exe" "$INSTDIR\GT4Recomp.exe"'
+FunctionEnd
+
+; ---- Desktop shortcut (TASK-094, 1.2.3) ----
+; The shortcut "Gran Turismo 4" on the all-users desktop starts $INSTDIR\GT4Recomp.exe. Its choice is kept in HKLM
+; DesktopShortcut: 1 = created, 0 = declined on the finish page. An interactive run asks on the finish page; a silent run
+; (no finish page, also the launcher's /S /UPDATE) follows the stored choice in DesktopShortcutSilent.
+
+; Creates the shortcut (the working folder is $INSTDIR, set first) and records 1 when it was made. Called by the finish
+; page checkbox (MUI_FINISHPAGE_SHOWREADME_FUNCTION) and by DesktopShortcutSilent. The current SetOutPath is $INSTDIR at
+; every call site, so nothing else depends on it.
+Function CreateDesktopShortcut
+  SetRegView 64
+  SetShellVarContext all
+  SetOutPath "$INSTDIR"
+  ClearErrors
+  CreateShortCut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\GT4Recomp.exe" "" "$INSTDIR\GT4Recomp.exe" 0
+  ${If} ${Errors}
+    DetailPrint "The desktop shortcut could not be created"
+  ${Else}
+    WriteRegDWORD HKLM "${APP_KEY}" "DesktopShortcut" 1
+  ${EndIf}
+FunctionEnd
+
+; Silent runs (install, or the launcher's /S /UPDATE). DesktopShortcut missing (an install from before 1.2.3, or a fresh
+; silent install) or 1: the shortcut is created or made again. 0: nothing is done.
+Function DesktopShortcutSilent
+  SetRegView 64
+  ClearErrors
+  ReadRegDWORD $0 HKLM "${APP_KEY}" "DesktopShortcut"
+  ${If} ${Errors}
+  ${OrIf} $0 == 1
+    Call CreateDesktopShortcut
+  ${EndIf}
+FunctionEnd
+
+; The finish page shows the checkbox ticked, unless the stored choice is 0 (declined before).
+Function FinishPageShow
+  SetRegView 64
+  ClearErrors
+  ReadRegDWORD $0 HKLM "${APP_KEY}" "DesktopShortcut"
+  ${If} ${Errors}
+    Return
+  ${EndIf}
+  ${If} $0 == 0
+    ${NSD_Uncheck} $mui.FinishPage.ShowReadme
+  ${EndIf}
+FunctionEnd
+
+; Leaving the finish page: an unticked box is kept as 0 (a ticked one runs CreateDesktopShortcut, after this function).
+Function FinishPageLeave
+  SendMessage $mui.FinishPage.ShowReadme ${BM_GETCHECK} 0 0 $0
+  ${If} $0 != ${BST_CHECKED}
+    SetRegView 64
+    WriteRegDWORD HKLM "${APP_KEY}" "DesktopShortcut" 0
+  ${EndIf}
 FunctionEnd
 
 ; Removes one folder of the old per-user install (1.0.0 to 1.2.0) given on the stack: only the files that installer
@@ -723,6 +787,12 @@ Section "Install" SecInstall
   CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\GT4Recomp.exe" "" "$INSTDIR\GT4Recomp.exe" 0
   CreateShortCut "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk" "$INSTDIR\uninstall.exe"
 
+  ; TASK-094 (1.2.3): a silent run creates the desktop shortcut, or makes it again, by the stored choice (see
+  ; DesktopShortcutSilent). An interactive run decides on the finish page.
+  ${If} ${Silent}
+    Call DesktopShortcutSilent
+  ${EndIf}
+
   WriteRegStr HKLM "${APP_KEY}" "InstallDir" "$INSTDIR"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
@@ -776,6 +846,8 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
   Delete "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk"
   RMDir "$SMPROGRAMS\${APP_NAME}"
+  ; TASK-094 (1.2.3): the desktop shortcut of all users. Its choice (HKLM DesktopShortcut) goes with the app key below.
+  Delete "$DESKTOP\${APP_NAME}.lnk"
 
   ; The program folder, its data folder included (the disc copy can be made again from the player's own image).
   RMDir /r "$INSTDIR\game"
