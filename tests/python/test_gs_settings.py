@@ -621,9 +621,10 @@ class PageLayoutTests(unittest.TestCase):
         self.assertEqual(sorted(row['id'] for row in rows() if row['page'] == 'mods'),
                          sorted(['texture_dump', 'texture_dump_mipmaps', 'texture_dump_fmv']))
 
-    def test_renderer_choice_is_the_only_coregs_option(self):
+    def test_renderer_choice_is_gsdx_only(self):
+        # TASK-096 (launcher 1.2.3): CoreGS 1.1 is no longer a launcher choice; GSdx is the only renderer.
         choices = [choice['name'] for choice in by_id()['gs_engine']['choices']]
-        self.assertEqual(choices, ['pcsx2', 'coregs-1.1'])
+        self.assertEqual(choices, ['pcsx2'])
         self.assertEqual(by_id()['gs_engine']['written'], 'never')
         self.assertIn('gs_engine', {row['id'] for row in gs_settings.offered(rows())})
         self.assertNotIn('gs_engine', gs_settings.render_ini(rows()))

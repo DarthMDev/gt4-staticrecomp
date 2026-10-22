@@ -78,7 +78,7 @@ Arguments are the payload object shown. Errors are strings or Error objects; the
 | `checking` | setup runs; `step` is `copying` (bytes), `checking`, `preparing` or `renderer` (`renderer_step`: `listing`, `downloading` with bytes, `installing`) | rows with a bar, Cancel (not during the renderer step) |
 | `failed` | a run stopped: cancelled, not enough free space, a write error | the reason, "Try again", "Choose another file" |
 | `files_missing` | set up once, but the copy of the disc image or the prepared files are gone or changed | "Game files missing", "Choose disc image" |
-| `done` | ready (the receipt's size and modified time of the copy match; nothing is hashed) | "Ready", Play; `note` says when CoreGS 1.1 is used because gt4-gs could not be downloaded |
+| `done` | ready (the receipt's size and modified time of the copy match; nothing is hashed) | "Ready", Play; `note` says the game cannot start yet because gt4-gs could not be downloaded (TASK-096: no CoreGS 1.1 fallback) |
 
 The game reads only the copy in `%LOCALAPPDATA%\GT4Recomp\disc\SCUS-97328.iso`. The file the player picked may be
 moved or deleted after setup.
@@ -94,7 +94,7 @@ Settings row (`rows[]` in the table):
 ```
 
 - slider values: `{min, max, step, unit?, limit?: "max_upscale", scale?, labels?}`; the effective max is `min(max, table[limit])`. `labels` maps a value to its readout (TASK-080 Render scale: `{"100": "100% · 4x · 2560x1792"}`); a slider with labels gets a wider control.
-- TASK-080 addendum rows: `monitor` (dropdown of the connected monitors, values `<GDI device>@<W>x<H>`, `primary` when none is known), `resolution` (dropdown of the chosen monitor's modes, `WxH`, `desktop` when none is known; set_setting `monitor` resets it to `desktop`), `render_scale` (slider 50..200 step 25 with `labels`, `visible_when` renderer = pcsx2). There is no `aspect_ratio`, `aspect_custom` or `upscale` row.
+- TASK-080 addendum rows: `monitor` (dropdown of the connected monitors, values `<GDI device>@<W>x<H>`, `primary` when none is known), `resolution` (dropdown of the chosen monitor's modes, `WxH`, `desktop` when none is known; set_setting `monitor` resets it to `desktop`), `render_scale` (slider 50..200 step 25 with `labels`; GSdx is the only renderer, so no `visible_when`). There is no `aspect_ratio`, `aspect_custom` or `upscale` row.
   With `scale` (TASK-080 Custom ratio: 100) the stored whole number is shown divided by it with two decimals
   (`233` reads "2.33:1").
 - dropdown values: `[{value, label, disabled?, note?}]`; disabled entries are greyed and not selectable.

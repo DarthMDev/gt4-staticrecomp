@@ -6,7 +6,7 @@
 //!
 //! `connected` is `false` for an option whose game-side variable is not in the build yet. Such an
 //! option is shown greyed out and never sent, so an unknown value cannot stop the game.
-//! Renderer-specific options are shown only for the selected renderer (see [`Settings::applies`]).
+//! The renderer is GSdx (the PCSX2 GS in its own process) only: the launcher never starts CoreGS 1.1 (TASK-096).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -67,46 +67,12 @@ pub struct SettingDef {
 
 /// The PCSX2 GS in its own process (downloaded, default when installed). Decision 0070.
 pub const PCSX2_GS: &str = "pcsx2";
-/// Built-in renderer (the donor lineage, MIT). Secondary: its upscale, FSR, FXAA and deinterlace options are hidden.
-pub const CORE_GS_11: &str = "coregs11";
-/// Our own hardware renderer, not built yet ("coming soon").
+/// Our own hardware renderer, not built yet ("coming soon"). It cannot be selected.
 pub const CORE_GS_20: &str = "coregs20";
 
 const RENDERER_CHOICES: &[Choice] = &[
     Choice { value: PCSX2_GS, label: "GSdx", selectable: true },
-    Choice { value: CORE_GS_11, label: "CoreGS 1.1", selectable: true },
     Choice { value: CORE_GS_20, label: "CoreGS 2.0 (coming soon)", selectable: false },
-];
-
-const INTERNAL_SCALE_CHOICES: &[Choice] = &[
-    Choice { value: "1", label: "1x", selectable: true },
-    Choice { value: "2", label: "2x", selectable: true },
-    Choice { value: "3", label: "3x", selectable: true },
-];
-
-/// `auto` sends no variable: the game picks nearest at 1x and linear when scaled.
-const PRESENT_FILTER_CHOICES: &[Choice] = &[
-    Choice { value: "auto", label: "Automatic", selectable: true },
-    Choice { value: "nearest", label: "Nearest", selectable: true },
-    Choice { value: "linear", label: "Linear", selectable: true },
-    Choice { value: "fsr", label: "FSR 1.0", selectable: true },
-];
-
-/// FSR sharpness is a percentage: 0 is the softest, 100 the sharpest. The game takes the same number.
-pub const FSR_SHARPNESS_DEFAULT: &str = "50";
-
-const DEINTERLACE_CHOICES: &[Choice] = &[
-    Choice { value: "off", label: "Off", selectable: true },
-    Choice { value: "weave", label: "Weave", selectable: true },
-    Choice { value: "bob", label: "Bob", selectable: true },
-    Choice { value: "blend", label: "Blend", selectable: true },
-    Choice { value: "adaptive", label: "Adaptive", selectable: true },
-    Choice { value: "auto", label: "Auto", selectable: true },
-];
-
-const ANTI_ALIASING_CHOICES: &[Choice] = &[
-    Choice { value: "off", label: "Off", selectable: true },
-    Choice { value: "fxaa", label: "FXAA", selectable: true },
 ];
 
 const VSYNC_CHOICES: &[Choice] = &[
@@ -130,8 +96,8 @@ pub const SETTINGS: &[SettingDef] = &[
         page: Page::Graphics,
         group: "Renderer",
         title: "Renderer",
-        info: "CoreGS 1.1 is our renderer, built on the GPU. paraLLEl-GS is an alternative renderer from the \
-               paraLLEl-GS project (LGPL). CoreGS 2.0 is in development.",
+        info: "GSdx draws the game on your GPU in its own process; it is the renderer GT4Recomp uses. CoreGS 2.0, \
+               our own renderer, is in development.",
         kind: Kind::Choice(RENDERER_CHOICES),
         default: PCSX2_GS,
         connected: true,
@@ -148,60 +114,6 @@ pub const SETTINGS: &[SettingDef] = &[
             step: crate::display::RENDER_SCALE_STEP,
         },
         default: "100",
-        connected: true,
-    },
-    SettingDef {
-        id: "internal_scale",
-        page: Page::Graphics,
-        group: "CoreGS 1.1",
-        title: "Internal resolution",
-        info: "Draws the picture at a higher internal resolution before it is shown. Higher values look \
-               sharper and need a faster GPU.",
-        kind: Kind::Choice(INTERNAL_SCALE_CHOICES),
-        default: "1",
-        connected: true,
-    },
-    SettingDef {
-        id: "present_filter",
-        page: Page::Graphics,
-        group: "CoreGS 1.1",
-        title: "Scaling filter",
-        info: "How the picture is enlarged to your screen. Nearest keeps pixels sharp; Linear smooths them. \
-               FSR 1.0 is a higher-quality upscaler with a sharpness control.",
-        kind: Kind::Choice(PRESENT_FILTER_CHOICES),
-        default: "auto",
-        connected: true,
-    },
-    SettingDef {
-        id: "fsr_sharpness",
-        page: Page::Graphics,
-        group: "CoreGS 1.1",
-        title: "FSR sharpness",
-        info: "How much edge detail FSR 1.0 adds: 0% is softest, 100% sharpest. Only used with the FSR scaling filter.",
-        kind: Kind::Percent,
-        default: FSR_SHARPNESS_DEFAULT,
-        connected: true,
-    },
-    SettingDef {
-        id: "deinterlacing",
-        page: Page::Graphics,
-        group: "CoreGS 1.1",
-        title: "Deinterlacing",
-        info: "For screens the game draws interlaced, such as menus and interlaced races. Off shows raw fields; \
-               Weave, Bob, Blend and Adaptive combine the two fields; Auto chooses per frame. Progressive \
-               pictures are not changed.",
-        kind: Kind::Choice(DEINTERLACE_CHOICES),
-        default: "auto",
-        connected: true,
-    },
-    SettingDef {
-        id: "anti_aliasing",
-        page: Page::Graphics,
-        group: "CoreGS 1.1",
-        title: "Anti-aliasing",
-        info: "Smooths jagged edges after the picture is drawn. FXAA is fast and softens fine detail a little.",
-        kind: Kind::Choice(ANTI_ALIASING_CHOICES),
-        default: "off",
         connected: true,
     },
     SettingDef {
@@ -285,6 +197,11 @@ pub const RETIRED_SETTINGS: &[(&str, &str)] = &[
     ("widescreen", "the game's own 16:9 is always on (GT4_FORCE_WIDESCREEN=1); the Resolution sets the screen shape"),
     ("aspect_ratio", "the aspect is always the Resolution's shape (TASK-080 addendum)"),
     ("aspect_custom", "the aspect is always the Resolution's shape (TASK-080 addendum)"),
+    ("internal_scale", "a CoreGS 1.1 row (TASK-096): the launcher no longer starts CoreGS 1.1"),
+    ("present_filter", "a CoreGS 1.1 row (TASK-096): the launcher no longer starts CoreGS 1.1"),
+    ("fsr_sharpness", "a CoreGS 1.1 row (TASK-096): the launcher no longer starts CoreGS 1.1"),
+    ("deinterlacing", "a CoreGS 1.1 row (TASK-096): the launcher no longer starts CoreGS 1.1"),
+    ("anti_aliasing", "a CoreGS 1.1 row (TASK-096): the launcher no longer starts CoreGS 1.1"),
 ];
 
 /// PCSX2 GS table rows the launcher derives from other settings, never stored as a user value (TASK-080 addendum):
@@ -442,23 +359,9 @@ impl Settings {
         }
     }
 
-    /// Whether a setting is shown. Rows of the built-in renderer's upscale, FSR, anti-aliasing and deinterlace
-    /// options are hidden (decision 0070): they keep their defaults and are still sent to CoreGS 1.1.
-    /// The PCSX2 GS options come from the table in `gs_table`, not from this list.
-    pub fn applies(&self, id: &str) -> bool {
-        !matches!(id, "internal_scale" | "present_filter" | "fsr_sharpness" | "deinterlacing" | "anti_aliasing")
-    }
-
-    /// Whether a shown row can be changed now: it is connected to the game and it applies to the
-    /// selected renderer.
+    /// Whether a shown row can be changed now: it is connected to the game.
     pub fn is_active(&self, id: &str) -> bool {
-        let connected = definition(id).map(|definition| definition.connected).unwrap_or(false);
-        if !connected || !self.applies(id) {
-            return false;
-        }
-        match id {
-            _ => true,
-        }
+        definition(id).map(|definition| definition.connected).unwrap_or(false)
     }
 
     /// A PCSX2 GS table value (`gs_table`), or its table default when the user has not set it.

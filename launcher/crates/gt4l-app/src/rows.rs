@@ -37,7 +37,7 @@ pub fn rows_for_page(settings: &Settings, page: Page) -> Vec<RowData> {
     let mut previous_group = "";
     for definition in SETTINGS
         .iter()
-        .filter(|definition| definition.page == page && settings.applies(definition.id))
+        .filter(|definition| definition.page == page)
     {
         let group_header = if definition.group != previous_group {
             definition.group.to_string()
@@ -112,7 +112,6 @@ mod tests {
         let rows = rows_for_page(&Settings::default(), Page::Graphics);
         assert_eq!(rows[0].group_header, "Renderer");
         assert!(rows[1].group_header == "Image");
-        assert!(rows.iter().any(|row| row.group_header == "CoreGS 1.1"));
     }
 
     #[test]

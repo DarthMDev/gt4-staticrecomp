@@ -1,5 +1,5 @@
-//! Custom textures (TASK-088, gt4-gs 1.2.0; TASK-091 moved the folder to `<install>\data\Textures`): the Textures folder, the folders the launcher
-//! makes on demand, and the two Graphics rows (Load custom textures on by default, Precache off by default).
+//! Custom textures (TASK-088, gt4-gs 1.2.0; TASK-091 moved the folder to `<install>\data\Textures`): the Textures folder, the folder the launcher
+//! makes on demand (TASK-093: no replacements subfolder), and the two Graphics rows (Load custom textures on by default, Precache off by default).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -33,14 +33,15 @@ fn a_textures_folder_not_moved_yet_stays_in_use() {
 }
 
 #[test]
-fn the_launcher_makes_the_textures_and_replacements_folders_on_demand() {
+fn the_launcher_makes_the_textures_folder_on_demand_and_no_replacements_folder() {
     let textures = scratch("ensure").join("Gran Turismo 4").join("Textures");
     ensure_texture_folders(&textures).unwrap();
-    assert!(textures.join("replacements").is_dir());
+    assert!(textures.is_dir());
+    assert!(!textures.join("replacements").exists(), "gt4-gs 1.2.1 reads Textures itself");
     // Idempotent: a second call keeps what is there.
-    fs::write(textures.join("replacements").join("pack.txt"), b"kept").unwrap();
+    fs::write(textures.join("pack.txt"), b"kept").unwrap();
     ensure_texture_folders(&textures).unwrap();
-    assert_eq!(fs::read(textures.join("replacements").join("pack.txt")).unwrap(), b"kept");
+    assert_eq!(fs::read(textures.join("pack.txt")).unwrap(), b"kept");
 }
 
 #[test]

@@ -9,8 +9,8 @@
 //! 5. rename the staging folder to `<gs root>\<version>\`, then point `current.txt` at it.
 //!
 //! The previous version stays in place until the new one has passed step 4 and step 5. Any failure leaves the
-//! installed version as it was; the caller then starts CoreGS 1.1 with a message (see `choose_renderer` in
-//! `launch.rs`). Every path written here passes [`crate::guard::check_write`] first.
+//! installed version as it was; the caller then reports the GSdx error and does not start the game (see
+//! `choose_renderer` in `launch.rs`, TASK-096). Every path written here passes [`crate::guard::check_write`] first.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -332,8 +332,8 @@ mod tests {
     }
 
     #[test]
-    fn the_minimum_is_1_2_0_with_the_real_asset_name() {
-        assert_eq!(MINIMUM_VERSION, Version(1, 2, 0));
+    fn the_minimum_is_1_2_1_with_the_real_asset_name() {
+        assert_eq!(MINIMUM_VERSION, Version(1, 2, 1));
         assert_eq!(package_name(Version(1, 2, 0)), "gt4-gs-1.2.0-windows-x64.zip");
     }
 }
