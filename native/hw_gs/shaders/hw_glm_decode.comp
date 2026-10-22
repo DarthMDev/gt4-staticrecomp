@@ -6,7 +6,8 @@
 // One invocation per texel of the requested extent: the stored value is read from the GLM with the texture's
 // (TBP0, TBW, PSM) addressing and written into the texel image. Direct formats keep the raw stored word (the
 // pixel shader expands CT16/CT24 with TEXA, TexelKind); indexed formats are looked up in the palette the CPU
-// CLUT unit expanded (RGBA8, one 256-entry slot of the palette ring).
+// CLUT unit expanded (RGBA8, one 256-entry slot of the palette ring), in the GPU CLUT buffer, or (IN-370) straight
+// in the GLM where the last CLUT load read them.
 
 #version 450
 #extension GL_GOOGLE_include_directive : require
@@ -28,7 +29,8 @@ layout(push_constant) uniform DecodeParameters {
     uint psm;           // texture PSM code
     uint width;         // texels
     uint height;
-    uint indexed;       // 0: direct; 1: palette ring (CPU CLUT); 2: GPU CLUT buffer (07.7, IN-349)
+    uint indexed;       // 0: direct; 1: palette ring (CPU CLUT); 2: GPU CLUT buffer (07.7, IN-349);
+                        // 3: the GLM, with the addressing of the CLUT load that wrote every entry used (IN-370)
     uint palette_base;  // first entry of this decode's palette in the ring (indexed = 1)
     uint cpsm;          // indexed = 2: TEX0.CPSM, CSA and TEXA, as clut::ClutUnit::Decode uses them
     uint csa;
@@ -37,16 +39,16 @@ layout(push_constant) uniform DecodeParameters {
     uint aem;
     uint origin_x;      // the texture's region in the texel atlas (IN-352)
     uint origin_y;
+    uint load_cbp;      // indexed = 3: that CLUT load's CBP (blocks), CSM, entry count (1: 256), CBW, COU, COV;
+    uint load_csm;      // its CPSM and CSA equal the texture's
+    uint load_eight_bit;
+    uint load_cbw;
+    uint load_cou;
+    uint load_cov;
 } pc;
 
-// clut::ClutUnit::Decode for one entry from the GPU CLUT buffer.
-uint gpu_palette_entry(uint e) {
-    if (pc.cpsm == 0u) {
-        uint group = min((e >> 4) + (pc.csa & 15u), 15u);
-        uint index = 16u * group + (e & 15u);
-        return clut[index] | (clut[index + 256u] << 16);
-    }
-    uint value = clut[(16u * pc.csa + e) & 511u];
+// CT16/CT16S palette halfword to RGBA8 with TEXA, as clut::ClutUnit::Decode.
+uint expand_palette16(uint value) {
     uint r = (value & 0x1Fu) << 3;
     uint g = ((value >> 5) & 0x1Fu) << 3;
     uint b = ((value >> 10) & 0x1Fu) << 3;
@@ -57,6 +59,49 @@ uint gpu_palette_entry(uint e) {
         a = 0u;
     }
     return r | (g << 8) | (b << 16) | (a << 24);
+}
+
+// clut::ClutUnit::Decode for one entry from the GPU CLUT buffer.
+uint gpu_palette_entry(uint e) {
+    if (pc.cpsm == 0u) {
+        uint group = min((e >> 4) + (pc.csa & 15u), 15u);
+        uint index = 16u * group + (e & 15u);
+        return clut[index] | (clut[index + 256u] << 16);
+    }
+    return expand_palette16(clut[(16u * pc.csa + e) & 511u]);
+}
+
+// IN-370: the value gpu_palette_entry(e) would return after the last CLUT load, read where that load read it.
+// The halfwords entry e looks up were written by load entry `le` (equal to e except where a CT32 lookup clamps
+// to group 15), whose source pixel follows hw_glm_clut.comp.
+uint glm_palette_entry(uint e) {
+    uint le = e;
+    if (pc.cpsm == 0u) {
+        uint group = min((e >> 4) + (pc.csa & 15u), 15u);
+        le = 16u * (group - (pc.csa & 15u)) + (e & 15u);
+    }
+    uint x;
+    uint y;
+    uint per_row = 1u;
+    if (pc.load_csm == 0u) {
+        if (pc.load_eight_bit != 0u) {
+            x = (le & 7u) + 8u * ((le >> 4) & 1u);
+            y = 2u * (le >> 5) + ((le >> 3) & 1u);
+        } else {
+            x = le & 7u;
+            y = le >> 3;
+        }
+    } else {
+        x = pc.load_cou * 16u + le;
+        y = pc.load_cov;
+        per_row = pc.load_cbw;
+    }
+    GlmSlot slot = glm_slot_rows(pc.load_cbp, per_row, pc.cpsm, x, y);
+    uint raw = (glm_words[slot.word_index] >> slot.shift) & slot.mask;
+    if (pc.cpsm == 0u) {
+        return raw;  // low and high halfwords, as the CLUT buffer holds them
+    }
+    return expand_palette16(raw & 0xFFFFu);
 }
 
 void main() {
@@ -72,6 +117,10 @@ void main() {
         uint count = ((pc.psm & 7u) == 3u) ? 256u : 16u;
         uint e = value & 255u;
         value = e < count ? gpu_palette_entry(e) : 0u;
+    } else if (pc.indexed == 3u) {
+        uint count = ((pc.psm & 7u) == 3u) ? 256u : 16u;
+        uint e = value & 255u;
+        value = e < count ? glm_palette_entry(e) : 0u;
     }
     imageStore(hw_texels, ivec2(texel) + ivec2(pc.origin_x, pc.origin_y), uvec4(value));
 }

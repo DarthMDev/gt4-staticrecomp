@@ -517,3 +517,23 @@ phase 2 will need another fast path (for example a tile-local path). PC focus no
   cost of the GPU CLUT loads is elsewhere (next: defer CLUT loads and apply several in one dispatch).
 - Gates: hashes identical on all five captures (night `fifo_hash=3a2fe617a174e7e7`), menu dumps 42/42, race frames
   42/42 identical, default parity 42/42, 227/227 non-Python CTests with and without interlock.
+
+## 2026-10-22 deferred CLUT loads (local slice247, IN-370) - Claude
+
+- IN-370: GPU CLUT loads are kept pending until the GLM or the CLUT buffer is touched; an indexed texture whose
+  palette the last load wrote reads it straight from the GLM. 480p race replay: CLUT dispatches 1,657 -> 300 per
+  frame, barriers about 4,090 -> 1,630 per frame, GPU busy 10.7 -> 6.9 ms per frame, GS stream 11.6 -> 9.6 ms.
+- Headless with the launcher's video mode (`[hw] cost`): 480p race GS thread 10.3-11.2 ms per frame (unchanged within
+  run-to-run noise in game, although the replay drops 2 ms), 480p night race 6.2-10.3 ms (was 12.4-15.4 ms).
+- Gates: hashes identical on all five captures (night `fifo_hash=3a2fe617a174e7e7`), menu dumps 42/42, race frames
+  42/42 identical, default parity 42/42, 227/227 non-Python CTests with and without interlock.
+
+### Efficiency table update (slice247, headless, launcher video mode)
+
+| Scene | GS thread CPU ms/frame | Process CPU core-ms/frame | Render passes | Barriers | Upload MB | Readback MB | GPU busy ms |
+|---|---|---|---|---|---|---|---|
+| 480p race (Nordschleife) | 10.3-11.2 | 26.6-30.0 | 330-350 | 1,520-1,630 | 5.5 | 0.002 | 6.9 (replay) |
+| 480p night race (Route 5) | 6.2-10.3 | 17.1-28.3 | 230-430 | 1,100-1,940 | 3.2-4.7 | 0.008 | not measured |
+
+Still over the owner's 6 ms GS-worker budget in the race. Largest remaining CPU parts (replay): batch translate
+1.8 ms, execute 3.3 ms, front end about 2.4 ms, and 330-430 render passes per frame.

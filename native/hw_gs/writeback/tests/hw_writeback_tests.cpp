@@ -1443,6 +1443,35 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         }
         ad({kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03, xyz(54, 22), 0x05, uv(10, 10), 0x03,
             xyz(64, 32), 0x05});
+        // 3e. Deferred CLUT loads (IN-370), depth test ALWAYS. (1) A T4 load from the palette page with CSA 0, then
+        //     an upload over that palette before the draw: the draw must use the palette as loaded (the load is
+        //     recorded before the upload writes the GLM). (2) A T4 load of the uploaded palette with CSA 1 and a draw
+        //     (palette read from the GLM). (3) A CSA 0 draw without a load: entries from load (1), CLUT buffer path.
+        {
+            auto t4 = [&](uint64_t cbpBlocks, uint64_t csa, bool load) {
+                return tex0(kT8 * 32, 0x14, 4, cbpBlocks, load) | (csa << 56);
+            };
+            auto sprite = [&](uint32_t x0) {
+                return std::vector<uint64_t>{kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uv(0, 0), 0x03,
+                                             xyz(x0, 16), 0x05, uv(16, 16), 0x03, xyz(x0 + 8, 28), 0x05};
+            };
+            ad({frameReg(kA), 0x4C, (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47, t4(kClut * 32, 0, true), 0x06});
+            ad({blit(0, 0, kClut * 32, 0x00), 0x50, uint64_t{0}, 0x51, uint64_t{8} | (uint64_t{2} << 32), 0x52, 0, 0x53});
+            std::vector<uint64_t> palette;
+            for (uint32_t i = 0; i < 8; ++i) {
+                palette.push_back((uint64_t{0x80F00000u + 0x1020u * i + frame} << 32) | (0x800000F0u + 0x10200u * i));
+            }
+            image(palette);
+            ad(sprite(26));
+            std::vector<uint64_t> second = {t4(kClut * 32, 1, true), 0x06};
+            for (uint64_t word : sprite(34)) second.push_back(word);
+            ad(second);
+            std::vector<uint64_t> third = {t4(kClut * 32, 0, false), 0x06};
+            for (uint64_t word : sprite(42)) third.push_back(word);
+            third.push_back((uint64_t{1} << 16) | (uint64_t{2} << 17));  // TEST back to GEQUAL
+            third.push_back(0x47);
+            ad(third);
+        }
         // 4. Host -> local: 8 x 8 CT32 block into buffer A at (4 + frame, 4).
         ad({blit(0, 0, kA * 32, 0x00), 0x50, (uint64_t{4 + frame} << 32) | (uint64_t{4} << 48), 0x51,
             uint64_t{8} | (uint64_t{8} << 32), 0x52, 0, 0x53});
@@ -1484,6 +1513,8 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         std::vector<uint8_t> slm;
     };
     uint64_t decodesReused = 0;  // IN-369, cache run
+    uint64_t decodesGlmPalette = 0;  // IN-370, cache run
+    uint64_t clutMaterialisations = 0;
     auto replay = [&](bool cacheMode, bool cpuSprites, std::vector<FrameRecord>& out, writeback::Counters& counters,
                       std::string& error) -> bool {
         writeback::Renderer renderer;
@@ -1510,7 +1541,11 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                                               },
                                               error);
         counters = renderer.GetCounters();
-        if (cacheMode && !cpuSprites) decodesReused = renderer.GpuCounters().decodesReused;
+        if (cacheMode && !cpuSprites) {
+            decodesReused = renderer.GpuCounters().decodesReused;
+            decodesGlmPalette = renderer.GpuCounters().decodesGlmPalette;
+            clutMaterialisations = renderer.GpuCounters().clutMaterialisations;
+        }
         if (renderer.Failed()) error += " " + renderer.LastError();
         return ok && !renderer.Failed();
     };
@@ -1573,7 +1608,9 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
                 static_cast<unsigned long long>(cacheCounters.glmSlotLoads),
                 static_cast<unsigned long long>(cpuSpriteCounters.glmSlotLoads),
                 static_cast<unsigned long long>(cacheCounters.glmDownloads));
-    std::printf("  cache: GLM decodes reused %llu\n", static_cast<unsigned long long>(decodesReused));
+    std::printf("  cache: GLM decodes reused %llu, palettes from the GLM %llu, CLUT materialisations %llu\n",
+                static_cast<unsigned long long>(decodesReused), static_cast<unsigned long long>(decodesGlmPalette),
+                static_cast<unsigned long long>(clutMaterialisations));
     std::printf("  cache: evictions %llu, GPU CLUT loads %llu, GLM textures %llu, CPU sprite batches %llu\n",
                 static_cast<unsigned long long>(cacheCounters.cacheEvictions),
                 static_cast<unsigned long long>(cacheCounters.gpuClutLoads),
@@ -1586,6 +1623,7 @@ int TestCacheEqualsWriteback(const gpu::VulkanHandles& handles) {
         cacheCounters.glmSlotLoads == 0 || cacheCounters.glmDownloads == 0 || cpuSpriteCounters.glmUploadMerges == 0 || cacheCounters.glmBatchedWritebacks == 0 ||
         cacheCounters.glmHostUploads == 0 ||
         (handles.pixelInterlock && decodesReused == 0) ||  // runs (and their decode reuse) need interlock
+        decodesGlmPalette == 0 || clutMaterialisations == 0 ||
         cpuSpriteCounters.glmSlotLoads < cpuSpriteCounters.cacheLoads) {
         std::printf("  the cache paths were not all exercised (fixture is blind)\n");
         ++failures;

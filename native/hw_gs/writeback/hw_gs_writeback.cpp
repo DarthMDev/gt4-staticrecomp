@@ -2404,6 +2404,7 @@ void Renderer::SetBatchedWritebacks(bool enabled) { impl_->glmBatchedWritebacks_
 
 void Renderer::SetGpuTiming(bool enabled) { impl_->gpu_.SetGpuTiming(enabled); }
 void Renderer::SetDecodeReuse(bool enabled) { impl_->gpu_.SetDecodeReuse(enabled); }
+void Renderer::SetClutDefer(bool enabled) { impl_->gpu_.SetClutDefer(enabled); }
 
 void Renderer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->gpu_.SetChunksPerSubmission(chunks); }
 

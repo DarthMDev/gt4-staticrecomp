@@ -2071,3 +2071,14 @@ Incremental rebuild. Gates in the commit message of this slice: 226/226 non-Pyth
 `hw_smoke_window_gpu_compose`), also without interlock; memory hashes identical on the five captures; replay
 `--gpu-compose-check` 121/121 identical on four progressive captures; headless menu 42/42 dumps byte-identical to
 slice228; race schedule identical to slice235; default renderer 42/42 = slice214.
+
+## Local slice245..slice247 - strip decoder, cost line, barriers, decode reuse, deferred CLUT (IN-366..IN-370)
+
+Incremental rebuilds of `build/slice228-coregs2`. New A/B switches: `GT4_HW_DECODE_REUSE=0` (replay
+`--no-decode-reuse`), `GT4_HW_CLUT_DEFER=0` (replay `--no-clut-defer`). Gates per slice: 227/227 non-Python CTests,
+also without interlock; memory hashes identical on the five captures (night `fifo_hash=3a2fe617a174e7e7`); headless
+menu 42/42 dumps byte-identical to slice228; race schedule 42/42 identical to slice235; default renderer 42/42 =
+slice214. Local helpers (ignored): `build/gates-hash.sh <tag>` and `build/gates-full.sh <tag>` write only under
+`private/gates/<tag>` and `private/<tag>-evidence`. Note: the replay's `--slm-hashes <file>` WRITES that file; never
+pass a reference file to it. Measure CPU without `GT4_HW_GPU_TIMING=1` (timestamps roughly double the GS thread cost).
+

@@ -259,6 +259,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--async-present") == 0) renderer.SetAsyncPresentation(true);          // IN-355
         if (std::strcmp(argv[i], "--no-batched-writebacks") == 0) renderer.SetBatchedWritebacks(false); // IN-357
         if (std::strcmp(argv[i], "--no-decode-reuse") == 0) renderer.SetDecodeReuse(false);              // IN-369 A/B
+        if (std::strcmp(argv[i], "--no-clut-defer") == 0) renderer.SetClutDefer(false);                  // IN-370 A/B
         if (std::strcmp(argv[i], "--gpu-timing") == 0) renderer.SetGpuTiming(true);                     // 12.8
         if (std::strcmp(argv[i], "--chunks-per-submission") == 0 && i + 1 < argc) {                   // IN-358 A/B
             renderer.SetChunksPerSubmission(static_cast<std::uint32_t>(std::strtoul(argv[i + 1], nullptr, 10)));
@@ -370,13 +371,16 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(counters.cacheWritebackByReason[8]));
     {
         const gpu::GpuStats& gpuStats = renderer.GpuCounters();
-        std::printf("gpu executions=%llu vk_draws=%llu barriers=%llu barriers_elided=%llu render_passes=%llu decodes_reused=%llu submissions=%llu runs=%llu run_chunks=%llu\n",
+        std::printf("gpu executions=%llu vk_draws=%llu barriers=%llu barriers_elided=%llu render_passes=%llu decodes_reused=%llu clut_dispatches=%llu clut_materialisations=%llu decodes_glm_palette=%llu submissions=%llu runs=%llu run_chunks=%llu\n",
                     static_cast<unsigned long long>(gpuStats.executions),
                     static_cast<unsigned long long>(gpuStats.draws),
                     static_cast<unsigned long long>(gpuStats.barriers),
                     static_cast<unsigned long long>(gpuStats.barriersElided),
                     static_cast<unsigned long long>(gpuStats.renderPasses),
                     static_cast<unsigned long long>(gpuStats.decodesReused),
+                    static_cast<unsigned long long>(gpuStats.clutDispatches),
+                    static_cast<unsigned long long>(gpuStats.clutMaterialisations),
+                    static_cast<unsigned long long>(gpuStats.decodesGlmPalette),
                     static_cast<unsigned long long>(gpuStats.submissions),
                     static_cast<unsigned long long>(gpuStats.runs),
                     static_cast<unsigned long long>(gpuStats.runChunks));

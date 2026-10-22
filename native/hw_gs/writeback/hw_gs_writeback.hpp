@@ -269,6 +269,9 @@ public:
     void SetGpuTiming(bool enabled);
     // IN-369: a run reuses the atlas region of an identical GLM texture decode (default on).
     void SetDecodeReuse(bool enabled);
+    // IN-370: GPU CLUT loads are deferred; an indexed texture whose palette the last deferred load wrote reads it
+    // from the GLM (default on).
+    void SetClutDefer(bool enabled);
     // IN-358 A/B: mid-frame submissions every `chunks` chunks (0 = off).
     void SetChunksPerSubmission(std::uint32_t chunks);
     // IN-354 A/B switch: double-buffered GPU submission.

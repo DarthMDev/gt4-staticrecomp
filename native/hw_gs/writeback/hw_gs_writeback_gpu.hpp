@@ -144,6 +144,9 @@ struct GpuStats {
     std::uint64_t runChunks = 0;    // chunks drawn inside runs
     std::uint64_t earlySubmissions = 0;  // submissions in mid-frame (IN-358)
     std::uint64_t barriersElided = 0;    // full barriers skipped right after another (IN-368)
+    std::uint64_t clutDispatches = 0;        // CLUT loads recorded on the GPU (after IN-370 collapsing)
+    std::uint64_t clutMaterialisations = 0;  // times deferred CLUT loads were recorded (IN-370)
+    std::uint64_t decodesGlmPalette = 0;     // indexed decodes that read the palette from the GLM (IN-370)
     std::uint64_t decodesReused = 0;     // GLM texture decodes skipped: same texture earlier in the run (IN-369)
     std::uint64_t renderPasses = 0;      // render pass instances (runs and per-chunk passes; IN-367 efficiency)
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
@@ -240,6 +243,7 @@ public:
     // GT4_HW_GPU_TIMING: per-category GPU timestamps (GpuStats::gpuNs). Off by default.
     void SetGpuTiming(bool enabled);
     void SetDecodeReuse(bool enabled);  // IN-369
+    void SetClutDefer(bool enabled);    // IN-370
     // IN-358 A/B: submit the recording every `chunks` chunks (0: only at VBlank, a full ring or a readback).
     void SetChunksPerSubmission(std::uint32_t chunks);
 

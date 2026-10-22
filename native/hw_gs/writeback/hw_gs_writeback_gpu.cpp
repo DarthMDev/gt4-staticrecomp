@@ -217,6 +217,84 @@ struct GpuDrawer::Impl {
   std::uint64_t workGeneration = 0;
   std::vector<RunDecode> runDecodes;
   void recorded_decode() { barrierIsLast = false; }
+
+  // IN-370: deferred GPU CLUT loads. A CLUT load (07.7) reads the GLM when the TEX0 write happens; recording it is
+  // put off while the GLM cannot change: every GpuDrawer call that writes the GLM, or reads or replaces the CLUT
+  // buffer, first records the pending loads (materialise_clut). Meanwhile an indexed decode whose palette entries
+  // were all written by the last pending load (same CPSM and CSA, at least as many entries) reads them straight
+  // from the GLM with that load's addressing (decode mode 3) and needs no CLUT buffer. When the loads are
+  // recorded, a load whose halfwords a later pending load all rewrites is dropped.
+  struct ClutLoadRecord {
+    std::uint32_t cbp = 0, cpsm = 0, csm = 0, csa = 0, eightBit = 0, cbw = 0, cou = 0, cov = 0;
+    std::array<std::uint64_t, 8> halfwords{};  // the 512 CLUT buffer halfwords this load writes
+  };
+  bool clutDefer = true;
+  std::vector<ClutLoadRecord> pendingClut;
+  static constexpr std::size_t kMaxPendingClut = 64;
+  static std::array<std::uint64_t, 8> clut_halfwords_written(std::uint32_t cpsm, std::uint32_t csa,
+                                                             std::uint32_t eightBit) {
+    // The destinations of hw_glm_clut.comp / clut::ClutUnit::Copy.
+    std::array<std::uint64_t, 8> mask{};
+    auto set = [&mask](std::uint32_t halfword) { mask[halfword >> 6] |= std::uint64_t{1} << (halfword & 63u); };
+    const std::uint32_t count = eightBit != 0 ? 256u : 16u;
+    for (std::uint32_t e = 0; e < count; ++e) {
+      if (cpsm == 0u) {
+        const std::uint32_t group = (e >> 4) + (csa & 15u);
+        if (group > 15u) continue;
+        set(16u * group + (e & 15u));
+        set(16u * group + (e & 15u) + 256u);
+      } else {
+        set((16u * csa + e) & 511u);
+      }
+    }
+    return mask;
+  }
+  // The last pending load wrote every entry an indexed texture with this CPSM, CSA and index width looks up.
+  const ClutLoadRecord *direct_palette_load(std::uint32_t cpsm, std::uint32_t csa, std::uint32_t eightBit) const {
+    if (!clutDefer || pendingClut.empty()) return nullptr;
+    const ClutLoadRecord &last = pendingClut.back();
+    if (last.cpsm != cpsm || last.csa != csa || last.eightBit < eightBit) return nullptr;
+    return &last;
+  }
+  bool materialise_clut(std::string &error) {
+    if (pendingClut.empty()) return true;
+    if (!begin_recording(error)) return false;
+    std::vector<ClutLoadRecord> loads;
+    loads.swap(pendingClut);
+    // Keep only the loads that still write a halfword no later load rewrites.
+    std::vector<bool> keep(loads.size(), false);
+    std::array<std::uint64_t, 8> later{};
+    for (std::size_t i = loads.size(); i-- > 0;) {
+      for (std::size_t w = 0; w < later.size(); ++w) {
+        if (loads[i].halfwords[w] & ~later[w]) keep[i] = true;
+        later[w] |= loads[i].halfwords[w];
+      }
+    }
+    ++stats.clutMaterialisations;
+    full_barrier();  // earlier GLM writes and CLUT buffer readers finish first
+    bind_compute(clutPipeline, computeSets[0]);
+    std::array<std::uint64_t, 8> sinceBarrier{};
+    for (std::size_t i = 0; i < loads.size(); ++i) {
+      if (!keep[i]) continue;
+      const ClutLoadRecord &load = loads[i];
+      bool overlap = false;
+      for (std::size_t w = 0; w < sinceBarrier.size(); ++w) overlap = overlap || (load.halfwords[w] & sinceBarrier[w]);
+      if (overlap) {  // a later load rewrites halfwords of an earlier one: keep their order
+        full_barrier();
+        bind_compute(clutPipeline, computeSets[0]);
+        sinceBarrier = {};
+      }
+      for (std::size_t w = 0; w < sinceBarrier.size(); ++w) sinceBarrier[w] |= load.halfwords[w];
+      const std::uint32_t push[8] = {load.cbp, load.cpsm, load.csm, load.csa, load.eightBit, load.cbw, load.cou, load.cov};
+      gt4_hwd_vkCmdPushConstants(cmd, computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+      recorded_work();
+      gt4_hwd_vkCmdDispatch(cmd, load.eightBit != 0 ? 4u : 1u, 1, 1);
+      ++stats.clutDispatches;
+    }
+    mark(kTimeClut);
+    full_barrier();
+    return true;
+  }
   const RunDecode *find_run_decode(const std::array<std::uint32_t, 12> &key) const {
     for (auto it = runDecodes.rbegin(); it != runDecodes.rend(); ++it) {
       if (it->generation != workGeneration) break;  // older entries are older still
@@ -950,7 +1028,7 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     computeSetInfo.pBindings = computeBindings;
     if (!check(gt4_hwd_vkCreateDescriptorSetLayout(s.device, &computeSetInfo, nullptr, &s.computeSetLayout),
                "vkCreateDescriptorSetLayout", error)) return false;
-    VkPushConstantRange computePush{VK_SHADER_STAGE_COMPUTE_BIT, 0, 16 * sizeof(std::uint32_t)};
+    VkPushConstantRange computePush{VK_SHADER_STAGE_COMPUTE_BIT, 0, 32 * sizeof(std::uint32_t)};  // 128 bytes
     VkPipelineLayoutCreateInfo computeLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
     computeLayoutInfo.setLayoutCount = 1;
     computeLayoutInfo.pSetLayouts = &s.computeSetLayout;
@@ -1275,6 +1353,7 @@ bool GpuDrawer::Flush(bool wait, std::string &error) { return impl_->submit(wait
 
 void GpuDrawer::SetRuns(bool enabled) { impl_->runsEnabled = enabled; }
 void GpuDrawer::SetDecodeReuse(bool enabled) { impl_->decodeReuse = enabled; }
+void GpuDrawer::SetClutDefer(bool enabled) { impl_->clutDefer = enabled; }
 
 void GpuDrawer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->chunksPerSubmission = chunks; }
 
@@ -1366,7 +1445,21 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   std::uint32_t originY = 0;
   // IN-369: the decode parameters (push constants of hw_glm_decode without the palette base and the atlas origin).
   // A CPU palette (indexed mode 1) lives in the palette ring and is never reused.
-  const std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
+  std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
+  // IN-370: mode 3 reads the palette from the GLM with the last pending CLUT load's addressing; otherwise a GPU
+  // CLUT decode needs the pending loads recorded first.
+  std::uint32_t paletteLoad[6] = {};  // CBP, CSM, entries (1: 256), CBW, COU, COV of that load
+  if (textureFromGlm && indexedMode == 2u) {
+    const std::uint32_t textureEightBit = (chunk.glmPsm & 7u) == 3u ? 1u : 0u;
+    if (const Impl::ClutLoadRecord *load = s.direct_palette_load(chunk.glmCpsm, chunk.glmCsa, textureEightBit)) {
+      indexedMode = 3u;
+      const std::uint32_t fields[6] = {load->cbp, load->csm, load->eightBit, load->cbw, load->cou, load->cov};
+      std::memcpy(paletteLoad, fields, sizeof(fields));
+      ++s.stats.decodesGlmPalette;
+    } else if (!s.materialise_clut(error)) {
+      return false;
+    }
+  }
   const std::array<std::uint32_t, 12> decodeKey = {chunk.glmBp,   chunk.glmBw,   chunk.glmPsm, chunk.texWidth,
                                                    chunk.texHeight, indexedMode, chunk.glmCpsm, chunk.glmCsa,
                                                    chunk.glmTa0,  chunk.glmTa1,  chunk.glmAem, 0u};
@@ -1451,9 +1544,10 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
       ++s.stats.decodesReused;
     } else if (textureFromGlm) {
       s.bind_compute(s.decodePipeline, s.computeSets[0]);
-      const std::uint32_t push[14] = {chunk.glmBp,  chunk.glmBw,   chunk.glmPsm,  chunk.texWidth, chunk.texHeight,
-                                      indexedMode,  paletteBase,   chunk.glmCpsm, chunk.glmCsa,   chunk.glmTa0,
-                                      chunk.glmTa1, chunk.glmAem,  originX,       originY};
+      const std::uint32_t push[20] = {chunk.glmBp,    chunk.glmBw,    chunk.glmPsm,   chunk.texWidth, chunk.texHeight,
+                                      indexedMode,    paletteBase,    chunk.glmCpsm,  chunk.glmCsa,   chunk.glmTa0,
+                                      chunk.glmTa1,   chunk.glmAem,   originX,        originY,        paletteLoad[0],
+                                      paletteLoad[1], paletteLoad[2], paletteLoad[3], paletteLoad[4], paletteLoad[5]};
       gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
       s.recorded_decode();
       gt4_hwd_vkCmdDispatch(s.cmd, (chunk.texWidth + 7) / 8, (chunk.texHeight + 7) / 8, 1);
@@ -1531,10 +1625,10 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     // IN-347: decode the texels from the GLM with the texture's addressing (the caller made the GLM current).
     s.full_barrier();
     s.bind_compute(s.decodePipeline, s.computeSets[0]);
-    const std::uint32_t indexedMode = !chunk.glmIndexed ? 0u : chunk.glmGpuClut ? 2u : 1u;
-    const std::uint32_t push[14] = {chunk.glmBp,  chunk.glmBw,   chunk.glmPsm,  chunk.texWidth,
-                                    chunk.texHeight, indexedMode, paletteBase,  chunk.glmCpsm,
-                                    chunk.glmCsa, chunk.glmTa0,  chunk.glmTa1,  chunk.glmAem, 0u, 0u};
+    const std::uint32_t push[20] = {chunk.glmBp,    chunk.glmBw,    chunk.glmPsm,   chunk.texWidth, chunk.texHeight,
+                                    indexedMode,    paletteBase,    chunk.glmCpsm,  chunk.glmCsa,   chunk.glmTa0,
+                                    chunk.glmTa1,   chunk.glmAem,   0u,             0u,             paletteLoad[0],
+                                    paletteLoad[1], paletteLoad[2], paletteLoad[3], paletteLoad[4], paletteLoad[5]};
     gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
     s.recorded_work();
     gt4_hwd_vkCmdDispatch(s.cmd, (chunk.texWidth + 7) / 8, (chunk.texHeight + 7) / 8, 1);
@@ -1696,7 +1790,7 @@ bool GpuDrawer::UploadGlm(const std::uint8_t *localMemory,
     return false;
   }
   if (s.stagingUsed + total > kStagingBytes && !s.submit(false, error)) return false;
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   std::vector<VkBufferCopy> copies;
   copies.reserve(ranges.size());
   auto *staging = static_cast<std::uint8_t *>(s.staging.mapped);
@@ -1728,7 +1822,7 @@ bool GpuDrawer::SwizzleToGlm(bool depthSlot, std::uint32_t slot, std::uint32_t b
     error = "GLM swizzle outside a slot";
     return false;
   }
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   if (!s.flush_run(error)) return false;  // the swizzle reads the target image the run draws into
   const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
   s.full_barrier();  // the target's draws and the GLM's earlier writes are complete
@@ -1784,7 +1878,7 @@ bool GpuDrawer::MergeIntoGlm(const std::vector<std::uint32_t> &triples, std::str
     return false;
   }
   if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
   std::memcpy(static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed, triples.data(), bytes);
   s.paletteUsed += bytes;
@@ -1819,7 +1913,7 @@ bool GpuDrawer::UploadHostToGlm(std::uint32_t bp, std::uint32_t bw, std::uint32_
     return false;
   }
   if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
   auto *ring = static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed;
   std::memcpy(ring, data, byteCount);
@@ -1987,7 +2081,7 @@ bool GpuDrawer::DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint
     error = "GLM download larger than the readback buffer";
     return false;
   }
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   s.full_barrier();
   s.recorded_work();
   gt4_hwd_vkCmdCopyBuffer(s.cmd, s.glm.buffer, s.readback.buffer, static_cast<std::uint32_t>(copies.size()),
@@ -2011,23 +2105,26 @@ bool GpuDrawer::LoadClutFromGlm(std::uint32_t cbp, std::uint32_t cpsm, std::uint
                                 std::uint32_t psm, std::uint32_t cbw, std::uint32_t cou, std::uint32_t cov,
                                 std::string &error) {
   Impl &s = *impl_;
-  if (!s.begin_recording(error)) return false;
-  s.full_barrier();
-  s.bind_compute(s.clutPipeline, s.computeSets[0]);
-  const std::uint32_t eightBit = (psm & 7u) == 3u ? 1u : 0u;
-  const std::uint32_t push[8] = {cbp, cpsm, csm, csa, eightBit, cbw, cou, cov};
-  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
-  s.recorded_work();
-  gt4_hwd_vkCmdDispatch(s.cmd, eightBit ? 4u : 1u, 1, 1);
-  s.mark(Impl::kTimeClut);
-  s.full_barrier();
+  Impl::ClutLoadRecord load;
+  load.cbp = cbp;
+  load.cpsm = cpsm;
+  load.csm = csm;
+  load.csa = csa;
+  load.eightBit = (psm & 7u) == 3u ? 1u : 0u;
+  load.cbw = cbw;
+  load.cou = cou;
+  load.cov = cov;
+  load.halfwords = Impl::clut_halfwords_written(cpsm, csa, load.eightBit);
+  s.pendingClut.push_back(load);
+  ++s.workGeneration;  // IN-369: a decode after this load must not reuse one from before it
+  if (!s.clutDefer || s.pendingClut.size() >= Impl::kMaxPendingClut) return s.materialise_clut(error);
   return true;
 }
 
 bool GpuDrawer::UploadClut(const std::uint16_t *halfwords, std::string &error) {
   Impl &s = *impl_;
   if (s.stagingUsed + kClutBytes > kStagingBytes && !s.submit(false, error)) return false;
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   auto *staging = reinterpret_cast<std::uint32_t *>(static_cast<std::uint8_t *>(s.staging.mapped) + s.stagingUsed);
   for (std::uint32_t i = 0; i < 512; ++i) staging[i] = halfwords[i];
   s.full_barrier();
@@ -2042,7 +2139,7 @@ bool GpuDrawer::UploadClut(const std::uint16_t *halfwords, std::string &error) {
 
 bool GpuDrawer::ReadClut(std::vector<std::uint16_t> &halfwords, std::string &error) {
   Impl &s = *impl_;
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   s.full_barrier();
   const VkBufferCopy copy{0, 0, kClutBytes};
   s.recorded_work();
@@ -2061,7 +2158,7 @@ bool GpuDrawer::ReadClut(std::vector<std::uint16_t> &halfwords, std::string &err
 
 bool GpuDrawer::ReadGlm(std::vector<std::uint32_t> &words, std::string &error) {
   Impl &s = *impl_;
-  if (!s.begin_recording(error)) return false;
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370
   s.full_barrier();
   const VkBufferCopy copy{0, 0, kGlmBytes};
   s.recorded_work();
