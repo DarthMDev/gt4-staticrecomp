@@ -459,6 +459,19 @@ bool BlockRangesOverlap(uint32_t begin0, uint32_t count0, uint32_t begin1, uint3
     if (count0 == 0u || count1 == 0u) {
         return false;
     }
+    // Two arcs of the circular block space intersect exactly when one of them contains the other's first
+    // block (IN-360: constant time; the block-by-block walk cost thousands of steps per frame-buffer check).
+    const uint32_t start0 = begin0 % kBlocksTotal;
+    const uint32_t start1 = begin1 % kBlocksTotal;
+    const uint32_t from0To1 = (start1 + kBlocksTotal - start0) % kBlocksTotal;  // start1 seen from start0
+    const uint32_t from1To0 = (start0 + kBlocksTotal - start1) % kBlocksTotal;  // start0 seen from start1
+    return from0To1 < count0 || from1To0 < count1;
+}
+
+bool BlockRangesOverlapByWalk(uint32_t begin0, uint32_t count0, uint32_t begin1, uint32_t count1) {
+    if (count0 == 0u || count1 == 0u) {
+        return false;
+    }
     for (uint32_t i = 0; i < count0 && i < kBlocksTotal; ++i) {
         const uint32_t block = (begin0 + i) % kBlocksTotal;
         const uint32_t offset = (block + kBlocksTotal - begin1 % kBlocksTotal) % kBlocksTotal;

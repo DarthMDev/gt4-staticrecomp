@@ -266,6 +266,41 @@ void ClutUnit::Copy(const Tex0Write& write, const uint8_t* localMemory) {
     sourceBlocks_.reset();
     sourceFirst_ = kBlocksTotal;
     sourceLast_ = 0;
+    // IN-360: without data copies only the source blocks matter; they depend on the placement fields alone.
+    SourceMemo* memo = nullptr;
+    if (!copiesData_) {
+        const uint64_t key = uint64_t{write.cbp} | (uint64_t{write.cpsm & 63u} << 14) | (uint64_t{write.csm & 1u} << 20) |
+                             (uint64_t{eightBit ? 1u : 0u} << 21) |
+                             (write.csm == 1u ? (uint64_t{write.texclutCbw & 63u} << 22) |
+                                                    (uint64_t{write.texclutCou & 63u} << 28) |
+                                                    (uint64_t{write.texclutCov & 1023u} << 34)
+                                              : 0ull);
+        SourceMemo* oldest = &sourceMemo_[0];
+        for (SourceMemo& entry : sourceMemo_) {
+            if (entry.key == key) {
+                memo = &entry;
+                break;
+            }
+            if (entry.lastUse < oldest->lastUse) oldest = &entry;
+        }
+        if (memo) {
+            for (const uint32_t block : memo->blocks) {
+                sourceBlocks_.set(block);
+                sourceFirst_ = std::min(sourceFirst_, block);
+                sourceLast_ = std::max(sourceLast_, block);
+            }
+            memo->lastUse = ++memoUses_;
+            ++generation_;
+            haveLast_ = true;
+            stale_ = false;
+            last_ = write;
+            return;
+        }
+        memo = oldest;
+        memo->key = key;
+        memo->blocks.clear();
+        memo->lastUse = ++memoUses_;
+    }
     for (uint32_t e = 0; e < entryCount; ++e) {
         uint32_t x = 0;
         uint32_t y = 0;
@@ -283,6 +318,7 @@ void ClutUnit::Copy(const Tex0Write& write, const uint8_t* localMemory) {
         if (!LocatePixel(write.cpsm, base, width, x, y, location)) {
             continue;
         }
+        if (memo && !sourceBlocks_.test(location.block)) memo->blocks.push_back(location.block);
         sourceBlocks_.set(location.block);
         sourceFirst_ = std::min(sourceFirst_, location.block);
         sourceLast_ = std::max(sourceLast_, location.block);

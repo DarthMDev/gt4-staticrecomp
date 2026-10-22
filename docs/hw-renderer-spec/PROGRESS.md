@@ -407,4 +407,7 @@ while a game is open, and never touches the owner's card.
 - GPU busy about 8.2-9.4 ms per night frame. The remaining cost of the heaviest frames is CPU: the GIF front end
   (about 7-8 ms of the GS stream on the heaviest interval) and translate/execute (about 4.5 ms).
 - Next: the GIF front end (step 3), then the CPU compose; the GPU-driven flare (R3) remains a later, producer-side step.
+- IN-360 (CPU front end, part 2): headless without dumps, night race 10.4-17.2 ms per vsync (race start with the full
+  field is the 17.2 interval), day race 15.2-16.7 ms. Gates as above (local slice241), 225/225 non-Python CTests.
+  Next: the presentation compose (3-4 ms of CPU per windowed frame).
 

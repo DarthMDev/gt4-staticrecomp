@@ -8,9 +8,11 @@
 // when the two are merged both must agree (their tests cover the same tables).
 #pragma once
 
+#include <array>
 #include <bitset>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 #include <functional>
 
 #include "hw_gs_counters.hpp"
@@ -134,6 +136,15 @@ private:
     uint32_t sourceFirst_ = kBlocksTotal;  // lowest and highest block set in sourceBlocks_ (IN-353 early-out)
     uint32_t sourceLast_ = 0;
     bool copiesData_ = true;
+    // IN-360: source blocks of recent copy-free loads, keyed by everything that places the entries (GT4 reloads
+    // the same few palettes about a thousand times per frame).
+    struct SourceMemo {
+        uint64_t key = ~0ull;
+        std::vector<uint32_t> blocks;
+        uint64_t lastUse = 0;
+    };
+    std::array<SourceMemo, 16> sourceMemo_{};
+    uint64_t memoUses_ = 0;
 };
 
 }  // namespace clut

@@ -10,6 +10,7 @@
 #include "hw_gs_writeback.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -1766,6 +1767,22 @@ public:
             return;
         }
         Translation t;
+        // IN-360: reuse the previous batch's vector storage (cleared, capacity kept).
+        t.vertices.swap(spareVertices_);
+        t.draws.swap(spareDraws_);
+        t.texels.swap(spareTexels_);
+        t.vertices.clear();
+        t.draws.clear();
+        t.texels.clear();
+        struct ReturnStorage {
+            Translation& t;
+            Impl& s;
+            ~ReturnStorage() {
+                s.spareVertices_.swap(t.vertices);
+                s.spareDraws_.swap(t.draws);
+                s.spareTexels_.swap(t.texels);
+            }
+        } returnStorage{t, *this};
         {
             StageTimer timer(frameTimings_.translateUs);
             Translate(batch, memory_.Local(), frontEnd_.Clut(), t, counters,
@@ -1907,7 +1924,11 @@ public:
     bool glmParking_ = true;                       // IN-350 (off for A/B runs: evictions and overlaps write back)
     bool glmLoadsAlways_ = false;                  // IN-350 fixtures: every slot load goes through the GLM
     BlockSpan pendingReadSpan_{0, kAllBlocks};    // source of the last LOCAL->HOST transfer (10.2)
-    bool glmBatchedWritebacks_ = true;             // IN-357 (off for A/B runs: one readback per slot)
+    bool glmBatchedWritebacks_ = true;
+    std::vector<Qword> gifScratch_;              // IN-360: unaligned GIF packets copied here (reused)
+    std::vector<gpu::GpuVertex> spareVertices_;  // IN-360: storage reused by the next batch's translation
+    std::vector<gpu::GpuDraw> spareDraws_;
+    std::vector<uint32_t> spareTexels_;             // IN-357 (off for A/B runs: one readback per slot)
     bool gpuUploads_ = true;                       // IN-351 (off for A/B runs: uploads written on the CPU)
     std::array<bool, memory::kPagesTotal> glmOwned_{};  // newest content only in the GLM (IN-350)
     uint32_t glmOwnedPages_ = 0;
@@ -1932,12 +1953,24 @@ bool Renderer::GifTransfer(std::uint32_t path, const std::uint8_t* bytes, std::s
     if (path == 0 || path > 3) return false;  // IN-312
     if (byteCount % 16 != 0) return false;
     StageTimer timer(impl_->counters.gifUs);
-    std::vector<Qword> qwords(byteCount / 16);
-    for (std::size_t i = 0; i < qwords.size(); ++i) {
-        std::memcpy(&qwords[i].lo, bytes + 16 * i, 8);
-        std::memcpy(&qwords[i].hi, bytes + 16 * i + 8, 8);
+    // IN-360: on a little-endian host the stream bytes are Qwords already; they are used in place when aligned,
+    // otherwise copied once into a reused buffer (no allocation per packet).
+    const std::size_t count = byteCount / 16;
+    if constexpr (std::endian::native == std::endian::little && sizeof(Qword) == 16) {
+        if (reinterpret_cast<std::uintptr_t>(bytes) % alignof(Qword) == 0) {
+            impl_->frontEnd_.GifTransfer(path, reinterpret_cast<const Qword*>(bytes), count);
+            return true;
+        }
+        impl_->gifScratch_.resize(count);
+        std::memcpy(impl_->gifScratch_.data(), bytes, byteCount);
+    } else {
+        impl_->gifScratch_.resize(count);
+        for (std::size_t i = 0; i < count; ++i) {
+            std::memcpy(&impl_->gifScratch_[i].lo, bytes + 16 * i, 8);  // as before IN-360
+            std::memcpy(&impl_->gifScratch_[i].hi, bytes + 16 * i + 8, 8);
+        }
     }
-    impl_->frontEnd_.GifTransfer(path, qwords.data(), qwords.size());
+    impl_->frontEnd_.GifTransfer(path, impl_->gifScratch_.data(), count);
     return true;
 }
 

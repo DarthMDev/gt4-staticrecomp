@@ -1289,6 +1289,27 @@ void TestCounters() {
 // same random sequence of TEX0 writes and memory writes: A notes each write as one range, R notes it block by
 // block (the reference: a single block cannot be mis-classified by a range test), B notes ranges and does not
 // copy entries. Every load decision, every counter and A's entries must equal R's; B's decisions must equal A's.
+// IN-360: the constant-time BlockRangesOverlap equals the block-by-block definition, including ranges that wrap at
+// the top of memory, cover all of it, touch end to end, and zero counts.
+void TestBlockRangesOverlap() {
+    uint64_t state = 0xB10Cu;
+    auto next = [&] {
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        return static_cast<uint32_t>(state >> 32);
+    };
+    const uint32_t counts[] = {0u, 1u, 2u, 31u, 32u, 4480u, 16383u, 16384u, 16390u, 40000u};
+    int checked = 0;
+    for (int i = 0; i < 200000; ++i) {
+        const uint32_t b0 = (i % 7 == 0) ? 16384u - 1u - next() % 64u : next() % 40000u;
+        const uint32_t b1 = (i % 5 == 0) ? (b0 + counts[next() % 10]) : next() % 40000u;  // end-to-end cases
+        const uint32_t c0 = (i % 3 == 0) ? counts[next() % 10] : next() % 9000u;
+        const uint32_t c1 = (i % 4 == 0) ? counts[next() % 10] : next() % 9000u;
+        CHECK_EQ(BlockRangesOverlap(b0, c0, b1, c1), BlockRangesOverlapByWalk(b0, c0, b1, c1));
+        ++checked;
+    }
+    std::printf("hw_block_ranges_overlap: %d random cases checked\n", checked);
+}
+
 void TestClutCopyFree() {
     std::vector<uint8_t> memory(kLocalMemoryBytes);
     uint64_t state = 0xC1A7u;
@@ -1392,6 +1413,7 @@ int main(int argc, char** argv) {
         {"hw_clut_load", [] { TestClutLoad(); }},
         {"hw_clut_snapshot", [] { TestClutSnapshot(); }},
         {"hw_clut_copy_free", [] { TestClutCopyFree(); }},
+        {"hw_block_ranges_overlap", [] { TestBlockRangesOverlap(); }},
         {"hw_transfers", [] { TestTransfers(); }},
         {"hw_counters", [] { TestCounters(); }},
     };

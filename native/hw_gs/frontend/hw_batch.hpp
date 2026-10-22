@@ -127,5 +127,7 @@ uint32_t FootprintBlocks(uint32_t widthUnits, uint32_t heightPixels);
 
 // True when two block ranges (with 16384-block wrap) share a block.
 bool BlockRangesOverlap(uint32_t begin0, uint32_t count0, uint32_t begin1, uint32_t count1);
+// The block-by-block definition the constant-time version must equal (fixture reference, IN-360).
+bool BlockRangesOverlapByWalk(uint32_t begin0, uint32_t count0, uint32_t begin1, uint32_t count1);
 
 }  // namespace hwgs

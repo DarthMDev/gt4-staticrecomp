@@ -2042,3 +2042,10 @@ The local run script gained the `night` schedule (FRAME-COST-STUDY Clubman Stage
 - Confirmed: headless menu 42/42 dumps byte-identical to slice228; race schedule 42/42 identical to slice235 and inside
   the 3D gate vs the donor; default renderer 42/42 = slice214; card copies unchanged.
 - Measured: headless night race 11-19 ms per vsync (slice239: 20-28 ms); GPU busy 8.2-9.4 ms per frame.
+
+## Local slice241 - CPU front-end savings part 2 (IN-360)
+
+Incremental rebuild. Confirmed: 225/225 non-Python CTests (new `m3_hw_block_ranges_overlap`), also without interlock;
+memory hashes identical on the menu, car, race and night captures, night `fifo_hash` unchanged; headless menu 42/42
+dumps byte-identical to slice228; race schedule identical to slice235; default renderer 42/42 = slice214. Measured
+headless (no dumps): night race 10.4-17.2 ms, day race 15.2-16.7 ms per vsync.

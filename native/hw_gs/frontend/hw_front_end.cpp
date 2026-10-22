@@ -2,6 +2,8 @@
 // Written from the TASK-026 specification (docs/hw-renderer-spec) (clean room).
 #include "hw_front_end.hpp"
 
+#include <bit>
+
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -211,14 +213,21 @@ void FrontEnd::ImageQword(uint32_t path, const Qword& qword) {
 // (one per transfer it completes); the bytes, commits and discard counts equal ImageQword per qword.
 void FrontEnd::ImageQwords(uint32_t path, const Qword* qwords, size_t count) {
     (void)path;
-    imageBytes_.resize(count * 16);
-    for (size_t i = 0; i < count; ++i) {
-        PackLe64(qwords[i].lo, imageBytes_.data() + 16 * i);
-        PackLe64(qwords[i].hi, imageBytes_.data() + 16 * i + 8);
+    // On a little-endian host a Qword {lo, hi} already holds the 16 bytes in GS order (IN-360: no repacking).
+    const uint8_t* bytes = nullptr;
+    if constexpr (std::endian::native == std::endian::little && sizeof(Qword) == 16) {
+        bytes = reinterpret_cast<const uint8_t*>(qwords);
+    } else {
+        imageBytes_.resize(count * 16);
+        for (size_t i = 0; i < count; ++i) {
+            PackLe64(qwords[i].lo, imageBytes_.data() + 16 * i);
+            PackLe64(qwords[i].hi, imageBytes_.data() + 16 * i + 8);
+        }
+        bytes = imageBytes_.data();
     }
     size_t done = 0;
     while (done < count) {
-        done += transfers_.AcceptImageQwords(imageBytes_.data() + 16 * done, count - done);
+        done += transfers_.AcceptImageQwords(bytes + 16 * done, count - done);
     }
 }
 
@@ -896,6 +905,12 @@ void FrontEnd::FlushBatch(FlushReason reason) {
             Batch out = std::move(batch_);
             batch_ = Batch{};
             batches_.OnBatch(std::move(out));
+            // IN-360: a sink that did not keep the batch leaves its storage here; the next batch reuses it
+            // (cleared, capacity kept) instead of growing new vectors.
+            out.vertices.clear();
+            out.prims.clear();
+            batch_.vertices.swap(out.vertices);
+            batch_.prims.swap(out.prims);
         }
         if (textured) {
             texflushPending_ = false;  // a textured batch flushed clears the flag
