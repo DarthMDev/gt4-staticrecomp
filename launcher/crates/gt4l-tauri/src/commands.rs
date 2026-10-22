@@ -152,6 +152,21 @@ pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), S
             // Another monitor has other modes: the Resolution goes back to that monitor's desktop mode.
             state.config.settings.set("resolution", display_rules::DESKTOP).map_err(|error| error.to_string())?;
         }
+        if id == "resolution" {
+            // TASK-088 (1.2.0): a size equal to the monitor's desktop is stored as "desktop" (it then follows the desktop
+            // at every start). Any other size is stored with the monitor's identifier, which records the desktop size at
+            // the time of the choice (`display::desktop_at_save`).
+            let monitors = gt4l_platform::display::monitors();
+            if let Some(monitor) = display_rules::resolve_monitor(&monitors, state.config.settings.get("monitor")) {
+                let desktop_choice = text == display_rules::DESKTOP || display_rules::Size::parse(&text) == Some(monitor.desktop);
+                if desktop_choice {
+                    state.config.settings.set("resolution", display_rules::DESKTOP).map_err(|error| error.to_string())?;
+                } else {
+                    let identifier = display_rules::monitor_id(monitor);
+                    state.config.settings.set("monitor", &identifier).map_err(|error| error.to_string())?;
+                }
+            }
+        }
     } else if let Some((trigger, field)) = id.split_once('_').filter(|(name, _)| ["l2", "r2"].contains(name)) {
         let current = state.controls.trigger_tuning(trigger);
         let (deadzone, curve) = match field {
@@ -250,11 +265,22 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         launch::RendererChoice::CoreGs11 { reason } => (None, reason),
     };
     // TASK-080 addendum: the stored Monitor and Resolution against the monitors connected now.
-    let display = display_rules::resolve_target(
-        &gt4l_platform::display::monitors(),
-        settings.get("monitor"),
-        settings.get("resolution"),
-    );
+    let monitors = gt4l_platform::display::monitors();
+    let display = display_rules::resolve_target(&monitors, settings.get("monitor"), settings.get("resolution"));
+    // TASK-088 (1.2.0): a stored size the monitor no longer has plays at its desktop mode, and the log says so.
+    if let Some(monitor) = display_rules::resolve_monitor(&monitors, settings.get("monitor")) {
+        if let Some(desktop) = display_rules::resolution_fallback(monitor, settings.get("resolution")) {
+            state::log(
+                &dirs,
+                &format!(
+                    "display: resolution {} is not a mode of {} now; playing at its desktop {}",
+                    settings.get("resolution"),
+                    monitor.device,
+                    desktop.text()
+                ),
+            );
+        }
+    }
     let plan = launch::session_plan(&settings, display.as_ref());
     state::log(
         &dirs,

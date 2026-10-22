@@ -268,3 +268,42 @@ fn a_schema_five_file_keeps_its_values_and_gets_the_texture_defaults_with_a_back
     let rewritten = fs::read_to_string(&path).unwrap();
     assert!(rewritten.contains("schema_version = 6"), "{rewritten}");
 }
+
+#[test]
+fn a_schema_five_resolution_equal_to_the_monitor_desktop_becomes_desktop() {
+    // TASK-088 (schema 6): the Monitor identifier records the desktop size when it was chosen. A Resolution equal to
+    // it follows the desktop from now on; a different size is a deliberate choice and stays.
+    let directory = scratch("v5-resolution-desktop");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 5\n\n",
+        "[settings]\nmonitor = '\\\\.\\DISPLAY2@3440x1440'\nresolution = \"3440x1440\"\n\n",
+        "[install]\ndisc_path = \"D:/gt4.iso\"\n",
+    );
+    fs::write(&path, original).unwrap();
+    let (loaded, notes) = config::load(&path);
+    assert!(notes.iter().any(|note| note.contains("migrated from schema 5 to 6")), "{notes:?}");
+    assert_eq!(loaded.settings.get("resolution"), "desktop");
+    assert_eq!(loaded.settings.get("monitor"), r"\\.\DISPLAY2@3440x1440", "the identifier is kept");
+    let copies = backups(&directory, "settings.toml.bak-schema5-");
+    assert_eq!(copies.len(), 1, "exactly one backup");
+    assert_eq!(fs::read_to_string(&copies[0]).unwrap(), original);
+}
+
+#[test]
+fn a_schema_five_resolution_that_differs_or_has_no_recorded_desktop_is_kept() {
+    let directory = scratch("v5-resolution-kept");
+    let path = directory.join("settings.toml");
+    let original = concat!(
+        "schema_version = 5\n\n",
+        "[settings]\nmonitor = '\\\\.\\DISPLAY2@5120x2160'\nresolution = \"3440x1440\"\n",
+    );
+    fs::write(&path, original).unwrap();
+    let (loaded, _) = config::load(&path);
+    assert_eq!(loaded.settings.get("resolution"), "3440x1440", "a deliberate size of another mode");
+
+    let primary = directory.join("primary.toml");
+    fs::write(&primary, "schema_version = 5\n\n[settings]\nmonitor = \"primary\"\nresolution = \"3440x1440\"\n").unwrap();
+    let (loaded, _) = config::load(&primary);
+    assert_eq!(loaded.settings.get("resolution"), "3440x1440", "no desktop size is recorded for primary");
+}

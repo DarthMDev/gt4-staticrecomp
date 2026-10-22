@@ -51,7 +51,8 @@ fn refused_values_are_the_same_refusals_as_the_python_writer() {
     // scripts/gs_settings.py refuses these with SettingsError: out of range, not settable, launcher-only.
     // upscale 9 is the INI value of 9x (accepted); 13 is out of the table (refused by both writers).
     assert!(gs_table::render_ini(&map(&[("upscale", "13")]), &BTreeMap::new()).is_err());
-    assert!(gs_table::render_ini(&map(&[("filter", "nearest")]), &BTreeMap::new()).is_err());
+    // TASK-088 (1.2.0): filter nearest is an enabled value now; a value outside the table is still refused.
+    assert!(gs_table::render_ini(&map(&[("filter", "bogus")]), &BTreeMap::new()).is_err());
     assert!(gs_table::render_ini(&map(&[("cache_folder", "C:/x")]), &BTreeMap::new()).is_err());
     // Forced rows (owner, 2026-10-21): only the fixed value is accepted.
     assert!(gs_table::render_ini(&map(&[("aspect", "4:3")]), &BTreeMap::new()).is_err());

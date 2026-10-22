@@ -237,15 +237,32 @@ pub const PRIMARY: &str = "primary";
 /// The stored value that means "the monitor's desktop mode" (the default resolution).
 pub const DESKTOP: &str = "desktop";
 
-/// "DELL U3419W - 3440x1440 (primary)"; a monitor without a friendly name is called by its device ("DISPLAY1").
-pub fn monitor_label(monitor: &Monitor) -> String {
-    let name = if monitor.name.trim().is_empty() {
+/// The monitor's friendly name ("DELL U3419W"); a monitor without one is called by its device ("DISPLAY1").
+pub fn monitor_base_name(monitor: &Monitor) -> String {
+    if monitor.name.trim().is_empty() {
         monitor.device.trim_start_matches(r"\\.\").to_string()
     } else {
         monitor.name.trim().to_string()
-    };
-    let primary = if monitor.primary { " (primary)" } else { "" };
-    format!("{name} \u{2013} {}{primary}", monitor.desktop.text())
+    }
+}
+
+/// The labels of the Monitor row, one per monitor in order: the friendly name only (no resolution, no "primary").
+/// A monitor whose name is already taken gets the smallest suffix that tells it apart: " 2", then " 3" and so on.
+pub fn monitor_labels(monitors: &[Monitor]) -> Vec<String> {
+    let mut used: Vec<String> = Vec::new();
+    let mut labels = Vec::new();
+    for monitor in monitors {
+        let base = monitor_base_name(monitor);
+        let mut label = base.clone();
+        let mut number = 2;
+        while used.contains(&label) {
+            label = format!("{base} {number}");
+            number += 1;
+        }
+        used.push(label.clone());
+        labels.push(label);
+    }
+    labels
 }
 
 /// The monitor a stored value names. Order: the exact identifier; the same device; a monitor with the same desktop
@@ -272,6 +289,21 @@ pub fn resolve_resolution(monitor: &Monitor, stored: &str) -> Size {
     match Size::parse(stored) {
         Some(size) if monitor.modes.contains(&size) => size,
         _ => monitor.desktop,
+    }
+}
+
+/// The desktop size a stored monitor identifier recorded when it was saved (`\\.\DISPLAY2@3440x1440` gives 3440x1440).
+/// `None` for "primary" and for anything else without a size.
+pub fn desktop_at_save(stored_monitor: &str) -> Option<Size> {
+    parse_monitor_id(stored_monitor).map(|(_, size)| size)
+}
+
+/// The mode a stored explicit resolution asked for when this monitor no longer has it: `Some(desktop)` then (the
+/// launcher logs it and plays at the desktop mode). `None` for "desktop", a mode the monitor supports, or no size.
+pub fn resolution_fallback(monitor: &Monitor, stored: &str) -> Option<Size> {
+    match Size::parse(stored) {
+        Some(size) if !monitor.modes.contains(&size) => Some(monitor.desktop),
+        _ => None,
     }
 }
 
@@ -391,9 +423,30 @@ mod tests {
             wide.modes,
             vec![Size::new(3440, 1440), Size::new(1920, 1080), Size::new(1280, 720), Size::new(800, 600)]
         );
-        assert_eq!(monitor_label(&wide), "DELL U3419W \u{2013} 3440x1440");
+        assert_eq!(monitor_base_name(&wide), "DELL U3419W");
+    }
+
+    #[test]
+    fn labels_are_the_friendly_name_with_a_suffix_only_for_duplicates() {
+        let wide = monitor(r"\\.\DISPLAY2", "DELL U3419W", false, Size::new(3440, 1440));
         let unnamed = monitor(r"\\.\DISPLAY1", "", true, Size::new(1920, 1080));
-        assert_eq!(monitor_label(&unnamed), "DISPLAY1 \u{2013} 1920x1080 (primary)");
+        assert_eq!(monitor_labels(&[wide.clone(), unnamed.clone()]), vec!["DELL U3419W".to_string(), "DISPLAY1".to_string()]);
+        let twin = monitor(r"\\.\DISPLAY3", "DELL U3419W", false, Size::new(2560, 1080));
+        let third = monitor(r"\\.\DISPLAY4", "DELL U3419W", false, Size::new(1920, 1080));
+        assert_eq!(
+            monitor_labels(&[wide, twin, unnamed, third]),
+            vec!["DELL U3419W", "DELL U3419W 2", "DISPLAY1", "DELL U3419W 3"]
+        );
+    }
+
+    #[test]
+    fn a_stored_mode_the_monitor_lost_falls_back_to_the_desktop() {
+        let wide = monitor(r"\\.\DISPLAY2", "DELL", false, Size::new(3440, 1440));
+        assert_eq!(resolution_fallback(&wide, "1920x1080"), None, "a mode the monitor has");
+        assert_eq!(resolution_fallback(&wide, "5120x2160"), Some(Size::new(3440, 1440)), "a lost mode");
+        assert_eq!(resolution_fallback(&wide, DESKTOP), None, "desktop is never a fallback");
+        assert_eq!(desktop_at_save(r"\\.\DISPLAY2@3440x1440"), Some(Size::new(3440, 1440)));
+        assert_eq!(desktop_at_save(PRIMARY), None);
     }
 
     #[test]

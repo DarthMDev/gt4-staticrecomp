@@ -213,11 +213,29 @@ fn settings_4_to_5(document: &mut Value) -> Result<(), String> {
     Ok(())
 }
 
-/// Schema 6: custom textures (TASK-088, gt4-gs 1.2.0). The Load custom textures row (`[gs] texture_load`, default on)
-/// and the Precache row (`[gs] texture_precache`, default off) are gs-table rows: a value is kept in `[gs]` only when
-/// the user changed it, and an absent key takes the table default. So this step changes no value: a schema 5 file keeps
-/// its settings and gets the new defaults. The backup of the old file is made by `config::prepare`, as for every step.
-fn settings_5_to_6(_document: &mut Value) -> Result<(), String> {
+/// Schema 6 (TASK-088, gt4-gs 1.2.0). Two changes, both in this one step (schema 6 is not released yet):
+///
+/// - Custom textures: the Load custom textures row (`[gs] texture_load`, default on) and the Precache row
+///   (`[gs] texture_precache`, default off) are gs-table rows. A value is kept in `[gs]` only when the user changed it,
+///   and an absent key takes the table default, so nothing is rewritten for them.
+/// - Resolution follows the desktop (owner, 2026-10-21). A stored Resolution equal to the desktop size of the stored
+///   Monitor becomes "desktop", so it follows the monitor's desktop at each start. The desktop size is known only from
+///   the Monitor identifier (`\\.\DISPLAY2@3440x1440` records the desktop when it was chosen, `display::desktop_at_save`).
+///   A file whose Monitor is "primary" records no desktop size: its Resolution is kept as it was (it cannot be told
+///   apart from a deliberate choice of that size). The rule is recorded here so that later readers know why.
+///
+/// The backup of the old file is made by `config::prepare`, as for every step.
+fn settings_5_to_6(document: &mut Value) -> Result<(), String> {
+    let Some(settings) = document.get_mut("settings").and_then(Value::as_object_mut) else {
+        return Ok(());
+    };
+    let monitor = settings.get("monitor").and_then(Value::as_str).unwrap_or("primary").to_string();
+    let resolution = settings.get("resolution").and_then(Value::as_str).unwrap_or("desktop").to_string();
+    if let Some(desktop) = crate::display::desktop_at_save(&monitor) {
+        if crate::display::Size::parse(&resolution) == Some(desktop) {
+            settings.insert("resolution".to_string(), Value::from("desktop"));
+        }
+    }
     Ok(())
 }
 

@@ -79,8 +79,8 @@ written = "always"
 status = "ok"
 choices = [
   { name = "vulkan", ini = "14", status = "ok" },
-  { name = "d3d12", ini = "15", status = "resolved" },
-  { name = "d3d11", ini = "3", status = "resolved" },
+  { name = "d3d12", ini = "15", status = "ok" },
+  { name = "d3d11", ini = "3", status = "ok" },
 ]
 notes = "GSRendererType (pcsx2/Config.h:271-281): VK = 14, DX12 = 15, DX11 = 3. Loader pcsx2/Pcsx2Config.cpp:1044 (key Renderer). UI values pcsx2/ImGui/FullscreenUI_Settings.cpp:2774-2790. D3D11 and D3D12 are resolved but not offered: the GT4 build is checked on Vulkan only. The software renderer (SW = 13) is not offered; in the JIT-free gt4-gs 0.4.0 (TASK-042) it would run the C rasterizer (no software JIT), which is slow and not checked for GT4."
 
@@ -128,12 +128,12 @@ default = "high"
 written = "always"
 status = "ok"
 choices = [
-  { name = "minimum", ini = "0", status = "resolved" },
-  { name = "basic", ini = "1", status = "resolved" },
-  { name = "medium", ini = "2", status = "resolved" },
+  { name = "minimum", ini = "0", status = "ok" },
+  { name = "basic", ini = "1", status = "ok" },
+  { name = "medium", ini = "2", status = "ok" },
   { name = "high", ini = "3", status = "ok" },
-  { name = "full", ini = "4", status = "resolved" },
-  { name = "maximum", ini = "5", status = "resolved" },
+  { name = "full", ini = "4", status = "ok" },
+  { name = "maximum", ini = "5", status = "ok" },
 ]
 notes = "AccBlendLevel (pcsx2/Config.h:330-337, Minimum = 0 to Maximum = 5). Loader pcsx2/Pcsx2Config.cpp:1054. PCSX2 default is Basic (pcsx2/Config.h:726); the owner keeps High (3). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2881-2888. Full and Maximum are slow (UI text)."
 
@@ -152,15 +152,15 @@ written = "always"
 status = "ok"
 choices = [
   { name = "automatic", ini = "0", status = "ok" },
-  { name = "off", ini = "1", status = "resolved" },
-  { name = "weave-tff", ini = "2", status = "resolved" },
-  { name = "weave-bff", ini = "3", status = "resolved" },
-  { name = "bob-tff", ini = "4", status = "resolved" },
-  { name = "bob-bff", ini = "5", status = "resolved" },
-  { name = "blend-tff", ini = "6", status = "resolved" },
-  { name = "blend-bff", ini = "7", status = "resolved" },
-  { name = "adaptive-tff", ini = "8", status = "resolved" },
-  { name = "adaptive-bff", ini = "9", status = "resolved" },
+  { name = "off", ini = "1", status = "ok" },
+  { name = "weave-tff", ini = "2", status = "ok" },
+  { name = "weave-bff", ini = "3", status = "ok" },
+  { name = "bob-tff", ini = "4", status = "ok" },
+  { name = "bob-bff", ini = "5", status = "ok" },
+  { name = "blend-tff", ini = "6", status = "ok" },
+  { name = "blend-bff", ini = "7", status = "ok" },
+  { name = "adaptive-tff", ini = "8", status = "ok" },
+  { name = "adaptive-bff", ini = "9", status = "ok" },
 ]
 notes = "GSInterlaceMode (pcsx2/Config.h:291-302: Automatic = 0 ... AdaptiveBFF = 9). Loader pcsx2/Pcsx2Config.cpp:1036. Default Automatic (pcsx2/Config.h:720). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2797-2808. Blend modes halve the frame rate (UI text): not for the 60 FPS target."
 
@@ -230,10 +230,10 @@ written = "always"
 status = "ok"
 choices = [
   { name = "accurate", ini = "0", status = "ok", label = "Accurate (default)" },
-  { name = "enabled-force-full", ini = "1", status = "resolved" },
-  { name = "no-readbacks", ini = "2", status = "resolved" },
+  { name = "enabled-force-full", ini = "1", status = "ok" },
+  { name = "no-readbacks", ini = "2", status = "ok" },
   { name = "unsynchronized", ini = "3", status = "ok", label = "Unsynchronized (faster, may drop effects)" },
-  { name = "disabled", ini = "4", status = "resolved" },
+  { name = "disabled", ini = "4", status = "ok" },
 ]
 notes = "GSHardwareDownloadMode (pcsx2/Config.h:399-405: Enabled = 0, EnabledForceFull = 1, NoReadbacks = 2, Unsynchronized = 3, Disabled = 4). Loader pcsx2/Pcsx2Config.cpp:1058, default Enabled (pcsx2/Config.h:871); the launcher default is accurate (Enabled, 0). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2913-2919. Owner decision: accurate by default, Unsynchronized as speed option. Unsynchronized is settable since TASK-037 (game-side reader in slice194)."
 
@@ -264,11 +264,11 @@ key = "CASMode"
 type = "enum"
 default = "off"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "sharpen-only", ini = "1", status = "resolved" },
-  { name = "sharpen-and-resize", ini = "2", status = "resolved" },
+  { name = "off", ini = "0", status = "ok" },
+  { name = "sharpen-only", ini = "1", status = "ok" },
+  { name = "sharpen-and-resize", ini = "2", status = "ok" },
 ]
 notes = "GSCASMode (pcsx2/Config.h:408-412). Loader pcsx2/Pcsx2Config.cpp:1059. Default Disabled (pcsx2/Config.h:723). UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3309-3313. FidelityFX CAS is the only sharpening filter in v2.8.2: FSR 1.0 is NOT in v2.8.2 (no FSR code or shader; the only \"FSR\" match is the MIPS QFSRV opcode). Owner decision: shown on Graphics; it becomes settable after the owner checks it in game."
 
@@ -286,7 +286,7 @@ min = 0
 max = 100
 default = "50"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Stored as u8 (pcsx2/Config.h:899, default 50). Loader pcsx2/Pcsx2Config.cpp:1060. UI range 0 to 100 in steps of 1 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3319-3321)."
 
 [[setting]]
@@ -316,11 +316,11 @@ key = "linear_present_mode"
 type = "enum"
 default = "smooth"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "smooth", ini = "1", status = "resolved" },
-  { name = "sharp", ini = "2", status = "resolved" },
+  { name = "off", ini = "0", status = "ok" },
+  { name = "smooth", ini = "1", status = "ok" },
+  { name = "sharp", ini = "2", status = "ok" },
 ]
 notes = "GSPostBilinearMode (pcsx2/Config.h:306-310: Off, BilinearSmooth = 1, BilinearSharp = 2). Loader pcsx2/Pcsx2Config.cpp:1035. Default Smooth = 1 (pcsx2/Pcsx2Config.cpp:719). The UI shows Sharp as its default (pcsx2/ImGui/FullscreenUI_Settings.cpp:3052), which disagrees with SetDefaults; the table keeps Smooth (D.1)."
 
@@ -351,7 +351,7 @@ key = "disable_interlace_offset"
 type = "bool"
 default = "false"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Key pcsx2/Pcsx2Config.cpp:954 (SettingsWrapBitBoolEx). Default false (pcsx2/Pcsx2Config.cpp:715). UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3027. GT4 keeps the PCSX2 default; the TASK-047 comb metric is the check (owner in-game check pending)."
 
 [[setting]]
@@ -411,13 +411,13 @@ key = "FMVAspectRatioSwitch"
 type = "enum"
 default = "off"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "off", ini = "Off", status = "resolved" },
-  { name = "auto", ini = "Auto 4:3/3:2", status = "resolved" },
-  { name = "4:3", ini = "4:3", status = "resolved" },
-  { name = "16:9", ini = "16:9", status = "resolved" },
-  { name = "10:7", ini = "10:7", status = "resolved" },
+  { name = "off", ini = "Off", status = "ok" },
+  { name = "auto", ini = "Auto 4:3/3:2", status = "ok" },
+  { name = "4:3", ini = "4:3", status = "ok" },
+  { name = "16:9", ini = "16:9", status = "ok" },
+  { name = "10:7", ini = "10:7", status = "ok" },
 ]
 notes = "Corrected in TASK-039: an enum of aspect names, not a bool. The loader reads a name (pcsx2/Pcsx2Config.cpp:939; names at pcsx2/Pcsx2Config.cpp:647-653; enum pcsx2/Config.h:234-240). Default Off (D.1)."
 
@@ -433,16 +433,16 @@ key = "TVShader"
 type = "enum"
 default = "none"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "none", ini = "0", status = "resolved" },
-  { name = "scanline", ini = "1", status = "resolved" },
-  { name = "diagonal", ini = "2", status = "resolved" },
-  { name = "triangular", ini = "3", status = "resolved" },
-  { name = "wave", ini = "4", status = "resolved" },
-  { name = "lottes-crt", ini = "5", status = "resolved" },
-  { name = "rgss-4x", ini = "6", status = "resolved" },
-  { name = "agss-nx", ini = "7", status = "resolved" },
+  { name = "none", ini = "0", status = "ok" },
+  { name = "scanline", ini = "1", status = "ok" },
+  { name = "diagonal", ini = "2", status = "ok" },
+  { name = "triangular", ini = "3", status = "ok" },
+  { name = "wave", ini = "4", status = "ok" },
+  { name = "lottes-crt", ini = "5", status = "ok" },
+  { name = "rgss-4x", ini = "6", status = "ok" },
+  { name = "agss-nx", ini = "7", status = "ok" },
 ]
 notes = "Stored as a u8 index (pcsx2/Config.h:875, default 0). Loader pcsx2/Pcsx2Config.cpp:1065. The list is the UI order at pcsx2/ImGui/FullscreenUI_Settings.cpp:3339-3351 (index = INI value)."
 
@@ -458,12 +458,12 @@ key = "filter"
 type = "enum"
 default = "bilinear-ps2"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "nearest", ini = "0", status = "resolved" },
-  { name = "bilinear-forced", ini = "1", status = "resolved" },
-  { name = "bilinear-ps2", ini = "2", status = "resolved" },
-  { name = "bilinear-forced-sprite-excluded", ini = "3", status = "resolved" },
+  { name = "nearest", ini = "0", status = "ok" },
+  { name = "bilinear-forced", ini = "1", status = "ok" },
+  { name = "bilinear-ps2", ini = "2", status = "ok" },
+  { name = "bilinear-forced-sprite-excluded", ini = "3", status = "ok" },
 ]
 notes = "BiFiltering (pcsx2/Config.h:314-319: Nearest, Forced, PS2, Forced_But_Sprite). Loader pcsx2/Pcsx2Config.cpp:1055. Default PS2 = 2 (pcsx2/Config.h:727). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2863-2868."
 
@@ -479,12 +479,12 @@ key = "TriFilter"
 type = "enum"
 default = "automatic"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "automatic", ini = "-1", status = "resolved" },
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "ps2", ini = "1", status = "resolved" },
-  { name = "forced", ini = "2", status = "resolved" },
+  { name = "automatic", ini = "-1", status = "ok" },
+  { name = "off", ini = "0", status = "ok" },
+  { name = "ps2", ini = "1", status = "ok" },
+  { name = "forced", ini = "2", status = "ok" },
 ]
 notes = "TriFiltering (pcsx2/Config.h:322-327, signed: Automatic = -1). Loader pcsx2/Pcsx2Config.cpp:1079. Default Automatic (pcsx2/Config.h:728). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2869-2874."
 
@@ -500,13 +500,13 @@ key = "MaxAnisotropy"
 type = "enum"
 default = "off"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "2x", ini = "2", status = "resolved" },
-  { name = "4x", ini = "4", status = "resolved" },
-  { name = "8x", ini = "8", status = "resolved" },
-  { name = "16x", ini = "16", status = "resolved" },
+  { name = "off", ini = "0", status = "ok" },
+  { name = "2x", ini = "2", status = "ok" },
+  { name = "4x", ini = "4", status = "ok" },
+  { name = "8x", ini = "8", status = "ok" },
+  { name = "16x", ini = "16", status = "ok" },
 ]
 notes = "Stored as the plain number (pcsx2/Config.h:874, u8, default 0). Loader pcsx2/Pcsx2Config.cpp:1062. The UI offers only 0, 2, 4, 8, 16 (pcsx2/ImGui/FullscreenUI_Settings.cpp:2889-2901). GT4 default Off (PCSX2 default): anisotropic filtering costs fill rate, and the 60 FPS target comes first. The owner may test 16x in game."
 
@@ -537,12 +537,12 @@ key = "dithering_ps2"
 type = "enum"
 default = "unscaled"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "off", ini = "0", status = "resolved" },
-  { name = "scaled", ini = "1", status = "resolved" },
-  { name = "unscaled", ini = "2", status = "resolved" },
-  { name = "force-32bit", ini = "3", status = "resolved" },
+  { name = "off", ini = "0", status = "ok" },
+  { name = "scaled", ini = "1", status = "ok" },
+  { name = "unscaled", ini = "2", status = "ok" },
+  { name = "force-32bit", ini = "3", status = "ok" },
 ]
 notes = "Key dithering_ps2 (loader pcsx2/Pcsx2Config.cpp:1061, not Dithering). Stored as u8 (pcsx2/Config.h:873, default 2 = Unscaled). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2875-2880, default set at line 3083. Owner checks dithering in menus (TASK-039 acceptance)."
 
@@ -558,11 +558,11 @@ key = "texture_preloading"
 type = "enum"
 default = "full"
 written = "when-set"
-status = "resolved"
+status = "ok"
 choices = [
-  { name = "none", ini = "0", status = "resolved" },
-  { name = "partial", ini = "1", status = "resolved" },
-  { name = "full", ini = "2", status = "resolved" },
+  { name = "none", ini = "0", status = "ok" },
+  { name = "partial", ini = "1", status = "ok" },
+  { name = "full", ini = "2", status = "ok" },
 ]
 notes = "TexturePreloadingLevel (pcsx2/Config.h:355-359: Off, Partial, Full). Loader pcsx2/Pcsx2Config.cpp:1056. Default Full (pcsx2/Config.h:869). UI list pcsx2/ImGui/FullscreenUI_Settings.cpp:2903-2907."
 
@@ -578,7 +578,7 @@ key = "HWAccurateAlphaTest"
 type = "bool"
 default = "false"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Pcsx2Config.cpp:1048; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3089. Default false. Kept off: a per-draw cost against the 60 FPS target; the owner may test it in game."
 
 [[setting]]
@@ -593,7 +593,7 @@ key = "HWAA1"
 type = "bool"
 default = "false"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Pcsx2Config.cpp:1049; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3087. Default false. The GT4 anti-aliasing choice is FXAA on Graphics; AA1 is the PS2 edge feature and stays off unless the owner tests it."
 
 [[setting]]
@@ -608,7 +608,7 @@ key = "HWROV"
 type = "bool"
 default = "false"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Pcsx2Config.cpp:1051; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3096 (hardware renderers only). Default false. Experimental: not offered until the owner tests it."
 
 [[setting]]
@@ -623,7 +623,7 @@ key = "ShadeBoost"
 type = "bool"
 default = "false"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Corrected in TASK-039: the switch is the bool key ShadeBoost (loader pcsx2/Pcsx2Config.cpp:1009; UI pcsx2/ImGui/FullscreenUI_Settings.cpp:3326-3330). The four levels are separate rows below. Default off."
 
 [[setting]]
@@ -640,7 +640,7 @@ min = 1
 max = 100
 default = "50"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Stored as u8 (pcsx2/Config.h:900, default 50). Loader pcsx2/Pcsx2Config.cpp:1083. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3331)."
 
 [[setting]]
@@ -657,7 +657,7 @@ min = 1
 max = 100
 default = "50"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Stored as u8 (pcsx2/Config.h:901, default 50). Loader pcsx2/Pcsx2Config.cpp:1084. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3333)."
 
 [[setting]]
@@ -674,7 +674,7 @@ min = 1
 max = 100
 default = "50"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Stored as u8 (pcsx2/Config.h:903, default 50). Loader pcsx2/Pcsx2Config.cpp:1086. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3335)."
 
 [[setting]]
@@ -691,7 +691,7 @@ min = 1
 max = 100
 default = "50"
 written = "when-set"
-status = "resolved"
+status = "ok"
 notes = "Stored as u8 (pcsx2/Config.h:902, default 50). Loader pcsx2/Pcsx2Config.cpp:1085. UI range 1 to 100 (pcsx2/ImGui/FullscreenUI_Settings.cpp:3337)."
 
 [[setting]]
@@ -981,17 +981,17 @@ notes = "TASK-088 (gt4-gs 1.2.0, owner 2026-10-21): default On, always written. 
 
 [[setting]]
 id = "texture_load_async"
-label = "Load replacements asynchronously"
-help = "Load texture replacements on a background thread. Mods page (TASK-048)."
-page = "mods"
-order = 2
+label = "Load custom textures in the background"
+help = "Load the custom textures on a background thread, so the game does not wait for them."
+page = "advanced"
+order = 42
 control = "toggle"
 section = "EmuCore/GS"
 key = "LoadTextureReplacementsAsync"
 type = "bool"
 default = "true"
 written = "when-set"
-status = "pending-TASK-040"
+status = "ok"
 notes = "D.1 default On. Verified in TASK-040."
 
 [[setting]]
