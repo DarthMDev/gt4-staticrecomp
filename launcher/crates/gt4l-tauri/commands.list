@@ -35,3 +35,4 @@ check_updates
 apply_update
 skip_update
 confirm_close
+ui_ready

@@ -1,4 +1,4 @@
-//! The Documents folder as Windows reports it (SHGetKnownFolderPath with FOLDERID_Documents), so OneDrive backup
+//! The Documents and Start-menu Programs folders as Windows reports them (SHGetKnownFolderPath with FOLDERID_Documents), so OneDrive backup
 //! and folder redirection to another drive are followed. The path is never built from the user name.
 
 use std::path::PathBuf;
@@ -26,6 +26,32 @@ pub fn documents() -> Option<PathBuf> {
 
 #[cfg(not(windows))]
 pub fn documents() -> Option<PathBuf> {
+    None
+}
+
+/// The current user's Start-menu Programs folder (FOLDERID_Programs), where the per-user installer of 1.0.0 to
+/// 1.2.0 put its shortcuts. `None` when Windows cannot report it.
+#[cfg(windows)]
+pub fn programs() -> Option<PathBuf> {
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{FOLDERID_Programs, SHGetKnownFolderPath, KF_FLAG_DEFAULT};
+
+    // SAFETY: as in `documents`.
+    unsafe {
+        let wide = SHGetKnownFolderPath(&FOLDERID_Programs, KF_FLAG_DEFAULT, None).ok()?;
+        let text = wide.to_string();
+        CoTaskMemFree(Some(wide.0 as *const _));
+        let path = PathBuf::from(text.ok()?);
+        if path.as_os_str().is_empty() {
+            None
+        } else {
+            Some(path)
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn programs() -> Option<PathBuf> {
     None
 }
 

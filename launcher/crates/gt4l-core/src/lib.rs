@@ -13,6 +13,7 @@ pub mod lock;
 pub mod migrate;
 pub mod paths;
 pub mod releases;
+pub mod relocate;
 pub mod settings;
 pub mod system_check;
 pub mod update;

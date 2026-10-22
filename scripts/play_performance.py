@@ -161,9 +161,9 @@ def main():
     parser.add_argument('--gs-setting', action='append', default=[], metavar='ID=VALUE',
                         help='pcsx2 only: set a GS option from docs/launcher/gs-settings.toml (repeatable; '
                              'checked against the table; docs/GS-SETTINGS.md)')
-    parser.add_argument('--gs-readback', choices=('accurate', 'unsynchronized'), default=None,
-                        help='pcsx2 only: GS readback mode. accurate (default, owner choice 2026-10-16); unsynchronized: '
-                             'faster, may drop effects (night race: headlight flares missing; GT4_GS_READBACK)')
+    parser.add_argument('--gs-readback', choices=('accurate', 'no-readbacks'), default=None,
+                        help='pcsx2 only: GS readback mode, the Performance Mode row (TASK-091). accurate (default); '
+                             'no-readbacks: faster, some effects that read the image back are skipped (GT4_GS_READBACK)')
     parser.add_argument('--play-card', type=Path, default=None, metavar='PATH',
                         help='play on this existing card inside private/ instead of the owner card '
                              '(never private/manual-play/card.ps2); backed up and locked the same way, recorded in result.json')
@@ -201,8 +201,8 @@ def main():
             if args.gs_scale is not None and 'upscale' in settings:
                 raise ValueError('--gs-scale (or --gs-resolution) and --gs-setting upscale=... both set the internal '
                                  'resolution')
-            if args.gs_readback is not None and 'hw_download_mode' in settings:
-                raise ValueError('--gs-readback and --gs-setting hw_download_mode=... both set the readback mode')
+            if args.gs_readback is not None and 'performance_mode' in settings:
+                raise ValueError('--gs-readback and --gs-setting performance_mode=... both set the readback mode')
             os.environ[GS_SETTINGS_ENV] = gs_settings.settings_to_json(settings)
         if args.gs_readback is not None:
             if args.mode not in PCSX2_MODES:

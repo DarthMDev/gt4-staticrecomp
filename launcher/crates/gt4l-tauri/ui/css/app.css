@@ -106,6 +106,17 @@ body.is-home.input-keys #hints { display: none; }
 }
 .toast.is-shown { opacity: 1; }
 .toast.is-error { background: var(--error); color: var(--white); }
+/* TASK-091: progress of the first-start move of the game files (not focusable, never covers the hint bar). */
+.migration {
+  position: absolute; right: 24px; bottom: 60px; width: 340px; padding: 10px 14px; background: var(--paper);
+  color: var(--paper-ink); border-radius: 3px; pointer-events: none; z-index: 40;
+}
+.migration-head { display: flex; justify-content: space-between; gap: 12px; font-size: 0.9em; }
+.migration-bar { margin-top: 8px; height: 4px; border-radius: 2px; background: rgba(0, 0, 0, 0.15); overflow: hidden; }
+.migration-fill { height: 100%; width: 0; background: currentColor; transition: width 0.4s ease; }
+/* A move inside one drive is a rename with no byte count: the bar slides instead of filling. */
+.migration-bar.indeterminate .migration-fill { width: 30%; animation: migration-slide 1.2s ease-in-out infinite; }
+@keyframes migration-slide { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -205,13 +216,16 @@ body.is-home.input-keys #hints { display: none; }
               linear-gradient(90deg, rgba(10, 12, 20, 0.55) 0%, rgba(10, 12, 20, 0.25) 24%, rgba(10, 12, 20, 0) 42%),
               linear-gradient(180deg, rgba(10, 12, 20, 0.45) 0%, rgba(10, 12, 20, 0) 16%);
 }
-.gear {
-  position: absolute; right: 32px; top: 24px; width: 48px; height: 48px; border-radius: 3px;
-  display: grid; place-items: center; color: var(--white); z-index: 2;
+.home-bottom {
+  position: absolute; left: 72px; bottom: 72px; z-index: 2;
+  display: flex; flex-direction: column; align-items: center;
 }
-.gear:hover { background: rgba(255, 255, 255, 0.08); }
-.home-bottom { position: absolute; left: 72px; bottom: 72px; z-index: 2; }
-.home-logo { width: 360px; height: auto; display: block; margin-bottom: 28px; }
+/* The logo sits right above the buttons (Play, or the running state, and Settings), centred on their row. */
+.home-logo { width: 280px; height: auto; display: block; margin-bottom: 28px; }
+.home-actions { display: flex; align-items: center; gap: 12px; }
+/* Settings beside Play: the same glass box, focus and press as Play, square, with the gear icon. */
+.play.play-square { width: 52px; padding: 0; display: grid; place-items: center; letter-spacing: 0; }
+.play.play-square svg { display: block; }
 /* Play. Idle: dark translucent glass, thin white border, white label and a light sheen that sweeps
    across about every 3.4 s. Focused (pad or keys) or hovered: solid white, dark label, scale 1.03,
    soft glow. Pressed: quick press-down. Reduced motion removes the sheen (rule at the end of this file). */
@@ -246,7 +260,7 @@ body.is-home.input-keys #hints { display: none; }
 .running .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .running span.state { font: 500 14px var(--label); letter-spacing: 0.16em; text-transform: uppercase; color: var(--white); }
 .running .btn { height: 48px; }
-.home.is-running .play { display: none; }
+.home.is-running .play:not(.play-square) { display: none; }
 .home.is-running .running { display: flex; }
 
 /* ---------- settings shell ---------- */
@@ -695,9 +709,8 @@ body.input-pad .info:focus .tip { display: block; }
   .setup h1 { font-size: 26px; line-height: 32px; margin-bottom: 4px; }
   .sub { margin-bottom: 12px; }
   .home-bottom { bottom: 40px; left: 48px; }
-  .home-logo { width: 260px; margin-bottom: 16px; }
+  .home-logo { width: 220px; margin-bottom: 18px; }
   .home-version { bottom: 12px; }
-  .gear { top: 12px; right: 16px; }
   .lib-head h1 { font-size: 24px; }
 }
 

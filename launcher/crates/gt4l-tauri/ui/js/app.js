@@ -99,15 +99,96 @@
     }
   });
 
+  // TASK-091 (1.2.1): the first start moves the files of GT4Recomp 1.2.0 to the new folders. While the game files
+  // move (in the background), a small status line shows the progress; Play and setup wait. The result is a toast,
+  // shown once per notice text.
+  var migrationBox = null;
+  var shownNotice = "";
+  // The status box: a label with the percentage on the right and a bar under it. Without a byte count (a move
+  // inside one drive) the bar slides and no percentage is shown.
+  function renderMigration(box, migration) {
+    var done = migration.bytes_done || 0;
+    var total = migration.bytes_total || 0;
+    var percent = total > 0 ? Math.min(100, Math.floor((done * 100) / total)) : -1;
+    if (!box.firstChild) {
+      var head = document.createElement("div");
+      head.className = "migration-head";
+      head.appendChild(document.createElement("span"));
+      head.appendChild(document.createElement("span"));
+      var bar = document.createElement("div");
+      bar.className = "migration-bar";
+      var fill = document.createElement("div");
+      fill.className = "migration-fill";
+      bar.appendChild(fill);
+      box.appendChild(head);
+      box.appendChild(bar);
+    }
+    var label = box.firstChild.firstChild;
+    var number = box.firstChild.lastChild;
+    var barNode = box.lastChild;
+    label.textContent = "Moving " + (migration.item || "game files") + " to the install folder…";
+    number.textContent = percent >= 0 ? percent + "%" : "";
+    barNode.classList.toggle("indeterminate", percent < 0);
+    barNode.firstChild.style.width = percent >= 0 ? percent + "%" : "";
+  }
+  function showMigration(appState) {
+    var migration = appState && appState.migration;
+    if (!migration) {
+      return;
+    }
+    if (migration.running) {
+      if (!migrationBox) {
+        migrationBox = document.createElement("div");
+        migrationBox.className = "migration";
+        migrationBox.setAttribute("role", "status");
+        migrationBox.setAttribute("aria-live", "polite");
+        document.body.appendChild(migrationBox);
+      }
+      renderMigration(migrationBox, migration);
+      root.setTimeout(function () {
+        GT4.backend.call("app_state").then(showMigration, function () {});
+      }, 700);
+      return;
+    }
+    if (migrationBox) {
+      migrationBox.parentNode.removeChild(migrationBox);
+      migrationBox = null;
+    }
+    if (migration.notice && migration.notice !== shownNotice) {
+      shownNotice = migration.notice;
+      GT4.ui.toast(migration.notice, !!migration.problem);
+    }
+  }
+  GT4.showMigration = showMigration;
+
+  // TASK-091 (1.2.1, WebView2 guard): the window stays hidden until the first screen has drawn. ui_ready is sent after
+  // the next animation frame, or after a short timer when the window is still hidden (a hidden web view may not run
+  // animation frames). The backend shows the window; a second call does nothing.
+  var readySent = false;
+  function signalReady() {
+    function send() {
+      if (readySent) {
+        return;
+      }
+      readySent = true;
+      GT4.backend.call("ui_ready").catch(function () {});
+    }
+    root.requestAnimationFrame(send);
+    root.setTimeout(send, 250);
+  }
+
   GT4.backend.call("app_state").then(function (appState) {
+    showMigration(appState);
     var route = parseRoute();
     if (!route.name) {
       go(appState.setup && appState.setup.state === "done" ? "#/home" : "#/setup");
     } else {
       render();
     }
+    signalReady();
   }, function (err) {
     render();
     GT4.ui.toast(GT4.errorText(err), true);
+    signalReady();
   });
 })(window);

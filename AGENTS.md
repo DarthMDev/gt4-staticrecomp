@@ -110,7 +110,11 @@ claim zero emulation or full PS2 fidelity.
 - **Distribution (decision 0069):** the installer ships the prebuilt game
   executable; the user supplies their own disc. Our code is MIT (`LICENSE`).
 - The launcher (TASK-019) and racing wheels (TASK-018) are planned tasks;
-  LAN/online launcher, in-game settings menus and Spec II are recorded ideas.
+  LAN/online launcher and in-game settings menus are recorded ideas.
+- **Spec II is a second target** (owner, 2026-10-22;
+  `docs/decisions/0072-spec2-second-target.md`): the SCUS-97436 Public Beta
+  lineage ISO with its own target executable, not a content merge into v2.00.
+  Recorded, not scheduled; Phase 2 stays the priority.
 
 Working fork: github.com/moesuito/gt4-staticrecomp. Upstream
 github.com/Kaezzey/gt4-staticrecomp is read-only.

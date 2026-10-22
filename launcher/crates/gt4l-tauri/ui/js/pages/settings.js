@@ -6,7 +6,7 @@
  * Table shape (returned by get_settings_table as {max_upscale, rows}):
  *   row = {id, label, help, page: "basic"|"advanced"|"mods"|"hidden",
  *          group?: "graphics"|"display" (the Display or Graphics section of the Graphics tab), control: "slider"|"toggle"|"dropdown",
- *          values, default, current, disabled?, visible_when?: {id, equals}}
+ *          values, default, current, disabled?, note? (a hint shown under the label), visible_when?: {id, equals}}
  *   slider values   = {min, max, step, unit?, limit?: "max_upscale", scale?: shown value = stored / scale,
  *                      labels?: {value: readout} (TASK-080 Render scale: "100% · 4x · 2560x1792")}
  *   dropdown values = [{value, label, disabled?, note?}]
@@ -304,6 +304,10 @@
     if (control.limited) {
       keyNodes.push(h("span", { class: "hint-text", text: "Limited to " + control.limited + " on this GPU" }));
     }
+    if (row.note) {
+      // A row that is shown but not available now (Performance Mode with CoreGS 1.1: "GSdx only").
+      keyNodes.push(h("span", { class: "hint-text", text: row.note }));
+    }
     return h("div", { class: "row" + (row.disabled ? " is-disabled" : ""), data: { row: row.id } }, [
       h("div", { class: "k" }, keyNodes),
       h("div", { class: "ctl" + (control.wide ? " wide" : "") }, control.node)
@@ -441,7 +445,7 @@
         var graphics = section(ctx, "graphics", "Graphics", basic.filter(function (row) {
           return (row.group || "graphics") === "graphics";
         }));
-        // TASK-088: opens Documents\Gran Turismo 4\Textures (its replacements folder is made first). Next to the texture options.
+        // TASK-088: opens <install>\data\Textures (TASK-091; its replacements folder is made first). Next to the texture options.
         if (graphics) {
           // Inline progress of a switch to GSdx (renderer-progress events; app.js sets the text).
           var rendererStatus = h("p", { class: "note renderer-status", role: "status", data: { action: "renderer-status" }, text: "" });
@@ -532,7 +536,7 @@
         ]),
         h("div", { class: "ctl" }, [openGameFiles])
       ]));
-      // The player's saves and replays live in Documents\Gran Turismo 4 (kept by the uninstaller).
+      // The player's settings, saves and replays live in %APPDATA%\GT4Recomp (kept by the uninstaller).
       var openSaves = h("button", {
         class: "btn small",
         type: "button",

@@ -186,19 +186,44 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
     row
 }
 
+/// PCSX2 GS rows that only apply to GSdx (the PCSX2 renderer). With CoreGS 1.1 they stay in the table, disabled with a
+/// note; the other GS rows are hidden there (`visible_when`). TASK-091: Performance Mode.
+const GSDX_ONLY_ROWS: &[&str] = &["performance_mode"];
+
+/// The two choices of a toggle over an enum row (table `control = "toggle"`): (Off, On). The first choice is Off.
+pub fn toggle_choices(row: &gs_table::Row) -> Option<(&str, &str)> {
+    if row.kind == "enum" && gs_table::ui_control(row) == "toggle" && row.choices.len() == 2 {
+        Some((row.choices[0].name.as_str(), row.choices[1].name.as_str()))
+    } else {
+        None
+    }
+}
+
+/// The table value text of a PCSX2 GS row from a UI value: a toggle over an enum takes true (On) or false (Off);
+/// every other row takes its plain value.
+pub fn gs_value_text(row: &gs_table::Row, value: &Value) -> Option<String> {
+    match toggle_choices(row) {
+        Some((off, on)) => value.as_bool().map(|is_on| (if is_on { on } else { off }).to_string()),
+        None => value_text(value, false),
+    }
+}
+
 fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
+    let toggle = toggle_choices(row);
     let control = match row.kind.as_str() {
+        _ if toggle.is_some() => "toggle",
         "bool" => "toggle",
         "int" | "float" => "slider",
         _ => "dropdown",
     };
-    let (values, default, current) = match row.kind.as_str() {
-        "bool" => (
+    let (values, default, current) = match (toggle, row.kind.as_str()) {
+        (Some((_, on)), _) => (Value::Null, json!(row.default == on), json!(settings.gs_value(&row.id) == on)),
+        (None, "bool") => (
             Value::Null,
             json!(row.default == "true"),
             json!(settings.gs_value(&row.id) == "true"),
         ),
-        "int" | "float" => {
+        (None, "int" | "float") => {
             let mut bounds = json!({ "min": row.min.unwrap_or(0.0), "max": row.max.unwrap_or(0.0), "step": 1 });
             if row.id == "upscale" {
                 bounds["max"] = json!(row.max.unwrap_or(0.0).min(MAX_UPSCALE_DEFAULT as f64));
@@ -207,7 +232,7 @@ fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
             let number = |text: &str| text.parse::<f64>().ok().map(|n| json!(n)).unwrap_or(Value::Null);
             (bounds, number(&row.default), number(&settings.gs_value(&row.id)))
         }
-        _ => (
+        (None, _) => (
             Value::Array(
                 row.choices
                     .iter()
@@ -227,8 +252,16 @@ fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
         "values": values,
         "default": default,
         "current": current,
-        "visible_when": { "id": "renderer", "equals": settings::PCSX2_GS },
     });
+    if GSDX_ONLY_ROWS.contains(&row.id.as_str()) {
+        let on_gsdx = settings.get("renderer") == settings::PCSX2_GS;
+        out["disabled"] = json!(!on_gsdx);
+        if !on_gsdx {
+            out["note"] = json!("GSdx only");
+        }
+    } else {
+        out["visible_when"] = json!({ "id": "renderer", "equals": settings::PCSX2_GS });
+    }
     match row.page.as_str() {
         "Graphics" => out["group"] = json!("graphics"),
         "Display" => out["group"] = json!("display"),
@@ -703,6 +736,49 @@ mod table_tests {
         assert_eq!(scale["values"]["labels"]["100"], "100% \u{00B7} 3x \u{00B7} 1920x1344");
         assert_eq!(scale["visible_when"]["equals"], "pcsx2", "CoreGS 1.1 keeps its own internal resolution");
         assert_eq!(scale["group"], "graphics");
+    }
+
+    #[test]
+    fn performance_mode_is_a_graphics_toggle_off_by_default() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        let mode = row(&table, "performance_mode");
+        assert_eq!(mode["control"], "toggle");
+        assert_eq!(mode["page"], "basic", "the main Graphics section, not Advanced");
+        assert_eq!(mode["group"], Value::Null);
+        assert_eq!(mode["default"], json!(false));
+        assert_eq!(mode["current"], json!(false));
+        assert_eq!(mode["disabled"], json!(false));
+        assert!(mode.get("visible_when").is_none(), "shown under GSdx without a visibility rule");
+    }
+
+    #[test]
+    fn performance_mode_is_disabled_with_a_gsdx_only_note_under_coregs11() {
+        let mut settings = Settings::default();
+        settings.set("renderer", "coregs11").unwrap();
+        let table = settings_table(&settings, &Controls::default());
+        let mode = row(&table, "performance_mode");
+        assert_eq!(mode["disabled"], json!(true));
+        assert_eq!(mode["note"], "GSdx only");
+        assert!(mode.get("visible_when").is_none(), "shown disabled, not hidden");
+    }
+
+    #[test]
+    fn the_readback_row_is_gone_from_the_table() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        assert!(!ids(&table).contains(&"hw_download_mode".to_string()));
+        assert!(!pcsx2_table_rows().iter().any(|row| row.id == "hw_download_mode"));
+        assert!(!gs_table::rows().iter().any(|row| row.key == "HWDownloadMode" && row.id != "performance_mode"));
+    }
+
+    #[test]
+    fn the_toggle_maps_on_and_off_to_the_two_readback_choices() {
+        let row = pcsx2_table_rows().into_iter().find(|row| row.id == "performance_mode").unwrap();
+        assert_eq!(toggle_choices(row), Some(("accurate", "no-readbacks")));
+        assert_eq!(gs_value_text(row, &json!(true)).as_deref(), Some("no-readbacks"), "On");
+        assert_eq!(gs_value_text(row, &json!(false)).as_deref(), Some("accurate"), "Off");
+        assert_eq!(gs_value_text(row, &json!("accurate")), None, "a toggle takes true or false");
+        let other = pcsx2_table_rows().into_iter().find(|row| row.id == "fxaa").unwrap();
+        assert_eq!(toggle_choices(other), None);
     }
 
     #[test]

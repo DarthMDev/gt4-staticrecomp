@@ -91,6 +91,9 @@ pub fn choose_disc_path(shared: &Shared, path: &Path) -> Result<DiscInfo, String
         if state.setup_busy {
             return Err("Setup is already running.".into());
         }
+        if state.migration.running {
+            return Err("GT4Recomp is moving its game files to the install folder. Wait until it has finished.".into());
+        }
         state.pins.clone()
     };
     match disc_setup::precheck(path, &pins) {
@@ -152,6 +155,9 @@ pub fn start_with(
         if state.setup_busy {
             return Err("Setup is already running.".into());
         }
+        if state.migration.running {
+            return Err("GT4Recomp is moving its game files to the install folder. Wait until it has finished.".into());
+        }
         let Some(disc) = state.config.disc_path.clone() else {
             return Err("Choose your disc image first.".into());
         };
@@ -162,9 +168,10 @@ pub fn start_with(
         (disc, state.pins.clone(), state.dirs.clone(), state.setup_cancel.clone())
     };
     let handle = std::thread::spawn(move || {
-        let prepared = dirs.prepared();
+        // Setup always writes the data folder's root, even when older game files are read from another folder.
+        let prepared = dirs.setup_prepared();
         let staging = dirs.prepared_staging();
-        let disc_folder = dirs.disc_folder();
+        let disc_folder = dirs.setup_disc_folder();
         let total_bytes = std::fs::metadata(&disc).map(|meta| meta.len()).unwrap_or(0);
         let mut last: (Stage, i32) = (Stage::Copying, -1);
         let progress_shared = shared.clone();
@@ -259,7 +266,7 @@ fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer:
     }
     // TASK-088 (1.2.0): a GSdx that is installed and meets the minimum (for example a local package) is kept, with no
     // download attempt and no misleading note.
-    if !gt4l_core::gs_release::needs_install(&updates::renderer_root(dirs)) {
+    if !gt4l_core::gs_release::needs_install(&dirs.renderer_root()) {
         state::log(dirs, "GSdx already installed; setup keeps it");
         return String::new();
     }

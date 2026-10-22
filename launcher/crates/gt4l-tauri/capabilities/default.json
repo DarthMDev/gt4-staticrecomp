@@ -38,6 +38,7 @@
     "allow-check-updates",
     "allow-apply-update",
     "allow-skip-update",
-    "allow-confirm-close"
+    "allow-confirm-close",
+    "allow-ui-ready"
   ]
 }
