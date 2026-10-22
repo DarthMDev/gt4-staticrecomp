@@ -132,6 +132,21 @@ Candidates, in order:
   - licensing and the OptiScaler/user-supplied-DLL constraints above.
 - **Status:** recorded only; no implementation planned before the FSR 3 milestone.
 
+## Beyond CoreGS 2.0: CoreGS 3.0, a modern pipeline (owner, 2026-10-22)
+The render pipeline is modernised in stages. CoreGS 2.0 is the start: it optimises as far as possible inside the
+VU1 + GS model. **CoreGS 3.0** (TASK-090) moves the VU1 work, which is the PS2's vertex shader, onto the GPU and
+renders natively.
+- It may first run the whole game with some effects missing or approximate, then restore them one by one in a native
+  way: flares through occlusion queries instead of GS readbacks, and so on.
+- Fidelity is a measured target there: per-scene visual checks and a list of effects to restore, not a bit-exact
+  gate. PS2 float semantics do not have to be reproduced.
+- A faithful renderer (GSdx, later CoreGS 2.0) stays the default and the reference; CoreGS 3.0 is an option until it
+  beats it in owner tests.
+- Game logic never changes: physics, timing, AI, saves and every value the EE or IOP reads back for gameplay stay
+  exact.
+- The study `private/research/vu1-direct-gpu-study.md` (in progress) maps the VU1 programs and evaluates skipping the
+  GIF (VU1 output straight to the renderer) and VU1 on the GPU.
+
 ## Honest limits
 - The PCSX2 GS has years of edge cases solved. Parity must be proven scene by scene with the chapter 14 protocol
   (night, rain, rally, replays, photo). gt4-gs stays the default until CoreGS 2.0 is better.
@@ -139,7 +154,9 @@ Candidates, in order:
 - Every enhancement is opt-in; the default image stays faithful to the original.
 
 ## Order
-Parity first (spec milestones through M8, the current focus). Then, by owner priority (2026-10-21):
+Parity first (spec milestones through M8, the current focus). Owner gate (2026-10-22): CoreGS 2.0 enters the launcher
+only when at least equivalent to GSdx; a beta needs at least upscaling and anti-aliasing. Then, by owner priority
+(2026-10-21):
 
 1. **Immediate image wins:** forced anisotropic filtering and LOD bias on 3D textures, and modern anti-aliasing
    (SMAA first; TAA later), all applied before the UI layer and only where they make sense.
