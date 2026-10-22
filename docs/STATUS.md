@@ -2,11 +2,11 @@
 
 ## Current state (2026-10-21)
 
-**TASK-027 CoreGS 2.0 (2026-10-21, Claude):** local slice239 waits for owner test 3: 3D scenes now run in
-the HWR with resident targets, interlock batching in runs, the GLM (GPU CLUT, GLM-owned pages, GPU uploads),
-double-buffered submission and an asynchronous presentation source; headless race 17-18.6 ms per frame (300 ms
-before the 3D work), memory and dumps unchanged against the reference paths ([PROGRESS](hw-renderer-spec/PROGRESS.md),
-IN-340..IN-355).
+**TASK-027 CoreGS 2.0 (2026-10-22, Claude):** local slice247 waits for owner test 5 (windowed, flat 60 FPS check):
+owner test 4 gave 60 FPS with about 18 ms spikes; since then the GS stream runs on its own thread, progressive frames
+are composed on the GPU, the GIF strip decoder (study S1), fewer barriers, decode reuse and deferred CLUT loads
+(IN-363..IN-370). Headless 480p race: GS thread 10.3-11.2 ms CPU per frame, GPU busy about 6.9 ms; memory, dumps and
+race frames identical to the reference paths ([PROGRESS](hw-renderer-spec/PROGRESS.md), efficiency table).
 
 **TASK-027 CoreGS 2.0 resumed (owner decision, 2026-10-21):** development branch `task/027-coregs2` (worktree
 `C:\Antigravity\gt4-wt-027-coregs2`) = `main` 1.0.0 + the paused TASK-027 work, without paraLLEl-GS. With
