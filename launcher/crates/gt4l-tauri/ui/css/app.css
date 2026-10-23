@@ -223,11 +223,14 @@ body.is-home.input-keys #hints { display: none; }
 /* The logo sits right above the buttons (Play, or the running state, and Settings), centred on their row. */
 .home-logo { width: 280px; height: auto; display: block; margin-bottom: 28px; }
 .home-actions { display: flex; align-items: center; gap: 12px; }
-/* Settings beside Play: the same glass box, focus and press as Play, square, with the gear icon. */
-.play.play-square { width: 52px; padding: 0; display: grid; place-items: center; letter-spacing: 0; }
-.play.play-square svg { display: block; }
-/* The light sweep is only on Play (owner, 2026-10-23). */
-.play.play-square::after { display: none; }
+/* Settings: the plain gear at the top left of the home screen (owner, 2026-10-23); a light box only on hover or focus. */
+.gear {
+  position: absolute; left: 32px; top: 24px; z-index: 3; width: 48px; height: 48px; border-radius: 3px;
+  display: grid; place-items: center; color: var(--white); background: transparent; border: 1px solid transparent;
+  transition: background 150ms ease, border-color 150ms ease;
+}
+.gear:hover, .gear:focus-visible { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.25); }
+.gear svg { display: block; }
 /* Play. Idle: dark translucent glass, thin white border, white label and a light sheen that sweeps
    across about every 3.4 s. Focused (pad or keys) or hovered: solid white, dark label, scale 1.03,
    soft glow. Pressed: quick press-down. Reduced motion removes the sheen (rule at the end of this file). */
@@ -262,7 +265,7 @@ body.is-home.input-keys #hints { display: none; }
 .running .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .running span.state { font: 500 14px var(--label); letter-spacing: 0.16em; text-transform: uppercase; color: var(--white); }
 .running .btn { height: 48px; }
-.home.is-running .play:not(.play-square) { display: none; }
+.home.is-running .play { display: none; }
 .home.is-running .running { display: flex; }
 
 /* ---------- games (TASK-101) ---------- */
@@ -272,6 +275,8 @@ body.is-home.input-keys #hints { display: none; }
   margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 4px;
   align-self: center;
 }
+/* The column (logo, Play, version switch) is centred on itself: Play under the logo, the switch under Play. */
+.home-actions { justify-content: center; }
 .version-arrow {
   width: 28px; height: 28px; display: grid; place-items: center; border-radius: 3px;
   background: transparent; color: var(--dim); border: 1px solid transparent;

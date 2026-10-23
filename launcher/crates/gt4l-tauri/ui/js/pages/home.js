@@ -1,5 +1,6 @@
 /*
- * Home: cover art, logo, Play, Settings gear, and the version switch under them. While the game runs, Play
+ * Home: cover art; the logo, Play and the version switch centred in one column; the Settings gear at the top left
+ * (owner, 2026-10-23). While the game runs, Play
  * becomes "Running · Stop". Polls app_state for game_running.
  * Commands: app_state, play, stop_game, select_game (js/games.js), setup_choose_disc and setup_start (Install).
  * Two games (TASK-101): under Play the version's name, Normal (Gran Turismo 4) or Spec II, between two arrows; an
@@ -222,9 +223,9 @@
       versionPrev.addEventListener("click", function () { cycleGame(-1); });
       versionNext.addEventListener("click", function () { cycleGame(1); });
 
-      // Settings: a square button beside Play with the same look and focus (owner, 1.2.1).
+      // Settings: the plain gear at the top left (owner, 2026-10-23), no box until hovered or focused.
       var gear = h("button", {
-        class: "play play-square",
+        class: "gear",
         type: "button",
         "aria-label": "Settings",
         title: "Settings",
@@ -267,9 +268,10 @@
       }, function () {});
       page.appendChild(h("div", { class: "home-bottom" }, [
         logoImage,
-        h("div", { class: "home-actions" }, [playButton, running, gear]),
+        h("div", { class: "home-actions" }, [playButton, running]),
         versionPicker
       ]));
+      page.appendChild(gear);
       root.appendChild(page);
       document.body.classList.add("is-home");
 

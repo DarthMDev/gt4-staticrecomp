@@ -521,7 +521,7 @@
       var names = document.querySelectorAll(".version-name:not(.is-leaving)");
       return names.length ? names[names.length - 1].textContent : "";
     };
-    var playText = function () { return document.querySelector(".play:not(.play-square)").textContent; };
+    var playText = function () { return document.querySelector(".play").textContent; };
     check("Home has the version switch: two arrows around Normal", arrows.length === 2 && nameText() === "Normal",
       arrows.length + " " + nameText());
     check("Gran Turismo 4 is selected first and shows Play", playText() === "Play", playText());
