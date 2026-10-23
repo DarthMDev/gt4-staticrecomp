@@ -263,10 +263,10 @@
     }).join("|");
     check("the Display section holds Monitor, Resolution, Fullscreen and VSync", displayIds === "monitor|resolution|fullscreen|vsync", displayIds);
     var graphicsSection = document.querySelector("[data-section=\"graphics\"]");
-    var inGraphics = !!graphicsSection && ["renderer", "render_scale", "fxaa"].every(function (id) {
+    var inGraphics = !!graphicsSection && ["renderer", "graphics_api", "render_scale", "fxaa"].every(function (id) {
       return !!graphicsSection.querySelector("[data-row=\"" + id + "\"]");
     });
-    check("the Graphics section holds Renderer, Render scale and FXAA", inGraphics, "missing rows");
+    check("the Graphics section holds Renderer, Graphics API, Render scale and FXAA", inGraphics, "missing rows");
     var looseRows = document.querySelectorAll(".content > .row").length;
     check("every Graphics row sits in a section", looseRows === 0, looseRows + " loose rows");
     var firstAdvanced = document.querySelector("[data-section=\"advanced\"] [data-setting]");

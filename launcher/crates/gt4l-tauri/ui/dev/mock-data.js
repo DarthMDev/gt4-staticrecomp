@@ -136,6 +136,16 @@
         { value: "coregs-2.0", label: "CoreGS 2.0 (coming soon)", disabled: true }
       ],
       default: "pcsx2", current: "pcsx2" },
+    // TASK-103: the GSdx Graphics API (the table row graphics_api; the Renderer row above is the engine). Vulkan is the
+    // default; Vulkan and Direct3D 12 are recommended, Direct3D 11 is for older PCs. OpenGL is not offered yet.
+    { id: "graphics_api", label: "Graphics API (GSdx)", help: "Vulkan is the default and the best tested; try Direct3D 11 on older graphics cards.",
+      page: "basic", group: "graphics", control: "dropdown",
+      values: [
+        { value: "vulkan", label: "Vulkan (recommended)" },
+        { value: "d3d12", label: "Direct3D 12 (recommended)" },
+        { value: "d3d11", label: "Direct3D 11 (older PCs)" }
+      ],
+      default: "vulkan", current: "vulkan" },
     // TASK-080 addendum: no Aspect ratio and no Internal resolution row. Render scale (50% to 200%) with the
     // resulting internal resolution as its readout (labels are filled by tableView from the chosen resolution).
     { id: "render_scale", label: "Render scale", help: "How sharp the picture is drawn. 100% draws it at least at your resolution; 50% is faster and softer, 200% is sharper and needs a much faster GPU.",

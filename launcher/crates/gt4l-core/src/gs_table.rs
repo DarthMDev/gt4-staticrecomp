@@ -39,6 +39,9 @@ pub struct Choice {
     #[serde(default)]
     pub ini: String,
     pub status: String,
+    /// Display text of the choice (English); empty means the name. The UI translates it by key (TASK-102).
+    #[serde(default)]
+    pub label: String,
 }
 
 /// One row of the table, as read from the file.
@@ -440,11 +443,50 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compiled_table_is_valid_and_has_the_renderer_row() {
+    fn compiled_table_is_valid_and_has_the_graphics_api_row() {
         assert!(rows().len() > 40);
-        let renderer = row("renderer").expect("renderer row");
-        assert_eq!(renderer.default, "vulkan");
+        let api = row("graphics_api").expect("graphics_api row");
+        assert_eq!(api.default, "vulkan");
+        assert_eq!(api.page, "basic", "Graphics page");
+        assert!(offered().iter().any(|offered| offered.id == "graphics_api"));
+        // TASK-103: three APIs, Vulkan first; no OpenGL (12) and no software renderer (13) yet.
+        let names: Vec<&str> = api.choices.iter().map(|choice| choice.name.as_str()).collect();
+        assert_eq!(names, ["vulkan", "d3d12", "d3d11"]);
+        let inis: Vec<&str> = api.choices.iter().map(|choice| choice.ini.as_str()).collect();
+        assert_eq!(inis, ["14", "15", "3"]);
+        assert_eq!(api.choices[0].label, "Vulkan (recommended)");
+        assert_eq!(api.choices[1].label, "Direct3D 12 (recommended)");
+        assert_eq!(api.choices[2].label, "Direct3D 11 (older PCs)");
+        // The engine setting of the launcher is also called "renderer": the table row must not use that id.
+        assert!(row("renderer").is_none(), "the table row is graphics_api");
         assert!(!offered().is_empty());
+    }
+
+    #[test]
+    fn each_graphics_api_choice_writes_its_renderer_number() {
+        for (choice, number) in [("vulkan", "14"), ("d3d12", "15"), ("d3d11", "3")] {
+            let mut settings = BTreeMap::new();
+            settings.insert("graphics_api".to_string(), choice.to_string());
+            let text = render_ini(&settings, &BTreeMap::new()).unwrap();
+            assert!(text.contains(&format!("Renderer = {number}
+")), "{choice} writes {number}");
+        }
+    }
+
+    #[test]
+    fn a_missing_or_unknown_graphics_api_falls_back_to_vulkan() {
+        // Missing: the table default is Vulkan (an existing install has no stored value).
+        assert_eq!(default_value("graphics_api").as_deref(), Some("vulkan"));
+        let text = render_ini(&BTreeMap::new(), &BTreeMap::new()).unwrap();
+        assert!(text.contains("Renderer = 14
+"));
+        // Unknown: refused by the table check, so the launcher keeps the default (config.rs warns and uses it).
+        assert!(check_user_value("graphics_api", "opengl").is_err());
+        assert!(check_user_value("graphics_api", "software").is_err());
+        assert!(check_user_value("graphics_api", "").is_err());
+        let mut unknown = BTreeMap::new();
+        unknown.insert("graphics_api".to_string(), "opengl".to_string());
+        assert!(render_ini(&unknown, &BTreeMap::new()).is_err(), "the writer never writes an unknown value");
     }
 
     #[test]
@@ -469,10 +511,10 @@ mod tests {
         assert!(check_user_value("upscale", "13").is_err());
         assert!(check_user_value("upscale", "x").is_err());
         // TASK-088 (1.2.0): every gt4-gs value the binary accepts is settable (the resolved ones were enabled).
-        assert!(check_user_value("renderer", "d3d12").is_ok());
-        assert!(check_user_value("renderer", "vulkan").is_ok());
+        assert!(check_user_value("graphics_api", "d3d12").is_ok());
+        assert!(check_user_value("graphics_api", "vulkan").is_ok());
         assert!(check_user_value("filter", "nearest").is_ok());
-        assert!(check_user_value("renderer", "opengl").is_err(), "not a value of the table");
+        assert!(check_user_value("graphics_api", "opengl").is_err(), "not a value of the table");
         assert!(check_user_value("cache_folder", "C:/x").is_err(), "launcher rows are not user settings");
         assert!(check_user_value("vsync", "yes").is_err());
     }

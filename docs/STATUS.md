@@ -1,5 +1,13 @@
 # Current Status
 
+## TASK-103 Graphics API for GSdx (2026-10-23, on `task/101-multi-game`, release 1.3.0)
+
+Implemented, not merged; owner in-game test pending. Settings > Graphics offers "Graphics API (GSdx)" (table row `graphics_api`,
+`[EmuCore/GS] Renderer` = 14, 15, 3): Vulkan (recommended, default), Direct3D 12 (recommended), Direct3D 11 (older PCs). The
+engine setting stays `renderer`. A missing or unknown value falls back to Vulkan. Checks: `cargo test --workspace` 453 passed,
+Python `test_gs_*` 168 OK, focus-check 151/151 (en-US) and 158/158 (pt-BR), nav-test 150/150; screenshots in
+`O:\gt4recomp-scratch\slice280-shots`. Open: owner test on Direct3D 11 and 12 against Vulkan.
+
 ## TASK-102 launcher language: en-US and pt-BR (2026-10-23, on `task/101-multi-game`)
 
 Implemented, not merged; owner test pending. The launcher follows the Windows language (Auto); Settings > General > Language

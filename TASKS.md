@@ -124,6 +124,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072); subtasks S1-S9 in docs/SPEC2-PLAN.md | 🔄 In progress (2026-10-22) · branch `task/100-spec2`; release 1.3.0 |
 | TASK‑101 | Multi-game launcher: Gran Turismo 4 and Spec II side by side (game selector, Play/Install, per-game disc, card and saves, shared settings, Spec II logo) | 📋 Planned (owner, 2026-10-23) · release 1.3.0 with TASK-100; plan docs/MULTI-GAME-LAUNCHER-PLAN.md |
 | TASK‑102 | Launcher language: automatic en-US / pt-BR with a General > Language setting (locale files, Rust messages, release notes) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
+| TASK‑103 | Graphics API choice for GSdx: Vulkan (recommended, default), Direct3D 12 (recommended), Direct3D 11 (older PCs), in Settings > Graphics (locale files, same ids kept apart from the engine Renderer) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner in-game test pending · release 1.3.0 |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -631,6 +632,20 @@ controller chips, the key names, the Release notes text of 1.3.0 in the sample (
 `Active save` slot name (a value the code compares). Owner approved the mock in pt-BR (2026-10-23; main-agent review:
 cargo 450 passed, focus-check en-US 151/151 and pt-BR 158/158, nav-test 150/150). Open: the owner test on a real
 window with the 1.3.0 candidate.
+
+### TASK-103 — Graphics API choice for GSdx (Vulkan, Direct3D 12, Direct3D 11)
+Implemented on `task/101-multi-game` (owner, 2026-10-23), release 1.3.0; owner in-game test pending. Settings > Graphics
+shows "Graphics API (GSdx)" (table row `graphics_api`, written as `[EmuCore/GS] Renderer` = 14, 15 or 3): Vulkan
+(recommended, default), Direct3D 12 (recommended), Direct3D 11 (older PCs). The row moved from the Advanced section to the
+Graphics page. The engine setting keeps its id `renderer` (GSdx or CoreGS 2.0) and its label "Renderer"; the new row
+cannot be confused with it in the UI, the settings store or the table. A missing or unknown stored value, and an existing
+install, use Vulkan. No OpenGL and no software renderer (OpenGL later, with a new gt4-gs build and its allow-list entry).
+Research (2026-10-23, read-only): gt4-gs.exe already contains Direct3D 11, Direct3D 12 and OpenGL; the backend follows
+`[EmuCore/GS] Renderer` (DX11 3, OpenGL 12, Vulkan 14, DX12 15). Checks: `cargo test --workspace` 453 passed; Python
+`test_gs_*` 168 tests OK; focus-check en-US 151 of 151 and pt-BR 158 of 158, nav-test 150 of 150; screenshots of
+Settings > Graphics in `O:\gt4recomp-scratch\slice280-shots` (pt-BR and en-US). Open: the owner in-game test on Direct3D 11
+and Direct3D 12 against Vulkan (Nordschleife TT 480p, night race, menus, ultrawide crop and fill, texture pack, upscaling,
+flares and readbacks). A backend that fails the owner test is not offered.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:

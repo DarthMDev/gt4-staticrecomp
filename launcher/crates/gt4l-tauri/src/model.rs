@@ -13,10 +13,10 @@ use serde_json::{json, Value};
 /// The upscale limit sent until gt4-gs reports the device limit.
 pub const MAX_UPSCALE_DEFAULT: u32 = 12;
 
-/// Settings rows that are never sent to the UI: the PCSX2 renderer's own Renderer API, and the present-mode rows the
-/// launcher derives from `vsync` (scripts/gs_settings.py, gs_table::render_ini callers).
-/// `upscale` follows the Resolution and the Render scale (TASK-080 addendum, `display::display_plan`).
-const DERIVED_TABLE_IDS: &[&str] = &["renderer", "vsync", "mailbox", "upscale"];
+/// Settings rows that are never sent to the UI: the present-mode rows the launcher derives from `vsync`
+/// (scripts/gs_settings.py, gs_table::render_ini callers). `upscale` follows the Resolution and the Render scale
+/// (TASK-080 addendum, `display::display_plan`). The GSdx Graphics API is `graphics_api` (TASK-103), offered in the UI.
+const DERIVED_TABLE_IDS: &[&str] = &["vsync", "mailbox", "upscale"];
 
 /// The rows of the PCSX2 GS table the UI may show: offered, not mods (release 1.1.0), not derived.
 pub fn pcsx2_table_rows() -> Vec<&'static gs_table::Row> {
@@ -239,7 +239,11 @@ fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
             Value::Array(
                 row.choices
                     .iter()
-                    .map(|choice| json!({ "value": choice.name, "label": choice.name, "disabled": choice.status != "ok" }))
+                    .map(|choice| {
+                        // The table's English label when it has one; the UI translates the value by key (TASK-102).
+                        let label = if choice.label.is_empty() { choice.name.as_str() } else { choice.label.as_str() };
+                        json!({ "value": choice.name, "label": label, "disabled": choice.status != "ok" })
+                    })
                     .collect(),
             ),
             json!(row.default),
@@ -788,6 +792,30 @@ mod table_tests {
         for gone in ["internal_scale", "present_filter", "fsr_sharpness", "deinterlacing", "anti_aliasing"] {
             assert!(!listed.contains(&gone.to_string()), "{gone} was a CoreGS 1.1 row");
         }
+    }
+
+    #[test]
+    fn graphics_api_dropdown_is_on_the_graphics_page_with_three_apis() {
+        let table = settings_table(&Settings::default(), &Controls::default());
+        let api = row(&table, "graphics_api");
+        assert_eq!(api["page"], "basic");
+        assert_eq!(api["control"], "dropdown");
+        assert_eq!(api["default"], "vulkan");
+        assert_eq!(api["current"], "vulkan", "an existing install keeps Vulkan");
+        let values = api["values"].as_array().unwrap();
+        let shown: Vec<(&str, &str)> =
+            values.iter().map(|value| (value["value"].as_str().unwrap(), value["label"].as_str().unwrap())).collect();
+        assert_eq!(
+            shown,
+            vec![("vulkan", "Vulkan (recommended)"), ("d3d12", "Direct3D 12 (recommended)"), ("d3d11", "Direct3D 11 (older PCs)")]
+        );
+        assert!(values.iter().all(|value| value["disabled"] == false));
+        // The choice is stored and shown back (the engine row keeps its own id, `renderer`).
+        let mut chosen = Settings::default();
+        chosen.set_gs("graphics_api", "d3d11").unwrap();
+        let table = settings_table(&chosen, &Controls::default());
+        assert_eq!(row(&table, "graphics_api")["current"], "d3d11");
+        assert!(chosen.set_gs("graphics_api", "opengl").is_err(), "OpenGL is not offered yet");
     }
 
     #[test]
