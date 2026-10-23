@@ -123,6 +123,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
 | TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072), plugin injector mapped, hooks remapped | 📋 Planned (owner, 2026-10-22) · release 1.3.0 |
 | TASK‑101 | Multi-game launcher: Gran Turismo 4 and Spec II side by side (game selector, Play/Install, per-game disc, card and saves, shared settings, Spec II logo) | 📋 Planned (owner, 2026-10-23) · release 1.3.0 with TASK-100; plan docs/MULTI-GAME-LAUNCHER-PLAN.md |
+| TASK‑103 | Launcher: Graphics API choice for GSdx (Vulkan default, Direct3D 12 and Direct3D 11 for older PCs; OpenGL later), hardware backends only | 📋 Planned (owner, 2026-10-23) · after TASK-102 (i18n) |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -601,6 +602,33 @@ the new pins (a slice264 pin set) need an owner decision on the release path. CT
   Donor default-initialised over 0xFF memory. slice268 (O:\gt4recomp-scratch\slice268-build, the slice264 recipe):
   CTest 40/40; headless menus with `--renderer donor` and `pcsx2` both run (exit 0). The launcher drops CoreGS 1.1 in
   1.2.3 (TASK-096); the fix stays as protection for runs without the launcher and the built-in restart path.
+
+### TASK-103 — Graphics API choice for GSdx (Vulkan, Direct3D 12, Direct3D 11)
+Planned (owner, 2026-10-23), after TASK-102 (the i18n work touches the same Settings pages). Some players ask for other
+graphics APIs, mostly for older PCs. A new option in the launcher's graphics settings, "Graphics API", default Vulkan,
+with the other hardware backends of the GSdx build; software rendering is never offered.
+
+Research (2026-10-23, read-only, PCSX2-tainted Haiku; gt4recomp-gs at 1.2.1, binary 1.2.0):
+- Confirmed: the release gt4-gs.exe already contains Direct3D 11, Direct3D 12 and OpenGL (imports d3d11, d3d12,
+  dxgi, opengl32; Vulkan is loaded at run time). No fork build flag change is needed.
+- Confirmed: the backend is chosen by `[EmuCore/GS] Renderer` in gt4-gs.ini (DX11 = 3, OpenGL = 12, Vulkan = 14,
+  DX12 = 15). In stream mode the command-line `-renderer` is overridden; the ini key works. The settings allow-list
+  accepts 14, 15 and 3 only; `docs/launcher/gs-settings.toml` already has the row `renderer` (choices
+  vulkan/d3d12/d3d11, default vulkan, written always) but does not offer it: the GT4 build is checked on Vulkan only.
+- Confirmed on this PC (RX 9060 XT): D3D11 and D3D12 create their device in a headless replay; no frame was rendered
+  (the offline replay stops after VM init), so no image has been checked on them yet.
+- High confidence: the GT4 additions (display crop, aspect fill, texture replacement, readbacks) are generic code;
+  the deferred swap chain acquire is Vulkan-only (a no-op elsewhere). D3D11 below feature level 11_0 runs degraded.
+- OpenGL (GL 4.1 minimum) needs the allow-list entry 12 in the fork's `3rdparty/gt4recomp-gs-stream` (with
+  SHA256SUMS) and in gs-settings.toml: left for a later step.
+
+Work: offer the row in the Settings UI (the engine setting is also called "renderer" there: keep the ids apart),
+update `gt4l-core/src/gs_table.rs` tests (they assert `Renderer = 14`) and `scripts/gs_settings.py` goldens, translate
+the labels (TASK-102 locale files), default Vulkan, and an existing install keeps Vulkan.
+
+Acceptance: cargo and Python tests; owner in-game test on Direct3D 11 and Direct3D 12 against Vulkan (Nordschleife
+TT 480p, night race, menus, ultrawide crop and fill, texture pack, upscaling, flares/readbacks). A backend that fails
+the owner test is not offered.
 
 ### TASK-101 — Multi-game launcher (Gran Turismo 4 and Spec II)
 Planned (owner, 2026-10-23) for release 1.3.0, the product side of TASK-100 (its S9). Plan and owner decisions:
