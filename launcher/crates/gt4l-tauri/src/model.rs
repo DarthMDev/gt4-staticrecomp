@@ -564,13 +564,18 @@ pub fn about_text(version: &str) -> String {
     )
 }
 
-/// The credits shown on the About page. The Spec II authors' names are not known to the launcher yet: the line below is a
-/// placeholder for the owner to fill in before the 1.3.0 release (their permission is also needed, decision 0072).
+/// The credits shown on the About page: the Spec II mod and its own credit list (owner decision 2026-10-23: no
+/// permission is needed; credit the authors properly and ship none of their files).
 pub fn credits_text() -> &'static str {
-    "Gran Turismo 4 Spec II is a mod of the GT4 Online Public Beta made by [AUTHORS: names to be filled in by the owner, \
-     with their permission and a link]. GT4Recomp prepares it from your own disc image and includes none of its files. \
-     The Spec II logo on the home screen is a placeholder (the GT4 logo with a Spec II line) until the authors' logo and \
-     credit are added."
+    "Gran Turismo 4 Spec II by TheAdmiester and contributors - https://www.theadmiester.co.uk/specii/\n\n\
+     Credits: Nenkai (GT4FS, GTAdhocToolchain, OpenAdhoc, file formats, reverse engineering); ddm (on-screen keyboard, \
+     randomizer algorithm, event theme suggestions); ermaccer (PS2PluginInjector, code assistance); zinklesmesh (car \
+     camera adjustments); pez2k (GT4FS, car specifications, GT research); xfileFIN (GT4FS); Silentwarrior112 (car colour \
+     patch editor); Xenn and Submaniac (ENGN research and sound documentation); Silent (GT3 chase cam, trigger \
+     sensitivity, 480p PCSX2 cheats); Alconautica, hydnhntr, JeyM, pioneerspine (UI graphics and layout).\n\n\
+     Special thanks: DustinEden (Spec II 100% livestream); testers Alconautica, Alex, Carver6K, ddm, Greg Thomas, Nebu, \
+     Rekoware, Romrolls, Silent, Submaniac; translators granturismo.italia, Gustingorriz, Submaniac, SWYD1.\n\n\
+     GT4Recomp prepares Spec II from your own disc image and ships none of its files."
 }
 
 /// Open-source notices of the launcher's user interface. Full texts are installed with the program.
@@ -647,6 +652,18 @@ mod tests {
         assert!(text.starts_with("GT4Recomp 1.0.0"));
         assert!(text.contains("not affiliated with, endorsed by or sponsored by"));
         assert!(licenses_text().contains("Tauri 2") && !licenses_text().contains("Slint"));
+    }
+
+    #[test]
+    fn credits_name_the_spec2_authors_with_their_link_and_credit_list() {
+        let text = credits_text();
+        assert!(text.contains("TheAdmiester and contributors"));
+        assert!(text.contains("https://www.theadmiester.co.uk/specii/"));
+        for name in ["Nenkai", "ddm", "ermaccer", "pez2k", "DustinEden", "granturismo.italia"] {
+            assert!(text.contains(name), "{name} is missing");
+        }
+        assert!(!text.contains('['), "no placeholder may remain");
+        assert!(text.contains("ships none of its files"));
     }
 
 }

@@ -42,6 +42,46 @@ Games). `cargo test --workspace`: 405 passed, 4 ignored; the dev mock checks pas
 checks). Open: the look on a real window, the authors' logo and names, the installer build. Plan progress:
 [MULTI-GAME-LAUNCHER-PLAN](MULTI-GAME-LAUNCHER-PLAN.md).
 
+## Release 1.3.0 candidate built (2026-10-23, NOT published)
+
+Branch `task/101-multi-game`, merges `63c110e` (origin/main `db5c559`) and `b8a6b5f` (origin/task/100-spec2
+`9206af5`, S8c). Version 1.3.0 in `launcher/Cargo.toml`, the workspace crates of `Cargo.lock`, `tauri.conf.json` and
+the installer default. No PR, merge, tag or GitHub release yet (owner approval first).
+
+- **Two game builds, fresh slices:** v2.00 `private/slice279-build/build/gt4vulkan.exe` 97,377,792 bytes, sha256
+  `9dccb5a4…` (pin `inputs/slice279-pcsx2.json`); Spec II `private/slice280-build/build/gt4vulkan-spec2.exe`
+  104,612,352 bytes, sha256 `174e7adf…` (pin `inputs/slice280-spec2.json`). The Spec II pin records the S7b IOP
+  runtime (`slice276`), the S8b guard (`slice277`) and the S8c EE library (`slice278`); the v2.00 pin keeps the
+  slice262 capsules and the slice217 aspect library. `PERF_PROFILES['pcsx2']` now points at slice279 (slice268 kept
+  as `pcsx2-slice268`); `SPEC2_RELEASE` holds slice280. The release gt4-gs pin moved to **1.2.1**
+  (`private/slice281-gt4gs-121`, `gt4-gs.exe` 11,347,456 bytes `887f5bf9…`, zip 13,025,171 bytes `7eb7e4a3…`).
+- **Release notes written before the build:** `docs/release-notes/1.3.0.md` (full), launcher `1.3.0.md` (en-US) and
+  `pt-BR/1.3.0.md`. They cover Spec II 1.10 and same-executable variants side by side, separate per-game saves, the
+  multi-game launcher, What's new, automatic language, the Graphics API choice, the portable build and the standalone
+  game executable. **Owner decision 2026-10-23: no permission from the Spec II authors is needed**; they are credited
+  by name in the full notes, the About page (both languages) and README, and the notes state that GT4Recomp ships no
+  Spec II files (the player supplies the disc image).
+- **Distribution/installer/portable:** `GAME_DIR` `private/slice282-dist-130` (both exes, shaders, CRT DLLs, SDL3,
+  licences, MANIFEST; 24 files). Launcher release `GT4Recomp.exe` 17,038,336 bytes `69530dfa…` and portable
+  `GT4Recomp.exe` 16,973,824 bytes `a1a0ed0d…`, both without user/build paths. Installer
+  `private/release-130-out/GT4Recomp-Setup-1.3.0.exe` 51,373,344 bytes sha256 `d1569b35…`; 7-Zip extraction compared
+  24 files with their sources (0 differences). Portable `GT4Recomp-1.3.0-portable.zip` 83,032,500 bytes sha256
+  `bfa3a08a…`; `SHA256SUMS` lists both.
+- **Checks:** CTest 45/45 in both builds; Python 694 OK (42 skipped with the v2.00 build, 56 with Spec II);
+  `cargo test --workspace` clean (new relocate retry test); launcher focus-check en-US 151/151 and pt-BR 158/158,
+  nav-test 150/150 in headless Edge; the launcher's Rust Spec II derivation is byte-identical to
+  `scripts/spec2_elf_patch.py` (`36f60b1a…`) and both real-image tests pass. **v2.00 identity against slice268 is
+  exact** in menus/day/night dumps and stream hashes (`463d455c…`/`1ccb97c5…`, `992f1ac9…`/`0c79dcf5…`,
+  `c57e7d03…`/`c091716e…`).
+- **Flaky migration test:** a scanner/indexer can hold a freshly written file, so the rename failed transiently. The
+  move now retries sharing/lock/access-denied errors five times (20-100 ms apart) before reporting a failure; the
+  test policy is covered by `only_scanner_and_lock_errors_are_retried`. The migration test passed 10/10 in isolation
+  and in the full workspace run.
+- **Owner test checklist** (not yet done): fresh install; update over 1.2.3 with the owner data in `%APPDATA%`
+  kept; Spec II install from the ISO; Spec II GT mode and a license DEMO watched (log must show `[license-guard]`);
+  Options menu; saves separate both ways; Graphics API Vulkan/D3D12/D3D11 in game; language switch; standalone exe;
+  portable build on another PC.
+
 ## TASK-100 Spec II on branch (2026-10-22, S1 done)
 
 Branch `task/100-spec2`. The owner supplied the Public Beta ISO and it is confirmed as the exact base of Spec II 1.10

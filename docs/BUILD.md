@@ -2800,6 +2800,63 @@ all its submenus, Replay Theater, Save Game, Credits, GT Mode and the Arcade men
 `O:\gt4recomp-scratch\spec2-s7d-build\build\gt4vulkan-spec2.exe`, 104,475,136 bytes, sha256 `301bbb4a.`. The harness
 has `--card` for an owner-card copy; a license demo was still not reached headless.
 
+## Release 1.3.0 (candidate, not published)
+
+Merges on `task/101-multi-game`: `origin/main` `db5c559` (`63c110e`) and `origin/task/100-spec2` `9206af5` (`b8a6b5f`).
+Version 1.3.0 in `launcher/Cargo.toml`, the workspace crates of `launcher/Cargo.lock`, `tauri.conf.json` and the
+installer default. Release notes: `docs/release-notes/1.3.0.md` (full), `launcher/1.3.0.md` and
+`launcher/pt-BR/1.3.0.md` (written before the build; see AGENTS.md).
+
+Game builds (release distribution ON, fresh slices and pins):
+
+| Game | Exe | Size / sha256 | Pin |
+|---|---|---|---|
+| v2.00 | `private/slice279-build/build/gt4vulkan.exe` | 97,377,792 / `9dccb5a4…` | `docs/inputs/slice279-pcsx2.json` |
+| Spec II | `private/slice280-build/build/gt4vulkan-spec2.exe` | 104,612,352 / `174e7adf…` | `docs/inputs/slice280-spec2.json` |
+
+- v2.00 build: `O:\gt4recomp-scratch\slice278-build` from `task/101-multi-game`, capsules `slice262-frame-cost-runtime`
+  and `slice262-license-guard-runtime`, port `slice200`, shaders `slice153`, `GT4_EE_PROFILE=aspect`,
+  `GT4_RELEASE_DISTRIBUTION=ON`.
+- Spec II build: `O:\gt4recomp-scratch\spec2-130-build` from `task/101-multi-game`, `-DGT4_TARGET=spec2
+  -DGT4_EE_PROFILE=spec2`, perf runtime `slice276-spec2-iop-runtime`, license guard `slice277-license-guard-runtime`,
+  EE library `slice278` (`docs/inputs/spec2-ee-libraries.json`), port/shaders/VU1/VU0 as v2.00,
+  `GT4_RELEASE_DISTRIBUTION=ON`.
+- Pins: `scripts/pin_release_130.py <slice> --target gt4|spec2 --exe <path>` (new pin file, never edited; gs package
+  1.2.1 in `private/slice281-gt4gs-121`). `PERF_PROFILES['pcsx2']` -> slice279; slice268 stays as `pcsx2-slice268`;
+  `external_runtime_probe.SPEC2_RELEASE` holds slice280.
+- `scripts/make_distribution.py` gained `--second-exe/--second-runtime-manifest`, so one GAME_DIR carries both exes.
+
+Distribution, launcher and installer:
+
+```
+python scripts/make_distribution.py <assets>/private/slice282-dist-130 --assets-root <assets> ^
+  --exe <assets>/private/slice279-build/build/gt4vulkan.exe --runtime-manifest docs/inputs/slice279-pcsx2.json ^
+  --second-exe <assets>/private/slice280-build/build/gt4vulkan-spec2.exe ^
+  --second-runtime-manifest docs/inputs/slice280-spec2.json
+
+powershell -ExecutionPolicy Bypass -File launcher\tools\build-release.ps1 -Sdl3Root <assets>/private/tooling/sdl3-3.4.18
+powershell -ExecutionPolicy Bypass -File launcher\tools\build-release.ps1 -Sdl3Root <assets>/private/tooling/sdl3-3.4.18 -Portable
+
+makensis /DVERSION=1.3.0 /DLAUNCHER_EXE=<target>/release/GT4Recomp.exe /DGAME_DIR=<assets>/private/slice282-dist-130 ^
+  /DSDL3_DLL=<assets>/private/tooling/sdl3-3.4.18/runtime/SDL3.dll ^
+  /DWEBVIEW2_BOOTSTRAPPER=<assets>/private/release-100-webview2/MicrosoftEdgeWebview2Setup.exe ^
+  /DOUTFILE=<assets>/private/release-130-out/GT4Recomp-Setup-1.3.0.exe installer/gt4recomp.nsi
+
+python scripts/make_portable_zip.py <assets>/private/release-130-out --version 1.3.0 ^
+  --launcher-exe <target>-portable/release/GT4Recomp.exe --sdl3-dll <assets>/private/tooling/sdl3-3.4.18/runtime/SDL3.dll ^
+  --game-dir <assets>/private/slice282-dist-130 --sums-file <assets>/private/release-130-out/SHA256SUMS
+```
+
+Results: launcher release 17,038,336 bytes `69530dfa…`, portable 16,973,824 `a1a0ed0d…`; installer 51,373,344
+`d1569b35…` (7-Zip extraction: 24 files compared with their sources, 0 differences); portable zip 83,032,500
+`bfa3a08a…`; SHA256SUMS lists both assets.
+
+Checks: CTest 45/45 in the v2.00 and Spec II builds; Python 694 OK (42 skipped v2.00, 56 Spec II); `cargo test
+--workspace` clean; focus-check en-US 151/151, pt-BR 158/158 and nav-test 150/150 in headless Edge; the launcher's
+Rust Spec II derivation is byte-identical to `scripts/spec2_elf_patch.py` (`36f60b1a…`); v2.00 identity against
+slice268 exact in menus/day/night (dumps `463d455c…`/`992f1ac9…`/`c57e7d03…`, streams `1ccb97c5…`/`0c79dcf5…`/
+`c091716e…`). Not published: no PR, merge, tag or GitHub release before the owner tests.
+
 ## Slice 278 - TASK-097 self-sufficient game, TASK-098 portable build (release 1.3.0)
 
 Build recipe: the slice268 / release 1.2.3 recipe (capsules `slice262-frame-cost-runtime`, `slice262-license-guard-runtime`,

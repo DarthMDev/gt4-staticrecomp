@@ -576,11 +576,14 @@
         h("p", { text: GT4.t("about.disclaimer") }),
         h("p", { text: GT4.t("about.trademarks") })
       ]));
-      // The people behind the games GT4Recomp runs (Spec II): a placeholder line until the owner fills in the names.
-      if (info.credits) {
-        content.appendChild(h("div", { class: "about-notice about-credits" }, [
-          h("p", { text: info.credits })
-        ]));
+      // The people behind Gran Turismo 4 Spec II: one localized line and the full credit list (owner 2026-10-23).
+      var spec2Credit = GT4.t("about.spec2_credit");
+      var creditText = GT4.t("rust.about.credits") || info.credits;
+      var creditLines = [];
+      if (spec2Credit) creditLines.push(h("p", { text: spec2Credit }));
+      if (creditText) creditLines.push(h("p", { class: "note", text: creditText }));
+      if (creditLines.length) {
+        content.appendChild(h("div", { class: "about-notice about-credits" }, creditLines));
       }
       content.appendChild(h("div", { class: "group", text: GT4.t("about.more") }));
       // The game runs from GT4Recomp's own copy of the disc image (the file chosen at setup is not needed any more,

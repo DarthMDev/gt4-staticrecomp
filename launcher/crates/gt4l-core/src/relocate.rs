@@ -69,8 +69,26 @@ pub struct FsOps<'a> {
     pub open: &'a dyn Fn(&Path) -> io::Result<Box<dyn Read>>,
 }
 
+/// Whether a rename error is the transient kind a scanner, the indexer or Explorer can cause on a freshly written
+/// file (Windows sharing/lock violation, access denied while a scan holds the file). Retried a few times; a real
+/// failure is still reported to the caller, which keeps the old place in use.
+fn transient_rename_error(error: &io::Error) -> bool {
+    matches!(error.raw_os_error(), Some(5) | Some(32) | Some(33))
+}
+
 fn real_rename(from: &Path, to: &Path) -> io::Result<()> {
-    fs::rename(from, to)
+    let mut last = None;
+    for attempt in 0..5u32 {
+        match fs::rename(from, to) {
+            Ok(()) => return Ok(()),
+            Err(error) if transient_rename_error(&error) => {
+                last = Some(error);
+                std::thread::sleep(std::time::Duration::from_millis(20 * u64::from(attempt + 1)));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last.expect("a retryable rename error"))
 }
 
 fn real_open(path: &Path) -> io::Result<Box<dyn Read>> {
@@ -984,5 +1002,16 @@ mod tests {
         assert_eq!(next_free_slot(&base), base.join("Save 05"));
         assert_eq!(next_free_slot(&base.join("missing")), base.join("missing").join("Save 01"));
         let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn only_scanner_and_lock_errors_are_retried() {
+        // Windows access denied, sharing violation and lock violation: a scanner or the indexer holding the file.
+        for code in [5, 32, 33] {
+            assert!(transient_rename_error(&io::Error::from_raw_os_error(code)), "code {code}");
+        }
+        for error in [io::ErrorKind::NotFound, io::ErrorKind::AlreadyExists, io::ErrorKind::Other] {
+            assert!(!transient_rename_error(&io::Error::from(error)), "{error:?}");
+        }
     }
 }
