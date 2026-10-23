@@ -195,7 +195,10 @@ fn main() {
                     Some(problem) => state::log(&check_dirs, &format!("system requirement not met: {problem}")),
                     None => state::log(&check_dirs, "system requirements: processor OK"),
                 }
-                let cards = gt4l_platform::gpu::probe_gpus();
+                let (cards, inputs) = gt4l_platform::gpu::probe_gpus_with_inputs();
+                for line in &inputs {
+                    state::log(&check_dirs, line);
+                }
                 state::log(&check_dirs, &format!("graphics: cards [{}]", gt4l_platform::gpu::card_list(&cards)));
             });
             Ok(())
@@ -230,6 +233,7 @@ fn main() {
             commands::replays_import,
             commands::replays_delete,
             webview_guard::ui_ready,
+            webview_guard::ui_log,
             commands::get_controls,
             commands::pad_status,
             commands::capture_binding,

@@ -52,6 +52,7 @@
     "allow-apply-update",
     "allow-skip-update",
     "allow-confirm-close",
-    "allow-ui-ready"
+    "allow-ui-ready",
+    "allow-ui-log"
   ]
 }

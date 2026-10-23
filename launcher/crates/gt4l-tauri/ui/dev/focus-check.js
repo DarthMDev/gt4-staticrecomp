@@ -985,6 +985,66 @@
     }
   }
 
+  // The setup page against a stubbed backend: the first-run page names no game, and the copy step ends at a full bar.
+  async function setupChecks() {
+    var realCall = GT4.backend.call;
+    var current = null;
+    GT4.backend.call = function (command) {
+      return command === "app_state" ? Promise.resolve({ setup: current, any_installed: false, games: [] }) : realCall.apply(null, arguments);
+    };
+    var scratch = document.createElement("div");
+    document.body.appendChild(scratch);
+    var handle = null;
+    try {
+      current = { state: "needed", step: "copying", progress: 0, bytes_done: 0, bytes_total: 0, renderer_step: "", disc_name: "", problem: "", note: "", game: null };
+      handle = GT4.pages.setup.mount(scratch);
+      await wait(700);
+      var title = scratch.querySelector("h1").textContent;
+      var sub = scratch.querySelector(".sub").textContent;
+      check("the first-run setup page is generic: no game is named before the disc is read",
+        title === T("setup.set_up") && sub === T("setup.choose_text") && title.indexOf("Spec") < 0, title + " / " + sub);
+      current = { state: "checking", step: "checking", progress: 0, bytes_done: 3683418112, bytes_total: 3683418112, renderer_step: "",
+        disc_name: "Gran Turismo 4 Spec II · Spec II 1.10", problem: "", note: "", game: { id: "spec2", name: "Gran Turismo 4 Spec II" } };
+      await wait(900);
+      var named = scratch.querySelector("h1").textContent;
+      check("after the disc is identified the steps name the game", named === T("setup.checking_title_named", { game: "Gran Turismo 4 Spec II" }), named);
+      var copyBar = scratch.querySelector(".steps li .bar i");
+      check("the copy step ends at a full bar after the page moved on to checking",
+        !!copyBar && copyBar.style.width === "100%" && copyBar.style.transition === "none", copyBar ? copyBar.style.width + " " + copyBar.style.transition : "no bar");
+    } finally {
+      if (handle) {
+        handle.destroy();
+      }
+      scratch.remove();
+      GT4.backend.call = realCall;
+    }
+  }
+
+  // The 1.3.0 intro is looked up by the base version: 1.3.0-rc5 plays it, once, and 1.3.0 then does not.
+  async function introChecks() {
+    var key = "gt4recomp.intro.seen";
+    var before = null;
+    try { before = root.localStorage.getItem(key); root.localStorage.removeItem(key); } catch (error) { return; }
+    try {
+      check("the intro base version drops the rc suffix", GT4.intro.baseVersion("1.3.0-rc5") === "1.3.0" && GT4.intro.baseVersion("1.3.0") === "1.3.0", "");
+      if (document.hidden) {
+        check("a hidden page does not start the intro", GT4.intro.maybePlay("1.3.0-rc5") === false && !GT4.intro.isPlaying(), "");
+        return;
+      }
+      var first = GT4.intro.maybePlay("1.3.0-rc5");
+      var playing = GT4.intro.isPlaying();
+      GT4.intro.skip();
+      await wait(800);
+      var second = GT4.intro.maybePlay("1.3.0-rc6");
+      var third = GT4.intro.maybePlay("1.3.0");
+      check("1.3.0-rc5 plays the 1.3.0 intro once", first === true && playing && second === false && third === false && !GT4.intro.isPlaying(),
+        first + " " + playing + " " + second + " " + third);
+      check("a version without an intro plays nothing", GT4.intro.maybePlay("1.2.9") === false, "");
+    } finally {
+      try { if (before === null) { root.localStorage.removeItem(key); } else { root.localStorage.setItem(key, before); } } catch (error) { /* none */ }
+    }
+  }
+
   async function run() {
     await GT4.i18n.ready;
     await wait(300);
@@ -1011,6 +1071,8 @@
       await advancedSectionChecks();
       await controlsChecks();
       await gamesChecks();
+      await setupChecks();
+      await introChecks();
       await versionChecks();
       await languageChecks();
     } catch (err) {

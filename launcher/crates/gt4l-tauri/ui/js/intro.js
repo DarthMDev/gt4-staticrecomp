@@ -16,6 +16,24 @@
   // The versions that have an intro. Later releases add theirs here.
   var INTRO_VERSIONS = { "1.3.0": true };
   var DURATION_MS = 8200;
+  // Whatever happens (a throttled timer in a hidden web view, a missed event), the overlay is removed by this bound.
+  var HARD_LIMIT_MS = 12000;
+
+  // A line in the launcher log (js -> Rust `ui_log`); never an error for the page.
+  function logLine(message) {
+    try {
+      if (GT4.backend && GT4.backend.call) {
+        GT4.backend.call("ui_log", { message: "intro " + message }).catch(function () {});
+      }
+    } catch (error) {
+      // the log is a help only
+    }
+  }
+
+  // "1.3.0-rc5" -> "1.3.0": a release candidate plays the intro of the version it leads to.
+  function baseVersion(version) {
+    return String(version || "").replace(/[-+].*$/, "");
+  }
 
   function reducedMotion() {
     return !!(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -31,9 +49,13 @@
     var state = active;
     active = null;
     clearTimeout(state.timer);
+    clearTimeout(state.hardTimer);
     document.removeEventListener("keydown", state.onKey, true);
     state.overlay.classList.add("is-leaving");
+    logLine("ended after " + (Date.now() - state.started) + " ms");
     setTimeout(function () { state.overlay.remove(); }, 650);
+    // If that timer is throttled, the overlay still stops covering the page at once.
+    state.overlay.style.pointerEvents = "none";
   }
 
   function play() {
@@ -69,8 +91,16 @@
     };
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
-    active = { overlay: overlay, onKey: onKey, timer: 0 };
+    active = { overlay: overlay, onKey: onKey, timer: 0, hardTimer: 0, started: Date.now() };
     active.timer = setTimeout(finish, reduced ? 4200 : DURATION_MS);
+    active.hardTimer = setTimeout(function () {
+      if (active && active.overlay === overlay) {
+        logLine("hard limit reached; removing the overlay");
+        finish();
+        overlay.remove();
+      }
+    }, HARD_LIMIT_MS);
+    logLine("started" + (reduced ? " (reduced motion)" : ""));
   }
 
   function seenVersion() {
@@ -89,12 +119,35 @@
     }
   }
 
-  // Plays the intro once for a version that has one.
+  // Plays the intro once for a version that has one. The release candidates of a version (1.3.0-rc5) play that version's
+  // intro, and the seen marker is per base version, so 1.3.0 plays it once whatever rc the player was on.
+  // It never starts while the page is hidden (timers and animations are throttled there): it waits for visibilitychange.
+  // It is not shown on the first-run setup page: the caller passes `onHome` only from Home.
   function maybePlay(version) {
-    if (!INTRO_VERSIONS[version] || seenVersion() === version) {
+    var base = baseVersion(version);
+    if (!INTRO_VERSIONS[base]) {
       return false;
     }
-    markSeen(version);
+    if (seenVersion() === base) {
+      logLine("skipped for " + version + " (already seen)");
+      return false;
+    }
+    if (document.hidden) {
+      logLine("waiting: the page is hidden");
+      var onVisible = function () {
+        if (document.hidden) {
+          return;
+        }
+        document.removeEventListener("visibilitychange", onVisible);
+        if (/^#\/home/.test(root.location.hash || "#/home") && seenVersion() !== base) {
+          markSeen(base);
+          play();
+        }
+      };
+      document.addEventListener("visibilitychange", onVisible);
+      return false;
+    }
+    markSeen(base);
     play();
     return true;
   }
@@ -108,5 +161,5 @@
     });
   }
 
-  GT4.intro = { maybePlay: maybePlay, play: play, skip: finish, isPlaying: function () { return !!active; } };
+  GT4.intro = { maybePlay: maybePlay, baseVersion: baseVersion, play: play, skip: finish, isPlaying: function () { return !!active; } };
 })(window);

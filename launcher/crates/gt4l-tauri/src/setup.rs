@@ -194,6 +194,30 @@ pub fn start_with(
     renderer: RendererInstaller,
 ) -> Result<std::thread::JoinHandle<()>, String> {
     let shared: Shared = shared.clone();
+    // The image is identified in place again before anything is copied: a file that changed since it was picked, or one
+    // that is not a supported game, is refused here and not one byte reaches the data folder. The game installed is the one
+    // the image really is, whatever the page asked for.
+    let identified = {
+        let state = lock(&shared);
+        state.config.disc_path.clone().map(|disc| (disc, state.pins.clone(), state.spec2_pins.clone()))
+    };
+    let identified_game: Option<&'static Game> = match identified {
+        Some((disc, pins, spec2_pins)) => match identify(&disc, &pins, &spec2_pins) {
+            Ok(found) => Some(match found.game {
+                DiscGame::Gt4 => &GT4,
+                DiscGame::Spec2 => &SPEC2,
+            }),
+            Err(error) => {
+                let message = error.user_message_in(state::current_language());
+                let mut state = lock(&shared);
+                state::log_warn(&state.dirs, &format!("setup refused before copying ({}): {error}", disc.display()));
+                state.setup_outcome =
+                    if error.is_disc_refusal() { SetupOutcome::Refused(message.clone()) } else { SetupOutcome::Failed(message.clone()) };
+                return Err(message);
+            }
+        },
+        None => None,
+    };
     let (disc, pins, spec2_pins, game, installed_before, dirs, cancel) = {
         let mut state = lock(&shared);
         if state.setup_busy {
@@ -205,9 +229,10 @@ pub fn start_with(
         let Some(disc) = state.config.disc_path.clone() else {
             return Err(messages::text("setup.choose_first", state::current_language()).into());
         };
-        let Some(game) = state.setup_game else {
+        let Some(game) = identified_game.or(state.setup_game) else {
             return Err(messages::text("setup.choose_first", state::current_language()).into());
         };
+        state.setup_game = Some(game);
         let installed_before = state.installed_games();
         state.setup_busy = true;
         state.setup_outcome = SetupOutcome::None;
@@ -235,13 +260,17 @@ pub fn start_with(
                 Stage::Checking => "checking",
                 Stage::Preparing => "preparing",
             };
-            let bytes_done = if stage == Stage::Copying { (fraction as f64 * total_bytes as f64) as u64 } else { 0 };
+            // Rc5 owner report: the Spec II copy bar stopped short. The figure is exact at the end of the copy, and the
+            // later steps keep the finished copy's size (done == total), so the page can draw the copy step full after it
+            // moved on (a poll can miss the last 100% value of a fast copy).
+            let copy_finished = stage != Stage::Copying || fraction >= 1.0;
+            let bytes_done = if copy_finished { total_bytes } else { (fraction as f64 * total_bytes as f64) as u64 };
             {
                 let mut state = lock(&progress_shared);
                 state.setup_run.step = step.into();
                 state.setup_run.fraction = fraction;
                 state.setup_run.bytes_done = bytes_done;
-                state.setup_run.bytes_total = if stage == Stage::Copying { total_bytes } else { 0 };
+                state.setup_run.bytes_total = total_bytes;
             }
             if permille % 10 == 0 || fraction >= 1.0 {
                 progress_notify(

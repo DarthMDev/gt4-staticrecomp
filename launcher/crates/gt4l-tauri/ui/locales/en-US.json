@@ -233,7 +233,7 @@
   "setup.checking_title": "Setting up your game",
   "setup.checking_text": "This only happens once. Keep GT4Recomp open until it finishes.",
   "setup.set_up_named": "Set up {game}",
-  "setup.set_up": "Set up your game",
+  "setup.set_up": "Install a game",
   "setup.choose_named_text": "Choose your {game} disc image (.iso). This only happens once for each game.",
   "setup.choose_text": "Choose your Gran Turismo 4 or Gran Turismo 4 Spec II disc image (.iso). GT4Recomp recognises the game from the disc. This only happens once for each game.",
   "setup.try_again": "Try again",

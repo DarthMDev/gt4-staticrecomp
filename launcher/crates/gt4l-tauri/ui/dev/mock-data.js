@@ -63,8 +63,9 @@
     setup.state = "checking";
     setup.step = step;
     setup.progress = progress;
-    setup.bytes_total = step === "copying" ? IMAGE_BYTES : (step === "renderer" ? 48000000 : 0);
-    setup.bytes_done = Math.round(setup.bytes_total * progress);
+    // As the Rust thread reports: the steps after the copy keep the finished copy's size (done == total).
+    setup.bytes_total = step === "renderer" ? 48000000 : IMAGE_BYTES;
+    setup.bytes_done = step === "copying" || step === "renderer" ? Math.round(setup.bytes_total * progress) : IMAGE_BYTES;
     setup.renderer_step = step === "renderer" ? "downloading" : "";
   }
   if (setupStart === "wrong") {

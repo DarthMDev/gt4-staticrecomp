@@ -281,6 +281,15 @@ pub fn ui_ready(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// The page writes a short line to the launcher log (the 1.3.0 intro: start, end, skipped). Capped at 200 characters.
+#[tauri::command]
+pub fn ui_log(app: AppHandle, message: String) -> Result<(), String> {
+    let guard = app.state::<Arc<Guard>>().inner().clone();
+    let line: String = message.chars().filter(|c| !c.is_control()).take(200).collect();
+    log(&guard.dirs, &format!("page: {line}"));
+    Ok(())
+}
+
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();

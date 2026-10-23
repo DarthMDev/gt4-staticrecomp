@@ -687,6 +687,63 @@ fn two_games_install_side_by_side_and_never_mix() {
 }
 
 #[test]
+fn the_disc_is_identified_before_any_byte_is_copied_and_decides_the_game() {
+    let root = scratch("identify-first");
+    let data = root.join("data");
+    let dirs = DataDirs::new(&data);
+    let game = synthetic_game(0x0010_0000, 0x0010_0008, b"synthetic guest code, not game data, 0123456789abcdef");
+    let gt4_image = build_iso(
+        "GT4 USA",
+        &[
+            ("SYSTEM.CNF;1", system_cnf("SCUS_973.28", "2.00", "NTSC")),
+            ("CORE.GT4;1", game.core.clone()),
+            ("SCUS_973.28;1", vec![0xA5; 3000]),
+        ],
+    );
+    let pins = pins_for(&gt4_image, &game, "SCUS-97328", "2.00");
+    let (executable, spec2_pins) = synthetic_spec2();
+    let spec2_image = build_iso(
+        "GRANTURISMO4",
+        &[("SYSTEM.CNF;1", system_cnf("SCUS_974.36", "1.00", "NTSC")), ("SCUS_974.36;1", executable)],
+    );
+    let unknown_image = build_iso("UNKNOWN", &[("SYSTEM.CNF;1", system_cnf("SCUS_999.99", "1.00", "NTSC")), ("SCUS_999.99;1", vec![1; 64])]);
+    let spec2_disc = root.join("spec2.iso");
+    let unknown_disc = root.join("unknown.iso");
+    fs::write(&spec2_disc, &spec2_image).unwrap();
+    fs::write(&unknown_disc, &unknown_image).unwrap();
+
+    // A stored choice of Spec II does not make the first-run page name it: with nothing installed and no disc identified,
+    // the disc decides (rc5 laptop test).
+    let shared = launch(&dirs, &pins);
+    use_spec2_pins(&shared, &spec2_pins);
+    lock(&shared).config.selected_game = Some("spec2".into());
+    lock(&shared).selected = &gt4l_core::games::SPEC2;
+    assert_eq!(screen(&shared)["setup"]["game"], Value::Null);
+
+    // An unsupported image is refused in place: nothing exists in the data folder, and setup cannot start from it.
+    assert!(setup::choose_disc_path(&shared, &unknown_disc).is_err());
+    assert!(!data.join("games").exists(), "a refused image copies nothing");
+    assert!(setup::start_with(&shared, Recorder::default().notify(), fake_renderer()).is_err());
+    assert!(!data.join("games").exists());
+
+    // The image is identified again when setup starts: a stale choice cannot send a refused file to the copy.
+    setup::choose_disc_path(&shared, &spec2_disc).unwrap();
+    lock(&shared).config.disc_path = Some(unknown_disc.clone());
+    let refused = setup::start_with(&shared, Recorder::default().notify(), fake_renderer()).map(|_| ()).unwrap_err();
+    assert!(refused.contains("not supported"), "{refused}");
+    assert!(!data.join("games").exists(), "setup start copied nothing for a refused image");
+
+    // Install Gran Turismo 4 was asked for, the image is Spec II: the answer says so and Spec II is what gets installed.
+    let info = setup::choose_disc_path_for(&shared, &spec2_disc, Some("gt4")).unwrap();
+    assert!(info.mismatch && info.game == "spec2");
+    lock(&shared).setup_game = Some(&gt4l_core::games::GT4);
+    run_setup(&shared, &Recorder::default(), fake_renderer());
+    assert!(data.join("games/spec2/disc/SCUS-97436.iso").is_file());
+    assert!(!data.join("games/gt4").exists(), "the page asked for Gran Turismo 4 but the image is Spec II");
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
 fn a_1_2_x_install_moves_into_games_gt4_at_the_first_start() {
     let root = scratch("migration");
     let data = root.join("data");

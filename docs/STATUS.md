@@ -1,4 +1,10 @@
 # Current Status
+## rc5 hotfixes, TASK-114 (2026-10-23, `task/101-multi-game`)
+
+Implemented, owner test pending: setup identifies the disc before copying and the first-run page is generic; the copy bar ends
+full; the GPU list merges identical integrated entries and the log shows the raw entries; the 1.3.0 intro is looked up by base
+version and hardened (the black window cause is not confirmed). Details in TASKS (TASK-114) and the journal.
+
 ## rc5 TASK-109: update channels and version picker (2026-10-23, `task/101-multi-game`, 1.3.0-rc5)
 
 Implemented, owner test pending; nothing merged or released. Settings > General has Channel (Stable or Beta) and Version

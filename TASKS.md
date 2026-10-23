@@ -846,6 +846,21 @@ second matrix or sprite list the widening scales twice. Find where Spec II draws
 with v2.00, and extend the Spec II hook table; headless check at 16:9 and 21:9 with frame dumps. Planned for the next
 update; listed under Known issues in the 1.3.0 notes.
 
+### TASK-114 — rc5 hotfixes (laptop test, RTX 3060 Laptop + Intel UHD 630, Windows 11 25H2)
+Done in the working tree (branch `task/101-multi-game`, release 1.3.0, 2026-10-23); owner test pending. Four items:
+1. **Setup identifies the disc first.** The first-run page is generic ("Install a game") until the picked image is
+   identified; the stored game choice no longer names a game there. The image is identified in place (SYSTEM.CNF serial,
+   executable hash, known-image table) before any copy, both when picked and again when setup starts; a refused or changed
+   file copies nothing. The game installed is the one the image really is, also for an Install button of the other game.
+2. **Copy bar reaches 100%.** The steps after the copy keep the finished copy's size, the copy step is drawn with a full bar
+   and its final figure, without a width transition.
+3. **GPU list.** Two integrated Vulkan devices (or two small-memory DXGI adapters) with the same PCI ids are one card; two
+   identical discrete cards with different LUIDs stay two. The launcher log lists every raw Vulkan and DXGI entry with PCI
+   ids and LUID at start, and the cards line shows source, vendor and kind.
+4. **Black window.** The intro looks up its version without the `-rcN` suffix (an rc never played it before), is never
+   started while the page is hidden, never on the setup page, has a 12 s hard limit, and logs start, end and skip. Cause not
+   confirmed; see the 1.3.0 notes.
+
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
 the SCUS-97436 Public Beta lineage image with its own target executable, not a content merge into v2.00. Identity

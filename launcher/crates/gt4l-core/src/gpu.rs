@@ -110,11 +110,19 @@ fn key(name: &str) -> String {
 pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
     let vulkan: Vec<&VulkanGpu> = without_repeats(
         vulkan.iter().filter(|gpu| !is_software_name(&gpu.name)).collect(),
-        |a, b| a.name == b.name && a.vendor_id == b.vendor_id && a.device_id == b.device_id && a.luid == b.luid,
+        |a, b| {
+            (a.name == b.name && a.vendor_id == b.vendor_id && a.device_id == b.device_id && a.luid == b.luid)
+                || (a.integrated && b.integrated && same_ids_or_name(a.vendor_id, a.device_id, &a.name, b.vendor_id, b.device_id, &b.name))
+        },
     );
     let dxgi: Vec<&DxgiGpu> = without_repeats(
         dxgi.iter().filter(|adapter| !adapter.software && !is_software_name(&adapter.name)).collect(),
-        |a, b| a.name == b.name && a.vendor_id == b.vendor_id && a.device_id == b.device_id && a.luid == b.luid,
+        |a, b| {
+            (a.name == b.name && a.vendor_id == b.vendor_id && a.device_id == b.device_id && a.luid == b.luid)
+                || (a.dedicated_video_memory < SHARED_MEMORY_LIMIT
+                    && b.dedicated_video_memory < SHARED_MEMORY_LIMIT
+                    && same_ids_or_name(a.vendor_id, a.device_id, &a.name, b.vendor_id, b.device_id, &b.name))
+        },
     );
     let mut matched = vec![false; dxgi.len()];
     // Pass 1: the strict rule (LUIDs when both have one) for every Vulkan device, so two identical cards each find their
@@ -171,11 +179,15 @@ pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
         if matched[index] {
             continue;
         }
-        let repeat = if adapter.vendor_id != 0 {
-            kept_ids.contains(&(adapter.vendor_id, adapter.device_id))
-        } else {
-            kept_names.contains(&key(&adapter.name))
-        };
+        // A small-memory (integrated) adapter with the name of a kept card is a repeat even when its ids differ: a PC
+        // never has two integrated GPUs of one name.
+        let integrated_repeat = adapter.dedicated_video_memory < SHARED_MEMORY_LIMIT && kept_names.contains(&key(&adapter.name));
+        let repeat = integrated_repeat
+            || if adapter.vendor_id != 0 {
+                kept_ids.contains(&(adapter.vendor_id, adapter.device_id))
+            } else {
+                kept_names.contains(&key(&adapter.name))
+            };
         if repeat {
             matched[index] = true;
             continue;
@@ -197,6 +209,42 @@ pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
         }
     }
     cards
+}
+
+/// Equal PCI ids (both known), or, when neither has ids, equal names.
+fn same_ids_or_name(vendor_a: u32, device_a: u32, name_a: &str, vendor_b: u32, device_b: u32, name_b: &str) -> bool {
+    if vendor_a != 0 && vendor_b != 0 {
+        vendor_a == vendor_b && device_a == device_b
+    } else {
+        vendor_a == 0 && vendor_b == 0 && key(name_a) == key(name_b)
+    }
+}
+
+/// One line of the log for a Vulkan device as the probe reported it (before the merge).
+pub fn describe_vulkan(gpu: &VulkanGpu) -> String {
+    format!(
+        "graphics input: vulkan {} pci {:04x}:{:04x} {} api {}.{} luid {}",
+        gpu.name,
+        gpu.vendor_id,
+        gpu.device_id,
+        if gpu.integrated { "integrated" } else { "other" },
+        gpu.api.0,
+        gpu.api.1,
+        gpu.luid.map_or("-".to_string(), |luid| format!("{luid:#018x}"))
+    )
+}
+
+/// One line of the log for a DXGI adapter as DXGI reported it (before the merge).
+pub fn describe_dxgi(adapter: &DxgiGpu) -> String {
+    format!(
+        "graphics input: dxgi {} pci {:04x}:{:04x} memory {} MB{} luid {}",
+        adapter.name,
+        adapter.vendor_id,
+        adapter.device_id,
+        adapter.dedicated_video_memory / (1024 * 1024),
+        if adapter.software { " software" } else { "" },
+        adapter.luid.map_or("-".to_string(), |luid| format!("{luid:#018x}"))
+    )
 }
 
 /// What tells one device entry (a Vulkan device or a DXGI adapter) from another: its name, PCI ids and LUID.
@@ -592,5 +640,63 @@ mod tests {
         assert_eq!(cards.len(), 1, "a DXGI description with a trailing space is the same card");
         assert_eq!(cards[0].dedicated_video_memory, 8 * GIB);
         assert_eq!(cards[0].dxgi_name.as_deref(), Some("NVIDIA GeForce RTX 4060 "));
+    }
+
+    fn integrated_vulkan(luid: u64) -> VulkanGpu {
+        VulkanGpu { integrated: true, ..card_vulkan("Intel(R) UHD Graphics", 0x8086, 0x9bc4, luid) }
+    }
+
+    #[test]
+    fn vulkan_listing_the_integrated_intel_twice_with_different_luids_gives_two_cards_in_total() {
+        // rc5 laptop (RTX 3060 Laptop + Intel UHD 630): three entries for two GPUs.
+        let cards = merge(
+            &[card_vulkan("NVIDIA GeForce RTX 3060 Laptop GPU", 0x10de, 0x2520, 0x100), integrated_vulkan(0x200), integrated_vulkan(0x300)],
+            &[
+                card_dxgi("Intel(R) UHD Graphics", 0x8086, 0x9bc4, 0x200, 128 * 1024 * 1024),
+                card_dxgi("NVIDIA GeForce RTX 3060 Laptop GPU", 0x10de, 0x2520, 0x100, 6 * GIB),
+            ],
+        );
+        assert_eq!(cards.len(), 2, "{cards:?}");
+    }
+
+    #[test]
+    fn two_identical_integrated_entries_with_different_names_of_ids_only_merge_by_ids() {
+        let cards = merge(&[integrated_vulkan(1), VulkanGpu { name: "Intel UHD".into(), ..integrated_vulkan(2) }], &[]);
+        assert_eq!(cards.len(), 1);
+    }
+
+    #[test]
+    fn dxgi_listing_a_small_memory_adapter_twice_with_other_ids_is_one_card() {
+        let cards = merge(
+            &[integrated_vulkan(1)],
+            &[
+                card_dxgi("Intel(R) UHD Graphics", 0x8086, 0x9bc4, 7, 128 * 1024 * 1024),
+                card_dxgi("Intel(R) UHD Graphics", 0x8086, 0x3e9b, 8, 128 * 1024 * 1024),
+            ],
+        );
+        assert_eq!(cards.len(), 1, "{cards:?}");
+    }
+
+    #[test]
+    fn two_identical_discrete_cards_with_different_luids_stay_two_with_equal_ids() {
+        let cards = merge(
+            &[
+                card_vulkan("Radeon RX 7800 XT", 0x1002, 0x747e, 1),
+                card_vulkan("Radeon RX 7800 XT", 0x1002, 0x747e, 2),
+            ],
+            &[
+                card_dxgi("Radeon RX 7800 XT", 0x1002, 0x747e, 1, 16 * GIB),
+                card_dxgi("Radeon RX 7800 XT", 0x1002, 0x747e, 2, 16 * GIB),
+            ],
+        );
+        assert_eq!(cards.len(), 2, "{cards:?}");
+    }
+
+    #[test]
+    fn the_input_lines_name_the_api_ids_and_luid() {
+        let line = describe_vulkan(&integrated_vulkan(0x200));
+        assert!(line.contains("vulkan") && line.contains("8086:9bc4") && line.contains("integrated") && line.contains("0x0000000000000200"), "{line}");
+        let line = describe_dxgi(&card_dxgi("Intel(R) UHD Graphics", 0x8086, 0x9bc4, 0x200, 128 * 1024 * 1024));
+        assert!(line.contains("dxgi") && line.contains("memory 128 MB"), "{line}");
     }
 }

@@ -10,6 +10,19 @@ use gt4l_core::system_check::{self, VulkanProbe};
 /// The graphics cards of this machine, as the launcher knows them now. A Vulkan device counts only when the game's
 /// instance extensions are offered (`system_check::missing_instance_extensions`).
 pub fn probe_gpus() -> Vec<GpuDevice> {
+    probe_gpus_with_inputs().0
+}
+
+/// [`probe_gpus`] and one log line for every raw entry (source API, PCI ids, LUID) the merge started from, so an owner log
+/// shows why the list has the cards it has (rc5 laptop: one card too many).
+pub fn probe_gpus_with_inputs() -> (Vec<GpuDevice>, Vec<String>) {
+    let (vulkan, dxgi) = gpu_inputs();
+    let mut lines: Vec<String> = vulkan.iter().map(gpu::describe_vulkan).collect();
+    lines.extend(dxgi.iter().map(gpu::describe_dxgi));
+    (gpu::merge(&vulkan, &dxgi), lines)
+}
+
+fn gpu_inputs() -> (Vec<gpu::VulkanGpu>, Vec<DxgiGpu>) {
     let vulkan = match super::system::probe_vulkan() {
         VulkanProbe::Ready { instance_extensions, devices }
             if system_check::missing_instance_extensions(&instance_extensions).is_empty() =>
@@ -30,7 +43,7 @@ pub fn probe_gpus() -> Vec<GpuDevice> {
         }
         _ => Vec::new(),
     };
-    gpu::merge(&vulkan, &dxgi_adapters())
+    (vulkan, dxgi_adapters())
 }
 
 /// The hardware and software DXGI adapters (Windows). Software ones are flagged, and `gpu::merge` drops them.
@@ -101,7 +114,24 @@ pub fn card_list(cards: &[GpuDevice]) -> String {
     if cards.is_empty() {
         return "none".to_string();
     }
-    cards.iter().map(|card| card.name().unwrap_or("unnamed")).collect::<Vec<_>>().join("; ")
+    cards
+        .iter()
+        .map(|card| {
+            let sources = match (card.vulkan_name.is_some(), card.dxgi_name.is_some()) {
+                (true, true) => "vulkan+dxgi",
+                (true, false) => "vulkan",
+                (false, true) => "dxgi",
+                (false, false) => "none",
+            };
+            format!(
+                "{} ({sources}, vendor {:04x}, {})",
+                card.name().unwrap_or("unnamed"),
+                card.vendor_id,
+                if card.integrated { "integrated" } else { "discrete" }
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 #[cfg(test)]

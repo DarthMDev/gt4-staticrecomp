@@ -139,9 +139,10 @@ pub fn app_state_of(state: &AppState) -> Value {
         _ => String::new(),
     };
     let installed_games = state.installed_games();
-    // The page asks for one game when others are already installed or the player chose a game on the home screen; the
-    // very first setup has no target: the disc decides.
-    let target = if installed_games.is_empty() && state.setup_game.is_none() && state.config.selected_game.is_none() {
+    // The page names a game when one is already installed, when the disc picked is identified (`setup_game`), or when this
+    // game's files are damaged. A setup with nothing installed and no disc identified yet has no target: the disc decides
+    // (rc5 laptop test: a stored choice of Spec II made the first-run page say "Install Spec II").
+    let target = if installed_games.is_empty() && state.setup_game.is_none() && !matches!(installed, Installed::Missing { .. }) {
         Value::Null
     } else {
         json!({ "id": subject.id, "name": subject.display_name })

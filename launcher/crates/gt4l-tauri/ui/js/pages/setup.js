@@ -52,6 +52,10 @@
 
   function barNode(pct) {
     var fill = h("i");
+    // A finished step never animates: the bar is placed at once, so no transition is left half-way when the step changes.
+    if (pct >= 100) {
+      fill.style.transition = "none";
+    }
     fill.style.width = pct + "%";
     return h("span", { class: "bar" }, [fill]);
   }
@@ -77,7 +81,7 @@
         h("span", { class: "t", text: label }),
         detail ? h("span", { class: "d", text: detail }) : null,
         bytesText ? h("span", { class: "bytes", text: bytesText }) : null,
-        status === "active" && pct !== null ? barNode(pct) : null
+        (status === "active" || status === "ok") && pct !== null ? barNode(pct) : null
       ]),
       h("span", { class: valueClass, text: value })
     ]);
@@ -150,6 +154,12 @@
         var detail = step.detail ? GT4.t(step.detail) : null;
         if (done || (running && index < order)) {
           status = "ok";
+          if (step.id === "copying" && running && setup.step !== "renderer" && setup.bytes_total) {
+            // The copy ended: its bar is drawn full with the final figure, even when the poll never saw the last
+            // 100% value (rc5 owner report: the Spec II copy bar stopped short).
+            pct = 100;
+            bytesText = gigabytes(setup.bytes_total) + " of " + gigabytes(setup.bytes_total);
+          }
         } else if (running && index === order) {
           status = "active";
           pct = Math.round((setup.progress || 0) * 100);
