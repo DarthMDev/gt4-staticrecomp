@@ -1,5 +1,15 @@
 # Current Status
 
+## TASK-102 launcher language: en-US and pt-BR (2026-10-23, on `task/101-multi-game`)
+
+Implemented, not merged; owner test pending. The launcher follows the Windows language (Auto); Settings > General > Language
+changes it at once. The texts are data: `launcher/crates/gt4l-tauri/ui/locales/<tag>.json` and `index.json` (the UI and the
+launcher's own messages under `rust.*`, generated into a table by `gt4l-core/build.rs`), the release notes under
+`docs/release-notes/launcher/<tag>/`. Adding a language is documented in `docs/TRANSLATING.md`. The CSP allows the page to
+read its own locale files (`connect-src 'self'`). Checks: focus-check 151 of 151 (en-US) and 158 of 158 (pt-BR), nav-test
+150 of 150, `cargo test --workspace` 450 passed. Gaps: the PCSX2 GS rows that are not in the UI keys show English, and the
+XInput and key names in the controller chips stay English.
+
 ## TASK-098 portable build and TASK-097 self-sufficient game (2026-10-23, slice 278, on `task/101-multi-game`)
 
 Release 1.3.0 (both moved from 1.2.4). **TASK-098:** a second launcher build from one source (Cargo feature `portable`):

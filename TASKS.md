@@ -123,6 +123,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 🟡 Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner visual check · release 1.3.0 (moved from 1.2.4) |
 | TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072); subtasks S1-S9 in docs/SPEC2-PLAN.md | 🔄 In progress (2026-10-22) · branch `task/100-spec2`; release 1.3.0 |
 | TASK‑101 | Multi-game launcher: Gran Turismo 4 and Spec II side by side (game selector, Play/Install, per-game disc, card and saves, shared settings, Spec II logo) | 📋 Planned (owner, 2026-10-23) · release 1.3.0 with TASK-100; plan docs/MULTI-GAME-LAUNCHER-PLAN.md |
+| TASK‑102 | Launcher language: automatic en-US / pt-BR with a General > Language setting (locale files, Rust messages, release notes) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -613,6 +614,22 @@ headless checks): game table, per-game folders and libraries, identification by 
 variants (1.10, PT-BR, variant, refusals), Spec II setup with the Rust port of the ELF patch (byte-identical to the script),
 per-game launch, the 1.2.x to `games\gt4` migration, selector, Install, Settings > Games. Open: look on a real window, the
 authors' logo, names and permission, installer build, `PreviousDataDir` into the games layout.
+
+### TASK-102 — Launcher language: automatic en-US / pt-BR with a General > Language setting
+Implemented on `task/101-multi-game` (owner, 2026-10-23). The launcher follows the Windows language (`auto`): pt-BR, pt_BR
+and pt (and pt-PT, by the base language) give Portuguese; anything else English. Settings > General > Language (Auto,
+English, Português (Brasil)) applies at once, without a restart. The texts are data: `launcher/crates/gt4l-tauri/ui/locales/<tag>.json`
+(one flat file per language, keys with `{placeholders}`, en-US as the fallback), `ui/locales/index.json` (the language list),
+`ui/js/i18n.js` (`GT4.t`), and the launcher's own messages in the same files under `rust.*` keys (`gt4l-core/build.rs`
+generates the table; `gt4l-core/src/messages.rs`). The short release notes are in `docs/release-notes/launcher/<version>.md`
+(en-US) and `docs/release-notes/launcher/<tag>/<version>.md` (pt-BR for 1.0.0 to 1.2.3). A new language is documented in
+[docs/TRANSLATING.md](docs/TRANSLATING.md). Checks: focus-check in en-US (151 of 151) and pt-BR (158 of 158, with the
+locale parity, placeholder and index checks), nav-test 150 of 150, `cargo test --workspace` 450 passed. Screenshots of Home,
+Settings > General and Settings > Graphics in pt-BR at 1440 x 860: `O:\gt4recomp-scratch\slice279-shots`. Not translated yet:
+the PCSX2 GS rows that the table does not list in the UI keys (they show their English text), the XInput names in the
+controller chips, the key names, the Release notes text of 1.3.0 in the sample (dev mock only), and the library's
+`Active save` slot name (a value the code compares). Open: owner test on a real window (the What's new card, the General
+row, the switch) and the review of the pt-BR wording.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
