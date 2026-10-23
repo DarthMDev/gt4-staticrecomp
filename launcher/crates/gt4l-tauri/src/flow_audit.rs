@@ -649,9 +649,9 @@ fn two_games_install_side_by_side_and_never_mix() {
     assert!(gt4_view.items.is_empty(), "Gran Turismo 4 has no save from the Spec II import");
     assert!(gt4_view.folder.replace('\\', "/").contains("games/gt4/Saves"), "{}", gt4_view.folder);
     // An import must say which game: nothing is guessed.
-    assert!(commands::import_target(None).is_err());
-    assert_eq!(commands::import_target(Some("spec2")).unwrap().id, "spec2");
-    assert!(commands::import_target(Some("gt9")).is_err());
+    assert!(commands::import_target(None, gt4l_core::language::Language::fallback()).is_err());
+    assert_eq!(commands::import_target(Some("spec2"), gt4l_core::language::Language::fallback()).unwrap().id, "spec2");
+    assert!(commands::import_target(Some("gt9"), gt4l_core::language::Language::fallback()).is_err());
 
     // Remove deletes the disc copy and the prepared files of one game, never its saves or the other game.
     let after = commands::games_remove_of("spec2".into(), &second).unwrap();

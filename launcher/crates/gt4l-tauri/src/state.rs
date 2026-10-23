@@ -14,6 +14,7 @@ use gt4controls::{self as controls_file, Controls, CONTROLS_FILE_NAME};
 use std::collections::BTreeMap;
 
 use gt4l_core::config::{self, ConfigFile};
+use gt4l_core::language::{self, Language};
 use gt4l_core::display as display_rules;
 use gt4l_core::gs_release;
 use gt4l_core::gs_table;
@@ -118,6 +119,38 @@ pub enum SetupOutcome {
     Done { renderer_note: String },
 }
 
+/// The language the launcher shows now: set at start-up and whenever the setting changes (`set_current_language`), so
+/// the messages built deep in the launcher do not need the state.
+static CURRENT_LANGUAGE: Mutex<Language> = Mutex::new(Language::fallback());
+
+/// The language of the messages the launcher sends now.
+pub fn current_language() -> Language {
+    // The tests of this crate check the English texts; the language of the machine running them must not change that.
+    if cfg!(test) {
+        return Language::fallback();
+    }
+    *CURRENT_LANGUAGE.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Makes `language` the language of the messages from now on.
+pub fn set_current_language(language: Language) {
+    *CURRENT_LANGUAGE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = language;
+}
+
+/// The language of the messages the launcher sends now (see `current_language`), for a settings table.
+pub fn language_of(state: &AppState) -> Language {
+    language_of_settings(&state.config.settings)
+}
+
+/// The language the settings choose, with `auto` resolved by the Windows user language.
+pub fn language_of_settings(settings: &gt4l_core::Settings) -> Language {
+    if cfg!(test) {
+        // See `current_language`: the tests of this crate check the English texts.
+        return Language::fallback();
+    }
+    language::resolve(settings.get("language"), &gt4l_platform::system::os_locale())
+}
+
 /// Locks the state; a poisoned lock still gives its data (a panicked job must not hang the UI).
 pub fn lock(shared: &Shared) -> MutexGuard<'_, AppState> {
     match shared.lock() {
@@ -158,6 +191,7 @@ impl AppState {
         for warning in &warnings {
             log(&dirs, &format!("settings: {warning}"));
         }
+        set_current_language(language_of_settings(&config.settings));
         // Stored paths inside the install folder are relative (see `save_config`); resolve them here.
         config.disc_path = config.disc_path.map(|path| paths::resolve_portable(&path, &install_dir));
         config.dev_game_dir = config.dev_game_dir.map(|path| paths::resolve_portable(&path, &install_dir));

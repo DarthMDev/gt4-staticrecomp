@@ -5,6 +5,7 @@
 //! The command bodies are plain functions over [`Shared`] (`choose_disc_path`, `start_with`) so the flow test
 //! (`flow_audit.rs`) drives exactly the code the page drives, without a window.
 
+use gt4l_core::messages;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -84,17 +85,17 @@ pub async fn setup_choose_disc(app: AppHandle, game: Option<String>, shared: Sta
     let shared: Shared = shared.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         if lock(&shared).setup_busy {
-            return Err("Setup is already running.".to_string());
+            return Err(messages::text("setup.already_running", state::current_language()).to_string());
         }
         refuse_unsupported_system(&shared)?;
         let picked = app
             .dialog()
             .file()
             .set_title(match game.as_deref().and_then(games::by_id) {
-                Some(requested) => format!("Choose your {} disc image", requested.display_name),
-                None => "Choose your Gran Turismo 4 or Gran Turismo 4 Spec II disc image".to_string(),
+                Some(requested) => messages::render("setup.picker_title_game", state::current_language(), &[("game", requested.display_name)]),
+                None => messages::text("setup.picker_title_any", state::current_language()).to_string(),
             })
-            .add_filter("PlayStation 2 disc image", &["iso"])
+            .add_filter(messages::text("setup.picker_filter", state::current_language()), &["iso"])
             .blocking_pick_file();
         let Some(picked) = picked else {
             return Ok(None);
@@ -117,10 +118,10 @@ pub fn choose_disc_path_for(shared: &Shared, path: &Path, requested: Option<&str
     let (pins, spec2_pins) = {
         let state = lock(shared);
         if state.setup_busy {
-            return Err("Setup is already running.".into());
+            return Err(messages::text("setup.already_running", state::current_language()).into());
         }
         if state.migration.running {
-            return Err("GT4Recomp is moving its game files to the install folder. Wait until it has finished.".into());
+            return Err(messages::text("setup.migrating", state::current_language()).into());
         }
         (state.pins.clone(), state.spec2_pins.clone())
     };
@@ -153,7 +154,7 @@ pub fn choose_disc_path_for(shared: &Shared, path: &Path, requested: Option<&str
             })
         }
         Err(error) => {
-            let message = error.user_message();
+            let message = error.user_message_in(state::current_language());
             let mut state = lock(shared);
             state::log(&state.dirs, &format!("disc rejected ({}): {error}", path.display()));
             state.setup_outcome = if error.is_disc_refusal() {
@@ -176,7 +177,8 @@ pub fn setup_start(app: AppHandle, shared: State<'_, Shared>) -> Result<(), Stri
 /// TASK-081: the processor and Vulkan checks before setup (`gt4l_core::system_check`). A problem is shown on the
 /// setup page as a failed setup with its message, and logged.
 fn refuse_unsupported_system(shared: &Shared) -> Result<(), String> {
-    let Some(problem) = gt4l_platform::system::requirements_problem() else {
+    let language = state::language_of(&lock(shared));
+    let Some(problem) = gt4l_platform::system::requirements_problem(language) else {
         return Ok(());
     };
     let mut state = lock(shared);
@@ -195,16 +197,16 @@ pub fn start_with(
     let (disc, pins, spec2_pins, game, installed_before, dirs, cancel) = {
         let mut state = lock(&shared);
         if state.setup_busy {
-            return Err("Setup is already running.".into());
+            return Err(messages::text("setup.already_running", state::current_language()).into());
         }
         if state.migration.running {
-            return Err("GT4Recomp is moving its game files to the install folder. Wait until it has finished.".into());
+            return Err(messages::text("setup.migrating", state::current_language()).into());
         }
         let Some(disc) = state.config.disc_path.clone() else {
-            return Err("Choose your disc image first.".into());
+            return Err(messages::text("setup.choose_first", state::current_language()).into());
         };
         let Some(game) = state.setup_game else {
-            return Err("Choose your disc image first.".into());
+            return Err(messages::text("setup.choose_first", state::current_language()).into());
         };
         let installed_before = state.installed_games();
         state.setup_busy = true;
@@ -280,7 +282,7 @@ pub fn start_with(
             Ok(receipt) => receipt,
             Err(error) => {
                 state::log(&dirs, &format!("setup stopped: {error}"));
-                let message = error.user_message();
+                let message = error.user_message_in(state::current_language());
                 let mut state = lock(&shared);
                 state.setup_busy = false;
                 state.setup_outcome = if error.is_disc_refusal() {
@@ -378,8 +380,7 @@ fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer:
         Err(message) => {
             state::log(dirs, &format!("GSdx not installed during setup: {message}"));
             notify("renderer-progress", json!({ "step": "failed", "message": message }));
-            "GSdx could not be downloaded, so the game cannot start yet. GT4Recomp tries again at the next start."
-                .to_string()
+            messages::text("renderer.not_installed_note", state::current_language()).to_string()
         }
     }
 }

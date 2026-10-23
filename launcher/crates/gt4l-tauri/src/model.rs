@@ -124,6 +124,7 @@ pub fn settings_table_with_monitors(settings: &Settings, controls: &Controls, mo
 
 fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
     let group = match definition.page {
+        Page::General => "general",
         Page::Graphics => "graphics",
         Page::Display => "display",
         Page::Advanced => "",
@@ -157,6 +158,17 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
         ),
         // TASK-080 Monitor and Resolution: dropdowns whose choices come from the connected monitors (filled by the
         // table, `fill_monitor_row` / `fill_resolution_row`).
+        // TASK-102: the language choices are the languages of the locale files (Auto first).
+        Kind::Language => (
+            "dropdown",
+            Value::Array(
+                std::iter::once(json!({ "value": "auto", "label": "Auto" }))
+                    .chain(gt4l_core::language::LANGUAGE_TAGS.iter().map(|(tag, name)| json!({ "value": tag, "label": name })))
+                    .collect(),
+            ),
+            json!(definition.default),
+            json!(settings.get(definition.id)),
+        ),
         Kind::Monitor | Kind::Resolution => (
             "dropdown",
             Value::Array(Vec::new()),

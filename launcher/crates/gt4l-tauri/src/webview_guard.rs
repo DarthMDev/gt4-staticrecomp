@@ -340,17 +340,18 @@ fn restart_in_safe_mode(app: &AppHandle, guard: &Guard) {
 pub fn show_failure(dirs: &DataDirs, problem: Problem) {
     let logs = dirs.logs();
     let logs_text = logs.display();
-    let text = match problem {
-        Problem::NotDrawn => format!(
-            "GT4Recomp could not draw its window. The launcher window is drawn by Microsoft Edge WebView2, which did not \
-             show it, even without GPU acceleration.\n\nYes: open the WebView2 download page ({WEBVIEW2_DOWNLOAD_URL}).\n\
-             No: open the log folder ({logs_text}).\nCancel: close."
-        ),
-        Problem::Missing => format!(
-            "GT4Recomp could not start its window: Microsoft Edge WebView2 is missing or could not start.\n\nYes: open \
-             the WebView2 download page ({WEBVIEW2_DOWNLOAD_URL}).\nNo: open the log folder ({logs_text}).\nCancel: close."
-        ),
+    // The native message comes before any window and before the settings are read in full: it follows the Windows
+    // language (`auto`).
+    let language = gt4l_core::language::from_os_locale(&gt4l_platform::system::os_locale());
+    let id = match problem {
+        Problem::NotDrawn => "dialog.not_drawn",
+        Problem::Missing => "dialog.missing",
     };
+    let text = gt4l_core::messages::render(
+        id,
+        language,
+        &[("url", WEBVIEW2_DOWNLOAD_URL), ("logs", &logs_text.to_string())],
+    );
     log(dirs, &format!("native message: {problem:?}"));
     match dialog::error_box_yes_no_cancel("GT4Recomp", &text) {
         Choice::Yes => {

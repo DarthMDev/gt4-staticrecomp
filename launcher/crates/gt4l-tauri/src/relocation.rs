@@ -10,6 +10,7 @@
 //!
 //! The rules of both moves are in `gt4l_core::relocate`.
 
+use gt4l_core::messages;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -336,10 +337,9 @@ fn move_games_layout(shared: &Shared, dirs: &DataDirs, pins: &Pins) -> (String, 
         state::log(dirs, &line);
     }
     match &outcome {
-        LargeOutcome::Deferred(_) => ("Close Gran Turismo 4 and restart GT4Recomp to finish organising the game files.".to_string(), true),
+        LargeOutcome::Deferred(_) => (messages::text("move.organise_close", state::current_language()).to_string(), true),
         _ if outcome.failed() => (
-            "Some game files could not be organised yet. They are used where they are, and GT4Recomp tries again at the next start."
-                .to_string(),
+            messages::text("move.organise_later", state::current_language()).to_string(),
             true,
         ),
         _ => {
@@ -437,25 +437,24 @@ pub fn flatten_textures(shared: &Shared) {
 /// The sentence for the page after the large-data move (empty when nothing happened).
 pub fn large_notice(outcome: &LargeOutcome, local: &Path, data_root: &Path) -> (String, bool) {
     match outcome {
-        LargeOutcome::Deferred(_) => ("Close Gran Turismo 4 and restart GT4Recomp to finish moving the game files.".to_string(), true),
+        LargeOutcome::Deferred(_) => (messages::text("move.game_close", state::current_language()).to_string(), true),
         LargeOutcome::AlreadyMoved => (String::new(), false),
         LargeOutcome::Ran(units) => {
             if outcome.failed() {
                 return (
-                    "Some game files could not be moved to the install folder yet. They are used where they are, and GT4Recomp tries again at the next start."
-                        .to_string(),
+                    messages::text("move.game_later", state::current_language()).to_string(),
                     true,
                 );
             }
             let kept_game_files = units.iter().any(|(name, result)| name == "game files" && matches!(result, UnitResult::Kept(_)));
             if kept_game_files {
                 return (
-                    format!("An older copy of the game files is still in {}. It is no longer used; you may delete it to free space.", local.display()),
+                    messages::render("move.old_copy", state::current_language(), &[("path", &local.display().to_string())]),
                     false,
                 );
             }
             if outcome.moved() {
-                return (format!("Game files moved to {}.", data_root.display()), false);
+                return (messages::render("move.game_moved", state::current_language(), &[("path", &data_root.display().to_string())]), false);
             }
             (String::new(), false)
         }

@@ -9,6 +9,7 @@
 //!
 //! Events to the page: `update-available` (offers), `renderer-progress` (install steps), `update-finished`.
 
+use gt4l_core::messages;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -285,7 +286,7 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
         match stream.as_str() {
             "renderer" => {
                 if game_running {
-                    return Err("Close the game before updating the renderer.".to_string());
+                    return Err(messages::text("renderer.close_game", state::current_language()).to_string());
                 }
                 let progress_app = app.clone();
                 let outcome = install_renderer(&dirs, &mut |step| emit_step(&progress_app, step));
@@ -303,7 +304,7 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
             "launcher" => {
                 // Updating ends the launcher, and the game ends with it (kill-on-close job).
                 if game_running {
-                    return Err("Close the game before updating GT4Recomp.".to_string());
+                    return Err(messages::text("update.close_game", state::current_language()).to_string());
                 }
                 let message = if gt4l_core::build_kind::BUILD.is_portable() {
                     start_portable_update(&app, &dirs)?
@@ -347,7 +348,7 @@ fn start_portable_update(app: &AppHandle, dirs: &DataDirs) -> Result<String, Str
     let latest = releases::select_latest(&list, Stream::Launcher.minimum()).ok_or("no stable GT4Recomp release")?;
     let version = latest.version.ok_or("the release has no version")?;
     if Version::parse(LAUNCHER_VERSION).is_some_and(|current| current >= version) {
-        return Err("GT4Recomp is up to date.".to_string());
+        return Err(messages::text("update.up_to_date", state::current_language()).to_string());
     }
     let (zip_asset, sums_asset) = portable_update::release_assets(latest, version)?;
     let package = zip_asset.name.clone();
@@ -380,12 +381,12 @@ fn start_portable_update(app: &AppHandle, dirs: &DataDirs) -> Result<String, Str
     if let Err(error) = started {
         // The files are swapped; the player starts GT4Recomp.exe by hand.
         state::log(dirs, &format!("the updated launcher did not start: {error}"));
-        let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Updated. Start GT4Recomp again." }));
-        return Ok(format!("GT4Recomp {} is installed. Start GT4Recomp again.", version.text()));
+        let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": messages::text("update.updated_start_again", state::current_language()) }));
+        return Ok(messages::render("update.installed_start_again", state::current_language(), &[("version", &version.text())]));
     }
-    let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Updated; restarting." }));
+    let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": messages::text("update.restarting", state::current_language()) }));
     app.exit(0);
-    Ok(format!("GT4Recomp {} installed; restarting.", version.text()))
+    Ok(messages::render("update.installed_restarting", state::current_language(), &[("version", &version.text())]))
 }
 
 /// Portable build, at every start (TASK-098): finishes or undoes the previous update (an interrupted swap is restored, the
@@ -418,7 +419,7 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
     let latest = releases::select_latest(&list, Stream::Launcher.minimum()).ok_or("no stable GT4Recomp release")?;
     let version = latest.version.ok_or("the release has no version")?;
     if Version::parse(LAUNCHER_VERSION).is_some_and(|current| current >= version) {
-        return Err("GT4Recomp is up to date.".to_string());
+        return Err(messages::text("update.up_to_date", state::current_language()).to_string());
     }
     let package = Stream::Launcher.package_name(version);
     let package_asset = latest.asset(&package).ok_or_else(|| format!("release {} has no {package}", latest.tag))?;
@@ -466,9 +467,9 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
         // Explorer starts it a moment later; the launcher waits so the hand-over completes first.
         std::thread::sleep(std::time::Duration::from_secs(3));
     }
-    let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Setup started." }));
+    let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": messages::text("update.setup_started", state::current_language()) }));
     app.exit(0);
-    Ok(format!("GT4Recomp {} setup started.", version.text()))
+    Ok(messages::render("update.setup_started_version", state::current_language(), &[("version", &version.text())]))
 }
 
 #[cfg(test)]

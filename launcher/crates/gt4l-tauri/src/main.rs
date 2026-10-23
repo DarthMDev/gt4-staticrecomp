@@ -132,6 +132,7 @@ fn main() {
 
     let shared: state::Shared = Arc::new(Mutex::new(app_state));
     let dirs_for_setup = dirs.clone();
+    let shared_for_check = shared.clone();
     let guard_for_setup = guard.clone();
     let mut context = tauri::generate_context!();
     if portable {
@@ -174,7 +175,8 @@ fn main() {
             // TASK-081: probe the processor and Vulkan once in the background, so Play does not wait for the driver
             // to load; a problem is logged here and shown when the player starts setup or Play.
             let check_dirs = dirs_for_setup.clone();
-            std::thread::spawn(move || match gt4l_platform::system::requirements_problem() {
+            let language = state::language_of(&state::lock(&shared_for_check));
+            std::thread::spawn(move || match gt4l_platform::system::requirements_problem(language) {
                 Some(problem) => state::log(&check_dirs, &format!("system requirement not met: {problem}")),
                 None => state::log(&check_dirs, "system requirements: processor and Vulkan OK"),
             });

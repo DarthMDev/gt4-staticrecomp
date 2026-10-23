@@ -2,6 +2,8 @@
 //! Replays, and About. Each command is a thin wrapper over a crate; the rules live in `model`,
 //! `saves` and the `gt4l-*` crates.
 
+use gt4l_core::language::Language;
+use gt4l_core::messages;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -98,6 +100,7 @@ fn folder_size(folder: &Path) -> u64 {
 }
 
 pub fn app_state_of(state: &AppState) -> Value {
+    let language = state::language_of(state);
     let subject = setup_subject(state);
     let installed = state.installed_of(subject);
     let chosen_name = state
@@ -118,13 +121,13 @@ pub fn app_state_of(state: &AppState) -> Value {
             SetupOutcome::Failed(message) => ("failed", message.clone(), chosen_name),
             SetupOutcome::Done { .. } => (
                 "files_missing",
-                "Game files missing. Choose your disc image again.".to_string(),
+                messages::text("setup.game_files_missing", language).to_string(),
                 chosen_name,
             ),
             SetupOutcome::None => match &installed {
                 Installed::Missing { reason } => (
                     "files_missing",
-                    format!("Game files missing ({reason}). Choose your disc image again."),
+                    messages::render("setup.game_files_missing_reason", language, &[("reason", reason)]),
                     chosen_name,
                 ),
                 _ => ("needed", String::new(), chosen_name),
@@ -160,6 +163,7 @@ pub fn app_state_of(state: &AppState) -> Value {
         "game_files": state.game_dirs(state.selected).disc_folder().display().to_string(),
         "selected_game": state.selected.id,
         "any_installed": !installed_games.is_empty(),
+        "language": state.config.settings.get("language"),
         "games": games::GAMES.iter().map(|game| game_row(state, game)).collect::<Vec<_>>(),
         "migration": {
             "running": state.migration.running,
@@ -243,6 +247,10 @@ pub fn set_setting_of(id: String, value: Value, shared: &Shared) -> Result<(), S
         let text = model::value_text(&value, definition.kind == settings::Kind::Toggle)
             .ok_or_else(|| format!("'{id}' needs a plain value"))?;
         state.config.settings.set_by_user(&id, &text).map_err(|error| error.to_string())?;
+        if id == "language" {
+            // The messages from Rust follow the new language at once (the UI re-draws on its own).
+            state::set_current_language(state::language_of(&state));
+        }
         if id == "monitor" {
             // Another monitor has other modes: the Resolution goes back to that monitor's desktop mode.
             state.config.settings.set("resolution", display_rules::DESKTOP).map_err(|error| error.to_string())?;
@@ -332,25 +340,26 @@ pub struct PlayInputs {
 /// The checks of Play before anything starts. `program_dir` is the folder of `GT4Recomp.exe`.
 pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, String> {
     let state = lock(shared);
+    let language = state::language_of(&state);
     if state.game_child.is_some() {
-        return Err("The game is already running.".into());
+        return Err(messages::text("game.already_running", language).into());
     }
     if state.migration.running {
-        return Err("GT4Recomp is moving its game files to the install folder. Wait until it has finished.".into());
+        return Err(messages::text("setup.migrating", language).into());
     }
     let disc = match state.installed() {
         Installed::Ready { image, .. } => image,
         Installed::Missing { reason } => {
-            return Err(format!("Game files missing ({reason}). Choose your disc image again."));
+            return Err(messages::render("setup.game_files_missing_reason", language, &[("reason", &reason)]));
         }
-        Installed::NotSetUp => return Err("Set up the game first.".into()),
+        Installed::NotSetUp => return Err(messages::text("game.set_up_first", language).into()),
     };
     let game = state.selected;
     let dirs = state.game_dirs(game);
     let game_dir = paths::game_directory(program_dir, state.config.dev_game_dir.as_deref());
     let executable = launch::game_program(game, &game_dir);
     if !executable.exists() {
-        return Err(format!("The program of {} is missing. Reinstall GT4Recomp.", game.display_name));
+        return Err(messages::render("game.program_missing", language, &[("game", game.display_name)]));
     }
     let mut extra: Vec<(String, String)> = Vec::new();
     let controls_path = state.user_dirs.controls_file();
@@ -413,7 +422,8 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
 pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let shared: Shared = shared.inner().clone();
     // TASK-081: the processor and Vulkan checks before the game starts (`gt4l_core::system_check`).
-    if let Some(problem) = gt4l_platform::system::requirements_problem() {
+    let language = state::language_of(&lock(&shared));
+    if let Some(problem) = gt4l_platform::system::requirements_problem(language) {
         let mut state = lock(&shared);
         state::log(&state.dirs, &format!("system requirement not met: {problem}"));
         state.home_message = problem.clone();
@@ -462,7 +472,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
                 error
             }
             (None, Outcome::NormalClose) => String::new(),
-            (None, Outcome::Crashed { .. }) => exit::user_message(&outcome),
+            (None, Outcome::Crashed { .. }) => exit::user_message_in(&outcome, state::current_language()),
         };
         lock(&shared).home_message = message.clone();
         crate::tray::handle(&app, crate::tray::Event::GameEnded { message });
@@ -495,23 +505,20 @@ fn program_directory() -> PathBuf {
 
 // Controls ---------------------------------------------------------------------------------------
 
-/// Shown when the controls file was written by a newer launcher: it is kept as it is.
-const CONTROLS_LOCKED: &str =
-    "The controls file was written by a newer GT4Recomp and is kept as it is. Update the launcher to change controls.";
-
 /// Applies `change` to a copy of the controls, writes the file, and only then keeps the copy. A refused change or a
 /// failed write leaves the controls and the file as they were, and returns the reason.
 fn change_controls<T>(
     state: &mut AppState,
     change: impl FnOnce(&mut controls_file::Controls) -> Result<T, String>,
 ) -> Result<T, String> {
+    let language = state::language_of(state);
     if state.controls_locked {
-        return Err(CONTROLS_LOCKED.to_string());
+        return Err(messages::text("controls.newer_file", language).to_string());
     }
     let mut next = state.controls.clone();
     let result = change(&mut next)?;
     controls_file::save(&state.controls_path(), &next)
-        .map_err(|error| format!("The controls file could not be saved: {error}"))?;
+        .map_err(|error| messages::render("controls.could_not_save", language, &[("error", &error.to_string())]))?;
     state.controls = next;
     Ok(result)
 }
@@ -627,7 +634,8 @@ pub fn reset_all_bindings_of(shared: &Shared) -> Result<Value, String> {
         controls.reset_all();
         Ok(())
     })?;
-    state.controls_status = "Every control is back to its built-in binding.".to_string();
+    let language = state::language_of(&state);
+    state.controls_status = messages::text("controls.defaults_restored", language).to_string();
     Ok(controls_view(&state))
 }
 
@@ -698,9 +706,9 @@ pub async fn replays_import(app: AppHandle, game: Option<String>, shared: State<
 }
 
 /// The game an import goes to: the page's answer. A missing or unknown answer is an error, never a guess.
-pub fn import_target(game: Option<&str>) -> Result<&'static Game, String> {
+pub fn import_target(game: Option<&str>, language: Language) -> Result<&'static Game, String> {
     match game {
-        None => Err("Choose which game these saves belong to.".to_string()),
+        None => Err(messages::text("saves.choose_game", language).to_string()),
         Some(id) => games::by_id(id).ok_or_else(|| format!("{id} is not a game of this launcher.")),
     }
 }
@@ -712,13 +720,14 @@ pub enum Kind {
 }
 
 async fn import_with_picker(app: AppHandle, shared: Shared, kind: Kind, game: Option<String>) -> Result<Option<LibraryView>, String> {
-    let target = import_target(game.as_deref())?;
+    let language = state::language_of(&lock(&shared));
+    let target = import_target(game.as_deref(), language)?;
     tauri::async_runtime::spawn_blocking(move || {
         let picked = app
             .dialog()
             .file()
-            .set_title("Import from a memory card or save file")
-            .add_filter("Save or card", &["psu", "ps2", "mcd", "bin", "card"])
+            .set_title(messages::text("saves.import_title", language))
+            .add_filter(messages::text("saves.import_filter", language), &["psu", "ps2", "mcd", "bin", "card"])
             .blocking_pick_file();
         let Some(picked) = picked else {
             return Ok(None);
@@ -774,11 +783,12 @@ pub fn saves_activate(id: String, shared: State<'_, Shared>) -> Result<LibraryVi
 pub fn saves_activate_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
     let name = id;
     let mut state = lock(shared);
+    let language = state::language_of(&state);
     let slot = saves::saves(state.library())?
         .into_iter()
         .find(|item| item.name == name)
         .map(|item| item.label)
-        .ok_or_else(|| "That save is not in the library any more.".to_string())?;
+        .ok_or_else(|| messages::text("saves.not_in_library", language).to_string())?;
     if slot == "Active save" {
         return saves_view(&state);
     }
@@ -810,11 +820,12 @@ pub fn replays_delete_of(id: String, shared: &Shared) -> Result<LibraryView, Str
 
 fn delete_item(name: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, String> {
     let mut state = lock(shared);
+    let language = state::language_of(&state);
     let items = saves::saves(state.library())?.into_iter().chain(saves::replays(state.library())?);
     let item = items
         .into_iter()
         .find(|item| item.name == name)
-        .ok_or_else(|| "That item is not in the library any more.".to_string())?;
+        .ok_or_else(|| messages::text("saves.item_not_in_library", language).to_string())?;
     let result = saves::delete(state.library(), &item);
     let status = match result {
         Ok(()) => format!("{} moved to the Recycle Bin.", item.label),
@@ -861,8 +872,9 @@ pub fn select_game_of(id: String, shared: &Shared) -> Result<Value, String> {
     let game = games::by_id(&id).ok_or_else(|| format!("{id} is not a game of this launcher."))?;
     {
         let mut state = lock(shared);
+        let language = state::language_of(&state);
         if state.game_child.is_some() {
-            return Err("Stop the game before choosing another one.".to_string());
+            return Err(messages::text("game.stop_before_choosing", language).to_string());
         }
         if state.selected != game {
             state.selected = game;
@@ -893,11 +905,12 @@ pub fn games_remove_of(id: String, shared: &Shared) -> Result<Value, String> {
     let game = games::by_id(&id).ok_or_else(|| format!("{id} is not a game of this launcher."))?;
     {
         let state = lock(shared);
+        let language = state::language_of(&state);
         if state.game_child.is_some() {
-            return Err("Stop the game before removing it.".to_string());
+            return Err(messages::text("game.stop_before_removing", language).to_string());
         }
         if state.setup_busy || state.migration.running {
-            return Err("Wait until the setup or the move of the game files has finished.".to_string());
+            return Err(messages::text("game.wait_for_setup", language).to_string());
         }
         let dirs = state.game_dirs(game);
         let mut removed = Vec::new();
@@ -985,18 +998,37 @@ pub struct ReleaseNotes {
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseNote {
     pub version: String,
+    /// The en-US text: the fallback when the page's language has no note for this version.
     pub markdown: String,
+    /// The other languages of this release: language tag (`pt-BR`) -> Markdown.
+    pub translations: std::collections::BTreeMap<String, String>,
 }
 
+/// The embedded notes grouped by version, newest first (TASK-102: en-US plus every translated folder).
 #[tauri::command]
 pub fn release_notes() -> ReleaseNotes {
-    ReleaseNotes {
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        releases: RELEASE_NOTES
-            .iter()
-            .map(|(version, markdown)| ReleaseNote { version: version.to_string(), markdown: markdown.to_string() })
-            .collect(),
+    let mut releases: Vec<ReleaseNote> = Vec::new();
+    for (tag, version, markdown) in RELEASE_NOTES {
+        let index = match releases.iter().position(|note| note.version == *version) {
+            Some(index) => index,
+            None => {
+                releases.push(ReleaseNote {
+                    version: version.to_string(),
+                    markdown: String::new(),
+                    translations: std::collections::BTreeMap::new(),
+                });
+                releases.len() - 1
+            }
+        };
+        if *tag == "en-US" {
+            releases[index].markdown = markdown.to_string();
+        } else {
+            releases[index].translations.insert(tag.to_string(), markdown.to_string());
+        }
     }
+    // A translation whose version has no en-US note is not shown (the build keeps the en-US note of this version).
+    releases.retain(|note| !note.markdown.is_empty());
+    ReleaseNotes { version: env!("CARGO_PKG_VERSION").to_string(), releases }
 }
 
 /// Opens one of the `PROJECT_LINKS` in the default browser. Any other name is refused.
@@ -1041,7 +1073,7 @@ pub fn about_info_of(shared: &Shared) -> Result<AboutInfo, String> {
         .map(|installed| installed.version.text())
         .unwrap_or_else(|| "not installed".to_string());
     Ok(AboutInfo {
-        text: model::about_text(LAUNCHER_VERSION),
+        text: gt4l_core::messages::render("about.text", state::current_language(), &[("version", LAUNCHER_VERSION)]),
         licenses: model::licenses_text().to_string(),
         disc_path: state.disc_path().map(|path| path.display().to_string()).unwrap_or_default(),
         version: LAUNCHER_VERSION.to_string(),
