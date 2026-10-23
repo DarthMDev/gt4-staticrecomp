@@ -63,6 +63,57 @@
     return svg;
   }
 
+  // Smooth wheel scrolling for a panel without a scroll bar (TASK-099, owner 2026-10-23): each wheel step moves a
+  // target and the panel eases towards it every frame. Reduced motion keeps the plain, immediate scroll. The fade
+  // classes show a soft edge where more text is hidden (the panel has no bar to say so).
+  function smoothScroll(panel) {
+    var target = panel.scrollTop;
+    var frame = 0;
+    var reduced = root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function updateEdges() {
+      var max = panel.scrollHeight - panel.clientHeight;
+      panel.classList.toggle("fade-top", panel.scrollTop > 2);
+      panel.classList.toggle("fade-bottom", panel.scrollTop < max - 2);
+    }
+
+    function step() {
+      var distance = target - panel.scrollTop;
+      if (Math.abs(distance) < 0.5) {
+        panel.scrollTop = target;
+        frame = 0;
+        updateEdges();
+        return;
+      }
+      panel.scrollTop += distance * 0.18;
+      updateEdges();
+      frame = root.requestAnimationFrame(step);
+    }
+
+    panel.addEventListener("wheel", function (event) {
+      var max = panel.scrollHeight - panel.clientHeight;
+      if (max <= 0 || reduced) {
+        return;
+      }
+      event.preventDefault();
+      var lines = event.deltaMode === 1 ? 40 : event.deltaMode === 2 ? panel.clientHeight : 1;
+      if (!frame) {
+        target = panel.scrollTop;
+      }
+      target = Math.max(0, Math.min(max, target + event.deltaY * lines));
+      if (!frame) {
+        frame = root.requestAnimationFrame(step);
+      }
+    }, { passive: false });
+    panel.addEventListener("scroll", function () {
+      if (!frame) {
+        target = panel.scrollTop;
+      }
+      updateEdges();
+    });
+    return updateEdges;
+  }
+
   GT4.pages = GT4.pages || {};
   GT4.pages.home = {
     mount: function (root) {
@@ -258,6 +309,8 @@
       ]);
       notesCard.hidden = true;
       page.appendChild(notesCard);
+      var updateNotesEdges = smoothScroll(notesBody);
+      root.addEventListener("resize", updateNotesEdges);
       call("release_notes").then(function (notes) {
         if (!notes || !notes.markdown) {
           return;
@@ -265,6 +318,7 @@
         notesVersion.textContent = notes.version || "";
         notesBody.appendChild(GT4.markdown.render(notes.markdown, { skipTitle: true }));
         notesCard.hidden = false;
+        root.requestAnimationFrame(updateNotesEdges);
       }, function () {});
       page.appendChild(h("div", { class: "home-bottom" }, [
         logoImage,
@@ -305,6 +359,7 @@
       return {
         destroy: function () {
           clearInterval(timer);
+          root.removeEventListener("resize", updateNotesEdges);
           document.body.classList.remove("is-home");
         }
       };
