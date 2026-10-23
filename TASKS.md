@@ -704,6 +704,10 @@ Planned (owner, 2026-10-23) for release 1.3.1, after issue #89 and TASK-105. Own
    `system_check.rs`), so a GPU without Vulkan cannot play even when GSdx draws with Direct3D or OpenGL. Find out
    whether the game needs its own Vulkan device when `GT4_RENDERER=pcsx2` and, if not, make that path Vulkan-free and
    relax the launcher check for it. Everything below depends on this.
+   First finding (2026-10-23, High confidence, from the owner's 1.2.3 game.log): in pcsx2 mode the game logs
+   `[gs-ipc] GT4_RENDERER=pcsx2: donor Vulkan renderer not created`, so the game creates no Vulkan device and only
+   gt4-gs renders; the Vulkan 1.2 requirement then comes from the launcher's system check (and gt4-gs on Vulkan). To
+   confirm: no other Vulkan call on that path (the loader is loaded dynamically) and a run on a machine without Vulkan.
 2. **Automatic Graphics API.** Vulkan when the GPU reports Vulkan 1.2 or newer with what GSdx needs; otherwise OpenGL
    on NVIDIA and Direct3D 11 on Intel and AMD (OpenGL tends to stall on non-NVIDIA GPUs; OpenGL has the same blending
    precision as Vulkan and Direct3D 12; Direct3D 11 is for weak and old hardware only). A player's own choice always
