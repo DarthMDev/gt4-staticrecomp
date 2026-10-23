@@ -10,7 +10,8 @@
  * Patch notes (TASK-099): a glass card on the right shows the release notes embedded in the launcher (release_notes:
  * every release up to this version, newest first), rendered by js/markdown.js; arrows in its header step back through
  * the older releases.
- * Support (owner, 2026-10-23): "Support the project" with the Ko-fi cup at the top right opens Ko-fi; the version line at
+ * Support (owner, 2026-10-23): "Support the project" with the Ko-fi cup at the foot of the What's new card opens Ko-fi; the
+ * version line at
  * the bottom right reads "GT4Recomp <version> - Made with passion, by Moesuito", Moesuito opening the YouTube channel
  * (open_link with a name; the addresses are fixed in the launcher).
  * Controller: A or Start = Play (or Install), Y = Settings, LB / RB = the other game. Hints show only once a pad is used.
@@ -305,11 +306,11 @@
           on: { click: function () { openLink("youtube"); } } }, "Moesuito")
       ]);
       page.appendChild(versionLabel);
-      page.appendChild(h("button", { class: "support", type: "button", title: "Support GT4Recomp on Ko-fi",
+      var supportButton = h("button", { class: "support", type: "button", title: "Support GT4Recomp on Ko-fi",
         on: { click: function () { openLink("kofi"); } } }, [
         h("img", { class: "support-cup", src: "assets/kofi-cup.avif", alt: "" }),
         h("span", { text: "Support the project" })
-      ]));
+      ]);
       call("about_info").then(function (info) {
         versionText.textContent = "GT4Recomp " + (info.version || "");
       }, function () {});
@@ -327,7 +328,8 @@
           h("span", { class: "home-notes-title", text: "What's new" }),
           h("span", { class: "home-notes-pager" }, [notesOlder, notesVersion, notesNewer])
         ]),
-        notesBody
+        notesBody,
+        supportButton
       ]);
       notesCard.hidden = true;
       page.appendChild(notesCard);
