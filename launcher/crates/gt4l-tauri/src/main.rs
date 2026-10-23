@@ -91,7 +91,6 @@ fn main() {
     // TASK-091 WebView2 guard: the safe mode flag decides the WebView2 arguments, before any web view exists.
     let user_root = startup.user.root().to_path_buf();
     let safe_mode = webview_guard::apply_safe_mode_environment(&user_root);
-    webview_guard::apply_autoplay_environment();
     let webview_version = tauri::webview_version().unwrap_or_else(|_| "unknown".to_string());
     state::log(&dirs, &format!("WebView2 runtime version: {webview_version}"));
     // TASK-091 (issue #80): a missing runtime is reported before any window exists, not after the watchdog's wait.

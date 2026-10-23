@@ -86,10 +86,6 @@ pub fn with_gpu_disabled(existing: Option<&str>) -> String {
     with_switch(existing, DISABLE_GPU)
 }
 
-/// The launcher page may play sound without a click first (the 1.3.0 intro's music, js/intro.js). The page is our own
-/// local UI; nothing remote is loaded.
-pub const AUTOPLAY_WITHOUT_GESTURE: &str = "--autoplay-policy=no-user-gesture-required";
-
 /// `existing` with `switch` added once, after the switches already there.
 fn with_switch(existing: Option<&str>, switch: &str) -> String {
     let existing = existing.unwrap_or("").trim();
@@ -103,11 +99,6 @@ fn with_switch(existing: Option<&str>, switch: &str) -> String {
     }
 }
 
-/// At startup, before the web view exists: lets the page start sound by itself (see [`AUTOPLAY_WITHOUT_GESTURE`]).
-pub fn apply_autoplay_environment() {
-    let existing = std::env::var(WEBVIEW_ARGUMENTS_VAR).ok();
-    std::env::set_var(WEBVIEW_ARGUMENTS_VAR, with_switch(existing.as_deref(), AUTOPLAY_WITHOUT_GESTURE));
-}
 
 /// The flag file of safe mode in `user_root`.
 pub fn safe_mode_flag(user_root: &Path) -> PathBuf {
@@ -409,12 +400,6 @@ mod tests {
 
     #[test]
     fn the_gpu_switch_is_appended_once() {
-        assert_eq!(with_switch(None, AUTOPLAY_WITHOUT_GESTURE), AUTOPLAY_WITHOUT_GESTURE);
-        assert_eq!(
-            with_switch(Some("--disable-gpu"), AUTOPLAY_WITHOUT_GESTURE),
-            format!("--disable-gpu {AUTOPLAY_WITHOUT_GESTURE}")
-        );
-        assert_eq!(with_switch(Some(AUTOPLAY_WITHOUT_GESTURE), AUTOPLAY_WITHOUT_GESTURE), AUTOPLAY_WITHOUT_GESTURE);
         assert_eq!(with_gpu_disabled(None), "--disable-gpu");
         assert_eq!(with_gpu_disabled(Some("")), "--disable-gpu");
         assert_eq!(with_gpu_disabled(Some("   ")), "--disable-gpu");
