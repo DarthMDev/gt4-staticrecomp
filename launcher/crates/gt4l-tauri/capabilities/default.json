@@ -47,6 +47,8 @@
     "allow-select-game",
     "allow-games-remove",
     "allow-check-updates",
+    "allow-list-launcher-versions",
+    "allow-install-launcher-version",
     "allow-apply-update",
     "allow-skip-update",
     "allow-confirm-close",

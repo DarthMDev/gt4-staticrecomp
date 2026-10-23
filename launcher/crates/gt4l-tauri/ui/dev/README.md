@@ -68,6 +68,8 @@ Arguments are the payload object shown. Errors are strings or Error objects; the
 | `open_log_folder` | none | none |
 | `open_game_files_folder` | none | none; opens `game_files` in Explorer |
 | `check_updates` | none | `{offers: [offer], errors: [string], upToDate: bool, launcher, renderer}`; offer = `{stream, installed, latest, notes, package, update}` |
+| `list_launcher_versions` | none | `{channel, installed, entries: [{tag, version, date, candidate, installed, downgrade}], nothingNewer}`; read from GitHub each time, for the saved channel (TASK-109); an error string is shown under the Version row |
+| `install_launcher_version` | `{tag}` | `{ok, message}`; the update path for that exact release (the page asks first; an older one gets the downgrade warning); the launcher closes |
 | `apply_update` | `{stream}` (`launcher` or `renderer`) | `{ok, message}`; the renderer installs in place (not while the game runs); the launcher starts its setup and exits |
 | `skip_update` | `{stream, version}` | none; no offer again for exactly that version |
 | `confirm_close` | none | none; the player chose Close launcher in the close confirmation |

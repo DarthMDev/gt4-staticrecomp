@@ -21,6 +21,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use crate::releases::{self, Asset, Release, Stream, CHECKSUM_ASSET};
+#[cfg(test)]
 use crate::version::Version;
 
 /// Where the verified zip is downloaded.
@@ -317,7 +318,7 @@ pub fn cleanup_pending(fs: &dyn UpdateFs, exe_dir: &Path) -> bool {
 }
 
 /// The release assets a portable update needs: the zip and the `SHA256SUMS` list. Errors name what is missing.
-pub fn release_assets(release: &Release, version: Version) -> Result<(&Asset, &Asset), String> {
+pub fn release_assets(release: &Release, version: impl Into<crate::version::ReleaseVersion>) -> Result<(&Asset, &Asset), String> {
     let package = Stream::Launcher.package_name_for(version, true);
     let zip = release.asset(&package).ok_or_else(|| format!("release {} has no {package}", release.tag))?;
     let sums = release

@@ -464,6 +464,15 @@ body.input-pad nav.side .ring-on { box-shadow: none; }
 .row .ctl.buttons { width: auto; flex-wrap: wrap; row-gap: 8px; }
 .row .ctl.buttons .btn { white-space: nowrap; }
 .row .ctl.wide .val { white-space: nowrap; min-width: 168px; }
+.version-note { margin: 6px 0 0; }
+.version-note:empty { display: none; }
+.version-note.is-warning { color: #ff8a8a; }
+.version-warning {
+  display: flex; gap: 12px; align-items: flex-start; margin: 12px 0 4px; padding: 12px 14px;
+  border: 1px solid rgba(255, 190, 80, 0.7); border-left-width: 4px; border-radius: 3px;
+  background: rgba(255, 190, 80, 0.1); color: #ffd28a; font-size: 14px; line-height: 1.45;
+}
+.version-warning .warn-icon { font-size: 20px; line-height: 1.2; flex: none; }
 .row .hint-text { font-size: 12px; color: var(--faint); }
 .row.is-disabled .k { color: var(--faint); }
 .row.is-disabled .ctl { opacity: 0.35; }

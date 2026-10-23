@@ -17,6 +17,8 @@ or a memory card in the game folder fails the build. The output is deterministic
 With --sums-file the zip's line, `<sha256>  <name>`, is appended to that SHA256SUMS file (created when missing), so the release
 lists the portable zip next to the setup program.
 
+--version carries the label of a test build: --version 1.3.0-rc5 makes GT4Recomp-1.3.0-rc5-portable.zip.
+
 Usage:
   python scripts/make_portable_zip.py <out dir> --version 1.3.0 --launcher-exe <GT4Recomp.exe> --sdl3-dll <SDL3.dll> \
       --game-dir <game folder> [--sums-file <out dir>/SHA256SUMS]
@@ -24,6 +26,7 @@ Usage:
 
 import argparse
 import hashlib
+import re
 import sys
 import zipfile
 from pathlib import Path
@@ -33,6 +36,9 @@ EMPTY_FOLDERS = ('user', 'data')
 # Names that must never be in the game folder: the player's disc and the files made from it.
 FORBIDDEN_SUFFIXES = ('.iso', '.bin', '.elf', '.ps2', '.mc2', '.gt4')
 FORBIDDEN_NAMES = ('core.gt4', 'scus_973.28', 'scus_973.28.elf', 'card.ps2')
+# The release version: numeric, with the label of a test build (TASK-109): 1.3.0 or 1.3.0-rc5. The name matches the asset the
+# launcher looks for (releases.rs package_name_for).
+VERSION_PATTERN = re.compile(r'^\d+\.\d+\.\d+(-rc[1-9][0-9]*)?$')
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)
 PORTABLE_NOTE = """GT4Recomp, portable copy
 ========================
@@ -82,6 +88,8 @@ def add_folder(archive, name):
 
 
 def make_zip(out_dir, version, launcher_exe, sdl3_dll, game_dir, notice=None, licence=None, sums_file=None):
+    if not VERSION_PATTERN.match(str(version)):
+        raise ValueError(f'version must look like 1.3.0 or 1.3.0-rc5, got {version!r}')
     out_dir = Path(out_dir).resolve()
     launcher_exe, sdl3_dll, game_dir = Path(launcher_exe), Path(sdl3_dll), Path(game_dir).resolve()
     notice = Path(notice) if notice else ROOT / 'NOTICE.md'

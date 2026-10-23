@@ -248,11 +248,84 @@
     };
   }
 
+  // The Settings > General update channel row (TASK-109). The choice is kept in the mock like the real setting.
+  var mockChannel = "stable";
+  function channelRow() {
+    return {
+      id: "update_channel", label: "Channel", group: "general", page: "basic", control: "dropdown",
+      help: "Stable gets the normal releases. Beta also gets the release candidates.", default: "stable", current: mockChannel,
+      values: [{ value: "stable", label: "Stable" }, { value: "beta", label: "Beta" }]
+    };
+  }
+
+  // TASK-109 version picker: a fake GitHub release list with stable releases, candidates and drafts that must not show.
+  // The mock applies the same rules as gt4l-core version_list.rs (minimum 1.3.0-rc5, drafts out, dates for candidates,
+  // SemVer for stables, a newer stable on top in Beta). devVersions.installed can be changed by the checks.
+  var devVersions = root.GT4.devVersions = {
+    installed: "1.3.0-rc6",
+    installs: [],
+    failList: false,
+    releases: [
+      { tag: "v1.3.2", published: "2026-10-30T10:00:00Z", draft: false },
+      { tag: "v1.3.1-rc2", published: "2026-10-28T10:00:00Z", draft: false },
+      { tag: "v1.3.1-rc3", published: null, draft: true },
+      { tag: "v1.3.0", published: "2026-10-26T10:00:00Z", draft: false },
+      { tag: "v1.3.0-rc6", published: "2026-10-25T09:00:00Z", draft: false },
+      { tag: "v1.3.0-rc5", published: "2026-10-23T09:00:00Z", draft: false },
+      { tag: "v1.3.0-rc4", published: "2026-10-22T09:00:00Z", draft: false },
+      { tag: "v1.2.3", published: "2026-10-01T09:00:00Z", draft: false }
+    ]
+  };
+  function parseRelease(text) {
+    var match = /^v?(\d+)\.(\d+)\.(\d+)(?:-rc(\d+))?$/.exec(text);
+    return match ? { nums: [+match[1], +match[2], +match[3]], rc: match[4] === undefined ? null : +match[4], text: String(text).replace(/^v/, "") } : null;
+  }
+  function compareRelease(a, b) {
+    for (var i = 0; i < 3; i++) {
+      if (a.nums[i] !== b.nums[i]) { return a.nums[i] - b.nums[i]; }
+    }
+    if (a.rc === b.rc) { return 0; }
+    if (a.rc === null) { return 1; }
+    if (b.rc === null) { return -1; }
+    return a.rc - b.rc;
+  }
+  var PICKER_MINIMUM = parseRelease("1.3.0-rc5");
+  function versionList() {
+    var installed = parseRelease(devVersions.installed);
+    var usable = devVersions.releases.filter(function (release) {
+      return !release.draft && compareRelease(parseRelease(release.tag), PICKER_MINIMUM) >= 0;
+    }).map(function (release) {
+      var version = parseRelease(release.tag);
+      return {
+        tag: release.tag, version: version.text, date: (release.published || "").slice(0, 10), candidate: version.rc !== null,
+        installed: compareRelease(version, installed) === 0, downgrade: compareRelease(version, installed) < 0,
+        _v: version, _p: release.published || ""
+      };
+    });
+    var stables = usable.filter(function (entry) { return !entry.candidate; }).sort(function (a, b) { return compareRelease(b._v, a._v); });
+    var entries = stables;
+    if (mockChannel === "beta") {
+      var candidates = usable.filter(function (entry) { return entry.candidate; }).sort(function (a, b) {
+        return a._p < b._p ? 1 : (a._p > b._p ? -1 : compareRelease(b._v, a._v));
+      });
+      var newest = candidates.reduce(function (best, entry) { return !best || compareRelease(entry._v, best) > 0 ? entry._v : best; }, null);
+      entries = stables.filter(function (entry) { return !newest || compareRelease(entry._v, newest) > 0; }).concat(candidates);
+    }
+    var nothingNewer = entries.every(function (entry) { return compareRelease(entry._v, installed) < 0; }) &&
+      !entries.some(function (entry) { return entry.installed; });
+    return {
+      channel: mockChannel, installed: devVersions.installed, nothingNewer: nothingNewer,
+      entries: entries.map(function (entry) {
+        return { tag: entry.tag, version: entry.version, date: entry.date, candidate: entry.candidate, installed: entry.installed, downgrade: entry.downgrade };
+      })
+    };
+  }
+
   function tableView() {
     fillDisplayRows();
     return {
       max_upscale: maxUpscale,
-      rows: [languageRow()].concat(rows.map(function (row) {
+      rows: [languageRow(), channelRow()].concat(rows.map(function (row) {
         return JSON.parse(JSON.stringify(row));
       }))
     };
@@ -561,6 +634,10 @@
           mockLanguage = args.value;
           return null;
         }
+        if (args.id === "update_channel") {
+          mockChannel = args.value;
+          return null;
+        }
         var row = findRow(args.id) || analog.filter(function (item) { return item.id === args.id; })[0];
         if (!row) {
           throw new Error("Unknown setting " + args.id);
@@ -713,6 +790,15 @@
           };
         }
         return { offers: [], errors: [], upToDate: true, launcher: "1.3.0", renderer: "1.2.1" };
+      case "list_launcher_versions":
+        if (devVersions.failList) {
+          throw new Error("Could not read the version list (no connection). Your current version stays.");
+        }
+        return versionList();
+      case "install_launcher_version":
+        // The real command runs the update path (download, SHA256SUMS check, setup) and the launcher closes.
+        devVersions.installs.push(args.tag);
+        return { ok: true, message: "GT4Recomp setup started." };
       case "apply_update":
         return { ok: true, message: args.stream === "launcher" ? "GT4Recomp setup started." : "gt4-gs 1.1.1 is ready." };
       case "skip_update":

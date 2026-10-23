@@ -198,6 +198,8 @@ impl AppState {
             log(&dirs, &format!("settings: {warning}"));
         }
         set_current_language(language_of_settings(&config.settings));
+        // TASK-109: a release candidate build with no chosen update channel stays on Beta; any other build on Stable.
+        gt4l_core::update::apply_channel_default(&mut config.settings, gt4l_core::launcher_release_version());
         // Stored paths inside the install folder are relative (see `save_config`); resolve them here.
         config.disc_path = config.disc_path.map(|path| paths::resolve_portable(&path, &install_dir));
         config.dev_game_dir = config.dev_game_dir.map(|path| paths::resolve_portable(&path, &install_dir));

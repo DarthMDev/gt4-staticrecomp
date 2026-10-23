@@ -19,9 +19,13 @@
 
 param(
     [string]$Sdl3Root = "C:/Antigravity/gt4-staticrecomp/private/tooling/sdl3-3.4.18",
-    [switch]$Portable
+    [switch]$Portable,
+    [string]$Label = ""
 )
 $ErrorActionPreference = "Stop"
+if ($Label -and $Label -notmatch '^rc[1-9][0-9]*$') { throw "-Label must be empty or rc<N> (for example rc5), got '$Label'" }
+$savedLabel = $env:GT4_RELEASE_LABEL
+$env:GT4_RELEASE_LABEL = $Label
 
 $launcher = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $checkout = (Resolve-Path (Join-Path $launcher "..")).Path
@@ -65,6 +69,7 @@ try {
 } finally {
     Pop-Location
     $env:CARGO_TARGET_DIR = $savedTargetDir
+    $env:GT4_RELEASE_LABEL = $savedLabel
     foreach ($path in $saved.Keys) {
         $now = [System.IO.File]::ReadAllBytes($path)
         if ([Convert]::ToBase64String($now) -ne [Convert]::ToBase64String($saved[$path])) {
@@ -94,4 +99,5 @@ foreach ($needle in $needles) {
 if ($hits -ne 0) { throw "$hits build path(s) left in $exe" }
 $hash = (Get-FileHash -Algorithm SHA256 $exe).Hash.ToLower()
 $kind = if ($Portable) { "portable" } else { "installer" }
-Write-Host "GT4Recomp.exe ($kind build): $((Get-Item $exe).Length) bytes, sha256 $hash; no user or build path found"
+$labelText = if ($Label) { ", label $Label" } else { "" }
+Write-Host "GT4Recomp.exe ($kind build$labelText): $((Get-Item $exe).Length) bytes, sha256 $hash; no user or build path found"

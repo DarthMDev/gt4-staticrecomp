@@ -49,6 +49,15 @@ class PortableZipTest(unittest.TestCase):
             self.assertEqual(archive.read('game/shaders/raster.spv'), b'spv')
         self.assertEqual(digest, hashlib.sha256(target.read_bytes()).hexdigest())
 
+    def test_a_test_build_carries_its_label_in_the_zip_name(self):
+        target, _ = portable.make_zip(self.base / 'rc', '1.3.0-rc5', self.exe, self.sdl, self.game)
+        self.assertEqual(target.name, 'GT4Recomp-1.3.0-rc5-portable.zip')
+
+    def test_a_version_that_is_not_a_release_version_is_refused(self):
+        for bad in ('1.3', '1.3.0-rc', '1.3.0-rc0', '1.3.0-beta1', 'v1.3.0', '../1.3.0'):
+            with self.assertRaises(ValueError, msg=bad):
+                portable.make_zip(self.base / 'bad', bad, self.exe, self.sdl, self.game)
+
     def test_the_zip_is_the_same_files_the_installer_stages(self):
         nsis = (ROOT / 'installer/gt4recomp.nsi').read_text(encoding='utf-8')
         for staged in ('/oname=GT4Recomp.exe', '/oname=SDL3.dll', '/oname=NOTICE.md', '/oname=LICENSE.txt'):

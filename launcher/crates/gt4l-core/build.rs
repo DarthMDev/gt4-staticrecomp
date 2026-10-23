@@ -21,7 +21,27 @@ fn quoted(text: &str) -> String {
     format!("{text:?}")
 }
 
+/// The release label of this build (TASK-109): `GT4_RELEASE_LABEL=rc5` makes the launcher version `1.3.0-rc5`. Empty or
+/// missing = a stable build. Anything but `rc<N>` stops the build.
+fn release_label() {
+    println!("cargo:rerun-if-env-changed=GT4_RELEASE_LABEL");
+    let label = std::env::var("GT4_RELEASE_LABEL").unwrap_or_default();
+    let label = label.trim();
+    if !label.is_empty() {
+        let digits = label.strip_prefix("rc").unwrap_or("");
+        let valid = !digits.is_empty()
+            && digits.bytes().all(|byte| byte.is_ascii_digit())
+            && !digits.starts_with('0');
+        assert!(valid, "GT4_RELEASE_LABEL must be empty or rc<N> (N from 1, no leading zero), got '{label}'");
+    }
+    let cargo = std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION");
+    let full = if label.is_empty() { cargo } else { format!("{cargo}-{label}") };
+    println!("cargo:rustc-env=GT4_LAUNCHER_VERSION={full}");
+    println!("cargo:rustc-env=GT4_RELEASE_LABEL={label}");
+}
+
 fn main() {
+    release_label();
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let locales = manifest.join("../gt4l-tauri/ui/locales");
     println!("cargo:rerun-if-changed={}", locales.display());

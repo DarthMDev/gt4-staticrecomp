@@ -75,7 +75,7 @@ fn main() {
     let _ = std::fs::create_dir_all(dirs.root());
     // TASK-112: one log file for this launch, with a header (version, install kind, Windows, date).
     let header = vec![
-        format!("GT4Recomp {}", env!("CARGO_PKG_VERSION")),
+        format!("GT4Recomp {}", gt4l_core::LAUNCHER_VERSION),
         format!("Install: {}", if portable { "portable" } else { "installer" }),
         format!("Windows: {}", gt4l_platform::system::windows_version()),
         format!("Date: {}", gt4l_core::logs::LocalTime::stamp(&gt4l_platform::system::local_time())),
@@ -253,6 +253,8 @@ fn main() {
             commands::select_game,
             commands::games_remove,
             updates::check_updates,
+            updates::list_launcher_versions,
+            updates::install_launcher_version,
             updates::apply_update,
             updates::skip_update,
             tray::confirm_close,

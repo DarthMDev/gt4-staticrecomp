@@ -87,11 +87,11 @@ fn skipped_update_versions_round_trip_through_settings() {
     let path = directory.join("settings.toml");
     let mut config = ConfigFile::default();
     config.skipped_renderer = Some(Version(1, 0, 2));
-    config.skipped_launcher = Some(Version(1, 0, 1));
+    config.skipped_launcher = Some(Version(1, 0, 1).into());
     config::save(&path, &config).unwrap();
     let (loaded, _) = config::load(&path);
     assert_eq!(loaded.skipped_renderer, Some(Version(1, 0, 2)));
-    assert_eq!(loaded.skipped_launcher, Some(Version(1, 0, 1)));
+    assert_eq!(loaded.skipped_launcher, Some(Version(1, 0, 1).into()));
 }
 
 #[test]
@@ -306,4 +306,16 @@ fn a_schema_five_resolution_that_differs_or_has_no_recorded_desktop_is_kept() {
     fs::write(&primary, "schema_version = 5\n\n[settings]\nmonitor = \"primary\"\nresolution = \"3440x1440\"\n").unwrap();
     let (loaded, _) = config::load(&primary);
     assert_eq!(loaded.settings.get("resolution"), "3440x1440", "no desktop size is recorded for primary");
+}
+
+#[test]
+fn a_skipped_candidate_and_the_chosen_channel_round_trip() {
+    use gt4l_core::ReleaseVersion;
+    let mut config = ConfigFile::default();
+    config.skipped_launcher = ReleaseVersion::parse("1.3.0-rc5");
+    config.settings.set_by_user("update_channel", "beta").unwrap();
+    let (loaded, _) = gt4l_core::config::parse(&gt4l_core::config::render(&config)).unwrap();
+    assert_eq!(loaded.skipped_launcher, ReleaseVersion::parse("1.3.0-rc5"));
+    assert_eq!(loaded.settings.get("update_channel"), "beta");
+    assert!(loaded.settings.was_chosen("update_channel"));
 }

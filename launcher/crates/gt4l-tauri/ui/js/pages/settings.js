@@ -442,12 +442,199 @@
   GT4.settingsTab = settingsTab;
   GT4.settingsRows = { rowNode: rowNode };
 
-  // General (TASK-102): the launcher's language. The rows come from the table (group "general").
+  // General: the Version row (TASK-109). A dropdown filled from GitHub each time the page opens (list_launcher_versions),
+  // with a small refresh button. Picking a version other than the installed one asks first:
+  //   newer or the same lineage -> "Install version X?" (Install is the default button);
+  //   older (a downgrade, any channel) -> a strong warning, Cancel first (the default), "Install older version" explicit.
+  // Yes runs install_launcher_version (the normal update path: download, SHA256SUMS check, setup, the launcher closes).
+  // No (or Cancel, B, outside) puts the dropdown back on the installed version; nothing changes.
+  function versionRow(ctx) {
+    var row = { id: "launcher_version", label: GT4.t("versions.label"), help: GT4.t("versions.help") };
+    var model = { loading: true, data: null, error: "", installedText: "" };
+    var select = h("button", {
+      class: "select",
+      type: "button",
+      "aria-haspopup": "listbox",
+      "aria-label": row.label,
+      disabled: true,
+      data: { setting: row.id }
+    }, [h("span", { text: GT4.t("versions.loading") }), h("span", { class: "chev" })]);
+    var label = select.querySelector("span");
+    var refresh = h("button", {
+      class: "btn small",
+      type: "button",
+      "aria-label": GT4.t("versions.refresh"),
+      title: GT4.t("versions.refresh"),
+      data: { action: "versions-refresh" }
+    }, "↻");
+    var note = h("p", { class: "note version-note", role: "status", data: { action: "versions-note" }, text: "" });
+    var node = h("div", { class: "row", data: { row: row.id } }, [
+      h("div", { class: "k" }, [h("span", { text: row.label }), infoButton(row)]),
+      h("div", { class: "ctl" }, [select, refresh])
+    ]);
+    var block = h("div", { class: "version-block" }, [node, note]);
+
+    function channelName() {
+      var channel = (model.data && model.data.channel) || "stable";
+      return GT4.t("choice.update_channel." + channel);
+    }
+
+    // The text of the dropdown and the note under the row, from the model.
+    function paint() {
+      select.disabled = model.loading;
+      label.textContent = model.loading ? GT4.t("versions.loading") : model.installedText;
+      var text = "";
+      var warn = false;
+      if (model.error) {
+        text = model.error;
+        warn = true;
+      } else if (model.data) {
+        text = model.data.nothingNewer ? GT4.t("versions.nothing_newer", { channel: channelName() }) : "";
+        text = (text ? text + " " : "") + GT4.t("versions.older_note");
+      }
+      note.textContent = text;
+      note.classList.toggle("is-warning", warn);
+    }
+
+    function load() {
+      model.loading = true;
+      model.error = "";
+      paint();
+      return call("list_launcher_versions").then(function (data) {
+        if (!block.isConnected) {
+          return;
+        }
+        model.data = data;
+        model.installedText = data.installed || "";
+        model.loading = false;
+        paint();
+      }, function (err) {
+        if (!block.isConnected) {
+          return;
+        }
+        model.loading = false;
+        model.error = errorText(err);
+        // The current version stays on the dropdown.
+        return call("about_info").then(function (info) {
+          model.installedText = (info && info.version) || "";
+        }, function () {}).then(paint);
+      });
+    }
+
+    function restore() {
+      label.textContent = model.installedText;
+    }
+
+    function startInstall(entry) {
+      GT4.ui.toast(GT4.t("versions.starting", { version: entry.version }));
+      call("install_launcher_version", { tag: entry.tag }).then(null, function (err) {
+        GT4.ui.toast(errorText(err), true);
+        restore();
+      });
+    }
+
+    function confirmInstall(entry) {
+      var confirmed = false;
+      var older = !!entry.downgrade;
+      var buttons;
+      var body = null;
+      if (older) {
+        body = h("div", { class: "version-warning", role: "alert" }, [
+          h("span", { class: "warn-icon", "aria-hidden": "true", text: "⚠" }),
+          h("span", { text: GT4.t("versions.downgrade_warning") })
+        ]);
+        // Cancel is the first button and has no "primary": it takes the focus. Installing needs an explicit choice.
+        buttons = [
+          { label: GT4.t("versions.cancel") },
+          {
+            label: GT4.t("versions.open_saves_folder"),
+            closes: false,
+            run: function () {
+              call("open_saves_folder").then(null, function (err) { GT4.ui.toast(errorText(err), true); });
+            }
+          },
+          {
+            label: GT4.t("versions.install_older"),
+            danger: true,
+            run: function () { confirmed = true; startInstall(entry); }
+          }
+        ];
+      } else {
+        buttons = [
+          { label: GT4.t("versions.install"), primary: true, run: function () { confirmed = true; startInstall(entry); } },
+          { label: GT4.t("versions.cancel") }
+        ];
+      }
+      GT4.ui.openDialog({
+        title: older ? GT4.t("versions.downgrade_title") : GT4.t("versions.confirm_title", { version: entry.version }),
+        text: older
+          ? GT4.t("versions.downgrade_text", { installed: model.installedText, version: entry.version })
+          : GT4.t("versions.confirm_text", { version: entry.version }),
+        body: body,
+        wide: older,
+        dismissable: true,
+        buttons: buttons,
+        onClose: function () {
+          if (!confirmed) {
+            restore();
+          }
+        }
+      });
+    }
+
+    select.addEventListener("click", function () {
+      var entries = (model.data && model.data.entries) || [];
+      var dialog = null;
+      var items = entries.map(function (entry) {
+        return h("button", {
+          class: "option",
+          role: "option",
+          "aria-selected": String(!!entry.installed),
+          data: Object.assign({ tag: entry.tag }, entry.installed ? { default: "1" } : {}),
+          on: {
+            click: function () {
+              dialog.close();
+              if (entry.installed) {
+                return;
+              }
+              label.textContent = entry.version;
+              confirmInstall(entry);
+            }
+          }
+        }, [
+          h("span", { text: entry.version + (entry.date ? "  ·  " + entry.date : "") }),
+          entry.installed
+            ? h("span", { class: "tick", text: GT4.t("versions.installed") })
+            : (entry.candidate ? h("span", { class: "tag", text: GT4.t("versions.candidate") }) : null)
+        ]);
+      });
+      var list = entries.length
+        ? h("div", { class: "option-list", role: "listbox" }, items)
+        : h("p", { class: "modal-text", text: GT4.t("versions.none") });
+      dialog = GT4.ui.openDialog({
+        title: row.label,
+        body: list,
+        buttons: [{ label: GT4.t("common.cancel") }]
+      });
+    });
+    refresh.addEventListener("click", function () {
+      load();
+    });
+    paint();
+    load();
+    return block;
+  }
+
+  // General (TASK-102, TASK-109): the launcher's language and update channel (rows from the table, group "general"),
+  // then the Version row, which reads GitHub when the page is drawn (a channel change draws it again).
   GT4.tabPages.general = function (content, host) {
     return settingsTab(content, host, {
       title: GT4.t("settings.general_title"),
       filter: function (row) {
         return row.group === "general";
+      },
+      extra: function (ctx) {
+        content.appendChild(versionRow(ctx));
       }
     });
   };

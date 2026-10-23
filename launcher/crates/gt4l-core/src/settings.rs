@@ -82,6 +82,11 @@ const RENDERER_CHOICES: &[Choice] = &[
     Choice { value: CORE_GS_20, label: "CoreGS 2.0 (coming soon)", selectable: false },
 ];
 
+const CHANNEL_CHOICES: &[Choice] = &[
+    Choice { value: "stable", label: "Stable", selectable: true },
+    Choice { value: "beta", label: "Beta", selectable: true },
+];
+
 const VSYNC_CHOICES: &[Choice] = &[
     Choice { value: "on", label: "On", selectable: true },
     Choice { value: "fast", label: "Fast", selectable: true },
@@ -106,6 +111,16 @@ pub const SETTINGS: &[SettingDef] = &[
         info: "The language of the launcher. Auto follows your Windows language (Portuguese (Brazil) or English); the other two choices always use that language.",
         kind: Kind::Language,
         default: "auto",
+        connected: true,
+    },
+    SettingDef {
+        id: "update_channel",
+        page: Page::General,
+        group: "Language",
+        title: "Channel",
+        info: "Stable gets the normal releases. Beta also gets the release candidates, to test new features early.                Going back to Stable never installs an older version by itself.",
+        kind: Kind::Choice(CHANNEL_CHOICES),
+        default: "stable",
         connected: true,
     },
     SettingDef {

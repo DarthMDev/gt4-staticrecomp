@@ -102,7 +102,7 @@ fn system_facts(state: &AppState) -> SystemFacts {
             .collect(),
         chosen: (plan.card.as_ref().and_then(|card| card.name()).unwrap_or_default().to_string(), plan.api.clone()),
         displays: monitors,
-        launcher_version: env!("CARGO_PKG_VERSION").to_string(),
+        launcher_version: gt4l_core::LAUNCHER_VERSION.to_string(),
         install: gt4l_core::build_kind::BUILD.label().to_string(),
         games: games::GAMES
             .iter()

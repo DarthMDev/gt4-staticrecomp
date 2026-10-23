@@ -478,7 +478,7 @@ fn real_flow_end_to_end() {
     for line in walk_pages(&second, &scratch.join("test-card.ps2")) {
         note(line);
     }
-    let check = crate::updates::check(&dirs, None, None);
+    let check = crate::updates::check(&dirs, gt4l_core::update::UpdateChannel::Stable, None, None);
     note(format!(
         "check_updates: {} offers, errors {:?}, gt4-gs installed {:?}",
         check.offers.len(),

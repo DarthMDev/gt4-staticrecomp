@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 use crate::migrate::{self, Verdict};
 use crate::settings::{self, Settings};
-use crate::version::Version;
+use crate::version::{ReleaseVersion, Version};
 
 /// Schema of this file (`migrate::SETTINGS`). Files without a schema number are schema 0 and are migrated.
 pub const SCHEMA_VERSION: u32 = 8;
@@ -21,7 +21,7 @@ pub struct ConfigFile {
     pub disc_path: Option<PathBuf>,
     pub dev_game_dir: Option<PathBuf>,
     /// "Skip this version" choices of the update popup: no offer again for exactly this version.
-    pub skipped_launcher: Option<Version>,
+    pub skipped_launcher: Option<ReleaseVersion>,
     pub skipped_renderer: Option<Version>,
     /// The game the home screen shows (`[game] selected`, schema 8, TASK-101): the first game installed, then the game
     /// played last. `None` before any game is installed. An id the launcher does not know reads as `None`.
@@ -145,9 +145,9 @@ pub fn parse(text: &str) -> Result<(ConfigFile, Vec<String>), ConfigError> {
             }
         });
     if let Some(section) = table.get("updates").and_then(|value| value.as_table()) {
-        let skipped = |key: &str| section.get(key).and_then(|value| value.as_str()).and_then(Version::parse);
-        config.skipped_launcher = skipped("skip_launcher");
-        config.skipped_renderer = skipped("skip_renderer");
+        let text = |key: &str| section.get(key).and_then(|value| value.as_str());
+        config.skipped_launcher = text("skip_launcher").and_then(ReleaseVersion::parse);
+        config.skipped_renderer = text("skip_renderer").and_then(Version::parse);
     }
     Ok((config, warnings))
 }

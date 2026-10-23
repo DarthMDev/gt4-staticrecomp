@@ -3,6 +3,7 @@
 ;   makensis /DVERSION=1.2.1 /DLAUNCHER_EXE=<path>\GT4Recomp.exe /DGAME_DIR=<path>\game ^
 ;            /DSDL3_DLL=<path>\SDL3.dll /DWEBVIEW2_BOOTSTRAPPER=<path>\MicrosoftEdgeWebview2Setup.exe ^
 ;            /DOUTFILE=<path>\GT4Recomp-Setup-1.2.1.exe <path>\installer\gt4recomp.nsi
+; A test build adds /DLABEL=rc5 (output GT4Recomp-Setup-1.3.0-rc5.exe; VERSION stays numeric).
 ; The default output name GT4Recomp-Setup-<VERSION>.exe is the asset name the launcher's updater looks for
 ; (launcher\crates\gt4l-core\src\releases.rs, docs/RELEASES.md).
 ; WEBVIEW2_BOOTSTRAPPER is Microsoft's Evergreen bootstrapper (https://go.microsoft.com/fwlink/p/?LinkId=2124703),
@@ -33,6 +34,13 @@
 !ifndef VERSION
   !define VERSION "1.3.0"
 !endif
+; A test build (TASK-109): /DLABEL=rc5 makes the shown version, version.json and the default output name carry -rc5
+; (GT4Recomp-Setup-1.3.0-rc5.exe). VERSION stays numeric; it must match the launcher's Cargo version.
+!ifdef LABEL
+  !define FULL_VERSION "${VERSION}-${LABEL}"
+!else
+  !define FULL_VERSION "${VERSION}"
+!endif
 !ifndef LAUNCHER_EXE
   !error "Define LAUNCHER_EXE=<path to GT4Recomp.exe>"
 !endif
@@ -46,7 +54,7 @@
   !error "Define WEBVIEW2_BOOTSTRAPPER=<path to MicrosoftEdgeWebview2Setup.exe>"
 !endif
 !ifndef OUTFILE
-  !define OUTFILE "GT4Recomp-Setup-${VERSION}.exe"
+  !define OUTFILE "GT4Recomp-Setup-${FULL_VERSION}.exe"
 !endif
 ; The Evergreen WebView2 Runtime's client id (Microsoft, "Distribute your app and the WebView2 Runtime").
 !define WEBVIEW2_CLIENT "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
@@ -68,7 +76,7 @@ InstallDir "$PROGRAMFILES64\${INTERNAL_NAME}"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 ShowInstDetails show
-BrandingText "${APP_NAME} ${VERSION}"
+BrandingText "${APP_NAME} ${FULL_VERSION}"
 
 !include "MUI2.nsh"
 !include "nsDialogs.nsh"
@@ -295,7 +303,7 @@ Function LogSetupResult
   FileOpen $R3 "$INSTDIR\data\logs\setup.log" a
   ${IfNot} ${Errors}
     FileSeek $R3 0 END
-    FileWrite $R3 "setup ${VERSION}: mode $R4, update flag $UpdateRun, result: $SetupResult, timings ms:$SetupTimings$\r$\n"
+    FileWrite $R3 "setup ${FULL_VERSION}: mode $R4, update flag $UpdateRun, result: $SetupResult, timings ms:$SetupTimings$\r$\n"
     StrCpy $SetupTimings ""
     FileClose $R3
   ${EndIf}
@@ -653,7 +661,7 @@ Function LogTimings
   FileOpen $R3 "$INSTDIR\data\logs\setup.log" a
   ${IfNot} ${Errors}
     FileSeek $R3 0 END
-    FileWrite $R3 "setup ${VERSION}: after the launcher start, timings ms:$SetupTimings$\r$\n"
+    FileWrite $R3 "setup ${FULL_VERSION}: after the launcher start, timings ms:$SetupTimings$\r$\n"
     FileClose $R3
   ${EndIf}
 FunctionEnd
@@ -767,7 +775,7 @@ Section "Install" SecInstall
   ; version.json (docs/RELEASES.md): the installed GT4Recomp version and the settings schema. The launcher cannot write
   ; this program folder, so it keeps its own copy (with the gt4-gs version) in the data folder.
   FileOpen $0 "$INSTDIR\version.json" w
-  FileWrite $0 '{"schema": 1, "gt4recomp": "${VERSION}", "gt4gs": null, "settings_schema": 1}$\r$\n'
+  FileWrite $0 '{"schema": 1, "gt4recomp": "${FULL_VERSION}", "gt4gs": null, "settings_schema": 1}$\r$\n'
   FileClose $0
 
   !insertmacro TimingMark "files"
@@ -807,7 +815,7 @@ Section "Install" SecInstall
 
   WriteRegStr HKLM "${APP_KEY}" "InstallDir" "$INSTDIR"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayName" "${APP_NAME}"
-  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
+  WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayVersion" "${FULL_VERSION}"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "Publisher" "GT4Recomp contributors"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "DisplayIcon" "$INSTDIR\GT4Recomp.exe"
   WriteRegStr HKLM "${UNINSTALL_KEY}" "InstallLocation" "$INSTDIR"

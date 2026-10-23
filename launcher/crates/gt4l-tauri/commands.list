@@ -43,6 +43,8 @@ games_list
 select_game
 games_remove
 check_updates
+list_launcher_versions
+install_launcher_version
 apply_update
 skip_update
 confirm_close

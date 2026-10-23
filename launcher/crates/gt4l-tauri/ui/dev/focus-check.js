@@ -793,6 +793,190 @@
       (ctl ? ctl.textContent : "no choice") + " table " + (languageRow && languageRow.current) + " setting " + GT4.i18n.setting());
   }
 
+  // ---------- Update channel and version picker (TASK-109), in the page's language ----------
+  function versionOptionTags() {
+    return Array.prototype.map.call(document.querySelectorAll(".modal .option-list .option"), function (button) {
+      return button.getAttribute("data-tag");
+    });
+  }
+
+  function topModalTitle() {
+    var modals = document.querySelectorAll(".modal");
+    var top = modals[modals.length - 1];
+    var title = top && top.querySelector("h3");
+    return title ? title.textContent : "";
+  }
+
+  function closeModals() {
+    var dialog = GT4.ui.topDialog();
+    while (dialog) {
+      dialog.close();
+      dialog = GT4.ui.topDialog();
+    }
+  }
+
+  async function openVersionList() {
+    var select = document.querySelector("[data-setting=\"launcher_version\"]");
+    select.focus({ preventScroll: true });
+    select.click();
+    await wait(150);
+    return versionOptionTags();
+  }
+
+  async function chooseVersion(tag) {
+    var button = document.querySelector(".modal .option[data-tag=\"" + tag + "\"]");
+    if (button) {
+      button.click();
+    }
+    await wait(150);
+    return !!button;
+  }
+
+  async function chooseChannel(value) {
+    var select = document.querySelector("[data-setting=\"update_channel\"]");
+    select.focus({ preventScroll: true });
+    select.click();
+    await wait(150);
+    var wanted = T("choice.update_channel." + value);
+    var option = Array.prototype.filter.call(document.querySelectorAll(".modal .option-list .option"), function (button) {
+      return button.textContent.indexOf(wanted) === 0;
+    })[0];
+    if (option) {
+      option.click();
+    }
+    await wait(600);
+    return !!option;
+  }
+
+  async function versionChecks() {
+    var dev = GT4.devVersions;
+    dev.installed = "1.3.0-rc6";
+    dev.installs.length = 0;
+    dev.failList = false;
+    await GT4.backend.call("set_setting", { id: "update_channel", value: "stable" });
+    await routeTo("#/settings/general");
+    await wait(500);
+
+    // The rows: Language, Channel, Version, in that order.
+    var order = Array.prototype.map.call(document.querySelectorAll(".content .row"), function (row) {
+      return row.getAttribute("data-row");
+    });
+    check("General lists Language, Channel and Version in that order", order.join(",") === "language,update_channel,launcher_version", order.join(","));
+    var channelSelect = document.querySelector("[data-setting=\"update_channel\"]");
+    check("the Channel row shows Stable", !!channelSelect && channelSelect.textContent.indexOf(T("choice.update_channel.stable")) === 0,
+      channelSelect ? channelSelect.textContent : "no row");
+    var versionSelect = document.querySelector("[data-setting=\"launcher_version\"]");
+    check("the Version row shows the installed version", !!versionSelect && versionSelect.textContent.indexOf("1.3.0-rc6") === 0,
+      versionSelect ? versionSelect.textContent : "no row");
+    var note = document.querySelector("[data-action=\"versions-note\"]");
+    check("the Version row says older versions are not listed", !!note && note.textContent.indexOf(T("versions.older_note")) >= 0,
+      note ? note.textContent : "no note");
+    check("the Version row has a refresh button", !!document.querySelector("[data-action=\"versions-refresh\"]"), "none");
+
+    var tags = await openVersionList();
+    check("Stable lists the stable releases by version, without a draft or a version below rc5", tags.join(",") === "v1.3.2,v1.3.0", tags.join(","));
+    closeModals();
+
+    // Choosing Beta applies at once and refreshes the list.
+    check("the Beta choice is in the Channel list", await chooseChannel("beta"), "no Beta option");
+    var saved = (await GT4.backend.call("get_settings_table")).rows.filter(function (row) { return row.id === "update_channel"; })[0];
+    check("the channel is saved at once", !!saved && saved.current === "beta", saved ? saved.current : "no row");
+    tags = await openVersionList();
+    check("Beta lists a newer stable on top, then candidates by date, no draft", tags.join(",") === "v1.3.2,v1.3.1-rc2,v1.3.0-rc6,v1.3.0-rc5", tags.join(","));
+    var installedOption = document.querySelector(".modal .option[data-tag=\"v1.3.0-rc6\"]");
+    check("the installed version is marked", !!installedOption && installedOption.textContent.indexOf(T("versions.installed")) >= 0 &&
+      installedOption.getAttribute("aria-selected") === "true", installedOption ? installedOption.textContent : "none");
+
+    // An older version: the strong warning, Cancel first, nothing changes on No.
+    await chooseVersion("v1.3.0-rc5");
+    var warning = document.querySelector(".modal .version-warning");
+    check("an older version opens the downgrade warning", topModalTitle() === T("versions.downgrade_title") && !!warning &&
+      warning.textContent.indexOf(T("versions.downgrade_warning")) >= 0, topModalTitle());
+    var active = document.activeElement;
+    check("the downgrade dialog does not focus the install button", !!active && active.textContent === T("versions.cancel"),
+      active ? active.textContent : "none");
+    var olderButton = Array.prototype.filter.call(document.querySelectorAll(".modal-actions .btn"), function (button) {
+      return button.textContent === T("versions.install_older");
+    })[0];
+    check("the downgrade dialog has an explicit Install older version button and a saves folder button", !!olderButton &&
+      Array.prototype.some.call(document.querySelectorAll(".modal-actions .btn"), function (button) {
+        return button.textContent === T("versions.open_saves_folder");
+      }), "missing");
+    versionSelect = document.querySelector("[data-setting=\"launcher_version\"]");
+    check("the dropdown shows the picked version while the question is open", versionSelect.textContent.indexOf("1.3.0-rc5") === 0, versionSelect.textContent);
+    active.click();
+    await wait(150);
+    versionSelect = document.querySelector("[data-setting=\"launcher_version\"]");
+    check("No puts the dropdown back on the installed version and installs nothing", versionSelect.textContent.indexOf("1.3.0-rc6") === 0 &&
+      dev.installs.length === 0, versionSelect.textContent + " installs " + dev.installs.join(","));
+
+    // A newer version: the plain question, Install is the default; No restores.
+    await openVersionList();
+    await chooseVersion("v1.3.2");
+    check("a newer version opens the plain question", topModalTitle() === T("versions.confirm_title", { version: "1.3.2" }) &&
+      !document.querySelector(".modal .version-warning"), topModalTitle());
+    active = document.activeElement;
+    check("the plain question focuses Install", !!active && active.textContent === T("versions.install"), active ? active.textContent : "none");
+    var cancel = Array.prototype.filter.call(document.querySelectorAll(".modal-actions .btn"), function (button) {
+      return button.textContent === T("versions.cancel");
+    })[0];
+    cancel.click();
+    await wait(150);
+    versionSelect = document.querySelector("[data-setting=\"launcher_version\"]");
+    check("Cancel on the plain question restores the dropdown", versionSelect.textContent.indexOf("1.3.0-rc6") === 0 && dev.installs.length === 0,
+      versionSelect.textContent);
+
+    // Yes calls the update path with the exact tag.
+    await openVersionList();
+    await chooseVersion("v1.3.2");
+    document.activeElement.click();
+    await wait(200);
+    check("Yes calls the install path for that exact version", dev.installs.join(",") === "v1.3.2", dev.installs.join(","));
+    await openVersionList();
+    await chooseVersion("v1.3.0-rc5");
+    olderButton = Array.prototype.filter.call(document.querySelectorAll(".modal-actions .btn"), function (button) {
+      return button.textContent === T("versions.install_older");
+    })[0];
+    olderButton.click();
+    await wait(200);
+    check("Install older version calls the same path", dev.installs.join(",") === "v1.3.2,v1.3.0-rc5", dev.installs.join(","));
+    closeModals();
+
+    // Keyboard: Enter on the focused dropdown opens the list.
+    versionSelect = document.querySelector("[data-setting=\"launcher_version\"]");
+    versionSelect.focus({ preventScroll: true });
+    versionSelect.click();
+    await wait(150);
+    check("the version list opens from the keyboard focus and holds the focus", !!document.querySelector(".modal .option-list") &&
+      document.activeElement.classList.contains("option"), "none");
+    closeModals();
+
+    // Offline or a GitHub error: a plain message, the current version stays.
+    dev.failList = true;
+    document.querySelector("[data-action=\"versions-refresh\"]").click();
+    await wait(400);
+    versionSelect = document.querySelector("[data-setting=\"launcher_version\"]");
+    note = document.querySelector("[data-action=\"versions-note\"]");
+    check("a failed list read shows a plain message and keeps the current version", versionSelect.textContent.indexOf("1.3.0") === 0 &&
+      !!note && note.classList.contains("is-warning") && note.textContent.length > 0, (versionSelect.textContent) + " / " + (note ? note.textContent : "none"));
+    dev.failList = false;
+
+    // Stable while a newer candidate runs: nothing to list above it, said plainly.
+    await GT4.backend.call("set_setting", { id: "update_channel", value: "stable" });
+    dev.installed = "1.3.3-rc1";
+    await routeTo("#/home");
+    await routeTo("#/settings/general");
+    await wait(500);
+    note = document.querySelector("[data-action=\"versions-note\"]");
+    var expected = T("versions.nothing_newer", { channel: T("choice.update_channel.stable") });
+    check("a newer build than any Stable release says updates resume later", !!note && note.textContent.indexOf(expected) >= 0,
+      note ? note.textContent : "no note");
+
+    dev.installed = "1.3.0-rc6";
+    dev.installs.length = 0;
+    await GT4.backend.call("set_setting", { id: "update_channel", value: "stable" });
+  }
+
   async function languageChecks() {
     await localeChecks();
     await languageSwitchChecks();
@@ -827,6 +1011,7 @@
       await advancedSectionChecks();
       await controlsChecks();
       await gamesChecks();
+      await versionChecks();
       await languageChecks();
     } catch (err) {
       check("the checks ran to the end", false, String(err && err.message ? err.message : err));
