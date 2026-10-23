@@ -65,6 +65,21 @@ def write_ico(path: Path, emblem: Image.Image, background, badge: bool) -> None:
     images[-1].save(path, format="ICO", sizes=[(size, size) for size in ICON_SIZES], append_images=images[:-1])
 
 
+def write_launcher_ico(path: Path, logo: Image.Image) -> None:
+    """The launcher icon (owner, 2026-10-23, release 1.3.0): the whole GT emblem alone on a transparent background, no
+    tile and no play badge. The emblem is the logo's drawn area above the wordmark and left of the "4"."""
+    upper = logo.crop((0, 0, 850, 425))
+    emblem = upper.crop(upper.getchannel("A").getbbox())
+    images = []
+    for size in ICON_SIZES:
+        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        mark = emblem.copy()
+        mark.thumbnail((max(1, round(size * 0.96)),) * 2, Image.LANCZOS)
+        canvas.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
+        images.append(canvas)
+    images[-1].save(path, format="ICO", sizes=[(size, size) for size in ICON_SIZES], append_images=images[:-1])
+
+
 def main() -> int:
     if not (SOURCE / "gt4-logo.svg").exists():
         print("missing launcher/assets/brand/source/gt4-logo.svg", file=sys.stderr)
@@ -75,7 +90,7 @@ def main() -> int:
     emblem.save(BRAND / "emblem-gt.png", optimize=True)
     Image.open(SOURCE / "cover-front.jpeg").convert("RGB").save(BRAND / "cover-front.png", optimize=True)
     write_ico(BRAND / "game.ico", emblem, INK, badge=False)
-    write_ico(BRAND / "launcher.ico", emblem, CARBON, badge=True)
+    write_launcher_ico(BRAND / "launcher.ico", logo)
 
     today = datetime.date.today().isoformat()
     lines = [
@@ -96,7 +111,7 @@ def main() -> int:
         ("emblem-gt.png", "GT emblem cropped from logo-gt4.png", None, "Derived."),
         ("cover-front.png", "Converted to PNG (RGB) from source/cover-front.jpeg", None, "Derived."),
         ("game.ico", "Game executable icon: emblem on dark tile, 10 sizes", None, "Derived (tools/make_brand.py)."),
-        ("launcher.ico", "Launcher icon: emblem on carbon with play badge, 10 sizes", None, "Derived."),
+        ("launcher.ico", "Launcher icon: the whole GT emblem on a transparent background, 10 sizes", None, "Derived."),
     ]
     for relative, description, url, licence in entries:
         path = BRAND / relative
