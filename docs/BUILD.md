@@ -2685,5 +2685,37 @@ Run notes:
   `8000:start` (main menu) → `9200:cross` (Arcade), `10000:cross` (Single Race), `11000/11200:down`, `11400:cross`
   (City Courses), `12200:cross` (track), `13000:cross` (Normal), `14400:cross` (Ford), carousel `right` ×5,
   `16400:cross` (car), `17200/18000:cross`, then hold `cross` to drive.
+  A night race at C.S. Route 5: `10600:down` (City Courses), `10800:cross`, `right` ×9 (11200…12800), `13000:cross`
+  (track), `13800:cross` (Normal), `14400:cross`, `15000:cross`, `right` ×5 (15600…16400), `17000/17800/18600:cross`,
+  `19400:cross:2600` (accelerate).
+
+## Spec II S7c - the shipping renderer (TASK-100)
+
+The Spec II target on the external PCSX2 GS process (`GT4_RENDERER=pcsx2`), which is the shipping renderer until
+CoreGS 2.0. Same launch path as the v2.00 pcsx2 mode, now with target overrides in
+`scripts/frame_cost_headless.py` (defaults are the v2.00 gate values):
+
+```
+private/tooling-venv/Scripts/python.exe scripts/frame_cost_headless.py ^
+  --assets-root <assets> --build <spec2 build> --exe gt4vulkan-spec2.exe --scene menus --frames 21000 ^
+  --elf <assets>/private/slice272-spec2-elf/SCUS_974.36 --iso "<Spec II ISO>" ^
+  --press 600:start:30 ... --keep-dumps
+```
+
+- `--exe` picks `gt4vulkan-spec2.exe`; `--elf`/`--iso` replace the v2.00 inputs; `--press` replaces the scene schedule
+  (repeatable, `FRAME:BUTTON:FRAMES`); `--gs-exe`/`--gs-sha256` choose the GS process and forward
+  `GT4_GS_PROCESS_SHA256`; `--textures <dir>` writes `[Folders] Textures` **and**
+  `[EmuCore/GS] LoadTextureReplacements = true` (PCSX2's loader switch defaults to off, the launcher always writes
+  both) and `--scale` is the gt4-gs multiplier.
+- Frame dumps come from the GS process (`DumpEvery`, `gs-frames/live_frameNNNNN.png`); the game process writes the
+  conditions, including `gs_exe_sha256` and `textures`.
+- The repo's pinned GS package is `private/slice203-gt4gs-release-pkg` (gt4-gs 1.0.1). Texture packs need gt4-gs
+  1.2.1 or later, so the texture check uses the launcher's installed 1.2.1 (`<install>\data\gs\1.2.1\gt4-gs.exe`) and
+  records its SHA-256; a release that ships packs must pin 1.2.1+.
+- The GT4 display crop is a fixed constant in gt4-gs (`GT4_DISPLAY_CROP = {0,0,1,2}`, `pcsx2-gt4gs/Main.cpp`; the
+  `[EmuCore/GS] Crop*` keys are refused) and applies to every live stream; the GS stderr logs
+  `gt4-gs: display crop left 0 top 0 right 1 bottom 2 (native pixels)`. The game announces `SCUS-97328` in the
+  handshake even for Spec II (`native/gs_stream/gs_stream_client.cpp`, `kGameSerial`), so gt4-gs selects the GT4
+  GameDB entry; gt4-gs has no SCUS-97436 entry (recorded for S8/S9).
 
 

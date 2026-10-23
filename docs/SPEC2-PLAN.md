@@ -90,9 +90,21 @@ Goal: `SCUS_974.36` (derived) through the donor translator into its own pinned E
 - S7b: boot Spec II headless; hunt every "no translated code" halt (coverage runs, ledger), then menus, then a race.
   Frame dumps reviewed by eye; no window launched by agents.
 
-### S8 — Re-target the host hooks for Spec II (after S7)
+### S7c — Spec II on GSdx (after S7b; owner 2026-10-23)
+Goal: the Spec II target on the **shipping renderer** — the external PCSX2 GS process (`gt4-gs.exe`,
+`GT4_RENDERER=pcsx2`), not the built-in donor renderer used for debugging. Spec II ships before CoreGS 2.0 on GSdx,
+with upscaling and texture packs.
+- Run `gt4vulkan-spec2.exe` headless through the same path as the v2.00 pcsx2 mode (`scripts/frame_cost_headless.py
+  --renderer pcsx2`, with `GT4_GS_PROCESS`, `GT4_GS_PROCESS_SHA256` and `GT4_GS_CONFIG`; frame dumps come from the GS
+  process, `DumpEvery`).
+- Checks: boot, menus and an arcade race; the GT4 crop (2 rows at the bottom, 1 column at the right) compared with
+  v2.00; the black start; GS readbacks (flares, a night race if reachable); stream health (no protocol errors or
+  back-pressure stalls); 1x and 3x upscale; a GT4 texture pack (`[Folders] Textures`, recursive in gt4-gs 1.2.1).
+- Do not change the gt4-gs fork. If a gt4-gs behaviour is keyed to v2.00, report it.
+
+### S8 — Re-target the host hooks for Spec II (after S7c)
 - Find the Spec II equivalents of the 16:9 hold, 480p race display, aspect/HUD hooks and the license demo guard, and
-  fill the S3 table for the target. Each hook with its fixture and a headless check.
+  fill the S3 table for the target. Each hook with its fixture and a headless check on GSdx.
 
 ### S9 — Product (after S7, before release 1.4.0)
 - Launcher: `gt4l-disc` accepts SCUS-97436 by its pinned identity (today `Unsupported::SpecII`), the prepared layout
@@ -249,6 +261,48 @@ Candidates this round (not release-pinned; the pin set is a release decision): S
 Open: the race ran with a scripted accelerator press (no driving test); the UI/HUD are the 4:3 layout until S8
 retargets the hooks; S6's "offline play without hangs" is now met on the boot/race path but not yet swept across
 menus (GT mode needs game data, which the seed card does not have).
+
+### S7c — Spec II on GSdx: PASS (2026-10-23)
+
+Runs (donor: none; all with `GT4_RENDERER=pcsx2` through `scripts/frame_cost_headless.py`, Spec II derived ELF
+`36f60b1a…` + Spec II ISO, seed card, `--keep-dumps`; run directories `O:\gt4recomp-scratch\spec2-s7c-*`):
+
+| Run | GS process | Frames | Result |
+|---|---|---|---|
+| `spec2-s7c-menus-1x` | pinned `slice203-gt4gs-release-pkg` (1.0.1, `bda98d49…`) | 4,200 | 41 dumps 640x480, 2,585,149 records; language/menus; 0 readbacks |
+| `spec2-s7c-race-1x` | pinned 1.0.1 | 21,000 | 37,495,084 records (46.9 GB), arcade race at Costa di Amalfi; 12 readbacks served (0 zero-filled) |
+| `spec2-s7c-night-1x` | pinned 1.0.1 | 22,000 | C.S. Route 5 (night, Clubman): 2,928 readbacks served, mean 4.6 ms, max 483 ms; race HUD at position 6 |
+| `spec2-s7c-menus-3x` | pinned 1.0.1 | 4,200 | dumps 1920x1440, same record count, clean |
+| `spec2-s7c-race-121` / `spec2-s7c-v200-race-121` | installed gt4-gs 1.2.1 (`887f5bf9…`) | 21,000 / 16,000 | Spec II Costa di Amalfi race vs v2.00 day race on the shipping version: identical frame geometry |
+| `spec2-s7c-tex-control` / `-tex-pack2` | installed gt4-gs 1.2.1 (`887f5bf9…`) | 4,200 each | owner's `!_HD HUD & UI` pack via `[Folders] Textures` + `LoadTextureReplacements`: log shows the pack folder, SCEA splash 13,374 changed pixels, language screen ~257,000 |
+
+Checks:
+
+- **Boot, menus, race** [Confirmed]: GS process posts READY (`PCSX2 GS Vulkan x1`, protocol 1.2), exits 0; the boot
+  splash ("Sony Computer Entertainment America Presents" on black), language menu, main menu, Arcade Mode, track and
+  car selection, and the race all render through gt4-gs. **Black start** is the SCEA splash on black (frame 100).
+- **GT4 crop** [Confirmed]: the crop is a **fixed constant in gt4-gs** (`GT4_DISPLAY_CROP = {0,0,1,2}`,
+  `pcsx2-gt4gs/Main.cpp`; the `[EmuCore/GS] Crop*` keys are refused), applied to every live stream regardless of the
+  game, and both runs log `gt4-gs: display crop left 0 top 0 right 1 bottom 2 (native pixels)`. Measured at 1x:
+  1.2.1 crops and scales (content to row 479 of 480, rightmost column duplicating its neighbour in flat areas),
+  identically for v2.00 and Spec II (`live_frame18500` vs v2.00 `live_frame12500`); the pinned 1.0.1 leaves 2 black
+  rows (its bottom crop was 1 row, changed in gt4-gs 1.2.0). **Reported for S8/S9:** the game announces the v2.00
+  serial **SCUS-97328** (`native/gs_stream/gs_stream_client.cpp`, `kGameSerial`) even for Spec II, so gt4-gs selects
+  the GT4 GameDB entry; gt4-gs has no SCUS-97436 entry (only a memory-card filter). The crop itself does not depend on
+  the serial.
+- **GS readbacks** [Confirmed]: 12 in the day race, 2,928 in the night race (tunnel/lights), 0 zero-filled; readback
+  waits are reported by the game (`readback 152 ms total` day) and the GS buckets show one 483 ms outlier at night.
+  No protocol or stream errors; no back-pressure stalls (space waits 0, frames-in-flight waits only).
+- **1x and 3x** [Confirmed]: 640x480 and 1920x1440 dumps, same record count, clean text.
+- **Texture pack** [Confirmed with the owner's pack]: needs gt4-gs ≥ 1.2.1 and the launcher's two keys
+  (`[Folders] Textures`, `[EmuCore/GS] LoadTextureReplacements`); the repo's pinned package is 1.0.1, so the texture
+  check used the installed 1.2.1 and recorded its SHA-256. Without a pack the same 1.2.1 run is deterministic against
+  itself; only pack-replaced art changes (the pack's bootup art also shows the "SECRET MENU" cheat sheet).
+- Harness: `scripts/frame_cost_headless.py` gained `--exe`, `--elf`, `--iso`, `--press`, `--textures`, `--gs-sha256`
+  (defaults unchanged, so the v2.00 release gates keep their behaviour); tests in `test_frame_cost.py`.
+
+Open: the GT4 serial constant decision (above); the pinned 1.0.1 GS package cannot load texture packs, so a release
+that ships packs must pin 1.2.1+ (launcher already requires 1.2.1).
 
 ### S5 — VU0 and VU1: mapping done (2026-10-22)
 

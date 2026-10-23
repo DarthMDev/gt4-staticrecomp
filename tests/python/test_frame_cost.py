@@ -58,6 +58,36 @@ class GsIniTests(unittest.TestCase):
         # gt4-gs treats DumpEvery = 0 as "every frame"; the harness never writes it.
         self.assertNotIn('DumpEvery = 0', text)
 
+    def test_texture_key_is_added_only_when_a_pack_is_named(self):
+        text = self.render()
+        self.assertNotIn('Textures =', text)
+        textured = harness.with_textures(text, 'C:/pack')
+        self.assertIn('[Folders]\nTextures = C:/pack\n', textured)
+        self.assertEqual(textured.count('[Folders]'), 1)
+        # PCSX2's custom-texture loader switch defaults to off; the launcher always writes it with a pack.
+        self.assertIn('[EmuCore/GS]\nLoadTextureReplacements = true\n', textured)
+        self.assertEqual(textured.count('[EmuCore/GS]'), 1)
+        with self.assertRaises(ValueError):
+            harness.with_textures('no folders section', 'C:/pack')
+
+
+class GameArgumentsTests(unittest.TestCase):
+    def test_spec2_overrides_reach_the_command_line(self):
+        arguments = harness.game_arguments('gt4vulkan-spec2.exe', 'run/SCUS_973.28', 'spec2.iso', 'run/card.ps2',
+                                           4200, ['600:start:30'])
+        self.assertEqual(arguments[0], 'gt4vulkan-spec2.exe')
+        self.assertIn('spec2.iso', arguments)
+        self.assertEqual(arguments[arguments.index('--frames') + 1], '4200')
+        self.assertIn('600:start:30', arguments)
+        # pcsx2 mode never passes the donor dump switches (the GS process dumps with DumpEvery).
+        self.assertNotIn('--frames-dir', arguments)
+
+    def test_donor_mode_keeps_the_frame_dump_switches(self):
+        arguments = harness.game_arguments('gt4vulkan.exe', 'run/SCUS_973.28', 'day.iso', 'run/card.ps2',
+                                           100, [], donor_frames_dir='run/frames', frame_every=50)
+        self.assertIn('--frames-dir', arguments)
+        self.assertEqual(arguments[arguments.index('--frame-every') + 1], '50')
+
 
 class RuntimePinTests(unittest.TestCase):
     def make_capsule(self, root, name='slice900-test-runtime'):
