@@ -628,8 +628,9 @@ locale parity, placeholder and index checks), nav-test 150 of 150, `cargo test -
 Settings > General and Settings > Graphics in pt-BR at 1440 x 860: `O:\gt4recomp-scratch\slice279-shots`. Not translated yet:
 the PCSX2 GS rows that the table does not list in the UI keys (they show their English text), the XInput names in the
 controller chips, the key names, the Release notes text of 1.3.0 in the sample (dev mock only), and the library's
-`Active save` slot name (a value the code compares). Open: owner test on a real window (the What's new card, the General
-row, the switch) and the review of the pt-BR wording.
+`Active save` slot name (a value the code compares). Owner approved the mock in pt-BR (2026-10-23; main-agent review:
+cargo 450 passed, focus-check en-US 151/151 and pt-BR 158/158, nav-test 150/150). Open: the owner test on a real
+window with the 1.3.0 candidate.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
