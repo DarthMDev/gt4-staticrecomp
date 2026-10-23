@@ -556,8 +556,8 @@
     // The 1.3.0 intro (js/intro.js): it covers the screen, a key skips it without reaching the page, and it shows once
     // per version.
     GT4.intro.play();
-    check("the intro covers the screen with SPEC II", !!document.querySelector(".intro") &&
-      document.querySelector(".intro-spec").textContent === "SPEC II" && GT4.intro.isPlaying(), "");
+    check("the intro covers the screen with spec-II", !!document.querySelector(".intro") &&
+      document.querySelector(".intro-spec").textContent === "spec-II" && GT4.intro.isPlaying(), "");
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await wait(800);
     check("a key skips the intro and does not press Play", !GT4.intro.isPlaying() && !document.querySelector(".intro") &&

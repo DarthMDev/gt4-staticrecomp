@@ -562,7 +562,9 @@ pub fn licenses_text() -> &'static str {
     "GT4Recomp is MIT licensed.\n\n\
      The launcher interface is built with Tauri 2 (MIT or Apache-2.0) and runs in Microsoft Edge WebView2, \
      the Windows system web view (Microsoft WebView2 terms).\n\n\
-     Typefaces: Roboto and Roboto Condensed (Apache-2.0), bundled in the launcher.\n\n\
+     Typefaces: Roboto and Roboto Condensed (Apache-2.0), and Michroma (SIL Open Font License 1.1, \
+     Copyright 2011 The Michroma Project Authors), bundled in the launcher.\n\n\
+     The Ko-fi cup on the home screen is Ko-fi's brand asset, used to link to the project's Ko-fi page.\n\n\
      GSdx is the PCSX2 GS renderer of the PCSX2 project (https://pcsx2.net), licensed GPL-3.0-or-later. It is the \
      gt4-gs.exe program, downloaded only when it is selected, and it runs in its own process; it is not part of \
      GT4Recomp's MIT code. Its source and licence are in the gt4-gs release.\n\n\

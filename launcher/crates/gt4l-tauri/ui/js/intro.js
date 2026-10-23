@@ -1,6 +1,7 @@
 /*
  * The 1.3.0 intro (owner, 2026-10-23): a short animation, about 7 s, the first time the launcher opens on this version,
- * to say that GT4Recomp now runs Gran Turismo 4 Spec II. Light streaks, the GT4 logo, "SPEC II" landing with a red bar,
+ * to say that GT4Recomp now runs Gran Turismo 4 Spec II. Light streaks, the GT4 logo, "spec-II" landing with a red bar
+ * (lower case in a wide geometric face, as on the community Spec II cover: Michroma, SIL OFL, assets/Michroma-Regular.ttf),
  * one line of text, then the launcher. Any key, click or pad button skips it. Sound and music are made live with the
  * Web Audio API (no audio files, nothing third-party). Reduced motion keeps a plain fade and no sound.
  * Shown once per version: the version is remembered in localStorage (`gt4recomp.intro.seen`). The animation is pure
@@ -208,8 +209,8 @@
     for (var i = 1; i <= 7; i++) {
       streaks.push(h("span", { class: "intro-streak intro-streak-" + i }));
     }
-    var letters = "SPEC II".split("").map(function (letter, index) {
-      return h("span", { class: "intro-letter intro-letter-" + (index + 1) + (letter === " " ? " is-space" : ""), text: letter });
+    var letters = "spec-II".split("").map(function (letter, index) {
+      return h("span", { class: "intro-letter intro-letter-" + (index + 1), text: letter });
     });
     var overlay = h("div", { class: "intro" + (reduced ? " is-reduced" : ""), role: "dialog", "aria-label": "Gran Turismo 4 Spec II is now supported" }, [
       h("div", { class: "intro-streaks", "aria-hidden": "true" }, streaks),
