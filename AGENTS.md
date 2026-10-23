@@ -170,6 +170,10 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
     - Give a measured number whenever there is one (for example "about 15% less processor work per frame"), taken
       from a real measurement and never invented.
     - About 5-10 bullets at most.
+    - **Two languages** (owner, 2026-10-23): the en-US note above, plus the same note in Brazilian Portuguese in
+      `docs/release-notes/launcher/pt-BR/<version>.md`. Headings there: Novidades, Correções, Desempenho, Bom saber,
+      Agradecimentos. The launcher shows the note in its interface language and falls back to en-US when the pt-BR
+      file is missing; write both for every release.
 - **Release steps:**
   - Bump the version in `launcher/Cargo.toml`, `Cargo.lock` (workspace crates only), `tauri.conf.json` and the
     installer default.
