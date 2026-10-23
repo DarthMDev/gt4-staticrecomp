@@ -214,7 +214,7 @@ fn main() {
             commands::reset_all_bindings,
             commands::about_info,
             commands::release_notes,
-            commands::open_releases_page,
+            commands::open_link,
             commands::open_log_folder,
             commands::open_game_files_folder,
             commands::open_player_folder,

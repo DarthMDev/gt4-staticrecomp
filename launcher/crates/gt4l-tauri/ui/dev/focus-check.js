@@ -549,6 +549,12 @@
     check("the notes title line is not repeated and raw HTML stays text", !notes.querySelector(".md-h1") &&
       !notes.querySelector(".home-notes-body b") && /<b>raw HTML<\/b>/.test(notes.textContent), "");
     check("the notes card has no footer link", !notes.querySelector(".home-notes-more"), "");
+    var support = document.querySelector(".support");
+    check("Support the project with the Ko-fi cup sits on the home screen", !!support && !!support.querySelector(".support-cup") &&
+      /Support the project/.test(support.textContent), "");
+    var credit = document.querySelector(".home-version");
+    check("the version line credits Moesuito as a link", /GT4Recomp .* - Made with passion, by Moesuito$/.test(credit.textContent) &&
+      !!credit.querySelector(".home-author"), credit.textContent);
     var older = notes.querySelectorAll(".notes-arrow")[0];
     var newer = notes.querySelectorAll(".notes-arrow")[1];
     var shownVersion = function () { return document.querySelector(".home-notes-version").textContent; };

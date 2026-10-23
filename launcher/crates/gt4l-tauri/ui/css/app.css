@@ -233,6 +233,27 @@ body.is-home.input-keys #hints { display: none; }
 }
 .gear:hover, .gear:focus-visible { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.25); }
 .gear svg { display: block; }
+/* Support the project (owner, 2026-10-23): top right, in line with the right edge of the What's new card; the Ko-fi cup
+   (assets/kofi-cup.avif, Ko-fi's own brand asset) and a quiet label that lights up on hover or focus. */
+.support {
+  position: absolute; right: 72px; top: 24px; z-index: 3; height: 40px; padding: 0 14px 0 8px;
+  display: flex; align-items: center; gap: 10px; border-radius: 20px;
+  background: rgba(10, 12, 20, 0.35); border: 1px solid rgba(255, 255, 255, 0.16); color: var(--silver);
+  font: 500 11px var(--label); letter-spacing: 0.16em; text-transform: uppercase;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+.support-cup { width: 26px; height: 26px; display: block; transition: transform 200ms ease; }
+.support:hover, .support:focus-visible {
+  color: var(--white); background: rgba(10, 12, 20, 0.6); border-color: rgba(255, 255, 255, 0.45);
+}
+.support:hover .support-cup, .support:focus-visible .support-cup { transform: rotate(-8deg) scale(1.08); }
+/* The version line's credit: Moesuito in bold, a link to the YouTube channel. */
+.home-version-credit { color: var(--dim); text-transform: none; letter-spacing: 0.04em; }
+.home-author {
+  background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--white); cursor: pointer;
+  letter-spacing: 0.04em; text-transform: none;
+}
+.home-author:hover, .home-author:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 /* Play. Idle: dark translucent glass, thin white border, white label and a light sheen that sweeps
    across about every 3.4 s. Focused (pad or keys) or hovered: solid white, dark label, scale 1.03,
    soft glow. Pressed: quick press-down. Reduced motion removes the sheen (rule at the end of this file). */
@@ -305,7 +326,7 @@ body.is-home.input-keys #hints { display: none; }
    on its own; narrow or short windows hide it (rules at the end of this file). */
 .home-notes {
   /* Always the full height between the margins (owner, 2026-10-23), whatever the release; the text scrolls inside. */
-  position: absolute; right: 72px; top: 72px; bottom: 72px; z-index: 2; width: 380px;
+  position: absolute; right: 72px; top: 84px; bottom: 72px; z-index: 2; width: 380px;
   display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; isolation: isolate;
   /* Dark enough that the text keeps its contrast over a light background picture (owner, 2026-10-23). */
   background: linear-gradient(160deg, rgba(20, 22, 30, 0.72) 0%, rgba(10, 12, 18, 0.80) 100%);

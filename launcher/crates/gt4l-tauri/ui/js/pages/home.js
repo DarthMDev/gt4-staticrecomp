@@ -10,6 +10,9 @@
  * Patch notes (TASK-099): a glass card on the right shows the release notes embedded in the launcher (release_notes:
  * every release up to this version, newest first), rendered by js/markdown.js; arrows in its header step back through
  * the older releases.
+ * Support (owner, 2026-10-23): "Support the project" with the Ko-fi cup at the top right opens Ko-fi; the version line at
+ * the bottom right reads "GT4Recomp <version> - Made with passion, by Moesuito", Moesuito opening the YouTube channel
+ * (open_link with a name; the addresses are fixed in the launcher).
  * Controller: A or Start = Play (or Install), Y = Settings, LB / RB = the other game. Hints show only once a pad is used.
  * Play is glass when idle (no focus): it takes the solid white state only when focused or hovered.
  */
@@ -291,10 +294,24 @@
         return h("img", { class: "bg-slide bg-slide-" + (index + 1), src: src, alt: "" });
       });
       page.appendChild(h("div", { class: "art" }, slides.concat([h("div", { class: "shade" })])));
-      var versionLabel = h("div", { class: "home-version", text: "" });
+      function openLink(name) {
+        call("open_link", { name: name }).catch(function (err) { GT4.ui.toast(GT4.errorText(err), true); });
+      }
+      var versionText = h("span", { text: "GT4Recomp" });
+      var versionLabel = h("div", { class: "home-version" }, [
+        versionText,
+        h("span", { class: "home-version-credit", text: " - Made with passion, by " }),
+        h("button", { class: "home-author", type: "button", title: "YouTube: @Moesuito",
+          on: { click: function () { openLink("youtube"); } } }, "Moesuito")
+      ]);
       page.appendChild(versionLabel);
+      page.appendChild(h("button", { class: "support", type: "button", title: "Support GT4Recomp on Ko-fi",
+        on: { click: function () { openLink("kofi"); } } }, [
+        h("img", { class: "support-cup", src: "assets/kofi-cup.avif", alt: "" }),
+        h("span", { text: "Support the project" })
+      ]));
       call("about_info").then(function (info) {
-        versionLabel.textContent = "GT4Recomp " + (info.version || "");
+        versionText.textContent = "GT4Recomp " + (info.version || "");
       }, function () {});
       // The patch notes card (TASK-099). It scrolls on its own; wide windows only (css/app.css hides it when narrow).
       // Its header arrows step through the release history (owner, 2026-10-23): it opens on the newest notes, the left

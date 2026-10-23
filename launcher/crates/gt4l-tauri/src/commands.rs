@@ -960,9 +960,15 @@ pub struct AboutInfo {
 // Markdown itself and shows no raw HTML; its arrows step through the older notes.
 include!(concat!(env!("OUT_DIR"), "/release_notes.rs"));
 
-/// The public list of every release, opened by the panel's "All release notes" link (a fixed address: the page never
-/// passes a URL).
-pub const RELEASES_PAGE: &str = "https://github.com/moesuito/gt4-staticrecomp/releases";
+/// The links the home screen may open (owner, 2026-10-23), by name: the page never passes an address.
+/// `kofi`: "Support the project" (top right); `youtube`: "Moesuito" in the version line (bottom right).
+pub const PROJECT_LINKS: &[(&str, &str)] =
+    &[("kofi", "https://ko-fi.com/moesuito"), ("youtube", "https://www.youtube.com/@Moesuito")];
+
+/// The address of a named project link, or None for any other name.
+pub fn project_link(name: &str) -> Option<&'static str> {
+    PROJECT_LINKS.iter().find(|(key, _)| *key == name).map(|(_, url)| *url)
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -991,20 +997,34 @@ pub fn release_notes() -> ReleaseNotes {
     }
 }
 
-/// Opens the GitHub releases page in the default browser.
+/// Opens one of the `PROJECT_LINKS` in the default browser. Any other name is refused.
 #[tauri::command]
-pub fn open_releases_page() -> Result<(), String> {
+pub fn open_link(name: String) -> Result<(), String> {
+    let url = project_link(&name).ok_or_else(|| format!("{name} is not a link of this launcher"))?;
     #[cfg(windows)]
     {
         std::process::Command::new("explorer.exe")
-            .arg(RELEASES_PAGE)
+            .arg(url)
             .spawn()
             .map(|_| ())
-            .map_err(|error| format!("could not open {RELEASES_PAGE}: {error}"))
+            .map_err(|error| format!("could not open {url}: {error}"))
     }
     #[cfg(not(windows))]
     {
-        Err(format!("open {RELEASES_PAGE} in a browser"))
+        Err(format!("open {url} in a browser"))
+    }
+}
+
+#[cfg(test)]
+mod project_link_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_named_project_links_open() {
+        assert_eq!(project_link("kofi"), Some("https://ko-fi.com/moesuito"));
+        assert_eq!(project_link("youtube"), Some("https://www.youtube.com/@Moesuito"));
+        assert_eq!(project_link("https://example.com"), None);
+        assert_eq!(project_link(""), None);
     }
 }
 

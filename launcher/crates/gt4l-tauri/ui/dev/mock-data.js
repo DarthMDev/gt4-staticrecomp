@@ -581,6 +581,11 @@
             { version: "1.0.0", markdown: "# GT4Recomp 1.0.0\n\n**The first release: Gran Turismo 4 running natively on your PC.**\n\n## New\n- One-click installer and a launcher that sets the game up from your own disc image.\n- **60 FPS** at full game speed in every scene we tested.\n- Any controller works out of the box (Xbox, DualShock 4, DualSense, Switch Pro), with button remapping.\n- Widescreen 16:9 and progressive 480p races, always on.\n- Your saves and replays are easy to find and back up, and survive a crash.\n\n## Good to know\n- Racing wheels and ultrawide screens are not supported yet.\n- Some license demos and menu backgrounds do not play.\n" }
           ]
         };
+      case "open_link":
+        if (args.name !== "kofi" && args.name !== "youtube") {
+          throw new Error(args.name + " is not a link of this launcher");
+        }
+        return null;
       case "about_info":
         return {
           version: "1.3.0",
