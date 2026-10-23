@@ -553,6 +553,22 @@
     check("HTML written in release notes shows as plain text", !sample.querySelector("b") && !sample.querySelector("img") &&
       /<b>raw HTML<\/b>/.test(sample.textContent), sample.textContent);
     check("the notes card has no footer link", !notes.querySelector(".home-notes-more"), "");
+    // The 1.3.0 intro (js/intro.js): it covers the screen, a key skips it without reaching the page, and it shows once
+    // per version.
+    GT4.intro.play();
+    check("the intro covers the screen with SPEC II", !!document.querySelector(".intro") &&
+      document.querySelector(".intro-spec").textContent === "SPEC II" && GT4.intro.isPlaying(), "");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await wait(800);
+    check("a key skips the intro and does not press Play", !GT4.intro.isPlaying() && !document.querySelector(".intro") &&
+      document.querySelector(".play").textContent === "Play", "");
+    try { localStorage.removeItem("gt4recomp.intro.seen"); } catch (error) { /* storage off */ }
+    var first = GT4.intro.maybePlay("1.3.0");
+    GT4.intro.skip();
+    var second = GT4.intro.maybePlay("1.3.0");
+    var other = GT4.intro.maybePlay("1.2.3");
+    await wait(800);
+    check("the intro plays once for 1.3.0 and never for a version without one", first && !second && !other, [first, second, other].join(" "));
     var support = document.querySelector(".support");
     check("Support the project with the Ko-fi cup sits on the home screen", !!support && !!support.querySelector(".support-cup") &&
       /Support the project/.test(support.textContent), "");

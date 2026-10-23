@@ -313,6 +313,15 @@
       ]);
       call("about_info").then(function (info) {
         versionText.textContent = "GT4Recomp " + (info.version || "");
+        // The 1.3.0 intro, once per version (js/intro.js). The dev mock plays it only with ?intro=1, so the focus checks
+        // are not covered by it.
+        if (GT4.intro) {
+          if (GT4.devIntro) {
+            GT4.intro.play();
+          } else if (!GT4.devMock) {
+            GT4.intro.maybePlay(info.version || "");
+          }
+        }
       }, function () {});
       // The patch notes card (TASK-099). It scrolls on its own; wide windows only (css/app.css hides it when narrow).
       // Its header arrows step through the release history (owner, 2026-10-23): it opens on the newest notes, the left

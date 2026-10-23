@@ -115,6 +115,9 @@
   // Read by pages/home.js: focuses Play on mount. Only the dev harness sets it.
   root.GT4 = root.GT4 || {};
   root.GT4.devFocus = query.get("focus") || "";
+  // ?intro=1 plays the 1.3.0 intro on every load of Home (the real launcher shows it once per version).
+  root.GT4.devIntro = query.get("intro") === "1";
+  root.GT4.devMock = true;
   var maxUpscale = 4;
 
   // Settings rows, the same shape as the Rust table.
