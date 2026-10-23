@@ -316,7 +316,7 @@ body.is-home.input-keys #hints { display: none; }
 .home-notes::before {
   content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background: url("../assets/acrylic-grain.png") repeat, linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 40%);
-  opacity: 0.22;
+  opacity: 0.045;  /* owner, 2026-10-23: about 20% of the first acrylic */
 }
 .home-notes[hidden] { display: none; }
 .home-notes-head {
