@@ -1101,6 +1101,17 @@ struct GpuDrawer::Impl {
       write.pImageInfo = &image;
       gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
     }
+    if (deinterlaceSet) {
+      // IN-381: binding 6 of the scaled deinterlace kernel is the display image it reads the composed frame from.
+      VkDescriptorImageInfo image{VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL};
+      VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+      write.dstSet = deinterlaceSet;
+      write.dstBinding = 6;
+      write.descriptorCount = 1;
+      write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      write.pImageInfo = &image;
+      gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    }
     note_scaled_bytes();
     return true;
   }
