@@ -407,7 +407,6 @@
   "rust.controls.newer_file": "The controls file was written by a newer GT4Recomp and is kept as it is. Update the launcher to change controls.",
   "rust.controls.could_not_save": "The controls file could not be saved: {error}",
   "rust.controls.defaults_restored": "Every control is back to its built-in binding.",
-  "rust.saves.choose_game": "Choose which game these saves belong to.",
   "rust.saves.not_in_library": "That save is not in the library any more.",
   "rust.saves.item_not_in_library": "That item is not in the library any more.",
   "rust.saves.active_slot": "Active save",
@@ -473,7 +472,7 @@
   "rust.saves.card_not_ps2": "This file is not a PS2 memory card.",
   "rust.saves.card_unsupported": "This memory card size is not supported. Cards from 8 to 64 MB work.",
   "rust.saves.card_damaged": "This memory card is damaged ({reason}).",
-  "rust.saves.no_gt4_save": "This card has no Gran Turismo 4 save. It holds {found}.",
+  "rust.saves.no_gt4_save": "This file holds no Gran Turismo save. It holds {found}.",
   "rust.saves.found_nothing": "nothing",
   "rust.saves.found_other_saves": "{count} saves of other games",
   "rust.saves.found_other_items": "{count} other items",
@@ -501,5 +500,7 @@
   "setting.perf_overlay_fps.label": "Overlay: FPS",
   "setting.perf_overlay_fps.help": "Shows the frame rate in the performance overlay.",
   "setting.launcher_gpu.label": "Launcher GPU acceleration",
-  "setting.launcher_gpu.help": "Off keeps the launcher window without GPU acceleration, after it failed to draw in WebView2. On takes effect at the next start of the launcher."
+  "setting.launcher_gpu.help": "Off keeps the launcher window without GPU acceleration, after it failed to draw in WebView2. On takes effect at the next start of the launcher.",
+  "rust.saves.added": "Added {items}.",
+  "rust.saves.went_to_game": "It went to {game}, the game this save belongs to."
 }

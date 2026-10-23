@@ -2,7 +2,8 @@
 //! the Saves and Replays pages can be captured. Enabled by `GT4RECOMP_VISUAL_SEED=1`. The saves are
 //! synthetic test data, not game data.
 
-use gt4saves::card::{DirEntry, Node, GAME_SAVE_NAME, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
+use gt4saves::card::{DirEntry, Node, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
+use gt4l_core::games::GT4;
 use gt4saves::Card;
 
 use crate::saves;
@@ -22,7 +23,7 @@ fn directory(name: &str, children: Vec<Node>) -> Node {
 /// A synthetic game save: a few files whose contents depend on `seed`, so two saves differ.
 fn game_save(seed: u8) -> Node {
     let pattern = |len: usize| (0..len).map(|i| (i as u8).wrapping_mul(7).wrapping_add(seed)).collect();
-    directory(GAME_SAVE_NAME, vec![file("icon.sys", pattern(964)), file("garage", pattern(20_000))])
+    directory(GT4.save_folder, vec![file("icon.sys", pattern(964)), file("garage", pattern(20_000))])
 }
 
 fn replay() -> Node {

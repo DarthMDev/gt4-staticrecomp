@@ -2,8 +2,15 @@
 
 mod common;
 
+use gt4saves::SaveNames;
+#[allow(dead_code)]
+const GT4: SaveNames = SaveNames::new("BASCUS-97328GAMEDATA", "BASCUS-97328");
+#[allow(dead_code)]
+const SPEC2: SaveNames = SaveNames::new("BASCUS-97436GAMEDATA", "BASCUS-97436");
+#[allow(dead_code)]
+const GT4_GAME_SAVE: &str = "BASCUS-97328GAMEDATA";
 use common::*;
-use gt4saves::card::{same_contents, Node, GAME_SAVE_NAME};
+use gt4saves::card::{same_contents, Node};
 use gt4saves::library::{clean_name, LibraryError, NAME_MAX_CHARS};
 use gt4saves::{psu, Card, Library};
 use std::fs;
@@ -26,7 +33,7 @@ fn game_names(bytes: &[u8]) -> Vec<String> {
 
 /// A library whose active save is `seed`'s save, after an import and an activation.
 fn library_with_active(name: &str, seed: u8) -> Library {
-    let library = Library::open(&scratch(name)).unwrap();
+    let library = Library::open(&scratch(name), GT4).unwrap();
     library.import_card_image(&card_of(&[game_save(seed)])).unwrap();
     library.activate_slot("Save 01").unwrap();
     library
@@ -35,7 +42,7 @@ fn library_with_active(name: &str, seed: u8) -> Library {
 #[test]
 fn new_save_parks_the_active_save_and_the_next_card_has_no_game_save() {
     let library = library_with_active("new-save", 1);
-    assert_eq!(library.active_save().unwrap().as_deref(), Some(GAME_SAVE_NAME));
+    assert_eq!(library.active_save().unwrap().as_deref(), Some(GT4_GAME_SAVE));
 
     let parked = library.new_save().unwrap();
     assert_eq!(parked.as_deref(), Some("Save 01"));
@@ -44,7 +51,7 @@ fn new_save_parks_the_active_save_and_the_next_card_has_no_game_save() {
 
     // Play with an empty Active builds a card with the replays only.
     let card = library.build_card(&[]).unwrap();
-    assert!(!game_names(&card).contains(&GAME_SAVE_NAME.to_string()));
+    assert!(!game_names(&card).contains(&GT4_GAME_SAVE.to_string()));
     let library_replay = replay(7);
     let with_replay = Card::build(&[library_replay.clone()]).unwrap().to_image();
     library.import_card_image(&with_replay).unwrap();
@@ -54,7 +61,7 @@ fn new_save_parks_the_active_save_and_the_next_card_has_no_game_save() {
 
 #[test]
 fn new_save_with_no_active_save_parks_nothing() {
-    let library = Library::open(&scratch("new-save-empty")).unwrap();
+    let library = Library::open(&scratch("new-save-empty"), GT4).unwrap();
     assert_eq!(library.new_save().unwrap(), None);
     assert!(library.slots().unwrap().is_empty());
 }
@@ -66,9 +73,9 @@ fn harvest_fills_an_empty_active_save_and_parks_nothing_else() {
     // The game made a new profile and wrote the card with it.
     let written = card_of(&[game_save(7)]);
     let report = library.harvest(&written).unwrap();
-    assert_eq!(report.added, [GAME_SAVE_NAME.to_string()]);
+    assert_eq!(report.added, [GT4_GAME_SAVE.to_string()]);
     assert!(!report.replaced_active, "nothing was replaced: Active was empty");
-    assert_eq!(library.active_save().unwrap().as_deref(), Some(GAME_SAVE_NAME));
+    assert_eq!(library.active_save().unwrap().as_deref(), Some(GT4_GAME_SAVE));
     assert_eq!(library.slots().unwrap(), ["Save 01"], "the parked save is still there");
     // A harvest of a card with no game save changes nothing.
     let empty = card_of(&[]);
@@ -78,7 +85,7 @@ fn harvest_fills_an_empty_active_save_and_parks_nothing_else() {
 
 #[test]
 fn an_import_of_a_card_with_no_gt4_item_names_what_it_found() {
-    let library = Library::open(&scratch("no-gt4")).unwrap();
+    let library = Library::open(&scratch("no-gt4"), GT4).unwrap();
     let other = dir("SLUS-20000GAMEDATA", vec![file("icon.sys", pattern(964, 9))]);
     match library.import_card_image(&card_of(&[other])) {
         Err(LibraryError::NoGtSave { found }) => assert_eq!(found, ["SLUS-20000GAMEDATA"]),
@@ -93,12 +100,12 @@ fn an_import_of_a_card_with_no_gt4_item_names_what_it_found() {
 #[test]
 fn export_writes_the_active_save_as_a_psu_file() {
     let library = library_with_active("export-active", 2);
-    let bytes = library.export_psu(GAME_SAVE_NAME).unwrap();
+    let bytes = library.export_psu(GT4_GAME_SAVE).unwrap();
     let node = psu::read(&bytes).unwrap();
-    assert_eq!(node.name(), GAME_SAVE_NAME);
+    assert_eq!(node.name(), GT4_GAME_SAVE);
     assert!(same_contents(std::slice::from_ref(&node), &[game_save(2)]));
     library.new_save().unwrap();
-    assert!(matches!(library.export_psu(GAME_SAVE_NAME), Err(LibraryError::NotFound(_))));
+    assert!(matches!(library.export_psu(GT4_GAME_SAVE), Err(LibraryError::NotFound(_))));
 }
 
 #[test]
@@ -108,7 +115,7 @@ fn rename_sets_a_clean_name_and_keeps_the_folder_name() {
     let stored = library.rename_save("Save 01", "  My   save: #1  ").unwrap();
     assert_eq!(stored, "My save #1");
     assert_eq!(library.display_name("Save 01").as_deref(), Some("My save #1"));
-    assert!(library.slot_dir("Save 01").join(GAME_SAVE_NAME).is_dir(), "the folder name is unchanged");
+    assert!(library.slot_dir("Save 01").join(GT4_GAME_SAVE).is_dir(), "the folder name is unchanged");
 
     let long = "x".repeat(60);
     let stored = library.rename_save("Save 01", &long).unwrap();
@@ -121,22 +128,22 @@ fn rename_sets_a_clean_name_and_keeps_the_folder_name() {
 #[test]
 fn the_active_save_can_be_renamed() {
     let library = library_with_active("rename-active", 1);
-    library.rename_save(GAME_SAVE_NAME, "Race").unwrap();
-    assert_eq!(library.display_name(GAME_SAVE_NAME).as_deref(), Some("Race"));
+    library.rename_save(GT4_GAME_SAVE, "Race").unwrap();
+    assert_eq!(library.display_name(GT4_GAME_SAVE).as_deref(), Some("Race"));
 }
 
 #[test]
 fn a_name_goes_with_its_save_when_saves_are_swapped() {
     let library = library_with_active("names-swap", 1);
-    library.rename_save(GAME_SAVE_NAME, "Alpha").unwrap();
+    library.rename_save(GT4_GAME_SAVE, "Alpha").unwrap();
     library.new_save().unwrap(); // Alpha parks as Save 01
     assert_eq!(library.display_name("Save 01").as_deref(), Some("Alpha"));
     library.import_card_image(&card_of(&[game_save(5)])).unwrap(); // Save 02, unnamed
     library.rename_save("Save 02", "Beta").unwrap();
     library.activate_slot("Save 02").unwrap(); // Beta becomes active; the empty Active had no name
-    assert_eq!(library.display_name(GAME_SAVE_NAME).as_deref(), Some("Beta"));
+    assert_eq!(library.display_name(GT4_GAME_SAVE).as_deref(), Some("Beta"));
     library.activate_slot("Save 01").unwrap(); // Alpha back; Beta parks as Save 02 with its name
-    assert_eq!(library.display_name(GAME_SAVE_NAME).as_deref(), Some("Alpha"));
+    assert_eq!(library.display_name(GT4_GAME_SAVE).as_deref(), Some("Alpha"));
     assert_eq!(library.display_name("Save 02").as_deref(), Some("Beta"));
 }
 

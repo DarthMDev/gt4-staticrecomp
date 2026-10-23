@@ -407,7 +407,6 @@
   "rust.controls.newer_file": "O arquivo de controles foi gravado por um GT4Recomp mais novo e é mantido como está. Atualize o launcher para mudar os controles.",
   "rust.controls.could_not_save": "Não foi possível salvar o arquivo de controles: {error}",
   "rust.controls.defaults_restored": "Todos os controles voltaram à configuração original.",
-  "rust.saves.choose_game": "Escolha a qual jogo estes saves pertencem.",
   "rust.saves.not_in_library": "Este save não está mais na biblioteca.",
   "rust.saves.item_not_in_library": "Este item não está mais na biblioteca.",
   "rust.saves.active_slot": "Save ativo",
@@ -473,7 +472,7 @@
   "rust.saves.card_not_ps2": "Este arquivo não é um memory card de PS2.",
   "rust.saves.card_unsupported": "Este tamanho de memory card não é aceito. Cartões de 8 a 64 MB funcionam.",
   "rust.saves.card_damaged": "Este memory card está danificado ({reason}).",
-  "rust.saves.no_gt4_save": "Este cartão não tem save de Gran Turismo 4. Ele tem {found}.",
+  "rust.saves.no_gt4_save": "Este arquivo não tem save de Gran Turismo. Ele tem {found}.",
   "rust.saves.found_nothing": "nada",
   "rust.saves.found_other_saves": "{count} saves de outros jogos",
   "rust.saves.found_other_items": "{count} outros itens",
@@ -501,5 +500,7 @@
   "setting.perf_overlay_fps.label": "Sobreposição: FPS",
   "setting.perf_overlay_fps.help": "Mostra a taxa de quadros na sobreposição de desempenho.",
   "setting.launcher_gpu.label": "Aceleração por GPU do launcher",
-  "setting.launcher_gpu.help": "Desligado mantém a janela do launcher sem aceleração por GPU, depois que ela falhou ao desenhar no WebView2. Ligado vale na próxima abertura do launcher."
+  "setting.launcher_gpu.help": "Desligado mantém a janela do launcher sem aceleração por GPU, depois que ela falhou ao desenhar no WebView2. Ligado vale na próxima abertura do launcher.",
+  "rust.saves.added": "Adicionado: {items}.",
+  "rust.saves.went_to_game": "Foi para {game}, o jogo a que este save pertence."
 }

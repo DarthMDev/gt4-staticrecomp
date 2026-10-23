@@ -5,7 +5,9 @@ mod common;
 
 use common::*;
 use gt4saves::card::{same_contents, CardError, Node, MAGIC};
-use gt4saves::{Card, Library};
+use gt4saves::{Card, Library, SaveNames};
+
+const GT4: SaveNames = SaveNames::new("BASCUS-97328GAMEDATA", "BASCUS-97328");
 use std::fs;
 use std::path::PathBuf;
 
@@ -42,7 +44,7 @@ fn a_card_with_saves_of_several_games_lists_each_one() {
         ["BASCUS-97328GAMEDATA", "BASCUS-97328R0001", "SLUS-20000GAMEDATA", "SCUS-97436GAMEDATA"]
     );
     // Import keeps the Gran Turismo 4 items and names the other games' saves as skipped.
-    let library = Library::open(&scratch("several-games")).unwrap();
+    let library = Library::open(&scratch("several-games"), GT4).unwrap();
     let report = library.import_card_image(&image).unwrap();
     assert_eq!(report.added, vec!["Save 01".to_string(), "BASCUS-97328R0001".to_string()]);
     assert_eq!(report.skipped.len(), 2, "{:?}", report.skipped);

@@ -11,7 +11,7 @@ SCUS-97328) and Gran Turismo 4 Spec II 1.10 (SCUS-97436 lineage, TASK-100). This
 | Executables | One per game: `game\gt4vulkan.exe` (v2.00) and `game\gt4vulkan-spec2.exe` (Spec II). The generated code of the two games shares symbol names, so they cannot share one executable (decision 0072). Both ship in every installer and update. |
 | Settings | One shared set for both games: graphics, GSdx options, controls, textures, display. |
 | Per game | The disc copy, the prepared files, the runtime card, the save library and the replays. |
-| Saves | Never shared or converted. Spec II does not accept a v2.00 save and v2.00 does not accept a Spec II save (owner). Spec II writes under the same PS2 folder name as retail, `BASCUS-97328GAMEDATA` (found in both executables), so a shared card would overwrite the other game's save. |
+| Saves | Never shared or converted. Spec II does not accept a v2.00 save and v2.00 does not accept a Spec II save (owner). Each game has its own item names on the card: retail writes `BASCUS-97328GAMEDATA` and replays `BASCUS-97328R` + four digits; Spec II writes `BASCUS-97436GAMEDATA` (confirmed by the owner's log, 2026-10-23) and replays `BASCUS-97436R` + four digits (not verified with a real Spec II replay). Each library only takes its own names, so a Spec II save is never dropped and never reaches the retail library. |
 | Replays | Separate per game. Cross-compatibility is open; test it later. |
 | First install | The player picks an ISO; the launcher recognises the game from it and installs that game. |
 | Selected game | The game installed first is selected at the start; after that, the game played last. |
@@ -139,6 +139,8 @@ Progress note (2026-10-23, slice 278): the portable build (TASK-098) uses this l
 `<exe dir>\data` holds `games\<id>\disc|prepared|runtime`, `gs`, `sessions`, `logs`, `Textures`. A game executable started
 without the launcher (TASK-097) finds `<install>\data\games\<id>` from its own folder (`gt4vulkan.exe` is `gt4`,
 `gt4vulkan-spec2.exe` is `spec2`) and reads `<install>\user\config` (portable) or `%APPDATA%\GT4Recomp\config`.
+
+rc4 (2026-10-23, item 1): the item names are per game (`gt4saves::SaveNames`, from the game table: `save_folder`, `replay_prefix`). Spec II's game data is `BASCUS-97436GAMEDATA`, so its saves were dropped at harvest in rc3; now each library takes only its own items, a mixed card is split by game, and an item no game knows is reported on the Saves page. The Spec II replay prefix `BASCUS-97436` is not verified with a real replay.
 
 Open for the owner: the look of the selector and the placeholder logo line on a real window; the authors' logo file,
 names and permission (the About text has a marked placeholder); the PT-BR variant hash is pinned (owner image) but only the

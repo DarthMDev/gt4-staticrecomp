@@ -2,7 +2,6 @@
 //! Replays, and About. Each command is a thin wrapper over a crate; the rules live in `model`,
 //! `saves` and the `gt4l-*` crates.
 
-use gt4l_core::language::Language;
 use gt4l_core::messages;
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
@@ -19,7 +18,6 @@ use gt4l_core::settings;
 use gt4l_core::{Settings, LAUNCHER_VERSION};
 use gt4l_disc::setup::{self as disc_setup, Installed};
 use gt4l_platform::game;
-use gt4saves::library::Report;
 use serde::Serialize;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, State};
@@ -29,6 +27,7 @@ use crate::model;
 use crate::pad_service;
 use crate::setup;
 use crate::saves::{self, Item};
+use gt4saves::Library;
 use crate::state::{self, lock, AppState, SetupOutcome, Shared};
 use crate::webview_guard;
 
@@ -724,9 +723,9 @@ pub fn replays_list_of(shared: &Shared) -> Result<LibraryView, String> {
     replays_view(&lock(shared))
 }
 
-/// Picks a save file or card image and imports it into the library of `game`. Imports never overwrite. Both games write the
-/// same PS2 folder name and no rule tells their saves apart (`gt4saves::game_of_save`), so the page always asks which game a
-/// file belongs to before it opens the picker, and a call without `game` is refused: nothing is guessed.
+/// Picks a save file or card image and imports it. Each item goes to the library of the game its name belongs to, so the
+/// page's game (`game`, optional) only decides what the status says when the file is of another game (TASK-101 item 1).
+/// Imports never overwrite.
 #[tauri::command]
 pub async fn saves_import(app: AppHandle, game: Option<String>, shared: State<'_, Shared>) -> Result<Option<LibraryView>, String> {
     import_with_picker(app, shared.inner().clone(), Kind::Saves, game).await
@@ -737,12 +736,9 @@ pub async fn replays_import(app: AppHandle, game: Option<String>, shared: State<
     import_with_picker(app, shared.inner().clone(), Kind::Replays, game).await
 }
 
-/// The game an import goes to: the page's answer. A missing or unknown answer is an error, never a guess.
-pub fn import_target(game: Option<&str>, language: Language) -> Result<&'static Game, String> {
-    match game {
-        None => Err(messages::text("saves.choose_game", language).to_string()),
-        Some(id) => games::by_id(id).ok_or_else(|| format!("{id} is not a game of this launcher.")),
-    }
+/// The game the page shows for an import: the page's answer when it names a game of the launcher, else the selected one.
+pub fn page_game(game: Option<&str>, selected: &'static Game) -> &'static Game {
+    game.and_then(games::by_id).unwrap_or(selected)
 }
 
 #[derive(Clone, Copy)]
@@ -753,7 +749,6 @@ pub enum Kind {
 
 async fn import_with_picker(app: AppHandle, shared: Shared, kind: Kind, game: Option<String>) -> Result<Option<LibraryView>, String> {
     let language = state::language_of(&lock(&shared));
-    let target = import_target(game.as_deref(), language)?;
     tauri::async_runtime::spawn_blocking(move || {
         let picked = app
             .dialog()
@@ -765,30 +760,37 @@ async fn import_with_picker(app: AppHandle, shared: Shared, kind: Kind, game: Op
             return Ok(None);
         };
         let path = picked.into_path().map_err(|error| error.to_string())?;
-        import_into_game(&shared, &path, kind, target).map(Some)
+        let page = page_game(game.as_deref(), lock(&shared).selected);
+        import_into_game(&shared, &path, kind, page).map(Some)
     })
     .await
     .map_err(|error| error.to_string())?
 }
 
-/// The import into the library of the game the page shows (tests and the flow audit).
+/// The import into the libraries of every game, for a picked path (tests and the flow audit). The answer is the page's
+/// own list: the game the page shows.
 #[cfg_attr(not(test), allow(dead_code))]
 pub fn import_into(shared: &Shared, path: &Path, kind: Kind) -> Result<LibraryView, String> {
     let selected = lock(shared).selected;
     import_into_game(shared, path, kind, selected)
 }
 
-/// The import behind `saves_import` and `replays_import` for a picked path into the library of `game`. Imports never
-/// overwrite. The answer is the page's own list (the game it shows); the status names the game when it is another one.
-pub fn import_into_game(shared: &Shared, path: &Path, kind: Kind, game: &'static Game) -> Result<LibraryView, String> {
+/// The import behind `saves_import` and `replays_import` for a picked path. Each item goes to its own game's library.
+/// The status names the game of an item when that game is not the page's one.
+pub fn import_into_game(shared: &Shared, path: &Path, kind: Kind, page: &'static Game) -> Result<LibraryView, String> {
     let mut state = lock(shared);
     let language = state::language_of(&state);
     // A panic in the import must never close the launcher (issue #86): it becomes a message, and the log names the file.
     let file_name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
     let size = fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
-    let attempt = panic::catch_unwind(AssertUnwindSafe(|| saves::import_path(state.library_of(game), path, language)));
-    let mut summary = match attempt {
-        Ok(Ok(report)) => summary_of(&report),
+    let libraries: Vec<(&'static Game, &Library)> = games::GAMES.iter().map(|game| (*game, state.library_of(game))).collect();
+    let attempt = panic::catch_unwind(AssertUnwindSafe(|| saves::import_path(&libraries, path, language)));
+    let summary = match attempt {
+        Ok(Ok(outcome)) => {
+            let summary = saves::import_summary(&outcome, page, language);
+            state::log(&state.dirs, &format!("import of {file_name} ({size} bytes): {summary}"));
+            summary
+        }
         Ok(Err(message)) => {
             state::log(&state.dirs, &format!("import of {file_name} ({size} bytes) refused: {message}"));
             message
@@ -798,10 +800,6 @@ pub fn import_into_game(shared: &Shared, path: &Path, kind: Kind, game: &'static
             messages::text("saves.import_crashed", language).to_string()
         }
     };
-    if game != state.selected {
-        summary = format!("{} (in {})", summary, game.display_name);
-    }
-    state::log(&state.dirs, &format!("import into {}: {summary}", game.id));
     match kind {
         Kind::Saves => {
             state.saves_status = summary;
@@ -812,10 +810,6 @@ pub fn import_into_game(shared: &Shared, path: &Path, kind: Kind, game: &'static
             replays_view(&state)
         }
     }
-}
-
-fn summary_of(report: &Report) -> String {
-    saves::import_summary(report)
 }
 
 /// Makes a save the one the next start uses. The save that was active moves to a new slot.

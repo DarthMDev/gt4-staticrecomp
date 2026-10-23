@@ -22,6 +22,11 @@ pub struct Game {
     pub elf_name: &'static str,
     /// The home-screen logo asset (a file under `ui/assets`).
     pub logo_asset: &'static str,
+    /// The game data folder on the memory card: `BASCUS-97328GAMEDATA` (GT4), `BASCUS-97436GAMEDATA` (Spec II).
+    pub save_folder: &'static str,
+    /// The prefix of the game's replays (the serial): `BASCUS-97328` (GT4); `BASCUS-97436` for Spec II, not verified
+    /// with a real Spec II replay yet.
+    pub replay_prefix: &'static str,
 }
 
 /// Gran Turismo 4 v2.00 (USA, SCUS-97328).
@@ -32,6 +37,8 @@ pub const GT4: Game = Game {
     executable: "gt4.exe",
     elf_name: "SCUS_973.28",
     logo_asset: "assets/logo-gt4.png",
+    save_folder: "BASCUS-97328GAMEDATA",
+    replay_prefix: "BASCUS-97328",
 };
 
 /// Gran Turismo 4 Spec II 1.10 (SCUS-97436 lineage). The authors' logo file is not in the launcher yet: the page shows
@@ -43,6 +50,8 @@ pub const SPEC2: Game = Game {
     executable: "gt4-spec2.exe",
     elf_name: "SCUS_974.36",
     logo_asset: "assets/logo-gt4.png",
+    save_folder: "BASCUS-97436GAMEDATA",
+    replay_prefix: "BASCUS-97436",
 };
 
 /// Every game, in display order.
@@ -103,6 +112,8 @@ mod tests {
         assert_eq!((GT4.display_name, SPEC2.display_name), ("Gran Turismo 4", "Gran Turismo 4 Spec II"));
         assert_ne!(GT4.id, SPEC2.id);
         assert_ne!(GT4.executable, SPEC2.executable, "the two games cannot share one executable (decision 0072)");
+        assert_eq!((GT4.save_folder, SPEC2.save_folder), ("BASCUS-97328GAMEDATA", "BASCUS-97436GAMEDATA"));
+        assert_eq!((GT4.replay_prefix, SPEC2.replay_prefix), ("BASCUS-97328", "BASCUS-97436"));
     }
 
     #[test]

@@ -749,25 +749,6 @@ impl Builder {
     }
 }
 
-/// Name of the GT4 game save directory (fixed by the game).
-pub const GAME_SAVE_NAME: &str = "BASCUS-97328GAMEDATA";
-/// Prefix shared by the GT4 save and replay directory names.
-pub const GAME_PREFIX: &str = "BASCUS-97328";
-
-pub fn is_game_save_name(name: &str) -> bool {
-    name == GAME_SAVE_NAME
-}
-
-/// Replay directories: the prefix, a type letter (R full replay, B best lap) and four digits.
-pub fn is_replay_name(name: &str) -> bool {
-    let bytes = name.as_bytes();
-    let letter = GAME_PREFIX.len();
-    name.len() == letter + 5
-        && name.starts_with(GAME_PREFIX)
-        && matches!(bytes[letter], b'R' | b'B')
-        && bytes[letter + 1..].iter().all(u8::is_ascii_digit)
-}
-
 impl DirEntry {
     pub fn set_name(&mut self, name: &str) -> Result<(), CardError> {
         validate_name(name)?;

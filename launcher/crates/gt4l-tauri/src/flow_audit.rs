@@ -105,10 +105,20 @@ fn scratch(name: &str) -> PathBuf {
 
 /// A synthetic memory card with one synthetic save (no game data).
 fn synthetic_card(path: &Path) {
-    use gt4saves::card::{DirEntry, Node, GAME_SAVE_NAME, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
+    use gt4saves::card::{DirEntry, Node, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
+    use gt4l_core::games::GT4;
     let stamp = [0, 39, 50, 7, 12, 10, 0xEA, 0x07];
     let file = Node::file(DirEntry::new("icon.sys", MODE_FILE_DEFAULT, stamp, stamp).unwrap(), vec![3; 964]);
-    let save = Node::dir(DirEntry::new(GAME_SAVE_NAME, MODE_DIR_DEFAULT, stamp, stamp).unwrap(), vec![file]);
+    let save = Node::dir(DirEntry::new(GT4.save_folder, MODE_DIR_DEFAULT, stamp, stamp).unwrap(), vec![file]);
+    fs::write(path, gt4saves::Card::build(&[save]).unwrap().to_image()).unwrap();
+}
+
+/// A synthetic Spec II memory card with one synthetic save (no game data).
+fn synthetic_spec2_card(path: &Path) {
+    use gt4saves::card::{DirEntry, Node, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
+    let stamp = [0, 39, 50, 7, 12, 10, 0xEA, 0x07];
+    let file = Node::file(DirEntry::new("icon.sys", MODE_FILE_DEFAULT, stamp, stamp).unwrap(), vec![5; 964]);
+    let save = Node::dir(DirEntry::new(gt4l_core::games::SPEC2.save_folder, MODE_DIR_DEFAULT, stamp, stamp).unwrap(), vec![file]);
     fs::write(path, gt4saves::Card::build(&[save]).unwrap().to_image()).unwrap();
 }
 
@@ -639,7 +649,7 @@ fn two_games_install_side_by_side_and_never_mix() {
 
     // Saves are apart: an import into Spec II is not in Gran Turismo 4, and the page names the game it shows.
     let card = root.join("card.ps2");
-    synthetic_card(&card);
+    synthetic_spec2_card(&card);
     let view = commands::import_into_game(&second, &card, Kind::Saves, &gt4l_core::games::SPEC2).unwrap();
     assert_eq!(view.game, "spec2");
     assert_eq!(view.items.len(), 1, "{}", view.status);
@@ -648,10 +658,18 @@ fn two_games_install_side_by_side_and_never_mix() {
     assert_eq!((gt4_view.game.as_str(), gt4_view.game_name.as_str()), ("gt4", "Gran Turismo 4"));
     assert!(gt4_view.items.is_empty(), "Gran Turismo 4 has no save from the Spec II import");
     assert!(gt4_view.folder.replace('\\', "/").contains("games/gt4/Saves"), "{}", gt4_view.folder);
-    // An import must say which game: nothing is guessed.
-    assert!(commands::import_target(None, gt4l_core::language::Language::fallback()).is_err());
-    assert_eq!(commands::import_target(Some("spec2"), gt4l_core::language::Language::fallback()).unwrap().id, "spec2");
-    assert!(commands::import_target(Some("gt9"), gt4l_core::language::Language::fallback()).is_err());
+    // An import goes to the game its save belongs to, whatever page is shown; the status says so (TASK-101 item 1).
+    assert_eq!(commands::page_game(None, &gt4l_core::games::GT4).id, "gt4");
+    assert_eq!(commands::page_game(Some("spec2"), &gt4l_core::games::GT4).id, "spec2");
+    assert_eq!(commands::page_game(Some("gt9"), &gt4l_core::games::GT4).id, "gt4");
+    let gt4_card = root.join("gt4-card.ps2");
+    synthetic_card(&gt4_card);
+    commands::select_game_of("spec2".into(), &second).unwrap();
+    let routed = commands::import_into_game(&second, &gt4_card, Kind::Saves, &gt4l_core::games::SPEC2).unwrap();
+    assert_eq!(routed.game, "spec2", "the page keeps showing Spec II");
+    assert!(routed.status.contains("Gran Turismo 4"), "{}", routed.status);
+    commands::select_game_of("gt4".into(), &second).unwrap();
+    assert_eq!(commands::saves_list_of(&second).unwrap().items.len(), 1, "the Gran Turismo 4 save went to its own library");
 
     // Remove deletes the disc copy and the prepared files of one game, never its saves or the other game.
     let after = commands::games_remove_of("spec2".into(), &second).unwrap();

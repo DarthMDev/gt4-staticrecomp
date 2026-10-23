@@ -223,7 +223,7 @@ impl AppState {
         for game in games::GAMES {
             // Only Gran Turismo 4 has a library from before 1.0.0 to take over.
             let old_root = if game.id == GT4.id { pre_1_0_root.as_deref() } else { None };
-            let opened = saves::open(&dirs.for_game(game), &user.for_game(game), old_root)?;
+            let opened = saves::open(&dirs.for_game(game), &user.for_game(game), game, old_root)?;
             for line in &opened.log {
                 log(&dirs, &format!("{}: {line}", game.id));
             }
