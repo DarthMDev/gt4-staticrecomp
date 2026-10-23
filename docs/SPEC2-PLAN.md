@@ -127,4 +127,61 @@ Report: [SPEC2-PATCHES](SPEC2-PATCHES.md). Pins: [spec2-patches](inputs/spec2-pa
   external-return perturbation; no settings or arguments are read.
 - Open points: the `0x006605F4` flag word has no reader in a linear text scan (Unknown); the two 128-byte container
   header blobs are opaque (Unknown); purpose labels marked Hypothesis are documentation only.
-- Next: S3 (started), S5, S6, then S2/S4.
+### S3 — target-aware host hooks: DONE (2026-10-22)
+
+Code: `native/game_target.hpp` (table), `native/game_target_fixture.cpp` and `native/game_target_spec2_fixture.cpp`
+(CTest `native_game_target`), `GT4_TARGET=v200|spec2` in `native/CMakeLists.txt`. The four hook modules
+(`race_widescreen.*`, `race_display.*`, `display_aspect.*`, `license_guard.*`) and the shape observer read their guest
+addresses from the table; a target without an address disables the hook and logs once, and the overlay capsules keep
+their text unchanged (`kCameraCallReturn`/`kRaceDisplayRender` become `0xFFFFFFFF` when absent). BUILD.md has the
+slice recipe and the full list of what changed.
+
+Checks (candidate `gt4vulkan.exe` 97,240,064 bytes, sha256 `ca1eff8d90b6df03…`; release capsules slice262, EE profile
+`aspect`, `GT4_TARGET=v200`, build `O:\gt4recomp-scratch\spec2-s3-build`):
+
+- CTest 42 of 42 in the first build (the final build's 41 non-Python tests also pass; `native_game_target` is new).
+- Python suite with `GT4_NATIVE_BUILD` = the candidate: 653 OK, 42 skipped, **1 known failure**:
+  `test_make_distribution` compares `gt4vulkan.exe` against the release slice268 pin, which any rebuilt executable
+  fails (same size, different hash). A new pin set is a release decision (same situation as slice264).
+- Headless frame identity against `private/slice268-build` (the 1.2.3 release build), 1x gt4-gs, `GT4_GS_STREAM_HASH=1`,
+  same seed cards and schedules:
+
+  | Scene | Dumps | Candidate | slice268 | Stream hash | Candidate | slice268 |
+  |---|---|---|---|---|---|---|
+  | menus | 41 | `463d455c3204cb56` | `463d455c3204cb56` | | `1ccb97c58a6d2945` | `1ccb97c58a6d2945` |
+  | day | 159 | `992f1ac9a6871901` | `992f1ac9a6871901` | | `0c79dcf5208e5e4d` | `0c79dcf5208e5e4d` |
+  | night | 159 | `c57e7d03aaccb3aa` | `c57e7d03aaccb3aa` | | `c091716e3cb40d79` | `c091716e3cb40d79` |
+
+  All six comparisons are equal, on the final code state (the run was repeated after the last two edits).
+- Open: the release pin set for the new executable (release decision); S8 fills the Spec II table.
+
+### S5 — VU0 and VU1: mapping done (2026-10-22)
+
+Tool: `scripts/spec2_vu.py`. Pin: [inputs/spec2-vu.json](inputs/spec2-vu.json). Tests: `VuTests` in
+`tests/python/test_spec2.py`.
+
+- **VU1 carries over, confirmed by content**: the 0x3FF0-byte blob at file `0x59C110` decrypts (v2.00 keystream) to
+  SHA-256 `ae6b6cb3b4406ff3…`, byte-identical to the v2.00 image. The content-addressed VU1 AOT table applies
+  unchanged; nothing to regenerate.
+- **VU0 does not**: the upload is 0x920 bytes at VA `0x731180` (v2.00: 0xA80 at `0x6D3280`), 1,050 differing bytes in
+  the 2,336-byte overlap, and the v2.00 upload is 352 bytes longer. Decision: the v2.00 generated programs cannot match
+  (key plus identity digest, `scripts/vu0_aot_overlay.inc`), so the exact interpreter runs as the counted fallback for
+  the first boot; generate a Spec II table after S7b only if the profile shows VU0 cost.
+- Open: a Spec II VU0 table still needs its VCALLMS entry list from a running boot (S7b).
+
+### S6 — IOP modules: map done, offline acceptance open (2026-10-22)
+
+Pin: [inputs/spec2-iop.json](inputs/spec2-iop.json) (35 files with sizes and hashes). Documentation: the new "Spec II"
+section of [IOP-MAP](IOP-MAP.md). Tests: `IopTests`.
+
+- 6 new module files (`LGAUD`, `PPP`, `PPPOE`, `DNAS_MC`, `DNAS_NET`, `NTG_ISCK`), inherited from the Public Beta
+  lineage; 28 module names appear in the Spec II text against v2.00's 23 loaded modules.
+- Policy: everything the offline path needs stays interpreted; the network group is interpreted with no device model
+  (device open must fail cleanly) and DNAS stays unloaded. Fallback order if a hang appears: per-module instruction
+  counter, HLE stub reporting "no network device", refusal to load.
+- Open: "offline play without hangs" needs S7b.
+
+### S2 — derived ELF (not started)
+### S3 — target-aware host hooks (done, see above)
+### S4 — second-target build (not started)
+### S7 — first boot (not started)

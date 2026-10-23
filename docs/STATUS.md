@@ -12,6 +12,15 @@ written at boot by the injector: 35 word stores (18 text, 17 data), unconditiona
 an EE-RAM image. Next: S3 (target-aware host hooks, v2.00 byte-identical), S5/S6, S2/S4. Report:
 [SPEC2-PATCHES](SPEC2-PATCHES.md). Nothing merged.
 
+S3 is done: `native/game_target.hpp` holds every guest address of the host hooks per target; v2.00 keeps the release
+values, and a target without an address disables the hook (one log line) with the capsule text unchanged. CTest 42/42
+(new `native_game_target`); the Python suite passes except the release-pin distribution test, which any rebuilt
+executable fails. Headless identity against the 1.2.3 build (slice268) is exact in all three scenes, dumps and GS
+stream hashes (menus `463d455c…`/`1ccb97c5…`, day `992f1ac9…`/`0c79dcf5…`, night `c57e7d03…`/`c091716e…`), on the
+final code state. S5: the VU1 blob decrypts to the v2.00 image (`ae6b6cb3…`), so the AOT table carries over; the VU0
+upload differs (0x920 vs 0xA80, 1,050 bytes) and uses the counted interpreter fallback. S6: 35 IOP files mapped with
+per-module policy (6 new, inherited from the beta lineage).
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

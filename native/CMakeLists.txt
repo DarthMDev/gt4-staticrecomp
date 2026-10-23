@@ -10,6 +10,15 @@ set(GT4_ASSETS_ROOT "${GT4_ROOT}" CACHE PATH "Verified private assets checkout")
 add_compile_definitions(GT4_MTVU_RUNTIME)
 set(GT4_EE_PROFILE "production" CACHE STRING "Pinned EE library profile")
 set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation coverage aspect)
+# TASK-100 S3: the game target whose guest addresses the host hooks use (native/game_target.hpp). v200 is the release
+# target; spec2 is the second target of decision 0072 and has no hooks until S8 fills its table.
+set(GT4_TARGET "v200" CACHE STRING "Game target for the host hooks and the guest image")
+set_property(CACHE GT4_TARGET PROPERTY STRINGS v200 spec2)
+if(GT4_TARGET STREQUAL "spec2")
+    add_compile_definitions(GT4_TARGET_SPEC2)
+elseif(NOT GT4_TARGET STREQUAL "v200")
+    message(FATAL_ERROR "Unknown GT4_TARGET '${GT4_TARGET}'; expected v200 or spec2")
+endif()
 set(GT4_SHAPE_RUNTIME_SOURCE "" CACHE PATH "Verified experimental runtime overlay capsule")
 set(GT4_PERF_RUNTIME_SOURCE "" CACHE PATH "Verified performance-only runtime capsule")
 option(GT4_PERF_FRAME_ONLY "Compile out subsystem hooks for a matched timing control" OFF)
@@ -271,6 +280,10 @@ target_link_libraries(license_guard_fixture PRIVATE gt4_license_guard)
 target_compile_options(license_guard_fixture PRIVATE /W4)
 # Sane data kept, insane count with CRC fail guarded, CRC pass kept.
 add_test(NAME native_license_guard COMMAND $<TARGET_FILE:license_guard_fixture>)
+# TASK-100 S3: the per-target guest-hook table (v2.00 values and the disabled Spec II default).
+add_executable(game_target_fixture game_target_fixture.cpp game_target_spec2_fixture.cpp)
+target_compile_options(game_target_fixture PRIVATE /W4)
+add_test(NAME native_game_target COMMAND $<TARGET_FILE:game_target_fixture>)
 add_library(gt4_perf_probe STATIC perf_probe.cpp)
 # TASK-011 step 0 counters (linked into the runtime only with the slice169 capsule).
 add_library(gt4_mtvu_measure STATIC mtvu_measure.cpp)

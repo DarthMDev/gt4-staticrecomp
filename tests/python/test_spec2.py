@@ -201,5 +201,70 @@ class DiffTests(unittest.TestCase):
         self.assertEqual(entry['target'], 0x68A768)
 
 
+class VuTests(unittest.TestCase):
+    @staticmethod
+    def make_elf(text_bytes, data_bytes, data_va=0x65FC00):
+        text_off, data_off = 0x1000, 0x560C00
+        out = bytearray(max(text_off + len(text_bytes), data_off + len(data_bytes)))
+        out[:16] = b'\x7fELF\x01\x01\x01' + b'\0' * 9
+        struct.pack_into('<HHIIIIIHHHHHH', out, 16, 2, 8, 1, 0x100008, 52, 0, 0, 52 + 64, 32, 2, 0, 0, 0)
+        struct.pack_into('<8I', out, 52, 1, text_off, 0x100000, 0x100000, len(text_bytes), len(text_bytes), 7, 4096)
+        struct.pack_into('<8I', out, 84, 1, data_off, data_va, data_va, len(data_bytes), len(data_bytes), 6, 4096)
+        out[text_off:text_off + len(text_bytes)] = text_bytes
+        out[data_off:data_off + len(data_bytes)] = data_bytes
+        return bytes(out)
+
+    def test_vu1_blob_identity(self):
+        import spec2_vu
+        blob = bytes(range(256)) * 64 + bytes(0x20)  # 0x3FF0 bytes
+        blob = blob[:0x3FF0]
+        spec2 = bytearray(self.make_elf(bytes(0x1000), bytes(0x59C110 - 0x560C00 + 0x3FF0)))
+        spec2[0x59C110:0x59C110 + 0x3FF0] = blob
+        v200 = bytearray(self.make_elf(bytes(0x1000), bytes(0x525DD0 - 0x1000 + 0x3FF0)))
+        v200[0x525DD0:0x525DD0 + 0x3FF0] = blob
+        report = spec2_vu.vu1_report(bytes(spec2), bytes(v200))
+        self.assertTrue(report['identical_to_v200'])
+        self.assertEqual(report['decrypted_sha256'], report['v200_decrypted_sha256'])
+        broken = bytearray(v200)
+        broken[0x525DD0] ^= 1
+        self.assertFalse(spec2_vu.vu1_report(bytes(spec2), bytes(broken))['identical_to_v200'])
+
+    def test_vu0_upload_is_read_from_the_data_segment(self):
+        import spec2_vu
+        data = bytearray(0x731180 - 0x65FC00 + 0x920)
+        data[0x731180 - 0x65FC00:0x731180 - 0x65FC00 + 4] = b'\x11\x22\x33\x44'
+        spec2 = self.make_elf(bytes(0x1000), bytes(data))
+        self.assertEqual(spec2_vu.spec2_file_offset(0x731180), 0x560C00 + 0x731180 - 0x65FC00)
+        self.assertEqual(spec2_vu.spec2_file_offset(0x100010), 0x1010)
+        with self.assertRaises(ValueError):
+            spec2_vu.spec2_file_offset(0x80000000)
+
+    def test_vu_pin_matches_the_tool_contract(self):
+        pin = json.loads((ROOT / 'docs/inputs/spec2-vu.json').read_text(encoding='utf-8'))
+        self.assertEqual(pin['vu1']['expected_prefix'], 'ae6b6cb3b4406ff3')
+        self.assertTrue(pin['vu1']['decrypted_sha256'].startswith('ae6b6cb3b4406ff3'))
+        self.assertTrue(pin['vu1']['identical_to_v200'])
+        self.assertEqual(pin['vu0']['upload_bytes'], 0x920)
+        self.assertEqual(pin['vu0']['vaddr'], 0x731180)
+        self.assertGreater(pin['vu0']['differing_bytes_in_the_overlap'], 0)
+        self.assertEqual(len(pin['vu0']['vcallms_entries']), 14)
+
+
+class IopTests(unittest.TestCase):
+    def test_pin_is_complete_and_policied(self):
+        pin = json.loads((ROOT / 'docs/inputs/spec2-iop.json').read_text(encoding='utf-8'))
+        allowed = set(pin['policies'])
+        self.assertEqual(len(pin['modules']), 35)
+        for module in pin['modules']:
+            self.assertIn(module['policy'], allowed, module['path'])
+            self.assertRegex(module['sha256'], r'^[0-9a-f]{64}$')
+            self.assertGreater(module['size_bytes'], 0)
+        self.assertEqual(sum(m['size_bytes'] for m in pin['modules']), pin['total_bytes'])
+        new = {m['path'] for m in pin['modules'] if m['vs_v200'] == 'new'}
+        self.assertEqual(new, {'/IRX/LGAUD.IRX', '/IRX/PPP.IRX', '/IRX/PPPOE.IRX',
+                               '/NET/DNAS_MC.ERX', '/NET/DNAS_NET.ERX', '/NET/NTG_ISCK.ERX'})
+        self.assertIn('pppoe.irx', pin['module_load_list_from_text']['names'])
+
+
 if __name__ == '__main__':
     unittest.main()

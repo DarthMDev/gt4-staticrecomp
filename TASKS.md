@@ -633,6 +633,15 @@ zero-filled data; every other byte is identical. The injector is mapped by execu
 Report [docs/SPEC2-PATCHES.md](docs/SPEC2-PATCHES.md), pins `docs/inputs/spec2-patches.json` and
 `docs/inputs/spec2-beta.json`, tools `scripts/spec2_patches.py` and `scripts/spec2_beta_elf.py`,
 `tests/python/test_spec2.py`. Open: S3 build/identity, then S5/S6, S2/S4.
+Progress (2026-10-22, S3 done): `native/game_target.hpp` carries every guest address of the host hooks per target
+(v2.00 keeps the release values; an absent address disables the hook and logs once; `GT4_TARGET=v200|spec2`). The
+capsule overlay text is unchanged. CTest 42/42 (new `native_game_target`); Python 653 OK, 42 skipped and the known
+release-pin distribution failure that any rebuilt executable has. Headless identity against the 1.2.3 build (slice268)
+is exact in menus, day and night, dumps and GS stream hashes, on the final code state. Open: the new executable's
+release pin set (release decision), S8 fills the Spec II table.
+Progress (2026-10-22, S5/S6 mapped): VU1 decrypts to the v2.00 image (`ae6b6cb3…`), the AOT table carries over; VU0
+differs (0x920 vs 0xA80, 1,050 bytes) and runs on the counted interpreter fallback. IOP: 35 files pinned with policy
+(`inputs/spec2-iop.json`), 6 new, inherited from the beta lineage. Open: S7b for both (VU0 profile, offline hangs).
 
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new

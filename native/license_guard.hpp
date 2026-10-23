@@ -22,16 +22,25 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "game_target.hpp"
+
 namespace gt4::license_guard {
 
-// Guest addresses (Confirmed from the translated units and the gt4-decomp symbols).
-inline constexpr std::uint32_t kLoadDemoInputs = 0x003EAD18u;    // RaceSolitaire::loadDemoInputs (vtbl[154])
-inline constexpr std::uint32_t kLoaderReturn = 0x001101E4u;      // return label after the vtbl[154] call in 0x001100D0
-inline constexpr std::uint32_t kReplayLoaderReturn = 0x00110344u; // return label after the vtbl[57] call in 0x00110230
+// Guest addresses (Confirmed from the translated units and the gt4-decomp symbols). TASK-100 S3: they come from the
+// per-target table; a target without the guard gets zeros, so no loader call site is ever guarded there.
+inline constexpr std::uint32_t kLoadDemoInputs = ::gt4::target::active().hooks.license_load_demo_inputs;
+inline constexpr std::uint32_t kLoaderEntry = ::gt4::target::active().hooks.license_loader_entry;
+inline constexpr std::uint32_t kLoaderReturn = ::gt4::target::active().hooks.license_loader_return;
+inline constexpr std::uint32_t kReplayLoaderEntry = ::gt4::target::active().hooks.license_replay_loader_entry;
+inline constexpr std::uint32_t kReplayLoaderReturn = ::gt4::target::active().hooks.license_replay_loader_return;
+inline constexpr std::uint32_t kCrcTableAddress = ::gt4::target::active().hooks.license_crc_table;
 
 // The loader (function entry) whose call returns to `return_address`, or 0 when it is not a guarded call site.
 constexpr std::uint32_t loader_for_return(std::uint32_t return_address) noexcept {
-    return return_address == kLoaderReturn ? 0x001100D0u : return_address == kReplayLoaderReturn ? 0x00110230u : 0u;
+    if (kLoaderReturn == 0)
+        return 0;
+    return return_address == kLoaderReturn ? kLoaderEntry
+                                           : return_address == kReplayLoaderReturn ? kReplayLoaderEntry : 0u;
 }
 // Demo file layout: header {u32 body offset, u32 body size, u32 unused, u32 key}, body at the offset.
 inline constexpr std::uint32_t kHeaderBytes = 16u;

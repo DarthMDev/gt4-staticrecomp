@@ -2542,3 +2542,53 @@ A/B in the same scene, if wanted: `$env:GT4_MTVU_CHAIN="0"`, `$env:GT4_GIF_FASTP
   closing). Frame dumps and the session hash of full runs are unaffected.
 - The mode-3 (interlaced) and 3x cases are not re-measured here; the switches do not depend on the resolution.
 
+## Spec II S3 - target-aware host hooks (TASK-100, v2.00 byte-identical)
+
+Second target: [decision 0072](decisions/0072-spec2-second-target.md), plan [SPEC2-PLAN](SPEC2-PLAN.md). This slice
+changes only the host side of v2.00.
+
+### What changed
+
+- `native/game_target.hpp`: one per-target table. `HookAddresses` carries every guest address or offset that a host
+  hook touches: the TASK-079 16:9 hold (owner pointer, option/flag/record offsets, video system, presets, published
+  word), the TASK-080 race display 480p (index offset and its three values), the TASK-080 display aspect (initMonitor,
+  the camera call return label, RaceDisplay::render, the display request state and offsets, HUD matrix offset, HUD
+  parameter block) and the TASK-017 license guard (both loader entries and their return labels, loadDemoInputs, the
+  CRC table). `kV200Hooks` holds the qualified release values; `kSpec2Hooks` is empty, so every hook disables itself
+  and logs one line. `GT4_TARGET=v200|spec2` selects at build time (`GT4_TARGET_SPEC2`); the default is v200.
+- The four hook modules read their constants from the table instead of keeping private copies
+  (`race_widescreen.*`, `race_display.*`, `display_aspect.hpp`, `license_guard.hpp`). The public constant names stay,
+  so fixtures and the overlay capsules compile unchanged: `kCameraCallReturn` and `kRaceDisplayRender` become
+  `0xFFFFFFFF` ("never matches") when the target has no hook, which keeps the capsule text byte-identical.
+- Availability gates: `force_widescreen_at_vblank`, `force_race_480p_at_vblank`, `HudCanvasHook::apply`,
+  `write_hud_parameters` and the display request read return early (and log once) when the active target lacks the
+  hook. `license_guard::loader_for_return` returns 0, so the capsule never enters the guard.
+- HUD parameter block `0x7F00` stays a literal: it is our own scratch block in guest kernel RAM, not a game address,
+  and two `static_assert`s tie it to the v2.00 table entry.
+- New fixture `native/game_target_fixture.cpp` plus `native/game_target_spec2_fixture.cpp` (compiles the same header
+  with `GT4_TARGET_SPEC2`), CTest `native_game_target`.
+
+### Build (v2.00, slice262 recipe with the release capsules)
+
+```
+cmake -S C:\Antigravity\gt4-wt-100-spec2 -B O:\gt4recomp-scratch\spec2-s3-build\build -G Ninja ^
+  -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" ^
+  -DGT4_EE_PROFILE=aspect -DGT4_ASSETS_ROOT=C:/Antigravity/gt4-staticrecomp -DGT4_TARGET=v200 ^
+  -DGT4_PYTHON=C:/Antigravity/gt4-staticrecomp/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_PERF_RUNTIME_SOURCE=<assets>/private/slice262-frame-cost-runtime ^
+  -DGT4_LICENSE_GUARD_SOURCE=<assets>/private/slice262-license-guard-runtime ^
+  -DGT4_PORT_DIR=<assets>/private/slice200-port -DGT4_SHADER_DIR=<assets>/private/slice153-pacing-shaders ^
+  ... (the rest of the slice262 recipe) ... -DGT4_RELEASE_DISTRIBUTION=ON
+```
+
+### Checks
+
+- CTest 42 of 42 (`native_game_target` is new).
+- Python suite with `GT4_NATIVE_BUILD` = this build: 653 OK, 42 skipped, 1 failure:
+  `test_make_distribution` compares `gt4vulkan.exe` against the **release** slice268 pin, so any rebuilt executable
+  fails it (same size, different hash). A new pin set is a release decision, exactly as recorded for slice264.
+- The Spec II half of the fixture proves an empty table disables every hook; the v2.00 half checks every documented
+  value, so the release behaviour cannot drift silently.
+- Headless frame identity against slice268 (menus, day, night; `GT4_GS_STREAM_HASH=1`): results in the Progress
+  section of SPEC2-PLAN.
+
