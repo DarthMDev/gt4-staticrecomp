@@ -33,6 +33,10 @@ pub enum LibraryError {
     NotFound(String),
     /// The item is not something this library stores (for example another game's save).
     NotGtSave(String),
+    /// A card with no Gran Turismo 4 save or replay on it; `found` lists the names it holds.
+    NoGtSave { found: Vec<String> },
+    /// A display name that cannot be used (empty after cleaning).
+    Name(String),
 }
 
 impl From<io::Error> for LibraryError {
@@ -61,6 +65,10 @@ impl fmt::Display for LibraryError {
             LibraryError::Folder(error) => write!(f, "{error}"),
             LibraryError::NotFound(name) => write!(f, "not in the library: {name}"),
             LibraryError::NotGtSave(name) => write!(f, "not a Gran Turismo 4 save: {name}"),
+            LibraryError::NoGtSave { found } => {
+                write!(f, "no Gran Turismo 4 save on this card (found: {})", found.join(", "))
+            }
+            LibraryError::Name(reason) => write!(f, "{reason}"),
         }
     }
 }
@@ -91,6 +99,43 @@ pub const ACTIVE_FOLDER: &str = "Active";
 pub const ACTIVE_BACKUP_FOLDER: &str = ".backup";
 /// Prefix of an inactive slot folder (`Save 01`, `Save 02`, ...).
 pub const SLOT_PREFIX: &str = "Save ";
+/// The display name of a save, kept next to the save's game folder (`<slot>/name.txt`, or `Active/name.txt`).
+/// The folder names do not change when a save is renamed.
+pub const NAME_FILE: &str = "name.txt";
+/// Longest display name, in characters.
+pub const NAME_MAX_CHARS: usize = 40;
+
+/// A display name made safe to store and show: control characters and the characters Windows refuses in file
+/// names are dropped, runs of spaces become one space, the ends are trimmed and the text is cut to
+/// [`NAME_MAX_CHARS`]. An empty result is an error.
+pub fn clean_name(text: &str) -> Result<String, LibraryError> {
+    let kept: String = text
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .filter(|c| !matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*'))
+        .collect();
+    let spaced = kept.split_whitespace().collect::<Vec<_>>().join(" ");
+    let cut: String = spaced.chars().take(NAME_MAX_CHARS).collect();
+    let cut = cut.trim_end().to_string();
+    if cut.is_empty() {
+        return Err(LibraryError::Name("the name is empty".to_string()));
+    }
+    Ok(cut)
+}
+
+/// Moves `<from>/name.txt` to `<to>/name.txt` (replacing one there). Nothing happens when `from` has no name.
+fn move_name_file(from: &Path, to: &Path) -> Result<(), LibraryError> {
+    let source = from.join(NAME_FILE);
+    if !source.is_file() {
+        return Ok(());
+    }
+    let target = to.join(NAME_FILE);
+    if target.exists() {
+        fs::remove_file(&target)?;
+    }
+    fs::rename(&source, &target)?;
+    Ok(())
+}
 
 /// Where the three parts of the library live.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -274,8 +319,16 @@ impl Library {
     /// Imports every item of a card image (`.ps2`, `.mcd`, `.bin`, with or without spare bytes).
     pub fn import_card_image(&self, bytes: &[u8]) -> Result<Report, LibraryError> {
         let card = Card::from_image(bytes)?;
+        let items = card.root()?;
+        let is_gt4 = |item: &Node| {
+            let name = item.name();
+            card::is_game_save_name(&name) || card::is_replay_name(&name)
+        };
+        if !items.iter().any(is_gt4) {
+            return Err(LibraryError::NoGtSave { found: items.iter().map(Node::name).collect() });
+        }
         let mut report = Report::default();
-        for item in card.root()? {
+        for item in items {
             self.add_item(&item, &mut report)?;
         }
         Ok(report)
@@ -305,9 +358,73 @@ impl Library {
         Ok(report)
     }
 
-    /// `.psu` bytes of a library item (a slot name such as "Save 02", or a replay name).
+    /// The folder a save's name file lives in: the active save's folder for [`GAME_SAVE_NAME`], a slot's for `Save NN`.
+    fn save_folder(&self, name: &str) -> Option<PathBuf> {
+        if name == GAME_SAVE_NAME {
+            Some(self.active_dir())
+        } else if name.starts_with(SLOT_PREFIX) {
+            Some(self.slot_dir(name))
+        } else {
+            None
+        }
+    }
+
+    /// The display name a player gave a save, if any. `name` is the library name (`Save NN` or the game save name).
+    pub fn display_name(&self, name: &str) -> Option<String> {
+        let file = self.save_folder(name)?.join(NAME_FILE);
+        let text = fs::read_to_string(file).ok()?;
+        let cleaned = text.trim();
+        if cleaned.is_empty() {
+            None
+        } else {
+            Some(cleaned.to_string())
+        }
+    }
+
+    /// Gives a save (`Save NN` or the active save) a display name. The folder names do not change. Returns the name
+    /// as stored, after [`clean_name`].
+    pub fn rename_save(&self, name: &str, new_name: &str) -> Result<String, LibraryError> {
+        let cleaned = clean_name(new_name)?;
+        let folder_path = self.save_folder(name).ok_or_else(|| LibraryError::NotFound(name.to_string()))?;
+        if !folder_path.join(GAME_SAVE_NAME).is_dir() {
+            return Err(LibraryError::NotFound(name.to_string()));
+        }
+        let file = folder_path.join(NAME_FILE);
+        let temporary = folder_path.join("name.tmp");
+        fs::write(&temporary, cleaned.as_bytes())?;
+        if file.exists() {
+            fs::remove_file(&file)?;
+        }
+        fs::rename(&temporary, &file)?;
+        Ok(cleaned)
+    }
+
+    /// Starts a new save: the active save (if any) is parked in a new `Save NN` slot and `Active` is left empty.
+    /// The next Play builds a card without a game save, so the game creates a new profile. Returns the slot the
+    /// old save went to, or `None` when there was no active save.
+    pub fn new_save(&self) -> Result<Option<String>, LibraryError> {
+        let target = self.active_dir().join(GAME_SAVE_NAME);
+        if !target.is_dir() {
+            // Nothing to park; a name left behind by a removed save must not stick to the next one.
+            let stale = self.active_dir().join(NAME_FILE);
+            if stale.is_file() {
+                fs::remove_file(stale)?;
+            }
+            return Ok(None);
+        }
+        let parked = self.next_slot_name()?;
+        let parked_dir = self.saves_dir().join(&parked);
+        fs::create_dir_all(&parked_dir)?;
+        fs::rename(&target, parked_dir.join(GAME_SAVE_NAME))?;
+        move_name_file(&self.active_dir(), &parked_dir)?;
+        Ok(Some(parked))
+    }
+
+    /// `.psu` bytes of a library item (`Active` for the active save, a slot name such as "Save 02", or a replay name).
     pub fn export_psu(&self, name: &str) -> Result<Vec<u8>, LibraryError> {
-        let folder_path = if name.starts_with(SLOT_PREFIX) {
+        let folder_path = if name == GAME_SAVE_NAME {
+            self.active_dir().join(GAME_SAVE_NAME)
+        } else if name.starts_with(SLOT_PREFIX) {
             self.slot_dir(name).join(GAME_SAVE_NAME)
         } else {
             self.replays_dir().join(name)
@@ -331,9 +448,12 @@ impl Library {
             let parked_dir = self.saves_dir().join(&parked);
             fs::create_dir_all(&parked_dir)?;
             fs::rename(&target, parked_dir.join(GAME_SAVE_NAME))?;
+            move_name_file(&self.active_dir(), &parked_dir)?;
         }
         fs::rename(&source, &target)?;
-        fs::remove_dir(self.saves_dir().join(slot))?; // now empty
+        // The display name goes with its save; the slot folder is then empty.
+        move_name_file(&self.saves_dir().join(slot), &self.active_dir())?;
+        fs::remove_dir(self.saves_dir().join(slot))?;
         Ok(())
     }
 

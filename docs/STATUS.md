@@ -1,5 +1,14 @@
 # Current Status
 
+## TASK-104 launcher saves: crash-proof card import, New save, Export, Rename (2026-10-23, on `task/101-multi-game`, release 1.3.0)
+
+Implemented, not merged; owner test pending. Issue #86 (importing a PCSX2 `Mcd001.ps2` closed the launcher): the card reader
+now reads the layout from the superblock (8 to 64 MB, with or without spare bytes), bounds directory depth (8), visits each
+directory once, checks every length before allocating, and the import runs under a panic guard that logs the file name and
+size. The Saves page gets New save (confirmed; the current save is kept as a new slot), Export of the active save as `.psu`
+and Rename (40 characters, `name.txt` beside the save). Checks: `cargo test --workspace` 474 passed, 0 failed, 4 ignored;
+focus-check 158/158 (en-US) and 165/165 (pt-BR), nav-test 150/150. Open: owner test with a real card and in-game New save.
+
 ## TASK-103 Graphics API for GSdx (2026-10-23, on `task/101-multi-game`, release 1.3.0)
 
 Implemented, not merged; owner in-game test pending. Settings > Graphics offers "Graphics API (GSdx)" (table row `graphics_api`,

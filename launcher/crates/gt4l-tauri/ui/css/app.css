@@ -542,7 +542,7 @@ body.input-pad .info:focus .tip { display: block; }
   overscroll-behavior: contain; touch-action: pan-y;
 }
 .slot-row {
-  display: grid; grid-template-columns: 28px 40px 1fr 190px 52px; align-items: center; height: 52px;
+  display: grid; grid-template-columns: 28px 40px 1fr 190px auto; align-items: center; height: 52px;
   border-bottom: 1px solid var(--hair); padding-right: 4px;
 }
 .slot-row:focus { outline: none; }
@@ -556,6 +556,11 @@ body.input-pad .info:focus .tip { display: block; }
 }
 .slot-row .date { font: 400 13px var(--label); letter-spacing: 0.04em; color: var(--dim); text-align: right; padding-right: 12px; }
 .slot-row.empty .nm, .slot-row.empty .no { color: var(--faint); }
+.slot-row .nm .slot-id { margin-left: 10px; font: 500 12px var(--label); letter-spacing: 0.06em; color: var(--faint); }
+.slot-row .acts { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+.lib-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.modal-input { width: 100%; height: 52px; margin: 8px 0 16px; padding: 0 14px; box-sizing: border-box; font: 400 18px var(--text); color: var(--white); background: transparent; border: 1px solid var(--faint); border-radius: 2px; }
+.modal-input:focus { outline: 2px solid var(--paper); outline-offset: 2px; }
 .emptystate { min-height: 200px; padding: 40px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--dim); text-align: center; }
 .emptystate h3 { font: 300 24px var(--text); color: var(--white); }
 
@@ -865,7 +870,7 @@ body.input-pad .info:focus .tip { display: block; }
   .setup-main { padding: 48px 40px 32px 40px; }
   .settings { grid-template-columns: 200px 1fr; }
   .content { padding: 28px 32px 24px 32px; }
-  .slot-row { grid-template-columns: 24px 32px 1fr 140px 44px; }
+  .slot-row { grid-template-columns: 24px 32px 1fr 140px auto; }
 }
 
 /* ---------- controls page at small sizes: the drawing stays the hero, the panel narrows and scrolls ---------- */

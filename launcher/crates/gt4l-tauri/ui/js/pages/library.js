@@ -1,14 +1,17 @@
 /*
  * Saves and Replays tabs. One list component, two commands sets:
- *   saves:   saves_list, saves_import, saves_activate({id}), saves_delete({id})
+ *   saves:   saves_list, saves_import, saves_activate({id}), saves_delete({id}),
+ *            saves_new, saves_export({id}), saves_rename({id, name})
  *   replays: replays_list, replays_import, replays_delete({id})
- * Item = {id (library name, sent back to activate/delete), name (shown), modified (ISO 8601), active (saves only)}. The list result also has `folder`: the
+ * Item = {id (library name, sent back to activate/delete/export/rename), name (shown: the display name when renamed),
+ * modified (ISO 8601), active (saves only), renamed (saves only)}. The list result also has `folder`: the
  * user data folder that holds the files (%APPDATA%\GT4Recomp\Saves or \Replays), shown with
  * "Open folder" (open_saves_folder / open_replays_folder).
- * saves_import / replays_import return the new list, or null when cancelled.
+ * saves_import / replays_import / saves_export return the new list, or null when cancelled.
  *
  * Keys on a focused row: A = select (saves: make active), Y = make active
- * (saves) or delete (replays). X = import. Delete also has a trash button.
+ * (saves) or delete (replays). X = import. F2 = rename (saves). Delete also has a trash button.
+ * Saves also have New save (a confirmed command), and per row Rename and Export buttons.
  */
 (function (root) {
   "use strict";
@@ -70,6 +73,91 @@
       return active && active.dataset && active.dataset.itemId ? active : null;
     }
 
+    // The slot the launcher parks the current save in: the next number after the highest one listed ("Save 02").
+    function nextSlotLabel() {
+      var highest = 0;
+      items.forEach(function (item) {
+        var match = /^Save (\d+)$/.exec(item.id || "");
+        if (match) {
+          highest = Math.max(highest, parseInt(match[1], 10));
+        }
+      });
+      return "Save " + String(highest + 1).padStart(2, "0");
+    }
+
+    // New save: the current save is kept in a new slot and the next Play starts a new profile. One confirmation.
+    function newSave() {
+      var hasActive = items.some(function (item) { return item.active; });
+      GT4.ui.openDialog({
+        title: GT4.t("library.new_save_title"),
+        text: hasActive
+          ? GT4.t("library.new_save_text_kept", { slot: nextSlotLabel() })
+          : GT4.t("library.new_save_text_none"),
+        buttons: [
+          { label: GT4.t("common.cancel") },
+          {
+            label: GT4.t("library.new_save_confirm"),
+            primary: true,
+            run: function () {
+              GT4.backend.call("saves_new", {}).then(function (result) {
+                apply(result, result && result.status ? result.status : "");
+              }, function (err) {
+                GT4.ui.toast(GT4.errorText(err), true);
+              });
+            }
+          }
+        ]
+      });
+    }
+
+    // Rename: a text box (up to 40 characters). Enter confirms; the folder name of the save does not change.
+    function renameItem(item) {
+      var input = h("input", {
+        class: "modal-input",
+        type: "text",
+        maxlength: "40",
+        value: item.renamed ? item.name : "",
+        "aria-label": GT4.t("library.rename_label"),
+        placeholder: item.id
+      });
+      var dialog = null;
+      function submit() {
+        GT4.backend.call("saves_rename", { id: item.id, name: input.value }).then(function (result) {
+          apply(result, result && result.status ? result.status : "");
+        }, function (err) {
+          GT4.ui.toast(GT4.errorText(err), true);
+        });
+      }
+      dialog = GT4.ui.openDialog({
+        title: GT4.t("library.rename_title"),
+        body: input,
+        buttons: [
+          { label: GT4.t("common.cancel") },
+          { label: GT4.t("library.rename_confirm"), primary: true, run: submit }
+        ]
+      });
+      input.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          submit();
+          dialog.close();
+        }
+      });
+      input.focus({ preventScroll: true });
+      input.select();
+    }
+
+    // Export: the player picks where the .psu file goes (the save dialog is in the launcher).
+    function exportItem(item) {
+      GT4.backend.call("saves_export", { id: item.id }).then(function (result) {
+        if (result) {
+          apply(result, result.status || "");
+        }
+      }, function (err) {
+        GT4.ui.toast(GT4.errorText(err), true);
+      });
+    }
+
     function removeItem(id) {
       GT4.ui.openDialog({
         title: kind.removeTitle,
@@ -116,22 +204,51 @@
       if (item.active) {
         nameNode.appendChild(h("small", { text: GT4.t("library.next_play") }));
       }
+      if (item.renamed) {
+        nameNode.appendChild(h("span", { class: "slot-id", text: item.id }));
+      }
       children.push(nameNode);
       children.push(h("span", { class: "date", text: GT4.ui.formatDate(item.modified) }));
-      children.push(h("span", { class: "acts" }, [
-        h("button", {
-          class: "iconbtn del",
+      var actions = [];
+      if (kindName === "saves") {
+        actions.push(h("button", {
+          class: "iconbtn",
           type: "button",
-          "aria-label": GT4.t("library.aria_delete", { name: item.name || item.id }),
-          title: GT4.t("common.delete"),
+          "aria-label": GT4.t("library.rename_aria", { name: item.name || item.id }),
+          title: GT4.t("library.rename"),
           on: {
             click: function (event) {
               event.stopPropagation();
-              removeItem(item.id);
+              renameItem(item);
             }
           }
-        }, trashIcon())
-      ]));
+        }, pencilIcon()));
+        actions.push(h("button", {
+          class: "iconbtn",
+          type: "button",
+          "aria-label": GT4.t("library.export_aria", { name: item.name || item.id }),
+          title: GT4.t("library.export"),
+          on: {
+            click: function (event) {
+              event.stopPropagation();
+              exportItem(item);
+            }
+          }
+        }, exportIcon()));
+      }
+      actions.push(h("button", {
+        class: "iconbtn del",
+        type: "button",
+        "aria-label": GT4.t("library.aria_delete", { name: item.name || item.id }),
+        title: GT4.t("common.delete"),
+        on: {
+          click: function (event) {
+            event.stopPropagation();
+            removeItem(item.id);
+          }
+        }
+      }, trashIcon()));
+      children.push(h("span", { class: "acts" }, actions));
 
       var node = h("div", {
         class: "slot-row" + (item.active ? " active" : ""),
@@ -148,6 +265,32 @@
         }
       }, children);
       return node;
+    }
+
+    // A line icon from one path (the same style as the trash icon).
+    function lineIcon(pathData) {
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("width", "18");
+      svg.setAttribute("height", "18");
+      svg.setAttribute("viewBox", "0 0 24 24");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "1.6");
+      svg.setAttribute("stroke-linecap", "round");
+      svg.setAttribute("stroke-linejoin", "round");
+      svg.setAttribute("aria-hidden", "true");
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", pathData);
+      svg.appendChild(path);
+      return svg;
+    }
+
+    function pencilIcon() {
+      return lineIcon("M4 20h4L19 9l-4-4L4 16z");
+    }
+
+    function exportIcon() {
+      return lineIcon("M12 3v12M7 10l5 5 5-5M5 21h14");
     }
 
     function trashIcon() {
@@ -230,9 +373,13 @@
       on: { click: importItems }
     }, kind.importLabel);
 
+    var newButton = kindName === "saves"
+      ? h("button", { class: "btn", type: "button", on: { click: newSave } }, GT4.t("library.new_save"))
+      : null;
+
     content.appendChild(h("div", { class: "lib-head" }, [
       h("div", null, [title, headNote]),
-      importButton
+      h("div", { class: "lib-actions" }, [newButton, importButton].filter(Boolean))
     ]));
     content.appendChild(list);
     // Where the files are: the user data folder (%APPDATA%\GT4Recomp), easy to open and back up.
@@ -274,6 +421,13 @@
         var row = selectedRow();
         if (row) {
           removeItem(row.dataset.itemId);
+        }
+      }
+      if (event.key === "F2" && kindName === "saves") {
+        var renamed = selectedRow();
+        var target = renamed ? items.filter(function (item) { return item.id === renamed.dataset.itemId; })[0] : null;
+        if (target) {
+          renameItem(target);
         }
       }
     });

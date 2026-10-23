@@ -5,6 +5,7 @@
 use gt4l_core::language::Language;
 use gt4l_core::messages;
 use std::fs;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use gt4controls::{self as controls_file, default_bindings};
@@ -750,9 +751,21 @@ pub fn import_into(shared: &Shared, path: &Path, kind: Kind) -> Result<LibraryVi
 /// overwrite. The answer is the page's own list (the game it shows); the status names the game when it is another one.
 pub fn import_into_game(shared: &Shared, path: &Path, kind: Kind, game: &'static Game) -> Result<LibraryView, String> {
     let mut state = lock(shared);
-    let mut summary = match saves::import_path(state.library_of(game), path) {
-        Ok(report) => summary_of(&report),
-        Err(message) => message,
+    let language = state::language_of(&state);
+    // A panic in the import must never close the launcher (issue #86): it becomes a message, and the log names the file.
+    let file_name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    let size = fs::metadata(path).map(|metadata| metadata.len()).unwrap_or(0);
+    let attempt = panic::catch_unwind(AssertUnwindSafe(|| saves::import_path(state.library_of(game), path, language)));
+    let mut summary = match attempt {
+        Ok(Ok(report)) => summary_of(&report),
+        Ok(Err(message)) => {
+            state::log(&state.dirs, &format!("import of {file_name} ({size} bytes) refused: {message}"));
+            message
+        }
+        Err(_) => {
+            state::log(&state.dirs, &format!("import of {file_name} ({size} bytes) stopped by an internal error"));
+            messages::text("saves.import_crashed", language).to_string()
+        }
     };
     if game != state.selected {
         summary = format!("{} (in {})", summary, game.display_name);
@@ -784,16 +797,83 @@ pub fn saves_activate_of(id: String, shared: &Shared) -> Result<LibraryView, Str
     let name = id;
     let mut state = lock(shared);
     let language = state::language_of(&state);
-    let slot = saves::saves(state.library())?
+    let item = saves::saves(state.library())?
         .into_iter()
         .find(|item| item.name == name)
-        .map(|item| item.label)
         .ok_or_else(|| messages::text("saves.not_in_library", language).to_string())?;
-    if slot == "Active save" {
+    if item.active {
         return saves_view(&state);
     }
     saves::activate(state.library(), &name)?;
     state.saves_status = format!("{} will be used the next time you play.", name);
+    saves_view(&state)
+}
+
+/// `saves_new()`: starts a new save. The active save is kept as a new `Save NN`; the next Play starts a new profile in
+/// the game. Refused while the game runs. The page asks first.
+#[tauri::command]
+pub fn saves_new(shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    saves_new_of(shared.inner())
+}
+
+pub fn saves_new_of(shared: &Shared) -> Result<LibraryView, String> {
+    let mut state = lock(shared);
+    let language = state::language_of(&state);
+    if state.game_child.is_some() {
+        return Err(messages::text("saves.game_running", language).to_string());
+    }
+    let card = state.game_dirs(state.selected).runtime_card();
+    let parked = saves::new_save(state.library(), &card)?;
+    state.saves_status = match parked {
+        Some(slot) => messages::render("saves.new_kept", language, &[("slot", &slot)]),
+        None => messages::text("saves.new_started", language).to_string(),
+    };
+    saves_view(&state)
+}
+
+/// `saves_export({id})`: writes a save (the active one or a slot) as a `.psu` file the player picks. Cancelling changes
+/// nothing.
+#[tauri::command]
+pub async fn saves_export(app: AppHandle, id: String, shared: State<'_, Shared>) -> Result<Option<LibraryView>, String> {
+    let shared = shared.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (bytes, suggested, language) = {
+            let state = lock(&shared);
+            let language = state::language_of(&state);
+            let (bytes, suggested) = saves::export(state.library(), &id)?;
+            (bytes, suggested, language)
+        };
+        let picked = app
+            .dialog()
+            .file()
+            .set_title(messages::text("saves.export_title", language))
+            .set_file_name(&suggested)
+            .add_filter(messages::text("saves.export_filter", language), &["psu"])
+            .blocking_save_file();
+        let Some(picked) = picked else {
+            return Ok(None);
+        };
+        let path = picked.into_path().map_err(|error| error.to_string())?;
+        fs::write(&path, &bytes).map_err(|error| format!("{}: {error}", path.display()))?;
+        let mut state = lock(&shared);
+        state.saves_status = messages::render("saves.exported", language, &[("path", &path.display().to_string())]);
+        saves_view(&state).map(Some)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// `saves_rename({id, name})`: gives a save a display name (at most 40 characters). The folder name stays.
+#[tauri::command]
+pub fn saves_rename(id: String, name: String, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    saves_rename_of(id, name, shared.inner())
+}
+
+pub fn saves_rename_of(id: String, name: String, shared: &Shared) -> Result<LibraryView, String> {
+    let mut state = lock(shared);
+    let language = state::language_of(&state);
+    let stored = saves::rename(state.library(), &id, &name, language)?;
+    state.saves_status = messages::render("saves.renamed", language, &[("name", &stored)]);
     saves_view(&state)
 }
 

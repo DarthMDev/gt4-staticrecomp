@@ -595,6 +595,38 @@
           return save.id !== args.id;
         });
         return libraryView("saves");
+      case "saves_new": {
+        // The active save is parked as a slot; the next Play starts a new profile (the real launcher keeps the save).
+        libraryOf().saves.forEach(function (save) {
+          save.active = false;
+        });
+        var fresh = libraryView("saves");
+        fresh.status = "Started a new save. The old one is kept as a slot.";
+        return fresh;
+      }
+      case "saves_rename": {
+        var renamedSave = libraryOf().saves.filter(function (save) {
+          return save.id === args.id;
+        })[0];
+        if (!renamedSave) {
+          throw new Error("That save is not in the library any more.");
+        }
+        // The same cleaning as the launcher: no characters a file name cannot hold, one space between words, 40 at most.
+        var cleaned = String(args.name || "").replace(/[<>:"\/\\|?*\u0000-\u001f]/g, "").replace(/\s+/g, " ").trim().slice(0, 40).trim();
+        if (!cleaned) {
+          throw new Error("Type a name with letters or numbers.");
+        }
+        renamedSave.name = cleaned;
+        renamedSave.renamed = true;
+        var renamedView = libraryView("saves");
+        renamedView.status = "Renamed to " + cleaned + ".";
+        return renamedView;
+      }
+      case "saves_export": {
+        var exported = libraryView("saves");
+        exported.status = "Saved to C:\\Users\\Player\\Desktop\\save.psu.";
+        return exported;
+      }
       case "replays_list":
         return libraryView("replays");
       case "replays_delete":

@@ -14,6 +14,9 @@ saves_list
 saves_import
 saves_activate
 saves_delete
+saves_new
+saves_export
+saves_rename
 replays_list
 replays_import
 replays_delete

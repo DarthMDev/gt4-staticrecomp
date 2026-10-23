@@ -155,6 +155,45 @@
     check("Saves never auto-selects Import", !(active && active.textContent && active.textContent.indexOf(T("library.import_saves")) >= 0), active ? active.textContent : "none");
   }
 
+  // New save, Rename and Export (TASK-104), in the page's language: the buttons exist with their texts; New save asks
+  // first (Cancel closes it); Rename opens a text box of up to 40 characters that takes the focus, and Escape closes it.
+  async function libraryActionChecks() {
+    await setHash("#/settings/saves");
+    await wait(400);
+    var newButton = Array.prototype.filter.call(document.querySelectorAll(".lib-actions button"), function (b) {
+      return b.textContent === T("library.new_save");
+    })[0];
+    check("Saves has a New save button", !!newButton, "no New save button");
+    var renameButton = document.querySelector(".slot-row .iconbtn[title=\"" + T("library.rename") + "\"]");
+    var exportButton = document.querySelector(".slot-row .iconbtn[title=\"" + T("library.export") + "\"]");
+    check("each save row has Rename and Export buttons", !!renameButton && !!exportButton, "rename " + !!renameButton + " export " + !!exportButton);
+    if (newButton) {
+      newButton.click();
+      await wait(150);
+      var askDialog = document.querySelector(".modal");
+      check("New save asks first with its confirm button", !!askDialog && askDialog.textContent.indexOf(T("library.new_save_confirm")) >= 0,
+        askDialog ? askDialog.textContent : "no dialog");
+      if (askDialog) {
+        GT4.ui.topDialog().close();
+      }
+      await wait(100);
+      check("Cancel leaves the save list as it was", !document.querySelector(".modal"), "a dialog is still open");
+    }
+    if (renameButton) {
+      renameButton.click();
+      await wait(150);
+      var box = document.querySelector(".modal input.modal-input");
+      check("Rename opens a text box of up to 40 characters", !!box && box.getAttribute("maxlength") === "40",
+        box ? "maxlength " + box.getAttribute("maxlength") : "no text box");
+      check("the text box takes the focus", !!box && document.activeElement === box, "focus " + (document.activeElement && document.activeElement.tagName));
+      press("Escape");
+      await wait(150);
+      check("Escape closes the rename box", !document.querySelector(".modal"), "a dialog is still open");
+    }
+    await setHash("#/settings/saves");
+    await wait(200);
+  }
+
   // Changed values show on screen at once and stay after the table is read again.
   async function valueChecks() {
     await setHash("#/settings/graphics");
@@ -779,6 +818,7 @@
       await sideWalk();
       await enterChecks();
       await importEntryCheck();
+      await libraryActionChecks();
       await valueChecks();
       await advancedSectionChecks();
       await controlsChecks();

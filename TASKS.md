@@ -125,6 +125,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑101 | Multi-game launcher: Gran Turismo 4 and Spec II side by side (game selector, Play/Install, per-game disc, card and saves, shared settings, Spec II logo) | 🟡 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 with TASK-100 |
 | TASK‑102 | Launcher language: automatic en-US / pt-BR with a General > Language setting (locale files, Rust messages, release notes) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑103 | Graphics API choice for GSdx: Vulkan (recommended, default), Direct3D 12 (recommended), Direct3D 11 (older PCs), OpenGL later; hardware backends only, in Settings > Graphics (locale files, same ids kept apart from the engine Renderer) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner in-game test pending · release 1.3.0 |
+| TASK‑104 | Launcher saves: crash-proof PCSX2 card import (issue #86: superblock layout for 8 to 64 MB, bounded directory walk, import under a panic guard), New save, Export of the active save, Rename (display name, 40 characters) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -676,6 +677,23 @@ Research (2026-10-23, read-only): gt4-gs.exe already contains Direct3D 11, Direc
 Settings > Graphics in `O:\gt4recomp-scratch\slice280-shots` (pt-BR and en-US). Open: the owner in-game test on Direct3D 11
 and Direct3D 12 against Vulkan (Nordschleife TT 480p, night race, menus, ultrawide crop and fill, texture pack, upscaling,
 flares and readbacks). A backend that fails the owner test is not offered.
+
+### TASK-104 — Launcher saves: crash-proof card import, New save, Export, Rename
+Planned and implemented (owner, 2026-10-23) for release 1.3.0. GitHub issue moesuito/gt4-staticrecomp#86: importing a PCSX2
+`Mcd001.ps2` closed the launcher with no message. Reproduced on the old reader with synthetic cards: a directory that points
+back to an ancestor overflowed the stack (0xc00000fd), and a 4 GB length aborted on a 2 TB allocation (0xc0000409). Both are
+silent in the launcher. Fix: the reader takes the card size, the allocation area and the indirect FAT list from the
+superblock and accepts 8, 16, 32 and 64 MB cards (with or without spare bytes); every length is checked against the chain
+and the card before allocating; directories nest at most 8 levels and each directory is visited once (a loop is
+`corrupt card`); the import runs under `catch_unwind` and logs the file name and size. Messages: not a PS2 memory card,
+unsupported card size, card damaged (with the reason), no Gran Turismo 4 save on this card (with what it holds).
+Saves page: New save (one confirmation; the current save is kept as a new `Save NN`, the last run's card is harvested and
+moved to `backups` first), Export of the active save or a slot as `.psu`, Rename (name in `name.txt` beside the save,
+sanitised, 40 characters, moved with the save when saves are swapped). Tests: `gt4saves/tests/hostile_cards.rs` (10 synthetic
+card cases, built in `tests/common`), `gt4saves/tests/save_management.rs` (9 library cases). Checks: `cargo test --workspace`
+474 passed, 0 failed, 4 ignored; focus-check en-US 158/158 and pt-BR 165/165, nav-test 150/150. Screenshots:
+`O:\gt4recomp-scratch\slice283-shots\saves-en-US.png` and `saves-pt-BR.png`. Open: the panic guard is not covered by a test
+(no injected panic); the owner test with a real PCSX2 card and in-game New save; gamepad rename needs a keyboard to type.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:

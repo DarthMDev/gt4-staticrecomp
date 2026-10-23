@@ -48,7 +48,7 @@ pub fn seed(state: &AppState) {
         let image = Card::build(&items).expect("synthetic card builds").to_image();
         let path = folder.join(name);
         if std::fs::write(&path, image).is_ok() {
-            let _ = saves::import_path(state.library(), &path);
+            let _ = saves::import_path(state.library(), &path, crate::state::language_of(&state));
         }
     }
     let _ = saves::activate(state.library(), "Save 01");
