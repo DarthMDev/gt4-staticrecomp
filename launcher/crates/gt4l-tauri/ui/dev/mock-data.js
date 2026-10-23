@@ -237,10 +237,10 @@
 
   // Demo offers for the update popup (?update=1). Notes are sample text, not a real release.
   var DEMO_OFFERS = [
-    { stream: "renderer", installed: "1.1.0", latest: "1.1.1", update: true,
+    { stream: "renderer", installed: "1.2.1", latest: "1.2.2", update: true,
       package: "gt4-gs-1.1.1-windows-x64.zip",
       notes: "## gt4-gs 1.1.1\n\n- **Faster** present on VSync Off.\n- Fixes a crash on exit when the game ends first.\n- Sample text for the launcher preview."},
-    { stream: "launcher", installed: "1.1.0", latest: "1.1.1", update: true,
+    { stream: "launcher", installed: "1.3.0", latest: "1.3.1", update: true,
       package: "GT4Recomp-Setup-1.1.1.exe",
       notes: "GT4Recomp 1.1.1\n\n* Tray: the launcher comes back when the game ends.\n* Sample text for the launcher preview." }
   ];
@@ -605,9 +605,9 @@
         return null;
       case "about_info":
         return {
-          version: "1.1.0",
-          gt4recomp: "1.1.0",
-          gt4gs: "1.1.0",
+          version: "1.3.0",
+          gt4recomp: "1.3.0",
+          gt4gs: "1.2.1",
           disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso",
           game_files: "C:\\Program Files\\GT4Recomp\\data\\games\\" + selectedGame + "\\disc",
           data_folder: "C:\\Program Files\\GT4Recomp\\data",
@@ -627,10 +627,10 @@
         if (query.get("update") === "1") {
           return {
             offers: DEMO_OFFERS.map(function (offer) { return JSON.parse(JSON.stringify(offer)); }),
-            errors: [], upToDate: false, launcher: "1.1.0", renderer: "1.1.0"
+            errors: [], upToDate: false, launcher: "1.3.0", renderer: "1.2.1"
           };
         }
-        return { offers: [], errors: [], upToDate: true, launcher: "1.1.0", renderer: "1.1.0" };
+        return { offers: [], errors: [], upToDate: true, launcher: "1.3.0", renderer: "1.2.1" };
       case "apply_update":
         return { ok: true, message: args.stream === "launcher" ? "GT4Recomp setup started." : "gt4-gs 1.1.1 is ready." };
       case "skip_update":
