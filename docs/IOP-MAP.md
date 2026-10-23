@@ -4,7 +4,7 @@
 
 ## Confirmed
 
-- Boot reboots the IOP with `cdrom0:\IOPRP300.IMG` (18 Sony modules: SYSMEM,
+- Boot reboots the IOP with `cdrom0:\IOPRP300.IMG` (16 Sony modules plus the RESET/ROMDIR/EXTINFO records: SYSMEM,
   LOADCORE, SIFCMD, SIFMAN, THREADMAN, IOMAN, MODLOAD, FILEIO, CDVDMAN, CDVDFSV,
   LOADFILE, TIMEMANI, ROMDRV, EESYNC, SYSCLIB, STDIO). The donor serves these
   libraries as native HLE functions (`runtime/src/iop/libs.cpp`, `io.cpp`,
@@ -62,3 +62,37 @@ loaded on the offline path, and in what order, is Unknown until S7b.
 
 Nothing here changes v2.00: the module files come from the disc the user supplies and the interpreter is the existing
 one. The S6 acceptance ("offline play without hangs") stays open until S7b runs the boot.
+
+## Spec II — the IOP reboot image (TASK-100 S7b)
+
+Pin: [inputs/spec2-dnas310.json](inputs/spec2-dnas310.json) (sizes and hashes only). Tool: `scripts/spec2_iop_image.py`.
+
+**Both games reboot the IOP with a Sony reboot image** [Confirmed]. v2.00 asks for
+`rom0:UDNL cdrom0:\IOPRP300.IMG;1`; Spec II asks for `rom0:UDNL cdrom0:\DNAS310.IMG;1`. The two files are the same
+container: a romdir (`RESET`, `ROMDIR`, `EXTINFO` then one 16-byte entry per module, bodies 16-byte aligned, each an
+ELF IOP module), 278,465 and 282,545 bytes, with **the same 16 system modules in the same order**:
+
+SYSMEM, LOADCORE, SIFCMD, SIFMAN, THREADMAN, IOMAN, MODLOAD, FILEIO, CDVDMAN, CDVDFSV, LOADFILE, TIMEMANI, ROMDRV,
+EESYNC, SYSCLIB, STDIO.
+
+No module is byte-identical between the two images (they are different builds); SIFMAN, CDVDMAN, CDVDFSV and EESYNC
+also differ in size. The runtime loads **neither** image: it logs the reboot request and serves those system
+libraries as native HLE (the table in the pin names the donor file per module), which is why v2.00 never needed
+IOPRP300.IMG on disk. So "loading DNAS310.IMG" cannot mean loading its modules; the HLE set is already the answer.
+
+**What the image does change is the FILEIO protocol generation** [Confirmed by the client code]: each image embeds
+its LOADFILE version under the `PsIIloadfile` tag — IOPRP300 reports `3000`, DNAS310 reports `3100` — and the
+runtime returns that word to the EE (LOADFILE server 0x80000006, method 0x09). The EE-side FILEIO library of that
+generation uses the asynchronous protocol of server 0x80000001: `devctl` (method 23) completes with the SIF packet
+`0x80000011`, not with the ordinary RPC end packet `0x8000000A`. The donor selected the asynchronous server only
+when the reboot path contained `IOPRP`, so the Spec II boot fell back to the synchronous server: the `devctl` on the
+DEV9 device returned -1, no `0x80000011` packet was sent, and the game thread that waits on the per-call FILEIO
+semaphore never woke (S7b stall; the semaphore dump shows the waiters). The fix is the runtime overlay capsule
+`slice276-spec2-iop-runtime` (`scripts/spec2_iop_overlay.inc` + `native/spec2_iop.hpp`): a DNAS310.IMG reboot selects
+the same asynchronous FILEIO server as IOPRP300.IMG. v2.00 never asks for that image, so its behaviour is unchanged.
+
+**SIF servers seen at boot** [Confirmed unless noted]: server `0x80000400` is registered by the guest **MCSERV**
+module (its init calls `sceSifRegisterRpc(&cd, 0x80000400, …)`), and the game binds it from `0x005B88D4` (Spec II;
+`sceSifBindRpc(&cd, 0x80000400, 0)`), the memory-card service it polls while a card is present. That polling is not
+what blocks the boot: the EE threads wait on the FILEIO semaphore above, not on an MC reply.
+

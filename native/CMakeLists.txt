@@ -36,8 +36,12 @@ get_filename_component(GT4_PRIVATE_BASE "${GT4_ASSETS_ROOT}" ABSOLUTE)
 # TASK-084 (slice260..269): frame-cost capsules. They keep the slice191 profile (GS stream + MTVU + VU1/VU0 AOT) and
 # add the TASK-084 instrumentation and optimisation switches. Each capsule pins its own manifest
 # docs/inputs/<capsule name>.json; the license guard capsule of the same profile pins docs/inputs/<its name>.json.
-set(GT4_TASK084_CAPSULE_RE "^private/slice26[0-9]-[a-z0-9-]+-runtime$")
 set(GT4_TASK084_GUARD_RE "^private/slice26[0-9]-[a-z0-9-]*license-guard-runtime$")
+# TASK-100 S7b (slice276): the TASK-084 frame-cost profile plus the Spec II IOP reboot rule (sif.cpp), so the frame-cost
+# capsule family spans slice260..slice279. Only the Spec II executable selects a slice27x capsule; v2.00 keeps its
+# slice262 capsule. It shares the TASK-084 file list and pin rules.
+set(GT4_FRAME_CAPSULE_RE "^private/slice2[67][0-9]-[a-z0-9-]+-runtime$")
+set(GT4_SPEC2_CAPSULE_RE "^private/slice27[0-9]-[a-z0-9-]+-runtime$")
 if(GT4_PERF_RUNTIME_SOURCE)
     # TASK-014 slice208: the accepted explicit-seed library (profile coverage) may carry the performance capsule too.
     # TASK-100 S4: the Spec II target uses the same target-independent runtime capsule.
@@ -264,6 +268,17 @@ target_compile_options(gt4_pacing PRIVATE /W4)
 # TASK-080: display aspect (GT4_DISPLAY_ASPECT parse, Hor+/Vert+ matrix scale, scene policy, runtime glue).
 add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp race_widescreen.cpp cursor_autohide.cpp display_aspect.cpp)
 target_compile_options(gt4_quickfix PRIVATE /W4)
+# TASK-100 S7b: the v2.00 hook fixtures assert the v2.00 guest chains, but gt4_quickfix carries the active target's table
+# (Spec II in a Spec II build). A Spec II build therefore compiles a second copy of the three hook modules pinned to
+# v2.00 for the fixtures only; the game keeps the target table.
+if(GT4_TARGET STREQUAL "spec2")
+    add_library(gt4_quickfix_v200_fixture STATIC race_display.cpp race_widescreen.cpp display_aspect.cpp)
+    target_compile_definitions(gt4_quickfix_v200_fixture PUBLIC GT4_TARGET_FIXTURE_V200)
+    target_compile_options(gt4_quickfix_v200_fixture PRIVATE /W4)
+    set(GT4_HOOK_FIXTURE_LIB gt4_quickfix_v200_fixture)
+else()
+    set(GT4_HOOK_FIXTURE_LIB gt4_quickfix)
+endif()
 # TASK-081: pure Vulkan extension selection (required surface/swapchain only; swapchain maintenance 1 when present).
 add_library(gt4_vulkan_extensions STATIC vulkan_extensions.cpp)
 target_compile_options(gt4_vulkan_extensions PRIVATE /W4)
@@ -303,6 +318,10 @@ add_test(NAME native_license_guard COMMAND $<TARGET_FILE:license_guard_fixture>)
 add_executable(game_target_fixture game_target_fixture.cpp game_target_spec2_fixture.cpp)
 target_compile_options(game_target_fixture PRIVATE /W4)
 add_test(NAME native_game_target COMMAND $<TARGET_FILE:game_target_fixture>)
+# TASK-100 S7b: the Spec II IOP reboot image rule (native/spec2_iop.hpp) on the reboot paths the game uses.
+add_executable(spec2_iop_fixture spec2_iop_fixture.cpp)
+target_compile_options(spec2_iop_fixture PRIVATE /W4)
+add_test(NAME native_spec2_iop COMMAND $<TARGET_FILE:spec2_iop_fixture>)
 add_library(gt4_perf_probe STATIC perf_probe.cpp)
 # TASK-011 step 0 counters (linked into the runtime only with the slice169 capsule).
 add_library(gt4_mtvu_measure STATIC mtvu_measure.cpp)
@@ -470,12 +489,12 @@ if(GT4_PERF_RUNTIME_SOURCE)
         message(FATAL_ERROR "The slice191 GS stream runtime requires the slice191 GS stream port")
     endif()
     if(GT4_GS_STREAM_PORT AND NOT perf_relative STREQUAL "private/slice191-gs-stream-runtime" AND
-       NOT perf_relative MATCHES "${GT4_TASK084_CAPSULE_RE}")
+       NOT perf_relative MATCHES "${GT4_FRAME_CAPSULE_RE}")
         message(FATAL_ERROR "The slice191 GS stream port requires the slice191 GS stream runtime")
     endif()
     if(perf_relative STREQUAL "private/slice170-mtvu-runtime" OR perf_relative STREQUAL "private/slice172-mtvu-runtime" OR
        perf_relative STREQUAL "private/slice178-main-runtime" OR perf_relative STREQUAL "private/slice191-gs-stream-runtime" OR
-       perf_relative MATCHES "${GT4_TASK084_CAPSULE_RE}")
+       perf_relative MATCHES "${GT4_FRAME_CAPSULE_RE}")
         if(GT4_PERF_FRAME_ONLY)
             message(FATAL_ERROR "MTVU requires detailed timing, not frame-only")
         endif()
@@ -486,7 +505,7 @@ if(GT4_PERF_RUNTIME_SOURCE)
         elseif(perf_relative STREQUAL "private/slice191-gs-stream-runtime")
             set(perf_manifest_path "${GT4_ROOT}/docs/inputs/slice191-gs-stream-runtime.json")
             target_link_libraries(ps2runtime_vulkan PUBLIC gt4_gs_stream_client)
-        elseif(perf_relative MATCHES "${GT4_TASK084_CAPSULE_RE}")
+        elseif(perf_relative MATCHES "${GT4_FRAME_CAPSULE_RE}")
             # TASK-084: same profile as slice191; the manifest is named after the capsule itself.
             get_filename_component(perf_capsule_name "${perf_source}" NAME)
             set(perf_manifest_path "${GT4_ROOT}/docs/inputs/${perf_capsule_name}.json")
@@ -510,8 +529,8 @@ if(GT4_PERF_RUNTIME_SOURCE)
            NOT perf_relative STREQUAL "private/slice191-gs-stream-runtime" AND
            NOT perf_relative STREQUAL "private/slice181-license-runtime" AND
            NOT perf_relative STREQUAL "private/slice204-halt-runtime" AND
-           NOT perf_relative MATCHES "${GT4_TASK084_CAPSULE_RE}")
-            message(FATAL_ERROR "The GS async adapter requires a VU1 AOT runtime capsule (slice151, slice154, slice155, slice156, slice157, slice158, slice160, slice164, slice169, slice170, slice172, slice178-main, slice191-gs-stream, slice181, slice204 or a slice26x TASK-084 capsule)")
+           NOT perf_relative MATCHES "${GT4_FRAME_CAPSULE_RE}")
+            message(FATAL_ERROR "The GS async adapter requires a VU1 AOT runtime capsule (slice151, slice154, slice155, slice156, slice157, slice158, slice160, slice164, slice169, slice170, slice172, slice178-main, slice191-gs-stream, slice181, slice204 or a slice26x/slice27x frame-cost capsule)")
         endif()
         set(perf_manifest_path "${GT4_ROOT}/docs/inputs/slice152-gs-async-runtime.json")
         if(GT4_PERF_PACING_PORT)
@@ -544,14 +563,14 @@ if(GT4_PERF_RUNTIME_SOURCE)
                 set(perf_manifest_path "${GT4_ROOT}/docs/inputs/slice181-license-runtime.json")
             elseif(perf_relative STREQUAL "private/slice204-halt-runtime")
                 set(perf_manifest_path "${GT4_ROOT}/docs/inputs/slice204-halt-runtime.json")
-            elseif(perf_relative MATCHES "${GT4_TASK084_CAPSULE_RE}")
+            elseif(perf_relative MATCHES "${GT4_FRAME_CAPSULE_RE}")
                 get_filename_component(perf_capsule_name "${perf_source}" NAME)
                 set(perf_manifest_path "${GT4_ROOT}/docs/inputs/${perf_capsule_name}.json")
             endif()
         endif()
     endif()
     # TASK-059 (slice200): the --portable-check port (slice200-port) pins its own main.cpp.
-    if(PORT STREQUAL "${GT4_PRIVATE_BASE}/private/slice200-port" AND NOT perf_relative MATCHES "${GT4_TASK084_CAPSULE_RE}")
+    if(PORT STREQUAL "${GT4_PRIVATE_BASE}/private/slice200-port" AND NOT perf_relative MATCHES "${GT4_FRAME_CAPSULE_RE}")
         set(perf_manifest_path "${GT4_ROOT}/docs/inputs/slice200-gs-stream-runtime.json")
     endif()
     file(READ "${perf_manifest_path}" perf_manifest)
@@ -601,8 +620,12 @@ if(GT4_PERF_RUNTIME_SOURCE)
     endif()
     if(perf_relative STREQUAL "private/slice170-mtvu-runtime" OR perf_relative STREQUAL "private/slice172-mtvu-runtime" OR
        perf_relative STREQUAL "private/slice178-main-runtime" OR perf_relative STREQUAL "private/slice191-gs-stream-runtime" OR
-       perf_relative MATCHES "${GT4_TASK084_CAPSULE_RE}")
+       perf_relative MATCHES "${GT4_FRAME_CAPSULE_RE}")
         list(APPEND perf_sources gif.cpp memory.cpp hw.cpp dmac.cpp)
+    endif()
+    # TASK-100 S7b: the Spec II capsule also carries the IOP reboot rule (donor runtime/src/iop/sif.cpp).
+    if(perf_relative MATCHES "${GT4_SPEC2_CAPSULE_RE}")
+        list(APPEND perf_sources sif.cpp)
     endif()
     set(perf_expected_files runtime.json ${perf_sources})
     list(SORT perf_expected_files)
@@ -626,6 +649,11 @@ if(GT4_PERF_RUNTIME_SOURCE)
         if(source STREQUAL "cdvdfsv.cpp")
             set(perf_donor_path "iop/cdvdfsv.cpp")
         endif()
+        if(source STREQUAL "sif.cpp")
+            # The capsule copy is compiled from the capsule directory; the overlay rewrites the donor's local include
+            # block to runtime/src-relative paths ("iop/sif.hpp", "hw.hpp"), so no extra include directory is needed.
+            set(perf_donor_path "iop/sif.cpp")
+        endif()
         list(REMOVE_ITEM RUNTIME_FILES "${DONOR}/runtime/src/${perf_donor_path}")
         if(source STREQUAL "gif.cpp")
             list(REMOVE_ITEM RUNTIME_FILES "${DONOR}/runtime/src/gs/gif.cpp")
@@ -641,8 +669,8 @@ endif()
 # VU1 AOT: compile the emitted table into the runtime. Only valid with the VU1 AOT capsule.
 set(GT4_VU1_GENERATED_DIR "" CACHE PATH "Fresh tools/vu_recomp generator output (vu1_generated.cpp) for the VU1 AOT capsule")
 if(GT4_VU1_GENERATED_DIR)
-    if(NOT GT4_PERF_RUNTIME_SOURCE OR NOT GT4_PERF_RUNTIME_SOURCE MATCHES "slice151-vu1-aot-runtime$|slice154-vu1-flags-runtime$|slice155-vu1-full-runtime$|slice156-quickfix-runtime$|slice157-vu1-all-runtime$|slice158-quickfix2-runtime$|slice160-vu0-runtime$|slice164-quickfix3-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$")
-        message(FATAL_ERROR "GT4_VU1_GENERATED_DIR requires a VU1 AOT runtime capsule (slice151, 154, 155, 156, 157, 158, 160, 164, 169, 170, 172, 178-main, 191-gs-stream or a slice26x TASK-084 capsule)")
+    if(NOT GT4_PERF_RUNTIME_SOURCE OR NOT GT4_PERF_RUNTIME_SOURCE MATCHES "slice151-vu1-aot-runtime$|slice154-vu1-flags-runtime$|slice155-vu1-full-runtime$|slice156-quickfix-runtime$|slice157-vu1-all-runtime$|slice158-quickfix2-runtime$|slice160-vu0-runtime$|slice164-quickfix3-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$|slice27[0-9]-[a-z0-9-]+-runtime$")
+        message(FATAL_ERROR "GT4_VU1_GENERATED_DIR requires a VU1 AOT runtime capsule (slice151, 154, 155, 156, 157, 158, 160, 164, 169, 170, 172, 178-main, 191-gs-stream or a slice26x/slice27x frame-cost capsule)")
     endif()
     foreach(generated_file IN ITEMS vu1_generated.cpp manifest.json)
         if(NOT EXISTS "${GT4_VU1_GENERATED_DIR}/${generated_file}")
@@ -659,7 +687,7 @@ if(GT4_VU1_GENERATED_DIR)
     # Suppressed for generated sources only, so warnings in hand-written code stay visible.
     set_source_files_properties("${GT4_VU1_GENERATED_DIR}/vu1_generated.cpp" ${vu1_generated_parts}
         PROPERTIES COMPILE_OPTIONS "-Wno-unused-label")
-elseif(GT4_PERF_RUNTIME_SOURCE AND GT4_PERF_RUNTIME_SOURCE MATCHES "slice151-vu1-aot-runtime$|slice154-vu1-flags-runtime$|slice155-vu1-full-runtime$|slice156-quickfix-runtime$|slice157-vu1-all-runtime$|slice158-quickfix2-runtime$|slice160-vu0-runtime$|slice164-quickfix3-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$")
+elseif(GT4_PERF_RUNTIME_SOURCE AND GT4_PERF_RUNTIME_SOURCE MATCHES "slice151-vu1-aot-runtime$|slice154-vu1-flags-runtime$|slice155-vu1-full-runtime$|slice156-quickfix-runtime$|slice157-vu1-all-runtime$|slice158-quickfix2-runtime$|slice160-vu0-runtime$|slice164-quickfix3-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$|slice27[0-9]-[a-z0-9-]+-runtime$")
     message(FATAL_ERROR "The VU1 AOT capsule requires GT4_VU1_GENERATED_DIR")
 endif()
 
@@ -667,8 +695,8 @@ endif()
 # slice160 capsule, which also overlays the VU1 table, so GT4_VU1_GENERATED_DIR is required as well.
 set(GT4_VU0_GENERATED_DIR "" CACHE PATH "Fresh tools/vu_recomp generator output (vu0_generated.cpp) for the VU0 AOT capsule")
 if(GT4_VU0_GENERATED_DIR)
-    if(NOT GT4_PERF_RUNTIME_SOURCE OR NOT GT4_PERF_RUNTIME_SOURCE MATCHES "slice160-vu0-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$")
-        message(FATAL_ERROR "GT4_VU0_GENERATED_DIR requires the VU0 AOT runtime capsule (slice160, 169, 170, 172, 178-main, 191-gs-stream or a slice26x TASK-084 capsule)")
+    if(NOT GT4_PERF_RUNTIME_SOURCE OR NOT GT4_PERF_RUNTIME_SOURCE MATCHES "slice160-vu0-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$|slice27[0-9]-[a-z0-9-]+-runtime$")
+        message(FATAL_ERROR "GT4_VU0_GENERATED_DIR requires the VU0 AOT runtime capsule (slice160, 169, 170, 172, 178-main, 191-gs-stream or a slice26x/slice27x frame-cost capsule)")
     endif()
     if(NOT GT4_VU1_GENERATED_DIR)
         message(FATAL_ERROR "The VU0 AOT capsule also requires GT4_VU1_GENERATED_DIR (it keeps the VU1 table)")
@@ -681,7 +709,7 @@ if(GT4_VU0_GENERATED_DIR)
     file(GLOB vu0_generated_parts CONFIGURE_DEPENDS "${GT4_VU0_GENERATED_DIR}/vu0_generated_*.cpp")
     list(SORT vu0_generated_parts)
     target_sources(ps2runtime_vulkan PRIVATE "${GT4_VU0_GENERATED_DIR}/vu0_generated.cpp" ${vu0_generated_parts})
-elseif(GT4_PERF_RUNTIME_SOURCE AND GT4_PERF_RUNTIME_SOURCE MATCHES "slice160-vu0-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$")
+elseif(GT4_PERF_RUNTIME_SOURCE AND GT4_PERF_RUNTIME_SOURCE MATCHES "slice160-vu0-runtime$|slice169-mtvu-measure-runtime$|slice170-mtvu-runtime$|slice172-mtvu-runtime$|slice178-main-runtime$|slice191-gs-stream-runtime$|slice181-license-runtime$|slice204-halt-runtime$|slice26[0-9]-[a-z0-9-]+-runtime$|slice27[0-9]-[a-z0-9-]+-runtime$")
     message(FATAL_ERROR "The VU0 AOT capsule requires GT4_VU0_GENERATED_DIR")
 endif()
 target_include_directories(ps2runtime_vulkan PUBLIC "${DONOR}/runtime/include" "${DONOR}/runtime/src"
@@ -813,15 +841,15 @@ target_compile_options(fpu_chop_fixture PRIVATE /W4)
 add_executable(quickfix_fixture quickfix_fixture.cpp)
 add_executable(race_display_fixture race_display_fixture.cpp)
 add_executable(race_widescreen_fixture race_widescreen_fixture.cpp)
-target_link_libraries(race_widescreen_fixture PRIVATE gt4_quickfix)
+target_link_libraries(race_widescreen_fixture PRIVATE ${GT4_HOOK_FIXTURE_LIB})
 target_compile_options(race_widescreen_fixture PRIVATE /W4)
 add_executable(display_aspect_fixture display_aspect_fixture.cpp)
-target_link_libraries(display_aspect_fixture PRIVATE gt4_quickfix)
+target_link_libraries(display_aspect_fixture PRIVATE ${GT4_HOOK_FIXTURE_LIB})
 target_compile_options(display_aspect_fixture PRIVATE /W4)
 add_executable(cursor_autohide_fixture cursor_autohide_fixture.cpp)
 target_link_libraries(cursor_autohide_fixture PRIVATE gt4_quickfix)
 target_compile_options(cursor_autohide_fixture PRIVATE /W4)
-target_link_libraries(race_display_fixture PRIVATE gt4_quickfix)
+target_link_libraries(race_display_fixture PRIVATE ${GT4_HOOK_FIXTURE_LIB})
 target_compile_options(race_display_fixture PRIVATE /W4)
 target_link_libraries(quickfix_fixture PRIVATE gt4_quickfix)
 target_compile_options(quickfix_fixture PRIVATE /W4)
@@ -832,6 +860,14 @@ add_executable(shape_capture_export_fixture shape_capture_export_fixture.cpp sha
 target_compile_options(shape_capture_export_fixture PRIVATE /W4)
 add_executable(shape_capture_control_fixture shape_capture_control_fixture.cpp shape_capture_control.cpp shape_capture_export.cpp shape_observer.cpp)
 target_compile_options(shape_capture_control_fixture PRIVATE /W4)
+# TASK-100 S7b: these fixtures assert the qualified v2.00 hook chains; in a Spec II build they pin the active table to
+# v2.00 so the same checks still run (the Spec II half of game_target_fixture deliberately does not). Production targets
+# never define GT4_TARGET_FIXTURE_V200.
+foreach(v200_fixture IN ITEMS license_guard_fixture race_display_fixture race_widescreen_fixture display_aspect_fixture
+                               shape_observer_fixture shape_capture_export_fixture shape_capture_control_fixture)
+    target_compile_definitions(${v200_fixture} PRIVATE GT4_TARGET_FIXTURE_V200)
+endforeach()
+set_source_files_properties(game_target_fixture.cpp PROPERTIES COMPILE_DEFINITIONS GT4_TARGET_FIXTURE_V200)
 if(GT4_SHAPE_RUNTIME_SOURCE)
     get_filename_component(observation_source "${GT4_SHAPE_RUNTIME_SOURCE}" ABSOLUTE)
     file(RELATIVE_PATH observation_relative "${GT4_ROOT}" "${observation_source}")

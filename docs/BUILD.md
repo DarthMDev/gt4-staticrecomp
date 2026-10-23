@@ -2630,3 +2630,60 @@ Executable recipe (worktree needs `-DGT4_PYTHON`): the slice262 capsule recipe w
   patch set. The game requests the IOP reboot with `DNAS310.IMG` (the beta's protected runtime) instead of
   `IOPRP300.IMG`; the runtime only logs it. Next: semaphore trace, DNAS reboot overlay, IOP module A/B.
 
+## Spec II S7b - the IOP reboot image and the FILEIO protocol (TASK-100)
+
+The 2026-10-22 stall is fixed by one derived runtime source. The game reboots the IOP with
+`rom0:UDNL cdrom0:\DNAS310.IMG;1`; the runtime never loads either reboot image (IOPRP300.IMG included), it serves the
+16 system modules as native HLE. What the image selects is the **FILEIO protocol generation** through its own
+LOADFILE version (`PsIIloadfile` tag: IOPRP300 `3000`, DNAS310 `3100`). The asynchronous server 0x80000001 answers a
+`devctl` (method 23) with the SIF packet `0x80000011`; the synchronous fallback only sends the ordinary RPC end packet,
+so the game's fileio thread waits forever on its completion semaphore.
+
+Capsule (fresh `private/` child, never overwritten):
+
+```
+private/tooling-venv/Scripts/python.exe scripts/prepare_perf_runtime.py <assets>/private/slice276-spec2-iop-runtime ^
+  --assets-root <assets> --mtvu --gs-stream --frame-cost --vu0-aot --spec2-iop
+private/tooling-venv/Scripts/python.exe scripts/pin_frame_cost_runtime.py slice276-spec2-iop-runtime ^
+  --assets-root <assets>
+```
+
+- `scripts/spec2_iop_overlay.inc` + `native/spec2_iop.hpp`: a `DNAS310.IMG` (or `IOPRP*`) reboot selects the
+  asynchronous FILEIO server and logs the LOADFILE version. The derived `sif.cpp` is compiled from the capsule with
+  `runtime/src`-relative includes (`iop/sif.hpp`, `hw.hpp`). The first attempt (`private/slice275-spec2-iop-runtime`)
+  did not compile: its include block resolved `hw.hpp` to the IOP header; slice276 is the qualified capsule.
+- CMake: `GT4_FRAME_CAPSULE_RE` covers `slice260`..`slice279`; a `slice27x` capsule also carries `sif.cpp`; the pin is
+  `docs/inputs/<capsule name>.json`. A Spec II build also compiles `gt4_quickfix_v200_fixture` (the three hook modules
+  with `GT4_TARGET_FIXTURE_V200`) so the v2.00 hook fixtures still run against the v2.00 table.
+- CTest `native_spec2_iop` covers the reboot-image rule; `Spec2RuntimeCapsuleTests` and `IopRebootImageTests` in
+  `tests/python/test_spec2.py` cover the overlay derivation and the `inputs/spec2-dnas310.json` pin.
+
+Recipe (same as S4, with the new capsule), `O:\gt4recomp-scratch\spec2-s7d-build`:
+
+```
+cmake -S <worktree> -B O:\gt4recomp-scratch\spec2-s7d-build\build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_CXX_COMPILER="C:/Program Files/LLVM/bin/clang-cl.exe" ^
+  -DGT4_EE_PROFILE=spec2 -DGT4_TARGET=spec2 -DGT4_ASSETS_ROOT=<assets> ^
+  -DGT4_PERF_RUNTIME_SOURCE=<assets>/private/slice276-spec2-iop-runtime ^
+  -DGT4_PORT_DIR=<assets>/private/slice200-port -DGT4_SHADER_DIR=<assets>/private/slice153-pacing-shaders ^
+  -DGT4_VU1_GENERATED_DIR=<assets>/private/slice157-vu1-all-gen ^
+  -DGT4_VU0_GENERATED_DIR=<assets>/private/slice160-vu0-gen-r3 ^
+  -DGT4_VU0_IMAGE_FILE=<assets>/private/slice160-vu0-image/vu0_image.bin ^
+  -DGT4_VU_CORPUS_DIR=<assets>/private/slice155-vu1-full-corpus ...
+```
+
+Run notes:
+
+- Configure **outside** a VS developer shell. Inside one, CMake picks the `cmake_llvm_rc` wrapper for the game .rc and
+  that wrapper fails here (silent exit 1); the plain environment uses the native RC rule. Builds still need
+  `PATH` with the LLVM bin folder.
+- Headless review runs (donor renderer writes PPM frames; create the frame folder first):
+  `gt4vulkan-spec2.exe <derived ELF> --ntsc --disc "<Spec II ISO>" --frames N --memcard <copy>.ps2 --misses misses.txt
+  --frames-dir <dir> --frame-every 200 --press <frame>:<button>:<frames> ...`
+- Boot press schedule found by hand (Spec II 1.10, seed card without GT data): `600:start`, `900:cross` (language),
+  `1500:left`,`1600:cross` (decline game data), `2200:right`,`2300:cross` (start game), `6200:start` (skip intro),
+  `8000:start` (main menu) → `9200:cross` (Arcade), `10000:cross` (Single Race), `11000/11200:down`, `11400:cross`
+  (City Courses), `12200:cross` (track), `13000:cross` (Normal), `14400:cross` (Ford), carousel `right` ×5,
+  `16400:cross` (car), `17200/18000:cross`, then hold `cross` to drive.
+
+

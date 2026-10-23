@@ -169,7 +169,7 @@ Checks (candidate `gt4vulkan.exe` 97,240,064 bytes, sha256 `ca1eff8d90b6df03…`
   `O:\gt4recomp-scratch\spec2-s4-build\build`.
 - **Pending**: the entry ledger / "no translated code" hunt on a real boot (S7b, blocked) and the later S8 hooks.
 
-### S7b — first headless boot: blocked before the menus (2026-10-22)
+### S7b — first headless boot (2026-10-22; **resolved 2026-10-23, see the entry above**)
 
 What was fixed to get this far:
 
@@ -202,6 +202,54 @@ Next steps for S7b (recorded, not done): trace which semaphore the main thread w
 decide whether the DNAS reboot needs a runtime overlay (a capsule, never the frozen donor); as an S6 experiment, boot
 a scratch ISO copy without one of the new modules (LGAUD/PPP/PPPOE) to see whether the stall is module-driven.
 
+### S7b — first headless boot: BLOCKER CLEARED, menus and a race run headless (2026-10-23)
+
+The 2026-10-22 blocker (nothing drawn, every EE thread waiting, IOP idle) is fixed. Root cause [Confirmed by the
+client code and the traces]: the Spec II disc reboots the IOP with `rom0:UDNL cdrom0:\DNAS310.IMG;1`, and the donor
+runtime selected its **asynchronous FILEIO server** (0x80000001, the one that answers `devctl`, method 23, with the
+SIF packet `0x80000011`) only when the reboot path contained `IOPRP`. Spec II fell back to the synchronous server:
+the `devctl` on `dev9x` returned -1 and sent no completion packet, and the game thread that waits on the per-call
+FILEIO semaphore never woke (the dump showed the waiter). The image itself needs no module loading: DNAS310.IMG is
+the same romdir as IOPRP300.IMG with the same 16 Sony system modules in the same order, all served as HLE
+(`docs/IOP-MAP.md`, pin `inputs/spec2-dnas310.json`).
+
+What landed:
+
+- **Runtime capsule** `private/slice276-spec2-iop-runtime` (`scripts/prepare_perf_runtime.py --mtvu --gs-stream
+  --frame-cost --vu0-aot --spec2-iop`, pin `inputs/slice276-spec2-iop-runtime.json`): the slice262 profile plus a
+  derived `sif.cpp` (`scripts/spec2_iop_overlay.inc`) that calls `native/spec2_iop.hpp`
+  (`async_fileio_boot_image`): IOPRP* or DNAS310.IMG selects the asynchronous FILEIO server, and the line logs the
+  LOADFILE version read from the image. v2.00 never asks for DNAS310.IMG; its build path and behaviour are unchanged.
+- **CMake**: `GT4_FRAME_CAPSULE_RE` (slice260-279) for the frame-cost profile; a `slice27x` capsule also carries
+  `sif.cpp`; a Spec II build compiles a v2.00-pinned copy of the three hook modules for the v2.00 hook fixtures
+  (`GT4_TARGET_FIXTURE_V200`, `gt4_quickfix_v200_fixture`), so the v2.00 checks still run in a Spec II build.
+- **CTest** `native_spec2_iop` (`native/spec2_iop_fixture.cpp`) pins the reboot-image rule.
+
+Boot evidence (derived ELF `36f60b1a…`, Spec II ISO, build `O:\gt4recomp-scratch\spec2-s7d-build`, donor renderer 1x,
+run directories `O:\gt4recomp-scratch\spec2-s7d-runs\*`):
+
+| Run | Frames | Result |
+|---|---|---|
+| `menus` | 4,200 | 1,805,640 primitives, all 23+ IRX modules loaded, the boot devctl answered by the async path |
+| `menus-frames` | 1,500 | language menu at 600, game-data dialog at 1,500 (frames reviewed by eye) |
+| `menus-main` | 4,000 | "Welcome to Gran Turismo 4 Spec II", name entry, intro movie, Ford GT showroom |
+| `menus-skip` | 9,000 | main menu: "GRAN TURISMO 4 spec-II", Arcade Mode highlighted |
+| `arcade-3` | 21,000 | Arcade → Single Race → Costa di Amalfi → Ford RS200 '84 → **race running** (HUD, lap timer, position, minimap; 169,687,609 primitives) |
+
+No "no translated code" in any run; the IOP runs up to 68 threads with the network modules loaded and their device
+opens failing cleanly. Checks: CTest 43 of 43 in the Spec II build; Python suite 668 tests with the Spec II build
+(0 failures, 51 skipped) and with the v2.00 build (1 expected failure: the release distribution pin, unchanged).
+**v2.00 identity re-run against the 1.2.3 build (`private/slice268-build`) with `GT4_GS_STREAM_HASH=1`:** menus
+`463d455c…`/`1ccb97c5…`, day `992f1ac9…`/`0c79dcf5…`, night `c57e7d03…`/`c091716e…` — all six equal.
+
+Candidates this round (not release-pinned; the pin set is a release decision): Spec II `gt4vulkan-spec2.exe`
+102,215,168 bytes, sha256 `87298c7b9e78…` (`O:\gt4recomp-scratch\spec2-s7d-build`); v2.00 control `gt4vulkan.exe`
+97,240,064 bytes, sha256 `44d39102ea46…` (`O:\gt4recomp-scratch\spec2-s7e-v200-build`).
+
+Open: the race ran with a scripted accelerator press (no driving test); the UI/HUD are the 4:3 layout until S8
+retargets the hooks; S6's "offline play without hangs" is now met on the boot/race path but not yet swept across
+menus (GT mode needs game data, which the seed card does not have).
+
 ### S5 — VU0 and VU1: mapping done (2026-10-22)
 
 Tool: `scripts/spec2_vu.py`. Pin: [inputs/spec2-vu.json](inputs/spec2-vu.json). Tests: `VuTests` in
@@ -226,7 +274,9 @@ section of [IOP-MAP](IOP-MAP.md). Tests: `IopTests`.
 - Policy: everything the offline path needs stays interpreted; the network group is interpreted with no device model
   (device open must fail cleanly) and DNAS stays unloaded. Fallback order if a hang appears: per-module instruction
   counter, HLE stub reporting "no network device", refusal to load.
-- Open: "offline play without hangs" needs S7b.
+- Open: "offline play without hangs" needs S7b. **[2026-10-23]** The boot now loads all 28 requested modules
+  (including PPP/PPPOE/LGAUD-path ones) and reaches a race without a hang; GT mode still needs game data on the card,
+  so its menu sweep is open.
 
 ### S2 — derived ELF: DONE (2026-10-22)
 

@@ -15,6 +15,10 @@
 // A zero field means "this target does not have that hook". The hook then disables itself and logs one line, and the
 // overlays use `never_match()` so a guest address can never key a hook that does not exist.
 //
+// TASK-100 S7b: the v2.00 hook fixtures assert the qualified v2.00 guest chains, so a fixture target may define
+// GT4_TARGET_FIXTURE_V200 to pin the active table to v2.00 even in a Spec II build (native/CMakeLists.txt). Production
+// code never defines it.
+//
 // Adding a target (S8 for Spec II) means filling its HookAddresses; the v2.00 entries are the Qualified release values
 // and must not change. The target is selected at build time by GT4_TARGET (CMake), default v200.
 
@@ -133,7 +137,7 @@ inline constexpr HookAddresses kSpec2Hooks = {};
 inline constexpr Profile kV200{Id::v200, "v2.00", 32u << 20, kV200Hooks};
 inline constexpr Profile kSpec2{Id::spec2, "Spec II", 32u << 20, kSpec2Hooks};
 
-#if defined(GT4_TARGET_SPEC2)
+#if defined(GT4_TARGET_SPEC2) && !defined(GT4_TARGET_FIXTURE_V200)
 inline constexpr Id kActiveId = Id::spec2;
 #else
 inline constexpr Id kActiveId = Id::v200;

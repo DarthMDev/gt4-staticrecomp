@@ -661,6 +661,19 @@ and the plugin's own pointer tables are inside its executable segment, so 12 ent
 draws nothing (8 primitives against v2.00's 2,524 at the same frame), all EE threads wait, the IOP is idle. The
 original unpatched image behaves identically, so our patches are not the cause. Next: semaphore trace, the DNAS310
 IOP-reboot path, and an IOP module A/B.
+Progress (2026-10-23, S7b unblocked: menus and a race): the stall was the FILEIO protocol generation. The Spec II disc
+reboots the IOP with `DNAS310.IMG` instead of `IOPRP300.IMG`; the donor selected its asynchronous FILEIO server (the
+one that answers `devctl`, method 23, with the SIF packet `0x80000011`) only for a path containing `IOPRP`, so the
+game's fileio thread waited forever on its completion semaphore. The image needs no loading: DNAS310.IMG is the same
+romdir as IOPRP300.IMG, with the same 16 Sony system modules in the same order, all served as HLE (pin
+`docs/inputs/spec2-dnas310.json`, section in docs/IOP-MAP.md). Fix: capsule `private/slice276-spec2-iop-runtime`
+(`scripts/prepare_perf_runtime.py --spec2-iop`, `scripts/spec2_iop_overlay.inc` + `native/spec2_iop.hpp`); v2.00
+keeps its capsule. Headless: 4,200 menu frames (1.8 M primitives), the main menu, Arcade Mode, track and car
+selection, and a 21,000-frame race at Costa di Amalfi (169.7 M primitives, HUD, lap timer), no "no translated code".
+CTest 43/43 in the Spec II build (new `native_spec2_iop`); Python 668 tests: all pass with the Spec II build (51
+skipped), only the expected release-pin failure with the v2.00 build. v2.00 identity against the 1.2.3 build: menus,
+day and night dump and GS stream hashes all equal. Open: S8 (Spec II hook addresses), S9 (launcher, installer,
+credits); the race used a scripted accelerator press, and GT mode still needs game data on the card.
 
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new

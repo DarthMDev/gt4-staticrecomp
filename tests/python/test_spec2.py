@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import spec2_beta_elf as beta  # noqa: E402
 import spec2_patches as patches  # noqa: E402
+import spec2_iop_image as iop_image  # noqa: E402
+import prepare_perf_runtime as runtime  # noqa: E402
 
 
 class PinTests(unittest.TestCase):
@@ -326,6 +328,96 @@ class EeGenerateTests(unittest.TestCase):
         self.assertEqual(pin['files'], pin['units'] + 2)  # table.cpp and the ledger/summary file
         self.assertRegex(pin['inventory_sha256'], r'^[0-9a-f]{64}$')
         self.assertIn('1285650 instructions', pin['stats'])
+
+
+class IopRebootImageTests(unittest.TestCase):
+    """S7b: the DNAS310.IMG romdir parser and the pin derived from the owner's disc (hashes only, no disc bytes)."""
+
+    @staticmethod
+    def make_image(modules, bookkeeping=('RESET', 'ROMDIR', 'EXTINFO')):
+        def entry(name, size):
+            return name.encode('latin-1').ljust(10, b'\x00') + (0).to_bytes(2, 'little') + size.to_bytes(4, 'little')
+        rows = [(name, 0) for name in bookkeeping] + [(name, len(data)) for name, data in modules]
+        header = b''.join(entry(name, size) for name, size in rows) + b'\x00' * 16
+        body = b''
+        for _, data in modules:
+            body += data + b'\x00' * ((16 - len(data) % 16) % 16)
+        return header + b'\x00' * ((16 - len(header) % 16) % 16) + body
+
+    def test_romdir_layout_and_module_hashes(self):
+        first = b'\x7fELF' + bytes(range(28))
+        second = b'\x7fELF' + bytes(range(12))
+        image = self.make_image([('SYSMEM', first), ('STDIO', second)])
+        parsed = iop_image.parse_image(image)
+        self.assertEqual([module['name'] for module in parsed['modules']], ['SYSMEM', 'STDIO'])
+        self.assertEqual([module['size'] for module in parsed['modules']], [len(first), len(second)])
+        self.assertTrue(all(module['elf'] for module in parsed['modules']))
+        self.assertEqual(parsed['modules'][0]['sha256'], hashlib.sha256(first).hexdigest())
+        self.assertEqual(parsed['modules'][1]['hle'], iop_image.HLE_SURFACE['STDIO'])
+        self.assertEqual(parsed['modules'][0]['hle'], iop_image.HLE_SURFACE['SYSMEM'])
+
+    def test_a_file_that_is_not_a_romdir_is_refused(self):
+        with self.assertRaises(ValueError):
+            iop_image.parse_image(b'\x7fELF' + b'\x00' * 64)
+
+    def test_pin_matches_the_tool(self):
+        pin = json.loads((ROOT / 'docs/inputs/spec2-dnas310.json').read_text(encoding='utf-8'))
+        self.assertEqual(pin['spec2_iso_sha256'],
+                         '6a3484b9672c10a92154ecee6faa5bbcfd4ed8cd538d8283e429c3fe6e1704b2')
+        self.assertEqual(pin['image']['path'], '/DNAS310.IMG;1')
+        self.assertEqual(pin['image']['size_bytes'], 282545)
+        self.assertEqual(pin['image']['sha256'],
+                         'c860a99d314b4e9e1b19c41988a76fc9ea3aa172c4770dfa05cef5f482d45424')
+        names = [module['name'] for module in pin['image']['modules']]
+        self.assertEqual(len(names), 16)
+        self.assertEqual(names[0], 'SYSMEM')
+        self.assertEqual(names[-1], 'STDIO')
+        self.assertEqual(len(set(names)), len(names))
+        self.assertTrue(pin['comparison']['same_module_order'])
+        self.assertEqual(pin['comparison']['identical_modules'], [])
+        for module in pin['image']['modules']:
+            self.assertEqual(module['hle'], iop_image.HLE_SURFACE[module['name']])
+            self.assertRegex(module['sha256'], r'^[0-9a-f]{64}$')
+            self.assertTrue(module['elf'])
+        # The pin carries sizes and hashes only: no module bytes.
+        self.assertNotIn('bytes', pin['image'])
+        self.assertNotIn('data', pin['image'])
+
+
+class Spec2RuntimeCapsuleTests(unittest.TestCase):
+    """S7b: the Spec II IOP reboot capsule (scripts/prepare_perf_runtime.py --spec2-iop) and its pin."""
+
+    def test_overlay_applies_and_reverses(self):
+        source = ('#include "sif.hpp"\n\n#include "../hw.hpp"\n#include "iop.hpp"\n#include "io.hpp"\n'
+                  '#include "kernel.hpp"\n\nvoid reboot() {\n'
+                  '    if (path.find("IOPRP") != std::string::npos) g_fileio_async = true;\n'
+                  '    if (const auto space = path.find(\' \'); space != std::string::npos) '
+                  'read_loadfile_version(path.substr(space + 1));\n}\n')
+        result = runtime.apply_spec2_iop(source)
+        self.assertIn('#include "spec2_iop.hpp"', result)
+        self.assertIn('#include "iop/sif.hpp"', result)
+        self.assertNotIn('../hw.hpp', result)
+        self.assertIn('gt4::spec2_iop::async_fileio_boot_image(path, g_loadfile_version)', result)
+        self.assertNotIn('if (path.find("IOPRP") != std::string::npos) g_fileio_async = true;', result)
+        # The derivation is reversible (apply_overlay checks this too; assert the reverse text here).
+        inverse = result.replace('gt4::spec2_iop::async_fileio_boot_image(path, g_loadfile_version)',
+                                 'path.find("IOPRP") != std::string::npos')
+        self.assertIn('if (path.find("IOPRP") != std::string::npos) g_fileio_async = true;', inverse)
+
+    def test_overlay_refuses_a_changed_anchor(self):
+        with self.assertRaises(ValueError):
+            runtime.apply_spec2_iop('void reboot() {\n}\n')
+
+    def test_capsule_pin_is_consistent(self):
+        pin = json.loads((ROOT / 'docs/inputs/slice276-spec2-iop-runtime.json').read_text(encoding='utf-8'))
+        self.assertEqual(pin['donor_sha256']['iop/sif.cpp'],
+                         '182a24218d719a669b3742867f9901b49d2e1043393f2211e93363dc0180dacc')
+        self.assertIn('sif.cpp', pin['source_sha256'])
+        self.assertEqual(pin['spec2_iop_profile'], 'dnas310-reboot-v1')
+        self.assertEqual(pin['mtvu_runtime_profile'], 'task084-frame-cost-v1')
+        self.assertEqual(pin['vu0_aot_profile'], 'overlay-v1')
+        self.assertEqual(pin['gs_stream_profile'], 'task035-seam-v1')
+        self.assertRegex(pin['receipt_sha256'], r'^[0-9a-f]{64}$')
 
 
 if __name__ == '__main__':

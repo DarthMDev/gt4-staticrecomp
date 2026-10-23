@@ -34,13 +34,24 @@ and its own executable (a second CMake profile), then the first boot.
 
 S4 is now built: `-DGT4_TARGET=spec2 -DGT4_EE_PROFILE=spec2` links the Spec II library
 (`private/slice274-spec2-ee-producer/game-build/ps2game.lib`, `5e483768…`) into `gt4vulkan-spec2.exe`, with v2.00
-untouched. **S7b is blocked before the menus**: the derived image boots headless with no "no translated code" (600 and
-4,200 frames), but the game draws nothing afterwards (8 primitives against v2.00's 2,524 at the same frame), every EE
-thread waits and the IOP is idle. The original unpatched image behaves identically, so the patch set is not the cause.
-Two S7b fixes landed on the way: the plugin PT_LOAD sits inside the data PT_LOAD, so the derived ELF now splits the
-data segment around the plugin (the translator otherwise read zeros for it), and 12 plugin entry seeds cover the
-plugin's own pointer tables. Next: which EE semaphore the main thread waits on, the `DNAS310.IMG` IOP reboot path, and
-an IOP module A/B.
+untouched. Two S7b fixes landed on the way: the plugin PT_LOAD sits inside the data PT_LOAD, so the derived ELF now
+splits the data segment around the plugin (the translator otherwise read zeros for it), and 12 plugin entry seeds
+cover the plugin's own pointer tables.
+
+**S7b is unblocked, and the Spec II target boots to the menus and into a race (2026-10-23).** The stall was the FILEIO
+protocol generation: the Spec II disc reboots the IOP with `DNAS310.IMG` instead of `IOPRP300.IMG`, and the donor
+selected its asynchronous FILEIO server (the one that answers `devctl`, method 23, with the SIF packet `0x80000011`)
+only for a path containing `IOPRP`. On the synchronous fallback the game's fileio thread waited forever on its
+completion semaphore. The reboot image itself needs no loading: DNAS310.IMG is the same romdir as IOPRP300.IMG with
+the same 16 Sony system modules in the same order, all served as HLE (`docs/IOP-MAP.md`, `inputs/spec2-dnas310.json`).
+Fix: capsule `private/slice276-spec2-iop-runtime` (`--spec2-iop`, `scripts/spec2_iop_overlay.inc` +
+`native/spec2_iop.hpp`); v2.00 keeps its capsule and is unchanged. Headless evidence: 4,200 menu frames with 1.8 M
+primitives, the language menu, the main menu, Arcade Mode, track and car selection, and a 21,000-frame race at Costa
+di Amalfi (169.7 M primitives, HUD and lap timer), with no "no translated code". CTest 43/43 in the Spec II build; the
+Python suite passes with the Spec II build (668 tests) and keeps only the expected release-pin failure with the v2.00
+build. v2.00 identity re-run: menus `463d455c…`/`1ccb97c5…`, day `992f1ac9…`/`0c79dcf5…`, night
+`c57e7d03…`/`c091716e…`, all equal to the 1.2.3 build. Next: S8 (Spec II hook addresses), S9 (launcher, installer,
+credits).
 
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
