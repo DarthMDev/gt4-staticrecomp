@@ -8,7 +8,7 @@
 
 #include <cstdio>
 
-bool spec2_target_has_no_hooks();
+bool spec2_target_has_the_s8_hooks();
 bool spec2_match_addresses_never_match();
 
 namespace {
@@ -92,7 +92,7 @@ void check_helpers() {
 int main() {
   check_v200_values();
   check_helpers();
-  check(spec2_target_has_no_hooks(), "Spec II table disables every hook");
+  check(spec2_target_has_the_s8_hooks(), "Spec II table has the S8 hooks and disables the rest");
   check(spec2_match_addresses_never_match(), "Spec II overlay keys are the sentinel");
   if (failures != 0) {
     std::fprintf(stderr, "game_target_fixture: %d failure(s)\n", failures);

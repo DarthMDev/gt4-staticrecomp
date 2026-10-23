@@ -59,8 +59,21 @@ readbacks, one 483 ms outlier), 3x upscale (1920x1440 dumps) and the owner's `!_
 1.2, no stream errors or back-pressure stalls). The GT4 display crop is a fixed gt4-gs constant (`{0,0,1,2}`) that
 logs for both games; the game still announces the v2.00 serial SCUS-97328 in the GS handshake and gt4-gs has no
 SCUS-97436 GameDB entry (recorded for S8/S9). `scripts/frame_cost_headless.py` gained `--exe/--elf/--iso/--press/
---textures/--gs-sha256` with the v2.00 gate defaults unchanged. Next: S8 (Spec II hook addresses), S9 (launcher,
-installer, credits).
+--textures/--gs-sha256` with the v2.00 gate defaults unchanged.
+
+**S8 is done for the main hooks (2026-10-23).** The Spec II table now has the option chain (owner `0x664EDC`, option
+`+0x680`, wide flag `+0x14`, record `+0x24` with width/height at `+0xC`/`+0x10`, presets `0x664E20/50/80/B0`,
+published wide word `0x6655A0`, race display index `+0x1718`), `RaceBase::initMonitor` `0x26BDB0` with the camera
+return label `0x26BE60`, `RaceDisplay::render` `0x1C5040` and the HUD matrix at `+0x70`. Values were found from the
+v2.00 code shapes in the derived ELF and confirmed with a runtime RAM dump of the Spec II menus. New fixture
+`native_spec2_hooks` asserts every value and the write rules in synthetic RAM; a headless GSdx race at 21:9 shows the
+camera matrix scaled (`x 0.761905`), the first `RaceDisplay::render`, the centred HUD canvas and the fill policy. The
+16:9 hold finds the settled owner (the game already boots 16:9, so it writes nothing); the 480p hold is a
+`window.cpp` VBlank hook, so headless runs cover its Spec II rule through the fixture only. Still open, rows left 0
+and the hook logs once: the display request struct (photo mode), the license demo guard (Spec II has the feature; the
+loaders are not mapped) and the shape observer. CTest 44/44 in the Spec II build; Python 671 tests clean on the Spec
+II build (51 skipped) and only the expected release-pin failure on v2.00; v2.00 identity against slice268 exact.
+Next: S9 (launcher, installer, credits).
 
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 

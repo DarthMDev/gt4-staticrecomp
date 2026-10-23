@@ -2719,3 +2719,34 @@ private/tooling-venv/Scripts/python.exe scripts/frame_cost_headless.py ^
   GameDB entry; gt4-gs has no SCUS-97436 entry (recorded for S8/S9).
 
 
+
+## Spec II S8 - host hooks for the Spec II image (TASK-100)
+
+The Spec II table in `native/game_target.hpp` is filled for the 16:9 hold, the 480p race display hold, the race
+camera aspect and the HUD canvas. The full address table and how each value was found are in the S8 Progress entry of
+[SPEC2-PLAN](SPEC2-PLAN.md); the short version:
+
+- option chain: owner word `0x664EDC`, option `owner + 0x680`, wide flag `+0x14`, record `+0x24` (44 bytes, width
+  `+0xC`, height `+0x10`), presets `0x664E20/50/80/B0`, published wide word `0x6655A0`, race display index `+0x1718`;
+- code: `RaceBase::initMonitor` `0x26BDB0` with camera return `0x26BE60`, `RaceDisplay::render` `0x1C5040` with the HUD
+  matrix at `this + 0x70`;
+- not mapped yet (rows stay 0 and the hook logs once): the display request struct (scene policy knows render activity,
+  not photo mode), the license demo guard (the feature exists; the loaders were not mapped), the shape observer.
+
+The aspect overlay lives in the license guard capsule, so the Spec II build needs it (it is target-independent and the
+license guard itself stays disabled by the zero rows):
+
+```
+cmake -S <worktree> -B O:\gt4recomp-scratch\spec2-s7d-build\build ... ^
+  -DGT4_LICENSE_GUARD_SOURCE=<assets>/private/slice262-license-guard-runtime
+```
+
+Checks:
+
+- `native_spec2_hooks` (`native/spec2_hooks_fixture.cpp`, always built with `GT4_TARGET_SPEC2`) asserts every table
+  value and the write rules in synthetic 32 MiB RAM: the wide record is copied from `0x664E50`, the flag and
+  `0x6655A0` are set, the 480p hold writes 1 on the normal index and keeps 1080i.
+- Headless GSdx race (21,000 frames, Costa di Amalfi) at `GT4_DISPLAY_ASPECT=21:9`: the log shows the camera matrix
+  scaled (`x 0.761905`), `first RaceDisplay::render`, the HUD canvas (`left -240 right 880`) and the fill policy. The
+  16:9 hold logs the settled owner `0x009BD690`; it writes nothing because the game itself boots 16:9. The 480p hold
+  lives in `window.cpp`'s VBlank and is therefore not exercised by headless runs (fixture only).

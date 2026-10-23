@@ -106,7 +106,7 @@ with upscaling and texture packs.
 - Find the Spec II equivalents of the 16:9 hold, 480p race display, aspect/HUD hooks and the license demo guard, and
   fill the S3 table for the target. Each hook with its fixture and a headless check on GSdx.
 
-### S9 — Product (after S7, before release 1.4.0)
+### S9 - Product (after S7, before release 1.4.0)
 - Launcher: `gt4l-disc` accepts SCUS-97436 by its pinned identity (today `Unsupported::SpecII`), the prepared layout
   without `CORE.GT4`, a second game executable in the installer, a separate save folder, the second disc copy, a game
   chooser when both discs are set up.
@@ -303,6 +303,53 @@ Checks:
 
 Open: the GT4 serial constant decision (above); the pinned 1.0.1 GS package cannot load texture packs, so a release
 that ships packs must pin 1.2.1+ (launcher already requires 1.2.1).
+
+### S8 — Re-target the host hooks for Spec II: DONE for the 16:9/480p holds, the camera and the HUD (2026-10-23)
+
+The Spec II image is a different build of the same game: the structures keep their shapes and every address moved.
+Each value was located in the derived ELF from the v2.00 code shapes, then confirmed against a **runtime RAM dump**
+of the Spec II menus (`O:\gt4recomp-scratch\spec2-s8-spec2-ram\ram.bin`, `PS2_DUMP`) and a v2.00 dump for comparison:
+
+| Spec II | v2.00 | How |
+|---|---|---|
+| owner word `0x664EDC` | `0x622F4C` | read by the translated `initMonitor` (`lui 0x0066; lw 0x4EDC`) and the RAM dump (owner `0x9BD690`) |
+| option `owner + 0x680` | `owner + 0x38CB0` | same instruction |
+| wide flag `option + 0x14`, record `option + 0x24` | same offsets | `initMonitor` and the wide setter `0x3124E4` (`lw a1,0x14; addiu a0,+0x24`) |
+| record width/height `+0xC/+0x10` (44 bytes) | same | RAM dump: wide 425.0x240.0, 4:3 275.0x205.0 |
+| presets `0x664E20/50/80/B0` | `0x622E90/C0/F0/20` | the preset copier `0x315368` selects them by (wide, NTSC); RAM dump shows the four records |
+| published wide word `0x6655A0` | `0x6184F0` | `MOption::apply` `0x31257C` stores the test result; `RaceDisplay::render` reads it |
+| race display index `option + 0x1718` (0/1/2) | `+0x16B0` | `initMonitor` compares it with 2; setter `0x312630` with 1 |
+| `RaceBase::initMonitor` `0x26BDB0`, camera return `0x26BE60` | `0x388A80` / `0x388B38` | found by the 1.8/1.35 fovy constant pair and the virtual call with `a1 = sp` |
+| `RaceDisplay::render` `0x1C5040`, HUD matrix `this + 0x70` | `0x39F498` / `0x70` | found by the five repeated setup calls (`100,15,16,13,14`) and the `addiu a0,sN,0x70` + matrix-load call |
+
+Not mapped yet, and disabled in the table (each logs one line and does nothing):
+
+- the **display request struct** (v2.00 `0x6184D0`): the scene policy knows render activity but not photo mode, so a
+  photo-mode frame could be filled for one request;
+- the **license demo guard**: Spec II has the demo feature (`license/%s`, `replay`, `DemoDirectory` strings), but the
+  loaders were not mapped; a wrong guard address would corrupt guest state, so it stays off until they are;
+- the **shape observer** (diagnostic only).
+
+Checks:
+
+- Fixture `native_spec2_hooks` (`native/spec2_hooks_fixture.cpp`, always compiled with `GT4_TARGET_SPEC2`): asserts
+  every table value, the preset stride/owner layout, and exercises the Spec II write rules in synthetic 32 MiB RAM:
+  the wide hold copies `0x664E50` into `option+0x24`, sets `option+0x14` and `0x6655A0`; the 480p hold writes 1 on the
+  normal index and leaves 1080i alone. `native_game_target` now asserts the filled table.
+- **Headless on GSdx** (Spec II build `O:\gt4recomp-scratch\spec2-s7d-build`, now with the `slice262` license guard
+  capsule that carries the aspect overlay; derived ELF + Spec II ISO, 21,000-frame Costa di Amalfi race):
+  - 16:9 hold: `[display] game-data pointer settled on 0x009BD690 at vblank 612` (the same owner as the RAM dump) and
+    the wide preset validates; no write because the game itself boots 16:9 (the record is already 425x240 and the
+    published word is 1). The write path is covered by the fixture.
+  - 480p hold: **not reachable headless** — the hold runs in `window.cpp`'s VBlank (`on_vblank`), which exists only in
+    a windowed run; the Spec II rule is covered by `native_spec2_hooks`, and the game's index was 0 at the end of the
+    race, so a windowed run would force it.
+  - camera aspect at `GT4_DISPLAY_ASPECT=21:9`: `[aspect] race camera hook 1 ... matrix 0x01FFF800 scaled
+    (x 0.761905, y 1.000000)` (and hook 2), `[aspect] HUD canvas of RaceDisplay 0x01E4CEA0 ... left -240 right 880`,
+    `[aspect] presentation ... fill 21:9` — the camera, HUD and scene-policy hooks all key on the Spec II addresses.
+  - Frames reviewed at 21:9 vs 16:9: the HUD is centred in its 16:9 box and the scene FOV widens.
+- v2.00 unchanged: `native_game_target` still asserts the release table, the v2.00 hook fixtures still run against it,
+  and the menus/day/night identity against slice268 is re-run after the change.
 
 ### S5 — VU0 and VU1: mapping done (2026-10-22)
 

@@ -130,9 +130,66 @@ inline constexpr HookAddresses kV200Hooks = {
     /* shape_return_pc */ 0x455A64u,
 };
 
-// Spec II (SCUS-97436, GT4 Online Public Beta lineage). Every hook is disabled until S8 finds the equivalent guest
-// addresses in that image; an empty table is the safe default (no write, no read, one log line per hook).
-inline constexpr HookAddresses kSpec2Hooks = {};
+// Spec II (SCUS-97436, GT4 Online Public Beta lineage), filled by S8 (2026-10-23). The image is a different build of
+// the same game, so the guest *structures* keep their shapes while every address moved; each value below was located
+// in the Spec II ELF and then confirmed against a runtime RAM dump of the menus (see docs/SPEC2-PLAN.md, S8).
+//
+// Option chain (Confirmed by the translated initMonitor at 0x26BDB0 and by the RAM dump):
+//   word at 0x664EDC          owner pointer (the game-data object)
+//   owner + 0x680             MOption (the same class; the v2.00 owner had it at +0x38CB0)
+//   option + 0x14             wide flag
+//   option + 0x24             screen aspect record (11 words; width/height f32 at +0xC/+0x10)
+//   presets at 0x664E20       4:3, wide, 4:3 NTSC, wide NTSC (0x30 bytes apart; the pairs are byte-identical)
+//   word at 0x6655A0          published "display is wide" word (written by MOption::apply at 0x31257C)
+//   option + 0x1718           race display index (0 normal, 1 480p, 2 1080i; 2 confirmed by initMonitor)
+// The wide setter at 0x3124E4 reads the video-system word from *owner + 0x44*, not from the option, so
+// video_system_offset stays 0 here: the hook then reads option word 0 (a pointer, never 1) and picks the non-NTSC
+// preset pair, which the runtime dump shows byte-identical to the NTSC pair. Reviewed for this NTSC-U target.
+//
+// Code hooks: RaceBase::initMonitor 0x26BDB0 with the camera virtual call's return label 0x26BE60 (a1 = sp = matrix);
+// RaceDisplay::render 0x1C5040 with the HUD matrix at this+0x70 (the same `addiu a0,sN,0x70` + matrix-load call shape
+// as v2.00). The display request struct was not located yet, so the scene policy knows render activity but not photo
+// mode; the license demo loaders exist (the "license/%s", "replay" and "DemoDirectory" strings are present) but the
+// guard stays disabled until the Spec II loaders are mapped: a wrong guard address would corrupt guest state.
+inline constexpr HookAddresses kSpec2Hooks = {
+    /* widescreen_owner_pointer */ 0x664EDCu,
+    /* widescreen_option_offset */ 0x680u,
+    /* widescreen_flag_offset */ 0x14u,
+    /* widescreen_record_offset */ 0x24u,
+    /* widescreen_record_bytes */ 44u,
+    /* widescreen_record_width_offset */ 0xCu,
+    /* widescreen_record_height_offset */ 0x10u,
+    /* video_system_offset */ 0u,
+    /* video_system_ntsc */ 1u,
+    /* widescreen_global */ 0x6655A0u,
+    /* widescreen_preset_4_3 */ 0x664E20u,
+    /* widescreen_preset_wide */ 0x664E50u,
+    /* widescreen_preset_4_3_ntsc */ 0x664E80u,
+    /* widescreen_preset_wide_ntsc */ 0x664EB0u,
+    /* race_display_index_offset */ 0x1718u,
+    /* race_display_index_normal */ 0u,
+    /* race_display_index_480p */ 1u,
+    /* race_display_index_1080i */ 2u,
+    /* init_monitor */ 0x26BDB0u,
+    /* camera_call_return */ 0x26BE60u,
+    /* race_display_render */ 0x1C5040u,
+    /* display_request_state */ 0u,
+    /* display_request_pending_offset */ 0u,
+    /* display_request_mode_offset */ 0u,
+    /* display_request_row_offset */ 0u,
+    /* hud_parameter_block */ 0x00007F00u,
+    /* hud_parameter_words */ 2u,
+    /* hud_matrix_offset */ 0x70u,
+    /* license_load_demo_inputs */ 0u,
+    /* license_loader_entry */ 0u,
+    /* license_loader_return */ 0u,
+    /* license_replay_loader_entry */ 0u,
+    /* license_replay_loader_return */ 0u,
+    /* license_crc_table */ 0u,
+    /* shape_call_pc */ 0u,
+    /* shape_target_pc */ 0u,
+    /* shape_return_pc */ 0u,
+};
 
 inline constexpr Profile kV200{Id::v200, "v2.00", 32u << 20, kV200Hooks};
 inline constexpr Profile kSpec2{Id::spec2, "Spec II", 32u << 20, kSpec2Hooks};

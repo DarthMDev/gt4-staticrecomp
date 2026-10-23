@@ -322,6 +322,11 @@ add_test(NAME native_game_target COMMAND $<TARGET_FILE:game_target_fixture>)
 add_executable(spec2_iop_fixture spec2_iop_fixture.cpp)
 target_compile_options(spec2_iop_fixture PRIVATE /W4)
 add_test(NAME native_spec2_iop COMMAND $<TARGET_FILE:spec2_iop_fixture>)
+# TASK-100 S8: the Spec II hook table and its guest-RAM write rules, always compiled against the Spec II table.
+add_executable(spec2_hooks_fixture spec2_hooks_fixture.cpp race_widescreen.cpp race_display.cpp)
+target_compile_definitions(spec2_hooks_fixture PRIVATE GT4_TARGET_SPEC2)
+target_compile_options(spec2_hooks_fixture PRIVATE /W4)
+add_test(NAME native_spec2_hooks COMMAND $<TARGET_FILE:spec2_hooks_fixture>)
 add_library(gt4_perf_probe STATIC perf_probe.cpp)
 # TASK-011 step 0 counters (linked into the runtime only with the slice169 capsule).
 add_library(gt4_mtvu_measure STATIC mtvu_measure.cpp)
