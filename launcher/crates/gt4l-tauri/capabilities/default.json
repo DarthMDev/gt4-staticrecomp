@@ -36,6 +36,8 @@
     "allow-open-link",
     "allow-open-log-folder",
     "allow-open-latest-log",
+    "allow-export-logs",
+    "allow-open-export-folder",
     "allow-open-game-files-folder",
     "allow-open-player-folder",
     "allow-open-saves-folder",

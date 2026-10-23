@@ -665,7 +665,7 @@
     // with the game shown; the Replays title still names the game.
     var rowTag = document.querySelector(".slot-row .game-tag");
     check("the Saves rows carry the game tag", !!rowTag && rowTag.textContent === T("home.normal"), rowTag ? rowTag.textContent : "no tag");
-    check("the Saves list shows the Spec II save too", !!document.querySelector(".slot-row [data-item-id^=\"spec2:\"]"), "no spec2 row");
+    check("the Saves list shows the Spec II save too", !!document.querySelector(".slot-row[data-item-id^=\"spec2:\"]"), "no spec2 row");
     await GT4.games.select("spec2");
     await setHash("#/settings/replays");
     await wait(400);
@@ -673,8 +673,8 @@
     check("the Replays title names the game", !!tag && tag.textContent === "Gran Turismo 4 Spec II", tag ? tag.textContent : "no tag");
     await setHash("#/settings/saves");
     await wait(400);
-    check("the Spec II save row is tagged Spec II", !!document.querySelector(".slot-row [data-item-id^=\"spec2:\"] .game-tag") &&
-      document.querySelector(".slot-row [data-item-id^=\"spec2:\"] .game-tag").textContent === T("home.spec2"), "spec2 tag");
+    check("the Spec II save row is tagged Spec II", !!document.querySelector(".slot-row[data-item-id^=\"spec2:\"] .game-tag") &&
+      document.querySelector(".slot-row[data-item-id^=\"spec2:\"] .game-tag").textContent === T("home.spec2"), "spec2 tag");
     await GT4.games.select("gt4");
   }
 

@@ -283,6 +283,7 @@ mod vulkan_ffi {
                             vendor_id: prefix.vendor_id,
                             device_type: prefix.device_type,
                             device_id: prefix.device_id,
+                            driver_version: prefix.driver_version,
                             luid,
                         });
                     }

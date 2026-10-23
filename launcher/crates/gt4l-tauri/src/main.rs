@@ -15,6 +15,7 @@ mod pad_service;
 mod relocation;
 mod renderer_switch;
 mod saves;
+mod log_bundle;
 mod session_log;
 mod setup;
 mod state;
@@ -241,6 +242,8 @@ fn main() {
             commands::open_link,
             commands::open_log_folder,
             commands::open_latest_log,
+            commands::export_logs,
+            commands::open_export_folder,
             commands::open_game_files_folder,
             commands::open_player_folder,
             commands::open_saves_folder,

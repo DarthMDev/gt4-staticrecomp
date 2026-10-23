@@ -698,6 +698,11 @@
       case "open_saves_folder":
       case "open_replays_folder":
       case "open_textures_folder":
+      case "open_latest_log":
+      case "open_export_folder":
+        return null;
+      case "export_logs":
+        // The mock does not write a bundle: the player "cancelled" the folder choice.
         return null;
       case "check_updates":
         // Demo: ?update=1 offers both streams; otherwise nothing is new.

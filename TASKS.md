@@ -132,7 +132,8 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑108 | Launcher: automatic Graphics API (Vulkan, else Direct3D 11) and graphics card (Adapter), no Vulkan requirement; game programs shipped as gt4.exe and gt4-spec2.exe | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑109 | Launcher update channels: Stable (default) or Test builds (rc pre-releases) | 📋 Planned (owner, 2026-10-23) · release 1.3.1 |
 | TASK‑110 | Controller tuning: stick and trigger deadzone, sensitivity, response curve, saturation, pressure, inversion, vibration, live test view | 📋 Planned (owner, 2026-10-23) · release 1.3.1 |
-| TASK‑111 | Logs for bug reports: one-click "Export logs" zip (launcher log, recent game logs, system summary, user paths masked), log size limits and clean-up, error lines marked | 📋 Planned (owner, 2026-10-23) · release 1.3.1 |
+| TASK‑111 | Logs for bug reports: one-click "Export logs" zip (latest log, recent launcher and game logs, settings, system summary; user name and paths masked), offered after a crash or a lost card | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
+| TASK‑112 | Launcher logs: one file per session with INFO, WARN and ERROR lines, the last 20 kept, `latest.log` with the earlier errors, game session folders capped at 20, Open latest log | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -789,20 +790,37 @@ differently from what the controller sends. No code yet.
 - Defaults reproduce today's behaviour exactly. Unit tests for every curve and deadzone rule.
 
 ### TASK-111 — Logs for bug reports
-Planned (owner, 2026-10-23) for release 1.3.1. Players should be able to attach logs to a GitHub issue in one step.
-What exists today (1.3.0): `launcher.log` in the data folder's logs (append-only, no size limit), one `game.log` per
-session in `data\sessions\session-*` (gt4-gs output included; never cleaned up), and About > "Open log folder".
-Issue #89 shows players already attach `launcher.log`. To add:
-- **Export logs** (About, and offered on the crash and GPU-lost messages): one zip in a chosen folder with
-  `launcher.log`, the last few session logs (`game.log`, `gt4-gs.ini`), the settings file and a short system summary
-  (Windows version, CPU, GPUs with driver versions, the chosen card and API, display, launcher and game versions,
-  install or portable). The user name and user paths are masked; no cards, saves, disc images or game files are
-  included. A button opens the repository's new-issue page (fixed link, through `open_link`).
-- **Size limits:** rotate `launcher.log` (for example 2 MB, keep 3) and keep only the last N sessions (for example 20)
-  or a total size cap; never delete the running session.
-- **Error lines:** a level prefix (`ERROR`, `WARN`) on failures (crash, GPU lost, setup and import errors, update
-  failures), and the last error shown in About.
-- Both languages; unit tests for masking, rotation and the zip contents.
+Implemented (rc4, 2026-10-23, `task/101-multi-game`) for release 1.3.0, together with TASK-112. The owner moved it from
+1.3.1 into rc4 (2026-10-23). Nothing from this entry is left for 1.3.1.
+- **Export logs** (About, and offered by a dialog after a crash or a lost graphics card): one zip
+  `GT4Recomp-logs-YYYYMMDD-HHMMSS.zip` in a folder the player picks (Desktop by default). It holds `latest.log`, the
+  last 3 launcher session logs, the last 3 game session folders' `game.log` and `gt4-gs.ini`, the settings file and
+  `system.txt` (Windows version, CPU, every GPU with vendor, driver version and video memory, the chosen card and API,
+  the displays, launcher version, install or portable, the installed games).
+- The Windows user name and the user profile paths are masked in every text (`C:\Users\<user>`). Cards, saves,
+  replays, disc images, prepared game files and programs are never put in (checked by a unit test).
+- After the export the zip path is shown, with "Open the folder" and "Report a problem on GitHub" (the named link
+  `report_problem`, through `open_link`).
+- Both languages. Unit tests in `gt4l-core/src/log_export.rs`: the path and user masking, the forbidden entries, the
+  zip contents, the newest-first selection and the system report.
+- The size limits are the session scheme of TASK-112 (20 session logs, 20 game session folders), not a size cap.
+
+### TASK-112 — Launcher logs: one file per session, last 20 kept, latest.log
+Implemented (rc4, 2026-10-23, `task/101-multi-game`) for release 1.3.0, with TASK-111. Replaces the single
+`launcher.log` of 1.2.x, which had no size limit.
+- One file per launcher session: `logs\launcher-YYYYMMDD-HHMMSS.log` (local time; a counter when two starts share a
+  second). Each line is `[time] LEVEL text`, with `INFO`, `WARN` or `ERROR`.
+- `ERROR`: a game crash, a lost graphics card, a setup or import failure, a failed harvest, an update failure, a
+  WebView2 problem, a settings file that could not be written. `WARN`: a soft problem (a refused disc, a GSdx
+  not installed during setup, a version file not updated).
+- The last 20 session logs are kept; the oldest go when a session starts. The running session's file is never removed.
+- `logs\latest.log`: a header (version, install kind, Windows, date), the `ERROR` lines of the earlier kept sessions,
+  oldest first and each prefixed with its file name, then the current session's lines as they are written. About >
+  "Open latest log" selects it in Explorer.
+- A 1.2.x `launcher.log` is renamed once to `launcher-legacy-YYYYMMDD.log` and counts as one of the kept logs.
+- Game session folders (`data\sessions\session-*`) are capped at the last 20, never the running one.
+- Both languages. Unit tests in `gt4l-core/src/logs.rs`: names, rotation at 20, the running file kept, the `latest.log`
+  error collection, the legacy migration and the session-folder cap.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:

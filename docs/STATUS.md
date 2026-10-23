@@ -1,4 +1,26 @@
 # Current Status
+## rc4 (2026-10-23, `task/101-multi-game`, 1.3.0-rc4): owner test 1 fixes and TASK-111, TASK-112
+
+Implemented in the working tree, owner test pending; nothing merged or released. Items:
+- **Saves per game (TASK-101 item 1).** Spec II's game data is `BASCUS-97436GAMEDATA` (the rc3 harvest dropped it).
+  `gt4saves::SaveNames` per game; each library takes its own items; a mixed card is split by game; the import routes by
+  name. The Spec II replay prefix `BASCUS-97436` is not verified with a real replay.
+- **One Saves list (item 2).** Both games in one list, tagged; actions go to the item's game; New save asks the game when
+  two are installed. Replays stay per game.
+- **GPU list (item 3).** Vulkan and DXGI merged per physical card (LUID, else PCI ids, else name). The Vulkan probe now reads
+  deviceID, driverVersion and the LUID; checked on this machine (AMD RX 9060 XT, LUID read). NVIDIA not checked.
+- **Copy bar (item 4).** The bar uses the same byte total as its figure. The owner's exact case was not reproduced here.
+- **Launcher logs (TASK-112).** One file per launch with INFO/WARN/ERROR, the last 20 kept, `latest.log` with the earlier
+  errors, the 1.2.x log migrated once, game session folders capped at 20; About > Open latest log.
+- **Export logs (TASK-111).** About and the crash / lost-card dialog; the zip with masked user names and paths; the system
+  report; Open the folder and Report a problem (named link `report_problem`).
+
+Checks: `cargo test --workspace` 519 passed, 0 failed; focus-check en-US 160/160 and pt-BR 167/167, nav-test 150/150
+(headless Edge, server stopped); `cargo check --features visual-check` OK; the language check (keys, placeholders, bullets)
+passes, with three identical pt-BR values that are product or language names. No game launched. Not done: owner tests
+(Spec II save recovery, export, the crash dialog), the installer build (not asked).
+
+
 
 ## TASK-108 launcher: automatic graphics API and card; game programs gt4.exe and gt4-spec2.exe (2026-10-23, on `task/101-multi-game`, release 1.3.0)
 

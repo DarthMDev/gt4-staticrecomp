@@ -142,6 +142,8 @@ without the launcher (TASK-097) finds `<install>\data\games\<id>` from its own f
 
 rc4 (2026-10-23, item 1): the item names are per game (`gt4saves::SaveNames`, from the game table: `save_folder`, `replay_prefix`). Spec II's game data is `BASCUS-97436GAMEDATA`, so its saves were dropped at harvest in rc3; now each library takes only its own items, a mixed card is split by game, and an item no game knows is reported on the Saves page. The Spec II replay prefix `BASCUS-97436` is not verified with a real replay.
 
+rc4 (2026-10-23, items 2 to 5): the Saves page lists both games in one list, each row tagged and carrying its game id; actions go to that game's library. The GPU list merges Vulkan and DXGI per physical card. The copy bar uses the figure's total. Launcher logs and the log bundle (TASK-111, TASK-112) are in `docs/TASKS.md`.
+
 Open for the owner: the look of the selector and the placeholder logo line on a real window; the authors' logo file,
 names and permission (the About text has a marked placeholder); the PT-BR variant hash is pinned (owner image) but only the
 executable identity was checked by a test here, the full-image hash was not recomputed; replays across games stay untested;

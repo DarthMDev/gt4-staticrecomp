@@ -503,5 +503,14 @@
   "setting.launcher_gpu.label": "Launcher GPU acceleration",
   "setting.launcher_gpu.help": "Off keeps the launcher window without GPU acceleration, after it failed to draw in WebView2. On takes effect at the next start of the launcher.",
   "rust.saves.added": "Added {items}.",
-  "rust.saves.went_to_game": "It went to {game}, the game this save belongs to."
+  "rust.saves.went_to_game": "It went to {game}, the game this save belongs to.",
+  "about.export_logs": "Export logs",
+  "about.logs_exported_title": "Logs exported",
+  "about.logs_exported_text": "The log bundle is saved as {path}. Attach that zip to a GitHub issue.",
+  "about.open_export_folder": "Open the folder",
+  "about.report_problem": "Report a problem on GitHub",
+  "logs.offer_title": "The game stopped with an error",
+  "logs.offer_text": "Export the logs and attach the zip to a GitHub issue, so the problem can be found.",
+  "rust.logs.export_title": "Choose a folder for the log bundle",
+  "rust.logs.export_failed": "The logs could not be exported: {error}"
 }

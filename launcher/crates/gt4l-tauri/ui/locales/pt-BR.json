@@ -503,5 +503,14 @@
   "setting.launcher_gpu.label": "Aceleração por GPU do launcher",
   "setting.launcher_gpu.help": "Desligado mantém a janela do launcher sem aceleração por GPU, depois que ela falhou ao desenhar no WebView2. Ligado vale na próxima abertura do launcher.",
   "rust.saves.added": "Adicionado: {items}.",
-  "rust.saves.went_to_game": "Foi para {game}, o jogo a que este save pertence."
+  "rust.saves.went_to_game": "Foi para {game}, o jogo a que este save pertence.",
+  "about.export_logs": "Exportar logs",
+  "about.logs_exported_title": "Logs exportados",
+  "about.logs_exported_text": "O pacote de logs foi salvo em {path}. Anexe esse zip a uma issue no GitHub.",
+  "about.open_export_folder": "Abrir a pasta",
+  "about.report_problem": "Relatar um problema no GitHub",
+  "logs.offer_title": "O jogo parou com um erro",
+  "logs.offer_text": "Exporte os logs e anexe o zip a uma issue no GitHub, para que o problema possa ser encontrado.",
+  "rust.logs.export_title": "Escolha uma pasta para o pacote de logs",
+  "rust.logs.export_failed": "Não foi possível exportar os logs: {error}"
 }

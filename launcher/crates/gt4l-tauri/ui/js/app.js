@@ -90,6 +90,51 @@
       GT4.go(root.location.hash);
     }
   });
+  // Export logs (TASK-111, rc4): one zip in a folder the player picks; then its path and two next steps.
+  GT4.exportLogs = function () {
+    return GT4.backend.call("export_logs", {}).then(function (path) {
+      if (!path) {
+        return;
+      }
+      GT4.ui.openDialog({
+        title: GT4.t("about.logs_exported_title"),
+        text: GT4.t("about.logs_exported_text", { path: path }),
+        buttons: [
+          { label: GT4.t("common.cancel") },
+          {
+            label: GT4.t("about.report_problem"),
+            run: function () {
+              GT4.backend.call("open_link", { name: "report_problem" }).catch(function (err) {
+                GT4.ui.toast(GT4.errorText(err), true);
+              });
+            }
+          },
+          {
+            label: GT4.t("about.open_export_folder"),
+            primary: true,
+            run: function () {
+              GT4.backend.call("open_export_folder", { path: path }).catch(function (err) {
+                GT4.ui.toast(GT4.errorText(err), true);
+              });
+            }
+          }
+        ]
+      });
+    }, function (err) {
+      GT4.ui.toast(GT4.errorText(err), true);
+    });
+  };
+  // A crash or a lost graphics card: the player is offered the log bundle for a report.
+  GT4.backend.listen("logs-offer", function () {
+    GT4.ui.openDialog({
+      title: GT4.t("logs.offer_title"),
+      text: GT4.t("logs.offer_text"),
+      buttons: [
+        { label: GT4.t("common.cancel") },
+        { label: GT4.t("about.export_logs"), primary: true, run: function () { GT4.exportLogs(); } }
+      ]
+    });
+  });
   GT4.backend.listen("game-state", function (payload) {
     if (payload && payload.message) {
       // TASK-108: a notice (a run on Direct3D 11 without Vulkan 1.2) is not an error.

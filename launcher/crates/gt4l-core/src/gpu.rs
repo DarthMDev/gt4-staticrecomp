@@ -43,6 +43,8 @@ pub struct VulkanGpu {
     pub device_id: u32,
     /// The adapter LUID when the driver reports one (`VkPhysicalDeviceIDProperties::deviceLUIDValid`).
     pub luid: Option<u64>,
+    /// The driver's own version number, raw (0 when unknown).
+    pub driver_version: u32,
 }
 
 /// A hardware adapter as DXGI reports it.
@@ -66,6 +68,10 @@ pub struct GpuDevice {
     pub dxgi_name: Option<String>,
     pub dedicated_video_memory: u64,
     pub integrated: bool,
+    /// PCI vendor id (0 when unknown), for the log bundle's system report.
+    pub vendor_id: u32,
+    /// The Vulkan driver's version number, raw (0 when the card has no Vulkan driver here).
+    pub driver_version: u32,
 }
 
 impl GpuDevice {
@@ -131,6 +137,8 @@ pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
             dxgi_name,
             dedicated_video_memory: memory,
             integrated: gpu.integrated,
+            vendor_id: gpu.vendor_id,
+            driver_version: gpu.driver_version,
         });
     }
     for (index, adapter) in dxgi.iter().enumerate() {
@@ -141,6 +149,8 @@ pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
                 dxgi_name: Some(adapter.name.clone()),
                 dedicated_video_memory: adapter.dedicated_video_memory,
                 integrated: adapter.dedicated_video_memory < SHARED_MEMORY_LIMIT,
+                vendor_id: adapter.vendor_id,
+                driver_version: 0,
             });
         }
     }
@@ -286,7 +296,7 @@ mod tests {
     use super::*;
 
     fn vulkan(name: &str, api: (u32, u32), integrated: bool) -> VulkanGpu {
-        VulkanGpu { name: name.into(), api, integrated, vendor_id: 0, device_id: 0, luid: None }
+        VulkanGpu { name: name.into(), api, integrated, vendor_id: 0, device_id: 0, luid: None, driver_version: 0 }
     }
 
     fn dxgi(name: &str, memory: u64) -> DxgiGpu {
@@ -295,7 +305,7 @@ mod tests {
 
     /// A card with its PCI ids and LUID, as both APIs report it.
     fn card_vulkan(name: &str, vendor: u32, device: u32, luid: u64) -> VulkanGpu {
-        VulkanGpu { name: name.into(), api: (1, 3), integrated: false, vendor_id: vendor, device_id: device, luid: Some(luid) }
+        VulkanGpu { name: name.into(), api: (1, 3), integrated: false, vendor_id: vendor, device_id: device, luid: Some(luid), driver_version: 0 }
     }
 
     fn card_dxgi(name: &str, vendor: u32, device: u32, luid: u64, memory: u64) -> DxgiGpu {

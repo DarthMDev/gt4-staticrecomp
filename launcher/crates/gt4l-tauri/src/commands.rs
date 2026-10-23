@@ -504,6 +504,8 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         } else {
             state::log(&dirs, &ended);
         }
+        // TASK-111: a crash or a lost graphics card offers the log bundle (the page asks, see app.js).
+        let offer_logs = gpu_lost.is_some() || matches!(outcome, Outcome::Crashed { .. });
         let message = match (gpu_lost, gsdx_error, &outcome) {
             (Some(line), _, _) => {
                 state::log_error(&dirs, &format!("graphics card lost: {line}"));
@@ -517,6 +519,9 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
             (None, None, Outcome::Crashed { .. }) => exit::user_message_in(&outcome, state::current_language()),
         };
         lock(&shared).home_message = message.clone();
+        if offer_logs {
+            let _ = app.emit("logs-offer", json!({ "reason": message.clone() }));
+        }
         crate::tray::handle(&app, crate::tray::Event::GameEnded { message });
     });
     Ok(())
@@ -1128,7 +1133,11 @@ include!(concat!(env!("OUT_DIR"), "/release_notes.rs"));
 /// The links the home screen may open (owner, 2026-10-23), by name: the page never passes an address.
 /// `kofi`: "Support the project" (top right); `youtube`: "Moesuito" in the version line (bottom right).
 pub const PROJECT_LINKS: &[(&str, &str)] =
-    &[("kofi", "https://ko-fi.com/moesuito"), ("youtube", "https://www.youtube.com/@Moesuito")];
+    &[
+        ("kofi", "https://ko-fi.com/moesuito"),
+        ("youtube", "https://www.youtube.com/@Moesuito"),
+        ("report_problem", "https://github.com/moesuito/gt4-staticrecomp/issues/new"),
+    ];
 
 /// The address of a named project link, or None for any other name.
 pub fn project_link(name: &str) -> Option<&'static str> {
@@ -1267,6 +1276,70 @@ pub fn open_latest_log(shared: State<'_, Shared>) -> Result<(), String> {
     #[cfg(not(windows))]
     {
         open_folder(&logs)
+    }
+}
+
+/// `export_logs()`: writes the log bundle (TASK-111) into a folder the player picks (Desktop by default). Returns the zip's
+/// path, or `None` when the player cancels. Nothing is written before the folder is picked.
+#[tauri::command]
+pub async fn export_logs(app: AppHandle, shared: State<'_, Shared>) -> Result<Option<String>, String> {
+    let shared = shared.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (language, start) = {
+            let state = lock(&shared);
+            let start = gt4l_platform::known_folder::desktop()
+                .or_else(gt4l_platform::known_folder::documents)
+                .unwrap_or_else(|| state.dirs.root().to_path_buf());
+            (state::language_of(&state), start)
+        };
+        let picked = app
+            .dialog()
+            .file()
+            .set_title(messages::text("logs.export_title", language))
+            .set_directory(&start)
+            .blocking_pick_folder();
+        let Some(picked) = picked else {
+            return Ok(None);
+        };
+        let folder = picked.into_path().map_err(|error| error.to_string())?;
+        let user = std::env::var("USERNAME").unwrap_or_default();
+        let state = lock(&shared);
+        match crate::log_bundle::export(&state, &folder, &user) {
+            Ok(path) => {
+                state::log(&state.dirs, &format!("logs exported to {}", path.display()));
+                Ok(Some(path.display().to_string()))
+            }
+            Err(error) => {
+                state::log_error(&state.dirs, &format!("logs not exported: {error}"));
+                Err(messages::render("logs.export_failed", language, &[("error", &error)]))
+            }
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+/// `open_export_folder({path})`: selects a log bundle in Explorer. Only a `GT4Recomp-logs-*.zip` file that exists is
+/// accepted, whatever the page sends.
+#[tauri::command]
+pub fn open_export_folder(path: String) -> Result<(), String> {
+    let file = std::path::Path::new(&path);
+    let name = file.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    if !(name.starts_with("GT4Recomp-logs-") && name.ends_with(".zip") && file.is_file()) {
+        return Err(format!("{name} is not a log bundle of this launcher"));
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(format!("/select,{}", file.display()))
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("could not open {}: {error}", file.display()))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = file;
+        Err("open the folder of the log bundle".to_string())
     }
 }
 

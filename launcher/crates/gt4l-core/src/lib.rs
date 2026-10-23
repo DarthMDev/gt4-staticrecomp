@@ -15,6 +15,7 @@ pub mod gs_table;
 pub mod language;
 pub mod launch;
 pub mod lock;
+pub mod log_export;
 pub mod logs;
 pub mod messages;
 pub mod migrate;

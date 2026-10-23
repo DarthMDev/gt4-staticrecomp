@@ -645,6 +645,15 @@
           }
         }
       }, GT4.t("about.open_log"));
+      var exportLogs = h("button", {
+        class: "btn small",
+        type: "button",
+        on: {
+          click: function () {
+            GT4.exportLogs();
+          }
+        }
+      }, GT4.t("about.export_logs"));
       var openLatest = h("button", {
         class: "btn small",
         type: "button",
@@ -658,7 +667,7 @@
       }, GT4.t("about.open_latest_log"));
       content.appendChild(h("div", { class: "row" }, [
         h("div", { class: "k", text: GT4.t("about.logs") }),
-        h("div", { class: "ctl" }, [openLog, openLatest])
+        h("div", { class: "ctl" }, [openLog, openLatest, exportLogs])
       ]));
     }, function (err) {
       content.appendChild(h("p", { class: "loading", text: errorText(err) }));

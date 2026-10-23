@@ -23,6 +23,7 @@ pub fn probe_gpus() -> Vec<GpuDevice> {
                     integrated: device.device_type == system_check::DEVICE_TYPE_INTEGRATED,
                     vendor_id: device.vendor_id,
                     device_id: device.device_id,
+                    driver_version: device.driver_version,
                     luid: device.luid,
                 })
                 .collect()
