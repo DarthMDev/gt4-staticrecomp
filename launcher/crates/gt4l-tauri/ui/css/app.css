@@ -237,7 +237,7 @@ body.is-home.input-keys #hints { display: none; }
 /* Support the project (owner, 2026-10-23): loose at the foot of the What's new card, no bar or box; the small Ko-fi cup
    (assets/kofi-cup.avif, Ko-fi's own brand asset) and a quiet label that lights up on hover or focus. */
 .support {
-  flex: none; align-self: flex-start; margin: 6px 20px 16px; padding: 4px 6px 4px 2px;
+  flex: none; align-self: center; margin: 8px 20px 14px; padding: 4px 8px;
   display: flex; align-items: center; gap: 8px; border-radius: 3px;
   background: transparent; border: 1px solid transparent; color: var(--dim);
   font: 500 11px var(--label); letter-spacing: 0.16em; text-transform: uppercase;
