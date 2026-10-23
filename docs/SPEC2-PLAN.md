@@ -112,6 +112,30 @@ with upscaling and texture packs.
   chooser when both discs are set up.
 - Credit the Spec II authors and ask them for permission before any public release (decision 0072).
 
+#### S9 recorded decisions and open questions (owner, 2026-10-23; recorded, not started)
+
+- **Order:** Spec II ships **before CoreGS 2.0**, on GSdx (the external PCSX2 GS process, `GT4_RENDERER=pcsx2`), with
+  upscaling and texture packs. S7c proved that path headless (menus, day and night races, 1x/3x, the owner's pack).
+- **One shared settings set** in the launcher for both games; only the **game executable, the disc and the save folder**
+  differ per game. No second settings schema, no per-game Graphics page.
+- **Texture packs:** the same `Textures` folder and the same settings for both games, no new folder or option
+  (owner-confirmed; S7c loaded the owner's `!_HD HUD & UI` pack on Spec II).
+- **16:9 and 480p holds** are implemented for Spec II (S8) so both games behave the same; Spec II may already select
+  480p by itself, which the windowed hold leaves alone (index 1/2 are never overwritten).
+- **GT mode needs game data on the card.** The seed cards used for headless work have none, so GT mode only shows the
+  creation flow. S9 must plan how a fresh Spec II card is created in normal play: the first boot offers "create game
+  data" (cancel leads to "GT mode is not playable unless game data is created"), then the name entry and the GT mode
+  save. The launcher must not require an existing GT4 save; the second game needs its own memory-card folder so a
+  v2.00 save and a Spec II save never share the same file name.
+- **Release rules** (AGENTS.md, 2026-10-23): every release writes both notes files before the build
+  (`docs/release-notes/<version>.md` and `docs/release-notes/launcher/<version>.md`, plus the pt-BR launcher note at
+  `docs/release-notes/launcher/pt-BR/<version>.md`), bumps the version in the launcher/installer files, pins the new
+  game build in new `docs/inputs` files and is tested by the owner before anything is public.
+- **Open:** the launcher's disc identity and prepared layout for a disc without `CORE.GT4`; the second executable's
+  name (today `gt4vulkan-spec2.exe`); the save folder layout; the game chooser; the Spec II authors' credit and
+  permission; the GS handshake serial decision (S7c: the game still announces `SCUS-97328`, and gt4-gs has no
+  `SCUS-97436` GameDB entry, so keeping `SCUS-97328` is what applies the GT4 GS profile).
+
 ## Rules for every subtask
 - AGENTS.md applies: one variable per build, fresh `private/sliceNNN-*` dirs, new pins only, CTest and Python
   fixtures for new behaviour, Confirmed / High confidence / Hypothesis / Unknown labels, STATUS and the journal kept
