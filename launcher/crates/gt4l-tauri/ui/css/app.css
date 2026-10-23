@@ -274,19 +274,20 @@ body.is-home.input-keys #hints { display: none; }
 /* The version switch under Play (owner, 2026-10-23): the version's name between two small arrows; an arrow moves to the
    next version (endless loop) and the name slides in from that side. Keyboard and pad focus use the common ring. */
 .version-picker {
-  margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 4px;
+  margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 2px;
   align-self: center;
 }
 /* The column (logo, Play, version switch) is centred on itself: Play under the logo, the switch under Play. */
 .home-actions { justify-content: center; }
 .version-arrow {
-  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 3px;
+  width: 24px; height: 24px; display: grid; place-items: center; border-radius: 3px;
   background: transparent; color: var(--dim); border: 1px solid transparent;
   transition: color 150ms ease, border-color 150ms ease;
 }
 .version-arrow:hover, .version-arrow:focus-visible { color: var(--white); border-color: rgba(255, 255, 255, 0.3); }
 .version-arrow:disabled { opacity: 0.3; }
-.version-window { position: relative; width: 150px; height: 18px; overflow: hidden; }
+/* Just wider than the longest name ("SPEC II"), so the arrows sit close to the text as in the notes pager. */
+.version-window { position: relative; width: 64px; height: 18px; overflow: hidden; }
 .version-name {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; white-space: nowrap;
   font: 500 12px var(--label); letter-spacing: 0.16em; text-transform: uppercase; color: var(--silver);
@@ -366,11 +367,7 @@ body.is-home.input-keys #hints { display: none; }
 .home-notes-body table { border-collapse: collapse; font-size: 12px; }
 .home-notes-body th, .home-notes-body td { padding: 4px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); text-align: left; }
 .home-notes-body th { color: var(--white); font-weight: 500; }
-.home-notes-more {
-  padding: 12px 20px; text-align: left; background: transparent; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08);
-  font: 500 11px var(--label); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim);
-}
-.home-notes-more:hover, .home-notes-more:focus-visible { color: var(--white); background: rgba(255, 255, 255, 0.05); }
+
 /* Settings > Games, and the game name on the Saves and Replays titles. */
 .game-row .k .val { display: block; }
 .game-row .ctl { gap: 8px; display: flex; }

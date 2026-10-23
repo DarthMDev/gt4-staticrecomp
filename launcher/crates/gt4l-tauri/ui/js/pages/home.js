@@ -9,7 +9,7 @@
  * game's setup. The logo stays the Gran Turismo 4 logo for both.
  * Patch notes (TASK-099): a glass card on the right shows the release notes embedded in the launcher (release_notes:
  * every release up to this version, newest first), rendered by js/markdown.js; arrows in its header step back through
- * the older releases; its footer opens the GitHub releases page (open_releases_page).
+ * the older releases.
  * Controller: A or Start = Play (or Install), Y = Settings, LB / RB = the other game. Hints show only once a pad is used.
  * Play is glass when idle (no focus): it takes the solid white state only when focused or hovered.
  */
@@ -310,12 +310,7 @@
           h("span", { class: "home-notes-title", text: "What's new" }),
           h("span", { class: "home-notes-pager" }, [notesOlder, notesVersion, notesNewer])
         ]),
-        notesBody,
-        h("button", {
-          class: "home-notes-more",
-          type: "button",
-          on: { click: function () { call("open_releases_page").catch(function (err) { GT4.ui.toast(GT4.errorText(err), true); }); } }
-        }, "All release notes on GitHub")
+        notesBody
       ]);
       notesCard.hidden = true;
       page.appendChild(notesCard);

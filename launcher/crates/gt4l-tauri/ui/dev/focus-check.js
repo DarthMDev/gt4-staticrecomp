@@ -548,7 +548,7 @@
       document.querySelector(".home-notes-version").textContent.length > 0, notes ? "card" : "none");
     check("the notes title line is not repeated and raw HTML stays text", !notes.querySelector(".md-h1") &&
       !notes.querySelector(".home-notes-body b") && /<b>raw HTML<\/b>/.test(notes.textContent), "");
-    check("the notes footer opens the releases page", !!notes.querySelector(".home-notes-more"), "");
+    check("the notes card has no footer link", !notes.querySelector(".home-notes-more"), "");
     var older = notes.querySelectorAll(".notes-arrow")[0];
     var newer = notes.querySelectorAll(".notes-arrow")[1];
     var shownVersion = function () { return document.querySelector(".home-notes-version").textContent; };
