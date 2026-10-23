@@ -674,6 +674,7 @@ CTest 43/43 in the Spec II build (new `native_spec2_iop`); Python 668 tests: all
 skipped), only the expected release-pin failure with the v2.00 build. v2.00 identity against the 1.2.3 build: menus,
 day and night dump and GS stream hashes all equal. Open: S8 (Spec II hook addresses), S9 (launcher, installer,
 credits); the race used a scripted accelerator press, and GT mode still needs game data on the card.
+Progress (2026-10-23, S7c PASS on GSdx): the harness gained target overrides (--exe/--elf/--iso/--press/--textures/--gs-sha256; defaults are the v2.00 gate values and the menus/day/night identity still equals slice268). Spec II runs on the shipping PCSX2 GS process: menus 4,200 frames, Costa di Amalfi race 21,000 frames (12 readbacks), night race at C.S. Route 5 (2,928 readbacks), 3x upscale, and the owner's HD HUD texture pack (with [Folders] Textures + LoadTextureReplacements, needs gt4-gs 1.2.1; the repo pin is 1.0.1). The GT4 display crop is a fixed gt4-gs constant ({0,0,1,2}) and logs for both games; gt4-gs has no SCUS-97436 GameDB entry and the game still announces SCUS-97328 (recorded for S8/S9).
 
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new

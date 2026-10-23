@@ -50,8 +50,17 @@ primitives, the language menu, the main menu, Arcade Mode, track and car selecti
 di Amalfi (169.7 M primitives, HUD and lap timer), with no "no translated code". CTest 43/43 in the Spec II build; the
 Python suite passes with the Spec II build (668 tests) and keeps only the expected release-pin failure with the v2.00
 build. v2.00 identity re-run: menus `463d455c…`/`1ccb97c5…`, day `992f1ac9…`/`0c79dcf5…`, night
-`c57e7d03…`/`c091716e…`, all equal to the 1.2.3 build. Next: S8 (Spec II hook addresses), S9 (launcher, installer,
-credits).
+`c57e7d03…`/`c091716e…`, all equal to the 1.2.3 build.
+
+**S7c is done: Spec II runs on GSdx**, the shipping external PCSX2 GS process (`GT4_RENDERER=pcsx2`). Headless:
+menus 4,200 frames, a Costa di Amalfi race (21,000 frames, 12 readbacks), a night race at C.S. Route 5 (2,928
+readbacks, one 483 ms outlier), 3x upscale (1920x1440 dumps) and the owner's `!_HD HUD & UI` texture pack
+(`[Folders] Textures` + `LoadTextureReplacements`; needs gt4-gs 1.2.1, the repo pin is 1.0.1), all clean (protocol
+1.2, no stream errors or back-pressure stalls). The GT4 display crop is a fixed gt4-gs constant (`{0,0,1,2}`) that
+logs for both games; the game still announces the v2.00 serial SCUS-97328 in the GS handshake and gt4-gs has no
+SCUS-97436 GameDB entry (recorded for S8/S9). `scripts/frame_cost_headless.py` gained `--exe/--elf/--iso/--press/
+--textures/--gs-sha256` with the v2.00 gate defaults unchanged. Next: S8 (Spec II hook addresses), S9 (launcher,
+installer, credits).
 
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
