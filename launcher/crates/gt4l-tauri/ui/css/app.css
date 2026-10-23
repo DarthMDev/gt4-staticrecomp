@@ -270,7 +270,7 @@ body.is-home.input-keys #hints { display: none; }
    next version (endless loop) and the name slides in from that side. Keyboard and pad focus use the common ring. */
 .version-picker {
   margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 4px;
-  align-self: flex-start; width: 240px;
+  align-self: center;
 }
 .version-arrow {
   width: 28px; height: 28px; display: grid; place-items: center; border-radius: 3px;
@@ -293,6 +293,47 @@ body.is-home.input-keys #hints { display: none; }
 @keyframes version-leave-left { from { transform: none; opacity: 1; } to { transform: translateX(-100%); opacity: 0; } }
 @keyframes version-leave-right { from { transform: none; opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 .play.is-install { letter-spacing: 0.2em; }
+/* Patch notes (TASK-099): a light glass card on the right of the home screen, this version's release notes. It scrolls
+   on its own; narrow or short windows hide it (rules at the end of this file). */
+.home-notes {
+  position: absolute; right: 72px; top: 72px; z-index: 2; width: 380px; max-height: calc(100% - 144px);
+  display: flex; flex-direction: column; border-radius: 6px; overflow: hidden;
+  background: rgba(14, 16, 24, 0.42); border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px) saturate(1.2);
+}
+.home-notes[hidden] { display: none; }
+.home-notes-head {
+  display: flex; align-items: baseline; justify-content: space-between; padding: 16px 20px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.home-notes-title { font: 500 12px var(--label); letter-spacing: 0.2em; text-transform: uppercase; color: var(--white); }
+.home-notes-version { font: 400 12px var(--label); letter-spacing: 0.1em; color: var(--dim); }
+.home-notes-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 12px 20px 16px; font: 400 13px/1.55 var(--text); color: var(--silver);
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+.home-notes-body:focus-visible { outline: 1px solid rgba(255, 255, 255, 0.35); outline-offset: -1px; }
+.home-notes-body p { margin: 0 0 10px; }
+.home-notes-body .md-h1, .home-notes-body .md-h2 {
+  margin: 16px 0 6px; font: 500 12px var(--label); letter-spacing: 0.16em; text-transform: uppercase; color: var(--white);
+}
+.home-notes-body .md-h3 { margin: 12px 0 4px; font: 500 13px var(--text); color: var(--white); }
+.home-notes-body > :first-child { margin-top: 0; }
+.home-notes-body ul { margin: 0 0 10px; padding-left: 18px; }
+.home-notes-body li { margin: 0 0 4px; }
+.home-notes-body li::marker { color: var(--dim); }
+.home-notes-body strong { color: var(--white); font-weight: 500; }
+.home-notes-body code { font: 400 12px Consolas, "Cascadia Mono", monospace; padding: 0 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.08); }
+.home-notes-body .md-table { overflow-x: auto; margin: 0 0 10px; }
+.home-notes-body table { border-collapse: collapse; font-size: 12px; }
+.home-notes-body th, .home-notes-body td { padding: 4px 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); text-align: left; }
+.home-notes-body th { color: var(--white); font-weight: 500; }
+.home-notes-more {
+  padding: 12px 20px; text-align: left; background: transparent; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font: 500 11px var(--label); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim);
+}
+.home-notes-more:hover, .home-notes-more:focus-visible { color: var(--white); background: rgba(255, 255, 255, 0.05); }
 /* Settings > Games, and the game name on the Saves and Replays titles. */
 .game-row .k .val { display: block; }
 .game-row .ctl { gap: 8px; display: flex; }
@@ -813,3 +854,8 @@ body.input-pad .info:focus .tip { display: block; }
 .release-notes .notes-heading { font-weight: 700; margin-top: 10px; }
 .release-notes ul { margin: 0 0 8px; padding-left: 20px; }
 .release-notes li { margin: 2px 0; line-height: 1.4; }
+
+/* Patch notes card (TASK-099): only where it does not crowd the logo and the buttons. */
+@media (max-width: 1100px), (max-height: 620px) {
+  .home-notes { display: none; }
+}

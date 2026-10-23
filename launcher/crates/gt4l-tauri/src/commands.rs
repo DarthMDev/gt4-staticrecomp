@@ -953,6 +953,44 @@ pub struct AboutInfo {
     pub credits: String,
 }
 
+/// TASK-099: the release notes of this launcher version, `docs/release-notes/<version>.md`, embedded at build time (a
+/// version without its notes file does not build). The home page renders the Markdown itself and shows no raw HTML.
+pub const RELEASE_NOTES_MARKDOWN: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../docs/release-notes/", env!("CARGO_PKG_VERSION"), ".md"));
+
+/// The public list of every release, opened by the panel's "All release notes" link (a fixed address: the page never
+/// passes a URL).
+pub const RELEASES_PAGE: &str = "https://github.com/moesuito/gt4-staticrecomp/releases";
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseNotes {
+    pub version: String,
+    pub markdown: String,
+}
+
+#[tauri::command]
+pub fn release_notes() -> ReleaseNotes {
+    ReleaseNotes { version: env!("CARGO_PKG_VERSION").to_string(), markdown: RELEASE_NOTES_MARKDOWN.to_string() }
+}
+
+/// Opens the GitHub releases page in the default browser.
+#[tauri::command]
+pub fn open_releases_page() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(RELEASES_PAGE)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("could not open {RELEASES_PAGE}: {error}"))
+    }
+    #[cfg(not(windows))]
+    {
+        Err(format!("open {RELEASES_PAGE} in a browser"))
+    }
+}
+
 #[tauri::command]
 pub fn about_info(shared: State<'_, Shared>) -> Result<AboutInfo, String> {
     about_info_of(shared.inner())

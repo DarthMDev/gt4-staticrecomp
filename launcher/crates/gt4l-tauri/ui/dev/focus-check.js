@@ -542,6 +542,13 @@
     GT4.hooks.tabs(-1);
     await wait(400);
     check("LB / RB switches back to Normal and Play", playText() === "Play" && nameText() === "Normal", nameText());
+    var notes = document.querySelector(".home-notes");
+    check("the patch notes card shows this version's notes (TASK-099)", !!notes && !notes.hidden &&
+      !!notes.querySelector(".home-notes-body .md-h2") && notes.querySelectorAll(".home-notes-body li").length > 0 &&
+      document.querySelector(".home-notes-version").textContent.length > 0, notes ? "card" : "none");
+    check("the notes title line is not repeated and raw HTML stays text", !notes.querySelector(".md-h1") &&
+      !notes.querySelector(".home-notes-body b") && /<b>raw HTML<\/b>/.test(notes.textContent), "");
+    check("the notes footer opens the releases page", !!notes.querySelector(".home-notes-more"), "");
     check("the pad hints name the game switch", /LB \/ RB/.test(document.getElementById("hints").textContent), document.getElementById("hints").textContent);
 
     await setHash("#/settings/games");

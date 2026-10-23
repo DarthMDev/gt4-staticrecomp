@@ -29,6 +29,8 @@
     "allow-assign-binding",
     "allow-reset-all-bindings",
     "allow-about-info",
+    "allow-release-notes",
+    "allow-open-releases-page",
     "allow-open-log-folder",
     "allow-open-game-files-folder",
     "allow-open-player-folder",

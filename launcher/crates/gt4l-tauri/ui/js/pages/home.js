@@ -6,6 +6,8 @@
  * arrow switches to the next version in an endless loop and the name slides in from that side (owner, 2026-10-23). An
  * installed game shows Play; a game that is not installed shows Install, which opens the disc picker and runs that
  * game's setup. The logo stays the Gran Turismo 4 logo for both.
+ * Patch notes (TASK-099): a glass card on the right shows this version's release notes (release_notes, the Markdown file
+ * embedded in the launcher), rendered by js/markdown.js; its footer opens the GitHub releases page (open_releases_page).
  * Controller: A or Start = Play (or Install), Y = Settings, LB / RB = the other game. Hints show only once a pad is used.
  * Play is glass when idle (no focus): it takes the solid white state only when focused or hovered.
  */
@@ -240,6 +242,28 @@
       page.appendChild(versionLabel);
       call("about_info").then(function (info) {
         versionLabel.textContent = "GT4Recomp " + (info.version || "");
+      }, function () {});
+      // The patch notes card (TASK-099). It scrolls on its own; wide windows only (css/app.css hides it when narrow).
+      var notesBody = h("div", { class: "home-notes-body", tabindex: "0", "aria-label": "Release notes" });
+      var notesVersion = h("span", { class: "home-notes-version", text: "" });
+      var notesCard = h("aside", { class: "home-notes", "aria-label": "What's new" }, [
+        h("header", { class: "home-notes-head" }, [h("span", { class: "home-notes-title", text: "What's new" }), notesVersion]),
+        notesBody,
+        h("button", {
+          class: "home-notes-more",
+          type: "button",
+          on: { click: function () { call("open_releases_page").catch(function (err) { GT4.ui.toast(GT4.errorText(err), true); }); } }
+        }, "All release notes on GitHub")
+      ]);
+      notesCard.hidden = true;
+      page.appendChild(notesCard);
+      call("release_notes").then(function (notes) {
+        if (!notes || !notes.markdown) {
+          return;
+        }
+        notesVersion.textContent = notes.version || "";
+        notesBody.appendChild(GT4.markdown.render(notes.markdown, { skipTitle: true }));
+        notesCard.hidden = false;
       }, function () {});
       page.appendChild(h("div", { class: "home-bottom" }, [
         logoImage,

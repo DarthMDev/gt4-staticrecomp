@@ -25,6 +25,8 @@ reset_binding
 assign_binding
 reset_all_bindings
 about_info
+release_notes
+open_releases_page
 open_log_folder
 open_game_files_folder
 open_player_folder

@@ -566,6 +566,43 @@
           return replay.id !== args.id;
         });
         return libraryView("replays");
+      case "release_notes":
+        // Sample text in the shape of docs/release-notes/<version>.md (the real build embeds the file).
+        return {
+          version: "1.3.0",
+          markdown: [
+            "# GT4Recomp 1.3.0",
+            "",
+            "**Gran Turismo 4 Spec II comes to GT4Recomp.** You need your own disc images.",
+            "",
+            "## Highlights",
+            "",
+            "- **Spec II 1.10** runs natively next to the normal game, on GSdx with upscaling and texture packs.",
+            "- Choose the version under **Play**: Normal or Spec II. Each keeps its own saves.",
+            "- The Brazilian Portuguese edition of Spec II 1.10 is recognised too.",
+            "",
+            "## Install or update",
+            "",
+            "- Update from 1.2.x: accept the update in the launcher. Your files move into the new per-game folders.",
+            "- New install: run **GT4Recomp-Setup-1.3.0.exe**.",
+            "",
+            "## Fixes",
+            "",
+            "- Smoother version switching on the home screen.",
+            "- `Textures` packs work the same in both games.",
+            "",
+            "| What | Normal | Spec II |",
+            "|---|---|---|",
+            "| Saves | games\\gt4 | games\\spec2 |",
+            "",
+            "## Known issues",
+            "",
+            "- Replays are kept apart per game until cross-play is tested.",
+            "- <b>raw HTML</b> stays plain text."
+          ].join("\n")
+        };
+      case "open_releases_page":
+        return null;
       case "about_info":
         return {
           version: "1.1.0",
