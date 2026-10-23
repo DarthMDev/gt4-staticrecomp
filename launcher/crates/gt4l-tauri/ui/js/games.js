@@ -53,7 +53,7 @@
       GT4.ui.openDialog({
         title: options.title,
         text: options.text,
-        buttons: [{ label: "Cancel" }].concat(games.map(function (game, index) {
+        buttons: [{ label: GT4.t("common.cancel") }].concat(games.map(function (game, index) {
           return { label: game.name, primary: index === 0, run: function () { run(game.id); } };
         }))
       });
@@ -65,12 +65,12 @@
   // The disc is not the game that was asked for: install it as the game it is, pick another file, or stop.
   function offerOtherGame(info, install, pickAgain) {
     GT4.ui.openDialog({
-      title: "This disc is " + info.gameName,
-      text: "You asked for another game, but this disc image is " + info.gameName + ". Install it as " + info.gameName + "?",
+      title: GT4.t("games.other_title", { game: info.gameName }),
+      text: GT4.t("games.other_text", { game: info.gameName }),
       buttons: [
-        { label: "Cancel" },
-        { label: "Choose another file", run: pickAgain },
-        { label: "Install " + info.gameName, primary: true, run: install }
+        { label: GT4.t("common.cancel") },
+        { label: GT4.t("common.choose_another_file"), run: pickAgain },
+        { label: GT4.t("games.install_as", { game: info.gameName }), primary: true, run: install }
       ]
     });
   }
@@ -108,7 +108,7 @@
     if (!bytes) {
       return "";
     }
-    return (bytes / 1e9).toFixed(1) + " GB";
+    return GT4.t("common.gb", { size: (bytes / 1e9).toLocaleString(GT4.i18n.intlLocale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 }) });
   }
 
   GT4.games = {

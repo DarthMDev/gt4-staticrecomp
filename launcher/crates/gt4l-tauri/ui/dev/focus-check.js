@@ -21,6 +21,12 @@
   var lines = [];
   var failures = 0;
 
+  // The text of a locale key in the current language. The checks compare against keys, so the same checks run in
+  // every language (ui/locales/*.json).
+  function T(key, params) {
+    return GT4.t(key, params);
+  }
+
   function wait(ms) {
     return new Promise(function (resolve) {
       root.setTimeout(resolve, ms);
@@ -146,7 +152,7 @@
     press("ArrowRight");
     await wait(200);
     var active = document.activeElement;
-    check("Saves never auto-selects Import", !(active && active.textContent && active.textContent.indexOf("Import") >= 0), active ? active.textContent : "none");
+    check("Saves never auto-selects Import", !(active && active.textContent && active.textContent.indexOf(T("library.import_saves")) >= 0), active ? active.textContent : "none");
   }
 
   // Changed values show on screen at once and stay after the table is read again.
@@ -251,7 +257,7 @@
     var heads = Array.prototype.map.call(document.querySelectorAll(".content .section-head"), function (item) {
       return item.textContent;
     }).join("|");
-    check("Graphics shows the Display, Graphics and Advanced sections in order", heads === "Display|Graphics|Advanced", heads);
+    check("Graphics shows the Display, Graphics and Advanced sections in order", heads === T("settings.section_display") + "|" + T("settings.section_graphics") + "|" + T("settings.section_advanced"), heads);
     var displayIds = Array.prototype.map.call(document.querySelectorAll("[data-section=\"display\"] .row"), function (item) {
       return item.getAttribute("data-row");
     }).join("|");
@@ -299,7 +305,7 @@
     check("D-pad down from the Display rows passes through the Graphics rows", passedGraphics, "walk " + walk.join(" > "));
     check("D-pad down from the Graphics rows reaches the Advanced rows", reached, "walk " + walk.join(" > "));
     check("D-pad down reaches Reset to defaults at the end of the section", reset, "focus " + focusedSetting());
-    check("the Graphics content footer offers Y Reset", /Reset/.test(footerText()), footerText());
+    check("the Graphics content footer offers Y Reset", new RegExp(T("hint.reset")).test(footerText()), footerText());
     var inSection = document.querySelector("[data-section=\"advanced\"] [data-setting=\"perf_overlay\"]");
     check("our performance overlay row is in the Advanced section", !!inSection, "no perf_overlay row");
     var osd = document.querySelector(".content [data-setting=\"osd_fps\"], .content [data-setting=\"aspect\"], " +
@@ -376,7 +382,7 @@
     press("ArrowRight");
     await wait(200);
     check("entering Controls focuses Cross on the drawing", focusedControl() === "cross", "focus " + focusedControl());
-    check("the Controls footer offers Rebind, Reset button and Reset all", /Rebind/.test(footerText()) && /Reset button/.test(footerText()) && /Reset all/.test(footerText()), footerText());
+    check("the Controls footer offers Rebind, Reset button and Reset all", footerText().indexOf(T("controls.rebind")) >= 0 && footerText().indexOf(T("hint.reset_button")) >= 0 && footerText().indexOf(T("hint.reset_all")) >= 0, footerText());
 
     press("ArrowUp");
     await wait(120);
@@ -386,7 +392,7 @@
     press("ArrowLeft");
     await wait(120);
     check("D-pad left from Cross reaches Square", focusedControl() === "square", "focus " + focusedControl());
-    check("the selection follows focus (panel shows Square)", cardName() === "Square", cardName());
+    check("the selection follows focus (panel shows Square)", cardName() === T("controls.button.square"), cardName());
     press("ArrowLeft");
     await wait(120);
     check("D-pad left from Square reaches Start", focusedControl() === "start", "focus " + focusedControl());
@@ -397,7 +403,7 @@
     GT4.nav.activate();
     await wait(200);
     check("A on a DS2 button opens the rebind overlay", !!document.querySelector(".modal.is-capture") && GT4.capturing === true, "capturing " + GT4.capturing);
-    check("the overlay names the button", /Square/.test((document.querySelector(".modal.is-capture h3") || {}).textContent || ""), "no title");
+    check("the overlay names the button", new RegExp(T("controls.button.square")).test((document.querySelector(".modal.is-capture h3") || {}).textContent || ""), "no title");
     check("the rebind footer shows only B Cancel", footerText() === "BCancel", footerText());
     press("Escape");
     await wait(200);
@@ -420,7 +426,7 @@
     GT4.nav.activate();
     await wait(2600);
     var dialogTitle = (document.querySelector(".modal h3") || {}).textContent || "";
-    check("a pad button already on R1 opens the conflict dialog", /already on R1/.test(dialogTitle), dialogTitle);
+    check("a pad button already on R1 opens the conflict dialog", /already on R1|já está em R1/.test(dialogTitle), dialogTitle);
     press("Escape");
     await wait(200);
     check("cancelling the conflict changes nothing", (await controlsOf("square")).xinput === "X" && (await controlsOf("r1")).xinput === "RB", "square/r1 changed");
@@ -429,7 +435,7 @@
     GT4.nav.activate();
     await wait(2600);
     var swap = Array.prototype.filter.call(document.querySelectorAll(".modal button"), function (button) {
-      return button.textContent === "Swap";
+      return button.textContent === T("controls.swap");
     })[0];
     check("the conflict dialog offers Swap", !!swap, "no Swap button");
     if (swap) {
@@ -440,7 +446,7 @@
     var r1 = await controlsOf("r1");
     check("Swap gives Square RB and R1 X", square.xinput === "RB" && r1.xinput === "X", square.xinput + "/" + r1.xinput);
     check("the chips show the swap (controller view)", badgeLabel("square") === "RB" && badgeLabel("r1") === "X", badgeLabel("square") + "/" + badgeLabel("r1"));
-    check("a swapped button reads Changed in the panel", (document.querySelector(".cx-card .cx-state") || {}).textContent === "Changed", "state");
+    check("a swapped button reads Changed in the panel", (document.querySelector(".cx-card .cx-state") || {}).textContent === T("controls.changed"), "state");
 
     // Live input from the pad events (a still dev pad, sent by the mock like the Rust service): Cross lights from A,
     // L2 fills to 60%.
@@ -471,7 +477,7 @@
     GT4.hooks.x();
     await wait(150);
     var resetAll = Array.prototype.filter.call(document.querySelectorAll(".modal button"), function (button) {
-      return button.textContent === "Reset all";
+      return button.textContent === T("controls.reset_all_hint");
     })[0];
     check("X asks before resetting everything", !!resetAll, "no confirmation");
     if (resetAll) {
@@ -522,26 +528,26 @@
       return names.length ? names[names.length - 1].textContent : "";
     };
     var playText = function () { return document.querySelector(".play").textContent; };
-    check("Home has the version switch: two arrows around Normal", arrows.length === 2 && nameText() === "Normal",
+    check("Home has the version switch: two arrows around Normal", arrows.length === 2 && nameText() === T("home.normal"),
       arrows.length + " " + nameText());
-    check("Gran Turismo 4 is selected first and shows Play", playText() === "Play", playText());
+    check("Gran Turismo 4 is selected first and shows Play", playText() === T("common.play"), playText());
     check("the logo is the Gran Turismo 4 logo, with no Spec II line", !document.querySelector(".home-logo-spec2") &&
       !!document.querySelector(".home-logo"), "");
     arrows[1].click();
     await wait(400);
     check("the right arrow switches to Spec II and shows Install (no other not-installed mark)", nameText() === "Spec II" &&
-      playText() === "Install" && !document.querySelector(".version-note"), nameText() + " " + playText());
+      playText() === T("common.install") && !document.querySelector(".version-note"), nameText() + " " + playText());
     check("the new name came in from the right", currentName().classList.contains("enter-from-right"), "");
     arrows[1].click();
     await wait(400);
-    check("the loop is endless: right again comes back to Normal", nameText() === "Normal" && playText() === "Play", nameText());
+    check("the loop is endless: right again comes back to Normal", nameText() === T("home.normal") && playText() === T("common.play"), nameText());
     arrows[0].click();
     await wait(400);
     check("the left arrow switches too, sliding in from the left", nameText() === "Spec II" &&
       currentName().classList.contains("enter-from-left"), nameText());
     GT4.hooks.tabs(-1);
     await wait(400);
-    check("LB / RB switches back to Normal and Play", playText() === "Play" && nameText() === "Normal", nameText());
+    check("LB / RB switches back to Normal and Play", playText() === T("common.play") && nameText() === T("home.normal"), nameText());
     var notes = document.querySelector(".home-notes");
     check("the patch notes card shows this version's notes (TASK-099)", !!notes && !notes.hidden &&
       !!notes.querySelector(".home-notes-body .md-h2") && notes.querySelectorAll(".home-notes-body li").length > 0 &&
@@ -561,7 +567,7 @@
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await wait(800);
     check("a key skips the intro and does not press Play", !GT4.intro.isPlaying() && !document.querySelector(".intro") &&
-      document.querySelector(".play").textContent === "Play", "");
+      document.querySelector(".play").textContent === T("common.play"), "");
     try { localStorage.removeItem("gt4recomp.intro.seen"); } catch (error) { /* storage off */ }
     var first = GT4.intro.maybePlay("1.3.0");
     GT4.intro.skip();
@@ -571,7 +577,7 @@
     check("the intro plays once for 1.3.0 and never for a version without one", first && !second && !other, [first, second, other].join(" "));
     var support = document.querySelector(".support");
     check("Support the project with the Ko-fi cup sits on the home screen", !!support && !!support.querySelector(".support-cup") &&
-      /Support the project/.test(support.textContent), "");
+      new RegExp(T("home.support")).test(support.textContent), "");
     var credit = document.querySelector(".home-version");
     check("the version line credits Moesuito as a link", /GT4Recomp .* - Made with passion, by Moesuito$/.test(credit.textContent) &&
       !!credit.querySelector(".home-author"), credit.textContent);
@@ -603,13 +609,13 @@
     var rows = document.querySelectorAll(".game-row");
     check("Settings > Games lists both games", rows.length === 2, String(rows.length));
     var labels = Array.prototype.map.call(rows[0].querySelectorAll("button"), function (b) { return b.textContent; });
-    check("an installed game offers Change disc image and Remove", labels.join("|") === "Change disc image|Remove", labels.join("|"));
+    check("an installed game offers Change disc image and Remove", labels.join("|") === T("games.change_disc") + "|" + T("common.remove"), labels.join("|"));
     var other = Array.prototype.map.call(rows[1].querySelectorAll("button"), function (b) { return b.textContent; });
-    check("a game that is not installed offers Install", other.join("|") === "Install", other.join("|"));
+    check("a game that is not installed offers Install", other.join("|") === T("common.install"), other.join("|"));
     rows[0].querySelectorAll("button")[1].click();
     await wait(200);
     var dialog = document.querySelector(".modal");
-    check("Remove asks first and says the saves are kept", !!dialog && /saves and replays are kept/i.test(dialog.textContent), dialog ? dialog.textContent : "no dialog");
+    check("Remove asks first and says the saves are kept", !!dialog && /saves and replays are kept|Seus saves e replays são mantidos/i.test(dialog.textContent), dialog ? dialog.textContent : "no dialog");
     if (dialog) {
       GT4.ui.topDialog().close();
     }
@@ -629,7 +635,131 @@
     await GT4.games.select("gt4");
   }
 
+
+  // ---------- Locales (TASK-102): every language has the keys of en-US; index.json lists only files that exist ----------
+  function fetchJson(name) {
+    return fetch("locales/" + name, { cache: "no-cache" }).then(function (response) {
+      return response.ok ? response.json() : null;
+    }, function () {
+      return null;
+    });
+  }
+
+  function placeholdersOf(text) {
+    return (String(text).match(/\{[A-Za-z0-9_]+\}/g) || []).slice().sort().join(",");
+  }
+
+  async function localeChecks() {
+    var index = await fetchJson("index.json");
+    check("index.json lists the languages", Array.isArray(index) && index.length >= 2, String(index && index.length));
+    var english = await fetchJson("en-US.json");
+    check("en-US.json exists (the fallback)", !!english, "missing");
+    if (!Array.isArray(index) || !english) {
+      return;
+    }
+    for (var i = 0; i < index.length; i++) {
+      var tag = index[i].tag;
+      var file = await fetchJson(tag + ".json");
+      check("index.json lists " + tag + " and its file exists", !!file, "no locales/" + tag + ".json");
+      if (!file || tag === "en-US") {
+        continue;
+      }
+      var missing = Object.keys(english).filter(function (key) { return !Object.prototype.hasOwnProperty.call(file, key); });
+      var extra = Object.keys(file).filter(function (key) { return !Object.prototype.hasOwnProperty.call(english, key); });
+      check(tag + " has every key of en-US", missing.length === 0, "missing " + missing.slice(0, 5).join(", "));
+      check(tag + " has no keys that en-US lacks", extra.length === 0, "extra " + extra.slice(0, 5).join(", "));
+      var badPlaceholder = Object.keys(english).filter(function (key) {
+        return typeof file[key] === "string" && placeholdersOf(file[key]) !== placeholdersOf(english[key]);
+      });
+      check(tag + " keeps the {placeholders} of en-US", badPlaceholder.length === 0, badPlaceholder.slice(0, 5).join(", "));
+      var empty = Object.keys(file).filter(function (key) { return typeof file[key] !== "string" || !file[key].trim(); });
+      check(tag + " has no empty texts", empty.length === 0, empty.slice(0, 5).join(", "));
+    }
+    check("the Auto rule picks pt-BR for pt-BR, pt_BR and pt", GT4.i18n.resolve("auto", "pt-BR") === "pt-BR" &&
+      GT4.i18n.resolve("auto", "pt_BR") === "pt-BR" && GT4.i18n.resolve("auto", "pt") === "pt-BR", "rule");
+    check("the Auto rule picks en-US for es-ES, fr and empty text", GT4.i18n.resolve("auto", "es-ES") === "en-US" &&
+      GT4.i18n.resolve("auto", "fr") === "en-US" && GT4.i18n.resolve("auto", "") === "en-US", "rule");
+    check("an explicit language wins over the OS", GT4.i18n.resolve("en-US", "pt-BR") === "en-US" &&
+      GT4.i18n.resolve("pt-BR", "en-US") === "pt-BR", "rule");
+  }
+
+  // The live switch (Settings > General > Language): the whole UI changes at once, in both directions.
+  async function languageSwitchChecks() {
+    var before = GT4.i18n.current();
+    var beforeSetting = GT4.i18n.setting();
+    var other = before === "pt-BR" ? "en-US" : "pt-BR";
+    await routeTo("#/settings/general");
+    await wait(400);
+    var select = document.querySelector("[data-setting=\"language\"]");
+    check("Settings > General shows the Language row", !!select, "no row");
+    if (!select) {
+      return;
+    }
+    select.focus({ preventScroll: true });
+    select.click();
+    await wait(300);
+    var option = Array.prototype.filter.call(document.querySelectorAll(".option-list .option"), function (button) {
+      return button.textContent.indexOf(other === "pt-BR" ? "Portugu" : "English") >= 0;
+    })[0];
+    check("the Language list offers " + other, !!option, "no option");
+    if (option) {
+      option.click();
+      await wait(900);
+    }
+    check("the page is in " + other + " after the choice (no restart)", GT4.i18n.current() === other &&
+      document.documentElement.getAttribute("lang") === other, GT4.i18n.current());
+    var sideGeneral = document.querySelector("nav.side [data-tab=\"general\"]");
+    check("the tab list names the General tab in " + other, !!sideGeneral && sideGeneral.textContent === GT4.t("tab.general"),
+      sideGeneral ? sideGeneral.textContent : "no tab");
+    // Back to the language the run started in.
+    await GT4.backend.call("set_setting", { id: "language", value: beforeSetting });
+    GT4.i18n.setSetting(beforeSetting);
+    await wait(400);
+  }
+
+  async function routeTo(hash) {
+    root.location.hash = hash;
+    await wait(500);
+  }
+
+  // Portuguese checks (run in pt-BR): the fixed terms, the notes card and the English credit line.
+  async function portugueseChecks() {
+    await routeTo("#/home");
+    var play = document.querySelector(".play");
+    check("pt-BR: the home button reads Jogar", !!play && play.textContent === "Jogar", play ? play.textContent : "no play");
+    var support = document.querySelector(".support");
+    check("pt-BR: the support button reads Ajude o projeto", !!support && support.textContent.indexOf("Ajude o projeto") >= 0,
+      support ? support.textContent : "no support");
+    var credit = document.querySelector(".home-version");
+    check("pt-BR: the credit line stays in English", !!credit && credit.textContent.indexOf("Made with passion, by Moesuito") >= 0,
+      credit ? credit.textContent : "no credit");
+    var notesTitle = document.querySelector(".home-notes-title");
+    check("pt-BR: the What's new card reads Novidades", !!notesTitle && notesTitle.textContent === "Novidades",
+      notesTitle ? notesTitle.textContent : "no card");
+    var notesBody = document.querySelector(".home-notes-body");
+    check("pt-BR: the release notes come in Portuguese", !!notesBody && notesBody.textContent.indexOf("Novidades") >= 0,
+      notesBody ? notesBody.textContent.slice(0, 60) : "no notes");
+    await routeTo("#/settings/general");
+    await wait(400);
+    var row = document.querySelector("[data-row=\"language\"] .k span");
+    check("pt-BR: the General tab row reads Idioma", !!row && row.textContent === "Idioma", row ? row.textContent : "no row");
+    var tableNow = await GT4.backend.call("get_settings_table");
+    var languageRow = (tableNow.rows || []).filter(function (item) { return item.id === "language"; })[0];
+    var ctl = document.querySelector("[data-setting=\"language\"]");
+    check("pt-BR: the language choice shows Português (Brasil)", !!ctl && ctl.textContent.indexOf("Português (Brasil)") >= 0,
+      (ctl ? ctl.textContent : "no choice") + " table " + (languageRow && languageRow.current) + " setting " + GT4.i18n.setting());
+  }
+
+  async function languageChecks() {
+    await localeChecks();
+    await languageSwitchChecks();
+    if (GT4.i18n.current() === "pt-BR") {
+      await portugueseChecks();
+    }
+  }
+
   async function run() {
+    await GT4.i18n.ready;
     await wait(300);
     var scenario = new URLSearchParams(root.location.search).get("scenario") || "";
     try {
@@ -653,6 +783,7 @@
       await advancedSectionChecks();
       await controlsChecks();
       await gamesChecks();
+      await languageChecks();
     } catch (err) {
       check("the checks ran to the end", false, String(err && err.message ? err.message : err));
     }

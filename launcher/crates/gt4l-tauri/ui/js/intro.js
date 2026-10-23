@@ -48,18 +48,18 @@
     var letters = "spec-II".split("").map(function (letter, index) {
       return h("span", { class: "intro-letter intro-letter-" + (index + 1), text: letter });
     });
-    var overlay = h("div", { class: "intro" + (reduced ? " is-reduced" : ""), role: "dialog", "aria-label": "Gran Turismo 4 Spec II is now supported" }, [
+    var overlay = h("div", { class: "intro" + (reduced ? " is-reduced" : ""), role: "dialog", "aria-label": GT4.t("intro.label") }, [
       h("div", { class: "intro-streaks", "aria-hidden": "true" }, streaks),
-      h("div", { class: "intro-scene intro-scene-1", text: "You asked for it." }),
-      h("div", { class: "intro-scene intro-scene-2", text: "We made it." }),
+      h("div", { class: "intro-scene intro-scene-1", text: GT4.t("intro.asked") }),
+      h("div", { class: "intro-scene intro-scene-2", text: GT4.t("intro.made") }),
       h("div", { class: "intro-stage" }, [
         h("img", { class: "intro-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
         h("div", { class: "intro-spec" }, letters),
         h("div", { class: "intro-bar", "aria-hidden": "true" }),
-        h("div", { class: "intro-line", text: "Natively recompiled" }),
-        h("div", { class: "intro-sub", text: "Now in GT4Recomp 1.3.0" })
+        h("div", { class: "intro-line", text: GT4.t("intro.natively") }),
+        h("div", { class: "intro-sub", text: GT4.t("intro.now", { version: "1.3.0" }) })
       ]),
-      h("div", { class: "intro-skip", text: "Press any key to skip" })
+      h("div", { class: "intro-skip", text: GT4.t("intro.skip") })
     ]);
     overlay.addEventListener("click", finish);
     var onKey = function (event) {

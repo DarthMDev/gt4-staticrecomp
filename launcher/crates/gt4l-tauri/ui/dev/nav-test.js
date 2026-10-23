@@ -2,7 +2,7 @@
  * Unit tests for GT4.spatial.pickNext (ui/js/spatial.js). Runs in any browser
  * through nav-test.html; prints PASS/FAIL per case and a summary.
  */
-(function (root) {
+function startNavTest(root) {
   "use strict";
   var pick = root.GT4.spatial.pickNext;
   var cases = [];
@@ -306,4 +306,9 @@
   }
 
   run();
-})(window);
+}
+
+// The footer labels come from the locale files (ui/locales): the cases run once they are loaded.
+window.GT4.i18n.ready.then(function () {
+  startNavTest(window);
+});

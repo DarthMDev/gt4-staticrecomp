@@ -61,7 +61,7 @@
     GT4.updates.confirmClose(payload && payload.message);
   });
   GT4.backend.listen("update-finished", function (payload) {
-    GT4.ui.toast(payload && payload.message ? payload.message : "Update finished.", !(payload && payload.ok));
+    GT4.ui.toast(payload && payload.message ? payload.message : GT4.t("app.update_finished"), !(payload && payload.ok));
   });
   GT4.backend.listen("renderer-progress", function (payload) {
     // The setup page draws its own renderer row; these toasts are for the retry at a later launch and updates.
@@ -70,14 +70,14 @@
     }
     var step = payload && payload.step;
     // TASK-089 extension (1.2.0): a switch in Settings shows its progress inline, under the Renderer row.
-    var labels = { listing: "Finding GSdx…", downloading: "Downloading GSdx…", installing: "Installing…" };
+    var labels = { listing: GT4.t("app.gsdx_listing"), downloading: GT4.t("app.gsdx_downloading"), installing: GT4.t("app.gsdx_installing") };
     if (GT4.setRendererStatus && labels[step]) {
       GT4.setRendererStatus(labels[step]);
     }
     if (step === "failed") {
-      GT4.ui.toast("GSdx could not be installed. The game cannot start until it is installed.", true);
+      GT4.ui.toast(GT4.t("app.gsdx_failed"), true);
     } else if (step === "done") {
-      GT4.ui.toast("gt4-gs is ready.");
+      GT4.ui.toast(GT4.t("app.gsdx_ready"));
     }
   });
   GT4.backend.listen("renderer-switched", function (payload) {
@@ -85,7 +85,7 @@
     if (GT4.setRendererStatus) {
       GT4.setRendererStatus("");
     }
-    GT4.ui.toast(payload && payload.message ? payload.message : "GSdx", !(payload && payload.ok));
+    GT4.ui.toast(payload && payload.message ? payload.message : GT4.t("app.gsdx_name"), !(payload && payload.ok));
     if (parseRoute().name === "settings") {
       GT4.go(root.location.hash);
     }
@@ -126,7 +126,7 @@
     var label = box.firstChild.firstChild;
     var number = box.firstChild.lastChild;
     var barNode = box.lastChild;
-    label.textContent = "Moving " + (migration.item || "game files") + " to the install folder…";
+    label.textContent = GT4.t("app.migration_moving", { item: migration.item || GT4.t("app.migration_items") });
     number.textContent = percent >= 0 ? percent + "%" : "";
     barNode.classList.toggle("indeterminate", percent < 0);
     barNode.firstChild.style.width = percent >= 0 ? percent + "%" : "";
@@ -177,7 +177,19 @@
     root.setTimeout(send, 250);
   }
 
-  GT4.backend.call("app_state").then(function (appState) {
+  // TASK-102: the locale files load first (js/i18n.js); the language then comes from the Settings value that
+  // app_state reports. A change of language (Settings, or the same value read again) re-draws the page.
+  var booted = false;
+  GT4.i18n.onChange(function () {
+    if (booted) {
+      render();
+    }
+  });
+  GT4.i18n.ready.then(function () {
+    return GT4.backend.call("app_state");
+  }).then(function (appState) {
+    GT4.i18n.setSetting(appState.language || "auto");
+    booted = true;
     showMigration(appState);
     var route = parseRoute();
     if (!route.name) {
@@ -188,6 +200,7 @@
     }
     signalReady();
   }, function (err) {
+    booted = true;
     render();
     GT4.ui.toast(GT4.errorText(err), true);
     signalReady();

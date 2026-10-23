@@ -19,6 +19,12 @@
   "use strict";
 
   var query = new URLSearchParams(root.location.search);
+  // TASK-102: ?lang=pt-BR forces the language (the Settings value and the OS language); ?os=pt-BR sets only the OS
+  // language, so Auto follows it. Without either, Auto follows the browser's language.
+  root.GT4 = root.GT4 || {};
+  var forcedLanguage = query.get("lang") || "";
+  root.GT4.devOsLanguage = query.get("os") || forcedLanguage || "";
+  var mockLanguage = forcedLanguage || "auto";
   var setupStart = query.get("setup") || "done";
   var IMAGE_BYTES = 5314478080;
   var SPEC_MESSAGE = "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328) and " +
@@ -219,13 +225,26 @@
     findRow("render_scale").values.labels = renderLabels(resolutionRow.current);
   }
 
+  // The Settings > General row (TASK-102): the launcher's language, as the table gives it.
+  function languageRow() {
+    return {
+      id: "language", label: "Language", group: "general", page: "basic", control: "dropdown",
+      help: "The language of the launcher.", default: "auto", current: mockLanguage,
+      values: [
+        { value: "auto", label: "Auto" },
+        { value: "en-US", label: "English" },
+        { value: "pt-BR", label: "Português (Brasil)" }
+      ]
+    };
+  }
+
   function tableView() {
     fillDisplayRows();
     return {
       max_upscale: maxUpscale,
-      rows: rows.map(function (row) {
+      rows: [languageRow()].concat(rows.map(function (row) {
         return JSON.parse(JSON.stringify(row));
-      })
+      }))
     };
   }
 
@@ -435,7 +454,7 @@
     }
     var target = setupGame || (view.any_installed ? selectedGame : null);
     snapshot.game = target ? { id: target, name: gameById(target).name } : null;
-    return { setup: snapshot, game_running: gameRunning, selected_game: view.selected,
+    return { setup: snapshot, game_running: gameRunning, selected_game: view.selected, language: mockLanguage,
       any_installed: view.any_installed, games: view.games,
       game_files: "C:\\Program Files\\GT4Recomp\\data\\games\\" + selectedGame + "\\disc",
       migration: { running: false, item: "", bytes_done: 0, bytes_total: 0, notice: "", problem: false } };
@@ -502,6 +521,10 @@
       case "get_settings_table":
         return tableView();
       case "set_setting": {
+        if (args.id === "language") {
+          mockLanguage = args.value;
+          return null;
+        }
         var row = findRow(args.id) || analog.filter(function (item) { return item.id === args.id; })[0];
         if (!row) {
           throw new Error("Unknown setting " + args.id);
@@ -575,13 +598,13 @@
         return {
           version: "1.3.0",
           releases: [
-            { version: "1.3.0", markdown: "# GT4Recomp 1.3.0\n\n**Gran Turismo 4 Spec II comes to GT4Recomp.**\n\n## New\n- **Spec II 1.10** runs next to the normal game, with upscaling and texture packs.\n- Pick the version under **Play**: Normal or Spec II. Each keeps its own saves.\n- A **What's new** panel on the home screen, with every past update.\n- A portable version: carry the whole folder to another PC.\n\n## Good to know\n- Spec II needs your own Spec II 1.10 disc image (the Brazilian Portuguese edition works too)." },
-            { version: "1.2.3", markdown: "# GT4Recomp 1.2.3\n\n**Quick fixes and a desktop shortcut.**\n\n## Fixes\n- The game no longer crashes at start for players who were not on GSdx.\n\n## New\n- Texture packs can go straight into the Textures folder, with no extra subfolder.\n- The installer can create a **Gran Turismo 4** shortcut on your desktop.\n- GSdx is now the only renderer; our own renderer, CoreGS 2.0, is coming later.\n" },
-            { version: "1.2.2", markdown: "# GT4Recomp 1.2.2\n\n**A lighter game on your processor.**\n\n## Performance\n- **About 15% less processor work** per frame in the heaviest races, so slower PCs keep 60 FPS more easily.\n- The picture is exactly the same as before.\n" },
-            { version: "1.2.1", markdown: "# GT4Recomp 1.2.1\n\n**A cleaner install and updates that just work.**\n\n## New\n- GT4Recomp now installs in Program Files, for every user of the PC, in any folder you pick.\n- Your settings and saves live in your Windows user folder; the big game files sit next to the program.\n- Updates install silently: one confirmation, and the launcher reopens by itself.\n- **Performance Mode** (Settings > Graphics): faster on weaker PCs, by skipping a few light effects.\n- Settings now sits next to Play on the home screen.\n\n## Fixes\n- The launcher no longer opens as a blank white window on some PCs.\n" },
-            { version: "1.2.0", markdown: "# GT4Recomp 1.2.0\n\n**Custom texture packs arrive.**\n\n## New\n- **HD texture packs**: drop a pack in the Textures folder (Settings > Graphics > Open textures folder) and play.\n- The renderer is now called **GSdx**, and every GSdx picture option is available in Settings.\n- The resolution follows your desktop automatically, and monitors show their real names.\n- The game window starts black instead of white.\n\n## Thanks\n- To **JulioHeroZ** for their contribution to this release.\n" },
-            { version: "1.1.0", markdown: "# GT4Recomp 1.1.0\n\n**Ultrawide support: the game now fills any screen.**\n\n## New\n- **21:9, 32:9, 16:10 and more**: races fill your screen and show more to the sides, with the HUD kept undistorted.\n- Choose the monitor and resolution the game opens on.\n- The game's sharpness adjusts to your resolution automatically, with a Render scale slider for more speed.\n- All picture settings in one place: Settings > Graphics.\n\n## Fixes\n- Updating from inside the launcher works now.\n\n## Good to know\n- Menus, movies and photo mode stay 16:9.\n" },
-            { version: "1.0.0", markdown: "# GT4Recomp 1.0.0\n\n**The first release: Gran Turismo 4 running natively on your PC.**\n\n## New\n- One-click installer and a launcher that sets the game up from your own disc image.\n- **60 FPS** at full game speed in every scene we tested.\n- Any controller works out of the box (Xbox, DualShock 4, DualSense, Switch Pro), with button remapping.\n- Widescreen 16:9 and progressive 480p races, always on.\n- Your saves and replays are easy to find and back up, and survive a crash.\n\n## Good to know\n- Racing wheels and ultrawide screens are not supported yet.\n- Some license demos and menu backgrounds do not play.\n" }
+            { version: "1.3.0", markdown: "# GT4Recomp 1.3.0\n\n**Gran Turismo 4 Spec II comes to GT4Recomp.**\n\n## New\n- **Spec II 1.10** runs next to the normal game, with upscaling and texture packs.\n- Pick the version under **Play**: Normal or Spec II. Each keeps its own saves.\n- A **What's new** panel on the home screen, with every past update.\n- A portable version: carry the whole folder to another PC.\n\n## Good to know\n- Spec II needs your own Spec II 1.10 disc image (the Brazilian Portuguese edition works too).", translations: { "pt-BR": "# GT4Recomp 1.3.0\n\n**Gran Turismo 4 Spec II chega ao GT4Recomp.**\n\n## Novidades\n- **Spec II 1.10** roda ao lado do jogo normal, com upscaling e pacotes de texturas.\n- Escolha a versão em **Jogar**: Normal ou Spec II. Cada uma mantém os próprios saves.\n- Um painel **Novidades** na tela inicial, com todas as atualizações anteriores.\n- Uma versão portátil: leve a pasta inteira para outro PC.\n\n## Bom saber\n- O Spec II precisa da sua própria imagem de disco do Spec II 1.10 (a edição em português do Brasil também funciona)." } },
+            { version: "1.2.3", markdown: "# GT4Recomp 1.2.3\n\n**Quick fixes and a desktop shortcut.**\n\n## Fixes\n- The game no longer crashes at start for players who were not on GSdx.\n\n## New\n- Texture packs can go straight into the Textures folder, with no extra subfolder.\n- The installer can create a **Gran Turismo 4** shortcut on your desktop.\n- GSdx is now the only renderer; our own renderer, CoreGS 2.0, is coming later.\n", translations: { "pt-BR": "# GT4Recomp 1.2.3\n\n**Correções rápidas e um atalho na área de trabalho.**\n\n## Correções\n- O jogo não trava mais ao iniciar para quem não estava usando o GSdx.\n\n## Novidades\n- Pacotes de texturas podem ir direto para a pasta Textures, sem subpasta extra.\n- O instalador pode criar um atalho **Gran Turismo 4** na sua área de trabalho.\n- O GSdx agora é o único renderizador; nosso próprio renderizador, o CoreGS 2.0, chega depois.\n" } },
+            { version: "1.2.2", markdown: "# GT4Recomp 1.2.2\n\n**A lighter game on your processor.**\n\n## Performance\n- **About 15% less processor work** per frame in the heaviest races, so slower PCs keep 60 FPS more easily.\n- The picture is exactly the same as before.\n", translations: { "pt-BR": "# GT4Recomp 1.2.2\n\n**Um jogo mais leve para o seu processador.**\n\n## Desempenho\n- **Cerca de 15% menos trabalho do processador** por quadro nas corridas mais pesadas, então PCs mais lentos mantêm 60 FPS com mais facilidade.\n- A imagem continua exatamente igual à de antes.\n" } },
+            { version: "1.2.1", markdown: "# GT4Recomp 1.2.1\n\n**A cleaner install and updates that just work.**\n\n## New\n- GT4Recomp now installs in Program Files, for every user of the PC, in any folder you pick.\n- Your settings and saves live in your Windows user folder; the big game files sit next to the program.\n- Updates install silently: one confirmation, and the launcher reopens by itself.\n- **Performance Mode** (Settings > Graphics): faster on weaker PCs, by skipping a few light effects.\n- Settings now sits next to Play on the home screen.\n\n## Fixes\n- The launcher no longer opens as a blank white window on some PCs.\n", translations: { "pt-BR": "# GT4Recomp 1.2.1\n\n**Uma instalação mais limpa e atualizações que simplesmente funcionam.**\n\n## Novidades\n- O GT4Recomp agora instala em Arquivos de Programas, para todos os usuários do PC, na pasta que você escolher.\n- Suas configurações e saves ficam na pasta de usuário do Windows; os arquivos grandes do jogo ficam ao lado do programa.\n- As atualizações são instaladas em silêncio: uma confirmação, e o launcher reabre sozinho.\n- **Modo de Desempenho** (Configurações > Gráficos): mais rápido em PCs mais fracos, pulando alguns efeitos leves.\n- Configurações agora fica ao lado de Jogar na tela inicial.\n\n## Correções\n- O launcher não abre mais como uma janela branca em alguns PCs.\n" } },
+            { version: "1.2.0", markdown: "# GT4Recomp 1.2.0\n\n**Custom texture packs arrive.**\n\n## New\n- **HD texture packs**: drop a pack in the Textures folder (Settings > Graphics > Open textures folder) and play.\n- The renderer is now called **GSdx**, and every GSdx picture option is available in Settings.\n- The resolution follows your desktop automatically, and monitors show their real names.\n- The game window starts black instead of white.\n\n## Thanks\n- To **JulioHeroZ** for their contribution to this release.\n", translations: { "pt-BR": "# GT4Recomp 1.2.0\n\n**Chegam os pacotes de texturas HD.**\n\n## Novidades\n- **Pacotes de texturas HD**: coloque um pacote na pasta Textures (Configurações > Gráficos > Abrir pasta de texturas) e jogue.\n- O renderizador agora se chama **GSdx**, e todas as opções de imagem do GSdx estão disponíveis em Configurações.\n- A resolução segue a sua área de trabalho automaticamente, e os monitores mostram seus nomes reais.\n- A janela do jogo abre preta em vez de branca.\n\n## Agradecimentos\n- À **JulioHeroZ** pela contribuição nesta versão.\n" } },
+            { version: "1.1.0", markdown: "# GT4Recomp 1.1.0\n\n**Ultrawide support: the game now fills any screen.**\n\n## New\n- **21:9, 32:9, 16:10 and more**: races fill your screen and show more to the sides, with the HUD kept undistorted.\n- Choose the monitor and resolution the game opens on.\n- The game's sharpness adjusts to your resolution automatically, with a Render scale slider for more speed.\n- All picture settings in one place: Settings > Graphics.\n\n## Fixes\n- Updating from inside the launcher works now.\n\n## Good to know\n- Menus, movies and photo mode stay 16:9.\n", translations: { "pt-BR": "# GT4Recomp 1.1.0\n\n**Suporte a ultrawide: o jogo agora preenche qualquer tela.**\n\n## Novidades\n- **21:9, 32:9, 16:10 e mais**: as corridas preenchem sua tela e mostram mais para os lados, com o HUD sem distorção.\n- Escolha o monitor e a resolução em que o jogo abre.\n- A nitidez do jogo se ajusta sozinha à sua resolução, com o controle Escala de renderização para ganhar velocidade.\n- Todas as configurações de imagem em um só lugar: Configurações > Gráficos.\n\n## Correções\n- Atualizar pelo próprio launcher funciona agora.\n\n## Bom saber\n- Menus, filmes e o modo foto continuam em 16:9.\n" } },
+            { version: "1.0.0", markdown: "# GT4Recomp 1.0.0\n\n**The first release: Gran Turismo 4 running natively on your PC.**\n\n## New\n- One-click installer and a launcher that sets the game up from your own disc image.\n- **60 FPS** at full game speed in every scene we tested.\n- Any controller works out of the box (Xbox, DualShock 4, DualSense, Switch Pro), with button remapping.\n- Widescreen 16:9 and progressive 480p races, always on.\n- Your saves and replays are easy to find and back up, and survive a crash.\n\n## Good to know\n- Racing wheels and ultrawide screens are not supported yet.\n- Some license demos and menu backgrounds do not play.\n", translations: { "pt-BR": "# GT4Recomp 1.0.0\n\n**A primeira versão: Gran Turismo 4 rodando nativamente no seu PC.**\n\n## Novidades\n- Instalador de um clique e um launcher que prepara o jogo a partir da sua própria imagem de disco.\n- **60 FPS** em velocidade total do jogo em todas as cenas testadas.\n- Qualquer controle funciona logo de cara (Xbox, DualShock 4, DualSense, Switch Pro), com remapeamento de botões.\n- Widescreen 16:9 e corridas em 480p progressivo, sempre ativos.\n- Seus saves e replays são fáceis de achar e de fazer backup, e sobrevivem a uma queda do jogo.\n\n## Bom saber\n- Volantes de corrida e telas ultrawide ainda não são suportados.\n- Algumas demos de licença e fundos de menu não rodam.\n" } },
           ]
         };
       case "open_link":

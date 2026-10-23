@@ -15,37 +15,40 @@
   var GT4 = (root.GT4 = root.GT4 || {});
   var h = GT4.ui.h;
 
-  var KINDS = {
-    saves: {
-      title: "Saves",
-      note: "The selected save is used the next time you play.",
-      importLabel: "Import save",
-      itemWord: "Save",
-      empty: { title: "No saves yet", text: "Your first save appears here after you save in the game." },
-      list: "saves_list",
-      importCmd: "saves_import",
-      activate: "saves_activate",
-      remove: "saves_delete",
-      removeTitle: "Delete save?",
-      removeText: "The save goes to the Recycle Bin. You can restore it from there."
-    },
-    replays: {
-      title: "Replays",
-      note: "All replays are kept. Replays you save in the game appear here.",
-      importLabel: "Import replays",
-      itemWord: "Replay",
-      empty: { title: "No replays yet", text: "Replays you save in the game appear here." },
+  // The texts of each list are read when the list is drawn, so a language change applies.
+  function kindInfo(kindName) {
+    if (kindName === "saves") {
+      return {
+        title: GT4.t("library.saves_title"),
+        note: GT4.t("library.saves_note"),
+        importLabel: GT4.t("library.import_saves"),
+        itemWord: GT4.t("library.item_save"),
+        empty: { title: GT4.t("library.empty_saves_title"), text: GT4.t("library.empty_saves_text") },
+        list: "saves_list",
+        importCmd: "saves_import",
+        activate: "saves_activate",
+        remove: "saves_delete",
+        removeTitle: GT4.t("library.delete_save_title"),
+        removeText: GT4.t("library.delete_save_text")
+      };
+    }
+    return {
+      title: GT4.t("library.replays_title"),
+      note: GT4.t("library.replays_note"),
+      importLabel: GT4.t("library.import_replays"),
+      itemWord: GT4.t("library.item_replay"),
+      empty: { title: GT4.t("library.empty_replays_title"), text: GT4.t("library.empty_replays_text") },
       list: "replays_list",
       importCmd: "replays_import",
       activate: null,
       remove: "replays_delete",
-      removeTitle: "Delete replay?",
-      removeText: "The replay goes to the Recycle Bin. You can restore it from there."
-    }
-  };
+      removeTitle: GT4.t("library.delete_replay_title"),
+      removeText: GT4.t("library.delete_replay_text")
+    };
+  }
 
   function mountLibrary(content, host, kindName) {
-    var kind = KINDS[kindName];
+    var kind = kindInfo(kindName);
     var items = [];
     var list = h("div", { class: "lib-list" });
     var headNote = h("p", { class: "note", text: kind.note });
@@ -72,14 +75,14 @@
         title: kind.removeTitle,
         text: kind.removeText,
         buttons: [
-          { label: "Cancel" },
+          { label: GT4.t("common.cancel") },
           {
-            label: "Delete",
+            label: GT4.t("common.delete"),
             primary: true,
             danger: true,
             run: function () {
               GT4.backend.call(kind.remove, { id: id }).then(function (result) {
-                apply(result, "Deleted");
+                apply(result, GT4.t("library.deleted"));
               }, function (err) {
                 GT4.ui.toast(GT4.errorText(err), true);
               });
@@ -94,7 +97,7 @@
         return;
       }
       GT4.backend.call(kind.activate, { id: id }).then(function (result) {
-        apply(result, "Next play uses this save");
+        apply(result, GT4.t("library.next_play_used"));
       }, function (err) {
         GT4.ui.toast(GT4.errorText(err), true);
       });
@@ -111,7 +114,7 @@
       children.push(h("span", { class: "no", text: String(index + 1).padStart(2, "0") }));
       var nameNode = h("span", { class: "nm", text: item.name || kind.itemWord + " " + item.id });
       if (item.active) {
-        nameNode.appendChild(h("small", { text: "Next play" }));
+        nameNode.appendChild(h("small", { text: GT4.t("library.next_play") }));
       }
       children.push(nameNode);
       children.push(h("span", { class: "date", text: GT4.ui.formatDate(item.modified) }));
@@ -119,8 +122,8 @@
         h("button", {
           class: "iconbtn del",
           type: "button",
-          "aria-label": "Delete " + (item.name || item.id),
-          title: "Delete",
+          "aria-label": GT4.t("library.aria_delete", { name: item.name || item.id }),
+          title: GT4.t("common.delete"),
           on: {
             click: function (event) {
               event.stopPropagation();
@@ -206,15 +209,15 @@
     // (gt4saves::game_of_save finds no rule yet; when one is found, the answer comes from the file and this is skipped.)
     function importItems() {
       GT4.games.chooseGame({
-        title: "Which game are these from?",
-        text: "Saves and replays of Gran Turismo 4 and Gran Turismo 4 Spec II are kept apart. GT4Recomp cannot tell them apart from the file, so choose the game they belong to.",
+        title: GT4.t("games.which_title"),
+        text: GT4.t("games.which_text"),
         current: currentGame
       }, function (gameId) {
         GT4.backend.call(kind.importCmd, { game: gameId }).then(function (result) {
           if (!result) {
             return;
           }
-          apply(result, result.status || "Import finished");
+          apply(result, result.status || GT4.t("library.import_finished"));
         }, function (err) {
           GT4.ui.toast(GT4.errorText(err), true);
         });
@@ -234,9 +237,9 @@
     content.appendChild(list);
     // Where the files are: the user data folder (%APPDATA%\GT4Recomp), easy to open and back up.
     content.appendChild(h("div", { class: "row lib-folder" }, [
-      h("div", { class: "k" }, [h("span", { text: "Folder" }), folderText]),
+      h("div", { class: "k" }, [h("span", { text: GT4.t("library.folder") }), folderText]),
       h("div", { class: "ctl" }, [
-        h("button", { class: "btn small", type: "button", on: { click: openFolder } }, "Open folder")
+        h("button", { class: "btn small", type: "button", on: { click: openFolder } }, GT4.t("common.open_folder"))
       ])
     ]));
 
@@ -245,7 +248,7 @@
       y: function () {
         var row = selectedRow();
         if (!row) {
-          GT4.ui.toast("Select an item first", true);
+          GT4.ui.toast(GT4.t("hint.select_first"), true);
           return;
         }
         var id = row.dataset.itemId;
@@ -262,8 +265,8 @@
       return GT4.settingsModel.libraryEntry(rows.length) === "row" ? rows[0] : importButton;
     });
     host.hints([
-      { key: "X", label: "Import", run: importItems },
-      { key: "Y", label: kind.activate ? "Make active" : "Delete", run: function () { if (GT4.hooks.y) { GT4.hooks.y(); } } }
+      { key: "X", label: GT4.t("hint.import"), run: importItems },
+      { key: "Y", label: kind.activate ? GT4.t("hint.make_active") : GT4.t("hint.delete"), run: function () { if (GT4.hooks.y) { GT4.hooks.y(); } } }
     ]);
 
     content.addEventListener("keydown", function (event) {

@@ -23,18 +23,17 @@
     function confirmRemove(game) {
       var size = GT4.games.size(game.size_bytes);
       GT4.ui.openDialog({
-        title: "Remove " + game.name + "?",
-        text: "This deletes the copy of the disc image and the prepared game files" + (size ? " (" + size + ")" : "") +
-          ". Your saves and replays are kept, and you can install the game again later.",
+        title: GT4.t("games.remove_title", { game: game.name }),
+        text: GT4.t("games.remove_text", { size: size ? " (" + size + ")" : "" }),
         buttons: [
-          { label: "Cancel" },
+          { label: GT4.t("common.cancel") },
           {
-            label: "Remove",
+            label: GT4.t("common.remove"),
             primary: true,
             danger: true,
             run: function () {
               GT4.games.remove(game.id).then(function (view) {
-                GT4.ui.toast(game.name + " removed. Its saves are kept.");
+                GT4.ui.toast(GT4.t("games.removed", { game: game.name }));
                 paint(view);
               }, function (err) {
                 GT4.ui.toast(GT4.errorText(err), true);
@@ -47,28 +46,28 @@
 
     function card(game) {
       var status = game.installed
-        ? "Installed" + (game.disc_name ? " · " + game.disc_name : "") + (game.size_bytes ? " · " + GT4.games.size(game.size_bytes) : "")
-        : (game.damaged ? "Game files missing (" + game.reason + ")" : "Not installed");
+        ? GT4.t("games.installed") + (game.disc_name ? " · " + game.disc_name : "") + (game.size_bytes ? " · " + GT4.games.size(game.size_bytes) : "")
+        : (game.damaged ? GT4.t("games.missing_reason", { reason: game.reason }) : GT4.t("games.not_installed"));
       var buttons = [];
       if (game.installed) {
         buttons.push(h("button", {
           class: "btn small", type: "button",
           on: { click: function () { GT4.games.installGame(game.id, started); } }
-        }, "Change disc image"));
+        }, GT4.t("games.change_disc")));
         buttons.push(h("button", {
           class: "btn small danger", type: "button",
           on: { click: function () { confirmRemove(game); } }
-        }, "Remove"));
+        }, GT4.t("common.remove")));
       } else {
         buttons.push(h("button", {
           class: "btn small primary", type: "button",
           on: { click: function () { GT4.games.installGame(game.id, started); } }
-        }, game.damaged ? "Choose disc image" : "Install"));
+        }, game.damaged ? GT4.t("games.choose_disc") : GT4.t("common.install")));
         if (game.damaged) {
           buttons.push(h("button", {
             class: "btn small danger", type: "button",
             on: { click: function () { confirmRemove(game); } }
-          }, "Remove"));
+          }, GT4.t("common.remove")));
         }
       }
       return h("div", { class: "row game-row", data: { gameId: game.id } }, [
@@ -88,10 +87,10 @@
       firstButton = list.querySelector("button");
     }
 
-    content.appendChild(h("h1", { text: "Games" }));
+    content.appendChild(h("h1", { text: GT4.t("games.page_title") }));
     content.appendChild(h("p", {
       class: "note",
-      text: "Each game keeps its own disc image copy, prepared files, memory card, saves and replays. Graphics, display, controls and textures are shared by both."
+      text: GT4.t("games.page_note")
     }));
     content.appendChild(list);
 

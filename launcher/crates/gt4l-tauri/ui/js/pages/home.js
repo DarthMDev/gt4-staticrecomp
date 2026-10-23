@@ -50,7 +50,10 @@
   }
 
   // The short names of the versions (owner, 2026-10-23); the full game names stay in Settings > Games.
-  var VERSION_LABELS = { gt4: "Normal", spec2: "Spec II" };
+  // Read when used, so the name follows a language change.
+  function versionNameOf(id) {
+    return id === "spec2" ? GT4.t("home.spec2") : GT4.t("home.normal");
+  }
 
   // A small chevron pointing left (-1) or right (+1).
   function chevronIcon(direction) {
@@ -123,7 +126,7 @@
   GT4.pages.home = {
     mount: function (root) {
       var page = h("div", { class: "stage home" });
-      var playButton = h("button", { class: "play", type: "button" }, "Play");
+      var playButton = h("button", { class: "play", type: "button" }, GT4.t("common.play"));
       var gameList = [];
       var selectedId = "gt4";
       var installedNow = true;
@@ -132,18 +135,18 @@
       // The version switch under Play: the version's name between two arrows (owner, 2026-10-23). On a switch the old name
       // slides out on one side while the new one slides in from the other, inside a clipped window.
       var versionWindow = h("span", { class: "version-window", "aria-live": "polite" });
-      var versionName = h("span", { class: "version-name", text: VERSION_LABELS.gt4 });
+      var versionName = h("span", { class: "version-name", text: versionNameOf("gt4") });
       versionWindow.appendChild(versionName);
-      var versionPrev = h("button", { class: "version-arrow", type: "button", "aria-label": "Previous version", title: "Previous version" },
+      var versionPrev = h("button", { class: "version-arrow", type: "button", "aria-label": GT4.t("home.previous_version"), title: GT4.t("home.previous_version") },
         [chevronIcon(-1)]);
-      var versionNext = h("button", { class: "version-arrow", type: "button", "aria-label": "Next version", title: "Next version" },
+      var versionNext = h("button", { class: "version-arrow", type: "button", "aria-label": GT4.t("home.next_version"), title: GT4.t("home.next_version") },
         [chevronIcon(1)]);
-      var versionPicker = h("div", { class: "version-picker", role: "group", "aria-label": "Version" },
+      var versionPicker = h("div", { class: "version-picker", role: "group", "aria-label": GT4.t("home.version_group") },
         [versionPrev, versionWindow, versionNext]);
       var paintedId = null;
       var slideFrom = 0;
-      var stopButton = h("button", { class: "btn", type: "button" }, "Stop");
-      var stateText = h("span", { class: "state", text: "Running" });
+      var stopButton = h("button", { class: "btn", type: "button" }, GT4.t("home.stop"));
+      var stateText = h("span", { class: "state", text: GT4.t("home.running") });
       var running = h("div", { class: "running" }, [h("span", { class: "dot" }), stateText, stopButton]);
       var timer = null;
       var isRunning = false;
@@ -193,12 +196,12 @@
         var locked = isRunning || gameList.length < 2;
         versionPrev.disabled = locked;
         versionNext.disabled = locked;
-        var label = VERSION_LABELS[selectedId] || (game ? game.name : "");
+        var label = selectedId === "gt4" || selectedId === "spec2" ? versionNameOf(selectedId) : (game ? game.name : "");
         showName(label, paintedId !== null && paintedId !== selectedId ? (slideFrom || 1) : 0);
         versionWindow.setAttribute("title", game ? game.name : "");
         paintedId = selectedId;
         slideFrom = 0;
-        playButton.textContent = installedNow ? "Play" : "Install";
+        playButton.textContent = installedNow ? GT4.t("common.play") : GT4.t("common.install");
         playButton.classList.toggle("is-install", !installedNow);
         playButton.setAttribute("title", installedNow || !game || !game.reason ? "" : game.reason);
       }
@@ -283,8 +286,8 @@
       var gear = h("button", {
         class: "gear",
         type: "button",
-        "aria-label": "Settings",
-        title: "Settings",
+        "aria-label": GT4.t("home.settings"),
+        title: GT4.t("home.settings"),
         on: { click: function () { GT4.go("#/settings/graphics"); } }
       }, [gearIcon()]);
 
@@ -302,14 +305,14 @@
       var versionLabel = h("div", { class: "home-version" }, [
         versionText,
         h("span", { class: "home-version-credit", text: " - Made with passion, by " }),
-        h("button", { class: "home-author", type: "button", title: "YouTube: @Moesuito",
+        h("button", { class: "home-author", type: "button", title: GT4.t("home.youtube_title"),
           on: { click: function () { openLink("youtube"); } } }, "Moesuito")
       ]);
       page.appendChild(versionLabel);
-      var supportButton = h("button", { class: "support", type: "button", title: "Support GT4Recomp on Ko-fi",
+      var supportButton = h("button", { class: "support", type: "button", title: GT4.t("home.support_title"),
         on: { click: function () { openLink("kofi"); } } }, [
         h("img", { class: "support-cup", src: "assets/kofi-cup.avif", alt: "" }),
-        h("span", { text: "Support the project" })
+        h("span", { text: GT4.t("home.support") })
       ]);
       call("about_info").then(function (info) {
         versionText.textContent = "GT4Recomp " + (info.version || "");
@@ -326,15 +329,15 @@
       // The patch notes card (TASK-099). It scrolls on its own; wide windows only (css/app.css hides it when narrow).
       // Its header arrows step through the release history (owner, 2026-10-23): it opens on the newest notes, the left
       // arrow goes to older releases, the right arrow back to newer ones; no loop, an arrow is disabled at its end.
-      var notesBody = h("div", { class: "home-notes-body", tabindex: "0", "aria-label": "Release notes" });
+      var notesBody = h("div", { class: "home-notes-body", tabindex: "0", "aria-label": GT4.t("home.release_notes_label") });
       var notesVersion = h("span", { class: "home-notes-version", text: "" });
-      var notesOlder = h("button", { class: "notes-arrow", type: "button", "aria-label": "Older release notes", title: "Older" },
+      var notesOlder = h("button", { class: "notes-arrow", type: "button", "aria-label": GT4.t("home.older_label"), title: GT4.t("home.older") },
         [chevronIcon(-1)]);
-      var notesNewer = h("button", { class: "notes-arrow", type: "button", "aria-label": "Newer release notes", title: "Newer" },
+      var notesNewer = h("button", { class: "notes-arrow", type: "button", "aria-label": GT4.t("home.newer_label"), title: GT4.t("home.newer") },
         [chevronIcon(1)]);
-      var notesCard = h("aside", { class: "home-notes", "aria-label": "What's new" }, [
+      var notesCard = h("aside", { class: "home-notes", "aria-label": GT4.t("home.whats_new") }, [
         h("header", { class: "home-notes-head" }, [
-          h("span", { class: "home-notes-title", text: "What's new" }),
+          h("span", { class: "home-notes-title", text: GT4.t("home.whats_new") }),
           h("span", { class: "home-notes-pager" }, [notesOlder, notesVersion, notesNewer])
         ]),
         notesBody,
@@ -347,6 +350,12 @@
       var releases = [];  // newest first
       var shownRelease = 0;
 
+      // The notes in the current language, with the en-US text as the fallback (TASK-102).
+      function releaseText(release) {
+        var tag = GT4.i18n.current();
+        return (release.translations && release.translations[tag]) || release.markdown;
+      }
+
       // Shows releases[index]; direction -1 = an older release (it comes in from the left), +1 = a newer one.
       function showRelease(index, direction) {
         if (index < 0 || index >= releases.length) {
@@ -358,7 +367,7 @@
         notesOlder.disabled = index >= releases.length - 1;
         notesNewer.disabled = index === 0;
         var content = h("div", { class: "home-notes-page" + (direction < 0 ? " enter-from-left" : direction > 0 ? " enter-from-right" : "") });
-        content.appendChild(GT4.markdown.render(release.markdown, { skipTitle: true }));
+        content.appendChild(GT4.markdown.render(releaseText(release), { skipTitle: true }));
         GT4.ui.clear(notesBody);
         notesBody.appendChild(content);
         notesBody.scrollTop = 0;
@@ -409,9 +418,9 @@
       GT4.hooks.y = function () { GT4.go("#/settings/graphics"); };
       GT4.hooks.tabs = cycleGame;
       GT4.ui.setHints([
-        { key: "A", label: "Select", run: play },
-        { key: "LB / RB", label: "Version", run: function () { cycleGame(1); } },
-        { key: "Y", label: "Settings", run: function () { GT4.go("#/settings/graphics"); } }
+        { key: "A", label: GT4.t("hint.select"), run: play },
+        { key: "LB / RB", label: GT4.t("home.hint_version"), run: function () { cycleGame(1); } },
+        { key: "Y", label: GT4.t("home.settings"), run: function () { GT4.go("#/settings/graphics"); } }
       ]);
 
       return {
