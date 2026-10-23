@@ -174,11 +174,11 @@ pub fn setup_start(app: AppHandle, shared: State<'_, Shared>) -> Result<(), Stri
     start_with(shared.inner(), notifier(&app), github_renderer()).map(|_| ())
 }
 
-/// TASK-081: the processor and Vulkan checks before setup (`gt4l_core::system_check`). A problem is shown on the
-/// setup page as a failed setup with its message, and logged.
+/// TASK-081: the processor check before setup (`gt4l_core::system_check`). Setup needs no GPU, so there is no Vulkan
+/// check here (TASK-108). A problem is shown on the setup page as a failed setup with its message, and logged.
 fn refuse_unsupported_system(shared: &Shared) -> Result<(), String> {
     let language = state::language_of(&lock(shared));
-    let Some(problem) = gt4l_platform::system::requirements_problem(language) else {
+    let Some(problem) = gt4l_platform::system::processor_problem(language) else {
         return Ok(());
     };
     let mut state = lock(shared);

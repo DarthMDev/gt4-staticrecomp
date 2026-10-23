@@ -504,7 +504,7 @@ mod tests {
             "SDL3.dll",
             "LICENSE.txt",
             "version.json",
-            "game/gt4vulkan.exe",
+            "game/gt4.exe",
             "game/shaders/raster.spv",
             "user/config/settings.toml",
             "data/games/gt4/disc/game.iso",
@@ -514,7 +514,7 @@ mod tests {
     }
 
     fn new_package(fs: &FakeFs) {
-        *fs.package.borrow_mut() = ["GT4Recomp.exe", "SDL3.dll", "NOTICE.md", "game/gt4vulkan.exe", "game/gt4vulkan-spec2.exe", "user/", "data/"]
+        *fs.package.borrow_mut() = ["GT4Recomp.exe", "SDL3.dll", "NOTICE.md", "game/gt4.exe", "game/gt4-spec2.exe", "user/", "data/"]
             .iter()
             .map(|name| name.to_string())
             .collect();
@@ -531,7 +531,7 @@ mod tests {
         assert_eq!(report.items, ["GT4Recomp.exe", "NOTICE.md", "SDL3.dll", "game"]);
         let root = folder();
         assert!(fs.has(&root.join("NOTICE.md")), "a new file arrives");
-        assert!(fs.has(&root.join("game/gt4vulkan-spec2.exe")), "the new game folder is in place");
+        assert!(fs.has(&root.join("game/gt4-spec2.exe")), "the new game folder is in place");
         assert!(!fs.has(&root.join("game/shaders/raster.spv")), "the old game folder is gone with its files");
         assert!(fs.has(&root.join(".update-old/GT4Recomp.exe")), "the old launcher waits for the next start");
         assert!(fs.has(&root.join(".update-old/game/shaders/raster.spv")));
@@ -593,17 +593,17 @@ mod tests {
         assert!(log.iter().any(|line| line.contains("interrupted")), "{log:?}");
         assert!(!fs.has(&folder().join(SWAPPING_MARKER)));
         assert!(!fs.has(&folder().join(OLD_FOLDER)));
-        for file in ["GT4Recomp.exe", "SDL3.dll", "LICENSE.txt", "game/gt4vulkan.exe", "game/shaders/raster.spv", "user/config/settings.toml"] {
+        for file in ["GT4Recomp.exe", "SDL3.dll", "LICENSE.txt", "game/gt4.exe", "game/shaders/raster.spv", "user/config/settings.toml"] {
             assert!(fs.has(&folder().join(file)), "{file} is back");
         }
-        assert!(!fs.has(&folder().join("game/gt4vulkan-spec2.exe")), "the half-installed new game folder is gone");
+        assert!(!fs.has(&folder().join("game/gt4-spec2.exe")), "the half-installed new game folder is gone");
     }
 
     #[test]
     fn a_package_without_the_launcher_changes_nothing() {
         let fs = FakeFs::default();
         installed_folder(&fs);
-        *fs.package.borrow_mut() = vec!["game/gt4vulkan.exe".to_string()];
+        *fs.package.borrow_mut() = vec!["game/gt4.exe".to_string()];
         let before = fs.snapshot_under(&folder());
         let error = install_package(&fs, &folder(), Path::new("package.zip")).unwrap_err();
         assert!(error.contains("no GT4Recomp.exe"), "{error}");
@@ -732,7 +732,7 @@ mod tests {
         std::fs::create_dir_all(exe_dir.join("user")).unwrap();
         std::fs::create_dir_all(exe_dir.join("data")).unwrap();
         std::fs::write(exe_dir.join("GT4Recomp.exe"), b"old launcher").unwrap();
-        std::fs::write(exe_dir.join("game").join("gt4vulkan.exe"), b"old game").unwrap();
+        std::fs::write(exe_dir.join("game").join("gt4.exe"), b"old game").unwrap();
         std::fs::write(exe_dir.join("user").join("settings.toml"), b"mine").unwrap();
         std::fs::write(exe_dir.join("data").join("disc.iso"), b"disc").unwrap();
         let zip = base.join("GT4Recomp-1.3.0-portable.zip");
@@ -740,7 +740,7 @@ mod tests {
             &zip,
             &[
                 ("GT4Recomp.exe", b"new launcher"),
-                ("game/gt4vulkan.exe", b"new game"),
+                ("game/gt4.exe", b"new game"),
                 ("game/shaders/raster.spv", b"spv"),
                 ("user/", b""),
                 ("data/", b""),

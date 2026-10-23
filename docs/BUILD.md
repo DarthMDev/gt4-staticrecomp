@@ -2908,3 +2908,13 @@ Launcher side (`launcher/`): `launch::standalone_config_text`, `AppState::write_
 settings change, before every Play), tests in `launch_contract.rs` and `flow_audit.rs`; portable build: see TASKS.md TASK-098.
 Cargo: `cargo test --workspace` with `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice278-cargo-target` and `GT4_SDL3_ROOT`, in both builds
 (`--features portable`).
+
+## Distribution names (TASK-108, release 1.3.0)
+
+The build output keeps its names: `gt4vulkan.exe` and `gt4vulkan-spec2.exe` in the build directory, and the developer
+scripts (`play_performance.py`, `external_runtime_probe.py`, the harnesses) run them under those names.
+`scripts/make_distribution.py` copies them into the game folder as `gt4.exe` and `gt4-spec2.exe`, checking the same
+pins by hash, so the files are byte-identical and no pin changes. The installer (`installer/gt4recomp.nsi`) and the
+portable zip (`scripts/make_portable_zip.py`) ship the new names; the installer deletes the 1.2.x names
+(`game\gt4vulkan.exe`, `game\gt4vulkan-spec2.exe`) on install and update. The launcher starts `gt4.exe` and
+`gt4-spec2.exe` and detects both old and new names as running games.

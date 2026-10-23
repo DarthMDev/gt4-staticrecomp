@@ -55,7 +55,7 @@ pub const USER_FOLDER_NAME: &str = "Gran Turismo 4";
 pub const MOVED_USER_FOLDER_NAME: &str = "Gran Turismo 4 (moved to AppData)";
 
 /// Name of the game executable inside the game folder.
-pub const GAME_EXECUTABLE: &str = "gt4vulkan.exe";
+pub const GAME_EXECUTABLE: &str = "gt4.exe";
 
 /// Name of the custom texture folder (TASK-088; TASK-093: gt4-gs 1.2.1 reads the folder itself).
 pub const TEXTURES_FOLDER_NAME: &str = "Textures";
@@ -638,7 +638,7 @@ pub fn ensure_texture_folders(textures: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(textures)
 }
 
-/// Folder that holds `gt4vulkan.exe`: `<program folder>\game` for an installed copy, or the
+/// Folder that holds `gt4.exe`: `<program folder>\game` for an installed copy, or the
 /// `[dev] game_dir` override from the config file.
 pub fn game_directory(program_directory: &Path, dev_override: Option<&Path>) -> PathBuf {
     match dev_override {

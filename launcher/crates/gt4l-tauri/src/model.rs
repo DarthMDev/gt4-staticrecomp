@@ -4,6 +4,7 @@
 use gt4controls::{Controls, Curve, Stick, TriggerTuning, BUTTON_INPUTS};
 use gt4l_core::display::{self, Monitor};
 use gt4l_core::gs_table;
+use gt4l_core::language::Language;
 use gt4l_core::settings::{Kind, Page, SettingDef, Settings, SETTINGS};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -26,7 +27,7 @@ pub fn pcsx2_table_rows() -> Vec<&'static gs_table::Row> {
 /// The payload of `get_settings_table`: `{max_upscale, rows}`. Launcher rows come from `SETTINGS`, PCSX2 GS rows from
 /// the table file; both use the row shape of ui/dev/README.md. GSdx is the only renderer (TASK-096), so no row depends on it.
 pub fn settings_table(settings: &Settings, controls: &Controls) -> Value {
-    settings_table_with_monitors(settings, controls, &[], false)
+    settings_table_with_monitors(settings, controls, &[], &[], false)
 }
 
 /// The Monitor row's choices: one per connected monitor, labelled by its name ("DELL U3419W"; a second one with the same
@@ -51,6 +52,32 @@ fn fill_monitor_row(row: &mut Value, settings: &Settings, monitors: &[Monitor]) 
         }
     }
     row["default"] = json!(display::PRIMARY);
+}
+
+/// The Graphics API row (TASK-108): the Automatic choice says which API it resolves to for the card the run would use.
+fn fill_api_row(row: &mut Value, settings: &Settings, cards: &[gt4l_core::gpu::GpuDevice]) {
+    let plan = gt4l_core::gpu::plan(&settings.gs_value("graphics_api"), settings.get("graphics_card"), cards, Language::fallback());
+    if let Some(first) = row["values"].as_array_mut().and_then(|values| values.first_mut()) {
+        if first["value"] == gt4l_core::gpu::AUTOMATIC {
+            first["api_label"] = json!(gt4l_core::gpu::api_name(&plan.api));
+        }
+    }
+}
+
+/// The Graphics card row (TASK-108): Automatic (best), then every card by name. A stored card that is not present is
+/// listed too, so the page shows what is stored; the run then falls back to Automatic.
+fn fill_card_row(row: &mut Value, settings: &Settings, cards: &[gt4l_core::gpu::GpuDevice]) {
+    let mut values = vec![json!({ "value": gt4l_core::gpu::AUTOMATIC, "label": "Automatic (best)" })];
+    let stored = settings.get("graphics_card").to_string();
+    let mut names: Vec<String> = cards.iter().filter_map(|card| card.name().map(str::to_string)).collect();
+    if stored != gt4l_core::gpu::AUTOMATIC && !names.contains(&stored) {
+        names.push(stored.clone());
+    }
+    for name in names {
+        values.push(json!({ "value": name, "label": name }));
+    }
+    row["values"] = Value::Array(values);
+    row["current"] = json!(stored);
 }
 
 /// The Resolution row's choices: the chosen monitor's modes ("3440x1440 (desktop)" marks its desktop mode); without
@@ -99,9 +126,19 @@ fn fill_render_scale_row(row: &mut Value, settings: &Settings, monitors: &[Monit
 /// The settings table with the connected monitors (TASK-080 addendum: Monitor, Resolution and Render scale).
 /// `integrated_gpu` is true when the game renders on an integrated GPU (issue #89): the Render scale readout then shows
 /// the untouched default at 1x.
-pub fn settings_table_with_monitors(settings: &Settings, controls: &Controls, monitors: &[Monitor], integrated_gpu: bool) -> Value {
+pub fn settings_table_with_monitors(
+    settings: &Settings,
+    controls: &Controls,
+    monitors: &[Monitor],
+    cards: &[gt4l_core::gpu::GpuDevice],
+    integrated_gpu: bool,
+) -> Value {
     let mut rows: Vec<Value> = Vec::new();
     for definition in SETTINGS {
+        // TASK-108: the Graphics card row sits after the Graphics API row (added with the table rows below).
+        if definition.id == "graphics_card" {
+            continue;
+        }
         let mut row = launcher_row(definition, settings);
         match definition.id {
             "monitor" => fill_monitor_row(&mut row, settings, monitors),
@@ -112,7 +149,18 @@ pub fn settings_table_with_monitors(settings: &Settings, controls: &Controls, mo
         rows.push(row);
     }
     for row in pcsx2_table_rows() {
-        rows.push(gs_row(row, settings));
+        let mut out = gs_row(row, settings);
+        if row.id == "graphics_api" {
+            fill_api_row(&mut out, settings, cards);
+            rows.push(out);
+            if let Some(definition) = gt4l_core::settings::definition("graphics_card") {
+                let mut card = launcher_row(definition, settings);
+                fill_card_row(&mut card, settings, cards);
+                rows.push(card);
+            }
+            continue;
+        }
+        rows.push(out);
     }
     for trigger in ["l2", "r2"] {
         rows.push(trigger_row(trigger, controls, "deadzone"));
@@ -171,7 +219,7 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
             json!(definition.default),
             json!(settings.get(definition.id)),
         ),
-        Kind::Monitor | Kind::Resolution => (
+        Kind::Monitor | Kind::Resolution | Kind::Gpu => (
             "dropdown",
             Value::Array(Vec::new()),
             json!(definition.default),
@@ -721,7 +769,7 @@ mod table_tests {
     fn monitor_and_resolution_list_the_connected_monitors_and_their_modes() {
         let monitors = two_monitors();
         let mut settings = Settings::default();
-        let table = settings_table_with_monitors(&settings, &Controls::default(), &monitors, false);
+        let table = settings_table_with_monitors(&settings, &Controls::default(), &monitors, &[], false);
         let monitor_row = row(&table, "monitor");
         assert_eq!(monitor_row["group"], "display");
         assert_eq!(monitor_row["control"], "dropdown");
@@ -738,7 +786,7 @@ mod table_tests {
 
         settings.set("monitor", r"\\.\DISPLAY2@3440x1440").unwrap();
         settings.set("resolution", "2560x1080").unwrap();
-        let table = settings_table_with_monitors(&settings, &Controls::default(), &monitors, false);
+        let table = settings_table_with_monitors(&settings, &Controls::default(), &monitors, &[], false);
         assert_eq!(row(&table, "monitor")["current"], r"\\.\DISPLAY2@3440x1440");
         let resolution = row(&table, "resolution");
         assert_eq!(resolution["current"], "2560x1080");
@@ -753,7 +801,7 @@ mod table_tests {
     #[test]
     fn an_integrated_gpu_reads_the_default_render_scale_at_1x() {
         // Issue #89: the readout shows the plan the game gets; a changed scale keeps its multiplier (150% of k 3 is 5x).
-        let table = settings_table_with_monitors(&Settings::default(), &Controls::default(), &[], true);
+        let table = settings_table_with_monitors(&Settings::default(), &Controls::default(), &[], &[], true);
         let scale = row(&table, "render_scale");
         assert_eq!(scale["values"]["labels"]["100"], "100% \u{00B7} 1x \u{00B7} 640x448");
         assert_eq!(scale["values"]["labels"]["150"], "150% \u{00B7} 5x \u{00B7} 3200x2240");
@@ -828,14 +876,19 @@ mod table_tests {
         let api = row(&table, "graphics_api");
         assert_eq!(api["page"], "basic");
         assert_eq!(api["control"], "dropdown");
-        assert_eq!(api["default"], "vulkan");
-        assert_eq!(api["current"], "vulkan", "an existing install keeps Vulkan");
+        assert_eq!(api["default"], "auto");
+        assert_eq!(api["current"], "auto", "an install that never changed the row is Automatic");
         let values = api["values"].as_array().unwrap();
         let shown: Vec<(&str, &str)> =
             values.iter().map(|value| (value["value"].as_str().unwrap(), value["label"].as_str().unwrap())).collect();
         assert_eq!(
             shown,
-            vec![("vulkan", "Vulkan (recommended)"), ("d3d12", "Direct3D 12 (recommended)"), ("d3d11", "Direct3D 11 (older PCs)")]
+            vec![
+                ("auto", "Automatic"),
+                ("vulkan", "Vulkan (recommended)"),
+                ("d3d12", "Direct3D 12 (recommended)"),
+                ("d3d11", "Direct3D 11 (older PCs)"),
+            ]
         );
         assert!(values.iter().all(|value| value["disabled"] == false));
         // The choice is stored and shown back (the engine row keeps its own id, `renderer`).

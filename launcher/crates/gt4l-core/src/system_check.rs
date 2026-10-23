@@ -1,16 +1,20 @@
-//! System requirements checked before setup and before Play (TASK-081): the processor and Vulkan.
+//! System requirements checked before setup and before Play (TASK-081, TASK-108): the processor, and Vulkan when it is
+//! the Graphics API of the run.
 //!
 //! This module holds the rules only (pure functions over plain data), so every case is tested without the
 //! hardware. `gt4l-platform::system` reads CPUID and probes the Vulkan loader and fills these structs.
 //!
-//! - **Processor.** SSE4.1 with its prerequisites SSE3 and SSSE3 (owner decision, 2026-10-21). `gt4vulkan.exe` is built
+//! - **Processor.** SSE4.1 with its prerequisites SSE3 and SSSE3 (owner decision, 2026-10-21). the game program (`gt4vulkan.exe` in the build, `gt4.exe` when distributed) is built
 //!   for baseline x86-64 (`GT4_X86_64_V3` is off; its only AVX code is CPU-dispatched Visual C++ library code), and the
 //!   PCSX2 GS (`gt4-gs.exe`) needs SSE4.1, PCSX2's published minimum. SSE state needs no OS opt-in on x64 Windows.
 //!   `MINIMUM_CPU` is the single place to change the level.
-//! - **Vulkan.** The game needs a GPU that reports Vulkan 1.2 or newer and the instance extensions `VK_KHR_surface` and
-//!   `VK_KHR_win32_surface` (`native/native_vulkan.cpp`, `native/vulkan_extensions.cpp`). Swapchain maintenance 1 is
-//!   used when present and is not required (slice214). The PCSX2 GS renders with Vulkan as well
-//!   (`docs/GS-SETTINGS.md`, row `renderer`), so the check applies to both renderers.
+//! - **Vulkan (TASK-108, release 1.3.0).** Checked only when Vulkan is the Graphics API of the run (`graphics_api`,
+//!   the default). The PCSX2 GS (`gt4-gs.exe`) renders with the chosen API and the game program creates no Vulkan
+//!   device in that mode, so a Direct3D 12 or 11 run never asks the Vulkan loader. A Vulkan run needs a GPU that
+//!   reports Vulkan 1.2 or newer and the instance extensions `VK_KHR_surface` and `VK_KHR_win32_surface`
+//!   (`native/native_vulkan.cpp`, `native/vulkan_extensions.cpp`); swapchain maintenance 1 is optional (slice214). When
+//!   no such GPU exists, that run plays with Direct3D 11 and the player is told ([`gpu::plan`]). This is decided
+//!   per run, so a driver update brings Vulkan back without a setting change. Setup needs no GPU.
 
 use crate::language::Language;
 use crate::messages;
@@ -68,7 +72,7 @@ pub fn cpu_problem_in(features: &CpuFeatures, language: Language) -> Option<Stri
 /// The lowest Vulkan version the game accepts on its GPU (`native/native_vulkan.cpp`: VK_API_VERSION_1_2).
 pub const MINIMUM_VULKAN: (u32, u32) = (1, 2);
 
-/// The instance extensions `gt4vulkan.exe` requires (`native/vulkan_extensions.cpp`). The swapchain-maintenance ones
+/// The instance extensions the game program requires (`native/vulkan_extensions.cpp`). The swapchain-maintenance ones
 /// are optional since slice214.
 pub const GAME_INSTANCE_EXTENSIONS: [&str; 2] = ["VK_KHR_surface", "VK_KHR_win32_surface"];
 
@@ -95,19 +99,6 @@ pub const DEVICE_TYPE_INTEGRATED: u32 = 1;
 /// True for a GPU with its own Vulkan driver: not a software rasterizer and not the D3D12 translation layer.
 pub fn is_gpu_driver(device: &VulkanDevice) -> bool {
     device.vendor_id != MICROSOFT_VENDOR_ID && device.device_type != DEVICE_TYPE_CPU
-}
-
-/// The name of the integrated GPU the game will render on, or `None` when the lighter default does not apply (issue
-/// #89). The game's GSdx picks its adapter itself and the launcher cannot tell which one it takes, so the rule is
-/// conservative: the integrated default applies only when every GPU with its own driver is integrated. With a discrete
-/// card in the machine (or none at all) the answer is `None`, which keeps today's default. The first integrated
-/// device's name is returned for the log.
-pub fn integrated_gpu_name(devices: &[VulkanDevice]) -> Option<String> {
-    let drivers: Vec<&VulkanDevice> = devices.iter().filter(|device| is_gpu_driver(device)).collect();
-    if drivers.is_empty() || drivers.iter().any(|device| device.device_type != DEVICE_TYPE_INTEGRATED) {
-        return None;
-    }
-    drivers.first().map(|device| device.name.clone())
 }
 
 /// What the Vulkan probe found.
@@ -290,39 +281,6 @@ mod tests {
             devices: vec![device("AMD Radeon RX 9060 XT", 1, 4), dozen],
         };
         assert_eq!(vulkan_problem(&real), None);
-    }
-
-    fn integrated(name: &str) -> VulkanDevice {
-        VulkanDevice { name: name.into(), api_major: 1, api_minor: 3, vendor_id: 0x8086, device_type: 1 }
-    }
-
-    #[test]
-    fn an_integrated_only_machine_is_integrated_with_its_first_name() {
-        let devices = vec![integrated("Intel(R) UHD Graphics (Ice Lake)")];
-        assert_eq!(integrated_gpu_name(&devices).as_deref(), Some("Intel(R) UHD Graphics (Ice Lake)"));
-    }
-
-    #[test]
-    fn a_discrete_card_among_integrated_ones_keeps_the_discrete_default() {
-        let laptop = vec![integrated("Intel UHD"), device("NVIDIA RTX", 1, 3)];
-        assert_eq!(integrated_gpu_name(&laptop), None);
-        let reversed = vec![device("AMD Radeon RX 9060 XT", 1, 4), integrated("Intel UHD")];
-        assert_eq!(integrated_gpu_name(&reversed), None);
-    }
-
-    #[test]
-    fn no_driver_gpu_is_not_integrated() {
-        assert_eq!(integrated_gpu_name(&[]), None);
-        let dozen = VulkanDevice {
-            name: "Microsoft Direct3D12 (Intel UHD)".into(),
-            api_major: 1,
-            api_minor: 2,
-            vendor_id: MICROSOFT_VENDOR_ID,
-            device_type: 1,
-        };
-        let llvmpipe =
-            VulkanDevice { name: "llvmpipe".into(), api_major: 1, api_minor: 3, vendor_id: 0x10005, device_type: 4 };
-        assert_eq!(integrated_gpu_name(&[dozen, llvmpipe]), None);
     }
 
     #[test]

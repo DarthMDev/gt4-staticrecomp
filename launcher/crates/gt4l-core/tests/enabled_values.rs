@@ -78,6 +78,6 @@ fn the_row_helpers_see_the_enabled_values() {
     let blending: &Row = gs_table::row("blending").unwrap();
     assert_eq!(gs_table::offered_choices(blending), vec!["minimum", "basic", "medium", "high", "full", "maximum"]);
     let graphics_api = gs_table::row("graphics_api").unwrap();
-    assert_eq!(gs_table::offered_choices(graphics_api), vec!["vulkan", "d3d12", "d3d11"]);
+    assert_eq!(gs_table::offered_choices(graphics_api), vec!["auto", "vulkan", "d3d12", "d3d11"]);
     assert!(gs_table::offered().iter().all(|row| row.page == "basic" || row.page == "advanced"));
 }

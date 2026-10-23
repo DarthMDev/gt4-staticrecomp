@@ -63,9 +63,9 @@ class MakeDistributionTest(unittest.TestCase):
     def test_folder_holds_the_executable_shaders_and_licences_only(self):
         manifest = self.assemble(executable())
         names = sorted(item['path'] for item in manifest['files'])
-        self.assertIn('gt4vulkan.exe', names)
+        self.assertIn('gt4.exe', names)
         # TASK-101 (1.3.0): both game executables ship in the installed folder.
-        self.assertIn('gt4vulkan-spec2.exe', names)
+        self.assertIn('gt4-spec2.exe', names)
         self.assertEqual(manifest['executable_spec2_sha256'],
                          json.loads(PIN_SPEC2.read_text(encoding='utf-8'))['runtime']['sha256'])
         for shader in dist.SHADER_NAMES:
@@ -87,7 +87,7 @@ class MakeDistributionTest(unittest.TestCase):
             self.assertEqual(dist.sha256_of(self.output / item['path']), item['sha256'], item['path'])
 
     def test_a_changed_executable_fails_its_pin(self):
-        changed = self.scratch / 'gt4vulkan.exe'
+        changed = self.scratch / 'gt4.exe'
         data = bytearray(executable().read_bytes())
         data[-1] ^= 0xFF
         changed.write_bytes(bytes(data))

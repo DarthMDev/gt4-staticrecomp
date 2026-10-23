@@ -29,7 +29,7 @@ pub const GT4: Game = Game {
     id: "gt4",
     display_name: "Gran Turismo 4",
     serial: "SCUS-97328",
-    executable: "gt4vulkan.exe",
+    executable: "gt4.exe",
     elf_name: "SCUS_973.28",
     logo_asset: "assets/logo-gt4.png",
 };
@@ -40,7 +40,7 @@ pub const SPEC2: Game = Game {
     id: "spec2",
     display_name: "Gran Turismo 4 Spec II",
     serial: "SCUS-97436",
-    executable: "gt4vulkan-spec2.exe",
+    executable: "gt4-spec2.exe",
     elf_name: "SCUS_974.36",
     logo_asset: "assets/logo-gt4.png",
 };
@@ -97,8 +97,8 @@ mod tests {
         assert_eq!(by_id("spec2"), Some(&SPEC2));
         assert_eq!(by_id("gt5"), None);
         assert_eq!(by_id_or_default("gt5"), &GT4);
-        assert_eq!(GT4.executable, "gt4vulkan.exe");
-        assert_eq!(SPEC2.executable, "gt4vulkan-spec2.exe");
+        assert_eq!(GT4.executable, "gt4.exe");
+        assert_eq!(SPEC2.executable, "gt4-spec2.exe");
         assert_eq!((GT4.elf_name, SPEC2.elf_name), ("SCUS_973.28", "SCUS_974.36"));
         assert_eq!((GT4.display_name, SPEC2.display_name), ("Gran Turismo 4", "Gran Turismo 4 Spec II"));
         assert_ne!(GT4.id, SPEC2.id);

@@ -64,7 +64,7 @@ fn default_settings_send_the_main_profile_variables_plus_the_launcher_defaults()
 fn argument_list_matches_run_probe_order() {
     let session = Path::new(r"C:\Users\me\AppData\Local\GT4Recomp\sessions\session-1");
     let inputs = LaunchInputs {
-        game_executable: Path::new(r"C:\Program Files\GT4Recomp\game\gt4vulkan.exe"),
+        game_executable: Path::new(r"C:\Program Files\GT4Recomp\game\gt4.exe"),
         elf: Path::new(r"C:\Users\me\AppData\Local\GT4Recomp\prepared\SCUS_973.28"),
         disc: Path::new(r"D:\Games\GT4 (USA) (v2.00).iso"),
         card: Path::new(r"C:\Users\me\AppData\Local\GT4Recomp\runtime\card.ps2"),
@@ -89,13 +89,13 @@ fn argument_list_matches_run_probe_order() {
     );
     assert_eq!(plan.working_directory, session);
     assert_eq!(plan.log_path, session.join("game.log"));
-    assert_eq!(plan.program, Path::new(r"C:\Program Files\GT4Recomp\game\gt4vulkan.exe"));
+    assert_eq!(plan.program, Path::new(r"C:\Program Files\GT4Recomp\game\gt4.exe"));
 }
 
 #[test]
 fn inherited_gt4_and_ps2_variables_are_scrubbed_and_others_kept() {
     let inputs = LaunchInputs {
-        game_executable: Path::new("gt4vulkan.exe"),
+        game_executable: Path::new("gt4.exe"),
         elf: Path::new("SCUS_973.28"),
         disc: Path::new("disc.iso"),
         card: Path::new("card.ps2"),
@@ -350,7 +350,7 @@ fn pcsx2_paths() -> launch::Pcsx2Paths {
 
 fn inputs() -> LaunchInputs<'static> {
     LaunchInputs {
-        game_executable: Path::new("C:/game/gt4vulkan.exe"),
+        game_executable: Path::new("C:/game/gt4.exe"),
         elf: Path::new("C:/work/SCUS_973.28"),
         disc: Path::new("C:/disc/game.iso"),
         card: Path::new("C:/cards/card.ps2"),

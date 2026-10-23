@@ -92,7 +92,8 @@
   });
   GT4.backend.listen("game-state", function (payload) {
     if (payload && payload.message) {
-      GT4.ui.toast(payload.message, true);
+      // TASK-108: a notice (a run on Direct3D 11 without Vulkan 1.2) is not an error.
+      GT4.ui.toast(payload.message, !payload.notice);
     }
     if (payload && payload.running === false && root.location.hash !== "#/home") {
       GT4.go("#/home");

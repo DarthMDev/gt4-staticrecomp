@@ -366,7 +366,7 @@ class OfferedTests(unittest.TestCase):
         for row in gs_settings.offered(rows()):
             if row['type'] == 'enum':
                 self.assertTrue(gs_settings.offered_choices(row), row['id'])
-        self.assertEqual(gs_settings.offered_choices(by_id()['graphics_api']), ['vulkan', 'd3d12', 'd3d11'])
+        self.assertEqual(gs_settings.offered_choices(by_id()['graphics_api']), ['auto', 'vulkan', 'd3d12', 'd3d11'])
 
 
 class PlayPerformanceTests(unittest.TestCase):
@@ -467,7 +467,8 @@ class ProbeEnvironmentTests(unittest.TestCase):
 # Value checks for the rows resolved from the PCSX2 v2.8.2 sources (commit fd9d310c; citations in the table notes).
 # Each entry: launcher id -> (INI key, {launcher name: INI value}, default launcher name).
 ENUM_EXPECTED = {
-    'graphics_api': ('Renderer', {'vulkan': '14', 'd3d12': '15', 'd3d11': '3'}, 'vulkan'),
+    # TASK-108: auto is the default; it writes 14 only if never resolved (the launcher resolves it before every write).
+    'graphics_api': ('Renderer', {'auto': '14', 'vulkan': '14', 'd3d12': '15', 'd3d11': '3'}, 'auto'),
     'filter': ('filter', {'nearest': '0', 'bilinear-forced': '1', 'bilinear-ps2': '2',
                           'bilinear-forced-sprite-excluded': '3'}, 'bilinear-ps2'),
     'trilinear': ('TriFilter', {'automatic': '-1', 'off': '0', 'ps2': '1', 'forced': '2'}, 'automatic'),
@@ -568,7 +569,7 @@ class ResolvedValueTests(unittest.TestCase):
         self.assertEqual(gs_settings.offered_choices(by_id()['deinterlace'])[0], 'automatic')
         self.assertEqual(len(gs_settings.offered_choices(by_id()['deinterlace'])), 10)
         self.assertEqual(gs_settings.offered_choices(by_id()['blending']), ['minimum', 'basic', 'medium', 'high', 'full', 'maximum'])
-        self.assertEqual(gs_settings.offered_choices(by_id()['graphics_api']), ['vulkan', 'd3d12', 'd3d11'])
+        self.assertEqual(gs_settings.offered_choices(by_id()['graphics_api']), ['auto', 'vulkan', 'd3d12', 'd3d11'])
 
     def test_resolved_values_stay_out_of_the_default_ini(self):
         text = gs_settings.render_ini(rows())
@@ -648,7 +649,7 @@ class ResetToDefaultsTests(unittest.TestCase):
     def test_reset_holds_only_settable_user_rows(self):
         settings = gs_settings.reset_to_defaults(rows())
         self.assertEqual(settings['upscale'], '1080p')
-        self.assertEqual(settings['graphics_api'], 'vulkan')
+        self.assertEqual(settings['graphics_api'], 'auto')
         for identifier in settings:
             row = by_id()[identifier]
             self.assertEqual(row['status'], 'ok', identifier)

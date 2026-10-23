@@ -109,6 +109,15 @@
     return GT4.i18n.has(key) ? GT4.t(key) : row.help;
   }
 
+  // TASK-108: an Automatic choice names the API it resolves to ({api}); the product names are not translated.
+  function choiceParams(option) {
+    var params = languageParams();
+    if (option.api_label) {
+      params.api = option.api_label;
+    }
+    return params;
+  }
+
   function choiceLabel(row, option) {
     var keys = ["choice." + row.id + "." + option.value];
     if (/_curve$/.test(row.id)) {
@@ -116,7 +125,7 @@
     }
     for (var i = 0; i < keys.length; i++) {
       if (GT4.i18n.has(keys[i])) {
-        return GT4.t(keys[i], languageParams());
+        return GT4.t(keys[i], choiceParams(option));
       }
     }
     return option.label;

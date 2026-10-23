@@ -1,5 +1,19 @@
 # Current Status
 
+## TASK-108 launcher: automatic graphics API and card; game programs gt4.exe and gt4-spec2.exe (2026-10-23, on `task/101-multi-game`, release 1.3.0)
+
+Implemented in the working tree, not committed until the checks below pass; owner test pending. Graphics API has an
+Automatic choice (default; Vulkan when the chosen card reports Vulkan 1.2, else Direct3D 11), resolved at every start and
+Play. A Graphics card row picks the card (Automatic = discrete before integrated, then most video memory); its name goes
+to the game's Adapter key (written by the launcher under `[EmuCore/GS]`). Explicit Vulkan without Vulkan 1.2 runs with
+Direct3D 11, with a note in both languages. The game programs ship as `gt4.exe` and `gt4-spec2.exe` (installer, portable zip,
+game folder, launcher, process detection for both names). Build output names unchanged; pins unchanged. Planned, no code: TASK-109
+(update channels, 1.3.1) and TASK-110 (controller tuning, 1.3.1). Checks: `cargo test --workspace` 494 passed, 0 failed,
+4 ignored; focus-check en-US 158/158 and pt-BR 165/165, nav-test 150/150 (headless Edge); `test_gs_settings` OK (72),
+`test_make_distribution` OK (5), `test_make_portable_zip` OK (7), `test_gs_osd` / `test_gs_window` / `test_gs_nojit` OK.
+`test_portable_install` skipped (no `GT4_NATIVE_BUILD` here). Open: owner test on NVIDIA + integrated, and on a machine
+without Vulkan 1.2; the installer is built by the main agent.
+
 ## TASK-105 integrated GPUs: lighter default and GPU-lost message (#89) (2026-10-23, on `task/101-multi-game`, release 1.3.0)
 
 Implemented, not merged; owner in-game test pending. Issue #89 (Intel UHD only, 1440 x 900): the default Render scale gave 3x

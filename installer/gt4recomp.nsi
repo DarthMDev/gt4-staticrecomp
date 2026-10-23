@@ -10,7 +10,7 @@
 ; window is a WebView2 page: the bootstrapper runs only when the runtime is missing (see WebView2Present below).
 ; SDL3_DLL is SDL3 3.4.18 (runtime\SDL3.dll of SDL3-3.4.18-win32-x64.zip). It ships beside GT4Recomp.exe: the
 ; launcher reads pads through SDL3 (launcher\crates\gt4l-platform\src\sdl_pads.rs).
-; GAME_DIR must hold gt4vulkan.exe and (from 1.3.0, TASK-101) gt4vulkan-spec2.exe, the runtime DLLs, shaders\ and the licence texts. It is not in git.
+; GAME_DIR must hold gt4.exe and (from 1.3.0, TASK-101; renamed TASK-108) gt4-spec2.exe, the runtime DLLs, shaders\ and the licence texts. It is not in git.
 ;
 ; Layout (TASK-091; docs/BUILD.md "Slice 250", docs/release-notes/1.2.1.md):
 ; - Program files in $INSTDIR (default C:\Program Files\GT4Recomp; the directory page lets the player pick any folder).
@@ -37,7 +37,7 @@
   !error "Define LAUNCHER_EXE=<path to GT4Recomp.exe>"
 !endif
 !ifndef GAME_DIR
-  !error "Define GAME_DIR=<folder with gt4vulkan.exe and its runtime files>"
+  !error "Define GAME_DIR=<folder with gt4.exe and its runtime files>"
 !endif
 !ifndef SDL3_DLL
   !error "Define SDL3_DLL=<path to SDL3.dll, SDL 3.4.18>"
@@ -249,9 +249,14 @@ Function FindLockedInstallFile
   Call TestFileFree
   StrCpy $R9 "$INSTDIR\SDL3.dll"
   Call TestFileFree
-  StrCpy $R9 "$INSTDIR\game\gt4vulkan.exe"
+  StrCpy $R9 "$INSTDIR\game\gt4.exe"
   Call TestFileFree
   ; TASK-101 (1.3.0): the second game's program, shipped beside the first. A missing file counts as free.
+  ; TASK-108 (1.3.0): the program names are gt4.exe and gt4-spec2.exe; a 1.2.x install left gt4vulkan*.exe, checked too.
+  StrCpy $R9 "$INSTDIR\game\gt4-spec2.exe"
+  Call TestFileFree
+  StrCpy $R9 "$INSTDIR\game\gt4vulkan.exe"
+  Call TestFileFree
   StrCpy $R9 "$INSTDIR\game\gt4vulkan-spec2.exe"
   Call TestFileFree
   FindFirst $R0 $R1 "$INSTDIR\game\*.dll"
@@ -313,7 +318,7 @@ Function CheckStagedFiles
   ${If} ${Errors}
   ${OrIfNot} ${FileExists} "$INSTDIR\.update-staging\GT4Recomp.exe"
   ${OrIfNot} ${FileExists} "$INSTDIR\.update-staging\SDL3.dll"
-  ${OrIfNot} ${FileExists} "$INSTDIR\.update-staging\game\gt4vulkan.exe"
+  ${OrIfNot} ${FileExists} "$INSTDIR\.update-staging\game\gt4.exe"
     StrCpy $R8 "extract failed"
   ${EndIf}
 FunctionEnd
@@ -709,6 +714,10 @@ Section "Install" SecInstall
   SetOutPath "$INSTDIR"
   RMDir /r "$INSTDIR\.update-staging"
   ClearErrors
+  ; TASK-108 (1.3.0): the game programs are gt4.exe and gt4-spec2.exe. A 1.2.x install left gt4vulkan*.exe in game\;
+  ; the update swaps the whole game folder, and a fresh copy never has them, so they are removed here as well.
+  Delete "$INSTDIR\game\gt4vulkan.exe"
+  Delete "$INSTDIR\game\gt4vulkan-spec2.exe"
   SetOutPath "$INSTDIR\.update-staging"
   File "/oname=GT4Recomp.exe" "${LAUNCHER_EXE}"
   File "/oname=SDL3.dll" "${SDL3_DLL}"

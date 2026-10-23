@@ -45,6 +45,9 @@ pub enum Kind {
     /// (`display::monitor_id`). The list of choices comes from the platform at run time, so any well-formed
     /// identifier is accepted here; a monitor that is gone resolves to the primary one (`display::resolve_monitor`).
     Monitor,
+    /// The graphics card that renders the game (TASK-108): `auto` (Automatic), or the name of a card as the launcher
+    /// lists it. The list comes from the platform at run time; a card that is gone falls back to Automatic for that run.
+    Gpu,
     /// An output resolution (TASK-080 addendum): `desktop` (the monitor's desktop mode) or `<W>x<H>`. A size the
     /// chosen monitor does not support resolves to its desktop mode (`display::resolve_resolution`).
     Resolution,
@@ -128,6 +131,16 @@ pub const SETTINGS: &[SettingDef] = &[
             step: crate::display::RENDER_SCALE_STEP,
         },
         default: "100",
+        connected: true,
+    },
+    SettingDef {
+        id: "graphics_card",
+        page: Page::Graphics,
+        group: "Image",
+        title: "Graphics card",
+        info: "The graphics card that draws the game. Automatic picks a dedicated card over integrated graphics, then the one with the most video memory.",
+        kind: Kind::Gpu,
+        default: "auto",
         connected: true,
     },
     SettingDef {
@@ -278,6 +291,14 @@ pub fn validate(definition: &SettingDef, value: &str) -> Result<String, SettingE
             Ok(number) if (min..=max).contains(&number) && (number - min) % step.max(1) == 0 => Ok(number.to_string()),
             _ => Err(invalid()),
         },
+        Kind::Gpu => {
+            let name = value.trim();
+            if !name.is_empty() && name.len() <= 256 && !name.chars().any(|c| c.is_control()) {
+                Ok(name.to_string())
+            } else {
+                Err(invalid())
+            }
+        }
         Kind::Monitor => {
             if value == crate::display::PRIMARY || crate::display::parse_monitor_id(value).is_some() {
                 Ok(value.to_string())
@@ -403,6 +424,19 @@ impl Settings {
         let normalized = crate::gs_table::check_user_value(id, value)?;
         self.gs.insert(id.to_string(), normalized);
         Ok(())
+    }
+
+    /// Sets a PCSX2 GS value for one run, without the table's checks: the run's resolved API, card and Adapter
+    /// (TASK-108). `None` removes the value, so the game's own default applies. Never stored in settings.toml.
+    pub fn set_run_gs(&mut self, id: &str, value: Option<&str>) {
+        match value {
+            Some(value) => {
+                self.gs.insert(id.to_string(), value.to_string());
+            }
+            None => {
+                self.gs.remove(id);
+            }
+        }
     }
 
     /// Drops every PCSX2 GS value the user set, so each table row is back at its default.

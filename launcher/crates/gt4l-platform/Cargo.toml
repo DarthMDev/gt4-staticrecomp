@@ -17,6 +17,8 @@ windows = { version = "0.62", features = [
     "Win32_Devices_Display",
     "Win32_Globalization",
     "Win32_Foundation",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Gdi",
     "Win32_UI_Shell",
     "Win32_System_Diagnostics_ToolHelp",

@@ -8,7 +8,7 @@
 //!     set GT4_AUDIT_DATA_DIR=<fresh scratch folder>
 //!     set GT4_REAL_ISO=<Gran Turismo 4 (USA) (v2.00).iso>
 //!     set GT4_SPEC2_ISO=<Gran Turismo 4 Spec II v1.10.iso>        (optional)
-//!     set GT4_AUDIT_GAME_DIR=<folder with a stand-in gt4vulkan.exe>  (optional; Play is planned, never started)
+//!     set GT4_AUDIT_GAME_DIR=<folder with a stand-in gt4.exe>  (optional; Play is planned, never started)
 //!     cargo test -p gt4l-tauri --release real_flow -- --ignored --nocapture
 //!
 //! Play is never started here: the test stops at the launch plan (program, arguments, environment).
@@ -258,7 +258,7 @@ fn synthetic_flow_end_to_end() {
     // program is a text file. The GSdx launch line is covered by the launch contract tests.
     let program = root.join("program");
     fs::create_dir_all(program.join("game")).unwrap();
-    fs::write(program.join("game").join("gt4vulkan.exe"), b"stand-in, never started").unwrap();
+    fs::write(program.join("game").join("gt4.exe"), b"stand-in, never started").unwrap();
     let refusal = play_plan(&second, &program).unwrap_err();
     assert!(refusal.starts_with("GSdx could not run the game: GSdx is not installed yet"), "{refusal}");
     assert!(refusal.contains("log folder"), "{refusal}");
@@ -391,7 +391,7 @@ fn without_gsdx_setup_finishes_and_play_refuses_with_the_log_folder() {
     let second = launch(&dirs, &pins);
     let program = root.join("program");
     fs::create_dir_all(program.join("game")).unwrap();
-    fs::write(program.join("game").join("gt4vulkan.exe"), b"stand-in, never started").unwrap();
+    fs::write(program.join("game").join("gt4.exe"), b"stand-in, never started").unwrap();
     let refusal = play_plan(&second, &program).unwrap_err();
     assert_eq!(
         refusal,
@@ -629,11 +629,11 @@ fn two_games_install_side_by_side_and_never_mix() {
     assert_eq!(commands::games_list_of(&second).unwrap()["games"].as_array().unwrap().iter().filter(|g| g["installed"] == json!(true)).count(), 2);
 
     // Each game plays with its own program, ELF, disc and card (checked up to the GSdx step, which a test has none of).
-    let program = stand_in_programs(&root, &["gt4vulkan.exe"]);
+    let program = stand_in_programs(&root, &["gt4.exe"]);
     commands::select_game_of("spec2".into(), &second).unwrap();
     let missing = commands::prepare_play(&second, &program).map(|_| ()).unwrap_err();
     assert!(missing.contains("Gran Turismo 4 Spec II") && missing.contains("missing"), "{missing}");
-    stand_in_programs(&root, &["gt4vulkan-spec2.exe"]);
+    stand_in_programs(&root, &["gt4-spec2.exe"]);
     let refusal = commands::prepare_play(&second, &program).map(|_| ()).unwrap_err();
     assert!(refusal.starts_with("GSdx could not run the game"), "reaches the shared GSdx check: {refusal}");
 

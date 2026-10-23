@@ -9,6 +9,7 @@ pub mod exit;
 pub mod guard;
 pub mod games;
 pub mod games_layout;
+pub mod gpu;
 pub mod gs_release;
 pub mod gs_table;
 pub mod language;

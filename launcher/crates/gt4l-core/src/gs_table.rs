@@ -446,17 +446,18 @@ mod tests {
     fn compiled_table_is_valid_and_has_the_graphics_api_row() {
         assert!(rows().len() > 40);
         let api = row("graphics_api").expect("graphics_api row");
-        assert_eq!(api.default, "vulkan");
+        assert_eq!(api.default, "auto");
         assert_eq!(api.page, "basic", "Graphics page");
         assert!(offered().iter().any(|offered| offered.id == "graphics_api"));
-        // TASK-103: three APIs, Vulkan first; no OpenGL (12) and no software renderer (13) yet.
+        // TASK-103: three APIs, Vulkan first; no OpenGL (12) and no software renderer (13) yet. TASK-108: Automatic first.
         let names: Vec<&str> = api.choices.iter().map(|choice| choice.name.as_str()).collect();
-        assert_eq!(names, ["vulkan", "d3d12", "d3d11"]);
+        assert_eq!(names, ["auto", "vulkan", "d3d12", "d3d11"]);
         let inis: Vec<&str> = api.choices.iter().map(|choice| choice.ini.as_str()).collect();
-        assert_eq!(inis, ["14", "15", "3"]);
-        assert_eq!(api.choices[0].label, "Vulkan (recommended)");
-        assert_eq!(api.choices[1].label, "Direct3D 12 (recommended)");
-        assert_eq!(api.choices[2].label, "Direct3D 11 (older PCs)");
+        assert_eq!(inis, ["14", "14", "15", "3"]);
+        assert_eq!(api.choices[0].label, "Automatic");
+        assert_eq!(api.choices[1].label, "Vulkan (recommended)");
+        assert_eq!(api.choices[2].label, "Direct3D 12 (recommended)");
+        assert_eq!(api.choices[3].label, "Direct3D 11 (older PCs)");
         // The engine setting of the launcher is also called "renderer": the table row must not use that id.
         assert!(row("renderer").is_none(), "the table row is graphics_api");
         assert!(!offered().is_empty());
@@ -464,7 +465,8 @@ mod tests {
 
     #[test]
     fn each_graphics_api_choice_writes_its_renderer_number() {
-        for (choice, number) in [("vulkan", "14"), ("d3d12", "15"), ("d3d11", "3")] {
+        // auto writes 14 only if it was never resolved; the launcher resolves it before every write (gpu::plan).
+        for (choice, number) in [("auto", "14"), ("vulkan", "14"), ("d3d12", "15"), ("d3d11", "3")] {
             let mut settings = BTreeMap::new();
             settings.insert("graphics_api".to_string(), choice.to_string());
             let text = render_ini(&settings, &BTreeMap::new()).unwrap();
@@ -474,9 +476,9 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_or_unknown_graphics_api_falls_back_to_vulkan() {
-        // Missing: the table default is Vulkan (an existing install has no stored value).
-        assert_eq!(default_value("graphics_api").as_deref(), Some("vulkan"));
+    fn a_missing_or_unknown_graphics_api_is_automatic() {
+        // Missing: the table default is Automatic (TASK-108; an install that never changed the row has no stored value).
+        assert_eq!(default_value("graphics_api").as_deref(), Some("auto"));
         let text = render_ini(&BTreeMap::new(), &BTreeMap::new()).unwrap();
         assert!(text.contains("Renderer = 14
 "));

@@ -13,6 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use gt4controls::{self as controls_file, Controls, CONTROLS_FILE_NAME};
 use std::collections::BTreeMap;
 
+use gt4l_core::settings::Settings;
 use gt4l_core::config::{self, ConfigFile};
 use gt4l_core::language::{self, Language};
 use gt4l_core::display as display_rules;
@@ -324,15 +325,18 @@ impl AppState {
             log(&self.dirs, &format!("settings not saved: {error}"));
         }
         // TASK-097: a direct start of the game reads the same choices.
-        self.write_standalone_files();
+        self.write_standalone_files(&self.config.settings);
     }
 
     /// Writes what a direct start of the game reads (TASK-097) into the user config folder: `game.ini` (fullscreen, present
     /// mode, monitor, output size and the diagnostic switches) and `gt4-gs.ini` (the session ini a Play writes, with the
     /// same display plan). The game finds the folder as the launcher does (`<install>\user\config` for the portable
-    /// build, `%APPDATA%\GT4Recomp\config` otherwise). Failures are logged; nothing here can stop the launcher.
-    pub fn write_standalone_files(&self) {
-        let settings = &self.config.settings;
+    /// build, `%APPDATA%\GT4Recomp\config` otherwise). `settings` are the values of the run (TASK-108: a run that
+    /// falls back to Direct3D 11 writes its own). Failures are logged; nothing here can stop the launcher.
+    pub fn write_standalone_files(&self, stored: &Settings) {
+        // TASK-108: a save writes the stored choices, so the API, card and Adapter are resolved here as a Play does.
+        let (resolved, _, _) = gt4l_platform::gpu::run_settings(stored, gt4l_core::language::Language::fallback());
+        let settings = &resolved;
         let monitors = gt4l_platform::display::monitors();
         let display = display_rules::resolve_target(&monitors, settings.get("monitor"), settings.get("resolution"));
         let config_dir = self.user_dirs.config_dir().to_path_buf();
@@ -345,7 +349,7 @@ impl AppState {
         let renderer_root = self.dirs.renderer_root();
         if let Some(installed) = gs_release::installed(&renderer_root) {
             let paths = launch::Pcsx2Paths::for_session(&installed, &self.dirs.renderer_install_root(), &config_dir, &self.dirs.textures());
-            let integrated = gt4l_platform::system::integrated_gpu_name().is_some();
+            let integrated = gt4l_platform::gpu::integrated_gpu_name(settings.get("graphics_card")).is_some();
             match launch::gs_config_text(settings, &paths, display.as_ref(), integrated) {
                 Ok(text) => {
                     if let Err(error) = gs_table::write_ini_atomic(&paths.config, &text) {

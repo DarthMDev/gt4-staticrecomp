@@ -700,7 +700,8 @@ plain message, and an owner test with a real CHD of each game.
 
 ### TASK-107 — Automatic graphics setup per GPU
 Planned (owner, 2026-10-23) for release 1.3.1, after issue #89 and TASK-105. Owner design:
-1. **Game without Vulkan (check first).** Today `gt4vulkan.exe` itself requires Vulkan 1.2 (`native/native_vulkan.cpp`,
+1. **Game without Vulkan (check first).** Done by TASK-108 (1.3.0): the game program is not checked for Vulkan
+   when the chosen API is not Vulkan, and Automatic falls back to Direct3D 11. Today `gt4vulkan.exe` itself requires Vulkan 1.2 (`native/native_vulkan.cpp`,
    `system_check.rs`), so a GPU without Vulkan cannot play even when GSdx draws with Direct3D or OpenGL. Find out
    whether the game needs its own Vulkan device when `GT4_RENDERER=pcsx2` and, if not, make that path Vulkan-free and
    relax the launcher check for it. Everything below depends on this.
@@ -725,6 +726,63 @@ Planned (owner, 2026-10-23) for release 1.3.1, after issue #89 and TASK-105. Own
    automatic choice and a chosen 100% are told apart (TASK-105 limit).
 Acceptance: pure unit tests for every rule (tables, fallbacks, step-down), the migration test, and owner tests on this PC
 plus at least one integrated-GPU machine.
+
+### TASK-108 — Launcher: automatic graphics API and card; game programs renamed gt4.exe and gt4-spec2.exe
+Status: done in the working tree (branch `task/101-multi-game`, release 1.3.0); owner test pending. Owner decisions 2026-10-23.
+Completes step 1 of TASK-107 (the game no longer needs Vulkan to start).
+1. **Automatic Graphics API.** `graphics_api` gets a new first choice, **Automatic** (`auto`), and it is the default for
+   new installs and for installs that never changed the row (no stored value). It is resolved at every launcher start and
+   before each Play: Vulkan when the chosen graphics card reports Vulkan 1.2 or newer, otherwise Direct3D 11. The Settings
+   page shows the resolved API ("Automatic (Vulkan)"). An explicit Vulkan, Direct3D 12 or Direct3D 11 is kept.
+   Explicit Vulkan on a card without Vulkan 1.2 runs with Direct3D 11 for that run, with the note "No Vulkan 1.2 graphics
+   card was found, so the game uses Direct3D 11. You can change this in Settings > Graphics." (pt-BR in the locale file).
+   The Vulkan check is per run, so a driver update brings Vulkan back without a setting change. Setup needs no GPU;
+   the processor check (SSE4.1) is unchanged.
+2. **Graphics card and Adapter.** The launcher lists the cards: Vulkan device names from its Vulkan probe and DXGI
+   adapter descriptions (`IDXGIFactory1::EnumAdapters1`; software adapters skipped). The **Graphics card** row follows the
+   Graphics API row: "Automatic (best)" (default) and every card by name. Automatic picks a discrete card over an
+   integrated one, then the most dedicated video memory. The chosen card's name goes to the game's `Adapter` key: the
+   Vulkan name for Vulkan, the DXGI description for Direct3D 11 and 12. No name for the API means an empty Adapter (system
+   default) with a log line. A stored card that is gone (unplugged eGPU, new PC) falls back to Automatic for that run,
+   with a log line. The `Adapter` line is written under `[EmuCore/GS]` by the launcher (`gs_config_text`), because the
+   table row `adapter` is still `resolved` (not settable from a value; the table and `scripts/gs_settings.py` are unchanged).
+3. **One chosen card.** The Vulkan support decision (point 1) and the integrated-GPU 1x default (TASK-105) use the chosen
+   card instead of "all GPUs integrated".
+4. **Logs.** Every Play logs the card list, the chosen card, the API and the Adapter value.
+5. **Game programs renamed at distribution.** `gt4vulkan.exe` is `gt4.exe` and `gt4vulkan-spec2.exe` is `gt4-spec2.exe`
+   in the installer, the portable zip, the game folder and the launcher (`games.rs`, paths, launch, process detection,
+   update and migration). The build output names are unchanged. The files are byte-identical and pinned by hash, so no
+   game rebuild and no new pins. `scripts/make_distribution.py` copies them under the new names; the installer deletes
+   the 1.2.x names from `game\` on install and update, and checks both sets of names for locks; the uninstaller removes
+   the whole `game` folder. Process detection and the portable swap cover both old and new names.
+   The developer scripts keep `gt4vulkan.exe`, the build output name.
+Acceptance: pure unit tests for each rule in `gt4l-core::gpu` (laptop integrated + NVIDIA, integrated only without
+Vulkan, two discrete cards, explicit choice kept, missing card, software skipped, name mismatch leaves Adapter empty), the
+Vulkan fallback in both languages, `system_check` for the processor, the settings migration of the Automatic default,
+the distribution tests with the new names, `cargo test --workspace`, the touched Python modules, the headless Edge focus
+checks, and an owner test on this PC (NVIDIA + integrated) and on one machine without Vulkan 1.2.
+
+### TASK-109 — Launcher update channels
+Planned (owner, 2026-10-23) for release 1.3.1. No code yet.
+- Settings > General gets an **Updates** choice: **Stable** (default) or **Test builds** (release candidates).
+- Stable keeps today's rule: drafts and pre-releases are never offered (`gt4l-core/src/releases.rs`).
+- Test builds also offers GitHub pre-releases tagged `vX.Y.Z-rcN`, newest first by semantic version (rc numbers ordered),
+  never a draft.
+- Moving back to Stable never downgrades automatically: it waits for the next stable release that is newer than the
+  installed rc.
+- Both languages. Tests for the version ordering, for example 1.3.0-rc3 < 1.3.0 < 1.3.1-rc1.
+
+### TASK-110 — Controller tuning: stick and trigger deadzone, sensitivity and response
+Planned (owner, 2026-10-23) for release 1.3.1. Players report that the game sometimes reads the stick and triggers
+differently from what the controller sends. No code yet.
+- A per-controller tuning section on the launcher's Controls page, applied by the game's input layer
+  (`native/host_io.cpp`, SDL3) and the controls config the launcher writes. It needs a game rebuild and new pins.
+- Settings (the feature list only, from what PCSX2 offers its players; no PCSX2 code is used, clean room):
+  left and right stick deadzone; stick sensitivity or scale; response curve (linear or curved); outer deadzone or
+  saturation; trigger deadzone and saturation (the analog throttle and brake mapped to GT4's pressure buttons and stick
+  axes); button pressure modifier; stick inversion; vibration strength.
+- A live test view in the launcher showing the raw value and the value the game will see, for each stick and trigger.
+- Defaults reproduce today's behaviour exactly. Unit tests for every curve and deadzone rule.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:

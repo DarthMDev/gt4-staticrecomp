@@ -1,15 +1,12 @@
-//! Reads the processor features and probes Vulkan for the requirement checks (TASK-081). The rules that turn these
+//! Reads the processor features and probes Vulkan for the requirement checks (TASK-081, TASK-108). The rules that turn these
 //! readings into a message are pure and tested in `gt4l_core::system_check`.
 //!
 //! - `read_cpu_features`: CPUID leaf 1 (SSE3, SSSE3, SSE4.1).
 //! - `probe_vulkan`: loads `vulkan-1.dll` from System32 (as the game does), lists the instance extensions, creates a
 //!   bare Vulkan 1.0 instance with no extensions or layers, lists the GPUs with their Vulkan version, and destroys the
 //!   instance. It opens no window and allocates no GPU memory. A loaded driver stays in the launcher process until it
-//!   exits; the probe runs once per launch when it succeeds (`checked_vulkan`).
+//!   exits. The graphics cards are listed by `gpu::probe_gpus`, which uses this probe.
 
-use std::sync::{Mutex, OnceLock};
-
-use gt4l_core::language::Language;
 use gt4l_core::system_check::{CpuFeatures, VulkanDevice, VulkanProbe};
 
 /// The Windows user language as a locale name (`pt-BR`, `en-US`), from `GetUserDefaultLocaleName`. Empty when it cannot
@@ -52,38 +49,10 @@ pub fn read_cpu_features() -> CpuFeatures {
     CpuFeatures::default()
 }
 
-/// The integrated GPU the game renders on, read once per launcher process (issue #89): its name, or `None` when the
-/// machine has a discrete card, no GPU with its own driver, or the probe fails. The rule is
-/// `gt4l_core::system_check::integrated_gpu_name`; the same probe as the system check.
-static INTEGRATED_GPU: OnceLock<Option<String>> = OnceLock::new();
-
-pub fn integrated_gpu_name() -> Option<String> {
-    INTEGRATED_GPU
-        .get_or_init(|| match probe_vulkan() {
-            VulkanProbe::Ready { devices, .. } => gt4l_core::system_check::integrated_gpu_name(&devices),
-            _ => None,
-        })
-        .clone()
-}
-
-/// The last successful Vulkan check of this launcher session. A failure is not kept, so a driver installed while the
-/// launcher is open is seen at the next Play.
-static VULKAN_OK: Mutex<bool> = Mutex::new(false);
-
-/// `None` when Vulkan is fine (probed once per session after the first success), else the player's message.
-pub fn checked_vulkan(language: Language) -> Option<String> {
-    let mut ok = VULKAN_OK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    if *ok {
-        return None;
-    }
-    let problem = gt4l_core::system_check::vulkan_problem_in(&probe_vulkan(), language);
-    *ok = problem.is_none();
-    problem
-}
-
-/// The CPU check, then the Vulkan check: the first problem's message, or `None`.
-pub fn requirements_problem(language: Language) -> Option<String> {
-    gt4l_core::system_check::cpu_problem_in(&read_cpu_features(), language).or_else(|| checked_vulkan(language))
+/// The processor check, which blocks setup and Play (TASK-108: setup needs no GPU, and the graphics card is chosen per
+/// run by `gpu::run_settings`).
+pub fn processor_problem(language: gt4l_core::language::Language) -> Option<String> {
+    gt4l_core::system_check::cpu_problem_in(&read_cpu_features(), language)
 }
 
 #[cfg(windows)]

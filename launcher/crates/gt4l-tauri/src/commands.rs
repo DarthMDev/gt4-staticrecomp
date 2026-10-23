@@ -214,8 +214,9 @@ pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
 
 pub fn get_settings_table_with_monitors(shared: &Shared, monitors: &[display_rules::Monitor]) -> Result<Value, String> {
     let state = lock(shared);
-    let integrated_gpu = gt4l_platform::system::integrated_gpu_name().is_some();
-    let mut table = model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors, integrated_gpu);
+    let integrated_gpu = gt4l_platform::gpu::integrated_gpu_name(state.config.settings.get("graphics_card")).is_some();
+    let cards = gt4l_platform::gpu::probe_gpus();
+    let mut table = model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors, &cards, integrated_gpu);
     // TASK-091: the launcher's own row (Graphics > Advanced), not a game setting.
     let safe_mode = webview_guard::safe_mode_on(state.user_dirs.root());
     if let Some(rows) = table.get_mut("rows").and_then(Value::as_array_mut) {
@@ -337,6 +338,8 @@ pub struct PlayInputs {
     /// The resolved Monitor and Resolution (TASK-080 addendum); `None` when no monitor could be read.
     pub display: Option<DisplayTarget>,
     pub extra: Vec<(String, String)>,
+    /// The note for the player when this run falls back to Direct3D 11 (TASK-108); `None` otherwise.
+    pub graphics_notice: Option<String>,
 }
 
 /// The checks of Play before anything starts. `program_dir` is the folder of `GT4Recomp.exe`.
@@ -369,7 +372,16 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         extra.push(("GT4_CONTROLS_FILE".into(), controls_path.display().to_string()));
     }
     // Only GSdx runs the game (decision 0070, TASK-096): without a verified GSdx, Play stops here with the error.
-    let settings = state.config.settings.clone();
+    // TASK-108 (release 1.3.0): the graphics card and API of this run (automatic unless the player chose them). The
+    // stored choices stay as they are; the run uses the resolved API, card and Adapter.
+    let (settings, graphics, cards) = gt4l_platform::gpu::run_settings(&state.config.settings, language);
+    state::log(&dirs, &format!("graphics: cards [{}]", gt4l_platform::gpu::card_list(&cards)));
+    for line in &graphics.log {
+        state::log(&dirs, line);
+    }
+    let card_name = graphics.card.as_ref().and_then(gt4l_core::gpu::GpuDevice::name).unwrap_or("none");
+    let adapter = if graphics.adapter.is_empty() { "system default" } else { graphics.adapter.as_str() };
+    state::log(&dirs, &format!("graphics: card {card_name}, API {}, Adapter {adapter}", graphics.api));
     let installed = gs_release::installed(&dirs.renderer_root());
     let pcsx2 = launch::choose_renderer(installed.as_ref(), &dirs.logs())?.clone();
     // TASK-080 addendum: the stored Monitor and Resolution against the monitors connected now.
@@ -390,7 +402,7 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         }
     }
     // Issue #89: on an integrated GPU the untouched default scale plays at 1x (the GPU the system check reports).
-    let integrated_gpu = gt4l_platform::system::integrated_gpu_name();
+    let integrated_gpu = gt4l_platform::gpu::integrated_gpu_name(settings.get("graphics_card"));
     let plan = launch::session_plan(&settings, display.as_ref(), integrated_gpu.is_some());
     state::log(
         &dirs,
@@ -420,6 +432,7 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         settings,
         pcsx2,
         extra,
+        graphics_notice: graphics.notice,
     })
 }
 
@@ -428,9 +441,10 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
 #[tauri::command]
 pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let shared: Shared = shared.inner().clone();
-    // TASK-081: the processor and Vulkan checks before the game starts (`gt4l_core::system_check`).
+    // TASK-081: the processor check before the game starts (`gt4l_core::system_check`). Vulkan is checked per run in
+    // `prepare_play`, and only when Vulkan is the chosen Graphics API (TASK-108).
     let language = state::language_of(&lock(&shared));
-    if let Some(problem) = gt4l_platform::system::requirements_problem(language) {
+    if let Some(problem) = gt4l_platform::system::processor_problem(language) {
         let mut state = lock(&shared);
         state::log(&state.dirs, &format!("system requirement not met: {problem}"));
         state.home_message = problem.clone();
@@ -439,9 +453,9 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let inputs = prepare_play(&shared, &program_directory()).inspect_err(|message| {
         lock(&shared).home_message = message.clone();
     })?;
-    let PlayInputs { game, dirs, disc, elf, executable, settings, pcsx2, display, extra } = inputs;
+    let PlayInputs { game, dirs, disc, elf, executable, settings, pcsx2, display, extra, graphics_notice } = inputs;
     // TASK-097: a direct start of the game reads these files; they follow the monitors connected now.
-    lock(&shared).write_standalone_files();
+    lock(&shared).write_standalone_files(&settings);
     let card = dirs.runtime_card();
     saves::prepare_card(lock(&shared).library_of(game), &card)?;
     let textures = lock(&shared).dirs.textures();
@@ -454,9 +468,14 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         // The game played last is the one the next start shows (owner, 2026-10-23).
         state.config.selected_game = games::after_play(game);
         state.save_config();
+        // save_config writes the stored choice; a run that fell back to Direct3D 11 keeps its own direct-start file.
+        state.write_standalone_files(&settings);
     }
     state::log(&dirs, &format!("game started ({}), session {}", game.id, running.session_dir.display()));
-    let _ = app.emit("game-state", json!({ "running": true, "message": "" }));
+    let _ = app.emit(
+        "game-state",
+        json!({ "running": true, "message": graphics_notice.clone().unwrap_or_default(), "notice": graphics_notice.is_some() }),
+    );
     crate::tray::handle(&app, crate::tray::Event::GameStarted);
 
     std::thread::spawn(move || {

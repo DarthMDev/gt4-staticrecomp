@@ -1,4 +1,4 @@
-//! Builds the exact command line and environment for `gt4vulkan.exe`.
+//! Builds the exact command line and environment for `gt4.exe`.
 //!
 //! Contract (from `scripts/external_runtime_probe.py::run_probe` and `gs_stream_environment`):
 //! - arguments: `<elf> --ntsc --disc <iso> --frames 0 --memcard <card> --misses <session>\misses.txt --window`
@@ -49,7 +49,7 @@ pub fn game_elf(game: &Game, prepared: &Path) -> PathBuf {
 /// Everything needed to start one game session.
 #[derive(Clone, Debug)]
 pub struct LaunchInputs<'a> {
-    /// `gt4vulkan.exe`.
+    /// `gt4.exe`.
     pub game_executable: &'a Path,
     /// The rebuilt ELF in the prepared folder. Its file name must stay `SCUS_973.28` (argv0 rule).
     pub elf: &'a Path,
@@ -224,6 +224,9 @@ pub fn gs_config_text(
     integrated_gpu: bool,
 ) -> Result<String, String> {
     let mut user: BTreeMap<String, String> = settings.gs_overrides().clone();
+    // TASK-108: the Adapter (the chosen graphics card's name) is written by the launcher, not by the table: its row is
+    // not settable from a value yet (status resolved). It is added below the table's render, in its section.
+    let adapter = user.remove("adapter").filter(|name| !name.is_empty());
     user.insert("upscale".to_string(), session_plan(settings, display, integrated_gpu).multiplier.to_string());
     let present = match settings.get("vsync") {
         "fast" => "mailbox",
@@ -238,7 +241,19 @@ pub fn gs_config_text(
     launcher.insert("cache_folder".to_string(), paths.cache.display().to_string());
     launcher.insert("data_root".to_string(), paths.data_root.display().to_string());
     launcher.insert("textures_folder".to_string(), paths.textures.display().to_string());
-    gs_table::render_ini(&user, &launcher).map_err(|error| error.to_string())
+    let text = gs_table::render_ini(&user, &launcher).map_err(|error| error.to_string())?;
+    match adapter {
+        None => Ok(text),
+        Some(name) => {
+            let header = "[EmuCore/GS]
+";
+            if !text.contains(header) {
+                return Err("gt4-gs.ini has no [EmuCore/GS] section for the Adapter".to_string());
+            }
+            Ok(text.replacen(header, &format!("{header}Adapter = {name}
+"), 1))
+        }
+    }
 }
 
 /// Name of the file the game reads for a direct start (TASK-097), in the user config folder.

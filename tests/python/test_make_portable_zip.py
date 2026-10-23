@@ -24,8 +24,8 @@ class PortableZipTest(unittest.TestCase):
         self.sdl.write_bytes(b'sdl')
         self.game = self.base / 'game'
         (self.game / 'shaders').mkdir(parents=True)
-        (self.game / 'gt4vulkan.exe').write_bytes(b'game')
-        (self.game / 'gt4vulkan-spec2.exe').write_bytes(b'spec2')
+        (self.game / 'gt4.exe').write_bytes(b'game')
+        (self.game / 'gt4-spec2.exe').write_bytes(b'spec2')
         (self.game / 'shaders' / 'raster.spv').write_bytes(b'spv')
         (self.game / 'vcruntime140.dll').write_bytes(b'crt')
 
@@ -38,8 +38,8 @@ class PortableZipTest(unittest.TestCase):
         with zipfile.ZipFile(target) as archive:
             names = archive.namelist()
             self.assertEqual(archive.testzip(), None)
-            for expected in ('GT4Recomp.exe', 'SDL3.dll', 'NOTICE.md', 'LICENSE.txt', 'PORTABLE.txt', 'game/gt4vulkan.exe',
-                             'game/gt4vulkan-spec2.exe', 'game/shaders/raster.spv', 'game/vcruntime140.dll'):
+            for expected in ('GT4Recomp.exe', 'SDL3.dll', 'NOTICE.md', 'LICENSE.txt', 'PORTABLE.txt', 'game/gt4.exe',
+                             'game/gt4-spec2.exe', 'game/shaders/raster.spv', 'game/vcruntime140.dll'):
                 self.assertIn(expected, names)
             self.assertIn('user/', names)
             self.assertIn('data/', names)

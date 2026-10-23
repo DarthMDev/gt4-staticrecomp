@@ -131,8 +131,8 @@ fn each_game_starts_its_own_program_with_its_own_elf_disc_and_card() {
     }
     let (_, gt4) = &plans[0];
     let (_, spec2) = &plans[1];
-    assert_eq!(gt4.program, game_dir.join("gt4vulkan.exe"));
-    assert_eq!(spec2.program, game_dir.join("gt4vulkan-spec2.exe"));
+    assert_eq!(gt4.program, game_dir.join("gt4.exe"));
+    assert_eq!(spec2.program, game_dir.join("gt4-spec2.exe"));
     assert!(gt4.arguments[0].ends_with("SCUS_973.28") && gt4.arguments[0].contains("gt4"));
     assert!(spec2.arguments[0].ends_with("SCUS_974.36") && spec2.arguments[0].contains("spec2"), "the argv0 name rule");
     let after = |plan: &launch::LaunchPlan, flag: &str| {
