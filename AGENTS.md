@@ -201,10 +201,17 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
   Beta lists rcs by date (plus a newer stable on top), Stable lists finals by SemVer. Drafts are never listed or
   offered (the public API does not even return them), and versions older than the picker minimum are hidden. Going to
   an older version shows a strong downgrade warning; a newer version, from either channel, is always plain.
+- **Every new build goes up as a GitHub draft** (owner, 2026-10-23): after the automated checks and the language check,
+  upload it as a **draft** release (`gh release create <tag> --draft`, with the label, the assets and the full notes
+  plus a test-build warning). A draft is private: neither the public nor any launcher sees it, and the owner can
+  download it on other PCs.
+  - **Replacing a draft:** a small fix keeps the same rc number. Rebuild with the same label and replace the draft's
+    assets (`gh release upload <tag> <files> --clobber`, and update `SHA256SUMS`), or delete and recreate the draft.
+    Only a more substantial change gets a new rc number. Never replace the assets of a published pre-release or
+    release.
 - **The agent never publishes on its own:**
-  - **Release candidate:** build it, run the automated checks and the language check, then hand the installer and
-    portable zip from `private/` to the owner for a basic local test. Publish the `vX.Y.Z-rcN` pre-release only after
-    the owner says so.
+  - **Release candidate:** it stays a draft until the owner says, in words, that it can become a pre-release; then
+    `gh release edit <tag> --draft=false --prerelease --latest=false`.
   - **Final release:** only when the owner says, in words, that a given rc is stable and should be rebuilt as final.
     Then rebuild without a label, publish `vX.Y.Z` as Latest with the full notes as the body, the installer, the
     portable zip and `SHA256SUMS`, open and merge the PR (owner approval), update the README badge and download name,
