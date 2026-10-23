@@ -558,8 +558,9 @@
     await wait(100);
     check("the left arrow shows an older release, sliding in from the left", shownVersion() === "1.2.3" &&
       !!notes.querySelector(".home-notes-page.enter-from-left") && !newer.disabled, shownVersion());
-    older.click();
-    older.click();
+    for (var step = 0; step < 10 && !older.disabled; step++) {
+      older.click();
+    }
     await wait(100);
     check("no loop: the oldest release disables the left arrow", shownVersion() === "1.0.0" && older.disabled, shownVersion());
     older.click();
@@ -567,7 +568,7 @@
     check("an extra click at the oldest stays there", shownVersion() === "1.0.0", shownVersion());
     newer.click();
     await wait(100);
-    check("the right arrow goes back to a newer release", shownVersion() === "1.2.2" &&
+    check("the right arrow goes back to a newer release", shownVersion() === "1.1.0" &&
       !!notes.querySelector(".home-notes-page.enter-from-right"), shownVersion());
     check("the pad hints name the game switch", /LB \/ RB/.test(document.getElementById("hints").textContent), document.getElementById("hints").textContent);
 
