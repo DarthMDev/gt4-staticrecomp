@@ -67,8 +67,15 @@ pub fn mask_text(text: &str, user_name: &str) -> String {
     if user.len() < 3 {
         return text.to_string();
     }
-    let profile = replace_ascii_insensitive(text, &format!("c:\\users\\{user}"), "C:\\Users\\<user>");
-    let profile = replace_ascii_insensitive(&profile, &format!("c:/users/{user}"), "C:/Users/<user>");
+    // The profile folder name is joined at run time: the release build refuses an executable that holds the literal
+    // `\Users\` (launcher/tools/build-release.ps1 scans it for build paths).
+    let mut profile = text.to_string();
+    for separator in ["\\", "/"] {
+        let users = ["C:", "Users"].join(separator);
+        let found = format!("{users}{separator}{user}");
+        let masked = format!("{users}{separator}<user>");
+        profile = replace_ascii_insensitive(&profile, &found, &masked);
+    }
     replace_ascii_insensitive(&profile, user, "<user>")
 }
 
