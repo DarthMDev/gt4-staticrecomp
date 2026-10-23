@@ -621,6 +621,6 @@ Still over the owner's 6 ms GS-worker budget in the race. Largest remaining CPU 
   disabled.
 - Gates (local slice271, built in the slice270 tree): CTest 242/242 with and without interlock; memory hashes identical
   on all five captures (night `fifo_hash=3a2fe617a174e7e7`); menu dumps 42/42 = slice228; race frames 42/42 =
-  slice235; scaled memory equal to 1x at 2x/4x/6x. Default renderer parity: see below.
+  slice235; scaled memory equal to 1x at 2x/4x/6x; default renderer 42/42 = slice214.
 - Candidate for owner test 8: `O:\gt4recomp-scratch\coregs2-candidate-271` (`gt4vulkan.exe` sha256
   `8f1c4a66bb274ee37ba0c3ddc01aeee3a725361e904737b0a7f162870218db29`), `build\hwr-play-scale.ps1 -Scale 1|2|4|6 [-AA]`.
