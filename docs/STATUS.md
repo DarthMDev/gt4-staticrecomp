@@ -21,6 +21,12 @@ final code state. S5: the VU1 blob decrypts to the v2.00 image (`ae6b6cb3…`), 
 upload differs (0x920 vs 0xA80, 1,050 bytes) and uses the counted interpreter fallback. S6: 35 IOP files mapped with
 per-module policy (6 new, inherited from the beta lineage).
 
+S2 is done too: `scripts/spec2_elf_patch.py` applies the 35 injector stores to `SCUS_974.36` from the ISO and writes
+`private/slice272-spec2-elf` (`10a794df…`; `--revert` reproduces the original `db08421b…`). The trampoline at
+`0x001001E8` is deliberately kept: the plugin's init calls the beta's boot initialiser and one more game function, so
+only the stores are reproduced ahead of time. Pins `inputs/spec2-iso.json` and `inputs/spec2-elf.json`. S4 (its own
+translated library and executable) and S7b (first boot) are next.
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

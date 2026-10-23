@@ -266,5 +266,49 @@ class IopTests(unittest.TestCase):
         self.assertIn('pppoe.irx', pin['module_load_list_from_text']['names'])
 
 
+class DerivedElfTests(unittest.TestCase):
+    @staticmethod
+    def make_elf(words):
+        text = b''.join(struct.pack('<I', w) for w in words)
+        out = bytearray(0x1000 + len(text))
+        out[:16] = b'\x7fELF\x01\x01\x01' + b'\0' * 9
+        struct.pack_into('<HHIIIIIHHHHHH', out, 16, 2, 8, 1, 0x100008, 52, 0, 0, 84, 32, 1, 0, 0, 0)
+        struct.pack_into('<8I', out, 52, 1, 0x1000, 0x100000, 0x100000, len(text), len(text), 7, 4096)
+        out[0x1000:0x1000 + len(text)] = text
+        return bytes(out)
+
+    def test_apply_and_revert_restore_the_image(self):
+        import spec2_elf_patch
+        image = self.make_elf([0x11111111, 0x22222222, 0x33333333])
+        patches = [{'addr': 0x100004, 'size': 4, 'old': 0x22222222, 'new': 0xDEADBEEF, 'source': 'injector'}]
+        patched = spec2_elf_patch.apply_patches(image, patches)
+        self.assertNotEqual(patched, image)
+        self.assertEqual(struct.unpack_from('<I', patched, 0x1004)[0], 0xDEADBEEF)
+        self.assertEqual(spec2_elf_patch.apply_patches(patched, patches, reverse=True), image)
+
+    def test_apply_refuses_a_mismatched_old_word(self):
+        import spec2_elf_patch
+        image = self.make_elf([0x11111111])
+        patches = [{'addr': 0x100000, 'size': 4, 'old': 0x99999999, 'new': 0x1, 'source': 'injector'}]
+        with self.assertRaises(ValueError):
+            spec2_elf_patch.apply_patches(image, patches)
+
+    def test_pin_matches_the_patch_table(self):
+        import spec2_elf_patch
+        elf_pin = json.loads((ROOT / 'docs/inputs/spec2-elf.json').read_text(encoding='utf-8'))
+        patch_pin = json.loads((ROOT / 'docs/inputs/spec2-patches.json').read_text(encoding='utf-8'))
+        iso_pin = json.loads((ROOT / 'docs/inputs/spec2-iso.json').read_text(encoding='utf-8'))
+        injector = [p for p in patch_pin['patches'] if p.get('source', 'injector') == 'injector']
+        self.assertEqual(elf_pin['patches_applied'], len(injector))
+        self.assertEqual(elf_pin['original']['sha256'], patch_pin['elf']['sha256'])
+        self.assertEqual(iso_pin['disc']['sha256'], '6a3484b9672c10a92154ecee6faa5bbcfd4ed8cd538d8283e429c3fe6e1704b2')
+        self.assertEqual(iso_pin['files']['/SCUS_974.36;1']['sha256'], patch_pin['elf']['sha256'])
+        self.assertTrue(elf_pin['entry_call']['kept'])
+        for patch in injector:
+            address = patch['addr']
+            self.assertTrue(0x100000 <= address < 0x65FBBC or 0x65FC00 <= address < 0x65FC00 + 0xD45FC,
+                            hex(address))
+
+
 if __name__ == '__main__':
     unittest.main()

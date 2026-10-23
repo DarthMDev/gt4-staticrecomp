@@ -181,7 +181,23 @@ section of [IOP-MAP](IOP-MAP.md). Tests: `IopTests`.
   counter, HLE stub reporting "no network device", refusal to load.
 - Open: "offline play without hangs" needs S7b.
 
-### S2 — derived ELF (not started)
-### S3 — target-aware host hooks (done, see above)
+### S2 — derived ELF: DONE (2026-10-22)
+
+- `scripts/spec2_elf_patch.py`: reads `SCUS_974.36` from the ISO (identity pinned in `inputs/spec2-iso.json`), applies
+  every `source: injector` entry of `inputs/spec2-patches.json` after checking the old word, and writes the result to a
+  fresh directory. `--revert` removes them again (control run: it reproduces the original hash exactly).
+- Derived image: `private/slice272-spec2-elf/SCUS_974.36`, 6,520,944 bytes, sha256
+  `10a794df128753045b4a9411a30adfa508a59b726507dcb40e3e9f8af648c747`; original `db08421b…`; pin
+  [inputs/spec2-elf.json](inputs/spec2-elf.json).
+- **The trampoline at 0x001001E8 is kept**, documented: the plugin's init calls the function it replaced
+  (`0x005E3AA8`, the beta's own boot initialiser) and one further game function (`0x004E2940`) whose side effects are
+  not in the store table. Reproducing only the stores and dropping the call would change behaviour; keeping the call
+  makes the runtime stores redundant (they write the same words again) and harmless, because translated code never
+  re-reads them. The plugin segment stays translatable code, so its five `jal` hooks and its handlers keep working.
+- Tests: `DerivedElfTests` (apply/revert round trip, refusal on a mismatched old word, pin consistency, every patch
+  address inside the text/data image).
+- Open: the translation run for this image is S4 (the donor producer expects the v2.00 CORE policy; a plain-ELF input
+  with its own library and manifests is needed).
+
 ### S4 — second-target build (not started)
 ### S7 — first boot (not started)

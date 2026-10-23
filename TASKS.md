@@ -642,6 +642,11 @@ release pin set (release decision), S8 fills the Spec II table.
 Progress (2026-10-22, S5/S6 mapped): VU1 decrypts to the v2.00 image (`ae6b6cb3…`), the AOT table carries over; VU0
 differs (0x920 vs 0xA80, 1,050 bytes) and runs on the counted interpreter fallback. IOP: 35 files pinned with policy
 (`inputs/spec2-iop.json`), 6 new, inherited from the beta lineage. Open: S7b for both (VU0 profile, offline hangs).
+Progress (2026-10-22, S2 done): `scripts/spec2_elf_patch.py` applies the 35 injector stores to `SCUS_974.36` from the
+ISO and writes `private/slice272-spec2-elf` (`10a794df…`, original `db08421b…`), with `--revert` reproducing the
+original exactly. Pins `docs/inputs/spec2-iso.json` and `docs/inputs/spec2-elf.json`; the trampoline at 0x1001E8 stays
+(documented: the init also calls the beta's boot initialiser and one more game function). Tests 21 in
+`tests/python/test_spec2.py`. Open: S4 (plain-ELF translation, own library and executable) and S7b.
 
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new
