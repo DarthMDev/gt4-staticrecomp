@@ -93,6 +93,25 @@ Python 675 OK (51 skipped) on the Spec II build, including the overlay harness c
 v2.00 identity against slice268 exact in all three scenes (dumps `463d455c.`/`992f1ac9.`/`c57e7d03.`, streams
 `1ccb97c5.`/`0c79dcf5.`/`c091716e.`). Next: S9 (launcher, installer, credits).
 
+**S8c fixes the owner's Options-menu halt and widens the Spec II entry seeds (2026-10-23).** The owner's first Spec
+II test halted twice opening Options (`missing code at 0x003CA690`, ra `0x0050D1B0`). The callback is built by the
+Options page itself: `lui s0,0x003D` at `0x003CC8EC` + `addiu s0,s0,-22896` 53 instructions later, stored in the
+descriptor; the translator's `luipair` window is 3 instructions and no dataword points at it, so it never became an
+entry. New `scripts/spec2_entry_seeds.py` seeds the missing classes (wide `luipair` window 64, stack-frame
+fallthrough, executable-segment literal code entries) as a 1,299-entry delta; the regenerated translation has
+1,332,727 instructions, 18,597 functions and 153,474 entries, and the new library
+`private/slice278-spec2-ee-producer/game-build/ps2game.lib` (80,229,124 bytes, `9a94c3ed.`) is pinned in
+`inputs/spec2-ee-libraries.json` / `inputs/spec2-ee-generated.json` (CMake accepts only slice278 for the spec2
+profile). After the reseed the sweep finds no real missing entries in the luipair/fallthrough/dataword/executable
+classes (only plugin strings/zeros remain). Headless: the old exe reproduces the halt after 11,159 frames; the new
+exe opens Options and every submenu (Race, Replay, Screen 16:9, Picture Quality, Sound, Arcade Mode, LAN Connection
+Settings, Photo Lab), Replay Theater, Save Game, Credits, GT Mode and the Arcade menu with no halt. The harness gained
+`--card` for an owner-card copy; a license demo was still not reached headless (the mod's "Spec II Settings" dialog
+blocks the GT map in the current schedule), so the `[license-guard]` confirmation stays with the owner. New executable:
+`O:\gt4recomp-scratch\spec2-s7d-build\build\gt4vulkan-spec2.exe`, 104,475,136 bytes, sha256 `301bbb4a.`. CTest 44/44
+and Python 678 OK (51 skipped) on the Spec II build; v2.00 identity against slice268 unchanged (menus/day/night dumps
+and stream hashes). Next: S9 (launcher, installer, credits).
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

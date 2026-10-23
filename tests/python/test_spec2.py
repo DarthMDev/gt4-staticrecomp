@@ -5,8 +5,10 @@ synthetic images built here, and the disc-derived constants are pinned so an acc
 """
 import hashlib
 import json
+import os
 import struct
 import sys
+import tempfile
 import unittest
 import zlib
 from pathlib import Path
@@ -327,7 +329,35 @@ class EeGenerateTests(unittest.TestCase):
         self.assertEqual(pin['units'], 346)
         self.assertEqual(pin['files'], pin['units'] + 2)  # table.cpp and the ledger/summary file
         self.assertRegex(pin['inventory_sha256'], r'^[0-9a-f]{64}$')
-        self.assertIn('1285650 instructions', pin['stats'])
+        self.assertIn('1332727 instructions', pin['stats'])
+        self.assertIn('functions 18597', pin['stats'])
+        self.assertEqual(pin['entry_seeds']['sha256'],
+                         '041c186448d75756a3fc4413c53e7c829b46bf13f83c699ca4a998734a35ec8a')
+
+
+class EntrySeedTests(unittest.TestCase):
+    """TASK-100 S8c: the widened seed scan for entries the translator's narrow luipair window misses."""
+
+    def test_seed_file_format_and_dedup(self):
+        import spec2_entry_seeds
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'seeds.txt'
+            addresses = spec2_entry_seeds.write_seed_file(path, [0x3CA690, 0x100010, 0x3CA690])
+            self.assertEqual(addresses, [0x100010, 0x3CA690])
+            self.assertEqual(path.read_text(encoding='utf-8').splitlines(), ['2', '0x00100010', '0x003CA690'])
+
+    def test_options_menu_target_is_found_by_the_wide_luipair_scan(self):
+        assets = Path(os.environ.get('GT4_ASSETS_ROOT', 'C:/Antigravity/gt4-staticrecomp'))
+        elf = assets / 'private/slice272-spec2-elf/SCUS_974.36'
+        if not elf.exists():
+            self.skipTest('derived Spec II ELF not present')
+        import spec2_entry_seeds
+        result = spec2_entry_seeds.collect(elf)
+        # `lui s0,0x003D` at 0x003CC8EC, then `addiu s0,s0,-22896` 53 instructions later: the Options halt.
+        self.assertEqual(result['sources']['luipair'].get(0x3CA690), 'lui at 0x003CC8EC')
+        self.assertIn(0x3CA690, result['candidates'])
+        # A zero/ASCII word in the plugin data is not an entry.
+        self.assertNotIn(0x68CFC0, result['candidates'])
 
 
 class IopRebootImageTests(unittest.TestCase):

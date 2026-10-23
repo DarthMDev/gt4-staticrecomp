@@ -5,6 +5,7 @@ synthetic capsules in a temporary folder, so they run everywhere.
 """
 import hashlib
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -87,6 +88,14 @@ class GameArgumentsTests(unittest.TestCase):
                                            100, [], donor_frames_dir='run/frames', frame_every=50)
         self.assertIn('--frames-dir', arguments)
         self.assertEqual(arguments[arguments.index('--frame-every') + 1], '50')
+
+
+class CardOverrideTests(unittest.TestCase):
+    def test_card_option_is_offered_for_owner_card_runs(self):
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts/frame_cost_headless.py'), '--help'],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('--card', result.stdout)
 
 
 class RuntimePinTests(unittest.TestCase):

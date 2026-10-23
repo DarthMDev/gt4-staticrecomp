@@ -2599,22 +2599,27 @@ The target is a separate build that never replaces v2.00:
 - `-DGT4_TARGET=spec2` (compile-time `GT4_TARGET_SPEC2`, empty hook table) and `-DGT4_EE_PROFILE=spec2` (the Spec II
   library, pinned by `docs/inputs/spec2-ee-libraries.json`). CMake refuses a mismatched pair.
 - The output is `gt4vulkan-spec2.exe`; `gt4vulkan.exe` and its pins are untouched.
-- The perf runtime capsule accepts the `spec2` profile (target-independent code); the license guard capsule stays out
-  until S8.
+- The perf runtime capsule accepts the `spec2` profile (target-independent code); the license guard capsule is the
+  slice277 one (S8b).
 
-Library: `private/slice274-spec2-ee-producer/game-build/ps2game.lib`, 77,369,746 bytes, sha256 `5e483768…`, built from
-the 346 units in `O:\gt4recomp-scratch\spec2-s4-generated` with clang-cl 23.1.2:
+Library (S8c reseed): `private/slice278-spec2-ee-producer/game-build/ps2game.lib`, 80,229,124 bytes, sha256 `9a94c3ed…`, built from
+the 346 units in `O:\gt4recomp-scratch\spec2-s8c-generated-clean` with clang-cl 23.1.2:
 
 ```
-cmake -S tools/ee_producer -B O:\gt4recomp-scratch\spec2-s4-lib-build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+cmake -S tools/ee_producer -B O:\gt4recomp-scratch\spec2-s8c-lib-build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
   -DCMAKE_CXX_COMPILER=<assets>/private/tooling/llvm-23.1.2/bin/clang-cl.exe ^
   -DGT4_DONOR=<assets>/private/references/ps2-web-recomp -DGT4_PYTHON=<assets>/private/tooling-venv/Scripts/python.exe ^
-  -DGT4_GENERATED=O:/gt4recomp-scratch/spec2-s4-generated -DGT4_BUILD_TRANSLATOR=OFF
-cmake --build O:\gt4recomp-scratch\spec2-s4-lib-build --target ps2game --parallel 4
+  -DGT4_GENERATED=O:/gt4recomp-scratch/spec2-s8c-generated-clean -DGT4_BUILD_TRANSLATOR=OFF
+cmake --build O:\gt4recomp-scratch\spec2-s8c-lib-build --target ps2game --parallel 4
 ```
 
 Executable recipe (worktree needs `-DGT4_PYTHON`): the slice262 capsule recipe with
 `-DGT4_EE_PROFILE=spec2 -DGT4_TARGET=spec2`, build dir `O:\gt4recomp-scratch\spec2-s4-build`.
+
+The units come from `scripts/spec2_ee_generate.py --entries private/slice278-spec2-ee-producer/entry-seeds.txt`; the
+seed file is produced by `scripts/spec2_entry_seeds.py --generated <previous units>` (wide `luipair` window 64,
+stack-frame fallthrough, executable-segment literal code entries). `native/CMakeLists.txt` accepts only the slice278
+library for the spec2 profile; `spec2-s4-generated` and slice274 stay as history.
 
 ### S7b findings (blocked before the menus)
 
@@ -2780,3 +2785,19 @@ key the guard and other labels do not, the shift/add maths, the rule), and the P
 (v2.00 and `GT4_TARGET_SPEC2` with a shifted pointer). Oracle on the 256 Spec II demos with our FPU: 0 CRC passes,
 114 sane layouts, 142 demos guarded. A headless license demo is not reachable (GT mode needs game data), so the owner
 run remains the gate.
+
+## Spec II S8c - the Options-menu halt and the entry seeds (TASK-100)
+
+Owner test 1 halted on opening Options at `0x003CA690` (ra `0x0050D1B0`). Root cause: the callback is built by
+`lui s0,0x003D` at `0x003CC8EC` + `addiu s0,s0,-22896` at `0x003CC9C0` (53 instructions apart), so the translator's
+3-instruction `luipair` window missed it. `scripts/spec2_entry_seeds.py` now emits the missing classes (wide `luipair`
+window 64, stack-frame fallthrough, executable-segment literal code entries); 1,299 seeds produced 1,332,727
+instructions / 18,597 functions / 153,474 entries, library `private/slice278-spec2-ee-producer/game-build/ps2game.lib`
+(80,229,124 bytes, `9a94c3ed.`). The seed file stays in the slice (`entry-seeds.txt`, `041c1864.`); pins are
+`docs/inputs/spec2-ee-libraries.json` and `docs/inputs/spec2-ee-generated.json`. CMake accepts only the slice278
+library for the spec2 profile.
+
+Headless: the old exe halts at `0x003CA690` after 11,159 frames on the same schedule; the new exe opens Options (and
+all its submenus, Replay Theater, Save Game, Credits, GT Mode and the Arcade menu) with no halt. The new executable is
+`O:\gt4recomp-scratch\spec2-s7d-build\build\gt4vulkan-spec2.exe`, 104,475,136 bytes, sha256 `301bbb4a.`. The harness
+has `--card` for an owner-card copy; a license demo was still not reached headless.

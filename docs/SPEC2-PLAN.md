@@ -446,7 +446,82 @@ bytes, sha256 `7efa63eceb26.` (`O:\gt4recomp-scratch\spec2-s7d-build`); v2.00 co
 bytes, sha256 `3b2f3ac19eb7.` (`O:\gt4recomp-scratch\spec2-s7e-v200-build`; the release-pin distribution test keeps
 its expected failure).
 
-### S5 — VU0 and VU1: mapping done (2026-10-22)
+### S8c - Spec II owner test 1: the Options-menu halt and the entry-seed sweep (2026-10-23)
+
+The owner's first Spec II test (`O:\gt4recomp-scratch\spec2-owner-play`, GSdx 1.2.1, the owner's card with game data)
+halted twice on opening the Options menu: `missing code at 0x003CA690 (ra 0x0050D1B0)` after 2,687 and 1,188 frames
+(runs `run-20261023-070428` and `-070522`). A third run closed normally after 4,322 frames. License tests opened and
+played normally; no `[license-guard]` line appeared, so no demo played yet.
+
+**Root cause (Confirmed).** The call at `0x0050D1A8` is `jalr $v1` with `v1 = lw 16(s1)`: a callback stored in the
+Options-menu descriptor object. The callback pointer is built by the Options page code itself:
+`lui s0,0x003D` at `0x003CC8EC` followed by `addiu s0,s0,-22896` at `0x003CC9C0` -> `0x003CA690`, 53 instructions
+apart, then stored into the descriptor. The pinned translator (`eerecomp.exe`) discovers entries from `fallthrough`,
+`dataword` and `luipair`; its `luipair` window is **3 instructions**, so this address never became an entry. It is not
+a dataword anywhere in the image (0 literal pointers to `0x003CA690`), and the direct call graph cannot see it because
+the caller goes through the object field. The same class covers every menu descriptor / vtable initialiser that sets
+many registers before its `addiu`; `dataword` was already complete (0 missing).
+
+**Fix (root, generic).** New `scripts/spec2_entry_seeds.py` runs the read-only ledger scans on the pinned derived ELF
+and writes the translator's `--entries` file, adding the classes the built-in discovery misses:
+
+- `luipair` with a **64-instruction window** and register-clobber detection (the Options callback is one of them);
+- `fallthrough` stack-frame openers after an unconditional jump (1,233 entries the translator had not reached);
+- literal text pointers inside **executable** segments (the plugin's own tables; only stack-frame or direct-jump
+  targets count, so plugin strings such as `unkB`/`over`/`argv` are not seeded).
+
+The seed file is the delta against the previous generated units: **1,299 seeds** (98 luipair + 1,233 fallthrough;
+0 plugin new), sha256 `041c1864...`, kept in `private/slice278-spec2-ee-producer/entry-seeds.txt`. Seeding only the
+delta is deterministic because the translator's own discovery is deterministic for the same ELF and translator.
+
+**Regeneration.** Fresh output `O:\gt4recomp-scratch\spec2-s8c-generated-clean` (346 units, inventory `2d8c92a4...`,
+93,030,717 bytes): **1,332,727 instructions** (was 1,285,650), **18,597 functions** (was 17,080), **153,474 entries**
+(was 148,756), 33 rejected seeds (data-shaped seeds that the generator now filters). New library
+`private/slice278-spec2-ee-producer/game-build/ps2game.lib`, 80,229,124 bytes, sha256 `9a94c3ed...`; pins updated in
+[inputs/spec2-ee-libraries.json](inputs/spec2-ee-libraries.json) and
+[inputs/spec2-ee-generated.json](inputs/spec2-ee-generated.json). `native/CMakeLists.txt` now accepts only the slice278
+library for the spec2 profile; the old slice274 library stays on disk as history.
+
+**Sweep (after reseed).** 154,193 translated entries; the wide-luipair candidates are 4,726 with **0 real missing**
+(the 29 remaining are plugin strings/zeros: ASCII data, not code), fallthrough 10,745 with 0 missing, dataword 12,319
+with 0 missing, executable literals complete. For comparison, v2.00's 326 units translate 139,534 entries over 3,894
+wide-luipair / 9,435 fallthrough / 10,672 dataword candidates (and its own narrow seed list leaves 7+0+3 data-shaped
+candidates). Spec II has more entries because of the plugin and the added menus.
+
+**Headless before/after (same schedule, seed card so it is data-independent).** Boot to the main menu, three Downs
+(Arcade -> GT Mode -> Replay Theater -> Options) and Cross:
+
+| Build | Result |
+|---|---|
+| old `gt4vulkan-spec2.exe` (owner copy, `7efa63ec...`) | halt `missing code at 0x003CA690 (ra 0x0050D1B0)` after 11,159 frames (reproduction) |
+| new `gt4vulkan-spec2.exe` (`301bbb4a...`) | 16,000 frames, no halt; Options screen: General (Race, Replay, Screen, Picture Quality, Sound), Arcade Mode (Arcade, 2-Player Battle, LAN Settings, Course Registration), Photo Mode (Photo Lab) |
+
+Menu sweep on the new build (headless, no halt in any run; every screen checked on a frame dump): Options -> Race
+Settings, Replay Settings, Screen Settings (16:9), Picture Quality Settings, Sound Settings, Arcade Mode Settings,
+**LAN Connection Settings** (the network menu), **Photo Lab Settings**; main menu -> **Replay Theater** ("No data
+found."), Save Game (create-data dialog), **Credits** (01/16), GT Mode (create-data dialog without data), and the
+Arcade Mode selection (Single Race / Time Trial / 2-Player Battle).
+
+**License demo (S8b follow-up):** not reached headless in this round. With a **copy** of the owner's card
+(`O:\gt4recomp-scratch\spec2-s8c-owner-card.ps2`, 8,650,752 bytes, sha256 `41bd9d57...`; the owner's card was never
+touched) GT Mode loads (10,000 credits, 4 APR) and opens the mod's "Spec II Settings" dialog over the GT map, but the
+current press schedule did not dismiss it and reach License Center/test/demo. The owner run remains the gate for the
+`[license-guard]` confirmation; the harness now has a `--card` option for a card copy.
+
+**Checks:** CTest 44/44 in the Spec II build (the Python suite is inside it), Python 678 OK (51 skipped); new tests
+`EntrySeedTests` (seed format, the Options target in the widened luipair source, plugin strings rejected) and
+`CardOverrideTests` (`--card`); v2.00 identity against slice268 unchanged (table below). New executable for the owner:
+`O:\gt4recomp-scratch\spec2-s7d-build\build\gt4vulkan-spec2.exe`, 104,475,136 bytes, sha256 `301bbb4a...`.
+
+| Scene | Dumps | Candidate | slice268 | Stream hash | Candidate | slice268 |
+|---|---|---|---|---|---|---|
+| menus | 41 | `463d455c3204cb56` | `463d455c3204cb56` | | `1ccb97c58a6d2945` | `1ccb97c58a6d2945` |
+| day | 159 | `992f1ac9a6871901` | `992f1ac9a6871901` | | `0c79dcf5208e5e4d` | `0c79dcf5208e5e4d` |
+| night | 159 | `c57e7d03aaccb3aa` | `c57e7d03aaccb3aa` | | `c091716e3cb40d79` | `c091716e3cb40d79` |
+
+All six comparisons are equal (v2.00 build unchanged since S8b).
+
+### S5 - VU0 and VU1: mapping done (2026-10-22)
 
 Tool: `scripts/spec2_vu.py`. Pin: [inputs/spec2-vu.json](inputs/spec2-vu.json). Tests: `VuTests` in
 `tests/python/test_spec2.py`.

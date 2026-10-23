@@ -144,13 +144,14 @@ elseif(GT4_EE_PROFILE STREQUAL "aspect")
     set(GAME_LIBRARY "${GT4_ASSETS_ROOT}/${library_path}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_ROOT}/docs/inputs/slice217-ee-libraries.json")
 elseif(GT4_EE_PROFILE STREQUAL "spec2")
-    # TASK-100 S4: the Spec II library, translated from the derived SCUS_974.36 (scripts/spec2_elf_patch.py and
-    # scripts/spec2_ee_generate.py). Plain translation: no aspect patch. Pinned by docs/inputs/spec2-ee-libraries.json.
+    # TASK-100 S4/S8c: the Spec II library, translated from the derived SCUS_974.36 (scripts/spec2_elf_patch.py,
+    # scripts/spec2_ee_generate.py and the S8c seed generator scripts/spec2_entry_seeds.py). Plain translation: no
+    # aspect patch. Pinned by docs/inputs/spec2-ee-libraries.json.
     file(READ "${GT4_ROOT}/docs/inputs/spec2-ee-libraries.json" spec2_manifest)
     string(JSON library_path GET "${spec2_manifest}" profiles spec2 path)
     string(JSON expected_game_library_hash GET "${spec2_manifest}" profiles spec2 sha256)
-    if(NOT library_path MATCHES "^private/slice274-spec2-ee-producer/game-build/ps2game\\.lib$")
-        message(FATAL_ERROR "Spec II library must be the slice274 producer library")
+    if(NOT library_path MATCHES "^private/slice278-spec2-ee-producer/game-build/ps2game\\.lib$")
+        message(FATAL_ERROR "Spec II library must be the slice278 producer library (S8c reseed)")
     endif()
     set(GAME_LIBRARY "${GT4_ASSETS_ROOT}/${library_path}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_ROOT}/docs/inputs/spec2-ee-libraries.json")

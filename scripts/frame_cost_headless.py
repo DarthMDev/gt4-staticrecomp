@@ -136,6 +136,7 @@ def main():
     parser.add_argument('--scene', required=True, choices=sorted(SCENES))
     parser.add_argument('--out', required=True, help='fresh run directory (created)')
     parser.add_argument('--assets-root', default=str(ROOT))
+    parser.add_argument('--card', help='memory-card image to copy into the run (default: the scene seed card)')
     parser.add_argument('--frames', type=int, help='override the scene frame count')
     parser.add_argument('--frame-every', type=int, default=100, help='frame dump interval (0 = no dumps)')
     parser.add_argument('--renderer', choices=('pcsx2', 'donor'), default='pcsx2')
@@ -165,7 +166,7 @@ def main():
     frames = options.frames or scene['frames']
     iso = Path(options.iso) if options.iso else assets / 'Gran Turismo 4 (USA) (v2.00).iso'
     elf = Path(options.elf) if options.elf else assets / 'private/reconstructed/SCUS_973.28.elf'
-    card = assets / scene['card']
+    card = Path(options.card) if options.card else assets / scene['card']
     for path in (iso, elf, card):
         if not path.exists():
             raise SystemExit(f'missing input: {path}')
