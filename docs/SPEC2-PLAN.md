@@ -155,6 +155,19 @@ Checks (candidate `gt4vulkan.exe` 97,240,064 bytes, sha256 `ca1eff8d90b6df03…`
   All six comparisons are equal, on the final code state (the run was repeated after the last two edits).
 - Open: the release pin set for the new executable (release decision); S8 fills the Spec II table.
 
+### S4 — second-target build: translation done, library/executable pending (2026-10-22)
+
+- `scripts/spec2_ee_generate.py` runs the pinned donor translator (`private/reference-acceleration-study/eerecomp.exe`,
+  `5aec705e…`) on the derived ELF with the plain-ELF input path: **346 units**, 348 files, 89,992,422 bytes,
+  inventory sha256 `13354c95…`; the translator reports 1,286,297 instructions, 17,061 functions, 148,522 entries and
+  2 rejected seeds. Generic sources only (no decomp names, no seeded entry list), and the plugin segment is translated
+  as code because it is an executable PT_LOAD. Pin [inputs/spec2-ee-generated.json](inputs/spec2-ee-generated.json).
+- The `--out` directory is game-derived and stays in scratch (`O:\gt4recomp-scratch\spec2-s4-generated`), never in git.
+- **Pending**: compile the units into a Spec II `ps2game` library, add a target profile to `native/CMakeLists.txt`
+  (`GT4_TARGET=spec2` must select a different library, its own manifest and its own `gt4vulkan.exe`), then the entry
+  ledger / "no translated code" hunt on a real boot (S7b). The v2.00 CMake profile is pinned by library hash, so a
+  second profile has to be added rather than reused.
+
 ### S5 — VU0 and VU1: mapping done (2026-10-22)
 
 Tool: `scripts/spec2_vu.py`. Pin: [inputs/spec2-vu.json](inputs/spec2-vu.json). Tests: `VuTests` in

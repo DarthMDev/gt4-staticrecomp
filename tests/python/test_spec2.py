@@ -310,5 +310,18 @@ class DerivedElfTests(unittest.TestCase):
                             hex(address))
 
 
+class EeGenerateTests(unittest.TestCase):
+    def test_pin_is_consistent(self):
+        pin = json.loads((ROOT / 'docs/inputs/spec2-ee-generated.json').read_text(encoding='utf-8'))
+        elf = json.loads((ROOT / 'docs/inputs/spec2-elf.json').read_text(encoding='utf-8'))
+        self.assertEqual(pin['input_elf']['sha256'], elf['derived']['sha256'])
+        self.assertEqual(pin['translator']['sha256'],
+                         '5aec705e31da349c941414fd54be264000459c3cb0d22727e7d810b5b24b03c0')
+        self.assertEqual(pin['units'], 346)
+        self.assertEqual(pin['files'], pin['units'] + 2)  # table.cpp and the ledger/summary file
+        self.assertRegex(pin['inventory_sha256'], r'^[0-9a-f]{64}$')
+        self.assertIn('1286297 instructions', pin['command'])
+
+
 if __name__ == '__main__':
     unittest.main()

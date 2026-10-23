@@ -647,6 +647,10 @@ ISO and writes `private/slice272-spec2-elf` (`10a794df…`, original `db08421b�
 original exactly. Pins `docs/inputs/spec2-iso.json` and `docs/inputs/spec2-elf.json`; the trampoline at 0x1001E8 stays
 (documented: the init also calls the beta's boot initialiser and one more game function). Tests 21 in
 `tests/python/test_spec2.py`. Open: S4 (plain-ELF translation, own library and executable) and S7b.
+Progress (2026-10-22, S4 translation): `scripts/spec2_ee_generate.py` runs the pinned translator on the derived ELF:
+346 units, 348 files, 89,992,422 bytes, inventory `13354c95…`; 1,286,297 instructions, 17,061 functions, 148,522
+entries, 2 rejected seeds. Pin `docs/inputs/spec2-ee-generated.json`; output stays in scratch. Open: the Spec II
+library and executable (own CMake profile) and S7b.
 
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new

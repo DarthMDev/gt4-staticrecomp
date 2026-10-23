@@ -27,6 +27,11 @@ S2 is done too: `scripts/spec2_elf_patch.py` applies the 35 injector stores to `
 only the stores are reproduced ahead of time. Pins `inputs/spec2-iso.json` and `inputs/spec2-elf.json`. S4 (its own
 translated library and executable) and S7b (first boot) are next.
 
+The Spec II translation now runs: `scripts/spec2_ee_generate.py` feeds the derived ELF to the pinned donor translator
+(plain-ELF path, no CORE) and produces 346 units (1,286,297 instructions, 17,061 functions, 148,522 entries, 2 rejected
+seeds), pinned in `inputs/spec2-ee-generated.json`; the generated C++ stays in scratch. Still open: the Spec II library
+and its own executable (a second CMake profile), then the first boot.
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

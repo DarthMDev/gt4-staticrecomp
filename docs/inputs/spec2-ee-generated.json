@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "schema": "spec2-ee-generated/1",
+  "input_elf": {
+    "path": "SCUS_974.36",
+    "size_bytes": 6520944,
+    "sha256": "10a794df128753045b4a9411a30adfa508a59b726507dcb40e3e9f8af648c747"
+  },
+  "translator": {
+    "path": "private\\reference-acceleration-study\\eerecomp.exe",
+    "size_bytes": 692224,
+    "sha256": "5aec705e31da349c941414fd54be264000459c3cb0d22727e7d810b5b24b03c0"
+  },
+  "command": "code 1286297 instructions (5024 KiB), functions 17061, entries 148522, rejected seeds 2\n346 units written to O:\\gt4recomp-scratch\\spec2-s4-generated",
+  "files": 348,
+  "units": 346,
+  "inventory_sha256": "13354c95913158f7e5ff2d6ca19ca7a56698c35f6fded3962138f03aa994a31b",
+  "total_bytes": 89992422,
+  "notes": "Generic sources only (the v2.00 decomp names and seeded entry list do not apply); the plugin segment is translated as code because it is an executable PT_LOAD."
+}
