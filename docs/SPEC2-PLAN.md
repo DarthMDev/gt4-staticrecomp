@@ -350,8 +350,7 @@ Not mapped yet, and disabled in the table (each logs one line and does nothing):
 
 - the **display request struct** (v2.00 `0x6184D0`): the scene policy knows render activity but not photo mode, so a
   photo-mode frame could be filled for one request;
-- the **license demo guard**: Spec II has the demo feature (`license/%s`, `replay`, `DemoDirectory` strings), but the
-  loaders were not mapped; a wrong guard address would corrupt guest state, so it stays off until they are;
+- the **license demo guard**: mapped in S8b below (the table fields are filled and the guard is on);
 - the **shape observer** (diagnostic only).
 
 Checks:
@@ -374,6 +373,78 @@ Checks:
   - Frames reviewed at 21:9 vs 16:9: the HUD is centred in its 16:9 box and the scene FOV widens.
 - v2.00 unchanged: `native_game_target` still asserts the release table, the v2.00 hook fixtures still run against it,
   and the menus/day/night identity against slice268 is re-run after the change.
+
+### S8b - License demo guard for Spec II: DONE, owner license run open (2026-10-23)
+
+Why: every `license_*` field in `kSpec2Hooks` was 0, so the TASK-017 guard (which stops the crash when our FPU
+decrypts a license demo in the wrong key-stream phase) was off for Spec II. The demo feature is present in the image
+(`license/%s`, `replay`, `DemoDirectory`), so it very likely crashes the same way.
+
+Method: the v2.00 code shapes in the derived Spec II ELF, then the demo files themselves (retail, beta and Spec II
+discs) as ground truth. No runtime license demo has been observed yet (see below), so the pointer shift is the one
+inferred value.
+
+| Spec II | v2.00 | Evidence (label) |
+|---|---|---|
+| `RaceSolitaire::loadDemoInputs` `0x002012C8` (vtbl `+0x510`) | `0x003EAD18` (vtbl `+0x4D8`) | Confirmed: RaceSolitaire vtable base `0x6B3130`; the same virtual that v2.00 base `0x680140` points at `+0x4D8`; the function calls `AutomobileControlRecord::Manager::load` |
+| loader A `0x0010CA18`, return `0x0010CB54` | `0x001100D0` / `0x001101E4` | Confirmed: entry prologue, calls the `license/%s` helper `0x001A8BE8`, one `jalr` through vtable `+0x510`, return label is its delay-slot return |
+| loader B `0x0010CBA8`, return `0x0010CCE4` | `0x00110230` / `0x00110344` | Confirmed: same helper, one `jalr` through vtable `+0x1C8` (index 57, unchanged) |
+| `Manager::load` `0x00207AA0` | `0x00346BB8` | Confirmed: `lw s3,0(s1)` count, `bne`, `addiu s1,s1,4`, `sw zero,4(s0)`, `addiu a0,s0,8` and the same tail shape |
+| Manager stream add `0x1A24` | `0x1AA4` | Confirmed in `0x002012C8` / `0x002012F0` (`addiu a1,a1,0x1A24`; `this+0xF318`, v2.00 `this+0xE560`) |
+| demo body pointer shift `0x80` | `0` | **High confidence**: `0x1A24 + 0x80 = 0x1AA4`, and the decrypted bodies on all three discs carry the Manager stream at body `+0x1AA4`; the pointer itself was not observed at runtime |
+| game CRC-32 table `0x00731DB0` | `0x00655358` | Confirmed: all 256 words equal the standard reflected table |
+
+Cipher and format check (step 2 of S8b):
+
+- The cipher is the same: `0x00459E90` (v2.00 `0x00579E00`) reached through `0x002E3CE8` (v2.00 `0x0044D278`);
+  the FT table at `0x00667048` matches `FT[i] = 0x3F800000 + (2i+1)*0x4010 + (i>>5)` for all 256 entries and the T8
+  bytes at `0x00731C98` are the bit reversal, exactly the v2.00 rule.
+- The demos are the retail files: the Spec II volume catalogues 26,891 files and 256 `replay/license/*` demos (RoFS
+  3.1 TOC at `0x115B800`; leaf pages carry an odd entry count, so the pinned reader's parity check was relaxed in
+  scratch only). 171 names are shared with v2.00 and **170 bodies are byte-identical**; the beta disc has the same
+  256 plus 381 in `replay/license.old`, also retail format.
+- A CRC-confirmed beam search on Spec II demos (`cnl0a0001`, `cnl0b0001`) returns the hardware plaintext
+  (`u32 body size`, `"GT4M"`, `"RaceLicense"`) with the single-Recorder Manager stream at body `+0x1AA4` and the
+  Recorder size ending exactly at the body end, so the **layout and the CRC rule are unchanged**. The code's `0x1A24`
+  add is therefore applied to a pointer the loader hands the virtual `0x80` into the body (`body + 0x80 + 0x1A24 =
+  body + 0x1AA4`).
+
+Guard change: `HookAddresses` gained `license_manager_add` and `license_body_shift`. `license_guard.hpp` keeps the
+layout constant `kManagerOffset = 0x1AA4` and adds `manager_address(a1) = a1 + license_manager_add`; the overlay
+evaluates the CRC and the layout at the header's own body start (`buffer + offset`) and writes `n = 0xFFFFFFFF` at the
+Manager address the virtual itself will read. A static assert keeps `license_manager_add + license_body_shift ==
+kManagerOffset` on every qualified target. The overlay text changed, so it was re-derived into a **fresh capsule**
+`private/slice277-license-guard-runtime` (the slice262 profile: aspect + frame counters), pinned in
+[inputs/slice277-license-guard-runtime.json](inputs/slice277-license-guard-runtime.json); `native/CMakeLists.txt`
+accepts a slice27x guard capsule and the Spec II build now uses it (v2.00 keeps its pinned slice262 capsule).
+
+How many demos the guard protects (the S8b number): with our FPU (`chop/chop`), **0 of the 256 Spec II demos pass the
+game CRC; 114 still decrypt to the single-Recorder layout, so the guard writes for 142 demos.** The other division
+models move the layout count between 104 and 126 (guard 130-152):
+`chop/nearest` 123 sane/133 guarded, `chop/srt2-cs-t1` 104/152, `chop/srt2-cs-t3` 115/141, `chop/srt2-la-t3` 126/130.
+
+Headless license test: **not reachable** - the license menu is GT mode and the seed cards carry no game data; the
+S7b/S7c harness reaches Arcade menus and a race only. The guard's evidence is therefore the code mapping, the demo
+files and the synthetic tests below; the owner run on a card with game data remains the gate. Its log lines print
+`demo 0x<a1>`, `body 0x<header body start>` and `manager 0x<write>` and would confirm the 0x80 pointer shift directly.
+
+Checks: CTest 44/44 in the Spec II build (`native_license_guard` v2.00 rule, `native_game_target`, the extended
+`native_spec2_hooks`: Spec II values, both loader return labels key the guard and other labels do not, the shift/add
+maths and the guard rule); Python 675 OK (51 skipped) with the Spec II build, including the overlay harness compiled
+twice (v2.00 and `GT4_TARGET_SPEC2` with a shifted pointer). v2.00 identity against slice268 after the header change
+(1x gt4-gs, `GT4_GS_STREAM_HASH=1`, same seed cards and schedules; candidate build
+`O:\gt4recomp-scratch\spec2-s7e-v200-build`, runs `O:\gt4recomp-scratch\spec2-s8b-identity`):
+
+| Scene | Dumps | Candidate | slice268 | Stream hash | Candidate | slice268 |
+|---|---|---|---|---|---|---|
+| menus | 41 | `463d455c3204cb56` | `463d455c3204cb56` | | `1ccb97c58a6d2945` | `1ccb97c58a6d2945` |
+| day | 159 | `992f1ac9a6871901` | `992f1ac9a6871901` | | `0c79dcf5208e5e4d` | `0c79dcf5208e5e4d` |
+| night | 159 | `c57e7d03aaccb3aa` | `c57e7d03aaccb3aa` | | `c091716e3cb40d79` | `c091716e3cb40d79` |
+
+All six comparisons are equal. Candidates this round (not release-pinned): Spec II `gt4vulkan-spec2.exe` 102,229,504
+bytes, sha256 `7efa63eceb26.` (`O:\gt4recomp-scratch\spec2-s7d-build`); v2.00 control `gt4vulkan.exe` 97,240,064
+bytes, sha256 `3b2f3ac19eb7.` (`O:\gt4recomp-scratch\spec2-s7e-v200-build`; the release-pin distribution test keeps
+its expected failure).
 
 ### S5 — VU0 and VU1: mapping done (2026-10-22)
 

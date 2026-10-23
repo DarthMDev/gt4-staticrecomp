@@ -75,6 +75,24 @@ loaders are not mapped) and the shape observer. CTest 44/44 in the Spec II build
 II build (51 skipped) and only the expected release-pin failure on v2.00; v2.00 identity against slice268 exact.
 Next: S9 (launcher, installer, credits).
 
+**S8b is done: the license demo guard is on for Spec II (2026-10-23).** `kSpec2Hooks` now has loadDemoInputs
+`0x2012C8` (RaceSolitaire vtable `0x6B3130 + 0x510`, the same virtual v2.00 has at `+0x4D8`), loaders
+`0x10CA18`/`0x10CBA8` with return labels `0x10CB54`/`0x10CCE4` (each calls the `license/%s` helper `0x1A8BE8` and
+makes one vtable call), `Manager::load` `0x207AA0`, the game CRC-32 table `0x731DB0`, the Manager add `0x1A24` and a
+loader body pointer shift `0x80`. The cipher is unchanged (`0x459E90`, FT at `0x667048`, T8 at `0x731C98`); the Spec
+II volume's 256 `replay/license` demos are the retail files (171 shared with v2.00, 170 bodies byte-identical) and
+CRC-confirmed plaintexts keep the single-Recorder stream at body `+0x1AA4`, so the layout and CRC rule are unchanged
+and the code's `0x1A24` add applies to a pointer 0x80 into the body (High confidence; not observed at runtime).
+The guard now evaluates the header's body and writes `n = 0xFFFFFFFF` at `a1 + manager_add`, exactly where the
+virtual reads (a static assert keeps add + shift = 0x1AA4); the overlay was re-derived into the fresh capsule
+`private/slice277-license-guard-runtime` (slice262 profile), pinned in `inputs/slice277-license-guard-runtime.json`,
+and CMake accepts slice27x guard capsules (v2.00 keeps slice262). Oracle on the Spec II set with our FPU: 0/256 CRC
+passes, 114 sane layouts, **142 demos guarded**. Headless license test not reachable (GT mode needs game data; the
+seed cards have none), so the owner run remains the gate; its log prints `demo`, `body` and `manager`. CTest 44/44 and
+Python 675 OK (51 skipped) on the Spec II build, including the overlay harness compiled for `GT4_TARGET_SPEC2`;
+v2.00 identity against slice268 exact in all three scenes (dumps `463d455c.`/`992f1ac9.`/`c57e7d03.`, streams
+`1ccb97c5.`/`0c79dcf5.`/`c091716e.`). Next: S9 (launcher, installer, credits).
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

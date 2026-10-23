@@ -36,10 +36,15 @@ bool spec2_target_has_the_s8_hooks() {
   // Our own HUD scratch block is target-independent and must match the v2.00 entry.
   if (h.hud_parameter_block != v.hud_parameter_block || h.hud_parameter_words != v.hud_parameter_words)
     return false;
-  // Not mapped yet: the request struct, the license guard and the shape observer stay disabled.
-  return h.display_request_state == 0 && h.license_load_demo_inputs == 0 && h.license_loader_entry == 0 &&
-         h.license_loader_return == 0 && h.license_replay_loader_entry == 0 && h.license_replay_loader_return == 0 &&
-         h.license_crc_table == 0 && h.shape_call_pc == 0 && h.shape_target_pc == 0 && h.shape_return_pc == 0;
+  // TASK-100 S8b: the license demo guard is mapped (the demo-input virtual adds 0x1A24 to a pointer the loader
+  // hands it 0x80 into the body, reaching the same Manager stream at body + 0x1AA4).
+  if (h.license_load_demo_inputs != 0x2012C8u || h.license_loader_entry != 0x10CA18u ||
+      h.license_loader_return != 0x10CB54u || h.license_replay_loader_entry != 0x10CBA8u ||
+      h.license_replay_loader_return != 0x10CCE4u || h.license_crc_table != 0x731DB0u ||
+      h.license_manager_add != 0x1A24u || h.license_body_shift != 0x80u)
+    return false;
+  // Not mapped yet: the request struct and the shape observer stay disabled.
+  return h.display_request_state == 0 && h.shape_call_pc == 0 && h.shape_target_pc == 0 && h.shape_return_pc == 0;
 }
 
 bool spec2_match_addresses_never_match() {
@@ -47,6 +52,6 @@ bool spec2_match_addresses_never_match() {
   return gt4::target::match_or_never(h.camera_call_return) == h.camera_call_return &&
          gt4::target::match_or_never(h.race_display_render) == h.race_display_render &&
          gt4::target::match_or_never(h.display_request_state) == gt4::target::kNeverMatch &&
-         gt4::target::match_or_never(h.license_loader_return) == gt4::target::kNeverMatch &&
+         gt4::target::match_or_never(h.license_loader_return) == h.license_loader_return &&
          gt4::target::match_or_never(0x388B38u) == 0x388B38u;
 }

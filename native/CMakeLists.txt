@@ -33,10 +33,12 @@ set(GT4_SHADER_DIR "${SHADERS}" CACHE PATH "Isolated qualified shader directory"
 # Qualified private capsules are named relative to the assets checkout. In the main checkout this is GT4_ROOT;
 # a worktree passes -DGT4_ASSETS_ROOT=<main checkout> and never links the main private/ directory.
 get_filename_component(GT4_PRIVATE_BASE "${GT4_ASSETS_ROOT}" ABSOLUTE)
-# TASK-084 (slice260..269): frame-cost capsules. They keep the slice191 profile (GS stream + MTVU + VU1/VU0 AOT) and
-# add the TASK-084 instrumentation and optimisation switches. Each capsule pins its own manifest
-# docs/inputs/<capsule name>.json; the license guard capsule of the same profile pins docs/inputs/<its name>.json.
-set(GT4_TASK084_GUARD_RE "^private/slice26[0-9]-[a-z0-9-]*license-guard-runtime$")
+# TASK-084 (slice260..269) and TASK-100 S8b (slice277): license guard capsules. They keep the slice191 profile
+# (GS stream + MTVU + VU1/VU0 AOT) and add the TASK-084 instrumentation and optimisation switches. Each capsule pins
+# its own manifest docs/inputs/<capsule name>.json; the license guard capsule of the same profile pins
+# docs/inputs/<its name>.json. Only the Spec II build selects a slice27x guard capsule (slice277, TASK-100 S8b: the
+# per-target Manager add/body shift for the Spec II demo loaders); v2.00 keeps its slice262 capsule.
+set(GT4_TASK084_GUARD_RE "^private/slice2[67][0-9]-[a-z0-9-]*license-guard-runtime$")
 # TASK-100 S7b (slice276): the TASK-084 frame-cost profile plus the Spec II IOP reboot rule (sif.cpp), so the frame-cost
 # capsule family spans slice260..slice279. Only the Spec II executable selects a slice27x capsule; v2.00 keeps its
 # slice262 capsule. It shares the TASK-084 file list and pin rules.
@@ -229,12 +231,12 @@ if(GT4_LICENSE_GUARD_SOURCE)
         # TASK-080 P2: as slice212c, and the RaceDisplay::render marker also runs the HUD canvas hook (a0 = this).
         set(guard_pin_path "${GT4_ROOT}/docs/inputs/slice217-license-guard-runtime.json")
     elseif(guard_relative MATCHES "${GT4_TASK084_GUARD_RE}")
-        # TASK-084 (slice260..269): the slice217 guard plus the kernel frame counters (--frame-counters); its pin file
-        # carries the same name as the capsule.
+        # TASK-084 (slice260..269) and TASK-100 S8b (slice277): the slice217 guard plus the kernel frame counters
+        # (--frame-counters); its pin file carries the same name as the capsule.
         get_filename_component(guard_name "${guard_capsule}" NAME)
         set(guard_pin_path "${GT4_ROOT}/docs/inputs/${guard_name}.json")
     else()
-        message(FATAL_ERROR "Unknown license guard capsule; expected private/slice205-, slice206-, slice212c-, slice217- or a slice26x TASK-084 license guard runtime")
+        message(FATAL_ERROR "Unknown license guard capsule; expected private/slice205-, slice206-, slice212c-, slice217- or a slice26x/slice27x license guard runtime")
     endif()
     file(GLOB guard_files RELATIVE "${guard_capsule}" "${guard_capsule}/*")
     list(SORT guard_files)
@@ -323,7 +325,7 @@ add_executable(spec2_iop_fixture spec2_iop_fixture.cpp)
 target_compile_options(spec2_iop_fixture PRIVATE /W4)
 add_test(NAME native_spec2_iop COMMAND $<TARGET_FILE:spec2_iop_fixture>)
 # TASK-100 S8: the Spec II hook table and its guest-RAM write rules, always compiled against the Spec II table.
-add_executable(spec2_hooks_fixture spec2_hooks_fixture.cpp race_widescreen.cpp race_display.cpp)
+add_executable(spec2_hooks_fixture spec2_hooks_fixture.cpp race_widescreen.cpp race_display.cpp license_guard.cpp)
 target_compile_definitions(spec2_hooks_fixture PRIVATE GT4_TARGET_SPEC2)
 target_compile_options(spec2_hooks_fixture PRIVATE /W4)
 add_test(NAME native_spec2_hooks COMMAND $<TARGET_FILE:spec2_hooks_fixture>)

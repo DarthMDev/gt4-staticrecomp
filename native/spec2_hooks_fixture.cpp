@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "game_target.hpp"
+#include "license_guard.hpp"
 #include "race_display.hpp"
 #include "race_widescreen.hpp"
 
@@ -82,10 +83,57 @@ void check_table() {
   expect(kSpec2Hooks.widescreen_preset_wide - kSpec2Hooks.widescreen_preset_4_3 == 0x30u, "preset stride");
   expect(kSpec2Hooks.widescreen_owner_pointer - kSpec2Hooks.widescreen_preset_wide_ntsc == 0x2Cu,
          "owner word after the last preset");
-  // Not mapped yet: the request struct, the license guard and the shape observer disable themselves safely.
+  // Not mapped yet: the request struct and the shape observer disable themselves safely.
   expect(match_or_never(kSpec2Hooks.display_request_state) == kNeverMatch, "request state disabled");
-  expect(match_or_never(kSpec2Hooks.license_loader_return) == kNeverMatch, "license guard disabled");
+  expect(match_or_never(kSpec2Hooks.license_loader_return) == kSpec2Hooks.license_loader_return,
+         "license guard enabled");
   expect(match_or_never(kSpec2Hooks.shape_call_pc) == kNeverMatch, "shape observer disabled");
+}
+
+// TASK-100 S8b: the Spec II license demo guard values (derived ELF; see docs/SPEC2-PLAN.md).
+void check_license_guard_table() {
+  expect(kSpec2Hooks.license_load_demo_inputs == 0x2012C8u, "loadDemoInputs");
+  expect(kSpec2Hooks.license_loader_entry == 0x10CA18u, "license loader entry");
+  expect(kSpec2Hooks.license_loader_return == 0x10CB54u, "license loader return label");
+  expect(kSpec2Hooks.license_replay_loader_entry == 0x10CBA8u, "replay loader entry");
+  expect(kSpec2Hooks.license_replay_loader_return == 0x10CCE4u, "replay loader return label");
+  expect(kSpec2Hooks.license_crc_table == 0x731DB0u, "CRC table");
+  expect(kSpec2Hooks.license_manager_add == 0x1A24u, "Manager add");
+  expect(kSpec2Hooks.license_body_shift == 0x80u, "body shift");
+  // Only the two Spec II return labels key the guard; other return addresses (including the v2.00 labels) do not.
+  expect(gt4::license_guard::loader_for_return(0x10CB54u) == 0x10CA18u, "first loader keys the guard");
+  expect(gt4::license_guard::loader_for_return(0x10CCE4u) == 0x10CBA8u, "second loader keys the guard");
+  expect(gt4::license_guard::loader_for_return(0x10CB58u) == 0u, "another label does not key the guard");
+  expect(gt4::license_guard::loader_for_return(0x1101E4u) == 0u, "the v2.00 label does not key the guard");
+  expect(gt4::license_guard::loader_for_return(0x10CCE8u) == 0u, "a later label does not key the guard");
+  // The virtual's add plus the loader's shift land on the Manager stream the layout rule reads.
+  expect(gt4::license_guard::kManagerAdd + gt4::license_guard::kBodyShift == gt4::license_guard::kManagerOffset,
+         "add plus shift reaches the Manager stream");
+  const std::uint32_t body = 0x01D0E540u;
+  expect(gt4::license_guard::body_pointer_matches(body, body), "unshifted body pointer accepted");
+  expect(gt4::license_guard::body_pointer_matches(body, body + 0x80u), "shifted body pointer accepted");
+  expect(!gt4::license_guard::body_pointer_matches(body, body + 0x40u), "other body pointer rejected");
+  expect(gt4::license_guard::manager_address(body) == body + 0x1A24u, "manager address is the virtual's read");
+  expect(gt4::license_guard::manager_address(body + 0x80u) == body + 0x1AA4u, "shifted pointer manager is the stream");
+}
+
+// The guard rule itself on synthetic bodies (the same checks native_license_guard runs on v2.00).
+void check_license_guard_rule() {
+  std::vector<std::uint8_t> body(0x1BB8u, 0u);
+  for (std::size_t index = 0; index < 0x100u; ++index) body[index] = static_cast<std::uint8_t>(index * 7u + 3u);
+  put32(body, 0x1AACu, 0x10Eu);  // Recorder size; the end must be 0x1BB8
+  put32(body, 0x1AA8u, 0x5BFu);  // frames
+  put32(body, 0x1AA4u, 0u);      // count n
+  const std::uint32_t key = (gt4::license_guard::crc32(body.data(), body.size()) & 0x00FFFFFFu) |
+                            (static_cast<std::uint32_t>(body[0]) << 24);
+  const gt4::license_guard::Verdict sane = gt4::license_guard::evaluate(body.data(), body.size(), key ^ 0x10000u);
+  expect(!sane.crc_ok && sane.layout_ok && !sane.guard, "a sane layout with a failing CRC is left alone");
+  const gt4::license_guard::Verdict crc = gt4::license_guard::evaluate(body.data(), body.size(), key);
+  expect(crc.crc_ok && !crc.guard, "a passing CRC is never guarded, whatever the layout");
+  put32(body, 0x1AA4u, 0x7F7F7F7Fu);
+  const gt4::license_guard::Verdict broken = gt4::license_guard::evaluate(body.data(), body.size(), key ^ 0x10000u);
+  expect(!broken.crc_ok && !broken.layout_ok && broken.count == 0x7F7F7F7Fu && broken.guard,
+         "an insane count with a failing CRC is guarded");
 }
 
 void check_widescreen_hold() {
@@ -137,6 +185,8 @@ void check_480p_hold() {
 
 int main() {
   check_table();
+  check_license_guard_table();
+  check_license_guard_rule();
   check_widescreen_hold();
   check_480p_hold();
   if (g_failures) {

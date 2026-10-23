@@ -2731,14 +2731,14 @@ camera aspect and the HUD canvas. The full address table and how each value was 
 - code: `RaceBase::initMonitor` `0x26BDB0` with camera return `0x26BE60`, `RaceDisplay::render` `0x1C5040` with the HUD
   matrix at `this + 0x70`;
 - not mapped yet (rows stay 0 and the hook logs once): the display request struct (scene policy knows render activity,
-  not photo mode), the license demo guard (the feature exists; the loaders were not mapped), the shape observer.
+  not photo mode), the shape observer. The license demo guard is mapped in S8b below.
 
-The aspect overlay lives in the license guard capsule, so the Spec II build needs it (it is target-independent and the
-license guard itself stays disabled by the zero rows):
+The aspect overlay lives in the license guard capsule, so the Spec II build needs it. From S8b that capsule is
+`slice277-license-guard-runtime` (the same profile as slice262 plus the per-target license guard):
 
 ```
 cmake -S <worktree> -B O:\gt4recomp-scratch\spec2-s7d-build\build ... ^
-  -DGT4_LICENSE_GUARD_SOURCE=<assets>/private/slice262-license-guard-runtime
+  -DGT4_LICENSE_GUARD_SOURCE=<assets>/private/slice277-license-guard-runtime
 ```
 
 Checks:
@@ -2750,3 +2750,33 @@ Checks:
   scaled (`x 0.761905`), `first RaceDisplay::render`, the HUD canvas (`left -240 right 880`) and the fill policy. The
   16:9 hold logs the settled owner `0x009BD690`; it writes nothing because the game itself boots 16:9. The 480p hold
   lives in `window.cpp`'s VBlank and is therefore not exercised by headless runs (fixture only).
+
+## Spec II S8b - license demo guard (TASK-100)
+
+The TASK-017 guard is on for Spec II. Table values (all in `native/game_target.hpp`; evidence in the S8b Progress
+entry of [SPEC2-PLAN](SPEC2-PLAN.md)):
+
+- `RaceSolitaire::loadDemoInputs` `0x2012C8` (vtbl `0x6B3130 + 0x510`), loaders `0x10CA18`/`0x10CBA8` with return
+  labels `0x10CB54`/`0x10CCE4` (vtbl `+0x510` and `+0x1C8`), `Manager::load` `0x207AA0`, game CRC-32 table `0x731DB0`;
+- `license_manager_add` `0x1A24` (the add inside `loadDemoInputs`) and `license_body_shift` `0x80` (the loader hands
+  the virtual a pointer 0x80 into the body; the decrypted demos keep the Manager stream at body `+0x1AA4` on all
+  discs). The overlay evaluates the CRC/layout at the header's body start and writes `n = 0xFFFFFFFF` at
+  `a1 + manager_add`, exactly where the virtual reads; a static assert keeps `add + shift == 0x1AA4`.
+
+The overlay text changed, so the guard capsule was re-derived (the slice262 profile, `--display-aspect
+--frame-counters`) and pinned:
+
+```
+private/tooling-venv/Scripts/python.exe scripts/prepare_license_guard.py ^
+  <assets>/private/slice277-license-guard-runtime --assets-root <assets> --display-aspect --frame-counters
+private/tooling-venv/Scripts/python.exe scripts/pin_frame_cost_guard.py slice277-license-guard-runtime --assets-root <assets>
+```
+
+`native/CMakeLists.txt` accepts a slice26x or slice27x guard capsule (`docs/inputs/<capsule>.json`); the Spec II
+build uses slice277, v2.00 keeps slice262.
+
+Checks: `native_license_guard` (v2.00 rule), the extended `native_spec2_hooks` (Spec II values, both loader labels
+key the guard and other labels do not, the shift/add maths, the rule), and the Python overlay harness compiled twice
+(v2.00 and `GT4_TARGET_SPEC2` with a shifted pointer). Oracle on the 256 Spec II demos with our FPU: 0 CRC passes,
+114 sane layouts, 142 demos guarded. A headless license demo is not reachable (GT mode needs game data), so the owner
+run remains the gate.

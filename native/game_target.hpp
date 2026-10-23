@@ -75,6 +75,8 @@ struct HookAddresses {
   std::uint32_t license_replay_loader_entry = 0;   // the loader function that makes the vtbl[57] call
   std::uint32_t license_replay_loader_return = 0;  // return label after the vtbl[57] call
   std::uint32_t license_crc_table = 0;             // the game's CRC-32 table
+  std::uint32_t license_manager_add = 0;           // demo-input virtual: pointer + this = Manager::load stream
+  std::uint32_t license_body_shift = 0;            // demo loader: pointer - header body start (Spec II 0x80)
 
   // TASK-133 shape observation (diagnostic capture; the observer only reads guest state).
   std::uint32_t shape_call_pc = 0;
@@ -125,6 +127,8 @@ inline constexpr HookAddresses kV200Hooks = {
     /* license_replay_loader_entry */ 0x110230u,
     /* license_replay_loader_return */ 0x110344u,
     /* license_crc_table */ 0x655358u,
+    /* license_manager_add */ 0x1AA4u,
+    /* license_body_shift */ 0u,
     /* shape_call_pc */ 0x455A5Cu,
     /* shape_target_pc */ 0x49D308u,
     /* shape_return_pc */ 0x455A64u,
@@ -149,8 +153,19 @@ inline constexpr HookAddresses kV200Hooks = {
 // Code hooks: RaceBase::initMonitor 0x26BDB0 with the camera virtual call's return label 0x26BE60 (a1 = sp = matrix);
 // RaceDisplay::render 0x1C5040 with the HUD matrix at this+0x70 (the same `addiu a0,sN,0x70` + matrix-load call shape
 // as v2.00). The display request struct was not located yet, so the scene policy knows render activity but not photo
-// mode; the license demo loaders exist (the "license/%s", "replay" and "DemoDirectory" strings are present) but the
-// guard stays disabled until the Spec II loaders are mapped: a wrong guard address would corrupt guest state.
+// mode.
+//
+// License demo guard (TASK-100 S8b, Confirmed in the derived ELF unless labelled otherwise):
+//   * the two "license/%s" demo loaders start at 0x10CA18 and 0x10CBA8 (both call the path helper 0x1A8BE8 and make
+//     one vtable call each: +0x510 -> 0x2012C8 and +0x1C8 -> 0x2012F0, return labels 0x10CB54 and 0x10CCE4);
+//   * RaceSolitaire::loadDemoInputs is 0x2012C8 (the RaceSolitaire vtable base 0x6B3130 has the same virtual at
+//     +0x510 that v2.00 has at +0x4D8 -> 0x3EAD18) and calls AutomobileControlRecord::Manager::load 0x207AA0;
+//   * loadDemoInputs adds 0x1A24 to the pointer it receives (v2.00 adds 0x1AA4). The decrypted demo files on the
+//     retail, beta and Spec II discs all keep the single-Recorder stream at body + 0x1AA4, so the loader must hand
+//     the virtual a pointer 0x80 past the header's body start (High confidence: 0x1A24 + 0x80 = 0x1AA4; the guard
+//     writes at a1 + 0x1A24, exactly where the virtual reads, and evaluates the body from the header's own offset);
+//   * the cipher is the same (0x459E90, FT at 0x667048 matching the derived formula, T8 bytes at 0x731C98, standard
+//     CRC-32 table at 0x731DB0): CRC-confirmed plaintexts of the Spec II demos pass the v2.00 rule.
 inline constexpr HookAddresses kSpec2Hooks = {
     /* widescreen_owner_pointer */ 0x664EDCu,
     /* widescreen_option_offset */ 0x680u,
@@ -180,12 +195,14 @@ inline constexpr HookAddresses kSpec2Hooks = {
     /* hud_parameter_block */ 0x00007F00u,
     /* hud_parameter_words */ 2u,
     /* hud_matrix_offset */ 0x70u,
-    /* license_load_demo_inputs */ 0u,
-    /* license_loader_entry */ 0u,
-    /* license_loader_return */ 0u,
-    /* license_replay_loader_entry */ 0u,
-    /* license_replay_loader_return */ 0u,
-    /* license_crc_table */ 0u,
+    /* license_load_demo_inputs */ 0x2012C8u,
+    /* license_loader_entry */ 0x10CA18u,
+    /* license_loader_return */ 0x10CB54u,
+    /* license_replay_loader_entry */ 0x10CBA8u,
+    /* license_replay_loader_return */ 0x10CCE4u,
+    /* license_crc_table */ 0x731DB0u,
+    /* license_manager_add */ 0x1A24u,
+    /* license_body_shift */ 0x80u,
     /* shape_call_pc */ 0u,
     /* shape_target_pc */ 0u,
     /* shape_return_pc */ 0u,

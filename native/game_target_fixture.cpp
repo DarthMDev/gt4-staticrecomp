@@ -66,6 +66,8 @@ void check_v200_values() {
   check(h.license_replay_loader_entry == 0x110230u, "second loader entry");
   check(h.license_replay_loader_return == 0x110344u, "second loader return label");
   check(h.license_crc_table == 0x655358u, "CRC table");
+  check(h.license_manager_add == 0x1AA4u, "Manager add");
+  check(h.license_body_shift == 0u, "body shift");
   // TASK-133 shape observation (diagnostic).
   check(h.shape_call_pc == 0x455A5Cu, "shape call pc");
   check(h.shape_target_pc == 0x49D308u, "shape target pc");
