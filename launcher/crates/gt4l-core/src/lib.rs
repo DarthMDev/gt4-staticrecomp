@@ -6,6 +6,8 @@ pub mod config;
 pub mod display;
 pub mod exit;
 pub mod guard;
+pub mod games;
+pub mod games_layout;
 pub mod gs_release;
 pub mod gs_table;
 pub mod launch;

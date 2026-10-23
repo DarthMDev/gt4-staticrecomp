@@ -45,12 +45,10 @@ pub const DISC_FOLDER: &str = "disc";
 pub const COPY_MARGIN_BYTES: u64 = 512 * 1024 * 1024;
 /// Message shown for every disc that is a PS2 game but not the supported one.
 pub const UNSUPPORTED_MESSAGE: &str =
-    "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328).";
+    "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328) and Gran Turismo 4 Spec II 1.10 (SCUS-97436).";
 const HASH_CHUNK_BYTES: usize = 4 * 1024 * 1024;
-const MAX_SYSTEM_CNF_BYTES: u64 = 4096;
+pub(crate) const MAX_SYSTEM_CNF_BYTES: u64 = 4096;
 const MAX_CORE_BYTES: u64 = 16 * 1024 * 1024;
-/// GT4 Online public beta, the base of the Spec II mod.
-const SPEC_II_SERIAL: &str = "SCUS-97436";
 
 /// The progress phases the UI shows.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -63,8 +61,9 @@ pub enum Stage {
 /// What kind of unsupported disc it is: one extra sentence after [`UNSUPPORTED_MESSAGE`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Unsupported {
-    /// Gran Turismo 4 Spec II or GT4 Online (SCUS-97436).
-    SpecII,
+    /// SCUS-97436 whose executable is not the pinned Spec II 1.10 one. `beta` is true for the unmodified GT4 Online
+    /// Public Beta (same serial, a different executable: it would need its own patch map and translation).
+    Spec2Executable { beta: bool },
     /// A PAL or Asian release (SCES, SLES, SCPS, SLPS, ...).
     OtherRegion { serial: String },
     /// SCUS-97328 whose game code (`CORE.GT4`) differs from the supported one.
@@ -110,7 +109,13 @@ impl SetupError {
             SetupError::NotPlayStation2 => "This is not a PlayStation 2 disc image.".into(),
             SetupError::Unsupported(kind) => {
                 let detail = match kind {
-                    Unsupported::SpecII => "This looks like Gran Turismo 4 Spec II or GT4 Online (SCUS-97436).".into(),
+                    Unsupported::Spec2Executable { beta: true } => {
+                        "This is the unmodified GT4 Online Public Beta (SCUS-97436), not Gran Turismo 4 Spec II.".into()
+                    }
+                    Unsupported::Spec2Executable { beta: false } => {
+                        "This SCUS-97436 disc has a different game program than Spec II 1.10, which GT4Recomp does not support yet."
+                            .into()
+                    }
                     Unsupported::OtherRegion { serial } => format!("This disc is {serial}, another region."),
                     Unsupported::OtherRevision { version } => {
                         format!("This SCUS-97328 disc (version {version}) has different game code.")
@@ -176,6 +181,9 @@ pub struct Receipt {
     pub schema_version: u32,
     pub launcher_version: String,
     pub payload: String,
+    /// The game this setup prepared: `gt4` or `spec2` (schema 2 receipts of 1.2.x have none and are `gt4`).
+    #[serde(default = "default_game")]
+    pub game: String,
     pub disc: DiscReceipt,
     /// The copied image under `<data>\disc\` (schema 2).
     #[serde(default)]
@@ -183,12 +191,25 @@ pub struct Receipt {
     /// True when the full image is byte-identical to the qualified v2.00 dump (schema 2).
     #[serde(default)]
     pub qualified_dump: bool,
+    /// The name of the known disc image (`Spec II 1.10`, `Spec II 1.10 (PT-BR)`), or the text of an unknown image with the
+    /// known executable (`Spec II 1.10 variant`). Empty for Gran Turismo 4.
+    #[serde(default)]
+    pub image_name: String,
+    /// `CORE.GT4` (Gran Turismo 4). Empty for a game with no CORE (Spec II: one plain ELF).
+    #[serde(default)]
     pub core: ReceiptIdentity,
+    /// The executable as it is on the disc, before the launcher's own preparation (Spec II only).
+    #[serde(default)]
+    pub original: Option<ReceiptIdentity>,
     pub elf: ReceiptIdentity,
     pub prepared_unix_seconds: u64,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+fn default_game() -> String {
+    "gt4".to_string()
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReceiptIdentity {
     pub size_bytes: u64,
     pub sha256: String,
@@ -302,9 +323,7 @@ pub fn precheck(disc: &Path, pins: &Pins) -> Result<DiscSummary, SetupError> {
 }
 
 fn classify_other(serial: &str, volume_identifier: &str) -> Unsupported {
-    if serial == SPEC_II_SERIAL || volume_identifier.to_ascii_uppercase().contains("SPEC") {
-        return Unsupported::SpecII;
-    }
+    let _ = volume_identifier;
     const OTHER_REGIONS: &[&str] =
         &["SCES", "SLES", "SCED", "SLED", "SCPS", "SLPS", "SCAJ", "SLAJ", "SCKA", "SLKA", "PAPX", "PBPX"];
     if OTHER_REGIONS.iter().any(|prefix| serial.starts_with(prefix)) {
@@ -313,7 +332,7 @@ fn classify_other(serial: &str, volume_identifier: &str) -> Unsupported {
     Unsupported::OtherGame { serial: serial.to_string() }
 }
 
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
@@ -375,22 +394,35 @@ fn copy_hashing(
 }
 
 /// Free space check, then the copy to `<disc folder>\<serial>.iso.tmp` with its hash.
-fn copy_image(
+pub(crate) fn copy_image(
     request: &SetupRequest<'_>,
     summary: &DiscSummary,
     temporary: &Path,
     progress: &mut dyn FnMut(Stage, f32),
 ) -> Result<Identity, SetupError> {
-    fs::create_dir_all(request.disc_folder)?;
+    copy_image_of(request.disc, request.disc_folder, request.cancel, request.free_space, summary.size_bytes, temporary, progress)
+}
+
+/// [`copy_image`] with its inputs given one by one (Spec II setup shares it).
+pub(crate) fn copy_image_of(
+    disc: &Path,
+    disc_folder: &Path,
+    cancel: &AtomicBool,
+    free_space: &dyn Fn(&Path) -> Option<u64>,
+    size_bytes: u64,
+    temporary: &Path,
+    progress: &mut dyn FnMut(Stage, f32),
+) -> Result<Identity, SetupError> {
+    fs::create_dir_all(disc_folder)?;
     let _ = fs::remove_file(temporary);
-    let needed = summary.size_bytes + COPY_MARGIN_BYTES;
-    if let Some(available) = (request.free_space)(request.disc_folder) {
+    let needed = size_bytes + COPY_MARGIN_BYTES;
+    if let Some(available) = free_space(disc_folder) {
         if available < needed {
             return Err(SetupError::NotEnoughSpace { needed, available });
         }
     }
     progress(Stage::Copying, 0.0);
-    copy_hashing(request.disc, temporary, request.cancel, progress)
+    copy_hashing(disc, temporary, cancel, progress)
 }
 
 /// Runs the whole setup. On success the image is copied and the prepared folder holds the receipt, CORE and ELF.
@@ -439,6 +471,7 @@ fn finish(
         schema_version: RECEIPT_SCHEMA,
         launcher_version: request.launcher_version.to_string(),
         payload: "bundled".to_string(),
+        game: default_game(),
         disc: DiscReceipt {
             path: request.disc.display().to_string(),
             size_bytes: identity.size_bytes,
@@ -454,7 +487,9 @@ fn finish(
             sha256: identity.sha256.clone(),
         }),
         qualified_dump,
+        image_name: String::new(),
         core: ReceiptIdentity { size_bytes: core_bytes.len() as u64, sha256: elf::sha256_hex(&core_bytes) },
+        original: None,
         elf: ReceiptIdentity { size_bytes: elf_bytes.len() as u64, sha256: elf::sha256_hex(&elf_bytes) },
         prepared_unix_seconds: unix_seconds(),
     };
@@ -471,7 +506,7 @@ fn finish(
     Ok(receipt)
 }
 
-fn modified_nanos(metadata: &fs::Metadata) -> u64 {
+pub(crate) fn modified_nanos(metadata: &fs::Metadata) -> u64 {
     metadata
         .modified()
         .ok()
@@ -510,7 +545,7 @@ fn write_staging(request: &SetupRequest<'_>, core: &[u8], image: &[u8]) -> Resul
     Ok(())
 }
 
-fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), SetupError> {
+pub(crate) fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), SetupError> {
     let mut file = File::create(path)?;
     file.write_all(bytes)?;
     file.sync_all()?;
@@ -518,7 +553,7 @@ fn write_synced(path: &Path, bytes: &[u8]) -> Result<(), SetupError> {
 }
 
 /// Moves the staging folder to `prepared`. The old folder is removed only after the new one is in place.
-fn swap_into_place(staging: &Path, prepared: &Path) -> Result<(), SetupError> {
+pub(crate) fn swap_into_place(staging: &Path, prepared: &Path) -> Result<(), SetupError> {
     let old: Option<PathBuf> = if prepared.exists() {
         let parked = prepared.with_file_name(format!("prepared.old-{}", unix_seconds()));
         fs::rename(prepared, &parked)?;
@@ -533,7 +568,7 @@ fn swap_into_place(staging: &Path, prepared: &Path) -> Result<(), SetupError> {
     Ok(())
 }
 
-fn unix_seconds() -> u64 {
+pub(crate) fn unix_seconds() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|duration| duration.as_secs()).unwrap_or(0)
 }
 
@@ -572,6 +607,11 @@ pub enum Installed {
 /// The cheap check of every launch: the receipt, the prepared sizes, and the copied image's size and modified
 /// time as recorded at setup. No hash runs here.
 pub fn check_installed(prepared: &Path, disc_folder: &Path, pins: &Pins) -> Installed {
+    check_installed_with(prepared, disc_folder, &|folder| verify_prepared(folder, pins))
+}
+
+/// [`check_installed`] with the game's own check of the prepared files (sizes of its ELF and, for Gran Turismo 4, CORE).
+pub fn check_installed_with(prepared: &Path, disc_folder: &Path, verify: &dyn Fn(&Path) -> Result<(), String>) -> Installed {
     if !prepared.join(RECEIPT_FILE).exists() {
         if prepared.exists() || disc_folder.exists() {
             return Installed::Missing { reason: "the game files are incomplete".into() };
@@ -584,7 +624,7 @@ pub fn check_installed(prepared: &Path, disc_folder: &Path, pins: &Pins) -> Inst
     let Some(image) = receipt.image.as_ref().filter(|_| receipt.schema_version >= 2) else {
         return Installed::Missing { reason: "this version keeps its own copy of the disc image".into() };
     };
-    if let Err(reason) = verify_prepared(prepared, pins) {
+    if let Err(reason) = verify(prepared) {
         return Installed::Missing { reason };
     }
     let path = disc_folder.join(&image.file);

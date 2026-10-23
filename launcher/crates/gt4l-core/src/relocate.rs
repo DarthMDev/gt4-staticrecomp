@@ -111,7 +111,7 @@ fn files_under(path: &Path) -> io::Result<Vec<PathBuf>> {
 
 /// Whether `path` is a file or a folder that holds at least one file. Unreadable counts as holding files (so
 /// nothing is ever placed over it).
-fn has_files(path: &Path) -> bool {
+pub(crate) fn has_files(path: &Path) -> bool {
     match files_under(path) {
         Ok(files) => !files.is_empty(),
         Err(_) => path.exists(),
@@ -246,11 +246,11 @@ fn copy_verified(source: &Path, target: &Path, ops: &FsOps<'_>, progress: &mut d
     Ok(report)
 }
 
-fn stamp_json(stamp: &str) -> serde_json::Value {
+pub(crate) fn stamp_json(stamp: &str) -> serde_json::Value {
     serde_json::Value::String(stamp.to_string())
 }
 
-fn write_marker(marker: &Path, value: &serde_json::Value) -> Result<(), String> {
+pub(crate) fn write_marker(marker: &Path, value: &serde_json::Value) -> Result<(), String> {
     if let Some(parent) = marker.parent() {
         fs::create_dir_all(parent).map_err(|error| format!("{}: {error}", parent.display()))?;
     }
@@ -557,7 +557,8 @@ pub fn migrate_user_data(request: &UserMove<'_>, ops: &FsOps<'_>) -> UserOutcome
         let item = &items[index];
         let destination = user.root().join(&item.target);
         let alternative = match item.kind {
-            ItemKind::SaveSlot => next_free_slot(&user.saves()),
+            // The 1.2.1 move writes the flat 1.2.x places; `games_layout` moves them into `games/gt4` afterwards.
+            ItemKind::SaveSlot => next_free_slot(&user.root().join("Saves")),
             ItemKind::Other => unique_name(&user.root().join(KEPT_FOLDER_NAME).join(&item.target)),
         };
         let staged = staging.join(index.to_string());
@@ -715,7 +716,7 @@ impl LargeOutcome {
 /// Moves `source` to `destination`: one rename on the same volume; across volumes a checked copy into a staging
 /// folder beside `destination`, a rename into place and the removal of `source`. `check` runs on the copy before it
 /// is placed.
-fn move_tree(
+pub(crate) fn move_tree(
     source: &Path,
     destination: &Path,
     ops: &FsOps<'_>,
@@ -768,7 +769,7 @@ fn move_tree(
 }
 
 /// Moves the game files: `disc` and `prepared` together, so the receipt and the image it names never split.
-fn move_game_files(request: &LargeMove<'_>, ops: &FsOps<'_>, progress: &mut dyn FnMut(&LargeProgress)) -> UnitResult {
+pub(crate) fn move_game_files(request: &LargeMove<'_>, ops: &FsOps<'_>, progress: &mut dyn FnMut(&LargeProgress)) -> UnitResult {
     let names = ["disc", "prepared"];
     let sources: Vec<PathBuf> = names.iter().map(|name| request.local.join(name)).collect();
     if !sources.iter().any(|source| has_files(source)) {
