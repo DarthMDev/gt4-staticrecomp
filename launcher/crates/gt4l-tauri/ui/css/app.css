@@ -303,7 +303,8 @@ body.is-home.input-keys #hints { display: none; }
 /* Patch notes (TASK-099): a light glass card on the right of the home screen, this version's release notes. It scrolls
    on its own; narrow or short windows hide it (rules at the end of this file). */
 .home-notes {
-  position: absolute; right: 72px; top: 72px; z-index: 2; width: 380px; max-height: calc(100% - 144px);
+  /* Always the full height between the margins (owner, 2026-10-23), whatever the release; the text scrolls inside. */
+  position: absolute; right: 72px; top: 72px; bottom: 72px; z-index: 2; width: 380px;
   display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; isolation: isolate;
   /* Dark enough that the text keeps its contrast over a light background picture (owner, 2026-10-23). */
   background: linear-gradient(160deg, rgba(20, 22, 30, 0.72) 0%, rgba(10, 12, 18, 0.80) 100%);
