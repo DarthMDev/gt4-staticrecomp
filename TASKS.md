@@ -57,7 +57,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | ✅ Done (2026-10-16) · license demo guard on both demo loaders (slice206, `--mode pcsx2`): licenses playable, demos that decrypt wrong are skipped as in PCSX2 default; root cause moved to TASK‑063 |
-| TASK‑018 | Racing wheels with force feedback: the game sees a Logitech Driving Force GT, force feedback through SDL3, a Wheel tab in the launcher | 📋 Planned · release 1.3.0 (owner, 2026-10-22) |
+| TASK‑018 | Racing wheels with force feedback: the game sees a Logitech Driving Force GT, force feedback through SDL3, a Wheel tab in the launcher | 📋 Planned · release 1.4.0 (owner, 2026-10-22) |
 | TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ✅ Launcher merged into main (2026-10-21): setup with disc copy, gt4-gs download, settings, saves, controls (SDL3), tray, updates; owner tested end to end. Still for 1.0.0: NSIS installer build and the v1.0.0 release |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
@@ -121,7 +121,8 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
 | TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 📋 Planned (owner, 2026-10-22) · release 1.2.4 with TASK-097 |
 | TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
-| TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072); subtasks S1-S9 in docs/SPEC2-PLAN.md | 🔄 In progress (2026-10-22) · branch `task/100-spec2`; release 1.4.0 |
+| TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072); subtasks S1-S9 in docs/SPEC2-PLAN.md | 🔄 In progress (2026-10-22) · branch `task/100-spec2`; release 1.3.0 |
+| TASK‑101 | Multi-game launcher: Gran Turismo 4 and Spec II side by side (game selector, Play/Install, per-game disc, card and saves, shared settings, Spec II logo) | 📋 Planned (owner, 2026-10-23) · release 1.3.0 with TASK-100; plan docs/MULTI-GAME-LAUNCHER-PLAN.md |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -601,8 +602,15 @@ the new pins (a slice264 pin set) need an owner decision on the release path. CT
   CTest 40/40; headless menus with `--renderer donor` and `pcsx2` both run (exit 0). The launcher drops CoreGS 1.1 in
   1.2.3 (TASK-096); the fix stays as protection for runs without the launcher and the built-in restart path.
 
-### TASK-100 — Spec II support (release 1.4.0)
-Planned (owner, 2026-10-22) for release 1.4.0, the release after the wheel release (1.3.0). Scope as decision 0072:
+### TASK-101 — Multi-game launcher (Gran Turismo 4 and Spec II)
+Planned (owner, 2026-10-23) for release 1.3.0, the product side of TASK-100 (its S9). Plan and owner decisions:
+[docs/MULTI-GAME-LAUNCHER-PLAN.md](docs/MULTI-GAME-LAUNCHER-PLAN.md). One executable per game, one shared settings set,
+per-game disc, prepared files, card, saves and replays (saves are incompatible both ways and share the PS2 folder
+name), identification by ISO, the selected game is the last played, Spec II 1.10 and same-executable variants, and
+the Spec II logo on the home screen when it is selected.
+
+### TASK-100 — Spec II support (release 1.3.0)
+Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
 the SCUS-97436 Public Beta lineage image with its own target executable, not a content merge into v2.00. Identity
 study: docs/SPEC2-STUDY.md. Expected to be most of the work at the start; once one Spec II build runs, keeping it
 working should be much cheaper. Work to map first:
@@ -847,7 +855,7 @@ Owner decisions (2026-10-21). Release 1.2.0 of both the game/launcher and gt4-gs
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
-Release 1.3.0 (owner, 2026-10-22): the game must recognise the connected wheel as a Logitech Driving Force GT
+Release 1.4.0 (owner, 2026-10-23; was 1.3.0 before Spec II moved ahead): the game must recognise the connected wheel as a Logitech Driving Force GT
 (900-degree range and force feedback in GT4), whatever wheel SDL3 finds (Logitech, Thrustmaster, Fanatec); the
 game's force-feedback commands go to SDL3 haptics. The launcher gets a new Wheel tab (detection, rotation, force
 feedback strength, pedals and buttons, a live test). Study first: the GT4 USB stack (USBD, PDIUSB, LGDEV IRX,
@@ -1500,7 +1508,7 @@ LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
 settings menus.
 
 **Release plan (owner, 2026-10-22):** big features take a minor version, intermediate updates and hotfixes the
-patch number: 1.2.3 hotfix, 1.2.4 (TASK-097, 098, 099), 1.3.0 wheels (TASK-018), 1.4.0 Spec II (TASK-100);
+patch number: 1.2.3 hotfix, 1.2.4 (TASK-097, 098, 099), 1.3.0 Spec II (TASK-100, on GSdx), 1.4.0 wheels (TASK-018) (owner, 2026-10-23: Spec II moved ahead);
 2.0.0 is CoreGS 2.0 (phase 2).
 
 **Spec II is a second target** (owner, 2026-10-22): support means the SCUS-97436
