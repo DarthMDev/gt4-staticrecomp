@@ -1,10 +1,10 @@
 /*
- * Home: cover art, logo, the game selector, Play, Settings gear. While the game runs, Play
+ * Home: cover art, logo, Play, Settings gear, and the version arrow under them. While the game runs, Play
  * becomes "Running · Stop". Polls app_state for game_running.
  * Commands: app_state, play, stop_game, select_game (js/games.js), setup_choose_disc and setup_start (Install).
- * Two games (TASK-101): the selector switches between Gran Turismo 4 and Gran Turismo 4 Spec II. An installed game shows
- * Play; a game that is not installed shows Install, which opens the disc picker and runs that game's setup. With Spec II
- * selected the logo is the GT4 logo with a "Spec II" line under it (a placeholder until the authors' logo file is added).
+ * Two games (TASK-101): a small arrow under Play opens the version menu, Normal (Gran Turismo 4) or Spec II (owner,
+ * 2026-10-23). An installed game shows Play; a game that is not installed shows Install, which opens the disc picker and
+ * runs that game's setup. The logo stays the Gran Turismo 4 logo for both.
  * Controller: A or Start = Play (or Install), Y = Settings, LB / RB = the other game. Hints show only once a pad is used.
  * Play is glass when idle (no focus): it takes the solid white state only when focused or hovered.
  */
@@ -40,6 +40,24 @@
     return svg;
   }
 
+  // The short names in the Version menu (owner, 2026-10-23); the full game names stay in Settings > Games.
+  var VERSION_LABELS = { gt4: "Normal", spec2: "Spec II" };
+
+  function chevronIcon() {
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("width", "18");
+    svg.setAttribute("height", "18");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("stroke", "currentColor");
+    svg.setAttribute("stroke-width", "1.8");
+    svg.setAttribute("aria-hidden", "true");
+    var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M6 9l6 6 6-6");
+    svg.appendChild(path);
+    return svg;
+  }
+
   GT4.pages = GT4.pages || {};
   GT4.pages.home = {
     mount: function (root) {
@@ -50,11 +68,20 @@
       var installedNow = true;
       var gameSignature = "";
       var logoImage = h("img", { class: "home-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" });
-      // Placeholder for the Spec II logo: the GT4 logo with a "Spec II" line (CSS), until the authors logo file and credit
-      // are added. Replace the line below with an img of their logo (TASK-101 open point) when they are.
-      var logoSpec = h("span", { class: "home-logo-spec2", text: "Spec II", "aria-hidden": "true" });
-      var logoWrap = h("div", { class: "home-logo-wrap" }, [logoImage, logoSpec]);
-      var gameSwitch = h("div", { class: "game-switch", role: "radiogroup", "aria-label": "Game" });
+      // The version arrow under Play, with the current version's name beside it, and its menu (Normal, Spec II). The menu
+      // is a small list that opens downwards (owner, 2026-10-23).
+      var versionName = h("span", { class: "version-name", text: VERSION_LABELS.gt4 });
+      var versionToggle = h("button", {
+        class: "version-toggle",
+        type: "button",
+        "aria-haspopup": "listbox",
+        "aria-expanded": "false",
+        "aria-label": "Version",
+        title: "Version"
+      }, [versionName, chevronIcon()]);
+      var versionMenu = h("div", { class: "version-menu", role: "listbox", "aria-label": "Version" });
+      versionMenu.hidden = true;
+      var versionPicker = h("div", { class: "version-picker" }, [versionMenu, versionToggle]);
       var stopButton = h("button", { class: "btn", type: "button" }, "Stop");
       var stateText = h("span", { class: "state", text: "Running" });
       var running = h("div", { class: "running" }, [h("span", { class: "dot" }), stateText, stopButton]);
@@ -75,7 +102,34 @@
         return null;
       }
 
-      // The selector, the logo and the main button follow the game list (rebuilt only when it changed).
+      function menuOpen() {
+        return !versionMenu.hidden;
+      }
+
+      function closeMenu(focusToggle) {
+        if (!menuOpen()) {
+          return;
+        }
+        versionMenu.hidden = true;
+        versionToggle.setAttribute("aria-expanded", "false");
+        if (focusToggle) {
+          versionToggle.focus({ preventScroll: true });
+        }
+      }
+
+      function openMenu() {
+        if (isRunning || gameList.length < 2) {
+          return;
+        }
+        versionMenu.hidden = false;
+        versionToggle.setAttribute("aria-expanded", "true");
+        var current = versionMenu.querySelector(".version-option.is-selected") || versionMenu.querySelector(".version-option");
+        if (current) {
+          current.focus({ preventScroll: true });
+        }
+      }
+
+      // The Version menu and the main button follow the game list (rebuilt only when it changed).
       function paintGames() {
         var signature = JSON.stringify([selectedId, isRunning, gameList.map(function (game) { return [game.id, game.installed]; })]);
         if (signature === gameSignature) {
@@ -85,32 +139,36 @@
         var game = selectedGame();
         installedNow = !game || game.installed;
         page.classList.toggle("is-spec2", selectedId === "spec2");
-        logoImage.alt = game ? game.name : "Gran Turismo 4";
-        logoWrap.setAttribute("title", game ? game.name : "");
+        versionToggle.disabled = isRunning || gameList.length < 2;
+        versionName.textContent = VERSION_LABELS[selectedId] || (game ? game.name : "");
+        versionToggle.setAttribute("title", "Version: " + versionName.textContent);
         playButton.textContent = installedNow ? "Play" : "Install";
         playButton.classList.toggle("is-install", !installedNow);
         playButton.setAttribute("title", installedNow || !game || !game.reason ? "" : game.reason);
         var focusedId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.gameId : null;
-        GT4.ui.clear(gameSwitch);
+        GT4.ui.clear(versionMenu);
         gameList.forEach(function (item) {
           var on = item.id === selectedId;
-          var pill = h("button", {
-            class: "game-pill" + (on ? " is-selected" : "") + (item.installed ? "" : " not-installed"),
+          var option = h("button", {
+            class: "version-option" + (on ? " is-selected" : "") + (item.installed ? "" : " not-installed"),
             type: "button",
-            role: "radio",
-            "aria-checked": String(on),
-            disabled: isRunning && !on,
+            role: "option",
+            "aria-selected": String(on),
+            title: item.name,
             data: { gameId: item.id },
-            on: { click: function () { chooseGame(item.id); } }
+            on: { click: function () { closeMenu(true); chooseGame(item.id); } }
           }, [
-            h("span", { class: "game-pill-name", text: item.name }),
+            h("span", { class: "version-option-name", text: VERSION_LABELS[item.id] || item.name }),
             item.installed ? null : h("small", { text: "Not installed" })
           ]);
-          gameSwitch.appendChild(pill);
-          if (focusedId === item.id) {
-            pill.focus({ preventScroll: true });
+          versionMenu.appendChild(option);
+          if (focusedId === item.id && menuOpen()) {
+            option.focus({ preventScroll: true });
           }
         });
+        if (isRunning) {
+          closeMenu(false);
+        }
       }
 
       function applyGames(view) {
@@ -185,6 +243,26 @@
 
       playButton.addEventListener("click", play);
       stopButton.addEventListener("click", stop);
+      versionToggle.addEventListener("click", function () {
+        if (menuOpen()) {
+          closeMenu(true);
+        } else {
+          openMenu();
+        }
+      });
+      // Escape closes the menu; a click anywhere else closes it too.
+      versionMenu.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeMenu(true);
+        }
+      });
+      function closeOnOutsideClick(event) {
+        if (menuOpen() && !versionPicker.contains(event.target)) {
+          closeMenu(false);
+        }
+      }
+      document.addEventListener("click", closeOnOutsideClick);
 
       // Settings: a square button beside Play with the same look and focus (owner, 1.2.1).
       var gear = h("button", {
@@ -208,9 +286,9 @@
         versionLabel.textContent = "GT4Recomp " + (info.version || "");
       }, function () {});
       page.appendChild(h("div", { class: "home-bottom" }, [
-        logoWrap,
-        gameSwitch,
-        h("div", { class: "home-actions" }, [playButton, running, gear])
+        logoImage,
+        h("div", { class: "home-actions" }, [playButton, running, gear]),
+        versionPicker
       ]));
       root.appendChild(page);
       document.body.classList.add("is-home");
@@ -238,13 +316,14 @@
       GT4.hooks.tabs = cycleGame;
       GT4.ui.setHints([
         { key: "A", label: "Select", run: play },
-        { key: "LB / RB", label: "Game", run: function () { cycleGame(1); } },
+        { key: "LB / RB", label: "Version", run: function () { cycleGame(1); } },
         { key: "Y", label: "Settings", run: function () { GT4.go("#/settings/graphics"); } }
       ]);
 
       return {
         destroy: function () {
           clearInterval(timer);
+          document.removeEventListener("click", closeOnOutsideClick);
           document.body.classList.remove("is-home");
         }
       };

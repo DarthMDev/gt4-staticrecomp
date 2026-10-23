@@ -505,30 +505,40 @@
     await wait(400);
   }
 
-  // Two games (TASK-101): the home selector, Play or Install, the logo line, Settings > Games and the game on the Saves
-  // title. The mock starts with Gran Turismo 4 installed and Spec II not (?games=gt4).
+  // Two games (TASK-101): the Version arrow under Play and its menu (owner, 2026-10-23), Play or Install, Settings > Games
+  // and the game on the Saves title. The mock starts with Gran Turismo 4 installed and Spec II not (?games=gt4).
   async function gamesChecks() {
     await setHash("#/home");
     await wait(500);
-    var pills = document.querySelectorAll(".game-pill");
-    check("Home has a selector with both games", pills.length === 2, String(pills.length));
+    var toggle = document.querySelector(".version-toggle");
+    var menu = document.querySelector(".version-menu");
     var playButton = document.querySelector(".play:not(.play-square)");
-    var home = document.querySelector(".home");
-    check("Gran Turismo 4 is selected first and shows Play", !!pills[0] && pills[0].classList.contains("is-selected") &&
-      playButton.textContent === "Play" && !home.classList.contains("is-spec2"), playButton ? playButton.textContent : "no button");
-    check("a game that is not installed is marked in the selector", !!pills[1] && pills[1].classList.contains("not-installed"), "");
-    pills[1].click();
+    check("Home has the Version arrow, closed, naming the current version", !!toggle && !!menu && menu.hidden &&
+      document.querySelector(".version-name").textContent === "Normal", toggle ? document.querySelector(".version-name").textContent : "none");
+    check("Gran Turismo 4 is selected first and shows Play", playButton.textContent === "Play", playButton ? playButton.textContent : "no button");
+    check("the logo is the Gran Turismo 4 logo, with no Spec II line", !document.querySelector(".home-logo-spec2") &&
+      !!document.querySelector(".home-logo"), "");
+    toggle.click();
+    await wait(200);
+    var options = document.querySelectorAll(".version-option");
+    check("the arrow opens the version menu with Normal and Spec II", !menu.hidden && options.length === 2 &&
+      !document.querySelector(".version-menu-title") &&
+      options[0].textContent.indexOf("Normal") === 0 && options[1].textContent.indexOf("Spec II") === 0, String(options.length));
+    check("a version that is not installed is marked in the menu", options[1].classList.contains("not-installed"), "");
+    options[1].click();
     await wait(400);
     playButton = document.querySelector(".play:not(.play-square)");
-    home = document.querySelector(".home");
-    check("selecting Spec II shows Install in place of Play", playButton.textContent === "Install", playButton.textContent);
-    check("selecting Spec II swaps the logo line", home.classList.contains("is-spec2") &&
-      !!document.querySelector(".home-logo-spec2") && document.querySelector(".home-logo-spec2").textContent === "Spec II", "");
-    check("the selected pill follows the choice", document.querySelectorAll(".game-pill")[1].classList.contains("is-selected"), "");
+    check("choosing Spec II closes the menu, shows Install and names Spec II", menu.hidden && playButton.textContent === "Install" &&
+      document.querySelector(".version-name").textContent === "Spec II", playButton.textContent);
+    toggle.click();
+    await wait(200);
+    document.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await wait(100);
+    check("a click elsewhere closes the menu", menu.hidden, "");
     GT4.hooks.tabs(-1);
     await wait(400);
-    check("LB / RB switches back to Gran Turismo 4 and Play", document.querySelector(".play:not(.play-square)").textContent === "Play" &&
-      !document.querySelector(".home").classList.contains("is-spec2"), "");
+    check("LB / RB switches back to Normal and Play", document.querySelector(".play:not(.play-square)").textContent === "Play" &&
+      document.querySelector(".version-name").textContent === "Normal", "");
     check("the pad hints name the game switch", /LB \/ RB/.test(document.getElementById("hints").textContent), document.getElementById("hints").textContent);
 
     await setHash("#/settings/games");

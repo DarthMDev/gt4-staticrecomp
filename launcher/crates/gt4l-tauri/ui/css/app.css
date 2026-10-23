@@ -226,6 +226,8 @@ body.is-home.input-keys #hints { display: none; }
 /* Settings beside Play: the same glass box, focus and press as Play, square, with the gear icon. */
 .play.play-square { width: 52px; padding: 0; display: grid; place-items: center; letter-spacing: 0; }
 .play.play-square svg { display: block; }
+/* The light sweep is only on Play (owner, 2026-10-23). */
+.play.play-square::after { display: none; }
 /* Play. Idle: dark translucent glass, thin white border, white label and a light sheen that sweeps
    across about every 3.4 s. Focused (pad or keys) or hovered: solid white, dark label, scale 1.03,
    soft glow. Pressed: quick press-down. Reduced motion removes the sheen (rule at the end of this file). */
@@ -264,28 +266,35 @@ body.is-home.input-keys #hints { display: none; }
 .home.is-running .running { display: flex; }
 
 /* ---------- games (TASK-101) ---------- */
-/* The logo and, with Spec II selected, its "Spec II" line (a placeholder for the authors' logo file). */
-.home-logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
-.home-logo-wrap .home-logo { margin-bottom: 0; }
-.home-logo-spec2 {
-  display: none; margin-top: 10px; padding-left: 0.42em;
-  font: 700 22px var(--label); letter-spacing: 0.42em; text-transform: uppercase; color: var(--white);
+/* The version arrow under Play (owner, 2026-10-23): the current version's name and a small chevron; its menu (Normal,
+   Spec II) is a minimal list that opens downwards. Keyboard and pad focus use the common ring. */
+.version-picker { position: relative; margin-top: 10px; display: flex; justify-content: center; align-self: flex-start; width: 240px; }
+.version-toggle {
+  height: 26px; padding: 0 6px 0 10px; display: flex; align-items: center; gap: 6px; border-radius: 3px;
+  font: 500 11px var(--label); letter-spacing: 0.14em; text-transform: uppercase;
+  background: transparent; color: var(--silver); border: 1px solid transparent;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
 }
-.home.is-spec2 .home-logo-spec2 { display: block; }
-/* The game selector above Play: two glass pills, the chosen one solid. Keyboard and pad focus use the common ring. */
-.game-switch { display: flex; gap: 8px; margin-bottom: 14px; }
-.game-pill {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 156px; min-height: 48px;
-  padding: 6px 14px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.4);
-  background: rgba(10, 12, 20, 0.5); color: var(--silver);
-  font: 500 12px var(--label); letter-spacing: 0.12em; text-transform: uppercase;
-  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+.version-toggle:hover, .version-toggle:focus-visible, .version-toggle[aria-expanded="true"] { color: var(--white); }
+.version-toggle svg { transition: transform 150ms ease; }
+.version-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.version-toggle:disabled { opacity: 0.3; }
+.version-menu {
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 5;
+  min-width: 140px; padding: 3px; border-radius: 3px;
+  background: rgba(10, 12, 20, 0.85); border: 1px solid rgba(255, 255, 255, 0.18);
 }
-.game-pill small { font: 400 10px var(--label); letter-spacing: 0.1em; color: var(--dim); margin-top: 2px; }
-.game-pill:hover, .game-pill:focus-visible { border-color: var(--white); color: var(--white); }
-.game-pill.is-selected { background: rgba(255, 255, 255, 0.92); color: var(--paper-ink); border-color: var(--white); }
-.game-pill.is-selected small { color: #555; }
-.game-pill:disabled { opacity: 0.4; }
+.version-menu[hidden] { display: none; }
+.version-option {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; height: 28px;
+  padding: 0 10px; border-radius: 2px; border: 0; background: transparent; color: var(--silver);
+  font: 500 11px var(--label); letter-spacing: 0.14em; text-transform: uppercase; text-align: left; align-items: center;
+}
+.version-option small { font: 400 10px var(--label); letter-spacing: 0.04em; color: var(--dim); text-transform: none; }
+.version-option:hover, .version-option:focus-visible { color: var(--white); background: rgba(255, 255, 255, 0.08); }
+.version-option.is-selected { color: var(--white); }
+.version-option.is-selected::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--white); }
+.version-option.is-selected small { display: none; }
 .play.is-install { letter-spacing: 0.2em; }
 /* Settings > Games, and the game name on the Saves and Replays titles. */
 .game-row .k .val { display: block; }
@@ -742,6 +751,8 @@ body.input-pad .info:focus .tip { display: block; }
   .setup h1 { font-size: 26px; line-height: 32px; margin-bottom: 4px; }
   .sub { margin-bottom: 12px; }
   .home-bottom { bottom: 40px; left: 48px; }
+  /* Too little room under the buttons in a very short window: the version menu opens upwards there. */
+  .version-menu { top: auto; bottom: calc(100% + 4px); }
   .home-logo { width: 220px; margin-bottom: 18px; }
   .home-version { bottom: 12px; }
   .lib-head h1 { font-size: 24px; }
