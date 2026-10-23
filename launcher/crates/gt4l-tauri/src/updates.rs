@@ -15,6 +15,7 @@ use std::sync::Mutex;
 
 use gt4l_core::gs_release::{self, Outcome, Step};
 use gt4l_core::paths::DataDirs;
+use gt4l_core::portable_update;
 use gt4l_core::releases::{self, GithubSource, ReleaseSource, Stream};
 use gt4l_core::update::{self, Offer};
 use gt4l_core::versions::{self, VersionFile};
@@ -70,7 +71,7 @@ impl OfferView {
             installed: offer.installed.map(|version| version.text()),
             latest: offer.latest.text(),
             notes: offer.notes.clone(),
-            package: offer.package.clone(),
+            package: offer.stream.package_name_for(offer.latest, gt4l_core::build_kind::BUILD.is_portable()),
             update: offer.is_update(),
         }
     }
@@ -304,7 +305,11 @@ pub async fn apply_update(app: AppHandle, stream: String, shared: State<'_, Shar
                 if game_running {
                     return Err("Close the game before updating GT4Recomp.".to_string());
                 }
-                let message = start_launcher_setup(&app, &dirs)?;
+                let message = if gt4l_core::build_kind::BUILD.is_portable() {
+                    start_portable_update(&app, &dirs)?
+                } else {
+                    start_launcher_setup(&app, &dirs)?
+                };
                 Ok(json!({ "ok": true, "message": message }))
             }
             other => Err(format!("unknown update stream '{other}'")),
@@ -331,6 +336,80 @@ pub fn setup_arguments(exe_dir: &Path, read_registered: &dyn Fn() -> Option<Stri
 /// A folder compared the way Windows compares it: case-insensitive, one trailing backslash (or slash) ignored.
 fn folder_key(folder: &str) -> String {
     folder.trim().trim_end_matches(['\\', '/']).to_ascii_lowercase()
+}
+
+/// The portable build's self-update (TASK-098): downloads `GT4Recomp-<version>-portable.zip` of the newest stable release into
+/// `<exe dir>\.update-download`, checks its SHA-256 against `SHA256SUMS`, extracts it, swaps the program files in (never
+/// `user\` or `data\`; a failure rolls back), starts the new launcher and ends this one. No administrator prompt.
+fn start_portable_update(app: &AppHandle, dirs: &DataDirs) -> Result<String, String> {
+    let exe_dir = install_directory();
+    let list = fetch(Stream::Launcher)?;
+    let latest = releases::select_latest(&list, Stream::Launcher.minimum()).ok_or("no stable GT4Recomp release")?;
+    let version = latest.version.ok_or("the release has no version")?;
+    if Version::parse(LAUNCHER_VERSION).is_some_and(|current| current >= version) {
+        return Err("GT4Recomp is up to date.".to_string());
+    }
+    let (zip_asset, sums_asset) = portable_update::release_assets(latest, version)?;
+    let package = zip_asset.name.clone();
+    let sums = GithubSource::for_stream(Stream::Launcher).download(&sums_asset.url)?;
+    let sums_text = String::from_utf8_lossy(&sums).into_owned();
+
+    let zip = portable_update::download_path(&exe_dir, &package);
+    let fs = portable_update::RealFs;
+    let _ = fs::remove_dir_all(exe_dir.join(portable_update::DOWNLOAD_FOLDER));
+    fs::create_dir_all(zip.parent().unwrap_or(&exe_dir))
+        .map_err(|error| format!("{}: {error}. Move the GT4Recomp folder to a place you can write to.", exe_dir.display()))?;
+    emit_progress(app, "downloading-launcher");
+    let actual = releases::download_to_file(&zip_asset.url, &zip, releases::MAX_SETUP_BYTES).inspect_err(|_| {
+        let _ = fs::remove_dir_all(exe_dir.join(portable_update::DOWNLOAD_FOLDER));
+    })?;
+    state::log(dirs, &format!("GT4Recomp {} portable package downloaded; checking and installing it", version.text()));
+    let outcome = portable_update::verify_and_install(&fs, &exe_dir, &zip, &package, &actual, &sums_text);
+    let _ = fs::remove_dir_all(exe_dir.join(portable_update::DOWNLOAD_FOLDER));
+    let report = match outcome {
+        Ok(report) => report,
+        Err(message) => {
+            state::log(dirs, &format!("portable update failed: {message}"));
+            return Err(message);
+        }
+    };
+    state::log(dirs, &format!("portable update installed: {}", report.items.join(", ")));
+    // The new launcher starts outside this launcher's kill-on-close job and waits for this one to exit (single instance).
+    let new_launcher = exe_dir.join(portable_update::LAUNCHER_FILE);
+    let started = gt4l_platform::process::spawn_outside_job(std::process::Command::new(&new_launcher).arg(portable_update::RESTART_ARGUMENT));
+    if let Err(error) = started {
+        // The files are swapped; the player starts GT4Recomp.exe by hand.
+        state::log(dirs, &format!("the updated launcher did not start: {error}"));
+        let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Updated. Start GT4Recomp again." }));
+        return Ok(format!("GT4Recomp {} is installed. Start GT4Recomp again.", version.text()));
+    }
+    let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": "Updated; restarting." }));
+    app.exit(0);
+    Ok(format!("GT4Recomp {} installed; restarting.", version.text()))
+}
+
+/// Portable build, at every start (TASK-098): finishes or undoes the previous update (an interrupted swap is restored, the
+/// old copy is removed). The old launcher may still be exiting, so a leftover is tried again for a while in the background.
+pub fn portable_start_cleanup(dirs: &DataDirs, exe_dir: &Path) {
+    let fs = portable_update::RealFs;
+    for line in portable_update::finish_previous_update(&fs, exe_dir) {
+        state::log(dirs, &format!("portable update: {line}"));
+    }
+    if portable_update::cleanup_pending(&fs, exe_dir) {
+        let dirs = dirs.clone();
+        let exe_dir = exe_dir.to_path_buf();
+        std::thread::spawn(move || {
+            for _ in 0..20 {
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                for line in portable_update::finish_previous_update(&portable_update::RealFs, &exe_dir) {
+                    state::log(&dirs, &format!("portable update: {line}"));
+                }
+                if !portable_update::cleanup_pending(&portable_update::RealFs, &exe_dir) {
+                    return;
+                }
+            }
+        });
+    }
 }
 
 /// Downloads the GT4Recomp setup program of the newest stable release, checks it, starts it, and ends the launcher.
@@ -412,6 +491,38 @@ mod tests {
         assert_eq!(setup_arguments(portable, &registered), None, "a portable folder is never turned into an install");
         let nothing = || None;
         assert_eq!(setup_arguments(Path::new("C:\\Program Files\\GT4Recomp"), &nothing), None);
+    }
+
+    #[test]
+    fn the_offer_names_the_package_of_this_build() {
+        let offer = Offer {
+            stream: Stream::Launcher,
+            installed: Some(Version(1, 2, 3)),
+            latest: Version(1, 3, 0),
+            notes: String::new(),
+            package: "GT4Recomp-Setup-1.3.0.exe".into(),
+        };
+        let expected = if gt4l_core::build_kind::BUILD.is_portable() { "GT4Recomp-1.3.0-portable.zip" } else { "GT4Recomp-Setup-1.3.0.exe" };
+        assert_eq!(OfferView::of(&offer).package, expected);
+        // Both packages exist for either build; the renderer has one package.
+        assert_eq!(Stream::Launcher.package_name_for(Version(1, 3, 0), true), "GT4Recomp-1.3.0-portable.zip");
+        assert_eq!(Stream::Launcher.package_name_for(Version(1, 3, 0), false), "GT4Recomp-Setup-1.3.0.exe");
+        assert_eq!(Stream::Renderer.package_name_for(Version(1, 2, 2), true), Stream::Renderer.package_name(Version(1, 2, 2)));
+    }
+
+    #[test]
+    fn the_start_cleanup_removes_the_old_copy_of_a_finished_update() {
+        let base = std::env::temp_dir().join(format!("gt4l-portable-cleanup-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let exe_dir = base.join("GT4Recomp");
+        fs::create_dir_all(exe_dir.join(portable_update::OLD_FOLDER)).unwrap();
+        fs::write(exe_dir.join(portable_update::OLD_FOLDER).join("GT4Recomp.exe"), b"old").unwrap();
+        fs::write(exe_dir.join("GT4Recomp.exe"), b"new").unwrap();
+        let dirs = DataDirs::new(exe_dir.join("data"));
+        portable_start_cleanup(&dirs, &exe_dir);
+        assert!(!exe_dir.join(portable_update::OLD_FOLDER).exists());
+        assert_eq!(fs::read(exe_dir.join("GT4Recomp.exe")).unwrap(), b"new");
+        let _ = fs::remove_dir_all(&base);
     }
 
     #[test]

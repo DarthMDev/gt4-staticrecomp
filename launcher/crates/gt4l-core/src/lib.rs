@@ -2,6 +2,7 @@
 //! lists, updates, `version.json`, schema migrations and the data-path guard. No UI here. The one
 //! Windows-specific piece is the process-lock file, which uses std APIs only.
 
+pub mod build_kind;
 pub mod config;
 pub mod display;
 pub mod exit;
@@ -14,6 +15,7 @@ pub mod launch;
 pub mod lock;
 pub mod migrate;
 pub mod paths;
+pub mod portable_update;
 pub mod releases;
 pub mod relocate;
 pub mod settings;

@@ -499,6 +499,7 @@
       content.appendChild(h("h1", { text: "About" }));
       content.appendChild(h("p", { class: "note", text: "GT4Recomp " + (info.gt4recomp || info.version || "") }));
       content.appendChild(h("p", { class: "note", text: "gt4-gs " + (info.gt4gs || "not installed") }));
+      content.appendChild(h("p", { class: "note", text: "Build: " + (info.build || "Installer") }));
       var checkButton = h("button", {
         class: "btn small",
         type: "button",

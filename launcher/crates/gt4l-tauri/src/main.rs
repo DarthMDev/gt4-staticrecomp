@@ -36,7 +36,16 @@ fn main() {
     // A second launcher brings the first window forward instead of starting. A restart in safe mode (TASK-091) waits
     // for the launcher that is exiting instead.
     let restarted = webview_guard::restart_requested(std::env::args().skip(1));
-    let claimed = if restarted {
+    let portable = gt4l_core::build_kind::BUILD.is_portable();
+    let exe_dir = updates::install_directory();
+    if portable {
+        // TASK-098: the lock belongs to this folder, so two portable copies (or a portable and the installed one) on one PC do
+        // not block each other, and one copy cannot start twice.
+        gt4l_platform::process::set_single_instance_scope(&exe_dir);
+    }
+    // A launcher started by the portable self-update waits for the old one to exit, as a safe-mode restart does.
+    let after_update = std::env::args().skip(1).any(|argument| argument == gt4l_core::portable_update::RESTART_ARGUMENT);
+    let claimed = if restarted || after_update {
         gt4l_platform::process::claim_single_instance_retrying(
             webview_guard::RESTART_CLAIM_TIMEOUT,
             webview_guard::RESTART_CLAIM_STEP,
@@ -49,17 +58,27 @@ fn main() {
     }
     // TASK-091: large data in `<exe dir>\data` (portable), user data in `%APPDATA%\GT4Recomp`. The 1.2.0 user
     // data moves here, before the window; the large data moves in the background below.
-    let exe_dir = updates::install_directory();
     let startup = match relocation::prepare(&exe_dir) {
         Ok(startup) => startup,
         Err(message) => {
             eprintln!("GT4Recomp cannot find its folders: {message}");
+            // No window and no console: a portable folder that cannot be written gets a native message.
+            if portable {
+                gt4l_platform::dialog::error_box_ok("GT4Recomp", &message);
+            }
             return;
         }
     };
     let dirs = startup.layout.data.clone();
     let _ = std::fs::create_dir_all(dirs.root());
-    state::log(&dirs, &format!("GT4Recomp {LAUNCHER_VERSION} starting from {}", exe_dir.display()));
+    if portable {
+        // TASK-098: finish or undo the previous update before anything reads the program files.
+        updates::portable_start_cleanup(&dirs, &exe_dir);
+    }
+    state::log(
+        &dirs,
+        &format!("GT4Recomp {LAUNCHER_VERSION} ({} build) starting from {}", gt4l_core::build_kind::BUILD.label(), exe_dir.display()),
+    );
     state::log(&dirs, &format!("start-up: data layout and relocation ready after {} ms", started.elapsed().as_millis()));
     for line in &startup.log {
         state::log(&dirs, line);
@@ -114,6 +133,13 @@ fn main() {
     let shared: state::Shared = Arc::new(Mutex::new(app_state));
     let dirs_for_setup = dirs.clone();
     let guard_for_setup = guard.clone();
+    let mut context = tauri::generate_context!();
+    if portable {
+        // TASK-098: the web view keeps its profile in `data\launcher-webview`, not in %LOCALAPPDATA%, so a portable copy
+        // leaves nothing in the system folders.
+        context.config_mut().app.app_directories_override =
+            Some(tauri::utils::config::AppDirectoriesOverride::Root(dirs.root().join("launcher-webview")));
+    }
     let run_result = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(shared)
@@ -203,7 +229,7 @@ fn main() {
             updates::skip_update,
             tray::confirm_close,
         ])
-        .run(tauri::generate_context!());
+        .run(context);
     // TASK-091: a web view that could not start (WebView2 missing) gets the native message, not a silent exit.
     if let Err(error) = run_result {
         state::log(&dirs, &format!("WebView2 is missing or could not start: {error}"));

@@ -951,6 +951,8 @@ pub struct AboutInfo {
     pub game_name: String,
     /// Credits of the people behind the games GT4Recomp runs (the Spec II authors; see `model::credits_text`).
     pub credits: String,
+    /// The build kind: `Installer` or `Portable` (TASK-098). Settings > About shows it.
+    pub build: String,
 }
 
 /// TASK-099: the release notes of this launcher version, `docs/release-notes/<version>.md`, embedded at build time (a
@@ -1013,6 +1015,7 @@ pub fn about_info_of(shared: &Shared) -> Result<AboutInfo, String> {
         saves_folder: state.user_dirs.root().display().to_string(),
         game_name: state.selected.display_name.to_string(),
         credits: model::credits_text().to_string(),
+        build: gt4l_core::build_kind::BUILD.label().to_string(),
     })
 }
 

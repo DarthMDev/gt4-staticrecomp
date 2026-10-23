@@ -68,14 +68,32 @@ fn previous_data_for(
     read_previous()
 }
 
-/// Step 1. `Err` only when no data or user folder can be named at all.
+/// Step 1. `Err` only when no data or user folder can be named at all (or, in the portable build, cannot be written).
 pub fn prepare(exe_dir: &Path) -> Result<Startup, String> {
-    let mut inputs = LayoutInputs::from_environment(exe_dir, gt4l_platform::known_folder::documents());
-    // The data folder of an earlier install in another folder, as the setup recorded it (TASK-091). Only the
-    // registered install takes it: a portable copy started on the same PC must never move the installed data.
-    inputs.previous_data = previous_data_for(exe_dir, &gt4l_platform::install_record::registered_install_folder, &|| {
-        gt4l_platform::install_record::previous_data_dir()
-    });
+    prepare_as(
+        exe_dir,
+        gt4l_core::build_kind::BUILD.is_portable(),
+        &gt4l_platform::install_record::registered_install_folder,
+        &gt4l_platform::install_record::previous_data_dir,
+    )
+}
+
+/// [`prepare`] for a given build kind, with the two registry reads injected (the portable build never calls them).
+pub fn prepare_as(
+    exe_dir: &Path,
+    portable: bool,
+    read_registered: &dyn Fn() -> Option<String>,
+    read_previous: &dyn Fn() -> Option<PathBuf>,
+) -> Result<Startup, String> {
+    // The portable build (TASK-098) reads no registry value and no system folder: no Documents lookup, no recorded
+    // install, no 1.2.0 places.
+    let mut inputs = LayoutInputs::from_environment(exe_dir, if portable { None } else { gt4l_platform::known_folder::documents() });
+    inputs.portable = portable;
+    if !portable {
+        // The data folder of an earlier install in another folder, as the setup recorded it (TASK-091). Only the
+        // registered install takes it: a portable copy started on the same PC must never move the installed data.
+        inputs.previous_data = previous_data_for(exe_dir, read_registered, read_previous);
+    }
     let layout = paths::resolve_layout(&inputs, &paths::probe_writable)?;
     let mut log = layout.notices.clone();
     log.push(format!(
@@ -85,6 +103,12 @@ pub fn prepare(exe_dir: &Path) -> Result<Startup, String> {
         layout.user_root.display()
     ));
     let new_user = layout.user_dirs();
+    if portable {
+        // A portable folder starts in the 1.3.0 layout: there is nothing to move from 1.2.0 or 1.2.x, so none of the
+        // migrations below run.
+        log.push("portable build: no 1.2.0 migration, no registry".to_string());
+        return Ok(Startup { layout, user: new_user, log, notice: None });
+    }
     let outcome = relocate::migrate_user_data(
         &UserMove {
             legacy: &layout.legacy,
@@ -118,6 +142,15 @@ pub fn prepare(exe_dir: &Path) -> Result<Startup, String> {
 /// Step 2: the per-user install of 1.0.0 to 1.2.0 (program files, Start-menu shortcuts, `HKCU` entries). Skipped
 /// under the development overrides, so a test run never touches a real install.
 pub fn clean_old_install(exe_dir: &Path) -> Vec<String> {
+    clean_old_install_as(gt4l_core::build_kind::BUILD.is_portable(), exe_dir)
+}
+
+/// [`clean_old_install`] for a given build kind. The portable build never touches the registry, Start menu or program
+/// folders of an install.
+pub fn clean_old_install_as(portable: bool, exe_dir: &Path) -> Vec<String> {
+    if portable {
+        return Vec::new();
+    }
     if std::env::var_os(paths::DATA_DIR_OVERRIDE_VAR).is_some() || std::env::var_os(paths::USER_DIR_OVERRIDE_VAR).is_some() {
         return Vec::new();
     }
@@ -445,6 +478,54 @@ mod tests {
 
     use super::*;
     use gt4l_core::paths::{DataDirs, UserRootSource};
+
+    fn portable_scratch(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!("gt4l-portable-start-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn the_portable_start_reads_no_registry_and_moves_nothing() {
+        let exe_dir = portable_scratch("start").join("GT4Recomp");
+        let no_registry = || -> Option<String> { panic!("the portable build must not read the registry") };
+        let no_previous = || -> Option<PathBuf> { panic!("the portable build must not read PreviousDataDir") };
+        let startup = prepare_as(&exe_dir, true, &no_registry, &no_previous).unwrap();
+        assert_eq!(startup.layout.data.root(), exe_dir.join("data"));
+        assert_eq!(startup.user.root(), exe_dir.join("user"));
+        assert_eq!(startup.layout.user_source, UserRootSource::Portable);
+        assert_eq!(startup.layout.legacy, LegacyLocations::default(), "no 1.2.0 places and no previous install");
+        assert!(startup.layout.data.read_layers().is_empty());
+        assert!(startup.notice.is_none());
+        assert!(exe_dir.join("data").is_dir() && exe_dir.join("user").is_dir(), "the two folders are the whole footprint");
+        let siblings: Vec<_> = std::fs::read_dir(&exe_dir).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+        assert_eq!(siblings.len(), 2, "nothing else was created: {siblings:?}");
+        // A second start finds the same folders.
+        let again = prepare_as(&exe_dir, true, &no_registry, &no_previous).unwrap();
+        assert_eq!(again.layout.data.root(), startup.layout.data.root());
+        let _ = std::fs::remove_dir_all(exe_dir.parent().unwrap());
+    }
+
+    #[test]
+    fn a_portable_folder_that_cannot_be_written_asks_to_move_it() {
+        let base = portable_scratch("readonly");
+        // A file where the data folder should be: it can never be created.
+        let exe_dir = base.join("GT4Recomp");
+        std::fs::create_dir_all(&exe_dir).unwrap();
+        std::fs::write(exe_dir.join("data"), b"not a folder").unwrap();
+        let error = match prepare_as(&exe_dir, true, &|| None, &|| None) {
+            Ok(_) => panic!("a data folder that cannot be created must stop the start"),
+            Err(error) => error,
+        };
+        assert!(error.contains("Move the GT4Recomp folder"), "{error}");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_portable_build_never_cleans_an_old_install() {
+        assert!(clean_old_install_as(true, Path::new(r"E:\Portable\GT4Recomp")).is_empty());
+    }
 
     fn layout(base: &Path, documents: bool) -> Layout {
         let local = base.join("Local").join("GT4Recomp");

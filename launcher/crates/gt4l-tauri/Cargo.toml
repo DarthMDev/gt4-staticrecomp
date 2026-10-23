@@ -16,6 +16,8 @@ path = "src/main.rs"
 # Development only: GT4RECOMP_VISUAL_PAGE, GT4RECOMP_VISUAL_READY and GT4RECOMP_VISUAL_SEED set the
 # page, a ready-looking home and a synthetic save library for screenshots. Not in release builds.
 visual-check = []
+# The portable build (TASK-098): user data in `<exe dir>\user`, large data in `<exe dir>\data`, update by zip swap.
+portable = ["gt4l-core/portable"]
 
 [dependencies]
 gt4l-core.workspace = true

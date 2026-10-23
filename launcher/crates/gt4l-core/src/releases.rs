@@ -92,6 +92,15 @@ impl Stream {
             Stream::Renderer => format!("gt4-gs-{}-windows-x64.zip", version.text()),
         }
     }
+
+    /// The download asset for a build kind (TASK-098): the portable build updates from `GT4Recomp-<version>-portable.zip`,
+    /// the installer build from the setup program. gt4-gs has one package for both.
+    pub fn package_name_for(self, version: Version, portable: bool) -> String {
+        match (self, portable) {
+            (Stream::Launcher, true) => format!("GT4Recomp-{}-portable.zip", version.text()),
+            _ => self.package_name(version),
+        }
+    }
 }
 
 /// One downloadable file of a release.

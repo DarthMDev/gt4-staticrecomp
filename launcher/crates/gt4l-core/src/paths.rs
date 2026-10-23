@@ -41,6 +41,10 @@ pub const DOCUMENTS_DIR_OVERRIDE_VAR: &str = "GT4RECOMP_DOCUMENTS_DIR";
 /// Name of the large data folder inside the install folder.
 pub const DATA_FOLDER_NAME: &str = "data";
 
+/// Name of the user data folder inside a portable folder (TASK-098). The installer build keeps that data in
+/// `%APPDATA%\GT4Recomp`; the game (TASK-097) reads its settings from `<install>\user\config` when this folder exists.
+pub const PORTABLE_USER_FOLDER: &str = "user";
+
 /// Name of the per-user folders in `%APPDATA%` and `%LOCALAPPDATA%`.
 pub const APP_FOLDER_NAME: &str = "GT4Recomp";
 
@@ -259,12 +263,13 @@ impl DataDirs {
     /// folder, named from a hash of its path, so the move runs once per folder and a second reinstall elsewhere
     /// gets its own.
     pub fn previous_data_marker(&self, previous: &Path) -> PathBuf {
-        self.root.join(format!("migration-from-{}.json", source_key(previous)))
+        self.root.join(format!("migration-from-{}.json", folder_key(previous)))
     }
 }
 
-/// A short, stable key of a folder: the first 16 hex digits of the SHA-256 of its normalised path.
-fn source_key(folder: &Path) -> String {
+/// A short, stable key of a folder: the first 16 hex digits of the SHA-256 of its normalised path (case, `.`/`..` and
+/// separators do not count). Names the migration markers, and the single-instance lock of a portable folder.
+pub fn folder_key(folder: &Path) -> String {
     let digest = Sha256::digest(normalized(folder).join("\\").as_bytes());
     digest.iter().take(8).map(|byte| format!("{byte:02x}")).collect()
 }
@@ -280,6 +285,8 @@ pub enum UserRootSource {
     Legacy(String),
     /// The save library could not be used where it should be; it is in the data folder. The text says why.
     Fallback(String),
+    /// The portable build: `<exe dir>\user`, beside the program (TASK-098).
+    Portable,
 }
 
 /// The user data: settings, controls, the save library and the card backups. Normally all under
@@ -470,6 +477,8 @@ pub struct LayoutInputs {
     pub known_documents: Option<PathBuf>,
     /// The `PreviousDataDir` the setup recorded (HKLM), read by the caller; ignored under the test overrides.
     pub previous_data: Option<PathBuf>,
+    /// The portable build (TASK-098): `<exe dir>\user` and `<exe dir>\data` only, no read layers, no system folders.
+    pub portable: bool,
 }
 
 impl LayoutInputs {
@@ -485,8 +494,9 @@ impl LayoutInputs {
             documents_override: non_empty(DOCUMENTS_DIR_OVERRIDE_VAR),
             app_data: non_empty("APPDATA").map(PathBuf::from),
             local_app_data: non_empty("LOCALAPPDATA").map(PathBuf::from),
-            known_documents,
+            known_documents: if crate::build_kind::BUILD.is_portable() { None } else { known_documents },
             previous_data: None,
+            portable: crate::build_kind::BUILD.is_portable(),
         }
     }
 }
@@ -513,6 +523,9 @@ impl Layout {
 /// Resolves the folders. `writable` tells whether a folder can be written (it may create the folder; see
 /// [`probe_writable`]). Nothing else is created here. Errors only when no data or user folder can be named at all.
 pub fn resolve_layout(inputs: &LayoutInputs, writable: &dyn Fn(&Path) -> bool) -> Result<Layout, String> {
+    if inputs.portable && inputs.data_override.is_none() {
+        return resolve_portable_layout(inputs, writable);
+    }
     let mut notices = Vec::new();
     let testing = inputs.data_override.is_some();
     // The 1.2.0 places. Under GT4RECOMP_DATA_DIR only the given overrides count, so a test never sees real folders.
@@ -575,6 +588,37 @@ pub fn resolve_layout(inputs: &LayoutInputs, writable: &dyn Fn(&Path) -> bool) -
         },
     };
     Ok(Layout { data, user_root, user_source, legacy, notices })
+}
+
+/// The message of a portable folder that cannot be written (a copy inside Program Files, a read-only drive).
+pub fn portable_not_writable_message(folder: &Path) -> String {
+    format!(
+        "GT4Recomp cannot write to {}. Move the GT4Recomp folder to a place you can write to (another drive, or a folder in your \
+         Documents) and start it again.",
+        folder.display()
+    )
+}
+
+/// The portable build (TASK-098): `UserDirs` in `<exe dir>\user`, `DataDirs` in `<exe dir>\data`, the standard per-game
+/// layout inside both. No read layers, no `%LOCALAPPDATA%` write fallback, no 1.2.0 places, no previous install: a folder
+/// that cannot be written is an error that tells the player to move the folder. `GT4RECOMP_USER_DIR` still replaces the
+/// user folder (tests).
+fn resolve_portable_layout(inputs: &LayoutInputs, writable: &dyn Fn(&Path) -> bool) -> Result<Layout, String> {
+    let data_root = inputs.exe_dir.join(DATA_FOLDER_NAME);
+    if !writable(&data_root) {
+        return Err(portable_not_writable_message(&data_root));
+    }
+    let (user_root, user_source) = match &inputs.user_override {
+        Some(value) => (PathBuf::from(value), UserRootSource::Override),
+        None => (inputs.exe_dir.join(PORTABLE_USER_FOLDER), UserRootSource::Portable),
+    };
+    if user_source == UserRootSource::Portable && !writable(&user_root) {
+        return Err(portable_not_writable_message(&user_root));
+    }
+    let mut data = DataDirs::new(data_root);
+    // A portable folder is new in 1.3.0: it never had the flat 1.2.x game folders.
+    data.set_flat_gt4(false);
+    Ok(Layout { data, user_root, user_source, legacy: LegacyLocations::default(), notices: Vec::new() })
 }
 
 /// Whether `folder` can be written: it is created if missing, then a probe file is written and removed.
@@ -825,6 +869,92 @@ mod tests {
         assert_eq!(resolve_portable(elsewhere, install), elsewhere);
         // Case differences still count as inside.
         assert!(portable_path(Path::new("c:/program files/gt4recomp/game"), install).is_relative());
+    }
+
+    fn portable_inputs(exe_dir: &Path, base: &Path) -> LayoutInputs {
+        LayoutInputs {
+            portable: true,
+            // Everything an installed build would read is present, to prove the portable build ignores it.
+            previous_data: Some(base.join("Program Files").join("GT4Recomp").join("data")),
+            known_documents: Some(base.to_path_buf()),
+            ..inputs(exe_dir, base)
+        }
+    }
+
+    #[test]
+    fn the_portable_build_keeps_user_and_data_beside_the_executable() {
+        let base = scratch("portable-layout");
+        let exe_dir = base.join("E").join("GT4Recomp");
+        let layout = resolve_layout(&portable_inputs(&exe_dir, &base), &probe_writable).unwrap();
+        assert_eq!(layout.data.root(), exe_dir.join("data"));
+        assert_eq!(layout.user_root, exe_dir.join("user"));
+        assert_eq!(layout.user_source, UserRootSource::Portable);
+        assert!(layout.data.read_layers().is_empty(), "no read layers");
+        assert_eq!(layout.legacy, LegacyLocations::default(), "no 1.2.0 places, no previous install");
+        assert!(layout.notices.is_empty());
+        // The same per-game layout as the installer build.
+        let user = layout.user_dirs();
+        assert_eq!(user.config_file(), exe_dir.join("user").join("config").join("settings.toml"));
+        assert_eq!(user.controls_file(), exe_dir.join("user").join("controls.toml"));
+        assert_eq!(user.saves(), exe_dir.join("user").join("games").join("gt4").join("Saves"));
+        assert_eq!(
+            user.for_game(&crate::games::SPEC2).card_backups(),
+            exe_dir.join("user").join("games").join("spec2").join("backups")
+        );
+        assert_eq!(layout.data.runtime_card(), exe_dir.join("data").join("games").join("gt4").join("runtime").join("card.ps2"));
+        assert_eq!(layout.data.setup_prepared(), exe_dir.join("data").join("games").join("gt4").join("prepared"));
+        assert_eq!(layout.data.renderer_install_root(), exe_dir.join("data").join("gs"));
+        assert_eq!(layout.data.textures(), exe_dir.join("data").join("Textures"));
+        assert_eq!(layout.data.logs(), exe_dir.join("data").join("logs"));
+        assert!(!layout.data.write_places().contains(&exe_dir.join("data")), "no flat 1.2.x folder in a portable copy");
+        assert!(!base.join("Local").exists() && !base.join("Roaming").exists(), "no system folder is created");
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_portable_build_never_falls_back_to_a_system_folder() {
+        let base = scratch("portable-readonly");
+        let exe_dir = base.join("Program Files").join("GT4Recomp");
+        let data = exe_dir.join("data");
+        let user = exe_dir.join("user");
+        let given = portable_inputs(&exe_dir, &base);
+        let data_locked = data.clone();
+        let error = resolve_layout(&given, &move |folder: &Path| !same_path(folder, &data_locked)).unwrap_err();
+        assert!(error.contains("Move the GT4Recomp folder"), "{error}");
+        assert!(error.contains(&data.display().to_string()), "the message names the folder: {error}");
+        let user_locked = user.clone();
+        let error = resolve_layout(&given, &move |folder: &Path| !same_path(folder, &user_locked)).unwrap_err();
+        assert!(error.contains(&user.display().to_string()), "{error}");
+        assert!(!base.join("Local").exists(), "%LOCALAPPDATA% is not used");
+        // The installer build, in the same situation, falls back to %LOCALAPPDATA% (unchanged).
+        let installer = LayoutInputs { portable: false, ..given };
+        let layout = resolve_layout(&installer, &move |folder: &Path| !same_path(folder, &data)).unwrap();
+        assert_eq!(layout.data.root(), base.join("Local").join("GT4Recomp"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_portable_build_still_honours_the_test_overrides() {
+        let base = scratch("portable-overrides");
+        let mut given = portable_inputs(&base.join("exe"), &base);
+        given.data_override = Some(base.join("test-data").into_os_string());
+        let layout = resolve_layout(&given, &|_: &Path| panic!("no probe under the override")).unwrap();
+        assert_eq!(layout.data.root(), base.join("test-data"));
+        assert_eq!(layout.user_root, base.join("test-data").join("user"));
+        assert_eq!(layout.user_source, UserRootSource::Override);
+        given.data_override = None;
+        given.user_override = Some(base.join("test-user").into_os_string());
+        let layout = resolve_layout(&given, &|_: &Path| true).unwrap();
+        assert_eq!(layout.data.root(), base.join("exe").join("data"));
+        assert_eq!(layout.user_root, base.join("test-user"));
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_environment_inputs_follow_the_compiled_build_kind() {
+        let from_environment = LayoutInputs::from_environment(Path::new("X:/GT4Recomp"), Some(PathBuf::from("X:/Docs")));
+        assert_eq!(from_environment.portable, crate::build_kind::BUILD.is_portable());
+        assert_eq!(from_environment.known_documents.is_none(), crate::build_kind::BUILD.is_portable());
     }
 
     #[test]
