@@ -6,11 +6,15 @@ Branch `task/027-coregs2`. Owner requirement (2026-10-23): CoreGS 2.0 must reach
 scale; item 2 of `docs/hw-renderer-spec/PARITY-PLAN.md` (tone-sequence HLE, memory-exact) landed first.
 `hw_tone_strips.comp` writes the eight 8 x 32 decal T8 strips of one 64 x 32 frame-buffer page in one dispatch from
 the GLM (index texel -> 07.4 CSM1 palette entry of the strip's quadrant -> CT24 RGB, alpha kept), replacing 135,399
-strip batches with 16,940 page dispatches on the 480p race capture (140 per frame). All five memory captures are
+strip batches with 16,940 page dispatches on the 480p race capture (140 per frame) and 118,580 palette loads held
+(GPU CLUT loads 200,467 -> 98,827). All five memory captures are
 byte-identical (menu 1,101 frames, race 121, car 121, night 121 with `fifo_hash=3a2fe617a174e7e7`, race480p 121),
 `hw_tone_hle_exact` compares the dispatch against the batches (0 of 2 frames differ in 4 MiB, 0 pixels off the CPU
 form of the rule, 0 alpha bytes changed) and CTest passes in both interlock modes. Replay CPU per frame: GS stream
-9.95 -> 9.31 ms, batch 5.54 -> 4.71, translate 1.83 -> 1.00, execute 3.52 -> 3.35; GLM swizzles 33,938 -> 18,272.
+9.95 -> 8.14 ms, batch 5.54 -> 4.28, translate 1.83 -> 0.97, execute 3.52 -> 2.89, CLUT 1.12 -> 0.75; GLM swizzles
+33,938 -> 18,272. In the game (headless 480p race, same build with the HLE off and on): GS thread 13.4-15.6 ->
+10.6-11.6 ms, render passes 341-347 -> 198-204, barriers 1,591-1,645 -> 1,437-1,474; GPU busy 7.19 -> 5.35 ms at 1x
+and 19.01 -> 16.92 ms at 6x, which leaves the scaled pass (9.2 ms at 6x) as the next target (item 1 of the plan).
 Switches `GT4_HW_TONE_HLE=0` / `--no-tone-hle` and `GT4_HW_VERIFY_SHUFFLE=1` / `--tone-verify`. Not merged; no pins.
 
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)

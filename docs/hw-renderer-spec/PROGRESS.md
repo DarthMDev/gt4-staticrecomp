@@ -31,12 +31,19 @@ Item 2 of `PARITY-PLAN.md`, first step (the strip executor), implemented and gat
   (index texel -> 07.4 CSM1 palette entry of the strip's quadrant -> CT24 RGB, alpha kept); the page becomes
   GLM-owned like a parked target. Matching is a strict template with the palette base and each strip CBP checked, so
   anything that is not GT4's sequence keeps the normal path, and a page that stops decoding keeps its prefix.
-- Race 480p replay: 16,940 page dispatches replacing 135,399 strip batches; 9.95 -> 9.31 ms GS stream, 5.54 -> 4.71
-  ms batch, 1.83 -> 1.00 ms translate, 3.52 -> 3.35 ms execute per frame; GLM swizzles 33,938 -> 18,272.
+  A collected strip's palette load is held (only the last of the eight can be observed) and recorded before anything
+  else reads the CLUT.
+- Race 480p replay: 16,940 page dispatches replacing 135,399 strip batches and 118,580 held (101,640 dropped)
+  strip palette loads, so GPU CLUT loads 200,467 -> 98,827; 9.95 -> 8.14 ms GS stream, 5.54 -> 4.28 ms batch,
+  1.83 -> 0.97 ms translate, 3.52 -> 2.89 ms execute, 1.12 -> 0.75 ms CLUT per frame; GLM swizzles 33,938 -> 18,272.
 - Gates: memory byte-identical on all five captures (menu 1,101 frames, race 121, car 121, night 121 with
   `fifo_hash=3a2fe617a174e7e7`, race480p 121); `hw_tone_hle_exact` 0/2 frames differ, 0 pixels off the CPU form of
   the rule, 0 alpha bytes changed, and the refused third page exact; CTest with and without the interlock.
 - Switches: `GT4_HW_TONE_HLE=0` / replay `--no-tone-hle`; `GT4_HW_VERIFY_SHUFFLE=1` / replay `--tone-verify`.
+- In the game (headless 480p race, same build with the HLE off and on): GS thread 13.4-15.6 -> 10.6-11.6 ms per
+  frame, process 32.7-37.3 -> 30.9-33.5 core-ms, render passes 341-347 -> 198-204, barriers 1,591-1,645 ->
+  1,437-1,474. GPU busy in the replay (`--gpu-timing`): 7.19 -> 5.35 ms at 1x, 19.01 -> 16.92 ms at 6x, so the
+  scaled pass (9.2 ms at 6x) is now the largest single cost and item 1 is the next step.
 
 ## Log
 

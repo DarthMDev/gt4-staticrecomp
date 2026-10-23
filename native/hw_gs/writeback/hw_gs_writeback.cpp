@@ -1815,11 +1815,39 @@ public:
     // a load happens. So a palette the game drew on the GPU needs no write-back.
     bool GpuClutActive() const { return cacheMode_ && glmEnabled_ && gpuClutEnabled_; }
 
-    void OnClutLoaded(const clut::Tex0Write& write) {
+    void OnClutLoaded(const clut::Tex0Write& write, bool deferrable = true) {
         // IN-383: the strips of GT4's tone sequence are collected with the palette load that precedes each of them, so
         // a page that has to run its batches afterwards can repeat the load instead of using a later palette.
         toneClut_ = write;
         toneClutValid_ = true;
+        if (!GpuClutActive() || failed_) return;
+        // IN-383: a collected strip's palette is not needed by its page's dispatch (the dispatch reads the palette
+        // itself from the temporary page), and the eight loads of a page all write different groups over the same
+        // 256 entries, so only the LAST one can be observed: the load of the next strip is held and the previous one
+        // is dropped. The held load is recorded before anything else reads the CLUT (another load, the page's flush,
+        // a reset or a mode change), which is the same palette the normal path leaves behind.
+        if (deferrable && toneHle_ && tonePage_.active && tonePage_.strips < 8 &&
+            write.cbp == tonePage_.absoluteCbp[0] + kToneQuadrantBlock[tonePage_.strips] &&
+            write.psm == static_cast<uint32_t>(memory::Psm::T8) && write.cpsm == 0 && write.csm == 0 && write.csa == 0) {
+            if (tonePendingClutValid_) ++counters.toneClutLoadsDropped;  // superseded by this strip's own group
+            tonePendingClut_ = write;
+            tonePendingClutValid_ = true;
+            ++counters.toneClutLoadsHeld;
+            return;
+        }
+        RecordTonePendingClut();
+        RecordGpuClutLoad(write);
+    }
+
+    // The held strip palette load, recorded on the GPU now (IN-383). The GPU CLUT ends as the normal path leaves it.
+    void RecordTonePendingClut() {
+        if (!tonePendingClutValid_) return;
+        const clut::Tex0Write write = tonePendingClut_;
+        tonePendingClutValid_ = false;
+        RecordGpuClutLoad(write);
+    }
+
+    void RecordGpuClutLoad(const clut::Tex0Write& write) {
         if (!GpuClutActive() || failed_) return;
         StageTimer timer(counters.clutUs);
         if (!gpuClutSynced_) SyncGpuClut();
@@ -2158,6 +2186,8 @@ public:
     ToneStripPage tonePage_;
     clut::Tex0Write toneClut_{};  // the last palette load (IN-383: repeated when a collected strip runs normally)
     bool toneClutValid_ = false;
+    clut::Tex0Write tonePendingClut_{};  // IN-383: a collected strip's palette load, held until it can be observed
+    bool tonePendingClutValid_ = false;
     bool toneHle_ = true;         // GT4_HW_TONE_HLE (A/B: off takes the normal path)
     bool verifyShuffle_ = false;  // GT4_HW_VERIFY_SHUFFLE: run both and compare the page (09.4)
 
@@ -2275,8 +2305,12 @@ public:
     // Writes the collected page: one dispatch, or the batches themselves when the page does not decode as 09.4's
     // strip sequence. Every source is made current in the GLM first; the page becomes GLM-owned afterwards.
     void FlushToneStrips() {
-        if (!tonePage_.active) return;
+        if (!tonePage_.active) {
+            RecordTonePendingClut();  // IN-383: a held strip palette is put back before anything else reads the CLUT
+            return;
+        }
         tonePage_.active = false;
+        RecordTonePendingClut();  // IN-383
         const uint32_t strips = tonePage_.strips;
         if (strips == 0) return;
         if (failed_) {
@@ -3104,6 +3138,7 @@ void Renderer::SetGlm(bool enabled) {
 }
 
 void Renderer::SetGpuClut(bool enabled) {
+    impl_->FlushToneStrips();  // IN-383: a held strip palette is recorded while the GPU CLUT is still authoritative
     impl_->gpuClutEnabled_ = enabled;
     impl_->UpdateClutCopies();
 }

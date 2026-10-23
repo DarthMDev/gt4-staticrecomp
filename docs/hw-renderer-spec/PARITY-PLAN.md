@@ -22,17 +22,20 @@ the owner moved the work to another agent. Read it together with `AGENTS.md`, `d
 
 ## 2. Current state
 
-- **Branch:** `task/027-coregs2`, last green commit **ce15f2a** (pushed). Nothing of items 1 and 2 is committed.
-  - The working tree is clean.
-  - The build tree `O:\gt4recomp-scratch\coregs2-slice270-present\build` contains binaries of reverted experiments,
-    so rebuild before using it.
-- **Candidate 272:** `O:\gt4recomp-scratch\coregs2-candidate-272`.
-  - `gt4vulkan.exe` sha256 `6a0506e174944bcac7a830d422d90fb6615518f90c249f540534aba142145c4d`.
-  - Not yet tested by the owner (owner test 9 is pending).
-  - Contents: 480i menus at scale (IN-381) and no scaled repeat of the tone sequence (IN-382), on top of
-    IN-371..IN-380.
-- **Last gates (slice272):**
-  - CTest 243/243 with and without interlock.
+- **Branch:** `task/027-coregs2`, last green commit **15f7caa** (pushed): item 2's first step (IN-383).
+  - Item 2, strip executor **done**: `hw_tone_strips.comp` writes the eight strip batches of one 64 x 32 page in one
+    dispatch (135,399 -> 16,940 on the 480p race capture), the strips' palette loads are held (GPU CLUT loads
+    200,467 -> 98,827), all five memory captures are byte-identical and `hw_tone_hle_exact` passes.
+  - Item 2's second step (the three temp batches per page) is **not** done; the plan's warning stands (pixel-centre
+    rules and v steps are not worth guessing).
+  - Item 1 is **not** implemented. Section 3 below has the findings that matter for it.
+  - The build tree `O:\gt4recomp-scratch\coregs2-slice270-present\build` matches commit 15f7caa; rebuild before use.
+- **Candidate 273:** `O:\gt4recomp-scratch\coregs2-candidate-273`.
+  - `gt4vulkan.exe` sha256 `7c410e535e3a33b50cc71e411d44a9c98c188c1f51dee1a31a73eb0e306d28e0` (97,959,424 bytes).
+  - `build\hwr-play-scale.ps1` defaults to it (`-Candidate`, run folder `private\hwr-play-273`).
+  - Contents: item 2 (IN-383) on top of candidate 272's IN-371..IN-382.
+- **Gates after IN-383 (slice273):**
+  - CTest 244/244 with and without interlock.
   - Memory hashes identical on all five captures (night `fifo_hash=3a2fe617a174e7e7`).
   - Menu dumps 42/42 = slice228; race 42/42 = slice235; default renderer 42/42 = slice214.
   - Race `--check-presented`: 0 low-detail frames at 2x/4x/6x.
@@ -155,6 +158,32 @@ classification test that an exact-only state (DATE, PABE, ATE FB_ONLY) takes the
 
 **Measure:** `--gpu-timing` replays at 1/2/4/6x (the `scaled` category), plus the game's `[hw] cost` and `[hw] gpu`
 lines. Compare with gt4-gs only as a black box: power and GPU load, final frames only.
+
+### Findings for the implementer (2026-10-23, before the work started)
+
+- **The scaled images are `kGpuScaledExtent * scale` squares**, i.e. 6144 x 6144 at 6x: about 151 MB each, and the
+  drawer already allocates 6 colour + 3 depth + `scaledTexels` + 2 shadows (about 1.6 GB at 6x). The mutable-format
+  RGBA8 view therefore costs nothing extra, but a D32 twin per depth slot adds about 150 MB per slot at 6x: create it
+  lazily and only for the slots the fast path uses.
+- **The scaled pass has no attachments today**: `scaledFramebuffer` is created with `attachmentCount = 0` and the
+  uber shader reads and writes the scaled images as storage images (bindings 2 and 3 of the slot descriptor set), so
+  the fast path needs a *second* render pass (1 colour attachment + 1 depth attachment) and one framebuffer per
+  (colour slot, depth slot) pair, 18 of them. `setLayout` can stay the layout of the fast fragment shader (uniform
+  buffer, atlas sampler), so the fast pipeline needs its own small descriptor set layout.
+- **Do not convert D32 back to r32ui.** The depth words are the only exact thing in the scaled image, and
+  `uint -> float -> uint` loses mantissa bits. Instead let the fast fragment shader write the incoming depth word into
+  the r32ui storage image (binding 2, write only, no read, no interlock) while the D32 attachment does the test and the
+  early-Z rejection: the two stay in step because the fragment sequence per pixel is the same. The only conversion left
+  is `r32ui -> D32` after `refresh_scaled(depth)` (a slot load) or an *exact* scaled depth draw, over a rectangle the
+  caller knows (`slot.loaded` / the draw rect), tracked with a per-slot "D32 current" rectangle. A whole-slot
+  conversion at 6x is about 19 M pixels; over the loaded rect of a race frame it is 0.3 M.
+- **Cost model:** the scaled pass is 8.5 ms for about 10.3 M pixels (640 x 448 at 6x) or less at 1.2 Gfrag/s, so the
+  win must come from early-Z (most of those fragments are hidden) and from the simpler shader, not from the blend unit
+  alone: the interlock removal alone measured 0.5-1 ms.
+- Alpha test can only be `discard` (AFAIL = KEEP); DATE and PABE must take the exact path, and a texture sampled with
+  REGION_REPEAT/REGION_CLAMP or the 4-bit fix stays exact (a hardware sampler cannot express those).
+- The classification has to know the *palette*: an indexed texture decoded through the GPU CLUT (IN-349/IN-370) is
+  already expanded into the atlas, so the fast sampler can use it as long as the atlas holds RGBA8 texels.
 
 ## 4. Item 2: tone-sequence HLE at 1x (approved, memory-exact)
 

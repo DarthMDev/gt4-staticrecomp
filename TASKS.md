@@ -967,9 +967,11 @@ barriers around CLUT loads, the GIF front end, M8 readbacks per the readback stu
 raster) approved with a tolerance only on the presentation-only scaled image, item 2 (tone-sequence HLE at 1x)
 approved as memory-exact, item 5 (skipping the 1x redraw) rejected. Item 2's first step landed (IN-383): the eight
 strip batches of one 64 x 32 page run as one GLM dispatch (`hw_tone_strips.comp`), 135,399 -> 16,940 dispatches on the
-480p race capture, all five memory captures byte-identical, `hw_tone_hle_exact` 0 of 2 frames different, replay CPU
-GS stream 9.95 -> 9.31 ms per frame. Switches `GT4_HW_TONE_HLE` and `GT4_HW_VERIFY_SHUFFLE` (replay
-`--no-tone-hle`/`--tone-verify`). No PR, no merge, no pins; owner test 10 pending.
+480p race capture, with 118,580 of its palette loads held (GPU CLUT loads 200,467 -> 98,827); all five memory captures
+byte-identical, `hw_tone_hle_exact` 0 of 2 frames different, replay CPU GS stream 9.95 -> 8.14 ms per frame; in the game the GS thread drops 13.4-15.6 -> 10.6-11.6 ms and the
+render passes 341-347 -> 198-204. Item 1 (fast scaled raster) is designed but not implemented, see PARITY-PLAN. Switches
+`GT4_HW_TONE_HLE` and `GT4_HW_VERIFY_SHUFFLE` (replay `--no-tone-hle`/`--tone-verify`). No PR, no merge, no pins;
+owner test 10 pending.
 
 **Paused by the owner on 2026-10-15** to focus on release 1.0.0. State on the
 integration branch `task/027-hw-renderer`: CPU-verified pure libraries for GS

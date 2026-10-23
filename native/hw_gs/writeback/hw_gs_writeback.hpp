@@ -99,6 +99,8 @@ struct Counters {
     std::uint64_t toneStripBatchesDeferred = 0;
     std::uint64_t toneVerifyPages = 0;
     std::uint64_t toneVerifyMismatchBytes = 0;
+    std::uint64_t toneClutLoadsHeld = 0;      // IN-383: strip palette loads held (not recorded) instead of performed
+    std::uint64_t toneClutLoadsDropped = 0;   // IN-383: held loads a later strip's load superseded
     std::uint64_t glmMergedWords = 0;
     std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).

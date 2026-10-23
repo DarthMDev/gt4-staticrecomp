@@ -554,12 +554,14 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(counters.glmUploadMerges),
                 static_cast<unsigned long long>(counters.glmHostUploads));
     std::printf("tone_strip_pages=%llu tone_strip_batches=%llu tone_strip_deferred=%llu tone_verify_pages=%llu "
-                "tone_verify_mismatch_bytes=%llu\n",
+                "tone_verify_mismatch_bytes=%llu tone_clut_held=%llu tone_clut_dropped=%llu\n",
                 static_cast<unsigned long long>(counters.toneStripPages),
                 static_cast<unsigned long long>(counters.toneStripBatches),
                 static_cast<unsigned long long>(counters.toneStripBatchesDeferred),
                 static_cast<unsigned long long>(counters.toneVerifyPages),
-                static_cast<unsigned long long>(counters.toneVerifyMismatchBytes));
+                static_cast<unsigned long long>(counters.toneVerifyMismatchBytes),
+                static_cast<unsigned long long>(counters.toneClutLoadsHeld),
+                static_cast<unsigned long long>(counters.toneClutLoadsDropped));
     std::printf("sync_mode=%s resident_batches=%llu fallback_batches=%llu loads=%llu load_words=%llu writebacks=%llu "
                 "writeback_words=%llu\n",
                 cacheMode ? "cache" : "writeback", static_cast<unsigned long long>(counters.cacheResidentBatches),
