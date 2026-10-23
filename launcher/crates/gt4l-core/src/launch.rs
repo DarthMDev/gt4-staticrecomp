@@ -219,6 +219,46 @@ pub fn gs_config_text(settings: &Settings, paths: &Pcsx2Paths, display: Option<&
     gs_table::render_ini(&user, &launcher).map_err(|error| error.to_string())
 }
 
+/// Name of the file the game reads for a direct start (TASK-097), in the user config folder.
+pub const STANDALONE_CONFIG_FILE: &str = "game.ini";
+
+/// Name of the gt4-gs.ini the launcher keeps in the user config folder for a direct start (TASK-097). A Play still writes
+/// its own copy into the session folder.
+pub const STANDALONE_GS_INI_FILE: &str = "gt4-gs.ini";
+
+/// The `game.ini` text (TASK-097): the player's choices that the launcher turns into variables at Play, so a direct start of
+/// the game (no launcher) honours them. `key=value` lines read by `native/standalone.cpp`:
+/// `fullscreen`, `present_mode`, `monitor`, `output_size` (only when a monitor is known), `async_gs`, `performance_report`
+/// and `check_vu_code`. Each key stands for the variable [`add_common`] and [`display_environment`] set (the mapping is
+/// tested against them). Anything the game defaults itself (GSdx, 480p, 16:9, automatic ultrawide) is not written.
+pub fn standalone_config_text(settings: &Settings, display: Option<&DisplayTarget>) -> String {
+    let present = match settings.get("vsync") {
+        "fast" => "mailbox",
+        "off" => "immediate",
+        _ => "fifo",
+    };
+    let check_vu_code = match settings.get("check_vu_code") {
+        "100" => "100",
+        "1000" => "1000",
+        _ => "0",
+    };
+    let mut text = String::from(
+        "# GT4Recomp: what the launcher chose for a direct start of the game (TASK-097).\n\
+         # Written by the launcher whenever a setting changes and before every Play. Do not edit by hand.\n\
+         version=1\n",
+    );
+    text.push_str(&format!("fullscreen={}\n", flag(settings.is_on("fullscreen"))));
+    text.push_str(&format!("present_mode={present}\n"));
+    if let Some(target) = display {
+        text.push_str(&format!("monitor={}\n", target.device));
+        text.push_str(&format!("output_size={}\n", target.output.text()));
+    }
+    text.push_str(&format!("async_gs={}\n", flag(settings.is_on("async_gs"))));
+    text.push_str(&format!("performance_report={}\n", flag(settings.is_on("performance_report"))));
+    text.push_str(&format!("check_vu_code={check_vu_code}\n"));
+    text
+}
+
 /// Whether the game asked for a restart with the built-in renderer (its log holds the marker line). The launcher
 /// answers with the GSdx error, not with a restart (TASK-096).
 pub fn restart_requested(log_text: &str) -> bool {

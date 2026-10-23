@@ -364,3 +364,107 @@ fn both_window_modes_pass_window_and_send_gt4_fullscreen_to_the_game_and_the_gs_
         assert_eq!(env_map(&gs_plan.environment)["GT4_FULLSCREEN"], expected, "the PCSX2 GS path gets the same mode");
     }
 }
+
+// ---- TASK-097: the config file of a direct start ---------------------------------------------------------------------
+
+/// The sample the game's fixture (`native/standalone_fixture.cpp`) parses.
+const STANDALONE_SAMPLE: &str = include_str!("../../../../native/standalone_samples/game.ini");
+
+#[test]
+fn the_game_ini_matches_the_sample_the_game_fixture_reads() {
+    let display = display_target(r"\\.\DISPLAY2", 3440, 1440);
+    let text = launch::standalone_config_text(&Settings::default(), Some(&display));
+    assert_eq!(text.replace("\r\n", "\n"), STANDALONE_SAMPLE.replace("\r\n", "\n"));
+}
+
+/// The variable a `game.ini` key stands for (the mapping `native/standalone.cpp` `config_environment` implements).
+fn variables_of_game_ini(text: &str) -> std::collections::BTreeMap<String, String> {
+    let mut variables = std::collections::BTreeMap::new();
+    for line in text.lines().filter(|line| !line.starts_with('#') && !line.is_empty()) {
+        let (key, value) = line.split_once('=').expect("key=value");
+        match key {
+            "version" => {}
+            "fullscreen" => {
+                variables.insert("GT4_FULLSCREEN".to_string(), value.to_string());
+            }
+            "present_mode" => {
+                variables.insert("GT4_PRESENT_MODE".to_string(), value.to_string());
+            }
+            "monitor" => {
+                variables.insert("GT4_MONITOR".to_string(), value.to_string());
+            }
+            "output_size" => {
+                variables.insert("GT4_OUTPUT_SIZE".to_string(), value.to_string());
+            }
+            "async_gs" => {
+                if value == "0" {
+                    variables.insert("GT4_GS_SYNC".to_string(), "1".to_string());
+                }
+            }
+            "performance_report" => {
+                if value == "1" {
+                    variables.insert("GT4_PERF".to_string(), "1".to_string());
+                }
+            }
+            "check_vu_code" => {
+                if value != "0" {
+                    variables.insert("GT4_VU1_VERIFY".to_string(), value.to_string());
+                    variables.insert("GT4_VU0_VERIFY".to_string(), value.to_string());
+                }
+            }
+            other => panic!("unknown game.ini key {other}"),
+        }
+    }
+    variables
+}
+
+#[test]
+fn every_game_ini_key_stands_for_the_variable_the_launcher_sets_at_play() {
+    let variants: Vec<Vec<(&str, &str)>> = vec![
+        vec![],
+        vec![("fullscreen", "off")],
+        vec![("vsync", "fast")],
+        vec![("vsync", "off"), ("async_gs", "off")],
+        vec![("performance_report", "on"), ("check_vu_code", "100")],
+        vec![("check_vu_code", "1000"), ("fullscreen", "off"), ("vsync", "on")],
+    ];
+    let display = display_target(r"\\.\DISPLAY1", 2560, 1440);
+    for changes in variants {
+        let mut settings = Settings::default();
+        for (id, value) in &changes {
+            settings.set(id, value).unwrap_or_else(|error| panic!("{id}={value}: {error}"));
+        }
+        for shown in [Some(&display), None] {
+            let text = launch::standalone_config_text(&settings, shown);
+            let from_ini = variables_of_game_ini(&text);
+            let mut at_play = env_map(&game_environment(&settings));
+            at_play.extend(env_map(&launch::display_environment(shown)));
+            // Every variable the file stands for has exactly the value Play sets.
+            for (name, value) in &from_ini {
+                assert_eq!(at_play.get(name), Some(value), "{name} for {changes:?}, display {}", shown.is_some());
+            }
+            // And the file leaves out nothing that Play sets and the game does not default itself.
+            for name in ["GT4_FULLSCREEN", "GT4_PRESENT_MODE", "GT4_GS_SYNC", "GT4_PERF", "GT4_VU1_VERIFY", "GT4_VU0_VERIFY", "GT4_MONITOR", "GT4_OUTPUT_SIZE"] {
+                assert_eq!(from_ini.get(name), at_play.get(name), "{name} for {changes:?}, display {}", shown.is_some());
+            }
+        }
+    }
+}
+
+#[test]
+fn the_game_defaults_are_the_values_the_launcher_sets_for_default_settings() {
+    // native/standalone.cpp default_environment(): the six variables the game applies when nothing else says otherwise.
+    let defaults = [
+        ("GT4_RENDERER", "pcsx2"),
+        ("PS2_GS", "gpu"),
+        ("GT4_FORCE_480P", "1"),
+        ("GT4_FORCE_WIDESCREEN", "1"),
+        ("GT4_DISPLAY_ASPECT", "auto"),
+        ("GT4_FULLSCREEN", "1"),
+        ("GT4_PRESENT_MODE", "fifo"),
+    ];
+    let at_play = env_map(&game_environment(&Settings::default()));
+    for (name, value) in defaults {
+        assert_eq!(at_play[name], value, "{name}");
+    }
+}

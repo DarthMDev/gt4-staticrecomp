@@ -2686,4 +2686,54 @@ Run notes:
   (City Courses), `12200:cross` (track), `13000:cross` (Normal), `14400:cross` (Ford), carousel `right` ×5,
   `16400:cross` (car), `17200/18000:cross`, then hold `cross` to drive.
 
+## Slice 278 - TASK-097 self-sufficient game, TASK-098 portable build (release 1.3.0)
 
+Build recipe: the slice268 / release 1.2.3 recipe (capsules `slice262-frame-cost-runtime`, `slice262-license-guard-runtime`,
+port `slice200`, shaders `slice153-pacing-shaders`, `GT4_EE_PROFILE=aspect`, `GT4_RELEASE_DISTRIBUTION=ON`) with
+`-S C:\Antigravity\gt4-wt-101-multi-game` and `-B O:\gt4recomp-scratch\slice278-build\build` (C: is short of space). No new
+capsule, no new pin file: the executable differs from every pinned one, so `test_make_distribution` (the release-pin check
+of `docs/inputs/slice268-pcsx2.json`) fails with this build, as with any rebuilt executable.
+
+Game side (`native/`):
+
+- `game_main.cpp` is the new `main`. The pinned donor `main.cpp` (port slice200, hash-checked, untouched) is compiled with the
+  source property `COMPILE_DEFINITIONS main=gt4_donor_main` and called from it. `bcrypt` is linked for the GSdx hash.
+- `standalone.hpp/.cpp`: the rules, with injected file and environment access. A start with no ELF argument (argc 1, or only
+  `--` options other than `--portable-check`) is *standalone*; an ELF argument is the *explicit mode*, which goes straight to the
+  donor main as before (launcher, harnesses, pins). Standalone finds `<install>\game\gt4vulkan*.exe` -> `<install>\data\games\<id>`
+  (fallback `%LOCALAPPDATA%\GT4Recomp`), checks the receipt like the launcher's `check_installed` (ELF size, disc copy size and
+  modified time), reads `gs\current.txt` and the recorded `sha256.txt` of gt4-gs.exe, takes the launcher's `launcher.lock`,
+  creates `data\sessions\standalone-<unix seconds>` (working directory, `game.log`, newest 20 kept), reads `game.ini` and
+  `gt4-gs.ini` from `<install>\user\config` (if `<install>\user` exists) or `%APPDATA%\GT4Recomp\config`, and builds the old
+  command line and environment. Order: argument or variable > `game.ini` > built-in default (GSdx, 480p, 16:9 hold, automatic
+  ultrawide, fullscreen, vsync). A missing piece shows a native message (exit 3); `GT4_STANDALONE_MESSAGE_FILE=<file>` writes the
+  text there instead (headless tests). `--no-window` (standalone only) leaves the window flag out.
+- CTest `native_standalone` (`standalone_fixture.cpp`, samples in `native/standalone_samples/`); the sample `game.ini` is also
+  compared with the launcher's output by `launch_contract.rs`.
+- Python: `tests/python/test_standalone_start.py` (7 tests: not installed, no prepared files, no GSdx, changed disc copy,
+  changed renderer, the explicit mode and `--portable-check` still reach the donor main).
+
+Checks (CTest 43 of 44 pass; the failing one is `python_native_contracts`, whose only error is the release-pin test above;
+Python with `GT4_NATIVE_BUILD` = slice278: 682 tests, 1 error, 42 skipped):
+
+| scene | build | dumps | dumps.sha256 (first 16) | GS stream hash |
+|---|---|---|---|---|
+| menus | slice268 | 41 | 463d455c3204cb56 | 1ccb97c58a6d2945 |
+| menus | slice278 | 41 | 463d455c3204cb56 | 1ccb97c58a6d2945 |
+| day | slice268 | 159 | 992f1ac9a6871901 | 0c79dcf5208e5e4d |
+| day | slice278 | 159 | 992f1ac9a6871901 | 0c79dcf5208e5e4d |
+| night | slice268 | 159 | c57e7d03accbb3aa | c091716e3cb40d79 |
+| night | slice278 | 159 | c57e7d03accbb3aa | c091716e3cb40d79 |
+
+Run with `scripts/frame_cost_headless.py ... --env GT4_GS_STREAM_HASH=1` (explicit arguments, 1x), run folders
+`O:\gt4recomp-scratch\slice278-runs\`. The per-dump lists (names and hashes) are byte-identical. A *standalone* headless start
+(a scratch install with `game\`, `user\config`, `data\games\gt4`, `data\gs\1.0.0`; `gt4vulkan.exe --no-window --frames N --disc
+<iso>` plus the scene's `--press` list, no ELF argument) gives the same results: menus `463d455c3204cb56` / `1ccb97c58a6d2945`,
+day `992f1ac9a6871901` / `0c79dcf5208e5e4d`, and a harness run with the defaults set as explicit variables (`GT4_FORCE_480P=1
+GT4_DISPLAY_ASPECT=auto GT4_FULLSCREEN=1 GT4_PRESENT_MODE=fifo`) has the same day dumps (`O:\gt4recomp-scratch\slice278-standalone-*`).
+The window, fullscreen, the message boxes and a double click were not run (no game window opens in this slice).
+
+Launcher side (`launcher/`): `launch::standalone_config_text`, `AppState::write_standalone_files` (at start, after every
+settings change, before every Play), tests in `launch_contract.rs` and `flow_audit.rs`; portable build: see TASKS.md TASK-098.
+Cargo: `cargo test --workspace` with `CARGO_TARGET_DIR=O:\gt4recomp-scratch\slice278-cargo-target` and `GT4_SDL3_ROOT`, in both builds
+(`--features portable`).

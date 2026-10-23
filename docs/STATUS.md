@@ -1,5 +1,18 @@
 # Current Status
 
+## TASK-098 portable build and TASK-097 self-sufficient game (2026-10-23, slice 278, on `task/101-multi-game`)
+
+Release 1.3.0 (both moved from 1.2.4). **TASK-098:** a second launcher build from one source (Cargo feature `portable`):
+`user\` and `data\` beside `GT4Recomp.exe`, no registry value and no system folder (the web view profile goes to
+`data\launcher-webview`), per-folder single-instance lock, self-update from `GT4Recomp-<version>-portable.zip` by a
+rename swap that never touches `user\` or `data\` and rolls back on failure; `scripts/make_portable_zip.py` and
+`build-release.ps1 -Portable`. `cargo test --workspace` 431 passed in each build. **TASK-097:** the game executable starts
+on its own (no ELF argument): paths from `<install>\game\gt4vulkan*.exe`, built-in defaults (GSdx, 480p, 16:9 hold,
+automatic ultrawide, fullscreen, vsync), the launcher's `game.ini` and `gt4-gs.ini` from the user config folder, and a
+native message that says to open the launcher once when a piece is missing. With an ELF argument (the launcher, the
+harnesses) nothing changed: headless identity against slice268 is exact (see docs/BUILD.md "Slice 278"). Not tested by the
+owner yet: the portable zip on a real PC (none was built), a direct double click of the game.
+
 ## TASK-101 multi-game launcher on branch (2026-10-23)
 
 Branch `task/101-multi-game` (from `task/100-spec2` and main). The launcher now holds two games: a game table, per-game

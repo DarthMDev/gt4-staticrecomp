@@ -158,6 +158,8 @@ fn main() {
             std::thread::spawn(move || {
                 relocation::move_large_data(&launch_shared, &legacy);
                 relocation::flatten_textures(&launch_shared);
+                // TASK-097: the files a direct start of the game reads (game.ini, gt4-gs.ini) follow the saved settings.
+                state::lock(&launch_shared).write_standalone_files();
                 updates::check_on_launch(launch_app, launch_shared);
             });
             // TASK-091 (1.2.1): the old per-user install clean-up runs in the background, after the window exists.

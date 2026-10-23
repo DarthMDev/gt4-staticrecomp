@@ -327,6 +327,43 @@ fn settings_store_no_absolute_path_inside_the_install_folder() {
 }
 
 #[test]
+fn a_settings_change_writes_the_files_a_direct_start_of_the_game_reads() {
+    // TASK-097: the game started without the launcher reads game.ini and gt4-gs.ini from the user config folder.
+    let root = scratch("standalone-files");
+    let dirs = DataDirs::new(root.join("data"));
+    let pins = Pins::embedded().expect("embedded pins");
+    let shared = launch(&dirs, &pins);
+    let config_dir = lock(&shared).user_dirs.config_dir().to_path_buf();
+    let game_ini = config_dir.join(launch::STANDALONE_CONFIG_FILE);
+    let gs_ini = config_dir.join(launch::STANDALONE_GS_INI_FILE);
+    {
+        let mut state = lock(&shared);
+        state.config.settings.set("vsync", "fast").unwrap();
+        state.config.settings.set("fullscreen", "off").unwrap();
+        state.save_config();
+    }
+    let text = fs::read_to_string(&game_ini).expect("game.ini is written with the settings");
+    assert!(text.contains("present_mode=mailbox"), "{text}");
+    assert!(text.contains("fullscreen=0"), "{text}");
+    assert!(text.contains("async_gs=1"), "{text}");
+    assert!(!gs_ini.exists(), "no gt4-gs.ini without an installed GSdx");
+
+    // An installed GSdx (stand-in files with the recorded hash) gives the game its ini too.
+    let version = dirs.root().join("gs").join("1.2.3");
+    fs::create_dir_all(&version).unwrap();
+    let program = b"stand-in gt4-gs.exe, never started";
+    fs::write(version.join("gt4-gs.exe"), program).unwrap();
+    fs::write(version.join("sha256.txt"), gt4l_core::gs_release::sha256_hex(program)).unwrap();
+    fs::write(dirs.root().join("gs").join("current.txt"), "1.2.3").unwrap();
+    lock(&shared).save_config();
+    let ini = fs::read_to_string(&gs_ini).expect("gt4-gs.ini is written once GSdx is installed");
+    assert!(ini.contains("[EmuCore/GS]"), "{ini}");
+    assert!(ini.contains(&dirs.root().join("gs").join("cache").display().to_string()), "the cache folder of the data folder: {ini}");
+    assert_eq!(fs::read_to_string(&game_ini).unwrap(), text, "game.ini does not change with the renderer");
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
 fn without_gsdx_setup_finishes_and_play_refuses_with_the_log_folder() {
     let root = scratch("gsdx-required");
     let dirs = DataDirs::new(root.join("data"));

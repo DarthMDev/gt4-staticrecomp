@@ -423,6 +423,8 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         lock(&shared).home_message = message.clone();
     })?;
     let PlayInputs { game, dirs, disc, elf, executable, settings, pcsx2, display, extra } = inputs;
+    // TASK-097: a direct start of the game reads these files; they follow the monitors connected now.
+    lock(&shared).write_standalone_files();
     let card = dirs.runtime_card();
     saves::prepare_card(lock(&shared).library_of(game), &card)?;
     let textures = lock(&shared).dirs.textures();

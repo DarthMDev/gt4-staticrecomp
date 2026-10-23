@@ -315,6 +315,11 @@ target_compile_options(license_guard_fixture PRIVATE /W4)
 # Sane data kept, insane count with CRC fail guarded, CRC pass kept.
 add_test(NAME native_license_guard COMMAND $<TARGET_FILE:license_guard_fixture>)
 # TASK-100 S3: the per-target guest-hook table (v2.00 values and the disabled Spec II default).
+# TASK-097: the standalone start rules (paths from the executable folder, receipt check, defaults, precedence, command line).
+add_executable(standalone_fixture standalone_fixture.cpp standalone.cpp)
+target_compile_options(standalone_fixture PRIVATE /W4)
+target_compile_definitions(standalone_fixture PRIVATE GT4_STANDALONE_SAMPLE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/standalone_samples")
+add_test(NAME native_standalone COMMAND $<TARGET_FILE:standalone_fixture>)
 add_executable(game_target_fixture game_target_fixture.cpp game_target_spec2_fixture.cpp)
 target_compile_options(game_target_fixture PRIVATE /W4)
 add_test(NAME native_game_target COMMAND $<TARGET_FILE:game_target_fixture>)
@@ -780,7 +785,11 @@ if(WIN32)
   configure_file("${CMAKE_CURRENT_SOURCE_DIR}/gt4vulkan.rc.in" "${CMAKE_CURRENT_BINARY_DIR}/gt4vulkan.rc" @ONLY)
   set(GT4VULKAN_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/gt4vulkan.rc")
 endif()
-add_executable(gt4vulkan "${PORT}/main.cpp" window.cpp ${GT4VULKAN_RESOURCES})
+# TASK-097: the entry point is native/game_main.cpp. The pinned donor main.cpp (the port, hashed by the pin checks) is compiled
+# unchanged with `main` renamed, and game_main.cpp calls it: with an ELF argument exactly as before, without one (a double click)
+# after the standalone rules of standalone.cpp built the command line and environment the launcher would have passed.
+set_source_files_properties("${PORT}/main.cpp" PROPERTIES COMPILE_DEFINITIONS "main=gt4_donor_main")
+add_executable(gt4vulkan "${PORT}/main.cpp" game_main.cpp standalone.cpp window.cpp ${GT4VULKAN_RESOURCES})
 if(GT4_TARGET STREQUAL "spec2")
     # TASK-100 S4: the second target links its own library, so it gets its own executable and never replaces v2.00.
     set_target_properties(gt4vulkan PROPERTIES OUTPUT_NAME gt4vulkan-spec2)
@@ -794,7 +803,7 @@ if(GT4_MEMCARD_FLUSH_ENABLED)
 endif()
 target_link_libraries(gt4vulkan PRIVATE
     "${GAME_LIBRARY}"
-    ps2runtime_vulkan native_host_io user32)
+    ps2runtime_vulkan native_host_io user32 bcrypt)
 # TASK-075: SDL3.dll and its licence next to the executables that load it (the build tree; make_distribution ships them).
 add_custom_command(TARGET gt4vulkan POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GT4_SDL3_ROOT}/${GT4_SDL3_RUNTIME_DLL}" "$<TARGET_FILE_DIR:gt4vulkan>/SDL3.dll")

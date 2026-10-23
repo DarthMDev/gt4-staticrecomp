@@ -14,6 +14,10 @@ use gt4controls::{self as controls_file, Controls, CONTROLS_FILE_NAME};
 use std::collections::BTreeMap;
 
 use gt4l_core::config::{self, ConfigFile};
+use gt4l_core::display as display_rules;
+use gt4l_core::gs_release;
+use gt4l_core::gs_table;
+use gt4l_core::launch;
 use gt4l_core::games::{self, Game, GT4};
 use gt4l_core::paths::{self, DataDirs, UserDirs};
 use gt4l_disc::setup as disc_setup;
@@ -123,6 +127,13 @@ pub fn lock(shared: &Shared) -> MutexGuard<'_, AppState> {
 }
 
 /// Appends one line to the launcher log in the data folder.
+/// Writes a small text file through a temporary file and a rename.
+fn write_text_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    let temporary = path.with_extension("ini.tmp");
+    fs::write(&temporary, text)?;
+    fs::rename(&temporary, path)
+}
+
 pub fn log(dirs: &DataDirs, message: &str) {
     let seconds = SystemTime::now().duration_since(UNIX_EPOCH).map(|value| value.as_secs()).unwrap_or(0);
     let _ = std::fs::create_dir_all(dirs.logs());
@@ -277,6 +288,37 @@ impl AppState {
         stored.dev_game_dir = stored.dev_game_dir.map(|path| paths::portable_path(&path, &self.install_dir));
         if let Err(error) = config::save(&self.user_dirs.config_file(), &stored) {
             log(&self.dirs, &format!("settings not saved: {error}"));
+        }
+        // TASK-097: a direct start of the game reads the same choices.
+        self.write_standalone_files();
+    }
+
+    /// Writes what a direct start of the game reads (TASK-097) into the user config folder: `game.ini` (fullscreen, present
+    /// mode, monitor, output size and the diagnostic switches) and `gt4-gs.ini` (the session ini a Play writes, with the
+    /// same display plan). The game finds the folder as the launcher does (`<install>\user\config` for the portable
+    /// build, `%APPDATA%\GT4Recomp\config` otherwise). Failures are logged; nothing here can stop the launcher.
+    pub fn write_standalone_files(&self) {
+        let settings = &self.config.settings;
+        let monitors = gt4l_platform::display::monitors();
+        let display = display_rules::resolve_target(&monitors, settings.get("monitor"), settings.get("resolution"));
+        let config_dir = self.user_dirs.config_dir().to_path_buf();
+        let game_ini = config_dir.join(launch::STANDALONE_CONFIG_FILE);
+        let text = launch::standalone_config_text(settings, display.as_ref());
+        if let Err(error) = fs::create_dir_all(&config_dir).and_then(|()| write_text_atomic(&game_ini, &text)) {
+            log(&self.dirs, &format!("{} not written: {error}", game_ini.display()));
+        }
+        // gt4-gs.ini needs the installed GSdx only for its folders; without it the previous file stays.
+        let renderer_root = self.dirs.renderer_root();
+        if let Some(installed) = gs_release::installed(&renderer_root) {
+            let paths = launch::Pcsx2Paths::for_session(&installed, &self.dirs.renderer_install_root(), &config_dir, &self.dirs.textures());
+            match launch::gs_config_text(settings, &paths, display.as_ref()) {
+                Ok(text) => {
+                    if let Err(error) = gs_table::write_ini_atomic(&paths.config, &text) {
+                        log(&self.dirs, &format!("{} not written: {error}", paths.config.display()));
+                    }
+                }
+                Err(message) => log(&self.dirs, &format!("gt4-gs.ini for a direct start not rendered: {message}")),
+            }
         }
     }
 

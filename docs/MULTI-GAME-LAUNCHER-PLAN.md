@@ -134,6 +134,12 @@ Pieces 1 to 6 are implemented, 7 is noted below, 8 is text. Nothing is merged, r
 Rules as implemented: the stored selection is the game played last (or the first installed); the page's selection is not
 stored until a game starts. Remove deletes `disc`, `prepared` and `prepared.tmp` of one game, never `runtime`, saves or replays.
 
+Progress note (2026-10-23, slice 278): the portable build (TASK-098) uses this layout unchanged: `<exe dir>\user` holds what
+`%APPDATA%\GT4Recomp` holds in the installer build (`config`, `controls.toml`, `games\<id>\Saves|Replays|backups`) and
+`<exe dir>\data` holds `games\<id>\disc|prepared|runtime`, `gs`, `sessions`, `logs`, `Textures`. A game executable started
+without the launcher (TASK-097) finds `<install>\data\games\<id>` from its own folder (`gt4vulkan.exe` is `gt4`,
+`gt4vulkan-spec2.exe` is `spec2`) and reads `<install>\user\config` (portable) or `%APPDATA%\GT4Recomp\config`.
+
 Open for the owner: the look of the selector and the placeholder logo line on a real window; the authors' logo file,
 names and permission (the About text has a marked placeholder); the PT-BR variant hash is pinned (owner image) but only the
 executable identity was checked by a test here, the full-image hash was not recomputed; replays across games stay untested;

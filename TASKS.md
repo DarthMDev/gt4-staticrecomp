@@ -118,7 +118,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | TASK‑095 | Ultrawide: undistorted 2D overlay on the pre-race menu (race lobby), as TASK-080 P2 does for the race HUD | 📋 Planned (owner, 2026-10-22) · study first; idea only |
-| TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
+| TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 🟡 Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner test · release 1.3.0 (moved from 1.2.4) |
 | TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 🟡 Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner test · release 1.3.0 (moved from 1.2.4) |
 | TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 🟡 Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner visual check · release 1.3.0 (moved from 1.2.4) |
 | TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072); subtasks S1-S9 in docs/SPEC2-PLAN.md | 🔄 In progress (2026-10-22) · branch `task/100-spec2`; release 1.3.0 |
@@ -789,7 +789,8 @@ What was built, and the decisions behind it:
   settings from `<install>\user\config` is part of TASK-097 below.
 
 ### TASK-097 — Self-sufficient game executable
-Planned (owner, 2026-10-22) for release 1.2.4, after the 1.2.3 hotfix. Principle: the game runs on its own with the
+**Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner test; release 1.3.0** (moved from 1.2.4). Planned
+by the owner on 2026-10-22, after the 1.2.3 hotfix. Principle: the game runs on its own with the
 same defaults every time; the launcher is only an easier way to start it and to manage settings. Today a double click
 on gt4vulkan.exe does not start the game: the launcher passes about 14 arguments and variables (ELF, disc, card,
 window; GT4_RENDERER, GT4_GS_PROCESS(_SHA256), GT4_GS_CONFIG; GT4_FORCE_480P, GT4_FORCE_WIDESCREEN,
@@ -847,6 +848,29 @@ Design (slice 278, 2026-10-23; written before the code, release 1.3.0 on branch 
 - **Tests:** CTest `native_standalone` (layout from the executable path, game ids, the receipt reader, defaults, precedence,
   command line, config parsing, missing-piece messages); the launcher's cargo tests; the frame identity checks of
   `scripts/frame_cost_headless.py` against the slice268 build (menus, day, night); a headless standalone run.
+
+Result (slice 278, 2026-10-23; recipe and numbers in docs/BUILD.md "Slice 278"):
+- Built from the slice268 recipe into `O:\gt4recomp-scratch\slice278-build\build`. CTest 43 of 44 pass (new
+  `native_standalone`); the failing test is `python_native_contracts`, whose only error is the release-pin check
+  (`test_make_distribution`), expected for any rebuilt executable. Python with `GT4_NATIVE_BUILD` = slice278: 682 tests,
+  1 error (that one), 42 skipped; new `tests/python/test_standalone_start.py` (7 tests) passes.
+- **Identity with the launcher's arguments (explicit mode), exact:** menus dumps `463d455c3204cb56` / stream
+  `1ccb97c58a6d2945`, day `992f1ac9a6871901` / `0c79dcf5208e5e4d`, night `c57e7d03accbb3aa` / `c091716e3cb40d79`, equal to the
+  slice268 run in each scene (41, 159 and 159 dumps, name and hash lists byte-identical).
+- **Headless standalone start** (a scratch install, no ELF argument, `--no-window`): menus and day give the same dump lists and
+  stream hashes as above, and as the harness run with the defaults passed as explicit variables.
+- `cargo test --workspace`: 436 passed, 4 ignored, 0 failed in each build (installer and `--features portable`); new tests: the
+  `game.ini` text against the sample the game fixture reads and against the variables Play sets, and the files written
+  after a settings change (`flow_audit`).
+- Decisions: the donor `main.cpp` stays untouched (pins): `game_main.cpp` provides `main`. **Standalone mode is a start with no
+  ELF argument**; with an ELF argument the old path runs unchanged, so no harness needed an explicit "off" value and no
+  pin or test changed. The launcher keeps passing its explicit arguments and variables at Play (behaviour unchanged) and
+  writes `game.ini` / `gt4-gs.ini` for the direct start. `controls.toml` is found in the same user folder.
+- Not done or not seen: a real double click (window, fullscreen, the console release and `game.log`), the native message boxes
+  on screen (they are tested through `GT4_STANDALONE_MESSAGE_FILE`), the portable zip on another PC, a direct start before the
+  launcher ever played (the card is then blank). Paths with characters outside the system code page are not handled (the donor
+  main reads its arguments as narrow text). A direct start does not harvest the card into the saves library; the launcher
+  does it at the next Play (`prepare_card`).
 
 ### TASK-095 — Ultrawide: undistorted pre-race menu overlay
 Planned (owner, 2026-10-22), idea to study later. At ratios wider than 16:9 (owner screenshot at 3440x1440, Time Trial
