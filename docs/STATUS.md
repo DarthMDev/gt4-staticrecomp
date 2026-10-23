@@ -1,4 +1,17 @@
 # Current Status
+## rc5 TASK-109: update channels and version picker (2026-10-23, `task/101-multi-game`, 1.3.0-rc5)
+
+Implemented, owner test pending; nothing merged or released. Settings > General has Channel (Stable or Beta) and Version
+(list read from GitHub on open, refresh button). The launcher version carries `-rcN` (`build-release.ps1 -Label rc5`).
+Beta offers candidates and stable releases by version, Stable never offers a candidate and never downgrades, the picker lists
+1.3.0-rc5 and newer, and an older target gets the strong downgrade warning. The real GitHub fetch and a real install of a
+chosen version are not verified here (fake release JSON only).
+
+Checks: `cargo test --workspace` 544 passed, 0 failed (`a_1_2_x_install_moves_into_games_gt4_at_the_first_start` failed
+in 2 of 5 full runs and passed alone and in later runs: a timing flake on a shared machine; the cause was not
+investigated and the code touched does not feed it); focus-check en-US 183/183 and pt-BR 190/190, nav-test 150/150 (headless Edge, server
+stopped); Python `make_portable_zip` 9 tests OK. No installer built, no game launched.
+
 ## rc4 (2026-10-23, `task/101-multi-game`, 1.3.0-rc4): owner test 1 fixes and TASK-111, TASK-112
 
 Implemented in the working tree, owner test pending; nothing merged or released. Items:

@@ -768,15 +768,29 @@ Vulkan fallback in both languages, `system_check` for the processor, the setting
 the distribution tests with the new names, `cargo test --workspace`, the touched Python modules, the headless Edge focus
 checks, and an owner test on this PC (NVIDIA + integrated) and on one machine without Vulkan 1.2.
 
-### TASK-109 — Launcher update channels
-Planned (owner, 2026-10-23) for release 1.3.1. No code yet.
-- Settings > General gets an **Updates** choice: **Stable** (default) or **Test builds** (release candidates).
-- Stable keeps today's rule: drafts and pre-releases are never offered (`gt4l-core/src/releases.rs`).
-- Test builds also offers GitHub pre-releases tagged `vX.Y.Z-rcN`, newest first by semantic version (rc numbers ordered),
-  never a draft.
-- Moving back to Stable never downgrades automatically: it waits for the next stable release that is newer than the
-  installed rc.
-- Both languages. Tests for the version ordering, for example 1.3.0-rc3 < 1.3.0 < 1.3.1-rc1.
+### TASK-109 — Launcher update channels and version picker
+**Implemented for 1.3.0** (owner, 2026-10-23; pulled forward from 1.3.1), on `task/101-multi-game`, owner test pending.
+- Settings > General, below Language: **Channel** (Stable default, or Beta) and **Version** (a dropdown read from GitHub
+  each time the page opens, with a refresh button).
+- Stable offers stable releases. Beta offers the release candidates (`vX.Y.Z-rcN`, GitHub pre-releases) and stable releases
+  together, newest by version; a draft is never offered. A candidate build with no stored choice starts on Beta.
+- Moving back to Stable never downgrades automatically: the launcher waits for a stable release newer than the installed
+  build.
+- The version carries its release candidate part (`gt4l-core::version::ReleaseVersion`): `1.3.0-rc4 < 1.3.0-rc5 < 1.3.0 <
+  1.3.1-rc1 < 1.3.1`. A build gets its label from `launcher/tools/build-release.ps1 -Label rc5` (`GT4_RELEASE_LABEL`, read
+  by `gt4l-core/build.rs`); About, the home credit line, `version.json` and the update decisions use `1.3.0-rc5`. Asset
+  names of a test build: `GT4Recomp-Setup-1.3.0-rc5.exe`, `GT4Recomp-1.3.0-rc5-portable.zip`.
+- The picker lists, per channel, stable releases by version (Stable) or candidates by publication date with a newer stable on
+  top (Beta); drafts and versions below 1.3.0-rc5 are left out (older builds cannot read the multi-game data layout).
+  Installing a chosen version asks first. A target older than the installed version (SemVer, any channel) shows the strong
+  downgrade warning (back up the saves, a saves folder button, an explicit "Install older version" button that is never the
+  default focus); a newer target is always the plain question. Yes runs the normal update path (`install_launcher_version`:
+  download, `SHA256SUMS` check, silent setup or portable zip swap); No restores the dropdown. When a channel lists only
+  versions older than the running build the page says updates resume when a newer release ships.
+- Both languages. Tests: version parsing and ordering, channel default, `decide` per channel, no automatic downgrade, list
+  building and sorting, `is_downgrade` and the dialog variant, asset names, a fake GitHub JSON through `FolderSource`,
+  `make_portable_zip` with a label; headless Edge focus checks (Yes calls the update path, No restores the selection).
+- Not verified here: the real GitHub fetch (the fake JSON follows the REST format), a real install of a chosen version.
 
 ### TASK-110 — Controller tuning: stick and trigger deadzone, sensitivity and response
 Planned (owner, 2026-10-23) for release 1.3.1. Players report that the game sometimes reads the stick and triggers
