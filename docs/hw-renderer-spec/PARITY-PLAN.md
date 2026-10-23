@@ -33,10 +33,12 @@ the owner moved the work to another agent. Read it together with `AGENTS.md`, `d
     1,660.9). Gates unchanged (see IN-384).
   - The fast scaled raster itself (the early-Z second pass) is **not** implemented yet.
   - The build tree `O:\gt4recomp-scratch\coregs2-slice270-present\build` matches the branch HEAD; rebuild before use.
-- **Candidate 273:** `O:\gt4recomp-scratch\coregs2-candidate-273`.
-  - `gt4vulkan.exe` sha256 `7c410e535e3a33b50cc71e411d44a9c98c188c1f51dee1a31a73eb0e306d28e0` (97,959,424 bytes).
-  - `build\hwr-play-scale.ps1` defaults to it (`-Candidate`, run folder `private\hwr-play-273`).
-  - Contents: item 2 (IN-383) on top of candidate 272's IN-371..IN-382.
+- **Candidate 274:** `O:\gt4recomp-scratch\coregs2-candidate-274`.
+  - `gt4vulkan.exe` sha256 `bcc1ea273a544085dd3a14556c889a8eebe434bec35e60685a60536ae76eb821` (97,969,664 bytes).
+  - `build\hwr-play-scale.ps1` defaults to it (`-Candidate`, run folder `private\hwr-play-274`).
+  - Contents: IN-384 (scaled images sized to their slot) on top of candidate 273's IN-371..IN-383.
+- **Candidate 273 (owner test 10, superseded):** `O:\gt4recomp-scratch\coregs2-candidate-273`, sha256
+  `7c410e535e3a33b50cc71e411d44a9c98c188c1f51dee1a31a73eb0e306d28e0`.
 - **Gates after IN-383 (slice273):**
   - CTest 244/244 with and without interlock.
   - Memory hashes identical on all five captures (night `fifo_hash=3a2fe617a174e7e7`).
@@ -159,6 +161,38 @@ classification test that an exact-only state (DATE, PABE, ATE FB_ONLY) takes the
 
 **Expected gain:** scaled pass 8.5 -> about 2-3 ms at 6x, about 4.2 -> 1-1.5 at 4x.
 
+**Implementation order (for the next writer, 2026-10-23, after Part A).** Each step ends in a committable, gated state:
+
+1. **Colour view only.** Add `VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT` and `COLOR_ATTACHMENT` usage to the scaled colour
+   images and keep an `R8G8B8A8_UNORM` view (`Image::rgbaView`); reuse it in `update_scaled_descriptors` when the image
+   grows (recreate the view with the new image). Add a second render pass (one colour attachment, `LOAD`/`STORE`,
+   `DONT_CARE` for depth) plus one framebuffer per colour slot, recreated on growth. Take the fast path only for draws
+   with **no depth test and no depth write** (ZTE 0, ZMSK 1) and a mappable blend: that alone proves the attachment,
+   the pipeline cache, the classification and the A/B switch, and covers GT4's HUD, the sky and the full-screen passes.
+2. **Fast fragment shader.** `hw_scale_fast.frag` includes `hw_pixel_core.glsl`, computes the same source colour as
+   `hw_pixel_uber.frag` (texture function, fog; skip dither inside the tolerance), applies the alpha test as
+   `discard` (only AFAIL = KEEP is eligible) and writes `gl_FragColor`; fixed-function blend with the mapped factors,
+   `pBlendConstants` from FIX (only FIX <= 0x80, i.e. <= 1.0). Colour write mask from a byte-aligned FBMSK.
+3. **Depth twin.** Add a lazily created `D32_SFLOAT` image per depth slot sized like the slot, a second render pass
+   (colour RGBA8 + depth D32) and 18 framebuffers. Conversion r32ui -> D32 is a full-screen triangle writing
+   `gl_FragDepth = word / 2^32` (`hw_scale_depth_words.frag`), no colour attachment. Track a per-slot "twin valid"
+   rectangle: empty after `refresh_scaled(depth)` (a load), after every exact scaled draw that tested or wrote depth,
+   and after the tone carry; convert `union(dirty, chunk rect)` before the first fast draw that needs it. **Require
+   Z32 for depth writes on the fast path** (a Z24 write merges with the upper byte of the stored word, which the fast
+   path would have to read back); Z24 keeps the exact path.
+4. **Mirror.** The fast fragment shader writes the depth word it computed into the r32ui storage image (binding 2,
+   write only, no read, no interlock), so an exact draw after a fast one still compares the exact words. Add
+   `stats.scaledDrawsFast/Exact` and print the share.
+5. **Tolerance.** A new IN note names the owner approval (2026-10-23) and the measured limits: max per-channel error
+   <= 8 on >= 99.9% of the presented pixels, presented PSNR >= 40 dB against the exact path, `--check-presented` still
+   0 low-detail frames on the race, `hw_scale_exact` / `hw_scale_display_shadow` / `hw_scale_fullscreen_passes` /
+   `hw_scale_interlaced_present` unchanged on the exact path, plus a fast-path variant of them within the tolerance.
+   Fixture `hw_scale_fast_raster`: alpha blend, additive, depth-tested overlapping triangles and one bilinear texture
+   at 2x and 4x, fast vs exact; and a classification control that DATE, PABE, ATE FB_ONLY, wrap colour, Z24 writes,
+   CT16 targets and a non-byte-aligned FBMSK take the exact path.
+6. **Switch.** `GT4_HW_SCALED_RASTER=fast|exact` (default `exact` until the tolerance is measured, then `fast`) and the
+   replay flag `--scaled-exact`.
+
 **Measure:** `--gpu-timing` replays at 1/2/4/6x (the `scaled` category), plus the game's `[hw] cost` and `[hw] gpu`
 lines. Compare with gt4-gs only as a black box: power and GPU load, final frames only.
 
@@ -168,6 +202,19 @@ lines. Compare with gt4-gs only as a black box: power and GPU load, final frames
 > grows on demand and is copied on growth, so the numbers below about "mutable-format view costs nothing but a D32 twin
 > adds 150 MB per slot" are now much smaller (a 640 x 448 target is 41 MB at 6x, and its D32 twin would be 41 MB).
 > The second render pass, the fast shader and the depth twin are still to be built.
+>
+> **What Part A changed for item 1 (read before starting it):**
+> - A scaled image can be *replaced* at any time (`ensure_scaled_image`) after the GPU was waited on. Everything that
+>   names its view must be rewritten there (`update_scaled_descriptors`): the scaled graphics sets of BOTH frame sets,
+>   the upsample sets, the tone sets and the scaled compose sets. A set left on a destroyed view loses the device.
+>   The item 1 framebuffers (colour RGBA8 view + D32 twin) have the same problem and must be recreated on growth.
+> - A colour slot's scaled image is no longer 1024 x 1024: its extent is `gpu::ScaledExtent(slot)` (native pixels) and
+>   a viewer must ask `ScaledCovers(slot, x1, y1)` before reading it. The compose already does.
+> - The existing scaled pass uses the storage images with the *same absolute sub-pixel coordinates* the compose reads
+>   (`x * s + floor(s/2)`), so the fast pass must render into the RGBA8 view of that same image with a viewport of
+>   `extent * s` and the same 06.3 offset; nothing is rebased.
+> - A texture taken from a slot now copies only its sampled footprint (`GpuChunk::texCopyWidth/Height`), which is
+>   enough evidence that a fast pass sampling the atlas can stay footprint-sized.
 
 - **The scaled images are `kGpuScaledExtent * scale` squares**, i.e. 6144 x 6144 at 6x: about 151 MB each, and the
   drawer already allocates 6 colour + 3 depth + `scaledTexels` + 2 shadows (about 1.6 GB at 6x). The mutable-format
@@ -374,13 +421,15 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
 - Update PROGRESS, IMPLEMENTATION-NOTES (a new IN note per change), STATUS, TASKS, the journal and ai-memory with
   every step.
 
-## 9. Owner test 10 (deliverable)
+## 9. Owner test 11 (deliverable)
 
+- **Status (2026-10-23, after IN-384):** Part A is in, items 2 is in, the fast scaled raster (the rest of item 1) is
+  **not** implemented; section 3 has the implementation order.
 - **Deliver:**
   - a new frozen candidate in a new folder `O:\gt4recomp-scratch\coregs2-candidate-NNN`, with its sha256;
   - `build\hwr-play-scale.ps1` pointed at it (`$Candidate` default and the run folder);
   - the measurement table after items 1 and 2 at 1/2/4/6x (GPU busy per category, GS thread, process, render passes,
-    barriers);
+    barriers) and the scaled image memory at 2/4/6x;
   - the remaining gap to gt4-gs.
 - **Owner commands:**
 
