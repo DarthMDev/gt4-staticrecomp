@@ -22,14 +22,17 @@ the owner moved the work to another agent. Read it together with `AGENTS.md`, `d
 
 ## 2. Current state
 
-- **Branch:** `task/027-coregs2`, last green commit **15f7caa** (pushed): item 2's first step (IN-383).
-  - Item 2, strip executor **done**: `hw_tone_strips.comp` writes the eight strip batches of one 64 x 32 page in one
-    dispatch (135,399 -> 16,940 on the 480p race capture), the strips' palette loads are held (GPU CLUT loads
+- **Branch:** `task/027-coregs2`, last green commit before the parity work **22f6dd7** (pushed): item 2 done.
+  - Item 2, strip executor **done** (IN-383): `hw_tone_strips.comp` writes the eight strip batches of one 64 x 32 page
+    in one dispatch (135,399 -> 16,940 on the 480p race capture), the strips' palette loads are held (GPU CLUT loads
     200,467 -> 98,827), all five memory captures are byte-identical and `hw_tone_hle_exact` passes.
   - Item 2's second step (the three temp batches per page) is **not** done; the plan's warning stands (pixel-centre
     rules and v steps are not worth guessing).
-  - Item 1 is **not** implemented. Section 3 below has the findings that matter for it.
-  - The build tree `O:\gt4recomp-scratch\coregs2-slice270-present\build` matches commit 15f7caa; rebuild before use.
+  - **Part A of item 1 (IN-384) is done**: scaled images sized to their slot, lazy and grown on demand. Scaled image
+    device memory on the 480p race capture: 64.1 MB at 2x, 243.1 MB at 4x, 541.4 MB at 6x (was 184.5 / 738.2 /
+    1,660.9). Gates unchanged (see IN-384).
+  - The fast scaled raster itself (the early-Z second pass) is **not** implemented yet.
+  - The build tree `O:\gt4recomp-scratch\coregs2-slice270-present\build` matches the branch HEAD; rebuild before use.
 - **Candidate 273:** `O:\gt4recomp-scratch\coregs2-candidate-273`.
   - `gt4vulkan.exe` sha256 `7c410e535e3a33b50cc71e411d44a9c98c188c1f51dee1a31a73eb0e306d28e0` (97,959,424 bytes).
   - `build\hwr-play-scale.ps1` defaults to it (`-Candidate`, run folder `private\hwr-play-273`).
@@ -160,6 +163,11 @@ classification test that an exact-only state (DATE, PABE, ATE FB_ONLY) takes the
 lines. Compare with gt4-gs only as a black box: power and GPU load, final frames only.
 
 ### Findings for the implementer (2026-10-23, before the work started)
+
+> **Part A implemented (IN-384).** The 1024 x 1024 squares are gone: a slot image covers FBW * 64 x its loaded rows,
+> grows on demand and is copied on growth, so the numbers below about "mutable-format view costs nothing but a D32 twin
+> adds 150 MB per slot" are now much smaller (a 640 x 448 target is 41 MB at 6x, and its D32 twin would be 41 MB).
+> The second render pass, the fast shader and the depth twin are still to be built.
 
 - **The scaled images are `kGpuScaledExtent * scale` squares**, i.e. 6144 x 6144 at 6x: about 151 MB each, and the
   drawer already allocates 6 colour + 3 depth + `scaledTexels` + 2 shadows (about 1.6 GB at 6x). The mutable-format

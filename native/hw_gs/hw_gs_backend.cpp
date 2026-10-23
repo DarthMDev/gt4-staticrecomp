@@ -1138,6 +1138,7 @@ RenderCounters Backend::render_counters() const {
   out.gpu_render_passes = gpu.renderPasses;
   out.gpu_upload_bytes = gpu.uploadBytes;
   out.gpu_readback_bytes = gpu.readbackBytes;
+  out.gpu_scaled_image_bytes = gpu.scaledImageBytes;
   out.gpu_busy_ns = gpu.gpuBusyNs;
   for (int i = 0; i < 8; ++i) out.gpu_ns[i] = gpu.gpuNs[i];
   out.gpu_early_submissions = gpu.earlySubmissions;

@@ -179,6 +179,10 @@ struct BatchTranslation {
     bool hasTexture = false;
     uint32_t texWidth = 0;
     uint32_t texHeight = 0;
+    // IN-384: the texels a texture taken from a resident slot can be sampled at (IN-380 footprint, 0 = whole extent);
+    // the scaled copy only needs these.
+    uint32_t texCopyWidth = 0;
+    uint32_t texCopyHeight = 0;
     std::vector<uint32_t> texels;
     std::vector<gpu::GpuVertex> vertices;
     std::vector<gpu::GpuDraw> draws;

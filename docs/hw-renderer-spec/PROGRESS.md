@@ -23,6 +23,27 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M10 GLM | Started: GLM, decode, swizzle, unswizzle, CLUT, merge and upload kernels (IN-347, IN-349..IN-351) | `hw_glm_decode`, `hw_glm_swizzle`, `hw_glm_unswizzle`, `hw_glm_clut`, `hw_glm_upload_merge`, `hw_glm_host_upload` |
 | M11, M13, M16, M18 | Pure references only (lod, replace) | lod, `hw_replace_*` CTest |
 
+## 2026-10-23 scaled images sized to their slot (IN-384, parity plan Part A)
+
+Part A of `PARITY-PLAN.md`, the memory half of the GSdx-parity work: every scaled presentation image now holds only
+its slot's real extent instead of a fixed 1024 x 1024 native square.
+
+- **Before:** 11 fixed squares at scale s (6 colour slots, 3 depth slots, the scaled texel image, 2 display shadows)
+  plus the 1x copies: 184.5 MB at 2x, 738.2 MB at 4x and 1,660.9 MB at 6x on the 480p race capture, i.e. 151 MB per
+  640 x 448 target at 6x.
+- **Now:** width = the target's FBW * 64 native pixels, height = the rows the slot loaded or drew (rounded to a page),
+  created lazily with a 64 x 32 minimum per slot and grown on demand (old content copied, the GPU waited on both
+  sides). Uploads, GLM slot loads, draw chunks and the scaled texture copy grow their images first, so no pixel is
+  ever clipped; a texture taken from a slot copies only the batch's sampled footprint (IN-380), which is what keeps
+  the race frame from growing to its 1024 x 512 texture view.
+- **Device memory on the 480p race capture:** 64.1 MB at 2x, 243.1 MB at 4x, 541.4 MB at 6x (65-67% less);
+  `scaled_draws_clipped=0`.
+- **Gates:** CTest 245/245 with and without the interlock (new `hw_scale_target_extent`); the five memory captures
+  byte-identical (menu 1,101 frames, race 121, car 121, night 121 with `fifo_hash=3a2fe617a174e7e7`, race480p 121);
+  scaled memory equal to 1x and 0 low-detail presented frames at 2x/4x/6x; the 06.3/IN-377/IN-379 fixtures unchanged.
+- **Reporting:** `stats.scaledImageBytes`, printed as `scaled_image_mb` on the `[hw] cost` line and on the replay's
+  `scale=` line with `scaled_image_grows` and `scaled_draws_clipped`.
+
 ## 2026-10-23 tone-sequence strip executor (IN-383, parity plan item 2)
 
 Item 2 of `PARITY-PLAN.md`, first step (the strip executor), implemented and gated:

@@ -1,5 +1,21 @@
 # Current Status
 
+## TASK-027 CoreGS 2.0: scaled images sized to their slot (IN-384, parity plan Part A)
+
+Branch `task/027-coregs2`. First half of item 1 of `docs/hw-renderer-spec/PARITY-PLAN.md`: every scaled presentation
+image now holds only its slot's real extent (FBW * 64 wide, the loaded or drawn rows, rounded to a page), created
+lazily and grown on demand with the old content copied. A draw, load or texture copy that reaches past the extent grows
+the image first, so no pixel is clipped (`scaled_draws_clipped=0`). A texture taken from a resident slot copies only
+the batch's sampled footprint (IN-380), so the 640 x 448 race frame no longer grows to its 1024 x 512 texture view.
+Scaled image device memory on the 480p race capture: 64.1 MB at 2x, 243.1 MB at 4x, 541.4 MB at 6x, against 184.5 /
+738.2 / 1,660.9 MB before (65-67% less; one 640 x 448 target is 41 MB instead of 151 MB at 6x). Gates unchanged:
+CTest 245/245 in both interlock modes (new `hw_scale_target_extent`), the five memory captures byte-identical (menu
+1,101 frames, race 121, car 121, night 121 with `fifo_hash=3a2fe617a174e7e7`, race480p 121), scaled memory equal to
+1x and 0 low-detail presented frames at 2x/4x/6x, and the 06.3/IN-377/IN-379 fixtures unchanged. GPU time is unchanged
+(the same sub-pixels are shaded): this item buys memory. Reported as `scaled_image_mb` on the `[hw] cost` line and on
+the replay's `scale=` line with `scaled_image_grows` and `scaled_draws_clipped`. Next: the fast scaled raster itself
+(an early-Z second pass with real attachments, tolerance only on the presented image). Not merged; no pins.
+
 ## TASK-027 CoreGS 2.0: tone-sequence strip executor (IN-383, parity plan item 2)
 
 Branch `task/027-coregs2`. Owner requirement (2026-10-23): CoreGS 2.0 must reach GSdx's performance at the same

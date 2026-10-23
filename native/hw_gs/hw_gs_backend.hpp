@@ -121,6 +121,7 @@ struct RenderCounters {
   std::uint64_t gpu_render_passes = 0;      // IN-367 efficiency counters
   std::uint64_t gpu_upload_bytes = 0;
   std::uint64_t gpu_readback_bytes = 0;
+  std::uint64_t gpu_scaled_image_bytes = 0;  // IN-384: device memory of every scaled presentation image
   std::uint64_t textures_cached = 0;
   std::uint64_t cache_writebacks = 0;
   std::uint64_t cache_loads = 0;

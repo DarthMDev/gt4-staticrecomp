@@ -1948,12 +1948,15 @@ int TestScaleExact(const gpu::VulkanHandles& handles) {
         }
         std::printf("  scale %u: memory %s, composes %s, non-uniform blocks (edge bands) %llu, sub-pixels off the 06.3 "
                     "expectation %llu, "
-                    "scaled draws %llu, scaled texture copies %llu, circuits from slots %llu\n",
+                    "scaled draws %llu, scaled texture copies %llu, circuits from slots %llu, scaled passes %llu, "
+                    "clipped %llu\n",
                     scale, sameMemory ? "equal" : "DIFFERENT", composed ? "all" : "MISSING",
                     static_cast<unsigned long long>(blockErrors), static_cast<unsigned long long>(pixelErrors),
                     static_cast<unsigned long long>(stats.scaledDraws),
                     static_cast<unsigned long long>(stats.scaledTextureCopies),
-                    static_cast<unsigned long long>(counters.scaledCircuitsFromSlots));
+                    static_cast<unsigned long long>(counters.scaledCircuitsFromSlots),
+                    static_cast<unsigned long long>(stats.scaledPasses),
+                    static_cast<unsigned long long>(stats.scaledDrawsClipped));
         // Blindness: the displayed 1x image must show the clear colour and the three sprites (4 colours or more).
         std::vector<uint32_t> colours;
         for (size_t i = 0; i + 2 < base.native[0].size(); i += 3) {
@@ -1970,6 +1973,185 @@ int TestScaleExact(const gpu::VulkanHandles& handles) {
         }
     }
     std::printf("hw_scale_exact: %d failures\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
+// hw_scale_target_extent (IN-384, parity plan Part A): a scaled image covers only its slot's real extent and grows on
+// demand. Three shapes in one capture, all flat CT32 sprites so the 06.3 expectation is exact (as in hw_scale_exact):
+//   - frame 0: target A at page 0, FBW 1 (64 wide), 64 rows, shown;
+//   - frame 1: the same view grows to 128 rows (a load and a draw outside the old extent), so A's scaled image has to
+//     grow while it already holds the previous frame's content, and the whole 64 x 128 picture must be presented;
+//   - frame 2: another buffer B at page 8 with FBW 2 (128 wide), 64 rows: a different width, its own image;
+//   - frame 3: A shown again, so the grown image is reused after the other view.
+// Every scaled frame must equal the 06.3 expectation of its 1x image, memory must equal the 1x run, no scaled draw may
+// leave its pair's images (clipped 0), the images must have grown, and their device memory must stay a small fraction
+// of the fixed 1024 x 1024 - per - slot squares (184 MB at scale 2).
+int TestScaleTargetExtent(const gpu::VulkanHandles& handles) {
+    auto rgbaq = [](uint32_t colour) { return uint64_t{colour} | (uint64_t{0x3F800000u} << 32); };
+    auto xy = [](uint32_t x, uint32_t y) { return uint64_t{x * 16} | (uint64_t{y * 16} << 16); };
+    auto frameReg = [](uint64_t page, uint64_t fbw) {
+        return page | (fbw << 16);  // FBP in pages, FBW in 64-pixel units, PSM CT32
+    };
+    auto dispFb = [](uint64_t page, uint64_t fbw) { return page | (fbw << 9); };
+    auto dispSize = [](uint64_t width, uint64_t height) {
+        return (uint64_t{3} << 23) | ((width * 4 - 1) << 32) | ((height - 1) << 44);
+    };
+    const uint64_t kSprite = 6, kZ = 8;
+    constexpr uint32_t kFrames = 4;
+    cpuref::CaptureWriter capture;
+    capture.Privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));  // PMODE: RC1, MMOD 1, ALP 255
+    capture.Privileged(0x12000010u, uint64_t{2} << 13);              // SMODE1: NTSC
+    auto ad = [&](const std::vector<uint64_t>& words) {
+        capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(words.size() / 2), true, false, 0, 0, {0xE},
+                                                     words));
+    };
+    // Frame 0: A (page 0, FBW 1) 64 x 64, clear plus one sprite, shown as 64 x 64.
+    ad({(uint64_t{63} << 16) | (uint64_t{63} << 48), 0x40, 0, 0x18,
+        (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,  // TEST: ZTE, ALWAYS
+        frameReg(0, 1), 0x4C, kZ | (uint64_t{1} << 32), 0x4E,
+        kSprite, 0x00, rgbaq(0x80102030u), 0x01, xy(0, 0), 0x05, xy(63, 63), 0x05,
+        kSprite, 0x00, rgbaq(0x80E04010u), 0x01, xy(8, 8), 0x05, xy(40, 40), 0x05});
+    capture.Privileged(0x12000070u, dispFb(0, 1));
+    capture.Privileged(0x12000080u, dispSize(64, 64));
+    capture.FrameEnd(0);
+    // Frame 1: the same view over 128 rows: the load and the draw reach past the 64-row extent.
+    ad({(uint64_t{63} << 16) | (uint64_t{127} << 48), 0x40, 0, 0x18,
+        (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,
+        frameReg(0, 1), 0x4C, kZ | (uint64_t{1} << 32), 0x4E,
+        kSprite, 0x00, rgbaq(0x80102030u), 0x01, xy(0, 0), 0x05, xy(63, 63), 0x05,
+        kSprite, 0x00, rgbaq(0x804010E0u), 0x01, xy(16, 64), 0x05, xy(47, 111), 0x05});
+    capture.Privileged(0x12000070u, dispFb(0, 1));
+    capture.Privileged(0x12000080u, dispSize(64, 128));
+    capture.FrameEnd(1);
+    // Frame 2: buffer B (page 8, FBW 2 = 128 wide, 64 rows): another width, its own scaled image.
+    ad({(uint64_t{127} << 16) | (uint64_t{63} << 48), 0x40, 0, 0x18,
+        (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,
+        frameReg(8, 2), 0x4C, kZ | (uint64_t{1} << 32), 0x4E,
+        kSprite, 0x00, rgbaq(0x80304090u), 0x01, xy(0, 0), 0x05, xy(127, 63), 0x05,
+        kSprite, 0x00, rgbaq(0x80C05020u), 0x01, xy(32, 16), 0x05, xy(96, 47), 0x05});
+    capture.Privileged(0x12000070u, dispFb(8, 2));
+    capture.Privileged(0x12000080u, dispSize(128, 64));
+    capture.FrameEnd(2);
+    // Frame 3: A again, 64 x 128, with a different picture (the grown image is reused after the other view).
+    ad({(uint64_t{63} << 16) | (uint64_t{127} << 48), 0x40, 0, 0x18,
+        (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,
+        frameReg(0, 1), 0x4C, kZ | (uint64_t{1} << 32), 0x4E,
+        kSprite, 0x00, rgbaq(0x802060B0u), 0x01, xy(0, 0), 0x05, xy(63, 127), 0x05,
+        kSprite, 0x00, rgbaq(0x8010E040u), 0x01, xy(0, 0), 0x05, xy(31, 31), 0x05});
+    capture.Privileged(0x12000070u, dispFb(0, 1));
+    capture.Privileged(0x12000080u, dispSize(64, 128));
+    capture.FrameEnd(3);
+
+    struct Run {
+        std::vector<uint64_t> slm;
+        std::vector<std::vector<uint8_t>> native;
+        std::vector<std::vector<uint32_t>> scaled;
+        std::vector<uint32_t> width, height;
+    };
+    auto replay = [&](uint32_t scale, Run& run, gpu::GpuStats& stats, std::string& error) -> bool {
+        writeback::Renderer renderer;
+        renderer.SetScale(scale, static_cast<float>(scale));
+        if (!renderer.Init(handles, error)) return false;
+        renderer.SetSyncMode(true);
+        renderer.SetCpuSmallSprites(false);
+        writeback::WritebackReplayTarget target(renderer, writeback::ComposeKind::Reference);
+        cpuref::ReplaySummary summary;
+        const bool ok = cpuref::ReplayCapture(capture.Bytes(), target, summary,
+                                              [&](uint64_t, const cpuref::FrameImage& image) {
+                                                  std::vector<uint8_t> rgb;
+                                                  for (const display::Rgba8& p : image.image.pixels) {
+                                                      rgb.push_back(p.r);
+                                                      rgb.push_back(p.g);
+                                                      rgb.push_back(p.b);
+                                                  }
+                                                  run.native.push_back(rgb);
+                                                  run.width.push_back(image.image.width);
+                                                  run.height.push_back(image.image.height);
+                                                  run.slm.push_back(cpuref::HashLocalMemory(renderer.Slm(), 4u * 1024u * 1024u));
+                                                  writeback::GpuFrame gpuFrame;
+                                                  std::vector<uint32_t> pixels;
+                                                  if (renderer.ComposeFrameGpu(gpuFrame) &&
+                                                      renderer.ReadGpuFrame(gpuFrame, pixels) &&
+                                                      gpuFrame.width == scale * image.image.width &&
+                                                      gpuFrame.height == scale * image.image.height) {
+                                                      run.scaled.push_back(std::move(pixels));
+                                                  } else {
+                                                      run.scaled.emplace_back();
+                                                  }
+                                              },
+                                              error);
+        stats = renderer.GpuCounters();
+        if (renderer.Failed()) error += " " + renderer.LastError();
+        return ok && !renderer.Failed();
+    };
+    Run base;
+    gpu::GpuStats baseStats;
+    std::string error;
+    if (!replay(1, base, baseStats, error) || base.native.size() != kFrames) {
+        std::printf("hw_scale_target_extent: 1x replay failed: %s\n", error.c_str());
+        return 1;
+    }
+    if (base.width[1] != 64 || base.height[1] != 128 || base.width[2] != 128 || base.height[2] != 64) {
+        std::printf("hw_scale_target_extent: the 1x frames are not the shapes the fixture draws (%ux%u, %ux%u)\n",
+                    base.width[1], base.height[1], base.width[2], base.height[2]);
+        return 1;
+    }
+    int failures = 0;
+    for (uint32_t scale = 2; scale <= 4; scale += 2) {
+        Run run;
+        gpu::GpuStats stats;
+        if (!replay(scale, run, stats, error) || run.native.size() != kFrames) {
+            std::printf("hw_scale_target_extent: scale %u replay failed: %s\n", scale, error.c_str());
+            ++failures;
+            continue;
+        }
+        uint64_t pixelErrors = 0;
+        bool sameMemory = true, composed = true;
+        for (uint32_t frame = 0; frame < kFrames; ++frame) {
+            sameMemory = sameMemory && run.slm[frame] == base.slm[frame] && run.native[frame] == base.native[frame];
+            const std::vector<uint32_t>& pixels = run.scaled[frame];
+            const uint32_t w = base.width[frame], h = base.height[frame];
+            if (pixels.size() != static_cast<size_t>(w) * h * scale * scale) {
+                composed = false;
+                continue;
+            }
+            const uint32_t half = scale / 2;
+            for (uint32_t sy = 0; sy < h * scale; ++sy) {
+                for (uint32_t sx = 0; sx < w * scale; ++sx) {
+                    const uint32_t nx = (std::max(sx, half) - half) / scale;
+                    const uint32_t ny = (std::max(sy, half) - half) / scale;
+                    const uint32_t got = pixels[static_cast<size_t>(sy) * w * scale + sx] & 0xFFFFFFu;
+                    const uint8_t* n = &base.native[frame][(static_cast<size_t>(ny) * w + nx) * 3];
+                    const uint32_t expected = uint32_t{n[0]} | (uint32_t{n[1]} << 8) | (uint32_t{n[2]} << 16);
+                    if (got != expected) {
+                        if (pixelErrors < 6) {
+                            std::printf("    scale %u frame %u sub-pixel %u,%u: scaled %06x, expected (native %u,%u) "
+                                        "%06x\n",
+                                        scale, frame, sx, sy, got, nx, ny, expected);
+                        }
+                        ++pixelErrors;
+                    }
+                }
+            }
+        }
+        // The fixed 1024 x 1024 per-slot squares of IN-371 cost 11 images x (1024 * scale)^2 x 4 bytes; this capture's
+        // slots are at most 128 x 128 native, so a few MB is all that may be allocated.
+        const double fixedSquaresMb = 11.0 * 1024.0 * 1024.0 * 4.0 * scale * scale / 1e6;
+        const double imageMb = static_cast<double>(stats.scaledImageBytes) / 1e6;
+        std::printf("  scale %u: memory %s, composes %s, sub-pixels off the 06.3 expectation %llu, scaled draws %llu, "
+                    "scaled passes %llu, grows %llu, clipped %llu, scaled image %.2f MB (fixed squares %.0f MB)\n",
+                    scale, sameMemory ? "equal" : "DIFFERENT", composed ? "all" : "MISSING",
+                    static_cast<unsigned long long>(pixelErrors),
+                    static_cast<unsigned long long>(stats.scaledDraws),
+                    static_cast<unsigned long long>(stats.scaledPasses),
+                    static_cast<unsigned long long>(stats.scaledImageGrows),
+                    static_cast<unsigned long long>(stats.scaledDrawsClipped), imageMb, fixedSquaresMb);
+        if (!sameMemory || !composed || pixelErrors != 0 || stats.scaledDraws == 0 || stats.scaledImageGrows == 0 ||
+            stats.scaledDrawsClipped != 0 || imageMb >= fixedSquaresMb / 8.0) {
+            ++failures;
+        }
+    }
+    std::printf("hw_scale_target_extent: %d failures\n", failures);
     return failures == 0 ? 0 : 1;
 }
 
@@ -3448,6 +3630,7 @@ int main(int argc, char** argv) {
     if (name == "hw_replay_parity_double_buffer") return TestReplayParityDoubleBuffer(handles);
     if (name == "hw_cache_equals_writeback") return TestCacheEqualsWriteback(handles);
     if (name == "hw_scale_exact") return TestScaleExact(handles);
+    if (name == "hw_scale_target_extent") return TestScaleTargetExtent(handles);
     if (name == "hw_postfx_fxaa") return TestPostfxFxaa(handles);
     if (name == "hw_scale_display_shadow") return TestScaleDisplayShadow(handles);
     if (name == "hw_scale_fullscreen_passes") return TestScaleFullscreenPasses(handles);

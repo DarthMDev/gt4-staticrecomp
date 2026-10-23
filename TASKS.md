@@ -973,6 +973,14 @@ render passes 341-347 -> 198-204. Item 1 (fast scaled raster) is designed but no
 `GT4_HW_TONE_HLE` and `GT4_HW_VERIFY_SHUFFLE` (replay `--no-tone-hle`/`--tone-verify`). No PR, no merge, no pins;
 owner test 10 pending.
 
+**2026-10-23, OpenCode (parity Plan A):** the presentation-only scaled images are no longer fixed 1024 x 1024 squares:
+each covers its slot's real extent (FBW * 64 wide, loaded/drawn rows), is created lazily and grows on demand with the
+old content copied, and a texture copy only takes the batch's sampled footprint (IN-380). Scaled image device memory
+on the 480p race capture: 184.5 -> 64.1 MB at 2x, 738.2 -> 243.1 MB at 4x, 1,660.9 -> 541.4 MB at 6x. New fixture
+`hw_scale_target_extent` (growth, a second FBW); CTest 245/245 both interlock modes, five memory captures
+byte-identical, scaled memory = 1x and 0 low-detail frames at 2x/4x/6x. GPU time unchanged (memory win, not a time
+win). Next: the fast scaled raster (early-Z second pass) itself, then owner test 11.
+
 **Paused by the owner on 2026-10-15** to focus on release 1.0.0. State on the
 integration branch `task/027-hw-renderer`: CPU-verified pure libraries for GS
 memory/swizzle (M2), GIF front end and CLUT (M3), exact pixel arithmetic (M5),

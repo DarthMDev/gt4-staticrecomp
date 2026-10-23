@@ -588,7 +588,8 @@ int main(int argc, char** argv) {
         const gpu::GpuStats& gpuStats = renderer.GpuCounters();
         std::printf("scale=%u scaled_draws=%llu scaled_passes=%llu scaled_refreshes=%llu scaled_refresh_pixels=%llu "
                     "scaled_composes=%llu circuits_from_slots=%llu circuits_from_glm=%llu circuits_from_shadows=%llu "
-                    "shadow_saves=%llu tone_runs=%llu tone_carries=%llu\n",
+                    "shadow_saves=%llu tone_runs=%llu tone_carries=%llu scaled_image_mb=%.2f scaled_image_grows=%llu "
+                    "scaled_draws_clipped=%llu\n",
                     renderer.Scale(), static_cast<unsigned long long>(gpuStats.scaledDraws),
                     static_cast<unsigned long long>(gpuStats.scaledPasses),
                     static_cast<unsigned long long>(gpuStats.scaledRefreshes),
@@ -599,7 +600,10 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(counters.scaledCircuitsFromShadows),
                     static_cast<unsigned long long>(counters.scaledShadowSaves),
                     static_cast<unsigned long long>(counters.toneRuns),
-                    static_cast<unsigned long long>(counters.toneCarries));
+                    static_cast<unsigned long long>(counters.toneCarries),
+                    static_cast<double>(gpuStats.scaledImageBytes) / 1e6,
+                    static_cast<unsigned long long>(gpuStats.scaledImageGrows),
+                    static_cast<unsigned long long>(gpuStats.scaledDrawsClipped));
     }
     if (checkPresented && scale > 1) {
         std::printf("presented_frames=%llu presented_1x_frames=%llu min_mixed_blocks=%llu mean_mixed_blocks=%.1f\n",

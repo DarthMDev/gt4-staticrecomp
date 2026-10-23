@@ -114,16 +114,32 @@ struct GpuDrawer::Impl {
   Image frames[kGpuColourSlots];  // colour target slots (IN-344); the last one is the write-back mode's
   Image depths[kGpuDepthSlots];   // depth target slots; the last one is the write-back mode's
   Image texels;
-  Image display;  // IN-364: GPU-composed presentation frame (IN-372: displaySide square)
+  Image display;  // IN-364: GPU-composed presentation frame (IN-384: grows to the composed frame)
 
-  // ---- M12 upscaling (chapter 06, IN-371/IN-372) ----
-  // At scale s > 1 every slot has a second image of kGpuScaledExtent * s pixels per side holding the same words at
-  // s x s sub-pixels per native pixel. Draws are recorded twice (1x words, then the scaled image); loads into a slot
-  // refresh the scaled image from the 1x words (hw_scale_upsample.comp). Only the presentation reads it.
+  // ---- M12 upscaling (chapter 06, IN-371/IN-372, Part A IN-384) ----
+  // At scale s > 1 every slot has a second image holding the same words at s x s sub-pixels per native pixel. Draws
+  // are recorded twice (1x words, then the scaled image); loads into a slot refresh the scaled image from the 1x
+  // words (hw_scale_upsample.comp). Only the presentation reads it. IN-384: an image covers only the native
+  // rectangle its slot really uses (its FBW * 64 width and the rows loaded or drawn, in pages), not a 1024 x 1024
+  // square: at 6x a race frame buffer is 3840 x 2688 (41 MB) instead of 6144 x 6144 (151 MB). It is created on first
+  // use and grows on demand, copying the old content.
+  struct ScaledExtent {
+    std::uint32_t width = 0;   // native pixels (0 x 0: no image)
+    std::uint32_t height = 0;
+  };
   std::uint32_t scale = 1;
   float scaleOffset = 1.0f;       // hw_vertex.vert scale_offset at scale (06.3: s in native mode)
-  std::uint32_t scaledSide = 0;   // kGpuScaledExtent * scale; 0 at 1x (no scaled images)
-  std::uint32_t displaySide = kSurfaceSize;
+  std::uint32_t scaledSide = 0;   // kGpuScaledExtent * scale: the largest scaled image (0 at 1x, no scaled images)
+  std::uint32_t displayWidth = kSurfaceSize;   // the display image's own extent (grows on demand, IN-384)
+  std::uint32_t displayHeight = kSurfaceSize;
+  ScaledExtent scaledFrameExtent[kGpuColourSlots];
+  ScaledExtent scaledDepthExtent[kGpuDepthSlots];
+  ScaledExtent scaledTexelExtent;                      // IN-374 scaled textures
+  ScaledExtent scaledShadowExtent[kGpuDisplayShadows];  // IN-377 scaled display shadows
+  ScaledExtent shadowNativeExtent[kGpuDisplayShadows];  // their 1x words
+  ScaledExtent toneScaledExtent;                        // IN-379 the saved scaled tone source
+  std::uint64_t scaledImageBytes = 0;                   // device memory of all of the above (+ display/fxaa)
+  bool scaledDescriptorsReady = false;                  // the scaled descriptor sets exist (set by create_scaled_resources)
   Image scaledFrames[kGpuColourSlots];
   Image scaledDepths[kGpuDepthSlots];
   Image scaledShadows[kGpuDisplayShadows];  // IN-377: kGpuScaledExtent * s wide, kGpuShadowRows * s high
@@ -140,6 +156,7 @@ struct GpuDrawer::Impl {
 
   // ---- 13.5 FXAA (IN-376), created on first use ----
   Image fxaaImage;
+  std::uint32_t fxaaWidth = 0, fxaaHeight = 0;  // IN-384: the FXAA image's extent
   VkDescriptorSetLayout fxaaSetLayout = VK_NULL_HANDLE;
   VkPipelineLayout fxaaLayout = VK_NULL_HANDLE;
   VkDescriptorPool fxaaPool = VK_NULL_HANDLE;
@@ -207,28 +224,46 @@ struct GpuDrawer::Impl {
     gt4_hwd_vkCmdBeginRenderPass(cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
     ++stats.renderPasses;
     ++stats.scaledPasses;
-    VkViewport viewport{0.0f, 0.0f, static_cast<float>(scaledSide), static_cast<float>(scaledSide), 0.0f, 1.0f};
-    gt4_hwd_vkCmdSetViewport(cmd, 0, 1, &viewport);
     const VkDeviceSize ringStart = 0;
     gt4_hwd_vkCmdBindVertexBuffers(cmd, 0, 1, &vertices.buffer, &ringStart);
     VkPipeline boundPipeline = VK_NULL_HANDLE;
     std::uint32_t lastPush[8] = {};
     bool pushed = false;
     VkRect2D lastScissor{{-1, -1}, {0, 0}};
+    std::uint32_t viewportWidth = 0, viewportHeight = 0;
     bool anyDraw = false;
-    const std::int32_t side = static_cast<std::int32_t>(scaledSide);
     const std::int32_t s = static_cast<std::int32_t>(scale);
     for (const ScaledDraw &draw : scaledDraws) {
-      if (draw.descriptorSet / kGpuDepthSlots == kGpuScratchColourSlot) continue;
+      const std::uint32_t colour = draw.descriptorSet / kGpuDepthSlots;
+      const std::uint32_t depth = draw.descriptorSet % kGpuDepthSlots;
+      if (colour == kGpuScratchColourSlot) continue;
+      // IN-384: the scaled image of this slot pair, not a 1024 * s square. Every collection of scaled draws has
+      // grown the images it writes before recording them.
+      const std::int32_t imageWidth = static_cast<std::int32_t>(scaledFrameExtent[colour].width) * s;
+      const std::int32_t imageHeight = static_cast<std::int32_t>(scaledFrameExtent[colour].height) * s;
+      const std::int32_t depthWidth = static_cast<std::int32_t>(scaledDepthExtent[depth].width) * s;
+      const std::int32_t depthHeight = static_cast<std::int32_t>(scaledDepthExtent[depth].height) * s;
+      if (imageWidth <= 0 || imageHeight <= 0) continue;
       // The GS scissor applies to the native sample points. In the 06.3 native mode native pixel N's sample point
       // is the centre of sub-pixel block N, and a sub-pixel belongs to native pixel floor((j - h) / s) with
       // h = floor(s/2) (the half-pixel band of IN-372), so the scaled scissor is the native one times s, moved by h.
       const std::int32_t h = s / 2;
       const std::int32_t x0 = draw.scissor.offset.x * s + h;
       const std::int32_t y0 = draw.scissor.offset.y * s + h;
-      if (x0 >= side || y0 >= side) continue;  // outside the scaled extent: 1x words only
-      const std::int32_t x1 = std::min<std::int32_t>(side, x0 + static_cast<std::int32_t>(draw.scissor.extent.width) * s);
-      const std::int32_t y1 = std::min<std::int32_t>(side, y0 + static_cast<std::int32_t>(draw.scissor.extent.height) * s);
+      if (x0 >= imageWidth || y0 >= imageHeight) continue;  // outside the scaled image: 1x words only
+      std::int32_t x1 =
+          std::min<std::int32_t>(imageWidth, x0 + static_cast<std::int32_t>(draw.scissor.extent.width) * s);
+      std::int32_t y1 = std::min<std::int32_t>(imageHeight, y0 + static_cast<std::int32_t>(draw.scissor.extent.height) * s);
+      // The depth image of this pair covers every draw of its chunks too (Execute grows it before recording them);
+      // this clip is the guard that no draw ever samples outside it.
+      const std::int32_t clippedX1 = std::min(x1, depthWidth);
+      const std::int32_t clippedY1 = std::min(y1, depthHeight);
+      if (clippedX1 != x1 || clippedY1 != y1) {
+        x1 = clippedX1;
+        y1 = clippedY1;
+        ++stats.scaledDrawsClipped;
+      }
+      if (x1 <= x0 || y1 <= y0) continue;
       const VkRect2D scissor{{x0, y0}, {static_cast<std::uint32_t>(x1 - x0), static_cast<std::uint32_t>(y1 - y0)}};
       if (barrierBetween && anyDraw) {
         VkMemoryBarrier between{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
@@ -244,9 +279,16 @@ struct GpuDrawer::Impl {
       }
       gt4_hwd_vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
                                       &scaledDescriptorSets[draw.descriptorSet], 1, &draw.uniformOffset);
+      if (viewportWidth != static_cast<std::uint32_t>(imageWidth) ||
+          viewportHeight != static_cast<std::uint32_t>(imageHeight)) {
+        VkViewport viewport{0.0f, 0.0f, static_cast<float>(imageWidth), static_cast<float>(imageHeight), 0.0f, 1.0f};
+        gt4_hwd_vkCmdSetViewport(cmd, 0, 1, &viewport);
+        viewportWidth = static_cast<std::uint32_t>(imageWidth);
+        viewportHeight = static_cast<std::uint32_t>(imageHeight);
+      }
       std::uint32_t push[8];
       std::memcpy(push, draw.push, sizeof(push));
-      const float sizes[2] = {static_cast<float>(scaledSide), static_cast<float>(scaledSide)};
+      const float sizes[2] = {static_cast<float>(imageWidth), static_cast<float>(imageHeight)};
       std::memcpy(push, sizes, sizeof(sizes));
       push[2] = FloatToBits(static_cast<float>(scale));
       push[3] = FloatToBits(scaleOffset);
@@ -279,10 +321,12 @@ struct GpuDrawer::Impl {
       ++stats.scaledRefreshesPaused;
       return;
     }
+    // IN-384: the slot's own image, not a 1024 x 1024 square.
+    const ScaledExtent &extent = depthSlot ? scaledDepthExtent[slot] : scaledFrameExtent[slot];
     x0 = std::max(x0, 0);
     y0 = std::max(y0, 0);
-    x1 = std::min(x1, kGpuScaledExtent - 1);
-    y1 = std::min(y1, kGpuScaledExtent - 1);
+    x1 = std::min(x1, static_cast<std::int32_t>(extent.width) - 1);
+    y1 = std::min(y1, static_cast<std::int32_t>(extent.height) - 1);
     if (x1 < x0 || y1 < y0) return;
     mark(kTimeUpload);  // the load before the refresh (12.8 timing: each interval goes to the mark after it)
     full_barrier();
@@ -586,13 +630,15 @@ struct GpuDrawer::Impl {
 
   // IN-372: the scaled compose set of frame set `index` (its ring is `ring`).
   bool make_compose_scaled_set(std::uint32_t index, const Resource &ring, std::string &error) {
-    VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
-    allocate.descriptorPool = scalePool;
-    allocate.descriptorSetCount = 1;
-    allocate.pSetLayouts = &composeScaledSetLayout;
-    if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &allocate, &composeScaledSets[index]), "vkAllocateDescriptorSets",
-               error)) {
-      return false;
+    if (!composeScaledSets[index]) {
+      VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+      allocate.descriptorPool = scalePool;
+      allocate.descriptorSetCount = 1;
+      allocate.pSetLayouts = &composeScaledSetLayout;
+      if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &allocate, &composeScaledSets[index]),
+                 "vkAllocateDescriptorSets", error)) {
+        return false;
+      }
     }
     VkDescriptorBufferInfo buffers[3] = {{glm.buffer, 0, kGlmBytes}, {glmTables.buffer, 0, glmTables.size},
                                          {ring.buffer, 0, kPaletteRingBytes}};
@@ -840,6 +886,223 @@ struct GpuDrawer::Impl {
     view.format = VK_FORMAT_R32_UINT;
     view.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
     return check(gt4_hwd_vkCreateImageView(device, &view, nullptr, &image.view), "vkCreateImageView", error);
+  }
+
+  // IN-384: destroys one image, view and memory (used when a scaled image grows).
+  void destroy_image(Image &image) {
+    if (image.view) gt4_hwd_vkDestroyImageView(device, image.view, nullptr);
+    if (image.image) gt4_hwd_vkDestroyImage(device, image.image, nullptr);
+    if (image.memory) gt4_hwd_vkFreeMemory(device, image.memory, nullptr);
+    image = Image{};
+  }
+
+  static std::uint32_t round_up(std::uint32_t value, std::uint32_t multiple) {
+    return (value + multiple - 1u) / multiple * multiple;
+  }
+
+  // Device memory of every image that only exists for the scaled presentation (reported, IN-384).
+  std::uint64_t scaled_bytes() const {
+    std::uint64_t bytes = 0;
+    const auto add = [&bytes](const Image &image, std::uint32_t width, std::uint32_t height) {
+      if (image.image) bytes += static_cast<std::uint64_t>(width) * height * 4u;
+    };
+    for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) {
+      add(scaledFrames[i], scaledFrameExtent[i].width * scale, scaledFrameExtent[i].height * scale);
+    }
+    for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) {
+      add(scaledDepths[i], scaledDepthExtent[i].width * scale, scaledDepthExtent[i].height * scale);
+    }
+    add(scaledTexels, scaledTexelExtent.width * scale, scaledTexelExtent.height * scale);
+    for (std::uint32_t i = 0; i < kGpuDisplayShadows; ++i) {
+      add(scaledShadows[i], scaledShadowExtent[i].width * scale, scaledShadowExtent[i].height * scale);
+      add(nativeShadows[i], shadowNativeExtent[i].width, shadowNativeExtent[i].height);
+    }
+    add(toneScaled, toneScaledExtent.width * scale, toneScaledExtent.height * scale);
+    add(toneNative, kGpuScaledExtent, kGpuShadowRows);
+    return bytes;
+  }
+
+  // Keeps the reported number (stats.scaledImageBytes) in step with the images that exist.
+  void note_scaled_bytes() {
+    scaledImageBytes = scaled_bytes();
+    stats.scaledImageBytes = scaledImageBytes;
+  }
+
+  // Rewrites every descriptor set that names a scaled image. Growth is rare (a slot's first use or a bigger target),
+  // and ensure_scaled_image has waited for the GPU, so no submission is using these sets. Every frame set has its own
+  // copies of the per-pair sets, so all of them are rewritten (a stale copy would name a destroyed view).
+  void update_scaled_descriptors() {
+    if (!scaledDescriptorsReady) return;  // create_scaled_resources writes them from the current views
+    const auto write_pairs = [this](VkDescriptorSet *sets) {
+      for (std::uint32_t colour = 0; colour < kGpuColourSlots; ++colour) {
+        for (std::uint32_t depth = 0; depth < kGpuDepthSlots; ++depth) {
+          VkDescriptorSet set = sets[colour * kGpuDepthSlots + depth];
+          if (!set) continue;
+          VkDescriptorImageInfo images[3] = {{VK_NULL_HANDLE, scaledFrames[colour].view, VK_IMAGE_LAYOUT_GENERAL},
+                                             {VK_NULL_HANDLE, scaledDepths[depth].view, VK_IMAGE_LAYOUT_GENERAL},
+                                             {VK_NULL_HANDLE, scaledTexels.view, VK_IMAGE_LAYOUT_GENERAL}};
+          const std::uint32_t bindings[3] = {1, 2, 4};
+          VkWriteDescriptorSet writes[3]{};
+          for (std::uint32_t i = 0; i < 3; ++i) {
+            writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[i].dstSet = set;
+            writes[i].dstBinding = bindings[i];
+            writes[i].descriptorCount = 1;
+            writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            writes[i].pImageInfo = &images[i];
+          }
+          gt4_hwd_vkUpdateDescriptorSets(device, 3, writes, 0, nullptr);
+        }
+      }
+    };
+    write_pairs(scaledDescriptorSets);
+    write_pairs(frameSets[0].scaledDescriptorSets);
+    write_pairs(frameSets[1].scaledDescriptorSets);
+    for (std::uint32_t set = 0; set < kGpuColourSlots + kGpuDepthSlots; ++set) {
+      const bool depthSet = set >= kGpuColourSlots;
+      const std::uint32_t slot = depthSet ? set - kGpuColourSlots : set;
+      VkDescriptorImageInfo image{VK_NULL_HANDLE, depthSet ? scaledDepths[slot].view : scaledFrames[slot].view,
+                                  VK_IMAGE_LAYOUT_GENERAL};
+      VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+      write.dstSet = upsampleSets[set];
+      write.dstBinding = 1;
+      write.descriptorCount = 1;
+      write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      write.pImageInfo = &image;
+      gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    }
+    for (std::uint32_t slot = 0; slot < kGpuColourSlots; ++slot) {
+      if (!toneSets[slot]) continue;
+      VkDescriptorImageInfo images[2] = {{VK_NULL_HANDLE, toneScaled.view, VK_IMAGE_LAYOUT_GENERAL},
+                                         {VK_NULL_HANDLE, scaledFrames[slot].view, VK_IMAGE_LAYOUT_GENERAL}};
+      VkWriteDescriptorSet writes[2]{};
+      for (std::uint32_t i = 0; i < 2; ++i) {
+        writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i].dstSet = toneSets[slot];
+        writes[i].dstBinding = i == 0 ? 1u : 3u;
+        writes[i].descriptorCount = 1;
+        writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[i].pImageInfo = &images[i];
+      }
+      gt4_hwd_vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+    }
+    for (std::uint32_t frame = 0; frame < 2; ++frame) {
+      if (!composeScaledSets[frame]) continue;
+      // Each frame's compose set names that frame's palette ring (IN-372); never another frame's.
+      std::string ignored;
+      make_compose_scaled_set(frame, secondFrameReady ? frameSets[frame].palettes : palettes, ignored);
+    }
+    note_scaled_bytes();
+  }
+
+  // Creates or grows an image so it covers width x height native pixels (width * pixelScale x height * pixelScale
+  // pixels), copying the old content. The width is rounded up to a page (64) and the height doubled per growth, so a
+  // target that grows row by row is rebuilt a few times at most. Nothing may reference the old image while it is
+  // replaced: the recording is submitted and waited for before and after the copy (that is also what makes
+  // destroying the old image and rewriting the descriptor sets safe). `pixelScale` is the internal scale for the
+  // presentation images and 1 for the few that are read at 1x (the IN-377 shadow words).
+  bool ensure_scaled_image(Image &image, ScaledExtent &extent, std::uint32_t width, std::uint32_t height,
+                           std::string &error, std::uint32_t pixelScale = 0) {
+    if (pixelScale == 0) pixelScale = scale;
+    width = std::max<std::uint32_t>(64u, round_up(width, 64u));
+    height = std::max<std::uint32_t>(32u, round_up(height, 32u));
+    if (extent.width >= width && extent.height >= height) return true;
+    const std::uint32_t newWidth = std::max(width, extent.width);
+    const std::uint32_t newHeight = std::max(height, extent.height * 2u);
+    if (image.image && !submit(true, error)) return false;
+    Image fresh;
+    if (!make_image(fresh, newWidth * pixelScale, newHeight * pixelScale, error)) return false;
+    if (!begin_recording(error)) return false;
+    VkImageMemoryBarrier toGeneral{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    toGeneral.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.image = fresh.image;
+    toGeneral.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toGeneral.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    gt4_hw_vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
+                                nullptr, 0, nullptr, 1, &toGeneral);
+    if (image.image) {
+      VkImageCopy region{};
+      region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+      region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+      region.extent = {extent.width * pixelScale, extent.height * pixelScale, 1};
+      recorded_work();
+      gt4_hwd_vkCmdCopyImage(cmd, image.image, VK_IMAGE_LAYOUT_GENERAL, fresh.image, VK_IMAGE_LAYOUT_GENERAL, 1,
+                             &region);
+      full_barrier();
+    }
+    if (!submit(true, error)) return false;
+    destroy_image(image);  // the GPU finished with it, and the next line updates every set that named it
+    image = fresh;
+    extent.width = newWidth;
+    extent.height = newHeight;
+    update_scaled_descriptors();
+    ++stats.scaledImageGrows;
+    static const bool trace = std::getenv("GT4_HW_SCALE_TRACE") != nullptr;  // diagnostic only
+    if (trace) {
+      std::fprintf(stderr, "[scale] grow to %ux%u native (%ux%u px)\n", newWidth, newHeight, newWidth * pixelScale,
+                   newHeight * pixelScale);
+    }
+    return true;
+  }
+
+  // IN-384: the display image (what the presentation reads) grows to the composed frame, not to a 1024 * s square.
+  // Its old content is never needed (a new size implies a new compose), so no copy.
+  bool ensure_display_image(std::uint32_t width, std::uint32_t height, std::string &error) {
+    if (width <= displayWidth && height <= displayHeight) return true;
+    const std::uint32_t newWidth = std::max(width, displayWidth);
+    const std::uint32_t newHeight = std::max(height, displayHeight);
+    if (display.image && !submit(true, error)) return false;
+    Image fresh;
+    if (!make_image(fresh, newWidth, newHeight, error)) return false;
+    if (!begin_recording(error)) return false;
+    VkImageMemoryBarrier toGeneral{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    toGeneral.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.image = fresh.image;
+    toGeneral.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toGeneral.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+    gt4_hw_vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
+                                nullptr, 0, nullptr, 1, &toGeneral);
+    recorded_work();
+    if (!submit(true, error)) return false;
+    destroy_image(display);
+    display = fresh;
+    displayWidth = newWidth;
+    displayHeight = newHeight;
+    // The compose kernels and the FXAA pass name the display image.
+    for (std::uint32_t frame = 0; frame < 2; ++frame) {
+      if (!displaySets[frame]) continue;
+      VkDescriptorImageInfo image{VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL};
+      VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+      write.dstSet = displaySets[frame];
+      write.dstBinding = 4;
+      write.descriptorCount = 1;
+      write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      write.pImageInfo = &image;
+      gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    }
+    for (std::uint32_t frame = 0; frame < 2; ++frame) {
+      if (!composeScaledSets[frame]) continue;
+      std::string ignored;
+      make_compose_scaled_set(frame, secondFrameReady ? frameSets[frame].palettes : palettes, ignored);
+    }
+    if (fxaaSet) {
+      VkDescriptorImageInfo image{VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL};
+      VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+      write.dstSet = fxaaSet;
+      write.dstBinding = 0;
+      write.descriptorCount = 1;
+      write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      write.pImageInfo = &image;
+      gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 0, nullptr);
+    }
+    note_scaled_bytes();
+    return true;
   }
 
   VkShaderModule make_module(const std::uint32_t *words, std::size_t count, std::string &error) {
@@ -1296,26 +1559,24 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   }
   if (!s.make_image(s.texels, kGpuTexelAtlasSide, kGpuTexelAtlasSide, error)) return false;
   s.scaledSide = s.scale > 1 ? static_cast<std::uint32_t>(kGpuScaledExtent) * s.scale : 0u;
-  s.displaySide = std::max<std::uint32_t>(kSurfaceSize, s.scaledSide);
-  if (!s.make_image(s.display, s.displaySide, s.displaySide, error)) return false;
+  if (!s.make_image(s.display, s.displayWidth, s.displayHeight, error)) return false;
   if (s.scaled()) {
-    for (Impl::Image &image : s.scaledFrames) {
-      if (!s.make_image(image, s.scaledSide, s.scaledSide, error)) return false;
+    // IN-384: a small image per slot to give every descriptor a view; a slot grows its own on first use. The
+    // 64 x 32 native minimum is one page (384 x 192 at 6x, 281 KB), so nothing is allocated for a target that is
+    // never used at scale.
+    for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) {
+      if (!s.ensure_scaled_image(s.scaledFrames[i], s.scaledFrameExtent[i], 64, 32, error)) return false;
     }
-    for (Impl::Image &image : s.scaledDepths) {
-      if (!s.make_image(image, s.scaledSide, s.scaledSide, error)) return false;
+    for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) {
+      if (!s.ensure_scaled_image(s.scaledDepths[i], s.scaledDepthExtent[i], 64, 32, error)) return false;
     }
-    if (!s.make_image(s.scaledTexels, s.scaledSide, s.scaledSide, error)) return false;
-    for (Impl::Image &image : s.scaledShadows) {
-      if (!s.make_image(image, s.scaledSide, static_cast<std::uint32_t>(kGpuShadowRows) * s.scale, error)) return false;
+    if (!s.ensure_scaled_image(s.scaledTexels, s.scaledTexelExtent, 64, 32, error)) return false;
+    for (std::uint32_t i = 0; i < kGpuDisplayShadows; ++i) {
+      if (!s.ensure_scaled_image(s.scaledShadows[i], s.scaledShadowExtent[i], 64, 32, error)) return false;
+      // The shadow's 1x words are read at 1x by the compose kernel: this image is not scaled.
+      if (!s.ensure_scaled_image(s.nativeShadows[i], s.shadowNativeExtent[i], 64, 32, error, 1)) return false;
     }
-    for (Impl::Image &image : s.nativeShadows) {
-      if (!s.make_image(image, static_cast<std::uint32_t>(kGpuScaledExtent), static_cast<std::uint32_t>(kGpuShadowRows),
-                        error)) {
-        return false;
-      }
-    }
-    if (!s.make_image(s.toneScaled, s.scaledSide, static_cast<std::uint32_t>(kGpuShadowRows) * s.scale, error)) return false;
+    if (!s.ensure_scaled_image(s.toneScaled, s.toneScaledExtent, 64, 32, error)) return false;
     if (!s.make_image(s.toneNative, static_cast<std::uint32_t>(kGpuScaledExtent), static_cast<std::uint32_t>(kGpuShadowRows),
                       error)) {
       return false;
@@ -1603,7 +1864,9 @@ bool GpuDrawer::Impl::create_deinterlace(std::string &error) {
 
 bool GpuDrawer::Impl::create_fxaa(std::string &error) {
   if (fxaaPipeline) return true;
-  if (!make_image(fxaaImage, displaySide, displaySide, error)) return false;
+  fxaaWidth = displayWidth;
+  fxaaHeight = displayHeight;
+  if (!make_image(fxaaImage, fxaaWidth, fxaaHeight, error)) return false;
   VkImageMemoryBarrier toGeneral{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
   toGeneral.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -1914,7 +2177,11 @@ bool GpuDrawer::Impl::create_scaled_resources(std::string &error) {
       return false;
     }
   }
-  return make_compose_scaled_set(0, palettes, error);
+  if (!make_compose_scaled_set(0, palettes, error)) return false;
+  // IN-384: from here on a grown scaled image can rewrite the descriptor sets.
+  scaledDescriptorsReady = true;
+  note_scaled_bytes();
+  return true;
 }
 
 
@@ -2276,6 +2543,39 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   for (const GpuDraw &draw : chunk.draws) allTriangles = allTriangles && draw.topology == GpuTopology::Triangles;
   const bool runnable = s.runsEnabled && allTriangles && drawingChunk && !chunk.uploadFrame && !chunk.uploadDepth &&
                         !chunk.readbackFrame && !chunk.readbackDepth && !textureFromSlot;
+  // IN-384: the scaled images of this chunk's slot pair cover its target's width and the rows it reaches; a target
+  // that grows past its image grows it here (copying the old content) before anything of this chunk is recorded.
+  if (s.scaled() && chunk.targetWidth != 0) {
+    const std::uint32_t targetWidth = chunk.targetWidth;
+    const std::uint32_t targetHeight = static_cast<std::uint32_t>(chunk.rectY1 + 1);
+    if (chunk.colourSlot != kGpuScratchColourSlot &&
+        !s.ensure_scaled_image(s.scaledFrames[chunk.colourSlot], s.scaledFrameExtent[chunk.colourSlot], targetWidth,
+                               targetHeight, error)) {
+      return false;
+    }
+    if (!s.ensure_scaled_image(s.scaledDepths[chunk.depthSlot], s.scaledDepthExtent[chunk.depthSlot], targetWidth,
+                               targetHeight, error)) {
+      return false;
+    }
+  }
+  // IN-374/IN-384: a texture copied from a resident slot copies the texels the batch can sample (IN-380 footprint),
+  // so the slot's scaled image has to cover that footprint; growing it here (never a clipped copy) keeps the scaled
+  // pass sampling the slot's own image.
+  const std::uint32_t copyWidth =
+      chunk.texCopyWidth != 0 ? std::min(chunk.texCopyWidth, chunk.texWidth) : chunk.texWidth;
+  const std::uint32_t copyHeight =
+      chunk.texCopyHeight != 0 ? std::min(chunk.texCopyHeight, chunk.texHeight) : chunk.texHeight;
+  bool scaledTextureCopy = s.scaled() && textureFromSlot &&
+                           chunk.textureSlot != static_cast<std::int32_t>(kGpuScratchColourSlot) &&
+                           copyWidth <= static_cast<std::uint32_t>(kGpuScaledExtent) &&
+                           copyHeight <= static_cast<std::uint32_t>(kGpuScaledExtent);
+  if (scaledTextureCopy) {
+    scaledTextureCopy =
+        s.ensure_scaled_image(s.scaledFrames[chunk.textureSlot], s.scaledFrameExtent[chunk.textureSlot], copyWidth,
+                              copyHeight, error) &&
+        s.ensure_scaled_image(s.scaledTexels, s.scaledTexelExtent, copyWidth, copyHeight, error);
+    if (!scaledTextureCopy) return false;
+  }
   if (!runnable && s.recording && !s.flush_run(error)) return false;
 
   // Ring space this chunk needs (IN-342): the staging bytes of its uploads, its vertices and one uniform slot.
@@ -2467,11 +2767,6 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   VkBufferImageCopy depthCopy = frameCopy;
   depthCopy.bufferOffset = depthOffset;
   const bool anyUpload = chunk.uploadFrame || chunk.uploadDepth || chunk.hasTexture;
-  // IN-374: a texture copied from a resident slot is also copied from its scaled image (inside the scaled extent).
-  const bool scaledTextureCopy = s.scaled() && textureFromSlot &&
-                                 chunk.textureSlot != static_cast<std::int32_t>(kGpuScratchColourSlot) &&
-                                 chunk.texWidth <= static_cast<std::uint32_t>(kGpuScaledExtent) &&
-                                 chunk.texHeight <= static_cast<std::uint32_t>(kGpuScaledExtent);
   if (chunk.uploadFrame) {
     s.recorded_work();
     gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, frameImage, VK_IMAGE_LAYOUT_GENERAL, 1, &frameCopy);
@@ -2503,9 +2798,9 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
                            VK_IMAGE_LAYOUT_GENERAL, 1, &region);
     if (scaledTextureCopy) {
       // IN-374 (06.8 "sampling a target directly: the source inherits the target's scale"): the same region of the
-      // slot's scaled image, for the scaled pass of this chunk.
+      // slot's scaled image, for the scaled pass of this chunk, over the sampled footprint (IN-384).
       VkImageCopy scaledRegion = region;
-      scaledRegion.extent = {chunk.texWidth * s.scale, chunk.texHeight * s.scale, 1};
+      scaledRegion.extent = {copyWidth * s.scale, copyHeight * s.scale, 1};
       s.recorded_work();
       gt4_hwd_vkCmdCopyImage(s.cmd, s.scaledFrames[chunk.textureSlot].image, VK_IMAGE_LAYOUT_GENERAL,
                              s.scaledTexels.image, VK_IMAGE_LAYOUT_GENERAL, 1, &scaledRegion);
@@ -2753,6 +3048,14 @@ bool GpuDrawer::LoadSlotFromGlm(bool depthSlot, std::uint32_t slot, std::uint32_
     error = "GLM load outside a slot";
     return false;
   }
+  // IN-384: the load grows the slot's scaled image first (copying the old content), so the refresh below covers
+  // every loaded row instead of being clipped.
+  if (s.scaled() &&
+      !s.ensure_scaled_image(depthSlot ? s.scaledDepths[slot] : s.scaledFrames[slot],
+                             depthSlot ? s.scaledDepthExtent[slot] : s.scaledFrameExtent[slot],
+                             std::max<std::uint32_t>(bw, 1u) * 64u, static_cast<std::uint32_t>(y1 + 1), error)) {
+    return false;
+  }
   if (!s.begin_recording(error)) return false;
   if (!s.flush_run(error)) return false;  // the load writes the target image the run may draw into
   const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
@@ -2916,10 +3219,12 @@ bool GpuDrawer::CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *
 bool GpuDrawer::ComposeDisplay(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth,
                                std::uint32_t outHeight, std::string &error) {
   Impl &s = *impl_;
-  if (outWidth == 0 || outHeight == 0 || outWidth > s.displaySide || outHeight > s.displaySide) {
-    error = "display compose outside the display image";
+  if (outWidth == 0 || outHeight == 0) {
+    error = "display compose with no size";
     return false;
   }
+  // IN-384: the display image grows to the composed frame (it is only allocated for the size really used).
+  if (s.display.image && !s.ensure_display_image(outWidth, outHeight, error)) return false;
   const VkDeviceSize bytes = parameters.size() * sizeof(std::uint32_t);
   if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
   if (!s.begin_recording(error)) return false;
@@ -2945,10 +3250,11 @@ bool GpuDrawer::ComposeDisplayScaled(const std::vector<std::uint32_t> &parameter
     error = "scaled display compose at 1x";
     return false;
   }
-  if (outWidth == 0 || outHeight == 0 || outWidth > s.displaySide || outHeight > s.displaySide) {
-    error = "scaled display compose outside the display image";
+  if (outWidth == 0 || outHeight == 0) {
+    error = "scaled display compose with no size";
     return false;
   }
+  if (s.display.image && !s.ensure_display_image(outWidth, outHeight, error)) return false;
   const VkDeviceSize bytes = parameters.size() * sizeof(std::uint32_t);
   if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
   if (!s.begin_recording(error)) return false;
@@ -2980,9 +3286,16 @@ bool GpuDrawer::SaveScaledShadow(std::uint32_t slot, std::uint32_t shadow, std::
   }
   x0 = std::max(x0, 0);
   y0 = std::max(y0, 0);
-  x1 = std::min(x1, kGpuScaledExtent - 1);
-  y1 = std::min(y1, kGpuShadowRows - 1);
+  // IN-384: the slot's own image, and the shadow grows to this rectangle.
+  x1 = std::min(x1, static_cast<std::int32_t>(s.scaledFrameExtent[slot].width) - 1);
+  y1 = std::min(y1, static_cast<std::int32_t>(s.scaledFrameExtent[slot].height) - 1);
   if (x1 < x0 || y1 < y0) return true;  // nothing of the slot lies inside the shadow
+  if (!s.ensure_scaled_image(s.scaledShadows[shadow], s.scaledShadowExtent[shadow],
+                             static_cast<std::uint32_t>(x1 + 1), static_cast<std::uint32_t>(y1 + 1), error) ||
+      !s.ensure_scaled_image(s.nativeShadows[shadow], s.shadowNativeExtent[shadow],
+                             static_cast<std::uint32_t>(x1 + 1), static_cast<std::uint32_t>(y1 + 1), error)) {
+    return false;
+  }
   if (!s.begin_recording(error)) return false;
   if (!s.flush_run(error)) return false;  // the slot's pending draws come first
   s.full_barrier_with_fragment();         // scaled draws and refreshes of the slot finish first
@@ -3018,9 +3331,14 @@ bool GpuDrawer::SaveToneSource(std::uint32_t slot, std::int32_t x0, std::int32_t
   }
   x0 = std::max(x0, 0);
   y0 = std::max(y0, 0);
-  x1 = std::min(x1, kGpuScaledExtent - 1);
-  y1 = std::min(y1, kGpuShadowRows - 1);
+  // IN-384: the slot's own image, and the saved tone source grows to this rectangle.
+  x1 = std::min(x1, static_cast<std::int32_t>(s.scaledFrameExtent[slot].width) - 1);
+  y1 = std::min(y1, static_cast<std::int32_t>(s.scaledFrameExtent[slot].height) - 1);
   if (x1 < x0 || y1 < y0) return true;
+  if (!s.ensure_scaled_image(s.toneScaled, s.toneScaledExtent, static_cast<std::uint32_t>(x1 + 1),
+                             static_cast<std::uint32_t>(y1 + 1), error)) {
+    return false;
+  }
   if (!s.begin_recording(error)) return false;
   if (!s.flush_run(error)) return false;
   s.full_barrier_with_fragment();
@@ -3055,8 +3373,10 @@ bool GpuDrawer::CarryTone(std::uint32_t slot, std::int32_t x0, std::int32_t y0, 
   }
   x0 = std::max(x0, 0);
   y0 = std::max(y0, 0);
-  x1 = std::min(x1, kGpuScaledExtent - 1);
-  y1 = std::min(y1, kGpuShadowRows - 1);
+  x1 = std::min(x1, std::min(static_cast<std::int32_t>(s.scaledFrameExtent[slot].width) - 1,
+                             static_cast<std::int32_t>(s.toneScaledExtent.width) - 1));
+  y1 = std::min(y1, std::min(static_cast<std::int32_t>(s.scaledFrameExtent[slot].height) - 1,
+                             static_cast<std::int32_t>(s.toneScaledExtent.height) - 1));
   if (x1 < x0 || y1 < y0) return true;
   if (!s.begin_recording(error)) return false;
   if (!s.flush_run(error)) return false;  // the slot's pending draws come first
@@ -3086,6 +3406,24 @@ bool GpuDrawer::CarryTone(std::uint32_t slot, std::int32_t x0, std::int32_t y0, 
 }
 
 void GpuDrawer::PauseScaled(bool paused) { impl_->scaledPaused = paused; }
+
+void GpuDrawer::ScaledExtent(bool depthSlot, std::uint32_t slot, std::uint32_t &width, std::uint32_t &height) const {
+  const Impl &s = *impl_;
+  width = 0;
+  height = 0;
+  if (!s.scaled() || slot >= (depthSlot ? kGpuDepthSlots : kGpuColourSlots)) return;
+  const Impl::ScaledExtent &extent = depthSlot ? s.scaledDepthExtent[slot] : s.scaledFrameExtent[slot];
+  width = extent.width;
+  height = extent.height;
+}
+
+bool GpuDrawer::ScaledCovers(bool depthSlot, std::uint32_t slot, std::int32_t x1, std::int32_t y1) const {
+  std::uint32_t width = 0, height = 0;
+  ScaledExtent(depthSlot, slot, width, height);
+  return width != 0 && height != 0 && x1 < static_cast<std::int32_t>(width) && y1 < static_cast<std::int32_t>(height);
+}
+
+std::uint64_t GpuDrawer::ScaledImageBytes() const { return impl_->scaledImageBytes; }
 
 bool GpuDrawer::RefreshScaledSlot(bool depthSlot, std::uint32_t slot, std::int32_t x0, std::int32_t y0,
                                   std::int32_t x1, std::int32_t y1, std::string &error) {
@@ -3187,13 +3525,41 @@ bool GpuDrawer::DeinterlaceScaled(const DeinterlaceStep &step, std::string &erro
 
 bool GpuDrawer::ApplyFxaa(std::uint32_t width, std::uint32_t height, std::string &error) {
   Impl &s = *impl_;
-  if (width == 0 || height == 0 || width > s.displaySide || height > s.displaySide) {
-    error = "FXAA outside the display image";
+  if (width == 0 || height == 0) {
+    error = "FXAA with no size";
     return false;
   }
   if (!s.begin_recording(error)) return false;
   if (!s.flush_run(error)) return false;
   if (!s.create_fxaa(error)) return false;
+  if (width > s.fxaaWidth || height > s.fxaaHeight) {
+    // IN-384: the FXAA image follows the display image's growth.
+    if (!s.submit(true, error)) return false;
+    s.destroy_image(s.fxaaImage);
+    s.fxaaWidth = std::max(width, s.displayWidth);
+    s.fxaaHeight = std::max(height, s.displayHeight);
+    if (!s.make_image(s.fxaaImage, s.fxaaWidth, s.fxaaHeight, error)) return false;
+    if (!s.begin_recording(error)) return false;
+    VkImageMemoryBarrier toGeneral{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    toGeneral.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.image = s.fxaaImage.image;
+    toGeneral.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toGeneral.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+    gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
+                                nullptr, 0, nullptr, 1, &toGeneral);
+    VkDescriptorImageInfo image{VK_NULL_HANDLE, s.fxaaImage.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+    write.dstSet = s.fxaaSet;
+    write.dstBinding = 1;
+    write.descriptorCount = 1;
+    write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    write.pImageInfo = &image;
+    gt4_hwd_vkUpdateDescriptorSets(s.device, 1, &write, 0, nullptr);
+    s.scaledImageBytes = s.scaled_bytes();
+  }
   s.full_barrier();  // the compose wrote the display image; an earlier present may still copy the FXAA image
   gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.fxaaPipeline);
   gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.fxaaLayout, 0, 1, &s.fxaaSet, 0, nullptr);
@@ -3239,7 +3605,7 @@ bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vect
     return false;
   }
   const VkImage source = fromFxaa ? s.fxaaImage.image : s.display.image;
-  if (width == 0 || height == 0 || width > s.displaySide || height > s.displaySide) {
+  if (width == 0 || height == 0 || width > s.displayWidth || height > s.displayHeight) {
     error = "display read outside the display image";
     return false;
   }

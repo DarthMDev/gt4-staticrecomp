@@ -99,8 +99,15 @@ struct GpuChunk {
     // IN-346: when >= 0, the texels are copied on the GPU from this colour slot's image (rectangle 0,0 to
     // texWidth x texHeight) instead of being uploaded from `texels`.
     std::int32_t textureSlot = -1;
+    // IN-384: the target's native row width (its FBW * 64), or 0 for a chunk that does not name a resident target.
+    // The scaled images of this chunk's slot pair grow to cover it and the rectangle's rows before it is recorded.
+    std::uint32_t targetWidth = 0;
     std::uint32_t texWidth = 0;              // texels (power of two up to 1024 or region extent)
     std::uint32_t texHeight = 0;
+    // IN-384: the sampled footprint of a texture taken from a resident slot (IN-380), 0 = the whole extent. Only the
+    // scaled copy uses it: the scaled texel image and the source slot's image grow to it, not to the 2^TW x 2^TH view.
+    std::uint32_t texCopyWidth = 0;
+    std::uint32_t texCopyHeight = 0;
     std::vector<std::uint32_t> texels;       // RGBA8 packed as R | G<<8 | B<<16 | A<<24
     // IN-347: when set, the texels are decoded on the GPU from the GLM (texture view below; indexed formats
     // through `palette`) instead of being uploaded or copied. The caller made the GLM current first.
@@ -182,6 +189,10 @@ struct GpuStats {
     std::uint64_t toneStripPages = 0;       // IN-383: tone-sequence pages written by one strip dispatch
     std::uint64_t toneStripDispatches = 0;  // IN-383: strip dispatches (one per page)
     std::uint64_t toneStripBatches = 0;     // IN-383: strip batches folded into those dispatches
+    // IN-384 (parity plan Part A): the scaled images only cover what their slot uses, and are grown on demand.
+    std::uint64_t scaledImageGrows = 0;
+    std::uint64_t scaledDrawsClipped = 0;   // scaled draws whose scissor left a pair image (0 expected: must stay 0)
+    std::uint64_t scaledImageBytes = 0;     // device memory of every scaled image (slots, shadows, tone)
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
     // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.
@@ -313,6 +324,11 @@ public:
         std::uint32_t quadrants[8] = {};           // per strip: qx + 4 * qy of the palette quadrant
     };
     bool ToneStrips(const ToneStripPage &page, std::string &error);
+    // IN-384 (parity plan Part A): the native extent of a slot's scaled image (0 x 0 when it has none yet) and
+    // whether that image covers a native rectangle, which is what the scaled presentation compose needs.
+    void ScaledExtent(bool depthSlot, std::uint32_t slot, std::uint32_t &width, std::uint32_t &height) const;
+    bool ScaledCovers(bool depthSlot, std::uint32_t slot, std::int32_t x1, std::int32_t y1) const;
+    std::uint64_t ScaledImageBytes() const;  // device memory of every scaled image (IN-384 reporting)
     // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, max(kGpuSurface,
     // kGpuScaledExtent * scale) square, GENERAL layout).
     // As an opaque handle (the VkImage value): this header carries no Vulkan types.

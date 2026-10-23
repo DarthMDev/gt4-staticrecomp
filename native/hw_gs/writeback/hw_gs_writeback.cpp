@@ -426,7 +426,14 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
         out.texHeight = height;
         const bool rawKind = texture.cls == TexClass::Ct32 || texture.cls == TexClass::Ct24 || texture.cls == TexClass::Ct16;
         if (rawKind && textureFromTarget) {
-            out.textureSlot = textureFromTarget(texture.view, width, height, TextureFootprint(batch, texture, width, height));
+            const PixelRect footprint = TextureFootprint(batch, texture, width, height);
+            out.textureSlot = textureFromTarget(texture.view, width, height, footprint);
+            // IN-384: the scaled copy of a texture taken from a slot only needs the texels the batch can sample (IN-380),
+            // so a 1024 x 512 texture view of a 640 x 448 frame does not grow the slot's scaled image.
+            if (out.textureSlot >= 0 && !footprint.Empty()) {
+                out.texCopyWidth = static_cast<uint32_t>(footprint.x1 + 1);
+                out.texCopyHeight = static_cast<uint32_t>(footprint.y1 + 1);
+            }
         }
         bool gpuClut = false;
         if (out.textureSlot < 0 && textureFromGlm &&
@@ -747,6 +754,8 @@ bool ExecuteBatch(gpu::GpuDrawer &gpu, const BatchTranslation &t, memory::LocalM
         chunk.palette = t.palette;
         chunk.texWidth = t.texWidth;
         chunk.texHeight = t.texHeight;
+        chunk.texCopyWidth = t.texCopyWidth;
+        chunk.texCopyHeight = t.texCopyHeight;
         chunk.texels = t.texels;
         chunk.vertices.assign(t.vertices.begin() + baseVertex, t.vertices.begin() + baseVertex + vertexCount);
         for (std::size_t i = begin; i < end; ++i) {
@@ -1183,9 +1192,12 @@ public:
     void SaveDisplayShadow(const ResidentSlot& slot) {
         if (failed_ || gpu_.Scale() <= 1 || slot.depth || !slot.hasIdentity || slot.loaded.Empty()) return;
         if (!RecentlyDisplayed(slot.view)) return;
+        // IN-384: the shadow is copied out of the slot's own scaled image, so its rectangle is that image's extent.
+        uint32_t scaledWidth = 0, scaledHeight = 0;
+        gpu_.ScaledExtent(false, slot.gpuIndex, scaledWidth, scaledHeight);
         const PixelRect saved{std::max(slot.loaded.x0, 0), std::max(slot.loaded.y0, 0),
-                              std::min(slot.loaded.x1, gpu::kGpuScaledExtent - 1),
-                              std::min(slot.loaded.y1, gpu::kGpuShadowRows - 1)};
+                              std::min(slot.loaded.x1, static_cast<int32_t>(scaledWidth) - 1),
+                              std::min(slot.loaded.y1, static_cast<int32_t>(scaledHeight) - 1)};
         if (saved.Empty()) return;
         size_t chosen = shadows_.size();
         for (size_t i = 0; i < shadows_.size() && chosen == shadows_.size(); ++i) {
@@ -1632,6 +1644,8 @@ public:
         chunk.rectY1 = rect.y1;
         chunk.colourSlot = slot.depth ? gpu::kGpuScratchColourSlot : slot.gpuIndex;
         chunk.depthSlot = slot.depth ? slot.gpuIndex : gpu::kGpuScratchDepthSlot;
+        // IN-384: the load grows the slot's scaled image to its row width and to these rows before it is recorded.
+        chunk.targetWidth = std::max<uint32_t>(slot.view.bufferWidth, 1u) * 64u;
         chunk.uploadFrame = !slot.depth;
         chunk.uploadDepth = slot.depth;
         chunk.readbackFrame = false;
@@ -1931,6 +1945,8 @@ public:
             chunk.rectY1 = t.rect.y1;
             chunk.colourSlot = colour.gpuIndex;
             chunk.depthSlot = depth ? depth->gpuIndex : gpu::kGpuScratchDepthSlot;
+            // IN-384: the scaled images of this pair cover the target's row width and the rows this chunk reaches.
+            chunk.targetWidth = std::max<uint32_t>(t.frameView.bufferWidth, 1u) * 64u;
             chunk.uploadFrame = chunk.uploadDepth = chunk.readbackFrame = chunk.readbackDepth = false;
             chunk.state = t.state;
             chunk.hasTexture = t.hasTexture;
@@ -1949,6 +1965,8 @@ public:
             chunk.palette = t.palette;
             chunk.texWidth = t.texWidth;
             chunk.texHeight = t.texHeight;
+            chunk.texCopyWidth = t.texCopyWidth;
+            chunk.texCopyHeight = t.texCopyHeight;
             chunk.texelSpan = t.texels.data();  // IN-365: borrowed, no copy per chunk
             chunk.texelSpanCount = t.texels.size();
             chunk.vertexSpan = t.vertices.data() + baseVertex;
@@ -2007,9 +2025,12 @@ public:
             if (slot.depth || !slot.hasIdentity || slot.loaded.Empty()) continue;
             if (slot.view.psm != memory::Psm::Ct32 && slot.view.psm != memory::Psm::Ct24) continue;
             if (!SpansOverlap(LoadedSpan(slot), read)) continue;
+            // IN-384: the tone source is copied out of the slot's own scaled image, so its rectangle is that extent.
+            uint32_t scaledWidth = 0, scaledHeight = 0;
+            gpu_.ScaledExtent(false, slot.gpuIndex, scaledWidth, scaledHeight);
             const PixelRect saved{std::max(slot.loaded.x0, 0), std::max(slot.loaded.y0, 0),
-                                  std::min(slot.loaded.x1, gpu::kGpuScaledExtent - 1),
-                                  std::min(slot.loaded.y1, gpu::kGpuShadowRows - 1)};
+                                  std::min(slot.loaded.x1, static_cast<int32_t>(scaledWidth) - 1),
+                                  std::min(slot.loaded.y1, static_cast<int32_t>(scaledHeight) - 1)};
             if (saved.Empty()) return;
             std::string error;
             if (!gpu_.SaveToneSource(slot.gpuIndex, saved.x0, saved.y0, saved.x1, saved.y1, error)) {
@@ -3278,11 +3299,14 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
                 const PixelRect read{circuit.dbx, circuit.dby, circuit.dbx + static_cast<int32_t>(circuit.read_width) - 1,
                                      circuit.dby + static_cast<int32_t>(circuit.read_height) - 1};
                 uint32_t slotWord = 0;
-                if (read.x0 >= 0 && read.y0 >= 0 && read.x1 < gpu::kGpuScaledExtent && read.y1 < gpu::kGpuScaledExtent) {
+                // IN-384: the slot's scaled image must cover the whole read rectangle (it only holds what the slot
+                // loaded), not a fixed 1024 x 1024 square.
+                if (read.x0 >= 0 && read.y0 >= 0) {
                     for (const auto& slot : s.slots_) {
                         if (slot.depth || !slot.hasIdentity || !SameView(slot.view, view) || !Contains(slot.loaded, read)) {
                             continue;
                         }
+                        if (!s.gpu_.ScaledCovers(false, slot.gpuIndex, read.x1, read.y1)) continue;
                         slotWord = slot.gpuIndex + 1u;
                         break;
                     }

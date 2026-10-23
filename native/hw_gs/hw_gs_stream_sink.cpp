@@ -211,13 +211,14 @@ void maybe_profile(Backend &hw) {
     if (primed) {
       std::fprintf(stderr,
                    "[hw] cost vsync=%llu gs_thread_cpu_ms=%.2f process_cpu_core_ms=%.2f render_passes=%.1f "
-                   "barriers=%.1f upload_mb=%.2f readback_mb=%.3f\n",
+                   "barriers=%.1f upload_mb=%.2f readback_mb=%.3f scaled_image_mb=%.1f\n",
                    static_cast<unsigned long long>(g_vsyncs), (threadMs - lastThreadMs) / n,
                    (processMs - lastProcessMs) / n,
                    static_cast<double>(now.gpu_render_passes - was.gpu_render_passes) / n,
                    static_cast<double>(now.gpu_barriers - was.gpu_barriers) / n,
                    static_cast<double>(now.gpu_upload_bytes - was.gpu_upload_bytes) / n / 1e6,
-                   static_cast<double>(now.gpu_readback_bytes - was.gpu_readback_bytes) / n / 1e6);
+                   static_cast<double>(now.gpu_readback_bytes - was.gpu_readback_bytes) / n / 1e6,
+                   static_cast<double>(now.gpu_scaled_image_bytes) / 1e6);
     }
     primed = true;
     lastThreadMs = threadMs;
