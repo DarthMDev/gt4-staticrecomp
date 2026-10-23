@@ -119,7 +119,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | TASK‑095 | Ultrawide: undistorted 2D overlay on the pre-race menu (race lobby), as TASK-080 P2 does for the race HUD | 📋 Planned (owner, 2026-10-22) · study first; idea only |
 | TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
-| TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 📋 Planned (owner, 2026-10-22) · release 1.2.4 with TASK-097 |
+| TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 🟡 Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner test · release 1.3.0 (moved from 1.2.4) |
 | TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 🟡 Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner visual check · release 1.3.0 (moved from 1.2.4) |
 | TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072); subtasks S1-S9 in docs/SPEC2-PLAN.md | 🔄 In progress (2026-10-22) · branch `task/100-spec2`; release 1.3.0 |
 | TASK‑101 | Multi-game launcher: Gran Turismo 4 and Spec II side by side (game selector, Play/Install, per-game disc, card and saves, shared settings, Spec II logo) | 📋 Planned (owner, 2026-10-23) · release 1.3.0 with TASK-100; plan docs/MULTI-GAME-LAUNCHER-PLAN.md |
@@ -715,7 +715,8 @@ Plan:
   shows the panel with real notes; the owner checks the look.
 
 ### TASK-098 — Portable build (zip) beside the installer
-Planned (owner, 2026-10-22) for release 1.2.4, together with TASK-097. Two launcher builds from one source: the
+**Done on branch `task/101-multi-game` (2026-10-23), waiting for the owner test; release 1.3.0** (moved from 1.2.4 with
+TASK-097, on top of the multi-game layout of TASK-101). Planned by the owner on 2026-10-22. Two launcher builds from one source: the
 installer build (as today) and a portable build shipped as a zip. The portable copy keeps everything in its own
 folder, so it can be carried to another PC as one folder. No path is hardcoded: every folder is found from the
 folder of `GT4Recomp.exe`.
@@ -755,6 +756,38 @@ Map of the work:
 - Tests: `cargo test --workspace` for both builds (`--features portable`); path resolution, no registry use, the
   portable self-update swap and rollback with an injected file system, the per-folder lock.
 
+Result (slice 278, 2026-10-23): `cargo test --workspace` 431 passed in each build (the installer build and
+`--features portable`), 0 failed. Python: `tests/python/test_make_portable_zip.py` (7 tests, fixtures only).
+What was built, and the decisions behind it:
+- `gt4l_core::build_kind` (`BUILD`, `BuildKind::label`): the Cargo feature `portable` of `gt4l-core`, forwarded by
+  `gt4l-tauri`. Logic takes the kind as a value (`LayoutInputs::portable`, `relocation::prepare_as(portable)`), so both
+  behaviours are tested in either build. Settings > About shows "Build: Portable" (`about_info.build`).
+- Paths: `resolve_layout` with `portable` gives `UserDirs` = `<exe dir>\user` (`UserRootSource::Portable`) and `DataDirs` =
+  `<exe dir>\data`, the per-game layout inside both, no read layers, no `%LOCALAPPDATA%` fallback: an unwritable folder
+  gives "Move the GT4Recomp folder to a place you can write to" (a native message box, because no window exists yet).
+  The test overrides (`GT4RECOMP_DATA_DIR`, `GT4RECOMP_USER_DIR`) still win.
+- Nothing in the registry or system folders: `prepare_as(portable)` reads no `InstallDir`/`PreviousDataDir`, no Documents
+  folder, runs no 1.2.0 or 1.2.x migration; `clean_old_install_as(portable)` does nothing; the launcher creates no
+  shortcut and no uninstall entry (only the NSIS installer does). The WebView2 profile goes to `data\launcher-webview`
+  (`appDirectoriesOverride`, Tauri 2.12) instead of `%LOCALAPPDATA%\io.github.moesuito.gt4recomp`. The only registry read
+  left is the existing read-only WebView2 runtime detection (TASK-091), which the portable zip cannot replace.
+- Self-update (`gt4l_core::portable_update`, injected `UpdateFs`): `GT4Recomp-<version>-portable.zip` + `SHA256SUMS` ->
+  `.update-download\` (SHA-256 checked while downloading) -> extracted into `.update-staging\` (zip-slip, size and entry
+  limits) -> each top-level item except `user\`, `data\` and the update's own folders is renamed into `.update-old\` and the
+  staged item renamed in (the running `GT4Recomp.exe` is renamed aside, which Windows allows) -> the new exe starts with
+  `--after-update` (waits for the old one to exit) and the old one exits. A failed rename undoes every step; a marker
+  `.update-swapping` survives a crash and the next start restores `.update-old\`; a finished update's `.update-old\` is removed
+  at the next start (retried for 20 s in the background while the old launcher exits). No administrator prompt.
+- Single instance: `Local\GT4Recomp.Launcher.<key of the exe folder>` in the portable build, so two copies never block each
+  other and one copy cannot start twice; the installer build keeps `Local\GT4Recomp.Launcher`. Known limit: a second start of
+  the same folder brings forward the window titled "GT4Recomp", which may be another copy's window when both run.
+- `scripts/make_portable_zip.py` makes the zip from the same files the installer stages (`GT4Recomp.exe`, `SDL3.dll`,
+  `NOTICE.md`, `LICENSE.txt`, `game\`) plus empty `user\` and `data\` and a `PORTABLE.txt`, refuses game data in the game
+  folder, is deterministic and appends the zip's line to `SHA256SUMS`. `launcher\tools\build-release.ps1 -Portable` builds
+  the portable launcher into `<target dir>-portable`. No release zip was built (owner rule); the script is tested on fixtures.
+- Not done on purpose: an "import saves from the installed GT4Recomp" button (later); the game executable reading its
+  settings from `<install>\user\config` is part of TASK-097 below.
+
 ### TASK-097 — Self-sufficient game executable
 Planned (owner, 2026-10-22) for release 1.2.4, after the 1.2.3 hotfix. Principle: the game runs on its own with the
 same defaults every time; the launcher is only an easier way to start it and to manage settings. Today a double click
@@ -770,6 +803,50 @@ GT4_DISPLAY_ASPECT; GT4_FULLSCREEN, GT4_PRESENT_MODE, GT4_MONITOR, GT4_OUTPUT_SI
   `%APPDATA%\GT4Recomp\config`; the game reads them at start, so a direct start honours them.
 - Missing pieces (no prepared files, no GSdx): a clear message that says to open the launcher once.
 - New game slice with the frame identity checks, launcher changes, tests.
+
+Design (slice 278, 2026-10-23; written before the code, release 1.3.0 on branch `task/101-multi-game`):
+- **Two ways to start the game.** *Explicit mode* is the way the launcher, the harnesses and the pins start it today: the
+  first argument is the ELF. It runs exactly the old code path: no built-in default, no config file, no path search. This is
+  what keeps v2.00 frames byte-identical and what keeps every test and pin working; variables and arguments are the test
+  overrides. *Standalone mode* is a start without an ELF argument (a double click, or only `--` options such as `--frames 600`
+  or `--fullscreen`): the game builds the old command line and environment itself, from the rules below.
+- **Where the code lives.** A new `native/game_main.cpp` provides `main`; the pinned donor `main.cpp` (port `slice200`) is
+  compiled unchanged with `main` renamed to `gt4_donor_main` (a compile definition on that one source), and `game_main`
+  calls it with the argument vector it built. The pure rules (paths, defaults, config parsing, the command line) are in
+  `native/standalone.cpp/.hpp` with no Windows calls, tested by the CTest fixture `native_standalone`.
+- **Order of every value:** explicit argument or environment variable (wins) > the launcher's config file > the built-in
+  default. An empty variable counts as unset.
+- **Built-in defaults:** renderer GSdx (`GT4_RENDERER=pcsx2`, `PS2_GS=gpu`), race display 480p (`GT4_FORCE_480P=1`), 16:9 hold
+  (`GT4_FORCE_WIDESCREEN=1`), automatic ultrawide (`GT4_DISPLAY_ASPECT=auto`), fullscreen (`GT4_FULLSCREEN=1`, `--window`),
+  vsync (`GT4_PRESENT_MODE=fifo`), NTSC, the monitor the window opens on and its desktop size (no `GT4_MONITOR`).
+- **Paths from the executable's own folder:** the game must run from `<install>\game\gt4vulkan*.exe`; the game id follows the file
+  name (`gt4vulkan.exe` -> `gt4`, `gt4vulkan-spec2.exe` -> `spec2`) and the files are
+  `<install>\data\games\<id>\prepared\<ELF>`, the disc copy named by the setup receipt `prepare.json` (`image.file`; its size
+  and modified time must equal the receipt, the same cheap check the launcher makes at every Play, and the prepared ELF size
+  must equal `elf.size_bytes`), and `...\runtime\card.ps2` (a missing card is a blank card, as today). When
+  `<install>\data` has no prepared files, `%LOCALAPPDATA%\GT4Recomp` is tried too (the launcher's write fallback for a
+  read-only data folder). The renderer is `<data>\gs\current.txt` -> `<data>\gs\<version>\gt4-gs.exe`, whose SHA-256 must equal the
+  `sha256.txt` recorded at install (`gs_release::installed`); that recorded hash is passed as `GT4_GS_PROCESS_SHA256`, so the game's
+  existing pin check does the hashing. The game takes the same exclusive lock as the launcher (`launcher.lock` beside the card),
+  so a direct start and a launcher start never share a card.
+- **Session:** `<data>\sessions\standalone-<unix seconds>`; it becomes the working directory, `misses.txt` goes there, and
+  stdout/stderr go to `game.log` there (the console is released). The newest 20 `standalone-*` folders are kept.
+- **Settings:** the launcher writes `game.ini` (key=value) and `gt4-gs.ini` (the session ini it renders today) into the user
+  config folder: `<install>\user\config` when `<install>\user` exists (portable build), else `%APPDATA%\GT4Recomp\config`. It does so
+  at start-up, after every settings change and before every Play. `game.ini` keys: `fullscreen`, `present_mode`, `monitor`,
+  `output_size`, `async_gs`, `performance_report`, `check_vu_code`. Each key becomes the variable the launcher would have set
+  (`GT4_FULLSCREEN`, `GT4_PRESENT_MODE`, `GT4_MONITOR`, `GT4_OUTPUT_SIZE`, `GT4_GS_SYNC`, `GT4_PERF`, `GT4_VU1_VERIFY`/`GT4_VU0_VERIFY`);
+  `gt4-gs.ini` becomes `GT4_GS_CONFIG`; `controls.toml` in the user folder becomes `GT4_CONTROLS_FILE` when it exists. A missing or
+  damaged config file means the built-in defaults, with one line in `game.log`.
+- **Missing pieces:** no prepared files, no disc copy, a changed disc copy, no GSdx or a GSdx that fails its hash, or a game not
+  in an install `game\` folder: a native message box (`MessageBoxW`) says what is missing and to open GT4Recomp once, and the
+  game exits with code 3. Nothing is started.
+- **Launcher side:** `gt4l_core::launch::standalone_config_text` renders `game.ini` from the same settings and display target
+  that build the Play environment (a test compares the two); the Play path is unchanged (explicit arguments and variables), so
+  behaviour when the launcher starts the game does not change.
+- **Tests:** CTest `native_standalone` (layout from the executable path, game ids, the receipt reader, defaults, precedence,
+  command line, config parsing, missing-piece messages); the launcher's cargo tests; the frame identity checks of
+  `scripts/frame_cost_headless.py` against the slice268 build (menus, day, night); a headless standalone run.
 
 ### TASK-095 — Ultrawide: undistorted pre-race menu overlay
 Planned (owner, 2026-10-22), idea to study later. At ratios wider than 16:9 (owner screenshot at 3440x1440, Time Trial
