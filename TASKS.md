@@ -695,6 +695,26 @@ card cases, built in `tests/common`), `gt4saves/tests/save_management.rs` (9 lib
 `O:\gt4recomp-scratch\slice283-shots\saves-en-US.png` and `saves-pt-BR.png`. Open: the panic guard is not covered by a test
 (no injected panic); the owner test with a real PCSX2 card and in-game New save; gamepad rename needs a keyboard to type.
 
+### TASK-105 — Integrated GPUs: lighter default and GPU-lost message (#89)
+Planned and implemented (owner report, 2026-10-23) for release 1.3.0. GitHub issue moesuito/gt4-staticrecomp#89, reported on
+1.2.3: Intel Core i3-1005G1 with the integrated Intel UHD only, 1440 x 900 screen. The default Render scale gave k 3
+(1920 x 1344 internal); GSdx lost the device ("Host GPU lost too many times, device is probably completely wedged") at 3x and
+at 2x. Fix: `display::integrated_default_applies` and `display_plan_on`: when the GPU the game uses is integrated (Vulkan
+device type 1, `system_check::integrated_gpu_name`; with any discrete card, or none, the default is unchanged) a Render scale
+that is the untouched default (100%) plays at 1x (`INTEGRATED_DEFAULT_MULTIPLIER`, 640 x 448). A changed scale keeps its
+multiplier. The stored value cannot tell an untouched 100% from a chosen one: a chosen 100% on an integrated GPU also plays at
+1x. The decision is logged (`display: integrated GPU <name>: default internal 1x`); the Render scale readout follows the plan.
+The device comes from the same Vulkan probe as the system check (`gt4l_platform::system::integrated_gpu_name`, read once per
+launcher process). GPU lost: a crashed session whose `game.log` holds a GSdx device-lost text (`exit::GPU_LOST_MARKERS`:
+"Host GPU lost", "device is probably completely wedged", `VK_ERROR_DEVICE_LOST`) shows the plain message in en-US and pt-BR
+(`rust.game.gpu_lost`) in place of the generic crash text; the matched line goes to the launcher log. Saves dates use the
+interface locale (`Intl.DateTimeFormat` with `GT4.i18n.intlLocale()`; pt-BR showed English months). Not changed: the default
+Graphics API (Vulkan) and gt4-gs. Checks: `cargo test --workspace` (launcher) 487 passed, 0 failed, 4 ignored (new tests in
+`display.rs`, `system_check.rs`, `exit.rs`, `tests/launch_contract.rs`, `model.rs`); focus-check en-US 158/158 and pt-BR
+165/165, nav-test 150/150. Open: the owner test on the Intel UHD machine (1x default and the message are not yet seen in-game);
+the exact device-lost line in a real `game.log` is not confirmed (the markers come from the GSdx dialog text); a multi-GPU
+laptop keeps the discrete default by design.
+
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
 the SCUS-97436 Public Beta lineage image with its own target executable, not a content merge into v2.00. Identity

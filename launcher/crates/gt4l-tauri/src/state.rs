@@ -345,7 +345,8 @@ impl AppState {
         let renderer_root = self.dirs.renderer_root();
         if let Some(installed) = gs_release::installed(&renderer_root) {
             let paths = launch::Pcsx2Paths::for_session(&installed, &self.dirs.renderer_install_root(), &config_dir, &self.dirs.textures());
-            match launch::gs_config_text(settings, &paths, display.as_ref()) {
+            let integrated = gt4l_platform::system::integrated_gpu_name().is_some();
+            match launch::gs_config_text(settings, &paths, display.as_ref(), integrated) {
                 Ok(text) => {
                     if let Err(error) = gs_table::write_ini_atomic(&paths.config, &text) {
                         log(&self.dirs, &format!("{} not written: {error}", paths.config.display()));

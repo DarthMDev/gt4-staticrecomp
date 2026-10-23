@@ -38,6 +38,26 @@ fn stop_reason(line: &str) -> Option<&str> {
     Some(rest[index + CYCLES_MARKER.len()..].trim())
 }
 
+/// Text that GSdx writes to a session's `game.log` when the graphics card stops responding (issue #89). The first
+/// two are the GSdx assertion and its message ("Host GPU lost too many times, device is probably completely wedged");
+/// the last is the Vulkan result name. Matched case-insensitively. A bare "device lost" is not a marker: other devices
+/// (audio) can report it too.
+pub const GPU_LOST_MARKERS: [&str; 3] = ["host gpu lost", "device is probably completely wedged", "vk_error_device_lost"];
+
+/// The first line of a session log that says the graphics card was lost, or `None`. The line stays in the launcher log
+/// as the detail behind the plain message.
+pub fn gpu_lost_line(log_text: &str) -> Option<&str> {
+    log_text.lines().find(|line| {
+        let lower = line.to_lowercase();
+        GPU_LOST_MARKERS.iter().any(|marker| lower.contains(marker))
+    })
+}
+
+/// The plain message for a lost graphics card, in `language` (issue #89). Shown in place of the generic crash text.
+pub fn gpu_lost_message_in(language: Language) -> String {
+    messages::text("game.gpu_lost", language).to_string()
+}
+
 /// One plain sentence for the crash dialog, in English. Technical detail stays in the log.
 pub fn user_message(outcome: &Outcome) -> String {
     user_message_in(outcome, Language::fallback())
@@ -92,5 +112,37 @@ mod tests {
     fn user_message_names_the_reason_in_one_sentence() {
         let outcome = Outcome::Crashed { reason: Some("no translated code".into()), exit_code: Some(1) };
         assert!(user_message(&outcome).starts_with("Gran Turismo 4 stopped unexpectedly (no translated code)"));
+    }
+
+    #[test]
+    fn the_gsdx_device_lost_text_is_found_in_the_session_log() {
+        let log = "[gs] init renderer Vulkan
+Assertion failed in function GSRenderer::BeginPresentFrame: Host GPU lost too many times, device is probably completely wedged
+[ee] stopped after 120 frames, 9000 cycles: GS process exited";
+        assert_eq!(
+            gpu_lost_line(log),
+            Some("Assertion failed in function GSRenderer::BeginPresentFrame: Host GPU lost too many times, device is probably completely wedged")
+        );
+        assert!(gpu_lost_line("vkQueueSubmit returned VK_ERROR_DEVICE_LOST").is_some());
+        assert!(gpu_lost_line("HOST GPU LOST").is_some(), "matched case-insensitively");
+    }
+
+    #[test]
+    fn ordinary_crashes_and_other_device_messages_are_not_a_lost_card() {
+        assert_eq!(gpu_lost_line(""), None);
+        assert_eq!(gpu_lost_line("[ee] stopped after 5 frames, 80 cycles: no translated code at 0x00123456"), None);
+        assert_eq!(gpu_lost_line("audio device lost, switching to the default output"), None);
+    }
+
+    #[test]
+    fn the_gpu_lost_message_is_plain_and_translated() {
+        let english = gpu_lost_message_in(Language::fallback());
+        assert_eq!(
+            english,
+            "Your graphics card stopped responding. Try a lower resolution (Graphics > Render scale) or switch Graphics API to Direct3D 11."
+        );
+        let portuguese = gpu_lost_message_in(Language::from_tag("pt-BR").expect("pt-BR is listed"));
+        assert!(portuguese.starts_with("Sua placa de vídeo parou de responder."), "{portuguese}");
+        assert!(portuguese.contains("Direct3D 11"), "{portuguese}");
     }
 }

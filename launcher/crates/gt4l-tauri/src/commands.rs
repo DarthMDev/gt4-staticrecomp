@@ -214,7 +214,8 @@ pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
 
 pub fn get_settings_table_with_monitors(shared: &Shared, monitors: &[display_rules::Monitor]) -> Result<Value, String> {
     let state = lock(shared);
-    let mut table = model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors);
+    let integrated_gpu = gt4l_platform::system::integrated_gpu_name().is_some();
+    let mut table = model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors, integrated_gpu);
     // TASK-091: the launcher's own row (Graphics > Advanced), not a game setting.
     let safe_mode = webview_guard::safe_mode_on(state.user_dirs.root());
     if let Some(rows) = table.get_mut("rows").and_then(Value::as_array_mut) {
@@ -388,7 +389,9 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
             );
         }
     }
-    let plan = launch::session_plan(&settings, display.as_ref());
+    // Issue #89: on an integrated GPU the untouched default scale plays at 1x (the GPU the system check reports).
+    let integrated_gpu = gt4l_platform::system::integrated_gpu_name();
+    let plan = launch::session_plan(&settings, display.as_ref(), integrated_gpu.is_some());
     state::log(
         &dirs,
         &format!(
@@ -404,6 +407,9 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
             if plan.ultrawide_on { ", aspect path on" } else { "" }
         ),
     );
+    if let (true, Some(name)) = (plan.integrated_default, integrated_gpu.as_deref()) {
+        state::log(&dirs, &format!("display: integrated GPU {name}: default internal {}x", plan.multiplier));
+    }
     Ok(PlayInputs {
         display,
         game,
@@ -459,6 +465,8 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         let log_text = fs::read_to_string(&running.log_path).unwrap_or_default();
         let gsdx_error = launch::restart_requested(&log_text)
             .then(|| launch::gsdx_unavailable_message(launch::GSDX_RESTART_REQUESTED, &dirs.logs()));
+        // Issue #89: a lost graphics card is named in plain words, ahead of the restart and the generic crash text.
+        let gpu_lost = matches!(outcome, Outcome::Crashed { .. }).then(|| exit::gpu_lost_line(&log_text)).flatten();
         match saves::harvest_card(lock(&shared).library_of(game), &card) {
             Ok(report) => state::log(&dirs, &format!("card harvested: {report:?}")),
             Err(error) => state::log(&dirs, &format!("card not harvested: {error}")),
@@ -467,13 +475,17 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         drop(running);
         lock(&shared).game_child = None;
         state::log(&dirs, &format!("game ended: {outcome:?} (log {})", log_path.display()));
-        let message = match (gsdx_error, &outcome) {
-            (Some(error), _) => {
+        let message = match (gpu_lost, gsdx_error, &outcome) {
+            (Some(line), _, _) => {
+                state::log(&dirs, &format!("graphics card lost: {line}"));
+                exit::gpu_lost_message_in(state::current_language())
+            }
+            (None, Some(error), _) => {
                 state::log(&dirs, "GSdx asked for a restart; the launcher does not start CoreGS 1.1");
                 error
             }
-            (None, Outcome::NormalClose) => String::new(),
-            (None, Outcome::Crashed { .. }) => exit::user_message_in(&outcome, state::current_language()),
+            (None, None, Outcome::NormalClose) => String::new(),
+            (None, None, Outcome::Crashed { .. }) => exit::user_message_in(&outcome, state::current_language()),
         };
         lock(&shared).home_message = message.clone();
         crate::tray::handle(&app, crate::tray::Event::GameEnded { message });
