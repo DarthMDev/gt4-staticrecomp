@@ -2389,6 +2389,266 @@ int TestScaleFullscreenPasses(const gpu::VulkanHandles& handles) {
     return failures == 0 ? 0 : 1;
 }
 
+// hw_tone_hle_exact (IN-383, parity plan item 2; chapter 09.4 variant A). The tone sequence's strip template in a
+// synthetic capture: three 64 x 32 frame-buffer pages converted through eight decal T8 strips each (page 0 and page 1
+// with the sequence's palette bases, page 2 with a palette base that breaks the template), a 64 x 32 temporary page
+// of varied CT32 data per page (uploaded, then drawn into so it is GPU-newer and must be swizzled), and an 8 x 32 T8
+// index texture of varied bytes. Replayed with the strip dispatch (default) and with the batches themselves
+// (SetToneHle(false)). For every frame:
+//   - the two 4 MiB local memories are identical: the dispatch is exact against the batches (the 1x and memory gate);
+//   - every pixel of pages 0 and 1 equals the CPU form of the strip rule read from the same memory (index texel ->
+//     07.4 CSM1 palette entry of the strip's quadrant -> RGB), and every alpha byte is unchanged, so a wrong
+//     quadrant, a wrong CSM1 position, a wrong index texel or a wrong destination address fails the fixture;
+//   - the dispatch ran for pages 0 and 1 only, and page 2 (refused) still changed memory.
+int TestToneHleExact(const gpu::VulkanHandles& handles) {
+    constexpr uint32_t kWidth = 64;
+    constexpr uint32_t kRows = 32;
+    constexpr uint32_t kFrames = 2;
+    constexpr uint32_t kDestBp[3] = {0u, 32u, 64u};      // a CT32 page drawn first, then the strips' CT24 view
+    constexpr uint32_t kTempBp[2] = {96u, 128u};         // the temporary pages (CT32, FBW 1)
+    constexpr uint32_t kIndexBp = 160u;                  // the T8 index texture (TBW 1, 8 x 32)
+    static constexpr uint32_t kQuadrantBlock[8] = {0, 4, 16, 20, 8, 12, 24, 28};  // 01.3 block table, 07.4
+    static constexpr uint32_t kBranchPage = 2;           // the page whose palette base breaks the template
+
+    // Deterministic pseudo-random words (a fixture, not a generator): both runs get the same capture.
+    uint32_t state = 0x12345u;
+    auto next = [&state]() {
+        state = state * 1664525u + 1013904223u;
+        return state;
+    };
+
+    cpuref::CaptureWriter capture;
+    // A display that shows the first converted page (not compared here).
+    capture.Privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));
+    capture.Privileged(0x12000010u, uint64_t{2} << 13);
+    capture.Privileged(0x12000070u, uint64_t{1} << 9);                 // DISPFB1: FBP 0, FBW 1, CT32
+    capture.Privileged(0x12000080u, (uint64_t{3} << 23) | (uint64_t{127} << 32) | (uint64_t{63} << 44));
+
+    // Emits one recorded GIF path-1 write (qword aligned).
+    const auto emit = [&capture](const std::vector<Qword>& qwords) {
+        std::vector<uint8_t> bytes(qwords.size() * sizeof(Qword));
+        std::memcpy(bytes.data(), qwords.data(), bytes.size());
+        capture.Gif(1, bytes);
+    };
+    // One host -> local transfer of `bytes` (qword multiple) into (bp, bw, psm) at (x, y), w x h pixels.
+    const auto upload = [&emit](uint32_t bp, uint32_t bw, uint32_t psm, uint32_t x, uint32_t y, uint32_t w,
+                                uint32_t h, const std::vector<uint8_t>& bytes) {
+        std::vector<Qword> qwords;
+        qwords.push_back(PackedTag(4, false, 0, {0xE}));  // A+D: four registers
+        qwords.push_back(Qword{uint64_t{bp} << 32 | uint64_t{bw} << 48 | uint64_t{psm} << 56, 0x50});  // BITBLTBUF
+        qwords.push_back(Qword{uint64_t{x} << 32 | uint64_t{y} << 48, 0x51});                          // TRXPOS
+        qwords.push_back(Qword{uint64_t{w} | uint64_t{h} << 32, 0x52});                                // TRXREG
+        qwords.push_back(Qword{0, 0x53});                                                             // TRXDIR: host -> local
+        const uint32_t count = static_cast<uint32_t>(bytes.size() / 16);
+        qwords.push_back(PackedTag(count, true, 2, {}));  // the image packet
+        for (uint32_t i = 0; i < count; ++i) {
+            Qword data;
+            std::memcpy(&data.lo, bytes.data() + i * 16, 8);
+            std::memcpy(&data.hi, bytes.data() + i * 16 + 8, 8);
+            qwords.push_back(data);
+        }
+        emit(qwords);
+    };
+
+    // --- one frame: uploads, a draw into each page (so the targets are GPU-newer), then the strips -----------------
+    for (uint32_t frame = 0; frame < kFrames; ++frame) {
+        // Temporary pages and index texture: varied CT32 words and varied bytes.
+        for (uint32_t t = 0; t < 2; ++t) {
+            std::vector<uint8_t> page(kWidth * kRows * 4);
+            for (uint32_t word = 0; word < kWidth * kRows; ++word) {
+                const uint32_t value = next() | 0xFF000000u;  // alpha 0xFF: the strips must leave it alone
+                std::memcpy(page.data() + word * 4, &value, 4);
+            }
+            upload(kTempBp[t], 1, 0x00, 0, 0, kWidth, kRows, page);
+        }
+        std::vector<uint8_t> index(kWidth / 8 * kRows);  // 8 x 32 T8 texels
+        for (uint8_t& texel : index) texel = static_cast<uint8_t>(next());
+        upload(kIndexBp, 1, 0x13, 0, 0, 8, kRows, index);
+        // The three destination pages as CT32 words (alpha 0x80), then a flat sprite over each so a resident target
+        // holds them (the dispatch parks it in the GLM).
+        for (uint32_t page = 0; page < 3; ++page) {
+            std::vector<uint8_t> words(kWidth * kRows * 4);
+            for (uint32_t word = 0; word < kWidth * kRows; ++word) {
+                const uint32_t value = (next() & 0x00FFFFFFu) | (0x80u << 24);
+                std::memcpy(words.data() + word * 4, &value, 4);
+            }
+            upload(kDestBp[page], 1, 0x00, 0, 0, kWidth, kRows, words);
+        }
+        const auto drawRegs = [&capture](const std::vector<uint64_t>& words) {
+            capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(words.size() / 2), true, false, 0, 0, {0xE},
+                                                        words));
+        };
+        const auto xy = [](uint32_t x, uint32_t y) {
+            return uint64_t{x * 16} | (uint64_t{y * 16} << 16);  // XYZ2/F2 in 12.4 window coordinates
+        };
+        drawRegs({uint64_t{63} << 16 | uint64_t{63} << 48, 0x40,       // SCISSOR 0..63 x 0..63
+                  (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,      // TEST: ZTE, ALWAYS
+                  uint64_t{1} << 32, 0x4E,                              // ZBUF: depth writes masked (ZMSK = 1)
+                  (uint64_t{6} | (uint64_t{1} << 8)), 0x00,             // sprite, FST
+                  0x80808080u | (uint64_t{0x3F800000u} << 32), 0x01,          // RGBAQ: a full grey quad
+                  xy(0, 0), 0x05, xy(8, 8), 0x05});
+        // A draw into each page over the upload, so a resident target holds it: the dispatch must park it in the GLM
+        // (destination pages) or swizzle it (the temporary pages) instead of reading the shadow memory.
+        for (uint32_t page = 0; page < 3; ++page) {
+            drawRegs({uint64_t{kDestBp[page] / 32u} | (uint64_t{1} << 16), 0x4C,  // FRAME: the page (FBP in pages), CT32
+                      0x80808080u | (uint64_t{0x3F800000u} << 32), 0x01, xy(1, 1), 0x05, xy(6, 6), 0x05});
+        }
+        for (uint32_t t = 0; t < 2; ++t) {
+            drawRegs({uint64_t{kTempBp[t] / 32u} | (uint64_t{1} << 16), 0x4C,
+                      0x80808080u | (uint64_t{0x3F800000u} << 32), 0x01, xy(2, 2), 0x05, xy(7, 7), 0x05});
+        }
+        // The strips of one page: eight decal T8 sprites, one texel per pixel, 8 x 32 each.
+        const auto strips = [&](uint32_t destinationBp, uint32_t tempBp, bool brokenPalette) {
+            for (uint32_t strip = 0; strip < 8; ++strip) {
+                const uint32_t quadrant = strip;  // the template's order: quadrant q at strip q
+                uint32_t cbp = tempBp + kQuadrantBlock[quadrant];
+                if (brokenPalette && strip == 3) cbp += 1;  // not a quadrant base: the page must be refused
+                const uint64_t tex0 = uint64_t{kIndexBp} | (uint64_t{1} << 14) | (uint64_t{0x13} << 20) |
+                                      (uint64_t{3} << 26) | (uint64_t{5} << 30) | (uint64_t{1} << 34) |
+                                      (uint64_t{1} << 35) | (uint64_t{cbp} << 37) | (uint64_t{5} << 61);
+                drawRegs({uint64_t{destinationBp / 32u} | (uint64_t{1} << 16) | (uint64_t{1} << 24) |
+                              (uint64_t{0xFF} << 56),  // FRAME: CT24, FBMSK 0xFF000000 (alpha protected)
+                          0x4C,
+                          tex0, 0x06,
+                          0, 0x14,  // TEX1: nearest
+                          0, 0x08,  // CLAMP: repeat
+                          uint64_t{6} | (uint64_t{1} << 4) | (uint64_t{1} << 8), 0x00,  // sprite, textured, FST
+                          0x80808080u | (uint64_t{0x3F800000u} << 32), 0x01,
+                          uint64_t{0}, 0x03,  // UV (0, 0)
+                          xy(strip * 8, 0), 0x05,
+                          uint64_t{8 * 16} | (uint64_t{32 * 16} << 16), 0x03,  // UV (8, 32) texels
+                          xy(strip * 8 + 8, 32), 0x05});
+            }
+        };
+        strips(kDestBp[0], kTempBp[0], false);
+        strips(kDestBp[1], kTempBp[1], false);
+        strips(kDestBp[kBranchPage], kTempBp[0], true);
+        capture.FrameEnd(frame);
+    }
+
+    struct Run {
+        std::vector<std::vector<uint8_t>> memory;  // the 4 MiB image per frame
+        writeback::Counters counters;
+    };
+    auto replay = [&](bool toneHle, Run& run, std::string& error) -> bool {
+        writeback::Renderer renderer;
+        if (!renderer.Init(handles, error)) return false;
+        renderer.SetSyncMode(true);
+        renderer.SetCpuSmallSprites(false);
+        renderer.SetToneHle(toneHle);
+        writeback::WritebackReplayTarget target(renderer, writeback::ComposeKind::Reference);
+        cpuref::ReplaySummary summary;
+        const bool ok = cpuref::ReplayCapture(
+            capture.Bytes(), target, summary,
+            [&](uint64_t, const cpuref::FrameImage&) {
+                run.memory.emplace_back(renderer.Slm(), renderer.Slm() + 4u * 1024u * 1024u);
+            },
+            error);
+        run.counters = renderer.GetCounters();
+        if (renderer.Failed()) error += " " + renderer.LastError();
+        return ok && !renderer.Failed();
+    };
+
+    int failures = 0;
+    Run hle, exact;
+    std::string error;
+    if (!replay(true, hle, error) || !replay(false, exact, error)) {
+        std::printf("hw_tone_hle_exact: replay failed: %s\n", error.c_str());
+        return 1;
+    }
+    if (hle.memory.size() != kFrames || exact.memory.size() != kFrames) {
+        std::printf("hw_tone_hle_exact: %zu and %zu frames replayed, expected %u\n", hle.memory.size(),
+                    exact.memory.size(), kFrames);
+        return 1;
+    }
+    uint64_t differingFrames = 0;
+    for (uint32_t frame = 0; frame < kFrames; ++frame) {
+        differingFrames += hle.memory[frame] != exact.memory[frame] ? 1u : 0u;
+    }
+    std::printf("  memory: %llu of %u frames differ between the dispatch and the batches\n",
+                static_cast<unsigned long long>(differingFrames), kFrames);
+    if (differingFrames != 0) ++failures;
+
+    // The dispatch ran for pages 0 and 1 and for page 2's decoded prefix (strips 0..2; strip 3 names a block that is
+    // not a palette quadrant and is refused, and the strips after it start at a non-page origin).
+    const uint64_t pagesExpected = 3ull * kFrames;
+    const uint64_t batchesExpected = 19ull * kFrames;   // 8 + 8 + 3
+    const uint64_t deferredExpected = 19ull * kFrames;  // page 2's strips 3..7 are never collected
+    std::printf("  counters: pages %llu (expected %llu), batches %llu (expected %llu), deferred %llu (expected %llu)\n",
+                static_cast<unsigned long long>(hle.counters.toneStripPages),
+                static_cast<unsigned long long>(pagesExpected),
+                static_cast<unsigned long long>(hle.counters.toneStripBatches),
+                static_cast<unsigned long long>(batchesExpected),
+                static_cast<unsigned long long>(hle.counters.toneStripBatchesDeferred),
+                static_cast<unsigned long long>(deferredExpected));
+    if (hle.counters.toneStripPages != pagesExpected || hle.counters.toneStripBatches != batchesExpected ||
+        hle.counters.toneStripBatchesDeferred != deferredExpected) {
+        ++failures;
+    }
+    if (exact.counters.toneStripPages != 0) ++failures;
+
+    // The strip rule read from the same memory (09.4 variant A): index texel -> 07.4 CSM1 palette entry of the
+    // strip's quadrant -> RGB, alpha untouched.
+    memory::LocalMemory memoryModel;
+    uint64_t pixelErrors = 0, alphaErrors = 0, changed = 0;
+    const std::vector<uint8_t>& finalMemory = hle.memory[kFrames - 1];
+    std::copy(finalMemory.begin(), finalMemory.end(), memoryModel.bytes().begin());
+    // The first bytes that differ between the two runs (diagnostic of a coherence or ordering error).
+    uint64_t firstDifference = UINT64_MAX;
+    uint64_t differingBytes = 0;
+    for (size_t i = 0; i < finalMemory.size(); ++i) {
+        if (finalMemory[i] != exact.memory[kFrames - 1][i]) {
+            if (firstDifference == UINT64_MAX) firstDifference = i;
+            ++differingBytes;
+        }
+    }
+    std::printf("  bytes: %llu differ, first at 0x%llx (page %llu)\n", static_cast<unsigned long long>(differingBytes),
+                static_cast<unsigned long long>(firstDifference),
+                static_cast<unsigned long long>(firstDifference == UINT64_MAX ? 0 : firstDifference / 8192u));
+    for (uint32_t page = 0; page < 2; ++page) {
+        for (uint32_t strip = 0; strip < 8; ++strip) {
+            const uint32_t quadrant = strip;
+            for (uint32_t row = 0; row < kRows; ++row) {
+                for (uint32_t column = 0; column < 8; ++column) {
+                    const uint32_t index =
+                        memoryModel.readPixel(memory::BufferView{kIndexBp, 1, memory::Psm::T8}, column, row);
+                    const uint32_t entryX = (index & 7u) + 8u * ((index >> 4) & 1u);
+                    const uint32_t entryY = 2u * (index >> 5) + ((index >> 3) & 1u);
+                    const uint32_t entry = memoryModel.readPixel(
+                        memory::BufferView{kTempBp[page], 1, memory::Psm::Ct32}, (quadrant & 3u) * 16u + entryX,
+                        (quadrant >> 2) * 16u + entryY);
+                    const uint32_t got = memoryModel.readPixel(
+                        memory::BufferView{kDestBp[page], 1, memory::Psm::Ct24}, strip * 8u + column, row);
+                    // The alpha byte of the same address (a CT24 pixel does not cover it; the CT32 view does).
+                    const uint32_t stored = memoryModel.readPixel(
+                        memory::BufferView{kDestBp[page], 1, memory::Psm::Ct32}, strip * 8u + column, row);
+                    if ((got & 0x00FFFFFFu) != (entry & 0x00FFFFFFu)) {
+                        if (pixelErrors < 4) {
+                            std::printf("    page %u strip %u pixel %u,%u: %06x, expected %06x\n", page, strip,
+                                        strip * 8u + column, row, got & 0x00FFFFFFu, entry & 0x00FFFFFFu);
+                        }
+                        ++pixelErrors;
+                    }
+                    if (((stored >> 24) & 0xFFu) != 0x80u) {
+                        if (alphaErrors < 5) {
+                            std::printf("    alpha page %u pixel %u,%u: %08x\n", page, strip * 8u + column, row, stored);
+                        }
+                        ++alphaErrors;
+                    }
+                    if ((got & 0x00FFFFFFu) != 0) ++changed;
+                }
+            }
+        }
+    }
+    std::printf("  rule: %llu pixels differ, %llu alpha bytes wrong, %llu non-zero pixels\n",
+                static_cast<unsigned long long>(pixelErrors), static_cast<unsigned long long>(alphaErrors),
+                static_cast<unsigned long long>(changed));
+    if (pixelErrors != 0 || alphaErrors != 0 || changed < 2u * 8u * kRows * 8u) ++failures;
+
+    std::printf("hw_tone_hle_exact: %d failures\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 // hw_scale_interlaced_present (IN-381): 480i field-mode frames (FFMD = 1, as GT4's menus) presented at an internal
 // scale go through the GPU compose and the GPU deinterlace of 13.3/13.4 counted in native rows.
 //   - Exactness: the field buffer is filled by EE uploads (1x words, so its scaled image is every native pixel as an
@@ -3191,6 +3451,7 @@ int main(int argc, char** argv) {
     if (name == "hw_postfx_fxaa") return TestPostfxFxaa(handles);
     if (name == "hw_scale_display_shadow") return TestScaleDisplayShadow(handles);
     if (name == "hw_scale_fullscreen_passes") return TestScaleFullscreenPasses(handles);
+    if (name == "hw_tone_hle_exact") return TestToneHleExact(handles);
     if (name == "hw_scale_interlaced_present") return TestScaleInterlacedPresent(handles);
     std::printf("unknown test: %s\n", name.c_str());
     return 2;

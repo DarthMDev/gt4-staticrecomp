@@ -91,6 +91,14 @@ struct Counters {
     // images rebuilt after them.
     std::uint64_t toneRuns = 0;
     std::uint64_t toneCarries = 0;
+    // IN-383 (parity plan item 2): the tone sequence's strip batches. `toneStripBatchesDeferred` counts the batches
+    // collected, `toneStripBatches` the ones a page dispatch replaced, and the verification pair is the
+    // GT4_HW_VERIFY_SHUFFLE comparison of the dispatch against the batches themselves.
+    std::uint64_t toneStripPages = 0;
+    std::uint64_t toneStripBatches = 0;
+    std::uint64_t toneStripBatchesDeferred = 0;
+    std::uint64_t toneVerifyPages = 0;
+    std::uint64_t toneVerifyMismatchBytes = 0;
     std::uint64_t glmMergedWords = 0;
     std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
@@ -293,6 +301,11 @@ public:
     // IN-370: GPU CLUT loads are deferred; an indexed texture whose palette the last deferred load wrote reads it
     // from the GLM (default on).
     void SetClutDefer(bool enabled);
+    // IN-383 A/B switch (GT4_HW_TONE_HLE): GT4's tone-sequence strip batches run as one dispatch per page (default
+    // on); off, every strip takes the normal path.
+    void SetToneHle(bool enabled);
+    // IN-383: GT4_HW_VERIFY_SHUFFLE, execute both and compare the written page (09.4, 12.8 `GT4_HW_VERIFY_SHUFFLE`).
+    void SetVerifyShuffle(bool enabled);
     // IN-358 A/B: mid-frame submissions every `chunks` chunks (0 = off).
     void SetChunksPerSubmission(std::uint32_t chunks);
     // IN-354 A/B switch: double-buffered GPU submission.

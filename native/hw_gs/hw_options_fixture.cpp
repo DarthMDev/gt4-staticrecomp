@@ -80,6 +80,7 @@ int main() {
   expect(!defaults.gpu_timing && !defaults.gpu_decode, "default GPU timing and decode off");
   expect(defaults.decode_reuse, "default decode reuse on");
   expect(defaults.clut_defer, "default CLUT defer on");
+  expect(defaults.tone_hle, "default tone HLE on (IN-383)");
 
   // Empty values behave as unset.
   const Options empties = parse_options(env_of({{"GT4_HW_SCALE", ""}, {"GT4_HW_GLM", ""}}));
@@ -120,6 +121,7 @@ int main() {
       {"GT4_HW_GPU_TIMING", "1"},
       {"GT4_HW_DECODE_REUSE", "0"},
       {"GT4_HW_CLUT_DEFER", "0"},
+      {"GT4_HW_TONE_HLE", "0"},
       {"GT4_HW_GPU_DECODE", "1"},
   }));
   expect(chosen.scale == 4, "scale 4");
@@ -146,6 +148,7 @@ int main() {
   expect(chosen.gpu_timing && chosen.gpu_decode, "gpu timing and decode");
   expect(!chosen.decode_reuse, "decode reuse off");
   expect(!chosen.clut_defer, "CLUT defer off");
+  expect(!chosen.tone_hle, "tone HLE off (IN-383)");
 
   // IN-372: the upscaled dump source (GPU presentation compose at GT4_HW_SCALE).
   expect(parse_options(env_of({{"GT4_HW_DUMP_SOURCE", "upscaled"}})).dump_source == DumpSource::upscaled,
@@ -171,7 +174,7 @@ int main() {
   expect(rejected("GT4_HW_BLEND", "HIGH"), "case-sensitive blend rejected");
 
   // Names and descriptions (result.json, F8 header).
-  expect(option_names().size() == 34, "34 runtime GT4_HW_* variables: chapter 12.8 plus GT4_HW_DECODE_REUSE (IN-369) and GT4_HW_CLUT_DEFER (IN-370); GT4_HW_GS is CMake only");
+  expect(option_names().size() == 35, "35 runtime GT4_HW_* variables: chapter 12.8 plus GT4_HW_DECODE_REUSE (IN-369), GT4_HW_CLUT_DEFER (IN-370) and GT4_HW_TONE_HLE (IN-383); GT4_HW_GS is CMake only");
   const auto lines = describe_options(defaults);
   expect(lines.size() == option_names().size(), "one description line per option");
   for (std::size_t i = 0; i < lines.size() && i < option_names().size(); ++i) {

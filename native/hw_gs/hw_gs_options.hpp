@@ -103,6 +103,7 @@ struct Options {
   bool gpu_decode = false;
   bool decode_reuse = true;  // IN-369: a run reuses an identical GLM texture decode
   bool clut_defer = true;    // IN-370: GPU CLUT loads deferred, palettes read from the GLM when exact
+  bool tone_hle = true;      // IN-383: GT4's tone-sequence strip batches as one dispatch per page (09.4 variant A)
 };
 
 // Parses every GT4_HW_* variable through `lookup`. Unset or empty values take

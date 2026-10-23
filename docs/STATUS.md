@@ -1,5 +1,18 @@
 # Current Status
 
+## TASK-027 CoreGS 2.0: tone-sequence strip executor (IN-383, parity plan item 2)
+
+Branch `task/027-coregs2`. Owner requirement (2026-10-23): CoreGS 2.0 must reach GSdx's performance at the same
+scale; item 2 of `docs/hw-renderer-spec/PARITY-PLAN.md` (tone-sequence HLE, memory-exact) landed first.
+`hw_tone_strips.comp` writes the eight 8 x 32 decal T8 strips of one 64 x 32 frame-buffer page in one dispatch from
+the GLM (index texel -> 07.4 CSM1 palette entry of the strip's quadrant -> CT24 RGB, alpha kept), replacing 135,399
+strip batches with 16,940 page dispatches on the 480p race capture (140 per frame). All five memory captures are
+byte-identical (menu 1,101 frames, race 121, car 121, night 121 with `fifo_hash=3a2fe617a174e7e7`, race480p 121),
+`hw_tone_hle_exact` compares the dispatch against the batches (0 of 2 frames differ in 4 MiB, 0 pixels off the CPU
+form of the rule, 0 alpha bytes changed) and CTest passes in both interlock modes. Replay CPU per frame: GS stream
+9.95 -> 9.31 ms, batch 5.54 -> 4.71, translate 1.83 -> 1.00, execute 3.52 -> 3.35; GLM swizzles 33,938 -> 18,272.
+Switches `GT4_HW_TONE_HLE=0` / `--no-tone-hle` and `GT4_HW_VERIFY_SHUFFLE=1` / `--tone-verify`. Not merged; no pins.
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

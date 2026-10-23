@@ -520,6 +520,10 @@ void finish(std::FILE *output) {
                static_cast<unsigned long long>(counters.merge_alpha_from_texel),
                static_cast<unsigned long long>(counters.writeback_depth_words),
                static_cast<unsigned long long>(counters.fifo_overruns));
+  std::fprintf(output, "[hw] tone: strip_pages=%llu strip_batches=%llu verify_mismatch_bytes=%llu (IN-383)\n",
+               static_cast<unsigned long long>(counters.tone_strip_pages),
+               static_cast<unsigned long long>(counters.tone_strip_batches),
+               static_cast<unsigned long long>(counters.tone_verify_mismatch_bytes));
   if (counters.scale > 1) {
     std::fprintf(output,
                  "[hw] scale: x%u draws=%llu passes=%llu refreshes=%llu refresh_pixels=%llu composes=%llu "

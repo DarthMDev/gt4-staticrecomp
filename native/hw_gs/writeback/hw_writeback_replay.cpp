@@ -208,7 +208,8 @@ int main(int argc, char** argv) {
             std::strcmp(argv[i], "--no-batched-writebacks") == 0 ||
             std::strcmp(argv[i], "--gpu-timing") == 0 || std::strcmp(argv[i], "--gpu-compose-check") == 0 ||
             std::strcmp(argv[i], "--fxaa") == 0 || std::strcmp(argv[i], "--check-presented") == 0 ||
-            std::strcmp(argv[i], "--no-gpu-compose") == 0) {
+            std::strcmp(argv[i], "--no-gpu-compose") == 0 || std::strcmp(argv[i], "--no-tone-hle") == 0 ||
+            std::strcmp(argv[i], "--tone-verify") == 0) {
             --i;  // a flag without a value
             continue;
         }
@@ -307,6 +308,8 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--no-batched-writebacks") == 0) renderer.SetBatchedWritebacks(false); // IN-357
         if (std::strcmp(argv[i], "--no-decode-reuse") == 0) renderer.SetDecodeReuse(false);              // IN-369 A/B
         if (std::strcmp(argv[i], "--no-clut-defer") == 0) renderer.SetClutDefer(false);                  // IN-370 A/B
+        if (std::strcmp(argv[i], "--no-tone-hle") == 0) renderer.SetToneHle(false);                      // IN-383 A/B
+        if (std::strcmp(argv[i], "--tone-verify") == 0) renderer.SetVerifyShuffle(true);                 // IN-383 (09.4)
         if (std::strcmp(argv[i], "--gpu-timing") == 0) renderer.SetGpuTiming(true);                     // 12.8
         if (std::strcmp(argv[i], "--fxaa") == 0) renderer.SetFxaa(true);                                // IN-376
         // A/B: every presentation from the CPU compose at 1x (what candidate 271 did for every 480i frame, IN-381).
@@ -550,6 +553,13 @@ int main(int argc, char** argv) {
                 static_cast<unsigned long long>(counters.glmPagesDownloaded),
                 static_cast<unsigned long long>(counters.glmUploadMerges),
                 static_cast<unsigned long long>(counters.glmHostUploads));
+    std::printf("tone_strip_pages=%llu tone_strip_batches=%llu tone_strip_deferred=%llu tone_verify_pages=%llu "
+                "tone_verify_mismatch_bytes=%llu\n",
+                static_cast<unsigned long long>(counters.toneStripPages),
+                static_cast<unsigned long long>(counters.toneStripBatches),
+                static_cast<unsigned long long>(counters.toneStripBatchesDeferred),
+                static_cast<unsigned long long>(counters.toneVerifyPages),
+                static_cast<unsigned long long>(counters.toneVerifyMismatchBytes));
     std::printf("sync_mode=%s resident_batches=%llu fallback_batches=%llu loads=%llu load_words=%llu writebacks=%llu "
                 "writeback_words=%llu\n",
                 cacheMode ? "cache" : "writeback", static_cast<unsigned long long>(counters.cacheResidentBatches),

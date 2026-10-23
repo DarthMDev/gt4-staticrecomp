@@ -179,6 +179,9 @@ struct GpuStats {
     std::uint64_t scaledDeinterlaces = 0;   // IN-381: scaled presentation frames deinterlaced on the GPU
     std::uint64_t scaledDrawsPaused = 0;    // IN-382: scaled draws not recorded while the scaled work is paused
     std::uint64_t scaledRefreshesPaused = 0;
+    std::uint64_t toneStripPages = 0;       // IN-383: tone-sequence pages written by one strip dispatch
+    std::uint64_t toneStripDispatches = 0;  // IN-383: strip dispatches (one per page)
+    std::uint64_t toneStripBatches = 0;     // IN-383: strip batches folded into those dispatches
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
     // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.
@@ -296,6 +299,20 @@ public:
     void PauseScaled(bool paused);
     bool RefreshScaledSlot(bool depthSlot, std::uint32_t slot, std::int32_t x0, std::int32_t y0, std::int32_t x1,
                            std::int32_t y1, std::string &error);
+    // IN-383 (parity plan item 2, chapter 09.4 variant A): the eight decal T8 strip sprites that write one frame
+    // buffer page back as CT24, in one dispatch. Every strip is eight wide and 32 tall with one texel per pixel, so
+    // its exact effect is dest(x, y).rgb = palette(index(x % 8, y)).rgb with the alpha byte untouched; the palette is
+    // the 16x16 quadrant of the temporary page its CBP names (07.4 CSM1) and the indices come from the strip's T8
+    // texture. Both are read from the GLM (the caller made it current and owns the destination pages afterwards).
+    struct ToneStripPage {
+        std::uint32_t destBp = 0, destBw = 0;   // the destination page through its CT24 view
+        std::int32_t destX = 0, destY = 0;      // page origin (64- and 32-aligned pixels)
+        std::uint32_t sourceBp = 0, sourceBw = 0;  // the temporary page (CT32, 64 x 32)
+        std::uint32_t indexBp = 0, indexBw = 0;    // the strip's T8 texture (8 x 32 texels)
+        std::uint32_t stripCount = 0;              // 1..8
+        std::uint32_t quadrants[8] = {};           // per strip: qx + 4 * qy of the palette quadrant
+    };
+    bool ToneStrips(const ToneStripPage &page, std::string &error);
     // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, max(kGpuSurface,
     // kGpuScaledExtent * scale) square, GENERAL layout).
     // As an opaque handle (the VkImage value): this header carries no Vulkan types.

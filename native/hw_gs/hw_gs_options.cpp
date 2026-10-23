@@ -217,7 +217,7 @@ const std::vector<std::string> &option_names() {
       "GT4_HW_TEXTURES",        "GT4_HW_TEXTURES_PRECACHE", "GT4_HW_DUMP_TEXTURES",
       "GT4_HW_DUMP_FORMAT",     "GT4_HW_GAME_FIXES",       "GT4_HW_DUMP_SOURCE",
       "GT4_HW_GPU_TIMING",      "GT4_HW_GPU_DECODE",       "GT4_HW_DECODE_REUSE",
-      "GT4_HW_CLUT_DEFER",
+      "GT4_HW_CLUT_DEFER",      "GT4_HW_TONE_HLE",
   };
   return names;
 }
@@ -260,6 +260,7 @@ Options parse_options(const EnvironmentLookup &lookup) {
   if (read_value(lookup, "GT4_HW_GPU_DECODE", v)) o.gpu_decode = parse_flag("GT4_HW_GPU_DECODE", v);
   if (read_value(lookup, "GT4_HW_DECODE_REUSE", v)) o.decode_reuse = parse_flag("GT4_HW_DECODE_REUSE", v);
   if (read_value(lookup, "GT4_HW_CLUT_DEFER", v)) o.clut_defer = parse_flag("GT4_HW_CLUT_DEFER", v);
+  if (read_value(lookup, "GT4_HW_TONE_HLE", v)) o.tone_hle = parse_flag("GT4_HW_TONE_HLE", v);
 
   return o;
 }
@@ -301,6 +302,7 @@ std::vector<std::string> describe_options(const Options &o) {
       "GT4_HW_GPU_DECODE=" + flag(o.gpu_decode),
       "GT4_HW_DECODE_REUSE=" + flag(o.decode_reuse),
       "GT4_HW_CLUT_DEFER=" + flag(o.clut_defer),
+      "GT4_HW_TONE_HLE=" + flag(o.tone_hle),
   };
 }
 

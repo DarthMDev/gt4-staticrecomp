@@ -343,6 +343,8 @@ struct GpuDrawer::Impl {
   VkPipeline mergePipeline = VK_NULL_HANDLE;
   VkShaderModule hostUploadModule = VK_NULL_HANDLE;
   VkPipeline hostUploadPipeline = VK_NULL_HANDLE;
+  VkShaderModule toneStripsModule = VK_NULL_HANDLE;  // IN-383
+  VkPipeline toneStripsPipeline = VK_NULL_HANDLE;
 
   // ---- Runs (M9, IN-352) ----
   // Chunks of triangles drawn with the ordered pixel interlock are batched: their texture preparation (GLM
@@ -1126,6 +1128,10 @@ struct GpuDrawer::Impl {
       if (hostUploadModule) gt4_hwd_vkDestroyShaderModule(device, hostUploadModule, nullptr);
       hostUploadPipeline = VK_NULL_HANDLE;
       hostUploadModule = VK_NULL_HANDLE;
+      if (toneStripsPipeline) gt4_hwd_vkDestroyPipeline(device, toneStripsPipeline, nullptr);
+      if (toneStripsModule) gt4_hwd_vkDestroyShaderModule(device, toneStripsModule, nullptr);
+      toneStripsPipeline = VK_NULL_HANDLE;
+      toneStripsModule = VK_NULL_HANDLE;
       if (decodePipeline) gt4_hwd_vkDestroyPipeline(device, decodePipeline, nullptr);
       if (swizzlePipeline) gt4_hwd_vkDestroyPipeline(device, swizzlePipeline, nullptr);
       if (decodeModule) gt4_hwd_vkDestroyShaderModule(device, decodeModule, nullptr);
@@ -1480,6 +1486,11 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     if (!s.hostUploadModule) return false;
     s.hostUploadPipeline = s.make_compute(s.hostUploadModule, error);
     if (!s.hostUploadPipeline) return false;
+    s.toneStripsModule =
+        s.make_module(hwgs::shaders::hw_tone_strips_words, hwgs::shaders::hw_tone_strips_word_count, error);
+    if (!s.toneStripsModule) return false;
+    s.toneStripsPipeline = s.make_compute(s.toneStripsModule, error);
+    if (!s.toneStripsPipeline) return false;
     s.displayModule =
         s.make_module(hwgs::shaders::hw_display_compose_words, hwgs::shaders::hw_display_compose_word_count, error);
     if (!s.displayModule) return false;
@@ -3087,6 +3098,39 @@ bool GpuDrawer::RefreshScaledSlot(bool depthSlot, std::uint32_t slot, std::int32
   if (!s.flush_run(error)) return false;
   s.full_barrier_with_fragment();
   s.refresh_scaled(depthSlot, slot, x0, y0, x1, y1);
+  return true;
+}
+
+bool GpuDrawer::ToneStrips(const ToneStripPage &page, std::string &error) {
+  Impl &s = *impl_;
+  if (page.stripCount == 0 || page.stripCount > 8 || page.destX < 0 || page.destY < 0 ||
+      page.destX + static_cast<std::int32_t>(page.stripCount) * 8 > kGpuSurface || page.destY + 32 > kGpuSurface) {
+    error = "tone strip page outside the surface";
+    return false;
+  }
+  if (!s.begin_recording(error) || !s.materialise_clut(error)) return false;  // IN-370: the dispatch writes the GLM
+  if (!s.flush_run(error)) return false;  // the temporary page's draws come first
+  s.full_barrier();                       // the caller's GLM writes and the run's draws are complete
+  s.bind_compute(s.toneStripsPipeline, s.computeSets[0]);
+  const std::uint32_t width = page.stripCount * 8u;
+  const std::uint32_t constPart[11] = {page.destBp,      page.destBw,
+                                       static_cast<std::uint32_t>(page.destX), static_cast<std::uint32_t>(page.destY),
+                                       width,           32u,
+                                       page.sourceBp,   page.sourceBw,
+                                       page.indexBp,    page.indexBw,
+                                       page.stripCount};
+  std::uint32_t push[19] = {};
+  std::memcpy(push, constPart, sizeof constPart);
+  for (std::uint32_t strip = 0; strip < 8; ++strip) push[11 + strip] = page.quadrants[strip];
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.computeLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                             static_cast<std::uint32_t>(sizeof push), push);
+  s.recorded_work();
+  gt4_hwd_vkCmdDispatch(s.cmd, (width * 32u + 63u) / 64u, 1, 1);
+  s.mark(Impl::kTimePass);  // 1x raster work (IN-383: the strips are drawn by one dispatch instead of eight draws)
+  s.full_barrier();
+  ++s.stats.toneStripPages;
+  ++s.stats.toneStripDispatches;
+  s.stats.toneStripBatches += page.stripCount;
   return true;
 }
 

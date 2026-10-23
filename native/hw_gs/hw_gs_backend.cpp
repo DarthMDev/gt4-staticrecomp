@@ -860,6 +860,10 @@ bool Backend::init(const Options &options, std::string &error) {
   // 13.5 GT4_HW_POSTFX=fxaa (IN-376): progressive presentation frames (races) pass through the edge-only FXAA.
   s.renderer->SetFxaa((options.postfx & postfx_fxaa) != 0);
   s.renderer->SetClutDefer(options.clut_defer);
+  // IN-383 (parity plan item 2): GT4's tone-sequence strip batches run as one dispatch per page; GT4_HW_VERIFY_SHUFFLE
+  // runs both paths and compares the written pages (09.4).
+  s.renderer->SetToneHle(options.tone_hle);
+  s.renderer->SetVerifyShuffle(options.verify_shuffle);
   // IN-358 diagnostic (not a 12.8 option): GT4_HW_CHUNKS_PER_SUBMIT=<n> mid-frame submission interval (0 = off).
   if (const char *chunks = std::getenv("GT4_HW_CHUNKS_PER_SUBMIT")) {
     s.renderer->SetChunksPerSubmission(static_cast<std::uint32_t>(std::strtoul(chunks, nullptr, 10)));
@@ -1151,6 +1155,9 @@ RenderCounters Backend::render_counters() const {
   out.scaled_shadow_saves = c.scaledShadowSaves;
   out.tone_runs = c.toneRuns;
   out.tone_carries = c.toneCarries;
+  out.tone_strip_pages = c.toneStripPages;
+  out.tone_strip_batches = c.toneStripBatches;
+  out.tone_verify_mismatch_bytes = c.toneVerifyMismatchBytes;
   out.gpu_composed_frames = c.gpuComposedFrames;
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;

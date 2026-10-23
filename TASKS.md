@@ -963,6 +963,14 @@ barriers around CLUT loads, the GIF front end, M8 readbacks per the readback stu
 
 **2026-10-23, Claude:** `main` 1.2.3 merged. Owner test 6 failed (race shown at 1x on every second frame at 4x; ultrawide race squeezed into 16:9); both fixed in local slice270 (IN-377 display shadows checked per pixel against memory, IN-378 display-aspect fill in the HWR presenter) with new controls (`hw_scale_display_shadow`, `hw_smoke_window_aspect_*`, `hw_stream_sink_display_aspect`, replay `--check-presented`). Owner test 7: ultrawide confirmed, race still 1x; fixed in local slice271 (IN-379 tone carry for GT4's T8 tone curve, IN-380 texture footprint for full-screen copies; fixture `hw_scale_fullscreen_passes`; `--check-presented` counts low-detail frames). Owner test 8 passed (races at real resolution, beta minimum met in races); new owner requirement: GSdx-level performance at the same scale. Local slice272: 480i menus at scale (IN-381, fixture `hw_scale_interlaced_present`), no scaled repetition of the tone sequence (IN-382), timing split into 1x/scaled/refresh, scene sweep findings and a ranked parity plan in PROGRESS. Waiting for owner test 9.
 
+**2026-10-23, OpenCode (parity work after the hand-over, `PARITY-PLAN.md`):** owner decisions: item 1 (fast scaled
+raster) approved with a tolerance only on the presentation-only scaled image, item 2 (tone-sequence HLE at 1x)
+approved as memory-exact, item 5 (skipping the 1x redraw) rejected. Item 2's first step landed (IN-383): the eight
+strip batches of one 64 x 32 page run as one GLM dispatch (`hw_tone_strips.comp`), 135,399 -> 16,940 dispatches on the
+480p race capture, all five memory captures byte-identical, `hw_tone_hle_exact` 0 of 2 frames different, replay CPU
+GS stream 9.95 -> 9.31 ms per frame. Switches `GT4_HW_TONE_HLE` and `GT4_HW_VERIFY_SHUFFLE` (replay
+`--no-tone-hle`/`--tone-verify`). No PR, no merge, no pins; owner test 10 pending.
+
 **Paused by the owner on 2026-10-15** to focus on release 1.0.0. State on the
 integration branch `task/027-hw-renderer`: CPU-verified pure libraries for GS
 memory/swizzle (M2), GIF front end and CLUT (M3), exact pixel arithmetic (M5),

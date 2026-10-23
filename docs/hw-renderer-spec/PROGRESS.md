@@ -18,9 +18,25 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M7 cache | In progress: resident target slots with LRU (IN-340/IN-344), decoded-texture cache (IN-341), deferred submission (IN-342), textures from targets (IN-346), CPU small sprites (IN-348), GPU CLUT (IN-349), GLM-owned pages instead of write-backs for evictions, overlaps and uploads (IN-350/IN-351); gated by `hw_cache_equals_writeback` and per-frame memory hashes of the menu, car and race captures (identical to the write-back mode). Open: target lists per chapter 05, display from targets, preload, dirty lists, clears, GPU moves | local slice237: race replay 1 write-back per frame (display) instead of 12; headless race 65 -> 38 ms per vsync |
 | M12 upscaling | Owner test 6 failed (half the race frames shown at 1x; ultrawide squeezed); both fixed in local slice270 (IN-377 display shadows, IN-378 display-aspect fill); owner test 7 still 1x (GT4 tone curve and full-screen copies at 1x), fixed in local slice271 (IN-379, IN-380); owner test 8 passed (races); 480i menus at scale in local slice272 (IN-381), in owner test 9. 2x-8x through a presentation-only scaled copy of every target (IN-371..IN-375), FXAA (IN-376, M15 part); 480i menus still 1x | `hw_scale_exact`, `hw_scale_display_shadow`, `hw_scale_fullscreen_passes`, `hw_scale_interlaced_present`, `hw_postfx_fxaa`, `hw_smoke_window_scaled`, `hw_smoke_window_aspect_*`, `hw_present_rect`, scale-3 block of `hw_cache_equals_writeback`; replay `--check-presented`; memory hashes identical at 6x |
 | M8, M14, M15 (rest), M17, M19 | M8 flare readback done earlier (IN-357..IN-359); others not started | |
+
 | M9 batching | In progress: one draw per chunk of triangles with an ordered pixel interlock (IN-345); runs of chunks in one render pass with texture preparation hoisted into a texel atlas (IN-352). Open: CLUT loads and GLM operations still cost two barriers each; double-buffered submission (CPU and GPU overlap) | `hw_cache_equals_writeback` and the GPU fixtures in both interlock modes; race barriers 9,500 -> 3,230 per frame |
 | M10 GLM | Started: GLM, decode, swizzle, unswizzle, CLUT, merge and upload kernels (IN-347, IN-349..IN-351) | `hw_glm_decode`, `hw_glm_swizzle`, `hw_glm_unswizzle`, `hw_glm_clut`, `hw_glm_upload_merge`, `hw_glm_host_upload` |
 | M11, M13, M16, M18 | Pure references only (lod, replace) | lod, `hw_replace_*` CTest |
+
+## 2026-10-23 tone-sequence strip executor (IN-383, parity plan item 2)
+
+Item 2 of `PARITY-PLAN.md`, first step (the strip executor), implemented and gated:
+
+- `hw_tone_strips.comp` writes the eight strip batches of one 64 x 32 frame-buffer page in one dispatch from the GLM
+  (index texel -> 07.4 CSM1 palette entry of the strip's quadrant -> CT24 RGB, alpha kept); the page becomes
+  GLM-owned like a parked target. Matching is a strict template with the palette base and each strip CBP checked, so
+  anything that is not GT4's sequence keeps the normal path, and a page that stops decoding keeps its prefix.
+- Race 480p replay: 16,940 page dispatches replacing 135,399 strip batches; 9.95 -> 9.31 ms GS stream, 5.54 -> 4.71
+  ms batch, 1.83 -> 1.00 ms translate, 3.52 -> 3.35 ms execute per frame; GLM swizzles 33,938 -> 18,272.
+- Gates: memory byte-identical on all five captures (menu 1,101 frames, race 121, car 121, night 121 with
+  `fifo_hash=3a2fe617a174e7e7`, race480p 121); `hw_tone_hle_exact` 0/2 frames differ, 0 pixels off the CPU form of
+  the rule, 0 alpha bytes changed, and the refused third page exact; CTest with and without the interlock.
+- Switches: `GT4_HW_TONE_HLE=0` / replay `--no-tone-hle`; `GT4_HW_VERIFY_SHUFFLE=1` / replay `--tone-verify`.
 
 ## Log
 

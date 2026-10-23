@@ -643,6 +643,9 @@ struct BlockSpan {
 
 constexpr uint32_t kAllBlocks = kBlocksTotal;
 
+// IN-383: block offsets of the eight 16x16 quadrants of a CT32 page (01.3 block table, 07.4), quadrant q = qx + 4 * qy.
+constexpr uint32_t kToneQuadrantBlock[8] = {0, 4, 16, 20, 8, 12, 24, 28};
+
 BlockSpan SpanOfRect(const memory::BufferView& view, int32_t x0, int32_t y0, int32_t x1, int32_t y1) {
     if (x1 < x0 || y1 < y0) return BlockSpan{};
     if (x0 < 0 || y0 < 0 || x1 >= 2048 || y1 >= 2048) return BlockSpan{0, kAllBlocks};
@@ -937,6 +940,7 @@ public:
 
     // ---- Transfers (02.7, 10.2): the resident targets are made coherent, then the shadow memory works ----
     void InvalidateDestination(const UploadCommit& c) override {
+        FlushToneStrips();  // IN-383: the collected strips write local memory before the transfer does
         ReasonScope scope(writebackReason_, WritebackReason::Transfer);
         // With GLM parking the slots park and CommitUpload merges into GLM-owned pages (IN-350).
         CoherentForWrite(SpanOfTransfer(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, c.rrh), nullptr,
@@ -944,6 +948,7 @@ public:
         memory_.InvalidateDestination(c);
     }
     void CommitUpload(const UploadCommit& c, const uint8_t* bytes, size_t byteCount) override {
+        FlushToneStrips();  // IN-383: the collected strips write local memory before the upload does
 
         const BlockSpan span = SpanOfTransfer(c.dbp, c.dbw, c.dpsm, c.dsax, c.dsay, c.rrw, c.rrh);
         StageTimer timer(counters.uploadUs);
@@ -1060,6 +1065,7 @@ public:
         counters.glmMergedWords += triples.size() / 3;
     }
     void LocalToLocalMove(const LocalMoveCommit& m) override {
+        FlushToneStrips();  // IN-383: the collected strips write local memory before the move reads it
 
         {
             ReasonScope scope(writebackReason_, WritebackReason::Transfer);
@@ -1071,6 +1077,7 @@ public:
         MarkWritten(destination);
     }
     void BeginLocalToHost(const LocalToHostSetup& r) override {
+        FlushToneStrips();  // IN-383: a readback observes the strips
         pendingReadSpan_ = SpanOfTransfer(r.sbp, r.sbw, r.spsm, r.ssax, r.ssay, r.rrw, r.rrh);
         {
             ReasonScope scope(writebackReason_, WritebackReason::Transfer);
@@ -1545,6 +1552,7 @@ public:
     }
 
     void DropAll() {
+        FlushToneStrips();      // IN-383: the collected strips write the pages before the targets go away
         toneRun_.active = false;  // IN-379: a reset or auxiliary frame ends a tone sequence without a carry
         gpu_.PauseScaled(false);
         for (ResidentSlot& slot : slots_) Drop(slot, false);  // resets and auxiliary frames keep no shadow
@@ -1808,6 +1816,10 @@ public:
     bool GpuClutActive() const { return cacheMode_ && glmEnabled_ && gpuClutEnabled_; }
 
     void OnClutLoaded(const clut::Tex0Write& write) {
+        // IN-383: the strips of GT4's tone sequence are collected with the palette load that precedes each of them, so
+        // a page that has to run its batches afterwards can repeat the load instead of using a later palette.
+        toneClut_ = write;
+        toneClutValid_ = true;
         if (!GpuClutActive() || failed_) return;
         StageTimer timer(counters.clutUs);
         if (!gpuClutSynced_) SyncGpuClut();
@@ -2116,13 +2128,312 @@ public:
         }
     }
 
-    void OnBatch(Batch&& batch) override {
-        StageTimer batchTimer(counters.batchUs);
-        counters.batches++;
-        if (!gpu_.Ready()) {
-            Fail("GPU drawer is not initialised");
+    // ---- IN-383: the tone sequence's strip batches (09.4 variant A; parity plan item 2) --------------------
+    // The eight decal T8 strips that write one frame-buffer page back as CT24 are the sequence's bulk: about 1,120 of
+    // the 1,540 tone batches per 480p race frame. Each strip is eight wide and 32 tall with one texel per pixel, so
+    // the strips of one page are one GPU dispatch over the page (hw_tone_strips.comp): it reads the temporary page
+    // and the strip's T8 index texture from the GLM and writes the page through its CT24 view. The page becomes
+    // GLM-owned, as a parked target leaves it, so GPU readers see it without a download and CPU readers materialise
+    // it. Matching is a refusal: anything that is not exactly the shape of 09.4's strip takes the normal path, and a
+    // page whose palette bases do not decode as the temporary page's quadrants is replayed batch by batch (exact).
+    struct ToneStripRecord {
+        BatchState state;
+        Vertex vertices[2];
+        PrimRecord prim;
+        PixelRect drawRect;
+        FlushReason reason = FlushReason::Count;
+        clut::Tex0Write clut;         // the palette load performed before this strip
+        bool clutValid = false;
+    };
+    struct ToneStripPage {
+        bool active = false;
+        memory::BufferView destination{};
+        int32_t x0 = 0, y0 = 0;
+        uint32_t strips = 0;
+        uint32_t absoluteCbp[8] = {};
+        uint32_t indexBp = 0, indexBw = 0;  // the strip's T8 index texture (same for every strip of the page)
+        bool templateOk = true;
+        std::vector<ToneStripRecord> records;  // the deferred batches, replayed when the page does not decode
+    };
+    ToneStripPage tonePage_;
+    clut::Tex0Write toneClut_{};  // the last palette load (IN-383: repeated when a collected strip runs normally)
+    bool toneClutValid_ = false;
+    bool toneHle_ = true;         // GT4_HW_TONE_HLE (A/B: off takes the normal path)
+    bool verifyShuffle_ = false;  // GT4_HW_VERIFY_SHUFFLE: run both and compare the page (09.4)
+
+    // The per-batch half of the template: registers, blend, tests and texture format of one strip (09.4 variant A).
+    bool MatchesToneStripTemplate(const Batch& batch) const {
+        if (!cacheMode_ || !glmEnabled_ || failed_ || auxiliary_ || batch.Empty()) return false;
+        if (batch.prims.size() != 1 || batch.vertices.size() != 2) return false;
+        const PrimRecord& primitive = batch.prims[0];
+        if (primitive.type != PrimType::Sprite || primitive.count != 2) return false;
+        const BatchState& state = batch.state;
+        const uint64_t attributes = state.effectivePrim;
+        if ((attributes & 7u) != 6u) return false;                    // sprite
+        if (((attributes >> primbit::kTme) & 1u) == 0) return false;  // textured
+        if (((attributes >> primbit::kAbe) & 1u) != 0) return false;  // opaque (decal only)
+        if (((attributes >> primbit::kFge) & 1u) != 0) return false;
+        if (state.env.dthe != 0 || state.env.pabe != 0) return false;  // dither would change the RGB
+        if (test::Ate(state.ctx.test) != 0 || test::Date(state.ctx.test) != 0) return false;
+        if (test::Zte(state.ctx.test) != 0 && test::Ztst(state.ctx.test) != 1u) return false;  // 1 = ALWAYS
+        if (zbuf::Zmsk(state.ctx.zbuf) == 0) return false;  // the strips never write depth
+        if (frame::Fbmsk(state.ctx.frame) != 0xFF000000u) return false;
+        if (frame::Psm(state.ctx.frame) != static_cast<uint32_t>(memory::Psm::Ct24)) return false;
+        if (tex0::Psm(state.ctx.tex0) != static_cast<uint32_t>(memory::Psm::T8)) return false;
+        if (tex0::Cpsm(state.ctx.tex0) != 0 || tex0::Csm(state.ctx.tex0) != 0 || tex0::Csa(state.ctx.tex0) != 0) {
+            return false;  // CT32 palettes in the CSM1 layout, from the palette's first group (07.4)
+        }
+        if (tex0::Tfx(state.ctx.tex0) != 1 || tex0::Tcc(state.ctx.tex0) != 1) return false;  // decal
+        if (tex0::Tw(state.ctx.tex0) != 3 || tex0::Th(state.ctx.tex0) != 5 || tex0::Tbw(state.ctx.tex0) != 1) {
+            return false;  // an 8 x 32 index texture, one texel per pixel
+        }
+        return true;
+    }
+
+    // IN-383: appends the batch to the page being collected. False when it is not one of the template's strips.
+    bool TryDeferToneStrip(const Batch& batch) {
+        if (!toneHle_ || !MatchesToneStripTemplate(batch)) return false;
+        const PixelRect& rect = batch.drawRect;
+        if (rect.Empty() || rect.x0 < 0 || rect.y0 < 0 || rect.x1 - rect.x0 != 7 || rect.y1 - rect.y0 != 31) {
+            return false;
+        }
+        const memory::BufferView destination{memory::blockOfPage(frame::Fbp(batch.state.ctx.frame)),
+                                             frame::Fbw(batch.state.ctx.frame), memory::Psm::Ct24};
+        const uint32_t cbp = tex0::Cbp(batch.state.ctx.tex0);
+        const uint32_t indexBp = tex0::Tbp0(batch.state.ctx.tex0);
+        const uint32_t indexBw = tex0::Tbw(batch.state.ctx.tex0);
+        if (tonePage_.active) {
+            const bool continues = SameView(tonePage_.destination, destination) &&
+                                   rect.x0 == tonePage_.x0 + static_cast<int32_t>(8u * tonePage_.strips) &&
+                                   rect.y0 == tonePage_.y0 && tonePage_.strips < 8 &&
+                                   indexBp == tonePage_.indexBp && indexBw == tonePage_.indexBw;
+            if (continues) {
+                // The palette base of this strip must be exactly its quadrant of the temporary page. Anything else
+                // is not 09.4's sequence: the batch then takes the normal path, after the collected prefix is
+                // written (its palette is put back for it there).
+                if (cbp != tonePage_.absoluteCbp[0] + kToneQuadrantBlock[tonePage_.strips]) return false;
+            } else {
+                FlushToneStrips();  // the previous page's strips come first (exact order)
+            }
+        }
+        if (!tonePage_.active) {
+            // One dispatch covers a page: its origin must be a page origin (its palette base is the page's first
+            // quadrant, checked by construction here and by the block table at the flush).
+            if ((rect.x0 & 63) != 0 || (rect.y0 & 31) != 0 || (cbp & (kBlocksPerPage - 1u)) != 0) return false;
+            tonePage_.records.clear();
+            tonePage_.destination = destination;
+            tonePage_.x0 = rect.x0;
+            tonePage_.y0 = rect.y0;
+            tonePage_.indexBp = indexBp;
+            tonePage_.indexBw = indexBw;
+            tonePage_.strips = 0;
+            tonePage_.templateOk = true;
+            tonePage_.active = true;
+        }
+        ToneStripRecord record;
+        record.state = batch.state;
+        record.vertices[0] = batch.vertices[0];
+        record.vertices[1] = batch.vertices[1];
+        record.prim = batch.prims[0];
+        record.drawRect = batch.drawRect;
+        record.reason = batch.reason;
+        record.clut = toneClut_;
+        record.clutValid = toneClutValid_;
+        tonePage_.records.push_back(record);
+        tonePage_.absoluteCbp[tonePage_.strips] = cbp;
+        ++tonePage_.strips;
+        counters.toneStripBatchesDeferred++;
+        return true;
+    }
+
+    // The batches of the collected page through the normal path, in order (exact: from `first` on the page did not
+    // decode). A strip's palette is only correct in the state its own TEX0 write left, so deferred batches are never
+    // replayed after the fact: a page that stops decoding runs its remaining strips here, in order.
+    void ReplayToneStrips(uint32_t first = 0) {
+        for (uint32_t index = first; index < tonePage_.records.size(); ++index) {
+            const ToneStripRecord& record = tonePage_.records[index];
+            // The palette this strip must use: the load performed before it. Later strips of the page have already
+            // loaded their own palettes into the GPU CLUT, so it is put back (a no-op for the first one).
+            if (record.clutValid) {
+                OnClutLoaded(record.clut);
+                if (failed_) break;
+            }
+            Batch batch;
+            batch.state = record.state;
+            batch.vertices.assign(record.vertices, record.vertices + 2);
+            batch.prims.push_back(record.prim);
+            batch.drawRect = record.drawRect;
+            batch.reason = record.reason;
+            batch.trace = ComputeVertexTrace(batch, nullptr);
+            TrackToneRun(batch);
+            RunBatch(batch);
+            if (failed_) break;
+        }
+        tonePage_.records.clear();
+    }
+
+    // Writes the collected page: one dispatch, or the batches themselves when the page does not decode as 09.4's
+    // strip sequence. Every source is made current in the GLM first; the page becomes GLM-owned afterwards.
+    void FlushToneStrips() {
+        if (!tonePage_.active) return;
+        tonePage_.active = false;
+        const uint32_t strips = tonePage_.strips;
+        if (strips == 0) return;
+        if (failed_) {
+            tonePage_.records.clear();
             return;
         }
+        // Quadrant of every strip from its CBP: the temporary page's 16x16 quadrants start at blocks
+        // {0, 4, 16, 20, 8, 12, 24, 28} (01.3 block table, 07.4), quadrant id = qx + 4 * qy.
+        const uint32_t base = tonePage_.absoluteCbp[0];
+        uint32_t quadrants[8] = {};
+        // Leading strips whose palette base decodes. TryDeferToneStrip only collects a strip whose CBP is its own
+        // quadrant of the base, so the whole collected prefix decodes; the check stays as the refusal for a base
+        // that is not a page base.
+        uint32_t drawable = 0;
+        if (base % kBlocksPerPage == 0) {
+            for (uint32_t strip = 0; strip < strips && strip < 8; ++strip) {
+                const uint32_t delta = tonePage_.absoluteCbp[strip] - base;
+                int quadrant = -1;
+                for (uint32_t candidate = 0; candidate < 8; ++candidate) {
+                    if (delta == kToneQuadrantBlock[candidate]) {
+                        quadrant = static_cast<int>(candidate);
+                        break;
+                    }
+                }
+                if (quadrant < 0) break;
+                quadrants[strip] = static_cast<uint32_t>(quadrant);
+                ++drawable;
+            }
+        }
+        const uint32_t rest = strips - drawable;
+        const bool decodes = drawable != 0;
+        const int32_t width = static_cast<int32_t>(8u * drawable);
+        const memory::BufferView source{base, 1, memory::Psm::Ct32};  // the temporary page's first page holds every quadrant
+        const memory::BufferView index{tonePage_.indexBp, tonePage_.indexBw, memory::Psm::T8};
+        // The destination rectangle is one memory page (a page-aligned 64 x 32 rectangle). The spans of SpanOfRect are
+        // the coherence granularity (whole page rows), so the page is named directly here.
+        const memory::PsmInfo& destinationInfo = memory::psmInfo(memory::Psm::Ct24);
+        const uint32_t bufferWidth =
+            std::max<uint32_t>(tonePage_.destination.bufferWidth, 1u) * 64u;
+        const uint32_t pagesPerRow =
+            std::max<uint32_t>(1u, (bufferWidth + destinationInfo.pageWidth - 1u) / destinationInfo.pageWidth);
+        const uint32_t pageIndex = (static_cast<uint32_t>(tonePage_.y0) / destinationInfo.pageHeight) * pagesPerRow +
+                                   (static_cast<uint32_t>(tonePage_.x0) / destinationInfo.pageWidth);
+        const BlockSpan span{(tonePage_.destination.basePointer + pageIndex * kBlocksPerPage) % kBlocksTotal,
+                             kBlocksPerPage};
+        const BlockSpan sourceSpan{base % kBlocksTotal, kBlocksPerPage};
+        static const bool trace = std::getenv("GT4_HW_TONE_TRACE") != nullptr;  // diagnostic only
+        if (trace) {
+            std::fprintf(stderr, "[tone] flush strips=%u base=%u decodes=%d span=%u+%u source=%u+%u\n", strips, base,
+                         decodes ? 1 : 0, span.begin, span.count, sourceSpan.begin, sourceSpan.count);
+        }
+        if (!decodes || SpansOverlap(span, sourceSpan)) {
+            ReplayToneStrips();
+            return;
+        }
+        // Both sources must be current in the GLM: stale pages uploaded, drawn targets swizzled.
+        if (!PrepareGlm(source, 64, 32, true) || failed_) {
+            ReplayToneStrips();
+            return;
+        }
+        if (!PrepareGlm(index, 8, 32, true) || failed_) {
+            ReplayToneStrips();
+            return;
+        }
+        if (verifyShuffle_) {
+            if (rest == 0) VerifyToneStrips(span, quadrants, base, drawable);
+            else ReplayToneStrips();
+            return;
+        }
+        // The page's own slots park in the GLM (the dispatch writes it there) and the page is uploaded.
+        CoherentForWrite(span, nullptr, true);
+        if (!UploadStalePages(span)) return;
+        if (failed_) return;
+        gpu::GpuDrawer::ToneStripPage page;
+        page.destBp = tonePage_.destination.basePointer;
+        page.destBw = tonePage_.destination.bufferWidth;
+        page.destX = tonePage_.x0;
+        page.destY = tonePage_.y0;
+        page.sourceBp = base;
+        page.sourceBw = 1;
+        page.indexBp = tonePage_.indexBp;
+        page.indexBw = tonePage_.indexBw;
+        page.stripCount = drawable;
+        std::memcpy(page.quadrants, quadrants, sizeof quadrants);
+        std::string error;
+        if (!gpu_.ToneStrips(page, error)) {
+            Fail(error);
+            return;
+        }
+        ForEachPage(span, [&](uint32_t pageIndex) {
+            if (!glmOwned_[pageIndex]) {
+                glmOwned_[pageIndex] = true;
+                ++glmOwnedPages_;
+            }
+        });
+        counters.toneStripPages++;
+        counters.toneStripBatches += drawable;
+        // The strips the template did not explain run afterwards, in order, through the normal path.
+        if (rest != 0) ReplayToneStrips(drawable);
+        else tonePage_.records.clear();
+    }
+
+    // GT4_HW_VERIFY_SHUFFLE (09.4): writes the page with the strip dispatch, keeps the result, then writes it again
+    // with the batches themselves and counts the bytes that differ. The page's memory and resident state afterwards
+    // are the normal path's, so a verification run stays exact.
+    void VerifyToneStrips(const BlockSpan& span, const uint32_t* quadrants, uint32_t base, uint32_t strips) {
+        const uint32_t page = span.begin / kBlocksPerPage;
+        const uint32_t offset = page * 8192u;
+        Materialise(span);
+        CoherentForWrite(span);
+        if (failed_) return;
+        uint8_t* const local = memory_.Local().bytes().data();
+        const std::vector<uint8_t> before(local + offset, local + offset + 8192u);
+        gpu::GpuDrawer::ToneStripPage pageInfo;
+        pageInfo.destBp = tonePage_.destination.basePointer;
+        pageInfo.destBw = tonePage_.destination.bufferWidth;
+        pageInfo.destX = tonePage_.x0;
+        pageInfo.destY = tonePage_.y0;
+        pageInfo.sourceBp = base;
+        pageInfo.sourceBw = 1;
+        pageInfo.indexBp = tonePage_.indexBp;
+        pageInfo.indexBw = tonePage_.indexBw;
+        pageInfo.stripCount = strips;
+        std::memcpy(pageInfo.quadrants, quadrants, sizeof pageInfo.quadrants);
+        std::string error;
+        if (!UploadStalePages(span) || !gpu_.ToneStrips(pageInfo, error)) {
+            Fail(error.empty() ? std::string("tone strip verification failed") : error);
+            return;
+        }
+        if (!glmOwned_[page]) {
+            glmOwned_[page] = true;
+            ++glmOwnedPages_;
+        }
+        std::vector<uint8_t> hle(8192u);
+        if (!gpu_.DownloadGlm({{offset, 8192u}}, local, error)) {
+            Fail(error);
+            return;
+        }
+        std::memcpy(hle.data(), local + offset, 8192u);
+        // The normal path again, from the same starting page.
+        std::memcpy(local + offset, before.data(), 8192u);
+        MarkWritten(span);
+        glmOwned_[page] = false;
+        --glmOwnedPages_;
+        glmPageSequence_[page] = 0;
+        ReplayToneStrips();
+        if (failed_) return;
+        CoherentForWrite(span);  // a resident target of the normal path writes the page back
+        uint64_t differing = 0;
+        const uint8_t* const now = memory_.Local().bytes().data() + offset;
+        for (uint32_t byte = 0; byte < 8192u; ++byte) differing += now[byte] != hle[byte] ? 1u : 0u;
+        counters.toneVerifyPages++;
+        counters.toneVerifyMismatchBytes += differing;
+        tonePage_.records.clear();
+    }
+
+    void RunBatch(Batch& batch) {
         TrackToneRun(batch);  // IN-379 (scale > 1 only)
         Translation t;
         // IN-360: reuse the previous batch's vector storage (cleared, capacity kept).
@@ -2213,6 +2524,24 @@ public:
             }
         }
     }
+
+    void OnBatch(Batch&& batch) override {
+        StageTimer batchTimer(counters.batchUs);
+        counters.batches++;
+        if (!gpu_.Ready()) {
+            Fail("GPU drawer is not initialised");
+            return;
+        }
+        // IN-383: a strip of GT4's tone sequence is collected; every other batch writes the collected page first.
+        if (TryDeferToneStrip(batch)) {
+            if (observer_) observer_(batch, BatchTranslation{});  // the trace still lists every batch
+            if (tonePage_.strips == 8) FlushToneStrips();
+            return;
+        }
+        FlushToneStrips();
+        RunBatch(batch);
+    }
+
 
     bool OnSync(SyncKind, uint32_t, uint32_t) override { return false; }
 
@@ -2510,6 +2839,7 @@ void Renderer::Flush() {
     Impl& s = *impl_;
     s.frontEnd_.VBlank(&kEverything, 1);
     s.frontEnd_.FlushBatch(FlushReason::VBlank);
+    s.FlushToneStrips();  // IN-383: a VBlank ends a collected tone page
     s.FinishToneRun();  // IN-379: a VBlank ends a tone sequence
     // Frame end: publish the CPU cost of the passes that just ran (roadmap requirement 4), so a run
     // without a window still reports translate and execute.
@@ -2795,12 +3125,24 @@ void Renderer::SetGpuTiming(bool enabled) { impl_->gpu_.SetGpuTiming(enabled); }
 void Renderer::SetDecodeReuse(bool enabled) { impl_->gpu_.SetDecodeReuse(enabled); }
 void Renderer::SetClutDefer(bool enabled) { impl_->gpu_.SetClutDefer(enabled); }
 
+void Renderer::SetToneHle(bool enabled) {
+    // A pending page is written before the path changes, so the switch is exact at any point.
+    impl_->FlushToneStrips();
+    impl_->toneHle_ = enabled;
+}
+
+void Renderer::SetVerifyShuffle(bool enabled) {
+    impl_->FlushToneStrips();
+    impl_->verifyShuffle_ = enabled;
+}
+
 void Renderer::SetChunksPerSubmission(std::uint32_t chunks) { impl_->gpu_.SetChunksPerSubmission(chunks); }
 
 void Renderer::SetDoubleBuffering(bool enabled) { impl_->gpu_.SetDoubleBuffering(enabled); }
 
 bool Renderer::ComposeFrameGpu(GpuFrame& out) {
     Impl& s = *impl_;
+    s.FlushToneStrips();  // IN-383: the compose reads local memory
     s.FinishToneRun();  // IN-379: the presentation reads the carried scaled image
     out = GpuFrame{};
     if (s.gpuComposeVblank_ == s.vblanks_ && s.lastGpuFrame_.valid && s.lastGpuFrameDeinterlaced_) {

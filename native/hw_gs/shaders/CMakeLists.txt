@@ -83,6 +83,8 @@ hw_add_shader(hw_scale_upsample "${HW_SHADER_DIR}/hw_scale_upsample.comp" comp)
 hw_add_shader(hw_display_compose_scaled "${HW_SHADER_DIR}/hw_display_compose_scaled.comp" comp)
 # IN-379: the scaled image of a frame after GT4's RGB tone curve (09.4 variant A).
 hw_add_shader(hw_scale_tone_carry "${HW_SHADER_DIR}/hw_scale_tone_carry.comp" comp)
+# IN-383: the tone sequence's eight strip batches of one page in one dispatch (09.4 variant A, parity plan item 2).
+hw_add_shader(hw_tone_strips "${HW_SHADER_DIR}/hw_tone_strips.comp" comp)
 # IN-381: 13.4 deinterlace of the scaled presentation frame (480i menus at scale).
 hw_add_shader(hw_deinterlace_scaled "${HW_SHADER_DIR}/hw_deinterlace_scaled.comp" comp)
 # 13.5 edge-only FXAA of the presentation frame (IN-376).
