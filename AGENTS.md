@@ -180,7 +180,16 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
   - Pin new game builds in new `docs/inputs` files.
   - Build the launcher with `launcher/tools/build-release.ps1` and the installer with makensis.
   - Check the installer contents against their sources.
-  - The owner tests the installer before anything is public.
+  - **Language check before every release, rc included** (owner, 2026-10-23). en-US and pt-BR are the two default
+    languages and both must be right:
+    - the locale files `launcher/crates/gt4l-tauri/ui/locales/en-US.json` and `pt-BR.json` have the same keys and the
+      same `{placeholders}`;
+    - no pt-BR value is left in English, except names and terms kept on purpose (Saves, Replays, Start, Select);
+    - the focus checks pass in both languages (`dev/focus-check.html?lang=en-US` and `?lang=pt-BR`);
+    - both launcher notes exist for the version, with the same bullets.
+  - Every minimally stable build is published as a GitHub pre-release `vX.Y.Z-rcN` (never Latest, never the final
+    tag; field launchers ignore pre-releases), so the owner can test it on other PCs.
+  - The owner tests the installer before the final release.
   - Then the PR, the merge, the tag `vX.Y.Z` and the GitHub release: the full notes as the body, the installer and
     `SHA256SUMS` as assets.
   - Update the README badge and download name, and STATUS.
