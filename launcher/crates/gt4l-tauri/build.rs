@@ -1,7 +1,8 @@
 //! Build script: generates the permissions of this app's own commands (see `capabilities/`), so the
 //! page can call only the commands listed in `commands.list`. Nothing else in Tauri is enabled for the page.
-//! It also embeds the release notes (TASK-099): every `docs/release-notes/<version>.md` up to this launcher's version,
-//! newest first, into `$OUT_DIR/release_notes.rs`. This version's own notes must exist, or the build stops.
+//! It also embeds the launcher's short release notes (TASK-099): every `docs/release-notes/launcher/<version>.md` up to
+//! this launcher's version, newest first, into `$OUT_DIR/release_notes.rs`. This version's own short notes must exist,
+//! or the build stops. (The full, technical notes beside them in `docs/release-notes/` are for GitHub.)
 
 use std::path::{Path, PathBuf};
 
@@ -29,7 +30,7 @@ fn parse_version(text: &str) -> Option<(u32, u32, u32)> {
 
 fn embed_release_notes() {
     let manifest = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
-    let folder = manifest.join("../../../docs/release-notes");
+    let folder = manifest.join("../../../docs/release-notes/launcher");
     println!("cargo:rerun-if-changed={}", folder.display());
     let current_text = std::env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION");
     let current = parse_version(&current_text).expect("the launcher version is x.y.z");
@@ -50,7 +51,7 @@ fn embed_release_notes() {
     notes.sort_by(|a, b| b.0.cmp(&a.0));
     assert!(
         notes.first().map(|note| note.0) == Some(current),
-        "docs/release-notes/{current_text}.md is missing: every launcher version ships its own release notes"
+        "docs/release-notes/launcher/{current_text}.md is missing: every launcher version ships its own short release notes"
     );
     let mut source = String::from("/// Release notes embedded by build.rs, newest first: (version, Markdown).\n");
     source.push_str("pub const RELEASE_NOTES: &[(&str, &str)] = &[\n");

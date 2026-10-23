@@ -955,9 +955,9 @@ pub struct AboutInfo {
     pub build: String,
 }
 
-// TASK-099: `RELEASE_NOTES`, every `docs/release-notes/<version>.md` up to this launcher version, newest first, embedded
-// by build.rs (a version without its own notes file does not build). The home page renders the Markdown itself and
-// shows no raw HTML; its arrows step through the older notes.
+// TASK-099: `RELEASE_NOTES`, every short `docs/release-notes/launcher/<version>.md` up to this launcher version, newest
+// first, embedded by build.rs (a version without its own short notes does not build). The home page renders the
+// Markdown itself and shows no raw HTML; its arrows step through the older notes.
 include!(concat!(env!("OUT_DIR"), "/release_notes.rs"));
 
 /// The public list of every release, opened by the panel's "All release notes" link (a fixed address: the page never
