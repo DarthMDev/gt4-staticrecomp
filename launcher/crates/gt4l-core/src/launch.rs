@@ -9,6 +9,9 @@
 //! [`pcsx2_environment`], decision 0070). CoreGS 1.1 is still inside the game executable, but the launcher never
 //! starts it (TASK-096, owner 2026-10-22). Only the child process gets these variables. Nothing is written to the
 //! user or system environment.
+use crate::language::Language;
+use crate::messages;
+
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -109,9 +112,20 @@ pub fn choose_renderer<'a>(installed: Option<&'a Installed>, log_folder: &Path) 
 /// The message of a session GSdx cannot run: the reason, what to do, and the log folder. Shown on the home page and in
 /// the tray, so the player is never left without a reason.
 pub fn gsdx_unavailable_message(reason: &str, log_folder: &Path) -> String {
-    format!(
-        "GSdx could not run the game: {reason}. Check your internet connection and try again. Details are in the log folder: {}.",
-        log_folder.display()
+    gsdx_unavailable_message_in(reason, log_folder, Language::fallback())
+}
+
+/// [`gsdx_unavailable_message`] in `language`. The two known reasons are translated; any other reason is shown as it is.
+pub fn gsdx_unavailable_message_in(reason: &str, log_folder: &Path, language: Language) -> String {
+    let reason_text = match reason {
+        GSDX_NOT_INSTALLED => messages::text("game.gs_not_installed", language).to_string(),
+        GSDX_RESTART_REQUESTED => messages::text("game.gs_restart", language).to_string(),
+        other => other.to_string(),
+    };
+    messages::render(
+        "game.gs_could_not_run",
+        language,
+        &[("reason", &reason_text), ("folder", &log_folder.display().to_string())],
     )
 }
 

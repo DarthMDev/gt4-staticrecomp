@@ -15,6 +15,7 @@ use std::fmt;
 /// have their own pages).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Page {
+    General,
     Graphics,
     Display,
     Advanced,
@@ -47,6 +48,9 @@ pub enum Kind {
     /// An output resolution (TASK-080 addendum): `desktop` (the monitor's desktop mode) or `<W>x<H>`. A size the
     /// chosen monitor does not support resolves to its desktop mode (`display::resolve_resolution`).
     Resolution,
+    /// The launcher's language (TASK-102): `auto`, or a tag listed in `ui/locales/index.json` (`language::LANGUAGE_TAGS`).
+    /// The choices come from that list, not from this table.
+    Language,
 }
 
 /// One row of a Settings page.
@@ -91,6 +95,16 @@ const TOGGLE: Kind = Kind::Toggle;
 
 /// Every user setting, in display order. Ids are the TOML keys.
 pub const SETTINGS: &[SettingDef] = &[
+    SettingDef {
+        id: "language",
+        page: Page::General,
+        group: "Language",
+        title: "Language",
+        info: "The language of the launcher. Auto follows your Windows language (Portuguese (Brazil) or English); the other two choices always use that language.",
+        kind: Kind::Language,
+        default: "auto",
+        connected: true,
+    },
     SettingDef {
         id: "renderer",
         page: Page::Graphics,
@@ -271,6 +285,15 @@ pub fn validate(definition: &SettingDef, value: &str) -> Result<String, SettingE
                 Err(invalid())
             }
         }
+        Kind::Language => {
+            if value == "auto" {
+                return Ok(value.to_string());
+            }
+            match crate::language::Language::from_tag(value) {
+                Some(language) => Ok(language.tag().to_string()),
+                None => Err(invalid()),
+            }
+        }
         Kind::Resolution => {
             if value == crate::display::DESKTOP {
                 return Ok(value.to_string());
@@ -390,5 +413,25 @@ impl Settings {
     /// The PCSX2 GS values the user has set (only these are stored in `settings.toml`).
     pub fn gs_overrides(&self) -> &BTreeMap<String, String> {
         &self.gs
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_language_setting_takes_auto_and_the_listed_languages_only() {
+        let definition = definition("language").expect("the language row");
+        assert_eq!(definition.default, "auto");
+        for value in ["auto", "en-US", "pt-BR"] {
+            assert_eq!(validate(definition, value).as_deref(), Ok(value), "{value}");
+        }
+        // Spelling of a listed tag is normalised to the tag of index.json.
+        assert_eq!(validate(definition, "pt_BR").as_deref(), Ok("pt-BR"));
+        assert_eq!(validate(definition, "pt-br").as_deref(), Ok("pt-BR"));
+        for value in ["fr-FR", "xx", ""] {
+            assert!(validate(definition, value).is_err(), "{value:?} is not a language of the launcher");
+        }
     }
 }

@@ -2,6 +2,9 @@
 //!
 //! Mirrors `external_runtime_probe.summarize_exit` and the manual-session rule in `run_probe`:
 //! a normal close is exit code 0 with the reason `window closed`.
+use crate::language::Language;
+use crate::messages;
+
 
 const STOP_PREFIX: &str = "[ee] stopped after ";
 const CYCLES_MARKER: &str = " cycles: ";
@@ -35,19 +38,22 @@ fn stop_reason(line: &str) -> Option<&str> {
     Some(rest[index + CYCLES_MARKER.len()..].trim())
 }
 
-/// One plain sentence for the crash dialog. Technical detail stays in the log.
+/// One plain sentence for the crash dialog, in English. Technical detail stays in the log.
 pub fn user_message(outcome: &Outcome) -> String {
+    user_message_in(outcome, Language::fallback())
+}
+
+/// [`user_message`] in `language`.
+pub fn user_message_in(outcome: &Outcome, language: Language) -> String {
     match outcome {
         Outcome::NormalClose => String::new(),
         Outcome::Crashed { reason: Some(reason), .. } => {
-            format!("Gran Turismo 4 stopped unexpectedly ({reason}). The session folder has the details.")
+            messages::render("game.stopped_unexpectedly_reason", language, &[("reason", reason)])
         }
         Outcome::Crashed { reason: None, exit_code: Some(code) } => {
-            format!("Gran Turismo 4 stopped unexpectedly (exit code {code}). The session folder has the details.")
+            messages::render("game.stopped_unexpectedly_code", language, &[("code", &code.to_string())])
         }
-        Outcome::Crashed { reason: None, exit_code: None } => {
-            "Gran Turismo 4 stopped unexpectedly. The session folder has the details.".to_string()
-        }
+        Outcome::Crashed { reason: None, exit_code: None } => messages::text("game.stopped_unexpectedly", language).to_string(),
     }
 }
 

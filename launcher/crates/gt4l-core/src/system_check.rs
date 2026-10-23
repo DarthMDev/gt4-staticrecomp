@@ -12,6 +12,9 @@
 //!   used when present and is not required (slice214). The PCSX2 GS renders with Vulkan as well
 //!   (`docs/GS-SETTINGS.md`, row `renderer`), so the check applies to both renderers.
 
+use crate::language::Language;
+use crate::messages;
+
 /// What the processor reports (CPUID leaf 1, ECX).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct CpuFeatures {
@@ -48,12 +51,17 @@ pub fn missing_cpu_features(features: &CpuFeatures, level: CpuLevel) -> Vec<&'st
     }
 }
 
-/// `None` when the processor can run the release; otherwise the message for the player.
+/// `None` when the processor can run the release; otherwise the message for the player (English).
 pub fn cpu_problem(features: &CpuFeatures) -> Option<String> {
+    cpu_problem_in(features, Language::fallback())
+}
+
+/// [`cpu_problem`] in `language`.
+pub fn cpu_problem_in(features: &CpuFeatures, language: Language) -> Option<String> {
     if missing_cpu_features(features, MINIMUM_CPU).is_empty() {
         None
     } else {
-        Some(CPU_UNSUPPORTED_MESSAGE.to_string())
+        Some(messages::text("system.cpu_unsupported", language).to_string())
     }
 }
 
@@ -98,46 +106,54 @@ pub enum VulkanProbe {
     Ready { instance_extensions: Vec<String>, devices: Vec<VulkanDevice> },
 }
 
-const DRIVER_ADVICE: &str = "Update your graphics driver from NVIDIA, AMD or Intel, then start GT4Recomp again.";
-
 /// `None` when the game can create its Vulkan instance and a GPU reports at least `MINIMUM_VULKAN`; otherwise the
-/// message for the player.
+/// message for the player (English).
 pub fn vulkan_problem(probe: &VulkanProbe) -> Option<String> {
+    vulkan_problem_in(probe, Language::fallback())
+}
+
+/// [`vulkan_problem`] in `language`.
+pub fn vulkan_problem_in(probe: &VulkanProbe, language: Language) -> Option<String> {
     let (major, minor) = MINIMUM_VULKAN;
+    let advice = messages::text("system.driver_advice", language);
+    let render = |id: &'static str, params: &[(&str, &str)]| Some(messages::render(id, language, params));
     match probe {
-        VulkanProbe::LoaderMissing => Some(format!(
-            "Vulkan is not installed on this PC. GT4Recomp needs a graphics card with Vulkan {major}.{minor} or newer. \
-             {DRIVER_ADVICE}"
-        )),
-        VulkanProbe::InstanceFailed { code } => Some(format!(
-            "Vulkan did not start on this PC (error {code}). GT4Recomp needs a graphics card with Vulkan \
-             {major}.{minor} or newer. {DRIVER_ADVICE}"
-        )),
+        VulkanProbe::LoaderMissing => render(
+            "system.vulkan_missing",
+            &[("major", &major.to_string()), ("minor", &minor.to_string()), ("advice", advice)],
+        ),
+        VulkanProbe::InstanceFailed { code } => render(
+            "system.vulkan_failed",
+            &[("code", &code.to_string()), ("major", &major.to_string()), ("minor", &minor.to_string()), ("advice", advice)],
+        ),
         VulkanProbe::Ready { instance_extensions, devices } => {
             let devices: Vec<&VulkanDevice> = devices.iter().filter(|device| is_gpu_driver(device)).collect();
             if devices.is_empty() {
-                return Some(format!(
-                    "No graphics card with Vulkan was found. GT4Recomp needs a graphics card with Vulkan \
-                     {major}.{minor} or newer. {DRIVER_ADVICE}"
-                ));
+                return render(
+                    "system.vulkan_no_gpu",
+                    &[("major", &major.to_string()), ("minor", &minor.to_string()), ("advice", advice)],
+                );
             }
             if !devices.iter().any(|device| (device.api_major, device.api_minor) >= (major, minor)) {
                 let best = devices
                     .iter()
                     .max_by_key(|device| (device.api_major, device.api_minor))
                     .expect("devices is not empty");
-                return Some(format!(
-                    "Your graphics card ({}) reports Vulkan {}.{}; GT4Recomp needs Vulkan {major}.{minor} or newer. \
-                     {DRIVER_ADVICE}",
-                    best.name, best.api_major, best.api_minor
-                ));
+                let reported = format!("{}.{}", best.api_major, best.api_minor);
+                return render(
+                    "system.vulkan_gpu_too_old",
+                    &[
+                        ("name", &best.name),
+                        ("reported", &reported),
+                        ("major", &major.to_string()),
+                        ("minor", &minor.to_string()),
+                        ("advice", advice),
+                    ],
+                );
             }
             let missing = missing_instance_extensions(instance_extensions);
             if !missing.is_empty() {
-                return Some(format!(
-                    "Your graphics driver is too old for GT4Recomp (missing Vulkan {}). {DRIVER_ADVICE}",
-                    missing.join(", ")
-                ));
+                return render("system.driver_too_old", &[("missing", &missing.join(", ")), ("advice", advice)]);
             }
             None
         }

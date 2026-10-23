@@ -18,3 +18,6 @@ serde_json.workspace = true
 sha2.workspace = true
 ureq = "3"
 zip = { version = "2", default-features = false, features = ["deflate"] }
+
+[build-dependencies]
+serde_json.workspace = true

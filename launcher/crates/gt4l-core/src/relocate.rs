@@ -24,6 +24,9 @@
 //!   no unit failed.
 //!
 //! Neither move runs while the game runs.
+use crate::language::Language;
+use crate::messages;
+
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -343,22 +346,25 @@ impl UserOutcome {
         }
     }
 
-    /// A sentence for the launcher window, when there is something to say.
+    /// A sentence for the launcher window, when there is something to say (English).
     pub fn notice(&self, user: &UserDirs) -> Option<String> {
-        let root = user.root().display();
+        self.notice_in(user, Language::fallback())
+    }
+
+    /// [`UserOutcome::notice`] in `language`.
+    pub fn notice_in(&self, user: &UserDirs, language: Language) -> Option<String> {
+        let root = user.root().display().to_string();
         match self {
             UserOutcome::Moved { kept_both, .. } if kept_both.is_empty() => {
-                Some(format!("Your settings, saves and replays moved to {root}."))
+                Some(messages::render("move.done", language, &[("root", &root)]))
             }
-            UserOutcome::Moved { kept_both, .. } => Some(format!(
-                "Your settings, saves and replays moved to {root}. {} item(s) already existed there; both copies were kept.",
-                kept_both.len()
+            UserOutcome::Moved { kept_both, .. } => Some(messages::render(
+                "move.done_kept",
+                language,
+                &[("root", &root), ("count", &kept_both.len().to_string())],
             )),
-            UserOutcome::Deferred(_) => Some("Close Gran Turismo 4 and restart GT4Recomp to finish moving your files.".to_string()),
-            UserOutcome::Failed(_) => Some(
-                "Your saves could not be moved to the new folder yet. They are safe where they were; GT4Recomp tries again at the next start."
-                    .to_string(),
-            ),
+            UserOutcome::Deferred(_) => Some(messages::text("move.close_game", language).to_string()),
+            UserOutcome::Failed(_) => Some(messages::text("move.saves_later", language).to_string()),
             _ => None,
         }
     }

@@ -15,6 +15,7 @@ sdl3 = "0.20"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
     "Win32_Devices_Display",
+    "Win32_Globalization",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_UI_Shell",

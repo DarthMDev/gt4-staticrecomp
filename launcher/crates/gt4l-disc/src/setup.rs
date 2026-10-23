@@ -26,6 +26,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+use gt4l_core::language::Language;
+use gt4l_core::messages;
+
 use crate::cnf;
 use crate::elf;
 use crate::iso::{Iso, IsoError};
@@ -95,49 +98,49 @@ fn gigabytes(bytes: u64) -> String {
 }
 
 impl SetupError {
+    /// The plain sentences the UI shows, in English (logs and the tests of this crate).
     pub fn user_message(&self) -> String {
+        self.user_message_in(Language::fallback())
+    }
+
+    /// The plain sentences the UI shows, in `language` (the texts are in `gt4l_core::messages`).
+    pub fn user_message_in(&self, language: Language) -> String {
         match self {
             SetupError::NotPlainIso { extension: Some(extension) } if extension.eq_ignore_ascii_case("chd") => {
-                "This image is compressed (.chd). Please convert it to a plain .iso.".into()
+                messages::text("setup.compressed", language).into()
             }
-            SetupError::NotPlainIso { extension: Some(extension) } => format!(
-                "Please use a plain .iso file. A .{extension} file is not supported. Convert it to a plain .iso first."
-            ),
-            SetupError::NotPlainIso { extension: None } => "Please choose a plain .iso file.".into(),
-            SetupError::NotFound => "That file could not be opened. Check that it is still there and try again.".into(),
-            SetupError::NotIso(_) => "This file is not a plain 2048-byte-sector .iso image.".into(),
-            SetupError::NotPlayStation2 => "This is not a PlayStation 2 disc image.".into(),
+            SetupError::NotPlainIso { extension: Some(extension) } => {
+                messages::render("setup.not_plain_iso_extension", language, &[("extension", extension)])
+            }
+            SetupError::NotPlainIso { extension: None } => messages::text("setup.not_plain_iso", language).into(),
+            SetupError::NotFound => messages::text("setup.not_found", language).into(),
+            SetupError::NotIso(_) => messages::text("setup.not_iso", language).into(),
+            SetupError::NotPlayStation2 => messages::text("setup.not_playstation2", language).into(),
             SetupError::Unsupported(kind) => {
                 let detail = match kind {
-                    Unsupported::Spec2Executable { beta: true } => {
-                        "This is the unmodified GT4 Online Public Beta (SCUS-97436), not Gran Turismo 4 Spec II.".into()
-                    }
+                    Unsupported::Spec2Executable { beta: true } => messages::text("setup.public_beta", language).into(),
                     Unsupported::Spec2Executable { beta: false } => {
-                        "This SCUS-97436 disc has a different game program than Spec II 1.10, which GT4Recomp does not support yet."
-                            .into()
+                        messages::text("setup.spec2_other_program", language).into()
                     }
-                    Unsupported::OtherRegion { serial } => format!("This disc is {serial}, another region."),
+                    Unsupported::OtherRegion { serial } => {
+                        messages::render("setup.other_region", language, &[("serial", serial)])
+                    }
                     Unsupported::OtherRevision { version } => {
-                        format!("This SCUS-97328 disc (version {version}) has different game code.")
+                        messages::render("setup.gt4_other_code", language, &[("version", version)])
                     }
-                    Unsupported::OtherGame { serial } => format!("This disc is {serial}."),
+                    Unsupported::OtherGame { serial } => messages::render("setup.other_game", language, &[("serial", serial)]),
                 };
-                format!("{UNSUPPORTED_MESSAGE} {detail}")
+                format!("{} {detail}", messages::text("setup.not_supported", language))
             }
-            SetupError::IncompleteOrModified => "This copy is incomplete or modified. Please re-dump your disc.".into(),
-            SetupError::DiffersFromKnownGood => {
-                "This dump differs from the known good v2.00 disc (damaged or patched). Please re-dump your disc."
-                    .into()
-            }
-            SetupError::NotEnoughSpace { needed, available } => format!(
-                "Not enough free space to copy the game files: {} needed, {} free. Free up space and try again.",
-                gigabytes(*needed),
-                gigabytes(*available)
+            SetupError::IncompleteOrModified => messages::text("setup.incomplete", language).into(),
+            SetupError::DiffersFromKnownGood => messages::text("setup.damaged_dump", language).into(),
+            SetupError::NotEnoughSpace { needed, available } => messages::render(
+                "setup.no_space",
+                language,
+                &[("needed", &gigabytes(*needed)), ("free", &gigabytes(*available))],
             ),
-            SetupError::Cancelled => "Setup was cancelled. Nothing was changed.".into(),
-            SetupError::Internal(_) | SetupError::Io(_) => {
-                "Preparing the game files failed. Your disc was not changed. Please report this with the log.".into()
-            }
+            SetupError::Cancelled => messages::text("setup.cancelled", language).into(),
+            SetupError::Internal(_) | SetupError::Io(_) => messages::text("setup.prepare_failed", language).into(),
         }
     }
 

@@ -9,7 +9,30 @@
 
 use std::sync::Mutex;
 
+use gt4l_core::language::Language;
 use gt4l_core::system_check::{CpuFeatures, VulkanDevice, VulkanProbe};
+
+/// The Windows user language as a locale name (`pt-BR`, `en-US`), from `GetUserDefaultLocaleName`. Empty when it cannot
+/// be read or off Windows; `gt4l_core::language` then uses English.
+#[cfg(windows)]
+pub fn os_locale() -> String {
+    use windows::Win32::Globalization::GetUserDefaultLocaleName;
+
+    // LOCALE_NAME_MAX_LENGTH is 85 UTF-16 units; a locale name is far shorter.
+    let mut buffer = [0u16; 85];
+    // SAFETY: the buffer is valid for the length passed; the call writes a NUL-terminated name or fails with 0.
+    let written = unsafe { GetUserDefaultLocaleName(&mut buffer) };
+    if written <= 1 {
+        return String::new();
+    }
+    String::from_utf16_lossy(&buffer[..(written as usize) - 1])
+}
+
+/// Off Windows there is no Windows user language: English.
+#[cfg(not(windows))]
+pub fn os_locale() -> String {
+    String::new()
+}
 
 /// The processor features the rules need (CPUID leaf 1, ECX: SSE3, SSSE3, SSE4.1).
 #[cfg(target_arch = "x86_64")]
@@ -34,19 +57,19 @@ pub fn read_cpu_features() -> CpuFeatures {
 static VULKAN_OK: Mutex<bool> = Mutex::new(false);
 
 /// `None` when Vulkan is fine (probed once per session after the first success), else the player's message.
-pub fn checked_vulkan() -> Option<String> {
+pub fn checked_vulkan(language: Language) -> Option<String> {
     let mut ok = VULKAN_OK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     if *ok {
         return None;
     }
-    let problem = gt4l_core::system_check::vulkan_problem(&probe_vulkan());
+    let problem = gt4l_core::system_check::vulkan_problem_in(&probe_vulkan(), language);
     *ok = problem.is_none();
     problem
 }
 
 /// The CPU check, then the Vulkan check: the first problem's message, or `None`.
-pub fn requirements_problem() -> Option<String> {
-    gt4l_core::system_check::cpu_problem(&read_cpu_features()).or_else(checked_vulkan)
+pub fn requirements_problem(language: Language) -> Option<String> {
+    gt4l_core::system_check::cpu_problem_in(&read_cpu_features(), language).or_else(|| checked_vulkan(language))
 }
 
 #[cfg(windows)]
