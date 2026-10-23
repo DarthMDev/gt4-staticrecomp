@@ -549,6 +549,26 @@
     check("the notes title line is not repeated and raw HTML stays text", !notes.querySelector(".md-h1") &&
       !notes.querySelector(".home-notes-body b") && /<b>raw HTML<\/b>/.test(notes.textContent), "");
     check("the notes footer opens the releases page", !!notes.querySelector(".home-notes-more"), "");
+    var older = notes.querySelectorAll(".notes-arrow")[0];
+    var newer = notes.querySelectorAll(".notes-arrow")[1];
+    var shownVersion = function () { return document.querySelector(".home-notes-version").textContent; };
+    check("the notes open on the newest release; newer is disabled at the start", shownVersion() === "1.3.0" &&
+      newer.disabled && !older.disabled, shownVersion());
+    older.click();
+    await wait(100);
+    check("the left arrow shows an older release, sliding in from the left", shownVersion() === "1.2.3" &&
+      !!notes.querySelector(".home-notes-page.enter-from-left") && !newer.disabled, shownVersion());
+    older.click();
+    older.click();
+    await wait(100);
+    check("no loop: the oldest release disables the left arrow", shownVersion() === "1.0.0" && older.disabled, shownVersion());
+    older.click();
+    await wait(100);
+    check("an extra click at the oldest stays there", shownVersion() === "1.0.0", shownVersion());
+    newer.click();
+    await wait(100);
+    check("the right arrow goes back to a newer release", shownVersion() === "1.2.2" &&
+      !!notes.querySelector(".home-notes-page.enter-from-right"), shownVersion());
     check("the pad hints name the game switch", /LB \/ RB/.test(document.getElementById("hints").textContent), document.getElementById("hints").textContent);
 
     await setHash("#/settings/games");

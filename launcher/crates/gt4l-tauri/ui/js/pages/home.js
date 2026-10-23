@@ -7,8 +7,9 @@
  * arrow switches to the next version in an endless loop and the name slides in from that side (owner, 2026-10-23). An
  * installed game shows Play; a game that is not installed shows Install, which opens the disc picker and runs that
  * game's setup. The logo stays the Gran Turismo 4 logo for both.
- * Patch notes (TASK-099): a glass card on the right shows this version's release notes (release_notes, the Markdown file
- * embedded in the launcher), rendered by js/markdown.js; its footer opens the GitHub releases page (open_releases_page).
+ * Patch notes (TASK-099): a glass card on the right shows the release notes embedded in the launcher (release_notes:
+ * every release up to this version, newest first), rendered by js/markdown.js; arrows in its header step back through
+ * the older releases; its footer opens the GitHub releases page (open_releases_page).
  * Controller: A or Start = Play (or Install), Y = Settings, LB / RB = the other game. Hints show only once a pad is used.
  * Play is glass when idle (no focus): it takes the solid white state only when focused or hovered.
  */
@@ -296,10 +297,19 @@
         versionLabel.textContent = "GT4Recomp " + (info.version || "");
       }, function () {});
       // The patch notes card (TASK-099). It scrolls on its own; wide windows only (css/app.css hides it when narrow).
+      // Its header arrows step through the release history (owner, 2026-10-23): it opens on the newest notes, the left
+      // arrow goes to older releases, the right arrow back to newer ones; no loop, an arrow is disabled at its end.
       var notesBody = h("div", { class: "home-notes-body", tabindex: "0", "aria-label": "Release notes" });
       var notesVersion = h("span", { class: "home-notes-version", text: "" });
+      var notesOlder = h("button", { class: "notes-arrow", type: "button", "aria-label": "Older release notes", title: "Older" },
+        [chevronIcon(-1)]);
+      var notesNewer = h("button", { class: "notes-arrow", type: "button", "aria-label": "Newer release notes", title: "Newer" },
+        [chevronIcon(1)]);
       var notesCard = h("aside", { class: "home-notes", "aria-label": "What's new" }, [
-        h("header", { class: "home-notes-head" }, [h("span", { class: "home-notes-title", text: "What's new" }), notesVersion]),
+        h("header", { class: "home-notes-head" }, [
+          h("span", { class: "home-notes-title", text: "What's new" }),
+          h("span", { class: "home-notes-pager" }, [notesOlder, notesVersion, notesNewer])
+        ]),
         notesBody,
         h("button", {
           class: "home-notes-more",
@@ -310,15 +320,40 @@
       notesCard.hidden = true;
       page.appendChild(notesCard);
       var updateNotesEdges = smoothScroll(notesBody);
-      root.addEventListener("resize", updateNotesEdges);
-      call("release_notes").then(function (notes) {
-        if (!notes || !notes.markdown) {
+      window.addEventListener("resize", updateNotesEdges);
+      var releases = [];  // newest first
+      var shownRelease = 0;
+
+      // Shows releases[index]; direction -1 = an older release (it comes in from the left), +1 = a newer one.
+      function showRelease(index, direction) {
+        if (index < 0 || index >= releases.length) {
           return;
         }
-        notesVersion.textContent = notes.version || "";
-        notesBody.appendChild(GT4.markdown.render(notes.markdown, { skipTitle: true }));
+        shownRelease = index;
+        var release = releases[index];
+        notesVersion.textContent = release.version;
+        notesOlder.disabled = index >= releases.length - 1;
+        notesNewer.disabled = index === 0;
+        var content = h("div", { class: "home-notes-page" + (direction < 0 ? " enter-from-left" : direction > 0 ? " enter-from-right" : "") });
+        content.appendChild(GT4.markdown.render(release.markdown, { skipTitle: true }));
+        GT4.ui.clear(notesBody);
+        notesBody.appendChild(content);
+        notesBody.scrollTop = 0;
+        window.requestAnimationFrame(updateNotesEdges);
+      }
+
+      notesOlder.addEventListener("click", function () { showRelease(shownRelease + 1, -1); });
+      notesNewer.addEventListener("click", function () { showRelease(shownRelease - 1, 1); });
+      call("release_notes").then(function (notes) {
+        releases = (notes && Array.isArray(notes.releases) ? notes.releases : []).filter(function (release) {
+          return release && release.markdown;
+        });
+        if (!releases.length) {
+          return;
+        }
+        showRelease(0, 0);
         notesCard.hidden = false;
-        root.requestAnimationFrame(updateNotesEdges);
+        window.requestAnimationFrame(updateNotesEdges);
       }, function () {});
       page.appendChild(h("div", { class: "home-bottom" }, [
         logoImage,
@@ -359,7 +394,7 @@
       return {
         destroy: function () {
           clearInterval(timer);
-          root.removeEventListener("resize", updateNotesEdges);
+          window.removeEventListener("resize", updateNotesEdges);
           document.body.classList.remove("is-home");
         }
       };

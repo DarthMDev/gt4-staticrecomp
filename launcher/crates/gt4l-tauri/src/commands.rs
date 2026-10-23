@@ -955,10 +955,10 @@ pub struct AboutInfo {
     pub build: String,
 }
 
-/// TASK-099: the release notes of this launcher version, `docs/release-notes/<version>.md`, embedded at build time (a
-/// version without its notes file does not build). The home page renders the Markdown itself and shows no raw HTML.
-pub const RELEASE_NOTES_MARKDOWN: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../docs/release-notes/", env!("CARGO_PKG_VERSION"), ".md"));
+// TASK-099: `RELEASE_NOTES`, every `docs/release-notes/<version>.md` up to this launcher version, newest first, embedded
+// by build.rs (a version without its own notes file does not build). The home page renders the Markdown itself and
+// shows no raw HTML; its arrows step through the older notes.
+include!(concat!(env!("OUT_DIR"), "/release_notes.rs"));
 
 /// The public list of every release, opened by the panel's "All release notes" link (a fixed address: the page never
 /// passes a URL).
@@ -967,13 +967,28 @@ pub const RELEASES_PAGE: &str = "https://github.com/moesuito/gt4-staticrecomp/re
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseNotes {
+    /// This launcher's version (the first entry of `releases`).
+    pub version: String,
+    /// Every embedded release, newest first.
+    pub releases: Vec<ReleaseNote>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseNote {
     pub version: String,
     pub markdown: String,
 }
 
 #[tauri::command]
 pub fn release_notes() -> ReleaseNotes {
-    ReleaseNotes { version: env!("CARGO_PKG_VERSION").to_string(), markdown: RELEASE_NOTES_MARKDOWN.to_string() }
+    ReleaseNotes {
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        releases: RELEASE_NOTES
+            .iter()
+            .map(|(version, markdown)| ReleaseNote { version: version.to_string(), markdown: markdown.to_string() })
+            .collect(),
+    }
 }
 
 /// Opens the GitHub releases page in the default browser.
