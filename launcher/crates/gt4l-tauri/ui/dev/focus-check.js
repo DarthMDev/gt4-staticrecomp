@@ -546,8 +546,12 @@
     check("the patch notes card shows this version's notes (TASK-099)", !!notes && !notes.hidden &&
       !!notes.querySelector(".home-notes-body .md-h2") && notes.querySelectorAll(".home-notes-body li").length > 0 &&
       document.querySelector(".home-notes-version").textContent.length > 0, notes ? "card" : "none");
-    check("the notes title line is not repeated and raw HTML stays text", !notes.querySelector(".md-h1") &&
-      !notes.querySelector(".home-notes-body b") && /<b>raw HTML<\/b>/.test(notes.textContent), "");
+    check("the notes title line is not repeated", !notes.querySelector(".md-h1"), "");
+    // Safety of js/markdown.js on its own (not shown in the mock): HTML in the notes stays plain text.
+    var sample = document.createElement("div");
+    sample.appendChild(GT4.markdown.render("- <b>raw HTML</b> and <img src=x> stay text", {}));
+    check("HTML written in release notes shows as plain text", !sample.querySelector("b") && !sample.querySelector("img") &&
+      /<b>raw HTML<\/b>/.test(sample.textContent), sample.textContent);
     check("the notes card has no footer link", !notes.querySelector(".home-notes-more"), "");
     var support = document.querySelector(".support");
     check("Support the project with the Ko-fi cup sits on the home screen", !!support && !!support.querySelector(".support-cup") &&
