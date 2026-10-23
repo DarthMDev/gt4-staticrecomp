@@ -5,6 +5,12 @@
 *.ISO
 *.chd
 *.cso
+# Disc patches (Spec II xdelta and similar): they carry game and mod data.
+*.xdelta
+*.xdelta3
+*.vcdiff
+*.ppf
+*.bps
 CORE.GT4
 *.elf
 *.ELF

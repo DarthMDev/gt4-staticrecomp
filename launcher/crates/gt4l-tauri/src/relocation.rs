@@ -16,6 +16,7 @@ use std::process::Command;
 
 use gt4l_core::paths::{self, DataDirs, Layout, LayoutInputs, LegacyLocations, UserDirs, TEXTURES_FOLDER_NAME};
 use gt4l_core::relocate::{self, FsOps, LargeMove, LargeOutcome, UnitResult, UserMove};
+use gt4l_core::textures::{self as texture_folder, FlattenOps};
 use gt4l_disc::setup::{self as disc_setup, Installed};
 use gt4l_disc::Pins;
 
@@ -321,6 +322,26 @@ fn move_source(shared: &Shared, dirs: &DataDirs, pins: &Pins, source: &LargeSour
     }
     let (notice, problem) = large_notice(&outcome, local, dirs.root());
     (notice, problem)
+}
+
+/// TASK-093: flattens an old `Textures\replacements` into `Textures` once gt4-gs 1.2.1 or later is in use (the rules
+/// are in `gt4l_core::textures`). Runs on the same thread after [`move_large_data`], so the move is never in progress;
+/// it waits for the next start while the game runs. Only the launcher's own data folder is touched.
+pub fn flatten_textures(shared: &Shared) {
+    let dirs = lock(shared).dirs.clone();
+    let folder = dirs.textures();
+    if !folder.starts_with(dirs.root()) {
+        state::log(&dirs, "textures: not flattened (the folder is still in Documents until its move succeeds)");
+        return;
+    }
+    if game_running() {
+        state::log(&dirs, "textures: not flattened now (Gran Turismo 4 is running); the next start tries again");
+        return;
+    }
+    let outcome = texture_folder::flatten_replacements(&folder, &dirs.renderer_root(), dirs.root(), &FlattenOps::real());
+    for line in outcome.log_lines() {
+        state::log(&dirs, &line);
+    }
 }
 
 /// The sentence for the page after the large-data move (empty when nothing happened).

@@ -47,7 +47,7 @@ description = "Reset to defaults: GT4 default for every settable row (owner deci
 [[setting]]
 id = "gs_engine"
 label = "Renderer"
-help = "Which renderer draws the game: GSdx (default; the PCSX2 GS renderer, GPL-3.0) or CoreGS 1.1 (built in, no download)."
+help = "Which renderer draws the game: GSdx, the PCSX2 GS renderer (GPL-3.0, downloaded). It is the only renderer the launcher starts (TASK-096)."
 page = "basic"
 order = 1
 control = "dropdown"
@@ -60,9 +60,8 @@ status = "ok"
 env = "GT4_GS_ENGINE"
 choices = [
   { name = "pcsx2", ini = "", status = "ok", label = "GSdx" },
-  { name = "coregs-1.1", ini = "", status = "ok", label = "CoreGS 1.1 (secondary)" },
 ]
-notes = "Owner decision 2026-10-16 (TASK-049, item 1). Launcher-only: pcsx2 = gt4-gs.exe (`--mode pcsx2`); coregs-1.1 = the built-in CoreGS 1.1 fallback (`--mode main`). Its upscale, FSR, FXAA and deinterlace options are hidden (owner decision 5). The launcher reads GT4_GS_ENGINE (TASK-019/043); it is never written to gt4-gs.ini."
+notes = "Owner decision 2026-10-16 (TASK-049, item 1). Launcher-only: pcsx2 = gt4-gs.exe (`--mode pcsx2`). Owner decision 2026-10-22 (TASK-096, launcher 1.2.3): the CoreGS 1.1 choice is removed from the launcher; the built-in CoreGS 1.1 stays in the game executable unused by the launcher. The launcher reads GT4_GS_ENGINE (TASK-019/043); it is never written to gt4-gs.ini."
 
 [[setting]]
 id = "renderer"
@@ -964,7 +963,7 @@ notes = "TASK-062. The F8 [gs-ipc] summary line, live: EE thread CPU, VU1 worker
 [[setting]]
 id = "texture_load"
 label = "Load custom textures"
-help = "Load the texture pack in the Textures folder of your Gran Turismo 4 folder (an empty folder changes nothing)."
+help = "Load the texture pack from the Textures folder: put the pack's files straight in it (an empty folder changes nothing)."
 page = "basic"
 order = 2
 control = "toggle"
@@ -974,7 +973,7 @@ type = "bool"
 default = "true"
 written = "always"
 status = "ok"
-notes = "TASK-088 (gt4-gs 1.2.0, owner 2026-10-21): default On, always written. Load only: gt4-gs reads Textures/replacements directly (no serial subfolder, GSTextureReplacements.cpp GetGameTextureDirectory). PCSX2 loader pcsx2/Pcsx2Config.cpp:1026."
+notes = "TASK-088 (gt4-gs 1.2.0, owner 2026-10-21): default On, always written. Load only: gt4-gs reads the textures directly (no serial subfolder, GSTextureReplacements.cpp GetGameTextureDirectory). PCSX2 loader pcsx2/Pcsx2Config.cpp:1026. TASK-093 (gt4-gs 1.2.1): the pack goes straight into the Textures folder; gt4-gs 1.2.1 reads it there, recursively, and still reads Textures/replacements."
 
 [[setting]]
 id = "texture_load_async"
@@ -1139,7 +1138,7 @@ type = "path"
 default = ""
 written = "launcher"
 status = "ok"
-notes = "TASK-088 (gt4-gs 1.2.0): the player folder Documents/Gran Turismo 4/Textures; the replacements are read from its replacements subfolder with no serial folder. Written only when the launcher supplies it."
+notes = "TASK-088 (gt4-gs 1.2.0): the player folder Documents/Gran Turismo 4/Textures; the replacements are read from its replacements subfolder with no serial folder. Written only when the launcher supplies it. TASK-093 (gt4-gs 1.2.1): the launcher data folder Textures (data/Textures); the pack goes straight in it, no replacements subfolder."
 
 [[setting]]
 id = "data_root"

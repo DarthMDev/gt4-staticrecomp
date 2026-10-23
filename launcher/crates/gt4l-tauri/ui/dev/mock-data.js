@@ -51,7 +51,7 @@
     setup.disc_name = "";
     setup.problem = "Game files missing (SCUS-97328.iso is missing). Choose your disc image again.";
   } else if (setupStart === "offline") {
-    setup.note = "GSdx could not be downloaded, so CoreGS 1.1 will be used. GT4Recomp tries again at the next start.";
+    setup.note = "GSdx could not be downloaded, so the game cannot start yet. GT4Recomp tries again at the next start.";
   }
 
   // setup_start: walk the steps on a timer, like the Rust thread.
@@ -83,11 +83,10 @@
   // Settings rows, the same shape as the Rust table.
   var DEFAULTS = {};
   var rows = [
-    { id: "renderer", label: "Renderer", help: "PCSX2 GS (the default) draws the game on your GPU in its own process. CoreGS 1.1 is the launcher's built-in renderer, a secondary choice. CoreGS 2.0 is in development.",
+    { id: "renderer", label: "Renderer", help: "GSdx draws the game on your GPU in its own process; it is the renderer GT4Recomp uses. CoreGS 2.0 is in development.",
       page: "basic", group: "graphics", control: "dropdown",
       values: [
         { value: "pcsx2", label: "GSdx" },
-        { value: "coregs-1.1", label: "CoreGS 1.1 (secondary)" },
         { value: "coregs-2.0", label: "CoreGS 2.0 (coming soon)", disabled: true }
       ],
       default: "pcsx2", current: "pcsx2" },
@@ -96,7 +95,7 @@
     { id: "render_scale", label: "Render scale", help: "How sharp the picture is drawn. 100% draws it at least at your resolution; 50% is faster and softer, 200% is sharper and needs a much faster GPU.",
       page: "basic", group: "graphics", control: "slider",
       values: { min: 50, max: 200, step: 25, unit: "%" },
-      default: 100, current: 100, visible_when: { id: "renderer", equals: "pcsx2" } },
+      default: 100, current: 100 },
     { id: "fxaa", label: "Anti-aliasing (FXAA)", help: "Smooths jagged edges with a fast filter. It softens fine detail a little. Off by default.",
       page: "basic", group: "graphics", control: "toggle", values: null, default: false, current: false },
     { id: "performance_mode", label: "Performance Mode", help: "Faster on weaker PCs. Some effects that read the image back are skipped, such as headlight and sun flares and the car icons next to the gap time. Applies the next time you play.",

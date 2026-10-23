@@ -287,6 +287,9 @@ target_compile_options(mtvu_ring_fixture PRIVATE /W4)
 # TASK-084 step 1: the VIF1 chain batch payload (mtvu_vif_batch.hpp), pure host code.
 add_executable(mtvu_vif_batch_fixture mtvu_vif_batch_fixture.cpp)
 target_compile_options(mtvu_vif_batch_fixture PRIVATE /W4)
+# TASK-092: the VBlank journal decision behind GT4_MTVU=0 and GT4_MTVU_VERIFY=1 (mtvu_runtime.hpp, host-only).
+add_executable(mtvu_switch_fixture mtvu_switch_fixture.cpp)
+target_compile_options(mtvu_switch_fixture PRIVATE /W4)
 add_executable(mtvu_journal_fixture mtvu_journal_fixture.cpp)
 # TASK-011 step 3 (slice171): per-thread accounting controls (worker scopes, shared probe validity).
 add_executable(mtvu_perf_fixture mtvu_perf_fixture.cpp)

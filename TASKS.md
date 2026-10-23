@@ -57,7 +57,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑015 | LWR sign-extension fidelity check | ✅ Done (already correct; no change) |
 | TASK‑016 | IOP per-module cost counters and review | ⏸️ Deferred (not needed for 1.0.0) |
 | TASK‑017 | License-test crash | ✅ Done (2026-10-16) · license demo guard on both demo loaders (slice206, `--mode pcsx2`): licenses playable, demos that decrypt wrong are skipped as in PCSX2 default; root cause moved to TASK‑063 |
-| TASK‑018 | Racing wheels with force feedback | 📋 Planned |
+| TASK‑018 | Racing wheels with force feedback: the game sees a Logitech Driving Force GT, force feedback through SDL3, a Wheel tab in the launcher | 📋 Planned · release 1.4.0 (owner, 2026-10-22) |
 | TASK‑019 | Launcher 1.0.0 (Rust core + Tauri 2 HTML frontend) and NSIS per-user installer | ✅ Launcher merged into main (2026-10-21): setup with disc copy, gt4-gs download, settings, saves, controls (SDL3), tray, updates; owner tested end to end. Still for 1.0.0: NSIS installer build and the v1.0.0 release |
 | TASK‑020 | Decomp names in generated EE code (waits for more decompilation progress) | 📋 Planned |
 | TASK‑025 | Save manager: memory card slots, import/export | ✅ Code done, merged into `task/019-launcher`; ships with the launcher (owner test pending) |
@@ -114,11 +114,19 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑086 | Progressive 480p everywhere (menus and races at 480p through ELF patches) | ⏸️ Shelved (owner, 2026-10-21) · owner test broke the car select and the race load; branch `task/086-progressive-480p` kept |
 | TASK‑087 | GS readbacks without stalls, in CoreGS 2.0 (GPU-driven flare visibility, no EE wait) | 📋 Planned (owner, 2026-10-21) · study done (docs/GS-READBACK-STUDY.md); CoreGS 2.0 only, gt4-gs frozen |
 | TASK‑088 | Release 1.2.0: custom textures (gt4-gs texture replacements from `Documents\Gran Turismo 4\Textures`, two launcher options), 2-row bottom crop, black window from the first frame, monitor names, desktop resolution, every gt4-gs value enabled, GSdx setup choice and switch | ✅ Done (2026-10-22) · owner tested and approved; released as GT4Recomp v1.2.0 with gt4-gs 1.2.0 (fork PR #9, tag `gt4gs-v1.2.0`) |
-| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0 |
+| TASK‑089 | Respect CoreGS 1.1 selection during setup and automatic renderer maintenance (contribution by JulioHeroZ, PR #72) | ✅ Done in release 1.2.0 (merged into `task/088-custom-textures-120` with a merge commit; PR #72 closes when 1.2.0 lands on main); owner tested in 1.2.0; superseded by TASK‑096 in 1.2.3 |
 | TASK‑090 | CoreGS 3.0: modern render pipeline (VU1 work on the GPU, native effects restored one by one), opt-in; faithful renderer stays the default | 📋 Planned (owner, 2026-10-22) · after CoreGS 2.0; VU1 study in progress |
 | TASK‑091 | Release 1.2.1: per-machine install with data beside the program, user data in %APPDATA%, portable folder, silent and safe self-update, WebView2 checks (issue #80), Performance Mode, home screen layout | ✅ Done (2026-10-22) · owner approved; released as v1.2.1 |
 | TASK‑095 | Ultrawide: undistorted 2D overlay on the pre-race menu (race lobby), as TASK-080 P2 does for the race HUD | 📋 Planned (owner, 2026-10-22) · study first; idea only |
-| TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | 📋 Planned (owner, 2026-10-22) · after release 1.2.2; not on the player path |
+| TASK‑097 | Self-sufficient game executable: defaults built in (GSdx, 480p, 16:9 and ultrawide, fullscreen), paths found from the exe folder, settings read from the launcher's config file; environment variables only as test overrides | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
+| TASK‑098 | Portable build: a second launcher build shipped as a zip, user data in `user\` and large data in `data\` beside the exe, no registry or system folders, self-update by zip swap | 📋 Planned (owner, 2026-10-22) · release 1.2.4 with TASK-097 |
+| TASK‑099 | Launcher home: patch notes panel on the right (glassmorphism card), Markdown release notes of the installed version embedded in the build | 📋 Planned (owner, 2026-10-22) · release 1.2.4 |
+| TASK‑100 | Spec II support: SCUS-97436 as a second target (decision 0072), plugin injector mapped, hooks remapped | 📋 Planned (owner, 2026-10-22) · release 1.3.0 |
+| TASK‑101 | Multi-game launcher: Gran Turismo 4 and Spec II side by side (game selector, Play/Install, per-game disc, card and saves, shared settings, Spec II logo) | 📋 Planned (owner, 2026-10-23) · release 1.3.0 with TASK-100; plan docs/MULTI-GAME-LAUNCHER-PLAN.md |
+| TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
+| TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
+| TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
+| TASK‑094 | Desktop shortcut: finish-page checkbox (on by default), all-users desktop `Gran Turismo 4.lnk`, choice kept in HKLM `DesktopShortcut`, silent updates create it for older installs and restore it when chosen | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | 🧩 | **gt4-gs 1.0.0, the first stable renderer release** (with TASK‑060/061/062; settings allow-list enforced) | ✅ Published 2026-10-16 (`gt4gs-v1.0.0`, zip sha256 `2e878019...`) |
 | 🚀 | **First stable release (1.0.0) on GitHub** (after TASK‑044, TASK‑043 and the owner's end-to-end test) | 📋 Planned |
 
@@ -523,9 +531,59 @@ replay and split screen. Risks: two hard-coded halvings (`func_00218170`, `mRend
 banding in menus. For CoreGS 2.0 it moves the deinterlacers (most of M15) and field compose off the main path; a small
 interlaced fallback stays. Owner decisions open: progressive by default, CT16 or CT24 menus, movies in scope.
 
+### TASK-096 — Remove CoreGS 1.1 from the launcher
+
+State (2026-10-22): done on branch `task/096-remove-coregs11` for launcher release 1.2.3. Not merged; waiting for the owner test and approval.
+Owner decision (2026-10-22): CoreGS 1.1 is removed from the launcher. Only GSdx (the external PCSX2 GS process `gt4-gs.exe`) runs
+the game. CoreGS 1.1 stays inside the game executable (no native change) and the launcher never starts it.
+- Renderer: the choice lists GSdx (selected) and CoreGS 2.0 (coming soon, disabled). `launch::choose_renderer` refuses to start
+  the session when GSdx is not installed or fails verification; Play does not start the game.
+- Error text: "GSdx could not run the game: {reason}. Check your internet connection and try again. Details are in the log
+  folder: {folder}." Reasons: "GSdx is not installed yet", and "GSdx stopped while playing" for a restart request.
+- Restart: the game's restart-with-CoreGS-1.1 request (`GS_RESTART_MARKER`) ends the session with that error; nothing restarts.
+- Settings schema 7 (`migrate::settings_6_to_7`): a stored `renderer = "coregs11"` becomes `pcsx2`. The CoreGS 1.1 rows
+  (Internal resolution, Scaling filter, FSR sharpness, Deinterlacing, Anti-aliasing) are retired: ignored on load, dropped at the next write.
+- Setup: the renderer chooser dialog is gone; setup installs GSdx. A failed download finishes setup with a note, and Play
+  refuses until GSdx is installed.
+- Docs: README, `docs/launcher/gs-settings.toml` (`gs_engine` lists GSdx only), `docs/launcher/FLOW-AUDIT.md`. Old plans and
+  release notes keep their history.
+- Supersedes TASK-089 (its CoreGS 1.1 path no longer exists).
+- Checks: `cargo test --workspace` all green (launcher tests with the new migration, renderer-choice, restart and renderer-switch tests).
+
+### TASK-093 — Custom textures straight in the Textures folder
+State (2026-10-22): done on branch `task/093-textures-root`; waiting for gt4-gs 1.2.1 (not published yet) and the owner
+test. Planned for release 1.2.3 with TASK-092.
+- gt4-gs 1.2.1 reads the `Textures` folder itself, recursively (`Textures\replacements\...` still works). A pack goes
+  straight into `<install>\data\Textures`.
+- The launcher creates only `Textures` (no `replacements`). `RENDERER_MINIMUM` is 1.2.1: an installed gt4-gs 1.2.0 is
+  replaced at the next launch (`gs_release::needs_install`, as before with 1.0.1 and 1.2.0).
+- One-time flatten at start, after the large-data move, on the same thread (`relocation::flatten_textures`): only when
+  gt4-gs 1.2.1+ is in use (`current.txt`), only when `replacements` is a real folder (junctions and links are skipped),
+  each child renames up into `Textures`, a name already there stays in `replacements` (logged), `replacements` is
+  removed only when empty, and the first error stops the rest until the next start. Nothing is deleted or overwritten.
+  Pure logic and tests: `gt4l-core/src/textures.rs`.
+- Text: `docs/launcher/gs-settings.toml` (`texture_load`, `textures_folder` notes), the Open textures folder comment,
+  README bullet. The 1.2.1 release notes stay as history.
+
+### TASK-094 — Desktop shortcut for the installed program
+Built on branch `task/094-desktop-shortcut` (2026-10-22), waiting for the owner test; planned for launcher release 1.2.3.
+Owner request (2026-10-22): the installer makes Start-menu shortcuts only, and players want a desktop icon.
+- Interactive install and update: the finish page offers "Create a desktop shortcut", ticked by default (after "Start Gran Turismo 4"). A choice made earlier (`DesktopShortcut` = 0) unticks it.
+- The shortcut `Gran Turismo 4.lnk` is on the all-users desktop and starts `$INSTDIR\GT4Recomp.exe` (working folder and icon: the same).
+- The choice is kept in HKLM `DesktopShortcut` (1 created, 0 declined). Uninstall removes the shortcut; the app key goes with the uninstall.
+- Silent runs (`/S`, and the launcher's `/S /UPDATE` self-update): `DesktopShortcut` missing (an install from before 1.2.3, or a fresh silent install) or 1 creates or makes again the shortcut; 0 does nothing.
+Acceptance: `makensis` compiles with no new warnings; owner test of a fresh interactive install (box ticked and unticked), an update from 1.2.2 (box follows the stored choice), a silent update, and the uninstall.
+
 ### TASK-092 — MTVU test switches after TASK-084
-Planned (owner, 2026-10-22): release 1.2.2 ships the owner-tested slice262 build; this fixes the TASK-084 review
-findings afterwards. None is reachable from the launcher, which sets neither variable.
+🟡 **Done on branch (2026-10-22), waiting for release.** Branch `task/092-mtvu-test-switches`, slice264 (build recipe
+in BUILD.md "Slice 264"). Owner decisions 2026-10-22: release 1.2.2 ships the owner-tested slice262 build; this fixes
+the TASK-084 review findings afterwards. None is reachable from the launcher, which sets neither variable.
+Result: `GT4_MTVU=0` in pcsx2 mode no longer crashes (slice262: access violation, no frames; slice264: 4,200 frames,
+41 dumps, 4,200 VSYNCs at the GS); `GT4_MTVU_VERIFY=1` sends its VSYNCs (4,200 frames, 0 mismatches); the default path
+is identical to slice262 (dump hashes and GS stream session hash equal in menus and night). Open before merge: the
+`gt4vulkan.exe` pin tests (`test_make_distribution`, `test_portable_install`) still point at slice262's executable;
+the new pins (a slice264 pin set) need an owner decision on the release path. CTest 40 of 41 pass (the 41st is
+`python_native_contracts`, the same two pin tests).
 - `GT4_MTVU=0` in pcsx2 mode crashes at the first VBlank (Confirmed by reading): `mtvu_bridge.cpp` sets
   `set_vsync_deferral(settings.vblank_journal)` without checking `enabled()`, `start()` returns before the journal
   exists, and `vblank_sync()` calls `r.journal->append_vblank_flush()` on a null journal.
@@ -536,6 +594,122 @@ findings afterwards. None is reachable from the launcher, which sets neither var
   pattern holds on ARM (Hypothesis today; x86 locked RMWs already order it). Needed before the Android phase.
 - Acceptance: CTest fixtures for both switches (a VSYNC reaches the stream; no crash), the frame identity matrix and
   the GS stream session hash unchanged against slice262 with default switches, a new slice and pins.
+- 1.2.2 bug found by the CoreGS 2.0 agent (2026-10-22), fixed here: donor mode (CoreGS 1.1) crashed at the first
+  guest VBlank (exit 0xC0000005; slice262 and slice264 crash, slice240 runs). `mtvu_bridge.cpp` declares `Donor donor;`
+  and sets `post_vsync` only in pcsx2/hw mode; the struct had no initialisers, so `vblank_sync` took the TASK-084
+  deferred path and called stack garbage. Every `Donor` callback is now `= nullptr`; `native_mtvu_switches` checks a
+  Donor default-initialised over 0xFF memory. slice268 (O:\gt4recomp-scratch\slice268-build, the slice264 recipe):
+  CTest 40/40; headless menus with `--renderer donor` and `pcsx2` both run (exit 0). The launcher drops CoreGS 1.1 in
+  1.2.3 (TASK-096); the fix stays as protection for runs without the launcher and the built-in restart path.
+
+### TASK-101 — Multi-game launcher (Gran Turismo 4 and Spec II)
+Planned (owner, 2026-10-23) for release 1.3.0, the product side of TASK-100 (its S9). Plan and owner decisions:
+[docs/MULTI-GAME-LAUNCHER-PLAN.md](docs/MULTI-GAME-LAUNCHER-PLAN.md). One executable per game, one shared settings set,
+per-game disc, prepared files, card, saves and replays (saves are incompatible both ways and share the PS2 folder
+name), identification by ISO, the selected game is the last played, Spec II 1.10 and same-executable variants, and
+the Spec II logo on the home screen when it is selected.
+
+### TASK-100 — Spec II support (release 1.3.0)
+Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
+the SCUS-97436 Public Beta lineage image with its own target executable, not a content merge into v2.00. Identity
+study: docs/SPEC2-STUDY.md. Expected to be most of the work at the start; once one Spec II build runs, keeping it
+working should be much cheaper. Work to map first:
+- How Spec II's plugin injector puts its code and scripts into the game at start (where the injected MIPS code and
+  data come from, when it runs, what it patches). Everything the EE runs must be compiled ahead of time (no JIT), so
+  the injected code has to be captured and translated like the rest of the ELF, or its effects reproduced natively.
+- A second EE pipeline: `SCUS_974.36` (no `CORE.GT4`) through the donor translator into its own pinned library,
+  with its own manifests, coverage runs and "no translated code" hunt.
+- Our own game-side hooks are bound to v2.00 addresses and must be remapped (decomp names where gt4-decomp helps):
+  the 16:9 hold (TASK-079), the aspect/race camera and HUD hooks (TASK-080), the 480p race display (GT4_FORCE_480P),
+  the license demo guard, the memory card store, the MTVU/VU1 AOT (Spec II VU1 microcode image and its keys), VU0
+  AOT, the IOP IRX set, and every pinned constant in docs/inputs.
+- Adhoc v7 scripts and the natives Spec II registers (menus, GT mode, `projects/%s/%s`), the `GT4_PREMIUM_US2560`
+  spec database, `/sound_gt` and `carsound` paths: data the game reads, so they need no translation, but every native
+  the scripts call must exist in the translated executable.
+- Launcher: a second game target (disc identity check, setup, saves kept apart from v2.00), chosen per disc image.
+
+### TASK-099 — Patch notes panel on the launcher home screen
+Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new
+block on the right shows the patch notes of the installed version, rendered from Markdown, in a light, minimal
+glassmorphism card (translucent background with a backdrop blur, thin border, soft shadow) that matches the current
+dark theme.
+
+Plan:
+- Source: the release notes the project already writes, `docs/release-notes/<version>.md` (the same text as the
+  GitHub release body). The launcher build embeds the file of its own version (`include_str!` from the version in
+  `Cargo.toml`, with a build check that the file exists), so it works offline, in the installer and the portable
+  build (TASK-098), and can never be missing or edited by accident. A file beside the launcher is not needed.
+- When an update is available, the panel can also show the new version's notes, read from the GitHub release body
+  that the update check already downloads (`releases.rs`), with the update button next to them. Optional, after
+  the basic panel.
+- Rendering: a small Markdown subset (headings, paragraphs, bold/italic, inline code, lists, links, tables if
+  cheap) converted to HTML in Rust with an MIT crate (for example pulldown-cmark), raw HTML disabled and the output
+  escaped; links open in the default browser through the existing opener, never inside the web view. A link at the
+  bottom: "All release notes on GitHub".
+- UI (`ui/js/pages/home.js`, `ui/css/app.css`): the right-side card scrolls on its own; on narrow windows it moves
+  under the buttons or hides behind a "What's new" button; keyboard and gamepad focus can reach and scroll it; the
+  WebView2 safe mode (no GPU) falls back to a plain translucent background without blur.
+- Release notes style: start each file with a short "Highlights" list so the panel reads well; the long sections
+  stay below.
+- Tests: Rust tests for the Markdown conversion (escaping, links, no raw HTML) and the embedded version; the UI mock
+  shows the panel with real notes; the owner checks the look.
+
+### TASK-098 — Portable build (zip) beside the installer
+Planned (owner, 2026-10-22) for release 1.2.4, together with TASK-097. Two launcher builds from one source: the
+installer build (as today) and a portable build shipped as a zip. The portable copy keeps everything in its own
+folder, so it can be carried to another PC as one folder. No path is hardcoded: every folder is found from the
+folder of `GT4Recomp.exe`.
+
+Layout of the portable folder:
+- `GT4Recomp.exe` (portable build), `SDL3.dll`, `game\` (game executable, shaders, runtimes), licences.
+- `user\`: what the installer build keeps in `%APPDATA%\GT4Recomp`: `config\settings.toml`, `controls.toml`,
+  `Saves`, `Replays`, `backups`. Shipped in the zip (empty).
+- `data\`: as in the installer build: disc copy, prepared files, `gs\` (gt4-gs versions and caches), runtime card,
+  sessions, logs, `Textures`.
+
+Map of the work:
+- Build kind: a Cargo feature (`portable`) gives a compile-time build kind; `build-release.ps1` builds both
+  (`-Portable`); Settings > About shows "Portable".
+- Paths (`gt4l-core/src/paths.rs`, `resolve_layout`): in the portable build `UserDirs` = `<exe dir>\user` (a new
+  `UserRootSource::Portable`) and `DataDirs` = `<exe dir>\data`, with no read layers and no `%LOCALAPPDATA%` write
+  fallback: a folder that cannot be written (for example a copy inside Program Files) gives a clear message to move
+  the folder somewhere writable. `UserDirs::new` already builds the standard layout under one root.
+- No registry and no system places in the portable build: no `InstallDir`/`PreviousDataDir` reads
+  (`relocation.rs` `previous_data_for`), no 1.2.0 legacy migration from `%LOCALAPPDATA%` and Documents
+  (`relocate.rs`; an optional "import saves from the installed GT4Recomp" button can come later), no
+  `clean_old_install`, no Start-menu or desktop shortcuts, no uninstall entry.
+- Self-update for the portable build (`updates.rs`, `releases.rs`): the launcher stream gets a second asset,
+  `GT4Recomp-<version>-portable.zip`, listed in the release `SHA256SUMS`. The portable launcher downloads it, checks
+  it, extracts it to `<exe dir>\.update-staging`, renames the running `GT4Recomp.exe` aside (Windows allows renaming
+  a running exe), swaps the program files in (never `user\` or `data\`), restarts itself, and removes the old copy at
+  the next start; a failure rolls back as the installer's swap does (TASK-091). No administrator prompt.
+- gt4-gs: unchanged; it is downloaded into `data\gs` as today (portable already; check its caches stay in `data\gs`).
+- Single instance: the lock is per folder, so two portable copies (or a portable and the installed one) on one PC do
+  not block each other but one copy cannot start twice.
+- WebView2: the portable zip cannot install it; the TASK-091 detection message (with the download link) covers it.
+- Game executable (TASK-097): one game build for both. When it starts on its own it reads the settings from
+  `<install>\user\config` if that folder exists, else from `%APPDATA%\GT4Recomp\config`; the installer never creates
+  `user\`.
+- Release: `scripts/make_distribution.py` or a new script makes the zip (with the empty `user\` and `data\`
+  folders) from the same files as the installer; release notes and README explain both downloads.
+- Tests: `cargo test --workspace` for both builds (`--features portable`); path resolution, no registry use, the
+  portable self-update swap and rollback with an injected file system, the per-folder lock.
+
+### TASK-097 — Self-sufficient game executable
+Planned (owner, 2026-10-22) for release 1.2.4, after the 1.2.3 hotfix. Principle: the game runs on its own with the
+same defaults every time; the launcher is only an easier way to start it and to manage settings. Today a double click
+on gt4vulkan.exe does not start the game: the launcher passes about 14 arguments and variables (ELF, disc, card,
+window; GT4_RENDERER, GT4_GS_PROCESS(_SHA256), GT4_GS_CONFIG; GT4_FORCE_480P, GT4_FORCE_WIDESCREEN,
+GT4_DISPLAY_ASPECT; GT4_FULLSCREEN, GT4_PRESENT_MODE, GT4_MONITOR, GT4_OUTPUT_SIZE, ...). Plan:
+- Built-in defaults: GSdx (pcsx2 renderer), 480p race display, 16:9 hold with the automatic ultrawide correction,
+  fullscreen, vsync. The variables stay as developer/test overrides; test harnesses and pins that assume today's
+  defaults set them explicitly.
+- Paths from the exe folder (`<install>\data`): prepared ELF, disc copy, runtime card, the gt4-gs version in use
+  (`data\gs\current.txt`), checked as the launcher checks them.
+- Settings: the launcher writes the player's choices (monitor, resolution, GSdx options, the gt4-gs.ini) to
+  `%APPDATA%\GT4Recomp\config`; the game reads them at start, so a direct start honours them.
+- Missing pieces (no prepared files, no GSdx): a clear message that says to open the launcher once.
+- New game slice with the frame identity checks, launcher changes, tests.
 
 ### TASK-095 — Ultrawide: undistorted pre-race menu overlay
 Planned (owner, 2026-10-22), idea to study later. At ratios wider than 16:9 (owner screenshot at 3440x1440, Time Trial
@@ -626,6 +800,11 @@ Owner decisions (2026-10-21). Release 1.2.0 of both the game/launcher and gt4-gs
 ### TASK-018 — Racing wheels
 High-level emulation at the PDIUSB boundary with SDL3 wheels and force feedback
 (docs/MENUS-AND-WHEEL.md). Builds on the TASK-075 SDL3 input layer.
+Release 1.4.0 (owner, 2026-10-23; was 1.3.0 before Spec II moved ahead): the game must recognise the connected wheel as a Logitech Driving Force GT
+(900-degree range and force feedback in GT4), whatever wheel SDL3 finds (Logitech, Thrustmaster, Fanatec); the
+game's force-feedback commands go to SDL3 haptics. The launcher gets a new Wheel tab (detection, rotation, force
+feedback strength, pedals and buttons, a live test). Study first: the GT4 USB stack (USBD, PDIUSB, LGDEV IRX,
+docs/IOP-MAP.md), where to answer as a DFGT, and the force-feedback command set.
 
 ### TASK-075 — Input layer on SDL3
 Owner decision 2026-10-21. Replace the game's XInput-only pad code (native/host_io.cpp) with one input layer on
@@ -1292,6 +1471,10 @@ ARM64 build, iOS host layers, signing/installation on iPhone 15 Pro Max and
 
 LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
 settings menus.
+
+**Release plan (owner, 2026-10-22):** big features take a minor version, intermediate updates and hotfixes the
+patch number: 1.2.3 hotfix, 1.2.4 (TASK-097, 098, 099), 1.3.0 Spec II (TASK-100, on GSdx), 1.4.0 wheels (TASK-018) (owner, 2026-10-23: Spec II moved ahead);
+2.0.0 is CoreGS 2.0 (phase 2).
 
 **Spec II is a second target** (owner, 2026-10-22): support means the SCUS-97436
 Public Beta lineage ISO with its own target executable, not a content merge into

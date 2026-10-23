@@ -2310,6 +2310,43 @@ Builds (all paths absolute):
   Not run on this PC.
 - Measured: the launcher start timings (`ui ready after N ms`, phases before the window) and the installer phases
   (setup.log `timings ms:`) come from the owner's run. No launcher window was opened here.
+## Slice 264 - TASK-092 (MTVU test switches, doorbell ordering)
+
+Build recipe: the slice262 recipe with `-S C:\Antigravity\gt4-wt-092-mtvu-switches` and `-B O:\gt4recomp-scratch\slice264-build\build`
+(C: is short of space). Every other `-D` value is the slice262 cache value (runtime capsule
+`private/slice262-frame-cost-runtime`, guard `private/slice262-license-guard-runtime`, `GT4_EE_PROFILE=aspect`,
+`GT4_RELEASE_DISTRIBUTION=ON`). No new capsule and no new pin files in this slice.
+
+Changes (`native/`): `vblank_journal_active(Settings)` in `mtvu_runtime.hpp` (`vblank_journal && enabled && !verify`) is
+the one condition for `set_vsync_deferral` in `mtvu_bridge.cpp` and for `defer` in `vblank_sync()`; `mtvu_ring.hpp`
+uses seq_cst on the doorbell handshake operations (`value_` fetch_add and load, `sleepers_` load and fetch_add in
+`ring`/`wait_changed`; the statistics counters stay relaxed).
+
+Checks:
+
+- CTest: 40 of 41 pass. New `native_mtvu_switches` (`mtvu_switch_fixture.cpp`) passes: the 8-row truth table and the
+  defaults. The failing test is `python_native_contracts`: `test_make_distribution` and `test_portable_install` check
+  `gt4vulkan.exe` against the pin in `docs/inputs/slice262-pcsx2.json`, which the new executable differs from (pin
+  `a0c7b5c0...`, slice264 `b9af2251...`). The same two tests pass on slice262 (Python 640 OK, 42 skipped, with
+  `GT4_NATIVE_BUILD` = slice262), so they fail only through the executable change; a new pin set is an owner decision.
+- Python with `GT4_NATIVE_BUILD` = slice264: 638 of 640 pass with the two tests above failing.
+- Headless identity (`scripts/frame_cost_headless.py`, 1x, `--env GT4_GS_STREAM_HASH=1`, default switches; hashes
+  from `dumps.sha256`, the stream hash from the `[gs-ipc] session stream hash` line):
+
+  | scene | build | dumps | dumps.sha256 (first 16) | GS stream hash |
+  |---|---|---|---|---|
+  | menus | slice262 | 41 | 463d455c3204cb56 | 1ccb97c58a6d2945 |
+  | menus | slice264 | 41 | 463d455c3204cb56 | 1ccb97c58a6d2945 |
+  | night | slice262 | 159 | c57e7d03aaccb3aa | c091716e3cb40d79 |
+  | night | slice264 | 159 | c57e7d03aaccb3aa | c091716e3cb40d79 |
+
+- Switches (menus, 4,200 frames): `GT4_MTVU=0` on slice264 exit 0, 41 dumps, 4,200 VSYNCs at the GS, stream hash
+  1ccb97c58a6d2945 (same as the default path); on slice262 it exits 0xC0000005 (access violation) after about 1 s with
+  no dumps (the before evidence). `GT4_MTVU_VERIFY=1` on slice264: `[mtvu] verify frames 4200 mismatches 0`, 41 dumps,
+  4,200 VSYNCs, stream hash 1ccb97c58a6d2945.
+- Run folders: `O:\gt4recomp-scratch\slice264-runs\` (`menus-262`, `menus-264`, `mtvu0-264-menus`, `verify-264-menus`,
+  `mtvu0-262-menus`, `night-262`, `night-264`). Not a perf benchmark.
+
 ## Slice 260/262 - TASK-084 frame cost, runtime side (`--mode pcsx2`)
 
 Owner request 2026-10-21; study `docs/FRAME-COST-STUDY.md`. Item 1 of the study (deferred flare readback) is out by

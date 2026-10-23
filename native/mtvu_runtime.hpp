@@ -39,6 +39,14 @@ struct Settings {
   static constexpr bool kPrivilegedAsyncDefault = true;
 };
 
+// TASK-092: the one condition for the VBlank journal (the VSYNC is a journal entry, and the GS client holds the field
+// until the entry runs). It needs the worker (enabled), the switch on, and no verify (verify keeps the blocking drain
+// so both sides are idle). The GS client deferral (mtvu_bridge.cpp) and vblank_sync() both use this function, so the
+// two sites cannot drift apart.
+inline bool vblank_journal_active(const Settings &settings) {
+  return settings.vblank_journal && settings.enabled && !settings.verify;
+}
+
 // Each switch accepts unset, "0" or "1"; GT4_MTVU_REPORT_EVERY accepts unset or a VBlank count. Any other value
 // throws std::invalid_argument naming the variable.
 Settings parse_settings(const char *mtvu, const char *verify, const char *strict, const char *report_every,
@@ -60,9 +68,9 @@ bool queue_privileged(std::uint32_t address, std::uint64_t value);
 std::uint64_t take_privileged_wait_us();
 
 // Donor operations. The worker callbacks run on the worker thread; render_gs runs on the EE thread.
+// Every callback starts null (1.2.2 bug, TASK-092): donor mode never sets post_vsync, and an uninitialised pointer
+// sent vblank_sync into the TASK-084 deferred path and a call through stack garbage at the first VBlank.
 struct Donor {
-  // Every callback starts null: a caller that sets only some of them (start_with_donor sets post_vsync only in
-  // pcsx2/hw mode) must never leave an indeterminate pointer behind (the 1.2.2 donor-mode crash at the first VBlank).
   void (*worker_vif_packet)(const std::uint8_t *data, std::uint32_t qwc) = nullptr;
   void (*worker_vif_write)(std::uint32_t reg, std::uint32_t value) = nullptr;
   void (*worker_vu_reset)() = nullptr;

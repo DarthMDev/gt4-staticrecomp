@@ -305,7 +305,7 @@
       keyNodes.push(h("span", { class: "hint-text", text: "Limited to " + control.limited + " on this GPU" }));
     }
     if (row.note) {
-      // A row that is shown but not available now (Performance Mode with CoreGS 1.1: "GSdx only").
+      // A row that is shown but not available now (the launcher sends `note` only for such a row).
       keyNodes.push(h("span", { class: "hint-text", text: row.note }));
     }
     return h("div", { class: "row" + (row.disabled ? " is-disabled" : ""), data: { row: row.id } }, [
@@ -445,7 +445,7 @@
         var graphics = section(ctx, "graphics", "Graphics", basic.filter(function (row) {
           return (row.group || "graphics") === "graphics";
         }));
-        // TASK-088: opens <install>\data\Textures (TASK-091; its replacements folder is made first). Next to the texture options.
+        // TASK-088: opens <install>\data\Textures (TASK-091; made first, TASK-093: no replacements subfolder). Next to the texture options.
         if (graphics) {
           // Inline progress of a switch to GSdx (renderer-progress events; app.js sets the text).
           var rendererStatus = h("p", { class: "note renderer-status", role: "status", data: { action: "renderer-status" }, text: "" });

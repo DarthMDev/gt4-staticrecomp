@@ -653,7 +653,9 @@ void vblank_sync() {
   // TASK-084 step 3: in pcsx2 mode the VSYNC is a journal entry after the frame's VU1 output, so the EE does not
   // drain here. The verify comparison needs both sides idle, so it keeps the blocking drain; donor mode (CoreGS 1.1)
   // always drains because its present reads the output.
-  const bool defer = r.settings.vblank_journal && r.donor.post_vsync != nullptr && !r.settings.verify;
+  // TASK-092: the same condition as the GS client deferral (vblank_journal_active); with the worker off there is no
+  // journal to append to.
+  const bool defer = vblank_journal_active(r.settings) && r.donor.post_vsync != nullptr;
   if (!defer) {
     sync("vblank");
     after_vblank_output();

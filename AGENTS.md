@@ -149,6 +149,42 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
   headline result, a known issue).
 - Ask the owner only for decisions and gameplay tests, not code review.
 
+## Releases and release notes (owner, 2026-10-23)
+
+- **Version numbers:**
+  - a big feature gets a minor version (1.x.0);
+  - intermediate updates and hotfixes get the patch number (1.x.y);
+  - the plan is in ai-memory `decisions/release-plan-1x`.
+- **Every release has two notes files, written before the build** (the launcher does not build without its own):
+  - **Full notes:** `docs/release-notes/<version>.md`.
+    - The GitHub release body: complete and technical.
+    - Covers install or update steps, every change, fixes, known issues, requirements and credits.
+  - **Launcher notes:** `docs/release-notes/launcher/<version>.md`, shown in the launcher's "What's new" card (the
+    launcher embeds every launcher note up to its own version).
+    - Short and plain, for a player who is not technical; readable in a few seconds.
+    - Format: a `# GT4Recomp <version>` title, then one bold sentence that sums up the release.
+    - Then a few bullets under `## New`, `## Fixes`, `## Performance` or `## Good to know`, in that spirit:
+      new features first, then fixes.
+    - No internal names (task numbers, slices, files, environment variables, renderer internals) and no long
+      explanations.
+    - Give a measured number whenever there is one (for example "about 15% less processor work per frame"), taken
+      from a real measurement and never invented.
+    - About 5-10 bullets at most.
+    - **Two languages** (owner, 2026-10-23): the en-US note above, plus the same note in Brazilian Portuguese in
+      `docs/release-notes/launcher/pt-BR/<version>.md`. Headings there: Novidades, Correções, Desempenho, Bom saber,
+      Agradecimentos. The launcher shows the note in its interface language and falls back to en-US when the pt-BR
+      file is missing; write both for every release.
+- **Release steps:**
+  - Bump the version in `launcher/Cargo.toml`, `Cargo.lock` (workspace crates only), `tauri.conf.json` and the
+    installer default.
+  - Pin new game builds in new `docs/inputs` files.
+  - Build the launcher with `launcher/tools/build-release.ps1` and the installer with makensis.
+  - Check the installer contents against their sources.
+  - The owner tests the installer before anything is public.
+  - Then the PR, the merge, the tag `vX.Y.Z` and the GitHub release: the full notes as the body, the installer and
+    `SHA256SUMS` as assets.
+  - Update the README badge and download name, and STATUS.
+
 ## Testing the game
 
 - While the owner is awake, the owner plays and reports: F7 starts an interval,

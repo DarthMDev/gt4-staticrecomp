@@ -124,7 +124,7 @@ class ProbeTests(unittest.TestCase):
 
     def test_performance_accepts_the_task076_keyboard_identity(self):
         root = Path(__file__).resolve().parents[2]
-        manifest = (root / 'docs/inputs/slice262-pcsx2.json').resolve()
+        manifest = (root / 'docs/inputs' / probe.PERF_PROFILES['pcsx2'][0]).resolve()
         evidence = json.loads(manifest.read_text(encoding='utf-8'))
         self.assertIn(evidence['keyboard_input_fix'], probe.PERFORMANCE_KEYBOARD_FIXES)
         probe.verify_performance_profile(manifest, evidence, root)

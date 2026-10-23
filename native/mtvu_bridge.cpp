@@ -61,7 +61,7 @@ void start_with_donor(const Settings &settings) {
     // TASK-062: the VU1 worker busy time for the GS process's performance overlay (OSD_STATS).
     gt4::gs_stream::set_worker_busy_source(&worker_busy_us);
     // TASK-084 step 3: the VSYNC becomes a journal entry after the frame's VU1 output (GT4_MTVU_VBLANK_JOURNAL).
-    gt4::gs_stream::set_vsync_deferral(settings.vblank_journal);
+    gt4::gs_stream::set_vsync_deferral(vblank_journal_active(settings));
     donor.post_vsync = &post_vsync;
   }
 #endif

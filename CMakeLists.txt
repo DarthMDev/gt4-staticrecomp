@@ -86,6 +86,8 @@ add_test(NAME native_mtvu_journal COMMAND $<TARGET_FILE:mtvu_journal_fixture>)
 add_test(NAME native_mtvu_perf COMMAND $<TARGET_FILE:mtvu_perf_fixture>)
 # TASK-084 step 1: the VIF1 chain batch payload (pure host code, round-trips and rejects malformed records).
 add_test(NAME native_mtvu_vif_batch COMMAND $<TARGET_FILE:mtvu_vif_batch_fixture>)
+# TASK-092: GT4_MTVU=0 / GT4_MTVU_VERIFY=1 decision (one condition for the GS client deferral and vblank_sync).
+add_test(NAME native_mtvu_switches COMMAND $<TARGET_FILE:mtvu_switch_fixture>)
 # TASK-035: GS stream transport (threads and a child process) and the game-side client end to end with the recorder.
 add_test(NAME native_gs_stream_ipc COMMAND $<TARGET_FILE:gs_stream_ipc_fixture>)
 add_test(NAME native_gs_stream_client

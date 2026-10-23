@@ -4,7 +4,7 @@
 use gt4controls::{Controls, Curve, Stick, TriggerTuning, BUTTON_INPUTS};
 use gt4l_core::display::{self, Monitor};
 use gt4l_core::gs_table;
-use gt4l_core::settings::{self, Kind, Page, SettingDef, Settings, SETTINGS};
+use gt4l_core::settings::{Kind, Page, SettingDef, Settings, SETTINGS};
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -24,7 +24,7 @@ pub fn pcsx2_table_rows() -> Vec<&'static gs_table::Row> {
 }
 
 /// The payload of `get_settings_table`: `{max_upscale, rows}`. Launcher rows come from `SETTINGS`, PCSX2 GS rows from
-/// the table file; both use the row shape of ui/dev/README.md. Rows of the other renderer are sent with `visible_when`.
+/// the table file; both use the row shape of ui/dev/README.md. GSdx is the only renderer (TASK-096), so no row depends on it.
 pub fn settings_table(settings: &Settings, controls: &Controls) -> Value {
     settings_table_with_monitors(settings, controls, &[])
 }
@@ -81,8 +81,7 @@ fn fill_resolution_row(row: &mut Value, settings: &Settings, monitors: &[Monitor
 }
 
 /// The Render scale slider's readout per step: "100% · 4x · 2560x1792" for the output size the game would use now
-/// (1920 x 1080 when no monitor is known). Shown only for the PCSX2 GS (CoreGS 1.1 is retired and keeps its own
-/// internal resolution).
+/// (1920 x 1080 when no monitor is known).
 fn fill_render_scale_row(row: &mut Value, settings: &Settings, monitors: &[Monitor]) {
     let output = display::resolve_target(monitors, settings.get("monitor"), settings.get("resolution"))
         .map(|target| target.output)
@@ -95,16 +94,12 @@ fn fill_render_scale_row(row: &mut Value, settings: &Settings, monitors: &[Monit
     }
     row["values"]["labels"] = Value::Object(labels);
     row["values"]["output"] = json!(output.text());
-    row["visible_when"] = json!({ "id": "renderer", "equals": settings::PCSX2_GS });
 }
 
 /// The settings table with the connected monitors (TASK-080 addendum: Monitor, Resolution and Render scale).
 pub fn settings_table_with_monitors(settings: &Settings, controls: &Controls, monitors: &[Monitor]) -> Value {
     let mut rows: Vec<Value> = Vec::new();
     for definition in SETTINGS {
-        if !settings.applies(definition.id) {
-            continue;
-        }
         let mut row = launcher_row(definition, settings);
         match definition.id {
             "monitor" => fill_monitor_row(&mut row, settings, monitors),
@@ -186,10 +181,6 @@ fn launcher_row(definition: &SettingDef, settings: &Settings) -> Value {
     row
 }
 
-/// PCSX2 GS rows that only apply to GSdx (the PCSX2 renderer). With CoreGS 1.1 they stay in the table, disabled with a
-/// note; the other GS rows are hidden there (`visible_when`). TASK-091: Performance Mode.
-const GSDX_ONLY_ROWS: &[&str] = &["performance_mode"];
-
 /// The two choices of a toggle over an enum row (table `control = "toggle"`): (Off, On). The first choice is Off.
 pub fn toggle_choices(row: &gs_table::Row) -> Option<(&str, &str)> {
     if row.kind == "enum" && gs_table::ui_control(row) == "toggle" && row.choices.len() == 2 {
@@ -253,15 +244,6 @@ fn gs_row(row: &gs_table::Row, settings: &Settings) -> Value {
         "default": default,
         "current": current,
     });
-    if GSDX_ONLY_ROWS.contains(&row.id.as_str()) {
-        let on_gsdx = settings.get("renderer") == settings::PCSX2_GS;
-        out["disabled"] = json!(!on_gsdx);
-        if !on_gsdx {
-            out["note"] = json!("GSdx only");
-        }
-    } else {
-        out["visible_when"] = json!({ "id": "renderer", "equals": settings::PCSX2_GS });
-    }
     match row.page.as_str() {
         "Graphics" => out["group"] = json!("graphics"),
         "Display" => out["group"] = json!("display"),
@@ -581,8 +563,6 @@ pub fn licenses_text() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use gt4l_core::launch;
-    use std::collections::BTreeMap;
 
 
     #[test]
@@ -734,7 +714,7 @@ mod table_tests {
                    (Some(50), Some(200), Some(25)));
         assert_eq!(scale["current"], 100);
         assert_eq!(scale["values"]["labels"]["100"], "100% \u{00B7} 3x \u{00B7} 1920x1344");
-        assert_eq!(scale["visible_when"]["equals"], "pcsx2", "CoreGS 1.1 keeps its own internal resolution");
+        assert!(scale.get("visible_when").is_none(), "GSdx is the only renderer: no visibility rule");
         assert_eq!(scale["group"], "graphics");
     }
 
@@ -747,19 +727,8 @@ mod table_tests {
         assert_eq!(mode["group"], Value::Null);
         assert_eq!(mode["default"], json!(false));
         assert_eq!(mode["current"], json!(false));
-        assert_eq!(mode["disabled"], json!(false));
+        assert!(mode.get("disabled").is_none(), "GSdx is the only renderer: never disabled");
         assert!(mode.get("visible_when").is_none(), "shown under GSdx without a visibility rule");
-    }
-
-    #[test]
-    fn performance_mode_is_disabled_with_a_gsdx_only_note_under_coregs11() {
-        let mut settings = Settings::default();
-        settings.set("renderer", "coregs11").unwrap();
-        let table = settings_table(&settings, &Controls::default());
-        let mode = row(&table, "performance_mode");
-        assert_eq!(mode["disabled"], json!(true));
-        assert_eq!(mode["note"], "GSdx only");
-        assert!(mode.get("visible_when").is_none(), "shown disabled, not hidden");
     }
 
     #[test]
@@ -782,25 +751,26 @@ mod table_tests {
     }
 
     #[test]
-    fn renderer_dropdown_offers_pcsx2_and_coregs11_and_greys_coregs20() {
+    fn renderer_dropdown_offers_gsdx_and_greys_coregs20() {
         let table = settings_table(&Settings::default(), &Controls::default());
         let renderer = row(&table, "renderer");
         assert_eq!(renderer["current"], "pcsx2");
         assert_eq!(renderer["control"], "dropdown");
         let values = renderer["values"].as_array().unwrap();
-        assert_eq!(values.len(), 3);
-        assert_eq!(values[2]["value"], "coregs20");
-        assert_eq!(values[2]["disabled"], true);
+        assert_eq!(values.len(), 2, "GSdx and CoreGS 2.0 only; CoreGS 1.1 is gone (TASK-096)");
+        assert_eq!(values[1]["value"], "coregs20");
+        assert_eq!(values[1]["disabled"], true);
+        let listed = ids(&table);
+        for gone in ["internal_scale", "present_filter", "fsr_sharpness", "deinterlacing", "anti_aliasing"] {
+            assert!(!listed.contains(&gone.to_string()), "{gone} was a CoreGS 1.1 row");
+        }
     }
 
     #[test]
-    fn coregs11_hides_its_upscale_fsr_aa_and_deinterlace_options() {
+    fn a_stored_coregs11_renderer_is_not_a_choice_any_more() {
         let mut settings = Settings::default();
-        settings.set("renderer", "coregs11").unwrap();
-        let listed = ids(&settings_table(&settings, &Controls::default()));
-        for hidden in ["internal_scale", "present_filter", "fsr_sharpness", "deinterlacing", "anti_aliasing"] {
-            assert!(!listed.contains(&hidden.to_string()), "{hidden} must stay hidden");
-        }
+        assert!(settings.set("renderer", "coregs11").is_err());
+        assert_eq!(settings.get("renderer"), "pcsx2");
     }
 
     #[test]
@@ -813,10 +783,10 @@ mod table_tests {
     }
 
     #[test]
-    fn pcsx2_rows_show_only_for_the_pcsx2_renderer() {
+    fn pcsx2_rows_are_shown_without_a_renderer_rule() {
         let table = settings_table(&Settings::default(), &Controls::default());
         let fxaa = row(&table, "fxaa");
-        assert_eq!(fxaa["visible_when"]["equals"], "pcsx2");
+        assert!(fxaa.get("visible_when").is_none(), "GSdx is the only renderer");
         assert_eq!(table["max_upscale"], MAX_UPSCALE_DEFAULT);
         assert!(!pcsx2_table_rows().iter().any(|row| row.id == "upscale"), "the internal resolution is derived");
     }

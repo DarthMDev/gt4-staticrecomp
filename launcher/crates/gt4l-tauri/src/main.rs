@@ -131,6 +131,7 @@ fn main() {
             // The 1.2.0 large data moves first (Play and setup wait for it), then the version file and update check.
             std::thread::spawn(move || {
                 relocation::move_large_data(&launch_shared, &legacy);
+                relocation::flatten_textures(&launch_shared);
                 updates::check_on_launch(launch_app, launch_shared);
             });
             // TASK-091 (1.2.1): the old per-user install clean-up runs in the background, after the window exists.
