@@ -17,7 +17,7 @@
 (function (root) {
   "use strict";
   var GT4 = root.GT4;
-  var TABS = ["graphics", "controls", "saves", "replays", "about"];
+  var TABS = ["graphics", "controls", "games", "saves", "replays", "about"];
   var lines = [];
   var failures = 0;
 
@@ -505,6 +505,63 @@
     await wait(400);
   }
 
+  // Two games (TASK-101): the home selector, Play or Install, the logo line, Settings > Games and the game on the Saves
+  // title. The mock starts with Gran Turismo 4 installed and Spec II not (?games=gt4).
+  async function gamesChecks() {
+    await setHash("#/home");
+    await wait(500);
+    var pills = document.querySelectorAll(".game-pill");
+    check("Home has a selector with both games", pills.length === 2, String(pills.length));
+    var playButton = document.querySelector(".play:not(.play-square)");
+    var home = document.querySelector(".home");
+    check("Gran Turismo 4 is selected first and shows Play", !!pills[0] && pills[0].classList.contains("is-selected") &&
+      playButton.textContent === "Play" && !home.classList.contains("is-spec2"), playButton ? playButton.textContent : "no button");
+    check("a game that is not installed is marked in the selector", !!pills[1] && pills[1].classList.contains("not-installed"), "");
+    pills[1].click();
+    await wait(400);
+    playButton = document.querySelector(".play:not(.play-square)");
+    home = document.querySelector(".home");
+    check("selecting Spec II shows Install in place of Play", playButton.textContent === "Install", playButton.textContent);
+    check("selecting Spec II swaps the logo line", home.classList.contains("is-spec2") &&
+      !!document.querySelector(".home-logo-spec2") && document.querySelector(".home-logo-spec2").textContent === "Spec II", "");
+    check("the selected pill follows the choice", document.querySelectorAll(".game-pill")[1].classList.contains("is-selected"), "");
+    GT4.hooks.tabs(-1);
+    await wait(400);
+    check("LB / RB switches back to Gran Turismo 4 and Play", document.querySelector(".play:not(.play-square)").textContent === "Play" &&
+      !document.querySelector(".home").classList.contains("is-spec2"), "");
+    check("the pad hints name the game switch", /LB \/ RB/.test(document.getElementById("hints").textContent), document.getElementById("hints").textContent);
+
+    await setHash("#/settings/games");
+    await wait(400);
+    var rows = document.querySelectorAll(".game-row");
+    check("Settings > Games lists both games", rows.length === 2, String(rows.length));
+    var labels = Array.prototype.map.call(rows[0].querySelectorAll("button"), function (b) { return b.textContent; });
+    check("an installed game offers Change disc image and Remove", labels.join("|") === "Change disc image|Remove", labels.join("|"));
+    var other = Array.prototype.map.call(rows[1].querySelectorAll("button"), function (b) { return b.textContent; });
+    check("a game that is not installed offers Install", other.join("|") === "Install", other.join("|"));
+    rows[0].querySelectorAll("button")[1].click();
+    await wait(200);
+    var dialog = document.querySelector(".modal");
+    check("Remove asks first and says the saves are kept", !!dialog && /saves and replays are kept/i.test(dialog.textContent), dialog ? dialog.textContent : "no dialog");
+    if (dialog) {
+      GT4.ui.topDialog().close();
+    }
+
+    await setHash("#/settings/saves");
+    await wait(400);
+    var tag = document.querySelector(".game-tag");
+    check("the Saves title names the game", !!tag && tag.textContent === "Gran Turismo 4", tag ? tag.textContent : "no tag");
+    await GT4.games.select("spec2");
+    await setHash("#/settings/replays");
+    await wait(400);
+    await setHash("#/settings/saves");
+    await wait(400);
+    tag = document.querySelector(".game-tag");
+    check("another game has its own list and title", !!tag && tag.textContent === "Gran Turismo 4 Spec II" &&
+      !!document.querySelector(".emptystate"), tag ? tag.textContent : "no tag");
+    await GT4.games.select("gt4");
+  }
+
   async function run() {
     await wait(300);
     var scenario = new URLSearchParams(root.location.search).get("scenario") || "";
@@ -528,6 +585,7 @@
       await valueChecks();
       await advancedSectionChecks();
       await controlsChecks();
+      await gamesChecks();
     } catch (err) {
       check("the checks ran to the end", false, String(err && err.message ? err.message : err));
     }

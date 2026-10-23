@@ -5,7 +5,11 @@
  *
  * Query options (ui/dev/index.html?...):
  *   setup=done|needed|wrong|copying|checking|preparing|renderer|failed|missing|offline   (default done)
- *   pick=spec                                       (setup: the picker returns a Spec II image, refused)
+ *   pick=spec                                       (setup: the picker returns an unsupported image, refused)
+ *   pick=other                                      (setup: the picker returns the other game's disc, a mismatch)
+ *   pick=spec2                                      (setup: the picker returns a Spec II disc)
+ *   games=gt4|spec2|both|none                       (which games are installed; default gt4: Spec II shows Install)
+ *   selected=spec2                                  (the game the home screen starts on)
  *   running=1                                       (game running at start)
  *   focus=play                                      (home: focus the Play button, for screenshots)
  *   Controls: pad=A,LB,DpadRight lt=0.6 rt=0.2 lx=0.7 ly=-0.45 rx= ry= pads=2 nopad=1 (a still dev controller),
@@ -17,8 +21,35 @@
   var query = new URLSearchParams(root.location.search);
   var setupStart = query.get("setup") || "done";
   var IMAGE_BYTES = 5314478080;
-  var SPEC_MESSAGE = "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328). " +
-    "This looks like Gran Turismo 4 Spec II or GT4 Online (SCUS-97436).";
+  var SPEC_MESSAGE = "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328) and " +
+    "Gran Turismo 4 Spec II 1.10 (SCUS-97436). This is the unmodified GT4 Online Public Beta (SCUS-97436), not Gran Turismo 4 Spec II.";
+
+  // Two games (TASK-101). The mock keeps the same shapes as commands::game_row and app_state.
+  var gamesParam = query.get("games") || "gt4";
+  var GAME_TABLE = [
+    { id: "gt4", name: "Gran Turismo 4", installed: gamesParam === "gt4" || gamesParam === "both",
+      disc_name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00", size_bytes: 5314478080 + 18000000 },
+    { id: "spec2", name: "Gran Turismo 4 Spec II", installed: gamesParam === "spec2" || gamesParam === "both",
+      disc_name: "Gran Turismo 4 Spec II \u00b7 Spec II 1.10", size_bytes: 3683418112 + 6520944 }
+  ];
+  var selectedGame = query.get("selected") ||
+    (GAME_TABLE.filter(function (game) { return game.installed; })[0] || GAME_TABLE[0]).id;
+  var setupGame = null; // the game of the setup that runs (set by setup_choose_disc)
+  function gameById(id) {
+    return GAME_TABLE.filter(function (game) { return game.id === id; })[0] || null;
+  }
+  function gamesView() {
+    return {
+      selected: selectedGame,
+      any_installed: GAME_TABLE.some(function (game) { return game.installed; }),
+      games: GAME_TABLE.map(function (game) {
+        return { id: game.id, name: game.name, installed: game.installed, damaged: false, reason: "",
+          selected: game.id === selectedGame, disc_name: game.installed ? game.disc_name : "",
+          folder: "C:\\Program Files\\GT4Recomp\\data\\games\\" + game.id,
+          size_bytes: game.installed ? game.size_bytes : 0 };
+      })
+    };
+  }
 
   var setup = { state: "done", step: "copying", progress: 0, bytes_done: 0, bytes_total: 0, renderer_step: "",
     disc_name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00", problem: "", note: "" };
@@ -66,6 +97,12 @@
         clearInterval(setupTimer);
         setup.state = "done";
         setup.renderer_step = "done";
+        var installedGame = gameById(setupGame || selectedGame);
+        if (installedGame) {
+          installedGame.installed = true;
+          selectedGame = installedGame.id;
+          setup.disc_name = installedGame.disc_name;
+        }
         return;
       }
       running(PLAN[index][0], PLAN[index][1]);
@@ -362,20 +399,42 @@
     });
   }
 
-  var saves = [
-    { id: "01", name: "Save 01", modified: "2026-10-16T06:31:00", active: true },
-    { id: "02", name: "Save 02", modified: "2026-10-12T22:14:00", active: false },
-    { id: "03", name: "Save 03", modified: "2026-09-03T19:02:00", active: false }
-  ];
-  var replays = [
-    { id: "01", name: "Replay 01", modified: "2026-10-16T21:40:00" },
-    { id: "02", name: "Replay 02", modified: "2026-10-16T20:55:00" },
-    { id: "03", name: "Replay 03", modified: "2026-10-12T22:31:00" }
-  ];
+  // One library per game: Spec II starts empty (saves are never shared or converted).
+  var libraries = {
+    gt4: {
+      saves: [
+        { id: "01", name: "Save 01", modified: "2026-10-16T06:31:00", active: true },
+        { id: "02", name: "Save 02", modified: "2026-10-12T22:14:00", active: false },
+        { id: "03", name: "Save 03", modified: "2026-09-03T19:02:00", active: false }
+      ],
+      replays: [
+        { id: "01", name: "Replay 01", modified: "2026-10-16T21:40:00" },
+        { id: "02", name: "Replay 02", modified: "2026-10-16T20:55:00" },
+        { id: "03", name: "Replay 03", modified: "2026-10-12T22:31:00" }
+      ]
+    },
+    spec2: { saves: [], replays: [] }
+  };
+  function libraryOf(id) { return libraries[id || selectedGame]; }
+  function libraryView(kind) {
+    var game = gameById(selectedGame);
+    return { items: JSON.parse(JSON.stringify(libraryOf()[kind])), game: game.id, gameName: game.name, status: "",
+      folder: "C:\\Users\\Player\\AppData\\Roaming\\GT4Recomp\\games\\" + game.id + (kind === "saves" ? "\\Saves" : "\\Replays") };
+  }
 
   function appState() {
-    return { setup: JSON.parse(JSON.stringify(setup)), game_running: gameRunning,
-      game_files: "C:\\Program Files\\GT4Recomp\\data\\disc",
+    var view = gamesView();
+    var snapshot = JSON.parse(JSON.stringify(setup));
+    // Without a ?setup= override the setup section describes the selected game (installed: done; else: needed).
+    if (setupStart === "done" && snapshot.state === "done" && !gameById(selectedGame).installed) {
+      snapshot.state = "needed";
+      snapshot.disc_name = "";
+    }
+    var target = setupGame || (view.any_installed ? selectedGame : null);
+    snapshot.game = target ? { id: target, name: gameById(target).name } : null;
+    return { setup: snapshot, game_running: gameRunning, selected_game: view.selected,
+      any_installed: view.any_installed, games: view.games,
+      game_files: "C:\\Program Files\\GT4Recomp\\data\\games\\" + selectedGame + "\\disc",
       migration: { running: false, item: "", bytes_done: 0, bytes_total: 0, notice: "", problem: false } };
   }
 
@@ -388,23 +447,50 @@
         running("copying", 0);
         startSetup();
         return null;
-      case "setup_choose_disc":
+      case "setup_choose_disc": {
         if (query.get("pick") === "spec") {
           setup.state = "wrong_disc";
-          setup.disc_name = "Gran Turismo 4 Spec II v1.10.iso";
+          setup.disc_name = "Gran Turismo 4 (USA) (Beta).iso";
           setup.problem = SPEC_MESSAGE;
           throw new Error(SPEC_MESSAGE);
         }
-        setup.disc_name = "Gran Turismo 4 (USA) (v2.00).iso";
+        // The disc decides the game; "pick=other" is always the one that was not asked for, "pick=spec2" is Spec II.
+        var asked = args.game || null;
+        var pick = query.get("pick");
+        var discGame = pick === "spec2" ? "spec2" : (pick === "other" && asked ? (asked === "gt4" ? "spec2" : "gt4") : (asked || "gt4"));
+        setupGame = discGame;
+        setup.disc_name = discGame === "spec2" ? "Gran Turismo 4 Spec II v1.10.iso" : "Gran Turismo 4 (USA) (v2.00).iso";
         setup.problem = "";
-        return { path: "D:\\Games\\Gran Turismo 4 (USA) (v2.00).iso", serial: "SCUS-97328", version: "2.00",
-          name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00" };
+        return { path: "D:\\Games\\" + setup.disc_name, serial: discGame === "spec2" ? "SCUS-97436" : "SCUS-97328",
+          version: discGame === "spec2" ? "1.10" : "2.00", name: gameById(discGame).disc_name, game: discGame,
+          gameName: gameById(discGame).name, mismatch: !!asked && asked !== discGame, requested: asked };
+      }
+      case "games_list":
+        return gamesView();
+      case "select_game":
+        if (!gameById(args.id)) {
+          throw new Error(args.id + " is not a game of this launcher.");
+        }
+        if (gameRunning) {
+          throw new Error("Stop the game before choosing another one.");
+        }
+        selectedGame = args.id;
+        return gamesView();
+      case "games_remove":
+        if (!gameById(args.id)) {
+          throw new Error(args.id + " is not a game of this launcher.");
+        }
+        gameById(args.id).installed = false;
+        return gamesView();
       case "setup_cancel":
         clearInterval(setupTimer);
         setup.state = "failed";
         setup.problem = "Setup was cancelled. Nothing was changed.";
         return null;
       case "play":
+        if (!gameById(selectedGame).installed) {
+          throw new Error("Set up the game first.");
+        }
         gameRunning = true;
         return null;
       case "stop_game":
@@ -455,37 +541,42 @@
         analog = analogDefaults();
         return controlsView();
       case "saves_list":
-        return { items: JSON.parse(JSON.stringify(saves)), folder: "C:\\Users\\Player\\Documents\\Gran Turismo 4\\Saves" };
+        return libraryView("saves");
       case "saves_import":
-        return null;
+      case "replays_import":
+        // Nothing is guessed: the page names the game the file belongs to.
+        if (!args.game) {
+          throw new Error("Choose which game these saves belong to.");
+        }
+        return libraryView(command === "saves_import" ? "saves" : "replays");
       case "saves_activate":
-        saves.forEach(function (save) {
+        libraryOf().saves.forEach(function (save) {
           save.active = save.id === args.id;
         });
-        return { items: JSON.parse(JSON.stringify(saves)) };
+        return libraryView("saves");
       case "saves_delete":
-        saves = saves.filter(function (save) {
+        libraryOf().saves = libraryOf().saves.filter(function (save) {
           return save.id !== args.id;
         });
-        return { items: JSON.parse(JSON.stringify(saves)) };
+        return libraryView("saves");
       case "replays_list":
-        return { items: JSON.parse(JSON.stringify(replays)), folder: "C:\\Users\\Player\\Documents\\Gran Turismo 4\\Replays" };
-      case "replays_import":
-        return null;
+        return libraryView("replays");
       case "replays_delete":
-        replays = replays.filter(function (replay) {
+        libraryOf().replays = libraryOf().replays.filter(function (replay) {
           return replay.id !== args.id;
         });
-        return { items: JSON.parse(JSON.stringify(replays)) };
+        return libraryView("replays");
       case "about_info":
         return {
           version: "1.1.0",
           gt4recomp: "1.1.0",
           gt4gs: "1.1.0",
           disc_path: "D:\\Games\\PS2\\Gran Turismo 4 (USA) (v2.00).iso",
-          game_files: "C:\\Program Files\\GT4Recomp\\data\\disc",
+          game_files: "C:\\Program Files\\GT4Recomp\\data\\games\\" + selectedGame + "\\disc",
           data_folder: "C:\\Program Files\\GT4Recomp\\data",
-          saves_folder: "C:\\Users\\Player\\AppData\\Roaming\\GT4Recomp"
+          saves_folder: "C:\\Users\\Player\\AppData\\Roaming\\GT4Recomp",
+          game_name: gameById(selectedGame).name,
+          credits: "Gran Turismo 4 Spec II is a mod of the GT4 Online Public Beta made by [AUTHORS: names to be filled in by the owner, with their permission and a link]. GT4Recomp prepares it from your own disc image and includes none of its files. The Spec II logo on the home screen is a placeholder until the authors logo and credit are added."
         };
       case "open_log_folder":
       case "open_game_files_folder":

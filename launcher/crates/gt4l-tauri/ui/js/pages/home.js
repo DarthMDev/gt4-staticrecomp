@@ -1,8 +1,11 @@
 /*
- * Home: cover art, logo, Play, Settings gear. While the game runs, Play
+ * Home: cover art, logo, the game selector, Play, Settings gear. While the game runs, Play
  * becomes "Running · Stop". Polls app_state for game_running.
- * Commands: app_state, play, stop_game.
- * Controller: A or Start = Play, Y = Settings. Hints show only once a pad is used.
+ * Commands: app_state, play, stop_game, select_game (js/games.js), setup_choose_disc and setup_start (Install).
+ * Two games (TASK-101): the selector switches between Gran Turismo 4 and Gran Turismo 4 Spec II. An installed game shows
+ * Play; a game that is not installed shows Install, which opens the disc picker and runs that game's setup. With Spec II
+ * selected the logo is the GT4 logo with a "Spec II" line under it (a placeholder until the authors' logo file is added).
+ * Controller: A or Start = Play (or Install), Y = Settings, LB / RB = the other game. Hints show only once a pad is used.
  * Play is glass when idle (no focus): it takes the solid white state only when focused or hovered.
  */
 (function (root) {
@@ -42,6 +45,16 @@
     mount: function (root) {
       var page = h("div", { class: "stage home" });
       var playButton = h("button", { class: "play", type: "button" }, "Play");
+      var gameList = [];
+      var selectedId = "gt4";
+      var installedNow = true;
+      var gameSignature = "";
+      var logoImage = h("img", { class: "home-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" });
+      // Placeholder for the Spec II logo: the GT4 logo with a "Spec II" line (CSS), until the authors logo file and credit
+      // are added. Replace the line below with an img of their logo (TASK-101 open point) when they are.
+      var logoSpec = h("span", { class: "home-logo-spec2", text: "Spec II", "aria-hidden": "true" });
+      var logoWrap = h("div", { class: "home-logo-wrap" }, [logoImage, logoSpec]);
+      var gameSwitch = h("div", { class: "game-switch", role: "radiogroup", "aria-label": "Game" });
       var stopButton = h("button", { class: "btn", type: "button" }, "Stop");
       var stateText = h("span", { class: "state", text: "Running" });
       var running = h("div", { class: "running" }, [h("span", { class: "dot" }), stateText, stopButton]);
@@ -53,8 +66,97 @@
         page.classList.toggle("is-running", nowRunning);
       }
 
+      function selectedGame() {
+        for (var i = 0; i < gameList.length; i++) {
+          if (gameList[i].id === selectedId) {
+            return gameList[i];
+          }
+        }
+        return null;
+      }
+
+      // The selector, the logo and the main button follow the game list (rebuilt only when it changed).
+      function paintGames() {
+        var signature = JSON.stringify([selectedId, isRunning, gameList.map(function (game) { return [game.id, game.installed]; })]);
+        if (signature === gameSignature) {
+          return;
+        }
+        gameSignature = signature;
+        var game = selectedGame();
+        installedNow = !game || game.installed;
+        page.classList.toggle("is-spec2", selectedId === "spec2");
+        logoImage.alt = game ? game.name : "Gran Turismo 4";
+        logoWrap.setAttribute("title", game ? game.name : "");
+        playButton.textContent = installedNow ? "Play" : "Install";
+        playButton.classList.toggle("is-install", !installedNow);
+        playButton.setAttribute("title", installedNow || !game || !game.reason ? "" : game.reason);
+        var focusedId = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.gameId : null;
+        GT4.ui.clear(gameSwitch);
+        gameList.forEach(function (item) {
+          var on = item.id === selectedId;
+          var pill = h("button", {
+            class: "game-pill" + (on ? " is-selected" : "") + (item.installed ? "" : " not-installed"),
+            type: "button",
+            role: "radio",
+            "aria-checked": String(on),
+            disabled: isRunning && !on,
+            data: { gameId: item.id },
+            on: { click: function () { chooseGame(item.id); } }
+          }, [
+            h("span", { class: "game-pill-name", text: item.name }),
+            item.installed ? null : h("small", { text: "Not installed" })
+          ]);
+          gameSwitch.appendChild(pill);
+          if (focusedId === item.id) {
+            pill.focus({ preventScroll: true });
+          }
+        });
+      }
+
+      function applyGames(view) {
+        if (view && Array.isArray(view.games)) {
+          gameList = view.games;
+          selectedId = view.selected || view.selected_game || selectedId;
+          paintGames();
+        }
+      }
+
+      function chooseGame(id) {
+        if (id === selectedId || isRunning) {
+          return;
+        }
+        GT4.games.select(id).then(applyGames, function (err) {
+          GT4.ui.toast(GT4.errorText(err), true);
+        });
+      }
+
+      // LB / RB: the other game (there are two).
+      function cycleGame(delta) {
+        if (gameList.length < 2 || isRunning) {
+          return;
+        }
+        var at = 0;
+        gameList.forEach(function (game, index) {
+          if (game.id === selectedId) {
+            at = index;
+          }
+        });
+        chooseGame(gameList[(at + delta + gameList.length) % gameList.length].id);
+      }
+
+      // Install: the disc picker for the selected game, then its setup on the Setup page.
+      function install() {
+        GT4.games.installGame(selectedId, function () {
+          GT4.go("#/setup");
+        });
+      }
+
       function play() {
         if (isRunning) {
+          return;
+        }
+        if (!installedNow) {
+          install();
           return;
         }
         paint(true);
@@ -63,9 +165,10 @@
         }, function (err) {
           paint(false);
           GT4.ui.toast(GT4.errorText(err), true);
-          // Game files missing (the data folder was cleaned): back to Setup, where the player chooses the disc again.
+          // Game files missing (the data folder was cleaned): the button becomes Install for that game.
           call("app_state").then(function (appState) {
-            if (appState.setup && appState.setup.state !== "done") {
+            applyGames(appState);
+            if (!appState.any_installed && appState.setup && appState.setup.state !== "done") {
               GT4.go("#/setup");
             }
           }, function () {});
@@ -105,7 +208,8 @@
         versionLabel.textContent = "GT4Recomp " + (info.version || "");
       }, function () {});
       page.appendChild(h("div", { class: "home-bottom" }, [
-        h("img", { class: "home-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
+        logoWrap,
+        gameSwitch,
         h("div", { class: "home-actions" }, [playButton, running, gear])
       ]));
       root.appendChild(page);
@@ -113,7 +217,12 @@
 
       function poll() {
         call("app_state").then(function (appState) {
+          var was = isRunning;
           paint(!!appState.game_running);
+          if (was !== isRunning) {
+            gameSignature = "";
+          }
+          applyGames(appState);
         }, function () {});
       }
       poll();
@@ -126,8 +235,10 @@
 
       GT4.hooks.start = play;
       GT4.hooks.y = function () { GT4.go("#/settings/graphics"); };
+      GT4.hooks.tabs = cycleGame;
       GT4.ui.setHints([
-        { key: "A", label: "Play", run: play },
+        { key: "A", label: "Select", run: play },
+        { key: "LB / RB", label: "Game", run: function () { cycleGame(1); } },
         { key: "Y", label: "Settings", run: function () { GT4.go("#/settings/graphics"); } }
       ]);
 

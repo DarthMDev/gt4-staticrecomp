@@ -20,6 +20,7 @@
   var TABS = [
     { id: "graphics", label: "Graphics" },
     { id: "controls", label: "Controls" },
+    { id: "games", label: "Games" },
     { id: "saves", label: "Saves" },
     { id: "replays", label: "Replays" },
     { id: "mods", label: "Mods" },
@@ -515,6 +516,12 @@
         h("p", { text: "GT4Recomp is an unofficial fan project. It is not affiliated with, endorsed by or sponsored by Sony Interactive Entertainment or Polyphony Digital." }),
         h("p", { text: "Gran Turismo and the Gran Turismo 4 logo are trademarks of Sony Interactive Entertainment Inc. and Polyphony Digital Inc. They are used here only to identify the game. You need your own copy of the game to play." })
       ]));
+      // The people behind the games GT4Recomp runs (Spec II): a placeholder line until the owner fills in the names.
+      if (info.credits) {
+        content.appendChild(h("div", { class: "about-notice about-credits" }, [
+          h("p", { text: info.credits })
+        ]));
+      }
       content.appendChild(h("div", { class: "group", text: "More" }));
       // The game runs from GT4Recomp's own copy of the disc image (the file chosen at setup is not needed any more,
       // so its path is not shown; it is in prepare.json and the log for support).
@@ -531,7 +538,7 @@
       }, "Open folder");
       content.appendChild(h("div", { class: "row" }, [
         h("div", { class: "k" }, [
-          h("span", { text: "Game files" }),
+          h("span", { text: info.game_name ? "Game files \u00b7 " + info.game_name : "Game files" }),
           h("span", { class: "val", text: info.game_files || "" })
         ]),
         h("div", { class: "ctl" }, [openGameFiles])

@@ -11,26 +11,44 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use gt4controls::{self as controls_file, Controls, CONTROLS_FILE_NAME};
+use std::collections::BTreeMap;
+
 use gt4l_core::config::{self, ConfigFile};
+use gt4l_core::games::{self, Game, GT4};
 use gt4l_core::paths::{self, DataDirs, UserDirs};
 use gt4l_disc::setup as disc_setup;
-use gt4l_disc::Pins;
+use gt4l_disc::spec2 as disc_spec2;
+use gt4l_disc::{DiscGame, Pins, Spec2Pins};
 use gt4saves::library::Library;
 
 use crate::saves;
 
+/// One game's save library and the user folders it was opened in (the Documents-free `games\<id>` place, or the data-folder
+/// fallback). Two games never share one (TASK-101).
+pub struct GameLibrary {
+    pub library: Library,
+    pub user: UserDirs,
+}
+
 pub struct AppState {
     pub dirs: DataDirs,
     pub pins: Pins,
+    pub spec2_pins: Spec2Pins,
     pub config: ConfigFile,
     pub controls: Controls,
     /// The user data in use: `%APPDATA%\GT4Recomp`, or the 1.2.0 places until their move has happened.
     pub user_dirs: UserDirs,
+    /// One save library per game (`games\<id>\Saves`, `Replays`, `backups`).
+    pub libraries: BTreeMap<&'static str, GameLibrary>,
+    /// The game the home screen shows. The stored choice (`[game] selected`) is the game played last; picking another game
+    /// on the page only changes this until that game starts.
+    pub selected: &'static Game,
+    /// The game of the setup that is running or was last run (set when a disc is accepted).
+    pub setup_game: Option<&'static Game>,
     /// The folder of `GT4Recomp.exe`: stored paths inside it are kept relative (portable copies).
     pub install_dir: PathBuf,
     /// The move of the 1.2.0 large data, while it runs and its result (TASK-091).
     pub migration: MigrationRun,
-    pub library: Library,
     /// Set by the Cancel button of setup; the setup thread checks it between steps.
     pub setup_cancel: Arc<AtomicBool>,
     pub setup_busy: bool,
@@ -154,19 +172,33 @@ impl AppState {
                 Controls::default()
             }
         };
-        let opened = saves::open(&dirs, &user, pre_1_0_root.as_deref())?;
-        for line in &opened.log {
-            log(&dirs, line);
+        let mut libraries = BTreeMap::new();
+        let mut library_notice = None;
+        for game in games::GAMES {
+            // Only Gran Turismo 4 has a library from before 1.0.0 to take over.
+            let old_root = if game.id == GT4.id { pre_1_0_root.as_deref() } else { None };
+            let opened = saves::open(&dirs.for_game(game), &user.for_game(game), old_root)?;
+            for line in &opened.log {
+                log(&dirs, &format!("{}: {line}", game.id));
+            }
+            if game.id == GT4.id {
+                library_notice = opened.notice.clone();
+            }
+            libraries.insert(game.id, GameLibrary { library: opened.library, user: opened.user });
         }
-        Ok(AppState {
+        let spec2_pins = Spec2Pins::embedded()?;
+        let mut state = AppState {
             dirs,
             pins,
+            spec2_pins,
             config,
             controls,
-            user_dirs: opened.user,
+            user_dirs: user,
+            libraries,
+            selected: &GT4,
+            setup_game: None,
             install_dir,
             migration: MigrationRun::default(),
-            library: opened.library,
             setup_cancel: Arc::new(AtomicBool::new(false)),
             setup_busy: false,
             setup_run: SetupRun::default(),
@@ -175,20 +207,66 @@ impl AppState {
             capturing: None,
             home_message: String::new(),
             controls_status: String::new(),
-            saves_status: opened.notice.unwrap_or_default(),
+            saves_status: library_notice.unwrap_or_default(),
             replays_status: String::new(),
             controls_locked,
-        })
+        };
+        let installed = state.installed_games();
+        state.selected = games::initial_selection(state.config.selected_game.as_deref(), &installed);
+        Ok(state)
     }
 
-    /// The cheap check of the copied disc image and the prepared files (no hash; see `gt4l_disc::setup`).
+    /// The data folders of one game (the shared parts are the same for every game).
+    pub fn game_dirs(&self, game: &'static Game) -> DataDirs {
+        self.dirs.for_game(game)
+    }
+
+    /// The save library of a game.
+    pub fn library_of(&self, game: &'static Game) -> &Library {
+        &self.libraries[game.id].library
+    }
+
+    /// The user folders of a game's library (`Saves`, `Replays`, `backups`).
+    pub fn user_for(&self, game: &'static Game) -> &UserDirs {
+        &self.libraries[game.id].user
+    }
+
+    /// The library of the game the page shows.
+    pub fn library(&self) -> &Library {
+        self.library_of(self.selected)
+    }
+
+    /// The user folders of the game the page shows.
+    pub fn selected_user(&self) -> &UserDirs {
+        self.user_for(self.selected)
+    }
+
+    /// The cheap check of one game's copied disc image and prepared files (no hash; see `gt4l_disc::setup`).
+    pub fn installed_of(&self, game: &'static Game) -> disc_setup::Installed {
+        let dirs = self.game_dirs(game);
+        match DiscGame::from_id(game.id) {
+            Some(DiscGame::Spec2) => disc_spec2::check_installed(&dirs.prepared(), &dirs.disc_folder(), &self.spec2_pins),
+            _ => disc_setup::check_installed(&dirs.prepared(), &dirs.disc_folder(), &self.pins),
+        }
+    }
+
+    /// The check for the game the page shows.
     pub fn installed(&self) -> disc_setup::Installed {
-        disc_setup::check_installed(&self.dirs.prepared(), &self.dirs.disc_folder(), &self.pins)
+        self.installed_of(self.selected)
     }
 
-    /// Home is ready when setup is not running and the copied image and prepared files pass the cheap check.
+    /// The games whose files pass the cheap check, in table order.
+    pub fn installed_games(&self) -> Vec<&'static Game> {
+        games::GAMES
+            .iter()
+            .copied()
+            .filter(|game| matches!(self.installed_of(game), disc_setup::Installed::Ready { .. }))
+            .collect()
+    }
+
+    /// Home is ready when setup is not running and at least one game passes the cheap check.
     pub fn home_ready(&self) -> bool {
-        !self.setup_busy && matches!(self.installed(), disc_setup::Installed::Ready { .. })
+        !self.setup_busy && !self.installed_games().is_empty()
     }
 
     /// Writes the settings to the user data folder. A path inside the install folder is stored relative to it, so a

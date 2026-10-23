@@ -108,6 +108,13 @@ impl LibraryPaths {
     pub fn under(root: &Path) -> LibraryPaths {
         LibraryPaths { saves: root.join("Saves"), replays: root.join("Replays"), backups: root.join("backups") }
     }
+
+    /// The library of one game (TASK-101): `<root>/games/<game id>/{Saves,Replays,backups}`. Two games never share a
+    /// folder, so a save of one can never be harvested into, or built onto the card of, the other (both write the PS2
+    /// folder `BASCUS-97328GAMEDATA`).
+    pub fn for_game(root: &Path, game_id: &str) -> LibraryPaths {
+        LibraryPaths::under(&root.join("games").join(game_id))
+    }
 }
 
 pub struct Library {

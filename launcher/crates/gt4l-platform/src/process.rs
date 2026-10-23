@@ -345,7 +345,7 @@ pub fn shell_run_as_admin(_program: &std::path::Path, _arguments: Option<&str>) 
 }
 
 /// Executable names of the game and its renderer process: neither may run while files move.
-pub const GAME_PROCESS_NAMES: &[&str] = &["gt4vulkan.exe", "gt4-gs.exe"];
+pub const GAME_PROCESS_NAMES: &[&str] = &["gt4vulkan.exe", "gt4vulkan-spec2.exe", "gt4-gs.exe"];
 
 /// `ERROR_CANCELLED`: the UAC prompt was declined.
 pub const ERROR_CANCELLED: u32 = 1223;

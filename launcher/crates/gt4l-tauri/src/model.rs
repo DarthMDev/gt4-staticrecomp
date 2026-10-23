@@ -543,8 +543,18 @@ pub fn about_text(version: &str) -> String {
          \"Gran Turismo\", \"GT\", the Gran Turismo 4 logo, the GT emblem and the Gran Turismo 4 cover \
          artwork are trademarks or copyrighted works of Sony Interactive Entertainment Inc. and/or Polyphony \
          Digital Inc. They are used here only to identify the game. No game data is included in the source \
-         repository. You need your own copy of Gran Turismo 4 (USA, v2.00) to play."
+         repository. You need your own copy of Gran Turismo 4 (USA, v2.00), or of Gran Turismo 4 Spec II 1.10 for \
+         that game, to play."
     )
+}
+
+/// The credits shown on the About page. The Spec II authors' names are not known to the launcher yet: the line below is a
+/// placeholder for the owner to fill in before the 1.3.0 release (their permission is also needed, decision 0072).
+pub fn credits_text() -> &'static str {
+    "Gran Turismo 4 Spec II is a mod of the GT4 Online Public Beta made by [AUTHORS: names to be filled in by the owner, \
+     with their permission and a link]. GT4Recomp prepares it from your own disc image and includes none of its files. \
+     The Spec II logo on the home screen is a placeholder (the GT4 logo with a Spec II line) until the authors' logo and \
+     credit are added."
 }
 
 /// Open-source notices of the launcher's user interface. Full texts are installed with the program.

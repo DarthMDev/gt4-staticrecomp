@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::display::{self, DisplayTarget};
+use crate::games::Game;
 use crate::gs_release::Installed;
 use crate::gs_table;
 use crate::settings::Settings;
@@ -30,6 +31,17 @@ pub const GSDX_NOT_INSTALLED: &str = "GSdx is not installed yet";
 
 /// The reason shown when GSdx stopped and asked for a restart with CoreGS 1.1.
 pub const GSDX_RESTART_REQUESTED: &str = "GSdx stopped while playing";
+
+/// The executable of a game inside the game folder (`<program folder>\game`, TASK-101: one program per game).
+pub fn game_program(game: &Game, game_dir: &Path) -> PathBuf {
+    game_dir.join(game.executable)
+}
+
+/// The prepared ELF of a game. Its file name stays `SCUS_973.28` / `SCUS_974.36` (the argv0 rule: the donor derives the
+/// boot name from it).
+pub fn game_elf(game: &Game, prepared: &Path) -> PathBuf {
+    prepared.join(game.elf_name)
+}
 
 /// Everything needed to start one game session.
 #[derive(Clone, Debug)]

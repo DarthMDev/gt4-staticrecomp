@@ -15,6 +15,14 @@ pub mod migration;
 pub mod psu;
 
 pub use card::{Card, CardError, DirEntry, Node};
+/// Which game a save belongs to, when its content tells (TASK-101 open study). Gran Turismo 4 and Spec II write the same
+/// PS2 folder name, `BASCUS-97328GAMEDATA`, and no field or size that tells them apart is known yet, so this answers `None`
+/// and an import asks the player which game it belongs to. When the study finds a rule, it goes here and imports are
+/// sorted automatically.
+pub fn game_of_save(_save: &card::Node) -> Option<&'static str> {
+    None
+}
+
 pub use library::{Library, LibraryError, LibraryPaths, Report};
 
 /// Current UTC time as (year, month, day, hour, minute, second).

@@ -3,6 +3,7 @@
  * when app_state says "done". The page polls app_state while it is open and draws the state it reports.
  *
  * app_state().setup = {
+ *   game: {id, name} | null,            (the game being set up; null on the very first start: the disc decides)
  *   state: "needed" | "wrong_disc" | "checking" | "failed" | "files_missing" | "done",
  *   step: "copying" | "checking" | "preparing" | "renderer",   (while checking)
  *   progress: 0..1,                     (of the current step)
@@ -10,6 +11,8 @@
  *   renderer_step: "listing" | "downloading" | "installing" | "done" | "failed",
  *   disc_name, problem, note            (note: GSdx could not be downloaded; the game cannot start yet)
  * }
+ * Two games (TASK-101): a disc of the other game than the one asked for offers to install it as that game (js/games.js).
+ * When another game is already installed the page also has "Back" to Home.
  * Flow: "Choose disc image" -> setup_choose_disc (Rust file picker and fast check) -> setup_start (copy, check,
  * prepare, renderer). A refused file shows its reason with "Choose another file". When setup is done the page
  * shows "Finish", which opens Home (it never starts the game). Commands: setup_choose_disc, setup_start, setup_cancel.
@@ -85,22 +88,37 @@
       Math.round((setup.bytes_done || 0) / 1e6), setup.problem || "", setup.note || "", setup.disc_name || ""].join("|");
   }
 
-  function texts(state) {
+  function gameName(setup) {
+    return setup.game && setup.game.name ? setup.game.name : "";
+  }
+
+  function discHint(setup) {
+    var name = gameName(setup);
+    if (!name) {
+      return "your Gran Turismo 4 or Gran Turismo 4 Spec II disc image";
+    }
+    return name === "Gran Turismo 4" ? "your Gran Turismo 4 (USA) disc image" : "your " + name + " disc image";
+  }
+
+  function texts(state, setup) {
+    var name = gameName(setup);
     switch (state) {
       case "done":
-        return ["Ready", "Press Finish to open GT4Recomp. Next time it opens straight to the home screen. You can move or delete the disc image you chose."];
+        return [name ? name + " is ready" : "Ready", "Press Finish to open GT4Recomp. Next time it opens straight to the home screen. You can move or delete the disc image you chose."];
       case "files_missing":
         return ["Game files missing", "Choose your disc image again to copy the game files. Your saves and settings are kept."];
       case "checking":
-        return ["Setting up your game", "This only happens once. Keep GT4Recomp open until it finishes."];
+        return [name ? "Setting up " + name : "Setting up your game", "This only happens once. Keep GT4Recomp open until it finishes."];
       default:
-        return ["Set up your game", "Choose your Gran Turismo 4 disc image (.iso). This only happens once."];
+        return [name ? "Set up " + name : "Set up your game",
+          name ? "Choose your " + name + " disc image (.iso). This only happens once for each game."
+            : "Choose your Gran Turismo 4 or Gran Turismo 4 Spec II disc image (.iso). GT4Recomp recognises the game from the disc. This only happens once for each game."];
     }
   }
 
   function build(setup, parts) {
     var state = setup.state;
-    var heading = texts(state);
+    var heading = texts(state, setup);
     parts.title.textContent = heading[0];
     parts.sub.textContent = heading[1];
 
@@ -120,7 +138,7 @@
       // Not chosen yet ("..." waits for the pick), or the file of a stopped run (no mark).
       steps.push(discName && state === "failed"
         ? row("01", "Disc", discName, "none", null, null)
-        : row("01", "Disc", "your Gran Turismo 4 (USA) disc image", "active", null, null));
+        : row("01", "Disc", discHint(setup), "active", null, null));
     }
     // A refused file, a stopped run and missing game files show the Disc row and the reason only, so the buttons
     // stay on screen at 1280 x 720.
@@ -179,6 +197,12 @@
       buttons.push({ label: state === "wrong_disc" ? "Choose another file" : "Choose disc image", primary: true, run: chooseDisc });
       hints.push({ key: "A", label: "Choose disc image", run: chooseDisc });
     }
+    // Another game is installed: Setup is not a dead end. Back returns to Home (nothing is changed).
+    if (!running && !done && active && active.anyInstalled) {
+      buttons.push({ label: "Back", run: backHome });
+      hints.push({ key: "B", label: "Back", run: backHome });
+      GT4.hooks.back = backHome;
+    }
 
     GT4.ui.clear(parts.steps);
     steps.forEach(function (node) {
@@ -194,7 +218,15 @@
       }, button.label));
     });
     GT4.ui.setHints(hints);
-    GT4.hooks.back = running && setup.step !== "renderer" ? cancelSetup : (done ? finishSetup : null);
+    if (running || done) {
+      GT4.hooks.back = running && setup.step !== "renderer" ? cancelSetup : finishSetup;
+    } else if (!(active && active.anyInstalled)) {
+      GT4.hooks.back = null;
+    }
+  }
+
+  function backHome() {
+    GT4.go("#/home");
   }
 
   var busyChoosing = false;
@@ -206,9 +238,13 @@
       return;
     }
     busyChoosing = true;
-    call("setup_choose_disc").then(function (info) {
+    var target = active && active.game ? active.game : null;
+    call("setup_choose_disc", target ? { game: target } : {}).then(function (info) {
       busyChoosing = false;
-      if (info) {
+      if (info && info.mismatch) {
+        // The disc is the other game: install it as that game, or pick again.
+        GT4.games.offerOtherGame(info, startSetup, chooseDisc);
+      } else if (info) {
         startSetup();
       } else {
         poll();
@@ -252,7 +288,9 @@
         return;
       }
       var setup = appState.setup || { state: "needed" };
-      var sig = signature(setup);
+      active.game = setup.game && setup.game.id ? setup.game.id : null;
+      active.anyInstalled = !!appState.any_installed;
+      var sig = signature(setup) + "|" + (active.game || "") + "|" + active.anyInstalled;
       if (sig === active.last) {
         return;
       }
@@ -299,7 +337,7 @@
         ])
       ]);
       root.appendChild(page);
-      active = { root: page, parts: parts, last: null, lastState: null, lastStep: null };
+      active = { root: page, parts: parts, last: null, lastState: null, lastStep: null, game: null, anyInstalled: false };
       poll();
       var timer = setInterval(poll, POLL_MS);
       return {

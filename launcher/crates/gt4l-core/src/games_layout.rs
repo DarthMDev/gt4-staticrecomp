@@ -80,6 +80,15 @@ pub fn migrate_data(
     outcome
 }
 
+/// Whether Gran Turismo 4's flat 1.2.x game folders (`disc`, `prepared`, `runtime`) still hold files that have not moved.
+pub fn flat_data_pending(data: &DataDirs) -> bool {
+    if relocate::marker_status(&data.games_layout_marker()).as_deref() == Some("migrated") {
+        return false;
+    }
+    let flat = data.flat_gt4_root();
+    ["disc", "prepared", "runtime"].iter().any(|name| relocate::has_files(&flat.join(name)))
+}
+
 /// What the move of Gran Turismo 4's library did.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UserLayoutOutcome {

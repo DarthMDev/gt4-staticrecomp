@@ -58,6 +58,31 @@ pub fn by_id_or_default(id: &str) -> &'static Game {
     by_id(id).unwrap_or(&GT4)
 }
 
+/// The game the home screen shows at start (owner, 2026-10-23): the game played last (the stored choice) when it is
+/// installed; otherwise the first installed game in table order; with nothing installed, the stored choice or Gran
+/// Turismo 4 (the page then offers "Install").
+pub fn initial_selection(stored: Option<&str>, installed: &[&'static Game]) -> &'static Game {
+    let stored = stored.and_then(by_id);
+    match stored {
+        Some(game) if installed.contains(&game) => game,
+        _ => installed.first().copied().or(stored).unwrap_or(&GT4),
+    }
+}
+
+/// The `[game] selected` value after `game` was set up: the first game installed becomes the stored choice; once a game
+/// is stored, installing another changes nothing (only playing does, see [`after_play`]).
+pub fn after_install(stored: Option<&str>, installed_before: &[&'static Game], game: &'static Game) -> Option<String> {
+    match stored.and_then(by_id) {
+        Some(known) if !installed_before.is_empty() => Some(known.id.to_string()),
+        _ => Some(game.id.to_string()),
+    }
+}
+
+/// The `[game] selected` value once `game` was started: the game played last.
+pub fn after_play(game: &'static Game) -> Option<String> {
+    Some(game.id.to_string())
+}
+
 /// The folder (under `games`) of a game's files, in the data folder and in the user data folder.
 pub const GAMES_FOLDER: &str = "games";
 
@@ -78,6 +103,26 @@ mod tests {
         assert_eq!((GT4.display_name, SPEC2.display_name), ("Gran Turismo 4", "Gran Turismo 4 Spec II"));
         assert_ne!(GT4.id, SPEC2.id);
         assert_ne!(GT4.executable, SPEC2.executable, "the two games cannot share one executable (decision 0072)");
+    }
+
+    #[test]
+    fn the_first_installed_game_is_selected_then_the_one_played_last() {
+        let both: &[&'static Game] = &[&GT4, &SPEC2];
+        // Nothing stored yet: the first installed game.
+        assert_eq!(initial_selection(None, &[&SPEC2]), &SPEC2);
+        assert_eq!(initial_selection(None, both), &GT4);
+        // Played last wins while it is installed.
+        assert_eq!(initial_selection(Some("spec2"), both), &SPEC2);
+        assert_eq!(initial_selection(Some("gt4"), both), &GT4);
+        // A stored game that is gone falls back to an installed one; with nothing installed the stored one is shown.
+        assert_eq!(initial_selection(Some("spec2"), &[&GT4]), &GT4);
+        assert_eq!(initial_selection(Some("spec2"), &[]), &SPEC2);
+        assert_eq!(initial_selection(Some("unknown"), &[]), &GT4);
+        // Installing: the first game becomes the choice, a second install keeps it, playing changes it.
+        assert_eq!(after_install(None, &[], &SPEC2).as_deref(), Some("spec2"));
+        assert_eq!(after_install(Some("spec2"), &[&SPEC2], &GT4).as_deref(), Some("spec2"));
+        assert_eq!(after_install(Some("unknown"), &[], &GT4).as_deref(), Some("gt4"));
+        assert_eq!(after_play(&GT4).as_deref(), Some("gt4"));
     }
 
     #[test]

@@ -608,6 +608,11 @@ Planned (owner, 2026-10-23) for release 1.3.0, the product side of TASK-100 (its
 per-game disc, prepared files, card, saves and replays (saves are incompatible both ways and share the PS2 folder
 name), identification by ISO, the selected game is the last played, Spec II 1.10 and same-executable variants, and
 the Spec II logo on the home screen when it is selected.
+Progress (2026-10-23): launcher side implemented on `task/101-multi-game` (pieces 1 to 6 of the plan; the UI in the mock and
+headless checks): game table, per-game folders and libraries, identification by serial and executable hash with named image
+variants (1.10, PT-BR, variant, refusals), Spec II setup with the Rust port of the ELF patch (byte-identical to the script),
+per-game launch, the 1.2.x to `games\gt4` migration, selector, Install, Settings > Games. Open: look on a real window, the
+authors' logo, names and permission, installer build, `PreviousDataDir` into the games layout.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:

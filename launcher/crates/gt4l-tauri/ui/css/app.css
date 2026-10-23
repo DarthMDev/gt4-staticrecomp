@@ -263,6 +263,39 @@ body.is-home.input-keys #hints { display: none; }
 .home.is-running .play:not(.play-square) { display: none; }
 .home.is-running .running { display: flex; }
 
+/* ---------- games (TASK-101) ---------- */
+/* The logo and, with Spec II selected, its "Spec II" line (a placeholder for the authors' logo file). */
+.home-logo-wrap { display: flex; flex-direction: column; align-items: center; margin-bottom: 20px; }
+.home-logo-wrap .home-logo { margin-bottom: 0; }
+.home-logo-spec2 {
+  display: none; margin-top: 10px; padding-left: 0.42em;
+  font: 700 22px var(--label); letter-spacing: 0.42em; text-transform: uppercase; color: var(--white);
+}
+.home.is-spec2 .home-logo-spec2 { display: block; }
+/* The game selector above Play: two glass pills, the chosen one solid. Keyboard and pad focus use the common ring. */
+.game-switch { display: flex; gap: 8px; margin-bottom: 14px; }
+.game-pill {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 156px; min-height: 48px;
+  padding: 6px 14px; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgba(10, 12, 20, 0.5); color: var(--silver);
+  font: 500 12px var(--label); letter-spacing: 0.12em; text-transform: uppercase;
+  transition: background 150ms ease, color 150ms ease, border-color 150ms ease;
+}
+.game-pill small { font: 400 10px var(--label); letter-spacing: 0.1em; color: var(--dim); margin-top: 2px; }
+.game-pill:hover, .game-pill:focus-visible { border-color: var(--white); color: var(--white); }
+.game-pill.is-selected { background: rgba(255, 255, 255, 0.92); color: var(--paper-ink); border-color: var(--white); }
+.game-pill.is-selected small { color: #555; }
+.game-pill:disabled { opacity: 0.4; }
+.play.is-install { letter-spacing: 0.2em; }
+/* Settings > Games, and the game name on the Saves and Replays titles. */
+.game-row .k .val { display: block; }
+.game-row .ctl { gap: 8px; display: flex; }
+.game-tag {
+  margin-left: 14px; font: 500 12px var(--label); letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--dim); vertical-align: middle;
+}
+.about-credits { border-left: 2px solid var(--hair); padding-left: 14px; margin-top: 8px; }
+
 /* ---------- settings shell ---------- */
 .settings { position: absolute; inset: 0; display: grid; grid-template-columns: 240px 1fr; }
 nav.side {

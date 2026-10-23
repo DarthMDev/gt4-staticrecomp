@@ -1,6 +1,6 @@
 /*
  * Router and boot. Routes (location.hash):
- *   #/setup                  first run (also shown until setup is done)
+ *   #/setup                  first run, or a game being installed (also shown until a game is set up)
  *   #/home                   Play and Settings
  *   #/settings/<tab>         graphics | controls | saves | replays | about (mods only when GT4.features.mods;
  *                            Display and Advanced are sections of Graphics, so #/settings/display and
@@ -181,7 +181,8 @@
     showMigration(appState);
     var route = parseRoute();
     if (!route.name) {
-      go(appState.setup && appState.setup.state === "done" ? "#/home" : "#/setup");
+      // Home as soon as one game is installed (the other game then offers Install there); Setup otherwise.
+      go(appState.any_installed || (appState.setup && appState.setup.state === "done") ? "#/home" : "#/setup");
     } else {
       render();
     }

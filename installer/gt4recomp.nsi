@@ -10,7 +10,7 @@
 ; window is a WebView2 page: the bootstrapper runs only when the runtime is missing (see WebView2Present below).
 ; SDL3_DLL is SDL3 3.4.18 (runtime\SDL3.dll of SDL3-3.4.18-win32-x64.zip). It ships beside GT4Recomp.exe: the
 ; launcher reads pads through SDL3 (launcher\crates\gt4l-platform\src\sdl_pads.rs).
-; GAME_DIR must hold gt4vulkan.exe, the runtime DLLs, shaders\ and the licence texts. It is not in git.
+; GAME_DIR must hold gt4vulkan.exe and (from 1.3.0, TASK-101) gt4vulkan-spec2.exe, the runtime DLLs, shaders\ and the licence texts. It is not in git.
 ;
 ; Layout (TASK-091; docs/BUILD.md "Slice 250", docs/release-notes/1.2.1.md):
 ; - Program files in $INSTDIR (default C:\Program Files\GT4Recomp; the directory page lets the player pick any folder).
@@ -250,6 +250,9 @@ Function FindLockedInstallFile
   StrCpy $R9 "$INSTDIR\SDL3.dll"
   Call TestFileFree
   StrCpy $R9 "$INSTDIR\game\gt4vulkan.exe"
+  Call TestFileFree
+  ; TASK-101 (1.3.0): the second game's program, shipped beside the first. A missing file counts as free.
+  StrCpy $R9 "$INSTDIR\game\gt4vulkan-spec2.exe"
   Call TestFileFree
   FindFirst $R0 $R1 "$INSTDIR\game\*.dll"
   ${DoWhile} $R1 != ""

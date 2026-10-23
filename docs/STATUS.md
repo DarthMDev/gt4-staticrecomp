@@ -1,5 +1,16 @@
 # Current Status
 
+## TASK-101 multi-game launcher on branch (2026-10-23)
+
+Branch `task/101-multi-game` (from `task/100-spec2` and main). The launcher now holds two games: a game table, per-game
+disc copy, prepared files, runtime card, saves and replays (`games\<id>`), identification by serial and the pinned
+executable hash (Spec II 1.10, the PT-BR image and unknown images with the known executable accepted; the unmodified
+Public Beta and other SCUS-97436 programs refused), the Spec II setup (Rust port of the ELF patch, byte-identical to
+`scripts/spec2_elf_patch.py`), per-game launch, the 1.2.x to `games\gt4` migration and the UI (selector, Install, Settings >
+Games). `cargo test --workspace`: 405 passed, 4 ignored; the dev mock checks pass headless (121 DOM checks, 150 model
+checks). Open: the look on a real window, the authors' logo and names, the installer build. Plan progress:
+[MULTI-GAME-LAUNCHER-PLAN](MULTI-GAME-LAUNCHER-PLAN.md).
+
 ## TASK-100 Spec II on branch (2026-10-22, S1 done)
 
 Branch `task/100-spec2`. The owner supplied the Public Beta ISO and it is confirmed as the exact base of Spec II 1.10

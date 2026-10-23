@@ -8,9 +8,10 @@ use std::path::{Path, PathBuf};
 use gt4controls::{self as controls_file, default_bindings};
 use gt4l_core::display::{self as display_rules, DisplayTarget};
 use gt4l_core::exit::{self, Outcome};
+use gt4l_core::games::{self, Game};
 use gt4l_core::gs_release;
 use gt4l_core::launch;
-use gt4l_core::paths::{self, DataDirs, GAME_EXECUTABLE};
+use gt4l_core::paths::{self, DataDirs};
 use gt4l_core::settings;
 use gt4l_core::{Settings, LAUNCHER_VERSION};
 use gt4l_disc::setup::{self as disc_setup, Installed};
@@ -40,8 +41,65 @@ pub fn app_state(shared: State<'_, Shared>) -> Result<Value, String> {
     Ok(app_state_of(&lock(shared.inner())))
 }
 
+/// The game the setup section of `app_state` talks about: the game of a setup that is running or has just ended, else the
+/// game the page shows.
+fn setup_subject(state: &AppState) -> &'static Game {
+    if state.setup_busy || !matches!(state.setup_outcome, SetupOutcome::None) {
+        state.setup_game.unwrap_or(state.selected)
+    } else {
+        state.selected
+    }
+}
+
+/// The display name of the disc a game was set up from, as the receipt records it.
+fn installed_disc_name(state: &AppState, game: &'static Game, version: &str) -> String {
+    let dirs = state.game_dirs(game);
+    let image_name = disc_setup::read_receipt(&dirs.prepared()).map(|receipt| receipt.image_name).unwrap_or_default();
+    setup::game_disc_name(game, version, &image_name)
+}
+
+/// One row of the game list: `{id, name, installed, selected, state, disc_name, folder, size_bytes}`.
+fn game_row(state: &AppState, game: &'static Game) -> Value {
+    let installed = state.installed_of(game);
+    let dirs = state.game_dirs(game);
+    let (ready, version, reason) = match &installed {
+        Installed::Ready { version, .. } => (true, version.clone(), String::new()),
+        Installed::Missing { reason } => (false, String::new(), reason.clone()),
+        Installed::NotSetUp => (false, String::new(), String::new()),
+    };
+    let disc_name = if ready { installed_disc_name(state, game, &version) } else { String::new() };
+    let size_bytes = if ready { folder_size(&dirs.disc_folder()) + folder_size(&dirs.prepared()) } else { 0 };
+    json!({
+        "id": game.id,
+        "name": game.display_name,
+        "installed": ready,
+        "damaged": !ready && !reason.is_empty(),
+        "reason": reason,
+        "selected": game == state.selected,
+        "disc_name": disc_name,
+        "folder": dirs.game_files_root().display().to_string(),
+        "size_bytes": size_bytes,
+    })
+}
+
+/// Total size of the files directly under or inside `folder` (0 when it is missing).
+fn folder_size(folder: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(folder) else {
+        return 0;
+    };
+    entries
+        .filter_map(|entry| entry.ok())
+        .map(|entry| match entry.metadata() {
+            Ok(meta) if meta.is_dir() => folder_size(&entry.path()),
+            Ok(meta) => meta.len(),
+            Err(_) => 0,
+        })
+        .sum()
+}
+
 pub fn app_state_of(state: &AppState) -> Value {
-    let installed = state.installed();
+    let subject = setup_subject(state);
+    let installed = state.installed_of(subject);
     let chosen_name = state
         .disc_path()
         .and_then(|path| path.file_name())
@@ -53,7 +111,7 @@ pub fn app_state_of(state: &AppState) -> Value {
     } else if state.setup_busy {
         ("checking", String::new(), chosen_name)
     } else if let Installed::Ready { version, .. } = &installed {
-        ("done", String::new(), setup::disc_display_name(version))
+        ("done", String::new(), installed_disc_name(state, subject, version))
     } else {
         match &state.setup_outcome {
             SetupOutcome::Refused(message) => ("wrong_disc", message.clone(), chosen_name),
@@ -77,6 +135,14 @@ pub fn app_state_of(state: &AppState) -> Value {
         SetupOutcome::Done { renderer_note } => renderer_note.clone(),
         _ => String::new(),
     };
+    let installed_games = state.installed_games();
+    // The page asks for one game when others are already installed or the player chose a game on the home screen; the
+    // very first setup has no target: the disc decides.
+    let target = if installed_games.is_empty() && state.setup_game.is_none() && state.config.selected_game.is_none() {
+        Value::Null
+    } else {
+        json!({ "id": subject.id, "name": subject.display_name })
+    };
     json!({
         "setup": {
             "state": screen,
@@ -88,9 +154,13 @@ pub fn app_state_of(state: &AppState) -> Value {
             "disc_name": disc_name,
             "problem": problem,
             "note": note,
+            "game": target,
         },
         "game_running": state.game_child.is_some(),
-        "game_files": state.dirs.disc_folder().display().to_string(),
+        "game_files": state.game_dirs(state.selected).disc_folder().display().to_string(),
+        "selected_game": state.selected.id,
+        "any_installed": !installed_games.is_empty(),
+        "games": games::GAMES.iter().map(|game| game_row(state, game)).collect::<Vec<_>>(),
         "migration": {
             "running": state.migration.running,
             "item": state.migration.item,
@@ -245,6 +315,8 @@ pub fn reset_gs_settings_to_defaults_of(shared: &Shared) -> Result<Value, String
 /// Everything Play needs, checked: the copied disc image, the prepared ELF, the game program, the settings, the
 /// renderer and the extra environment. The flow test builds the launch plan from this without starting anything.
 pub struct PlayInputs {
+    /// The game that starts (TASK-101): its executable, ELF, disc image and runtime card are the ones below.
+    pub game: &'static Game,
     pub dirs: DataDirs,
     pub disc: PathBuf,
     pub elf: PathBuf,
@@ -273,11 +345,12 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         }
         Installed::NotSetUp => return Err("Set up the game first.".into()),
     };
-    let dirs = state.dirs.clone();
+    let game = state.selected;
+    let dirs = state.game_dirs(game);
     let game_dir = paths::game_directory(program_dir, state.config.dev_game_dir.as_deref());
-    let executable = game_dir.join(GAME_EXECUTABLE);
+    let executable = launch::game_program(game, &game_dir);
     if !executable.exists() {
-        return Err("The game program is missing. Reinstall GT4Recomp.".into());
+        return Err(format!("The program of {} is missing. Reinstall GT4Recomp.", game.display_name));
     }
     let mut extra: Vec<(String, String)> = Vec::new();
     let controls_path = state.user_dirs.controls_file();
@@ -323,7 +396,8 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
     );
     Ok(PlayInputs {
         display,
-        elf: dirs.prepared().join(disc_setup::ELF_FILE),
+        game,
+        elf: launch::game_elf(game, &dirs.prepared()),
         dirs,
         disc,
         executable,
@@ -348,9 +422,9 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let inputs = prepare_play(&shared, &program_directory()).inspect_err(|message| {
         lock(&shared).home_message = message.clone();
     })?;
-    let PlayInputs { dirs, disc, elf, executable, settings, pcsx2, display, extra } = inputs;
+    let PlayInputs { game, dirs, disc, elf, executable, settings, pcsx2, display, extra } = inputs;
     let card = dirs.runtime_card();
-    saves::prepare_card(&lock(&shared).library, &card)?;
+    saves::prepare_card(lock(&shared).library_of(game), &card)?;
     let textures = lock(&shared).dirs.textures();
     paths::ensure_texture_folders(&textures).map_err(|error| format!("texture folder: {error}"))?;
     let running = game::start(&dirs, &executable, &elf, &disc, &settings, &pcsx2, display.as_ref(), &textures, &extra)?;
@@ -358,8 +432,11 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         let mut state = lock(&shared);
         state.game_child = Some(running.child.clone());
         state.home_message.clear();
+        // The game played last is the one the next start shows (owner, 2026-10-23).
+        state.config.selected_game = games::after_play(game);
+        state.save_config();
     }
-    state::log(&dirs, &format!("game started, session {}", running.session_dir.display()));
+    state::log(&dirs, &format!("game started ({}), session {}", game.id, running.session_dir.display()));
     let _ = app.emit("game-state", json!({ "running": true, "message": "" }));
     crate::tray::handle(&app, crate::tray::Event::GameStarted);
 
@@ -369,7 +446,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         let log_text = fs::read_to_string(&running.log_path).unwrap_or_default();
         let gsdx_error = launch::restart_requested(&log_text)
             .then(|| launch::gsdx_unavailable_message(launch::GSDX_RESTART_REQUESTED, &dirs.logs()));
-        match saves::harvest_card(&lock(&shared).library, &card) {
+        match saves::harvest_card(lock(&shared).library_of(game), &card) {
             Ok(report) => state::log(&dirs, &format!("card harvested: {report:?}")),
             Err(error) => state::log(&dirs, &format!("card not harvested: {error}")),
         }
@@ -562,21 +639,28 @@ pub struct LibraryView {
     /// The folder that holds the page's files (`Documents\Gran Turismo 4\Saves` or `...\Replays`), shown with an
     /// "Open folder" button so a player can find and back up the files.
     pub folder: String,
+    /// The game these saves or replays belong to (the Saves page names it in its title): `gt4` or `spec2`.
+    pub game: String,
+    pub game_name: String,
 }
 
 fn saves_view(state: &AppState) -> Result<LibraryView, String> {
     Ok(LibraryView {
-        items: saves::saves(&state.library)?,
+        items: saves::saves(state.library())?,
         status: state.saves_status.clone(),
-        folder: state.user_dirs.saves().display().to_string(),
+        folder: state.selected_user().saves().display().to_string(),
+        game: state.selected.id.to_string(),
+        game_name: state.selected.display_name.to_string(),
     })
 }
 
 fn replays_view(state: &AppState) -> Result<LibraryView, String> {
     Ok(LibraryView {
-        items: saves::replays(&state.library)?,
+        items: saves::replays(state.library())?,
         status: state.replays_status.clone(),
-        folder: state.user_dirs.replays().display().to_string(),
+        folder: state.selected_user().replays().display().to_string(),
+        game: state.selected.id.to_string(),
+        game_name: state.selected.display_name.to_string(),
     })
 }
 
@@ -598,15 +682,25 @@ pub fn replays_list_of(shared: &Shared) -> Result<LibraryView, String> {
     replays_view(&lock(shared))
 }
 
-/// Picks a save file or card image and imports it into the library. Imports never overwrite.
+/// Picks a save file or card image and imports it into the library of `game`. Imports never overwrite. Both games write the
+/// same PS2 folder name and no rule tells their saves apart (`gt4saves::game_of_save`), so the page always asks which game a
+/// file belongs to before it opens the picker, and a call without `game` is refused: nothing is guessed.
 #[tauri::command]
-pub async fn saves_import(app: AppHandle, shared: State<'_, Shared>) -> Result<Option<LibraryView>, String> {
-    import_with_picker(app, shared.inner().clone(), Kind::Saves).await
+pub async fn saves_import(app: AppHandle, game: Option<String>, shared: State<'_, Shared>) -> Result<Option<LibraryView>, String> {
+    import_with_picker(app, shared.inner().clone(), Kind::Saves, game).await
 }
 
 #[tauri::command]
-pub async fn replays_import(app: AppHandle, shared: State<'_, Shared>) -> Result<Option<LibraryView>, String> {
-    import_with_picker(app, shared.inner().clone(), Kind::Replays).await
+pub async fn replays_import(app: AppHandle, game: Option<String>, shared: State<'_, Shared>) -> Result<Option<LibraryView>, String> {
+    import_with_picker(app, shared.inner().clone(), Kind::Replays, game).await
+}
+
+/// The game an import goes to: the page's answer. A missing or unknown answer is an error, never a guess.
+pub fn import_target(game: Option<&str>) -> Result<&'static Game, String> {
+    match game {
+        None => Err("Choose which game these saves belong to.".to_string()),
+        Some(id) => games::by_id(id).ok_or_else(|| format!("{id} is not a game of this launcher.")),
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -615,7 +709,8 @@ pub enum Kind {
     Replays,
 }
 
-async fn import_with_picker(app: AppHandle, shared: Shared, kind: Kind) -> Result<Option<LibraryView>, String> {
+async fn import_with_picker(app: AppHandle, shared: Shared, kind: Kind, game: Option<String>) -> Result<Option<LibraryView>, String> {
+    let target = import_target(game.as_deref())?;
     tauri::async_runtime::spawn_blocking(move || {
         let picked = app
             .dialog()
@@ -627,19 +722,31 @@ async fn import_with_picker(app: AppHandle, shared: Shared, kind: Kind) -> Resul
             return Ok(None);
         };
         let path = picked.into_path().map_err(|error| error.to_string())?;
-        import_into(&shared, &path, kind).map(Some)
+        import_into_game(&shared, &path, kind, target).map(Some)
     })
     .await
     .map_err(|error| error.to_string())?
 }
 
-/// The import behind `saves_import` and `replays_import` for a picked path. Imports never overwrite.
+/// The import into the library of the game the page shows (tests and the flow audit).
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn import_into(shared: &Shared, path: &Path, kind: Kind) -> Result<LibraryView, String> {
+    let selected = lock(shared).selected;
+    import_into_game(shared, path, kind, selected)
+}
+
+/// The import behind `saves_import` and `replays_import` for a picked path into the library of `game`. Imports never
+/// overwrite. The answer is the page's own list (the game it shows); the status names the game when it is another one.
+pub fn import_into_game(shared: &Shared, path: &Path, kind: Kind, game: &'static Game) -> Result<LibraryView, String> {
     let mut state = lock(shared);
-    let summary = match saves::import_path(&state.library, path) {
+    let mut summary = match saves::import_path(state.library_of(game), path) {
         Ok(report) => summary_of(&report),
         Err(message) => message,
     };
+    if game != state.selected {
+        summary = format!("{} (in {})", summary, game.display_name);
+    }
+    state::log(&state.dirs, &format!("import into {}: {summary}", game.id));
     match kind {
         Kind::Saves => {
             state.saves_status = summary;
@@ -665,7 +772,7 @@ pub fn saves_activate(id: String, shared: State<'_, Shared>) -> Result<LibraryVi
 pub fn saves_activate_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
     let name = id;
     let mut state = lock(shared);
-    let slot = saves::saves(&state.library)?
+    let slot = saves::saves(state.library())?
         .into_iter()
         .find(|item| item.name == name)
         .map(|item| item.label)
@@ -673,7 +780,7 @@ pub fn saves_activate_of(id: String, shared: &Shared) -> Result<LibraryView, Str
     if slot == "Active save" {
         return saves_view(&state);
     }
-    saves::activate(&state.library, &name)?;
+    saves::activate(state.library(), &name)?;
     state.saves_status = format!("{} will be used the next time you play.", name);
     saves_view(&state)
 }
@@ -701,12 +808,12 @@ pub fn replays_delete_of(id: String, shared: &Shared) -> Result<LibraryView, Str
 
 fn delete_item(name: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, String> {
     let mut state = lock(shared);
-    let items = saves::saves(&state.library)?.into_iter().chain(saves::replays(&state.library)?);
+    let items = saves::saves(state.library())?.into_iter().chain(saves::replays(state.library())?);
     let item = items
         .into_iter()
         .find(|item| item.name == name)
         .ok_or_else(|| "That item is not in the library any more.".to_string())?;
-    let result = saves::delete(&state.library, &item);
+    let result = saves::delete(state.library(), &item);
     let status = match result {
         Ok(()) => format!("{} moved to the Recycle Bin.", item.label),
         Err(message) => message,
@@ -721,6 +828,103 @@ fn delete_item(name: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, S
             replays_view(&state)
         }
     }
+}
+
+// Games -----------------------------------------------------------------------------------------
+
+/// `games_list()`: `{selected, any_installed, games: [{id, name, installed, damaged, reason, selected, disc_name, folder,
+/// size_bytes}]}` (Settings > Games and the home selector).
+#[tauri::command]
+pub fn games_list(shared: State<'_, Shared>) -> Result<Value, String> {
+    games_list_of(shared.inner())
+}
+
+pub fn games_list_of(shared: &Shared) -> Result<Value, String> {
+    let state = lock(shared);
+    Ok(json!({
+        "selected": state.selected.id,
+        "any_installed": !state.installed_games().is_empty(),
+        "games": games::GAMES.iter().map(|game| game_row(&state, game)).collect::<Vec<_>>(),
+    }))
+}
+
+/// `select_game({id})`: the game the home screen, the Saves page and Play use. It is only the page's choice; the stored
+/// choice (the game played last) changes when a game starts. Not while the game runs.
+#[tauri::command]
+pub fn select_game(id: String, shared: State<'_, Shared>) -> Result<Value, String> {
+    select_game_of(id, shared.inner())
+}
+
+pub fn select_game_of(id: String, shared: &Shared) -> Result<Value, String> {
+    let game = games::by_id(&id).ok_or_else(|| format!("{id} is not a game of this launcher."))?;
+    {
+        let mut state = lock(shared);
+        if state.game_child.is_some() {
+            return Err("Stop the game before choosing another one.".to_string());
+        }
+        if state.selected != game {
+            state.selected = game;
+            state.saves_status.clear();
+            state.replays_status.clear();
+            state.home_message.clear();
+            // A finished setup of another game is not this game's result.
+            if state.setup_game != Some(game) && !state.setup_busy {
+                state.setup_outcome = SetupOutcome::None;
+            }
+        }
+    }
+    games_list_of(shared)
+}
+
+/// What "Remove" deletes of a game: the copy of the disc image and the prepared files, in the data folder's write places.
+/// Never the save library, the replays, the runtime card or any shared folder.
+pub const REMOVED_FOLDERS: &[&str] = &["disc", "prepared", "prepared.tmp"];
+
+/// `games_remove({id})`: deletes the disc copy and the prepared files of a game (the page asks first). Its saves and replays
+/// stay. Refused while the game runs or setup works. Returns the new `games_list`.
+#[tauri::command]
+pub fn games_remove(id: String, shared: State<'_, Shared>) -> Result<Value, String> {
+    games_remove_of(id, shared.inner())
+}
+
+pub fn games_remove_of(id: String, shared: &Shared) -> Result<Value, String> {
+    let game = games::by_id(&id).ok_or_else(|| format!("{id} is not a game of this launcher."))?;
+    {
+        let state = lock(shared);
+        if state.game_child.is_some() {
+            return Err("Stop the game before removing it.".to_string());
+        }
+        if state.setup_busy || state.migration.running {
+            return Err("Wait until the setup or the move of the game files has finished.".to_string());
+        }
+        let dirs = state.game_dirs(game);
+        let mut removed = Vec::new();
+        for place in dirs.write_places() {
+            for name in REMOVED_FOLDERS {
+                let folder = place.join(name);
+                if folder.exists() {
+                    fs::remove_dir_all(&folder).map_err(|error| format!("{} was not removed: {error}", folder.display()))?;
+                    removed.push(folder.display().to_string());
+                }
+            }
+            // Leftovers of an interrupted preparation (`prepared.old-<time>`).
+            if let Ok(entries) = fs::read_dir(&place) {
+                for entry in entries.filter_map(|entry| entry.ok()) {
+                    if entry.file_name().to_string_lossy().starts_with("prepared.old-") {
+                        let _ = fs::remove_dir_all(entry.path());
+                    }
+                }
+            }
+        }
+        state::log(&state.dirs, &format!("game removed ({}): {}; the saves and replays are kept", game.id, removed.join(", ")));
+    }
+    {
+        let mut state = lock(shared);
+        if state.setup_game == Some(game) {
+            state.setup_outcome = SetupOutcome::None;
+        }
+    }
+    games_list_of(shared)
 }
 
 // About -----------------------------------------------------------------------------------------
@@ -743,6 +947,10 @@ pub struct AboutInfo {
     pub data_folder: String,
     /// The user data folder with the settings, saves and replays (`%APPDATA%\GT4Recomp`).
     pub saves_folder: String,
+    /// The game the page shows (game files and the Saves folder below belong to it).
+    pub game_name: String,
+    /// Credits of the people behind the games GT4Recomp runs (the Spec II authors; see `model::credits_text`).
+    pub credits: String,
 }
 
 #[tauri::command]
@@ -762,9 +970,11 @@ pub fn about_info_of(shared: &Shared) -> Result<AboutInfo, String> {
         version: LAUNCHER_VERSION.to_string(),
         gt4recomp: LAUNCHER_VERSION.to_string(),
         gt4gs: renderer,
-        game_files: state.dirs.disc_folder().display().to_string(),
+        game_files: state.game_dirs(state.selected).disc_folder().display().to_string(),
         data_folder: state.dirs.root().display().to_string(),
         saves_folder: state.user_dirs.root().display().to_string(),
+        game_name: state.selected.display_name.to_string(),
+        credits: model::credits_text().to_string(),
     })
 }
 
@@ -778,7 +988,10 @@ pub fn open_log_folder(shared: State<'_, Shared>) -> Result<(), String> {
 /// Opens the game files folder (the copy of the disc image) in Explorer. The path is fixed by the launcher.
 #[tauri::command]
 pub fn open_game_files_folder(shared: State<'_, Shared>) -> Result<(), String> {
-    let folder = lock(shared.inner()).dirs.disc_folder();
+    let folder = {
+        let state = lock(shared.inner());
+        state.game_dirs(state.selected).disc_folder()
+    };
     open_folder(&folder)
 }
 
@@ -792,14 +1005,20 @@ pub fn open_player_folder(shared: State<'_, Shared>) -> Result<(), String> {
 /// Opens the Saves folder of the user data folder (`%APPDATA%\GT4Recomp\Saves`) in Explorer.
 #[tauri::command]
 pub fn open_saves_folder(shared: State<'_, Shared>) -> Result<(), String> {
-    let folder = lock(shared.inner()).user_dirs.saves();
+    let folder = {
+        let state = lock(shared.inner());
+        state.selected_user().saves()
+    };
     open_folder(&folder)
 }
 
 /// Opens the Replays folder of the user data folder (`%APPDATA%\GT4Recomp\Replays`) in Explorer.
 #[tauri::command]
 pub fn open_replays_folder(shared: State<'_, Shared>) -> Result<(), String> {
-    let folder = lock(shared.inner()).user_dirs.replays();
+    let folder = {
+        let state = lock(shared.inner());
+        state.selected_user().replays()
+    };
     open_folder(&folder)
 }
 

@@ -49,6 +49,10 @@
     var items = [];
     var list = h("div", { class: "lib-list" });
     var headNote = h("p", { class: "note", text: kind.note });
+    // The game these files belong to (TASK-101): each game has its own saves and replays.
+    var gameTag = h("span", { class: "game-tag", text: "" });
+    var title = h("h1", { text: kind.title }, [gameTag]);
+    var currentGame = "";
     var folderText = h("span", { class: "val lib-folder-path", text: "" });
 
     function openFolder() {
@@ -182,6 +186,10 @@
     }
 
     function apply(result, message) {
+      if (result && typeof result.gameName === "string") {
+        gameTag.textContent = result.gameName;
+        currentGame = result.game || currentGame;
+      }
       if (result && Array.isArray(result.items)) {
         items = result.items;
       }
@@ -194,14 +202,22 @@
       paint();
     }
 
+    // A save or card file does not say which game it is from, and the games never share saves: the player says.
+    // (gt4saves::game_of_save finds no rule yet; when one is found, the answer comes from the file and this is skipped.)
     function importItems() {
-      GT4.backend.call(kind.importCmd, {}).then(function (result) {
-        if (!result) {
-          return;
-        }
-        apply(result, "Import finished");
-      }, function (err) {
-        GT4.ui.toast(GT4.errorText(err), true);
+      GT4.games.chooseGame({
+        title: "Which game are these from?",
+        text: "Saves and replays of Gran Turismo 4 and Gran Turismo 4 Spec II are kept apart. GT4Recomp cannot tell them apart from the file, so choose the game they belong to.",
+        current: currentGame
+      }, function (gameId) {
+        GT4.backend.call(kind.importCmd, { game: gameId }).then(function (result) {
+          if (!result) {
+            return;
+          }
+          apply(result, result.status || "Import finished");
+        }, function (err) {
+          GT4.ui.toast(GT4.errorText(err), true);
+        });
       });
     }
 
@@ -212,7 +228,7 @@
     }, kind.importLabel);
 
     content.appendChild(h("div", { class: "lib-head" }, [
-      h("div", null, [h("h1", { text: kind.title }), headNote]),
+      h("div", null, [title, headNote]),
       importButton
     ]));
     content.appendChild(list);

@@ -240,7 +240,7 @@ fn synthetic_flow_end_to_end() {
     assert!(renderer.iter().any(|event| event["step"] == "downloading" && event["percent"] == 50), "{renderer:?}");
     assert!(renderer.iter().any(|event| event["step"] == "done"));
     assert_eq!(recorder.names("setup-finished"), vec![json!({ "ok": true, "message": "" })]);
-    assert!(data.join("disc").join("SCUS-97328.iso").exists());
+    assert!(data.join("games").join("gt4").join("disc").join("SCUS-97328.iso").exists());
 
     // The picked file may go away: the next launch goes straight to Home, with no hash (well under the time a hash
     // of a real image takes).
@@ -264,7 +264,7 @@ fn synthetic_flow_end_to_end() {
     assert!(refusal.contains("log folder"), "{refusal}");
 
     // The player cleaned the data folder: Home is not shown, Play refuses, Setup offers to choose the disc again.
-    fs::remove_file(data.join("disc").join("SCUS-97328.iso")).unwrap();
+    fs::remove_file(data.join("games").join("gt4").join("disc").join("SCUS-97328.iso")).unwrap();
     let third = launch(&dirs, &pins);
     let view = screen(&third);
     assert_eq!(view["setup"]["state"], "files_missing", "{view}");
@@ -290,8 +290,8 @@ fn synthetic_flow_end_to_end() {
     handle.join().unwrap();
     let state = setup_state(&shared);
     assert!(state == "failed" || state == "done", "{state}");
-    assert!(!data.join("disc").join("SCUS-97328.iso.tmp").exists());
-    assert!(!data.join("prepared.tmp").exists());
+    assert!(!data.join("games").join("gt4").join("disc").join("SCUS-97328.iso.tmp").exists());
+    assert!(!data.join("games").join("gt4").join("prepared.tmp").exists());
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -451,4 +451,223 @@ fn real_flow_end_to_end() {
         }
     }
     fs::write(data.parent().unwrap().join("real-flow-report.txt"), report.join("\n")).unwrap();
+}
+
+// Two games (TASK-101) -----------------------------------------------------------------------------------------------
+
+/// A synthetic Spec II executable (a small ELF32 with the plugin segment) and pins that describe it.
+fn synthetic_spec2() -> (Vec<u8>, gt4_disc_spec2::Spec2Pins) {
+    gt4_disc_spec2::synthetic()
+}
+
+/// Helpers for a synthetic Spec II disc (no game data).
+mod gt4_disc_spec2 {
+    use gt4l_disc::elf::sha256_hex;
+    use gt4l_disc::spec2_elf;
+    use gt4l_disc::spec2_pins::Spec2Patch;
+    pub use gt4l_disc::Spec2Pins;
+    use gt4l_disc::Identity;
+
+    pub fn synthetic() -> (Vec<u8>, Spec2Pins) {
+        const PLUGIN_VA: u32 = 0x68A480;
+        let headers: [[u32; 8]; 3] = [
+            [1, 0x1000, 0x100000, 0x100000, 0x100, 0x100, 5, 0x1000],
+            [1, 0x1100, 0x680000, 0x680000, 0x20000, 0x30000, 6, 0x1000],
+            [1, 0x21100, PLUGIN_VA, PLUGIN_VA, 0x40, 0x40, 7, 0x10],
+        ];
+        let mut image = vec![0u8; 0x21140];
+        image[..4].copy_from_slice(&[0x7f, b'E', b'L', b'F']);
+        image[4] = 1;
+        image[5] = 1;
+        image[28..32].copy_from_slice(&52u32.to_le_bytes());
+        image[42..44].copy_from_slice(&32u16.to_le_bytes());
+        image[44..46].copy_from_slice(&3u16.to_le_bytes());
+        for (index, header) in headers.iter().enumerate() {
+            for (field, value) in header.iter().enumerate() {
+                let at = 52 + index * 32 + field * 4;
+                image[at..at + 4].copy_from_slice(&value.to_le_bytes());
+            }
+        }
+        image[0x1000..0x1004].copy_from_slice(&0x1111_2222u32.to_le_bytes());
+        let patches = vec![Spec2Patch { address: 0x100000, size: 4, old: 0x1111_2222, new: 0xAABB_CCDD }];
+        let derived = spec2_elf::derive(&image, &patches).unwrap();
+        let pins = Spec2Pins {
+            serial: "SCUS-97436".into(),
+            boot_path: "/SCUS_974.36;1".into(),
+            system_version: "1.00".into(),
+            executable: Identity { size_bytes: image.len() as u64, sha256: sha256_hex(&image) },
+            derived: Identity { size_bytes: derived.len() as u64, sha256: sha256_hex(&derived) },
+            known_images: Vec::new(),
+            beta_boot_sha256: sha256_hex(b"beta"),
+            patches,
+        };
+        (image, pins)
+    }
+}
+
+/// The synthetic Spec II pins in place of the embedded ones, and the selection a start would make with them.
+fn use_spec2_pins(shared: &Shared, pins: &gt4_disc_spec2::Spec2Pins) {
+    let mut state = lock(shared);
+    state.spec2_pins = pins.clone();
+    let installed = state.installed_games();
+    state.selected = gt4l_core::games::initial_selection(state.config.selected_game.as_deref(), &installed);
+}
+
+fn stand_in_programs(root: &Path, names: &[&str]) -> PathBuf {
+    let program = root.join("program");
+    fs::create_dir_all(program.join("game")).unwrap();
+    for name in names {
+        fs::write(program.join("game").join(name), b"stand-in, never started").unwrap();
+    }
+    program
+}
+
+#[test]
+fn two_games_install_side_by_side_and_never_mix() {
+    let root = scratch("two-games");
+    let data = root.join("data");
+    let dirs = DataDirs::new(&data);
+    let game = synthetic_game(0x0010_0000, 0x0010_0008, b"synthetic guest code, not game data, 0123456789abcdef");
+    let gt4_image = build_iso(
+        "GT4 USA",
+        &[
+            ("SYSTEM.CNF;1", system_cnf("SCUS_973.28", "2.00", "NTSC")),
+            ("CORE.GT4;1", game.core.clone()),
+            ("SCUS_973.28;1", vec![0xA5; 3000]),
+        ],
+    );
+    let pins = pins_for(&gt4_image, &game, "SCUS-97328", "2.00");
+    let (executable, spec2_pins) = synthetic_spec2();
+    let spec2_image = build_iso(
+        "GRANTURISMO4",
+        &[("SYSTEM.CNF;1", system_cnf("SCUS_974.36", "1.00", "NTSC")), ("SCUS_974.36;1", executable)],
+    );
+    let gt4_disc = root.join("gt4.iso");
+    let spec2_disc = root.join("spec2.iso");
+    fs::write(&gt4_disc, &gt4_image).unwrap();
+    fs::write(&spec2_disc, &spec2_image).unwrap();
+
+    // First start, Spec II first: the disc decides the game; it becomes the selected and the stored choice.
+    let shared = launch(&dirs, &pins);
+    use_spec2_pins(&shared, &spec2_pins);
+    assert_eq!(screen(&shared)["setup"]["game"], Value::Null, "the first setup has no target: the disc decides");
+    let info = setup::choose_disc_path(&shared, &spec2_disc).expect("a Spec II disc is accepted");
+    assert_eq!((info.game.as_str(), info.mismatch), ("spec2", false));
+    run_setup(&shared, &Recorder::default(), fake_renderer());
+    let view = screen(&shared);
+    assert_eq!(view["setup"]["state"], "done", "{view}");
+    assert_eq!(view["selected_game"], "spec2");
+    assert_eq!(lock(&shared).config.selected_game.as_deref(), Some("spec2"));
+    assert!(data.join("games/spec2/prepared/SCUS_974.36").is_file());
+    assert!(data.join("games/spec2/disc/SCUS-97436.iso").is_file());
+    assert!(!data.join("games/gt4").exists(), "Gran Turismo 4 is untouched");
+    let games_view = commands::games_list_of(&shared).unwrap();
+    assert_eq!(games_view["games"][0]["installed"], json!(false));
+    assert_eq!(games_view["games"][1]["installed"], json!(true));
+
+    // The home selector moves to Gran Turismo 4, which is not installed: its setup is the "Install" button.
+    let view = commands::select_game_of("gt4".into(), &shared).unwrap();
+    assert_eq!(view["selected"], "gt4");
+    assert_eq!(screen(&shared)["setup"]["state"], "needed");
+    assert_eq!(screen(&shared)["any_installed"], json!(true), "the page stays on Home, with Install in place of Play");
+    assert_eq!(screen(&shared)["setup"]["game"]["id"], "gt4");
+
+    // The Spec II disc under "Install Gran Turismo 4": the answer says it is another game.
+    let wrong = setup::choose_disc_path_for(&shared, &spec2_disc, Some("gt4")).unwrap();
+    assert!(wrong.mismatch && wrong.game == "spec2" && wrong.requested.as_deref() == Some("gt4"));
+    // The right disc installs Gran Turismo 4; the stored choice (the game played last) does not change.
+    let right = setup::choose_disc_path_for(&shared, &gt4_disc, Some("gt4")).unwrap();
+    assert!(!right.mismatch && right.game == "gt4");
+    run_setup(&shared, &Recorder::default(), fake_renderer());
+    assert_eq!(screen(&shared)["setup"]["state"], "done");
+    assert!(data.join("games/gt4/disc/SCUS-97328.iso").is_file());
+    assert!(data.join("games/spec2/disc/SCUS-97436.iso").is_file(), "installing one game leaves the other alone");
+    assert_eq!(lock(&shared).config.selected_game.as_deref(), Some("spec2"));
+    assert_eq!(lock(&shared).selected.id, "gt4", "the page stays on the game just set up");
+
+    // The next start shows the game played last.
+    let second = launch(&dirs, &pins);
+    use_spec2_pins(&second, &spec2_pins);
+    assert_eq!(screen(&second)["selected_game"], "spec2");
+    assert_eq!(commands::games_list_of(&second).unwrap()["games"].as_array().unwrap().iter().filter(|g| g["installed"] == json!(true)).count(), 2);
+
+    // Each game plays with its own program, ELF, disc and card (checked up to the GSdx step, which a test has none of).
+    let program = stand_in_programs(&root, &["gt4vulkan.exe"]);
+    commands::select_game_of("spec2".into(), &second).unwrap();
+    let missing = commands::prepare_play(&second, &program).map(|_| ()).unwrap_err();
+    assert!(missing.contains("Gran Turismo 4 Spec II") && missing.contains("missing"), "{missing}");
+    stand_in_programs(&root, &["gt4vulkan-spec2.exe"]);
+    let refusal = commands::prepare_play(&second, &program).map(|_| ()).unwrap_err();
+    assert!(refusal.starts_with("GSdx could not run the game"), "reaches the shared GSdx check: {refusal}");
+
+    // Saves are apart: an import into Spec II is not in Gran Turismo 4, and the page names the game it shows.
+    let card = root.join("card.ps2");
+    synthetic_card(&card);
+    let view = commands::import_into_game(&second, &card, Kind::Saves, &gt4l_core::games::SPEC2).unwrap();
+    assert_eq!(view.game, "spec2");
+    assert_eq!(view.items.len(), 1, "{}", view.status);
+    commands::select_game_of("gt4".into(), &second).unwrap();
+    let gt4_view = commands::saves_list_of(&second).unwrap();
+    assert_eq!((gt4_view.game.as_str(), gt4_view.game_name.as_str()), ("gt4", "Gran Turismo 4"));
+    assert!(gt4_view.items.is_empty(), "Gran Turismo 4 has no save from the Spec II import");
+    assert!(gt4_view.folder.replace('\\', "/").contains("games/gt4/Saves"), "{}", gt4_view.folder);
+    // An import must say which game: nothing is guessed.
+    assert!(commands::import_target(None).is_err());
+    assert_eq!(commands::import_target(Some("spec2")).unwrap().id, "spec2");
+    assert!(commands::import_target(Some("gt9")).is_err());
+
+    // Remove deletes the disc copy and the prepared files of one game, never its saves or the other game.
+    let after = commands::games_remove_of("spec2".into(), &second).unwrap();
+    assert_eq!(after["games"][1]["installed"], json!(false));
+    assert_eq!(after["games"][0]["installed"], json!(true));
+    assert!(!data.join("games/spec2/disc").exists() && !data.join("games/spec2/prepared").exists());
+    assert!(data.join("games/gt4/disc/SCUS-97328.iso").is_file());
+    commands::select_game_of("spec2".into(), &second).unwrap();
+    assert_eq!(commands::saves_list_of(&second).unwrap().items.len(), 1, "the Spec II save is still there");
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_1_2_x_install_moves_into_games_gt4_at_the_first_start() {
+    let root = scratch("migration");
+    let data = root.join("data");
+    let dirs = DataDirs::new(&data);
+    let game = synthetic_game(0x0010_0000, 0x0010_0008, b"synthetic guest code, not game data, 0123456789abcdef");
+    let image = build_iso(
+        "GT4 USA",
+        &[
+            ("SYSTEM.CNF;1", system_cnf("SCUS_973.28", "2.00", "NTSC")),
+            ("CORE.GT4;1", game.core.clone()),
+            ("SCUS_973.28;1", vec![0xA5; 3000]),
+        ],
+    );
+    let pins = pins_for(&image, &game, "SCUS-97328", "2.00");
+    let picked = root.join("gt4.iso");
+    fs::write(&picked, &image).unwrap();
+    let shared = launch(&dirs, &pins);
+    setup::choose_disc_path(&shared, &picked).unwrap();
+    run_setup(&shared, &Recorder::default(), fake_renderer());
+    drop(shared);
+
+    // Put the files back where 1.2.x kept them: <data>\disc, <data>\prepared, <data>\runtime.
+    fs::create_dir_all(data.join("runtime")).unwrap();
+    fs::write(data.join("runtime").join("card.ps2"), b"card").unwrap();
+    for name in ["disc", "prepared"] {
+        fs::rename(data.join("games/gt4").join(name), data.join(name)).unwrap();
+    }
+    fs::remove_dir_all(data.join("games")).unwrap();
+
+    // The launcher still reads the flat files before the move: nothing is lost if the move fails.
+    let shared = launch(&dirs, &pins);
+    assert_eq!(setup_state(&shared), "done");
+    assert!(lock(&shared).dirs.disc_folder().ends_with("disc") && !lock(&shared).dirs.disc_folder().to_string_lossy().contains("games"));
+    crate::relocation::move_large_data(&shared, &gt4l_core::paths::LegacyLocations::default());
+    assert!(!lock(&shared).migration.running);
+    assert!(data.join("games/gt4/disc/SCUS-97328.iso").is_file(), "moved by a rename");
+    assert!(data.join("games/gt4/prepared/SCUS_973.28").is_file());
+    assert_eq!(fs::read(data.join("games/gt4/runtime/card.ps2")).unwrap(), b"card");
+    assert!(!data.join("disc").exists() && !data.join("prepared").exists() && !data.join("runtime").exists());
+    assert_eq!(setup_state(&shared), "done", "Play is available again after the move");
+    assert!(lock(&shared).dirs.disc_folder().to_string_lossy().contains("games"));
+    let _ = fs::remove_dir_all(&root);
 }

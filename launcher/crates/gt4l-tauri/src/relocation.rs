@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use gt4l_core::games_layout::{self, UserLayoutOutcome};
 use gt4l_core::paths::{self, DataDirs, Layout, LayoutInputs, LegacyLocations, UserDirs, TEXTURES_FOLDER_NAME};
 use gt4l_core::relocate::{self, FsOps, LargeMove, LargeOutcome, UnitResult, UserMove};
 use gt4l_core::textures::{self as texture_folder, FlattenOps};
@@ -96,11 +97,21 @@ pub fn prepare(exe_dir: &Path) -> Result<Startup, String> {
     );
     log.extend(outcome.log_lines(&new_user));
     let notice = outcome.notice(&new_user).map(|text| (text, !outcome.uses_new_place()));
-    let user = if outcome.uses_new_place() {
+    let mut user = if outcome.uses_new_place() {
         new_user
     } else {
         legacy_user_dirs(&layout, format!("{outcome:?}"))
     };
+    // TASK-101: Gran Turismo 4's library moves into `games\gt4` (the 1.3.0 layout). It is small and the move is a rename,
+    // so it is done here, before the window. Until it has happened the flat 1.2.x folders stay in use.
+    if outcome.uses_new_place() {
+        let moved = games_layout::migrate_user_library(&user, game_running(), &FsOps::real());
+        log.extend(moved.log_lines());
+        user.set_flat_gt4(!moved.uses_new_place());
+        if let UserLayoutOutcome::Failed(_) = moved {
+            log.push("library: the saves are used where they are".to_string());
+        }
+    }
     Ok(Startup { layout, user, log, notice })
 }
 
@@ -237,7 +248,9 @@ pub fn move_large_data(shared: &Shared, legacy: &LegacyLocations) {
         (state.dirs.clone(), state.pins.clone())
     };
     let sources = large_sources(legacy, &dirs);
-    if sources.is_empty() {
+    // The 1.2.0 sources move first (into the flat 1.2.x names), then the flat names move into `games\gt4` (TASK-101).
+    if sources.is_empty() && !games_layout::flat_data_pending(&dirs) {
+        lock(shared).dirs.set_flat_gt4(false);
         return;
     }
     lock(shared).migration.running = true;
@@ -250,6 +263,11 @@ pub fn move_large_data(shared: &Shared, legacy: &LegacyLocations) {
         }
         problem |= failed;
     }
+    let (layout_notice, layout_failed) = move_games_layout(shared, &dirs, &pins);
+    if !layout_notice.is_empty() {
+        notices.push(layout_notice);
+    }
+    problem |= layout_failed;
     let mut state = lock(shared);
     state.migration = crate::state::MigrationRun {
         running: false,
@@ -257,6 +275,45 @@ pub fn move_large_data(shared: &Shared, legacy: &LegacyLocations) {
         problem: problem || state.migration.problem,
         ..Default::default()
     };
+}
+
+/// The move of the flat 1.2.x game folders into `games\gt4` (TASK-101, `gt4l_core::games_layout`). Returns the page sentence
+/// (empty when nothing needs saying) and whether it reports a problem. After a move that did not fail, the flat folders are
+/// no longer read.
+fn move_games_layout(shared: &Shared, dirs: &DataDirs, pins: &Pins) -> (String, bool) {
+    let flat = dirs.flat_gt4_root().to_path_buf();
+    let source_ready = matches!(
+        disc_setup::check_installed(&flat.join("prepared"), &flat.join("disc"), pins),
+        Installed::Ready { .. }
+    );
+    let check = |folder: &Path, hashes: &BTreeMap<PathBuf, String>| check_moved_game_files(folder, hashes, pins, source_ready);
+    let mut last_permille = u64::MAX;
+    let outcome = games_layout::migrate_data(dirs, game_running(), &gt4saves::timestamp(), &check, &FsOps::real(), &mut |progress| {
+        let permille = if progress.bytes_total == 0 { 0 } else { progress.bytes_done * 1000 / progress.bytes_total };
+        if permille == last_permille {
+            return;
+        }
+        last_permille = permille;
+        let mut state = lock(shared);
+        state.migration.item = progress.item.clone();
+        state.migration.bytes_done = progress.bytes_done;
+        state.migration.bytes_total = progress.bytes_total;
+    });
+    for line in outcome.log_lines() {
+        state::log(dirs, &line);
+    }
+    match &outcome {
+        LargeOutcome::Deferred(_) => ("Close Gran Turismo 4 and restart GT4Recomp to finish organising the game files.".to_string(), true),
+        _ if outcome.failed() => (
+            "Some game files could not be organised yet. They are used where they are, and GT4Recomp tries again at the next start."
+                .to_string(),
+            true,
+        ),
+        _ => {
+            lock(shared).dirs.set_flat_gt4(false);
+            (String::new(), false)
+        }
+    }
 }
 
 /// Moves one source. Returns the page sentence (empty when nothing happened) and whether it reports a problem.

@@ -34,7 +34,7 @@ pub fn seed(state: &AppState) {
     if std::env::var("GT4RECOMP_VISUAL_SEED").as_deref() != Ok("1") {
         return;
     }
-    if saves::saves(&state.library).map(|items| !items.is_empty()).unwrap_or(true) {
+    if saves::saves(state.library()).map(|items| !items.is_empty()).unwrap_or(true) {
         return;
     }
     let folder = state.dirs.root().join("visual-seed");
@@ -48,8 +48,8 @@ pub fn seed(state: &AppState) {
         let image = Card::build(&items).expect("synthetic card builds").to_image();
         let path = folder.join(name);
         if std::fs::write(&path, image).is_ok() {
-            let _ = saves::import_path(&state.library, &path);
+            let _ = saves::import_path(state.library(), &path);
         }
     }
-    let _ = saves::activate(&state.library, "Save 01");
+    let _ = saves::activate(state.library(), "Save 01");
 }
