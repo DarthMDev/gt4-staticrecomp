@@ -222,6 +222,8 @@ body.is-home.input-keys #hints { display: none; }
 }
 /* The logo sits right above the buttons (Play, or the running state, and Settings), centred on their row. */
 .home-logo { width: 280px; height: auto; display: block; margin-bottom: 28px; }
+/* Optical centring (owner, 2026-10-23): the GT emblem weighs the logo to the left, so it sits 5 px right of the maths. */
+.home-bottom .home-logo { transform: translateX(5px); }
 .home-actions { display: flex; align-items: center; gap: 12px; }
 /* Settings: the plain gear at the top left of the home screen (owner, 2026-10-23); a light box only on hover or focus. */
 .gear {
