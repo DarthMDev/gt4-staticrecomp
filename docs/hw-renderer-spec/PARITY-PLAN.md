@@ -438,6 +438,9 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
   & "C:\Antigravity\gt4-wt-027-coregs2\build\hwr-play-scale.ps1" -Scale 6 -AA
   ```
 
+  The candidate folder must hold `SDL3.dll` next to `gt4vulkan.exe` (the executable links SDL3 dynamically); the
+  script copies it from the build tree when it is missing. Owner test 10 never ran for this reason.
+
   Compare with gt4-gs (GSdx) at 6x in the launcher on the same scene (Fuji Test Course or Nordschleife TT, 480p):
   GPU load, clock and power in RivaTuner, and the picture.
 
