@@ -11,8 +11,10 @@ Scaled image device memory on the 480p race capture: 64.1 MB at 2x, 243.1 MB at 
 738.2 / 1,660.9 MB before (65-67% less; one 640 x 448 target is 41 MB instead of 151 MB at 6x). Gates unchanged:
 CTest 245/245 in both interlock modes (new `hw_scale_target_extent`), the five memory captures byte-identical (menu
 1,101 frames, race 121, car 121, night 121 with `fifo_hash=3a2fe617a174e7e7`, race480p 121), scaled memory equal to
-1x and 0 low-detail presented frames at 2x/4x/6x, and the 06.3/IN-377/IN-379 fixtures unchanged. GPU time is unchanged
-(the same sub-pixels are shaded): this item buys memory. Reported as `scaled_image_mb` on the `[hw] cost` line and on
+1x and 0 low-detail presented frames at 2x/4x/6x, and the 06.3/IN-377/IN-379 fixtures unchanged. GPU busy on the
+480p race replay (`--gpu-timing`, this build against candidate 273): 5.25/6.42/9.58/14.77 ms at 1/2/4/6x against
+5.35/5.99/8.68/16.92; the 6x gain (about 13%, scaled pass 9.18 -> 8.04 ms) is the only one outside the run-to-run
+spread, so the item is reported mainly as a memory win. Reported as `scaled_image_mb` on the `[hw] cost` line and on
 the replay's `scale=` line with `scaled_image_grows` and `scaled_draws_clipped`. Next: the fast scaled raster itself
 (an early-Z second pass with real attachments, tolerance only on the presented image). Not merged; no pins.
 

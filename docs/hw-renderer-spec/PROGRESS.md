@@ -43,6 +43,12 @@ its slot's real extent instead of a fixed 1024 x 1024 native square.
   scaled memory equal to 1x and 0 low-detail presented frames at 2x/4x/6x; the 06.3/IN-377/IN-379 fixtures unchanged.
 - **Reporting:** `stats.scaledImageBytes`, printed as `scaled_image_mb` on the `[hw] cost` line and on the replay's
   `scale=` line with `scaled_image_grows` and `scaled_draws_clipped`.
+- **GPU busy on the 480p race replay** (`--gpu-timing`, same capture and recipe, this build against candidate 273):
+  - 1x 5.25 (was 5.35), 2x 6.42 (5.99), 4x 9.58 (8.68), 6x 14.77 (16.92) ms.
+  - At 6x the scaled pass is 8.04 instead of 9.18 ms; the 1x pass 2.75 (3.24), refresh 0.70 (0.82).
+  - Only 6x is outside the run-to-run spread of this machine; the item is mainly a memory win.
+- **CPU per frame (replay, same recipe):** 1x gif 8.82 / batch 4.70 / execute 3.41 ms; 6x gif 17.86 / batch 12.84 /
+  execute 11.33 ms. Unchanged by this item (the CPU does not see the images).
 
 ## 2026-10-23 tone-sequence strip executor (IN-383, parity plan item 2)
 
