@@ -39,8 +39,8 @@ the owner moved the work to another agent. Read it together with `AGENTS.md`, `d
   - Contents: IN-384 (scaled images sized to their slot) on top of candidate 273's IN-371..IN-383.
 - **Candidate 273 (owner test 10, superseded):** `O:\gt4recomp-scratch\coregs2-candidate-273`, sha256
   `7c410e535e3a33b50cc71e411d44a9c98c188c1f51dee1a31a73eb0e306d28e0`.
-- **Gates after IN-383 (slice273):**
-  - CTest 244/244 with and without interlock.
+- **Gates after IN-384 (slice274):**
+  - CTest 245/245 with and without interlock.
   - Memory hashes identical on all five captures (night `fifo_hash=3a2fe617a174e7e7`).
   - Menu dumps 42/42 = slice228; race 42/42 = slice235; default renderer 42/42 = slice214.
   - Race `--check-presented`: 0 low-detail frames at 2x/4x/6x.
