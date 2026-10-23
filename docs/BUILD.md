@@ -2599,22 +2599,27 @@ The target is a separate build that never replaces v2.00:
 - `-DGT4_TARGET=spec2` (compile-time `GT4_TARGET_SPEC2`, empty hook table) and `-DGT4_EE_PROFILE=spec2` (the Spec II
   library, pinned by `docs/inputs/spec2-ee-libraries.json`). CMake refuses a mismatched pair.
 - The output is `gt4vulkan-spec2.exe`; `gt4vulkan.exe` and its pins are untouched.
-- The perf runtime capsule accepts the `spec2` profile (target-independent code); the license guard capsule stays out
-  until S8.
+- The perf runtime capsule accepts the `spec2` profile (target-independent code); the license guard capsule is the
+  slice277 one (S8b).
 
-Library: `private/slice274-spec2-ee-producer/game-build/ps2game.lib`, 77,369,746 bytes, sha256 `5e483768…`, built from
-the 346 units in `O:\gt4recomp-scratch\spec2-s4-generated` with clang-cl 23.1.2:
+Library (S8c reseed): `private/slice278-spec2-ee-producer/game-build/ps2game.lib`, 80,229,124 bytes, sha256 `9a94c3ed…`, built from
+the 346 units in `O:\gt4recomp-scratch\spec2-s8c-generated-clean` with clang-cl 23.1.2:
 
 ```
-cmake -S tools/ee_producer -B O:\gt4recomp-scratch\spec2-s4-lib-build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+cmake -S tools/ee_producer -B O:\gt4recomp-scratch\spec2-s8c-lib-build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
   -DCMAKE_CXX_COMPILER=<assets>/private/tooling/llvm-23.1.2/bin/clang-cl.exe ^
   -DGT4_DONOR=<assets>/private/references/ps2-web-recomp -DGT4_PYTHON=<assets>/private/tooling-venv/Scripts/python.exe ^
-  -DGT4_GENERATED=O:/gt4recomp-scratch/spec2-s4-generated -DGT4_BUILD_TRANSLATOR=OFF
-cmake --build O:\gt4recomp-scratch\spec2-s4-lib-build --target ps2game --parallel 4
+  -DGT4_GENERATED=O:/gt4recomp-scratch/spec2-s8c-generated-clean -DGT4_BUILD_TRANSLATOR=OFF
+cmake --build O:\gt4recomp-scratch\spec2-s8c-lib-build --target ps2game --parallel 4
 ```
 
 Executable recipe (worktree needs `-DGT4_PYTHON`): the slice262 capsule recipe with
 `-DGT4_EE_PROFILE=spec2 -DGT4_TARGET=spec2`, build dir `O:\gt4recomp-scratch\spec2-s4-build`.
+
+The units come from `scripts/spec2_ee_generate.py --entries private/slice278-spec2-ee-producer/entry-seeds.txt`; the
+seed file is produced by `scripts/spec2_entry_seeds.py --generated <previous units>` (wide `luipair` window 64,
+stack-frame fallthrough, executable-segment literal code entries). `native/CMakeLists.txt` accepts only the slice278
+library for the spec2 profile; `spec2-s4-generated` and slice274 stay as history.
 
 ### S7b findings (blocked before the menus)
 
@@ -2685,6 +2690,115 @@ Run notes:
   `8000:start` (main menu) → `9200:cross` (Arcade), `10000:cross` (Single Race), `11000/11200:down`, `11400:cross`
   (City Courses), `12200:cross` (track), `13000:cross` (Normal), `14400:cross` (Ford), carousel `right` ×5,
   `16400:cross` (car), `17200/18000:cross`, then hold `cross` to drive.
+  A night race at C.S. Route 5: `10600:down` (City Courses), `10800:cross`, `right` ×9 (11200…12800), `13000:cross`
+  (track), `13800:cross` (Normal), `14400:cross`, `15000:cross`, `right` ×5 (15600…16400), `17000/17800/18600:cross`,
+  `19400:cross:2600` (accelerate).
+
+## Spec II S7c - the shipping renderer (TASK-100)
+
+The Spec II target on the external PCSX2 GS process (`GT4_RENDERER=pcsx2`), which is the shipping renderer until
+CoreGS 2.0. Same launch path as the v2.00 pcsx2 mode, now with target overrides in
+`scripts/frame_cost_headless.py` (defaults are the v2.00 gate values):
+
+```
+private/tooling-venv/Scripts/python.exe scripts/frame_cost_headless.py ^
+  --assets-root <assets> --build <spec2 build> --exe gt4vulkan-spec2.exe --scene menus --frames 21000 ^
+  --elf <assets>/private/slice272-spec2-elf/SCUS_974.36 --iso "<Spec II ISO>" ^
+  --press 600:start:30 ... --keep-dumps
+```
+
+- `--exe` picks `gt4vulkan-spec2.exe`; `--elf`/`--iso` replace the v2.00 inputs; `--press` replaces the scene schedule
+  (repeatable, `FRAME:BUTTON:FRAMES`); `--gs-exe`/`--gs-sha256` choose the GS process and forward
+  `GT4_GS_PROCESS_SHA256`; `--textures <dir>` writes `[Folders] Textures` **and**
+  `[EmuCore/GS] LoadTextureReplacements = true` (PCSX2's loader switch defaults to off, the launcher always writes
+  both) and `--scale` is the gt4-gs multiplier.
+- Frame dumps come from the GS process (`DumpEvery`, `gs-frames/live_frameNNNNN.png`); the game process writes the
+  conditions, including `gs_exe_sha256` and `textures`.
+- The repo's pinned GS package is `private/slice203-gt4gs-release-pkg` (gt4-gs 1.0.1). Texture packs need gt4-gs
+  1.2.1 or later, so the texture check uses the launcher's installed 1.2.1 (`<install>\data\gs\1.2.1\gt4-gs.exe`) and
+  records its SHA-256; a release that ships packs must pin 1.2.1+.
+- The GT4 display crop is a fixed constant in gt4-gs (`GT4_DISPLAY_CROP = {0,0,1,2}`, `pcsx2-gt4gs/Main.cpp`; the
+  `[EmuCore/GS] Crop*` keys are refused) and applies to every live stream; the GS stderr logs
+  `gt4-gs: display crop left 0 top 0 right 1 bottom 2 (native pixels)`. The game announces `SCUS-97328` in the
+  handshake even for Spec II (`native/gs_stream/gs_stream_client.cpp`, `kGameSerial`), so gt4-gs selects the GT4
+  GameDB entry; gt4-gs has no SCUS-97436 entry (recorded for S8/S9).
+
+## Spec II S8 - host hooks for the Spec II image (TASK-100)
+
+The Spec II table in `native/game_target.hpp` is filled for the 16:9 hold, the 480p race display hold, the race
+camera aspect and the HUD canvas. The full address table and how each value was found are in the S8 Progress entry of
+[SPEC2-PLAN](SPEC2-PLAN.md); the short version:
+
+- option chain: owner word `0x664EDC`, option `owner + 0x680`, wide flag `+0x14`, record `+0x24` (44 bytes, width
+  `+0xC`, height `+0x10`), presets `0x664E20/50/80/B0`, published wide word `0x6655A0`, race display index `+0x1718`;
+- code: `RaceBase::initMonitor` `0x26BDB0` with camera return `0x26BE60`, `RaceDisplay::render` `0x1C5040` with the HUD
+  matrix at `this + 0x70`;
+- not mapped yet (rows stay 0 and the hook logs once): the display request struct (scene policy knows render activity,
+  not photo mode), the shape observer. The license demo guard is mapped in S8b below.
+
+The aspect overlay lives in the license guard capsule, so the Spec II build needs it. From S8b that capsule is
+`slice277-license-guard-runtime` (the same profile as slice262 plus the per-target license guard):
+
+```
+cmake -S <worktree> -B O:\gt4recomp-scratch\spec2-s7d-build\build ... ^
+  -DGT4_LICENSE_GUARD_SOURCE=<assets>/private/slice277-license-guard-runtime
+```
+
+Checks:
+
+- `native_spec2_hooks` (`native/spec2_hooks_fixture.cpp`, always built with `GT4_TARGET_SPEC2`) asserts every table
+  value and the write rules in synthetic 32 MiB RAM: the wide record is copied from `0x664E50`, the flag and
+  `0x6655A0` are set, the 480p hold writes 1 on the normal index and keeps 1080i.
+- Headless GSdx race (21,000 frames, Costa di Amalfi) at `GT4_DISPLAY_ASPECT=21:9`: the log shows the camera matrix
+  scaled (`x 0.761905`), `first RaceDisplay::render`, the HUD canvas (`left -240 right 880`) and the fill policy. The
+  16:9 hold logs the settled owner `0x009BD690`; it writes nothing because the game itself boots 16:9. The 480p hold
+  lives in `window.cpp`'s VBlank and is therefore not exercised by headless runs (fixture only).
+
+## Spec II S8b - license demo guard (TASK-100)
+
+The TASK-017 guard is on for Spec II. Table values (all in `native/game_target.hpp`; evidence in the S8b Progress
+entry of [SPEC2-PLAN](SPEC2-PLAN.md)):
+
+- `RaceSolitaire::loadDemoInputs` `0x2012C8` (vtbl `0x6B3130 + 0x510`), loaders `0x10CA18`/`0x10CBA8` with return
+  labels `0x10CB54`/`0x10CCE4` (vtbl `+0x510` and `+0x1C8`), `Manager::load` `0x207AA0`, game CRC-32 table `0x731DB0`;
+- `license_manager_add` `0x1A24` (the add inside `loadDemoInputs`) and `license_body_shift` `0x80` (the loader hands
+  the virtual a pointer 0x80 into the body; the decrypted demos keep the Manager stream at body `+0x1AA4` on all
+  discs). The overlay evaluates the CRC/layout at the header's body start and writes `n = 0xFFFFFFFF` at
+  `a1 + manager_add`, exactly where the virtual reads; a static assert keeps `add + shift == 0x1AA4`.
+
+The overlay text changed, so the guard capsule was re-derived (the slice262 profile, `--display-aspect
+--frame-counters`) and pinned:
+
+```
+private/tooling-venv/Scripts/python.exe scripts/prepare_license_guard.py ^
+  <assets>/private/slice277-license-guard-runtime --assets-root <assets> --display-aspect --frame-counters
+private/tooling-venv/Scripts/python.exe scripts/pin_frame_cost_guard.py slice277-license-guard-runtime --assets-root <assets>
+```
+
+`native/CMakeLists.txt` accepts a slice26x or slice27x guard capsule (`docs/inputs/<capsule>.json`); the Spec II
+build uses slice277, v2.00 keeps slice262.
+
+Checks: `native_license_guard` (v2.00 rule), the extended `native_spec2_hooks` (Spec II values, both loader labels
+key the guard and other labels do not, the shift/add maths, the rule), and the Python overlay harness compiled twice
+(v2.00 and `GT4_TARGET_SPEC2` with a shifted pointer). Oracle on the 256 Spec II demos with our FPU: 0 CRC passes,
+114 sane layouts, 142 demos guarded. A headless license demo is not reachable (GT mode needs game data), so the owner
+run remains the gate.
+
+## Spec II S8c - the Options-menu halt and the entry seeds (TASK-100)
+
+Owner test 1 halted on opening Options at `0x003CA690` (ra `0x0050D1B0`). Root cause: the callback is built by
+`lui s0,0x003D` at `0x003CC8EC` + `addiu s0,s0,-22896` at `0x003CC9C0` (53 instructions apart), so the translator's
+3-instruction `luipair` window missed it. `scripts/spec2_entry_seeds.py` now emits the missing classes (wide `luipair`
+window 64, stack-frame fallthrough, executable-segment literal code entries); 1,299 seeds produced 1,332,727
+instructions / 18,597 functions / 153,474 entries, library `private/slice278-spec2-ee-producer/game-build/ps2game.lib`
+(80,229,124 bytes, `9a94c3ed.`). The seed file stays in the slice (`entry-seeds.txt`, `041c1864.`); pins are
+`docs/inputs/spec2-ee-libraries.json` and `docs/inputs/spec2-ee-generated.json`. CMake accepts only the slice278
+library for the spec2 profile.
+
+Headless: the old exe halts at `0x003CA690` after 11,159 frames on the same schedule; the new exe opens Options (and
+all its submenus, Replay Theater, Save Game, Credits, GT Mode and the Arcade menu) with no halt. The new executable is
+`O:\gt4recomp-scratch\spec2-s7d-build\build\gt4vulkan-spec2.exe`, 104,475,136 bytes, sha256 `301bbb4a.`. The harness
+has `--card` for an owner-card copy; a license demo was still not reached headless.
 
 ## Slice 278 - TASK-097 self-sufficient game, TASK-098 portable build (release 1.3.0)
 

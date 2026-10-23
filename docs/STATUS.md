@@ -92,8 +92,67 @@ primitives, the language menu, the main menu, Arcade Mode, track and car selecti
 di Amalfi (169.7 M primitives, HUD and lap timer), with no "no translated code". CTest 43/43 in the Spec II build; the
 Python suite passes with the Spec II build (668 tests) and keeps only the expected release-pin failure with the v2.00
 build. v2.00 identity re-run: menus `463d455c…`/`1ccb97c5…`, day `992f1ac9…`/`0c79dcf5…`, night
-`c57e7d03…`/`c091716e…`, all equal to the 1.2.3 build. Next: S8 (Spec II hook addresses), S9 (launcher, installer,
-credits).
+`c57e7d03…`/`c091716e…`, all equal to the 1.2.3 build.
+
+**S7c is done: Spec II runs on GSdx**, the shipping external PCSX2 GS process (`GT4_RENDERER=pcsx2`). Headless:
+menus 4,200 frames, a Costa di Amalfi race (21,000 frames, 12 readbacks), a night race at C.S. Route 5 (2,928
+readbacks, one 483 ms outlier), 3x upscale (1920x1440 dumps) and the owner's `!_HD HUD & UI` texture pack
+(`[Folders] Textures` + `LoadTextureReplacements`; needs gt4-gs 1.2.1, the repo pin is 1.0.1), all clean (protocol
+1.2, no stream errors or back-pressure stalls). The GT4 display crop is a fixed gt4-gs constant (`{0,0,1,2}`) that
+logs for both games; the game still announces the v2.00 serial SCUS-97328 in the GS handshake and gt4-gs has no
+SCUS-97436 GameDB entry (recorded for S8/S9). `scripts/frame_cost_headless.py` gained `--exe/--elf/--iso/--press/
+--textures/--gs-sha256` with the v2.00 gate defaults unchanged.
+
+**S8 is done for the main hooks (2026-10-23).** The Spec II table now has the option chain (owner `0x664EDC`, option
+`+0x680`, wide flag `+0x14`, record `+0x24` with width/height at `+0xC`/`+0x10`, presets `0x664E20/50/80/B0`,
+published wide word `0x6655A0`, race display index `+0x1718`), `RaceBase::initMonitor` `0x26BDB0` with the camera
+return label `0x26BE60`, `RaceDisplay::render` `0x1C5040` and the HUD matrix at `+0x70`. Values were found from the
+v2.00 code shapes in the derived ELF and confirmed with a runtime RAM dump of the Spec II menus. New fixture
+`native_spec2_hooks` asserts every value and the write rules in synthetic RAM; a headless GSdx race at 21:9 shows the
+camera matrix scaled (`x 0.761905`), the first `RaceDisplay::render`, the centred HUD canvas and the fill policy. The
+16:9 hold finds the settled owner (the game already boots 16:9, so it writes nothing); the 480p hold is a
+`window.cpp` VBlank hook, so headless runs cover its Spec II rule through the fixture only. Still open, rows left 0
+and the hook logs once: the display request struct (photo mode), the license demo guard (Spec II has the feature; the
+loaders are not mapped) and the shape observer. CTest 44/44 in the Spec II build; Python 671 tests clean on the Spec
+II build (51 skipped) and only the expected release-pin failure on v2.00; v2.00 identity against slice268 exact.
+Next: S9 (launcher, installer, credits).
+
+**S8b is done: the license demo guard is on for Spec II (2026-10-23).** `kSpec2Hooks` now has loadDemoInputs
+`0x2012C8` (RaceSolitaire vtable `0x6B3130 + 0x510`, the same virtual v2.00 has at `+0x4D8`), loaders
+`0x10CA18`/`0x10CBA8` with return labels `0x10CB54`/`0x10CCE4` (each calls the `license/%s` helper `0x1A8BE8` and
+makes one vtable call), `Manager::load` `0x207AA0`, the game CRC-32 table `0x731DB0`, the Manager add `0x1A24` and a
+loader body pointer shift `0x80`. The cipher is unchanged (`0x459E90`, FT at `0x667048`, T8 at `0x731C98`); the Spec
+II volume's 256 `replay/license` demos are the retail files (171 shared with v2.00, 170 bodies byte-identical) and
+CRC-confirmed plaintexts keep the single-Recorder stream at body `+0x1AA4`, so the layout and CRC rule are unchanged
+and the code's `0x1A24` add applies to a pointer 0x80 into the body (High confidence; not observed at runtime).
+The guard now evaluates the header's body and writes `n = 0xFFFFFFFF` at `a1 + manager_add`, exactly where the
+virtual reads (a static assert keeps add + shift = 0x1AA4); the overlay was re-derived into the fresh capsule
+`private/slice277-license-guard-runtime` (slice262 profile), pinned in `inputs/slice277-license-guard-runtime.json`,
+and CMake accepts slice27x guard capsules (v2.00 keeps slice262). Oracle on the Spec II set with our FPU: 0/256 CRC
+passes, 114 sane layouts, **142 demos guarded**. Headless license test not reachable (GT mode needs game data; the
+seed cards have none), so the owner run remains the gate; its log prints `demo`, `body` and `manager`. CTest 44/44 and
+Python 675 OK (51 skipped) on the Spec II build, including the overlay harness compiled for `GT4_TARGET_SPEC2`;
+v2.00 identity against slice268 exact in all three scenes (dumps `463d455c.`/`992f1ac9.`/`c57e7d03.`, streams
+`1ccb97c5.`/`0c79dcf5.`/`c091716e.`). Next: S9 (launcher, installer, credits).
+
+**S8c fixes the owner's Options-menu halt and widens the Spec II entry seeds (2026-10-23).** The owner's first Spec
+II test halted twice opening Options (`missing code at 0x003CA690`, ra `0x0050D1B0`). The callback is built by the
+Options page itself: `lui s0,0x003D` at `0x003CC8EC` + `addiu s0,s0,-22896` 53 instructions later, stored in the
+descriptor; the translator's `luipair` window is 3 instructions and no dataword points at it, so it never became an
+entry. New `scripts/spec2_entry_seeds.py` seeds the missing classes (wide `luipair` window 64, stack-frame
+fallthrough, executable-segment literal code entries) as a 1,299-entry delta; the regenerated translation has
+1,332,727 instructions, 18,597 functions and 153,474 entries, and the new library
+`private/slice278-spec2-ee-producer/game-build/ps2game.lib` (80,229,124 bytes, `9a94c3ed.`) is pinned in
+`inputs/spec2-ee-libraries.json` / `inputs/spec2-ee-generated.json` (CMake accepts only slice278 for the spec2
+profile). After the reseed the sweep finds no real missing entries in the luipair/fallthrough/dataword/executable
+classes (only plugin strings/zeros remain). Headless: the old exe reproduces the halt after 11,159 frames; the new
+exe opens Options and every submenu (Race, Replay, Screen 16:9, Picture Quality, Sound, Arcade Mode, LAN Connection
+Settings, Photo Lab), Replay Theater, Save Game, Credits, GT Mode and the Arcade menu with no halt. The harness gained
+`--card` for an owner-card copy; a license demo was still not reached headless (the mod's "Spec II Settings" dialog
+blocks the GT map in the current schedule), so the `[license-guard]` confirmation stays with the owner. New executable:
+`O:\gt4recomp-scratch\spec2-s7d-build\build\gt4vulkan-spec2.exe`, 104,475,136 bytes, sha256 `301bbb4a.`. CTest 44/44
+and Python 678 OK (51 skipped) on the Spec II build; v2.00 identity against slice268 unchanged (menus/day/night dumps
+and stream hashes). Next: S9 (launcher, installer, credits).
 
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 

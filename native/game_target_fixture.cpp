@@ -8,7 +8,7 @@
 
 #include <cstdio>
 
-bool spec2_target_has_no_hooks();
+bool spec2_target_has_the_s8_hooks();
 bool spec2_match_addresses_never_match();
 
 namespace {
@@ -66,6 +66,8 @@ void check_v200_values() {
   check(h.license_replay_loader_entry == 0x110230u, "second loader entry");
   check(h.license_replay_loader_return == 0x110344u, "second loader return label");
   check(h.license_crc_table == 0x655358u, "CRC table");
+  check(h.license_manager_add == 0x1AA4u, "Manager add");
+  check(h.license_body_shift == 0u, "body shift");
   // TASK-133 shape observation (diagnostic).
   check(h.shape_call_pc == 0x455A5Cu, "shape call pc");
   check(h.shape_target_pc == 0x49D308u, "shape target pc");
@@ -92,7 +94,7 @@ void check_helpers() {
 int main() {
   check_v200_values();
   check_helpers();
-  check(spec2_target_has_no_hooks(), "Spec II table disables every hook");
+  check(spec2_target_has_the_s8_hooks(), "Spec II table has the S8 hooks and disables the rest");
   check(spec2_match_addresses_never_match(), "Spec II overlay keys are the sentinel");
   if (failures != 0) {
     std::fprintf(stderr, "game_target_fixture: %d failure(s)\n", failures);
