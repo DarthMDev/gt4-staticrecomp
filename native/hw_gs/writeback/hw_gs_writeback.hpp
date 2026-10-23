@@ -79,6 +79,10 @@ struct Counters {
     std::uint64_t displayCaptures = 0;        // display downloads recorded at Flush (IN-355)
     std::uint64_t presentationsFromCapture = 0;  // presentation composes made from a capture (IN-355)
     std::uint64_t gpuComposedFrames = 0;      // presentation frames composed on the GPU (IN-364)
+    // M12 (IN-372): GPU composes at scale, and the circuits of them read from the GLM at 1x (no scaled image).
+    std::uint64_t scaledComposedFrames = 0;
+    std::uint64_t scaledCircuitsFromSlots = 0;
+    std::uint64_t scaledCircuitsFromGlm = 0;
     std::uint64_t glmMergedWords = 0;
     std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).
@@ -127,6 +131,7 @@ struct GpuFrame {
     std::uint32_t width = 0;
     std::uint32_t height = 0;
     std::uint64_t image = 0;  // the VkImage value (opaque here)
+    bool fxaa = false;        // IN-376: `image` is the FXAA output (13.5) instead of the composed display image
 };
 
 struct FrameOutput {
@@ -177,6 +182,12 @@ public:
     Renderer(const Renderer &) = delete;
     Renderer &operator=(const Renderer &) = delete;
 
+    // M12 (chapter 06, IN-371): internal resolution scale and the 06.3 vertex shift factor, before Init. The scale
+    // changes only the presentation (scaled images and the scaled GPU compose); memory, dumps of the `vram` and
+    // `scanout` sources, readbacks and every 1x gate are unchanged.
+    void SetScale(std::uint32_t scale, float scaleOffset);
+    std::uint32_t Scale() const;
+
     // Creates the GPU drawer on an existing device. False with `error` when the GPU path is unusable.
     bool Init(const gpu::VulkanHandles &handles, std::string &error);
 
@@ -210,6 +221,8 @@ public:
     // image, then the work is submitted. Returns false (nothing done) when the frame needs the CPU path.
     bool ComposeFrameGpu(GpuFrame &out);
     void SetGpuCompose(bool enabled);
+    // 13.5 FXAA (GT4_HW_POSTFX=fxaa, IN-376): GPU-composed presentation frames pass through the edge-only FXAA.
+    void SetFxaa(bool enabled);
     // Fixtures and checks: the pixels of a GPU frame (submits and waits).
     bool ReadGpuFrame(const GpuFrame &frame, std::vector<std::uint32_t> &pixels);
     FrameOutput Compose(ComposeKind kind = ComposeKind::Reference);

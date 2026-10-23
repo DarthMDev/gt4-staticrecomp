@@ -41,7 +41,9 @@ enum class Readback { exact, full, none };
 enum class DirtyFilter { automatic, linear, nearest };
 enum class DumpTextures { off, on, mips };
 enum class DumpFormat { g, p };
-enum class DumpSource { vram, scanout };
+// vram: the reference image; scanout: the 1x presentation image; upscaled: the GPU presentation compose at
+// GT4_HW_SCALE (IN-372; interlaced frames fall back to the 1x presentation).
+enum class DumpSource { vram, scanout, upscaled };
 enum class PresentFilter { bilinear, nearest, sharp };
 enum class DeinterlaceAlgorithm { automatic, off, weave, bob, blend, adaptive };
 

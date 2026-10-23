@@ -126,6 +126,11 @@ struct GpuChunk {
     std::size_t TexelCount() const { return texelSpan ? texelSpanCount : texels.size(); }
 };
 
+// M12 (chapter 06, IN-371): the scaled images of the target slots cover the native rectangle (0, 0) to
+// (kGpuScaledExtent - 1, kGpuScaledExtent - 1) of each slot; draws and loads outside it reach only the 1x words.
+constexpr std::int32_t kGpuScaledExtent = 1024;
+constexpr std::uint32_t kGpuMaxScale = 8;  // GT4_HW_SCALE range (06.1)
+
 // Limits of one Execute() call (the caller splits larger batches).
 constexpr std::uint32_t kGpuMaxVertices = 1u << 20;   // 32 MiB of vertex data
 constexpr std::int32_t kGpuSurface = 2048;             // GS window size: frame and depth images
@@ -149,6 +154,14 @@ struct GpuStats {
     std::uint64_t decodesGlmPalette = 0;     // indexed decodes that read the palette from the GLM (IN-370)
     std::uint64_t decodesReused = 0;     // GLM texture decodes skipped: same texture earlier in the run (IN-369)
     std::uint64_t renderPasses = 0;      // render pass instances (runs and per-chunk passes; IN-367 efficiency)
+    // M12 upscaling (chapter 06, IN-371): draws repeated into the scaled images, scaled render passes, and
+    // refreshes of a scaled image from its 1x words after a load (uploads and GLM loads).
+    std::uint64_t scaledDraws = 0;
+    std::uint64_t scaledPasses = 0;
+    std::uint64_t scaledRefreshes = 0;
+    std::uint64_t scaledRefreshPixels = 0;  // native pixels refreshed
+    std::uint64_t scaledTextureCopies = 0;  // IN-374: textures copied from a slot's scaled image
+    std::uint64_t fxaaFrames = 0;           // IN-376: presentation frames passed through FXAA
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
     // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.
@@ -162,6 +175,14 @@ public:
     ~GpuDrawer();
     GpuDrawer(const GpuDrawer &) = delete;
     GpuDrawer &operator=(const GpuDrawer &) = delete;
+
+    // M12 (chapter 06, IN-371): internal resolution scale s (1..kGpuMaxScale), set before Init. With s > 1 every
+    // target slot also gets an image of kGpuScaledExtent * s pixels per side; every draw into a slot is rasterised a
+    // second time into it (vertex positions times s, 06.3 half-pixel shift `halfPixelShift` in scaled pixels times 2,
+    // so 1.0 * s is the native mode), and every load of 1x words into a slot refreshes it. The 1x words stay the
+    // only authority: memory, the GLM, readbacks and every 1x gate are unchanged at any scale.
+    void SetScale(std::uint32_t scale, float scaleOffset);
+    std::uint32_t Scale() const;
 
     // Creates the shader modules, pipelines, images and buffers. Fails with a readable message.
     bool Init(const VulkanHandles &handles, std::string &error);
@@ -213,11 +234,22 @@ public:
     // placements), out_width x out_height pixels. The caller made the GLM current for the circuits.
     bool ComposeDisplay(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth, std::uint32_t outHeight,
                         std::string &error);
-    // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, kGpuSurface square, GENERAL layout).
+    // M12 (IN-372): the same compose at s x s output pixels per native pixel into the display image (sized for it).
+    // The block holds 13 words per circuit (RC1 at 5, RC2 at 18): the 12 of ComposeDisplay plus the colour slot
+    // whose scaled image the circuit reads, plus one (0: read the GLM at 1x). out_* are scaled pixels.
+    bool ComposeDisplayScaled(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth,
+                              std::uint32_t outHeight, std::string &error);
+    // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, max(kGpuSurface,
+    // kGpuScaledExtent * scale) square, GENERAL layout).
     // As an opaque handle (the VkImage value): this header carries no Vulkan types.
     std::uint64_t DisplayImage() const;
-    // Fixtures: the top-left width x height words of the display image (submits and waits).
-    bool ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words, std::string &error);
+    // Fixtures: the top-left width x height words of the display image, or of the FXAA image (submits and waits).
+    bool ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words, std::string &error,
+                     bool fromFxaa = false);
+    // 13.5 FXAA (IN-376): records hw_postfx_fxaa.comp over the top-left width x height pixels of the display image
+    // into the FXAA image (created on first use, same size and packing as the display image).
+    bool ApplyFxaa(std::uint32_t width, std::uint32_t height, std::string &error);
+    std::uint64_t FxaaImage() const;
     // Copies the given byte ranges of the GLM into `localMemory` at the same offsets (IN-350: pages whose newest
     // content lives only in the GLM, before the CPU reads or writes them). Submits and waits.
     bool DownloadGlm(const std::vector<std::pair<std::uint32_t, std::uint32_t>> &ranges, std::uint8_t *localMemory,

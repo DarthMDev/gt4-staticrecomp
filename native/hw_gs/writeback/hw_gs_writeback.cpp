@@ -1408,6 +1408,16 @@ public:
     }
 
     // The slot holding `view`, or the least recently used slot of that kind (written back and dropped).
+    // A view one of the display circuits reads now (DISPFB1/2: FBP, FBW, PSM).
+    bool DisplayedView(const memory::BufferView& view) const {
+        for (const display::CircuitRegisters& registers : displayRegs_.circuits) {
+            const display::CircuitFields fields = display::decode_circuit(registers);
+            const auto psm = memory::decodePsm(fields.psm);
+            if (psm && SameView(view, memory::BufferView{memory::blockOfPage(fields.fbp), fields.fbw, *psm})) return true;
+        }
+        return false;
+    }
+
     ResidentSlot& Acquire(bool depth, const memory::BufferView& view) {
         ResidentSlot* oldest = nullptr;
         for (ResidentSlot& slot : slots_) {
@@ -1417,11 +1427,18 @@ public:
                 return slot;
             }
         }
-        for (ResidentSlot& slot : slots_) {
-            if (slot.depth != depth || &slot == protectedSlot_) continue;  // never evict this batch's texture
-            if (!oldest || (!slot.hasIdentity && oldest->hasIdentity) ||
-                (slot.hasIdentity == oldest->hasIdentity && slot.lastUse < oldest->lastUse)) {
-                oldest = &slot;
+        // IN-373: at an internal scale > 1 a colour target the display circuits show is evicted last, so the
+        // presentation finds its scaled image (GT4 keeps the shown buffer of its double buffer untouched while it
+        // draws the other one and many small targets). At 1x the order is the plain LRU of IN-344.
+        const bool keepDisplayed = !depth && gpu_.Scale() > 1;
+        for (int pass = 0; pass < 2 && !oldest; ++pass) {
+            for (ResidentSlot& slot : slots_) {
+                if (slot.depth != depth || &slot == protectedSlot_) continue;  // never evict this batch's texture
+                if (pass == 0 && keepDisplayed && slot.hasIdentity && DisplayedView(slot.view)) continue;
+                if (!oldest || (!slot.hasIdentity && oldest->hasIdentity) ||
+                    (slot.hasIdentity == oldest->hasIdentity && slot.lastUse < oldest->lastUse)) {
+                    oldest = &slot;
+                }
             }
         }
         if (oldest->hasIdentity) counters.cacheEvictions++;
@@ -1933,6 +1950,7 @@ public:
     std::string lastError_;
     Renderer::BatchObserver observer_;
     bool cacheMode_ = false;       // GT4_HW_SYNC_MODE: false = write-back reference mode
+    bool fxaa_ = false;            // 13.5 FXAA on GPU-composed presentation frames (IN-376)
     // Decoded-texture cache (IN-341). On in both sync modes: it only skips re-decoding unchanged memory.
     static constexpr size_t kTextureCacheEntries = 256;
     bool textureCacheEnabled_ = true;
@@ -1969,6 +1987,10 @@ public:
 Renderer::Renderer() : impl_(std::make_unique<Impl>()) {}
 
 Renderer::~Renderer() = default;
+
+void Renderer::SetScale(std::uint32_t scale, float scaleOffset) { impl_->gpu_.SetScale(scale, scaleOffset); }
+
+std::uint32_t Renderer::Scale() const { return impl_->gpu_.Scale(); }
 
 bool Renderer::Init(const gpu::VulkanHandles& handles, std::string& error) {
     if (!impl_->gpu_.Init(handles, error)) return false;
@@ -2474,7 +2496,65 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
             parameters[at + 11] = circuit.display_height;
         }
         std::string error;
-        if (!s.gpu_.ComposeDisplay(parameters, size.width, size.height, error) || !s.gpu_.Flush(false, error)) {
+        const uint32_t scale = s.gpu_.Scale();
+        uint32_t outWidth = size.width;
+        uint32_t outHeight = size.height;
+        bool composed = false;
+        if (scale > 1) {
+            // IN-372: the same block with a 13th word per circuit: the resident colour slot whose scaled image holds
+            // the circuit's whole read rectangle (+1), or 0 to read the GLM at 1x.
+            std::vector<uint32_t> scaled(31, 0u);
+            std::copy(parameters.begin(), parameters.begin() + 5, scaled.begin());
+            for (std::size_t i = 0; i < 2; ++i) {
+                const std::size_t from = i == 0 ? 5u : 17u;
+                const std::size_t at = i == 0 ? 5u : 18u;
+                std::copy(parameters.begin() + from, parameters.begin() + from + 12, scaled.begin() + at);
+                const display::CircuitRect& circuit = layout.circuits[i];
+                const auto psm = memory::decodePsm(circuit.psm);
+                if (!available[i] || !psm) continue;
+                const memory::BufferView view{memory::blockOfPage(circuit.fbp), circuit.fbw, *psm};
+                const PixelRect read{circuit.dbx, circuit.dby, circuit.dbx + static_cast<int32_t>(circuit.read_width) - 1,
+                                     circuit.dby + static_cast<int32_t>(circuit.read_height) - 1};
+                uint32_t slotWord = 0;
+                if (read.x0 >= 0 && read.y0 >= 0 && read.x1 < gpu::kGpuScaledExtent && read.y1 < gpu::kGpuScaledExtent) {
+                    for (const auto& slot : s.slots_) {
+                        if (slot.depth || !slot.hasIdentity || !SameView(slot.view, view) || !Contains(slot.loaded, read)) {
+                            continue;
+                        }
+                        slotWord = slot.gpuIndex + 1u;
+                        break;
+                    }
+                }
+                scaled[at + 12] = slotWord;
+                static const bool trace = std::getenv("GT4_HW_SCALE_TRACE") != nullptr;  // diagnostic only
+                if (trace) {
+                    std::fprintf(stderr, "[scale] circuit %zu bp=%u bw=%u psm=%u read=%d,%d,%d,%d slot=%u\n", i,
+                                 view.basePointer, view.bufferWidth, static_cast<unsigned>(view.psm), read.x0, read.y0,
+                                 read.x1, read.y1, slotWord);
+                    for (const auto& slot : s.slots_) {
+                        std::fprintf(stderr, "[scale]   slot depth=%d gpu=%u id=%d bp=%u bw=%u psm=%u loaded=%d,%d,%d,%d "
+                                     "drawn=%d,%d,%d,%d\n", slot.depth ? 1 : 0, slot.gpuIndex, slot.hasIdentity ? 1 : 0,
+                                     slot.view.basePointer, slot.view.bufferWidth, static_cast<unsigned>(slot.view.psm),
+                                     slot.loaded.x0, slot.loaded.y0, slot.loaded.x1, slot.loaded.y1, slot.drawn.x0,
+                                     slot.drawn.y0, slot.drawn.x1, slot.drawn.y1);
+                    }
+                }
+                if (slotWord != 0) {
+                    s.counters.scaledCircuitsFromSlots++;
+                } else {
+                    s.counters.scaledCircuitsFromGlm++;
+                }
+            }
+            outWidth = size.width * scale;
+            outHeight = size.height * scale;
+            composed = s.gpu_.ComposeDisplayScaled(scaled, outWidth, outHeight, error);
+            if (composed) s.counters.scaledComposedFrames++;
+        } else {
+            composed = s.gpu_.ComposeDisplay(parameters, size.width, size.height, error);
+        }
+        const bool fxaa = composed && s.fxaa_;
+        if (fxaa) composed = s.gpu_.ApplyFxaa(outWidth, outHeight, error);  // IN-376
+        if (!composed || !s.gpu_.Flush(false, error)) {
             s.Fail(error);
             return false;
         }
@@ -2483,9 +2563,10 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
         s.counters.gpuComposedFrames++;
         s.lastPresented_.reset();  // a later KeepPrevious falls back to the CPU history (none: blank)
         out.valid = true;
-        out.width = size.width;
-        out.height = size.height;
-        out.image = s.gpu_.DisplayImage();
+        out.width = outWidth;
+        out.height = outHeight;
+        out.fxaa = fxaa;
+        out.image = fxaa ? s.gpu_.FxaaImage() : s.gpu_.DisplayImage();
     }
     s.timings_.composeUs = composeUs;
     s.counters.composeUs += composeUs;
@@ -2494,9 +2575,11 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
 
 void Renderer::SetGpuCompose(bool enabled) { impl_->gpuCompose_ = enabled; }
 
+void Renderer::SetFxaa(bool enabled) { impl_->fxaa_ = enabled; }
+
 bool Renderer::ReadGpuFrame(const GpuFrame& frame, std::vector<std::uint32_t>& pixels) {
     std::string error;
-    if (!frame.valid || !impl_->gpu_.ReadDisplay(frame.width, frame.height, pixels, error)) return false;
+    if (!frame.valid || !impl_->gpu_.ReadDisplay(frame.width, frame.height, pixels, error, frame.fxaa)) return false;
     return true;
 }
 

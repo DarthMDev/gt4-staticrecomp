@@ -59,6 +59,8 @@ struct Stats {
   // Destination rectangle of the last presented image inside the swapchain (chapter 13.6: always the largest
   // centred 16:9 rectangle; GT4 draws its forced 16:9 picture anamorphically into 640 x 448, TASK-079).
   std::uint32_t present_left = 0, present_top = 0, present_width = 0, present_height = 0;
+  std::uint32_t present_downscale_levels = 0;  // IN-375: 2x2 box steps before the final blit (upscaled frames)
+  std::uint32_t present_source_width = 0, present_source_height = 0;  // the presented frame (scaled size)
 };
 
 // Renderer counters of chapter 12.7, flattened so the backend header stays free of the write-back
@@ -95,6 +97,16 @@ struct RenderCounters {
   std::uint64_t gpu_early_submissions = 0;  // mid-frame submissions (IN-358)
   std::uint64_t vblanks_interlaced = 0;     // SMODE2.INT = 1 (480i)
   std::uint64_t vblanks_progressive = 0;    // SMODE2.INT = 0 (480p)
+  // M12 (IN-371/IN-372): the internal scale, draws and passes repeated at scale, scaled-image refreshes from 1x
+  // words, scaled GPU composes and their circuits read from a slot's scaled image or from the GLM at 1x.
+  std::uint32_t scale = 1;
+  std::uint64_t scaled_draws = 0;
+  std::uint64_t scaled_passes = 0;
+  std::uint64_t scaled_refreshes = 0;
+  std::uint64_t scaled_refresh_pixels = 0;
+  std::uint64_t scaled_composes = 0;
+  std::uint64_t scaled_circuits_from_slots = 0;
+  std::uint64_t scaled_circuits_from_glm = 0;
   std::uint64_t gpu_composed_frames = 0;    // presentation frames composed on the GPU (IN-364)
   std::uint64_t gpu_render_passes = 0;      // IN-367 efficiency counters
   std::uint64_t gpu_upload_bytes = 0;
@@ -117,7 +129,7 @@ struct DeviceReport {
   std::vector<std::string> missing_required;  // refusal list when non-empty
   std::vector<std::string> optional_found;
   std::vector<std::string> optional_missing;
-  std::uint32_t max_image_dimension_2d = 0;
+  std::uint32_t max_image_dimension_2d = 0;  // also the 06.1 scale ceiling (/ 1280)
   std::uint32_t max_compute_workgroup_count_x = 0;
 };
 

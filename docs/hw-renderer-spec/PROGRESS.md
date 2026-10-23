@@ -16,7 +16,8 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
 | M6 output | Done except owner test 1: display library, presentation interfaces (IN-331) with `end_frame`/`present_slot`, HWR frame dumps (IN-332; `vram` = reference image, `scanout` = presentation image, IN-338), replay tool (IN-333/IN-334), odd-frame draw loss fixed (IN-335), field offset and deinterlace in the presentation (IN-338) with the adaptive rule corrected (IN-337). Open: IN-336 (triangle precision, inside the gate) | local slice229: `hw_presentation_field_phase`, `display_hw_deint_adaptive`; 42/42 `vram` dumps inside the 2D gate and byte-identical to slice228; presentation replay of the menu capture bob-free on static screens |
 | M7 cache | In progress: resident target slots with LRU (IN-340/IN-344), decoded-texture cache (IN-341), deferred submission (IN-342), textures from targets (IN-346), CPU small sprites (IN-348), GPU CLUT (IN-349), GLM-owned pages instead of write-backs for evictions, overlaps and uploads (IN-350/IN-351); gated by `hw_cache_equals_writeback` and per-frame memory hashes of the menu, car and race captures (identical to the write-back mode). Open: target lists per chapter 05, display from targets, preload, dirty lists, clears, GPU moves | local slice237: race replay 1 write-back per frame (display) instead of 12; headless race 65 -> 38 ms per vsync |
-| M8, M12, M14, M15, M17, M19 | Not started | |
+| M12 upscaling | In owner test: 2x-8x through a presentation-only scaled copy of every target (IN-371..IN-375), FXAA (IN-376, M15 part); 480i menus still 1x | `hw_scale_exact`, `hw_postfx_fxaa`, `hw_smoke_window_scaled`, scale-3 block of `hw_cache_equals_writeback`; memory hashes identical at 6x |
+| M8, M14, M15 (rest), M17, M19 | M8 flare readback done earlier (IN-357..IN-359); others not started | |
 | M9 batching | In progress: one draw per chunk of triangles with an ordered pixel interlock (IN-345); runs of chunks in one render pass with texture preparation hoisted into a texel atlas (IN-352). Open: CLUT loads and GLM operations still cost two barriers each; double-buffered submission (CPU and GPU overlap) | `hw_cache_equals_writeback` and the GPU fixtures in both interlock modes; race barriers 9,500 -> 3,230 per frame |
 | M10 GLM | Started: GLM, decode, swizzle, unswizzle, CLUT, merge and upload kernels (IN-347, IN-349..IN-351) | `hw_glm_decode`, `hw_glm_swizzle`, `hw_glm_unswizzle`, `hw_glm_clut`, `hw_glm_upload_merge`, `hw_glm_host_upload` |
 | M11, M13, M16, M18 | Pure references only (lod, replace) | lod, `hw_replace_*` CTest |
@@ -553,3 +554,25 @@ Still over the owner's 6 ms GS-worker budget in the race. Largest remaining CPU 
   slice249 = the release 1.2.2 recipe (aspect, slice262 capsule and guard). Build trees on
   `O:\gt4recomp-scratch\coregs2-slice248-merge` and `coregs2-slice249-r122`; local gate helper `build/gates2/gates.sh`.
 - Next: M12 upscaling (step 3 plan above), then anti-aliasing.
+
+## 2026-10-22 M12 upscaling and FXAA (local slice250, IN-371..IN-376) - Claude
+
+- Design (IN-371): the 1x words stay the only authority. With `GT4_HW_SCALE` s > 1 every target slot gets a second
+  image at s x s sub-pixels per native pixel (native extent 1024); every draw is rasterised a second time into it
+  (06.3 native mode, scissor moved by floor(s/2) sub-pixels), every load of 1x words refreshes it. Memory, GLM,
+  readbacks (night flare `fifo_hash=3a2fe617a174e7e7`), `vram` dumps and every 1x gate are identical at 2x, 4x and 6x.
+- Presentation (IN-372): a scaled GPU compose reads the displayed buffer's scaled image (06.3 edge band handled);
+  the displayed buffer is evicted last at scale (IN-373); textures copied from targets are sampled at scale (IN-374,
+  GT4's CT24 -> CT16 frame conversion); the present reduces large frames by 2x2 box steps before the final blit
+  (IN-375). Menus (480i, CPU presentation) stay 1x for now.
+- FXAA (IN-376, 13.5): `GT4_HW_POSTFX=fxaa`, own edge-only implementation, on GPU-composed frames.
+- 06.9 metric on the 480p race capture (box downsample vs 1x): 40.0 dB (2x), 40.4 (4x), 40.2 (6x).
+- New controls: `hw_scale_exact` (exact 06.3 expectation for flat sprites and a 1:1 target copy at 2x-4x, both
+  interlock modes), the scale-3 block of `hw_cache_equals_writeback` (memory equals 1x; box PSNR >= 25 dB on that
+  noise-pattern capture), `hw_postfx_fxaa`, `hw_smoke_window_scaled`, the `upscaled` dump source option.
+- Cost (headless, not windowed; noisy): 480p race at 6x GS thread 10.7-11.8 ms CPU per frame (unchanged from 1x
+  within noise), about 15-16 ms per vsync; replay GPU busy (with timestamps) 6.4 ms at 1x, 12.8 at 4x, 14.8 at 6x,
+  17.8 at 8x: the scaled pass is the new GPU cost; 6x is near the 16.7 ms budget.
+- Ready for owner test 6: `build\hwr-play-scale.ps1 -Scale N [-AA]` (frozen copy `O:\gt4recomp-scratch\coregs2-candidate-250`).
+- Next: owner verdict at 2x-6x vs GSdx; scaled presentation for the 480i menus; textures decoded from the GLM at scale
+  where they are targets (mirror); scaled-pass GPU cost; GS-thread CPU (gif front end).

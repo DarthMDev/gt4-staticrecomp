@@ -2854,3 +2854,18 @@ Gates (`build/gates2/gates.sh <tag> <build dir>`, outputs under `O:\gt4recomp-sc
 output and passed on every rerun); memory hashes identical on the five captures; menu dumps 42/42 = slice228; race
 frames 42/42 = slice235; default renderer 42/42 = slice214 after the `mtvu::Donor` fix (before it, donor mode crashed
 at the first VBlank, as main's slice262 build does).
+
+## Local slice250 - TASK-027 M12 upscaling and FXAA (IN-371..IN-376)
+
+Fresh build tree `O:\gt4recomp-scratch\coregs2-slice250-scale\build` with the release 1.2.2 recipe
+(`build/slice248-coregs2/build.bat <dir> aspect slice262-frame-cost-runtime slice262-license-guard-runtime`),
+incremental rebuilds during the step. Owner candidate frozen in `O:\gt4recomp-scratch\coregs2-candidate-250`
+(`gt4vulkan.exe` SHA-256 `363d11a7347ffa0c182618f80f5789abd909d15e7a1a832159a058d5918d7f06` plus `SDL3.dll`; no pin, no
+launcher mode); test script `build\hwr-play-scale.ps1 -Scale N [-AA] [-DumpEvery N]` (local, ignored).
+
+Gates (`build/gates2/gates.sh`): CTest 233/233 non-Python with and without interlock (new `hw_scale_exact`,
+`hw_postfx_fxaa`, `hw_smoke_window_scaled`, the scale-3 block of `hw_cache_equals_writeback`); Python 677 tests, only the
+expected distribution-pin error (new `test_hw_frame_tools.py`); at 1x and with `--scale 6` the memory hashes of the five
+captures are identical to the references (night `fifo_hash=3a2fe617a174e7e7`); headless game at 1x and at
+`GT4_HW_SCALE=6 GT4_HW_POSTFX=fxaa`: menu dumps 42/42 = slice228, race frames 42/42 = slice235; default renderer 42/42 =
+slice214. Replay tool: `--scale N`, `--upscaled-dir D`, `--fxaa`; `scripts/hw_frame_tools.py boxpsnr`.

@@ -97,6 +97,21 @@ layout(set = 0, binding = 2, r32ui) uniform uimage2D hw_depth;
 #endif
 layout(set = 0, binding = 3, r32ui) uniform readonly uimage2D hw_texels;
 
+// The vertex stage's push constants (hw_vertex.vert), read here for the internal scale (IN-371): the native dither
+// mode of 06.5 indexes DIMX by the native pixel, so each dither cell covers s x s sub-pixels.
+layout(push_constant) uniform VertexPush {
+    vec2 viewport_size;
+    float scale;
+    float scale_offset;
+    int offset_x;
+    int offset_y;
+    uint z_max;
+    uint tex_scale;  // IN-374: 1 = the texel atlas (1x texels); s = hw_texels_scaled holds the texture at scale s
+} pc;
+
+// IN-374 (06.8): a texture copied from a resident target's scaled image, s x s texels per native texel.
+layout(set = 0, binding = 4, r32ui) uniform readonly uimage2D hw_texels_scaled;
+
 // CPU ToTexel104: floor of the scaled coordinate, saturated far outside the 1024 range.
 int to_texel_104(float value) {
     return int(clamp(floor(value), -1.0e9, 1.0e9));
@@ -122,6 +137,49 @@ int wrap_texel(int texel, uint log2_size, uint mode, uint minimum, uint maximum)
 ivec4 fetch_texel(int x, int y) {
     uint raw = imageLoad(hw_texels, ivec2(x + int(state.tex_origin_x), y + int(state.tex_origin_y))).x;
     return hw_texel_colour(state.texel_kind, raw, state.ta0, state.ta1, state.aem != 0u);
+}
+
+// IN-374: wrap of a scaled texel coordinate. The native texel (floor division by s) takes the 03.5 wrap of its
+// axis; the sub-texel is kept for the repeat modes and pinned to the clamped edge for the clamp modes.
+int wrap_scaled(int texel, int s, uint log2_size, uint mode, uint minimum, uint maximum) {
+    int native = texel >= 0 ? texel / s : -((s - 1 - texel) / s);
+    int sub = texel - native * s;
+    int wrapped = wrap_texel(native, log2_size, mode, minimum, maximum);
+    if ((mode == 1u || mode == 2u) && wrapped != native) {
+        sub = native > wrapped ? s - 1 : 0;
+    }
+    return wrapped * s + sub;
+}
+
+ivec4 fetch_texel_scaled(int x, int y, int s) {
+    uint raw = imageLoad(hw_texels_scaled, ivec2(x + int(state.tex_origin_x) * s, y + int(state.tex_origin_y) * s)).x;
+    return hw_texel_colour(state.texel_kind, raw, state.ta0, state.ta1, state.aem != 0u);
+}
+
+// The texture at s x s texels per native texel: the coordinate times s, the same 4-bit weights.
+ivec4 sample_texture_scaled(int uvs, int uvt, int s) {
+    if (state.tex_linear == 0u) {
+        int x = wrap_scaled((uvs * s) >> 4, s, state.tex_log2_w, state.wrap_s, state.wrap_min_s, state.wrap_max_s);
+        int y = wrap_scaled((uvt * s) >> 4, s, state.tex_log2_h, state.wrap_t, state.wrap_min_t, state.wrap_max_t);
+        return fetch_texel_scaled(x, y, s);
+    }
+    int bs = uvs * s - 8;
+    int bt = uvt * s - 8;
+    int x0 = wrap_scaled(bs >> 4, s, state.tex_log2_w, state.wrap_s, state.wrap_min_s, state.wrap_max_s);
+    int x1 = wrap_scaled((bs >> 4) + 1, s, state.tex_log2_w, state.wrap_s, state.wrap_min_s, state.wrap_max_s);
+    int y0 = wrap_scaled(bt >> 4, s, state.tex_log2_h, state.wrap_t, state.wrap_min_t, state.wrap_max_t);
+    int y1 = wrap_scaled((bt >> 4) + 1, s, state.tex_log2_h, state.wrap_t, state.wrap_min_t, state.wrap_max_t);
+    int fx = bs & 15;
+    int fy = bt & 15;
+    ivec4 c00 = fetch_texel_scaled(x0, y0, s);
+    ivec4 c10 = fetch_texel_scaled(x1, y0, s);
+    ivec4 c01 = fetch_texel_scaled(x0, y1, s);
+    ivec4 c11 = fetch_texel_scaled(x1, y1, s);
+    int w00 = (16 - fx) * (16 - fy);
+    int w10 = fx * (16 - fy);
+    int w01 = (16 - fx) * fy;
+    int w11 = fx * fy;
+    return (c00 * w00 + c10 * w10 + c01 * w01 + c11 * w11) >> 8;
 }
 
 // SampleTexture of the CPU reference: nearest, or bilinear with the 4-bit weights (IN-305).
@@ -197,7 +255,7 @@ void main() {
             uvs = to_texel_104((in_st.x / q) * scale_s);
             uvt = to_texel_104((in_st.y / q) * scale_t);
         }
-        ivec4 texel = sample_texture(uvs, uvt);
+        ivec4 texel = pc.tex_scale > 1u ? sample_texture_scaled(uvs, uvt, int(pc.tex_scale)) : sample_texture(uvs, uvt);
         colour = hw_texture_function(state.tfx, state.tcc != 0u, texel, frag);
     }
     if (state.fog_on != 0u) {
@@ -209,8 +267,10 @@ void main() {
     }
 
     HwFragment f;
-    f.x = uint(pixel.x);
-    f.y = uint(pixel.y);
+    // Native pixel of the fragment for the dither index (06.5 native mode); at 1x the GPU pixel itself.
+    uint pixel_scale = max(uint(pc.scale + 0.5), 1u);
+    f.x = uint(pixel.x) / pixel_scale;
+    f.y = uint(pixel.y) / pixel_scale;
     f.colour = colour;
     f.z = uint(clamp(in_z, 0.0, 4294967040.0));
 

@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: MIT
+//
+// Scaled target refresh (TASK-027 M12, chapter 06.8, IN-371). Copyright (c) 2026 GT4Recomp contributors.
+// Written from docs/hw-renderer-spec chapters 06.2 and 06.8, clean room (decision 0070).
+//
+// CoreGS 2.0 keeps every resident target as exact 1x GS words (the authority for memory, the GLM and
+// readbacks) and, when GT4_HW_SCALE > 1, a second image of the same words at s x s sub-pixels per native
+// pixel that only the presentation reads. Whenever the 1x image changes by anything other than a draw (a load
+// from the shadow memory or the GLM), the changed rectangle of the scaled image is refreshed from it here: every
+// sub-pixel of a native pixel takes that pixel's word (nearest, 06.8 "memory sources are always 1x"). Draws
+// reach the scaled image by being rasterised a second time at scale (IN-371), not through this kernel.
+
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0, r32ui) uniform readonly uimage2D native_words;   // the 1x slot image
+layout(set = 0, binding = 1, r32ui) uniform writeonly uimage2D scaled_words;  // the s x slot image
+
+layout(push_constant) uniform UpsampleParameters {
+    uint x0;      // native rectangle, inclusive origin
+    uint y0;
+    uint width;   // native pixels
+    uint height;
+    uint scale;   // s
+} pc;
+
+void main() {
+    uvec2 sub = gl_GlobalInvocationID.xy;  // scaled pixel relative to the rectangle's scaled origin
+    if (sub.x >= pc.width * pc.scale || sub.y >= pc.height * pc.scale) {
+        return;
+    }
+    uvec2 native = uvec2(pc.x0, pc.y0) + sub / pc.scale;
+    uint word = imageLoad(native_words, ivec2(native)).x;
+    imageStore(scaled_words, ivec2(uvec2(pc.x0, pc.y0) * pc.scale + sub), uvec4(word, 0u, 0u, 0u));
+}

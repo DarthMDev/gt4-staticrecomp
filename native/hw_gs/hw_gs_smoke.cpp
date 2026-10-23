@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
   bool print_only = false;
   bool use_window = false;
   bool display = false;  // --display: a 64 x 64 NTSC display on circuit 1, so presents take the GPU compose (IN-364)
+  bool wideDisplay = false;  // --display-640: the same with GT4's 640 x 448 race display (IN-375 downscale steps)
   std::uint64_t frames = 4200;
   std::uint64_t resize_toggles = 0;
   for (int i = 1; i < argc; ++i) {
@@ -75,6 +76,9 @@ int main(int argc, char **argv) {
       use_window = true;
     } else if (arg == "--display") {
       display = true;
+    } else if (arg == "--display-640") {
+      display = true;
+      wideDisplay = true;
     } else if (arg == "--frames" && i + 1 < argc) {
       frames = std::strtoull(argv[++i], nullptr, 10);
     } else if (arg == "--resize-toggles" && i + 1 < argc) {
@@ -124,8 +128,13 @@ int main(int argc, char **argv) {
   if (display) {
     backend.write_privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));             // PMODE: RC1, MMOD, ALP 255
     backend.write_privileged(0x12000010u, std::uint64_t{2} << 13);                       // SMODE1: NTSC
-    backend.write_privileged(0x12000070u, std::uint64_t{1} << 9);                        // DISPFB1: FBW 1, CT32
-    backend.write_privileged(0x12000080u, (std::uint64_t{63} << 32) | (std::uint64_t{63} << 44));  // 64 x 64
+    if (wideDisplay) {
+      backend.write_privileged(0x12000070u, std::uint64_t{10} << 9);                     // DISPFB1: FBW 10, CT32
+      backend.write_privileged(0x12000080u, (std::uint64_t{3} << 23) | (std::uint64_t{2559} << 32) | (std::uint64_t{447} << 44));  // 640 x 448
+    } else {
+      backend.write_privileged(0x12000070u, std::uint64_t{1} << 9);                      // DISPFB1: FBW 1, CT32
+      backend.write_privileged(0x12000080u, (std::uint64_t{63} << 32) | (std::uint64_t{63} << 44));  // 64 x 64
+    }
   }
   for (std::uint64_t frame = 0; frame < frames; ++frame) {
     backend.next_frame();
@@ -186,6 +195,8 @@ int main(int argc, char **argv) {
     const bool widescreen = w > 0 && h > 0 && (w * 9 >= h * 16 ? w * 9 - h * 16 : h * 16 - w * 9) <= 16;
     std::printf("present_rect=%u,%u %ux%u present_16x9=%d\n", stats.present_left, stats.present_top,
                 stats.present_width, stats.present_height, widescreen ? 1 : 0);
+    std::printf("present_downscale_levels=%u scale=%u source=%ux%u\n", stats.present_downscale_levels,
+                backend.render_counters().scale, stats.present_source_width, stats.present_source_height);
   }
 
   if (use_window) {

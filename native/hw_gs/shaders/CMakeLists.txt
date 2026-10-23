@@ -78,6 +78,11 @@ hw_add_shader(hw_pixel_uber_flat "${HW_SHADER_DIR}/hw_pixel_uber.frag" frag DEFI
 hw_add_shader(hw_glm_decode "${HW_SHADER_DIR}/hw_glm_decode.comp" comp)
 hw_add_shader(hw_glm_swizzle "${HW_SHADER_DIR}/hw_glm_swizzle.comp" comp)
 hw_add_shader(hw_glm_clut "${HW_SHADER_DIR}/hw_glm_clut.comp" comp)
+# M12 upscaling (IN-371/IN-372): scaled-image refresh from 1x words and the display compose at scale.
+hw_add_shader(hw_scale_upsample "${HW_SHADER_DIR}/hw_scale_upsample.comp" comp)
+hw_add_shader(hw_display_compose_scaled "${HW_SHADER_DIR}/hw_display_compose_scaled.comp" comp)
+# 13.5 edge-only FXAA of the presentation frame (IN-376).
+hw_add_shader(hw_postfx_fxaa "${HW_SHADER_DIR}/hw_postfx_fxaa.comp" comp)
 hw_add_shader(hw_glm_unswizzle "${HW_SHADER_DIR}/hw_glm_unswizzle.comp" comp)
 hw_add_shader(hw_glm_merge "${HW_SHADER_DIR}/hw_glm_merge.comp" comp)
 hw_add_shader(hw_glm_host_upload "${HW_SHADER_DIR}/hw_glm_host_upload.comp" comp)

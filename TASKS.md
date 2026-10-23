@@ -780,7 +780,7 @@ mode on the menu, car and race captures and the 42 menu dumps byte-identical. He
 frame. Waiting for owner test 3 (local slice239, `build/hwr-play.ps1`). Next: GPU compose of the display, fewer
 barriers around CLUT loads, the GIF front end, M8 readbacks per the readback study.
 
-**2026-10-22, Claude:** owner tests 3-5 (60 FPS in 3D races, flares, 16:9 480p; test 5 approved a flat 60 FPS frametime on local slice247). `main` 1.2.2 merged into the branch (local slice248/249; hw output identical to slice247, default renderer 42/42 after fixing the 1.2.2 donor-mode crash in `mtvu::Donor`). Next: M12 upscaling and anti-aliasing (beta minimum, decisions/coregs2-launcher-gate), then GS-thread CPU cost.
+**2026-10-22, Claude:** owner tests 3-5 (60 FPS in 3D races, flares, 16:9 480p; test 5 approved a flat 60 FPS frametime on local slice247). `main` 1.2.2 merged into the branch (local slice248/249; hw output identical to slice247, default renderer 42/42 after fixing the 1.2.2 donor-mode crash in `mtvu::Donor`). M12 upscaling (2x-8x) and FXAA in local slice250 (IN-371..IN-376; memory and readbacks identical to 1x at every scale), waiting for owner test 6. Next: owner verdict vs GSdx, 480i menus at scale, then GS-thread CPU cost.
 
 **Paused by the owner on 2026-10-15** to focus on release 1.0.0. State on the
 integration branch `task/027-hw-renderer`: CPU-verified pure libraries for GS

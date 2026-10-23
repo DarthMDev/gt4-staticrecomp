@@ -34,6 +34,7 @@ bool load_device_entry_points(VkInstance instance, std::vector<std::string> &mis
   resolve(gt4_hwd_vkCmdBindPipeline, proc, instance, "vkCmdBindPipeline", missing);
   resolve(gt4_hwd_vkCmdBindVertexBuffers, proc, instance, "vkCmdBindVertexBuffers", missing);
   resolve(gt4_hwd_vkCmdBlitImage, proc, instance, "vkCmdBlitImage", missing);
+  resolve(gt4_hwd_vkCmdClearColorImage, proc, instance, "vkCmdClearColorImage", missing);
   resolve(gt4_hwd_vkCmdCopyBufferToImage, proc, instance, "vkCmdCopyBufferToImage", missing);
   resolve(gt4_hwd_vkCmdCopyImage, proc, instance, "vkCmdCopyImage", missing);
   resolve(gt4_hwd_vkCreateComputePipelines, proc, instance, "vkCreateComputePipelines", missing);

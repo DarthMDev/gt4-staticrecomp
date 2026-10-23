@@ -132,6 +132,26 @@ bool WritePpm(const std::string& path, const cpuref::FrameImage& frame) {
     return true;
 }
 
+// IN-372: an RGBA8-packed GPU frame (red in the low byte) as a P6 PPM.
+bool WritePackedPpm(const std::string& path, std::uint32_t width, std::uint32_t height,
+                    const std::vector<std::uint32_t>& pixels) {
+    std::FILE* file = std::fopen(path.c_str(), "wb");
+    if (!file) return false;
+    std::fprintf(file, "P6\n%u %u\n255\n", width, height);
+    std::vector<unsigned char> row(static_cast<std::size_t>(width) * 3);
+    for (std::uint32_t y = 0; y < height; ++y) {
+        for (std::uint32_t x = 0; x < width; ++x) {
+            const std::uint32_t pixel = pixels[static_cast<std::size_t>(y) * width + x];
+            row[x * 3 + 0] = static_cast<unsigned char>(pixel & 0xFFu);
+            row[x * 3 + 1] = static_cast<unsigned char>((pixel >> 8) & 0xFFu);
+            row[x * 3 + 2] = static_cast<unsigned char>((pixel >> 16) & 0xFFu);
+        }
+        std::fwrite(row.data(), 1, row.size(), file);
+    }
+    std::fclose(file);
+    return true;
+}
+
 bool ReadFile(const char* path, std::vector<std::uint8_t>& out) {
     std::FILE* file = std::fopen(path, "rb");
     if (!file) return false;
@@ -164,6 +184,8 @@ int main(int argc, char** argv) {
     writeback::OutputSettings outputSettings;  // --deinterlace (13.4 names, `_bff` suffix allowed)
     bool cacheMode = true;                     // --sync-mode
     PixelRect traceRect{0, 0, 2047, 2047};
+    std::uint32_t scale = 1;     // --scale N (M12, IN-371): internal resolution of the scaled images
+    std::string upscaledDir;     // --upscaled-dir DIR: the GPU presentation compose at that scale (IN-372)
     for (int i = 3; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--no-interlock") == 0 || std::strcmp(argv[i], "--no-target-textures") == 0 ||
             std::strcmp(argv[i], "--no-glm") == 0 || std::strcmp(argv[i], "--no-cpu-sprites") == 0 ||
@@ -171,7 +193,8 @@ int main(int argc, char** argv) {
             std::strcmp(argv[i], "--no-gpu-uploads") == 0 || std::strcmp(argv[i], "--no-runs") == 0 ||
             std::strcmp(argv[i], "--single-buffer") == 0 || std::strcmp(argv[i], "--async-present") == 0 ||
             std::strcmp(argv[i], "--no-batched-writebacks") == 0 ||
-            std::strcmp(argv[i], "--gpu-timing") == 0 || std::strcmp(argv[i], "--gpu-compose-check") == 0) {
+            std::strcmp(argv[i], "--gpu-timing") == 0 || std::strcmp(argv[i], "--gpu-compose-check") == 0 ||
+            std::strcmp(argv[i], "--fxaa") == 0) {
             --i;  // a flag without a value
             continue;
         }
@@ -203,6 +226,15 @@ int main(int argc, char** argv) {
             }
             outputSettings.deinterlace = setting->mode;
             outputSettings.bottomFieldFirst = setting->bottom_first;
+        } else if (std::strcmp(argv[i], "--scale") == 0) {
+            const long value = std::strtol(argv[i + 1], nullptr, 10);
+            if (value < 1 || value > 8) {
+                std::fprintf(stderr, "--scale takes 1..8\n");
+                return 2;
+            }
+            scale = static_cast<std::uint32_t>(value);
+        } else if (std::strcmp(argv[i], "--upscaled-dir") == 0) {
+            upscaledDir = argv[i + 1];
         } else if (std::strcmp(argv[i], "--slm-hashes") == 0) {
             slmHashPath = argv[i + 1];
         } else if (std::strcmp(argv[i], "--trace-frame") == 0) {
@@ -240,7 +272,8 @@ int main(int argc, char** argv) {
     handles.queue = headless.queue;
     handles.queueFamily = headless.family;
     handles.pixelInterlock = headless.interlock;
-    std::printf("pixel_interlock=%d\n", headless.interlock ? 1 : 0);
+    std::printf("pixel_interlock=%d scale=%u\n", headless.interlock ? 1 : 0, scale);
+    renderer.SetScale(scale, static_cast<float>(scale));  // 06.3 native half-pixel mode
     if (!renderer.Init(handles, error)) {
         std::fprintf(stderr, "GPU drawer init failed: %s\n", error.c_str());
         return 1;
@@ -261,6 +294,7 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--no-decode-reuse") == 0) renderer.SetDecodeReuse(false);              // IN-369 A/B
         if (std::strcmp(argv[i], "--no-clut-defer") == 0) renderer.SetClutDefer(false);                  // IN-370 A/B
         if (std::strcmp(argv[i], "--gpu-timing") == 0) renderer.SetGpuTiming(true);                     // 12.8
+        if (std::strcmp(argv[i], "--fxaa") == 0) renderer.SetFxaa(true);                                // IN-376
         if (std::strcmp(argv[i], "--chunks-per-submission") == 0 && i + 1 < argc) {                   // IN-358 A/B
             renderer.SetChunksPerSubmission(static_cast<std::uint32_t>(std::strtoul(argv[i + 1], nullptr, 10)));
         }
@@ -319,6 +353,15 @@ int main(int argc, char** argv) {
         }
         if (!image.valid) return;
         if (every > 1 && frame % every != 0) return;
+        if (!upscaledDir.empty()) {
+            writeback::GpuFrame gpuFrame;
+            std::vector<std::uint32_t> pixels;
+            if (renderer.ComposeFrameGpu(gpuFrame) && renderer.ReadGpuFrame(gpuFrame, pixels)) {
+                char upscaledName[64];
+                std::snprintf(upscaledName, sizeof(upscaledName), "frame_%05llu.ppm", static_cast<unsigned long long>(frame));
+                WritePackedPpm(upscaledDir + "\\" + upscaledName, gpuFrame.width, gpuFrame.height, pixels);
+            }
+        }
         char name[64];
         std::snprintf(name, sizeof(name), "frame_%05llu.ppm", static_cast<unsigned long long>(frame));
         if (WritePpm(outDir + "\\" + name, image)) ++written;
@@ -430,6 +473,18 @@ int main(int argc, char** argv) {
                     counters.textureDecodeUs / frames / 1000.0);
     }
     std::printf("images_written=%llu\n", static_cast<unsigned long long>(written));
+    {
+        const gpu::GpuStats& gpuStats = renderer.GpuCounters();
+        std::printf("scale=%u scaled_draws=%llu scaled_passes=%llu scaled_refreshes=%llu scaled_refresh_pixels=%llu "
+                    "scaled_composes=%llu circuits_from_slots=%llu circuits_from_glm=%llu\n",
+                    renderer.Scale(), static_cast<unsigned long long>(gpuStats.scaledDraws),
+                    static_cast<unsigned long long>(gpuStats.scaledPasses),
+                    static_cast<unsigned long long>(gpuStats.scaledRefreshes),
+                    static_cast<unsigned long long>(gpuStats.scaledRefreshPixels),
+                    static_cast<unsigned long long>(counters.scaledComposedFrames),
+                    static_cast<unsigned long long>(counters.scaledCircuitsFromSlots),
+                    static_cast<unsigned long long>(counters.scaledCircuitsFromGlm));
+    }
     std::printf("gpu_compose_equal=%llu gpu_compose_different=%llu\n",
                 static_cast<unsigned long long>(target.GpuComposeEqual()),
                 static_cast<unsigned long long>(target.GpuComposeDifferent()));

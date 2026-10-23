@@ -46,7 +46,9 @@ constexpr VkDeviceSize kPaletteRingBytes = static_cast<VkDeviceSize>(4) << 20;  
 constexpr VkDeviceSize kClutBytes = 512 * sizeof(std::uint32_t);                  // GPU CLUT buffer (IN-349)
 constexpr VkDeviceSize kUniformBytes = 256;                   // one pixel-state block
 constexpr VkDeviceSize kUniformRingBytes = static_cast<VkDeviceSize>(4) << 20;  // 16,384 blocks at 256 B
-constexpr std::uint32_t kPushBytes = 28;  // hw_vertex.vert PushConstants
+constexpr std::uint32_t kPushBytes = 32;  // hw_vertex.vert PushConstants (IN-374: + tex_scale)
+// IN-371: the pixel shader reads the scale from the same block (native dither cells, 06.5).
+constexpr VkShaderStageFlags kGraphicsPushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
 
 const char *result_text(VkResult result) {
   switch (result) {
@@ -112,7 +114,164 @@ struct GpuDrawer::Impl {
   Image frames[kGpuColourSlots];  // colour target slots (IN-344); the last one is the write-back mode's
   Image depths[kGpuDepthSlots];   // depth target slots; the last one is the write-back mode's
   Image texels;
-  Image display;  // IN-364: GPU-composed presentation frame
+  Image display;  // IN-364: GPU-composed presentation frame (IN-372: displaySide square)
+
+  // ---- M12 upscaling (chapter 06, IN-371/IN-372) ----
+  // At scale s > 1 every slot has a second image of kGpuScaledExtent * s pixels per side holding the same words at
+  // s x s sub-pixels per native pixel. Draws are recorded twice (1x words, then the scaled image); loads into a slot
+  // refresh the scaled image from the 1x words (hw_scale_upsample.comp). Only the presentation reads it.
+  std::uint32_t scale = 1;
+  float scaleOffset = 1.0f;       // hw_vertex.vert scale_offset at scale (06.3: s in native mode)
+  std::uint32_t scaledSide = 0;   // kGpuScaledExtent * scale; 0 at 1x (no scaled images)
+  std::uint32_t displaySide = kSurfaceSize;
+  Image scaledFrames[kGpuColourSlots];
+  Image scaledDepths[kGpuDepthSlots];
+  Image scaledTexels;  // IN-374: a texture copied from a slot's scaled image (graphics binding 4 of scaled sets)
+
+  // ---- 13.5 FXAA (IN-376), created on first use ----
+  Image fxaaImage;
+  VkDescriptorSetLayout fxaaSetLayout = VK_NULL_HANDLE;
+  VkPipelineLayout fxaaLayout = VK_NULL_HANDLE;
+  VkDescriptorPool fxaaPool = VK_NULL_HANDLE;
+  VkDescriptorSet fxaaSet = VK_NULL_HANDLE;
+  VkShaderModule fxaaModule = VK_NULL_HANDLE;
+  VkPipeline fxaaPipeline = VK_NULL_HANDLE;
+  bool create_fxaa(std::string &error);
+  VkFramebuffer scaledFramebuffer = VK_NULL_HANDLE;
+  VkDescriptorSet scaledDescriptorSets[kGpuColourSlots * kGpuDepthSlots] = {};  // current frame set
+  VkDescriptorPool scalePool = VK_NULL_HANDLE;
+  VkDescriptorSetLayout upsampleSetLayout = VK_NULL_HANDLE;
+  VkPipelineLayout upsampleLayout = VK_NULL_HANDLE;
+  VkShaderModule upsampleModule = VK_NULL_HANDLE;
+  VkPipeline upsamplePipeline = VK_NULL_HANDLE;
+  VkDescriptorSet upsampleSets[kGpuColourSlots + kGpuDepthSlots] = {};
+  VkDescriptorSetLayout composeScaledSetLayout = VK_NULL_HANDLE;
+  VkPipelineLayout composeScaledLayout = VK_NULL_HANDLE;
+  VkShaderModule composeScaledModule = VK_NULL_HANDLE;
+  VkPipeline composeScaledPipeline = VK_NULL_HANDLE;
+  VkDescriptorSet composeScaledSets[2] = {};  // per frame set (binding 2 is that set's ring)
+  bool scaled() const { return scaledSide != 0; }
+
+  // One draw of a scaled pass: the 1x draw's set, uniform, push words and scissor, its absolute first vertex in the
+  // vertex ring, and its pipeline.
+  struct ScaledDraw {
+    std::uint32_t descriptorSet = 0;
+    std::uint32_t uniformOffset = 0;
+    const std::uint32_t *push = nullptr;
+    VkRect2D scissor{};
+    std::uint32_t firstVertex = 0;
+    std::uint32_t vertexCount = 0;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    bool scaledTexture = false;  // IN-374: sample the scaled texel image (a texture copied from a slot at scale)
+  };
+  std::vector<ScaledDraw> scaledDraws;  // reused
+
+  // Records `scaledDraws` into the scaled images (IN-371): one render pass over the scaled framebuffer, the same
+  // descriptor set index (scaled images, same texel atlas and uniform), positions times s, the 06.3 shift and the
+  // scissor times s. Draws into the write-back mode's scratch colour slot are not repeated (nothing presents it).
+  // `barrierBetween`: storage-image barriers between draws (the per-primitive path without pixel interlock).
+  void record_scaled_draws(bool barrierBetween) {
+    if (!scaled() || scaledDraws.empty()) return;
+    VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
+    pass.renderPass = renderPass;
+    pass.framebuffer = scaledFramebuffer;
+    pass.renderArea = {{0, 0}, {scaledSide, scaledSide}};
+    recorded_work();
+    gt4_hwd_vkCmdBeginRenderPass(cmd, &pass, VK_SUBPASS_CONTENTS_INLINE);
+    ++stats.renderPasses;
+    ++stats.scaledPasses;
+    VkViewport viewport{0.0f, 0.0f, static_cast<float>(scaledSide), static_cast<float>(scaledSide), 0.0f, 1.0f};
+    gt4_hwd_vkCmdSetViewport(cmd, 0, 1, &viewport);
+    const VkDeviceSize ringStart = 0;
+    gt4_hwd_vkCmdBindVertexBuffers(cmd, 0, 1, &vertices.buffer, &ringStart);
+    VkPipeline boundPipeline = VK_NULL_HANDLE;
+    std::uint32_t lastPush[8] = {};
+    bool pushed = false;
+    VkRect2D lastScissor{{-1, -1}, {0, 0}};
+    bool anyDraw = false;
+    const std::int32_t side = static_cast<std::int32_t>(scaledSide);
+    const std::int32_t s = static_cast<std::int32_t>(scale);
+    for (const ScaledDraw &draw : scaledDraws) {
+      if (draw.descriptorSet / kGpuDepthSlots == kGpuScratchColourSlot) continue;
+      // The GS scissor applies to the native sample points. In the 06.3 native mode native pixel N's sample point
+      // is the centre of sub-pixel block N, and a sub-pixel belongs to native pixel floor((j - h) / s) with
+      // h = floor(s/2) (the half-pixel band of IN-372), so the scaled scissor is the native one times s, moved by h.
+      const std::int32_t h = s / 2;
+      const std::int32_t x0 = draw.scissor.offset.x * s + h;
+      const std::int32_t y0 = draw.scissor.offset.y * s + h;
+      if (x0 >= side || y0 >= side) continue;  // outside the scaled extent: 1x words only
+      const std::int32_t x1 = std::min<std::int32_t>(side, x0 + static_cast<std::int32_t>(draw.scissor.extent.width) * s);
+      const std::int32_t y1 = std::min<std::int32_t>(side, y0 + static_cast<std::int32_t>(draw.scissor.extent.height) * s);
+      const VkRect2D scissor{{x0, y0}, {static_cast<std::uint32_t>(x1 - x0), static_cast<std::uint32_t>(y1 - y0)}};
+      if (barrierBetween && anyDraw) {
+        VkMemoryBarrier between{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+        between.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+        between.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+        gt4_hw_vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                                    1, &between, 0, nullptr, 0, nullptr);
+        ++stats.barriers;
+      }
+      if (draw.pipeline != boundPipeline) {
+        gt4_hwd_vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, draw.pipeline);
+        boundPipeline = draw.pipeline;
+      }
+      gt4_hwd_vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
+                                      &scaledDescriptorSets[draw.descriptorSet], 1, &draw.uniformOffset);
+      std::uint32_t push[8];
+      std::memcpy(push, draw.push, sizeof(push));
+      const float sizes[2] = {static_cast<float>(scaledSide), static_cast<float>(scaledSide)};
+      std::memcpy(push, sizes, sizeof(sizes));
+      push[2] = FloatToBits(static_cast<float>(scale));
+      push[3] = FloatToBits(scaleOffset);
+      push[7] = draw.scaledTexture ? scale : 1u;  // IN-374: the texture is the slot's scaled image
+      if (!pushed || std::memcmp(lastPush, push, sizeof(push)) != 0) {
+        gt4_hwd_vkCmdPushConstants(cmd, pipelineLayout, kGraphicsPushStages, 0, kPushBytes, push);
+        std::memcpy(lastPush, push, sizeof(push));
+        pushed = true;
+      }
+      if (std::memcmp(&lastScissor, &scissor, sizeof(VkRect2D)) != 0) {
+        gt4_hwd_vkCmdSetScissor(cmd, 0, 1, &scissor);
+        lastScissor = scissor;
+      }
+      recorded_work();
+      gt4_hwd_vkCmdDraw(cmd, draw.vertexCount, 1, draw.firstVertex, 0);
+      ++stats.scaledDraws;
+      anyDraw = true;
+    }
+    recorded_work();
+    gt4_hwd_vkCmdEndRenderPass(cmd);
+    scaledDraws.clear();
+  }
+
+  // Refreshes the scaled image of a slot over a native rectangle (inclusive) from its 1x words (IN-371). Records
+  // the barriers on both sides itself.
+  void refresh_scaled(bool depthSlot, std::uint32_t slot, std::int32_t x0, std::int32_t y0, std::int32_t x1,
+                      std::int32_t y1) {
+    if (!scaled()) return;
+    x0 = std::max(x0, 0);
+    y0 = std::max(y0, 0);
+    x1 = std::min(x1, kGpuScaledExtent - 1);
+    y1 = std::min(y1, kGpuScaledExtent - 1);
+    if (x1 < x0 || y1 < y0) return;
+    full_barrier();
+    const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
+    gt4_hwd_vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, upsamplePipeline);
+    gt4_hwd_vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, upsampleLayout, 0, 1, &upsampleSets[set], 0,
+                                    nullptr);
+    boundComputePipeline = upsamplePipeline;  // bind_compute rebinds its own pipeline and set afterwards
+    boundComputeSet = upsampleSets[set];
+    const std::uint32_t width = static_cast<std::uint32_t>(x1 - x0 + 1);
+    const std::uint32_t height = static_cast<std::uint32_t>(y1 - y0 + 1);
+    const std::uint32_t push[5] = {static_cast<std::uint32_t>(x0), static_cast<std::uint32_t>(y0), width, height, scale};
+    gt4_hwd_vkCmdPushConstants(cmd, upsampleLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+    recorded_work();
+    gt4_hwd_vkCmdDispatch(cmd, (width * scale + 7) / 8, (height * scale + 7) / 8, 1);
+    full_barrier();
+    ++stats.scaledRefreshes;
+    stats.scaledRefreshPixels += static_cast<std::uint64_t>(width) * height;
+  }
+
+  bool create_scaled_resources(std::string &error);
   VkDescriptorSet displaySets[2] = {};  // compute set 0 with binding 4 = the display image, per frame set
   VkShaderModule displayModule = VK_NULL_HANDLE;
   VkPipeline displayPipeline = VK_NULL_HANDLE;
@@ -162,7 +321,7 @@ struct GpuDrawer::Impl {
   struct PendingDraw {
     std::uint32_t descriptorSet = 0;
     std::uint32_t uniformOffset = 0;
-    std::uint32_t push[7] = {};
+    std::uint32_t push[8] = {};
     VkDeviceSize vertexOffsetBytes = 0;
     VkRect2D scissor{};
     std::uint32_t firstVertex = 0;
@@ -351,6 +510,7 @@ struct GpuDrawer::Impl {
     Resource uniforms;
     Resource palettes;
     VkDescriptorSet descriptorSets[kGpuColourSlots * kGpuDepthSlots] = {};
+    VkDescriptorSet scaledDescriptorSets[kGpuColourSlots * kGpuDepthSlots] = {};  // IN-371
     VkDescriptorSet computeSets[kGpuColourSlots + kGpuDepthSlots] = {};
   };
   FrameResources frameSets[2];
@@ -369,6 +529,7 @@ struct GpuDrawer::Impl {
     f.uniforms = uniforms;
     f.palettes = palettes;
     std::copy(std::begin(descriptorSets), std::end(descriptorSets), std::begin(f.descriptorSets));
+    std::copy(std::begin(scaledDescriptorSets), std::end(scaledDescriptorSets), std::begin(f.scaledDescriptorSets));
     std::copy(std::begin(computeSets), std::end(computeSets), std::begin(f.computeSets));
   }
   void load_frame(std::uint32_t index) {
@@ -382,10 +543,49 @@ struct GpuDrawer::Impl {
     uniforms = f.uniforms;
     palettes = f.palettes;
     std::copy(std::begin(f.descriptorSets), std::end(f.descriptorSets), std::begin(descriptorSets));
+    std::copy(std::begin(f.scaledDescriptorSets), std::end(f.scaledDescriptorSets), std::begin(scaledDescriptorSets));
     std::copy(std::begin(f.computeSets), std::end(f.computeSets), std::begin(computeSets));
   }
   bool wait_all(std::string &error);
   bool create_second_frame(std::string &error);
+
+  // IN-372: the scaled compose set of frame set `index` (its ring is `ring`).
+  bool make_compose_scaled_set(std::uint32_t index, const Resource &ring, std::string &error) {
+    VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    allocate.descriptorPool = scalePool;
+    allocate.descriptorSetCount = 1;
+    allocate.pSetLayouts = &composeScaledSetLayout;
+    if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &allocate, &composeScaledSets[index]), "vkAllocateDescriptorSets",
+               error)) {
+      return false;
+    }
+    VkDescriptorBufferInfo buffers[3] = {{glm.buffer, 0, kGlmBytes}, {glmTables.buffer, 0, glmTables.size},
+                                         {ring.buffer, 0, kPaletteRingBytes}};
+    VkDescriptorImageInfo out{VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL};
+    VkDescriptorImageInfo frameViews[kGpuColourSlots];
+    for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) frameViews[i] = {VK_NULL_HANDLE, scaledFrames[i].view,
+                                                                         VK_IMAGE_LAYOUT_GENERAL};
+    VkWriteDescriptorSet writes[5]{};
+    for (std::uint32_t i = 0; i < 5; ++i) {
+      writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      writes[i].dstSet = composeScaledSets[index];
+      writes[i].descriptorCount = 1;
+    }
+    for (std::uint32_t i = 0; i < 3; ++i) {
+      writes[i].dstBinding = i;
+      writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      writes[i].pBufferInfo = &buffers[i];
+    }
+    writes[3].dstBinding = 4;
+    writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    writes[3].pImageInfo = &out;
+    writes[4].dstBinding = 6;
+    writes[4].descriptorCount = kGpuColourSlots;
+    writes[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    writes[4].pImageInfo = frameViews;
+    gt4_hwd_vkUpdateDescriptorSets(device, 5, writes, 0, nullptr);
+    return true;
+  }
 
   // IN-364: the display set of frame set `index`: a copy of that set's compute set 0 with binding 4 = display.
   bool make_display_set(std::uint32_t index, VkDescriptorSet source, std::string &error) {
@@ -683,13 +883,19 @@ struct GpuDrawer::Impl {
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
-    constexpr int kImages = static_cast<int>(kGpuColourSlots + kGpuDepthSlots + 2);
-    VkImageMemoryBarrier barriers[kImages]{};
-    VkImage images[kImages] = {};
-    for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) images[i] = frames[i].image;
-    for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) images[kGpuColourSlots + i] = depths[i].image;
-    images[kImages - 2] = texels.image;
-    images[kImages - 1] = display.image;
+    constexpr int kMaxImages = static_cast<int>(2 * (kGpuColourSlots + kGpuDepthSlots) + 3);
+    VkImageMemoryBarrier barriers[kMaxImages]{};
+    VkImage images[kMaxImages] = {};
+    int kImages = 0;
+    for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) images[kImages++] = frames[i].image;
+    for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) images[kImages++] = depths[i].image;
+    images[kImages++] = texels.image;
+    images[kImages++] = display.image;
+    if (scaled()) {  // IN-371
+      for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) images[kImages++] = scaledFrames[i].image;
+      for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) images[kImages++] = scaledDepths[i].image;
+      images[kImages++] = scaledTexels.image;
+    }
     for (int i = 0; i < kImages; ++i) {
       barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
       barriers[i].oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -702,7 +908,18 @@ struct GpuDrawer::Impl {
                                   VK_ACCESS_TRANSFER_WRITE_BIT;
     }
     gt4_hw_vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
-                                nullptr, 0, nullptr, kImages, barriers);
+                                nullptr, 0, nullptr, static_cast<std::uint32_t>(kImages), barriers);
+    if (scaled()) {
+      // The scaled images start as zero words, so a sub-pixel never shows undefined memory (IN-371).
+      VkClearColorValue zero{};
+      const VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+      for (Image &image : scaledFrames) {
+        gt4_hwd_vkCmdClearColorImage(cmd, image.image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
+      }
+      for (Image &image : scaledDepths) {
+        gt4_hwd_vkCmdClearColorImage(cmd, image.image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
+      }
+    }
     if (!check(gt4_hw_vkEndCommandBuffer(cmd), "vkEndCommandBuffer", error)) return false;
     VkSubmitInfo submit{VK_STRUCTURE_TYPE_SUBMIT_INFO};
     submit.commandBufferCount = 1;
@@ -770,6 +987,41 @@ struct GpuDrawer::Impl {
       for (Image &image : depths) destroyImage(&image);
       destroyImage(&texels);
       destroyImage(&display);
+      for (Image &image : scaledFrames) destroyImage(&image);
+      for (Image &image : scaledDepths) destroyImage(&image);
+      destroyImage(&scaledTexels);
+      destroyImage(&fxaaImage);
+      if (fxaaPipeline) gt4_hwd_vkDestroyPipeline(device, fxaaPipeline, nullptr);
+      if (fxaaModule) gt4_hwd_vkDestroyShaderModule(device, fxaaModule, nullptr);
+      if (fxaaLayout) gt4_hwd_vkDestroyPipelineLayout(device, fxaaLayout, nullptr);
+      if (fxaaSetLayout) gt4_hwd_vkDestroyDescriptorSetLayout(device, fxaaSetLayout, nullptr);
+      if (fxaaPool) gt4_hwd_vkDestroyDescriptorPool(device, fxaaPool, nullptr);
+      fxaaPipeline = VK_NULL_HANDLE;
+      fxaaModule = VK_NULL_HANDLE;
+      fxaaLayout = VK_NULL_HANDLE;
+      fxaaSetLayout = VK_NULL_HANDLE;
+      fxaaPool = VK_NULL_HANDLE;
+      fxaaSet = VK_NULL_HANDLE;
+      if (scaledFramebuffer) gt4_hwd_vkDestroyFramebuffer(device, scaledFramebuffer, nullptr);
+      scaledFramebuffer = VK_NULL_HANDLE;
+      for (VkPipeline *pipeline : {&upsamplePipeline, &composeScaledPipeline}) {
+        if (*pipeline) gt4_hwd_vkDestroyPipeline(device, *pipeline, nullptr);
+        *pipeline = VK_NULL_HANDLE;
+      }
+      for (VkShaderModule *module : {&upsampleModule, &composeScaledModule}) {
+        if (*module) gt4_hwd_vkDestroyShaderModule(device, *module, nullptr);
+        *module = VK_NULL_HANDLE;
+      }
+      for (VkPipelineLayout *layout : {&upsampleLayout, &composeScaledLayout}) {
+        if (*layout) gt4_hwd_vkDestroyPipelineLayout(device, *layout, nullptr);
+        *layout = VK_NULL_HANDLE;
+      }
+      for (VkDescriptorSetLayout *layout : {&upsampleSetLayout, &composeScaledSetLayout}) {
+        if (*layout) gt4_hwd_vkDestroyDescriptorSetLayout(device, *layout, nullptr);
+        *layout = VK_NULL_HANDLE;
+      }
+      if (scalePool) gt4_hwd_vkDestroyDescriptorPool(device, scalePool, nullptr);
+      scalePool = VK_NULL_HANDLE;
       if (clutPipeline) gt4_hwd_vkDestroyPipeline(device, clutPipeline, nullptr);
       if (clutModule) gt4_hwd_vkDestroyShaderModule(device, clutModule, nullptr);
       clutPipeline = VK_NULL_HANDLE;
@@ -823,6 +1075,10 @@ struct GpuDrawer::Impl {
     for (Image &image : depths) image = Image{};
     texels = Image{};
     display = Image{};
+    for (Image &image : scaledFrames) image = Image{};
+    for (Image &image : scaledDepths) image = Image{};
+    scaledTexels = Image{};
+    fxaaImage = Image{};
     staging = Resource{};
     readback = Resource{};
     vertices = Resource{};
@@ -881,18 +1137,20 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
                                    hwgs::shaders::hw_pixel_uber_smooth_word_count, error);
   if (!s.vertexModule || !s.fragmentModule) return false;
 
-  VkDescriptorSetLayoutBinding bindings[4]{};
+  VkDescriptorSetLayoutBinding bindings[5]{};
   bindings[0] = {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
   bindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
   bindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
   bindings[3] = {3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
+  // IN-374: binding 4 = the scaled texel image (scaled sets); 1x sets point it at the texel atlas (never read).
+  bindings[4] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr};
   VkDescriptorSetLayoutCreateInfo setInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  setInfo.bindingCount = 4;
+  setInfo.bindingCount = 5;
   setInfo.pBindings = bindings;
   if (!check(gt4_hwd_vkCreateDescriptorSetLayout(s.device, &setInfo, nullptr, &s.setLayout), "vkCreateDescriptorSetLayout", error)) return false;
 
   VkPushConstantRange push{};
-  push.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+  push.stageFlags = kGraphicsPushStages;
   push.size = kPushBytes;
   VkPipelineLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
   layoutInfo.setLayoutCount = 1;
@@ -902,10 +1160,10 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
   if (!check(gt4_hwd_vkCreatePipelineLayout(s.device, &layoutInfo, nullptr, &s.pipelineLayout), "vkCreatePipelineLayout", error)) return false;
 
   constexpr std::uint32_t kSets = kGpuColourSlots * kGpuDepthSlots;
-  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 2 * kSets},
-                                   {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * 3 * kSets}};
+  VkDescriptorPoolSize sizes[2] = {{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 4 * kSets},
+                                   {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 4 * 4 * kSets}};
   VkDescriptorPoolCreateInfo poolSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
-  poolSetInfo.maxSets = 2 * kSets;  // two frame sets (IN-354)
+  poolSetInfo.maxSets = 4 * kSets;  // two frame sets (IN-354), each with 1x and scaled sets (IN-371)
   poolSetInfo.poolSizeCount = 2;
   poolSetInfo.pPoolSizes = sizes;
   if (!check(gt4_hwd_vkCreateDescriptorPool(s.device, &poolSetInfo, nullptr, &s.descriptorPool), "vkCreateDescriptorPool", error)) return false;
@@ -940,24 +1198,36 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     if (!s.make_image(image, kSurfaceSize, kSurfaceSize, error)) return false;
   }
   if (!s.make_image(s.texels, kGpuTexelAtlasSide, kGpuTexelAtlasSide, error)) return false;
-  if (!s.make_image(s.display, kSurfaceSize, kSurfaceSize, error)) return false;
+  s.scaledSide = s.scale > 1 ? static_cast<std::uint32_t>(kGpuScaledExtent) * s.scale : 0u;
+  s.displaySide = std::max<std::uint32_t>(kSurfaceSize, s.scaledSide);
+  if (!s.make_image(s.display, s.displaySide, s.displaySide, error)) return false;
+  if (s.scaled()) {
+    for (Impl::Image &image : s.scaledFrames) {
+      if (!s.make_image(image, s.scaledSide, s.scaledSide, error)) return false;
+    }
+    for (Impl::Image &image : s.scaledDepths) {
+      if (!s.make_image(image, s.scaledSide, s.scaledSide, error)) return false;
+    }
+    if (!s.make_image(s.scaledTexels, s.scaledSide, s.scaledSide, error)) return false;
+  }
 
   VkDescriptorBufferInfo uniformInfo{s.uniforms.buffer, 0, kUniformBytes};
   for (std::uint32_t colour = 0; colour < kGpuColourSlots; ++colour) {
     for (std::uint32_t depth = 0; depth < kGpuDepthSlots; ++depth) {
       const VkDescriptorSet set = s.descriptorSets[colour * kGpuDepthSlots + depth];
-      VkDescriptorImageInfo imageInfos[3] = {
+      VkDescriptorImageInfo imageInfos[4] = {
           {VK_NULL_HANDLE, s.frames[colour].view, VK_IMAGE_LAYOUT_GENERAL},
           {VK_NULL_HANDLE, s.depths[depth].view, VK_IMAGE_LAYOUT_GENERAL},
+          {VK_NULL_HANDLE, s.texels.view, VK_IMAGE_LAYOUT_GENERAL},
           {VK_NULL_HANDLE, s.texels.view, VK_IMAGE_LAYOUT_GENERAL}};
-      VkWriteDescriptorSet writes[4]{};
+      VkWriteDescriptorSet writes[5]{};
       writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       writes[0].dstSet = set;
       writes[0].dstBinding = 0;
       writes[0].descriptorCount = 1;
       writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
       writes[0].pBufferInfo = &uniformInfo;
-      for (int i = 0; i < 3; ++i) {
+      for (int i = 0; i < 4; ++i) {
         writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         writes[i + 1].dstSet = set;
         writes[i + 1].dstBinding = static_cast<std::uint32_t>(i + 1);
@@ -965,7 +1235,7 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
         writes[i + 1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
         writes[i + 1].pImageInfo = &imageInfos[i];
       }
-      gt4_hwd_vkUpdateDescriptorSets(s.device, 4, writes, 0, nullptr);
+      gt4_hwd_vkUpdateDescriptorSets(s.device, 5, writes, 0, nullptr);
     }
   }
 
@@ -1108,10 +1378,254 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
     if (!s.displayPipeline) return false;
     if (!s.make_display_set(0, s.computeSets[0], error)) return false;
   }
+  if (s.scaled() && !s.create_scaled_resources(error)) return false;
   if (!s.create_second_frame(error)) return false;
   s.ready = true;
   return true;
 }
+
+// IN-376: the FXAA image (display-sized, GENERAL layout), its descriptor set and kernel. Records the layout change
+// into the current recording.
+bool GpuDrawer::Impl::create_fxaa(std::string &error) {
+  if (fxaaPipeline) return true;
+  if (!make_image(fxaaImage, displaySide, displaySide, error)) return false;
+  VkImageMemoryBarrier toGeneral{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+  toGeneral.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+  toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  toGeneral.image = fxaaImage.image;
+  toGeneral.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+  toGeneral.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT;
+  gt4_hw_vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr,
+                              0, nullptr, 1, &toGeneral);
+  VkDescriptorSetLayoutBinding bindings[2]{};
+  bindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  bindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  VkDescriptorSetLayoutCreateInfo setInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  setInfo.bindingCount = 2;
+  setInfo.pBindings = bindings;
+  if (!check(gt4_hwd_vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &fxaaSetLayout),
+             "vkCreateDescriptorSetLayout", error)) {
+    return false;
+  }
+  VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 2 * sizeof(std::uint32_t)};
+  VkPipelineLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+  layoutInfo.setLayoutCount = 1;
+  layoutInfo.pSetLayouts = &fxaaSetLayout;
+  layoutInfo.pushConstantRangeCount = 1;
+  layoutInfo.pPushConstantRanges = &push;
+  if (!check(gt4_hwd_vkCreatePipelineLayout(device, &layoutInfo, nullptr, &fxaaLayout), "vkCreatePipelineLayout",
+             error)) {
+    return false;
+  }
+  VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2};
+  VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  poolInfo.maxSets = 1;
+  poolInfo.poolSizeCount = 1;
+  poolInfo.pPoolSizes = &size;
+  if (!check(gt4_hwd_vkCreateDescriptorPool(device, &poolInfo, nullptr, &fxaaPool), "vkCreateDescriptorPool", error)) {
+    return false;
+  }
+  VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  allocate.descriptorPool = fxaaPool;
+  allocate.descriptorSetCount = 1;
+  allocate.pSetLayouts = &fxaaSetLayout;
+  if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &allocate, &fxaaSet), "vkAllocateDescriptorSets", error)) {
+    return false;
+  }
+  VkDescriptorImageInfo images[2] = {{VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL},
+                                     {VK_NULL_HANDLE, fxaaImage.view, VK_IMAGE_LAYOUT_GENERAL}};
+  VkWriteDescriptorSet writes[2]{};
+  for (std::uint32_t i = 0; i < 2; ++i) {
+    writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[i].dstSet = fxaaSet;
+    writes[i].dstBinding = i;
+    writes[i].descriptorCount = 1;
+    writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    writes[i].pImageInfo = &images[i];
+  }
+  gt4_hwd_vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+  fxaaModule = make_module(hwgs::shaders::hw_postfx_fxaa_words, hwgs::shaders::hw_postfx_fxaa_word_count, error);
+  if (!fxaaModule) return false;
+  VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+  info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+  info.stage.module = fxaaModule;
+  info.stage.pName = "main";
+  info.layout = fxaaLayout;
+  return check(gt4_hwd_vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &fxaaPipeline),
+               "vkCreateComputePipelines", error);
+}
+
+// IN-371/IN-372: framebuffer, descriptor sets and kernels of the scaled images (frame set 0; create_second_frame
+// adds frame set 1's).
+bool GpuDrawer::Impl::create_scaled_resources(std::string &error) {
+  VkFramebufferCreateInfo fbInfo{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
+  fbInfo.renderPass = renderPass;
+  fbInfo.attachmentCount = 0;
+  fbInfo.width = scaledSide;
+  fbInfo.height = scaledSide;
+  fbInfo.layers = 1;
+  if (!check(gt4_hwd_vkCreateFramebuffer(device, &fbInfo, nullptr, &scaledFramebuffer), "vkCreateFramebuffer", error)) {
+    return false;
+  }
+  // Graphics sets: binding 0 the frame set's uniform ring, 1 and 2 the scaled images, 3 the texel atlas.
+  constexpr std::uint32_t kSets = kGpuColourSlots * kGpuDepthSlots;
+  VkDescriptorSetLayout layouts[kSets];
+  for (VkDescriptorSetLayout &layout : layouts) layout = setLayout;
+  VkDescriptorSetAllocateInfo setAllocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  setAllocate.descriptorPool = descriptorPool;
+  setAllocate.descriptorSetCount = kSets;
+  setAllocate.pSetLayouts = layouts;
+  if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &setAllocate, scaledDescriptorSets), "vkAllocateDescriptorSets",
+             error)) {
+    return false;
+  }
+  VkDescriptorBufferInfo uniformInfo{uniforms.buffer, 0, kUniformBytes};
+  for (std::uint32_t colour = 0; colour < kGpuColourSlots; ++colour) {
+    for (std::uint32_t depth = 0; depth < kGpuDepthSlots; ++depth) {
+      const VkDescriptorSet set = scaledDescriptorSets[colour * kGpuDepthSlots + depth];
+      VkDescriptorImageInfo imageInfos[4] = {{VK_NULL_HANDLE, scaledFrames[colour].view, VK_IMAGE_LAYOUT_GENERAL},
+                                             {VK_NULL_HANDLE, scaledDepths[depth].view, VK_IMAGE_LAYOUT_GENERAL},
+                                             {VK_NULL_HANDLE, texels.view, VK_IMAGE_LAYOUT_GENERAL},
+                                             {VK_NULL_HANDLE, scaledTexels.view, VK_IMAGE_LAYOUT_GENERAL}};
+      VkWriteDescriptorSet writes[5]{};
+      writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      writes[0].dstSet = set;
+      writes[0].dstBinding = 0;
+      writes[0].descriptorCount = 1;
+      writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+      writes[0].pBufferInfo = &uniformInfo;
+      for (int i = 0; i < 4; ++i) {
+        writes[i + 1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[i + 1].dstSet = set;
+        writes[i + 1].dstBinding = static_cast<std::uint32_t>(i + 1);
+        writes[i + 1].descriptorCount = 1;
+        writes[i + 1].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        writes[i + 1].pImageInfo = &imageInfos[i];
+      }
+      gt4_hwd_vkUpdateDescriptorSets(device, 5, writes, 0, nullptr);
+    }
+  }
+
+  // Kernel pool: 9 upsample sets (2 images each) and 2 compose sets (GLM, tables, ring, display, 6 scaled frames).
+  constexpr std::uint32_t kUpsampleSets = kGpuColourSlots + kGpuDepthSlots;
+  VkDescriptorPoolSize poolSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * kUpsampleSets + 2 * (1 + kGpuColourSlots)},
+                                       {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * 3}};
+  VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  poolInfo.maxSets = kUpsampleSets + 2;
+  poolInfo.poolSizeCount = 2;
+  poolInfo.pPoolSizes = poolSizes;
+  if (!check(gt4_hwd_vkCreateDescriptorPool(device, &poolInfo, nullptr, &scalePool), "vkCreateDescriptorPool", error)) {
+    return false;
+  }
+
+  // Upsample kernel (hw_scale_upsample.comp): binding 0 the 1x image, 1 the scaled image.
+  VkDescriptorSetLayoutBinding upsampleBindings[2]{};
+  upsampleBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  upsampleBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  VkDescriptorSetLayoutCreateInfo upsampleSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  upsampleSetInfo.bindingCount = 2;
+  upsampleSetInfo.pBindings = upsampleBindings;
+  if (!check(gt4_hwd_vkCreateDescriptorSetLayout(device, &upsampleSetInfo, nullptr, &upsampleSetLayout),
+             "vkCreateDescriptorSetLayout", error)) {
+    return false;
+  }
+  VkPushConstantRange upsamplePush{VK_SHADER_STAGE_COMPUTE_BIT, 0, 5 * sizeof(std::uint32_t)};
+  VkPipelineLayoutCreateInfo upsampleLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+  upsampleLayoutInfo.setLayoutCount = 1;
+  upsampleLayoutInfo.pSetLayouts = &upsampleSetLayout;
+  upsampleLayoutInfo.pushConstantRangeCount = 1;
+  upsampleLayoutInfo.pPushConstantRanges = &upsamplePush;
+  if (!check(gt4_hwd_vkCreatePipelineLayout(device, &upsampleLayoutInfo, nullptr, &upsampleLayout),
+             "vkCreatePipelineLayout", error)) {
+    return false;
+  }
+  VkDescriptorSetLayout upsampleLayouts[kUpsampleSets];
+  for (VkDescriptorSetLayout &layout : upsampleLayouts) layout = upsampleSetLayout;
+  VkDescriptorSetAllocateInfo upsampleAllocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  upsampleAllocate.descriptorPool = scalePool;
+  upsampleAllocate.descriptorSetCount = kUpsampleSets;
+  upsampleAllocate.pSetLayouts = upsampleLayouts;
+  if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &upsampleAllocate, upsampleSets), "vkAllocateDescriptorSets",
+             error)) {
+    return false;
+  }
+  for (std::uint32_t set = 0; set < kUpsampleSets; ++set) {
+    const bool depthSet = set >= kGpuColourSlots;
+    const std::uint32_t slot = depthSet ? set - kGpuColourSlots : set;
+    VkDescriptorImageInfo images[2] = {
+        {VK_NULL_HANDLE, depthSet ? depths[slot].view : frames[slot].view, VK_IMAGE_LAYOUT_GENERAL},
+        {VK_NULL_HANDLE, depthSet ? scaledDepths[slot].view : scaledFrames[slot].view, VK_IMAGE_LAYOUT_GENERAL}};
+    VkWriteDescriptorSet writes[2]{};
+    for (std::uint32_t i = 0; i < 2; ++i) {
+      writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      writes[i].dstSet = upsampleSets[set];
+      writes[i].dstBinding = i;
+      writes[i].descriptorCount = 1;
+      writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      writes[i].pImageInfo = &images[i];
+    }
+    gt4_hwd_vkUpdateDescriptorSets(device, 2, writes, 0, nullptr);
+  }
+  upsampleModule = make_module(hwgs::shaders::hw_scale_upsample_words, hwgs::shaders::hw_scale_upsample_word_count, error);
+  if (!upsampleModule) return false;
+  {
+    VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+    info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    info.stage.module = upsampleModule;
+    info.stage.pName = "main";
+    info.layout = upsampleLayout;
+    if (!check(gt4_hwd_vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &upsamplePipeline),
+               "vkCreateComputePipelines", error)) {
+      return false;
+    }
+  }
+
+  // Scaled compose kernel (hw_display_compose_scaled.comp): 0 GLM, 1 tables, 2 ring, 4 display, 6 scaled frames.
+  VkDescriptorSetLayoutBinding composeBindings[5]{};
+  composeBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  composeBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  composeBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  composeBindings[3] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  composeBindings[4] = {6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kGpuColourSlots, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  VkDescriptorSetLayoutCreateInfo composeSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  composeSetInfo.bindingCount = 5;
+  composeSetInfo.pBindings = composeBindings;
+  if (!check(gt4_hwd_vkCreateDescriptorSetLayout(device, &composeSetInfo, nullptr, &composeScaledSetLayout),
+             "vkCreateDescriptorSetLayout", error)) {
+    return false;
+  }
+  VkPushConstantRange composePush{VK_SHADER_STAGE_COMPUTE_BIT, 0, 4 * sizeof(std::uint32_t)};
+  VkPipelineLayoutCreateInfo composeLayoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+  composeLayoutInfo.setLayoutCount = 1;
+  composeLayoutInfo.pSetLayouts = &composeScaledSetLayout;
+  composeLayoutInfo.pushConstantRangeCount = 1;
+  composeLayoutInfo.pPushConstantRanges = &composePush;
+  if (!check(gt4_hwd_vkCreatePipelineLayout(device, &composeLayoutInfo, nullptr, &composeScaledLayout),
+             "vkCreatePipelineLayout", error)) {
+    return false;
+  }
+  composeScaledModule = make_module(hwgs::shaders::hw_display_compose_scaled_words,
+                                    hwgs::shaders::hw_display_compose_scaled_word_count, error);
+  if (!composeScaledModule) return false;
+  {
+    VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+    info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    info.stage.module = composeScaledModule;
+    info.stage.pName = "main";
+    info.layout = composeScaledLayout;
+    if (!check(gt4_hwd_vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &composeScaledPipeline),
+               "vkCreateComputePipelines", error)) {
+      return false;
+    }
+  }
+  return make_compose_scaled_set(0, palettes, error);
+}
+
 
 // Submits the recorded commands. With `wait`, blocks until the GPU finished them and the rings are free again;
 // without, the fence is waited for before the next recording reuses the rings (the GPU works while the CPU
@@ -1142,7 +1656,7 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
     gt4_hwd_vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1,
                                     &descriptorSets[draw.descriptorSet], 1, &draw.uniformOffset);
     if (!lastPush || std::memcmp(lastPush, draw.push, sizeof(draw.push)) != 0) {
-      gt4_hwd_vkCmdPushConstants(cmd, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, kPushBytes, draw.push);
+      gt4_hwd_vkCmdPushConstants(cmd, pipelineLayout, kGraphicsPushStages, 0, kPushBytes, draw.push);
       lastPush = draw.push;
     }
     if (std::memcmp(&lastScissor, &draw.scissor, sizeof(VkRect2D)) != 0) {
@@ -1157,6 +1671,22 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
   }
   recorded_work();
   gt4_hwd_vkCmdEndRenderPass(cmd);
+  if (scaled()) {
+    // IN-371: the same draws into the scaled images (other images: no barrier against the 1x pass).
+    scaledDraws.clear();
+    for (const PendingDraw &draw : runDraws) {
+      ScaledDraw scaledDraw;
+      scaledDraw.descriptorSet = draw.descriptorSet;
+      scaledDraw.uniformOffset = draw.uniformOffset;
+      scaledDraw.push = draw.push;
+      scaledDraw.scissor = draw.scissor;
+      scaledDraw.firstVertex = static_cast<std::uint32_t>(draw.vertexOffsetBytes / sizeof(GpuVertex)) + draw.firstVertex;
+      scaledDraw.vertexCount = draw.vertexCount;
+      scaledDraw.pipeline = interlockTriangles;
+      scaledDraws.push_back(scaledDraw);
+    }
+    record_scaled_draws(false);
+  }
   mark(kTimePass);
   full_barrier_with_fragment();  // the run's draws -> anything after (target reads, the next run's atlas writes)
   ++stats.runs;
@@ -1251,8 +1781,8 @@ bool GpuDrawer::Impl::create_second_frame(std::string &error) {
   const FrameResources &first = frameSets[0];
   VkDescriptorBufferInfo uniformInfo{f.uniforms.buffer, 0, kUniformBytes};
   for (std::uint32_t i = 0; i < kSets; ++i) {
-    VkCopyDescriptorSet copies[3]{};
-    for (std::uint32_t b = 0; b < 3; ++b) {
+    VkCopyDescriptorSet copies[4]{};
+    for (std::uint32_t b = 0; b < 4; ++b) {
       copies[b].sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
       copies[b].srcSet = first.descriptorSets[i];
       copies[b].srcBinding = b + 1;
@@ -1266,7 +1796,7 @@ bool GpuDrawer::Impl::create_second_frame(std::string &error) {
     write.descriptorCount = 1;
     write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     write.pBufferInfo = &uniformInfo;
-    gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 3, copies);
+    gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 4, copies);
   }
   VkDescriptorBufferInfo paletteInfo{f.palettes.buffer, 0, kPaletteRingBytes};
   for (std::uint32_t i = 0; i < kComputeSets; ++i) {
@@ -1309,6 +1839,36 @@ bool GpuDrawer::Impl::create_second_frame(std::string &error) {
     }
   }
   if (!make_display_set(1, f.computeSets[0], error)) return false;
+  if (scaled()) {
+    // IN-371: frame set 1's scaled graphics sets (images copied from set 0's, own uniform ring) and compose set.
+    VkDescriptorSetAllocateInfo scaledAllocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+    scaledAllocate.descriptorPool = descriptorPool;
+    scaledAllocate.descriptorSetCount = kSets;
+    scaledAllocate.pSetLayouts = layouts;
+    if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &scaledAllocate, f.scaledDescriptorSets),
+               "vkAllocateDescriptorSets", error)) {
+      return false;
+    }
+    for (std::uint32_t i = 0; i < kSets; ++i) {
+      VkCopyDescriptorSet copies[4]{};
+      for (std::uint32_t b = 0; b < 4; ++b) {
+        copies[b].sType = VK_STRUCTURE_TYPE_COPY_DESCRIPTOR_SET;
+        copies[b].srcSet = first.scaledDescriptorSets[i];
+        copies[b].srcBinding = b + 1;
+        copies[b].dstSet = f.scaledDescriptorSets[i];
+        copies[b].dstBinding = b + 1;
+        copies[b].descriptorCount = 1;
+      }
+      VkWriteDescriptorSet write{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
+      write.dstSet = f.scaledDescriptorSets[i];
+      write.dstBinding = 0;
+      write.descriptorCount = 1;
+      write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
+      write.pBufferInfo = &uniformInfo;
+      gt4_hwd_vkUpdateDescriptorSets(device, 1, &write, 4, copies);
+    }
+    if (!make_compose_scaled_set(1, f.palettes, error)) return false;
+  }
   secondFrameReady = true;
   doubleBuffered = true;
   load_frame(0);
@@ -1530,13 +2090,14 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   // PushConstants of hw_vertex.vert: viewport (vec2), scale, scale_offset (1.0 at 1x), offset X and
   // Y (0: the batch vertices already carry XYOFFSET), z_max.
   const float viewportSize[2] = {static_cast<float>(kSurfaceSize), static_cast<float>(kSurfaceSize)};
-  std::uint32_t pushWords[7];
+  std::uint32_t pushWords[8];
   std::memcpy(pushWords, viewportSize, sizeof(viewportSize));
   pushWords[2] = FloatToBits(1.0f);
   pushWords[3] = FloatToBits(1.0f);
   pushWords[4] = 0;
   pushWords[5] = 0;
   pushWords[6] = zMax;
+  pushWords[7] = 1;  // tex_scale: the texel atlas holds 1x texels
 
   if (runnable) {
     // IN-352: texture preparation now, into the chunk's atlas region; the draw is recorded when the run closes.
@@ -1613,6 +2174,11 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
   VkBufferImageCopy depthCopy = frameCopy;
   depthCopy.bufferOffset = depthOffset;
   const bool anyUpload = chunk.uploadFrame || chunk.uploadDepth || chunk.hasTexture;
+  // IN-374: a texture copied from a resident slot is also copied from its scaled image (inside the scaled extent).
+  const bool scaledTextureCopy = s.scaled() && textureFromSlot &&
+                                 chunk.textureSlot != static_cast<std::int32_t>(kGpuScratchColourSlot) &&
+                                 chunk.texWidth <= static_cast<std::uint32_t>(kGpuScaledExtent) &&
+                                 chunk.texHeight <= static_cast<std::uint32_t>(kGpuScaledExtent);
   if (chunk.uploadFrame) {
     s.recorded_work();
     gt4_hwd_vkCmdCopyBufferToImage(s.cmd, s.staging.buffer, frameImage, VK_IMAGE_LAYOUT_GENERAL, 1, &frameCopy);
@@ -1642,6 +2208,16 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     s.recorded_work();
     gt4_hwd_vkCmdCopyImage(s.cmd, s.frames[chunk.textureSlot].image, VK_IMAGE_LAYOUT_GENERAL, s.texels.image,
                            VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+    if (scaledTextureCopy) {
+      // IN-374 (06.8 "sampling a target directly: the source inherits the target's scale"): the same region of the
+      // slot's scaled image, for the scaled pass of this chunk.
+      VkImageCopy scaledRegion = region;
+      scaledRegion.extent = {chunk.texWidth * s.scale, chunk.texHeight * s.scale, 1};
+      s.recorded_work();
+      gt4_hwd_vkCmdCopyImage(s.cmd, s.scaledFrames[chunk.textureSlot].image, VK_IMAGE_LAYOUT_GENERAL,
+                             s.scaledTexels.image, VK_IMAGE_LAYOUT_GENERAL, 1, &scaledRegion);
+      ++s.stats.scaledTextureCopies;
+    }
   } else if (chunk.hasTexture) {
     VkBufferImageCopy texCopy{};
     texCopy.bufferOffset = textureOffset;
@@ -1661,6 +2237,13 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
                                 &copyBarrier, 0, nullptr, 0, nullptr);
     s.stats.barriers++;
   }
+  // IN-371: a load of 1x words into a resident slot refreshes its scaled image (the scratch pair has none in use).
+  if (chunk.uploadFrame && chunk.colourSlot != kGpuScratchColourSlot) {
+    s.refresh_scaled(false, chunk.colourSlot, chunk.rectX0, chunk.rectY0, chunk.rectX1, chunk.rectY1);
+  }
+  if (chunk.uploadDepth && chunk.depthSlot != kGpuScratchDepthSlot) {
+    s.refresh_scaled(true, chunk.depthSlot, chunk.rectX0, chunk.rectY0, chunk.rectX1, chunk.rectY1);
+  }
 
   if (drawing) {
     VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
@@ -1673,7 +2256,7 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, s.pipelineLayout, 0, 1,
                                     &s.descriptorSets[chunk.colourSlot * kGpuDepthSlots + chunk.depthSlot], 1,
                                     &uniformOffset);
-    gt4_hwd_vkCmdPushConstants(s.cmd, s.pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, kPushBytes, pushWords);
+    gt4_hwd_vkCmdPushConstants(s.cmd, s.pipelineLayout, kGraphicsPushStages, 0, kPushBytes, pushWords);
     VkViewport viewport{0.0f, 0.0f, static_cast<float>(kSurfaceSize), static_cast<float>(kSurfaceSize), 0.0f, 1.0f};
     gt4_hwd_vkCmdSetViewport(s.cmd, 0, 1, &viewport);
     VkDeviceSize vertexBufferOffset = vertexOffsetBytes;
@@ -1703,6 +2286,18 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
         s.recorded_work();
         gt4_hwd_vkCmdDraw(s.cmd, endVertex - firstVertex, 1, firstVertex, 0);
         s.stats.draws++;
+        if (s.scaled()) {
+          Impl::ScaledDraw scaledDraw;
+          scaledDraw.descriptorSet = chunk.colourSlot * kGpuDepthSlots + chunk.depthSlot;
+          scaledDraw.uniformOffset = uniformOffset;
+          scaledDraw.push = pushWords;
+          scaledDraw.scissor = scissor;
+          scaledDraw.firstVertex = static_cast<std::uint32_t>(vertexOffsetBytes / sizeof(GpuVertex)) + firstVertex;
+          scaledDraw.vertexCount = endVertex - firstVertex;
+          scaledDraw.pipeline = s.interlockTriangles;
+          scaledDraw.scaledTexture = scaledTextureCopy;
+          s.scaledDraws.push_back(scaledDraw);
+        }
       }
     }
     bool anyDraw = false;
@@ -1733,9 +2328,22 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
       gt4_hwd_vkCmdDraw(s.cmd, draw.count, 1, draw.first, 0);
       anyDraw = true;
       s.stats.draws++;
+      if (s.scaled()) {
+        Impl::ScaledDraw scaledDraw;
+        scaledDraw.descriptorSet = chunk.colourSlot * kGpuDepthSlots + chunk.depthSlot;
+        scaledDraw.uniformOffset = uniformOffset;
+        scaledDraw.push = pushWords;
+        scaledDraw.scissor = scissor;
+        scaledDraw.firstVertex = static_cast<std::uint32_t>(vertexOffsetBytes / sizeof(GpuVertex)) + draw.first;
+        scaledDraw.vertexCount = draw.count;
+        scaledDraw.pipeline = s.pipelines[pipelineIndex];
+        scaledDraw.scaledTexture = scaledTextureCopy;
+        s.scaledDraws.push_back(scaledDraw);
+      }
     }
     s.recorded_work();
     gt4_hwd_vkCmdEndRenderPass(s.cmd);
+    s.record_scaled_draws(!allTriangles);  // IN-371
   }
   s.mark(drawing ? Impl::kTimePass : Impl::kTimeUpload);
 
@@ -1862,6 +2470,7 @@ bool GpuDrawer::LoadSlotFromGlm(bool depthSlot, std::uint32_t slot, std::uint32_
   gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
   s.mark(Impl::kTimeSwizzle);
   s.full_barrier();
+  s.refresh_scaled(depthSlot, slot, x0, y0, x1, y1);  // IN-371
   return true;
 }
 
@@ -2010,7 +2619,7 @@ bool GpuDrawer::CompleteGlmDownload(const DownloadTicket &ticket, std::uint8_t *
 bool GpuDrawer::ComposeDisplay(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth,
                                std::uint32_t outHeight, std::string &error) {
   Impl &s = *impl_;
-  if (outWidth == 0 || outHeight == 0 || outWidth > kSurfaceSize || outHeight > kSurfaceSize) {
+  if (outWidth == 0 || outHeight == 0 || outWidth > s.displaySide || outHeight > s.displaySide) {
     error = "display compose outside the display image";
     return false;
   }
@@ -2032,33 +2641,112 @@ bool GpuDrawer::ComposeDisplay(const std::vector<std::uint32_t> &parameters, std
   return true;
 }
 
-std::uint64_t GpuDrawer::DisplayImage() const { return reinterpret_cast<std::uint64_t>(impl_->display.image); }
-
-bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words,
-                            std::string &error) {
+bool GpuDrawer::ComposeDisplayScaled(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth,
+                                     std::uint32_t outHeight, std::string &error) {
   Impl &s = *impl_;
-  if (width == 0 || height == 0 || width > kSurfaceSize || height > kSurfaceSize) {
-    error = "display read outside the display image";
+  if (!s.scaled()) {
+    error = "scaled display compose at 1x";
+    return false;
+  }
+  if (outWidth == 0 || outHeight == 0 || outWidth > s.displaySide || outHeight > s.displaySide) {
+    error = "scaled display compose outside the display image";
+    return false;
+  }
+  const VkDeviceSize bytes = parameters.size() * sizeof(std::uint32_t);
+  if (s.paletteUsed + bytes > kPaletteRingBytes && !s.submit(false, error)) return false;
+  if (!s.begin_recording(error)) return false;
+  if (!s.flush_run(error)) return false;  // the frame's pending draws come first
+  const std::uint32_t base = static_cast<std::uint32_t>(s.paletteUsed / sizeof(std::uint32_t));
+  std::memcpy(static_cast<std::uint8_t *>(s.palettes.mapped) + s.paletteUsed, parameters.data(), bytes);
+  s.paletteUsed += bytes;
+  s.full_barrier_with_fragment();  // scaled draws, GLM swizzles and uploads, and an earlier present's copy finish first
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.composeScaledPipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.composeScaledLayout, 0, 1,
+                                  &s.composeScaledSets[s.currentFrame], 0, nullptr);
+  s.boundComputePipeline = s.composeScaledPipeline;
+  s.boundComputeSet = s.composeScaledSets[s.currentFrame];
+  const std::uint32_t push[4] = {base, outWidth, outHeight, s.scale};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.composeScaledLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+  s.recorded_work();
+  gt4_hwd_vkCmdDispatch(s.cmd, (outWidth + 7) / 8, (outHeight + 7) / 8, 1);
+  s.mark(Impl::kTimeDownload);
+  s.full_barrier();
+  return true;
+}
+
+bool GpuDrawer::ApplyFxaa(std::uint32_t width, std::uint32_t height, std::string &error) {
+  Impl &s = *impl_;
+  if (width == 0 || height == 0 || width > s.displaySide || height > s.displaySide) {
+    error = "FXAA outside the display image";
     return false;
   }
   if (!s.begin_recording(error)) return false;
   if (!s.flush_run(error)) return false;
-  s.full_barrier();
-  VkBufferImageCopy copy{};
-  copy.bufferRowLength = width;
-  copy.bufferImageHeight = height;
-  copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-  copy.imageExtent = {width, height, 1};
+  if (!s.create_fxaa(error)) return false;
+  s.full_barrier();  // the compose wrote the display image; an earlier present may still copy the FXAA image
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.fxaaPipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.fxaaLayout, 0, 1, &s.fxaaSet, 0, nullptr);
+  s.boundComputePipeline = s.fxaaPipeline;
+  s.boundComputeSet = s.fxaaSet;
+  const std::uint32_t push[2] = {width, height};
+  gt4_hwd_vkCmdPushConstants(s.cmd, s.fxaaLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
   s.recorded_work();
-  gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, s.display.image, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &copy);
-  VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
-  done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-  done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-  gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0, nullptr,
-                              0, nullptr);
-  if (!s.submit(true, error)) return false;
+  gt4_hwd_vkCmdDispatch(s.cmd, (width + 7) / 8, (height + 7) / 8, 1);
+  s.mark(Impl::kTimeDownload);
+  s.full_barrier();
+  ++s.stats.fxaaFrames;
+  return true;
+}
+
+std::uint64_t GpuDrawer::FxaaImage() const { return reinterpret_cast<std::uint64_t>(impl_->fxaaImage.image); }
+
+void GpuDrawer::SetScale(std::uint32_t scale, float scaleOffset) {
+  impl_->scale = std::clamp<std::uint32_t>(scale, 1u, kGpuMaxScale);
+  impl_->scaleOffset = scaleOffset;
+}
+
+std::uint32_t GpuDrawer::Scale() const { return impl_->scale; }
+
+std::uint64_t GpuDrawer::DisplayImage() const { return reinterpret_cast<std::uint64_t>(impl_->display.image); }
+
+bool GpuDrawer::ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words,
+                            std::string &error, bool fromFxaa) {
+  Impl &s = *impl_;
+  if (fromFxaa && !s.fxaaImage.image) {
+    error = "FXAA image read before any FXAA pass";
+    return false;
+  }
+  const VkImage source = fromFxaa ? s.fxaaImage.image : s.display.image;
+  if (width == 0 || height == 0 || width > s.displaySide || height > s.displaySide) {
+    error = "display read outside the display image";
+    return false;
+  }
   words.resize(static_cast<std::size_t>(width) * height);
-  std::memcpy(words.data(), s.readback.mapped, words.size() * sizeof(std::uint32_t));
+  // IN-372: a scaled frame can exceed the readback buffer; it is read in bands of whole rows.
+  const std::uint32_t bandRows =
+      static_cast<std::uint32_t>(std::min<VkDeviceSize>(height, kReadbackBytes / (static_cast<VkDeviceSize>(width) * 4)));
+  for (std::uint32_t row = 0; row < height; row += bandRows) {
+    const std::uint32_t rows = std::min(bandRows, height - row);
+    if (!s.begin_recording(error)) return false;
+    if (!s.flush_run(error)) return false;
+    s.full_barrier();
+    VkBufferImageCopy copy{};
+    copy.bufferRowLength = width;
+    copy.bufferImageHeight = rows;
+    copy.imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+    copy.imageOffset = {0, static_cast<std::int32_t>(row), 0};
+    copy.imageExtent = {width, rows, 1};
+    s.recorded_work();
+    gt4_hwd_vkCmdCopyImageToBuffer(s.cmd, source, VK_IMAGE_LAYOUT_GENERAL, s.readback.buffer, 1, &copy);
+    VkMemoryBarrier done{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    done.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    done.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    gt4_hw_vkCmdPipelineBarrier(s.cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_HOST_BIT, 0, 1, &done, 0,
+                                nullptr, 0, nullptr);
+    if (!s.submit(true, error)) return false;
+    std::memcpy(words.data() + static_cast<std::size_t>(row) * width, s.readback.mapped,
+                static_cast<std::size_t>(rows) * width * sizeof(std::uint32_t));
+  }
   return true;
 }
 

@@ -147,6 +147,11 @@ int main() {
   expect(!chosen.decode_reuse, "decode reuse off");
   expect(!chosen.clut_defer, "CLUT defer off");
 
+  // IN-372: the upscaled dump source (GPU presentation compose at GT4_HW_SCALE).
+  expect(parse_options(env_of({{"GT4_HW_DUMP_SOURCE", "upscaled"}})).dump_source == DumpSource::upscaled,
+         "dump source upscaled");
+  expect(rejected("GT4_HW_DUMP_SOURCE", "scaled"), "unknown dump source rejected");
+
   // Invalid values abort (throw), one per kind.
   expect(rejected("GT4_HW_SCALE", "0"), "scale 0 rejected");
   expect(rejected("GT4_HW_SCALE", "9"), "scale 9 rejected");

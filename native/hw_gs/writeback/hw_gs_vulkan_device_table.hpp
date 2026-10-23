@@ -21,6 +21,7 @@
 #define vkCmdBindPipeline gt4_hwd_vkCmdBindPipeline
 #define vkCmdBindVertexBuffers gt4_hwd_vkCmdBindVertexBuffers
 #define vkCmdBlitImage gt4_hwd_vkCmdBlitImage
+#define vkCmdClearColorImage gt4_hwd_vkCmdClearColorImage
 #define vkCmdCopyBufferToImage gt4_hwd_vkCmdCopyBufferToImage
 #define vkCmdCopyImage gt4_hwd_vkCmdCopyImage
 #define vkCreateComputePipelines gt4_hwd_vkCreateComputePipelines
@@ -74,6 +75,7 @@ inline PFN_vkCmdBindDescriptorSets gt4_hwd_vkCmdBindDescriptorSets = nullptr;
 inline PFN_vkCmdBindPipeline gt4_hwd_vkCmdBindPipeline = nullptr;
 inline PFN_vkCmdBindVertexBuffers gt4_hwd_vkCmdBindVertexBuffers = nullptr;
 inline PFN_vkCmdBlitImage gt4_hwd_vkCmdBlitImage = nullptr;
+inline PFN_vkCmdClearColorImage gt4_hwd_vkCmdClearColorImage = nullptr;
 inline PFN_vkCmdCopyBufferToImage gt4_hwd_vkCmdCopyBufferToImage = nullptr;
 inline PFN_vkCmdCopyImage gt4_hwd_vkCmdCopyImage = nullptr;
 inline PFN_vkCreateComputePipelines gt4_hwd_vkCreateComputePipelines = nullptr;

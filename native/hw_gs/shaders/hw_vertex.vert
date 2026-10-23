@@ -27,6 +27,7 @@ layout(push_constant) uniform VertexPush {
     int offset_x;        // XYOFFSET X, 12.4 units
     int offset_y;        // XYOFFSET Y, 12.4 units
     uint z_max;          // format maximum of Z (16777215 for Z24, 65535 for Z16, else 4294967295)
+    uint tex_scale;      // read by the pixel stage only (IN-374)
 } pc;
 
 #if HWR_FLAT_COLOUR
@@ -54,6 +55,8 @@ void main() {
     float depth = float(min(in_z, pc.z_max)) * (1.0 / 4294967296.0);
     vec2 ndc = gpu / pc.viewport_size * 2.0 - 1.0;
     gl_Position = vec4(ndc, depth, 1.0);
+    // Points cover s x s sub-pixels at scale (06.5), one pixel at 1x.
+    gl_PointSize = pc.scale;
 
     out_rgba = vec4(in_rgba);
     out_st = in_st;

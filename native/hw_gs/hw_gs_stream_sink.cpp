@@ -500,6 +500,18 @@ void finish(std::FILE *output) {
                static_cast<unsigned long long>(counters.merge_alpha_from_texel),
                static_cast<unsigned long long>(counters.writeback_depth_words),
                static_cast<unsigned long long>(counters.fifo_overruns));
+  if (counters.scale > 1) {
+    std::fprintf(output,
+                 "[hw] scale: x%u draws=%llu passes=%llu refreshes=%llu refresh_pixels=%llu composes=%llu "
+                 "circuits_from_slots=%llu circuits_from_glm=%llu\n",
+                 counters.scale, static_cast<unsigned long long>(counters.scaled_draws),
+                 static_cast<unsigned long long>(counters.scaled_passes),
+                 static_cast<unsigned long long>(counters.scaled_refreshes),
+                 static_cast<unsigned long long>(counters.scaled_refresh_pixels),
+                 static_cast<unsigned long long>(counters.scaled_composes),
+                 static_cast<unsigned long long>(counters.scaled_circuits_from_slots),
+                 static_cast<unsigned long long>(counters.scaled_circuits_from_glm));
+  }
   if (g_dump_every != 0) {
     std::fprintf(output, "[hw] dumps: written=%llu without_image=%llu every=%u dir=%s\n",
                  static_cast<unsigned long long>(g_dumps), static_cast<unsigned long long>(g_dumps_without_image),

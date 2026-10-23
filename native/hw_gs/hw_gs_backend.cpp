@@ -143,6 +143,7 @@ struct Backend::Impl {
     void *mapped = nullptr;
     std::uint32_t width = 0;
     std::uint32_t height = 0;
+    std::uint32_t levels = 1;  // IN-375: mip levels for the downscale of an upscaled frame
   } upload;
 
   ~Impl() { shutdown(); }
@@ -224,7 +225,13 @@ struct Backend::Impl {
     image.imageType = VK_IMAGE_TYPE_2D;
     image.format = VK_FORMAT_R8G8B8A8_UNORM;
     image.extent = {width, height, 1};
-    image.mipLevels = 1;
+    // IN-375: an upscaled frame larger than the window is reduced by 2x2 box steps (linear half-size blits) before
+    // the final linear blit, so the final blit never skips source pixels (a single linear blit of a 6x frame into a
+    // 1440p window samples only 4 of about 7 x 7 source pixels per output pixel and aliases).
+    std::uint32_t levels = 1;
+    while (levels < 4 && (width >> levels) >= 320 && (height >> levels) >= 224) ++levels;
+    upload.levels = levels;
+    image.mipLevels = levels;
     image.arrayLayers = 1;
     image.samples = VK_SAMPLE_COUNT_1_BIT;
     image.tiling = VK_IMAGE_TILING_OPTIMAL;
@@ -588,7 +595,7 @@ struct Backend::Impl {
       to_copy.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       to_copy.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       to_copy.image = upload.image;
-      to_copy.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+      to_copy.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, upload.levels, 0, 1};
       to_copy.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
       vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
                            nullptr, 1, &to_copy);
@@ -617,6 +624,7 @@ struct Backend::Impl {
       to_copy.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
       to_copy.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
       to_copy.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+      to_copy.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
       vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
                            nullptr, 1, &to_copy);
       // Chapter 13.6 (fixed 16:9, the presentation contract of the default renderer and gt4-gs): the composed
@@ -632,9 +640,31 @@ struct Backend::Impl {
       stats.present_top = rect.top;
       stats.present_width = rect.width;
       stats.present_height = rect.height;
+      // IN-375: halve with 2x2 box blits while the next level still covers the destination rectangle.
+      std::uint32_t level = 0;
+      std::uint32_t lw = upload.width, lh = upload.height;
+      while (level + 1 < upload.levels && (lw >> 1) >= dw && (lh >> 1) >= dh) {
+        VkImageBlit half{};
+        half.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
+        half.srcOffsets[1] = {static_cast<std::int32_t>(lw), static_cast<std::int32_t>(lh), 1};
+        half.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 0, 1};
+        half.dstOffsets[1] = {static_cast<std::int32_t>(lw >> 1), static_cast<std::int32_t>(lh >> 1), 1};
+        gt4_hwd_vkCmdBlitImage(cmd, upload.image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, upload.image,
+                               VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &half, VK_FILTER_LINEAR);
+        VkImageMemoryBarrier toSource = to_copy;
+        toSource.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, level + 1, 1, 0, 1};
+        vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0,
+                             nullptr, 1, &toSource);
+        ++level;
+        lw >>= 1;
+        lh >>= 1;
+      }
+      stats.present_downscale_levels = level;
+      stats.present_source_width = upload.width;
+      stats.present_source_height = upload.height;
       VkImageBlit blit{};
-      blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
-      blit.srcOffsets[1] = {static_cast<std::int32_t>(upload.width), static_cast<std::int32_t>(upload.height), 1};
+      blit.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, level, 0, 1};
+      blit.srcOffsets[1] = {static_cast<std::int32_t>(lw), static_cast<std::int32_t>(lh), 1};
       blit.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
       blit.dstOffsets[0] = {left, top, 0};
       blit.dstOffsets[1] = {left + static_cast<std::int32_t>(dw), top + static_cast<std::int32_t>(dh), 1};
@@ -739,6 +769,13 @@ struct Backend::Impl {
   }
 };
 
+// 06.3 `normal` half-pixel mode: m = s + 0.2 (s even), s + 0.3 (s odd with bit 1 clear), s + 0.1 (otherwise).
+static float scale_offset_normal(std::uint32_t scale) {
+  if (scale % 2u == 0u) return static_cast<float>(scale) + 0.2f;
+  if ((scale & 2u) == 0u) return static_cast<float>(scale) + 0.3f;
+  return static_cast<float>(scale) + 0.1f;
+}
+
 Backend::Backend() : impl_(std::make_unique<Impl>()) {}
 Backend::~Backend() = default;
 
@@ -768,6 +805,24 @@ bool Backend::init(const Options &options, std::string &error) {
   s.renderer = std::make_unique<hwgs::writeback::Renderer>();
   hwgs::gpu::VulkanHandles handles{s.instance, s.physical, s.device, s.queue, s.queue_family};
   handles.pixelInterlock = s.pixel_interlock;
+  {
+    // M12 (06.1, IN-371): GT4_HW_SCALE clamped to the device ceiling s_max = max(1, floor(maxImageDimension2D /
+    // 1280)); the 06.3 half-pixel mode sets the vertex shift factor (native: s, normal: m, off: 1).
+    const std::uint32_t ceiling = std::max<std::uint32_t>(1u, s.report.max_image_dimension_2d / 1280u);
+    std::uint32_t scale = options.scale;
+    if (scale > ceiling) {
+      std::fprintf(stderr, "[hw] GT4_HW_SCALE=%u is above this device's ceiling %u; using %u\n", scale, ceiling,
+                   ceiling);
+      scale = ceiling;
+    }
+    float shift = static_cast<float>(scale);
+    if (options.half_pixel == HalfPixel::off) {
+      shift = 1.0f;
+    } else if (options.half_pixel == HalfPixel::normal) {
+      shift = scale_offset_normal(scale);
+    }
+    s.renderer->SetScale(scale, shift);
+  }
   if (!s.renderer->Init(handles, error)) {
     s.shutdown();
     return false;
@@ -793,6 +848,8 @@ bool Backend::init(const Options &options, std::string &error) {
   // GT4_HW_GPU_TIMING (12.8): GPU timestamps per category, reported on the GT4_HW_PROFILE_EVERY line.
   s.renderer->SetGpuTiming(options.gpu_timing);
   s.renderer->SetDecodeReuse(options.decode_reuse);
+  // 13.5 GT4_HW_POSTFX=fxaa (IN-376): progressive presentation frames (races) pass through the edge-only FXAA.
+  s.renderer->SetFxaa((options.postfx & postfx_fxaa) != 0);
   s.renderer->SetClutDefer(options.clut_defer);
   // IN-358 diagnostic (not a 12.8 option): GT4_HW_CHUNKS_PER_SUBMIT=<n> mid-frame submission interval (0 = off).
   if (const char *chunks = std::getenv("GT4_HW_CHUNKS_PER_SUBMIT")) {
@@ -884,6 +941,16 @@ bool Backend::scanout(ScanoutRequest &request) {
   // image (field offset and deinterlace). The deinterlacer is stateful, so a windowed session reuses the
   // image it presented this VBlank instead of composing the presentation a second time.
   Impl &s = *impl_;
+  if (s.options.dump_source == DumpSource::upscaled) {
+    // IN-372: the GPU presentation compose at the internal scale (progressive frames); other frames fall back to
+    // the CPU presentation compose at 1x.
+    hwgs::writeback::GpuFrame gpuFrame;
+    if (s.renderer->ComposeFrameGpu(gpuFrame) && s.renderer->ReadGpuFrame(gpuFrame, request.pixels)) {
+      request.width = gpuFrame.width;
+      request.height = gpuFrame.height;
+      return true;
+    }
+  }
   if (s.options.dump_source == DumpSource::scanout) {
     if (s.window && s.presentedVblank == s.stats.flushes && s.frame.valid) {
       request.width = s.frame.width;
@@ -892,7 +959,7 @@ bool Backend::scanout(ScanoutRequest &request) {
       return true;
     }
   }
-  const hwgs::writeback::ComposeKind kind = s.options.dump_source == DumpSource::scanout
+  const hwgs::writeback::ComposeKind kind = s.options.dump_source != DumpSource::vram
                                                 ? hwgs::writeback::ComposeKind::Presentation
                                                 : hwgs::writeback::ComposeKind::Reference;
   hwgs::writeback::FrameOutput frame = impl_->renderer->Compose(kind);
@@ -1063,6 +1130,14 @@ RenderCounters Backend::render_counters() const {
   out.gpu_early_submissions = gpu.earlySubmissions;
   out.vblanks_interlaced = c.vblanksInterlaced;
   out.vblanks_progressive = c.vblanksProgressive;
+  out.scale = impl_->renderer->Scale();
+  out.scaled_draws = gpu.scaledDraws;
+  out.scaled_passes = gpu.scaledPasses;
+  out.scaled_refreshes = gpu.scaledRefreshes;
+  out.scaled_refresh_pixels = gpu.scaledRefreshPixels;
+  out.scaled_composes = c.scaledComposedFrames;
+  out.scaled_circuits_from_slots = c.scaledCircuitsFromSlots;
+  out.scaled_circuits_from_glm = c.scaledCircuitsFromGlm;
   out.gpu_composed_frames = c.gpuComposedFrames;
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;

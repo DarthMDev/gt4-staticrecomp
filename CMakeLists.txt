@@ -144,6 +144,10 @@ if(GT4_HW_GS)
     add_test(NAME hw_smoke_window_gpu_compose COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 120 --window --display)
     set_tests_properties(hw_smoke_window_gpu_compose PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
         PASS_REGULAR_EXPRESSION "frames=120 presents=120 black_presents=0 gif_bytes=0 swapchain_recreations=0 faults=0\ngpu_composed=120\npresent_rect=[0-9]+,[0-9]+ [0-9]+x[0-9]+ present_16x9=1")
+    # IN-372/IN-375: at GT4_HW_SCALE=4 the GPU compose is 4x and the present reduces it by 2x2 box steps first.
+    add_test(NAME hw_smoke_window_scaled COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 120 --window --display-640)
+    set_tests_properties(hw_smoke_window_scaled PROPERTIES ENVIRONMENT "GT4_RENDERER=hw;GT4_HW_SCALE=4"
+        PASS_REGULAR_EXPRESSION "faults=0\ngpu_composed=120\npresent_rect=[0-9]+,[0-9]+ [0-9]+x[0-9]+ present_16x9=1\npresent_downscale_levels=[1-9] scale=4")
     # Fullscreen-style toggles on the hidden window: resize flag, swapchain rebuild, every present under 100 ms.
     add_test(NAME hw_smoke_resize COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1 --resize-toggles 5)
     set_tests_properties(hw_smoke_resize PROPERTIES ENVIRONMENT "GT4_RENDERER=hw" PASS_REGULAR_EXPRESSION "resize_toggles=5")
@@ -163,6 +167,6 @@ if(GT4_HW_GS)
     add_test(NAME hw_smoke_unknown_renderer_refused COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1)
     set_tests_properties(hw_smoke_unknown_renderer_refused PROPERTIES ENVIRONMENT "GT4_RENDERER=vulkan" WILL_FAIL TRUE)
     set_tests_properties(hw_options hw_present_rect hw_smoke_donor hw_smoke_headless hw_smoke_window
-        hw_smoke_parallel_refused hw_smoke_unknown_renderer_refused hw_stream_sink hw_stream_sink_capture_refused hw_stream_sink_deferred_vsync
+        hw_smoke_parallel_refused hw_smoke_unknown_renderer_refused hw_stream_sink hw_stream_sink_capture_refused hw_stream_sink_deferred_vsync hw_smoke_window_scaled
         PROPERTIES RUN_SERIAL TRUE TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()

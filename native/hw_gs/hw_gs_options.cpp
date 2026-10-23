@@ -97,7 +97,7 @@ constexpr std::pair<const char *, DirtyFilter> dirty_filter_tokens[] = {
 constexpr std::pair<const char *, DumpFormat> dump_format_tokens[] = {
     {"g", DumpFormat::g}, {"p", DumpFormat::p}};
 constexpr std::pair<const char *, DumpSource> dump_source_tokens[] = {
-    {"vram", DumpSource::vram}, {"scanout", DumpSource::scanout}};
+    {"vram", DumpSource::vram}, {"scanout", DumpSource::scanout}, {"upscaled", DumpSource::upscaled}};
 constexpr std::pair<const char *, PresentFilter> present_filter_tokens[] = {
     {"bilinear", PresentFilter::bilinear}, {"nearest", PresentFilter::nearest},
     {"sharp", PresentFilter::sharp}};
