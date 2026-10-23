@@ -656,7 +656,9 @@ fn two_games_install_side_by_side_and_never_mix() {
     commands::select_game_of("gt4".into(), &second).unwrap();
     let gt4_view = commands::saves_list_of(&second).unwrap();
     assert_eq!((gt4_view.game.as_str(), gt4_view.game_name.as_str()), ("gt4", "Gran Turismo 4"));
-    assert!(gt4_view.items.is_empty(), "Gran Turismo 4 has no save from the Spec II import");
+    // One list of both games (TASK-101 item 2): the Spec II save is listed with its game id, and no Gran Turismo 4 one.
+    assert_eq!(gt4_view.items.iter().filter(|item| item.game == "gt4").count(), 0, "no Gran Turismo 4 save yet");
+    assert_eq!(gt4_view.items.iter().filter(|item| item.game == "spec2").count(), 1);
     assert!(gt4_view.folder.replace('\\', "/").contains("games/gt4/Saves"), "{}", gt4_view.folder);
     // An import goes to the game its save belongs to, whatever page is shown; the status says so (TASK-101 item 1).
     assert_eq!(commands::page_game(None, &gt4l_core::games::GT4).id, "gt4");
@@ -669,7 +671,9 @@ fn two_games_install_side_by_side_and_never_mix() {
     assert_eq!(routed.game, "spec2", "the page keeps showing Spec II");
     assert!(routed.status.contains("Gran Turismo 4"), "{}", routed.status);
     commands::select_game_of("gt4".into(), &second).unwrap();
-    assert_eq!(commands::saves_list_of(&second).unwrap().items.len(), 1, "the Gran Turismo 4 save went to its own library");
+    let both = commands::saves_list_of(&second).unwrap().items;
+    assert_eq!(both.iter().filter(|item| item.game == "gt4").count(), 1, "the Gran Turismo 4 save went to its own library");
+    assert_eq!(both.iter().filter(|item| item.game == "spec2").count(), 1, "the Spec II save is still listed");
 
     // Remove deletes the disc copy and the prepared files of one game, never its saves or the other game.
     let after = commands::games_remove_of("spec2".into(), &second).unwrap();
@@ -678,7 +682,7 @@ fn two_games_install_side_by_side_and_never_mix() {
     assert!(!data.join("games/spec2/disc").exists() && !data.join("games/spec2/prepared").exists());
     assert!(data.join("games/gt4/disc/SCUS-97328.iso").is_file());
     commands::select_game_of("spec2".into(), &second).unwrap();
-    assert_eq!(commands::saves_list_of(&second).unwrap().items.len(), 1, "the Spec II save is still there");
+    assert_eq!(commands::saves_list_of(&second).unwrap().items.len(), 2, "both games' saves are in the one list");
     let _ = fs::remove_dir_all(&root);
 }
 

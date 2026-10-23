@@ -431,13 +431,13 @@
     });
   }
 
-  // One library per game: Spec II starts empty (saves are never shared or converted).
+  // One library per game (TASK-101): saves and replays are never shared. A save is listed with its game id: `gt4:Save 01`.
   var libraries = {
     gt4: {
       saves: [
-        { id: "01", name: "Save 01", modified: "2026-10-16T06:31:00", active: true },
-        { id: "02", name: "Save 02", modified: "2026-10-12T22:14:00", active: false },
-        { id: "03", name: "Save 03", modified: "2026-09-03T19:02:00", active: false }
+        { slot: "Save 01", name: "Save 01", modified: "2026-10-16T06:31:00", active: true },
+        { slot: "Save 02", name: "Save 02", modified: "2026-10-12T22:14:00", active: false },
+        { slot: "Save 03", name: "Save 03", modified: "2026-09-03T19:02:00", active: false }
       ],
       replays: [
         { id: "01", name: "Replay 01", modified: "2026-10-16T21:40:00" },
@@ -445,12 +445,38 @@
         { id: "03", name: "Replay 03", modified: "2026-10-12T22:31:00" }
       ]
     },
-    spec2: { saves: [], replays: [] }
+    spec2: {
+      saves: [
+        { slot: "Save 01", name: "Save 01", modified: "2026-10-22T18:05:00", active: true }
+      ],
+      replays: []
+    }
   };
   function libraryOf(id) { return libraries[id || selectedGame]; }
+  // The Saves list of both games, in table order: each row carries its game id (the page shows the tag).
+  function savesList() {
+    var rows = [];
+    ["gt4", "spec2"].forEach(function (gameId) {
+      libraries[gameId].saves.forEach(function (save) {
+        rows.push({ id: gameId + ":" + save.slot, slot: save.slot, name: save.name, modified: save.modified,
+          active: !!save.active, renamed: !!save.renamed, game: gameId });
+      });
+    });
+    return rows;
+  }
+  // "gt4:Save 02" -> { game: "gt4", slot: "Save 02" }.
+  function parseSaveId(id) {
+    var at = String(id).indexOf(":");
+    return { game: String(id).slice(0, at), slot: String(id).slice(at + 1) };
+  }
+  function saveOf(id) {
+    var parts = parseSaveId(id);
+    return libraries[parts.game].saves.filter(function (save) { return save.slot === parts.slot; })[0];
+  }
   function libraryView(kind) {
     var game = gameById(selectedGame);
-    return { items: JSON.parse(JSON.stringify(libraryOf()[kind])), game: game.id, gameName: game.name, status: "",
+    var items = kind === "saves" ? savesList() : JSON.parse(JSON.stringify(libraryOf()[kind]));
+    return { items: items, game: game.id, gameName: game.name, status: "",
       folder: "C:\\Users\\Player\\AppData\\Roaming\\GT4Recomp\\games\\" + game.id + (kind === "saves" ? "\\Saves" : "\\Replays") };
   }
 
@@ -580,34 +606,34 @@
         return libraryView("saves");
       case "saves_import":
       case "replays_import":
-        // Nothing is guessed: the page names the game the file belongs to.
-        if (!args.game) {
-          throw new Error("Choose which game these saves belong to.");
-        }
+        // Nothing is asked: each save names its game and goes to that game's library.
         return libraryView(command === "saves_import" ? "saves" : "replays");
-      case "saves_activate":
-        libraryOf().saves.forEach(function (save) {
-          save.active = save.id === args.id;
+      case "saves_activate": {
+        var activeParts = parseSaveId(args.id);
+        libraries[activeParts.game].saves.forEach(function (save) {
+          save.active = save.slot === activeParts.slot;
         });
         return libraryView("saves");
-      case "saves_delete":
-        libraryOf().saves = libraryOf().saves.filter(function (save) {
-          return save.id !== args.id;
+      }
+      case "saves_delete": {
+        var deleteParts = parseSaveId(args.id);
+        libraries[deleteParts.game].saves = libraries[deleteParts.game].saves.filter(function (save) {
+          return save.slot !== deleteParts.slot;
         });
         return libraryView("saves");
+      }
       case "saves_new": {
-        // The active save is parked as a slot; the next Play starts a new profile (the real launcher keeps the save).
-        libraryOf().saves.forEach(function (save) {
+        // The active save of that game is parked as a slot; its next Play starts a new profile (the real launcher keeps it).
+        var newGame = args.game || selectedGame;
+        libraries[newGame].saves.forEach(function (save) {
           save.active = false;
         });
         var fresh = libraryView("saves");
-        fresh.status = "Started a new save. The old one is kept as a slot.";
+        fresh.status = gameById(newGame).name + ": Started a new save. The old one is kept as a slot.";
         return fresh;
       }
       case "saves_rename": {
-        var renamedSave = libraryOf().saves.filter(function (save) {
-          return save.id === args.id;
-        })[0];
+        var renamedSave = saveOf(args.id);
         if (!renamedSave) {
           throw new Error("That save is not in the library any more.");
         }

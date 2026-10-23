@@ -407,7 +407,7 @@ fn move_source(shared: &Shared, dirs: &DataDirs, pins: &Pins, source: &LargeSour
     if source.is_previous_install && !outcome.failed() {
         match relocate::remove_empty_folder(local) {
             Ok(()) => {}
-            Err(error) => state::log(dirs, &format!("the old data folder {} is kept: {error}", local.display())),
+            Err(error) => state::log_warn(dirs, &format!("the old data folder {} is kept: {error}", local.display())),
         }
     }
     let (notice, problem) = large_notice(&outcome, local, dirs.root());

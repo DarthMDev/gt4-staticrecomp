@@ -445,7 +445,7 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
     let language = state::language_of(&lock(&shared));
     if let Some(problem) = gt4l_platform::system::processor_problem(language) {
         let mut state = lock(&shared);
-        state::log(&state.dirs, &format!("system requirement not met: {problem}"));
+        state::log_error(&state.dirs, &format!("system requirement not met: {problem}"));
         state.home_message = problem.clone();
         return Err(problem);
     }
@@ -471,6 +471,12 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         state.write_standalone_files(&settings);
     }
     state::log(&dirs, &format!("game started ({}), session {}", game.id, running.session_dir.display()));
+    // TASK-112: the last 20 game session folders are kept; the one just started is never removed.
+    match gt4l_core::logs::prune_sessions(&dirs.sessions(), gt4l_core::logs::KEPT_SESSIONS, &running.session_dir) {
+        Ok(removed) if !removed.is_empty() => state::log(&dirs, &format!("old game sessions removed: {}", removed.join(", "))),
+        Ok(_) => {}
+        Err(error) => state::log_warn(&dirs, &format!("game sessions not cleaned up: {error}")),
+    }
     let _ = app.emit(
         "game-state",
         json!({ "running": true, "message": graphics_notice.clone().unwrap_or_default(), "notice": graphics_notice.is_some() }),
@@ -487,19 +493,24 @@ pub fn play(app: AppHandle, shared: State<'_, Shared>) -> Result<(), String> {
         let gpu_lost = matches!(outcome, Outcome::Crashed { .. }).then(|| exit::gpu_lost_line(&log_text)).flatten();
         match saves::harvest_card(lock(&shared).library_of(game), &card) {
             Ok(report) => state::log(&dirs, &format!("card harvested: {report:?}")),
-            Err(error) => state::log(&dirs, &format!("card not harvested: {error}")),
+            Err(error) => state::log_error(&dirs, &format!("card not harvested: {error}")),
         }
         let log_path = running.log_path.clone();
         drop(running);
         lock(&shared).game_child = None;
-        state::log(&dirs, &format!("game ended: {outcome:?} (log {})", log_path.display()));
+        let ended = format!("game ended: {outcome:?} (log {})", log_path.display());
+        if matches!(outcome, gt4l_core::exit::Outcome::Crashed { .. }) {
+            state::log_error(&dirs, &ended);
+        } else {
+            state::log(&dirs, &ended);
+        }
         let message = match (gpu_lost, gsdx_error, &outcome) {
             (Some(line), _, _) => {
-                state::log(&dirs, &format!("graphics card lost: {line}"));
+                state::log_error(&dirs, &format!("graphics card lost: {line}"));
                 exit::gpu_lost_message_in(state::current_language())
             }
             (None, Some(error), _) => {
-                state::log(&dirs, "GSdx asked for a restart; the launcher does not start CoreGS 1.1");
+                state::log_warn(&dirs, "GSdx asked for a restart; the launcher does not start CoreGS 1.1");
                 error
             }
             (None, None, Outcome::NormalClose) => String::new(),
@@ -687,12 +698,33 @@ pub struct LibraryView {
 
 fn saves_view(state: &AppState) -> Result<LibraryView, String> {
     Ok(LibraryView {
-        items: saves::saves(state.library())?,
+        items: saves_items(state)?,
         status: state.saves_status.clone(),
         folder: state.selected_user().saves().display().to_string(),
         game: state.selected.id.to_string(),
         game_name: state.selected.display_name.to_string(),
     })
+}
+
+/// The saves of every game in one list (TASK-101 item 2): each game's saves in slot order, each tagged with its game id.
+fn saves_items(state: &AppState) -> Result<Vec<Item>, String> {
+    let mut items = Vec::new();
+    for &game in games::GAMES {
+        for mut item in saves::saves(state.library_of(game))? {
+            item.game = game.id.to_string();
+            items.push(item);
+        }
+    }
+    Ok(items)
+}
+
+/// The game and the library name of a Saves page item id (`gt4:Save 02`). An id without a known game prefix (a replay,
+/// or an id from an older page) belongs to the game the page shows.
+pub fn item_target(state: &AppState, id: &str) -> (&'static Game, String) {
+    match id.split_once(':').and_then(|(game, name)| games::by_id(game).map(|game| (game, name))) {
+        Some((game, name)) => (game, name.to_string()),
+        None => (state.selected, id.to_string()),
+    }
 }
 
 fn replays_view(state: &AppState) -> Result<LibraryView, String> {
@@ -792,11 +824,11 @@ pub fn import_into_game(shared: &Shared, path: &Path, kind: Kind, page: &'static
             summary
         }
         Ok(Err(message)) => {
-            state::log(&state.dirs, &format!("import of {file_name} ({size} bytes) refused: {message}"));
+            state::log_error(&state.dirs, &format!("import of {file_name} ({size} bytes) refused: {message}"));
             message
         }
         Err(_) => {
-            state::log(&state.dirs, &format!("import of {file_name} ({size} bytes) stopped by an internal error"));
+            state::log_error(&state.dirs, &format!("import of {file_name} ({size} bytes) stopped by an internal error"));
             messages::text("saves.import_crashed", language).to_string()
         }
     };
@@ -819,40 +851,44 @@ pub fn saves_activate(id: String, shared: State<'_, Shared>) -> Result<LibraryVi
 }
 
 pub fn saves_activate_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
-    let name = id;
     let mut state = lock(shared);
     let language = state::language_of(&state);
-    let item = saves::saves(state.library())?
+    let (game, name) = item_target(&state, &id);
+    let library = state.library_of(game);
+    let item = saves::saves(library)?
         .into_iter()
         .find(|item| item.name == name)
         .ok_or_else(|| messages::text("saves.not_in_library", language).to_string())?;
     if item.active {
         return saves_view(&state);
     }
-    saves::activate(state.library(), &name)?;
+    saves::activate(library, &name)?;
     state.saves_status = format!("{} will be used the next time you play.", name);
     saves_view(&state)
 }
 
-/// `saves_new()`: starts a new save. The active save is kept as a new `Save NN`; the next Play starts a new profile in
-/// the game. Refused while the game runs. The page asks first.
+/// `saves_new({game})`: starts a new save for `game` (the page's game when it names none). The active save of that game is
+/// kept as a new `Save NN`; the next Play of that game starts a new profile. Refused while a game runs. The page asks first,
+/// and asks which game when two are installed.
 #[tauri::command]
-pub fn saves_new(shared: State<'_, Shared>) -> Result<LibraryView, String> {
-    saves_new_of(shared.inner())
+pub fn saves_new(game: Option<String>, shared: State<'_, Shared>) -> Result<LibraryView, String> {
+    saves_new_of(game, shared.inner())
 }
 
-pub fn saves_new_of(shared: &Shared) -> Result<LibraryView, String> {
+pub fn saves_new_of(game: Option<String>, shared: &Shared) -> Result<LibraryView, String> {
     let mut state = lock(shared);
     let language = state::language_of(&state);
     if state.game_child.is_some() {
         return Err(messages::text("saves.game_running", language).to_string());
     }
-    let card = state.game_dirs(state.selected).runtime_card();
-    let parked = saves::new_save(state.library(), &card)?;
-    state.saves_status = match parked {
+    let game = page_game(game.as_deref(), state.selected);
+    let card = state.game_dirs(game).runtime_card();
+    let parked = saves::new_save(state.library_of(game), &card)?;
+    let text = match parked {
         Some(slot) => messages::render("saves.new_kept", language, &[("slot", &slot)]),
         None => messages::text("saves.new_started", language).to_string(),
     };
+    state.saves_status = format!("{}: {text}", game.display_name);
     saves_view(&state)
 }
 
@@ -865,7 +901,8 @@ pub async fn saves_export(app: AppHandle, id: String, shared: State<'_, Shared>)
         let (bytes, suggested, language) = {
             let state = lock(&shared);
             let language = state::language_of(&state);
-            let (bytes, suggested) = saves::export(state.library(), &id)?;
+            let (game, name) = item_target(&state, &id);
+            let (bytes, suggested) = saves::export(state.library_of(game), &name)?;
             (bytes, suggested, language)
         };
         let picked = app
@@ -897,7 +934,8 @@ pub fn saves_rename(id: String, name: String, shared: State<'_, Shared>) -> Resu
 pub fn saves_rename_of(id: String, name: String, shared: &Shared) -> Result<LibraryView, String> {
     let mut state = lock(shared);
     let language = state::language_of(&state);
-    let stored = saves::rename(state.library(), &id, &name, language)?;
+    let (game, library_name) = item_target(&state, &id);
+    let stored = saves::rename(state.library_of(game), &library_name, &name, language)?;
     state.saves_status = messages::render("saves.renamed", language, &[("name", &stored)]);
     saves_view(&state)
 }
@@ -909,8 +947,7 @@ pub fn saves_delete(id: String, shared: State<'_, Shared>) -> Result<LibraryView
 }
 
 pub fn saves_delete_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
-    let name = id;
-    delete_item(&name, shared, Kind::Saves)
+    delete_item(&id, shared, Kind::Saves)
 }
 
 #[tauri::command]
@@ -919,19 +956,27 @@ pub fn replays_delete(id: String, shared: State<'_, Shared>) -> Result<LibraryVi
 }
 
 pub fn replays_delete_of(id: String, shared: &Shared) -> Result<LibraryView, String> {
-    let name = id;
-    delete_item(&name, shared, Kind::Replays)
+    delete_item(&id, shared, Kind::Replays)
 }
 
-fn delete_item(name: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, String> {
+/// Deletes one save (of the game its id names) or one replay (of the game the page shows).
+fn delete_item(id: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, String> {
     let mut state = lock(shared);
     let language = state::language_of(&state);
-    let items = saves::saves(state.library())?.into_iter().chain(saves::replays(state.library())?);
+    let (game, name) = match kind {
+        Kind::Saves => item_target(&state, id),
+        Kind::Replays => (state.selected, id.to_string()),
+    };
+    let library = state.library_of(game);
+    let items = match kind {
+        Kind::Saves => saves::saves(library)?,
+        Kind::Replays => saves::replays(library)?,
+    };
     let item = items
         .into_iter()
         .find(|item| item.name == name)
         .ok_or_else(|| messages::text("saves.item_not_in_library", language).to_string())?;
-    let result = saves::delete(state.library(), &item);
+    let result = saves::delete(library, &item);
     let status = match result {
         Ok(()) => format!("{} moved to the Recycle Bin.", item.label),
         Err(message) => message,
@@ -1198,6 +1243,31 @@ pub fn about_info_of(shared: &Shared) -> Result<AboutInfo, String> {
 pub fn open_log_folder(shared: State<'_, Shared>) -> Result<(), String> {
     let logs = lock(shared.inner()).dirs.logs();
     open_folder(&logs)
+}
+
+/// Selects `logs\latest.log` in Explorer: the file a player attaches to an issue (TASK-112). The path is fixed by the
+/// launcher. Before the file exists the log folder opens.
+#[tauri::command]
+pub fn open_latest_log(shared: State<'_, Shared>) -> Result<(), String> {
+    let (latest, logs) = {
+        let state = lock(shared.inner());
+        (crate::session_log::latest_path(&state.dirs), state.dirs.logs())
+    };
+    if !latest.is_file() {
+        return open_folder(&logs);
+    }
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer.exe")
+            .arg(format!("/select,{}", latest.display()))
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("could not open {}: {error}", latest.display()))
+    }
+    #[cfg(not(windows))]
+    {
+        open_folder(&logs)
+    }
 }
 
 /// Opens the game files folder (the copy of the disc image) in Explorer. The path is fixed by the launcher.

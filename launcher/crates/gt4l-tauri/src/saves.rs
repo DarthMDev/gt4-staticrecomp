@@ -106,19 +106,25 @@ pub struct Item {
     pub modified: String,
     /// The player gave the save a name (`label` is that name; the library name stays `Save NN`).
     pub renamed: bool,
+    /// The game the item belongs to (`gt4` or `spec2`). Empty for replays, which the page lists per game.
+    pub game: String,
 }
 
-/// The page's item shape (`ui/js/pages/library.js`): `id` is the library name the page sends back to
-/// `saves_activate`, `saves_delete` and `replays_delete`; `name` is the text shown.
+/// The page's item shape (`ui/js/pages/library.js`): `id` is what the page sends back to `saves_activate`,
+/// `saves_delete`, `saves_export`, `saves_rename` and `replays_delete`: the library name, prefixed with the game id
+/// (`gt4:Save 02`) for a save. `slot` is the library name alone; `name` is the text shown.
 impl Serialize for Item {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut row = serializer.serialize_struct("Item", 5)?;
-        row.serialize_field("id", &self.name)?;
+        let id = if self.game.is_empty() { self.name.clone() } else { format!("{}:{}", self.game, self.name) };
+        let mut row = serializer.serialize_struct("Item", 7)?;
+        row.serialize_field("id", &id)?;
+        row.serialize_field("slot", &self.name)?;
         row.serialize_field("name", &self.label)?;
         row.serialize_field("active", &self.active)?;
         row.serialize_field("modified", &self.modified)?;
         row.serialize_field("renamed", &self.renamed)?;
+        row.serialize_field("game", &self.game)?;
         row.end()
     }
 }
@@ -136,7 +142,7 @@ pub fn saves(library: &Library) -> Result<Vec<Item>, String> {
         let named = library.display_name(game_save);
         items.push(Item {
             name: game_save.to_string(),
-            renamed: named.is_some(),
+            renamed: named.is_some(), game: String::new(),
             label: named.unwrap_or_else(|| "Active save".to_string()),
             active: true,
             modified: modified_of(&library.active_dir().join(game_save)),
@@ -146,7 +152,7 @@ pub fn saves(library: &Library) -> Result<Vec<Item>, String> {
         let modified = modified_of(&library.slot_dir(&slot).join(library.names().game_save));
         let named = library.display_name(&slot);
         items.push(Item {
-            renamed: named.is_some(),
+            renamed: named.is_some(), game: String::new(),
             label: named.unwrap_or_else(|| slot.clone()),
             name: slot,
             active: false,
@@ -164,7 +170,7 @@ pub fn replays(library: &Library) -> Result<Vec<Item>, String> {
         .into_iter()
         .map(|name| {
             let modified = modified_of(&library.replays_dir().join(&name));
-            Item { label: name.clone(), name, active: false, modified, renamed: false }
+            Item { label: name.clone(), name, active: false, modified, renamed: false, game: String::new() }
         })
         .collect())
 }
@@ -515,7 +521,7 @@ mod tests {
         let card = data.join("card.ps2");
         fs::write(&card, card_with(&[game_save(5), replay()])).unwrap();
         harvest_card(&library, &card).unwrap();
-        let active = Item { name: GT4.save_folder.into(), label: "Active save".into(), active: true, modified: String::new(), renamed: false };
+        let active = Item { name: GT4.save_folder.into(), label: "Active save".into(), active: true, modified: String::new(), renamed: false, game: String::new() };
         assert!(delete(&library, &active).is_err());
         assert!(library.active_dir().join(GT4.save_folder).is_dir(), "refused delete leaves the save");
         let _ = fs::remove_dir_all(&data);
@@ -529,10 +535,6 @@ mod migration_tests {
     use gt4saves::Card;
     use gt4l_core::games::GT4;
 
-    fn import_path(library: &Library, path: &Path, language: Language) -> Result<Report, String> {
-        let outcome = super::import_path(&[(&GT4, library)], path, language)?;
-        Ok(outcome.per_game.into_iter().next().map(|(_, report)| report).unwrap_or_default())
-    }
     use std::path::PathBuf;
 
     const STAMP: [u8; 8] = [0, 39, 50, 7, 12, 10, 0xEA, 0x07];
@@ -598,11 +600,17 @@ mod page_shape_tests {
 
     #[test]
     fn an_item_has_the_fields_the_page_reads() {
-        let item = Item { name: "Save 02".into(), label: "Save 02".into(), active: false, modified: "2026-10-21T12:00:00Z".into(), renamed: false };
+        let item = Item { name: "Save 02".into(), label: "Save 02".into(), active: false, modified: "2026-10-21T12:00:00Z".into(), renamed: false, game: String::new() };
         let json = serde_json::to_value(&item).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({ "id": "Save 02", "name": "Save 02", "active": false, "modified": "2026-10-21T12:00:00Z", "renamed": false })
+            serde_json::json!({ "id": "Save 02", "slot": "Save 02", "name": "Save 02", "active": false, "modified": "2026-10-21T12:00:00Z", "renamed": false, "game": "" })
         );
+        // A save of a game carries the game in its id, so the page's actions reach that game's library.
+        let spec2 = Item { game: "spec2".into(), ..item };
+        let json = serde_json::to_value(&spec2).unwrap();
+        assert_eq!(json["id"], "spec2:Save 02");
+        assert_eq!(json["slot"], "Save 02");
+        assert_eq!(json["game"], "spec2");
     }
 }

@@ -61,6 +61,11 @@
     var currentGame = "";
     var folderText = h("span", { class: "val lib-folder-path", text: "" });
 
+    // The game tag of a save row: the game's name as the home version switch shows it (TASK-101 item 2).
+    function gameTagText(gameId) {
+      return gameId === "spec2" ? GT4.t("home.spec2") : GT4.t("home.normal");
+    }
+
     function openFolder() {
       var request = kindName === "saves" ? GT4.backend.call("open_saves_folder", {}) : GT4.backend.call("open_replays_folder", {});
       request.catch(function (err) {
@@ -73,11 +78,14 @@
       return active && active.dataset && active.dataset.itemId ? active : null;
     }
 
-    // The slot the launcher parks the current save in: the next number after the highest one listed ("Save 02").
-    function nextSlotLabel() {
+    // The slot the launcher parks the current save in: the next number after the highest one of that game ("Save 02").
+    function nextSlotLabel(gameId) {
       var highest = 0;
       items.forEach(function (item) {
-        var match = /^Save (\d+)$/.exec(item.id || "");
+        if (item.game !== gameId) {
+          return;
+        }
+        var match = /^Save (\d+)$/.exec(item.slot || "");
         if (match) {
           highest = Math.max(highest, parseInt(match[1], 10));
         }
@@ -85,21 +93,43 @@
       return "Save " + String(highest + 1).padStart(2, "0");
     }
 
-    // New save: the current save is kept in a new slot and the next Play starts a new profile. One confirmation.
+    // New save: the current save of the game is kept in a new slot and that game's next Play starts a new profile. When
+    // two games are installed the player says which one first; otherwise it is the game the page shows.
     function newSave() {
-      var hasActive = items.some(function (item) { return item.active; });
+      GT4.backend.call("games_list", {}).then(function (view) {
+        var games = (view.games || []).filter(function (game) { return game.installed; });
+        if (games.length > 1) {
+          GT4.games.chooseGame({
+            title: GT4.t("games.which_title"),
+            text: GT4.t("games.which_text"),
+            current: currentGame
+          }, function (gameId) {
+            askNewSave(gameId, games);
+          });
+        } else {
+          askNewSave(currentGame, games);
+        }
+      }, function (err) {
+        GT4.ui.toast(GT4.errorText(err), true);
+      });
+    }
+
+    function askNewSave(gameId, games) {
+      var game = games.filter(function (entry) { return entry.id === gameId; })[0];
+      var gameName = game ? game.name : "";
+      var hasActive = items.some(function (item) { return item.active && item.game === gameId; });
       GT4.ui.openDialog({
         title: GT4.t("library.new_save_title"),
-        text: hasActive
-          ? GT4.t("library.new_save_text_kept", { slot: nextSlotLabel() })
-          : GT4.t("library.new_save_text_none"),
+        text: (gameName ? gameName + ". " : "") + (hasActive
+          ? GT4.t("library.new_save_text_kept", { slot: nextSlotLabel(gameId) })
+          : GT4.t("library.new_save_text_none")),
         buttons: [
           { label: GT4.t("common.cancel") },
           {
             label: GT4.t("library.new_save_confirm"),
             primary: true,
             run: function () {
-              GT4.backend.call("saves_new", {}).then(function (result) {
+              GT4.backend.call("saves_new", { game: gameId }).then(function (result) {
                 apply(result, result && result.status ? result.status : "");
               }, function (err) {
                 GT4.ui.toast(GT4.errorText(err), true);
@@ -118,7 +148,7 @@
         maxlength: "40",
         value: item.renamed ? item.name : "",
         "aria-label": GT4.t("library.rename_label"),
-        placeholder: item.id
+        placeholder: item.slot || item.id
       });
       var dialog = null;
       function submit() {
@@ -200,12 +230,15 @@
       }
       // Row number: the position in the list (the id is the library name, e.g. "Save 02").
       children.push(h("span", { class: "no", text: String(index + 1).padStart(2, "0") }));
-      var nameNode = h("span", { class: "nm", text: item.name || kind.itemWord + " " + item.id });
+      var nameNode = h("span", { class: "nm", text: item.name || kind.itemWord + " " + (item.slot || item.id) });
+      if (item.game) {
+        nameNode.appendChild(h("span", { class: "game-tag", text: gameTagText(item.game) }));
+      }
       if (item.active) {
         nameNode.appendChild(h("small", { text: GT4.t("library.next_play") }));
       }
       if (item.renamed) {
-        nameNode.appendChild(h("span", { class: "slot-id", text: item.id }));
+        nameNode.appendChild(h("span", { class: "slot-id", text: item.slot || item.id }));
       }
       children.push(nameNode);
       children.push(h("span", { class: "date", text: GT4.ui.formatDate(item.modified) }));
@@ -332,9 +365,12 @@
     }
 
     function apply(result, message) {
-      if (result && typeof result.gameName === "string") {
-        gameTag.textContent = result.gameName;
+      if (result && typeof result.game === "string") {
         currentGame = result.game || currentGame;
+      }
+      // Replays belong to the game the page shows, so their title names it; the Saves list holds both games.
+      if (result && typeof result.gameName === "string" && kindName === "replays") {
+        gameTag.textContent = result.gameName;
       }
       if (result && Array.isArray(result.items)) {
         items = result.items;
@@ -348,22 +384,15 @@
       paint();
     }
 
-    // A save or card file does not say which game it is from, and the games never share saves: the player says.
-    // (gt4saves::game_of_save finds no rule yet; when one is found, the answer comes from the file and this is skipped.)
+    // An import needs no question: each save or replay names its game, and the launcher files it there.
     function importItems() {
-      GT4.games.chooseGame({
-        title: GT4.t("games.which_title"),
-        text: GT4.t("games.which_text"),
-        current: currentGame
-      }, function (gameId) {
-        GT4.backend.call(kind.importCmd, { game: gameId }).then(function (result) {
-          if (!result) {
-            return;
-          }
-          apply(result, result.status || GT4.t("library.import_finished"));
-        }, function (err) {
-          GT4.ui.toast(GT4.errorText(err), true);
-        });
+      GT4.backend.call(kind.importCmd, {}).then(function (result) {
+        if (!result) {
+          return;
+        }
+        apply(result, result.status || GT4.t("library.import_finished"));
+      }, function (err) {
+        GT4.ui.toast(GT4.errorText(err), true);
       });
     }
 

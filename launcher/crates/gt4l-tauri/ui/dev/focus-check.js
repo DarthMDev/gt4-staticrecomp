@@ -121,7 +121,7 @@
   async function enterChecks() {
     await setHash("#/settings/graphics");
     var expected = {
-      saves: "01",
+      saves: "gt4:Save 01",
       replays: "01"
     };
     for (var i = 0; i < TABS.length; i++) {
@@ -661,16 +661,20 @@
 
     await setHash("#/settings/saves");
     await wait(400);
-    var tag = document.querySelector(".game-tag");
-    check("the Saves title names the game", !!tag && tag.textContent === "Gran Turismo 4", tag ? tag.textContent : "no tag");
+    // One Saves list for both games (TASK-101 item 2): each row carries its game's tag, and the list does not change
+    // with the game shown; the Replays title still names the game.
+    var rowTag = document.querySelector(".slot-row .game-tag");
+    check("the Saves rows carry the game tag", !!rowTag && rowTag.textContent === T("home.normal"), rowTag ? rowTag.textContent : "no tag");
+    check("the Saves list shows the Spec II save too", !!document.querySelector(".slot-row [data-item-id^=\"spec2:\"]"), "no spec2 row");
     await GT4.games.select("spec2");
     await setHash("#/settings/replays");
     await wait(400);
+    var tag = document.querySelector(".game-tag");
+    check("the Replays title names the game", !!tag && tag.textContent === "Gran Turismo 4 Spec II", tag ? tag.textContent : "no tag");
     await setHash("#/settings/saves");
     await wait(400);
-    tag = document.querySelector(".game-tag");
-    check("another game has its own list and title", !!tag && tag.textContent === "Gran Turismo 4 Spec II" &&
-      !!document.querySelector(".emptystate"), tag ? tag.textContent : "no tag");
+    check("the Spec II save row is tagged Spec II", !!document.querySelector(".slot-row [data-item-id^=\"spec2:\"] .game-tag") &&
+      document.querySelector(".slot-row [data-item-id^=\"spec2:\"] .game-tag").textContent === T("home.spec2"), "spec2 tag");
     await GT4.games.select("gt4");
   }
 

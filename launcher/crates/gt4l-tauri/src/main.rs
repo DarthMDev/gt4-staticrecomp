@@ -15,6 +15,7 @@ mod pad_service;
 mod relocation;
 mod renderer_switch;
 mod saves;
+mod session_log;
 mod setup;
 mod state;
 mod tray;
@@ -71,6 +72,16 @@ fn main() {
     };
     let dirs = startup.layout.data.clone();
     let _ = std::fs::create_dir_all(dirs.root());
+    // TASK-112: one log file for this launch, with a header (version, install kind, Windows, date).
+    let header = vec![
+        format!("GT4Recomp {}", env!("CARGO_PKG_VERSION")),
+        format!("Install: {}", if portable { "portable" } else { "installer" }),
+        format!("Windows: {}", gt4l_platform::system::windows_version()),
+        format!("Date: {}", gt4l_core::logs::LocalTime::stamp(&gt4l_platform::system::local_time())),
+    ];
+    if let Err(message) = session_log::start(&dirs, &header) {
+        eprintln!("GT4Recomp cannot open its log: {message}");
+    }
     if portable {
         // TASK-098: finish or undo the previous update before anything reads the program files.
         updates::portable_start_cleanup(&dirs, &exe_dir);
@@ -116,7 +127,7 @@ fn main() {
     let mut app_state = match state::AppState::load(dirs.clone(), startup.user.clone(), startup.layout.legacy.local.clone()) {
         Ok(app_state) => app_state,
         Err(message) => {
-            state::log(&dirs, &format!("the launcher could not start: {message}"));
+            state::log_error(&dirs, &format!("the launcher could not start: {message}"));
             return;
         }
     };
@@ -229,6 +240,7 @@ fn main() {
             commands::release_notes,
             commands::open_link,
             commands::open_log_folder,
+            commands::open_latest_log,
             commands::open_game_files_folder,
             commands::open_player_folder,
             commands::open_saves_folder,
@@ -245,7 +257,7 @@ fn main() {
         .run(context);
     // TASK-091: a web view that could not start (WebView2 missing) gets the native message, not a silent exit.
     if let Err(error) = run_result {
-        state::log(&dirs, &format!("WebView2 is missing or could not start: {error}"));
+        state::log_error(&dirs, &format!("WebView2 is missing or could not start: {error}"));
         webview_guard::show_failure(&dirs, webview_guard::Problem::Missing);
     }
 }

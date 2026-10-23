@@ -30,7 +30,7 @@ use gt4l_platform::process::spawn_outside_job;
 use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
-use crate::state::log;
+use crate::state::{log, log_error, log_warn};
 
 /// The flag file in the user folder (`%APPDATA%\GT4Recomp`) while safe mode is on.
 pub const SAFE_MODE_FILE: &str = "webview-safe-mode";
@@ -208,10 +208,10 @@ pub fn check_webview2_at_start(dirs: &DataDirs) -> bool {
     let check = gt4l_platform::webview2::check_installed(fixed, test_webview2_missing());
     match &check.version {
         Some(version) => log(dirs, &format!("WebView2 runtime found in the registry: {version}")),
-        None => log(dirs, "WebView2 runtime not found in the registry"),
+        None => log_warn(dirs, "WebView2 runtime not found in the registry"),
     }
     if check.missing {
-        log(dirs, "WebView2 is missing: the native message is shown before any window");
+        log_error(dirs, "WebView2 is missing: the native message is shown before any window");
     }
     check.missing
 }
@@ -303,7 +303,7 @@ pub fn start_watchdog(app: AppHandle, guard: Arc<Guard>) {
             Decision::Show => {}
             Decision::RestartInSafeMode => restart_in_safe_mode(&app, &guard),
             Decision::ShowNativeErrorAndExit => {
-                log(&guard.dirs, "the launcher page did not draw in safe mode either");
+                log_error(&guard.dirs, "the launcher page did not draw in safe mode either");
                 hide_main_window(&app);
                 show_failure(&guard.dirs, Problem::NotDrawn);
                 app.exit(0);
@@ -316,18 +316,18 @@ fn restart_in_safe_mode(app: &AppHandle, guard: &Guard) {
     let now = unix_seconds();
     if let Err(error) = write_safe_mode(&guard.user_root, "the window did not draw within 12 s (WebView2)", now) {
         // Without the flag a restart would wait again and again, so the player gets the message instead.
-        log(&guard.dirs, &format!("the page did not draw; the safe mode flag could not be written: {error}"));
+        log_error(&guard.dirs, &format!("the page did not draw; the safe mode flag could not be written: {error}"));
         hide_main_window(app);
         show_failure(&guard.dirs, Problem::NotDrawn);
         app.exit(0);
         return;
     }
-    log(&guard.dirs, "the page did not draw in 12 s: restarting with WebView2 GPU acceleration off (safe mode)");
+    log_warn(&guard.dirs, "the page did not draw in 12 s: restarting with WebView2 GPU acceleration off (safe mode)");
     let started = std::env::current_exe().and_then(|exe| spawn_outside_job(Command::new(exe).arg(RESTART_ARGUMENT)));
     match started {
         Ok(_) => app.exit(0),
         Err(error) => {
-            log(&guard.dirs, &format!("the safe mode restart could not start: {error}"));
+            log_error(&guard.dirs, &format!("the safe mode restart could not start: {error}"));
             hide_main_window(app);
             show_failure(&guard.dirs, Problem::NotDrawn);
             app.exit(0);

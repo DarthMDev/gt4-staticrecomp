@@ -645,9 +645,20 @@
           }
         }
       }, GT4.t("about.open_log"));
+      var openLatest = h("button", {
+        class: "btn small",
+        type: "button",
+        on: {
+          click: function () {
+            call("open_latest_log").catch(function (err) {
+              GT4.ui.toast(errorText(err), true);
+            });
+          }
+        }
+      }, GT4.t("about.open_latest_log"));
       content.appendChild(h("div", { class: "row" }, [
         h("div", { class: "k", text: GT4.t("about.logs") }),
-        h("div", { class: "ctl" }, [openLog])
+        h("div", { class: "ctl" }, [openLog, openLatest])
       ]));
     }, function (err) {
       content.appendChild(h("p", { class: "loading", text: errorText(err) }));

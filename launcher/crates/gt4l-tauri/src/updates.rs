@@ -128,7 +128,7 @@ fn check_with(
         }
     }
     for error in &errors {
-        state::log(dirs, &format!("update check: {error}"));
+        state::log_warn(dirs, &format!("update check: {error}"));
     }
     Check { offers, errors, renderer_installed }
 }
@@ -147,7 +147,7 @@ pub fn install_renderer(dirs: &DataDirs, progress: &mut dyn FnMut(Step)) -> Resu
         outcome.installed().version,
         LAUNCHER_VERSION,
     ) {
-        state::log(dirs, &format!("version.json not updated: {message}"));
+        state::log_warn(dirs, &format!("version.json not updated: {message}"));
     }
     state::log(dirs, &format!("gt4-gs {} ready", outcome.installed().version.text()));
     Ok(outcome)
@@ -187,18 +187,18 @@ pub fn ensure_version_file(dirs: &DataDirs) {
             let renderer = gs_release::installed(&renderer_root(dirs)).map(|installed| installed.version);
             if let Some(next) = versions::reconciled(&file, LAUNCHER_VERSION, renderer) {
                 if let Err(message) = versions::write(&location.path, location.path.parent().unwrap_or(dirs.root()), &next) {
-                    state::log(dirs, &format!("version.json not updated: {message}"));
+                    state::log_warn(dirs, &format!("version.json not updated: {message}"));
                 }
             }
         }
         Ok(None) => {
             let file = VersionFile::for_install(LAUNCHER_VERSION, gt4l_core::config::SCHEMA_VERSION);
             if let Err(message) = versions::write(&location.path, location.path.parent().unwrap_or(dirs.root()), &file) {
-                state::log(dirs, &format!("version.json not written: {message}"));
+                state::log_warn(dirs, &format!("version.json not written: {message}"));
             }
         }
         Err(message) => {
-            state::log(dirs, &format!("{message}; kept as version.json.bad and replaced"));
+            state::log_warn(dirs, &format!("{message}; kept as version.json.bad and replaced"));
             let _ = fs::rename(&location.path, location.path.with_extension("json.bad"));
             let file = VersionFile::for_install(LAUNCHER_VERSION, gt4l_core::config::SCHEMA_VERSION);
             let _ = versions::write(&location.path, location.path.parent().unwrap_or(dirs.root()), &file);
@@ -226,7 +226,7 @@ pub fn check_on_launch(app: AppHandle, shared: Shared) {
         let progress_app = app.clone();
         match install_renderer(&dirs, &mut |step| emit_step(&progress_app, step)) {
             Ok(_) => emit_progress(&app, "done"),
-            Err(message) => state::log(&dirs, &format!("gt4-gs not installed at launch: {message}")),
+            Err(message) => state::log_error(&dirs, &format!("gt4-gs not installed at launch: {message}")),
         }
     }
     let result = check_with(&dirs, config.skipped_launcher, config.skipped_renderer, true, fetch);
@@ -370,7 +370,7 @@ fn start_portable_update(app: &AppHandle, dirs: &DataDirs) -> Result<String, Str
     let report = match outcome {
         Ok(report) => report,
         Err(message) => {
-            state::log(dirs, &format!("portable update failed: {message}"));
+            state::log_error(dirs, &format!("portable update failed: {message}"));
             return Err(message);
         }
     };
@@ -380,7 +380,7 @@ fn start_portable_update(app: &AppHandle, dirs: &DataDirs) -> Result<String, Str
     let started = gt4l_platform::process::spawn_outside_job(std::process::Command::new(&new_launcher).arg(portable_update::RESTART_ARGUMENT));
     if let Err(error) = started {
         // The files are swapped; the player starts GT4Recomp.exe by hand.
-        state::log(dirs, &format!("the updated launcher did not start: {error}"));
+        state::log_error(dirs, &format!("the updated launcher did not start: {error}"));
         let _ = app.emit("update-finished", json!({ "stream": "launcher", "ok": true, "message": messages::text("update.updated_start_again", state::current_language()) }));
         return Ok(messages::render("update.installed_start_again", state::current_language(), &[("version", &version.text())]));
     }
@@ -444,7 +444,7 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
     // it exits (the game is not running here), then asks Windows to start the setup elevated (`runas`, the UAC
     // prompt). The breakaway start and the Explorer fallback stay behind it (gt4l_platform::process::start_setup).
     if let Err(message) = gt4l_platform::process::release_kill_on_close() {
-        state::log(dirs, &format!("kill-on-close not cleared ({message}); the setup is started outside the job"));
+        state::log_warn(dirs, &format!("kill-on-close not cleared ({message}); the setup is started outside the job"));
     }
     // Silent, with this folder as the install folder, when this launcher is the registered install (see setup_arguments).
     let arguments = setup_arguments(&install_directory(), &gt4l_platform::install_record::registered_install_folder);
@@ -457,7 +457,7 @@ fn start_launcher_setup(app: &AppHandle, dirs: &DataDirs) -> Result<String, Stri
             // No setup runs, so the launcher goes back to ending the game with it.
             match gt4l_platform::process::restore_kill_on_close() {
                 Ok(()) => state::log(dirs, "kill-on-close restored after the setup did not start"),
-                Err(restore) => state::log(dirs, &format!("kill-on-close not restored ({restore})")),
+                Err(restore) => state::log_warn(dirs, &format!("kill-on-close not restored ({restore})")),
             }
             return Err(message);
         }

@@ -3,7 +3,8 @@
 //! synthetic test data, not game data.
 
 use gt4saves::card::{DirEntry, Node, MODE_DIR_DEFAULT, MODE_FILE_DEFAULT};
-use gt4l_core::games::GT4;
+use gt4l_core::games::{self, Game, GT4};
+use gt4saves::Library;
 use gt4saves::Card;
 
 use crate::saves;
@@ -49,7 +50,8 @@ pub fn seed(state: &AppState) {
         let image = Card::build(&items).expect("synthetic card builds").to_image();
         let path = folder.join(name);
         if std::fs::write(&path, image).is_ok() {
-            let _ = saves::import_path(state.library(), &path, crate::state::language_of(&state));
+            let libraries: Vec<(&'static Game, &Library)> = games::GAMES.iter().map(|game| (*game, state.library_of(game))).collect();
+            let _ = saves::import_path(&libraries, &path, crate::state::language_of(&state));
         }
     }
     let _ = saves::activate(state.library(), "Save 01");

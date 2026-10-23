@@ -35,6 +35,7 @@
     "allow-release-notes",
     "allow-open-link",
     "allow-open-log-folder",
+    "allow-open-latest-log",
     "allow-open-game-files-folder",
     "allow-open-player-folder",
     "allow-open-saves-folder",

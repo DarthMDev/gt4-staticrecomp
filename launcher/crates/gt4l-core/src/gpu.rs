@@ -38,6 +38,11 @@ pub struct VulkanGpu {
     pub name: String,
     pub api: (u32, u32),
     pub integrated: bool,
+    /// PCI vendor and device ids (0 when unknown).
+    pub vendor_id: u32,
+    pub device_id: u32,
+    /// The adapter LUID when the driver reports one (`VkPhysicalDeviceIDProperties::deviceLUIDValid`).
+    pub luid: Option<u64>,
 }
 
 /// A hardware adapter as DXGI reports it.
@@ -47,6 +52,10 @@ pub struct DxgiGpu {
     pub dedicated_video_memory: u64,
     /// `DXGI_ADAPTER_FLAG_SOFTWARE` (the Direct3D software rasterizer).
     pub software: bool,
+    /// `DXGI_ADAPTER_DESC1::VendorId` and `DeviceId`, and the `AdapterLuid` (always reported by DXGI).
+    pub vendor_id: u32,
+    pub device_id: u32,
+    pub luid: Option<u64>,
 }
 
 /// One graphics card: the Vulkan device and the DXGI adapter that are the same hardware (matched by name).
@@ -85,15 +94,30 @@ fn key(name: &str) -> String {
     name.chars().filter(|c| c.is_alphanumeric()).flat_map(char::to_lowercase).collect()
 }
 
-/// Joins the Vulkan devices and the DXGI adapters into cards. A DXGI adapter with the same name as a Vulkan device
-/// is the same card. Software adapters are dropped. A card known only to DXGI is integrated when its dedicated memory
-/// is small.
+/// Joins the Vulkan devices and the DXGI adapters into one entry per physical card (TASK-101 item 3, rc3 owner log:
+/// five entries for two cards). Rules:
+/// - an exact duplicate within one API (the same device listed twice, as hybrid laptops can) is dropped;
+/// - a Vulkan device and a DXGI adapter are the same card when their LUIDs are equal (both report one), else when their
+///   PCI vendor and device ids are equal, else when their names match. Each DXGI adapter joins at most one Vulkan device,
+///   so two identical cards with different LUIDs stay two;
+/// - software adapters are dropped, and a card known only to DXGI is integrated when its dedicated memory is small.
 pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
-    let dxgi: Vec<&DxgiGpu> = dxgi.iter().filter(|adapter| !adapter.software && !is_software_name(&adapter.name)).collect();
+    let vulkan: Vec<&VulkanGpu> = without_repeats(
+        vulkan.iter().filter(|gpu| !is_software_name(&gpu.name)).collect(),
+        |a, b| a.name == b.name && a.vendor_id == b.vendor_id && a.device_id == b.device_id && a.luid == b.luid,
+    );
+    let dxgi: Vec<&DxgiGpu> = without_repeats(
+        dxgi.iter().filter(|adapter| !adapter.software && !is_software_name(&adapter.name)).collect(),
+        |a, b| a.name == b.name && a.vendor_id == b.vendor_id && a.device_id == b.device_id && a.luid == b.luid,
+    );
     let mut matched = vec![false; dxgi.len()];
     let mut cards = Vec::new();
-    for gpu in vulkan.iter().filter(|gpu| !is_software_name(&gpu.name)) {
-        let partner = dxgi.iter().position(|adapter| key(&adapter.name) == key(&gpu.name));
+    for gpu in &vulkan {
+        let mine = Identity { name: &gpu.name, vendor_id: gpu.vendor_id, device_id: gpu.device_id, luid: gpu.luid };
+        let partner = dxgi.iter().enumerate().position(|(index, adapter)| {
+            !matched[index]
+                && same_card(&mine, &Identity { name: &adapter.name, vendor_id: adapter.vendor_id, device_id: adapter.device_id, luid: adapter.luid })
+        });
         let (dxgi_name, memory) = match partner {
             Some(index) => {
                 matched[index] = true;
@@ -121,6 +145,35 @@ pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
         }
     }
     cards
+}
+
+/// What tells one device entry (a Vulkan device or a DXGI adapter) from another: its name, PCI ids and LUID.
+struct Identity<'a> {
+    name: &'a str,
+    vendor_id: u32,
+    device_id: u32,
+    luid: Option<u64>,
+}
+
+/// True when two entries are the same physical card. LUIDs decide when both have one; else the PCI ids (when both are
+/// known); else the names.
+fn same_card(a: &Identity, b: &Identity) -> bool {
+    match (a.luid, b.luid) {
+        (Some(left), Some(right)) => left == right,
+        _ if a.vendor_id != 0 && b.vendor_id != 0 => a.vendor_id == b.vendor_id && a.device_id == b.device_id,
+        _ => key(a.name) == key(b.name),
+    }
+}
+
+/// The entries with the first of every group of exact duplicates (`same`), in their order.
+fn without_repeats<T>(items: Vec<&T>, same: impl Fn(&T, &T) -> bool) -> Vec<&T> {
+    let mut kept: Vec<&T> = Vec::new();
+    for item in items {
+        if !kept.iter().any(|known| same(known, item)) {
+            kept.push(item);
+        }
+    }
+    kept
 }
 
 /// The index of the Automatic card: a discrete card before an integrated one, then the most dedicated memory. The
@@ -233,11 +286,20 @@ mod tests {
     use super::*;
 
     fn vulkan(name: &str, api: (u32, u32), integrated: bool) -> VulkanGpu {
-        VulkanGpu { name: name.into(), api, integrated }
+        VulkanGpu { name: name.into(), api, integrated, vendor_id: 0, device_id: 0, luid: None }
     }
 
     fn dxgi(name: &str, memory: u64) -> DxgiGpu {
-        DxgiGpu { name: name.into(), dedicated_video_memory: memory, software: false }
+        DxgiGpu { name: name.into(), dedicated_video_memory: memory, software: false, vendor_id: 0, device_id: 0, luid: None }
+    }
+
+    /// A card with its PCI ids and LUID, as both APIs report it.
+    fn card_vulkan(name: &str, vendor: u32, device: u32, luid: u64) -> VulkanGpu {
+        VulkanGpu { name: name.into(), api: (1, 3), integrated: false, vendor_id: vendor, device_id: device, luid: Some(luid) }
+    }
+
+    fn card_dxgi(name: &str, vendor: u32, device: u32, luid: u64, memory: u64) -> DxgiGpu {
+        DxgiGpu { name: name.into(), dedicated_video_memory: memory, software: false, vendor_id: vendor, device_id: device, luid: Some(luid) }
     }
 
     const GIB: u64 = 1024 * 1024 * 1024;
@@ -311,7 +373,7 @@ mod tests {
         let cards = merge(
             &[vulkan("llvmpipe (LLVM 19.1)", (1, 3), true)],
             &[
-                DxgiGpu { name: "Microsoft Basic Render Driver".into(), dedicated_video_memory: 0, software: true },
+                DxgiGpu { name: "Microsoft Basic Render Driver".into(), dedicated_video_memory: 0, software: true, vendor_id: 0x1414, device_id: 0x8c, luid: None },
                 dxgi("Intel UHD", 128 * 1024 * 1024),
             ],
         );
@@ -356,6 +418,74 @@ mod tests {
         assert_eq!(run.api, "d3d11");
         assert_eq!(run.adapter, "");
         assert!(run.notice.is_some());
+    }
+
+    #[test]
+    fn the_five_entries_of_the_rc3_log_are_two_cards() {
+        // rc3 laptop (RTX 3060 Laptop + Intel UHD): the log listed NVIDIA, Intel, Intel, NVIDIA, Intel. Vulkan repeats
+        // a device and DXGI repeats one too; the LUIDs tell the repeats apart from the other card.
+        let nvidia_luid = 0x0000_1234_0000_5678;
+        let intel_luid = 0x0000_1234_0000_9abc;
+        let cards = merge(
+            &[
+                card_vulkan("NVIDIA GeForce RTX 3060 Laptop GPU", 0x10de, 0x2520, nvidia_luid),
+                card_vulkan("Intel(R) UHD Graphics", 0x8086, 0x9bc8, intel_luid),
+                card_vulkan("Intel(R) UHD Graphics", 0x8086, 0x9bc8, intel_luid),
+                card_vulkan("NVIDIA GeForce RTX 3060 Laptop GPU", 0x10de, 0x2520, nvidia_luid),
+            ],
+            &[
+                card_dxgi("Intel(R) UHD Graphics", 0x8086, 0x9bc8, intel_luid, 128 * 1024 * 1024),
+                card_dxgi("NVIDIA GeForce RTX 3060 Laptop GPU", 0x10de, 0x2520, nvidia_luid, 6 * GIB),
+                card_dxgi("Intel(R) UHD Graphics", 0x8086, 0x9bc8, intel_luid, 128 * 1024 * 1024),
+            ],
+        );
+        let names: Vec<&str> = cards.iter().map(|card| card.name().unwrap()).collect();
+        assert_eq!(names, vec!["NVIDIA GeForce RTX 3060 Laptop GPU", "Intel(R) UHD Graphics"]);
+        // Each card keeps both API names.
+        assert_eq!(cards[0].dxgi_name.as_deref(), Some("NVIDIA GeForce RTX 3060 Laptop GPU"));
+        assert_eq!(cards[0].dedicated_video_memory, 6 * GIB);
+        assert_eq!(cards[1].dxgi_name.as_deref(), Some("Intel(R) UHD Graphics"));
+        // And the automatic choice is the same card as before.
+        assert_eq!(automatic_index(&cards), Some(0));
+    }
+
+    #[test]
+    fn two_identical_cards_with_different_luids_stay_two() {
+        let cards = merge(
+            &[card_vulkan("NVIDIA GeForce RTX 4090", 0x10de, 0x2684, 1), card_vulkan("NVIDIA GeForce RTX 4090", 0x10de, 0x2684, 2)],
+            &[card_dxgi("NVIDIA GeForce RTX 4090", 0x10de, 0x2684, 1, 24 * GIB), card_dxgi("NVIDIA GeForce RTX 4090", 0x10de, 0x2684, 2, 24 * GIB)],
+        );
+        assert_eq!(cards.len(), 2, "two cards with two LUIDs");
+        assert!(cards.iter().all(|card| card.vulkan_name.is_some() && card.dxgi_name.is_some()), "each keeps both names");
+    }
+
+    #[test]
+    fn identical_entries_without_luids_are_one_card() {
+        // Without a LUID two identical cards cannot be told apart, so exact repeats count as one card. DXGI always
+        // reports a LUID, so this only applies to Vulkan-only data.
+        let cards = merge(
+            &[vulkan("Radeon RX 7800 XT", (1, 3), false), vulkan("Radeon RX 7800 XT", (1, 3), false)],
+            &[
+                DxgiGpu { vendor_id: 0x1002, device_id: 0x747e, ..dxgi("Radeon RX 7800 XT", 16 * GIB) },
+                DxgiGpu { vendor_id: 0x1002, device_id: 0x747e, ..dxgi("Radeon RX 7800 XT", 16 * GIB) },
+            ],
+        );
+        assert_eq!(cards.len(), 1);
+        assert!(cards[0].dxgi_name.is_some());
+    }
+
+    #[test]
+    fn a_dxgi_adapter_joins_at_most_one_vulkan_device() {
+        // Two different cards that only share a name and ids (no LUID): each DXGI adapter joins one Vulkan device.
+        let cards = merge(
+            &[
+                VulkanGpu { vendor_id: 0x1002, device_id: 0x747e, ..vulkan("Radeon RX 7800 XT", (1, 3), false) },
+                VulkanGpu { vendor_id: 0x1002, device_id: 0x7480, ..vulkan("Radeon RX 7800 XT", (1, 3), false) },
+            ],
+            &[DxgiGpu { vendor_id: 0x1002, device_id: 0x747e, ..dxgi("Radeon RX 7800 XT", 16 * GIB) }],
+        );
+        assert_eq!(cards.len(), 2);
+        assert_eq!(cards.iter().filter(|card| card.dxgi_name.is_some()).count(), 1);
     }
 
     #[test]

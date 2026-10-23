@@ -139,10 +139,50 @@ mod vulkan_ffi {
     type DestroyInstance = unsafe extern "system" fn(VkInstance, *const c_void);
     type EnumeratePhysicalDevices = unsafe extern "system" fn(VkInstance, *mut u32, *mut VkPhysicalDevice) -> VkResult;
     type GetPhysicalDeviceProperties = unsafe extern "system" fn(VkPhysicalDevice, *mut c_void);
+    type GetPhysicalDeviceProperties2 = unsafe extern "system" fn(VkPhysicalDevice, *mut c_void);
+
+    const VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2: u32 = 1_000_059_001;
+    const VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES: u32 = 1_000_071_004;
+
+    /// VkPhysicalDeviceIDProperties, chained through pNext of VkPhysicalDeviceProperties2 (Vulkan 1.1).
+    #[repr(C)]
+    struct IdPropertiesChain {
+        s_type: u32,
+        p_next: *mut c_void,
+        device_uuid: [u8; 16],
+        driver_uuid: [u8; 16],
+        device_luid: [u8; 8],
+        device_node_mask: u32,
+        device_luid_valid: u32,
+    }
 
     fn text(raw: &[c_char]) -> String {
         let bytes: Vec<u8> = raw.iter().take_while(|byte| **byte != 0).map(|byte| *byte as u8).collect();
         String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    /// The LUID of a device, when the driver reports it as valid (VkPhysicalDeviceIDProperties::deviceLUIDValid).
+    unsafe fn device_luid(handle: VkPhysicalDevice, properties2_of: GetPhysicalDeviceProperties2) -> Option<u64> {
+        let mut id = IdPropertiesChain {
+            s_type: VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES,
+            p_next: ptr::null_mut(),
+            device_uuid: [0; 16],
+            driver_uuid: [0; 16],
+            device_luid: [0; 8],
+            device_node_mask: 0,
+            device_luid_valid: 0,
+        };
+        // u64 storage keeps the buffer 8-byte aligned; the header is sType (u32) then pNext, as the driver reads it.
+        let mut buffer = vec![0u64; PROPERTIES_BUFFER / 8];
+        let bytes = buffer.as_mut_ptr().cast::<u8>();
+        bytes.cast::<u32>().write(VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2);
+        bytes.add(8).cast::<*mut c_void>().write(&mut id as *mut IdPropertiesChain as *mut c_void);
+        properties2_of(handle, buffer.as_mut_ptr().cast());
+        if id.device_luid_valid != 0 {
+            Some(u64::from_le_bytes(id.device_luid))
+        } else {
+            None
+        }
     }
 
     pub fn probe() -> VulkanProbe {
@@ -219,6 +259,10 @@ mod vulkan_ffi {
         let destroy = load::<DestroyInstance>(get, instance, c"vkDestroyInstance");
         let enumerate_devices = load::<EnumeratePhysicalDevices>(get, instance, c"vkEnumeratePhysicalDevices");
         let properties_of = load::<GetPhysicalDeviceProperties>(get, instance, c"vkGetPhysicalDeviceProperties");
+        // The LUID comes from vkGetPhysicalDeviceProperties2 (core in Vulkan 1.1; the KHR name is tried too). Without it
+        // the devices are still listed, with no LUID.
+        let properties2_of = load::<GetPhysicalDeviceProperties2>(get, instance, c"vkGetPhysicalDeviceProperties2")
+            .or_else(|| load::<GetPhysicalDeviceProperties2>(get, instance, c"vkGetPhysicalDeviceProperties2KHR"));
         if let (Some(enumerate_devices), Some(properties_of)) = (enumerate_devices, properties_of) {
             let mut count = 0u32;
             if enumerate_devices(instance, &mut count, ptr::null_mut()) == VK_SUCCESS && count > 0 {
@@ -231,12 +275,15 @@ mod vulkan_ffi {
                         let mut buffer = vec![0u64; PROPERTIES_BUFFER / 8];
                         properties_of(handle, buffer.as_mut_ptr().cast());
                         let prefix = &*(buffer.as_ptr() as *const PropertiesPrefix);
+                        let luid = properties2_of.and_then(|properties2| device_luid(handle, properties2));
                         devices.push(VulkanDevice {
                             name: text(&prefix.device_name),
                             api_major: (prefix.api_version >> 22) & 0x7F,
                             api_minor: (prefix.api_version >> 12) & 0x3FF,
                             vendor_id: prefix.vendor_id,
                             device_type: prefix.device_type,
+                            device_id: prefix.device_id,
+                            luid,
                         });
                     }
                 }
@@ -249,11 +296,128 @@ mod vulkan_ffi {
     }
 }
 
+/// The local date and time now (the launcher's log file names and lines, TASK-112).
+#[cfg(windows)]
+pub fn local_time() -> gt4l_core::logs::LocalTime {
+    use windows::Win32::System::SystemInformation::GetLocalTime;
+
+    // SAFETY: a plain call that fills in the local SYSTEMTIME.
+    let now = unsafe { GetLocalTime() };
+    gt4l_core::logs::LocalTime {
+        year: u32::from(now.wYear),
+        month: u32::from(now.wMonth),
+        day: u32::from(now.wDay),
+        hour: u32::from(now.wHour),
+        minute: u32::from(now.wMinute),
+        second: u32::from(now.wSecond),
+    }
+}
+
+/// Off Windows the clock is read in UTC (the launcher only runs on Windows today).
+#[cfg(not(windows))]
+pub fn local_time() -> gt4l_core::logs::LocalTime {
+    utc_time_of(std::time::SystemTime::now())
+}
+
+/// The UTC date and time of `time` (a civil calendar from the Unix day count).
+pub fn utc_time_of(time: std::time::SystemTime) -> gt4l_core::logs::LocalTime {
+    let seconds = time.duration_since(std::time::UNIX_EPOCH).map(|value| value.as_secs()).unwrap_or(0) as i64;
+    let days = seconds.div_euclid(86_400);
+    let of_day = seconds.rem_euclid(86_400);
+    // Howard Hinnant's civil-from-days algorithm.
+    let shifted = days + 719_468;
+    let era = shifted.div_euclid(146_097);
+    let day_of_era = shifted.rem_euclid(146_097);
+    let year_of_era = (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 { month_index + 3 } else { month_index - 9 };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    gt4l_core::logs::LocalTime {
+        year: year as u32,
+        month: month as u32,
+        day: day as u32,
+        hour: (of_day / 3600) as u32,
+        minute: ((of_day % 3600) / 60) as u32,
+        second: (of_day % 60) as u32,
+    }
+}
+
+/// The Windows version for the launcher log and the bug report, e.g. "Windows 11 (build 26100)". Reads the registry;
+/// Windows 11 has build 22000 and up (its product name still says Windows 10). Empty when it cannot be read.
+#[cfg(windows)]
+pub fn windows_version() -> String {
+    let build = registry_string(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "CurrentBuild").unwrap_or_default();
+    let product = registry_string(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName").unwrap_or_default();
+    let display = registry_string(r"SOFTWARE\Microsoft\Windows NT\CurrentVersion", "DisplayVersion").unwrap_or_default();
+    let build_number: u32 = build.trim().parse().unwrap_or(0);
+    let name = if build_number >= 22_000 { "Windows 11".to_string() } else { product.trim().to_string() };
+    let mut text = if name.is_empty() { "Windows".to_string() } else { name };
+    if !display.trim().is_empty() {
+        text.push_str(&format!(" {}", display.trim()));
+    }
+    if build_number > 0 {
+        text.push_str(&format!(" (build {build_number})"));
+    }
+    text
+}
+
+/// Off Windows there is no registry: nothing to report.
+#[cfg(not(windows))]
+pub fn windows_version() -> String {
+    String::new()
+}
+
+/// A REG_SZ value under HKEY_LOCAL_MACHINE (64-bit view).
+#[cfg(windows)]
+fn registry_string(key: &str, value: &str) -> Option<String> {
+    use windows::core::HSTRING;
+    use windows::Win32::System::Registry::{RegGetValueW, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ};
+    let (key, value) = (HSTRING::from(key), HSTRING::from(value));
+    let mut buffer = vec![0u16; 512];
+    let mut size = (buffer.len() * 2) as u32;
+    // SAFETY: the buffer and its size in bytes live for the call; the value is read as REG_SZ only.
+    let status = unsafe {
+        RegGetValueW(HKEY_LOCAL_MACHINE, &key, &value, RRF_RT_REG_SZ, None, Some(buffer.as_mut_ptr() as *mut _), Some(&mut size))
+    };
+    if status.is_err() {
+        return None;
+    }
+    let length = (size as usize / 2).min(buffer.len());
+    Some(String::from_utf16_lossy(&buffer[..length]).trim_end_matches('\0').to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Reads this machine; the rules are tested in gt4l-core. Here only the plumbing: the bits are consistent.
+    /// Reads this machine's Vulkan devices (the launcher's own probe, with the LUID read). Any probe result is accepted
+    /// here; the output (`--nocapture`) shows the devices, their PCI ids and LUIDs.
+    #[test]
+    fn vulkan_probe_runs_on_this_machine() {
+        let probe = probe_vulkan();
+        if let VulkanProbe::Ready { devices, .. } = &probe {
+            for device in devices {
+                println!("vulkan device {} vendor {:#06x} device {:#06x} luid {:?}", device.name, device.vendor_id, device.device_id, device.luid);
+            }
+        }
+        println!("vulkan probe: {probe:?}");
+    }
+
+    #[test]
+    fn local_time_is_a_plausible_clock_reading() {
+        let now = local_time();
+        assert!((2024..=2100).contains(&now.year) && (1..=12).contains(&now.month) && (1..=31).contains(&now.day));
+        assert!(now.hour < 24 && now.minute < 60 && now.second < 60);
+        let epoch = utc_time_of(std::time::UNIX_EPOCH);
+        assert_eq!((epoch.year, epoch.month, epoch.day, epoch.hour), (1970, 1, 1, 0));
+        // 2026-10-23 21:03:40 UTC is 1792789420 seconds after the epoch.
+        let sample = utc_time_of(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_792_789_420));
+        assert_eq!(sample.stamp(), "2026-10-23 21:03:40");
+    }
+
     #[test]
     fn cpu_reading_is_consistent() {
         let features = read_cpu_features();

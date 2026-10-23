@@ -21,6 +21,9 @@ pub fn probe_gpus() -> Vec<GpuDevice> {
                     name: device.name.clone(),
                     api: (device.api_major, device.api_minor),
                     integrated: device.device_type == system_check::DEVICE_TYPE_INTEGRATED,
+                    vendor_id: device.vendor_id,
+                    device_id: device.device_id,
+                    luid: device.luid,
                 })
                 .collect()
         }
@@ -48,10 +51,15 @@ fn dxgi_adapters() -> Vec<DxgiGpu> {
                 continue;
             };
             let length = desc.Description.iter().position(|&unit| unit == 0).unwrap_or(desc.Description.len());
+            // The LUID is the adapter's own id on this machine: a 64-bit value from its two halves.
+            let luid = (u64::from(desc.AdapterLuid.HighPart as u32) << 32) | u64::from(desc.AdapterLuid.LowPart);
             adapters.push(DxgiGpu {
                 name: String::from_utf16_lossy(&desc.Description[..length]),
                 dedicated_video_memory: desc.DedicatedVideoMemory as u64,
                 software: (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE.0 as u32) != 0,
+                vendor_id: desc.VendorId,
+                device_id: desc.DeviceId,
+                luid: Some(luid),
             });
         }
     }

@@ -2,8 +2,7 @@
 //! The state lives behind one mutex. Long jobs (setup, the game, controller capture) run on their
 //! own threads and lock the state only to read or write their results.
 
-use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Child;
 use std::sync::atomic::AtomicBool;
@@ -160,7 +159,6 @@ pub fn lock(shared: &Shared) -> MutexGuard<'_, AppState> {
     }
 }
 
-/// Appends one line to the launcher log in the data folder.
 /// Writes a small text file through a temporary file and a rename.
 fn write_text_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     let temporary = path.with_extension("ini.tmp");
@@ -168,12 +166,19 @@ fn write_text_atomic(path: &Path, text: &str) -> std::io::Result<()> {
     fs::rename(&temporary, path)
 }
 
+/// Appends an INFO line to the launcher's session log (see `session_log`).
 pub fn log(dirs: &DataDirs, message: &str) {
-    let seconds = SystemTime::now().duration_since(UNIX_EPOCH).map(|value| value.as_secs()).unwrap_or(0);
-    let _ = std::fs::create_dir_all(dirs.logs());
-    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(dirs.logs().join("launcher.log")) {
-        let _ = writeln!(file, "[{seconds}] {message}");
-    }
+    crate::session_log::write(dirs, gt4l_core::logs::Level::Info, message);
+}
+
+/// Appends a WARN line: a soft problem the player may notice (TASK-112).
+pub fn log_warn(dirs: &DataDirs, message: &str) {
+    crate::session_log::write(dirs, gt4l_core::logs::Level::Warn, message);
+}
+
+/// Appends an ERROR line: a real failure (a crash, a lost GPU, a failed setup, import, harvest or update) (TASK-112).
+pub fn log_error(dirs: &DataDirs, message: &str) {
+    crate::session_log::write(dirs, gt4l_core::logs::Level::Error, message);
 }
 
 impl AppState {
@@ -322,7 +327,7 @@ impl AppState {
         stored.disc_path = stored.disc_path.map(|path| paths::portable_path(&path, &self.install_dir));
         stored.dev_game_dir = stored.dev_game_dir.map(|path| paths::portable_path(&path, &self.install_dir));
         if let Err(error) = config::save(&self.user_dirs.config_file(), &stored) {
-            log(&self.dirs, &format!("settings not saved: {error}"));
+            log_error(&self.dirs, &format!("settings not saved: {error}"));
         }
         // TASK-097: a direct start of the game reads the same choices.
         self.write_standalone_files(&self.config.settings);
@@ -343,7 +348,7 @@ impl AppState {
         let game_ini = config_dir.join(launch::STANDALONE_CONFIG_FILE);
         let text = launch::standalone_config_text(settings, display.as_ref());
         if let Err(error) = fs::create_dir_all(&config_dir).and_then(|()| write_text_atomic(&game_ini, &text)) {
-            log(&self.dirs, &format!("{} not written: {error}", game_ini.display()));
+            log_error(&self.dirs, &format!("{} not written: {error}", game_ini.display()));
         }
         // gt4-gs.ini needs the installed GSdx only for its folders; without it the previous file stays.
         let renderer_root = self.dirs.renderer_root();
@@ -353,7 +358,7 @@ impl AppState {
             match launch::gs_config_text(settings, &paths, display.as_ref(), integrated) {
                 Ok(text) => {
                     if let Err(error) = gs_table::write_ini_atomic(&paths.config, &text) {
-                        log(&self.dirs, &format!("{} not written: {error}", paths.config.display()));
+                        log_error(&self.dirs, &format!("{} not written: {error}", paths.config.display()));
                     }
                 }
                 Err(message) => log(&self.dirs, &format!("gt4-gs.ini for a direct start not rendered: {message}")),

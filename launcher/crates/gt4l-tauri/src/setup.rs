@@ -156,7 +156,7 @@ pub fn choose_disc_path_for(shared: &Shared, path: &Path, requested: Option<&str
         Err(error) => {
             let message = error.user_message_in(state::current_language());
             let mut state = lock(shared);
-            state::log(&state.dirs, &format!("disc rejected ({}): {error}", path.display()));
+            state::log_warn(&state.dirs, &format!("disc rejected ({}): {error}", path.display()));
             state.setup_outcome = if error.is_disc_refusal() {
                 SetupOutcome::Refused(message.clone())
             } else {
@@ -182,7 +182,7 @@ fn refuse_unsupported_system(shared: &Shared) -> Result<(), String> {
         return Ok(());
     };
     let mut state = lock(shared);
-    state::log(&state.dirs, &format!("system requirement not met: {problem}"));
+    state::log_error(&state.dirs, &format!("system requirement not met: {problem}"));
     state.setup_outcome = SetupOutcome::Failed(problem.clone());
     Err(problem)
 }
@@ -281,7 +281,7 @@ pub fn start_with(
         let receipt = match result {
             Ok(receipt) => receipt,
             Err(error) => {
-                state::log(&dirs, &format!("setup stopped: {error}"));
+                state::log_error(&dirs, &format!("setup stopped: {error}"));
                 let message = error.user_message_in(state::current_language());
                 let mut state = lock(&shared);
                 state.setup_busy = false;
@@ -378,7 +378,7 @@ fn prepare_renderer(shared: &Shared, dirs: &DataDirs, notify: &Notify, renderer:
             String::new()
         }
         Err(message) => {
-            state::log(dirs, &format!("GSdx not installed during setup: {message}"));
+            state::log_warn(dirs, &format!("GSdx not installed during setup: {message}"));
             notify("renderer-progress", json!({ "step": "failed", "message": message }));
             messages::text("renderer.not_installed_note", state::current_language()).to_string()
         }

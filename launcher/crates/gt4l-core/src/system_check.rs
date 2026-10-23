@@ -86,6 +86,10 @@ pub struct VulkanDevice {
     pub vendor_id: u32,
     /// VkPhysicalDeviceType: 0 other, 1 integrated, 2 discrete, 3 virtual, 4 CPU.
     pub device_type: u32,
+    /// VkPhysicalDeviceProperties::deviceID (0 when unknown).
+    pub device_id: u32,
+    /// VkPhysicalDeviceIDProperties::deviceLUID, when the driver reports it as valid (TASK-101 item 3).
+    pub luid: Option<u64>,
 }
 
 /// Microsoft's vendor id: the "Microsoft Direct3D12 (...)" devices of the Vulkan-on-D3D12 layer (Dozen, part of the
@@ -219,7 +223,7 @@ mod tests {
     }
 
     fn device(name: &str, major: u32, minor: u32) -> VulkanDevice {
-        VulkanDevice { name: name.into(), api_major: major, api_minor: minor, vendor_id: 0x1002, device_type: 2 }
+        VulkanDevice { name: name.into(), api_major: major, api_minor: minor, vendor_id: 0x1002, device_type: 2, device_id: 0, luid: None }
     }
 
     #[test]
@@ -268,9 +272,11 @@ mod tests {
             api_minor: 2,
             vendor_id: MICROSOFT_VENDOR_ID,
             device_type: 1,
+            device_id: 0,
+            luid: None,
         };
         let llvmpipe =
-            VulkanDevice { name: "llvmpipe".into(), api_major: 1, api_minor: 3, vendor_id: 0x10005, device_type: 4 };
+            VulkanDevice { name: "llvmpipe".into(), api_major: 1, api_minor: 3, vendor_id: 0x10005, device_type: 4, device_id: 0, luid: None };
         assert!(!is_gpu_driver(&dozen) && !is_gpu_driver(&llvmpipe));
         let only_layers =
             VulkanProbe::Ready { instance_extensions: required_extensions(), devices: vec![dozen.clone(), llvmpipe] };
