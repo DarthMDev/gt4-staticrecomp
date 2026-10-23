@@ -917,12 +917,13 @@ body.input-pad .info:focus .tip { display: block; }
 }
 
 /* ---------- 1.3.0 intro (owner, 2026-10-23; js/intro.js) ----------
-   About 7 s: light streaks (0-1.4 s), the GT4 logo out of a blur (1.0 s), SPEC II landing letter by letter with a red
-   bar (2.6 s), one line of text (3.4 s), then everything zooms away and the overlay fades out (6.4-7.2 s). */
+   About 8 s in three scenes: "You asked for it." with light streaks (0-1.9 s), "We made it." landing hard (1.9-3.7 s),
+   then the GT4 logo, spec-II, "Natively recompiled" and the version (3.7-7.4 s); everything zooms away and the
+   overlay fades out (7.4-8.2 s). */
 .intro {
   position: fixed; inset: 0; z-index: 100; overflow: hidden; cursor: pointer;
   background: radial-gradient(ellipse at 50% 55%, #11141c 0%, #05060a 70%);
-  animation: intro-out 0.8s ease-in 6.4s both;
+  animation: intro-out 0.8s ease-in 7.4s both;
 }
 .intro.is-leaving { animation: intro-out 0.6s ease-in both; }
 @keyframes intro-out { to { opacity: 0; } }
@@ -938,21 +939,47 @@ body.input-pad .info:focus .tip { display: block; }
 .intro-streak-3 { top: 61%; animation-delay: 0.32s; background: linear-gradient(90deg, rgba(220, 40, 40, 0), #e3262b); box-shadow: 0 0 14px rgba(227, 38, 43, 0.7); }
 .intro-streak-4 { top: 45%; animation-delay: 0.45s; }
 .intro-streak-5 { top: 70%; animation-delay: 0.6s; height: 1px; }
-.intro-streak-6 { top: 30%; animation-delay: 0.72s; height: 1px; }
-.intro-streak-7 { top: 57%; animation-delay: 0.85s; background: linear-gradient(90deg, rgba(220, 40, 40, 0), #e3262b); box-shadow: 0 0 14px rgba(227, 38, 43, 0.7); }
+.intro-streak-6 { top: 30%; animation-delay: 3.45s; height: 1px; }
+.intro-streak-7 { top: 57%; animation-delay: 3.55s; background: linear-gradient(90deg, rgba(220, 40, 40, 0), #e3262b); box-shadow: 0 0 14px rgba(227, 38, 43, 0.7); }
 @keyframes intro-streak {
   0% { transform: translateX(0); opacity: 0; }
   15% { opacity: 1; }
   100% { transform: translateX(360%); opacity: 0; }
 }
+/* Scenes 1 and 2: one large line each, centred. */
+.intro-scene {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0;
+  font: 700 clamp(34px, 5.2vw, 72px)/1 var(--label); letter-spacing: 0.04em; color: var(--white); text-align: center;
+}
+.intro-scene-1 { animation: intro-scene-1 1.9s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both; }
+@keyframes intro-scene-1 {
+  0% { opacity: 0; transform: translateX(-40px); filter: blur(6px); letter-spacing: 0.3em; }
+  30% { opacity: 1; transform: none; filter: none; letter-spacing: 0.04em; }
+  78% { opacity: 1; transform: translateX(10px); }
+  100% { opacity: 0; transform: translateX(60px); filter: blur(4px); }
+}
+.intro-scene-2 { color: #fff; animation: intro-scene-2 1.75s cubic-bezier(0.2, 0.9, 0.2, 1) 1.95s both; }
+.intro-scene-2::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 120vw; height: 2px; transform: translate(-50%, 2.2em) scaleX(0);
+  background: linear-gradient(90deg, rgba(227, 38, 43, 0), #e3262b 50%, rgba(227, 38, 43, 0));
+  animation: intro-flash-line 0.7s ease-out 1.95s both;
+}
+@keyframes intro-scene-2 {
+  0% { opacity: 0; transform: scale(1.6); filter: blur(8px); }
+  12% { opacity: 1; transform: scale(1); filter: none; }
+  80% { opacity: 1; transform: scale(1.03); }
+  100% { opacity: 0; transform: scale(1.12); filter: blur(4px); }
+}
+@keyframes intro-flash-line { 0% { transform: translate(-50%, 2.2em) scaleX(0); opacity: 1; } 100% { transform: translate(-50%, 2.2em) scaleX(1); opacity: 0; } }
+/* Scene 3: the logo and spec-II. */
 .intro-stage {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  animation: intro-stage-away 0.9s cubic-bezier(0.6, 0, 0.8, 0.4) 6.3s both;
+  animation: intro-stage-away 0.9s cubic-bezier(0.6, 0, 0.8, 0.4) 7.3s both;
 }
 @keyframes intro-stage-away { to { transform: scale(1.12); opacity: 0; filter: blur(6px); } }
 .intro-logo {
   width: min(460px, 46vw); height: auto; opacity: 0;
-  animation: intro-logo 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) 1.0s both;
+  animation: intro-logo 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 3.7s both;
 }
 @keyframes intro-logo {
   from { opacity: 0; transform: scale(1.1); filter: blur(10px); }
@@ -965,41 +992,41 @@ body.input-pad .info:focus .tip { display: block; }
   -webkit-text-stroke: 0.035em currentColor;  /* Michroma has one weight; the cover wordmark is heavier */
 }
 .intro-letter { display: inline-block; opacity: 0; animation: intro-letter 0.5s cubic-bezier(0.2, 0.9, 0.2, 1.1) both; }
-.intro-letter-1 { animation-delay: 2.45s; }
-.intro-letter-2 { animation-delay: 2.49s; }
-.intro-letter-3 { animation-delay: 2.53s; }
-.intro-letter-4 { animation-delay: 2.57s; }
-.intro-letter-5 { animation-delay: 2.61s; }
-.intro-letter-6 { animation-delay: 2.65s; }
-.intro-letter-7 { animation-delay: 2.69s; }
+.intro-letter-1 { animation-delay: 4.0s; }
+.intro-letter-2 { animation-delay: 4.04s; }
+.intro-letter-3 { animation-delay: 4.08s; }
+.intro-letter-4 { animation-delay: 4.12s; }
+.intro-letter-5 { animation-delay: 4.16s; }
+.intro-letter-6 { animation-delay: 4.2s; }
+.intro-letter-7 { animation-delay: 4.24s; }
 @keyframes intro-letter {
   from { opacity: 0; transform: translateX(-0.9em) skewX(-14deg); filter: blur(4px); }
   to { opacity: 1; transform: none; filter: none; }
 }
-/* A light sheen across SPEC II once it has landed. */
+/* A light sheen across spec-II once it has landed. */
 .intro-spec::after {
   content: ""; position: absolute; top: 0; bottom: 0; left: -40%; width: 30%;
   background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 100%);
-  animation: intro-sheen 0.9s ease-in-out 3.6s both;
+  animation: intro-sheen 0.9s ease-in-out 5.2s both;
 }
 @keyframes intro-sheen { from { left: -40%; } to { left: 120%; } }
 .intro-bar {
   width: min(300px, 28vw); height: 2px; margin-top: 14px; border-radius: 2px; background: #e3262b;
   box-shadow: 0 0 18px rgba(227, 38, 43, 0.75); transform: scaleX(0);
-  animation: intro-bar 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 2.75s both;
+  animation: intro-bar 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 4.3s both;
 }
 @keyframes intro-bar { to { transform: scaleX(1); } }
 .intro-line, .intro-sub { opacity: 0; animation: intro-text 0.7s ease-out both; }
-.intro-line { margin-top: 26px; font: 500 15px var(--label); letter-spacing: 0.3em; text-transform: uppercase; color: var(--white); animation-delay: 3.4s; }
-.intro-sub { margin-top: 8px; font: 400 13px var(--text); letter-spacing: 0.06em; color: var(--dim); animation-delay: 3.7s; }
+.intro-line { margin-top: 26px; font: 500 15px var(--label); letter-spacing: 0.3em; text-transform: uppercase; color: var(--white); animation-delay: 4.7s; }
+.intro-sub { margin-top: 8px; font: 400 13px var(--text); letter-spacing: 0.06em; color: var(--dim); animation-delay: 5.0s; }
 @keyframes intro-text { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .intro-skip {
   position: absolute; right: 32px; bottom: 24px; font: 400 11px var(--label); letter-spacing: 0.14em;
   text-transform: uppercase; color: rgba(255, 255, 255, 0.35); opacity: 0; animation: intro-text 0.6s ease-out 1.2s both;
 }
-/* Reduced motion: no streaks or movement, the logo and the words fade in and out. */
-.intro.is-reduced { animation-delay: 2.4s; }
-.intro.is-reduced .intro-streaks, .intro.is-reduced .intro-spec::after { display: none; }
+/* Reduced motion: no streaks or movement; the final card shows at once and the overlay fades out. */
+.intro.is-reduced { animation-delay: 3.4s; }
+.intro.is-reduced .intro-streaks, .intro.is-reduced .intro-spec::after, .intro.is-reduced .intro-scene { display: none; }
 /* The global reduced-motion rule turns every animation off, so the reduced intro shows its parts directly. */
 .intro.is-reduced .intro-logo, .intro.is-reduced .intro-letter, .intro.is-reduced .intro-line, .intro.is-reduced .intro-sub,
 .intro.is-reduced .intro-skip { opacity: 1; }

@@ -1,8 +1,8 @@
 /*
- * The 1.3.0 intro (owner, 2026-10-23): a short animation, about 7 s, the first time the launcher opens on this version,
- * to say that GT4Recomp now runs Gran Turismo 4 Spec II. Light streaks, the GT4 logo, "spec-II" landing with a red bar
- * (lower case in a wide geometric face, as on the community Spec II cover: Michroma, SIL OFL, assets/Michroma-Regular.ttf),
- * one line of text, then the launcher. Any key, click or pad button skips it. Sound and music are made live with the
+ * The 1.3.0 intro (owner, 2026-10-23): about 8 s in three scenes, the first time the launcher opens on this version, to
+ * say that GT4Recomp now runs Gran Turismo 4 Spec II: "You asked for it." (light streaks), "We made it." (an impact),
+ * then the GT4 logo with "spec-II" (lower case in a wide geometric face, as on the community Spec II cover: Michroma,
+ * SIL OFL, assets/Michroma-Regular.ttf), "Natively recompiled" and the version, then the launcher. Any key, click or pad button skips it. Sound and music are made live with the
  * Web Audio API (no audio files, nothing third-party). Reduced motion keeps a plain fade and no sound.
  * Shown once per version: the version is remembered in localStorage (`gt4recomp.intro.seen`). The animation is pure
  * CSS on classes (no inline styles, CSP); the timing is in css/app.css ("intro" section).
@@ -15,7 +15,7 @@
   var SEEN_KEY = "gt4recomp.intro.seen";
   // The versions that have an intro. Later releases add theirs here.
   var INTRO_VERSIONS = { "1.3.0": true };
-  var DURATION_MS = 7200;
+  var DURATION_MS = 8200;
 
   function reducedMotion() {
     return !!(root.matchMedia && root.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -168,16 +168,23 @@
       });
     }
 
-    whoosh(t0 + 0.0, 1.1, 300, 4200, 0.5);
-    whoosh(t0 + 0.55, 0.9, 500, 6000, 0.35);
-    engine(t0 + 0.2, 2.4);
-    pad(t0 + 1.1, [110.0, 130.81, 164.81], 1.6, 0.16);   // A minor
-    impact(t0 + 2.6);
-    pad(t0 + 2.6, [130.81, 164.81, 196.0, 261.63], 4.0, 0.2); // C major, the lift
-    arpeggio(t0 + 2.75, [523.25, 659.25, 783.99, 1046.5], 0.09);
-    whoosh(t0 + 6.0, 1.0, 3800, 400, 0.3);
-    master.gain.setValueAtTime(0.32, t0 + 6.2);
-    master.gain.linearRampToValueAtTime(0.0001, t0 + 7.2);
+    // Scene 1 (0-1.9 s): "You asked for it." - streaks and a rising engine.
+    whoosh(t0 + 0.0, 1.1, 300, 4200, 0.45);
+    whoosh(t0 + 0.55, 0.9, 500, 6000, 0.3);
+    engine(t0 + 0.1, 1.9);
+    pad(t0 + 0.2, [110.0, 130.81, 164.81], 1.8, 0.12);        // A minor, held back
+    // Scene 2 (1.9-3.7 s): "We made it." - the hit.
+    whoosh(t0 + 1.55, 0.45, 5000, 600, 0.3);
+    impact(t0 + 1.95);
+    pad(t0 + 1.95, [98.0, 123.47, 146.83], 1.8, 0.14);        // G major, tension
+    // Scene 3 (3.7-7.4 s): the logo and spec-II - the lift.
+    whoosh(t0 + 3.4, 0.6, 400, 5200, 0.3);
+    impact(t0 + 4.15);
+    pad(t0 + 3.7, [130.81, 164.81, 196.0, 261.63], 4.2, 0.2); // C major, the arrival
+    arpeggio(t0 + 4.3, [523.25, 659.25, 783.99, 1046.5], 0.09);
+    whoosh(t0 + 7.3, 0.9, 3800, 400, 0.25);
+    master.gain.setValueAtTime(0.32, t0 + 7.4);
+    master.gain.linearRampToValueAtTime(0.0001, t0 + 8.2);
     return ctx;
   }
 
@@ -214,12 +221,14 @@
     });
     var overlay = h("div", { class: "intro" + (reduced ? " is-reduced" : ""), role: "dialog", "aria-label": "Gran Turismo 4 Spec II is now supported" }, [
       h("div", { class: "intro-streaks", "aria-hidden": "true" }, streaks),
+      h("div", { class: "intro-scene intro-scene-1", text: "You asked for it." }),
+      h("div", { class: "intro-scene intro-scene-2", text: "We made it." }),
       h("div", { class: "intro-stage" }, [
         h("img", { class: "intro-logo", src: "assets/logo-gt4-white.png", alt: "Gran Turismo 4" }),
         h("div", { class: "intro-spec" }, letters),
         h("div", { class: "intro-bar", "aria-hidden": "true" }),
-        h("div", { class: "intro-line", text: "Now playable in GT4Recomp" }),
-        h("div", { class: "intro-sub", text: "Gran Turismo 4 Spec II 1.10" })
+        h("div", { class: "intro-line", text: "Natively recompiled" }),
+        h("div", { class: "intro-sub", text: "Now in GT4Recomp 1.3.0" })
       ]),
       h("div", { class: "intro-skip", text: "Press any key to skip" })
     ]);
@@ -232,7 +241,7 @@
     document.addEventListener("keydown", onKey, true);
     document.body.appendChild(overlay);
     active = { overlay: overlay, onKey: onKey, audio: reduced ? null : playSound(), timer: 0 };
-    active.timer = setTimeout(finish, reduced ? 3200 : DURATION_MS);
+    active.timer = setTimeout(finish, reduced ? 4200 : DURATION_MS);
   }
 
   function seenVersion() {
