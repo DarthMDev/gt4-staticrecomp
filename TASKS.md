@@ -623,6 +623,16 @@ Plan (2026-10-22): [docs/SPEC2-PLAN.md](docs/SPEC2-PLAN.md), subtasks S1 patch s
 ELF, S3 target-aware host hooks (v2.00 byte-identical), S4 second-target build, S5 VU0/VU1, S6 IOP network modules,
 S7 first boot, S8 re-targeted hooks, S9 launcher and installer. Worktree `C:\Antigravity\gt4-wt-100-spec2`; the
 owner runs the long parts in OpenCode. The unmodified Public Beta ISO is wanted for S1 (exact diff) and S7a.
+Progress (2026-10-22, S1 done): the owner supplied the Public Beta ISO; the community `.xdelta` decodes it to exactly
+the owner's Spec II ISO (byte identity), so the beta is the confirmed base. The beta's encrypted `CORE.GT4` was
+recovered (Salsa20/20, key `PolyphonyDigital`, CRC-32C trailer) and rebuilt into `private/slice271-spec2-beta-elf`
+(ELF `2e5621ed…`). The diff against Spec II's `SCUS_974.36` gives the complete static patch set: **one word**
+(`0x001001E8`, the trampoline into the plugin) plus the `.plugin` segment at `0x0068A480` (0x2CCC bytes) over
+zero-filled data; every other byte is identical. The injector is mapped by executing its init on an EE-RAM image:
+35 word stores (18 text, 17 data), unconditional (no variants; identical under stack/return-value perturbation).
+Report [docs/SPEC2-PATCHES.md](docs/SPEC2-PATCHES.md), pins `docs/inputs/spec2-patches.json` and
+`docs/inputs/spec2-beta.json`, tools `scripts/spec2_patches.py` and `scripts/spec2_beta_elf.py`,
+`tests/python/test_spec2.py`. Open: S3 build/identity, then S5/S6, S2/S4.
 
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new

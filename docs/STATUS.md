@@ -1,5 +1,17 @@
 # Current Status
 
+## TASK-100 Spec II on branch (2026-10-22, S1 done)
+
+Branch `task/100-spec2`. The owner supplied the Public Beta ISO and it is confirmed as the exact base of Spec II 1.10
+(the community `.xdelta` decodes to the owner's Spec II ISO byte for byte). The beta's game image was rebuilt from its
+encrypted `CORE.GT4` (Salsa20/20, key `PolyphonyDigital`, CRC-32C trailer) into
+`private/slice271-spec2-beta-elf` (ELF `2e5621ed…`), which makes the static patch set measurable: Spec II changes
+**one word** of the beta's own code (`0x001001E8`, a trampoline into the plugin) and adds the `.plugin` segment at
+`0x0068A480` (0x2CCC bytes) over zero-filled data; everything else is byte-identical. All other behaviour changes are
+written at boot by the injector: 35 word stores (18 text, 17 data), unconditional, recovered by executing the init on
+an EE-RAM image. Next: S3 (target-aware host hooks, v2.00 byte-identical), S5/S6, S2/S4. Report:
+[SPEC2-PATCHES](SPEC2-PATCHES.md). Nothing merged.
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

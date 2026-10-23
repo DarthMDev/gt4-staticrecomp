@@ -11,14 +11,19 @@ The work is split into subtasks S1..S9. Each one is a commit series with its own
 
 | Input | Where | Status |
 |---|---|---|
-| Spec II v1.10 ISO | `C:\Antigravity\gt4-staticrecomp\Gran Turismo 4 Spec II v1.10.iso` (owner's, ignored) | available; SHA-256 `6a3484b9...04b2` |
-| GT4 Online Public Beta ISO (unmodified SCUS-97436) | to be supplied by the owner | **wanted** (see S1, S7a) |
+| Spec II v1.10 ISO | `C:\Antigravity\gt4-staticrecomp\Gran Turismo 4 Spec II v1.10.iso` (owner's, ignored) | available; SHA-256 `6a3484b9672c10a92154ecee6faa5bbcfd4ed8cd538d8283e429c3fe6e1704b2`, 3,683,418,112 bytes |
+| GT4 Online Public Beta ISO (unmodified SCUS-97436) | `C:\Antigravity\gt4-staticrecomp\Gran Turismo 4 (USA) (Beta).iso` | available (owner, 2026-10-22); 2,654,109,696 bytes, SHA-256 `1f49b9d8077801188860b62c3efdbc631ba8af7df979373811ce8c60dcc48ebe` |
+| Spec II 1.10 community `.xdelta` | `C:\Antigravity\gt4-staticrecomp\Gran Turismo 4 Spec II (1.10 Full).xdelta` | cross-check done: decoding it with the beta ISO produces exactly the Spec II ISO hash above, so the beta is the confirmed base. Not used for anything else |
 | v2.00 retail ISO and pins | as today | available |
 
 Why the unmodified Public Beta helps: (1) a byte diff of `SCUS_974.36` against the beta ELF gives the exact static
-patch set of Spec II (today only ~27 addresses and 5 `jal` redirections are known from a scan); (2) the beta is a
-cleaner first target (S7a): it proves the second-target pipeline without the plugin injector. Nothing is blocked
-without it: S1 starts from the payload itself, and S7 can go straight to Spec II.
+patch set of Spec II; (2) the beta is a cleaner first target (S7a): it proves the second-target pipeline without the
+plugin injector. Both are now unblocked: the beta's game image is rebuilt from its encrypted `CORE.GT4` (S1) and the
+static patch set is measured. The beta ISO is also the base the S7a boot will use.
+
+Note: the beta is *not* "Spec II minus the injector" at the file level. Its `SCUS_974.36` is a small loader and the
+game lives in `CORE.GT4`; Spec II ships the game itself as one plain ELF. Rebuilding the beta image therefore needs
+the loader's container (Salsa20/20 + CRC-32C + deflate), which `scripts/spec2_beta_elf.py` reproduces.
 
 ## Subtasks
 
@@ -105,3 +110,21 @@ Goal: `SCUS_974.36` (derived) through the donor translator into its own pinned E
 
 ## Progress
 (Each subtask appends: date, what was done, checks, commits, open points.)
+
+### S1 — patch set and plugin injector map: DONE (2026-10-22)
+
+Report: [SPEC2-PATCHES](SPEC2-PATCHES.md). Pins: [spec2-patches](inputs/spec2-patches.json),
+[spec2-beta](inputs/spec2-beta.json). Tools: `scripts/spec2_patches.py`, `scripts/spec2_beta_elf.py`. Tests:
+`tests/python/test_spec2.py` (14 tests).
+
+- The beta is the confirmed base of Spec II 1.10: the community `.xdelta` decodes to the owner's Spec II ISO hash.
+- The beta's encrypted `CORE.GT4` is reproduced (Salsa20/20, key `PolyphonyDigital`, CRC-32C trailer, then the retail
+  v2.00 container) and rebuilt into `private/slice271-spec2-beta-elf/SCUS_974.36.elf` (`2e5621ed…`, entry 0x100008).
+- Static patch set: **one word** (`0x001001E8`, `jal 0x005E3AA8` -> `jal 0x0068A768`) plus the `.plugin` segment at
+  `0x0068A480` (0x2CCC bytes, RWX) over 0x2CCC zero bytes of the beta data image. Every other word is identical.
+- Injector map: the init at `0x0068A480` executes 356 instructions, calls `0x005E3AA8` (the function it replaced) and
+  `0x004E2940`, and makes 35 unconditional word stores (18 text, 17 data). No variants: same table under stack and
+  external-return perturbation; no settings or arguments are read.
+- Open points: the `0x006605F4` flag word has no reader in a linear text scan (Unknown); the two 128-byte container
+  header blobs are opaque (Unknown); purpose labels marked Hypothesis are documentation only.
+- Next: S3 (started), S5, S6, then S2/S4.
