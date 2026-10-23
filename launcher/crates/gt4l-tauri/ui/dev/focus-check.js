@@ -505,40 +505,43 @@
     await wait(400);
   }
 
-  // Two games (TASK-101): the Version arrow under Play and its menu (owner, 2026-10-23), Play or Install, Settings > Games
-  // and the game on the Saves title. The mock starts with Gran Turismo 4 installed and Spec II not (?games=gt4).
+  // Two games (TASK-101): the version switch under Play (the name between two arrows, an endless loop; owner, 2026-10-23),
+  // Play or Install, Settings > Games and the game on the Saves title. The mock starts with Gran Turismo 4 installed and
+  // Spec II not (?games=gt4).
   async function gamesChecks() {
     await setHash("#/home");
     await wait(500);
-    var toggle = document.querySelector(".version-toggle");
-    var menu = document.querySelector(".version-menu");
-    var playButton = document.querySelector(".play:not(.play-square)");
-    check("Home has the Version arrow, closed, naming the current version", !!toggle && !!menu && menu.hidden &&
-      document.querySelector(".version-name").textContent === "Normal", toggle ? document.querySelector(".version-name").textContent : "none");
-    check("Gran Turismo 4 is selected first and shows Play", playButton.textContent === "Play", playButton ? playButton.textContent : "no button");
+    var arrows = document.querySelectorAll(".version-arrow");
+    // The name that is shown (a leaving name may still be sliding out beside it).
+    var currentName = function () {
+      var names = document.querySelectorAll(".version-name:not(.is-leaving)");
+      return names[names.length - 1];
+    };
+    var nameText = function () {
+      var names = document.querySelectorAll(".version-name:not(.is-leaving)");
+      return names.length ? names[names.length - 1].textContent : "";
+    };
+    var playText = function () { return document.querySelector(".play:not(.play-square)").textContent; };
+    check("Home has the version switch: two arrows around Normal", arrows.length === 2 && nameText() === "Normal",
+      arrows.length + " " + nameText());
+    check("Gran Turismo 4 is selected first and shows Play", playText() === "Play", playText());
     check("the logo is the Gran Turismo 4 logo, with no Spec II line", !document.querySelector(".home-logo-spec2") &&
       !!document.querySelector(".home-logo"), "");
-    toggle.click();
-    await wait(200);
-    var options = document.querySelectorAll(".version-option");
-    check("the arrow opens the version menu with Normal and Spec II", !menu.hidden && options.length === 2 &&
-      !document.querySelector(".version-menu-title") &&
-      options[0].textContent.indexOf("Normal") === 0 && options[1].textContent.indexOf("Spec II") === 0, String(options.length));
-    check("a version that is not installed is marked in the menu", options[1].classList.contains("not-installed"), "");
-    options[1].click();
+    arrows[1].click();
     await wait(400);
-    playButton = document.querySelector(".play:not(.play-square)");
-    check("choosing Spec II closes the menu, shows Install and names Spec II", menu.hidden && playButton.textContent === "Install" &&
-      document.querySelector(".version-name").textContent === "Spec II", playButton.textContent);
-    toggle.click();
-    await wait(200);
-    document.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await wait(100);
-    check("a click elsewhere closes the menu", menu.hidden, "");
+    check("the right arrow switches to Spec II and shows Install (no other not-installed mark)", nameText() === "Spec II" &&
+      playText() === "Install" && !document.querySelector(".version-note"), nameText() + " " + playText());
+    check("the new name came in from the right", currentName().classList.contains("enter-from-right"), "");
+    arrows[1].click();
+    await wait(400);
+    check("the loop is endless: right again comes back to Normal", nameText() === "Normal" && playText() === "Play", nameText());
+    arrows[0].click();
+    await wait(400);
+    check("the left arrow switches too, sliding in from the left", nameText() === "Spec II" &&
+      currentName().classList.contains("enter-from-left"), nameText());
     GT4.hooks.tabs(-1);
     await wait(400);
-    check("LB / RB switches back to Normal and Play", document.querySelector(".play:not(.play-square)").textContent === "Play" &&
-      document.querySelector(".version-name").textContent === "Normal", "");
+    check("LB / RB switches back to Normal and Play", playText() === "Play" && nameText() === "Normal", nameText());
     check("the pad hints name the game switch", /LB \/ RB/.test(document.getElementById("hints").textContent), document.getElementById("hints").textContent);
 
     await setHash("#/settings/games");

@@ -16,7 +16,7 @@ SCUS-97328) and Gran Turismo 4 Spec II 1.10 (SCUS-97436 lineage, TASK-100). This
 | First install | The player picks an ISO; the launcher recognises the game from it and installs that game. |
 | Selected game | The game installed first is selected at the start; after that, the game played last. |
 | Accepted discs | Spec II 1.10 only for now, plus variants of 1.10 that keep the same executable (for example the Brazilian Portuguese translation of 1.10, which only replaces the Spanish language data). |
-| Logo and selector | The home screen keeps the Gran Turismo 4 logo for both games (owner, 2026-10-23, after the first mock). The game is chosen with a small arrow under Play that shows the current version's name and opens a "Version" menu: Normal, Spec II (a version that is not installed is marked). |
+| Logo and selector | The home screen keeps the Gran Turismo 4 logo for both games (owner, 2026-10-23, after the first mock). Under Play, the current version's name (Normal or Spec II) between a left and a right arrow; an arrow switches to the next version in an endless loop, the name sliding in from that side (a version that is not installed is marked). |
 | Shortcuts | One desktop and Start-menu shortcut, always to the launcher (as today). |
 
 ## User flows
@@ -27,9 +27,8 @@ SCUS-97328) and Gran Turismo 4 Spec II 1.10 (SCUS-97436 lineage, TASK-100). This
    - Anything else → the existing "This disc is not supported" message, which names what it found (serial, title).
 
    The installed game becomes the selected game.
-2. **Home screen.** Under Play, the current version's name with a small arrow ("Normal ⌄" / "Spec II ⌄"); the arrow
-   opens the "Version" menu (Normal, Spec II), keyboard and gamepad friendly (LB / RB switch too). The logo does not
-   change.
+2. **Home screen.** Under Play, "‹ Normal ›" / "‹ Spec II ›": the arrows switch versions in an endless loop with a
+   short slide, keyboard and gamepad friendly (LB / RB switch too). The logo does not change.
    - Installed game: **Play**.
    - Game not installed: **Install** in place of Play. It opens the ISO picker and runs the normal setup for that game.
 3. **Wrong disc for the chosen game** (for example the v2.00 ISO under "Install Spec II"): the launcher says which

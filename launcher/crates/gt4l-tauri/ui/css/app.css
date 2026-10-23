@@ -266,35 +266,32 @@ body.is-home.input-keys #hints { display: none; }
 .home.is-running .running { display: flex; }
 
 /* ---------- games (TASK-101) ---------- */
-/* The version arrow under Play (owner, 2026-10-23): the current version's name and a small chevron; its menu (Normal,
-   Spec II) is a minimal list that opens downwards. Keyboard and pad focus use the common ring. */
-.version-picker { position: relative; margin-top: 10px; display: flex; justify-content: center; align-self: flex-start; width: 240px; }
-.version-toggle {
-  height: 26px; padding: 0 6px 0 10px; display: flex; align-items: center; gap: 6px; border-radius: 3px;
-  font: 500 11px var(--label); letter-spacing: 0.14em; text-transform: uppercase;
-  background: transparent; color: var(--silver); border: 1px solid transparent;
-  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+/* The version switch under Play (owner, 2026-10-23): the version's name between two small arrows; an arrow moves to the
+   next version (endless loop) and the name slides in from that side. Keyboard and pad focus use the common ring. */
+.version-picker {
+  margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 4px;
+  align-self: flex-start; width: 240px;
 }
-.version-toggle:hover, .version-toggle:focus-visible, .version-toggle[aria-expanded="true"] { color: var(--white); }
-.version-toggle svg { transition: transform 150ms ease; }
-.version-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
-.version-toggle:disabled { opacity: 0.3; }
-.version-menu {
-  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%); z-index: 5;
-  min-width: 140px; padding: 3px; border-radius: 3px;
-  background: rgba(10, 12, 20, 0.85); border: 1px solid rgba(255, 255, 255, 0.18);
+.version-arrow {
+  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 3px;
+  background: transparent; color: var(--dim); border: 1px solid transparent;
+  transition: color 150ms ease, border-color 150ms ease;
 }
-.version-menu[hidden] { display: none; }
-.version-option {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%; height: 28px;
-  padding: 0 10px; border-radius: 2px; border: 0; background: transparent; color: var(--silver);
-  font: 500 11px var(--label); letter-spacing: 0.14em; text-transform: uppercase; text-align: left; align-items: center;
+.version-arrow:hover, .version-arrow:focus-visible { color: var(--white); border-color: rgba(255, 255, 255, 0.3); }
+.version-arrow:disabled { opacity: 0.3; }
+.version-window { position: relative; width: 150px; height: 18px; overflow: hidden; }
+.version-name {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; white-space: nowrap;
+  font: 500 12px var(--label); letter-spacing: 0.16em; text-transform: uppercase; color: var(--silver);
 }
-.version-option small { font: 400 10px var(--label); letter-spacing: 0.04em; color: var(--dim); text-transform: none; }
-.version-option:hover, .version-option:focus-visible { color: var(--white); background: rgba(255, 255, 255, 0.08); }
-.version-option.is-selected { color: var(--white); }
-.version-option.is-selected::after { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--white); }
-.version-option.is-selected small { display: none; }
+.version-name.enter-from-right { animation: version-enter-right 320ms cubic-bezier(0.25, 0.8, 0.25, 1) both; }
+.version-name.enter-from-left { animation: version-enter-left 320ms cubic-bezier(0.25, 0.8, 0.25, 1) both; }
+.version-name.leave-to-left { animation: version-leave-left 320ms cubic-bezier(0.25, 0.8, 0.25, 1) both; }
+.version-name.leave-to-right { animation: version-leave-right 320ms cubic-bezier(0.25, 0.8, 0.25, 1) both; }
+@keyframes version-enter-right { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes version-enter-left { from { transform: translateX(-100%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes version-leave-left { from { transform: none; opacity: 1; } to { transform: translateX(-100%); opacity: 0; } }
+@keyframes version-leave-right { from { transform: none; opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
 .play.is-install { letter-spacing: 0.2em; }
 /* Settings > Games, and the game name on the Saves and Replays titles. */
 .game-row .k .val { display: block; }
@@ -751,8 +748,6 @@ body.input-pad .info:focus .tip { display: block; }
   .setup h1 { font-size: 26px; line-height: 32px; margin-bottom: 4px; }
   .sub { margin-bottom: 12px; }
   .home-bottom { bottom: 40px; left: 48px; }
-  /* Too little room under the buttons in a very short window: the version menu opens upwards there. */
-  .version-menu { top: auto; bottom: calc(100% + 4px); }
   .home-logo { width: 220px; margin-bottom: 18px; }
   .home-version { bottom: 12px; }
   .lib-head h1 { font-size: 24px; }
