@@ -126,6 +126,9 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑102 | Launcher language: automatic en-US / pt-BR with a General > Language setting (locale files, Rust messages, release notes) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑103 | Graphics API choice for GSdx: Vulkan (recommended, default), Direct3D 12 (recommended), Direct3D 11 (older PCs), OpenGL later; hardware backends only, in Settings > Graphics (locale files, same ids kept apart from the engine Renderer) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner in-game test pending · release 1.3.0 |
 | TASK‑104 | Launcher saves: crash-proof PCSX2 card import (issue #86: superblock layout for 8 to 64 MB, bounded directory walk, import under a panic guard), New save, Export of the active save, Rename (display name, 40 characters) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
+| TASK‑105 | Integrated GPUs: 1x default and a plain GPU-lost message (issue #89) | 🔧 Implemented on `task/101-multi-game` (2026-10-23), owner test pending · release 1.3.0 |
+| TASK‑106 | CHD disc images: accept `.chd` at setup and decompress to the launcher's own ISO image (issue #90) | 📋 Planned (owner, 2026-10-23) · release 1.3.1 |
+| TASK‑107 | Automatic graphics setup per GPU: automatic Graphics API, GPU generation table, step down after a lost GPU, game without Vulkan when GSdx draws, OpenGL in gt4-gs | 📋 Planned (owner, 2026-10-23) · release 1.3.1 |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -605,35 +608,6 @@ the new pins (a slice264 pin set) need an owner decision on the release path. CT
   CTest 40/40; headless menus with `--renderer donor` and `pcsx2` both run (exit 0). The launcher drops CoreGS 1.1 in
   1.2.3 (TASK-096); the fix stays as protection for runs without the launcher and the built-in restart path.
 
-### TASK-103 — Graphics API choice for GSdx (Vulkan, Direct3D 12, Direct3D 11)
-Planned (owner, 2026-10-23), after TASK-102 (the i18n work touches the same Settings pages). Some players ask for other
-graphics APIs, mostly for older PCs. A new option in the launcher's graphics settings, "Graphics API", default Vulkan,
-with the other hardware backends of the GSdx build; software rendering is never offered.
-Labels (owner, 2026-10-23): Vulkan and Direct3D 12 are the recommended choices; OpenGL and Direct3D 11 are marked
-for older PCs. The UI shows that grouping (for example "Recommended" / "Older PCs").
-
-Research (2026-10-23, read-only, PCSX2-tainted Haiku; gt4recomp-gs at 1.2.1, binary 1.2.0):
-- Confirmed: the release gt4-gs.exe already contains Direct3D 11, Direct3D 12 and OpenGL (imports d3d11, d3d12,
-  dxgi, opengl32; Vulkan is loaded at run time). No fork build flag change is needed.
-- Confirmed: the backend is chosen by `[EmuCore/GS] Renderer` in gt4-gs.ini (DX11 = 3, OpenGL = 12, Vulkan = 14,
-  DX12 = 15). In stream mode the command-line `-renderer` is overridden; the ini key works. The settings allow-list
-  accepts 14, 15 and 3 only; `docs/launcher/gs-settings.toml` already has the row `renderer` (choices
-  vulkan/d3d12/d3d11, default vulkan, written always) but does not offer it: the GT4 build is checked on Vulkan only.
-- Confirmed on this PC (RX 9060 XT): D3D11 and D3D12 create their device in a headless replay; no frame was rendered
-  (the offline replay stops after VM init), so no image has been checked on them yet.
-- High confidence: the GT4 additions (display crop, aspect fill, texture replacement, readbacks) are generic code;
-  the deferred swap chain acquire is Vulkan-only (a no-op elsewhere). D3D11 below feature level 11_0 runs degraded.
-- OpenGL (GL 4.1 minimum) needs the allow-list entry 12 in the fork's `3rdparty/gt4recomp-gs-stream` (with
-  SHA256SUMS) and in gs-settings.toml: left for a later step.
-
-Work: offer the row in the Settings UI (the engine setting is also called "renderer" there: keep the ids apart),
-update `gt4l-core/src/gs_table.rs` tests (they assert `Renderer = 14`) and `scripts/gs_settings.py` goldens, translate
-the labels (TASK-102 locale files), default Vulkan, and an existing install keeps Vulkan.
-
-Acceptance: cargo and Python tests; owner in-game test on Direct3D 11 and Direct3D 12 against Vulkan (Nordschleife
-TT 480p, night race, menus, ultrawide crop and fill, texture pack, upscaling, flares/readbacks). A backend that fails
-the owner test is not offered.
-
 ### TASK-101 — Multi-game launcher (Gran Turismo 4 and Spec II)
 Planned (owner, 2026-10-23) for release 1.3.0, the product side of TASK-100 (its S9). Plan and owner decisions:
 [docs/MULTI-GAME-LAUNCHER-PLAN.md](docs/MULTI-GAME-LAUNCHER-PLAN.md). One executable per game, one shared settings set,
@@ -714,6 +688,39 @@ Graphics API (Vulkan) and gt4-gs. Checks: `cargo test --workspace` (launcher) 48
 165/165, nav-test 150/150. Open: the owner test on the Intel UHD machine (1x default and the message are not yet seen in-game);
 the exact device-lost line in a real `game.log` is not confirmed (the markers come from the GSdx dialog text); a multi-GPU
 laptop keeps the discrete default by design.
+
+### TASK-106 — CHD disc images (issue #90)
+Planned (owner, 2026-10-23) for release 1.3.1. Issue moesuito/gt4-staticrecomp#90 asks for CHD support. The launcher
+already writes its own ISO image of the player's disc at setup, so the game never reads the player's file: accept `.chd`
+(and keep `.iso`) in the disc picker, decompress it to that image with a permissively licensed CHD reader (MIT or
+BSD; check the licence before use; never GPL in the launcher), then run the normal identification (serial and
+executable hash, both games and their variants). Show progress and free-space needs (a full image is about 3.7 GB for
+Spec II). Acceptance: synthetic CHD fixtures in tests (no game data), a CD and a DVD CHD, a damaged CHD refused with a
+plain message, and an owner test with a real CHD of each game.
+
+### TASK-107 — Automatic graphics setup per GPU
+Planned (owner, 2026-10-23) for release 1.3.1, after issue #89 and TASK-105. Owner design:
+1. **Game without Vulkan (check first).** Today `gt4vulkan.exe` itself requires Vulkan 1.2 (`native/native_vulkan.cpp`,
+   `system_check.rs`), so a GPU without Vulkan cannot play even when GSdx draws with Direct3D or OpenGL. Find out
+   whether the game needs its own Vulkan device when `GT4_RENDERER=pcsx2` and, if not, make that path Vulkan-free and
+   relax the launcher check for it. Everything below depends on this.
+2. **Automatic Graphics API.** Vulkan when the GPU reports Vulkan 1.2 or newer with what GSdx needs; otherwise OpenGL
+   on NVIDIA and Direct3D 11 on Intel and AMD (OpenGL tends to stall on non-NVIDIA GPUs; OpenGL has the same blending
+   precision as Vulkan and Direct3D 12; Direct3D 11 is for weak and old hardware only). A player's own choice always
+   wins; the automatic choice is shown as such.
+3. **OpenGL in gt4-gs.** Allow `Renderer = 12` in a new gt4-gs release (allow-list and SHA256SUMS in the fork) and in
+   `docs/launcher/gs-settings.toml`; offer OpenGL in the Graphics API list ("older PCs" group) after an owner test.
+4. **GPU generation table.** A small table we maintain ourselves (no third-party database copied; check the licence of
+   any source used for reference): vendor ID plus PCI device-ID ranges per GPU generation (for example Intel Gen9, Gen11,
+   Xe; AMD GCN, RDNA1-3; NVIDIA Maxwell to Ada), so every variant of a family (RX 6600, 6600M, 6600 XT, 6650 XT) falls
+   in the right range. Each generation gives a starting profile (internal scale, API). An unknown GPU uses the driver's
+   own facts (integrated or discrete, video memory, Vulkan or Direct3D level) and else the default.
+5. **Step down after a lost GPU.** When a session ends with a GPU-lost line (TASK-105), the next start uses one level
+   less (lower internal scale, then Direct3D 11), told to the player, never below 1x; a successful session keeps it.
+6. **Auto render scale token.** Store the untouched Render scale as `auto` instead of 100 (settings migration), so an
+   automatic choice and a chosen 100% are told apart (TASK-105 limit).
+Acceptance: pure unit tests for every rule (tables, fallbacks, step-down), the migration test, and owner tests on this PC
+plus at least one integrated-GPU machine.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
