@@ -187,12 +187,30 @@ github.com/Kaezzey/gt4-staticrecomp is read-only.
     - no pt-BR value is left in English, except names and terms kept on purpose (Saves, Replays, Start, Select);
     - the focus checks pass in both languages (`dev/focus-check.html?lang=en-US` and `?lang=pt-BR`);
     - both launcher notes exist for the version, with the same bullets.
-  - Every minimally stable build is published as a GitHub pre-release `vX.Y.Z-rcN` (never Latest, never the final
-    tag; field launchers ignore pre-releases), so the owner can test it on other PCs.
-  - The owner tests the installer before the final release.
-  - Then the PR, the merge, the tag `vX.Y.Z` and the GitHub release: the full notes as the body, the installer and
-    `SHA256SUMS` as assets.
-  - Update the README badge and download name, and STATUS.
+  - Then the release channels below decide what is published and when.
+
+### Release channels (owner, 2026-10-23)
+
+- **Stable channel:** final releases, tag `vX.Y.Z`, marked Latest on GitHub. Launchers on Stable (the default) only
+  see these.
+- **Beta channel:** release candidates, GitHub **pre-releases** tagged `vX.Y.Z-rcN` (rc1, rc2, …). The build carries
+  its label (`build-release.ps1 -Label rcN`, makensis `/DLABEL=rcN`, `make_portable_zip.py --version X.Y.Z-rcN`), so
+  the launcher reports `X.Y.Z-rcN` and the assets are named `GT4Recomp-Setup-X.Y.Z-rcN.exe` and
+  `GT4Recomp-X.Y.Z-rcN-portable.zip`. Never reuse the final tag for an rc.
+- **The launcher** (Settings > General, from 1.3.0-rc5) offers Stable or Beta and a version list read from GitHub:
+  Beta lists rcs by date (plus a newer stable on top), Stable lists finals by SemVer. Drafts are never listed or
+  offered (the public API does not even return them), and versions older than the picker minimum are hidden. Going to
+  an older version shows a strong downgrade warning; a newer version, from either channel, is always plain.
+- **The agent never publishes on its own:**
+  - **Release candidate:** build it, run the automated checks and the language check, then hand the installer and
+    portable zip from `private/` to the owner for a basic local test. Publish the `vX.Y.Z-rcN` pre-release only after
+    the owner says so.
+  - **Final release:** only when the owner says, in words, that a given rc is stable and should be rebuilt as final.
+    Then rebuild without a label, publish `vX.Y.Z` as Latest with the full notes as the body, the installer, the
+    portable zip and `SHA256SUMS`, open and merge the PR (owner approval), update the README badge and download name,
+    and STATUS.
+  - **Withdrawn rcs:** an rc replaced by a newer one is turned into a **draft** (`gh release edit <tag> --draft=true`)
+    when the owner asks, so nobody downloads it and no launcher sees it.
 
 ## Testing the game
 
