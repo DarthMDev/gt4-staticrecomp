@@ -136,6 +136,11 @@ constexpr std::uint32_t kGpuMaxScale = 8;  // GT4_HW_SCALE range (06.1)
 // kGpuShadowRows - 1) at scale with its 1x words; the scaled compose reads it as source kGpuColourSlots + shadow
 // wherever the GLM still holds the saved word (per pixel), and the GLM at 1x elsewhere.
 constexpr std::uint32_t kGpuDisplayShadows = 2;
+// IN-381: the deinterlace images of the scaled presentation hold up to kGpuDeinterlaceWidth x kGpuDeinterlaceRows
+// native pixels (NTSC and PAL 480i/576i frames); a larger interlaced frame keeps the 1x CPU presentation.
+constexpr std::uint32_t kGpuDeinterlaceWidth = 640;
+constexpr std::uint32_t kGpuDeinterlaceRows = 512;
+constexpr std::uint32_t kGpuDeinterlaceHistory = 4;
 constexpr std::int32_t kGpuShadowRows = 512;
 
 // Limits of one Execute() call (the caller splits larger batches).
@@ -171,10 +176,16 @@ struct GpuStats {
     std::uint64_t fxaaFrames = 0;           // IN-376: presentation frames passed through FXAA
     std::uint64_t scaledShadowSaves = 0;    // IN-377: display shadows saved from a dropped slot's scaled image
     std::uint64_t toneCarries = 0;          // IN-379: scaled images rebuilt after a tone-curve sequence
+    std::uint64_t scaledDeinterlaces = 0;   // IN-381: scaled presentation frames deinterlaced on the GPU
+    std::uint64_t scaledDrawsPaused = 0;    // IN-382: scaled draws not recorded while the scaled work is paused
+    std::uint64_t scaledRefreshesPaused = 0;
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
     // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.
-    std::uint64_t gpuNs[6] = {};    // pass, decode, clut, swizzle (both directions), upload, download
+    // pass (1x draws), decode, clut, swizzle (both directions), upload, download (readbacks and the presentation
+    // compute: compose, tone carry, deinterlace, FXAA), scaled (the M12 scaled passes), refresh (scaled-image refreshes
+    // from 1x words).
+    std::uint64_t gpuNs[8] = {};
     std::uint64_t gpuBusyNs = 0;
 };
 
@@ -262,6 +273,29 @@ public:
                         std::string &error);
     bool CarryTone(std::uint32_t slot, std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1,
                    std::string &error);
+    // IN-381 (13.4 at scale): deinterlaces the top-left width x height pixels of the display image in place, with
+    // the persistent history the caller tracks (hw_deinterlace_scaled.comp). `mode`: 2 weave, 3 blend, 4 bob,
+    // 5 adaptive. The display image is first copied into history slot `current`. History indices are
+    // 0..kGpuDeinterlaceHistory-1, or kGpuDeinterlaceHistory for none.
+    struct DeinterlaceStep {
+        std::uint32_t mode = 5;
+        std::uint32_t width = 0, height = 0;
+        std::uint32_t rowParity = 0;
+        std::uint32_t field = 0;
+        std::uint32_t current = 0;
+        std::uint32_t previousSame = kGpuDeinterlaceHistory;
+        std::uint32_t previousOther = kGpuDeinterlaceHistory;
+        bool haveOutput = false;
+        bool initWoven = false;
+        std::uint32_t thresholdPermille = 80;
+    };
+    bool DeinterlaceScaled(const DeinterlaceStep &step, std::string &error);
+    // IN-382: while paused, draws are not repeated into the scaled images and loads do not refresh them (the caller
+    // rebuilds or refreshes every scaled image the paused work touched). RefreshScaledSlot refreshes a slot's
+    // scaled image over a native rectangle (inclusive) from its 1x words.
+    void PauseScaled(bool paused);
+    bool RefreshScaledSlot(bool depthSlot, std::uint32_t slot, std::int32_t x0, std::int32_t y0, std::int32_t x1,
+                           std::int32_t y1, std::string &error);
     // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, max(kGpuSurface,
     // kGpuScaledExtent * scale) square, GENERAL layout).
     // As an opaque handle (the VkImage value): this header carries no Vulkan types.

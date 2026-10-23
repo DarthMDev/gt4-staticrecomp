@@ -16,7 +16,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
 | M6 output | Done except owner test 1: display library, presentation interfaces (IN-331) with `end_frame`/`present_slot`, HWR frame dumps (IN-332; `vram` = reference image, `scanout` = presentation image, IN-338), replay tool (IN-333/IN-334), odd-frame draw loss fixed (IN-335), field offset and deinterlace in the presentation (IN-338) with the adaptive rule corrected (IN-337). Open: IN-336 (triangle precision, inside the gate) | local slice229: `hw_presentation_field_phase`, `display_hw_deint_adaptive`; 42/42 `vram` dumps inside the 2D gate and byte-identical to slice228; presentation replay of the menu capture bob-free on static screens |
 | M7 cache | In progress: resident target slots with LRU (IN-340/IN-344), decoded-texture cache (IN-341), deferred submission (IN-342), textures from targets (IN-346), CPU small sprites (IN-348), GPU CLUT (IN-349), GLM-owned pages instead of write-backs for evictions, overlaps and uploads (IN-350/IN-351); gated by `hw_cache_equals_writeback` and per-frame memory hashes of the menu, car and race captures (identical to the write-back mode). Open: target lists per chapter 05, display from targets, preload, dirty lists, clears, GPU moves | local slice237: race replay 1 write-back per frame (display) instead of 12; headless race 65 -> 38 ms per vsync |
-| M12 upscaling | Owner test 6 failed (half the race frames shown at 1x; ultrawide squeezed); both fixed in local slice270 (IN-377 display shadows, IN-378 display-aspect fill); owner test 7 still 1x (GT4 tone curve and full-screen copies at 1x), fixed in local slice271 (IN-379, IN-380), in owner test 8. 2x-8x through a presentation-only scaled copy of every target (IN-371..IN-375), FXAA (IN-376, M15 part); 480i menus still 1x | `hw_scale_exact`, `hw_scale_display_shadow`, `hw_scale_fullscreen_passes`, `hw_postfx_fxaa`, `hw_smoke_window_scaled`, `hw_smoke_window_aspect_*`, `hw_present_rect`, scale-3 block of `hw_cache_equals_writeback`; replay `--check-presented`; memory hashes identical at 6x |
+| M12 upscaling | Owner test 6 failed (half the race frames shown at 1x; ultrawide squeezed); both fixed in local slice270 (IN-377 display shadows, IN-378 display-aspect fill); owner test 7 still 1x (GT4 tone curve and full-screen copies at 1x), fixed in local slice271 (IN-379, IN-380); owner test 8 passed (races); 480i menus at scale in local slice272 (IN-381), in owner test 9. 2x-8x through a presentation-only scaled copy of every target (IN-371..IN-375), FXAA (IN-376, M15 part); 480i menus still 1x | `hw_scale_exact`, `hw_scale_display_shadow`, `hw_scale_fullscreen_passes`, `hw_scale_interlaced_present`, `hw_postfx_fxaa`, `hw_smoke_window_scaled`, `hw_smoke_window_aspect_*`, `hw_present_rect`, scale-3 block of `hw_cache_equals_writeback`; replay `--check-presented`; memory hashes identical at 6x |
 | M8, M14, M15 (rest), M17, M19 | M8 flare readback done earlier (IN-357..IN-359); others not started | |
 | M9 batching | In progress: one draw per chunk of triangles with an ordered pixel interlock (IN-345); runs of chunks in one render pass with texture preparation hoisted into a texel atlas (IN-352). Open: CLUT loads and GLM operations still cost two barriers each; double-buffered submission (CPU and GPU overlap) | `hw_cache_equals_writeback` and the GPU fixtures in both interlock modes; race barriers 9,500 -> 3,230 per frame |
 | M10 GLM | Started: GLM, decode, swizzle, unswizzle, CLUT, merge and upload kernels (IN-347, IN-349..IN-351) | `hw_glm_decode`, `hw_glm_swizzle`, `hw_glm_unswizzle`, `hw_glm_clut`, `hw_glm_upload_merge`, `hw_glm_host_upload` |
@@ -624,3 +624,70 @@ Still over the owner's 6 ms GS-worker budget in the race. Largest remaining CPU 
   slice235; scaled memory equal to 1x at 2x/4x/6x; default renderer 42/42 = slice214.
 - Candidate for owner test 8: `O:\gt4recomp-scratch\coregs2-candidate-271` (`gt4vulkan.exe` sha256
   `8f1c4a66bb274ee37ba0c3ddc01aeee3a725361e904737b0a7f162870218db29`), `build\hwr-play-scale.ps1 -Scale 1|2|4|6 [-AA]`.
+
+## 2026-10-23 owner test 8 passed; 480i menus at scale, scene sweep, cost and parity plan (local slice272) - Claude
+
+- Owner test 8 (candidate 271, 6x + AA): race at real resolution, approved; the beta minimum (upscaling and AA) is met
+  in races. New owner requirement: CoreGS 2.0 must reach at least GSdx's performance at the same scale (owner reading
+  at 6x: gt4-gs 37% GPU load, 1,357 MHz, ~41 W; candidate 271 ~105-120 W at ~3,300 MHz).
+- IN-381, 480i menus at scale: GPU compose of interlaced frames at scale with the field offset and a GPU 13.4
+  deinterlacer in native rows (`hw_deinterlace_scaled.comp`). Fixture `hw_scale_interlaced_present` (exact against
+  the CPU 1x deinterlacer for auto/weave/bob/blend at 2x and 4x; sub-pixel detail from a drawn sprite). Menu capture
+  `--check-presented` (detail now measured against each frame's own 1x edges): candidate 271 behaviour
+  (`--no-gpu-compose`) 922 low-detail frames of 922 with edges; slice272 323 at 2x and 163 at 6x. The remaining
+  low-detail menu frames are the intro logo movie (frames ~300-650; Hypothesis: IPU video uploaded as 1x pixels, 1x by
+  nature) and menu fades (~30 frames per transition; Hypothesis: 09.4 variant B alpha stashes, not carried yet).
+- Scene sweep (headless): 480p race (El Capitan, launcher settings) and the night schedule at 2x through the game,
+  plus the five captures through replay. Findings:
+  - the old 480i captures (`race-9000`, `car-6600`, `night-10000`) present at 1x: their display reads 448 rows of a
+    224-row field buffer, so no scaled source covers the read rectangle (480i races only; the launcher forces 480p);
+  - car-select and track-select menus in the live sweep: low detail, combing on the rotating 3D car (Hypothesis: the
+    same 224-row field-buffer layout or variant B fades);
+  - not reachable headless (owner test 9): rain, rally/dirt, replays, photo mode, split screen, in-car mirror view.
+- IN-382 (safe win): no scaled draws or refreshes while GT4's tone sequence runs (its scaled result is rebuilt by the
+  carry): presented frames byte-identical, memory unchanged, scaled passes 348 -> 61 per race frame.
+- Timing categories split (12.8): `pass` (1x draws), `scaled`, `refresh`, plus decode, clut, swizzle, upload and
+  `download` (readbacks and the presentation compute).
+- Gates (local slice272 in the slice270 tree): CTest 243/243 with and without interlock; memory hashes identical on all
+  five captures (night `fifo_hash=3a2fe617a174e7e7`); menu dumps 42/42 = slice228; race 42/42 = slice235; default
+  42/42 = slice214; race `--check-presented` 0 low-detail frames at 2x/4x/6x, memory equal to 1x; menu memory equal to
+  1x at 2x and 6x.
+- Candidate for owner test 9: `O:\gt4recomp-scratch\coregs2-candidate-272` (`gt4vulkan.exe` sha256
+  `6a0506e174944bcac7a830d422d90fb6615518f90c249f540534aba142145c4d`).
+
+### Clean measurement (2026-10-23, no game, GS process or build running; checked before and after every run)
+
+GPU ms per frame, replay with timestamps (timestamps add a little), before -> after IN-382:
+
+| Capture | Scale | Busy | 1x pass | Scaled pass | Refresh | Decode + CLUT + swizzle + upload | Presentation compute |
+|---|---|---|---|---|---|---|---|
+| race 480p | 1x | 6.6 -> 7.1 | 3.0 -> 3.4 | - | - | 3.6 -> 3.7 | 0.0 |
+| race 480p | 2x | 10.0 -> 8.7 | 3.3 | 2.8 -> 1.5 | 0.14 -> 0.12 | 3.6 -> 3.5 | 0.26 |
+| race 480p | 4x | 14.0 -> 11.9 | 3.6 -> 3.5 | 5.8 -> 4.2 | 0.43 -> 0.35 | 3.7 -> 3.5 | 0.44 |
+| race 480p | 6x | 18.3 -> 17.1 | 3.6 -> 3.7 | 9.9 -> 8.5 | 0.78 -> 0.72 | 3.5 -> 3.5 | 0.59 -> 0.67 |
+| night (old 480i) | 6x | 17.1 -> 16.4 | 3.5 | 9.6 -> 9.0 | 0.81 -> 0.83 | 2.8 | 0.3 |
+
+CPU per frame in the game (headless, launcher settings, last 600-VBlank interval of the race), after IN-382: GS thread
+10.6-11.3 ms at every scale (before 12.0-13.5; run-to-run noise about +-1 ms), process 27-28 core-ms (before 29-34);
+render passes per frame 344 (1x) and 403 at scale (before 690); barriers about 1,640 (race) and 1,990 (night).
+
+Where it stands: 6x is at 17.1 ms GPU busy against the 16.7 ms frame budget (over it with timestamps, borderline
+without); 2x and 4x are inside. The GS thread is at about 11 ms against its 6 ms budget.
+
+### Parity plan with GSdx (ranked by expected gain)
+
+1. Fast scaled raster: the scaled pass is half of the 6x frame (8.5 ms). It runs the exact pixel pipeline with fragment
+   interlock and storage-image read-modify-write for every one of the s x s samples. Draw the scaled copy into normal
+   attachments with fixed-function blending and depth where the GS state maps to them, keeping the interlocked path for
+   the rest. Expected: scaled pass 3-4x cheaper (8.5 -> about 2-3 ms at 6x). Rule: the 1x authority is untouched; it
+   relaxes only the bit-exact 8-bit arithmetic of the presentation-only scaled image (CoreGS 2.0 keeps its 1x gates;
+   the 06.3 scaled fixtures would get a tolerance). Owner decision needed.
+2. Tone-sequence HLE at 1x (spec 09.4 policy 2): one exact compute pass instead of about 1,540 batches and 280 runs per
+   frame. Expected: GS thread about 11 -> 4-6 ms (the sequence is about 80% of the frame's batches), 1x pass, decode,
+   CLUT and barriers down by most of their tone share (about 2-3 ms GPU). Must stay memory-exact (temporary page, CLUT
+   state), verified with `GT4_HW_VERIFY_SHUFFLE` and the memory gates. No rule relaxed.
+3. Fewer render passes and barriers: with 2 done only about 40 runs per frame remain; merge consecutive runs (larger
+   texel atlas ring) for about 0.5-1 ms.
+4. Cheaper refreshes (0.7 ms at 6x): refresh only what a presentation or scaled texture reads.
+5. Skipping the 1x redraw where nothing reads the words would save the 1x pass (3.6 ms) but relaxes the 1x-authority
+   rule (readbacks would come from downsampled scaled images). Not recommended.

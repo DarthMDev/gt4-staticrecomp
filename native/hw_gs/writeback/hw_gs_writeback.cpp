@@ -1546,6 +1546,7 @@ public:
 
     void DropAll() {
         toneRun_.active = false;  // IN-379: a reset or auxiliary frame ends a tone sequence without a carry
+        gpu_.PauseScaled(false);
         for (ResidentSlot& slot : slots_) Drop(slot, false);  // resets and auxiliary frames keep no shadow
         for (DisplayShadow& shadow : shadows_) shadow.valid = false;
     }
@@ -1944,6 +1945,7 @@ public:
         bool active = false;
         memory::BufferView source{};
         PixelRect saved{};
+        uint64_t firstUse = 0;  // slotUses_ when the sequence started (IN-382)
     };
     ToneRun toneRun_;
 
@@ -1977,15 +1979,96 @@ public:
             toneRun_.active = true;
             toneRun_.source = slot.view;
             toneRun_.saved = saved;
+            toneRun_.firstUse = slotUses_;
             counters.toneRuns++;
+            // IN-382 (owner performance requirement): the sequence's draws are not repeated at scale. About 280 of
+            // GT4's ~320 runs per race frame are this sequence (140 pages x temporary page and write-back), and its
+            // scaled result is rebuilt by the carry anyway; slots it touched are refreshed at its end.
+            gpu_.PauseScaled(true);
             return;
         }
+    }
+
+    // IN-381: one 13.4 deinterlace of the scaled frame in the display image, with the GPU history (the same rules as
+    // display::Deinterlacer, in native rows).
+    bool DeinterlaceGpu(display::DeinterlaceMode mode, int vblankField, uint32_t width, uint32_t height,
+                        std::string& error) {
+        GpuDeinterlaceHistory& h = gpuDeinterlace_;
+        if (h.width != width || h.height != height) {
+            h.Clear();
+            h.width = width;
+            h.height = height;
+        }
+        const int rowParity = (vblankField ^ (settings_.bottomFieldFirst ? 1 : 0)) & 1;
+        gpu::GpuDrawer::DeinterlaceStep step;
+        step.width = width;
+        step.height = height;
+        step.rowParity = static_cast<uint32_t>(rowParity);
+        step.field = static_cast<uint32_t>(vblankField & 1);
+        // The slot for this field: a free one, else the oldest (the CPU history keeps the last four fields).
+        uint32_t current = gpu::kGpuDeinterlaceHistory;
+        for (uint32_t i = 0; i < gpu::kGpuDeinterlaceHistory && current == gpu::kGpuDeinterlaceHistory; ++i) {
+            if (!h.valid[i]) current = i;
+        }
+        if (current == gpu::kGpuDeinterlaceHistory) {
+            current = 0;
+            for (uint32_t i = 1; i < gpu::kGpuDeinterlaceHistory; ++i) {
+                if (h.age[i] < h.age[current]) current = i;
+            }
+        }
+        // Previous same- and opposite-parity fields: the most recent older entries (IN-39, IN-337).
+        uint64_t sameAge = 0, otherAge = 0;
+        for (uint32_t i = 0; i < gpu::kGpuDeinterlaceHistory; ++i) {
+            if (i == current || !h.valid[i]) continue;
+            if (h.parity[i] == rowParity) {
+                if (step.previousSame == gpu::kGpuDeinterlaceHistory || h.age[i] > sameAge) {
+                    step.previousSame = i;
+                    sameAge = h.age[i];
+                }
+            } else if (step.previousOther == gpu::kGpuDeinterlaceHistory || h.age[i] > otherAge) {
+                step.previousOther = i;
+                otherAge = h.age[i];
+            }
+        }
+        step.current = current;
+        step.haveOutput = h.output;
+        step.initWoven = !h.woven;
+        switch (mode) {
+            case display::DeinterlaceMode::Weave: step.mode = 2; break;
+            case display::DeinterlaceMode::Blend: step.mode = 3; break;
+            case display::DeinterlaceMode::Bob: step.mode = 4; break;
+            default: step.mode = 5; break;
+        }
+        if (!gpu_.DeinterlaceScaled(step, error)) return false;
+        if (step.mode == 5) {
+            h.valid[current] = true;  // only the adaptive mode keeps a field history (as the CPU deinterlacer)
+            h.parity[current] = rowParity;
+            h.age[current] = ++h.clock;
+            h.output = true;
+        }
+        if (step.mode == 2 || step.mode == 3) h.woven = true;
+        counters.deinterlacedFrames++;
+        return true;
     }
 
     void FinishToneRun() {
         if (!toneRun_.active) return;
         toneRun_.active = false;
+        gpu_.PauseScaled(false);  // IN-382
         if (failed_) return;
+        // IN-382: every other slot the paused sequence used gets its scaled image back from its 1x words (GT4: the
+        // temporary page), so no scaled image is left stale.
+        for (const ResidentSlot& used : slots_) {
+            if (!used.hasIdentity || used.loaded.Empty() || used.lastUse <= toneRun_.firstUse) continue;
+            // The source memory (any view of it) is reloaded and rebuilt by the carry below.
+            if (SpansOverlap(LoadedSpan(used), SpanOfRect(toneRun_.source, toneRun_.saved))) continue;
+            std::string error;
+            if (!gpu_.RefreshScaledSlot(used.depth, used.gpuIndex, used.loaded.x0, used.loaded.y0, used.loaded.x1,
+                                        used.loaded.y1, error)) {
+                Fail(error);
+                return;
+            }
+        }
         // The result is in the same memory, maybe under another 32-bit view (GT4 writes it back as CT24); the next
         // reader (GT4: the CT32 texture of the CT16 display conversion) finds the source view resident at scale.
         ResidentSlot& slot = Acquire(false, toneRun_.source);
@@ -2181,9 +2264,10 @@ public:
     // IN-364: the GPU compose applies to this VBlank's layout (progressive, a composite plan, GLM mode).
     bool GpuComposeApplies(const display::DisplayLayout& layout, display::MergePlan& plan,
                            std::array<bool, 2>& available) const {
-        if (!gpuCompose_ || !cacheMode_ || !glmEnabled_ || auxiliary_ || !layout.valid || layout.really_interlaced) {
-            return false;
-        }
+        if (!gpuCompose_ || !cacheMode_ || !glmEnabled_ || auxiliary_ || !layout.valid) return false;
+        // IN-381: an interlaced frame is composed (and deinterlaced) on the GPU only at an internal scale above 1;
+        // at 1x the CPU presentation compose stays the reference path.
+        if (layout.really_interlaced && gpu_.Scale() <= 1) return false;
         for (std::size_t i = 0; i < 2; ++i) {
             const display::CircuitRect& circuit = layout.circuits[i];
             available[i] = circuit.enabled && circuit.read_width != 0 && circuit.read_height != 0;
@@ -2192,6 +2276,27 @@ public:
         plan = display::plan_merge(pmode, layout.circuits[0], layout.circuits[1], available[0], available[1]);
         return plan.outcome == display::MergeOutcome::Composite;
     }
+    // IN-381: history of the scaled GPU deinterlace (the GPU form of display::Deinterlacer's state).
+    struct GpuDeinterlaceHistory {
+        uint32_t width = 0, height = 0;
+        std::array<bool, gpu::kGpuDeinterlaceHistory> valid{};
+        std::array<int, gpu::kGpuDeinterlaceHistory> parity{};
+        std::array<uint64_t, gpu::kGpuDeinterlaceHistory> age{};
+        uint64_t clock = 0;
+        bool woven = false;
+        bool output = false;
+        void Clear() {
+            valid.fill(false);
+            woven = false;
+            output = false;
+        }
+    };
+    GpuDeinterlaceHistory gpuDeinterlace_;
+    // A second GPU compose of a deinterlaced frame in the same VBlank (a dump next to the present) returns the first
+    // one's frame: the deinterlace history must advance once per VBlank.
+    uint64_t gpuComposeVblank_ = UINT64_MAX;
+    GpuFrame lastGpuFrame_{};
+    bool lastGpuFrameDeinterlaced_ = false;
     DisplayCapture captureNext_;   // recorded at the last Flush
     DisplayCapture captureShown_;  // recorded at the Flush before; composed by this VBlank's presentation
     memory::LocalMemory displayMemory_;
@@ -2550,6 +2655,7 @@ void Renderer::ComposeFrame(FrameOutput& out, ComposeKind kind) {
             if (presentation) {
                 s.counters.blankFrames++;
                 s.deinterlacer_.clear_history();  // 13.4: no source, no stale history next time
+                s.gpuDeinterlace_.Clear();        // IN-381: the GPU form too
             }
         };
         const auto body = [&] {
@@ -2697,6 +2803,10 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
     Impl& s = *impl_;
     s.FinishToneRun();  // IN-379: the presentation reads the carried scaled image
     out = GpuFrame{};
+    if (s.gpuComposeVblank_ == s.vblanks_ && s.lastGpuFrame_.valid && s.lastGpuFrameDeinterlaced_) {
+        out = s.lastGpuFrame_;  // IN-381: already composed and deinterlaced this VBlank (the history moves once)
+        return true;
+    }
     double composeUs = 0.0;
     {
         StageTimer timer(composeUs);
@@ -2706,8 +2816,9 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
         std::array<bool, 2> available{};
         if (!s.GpuComposeApplies(layout, plan, available)) return false;
         const display::PmodeFields pmode = display::decode_pmode(s.displayRegs_.pmode);
-        // The same choices as the CPU presentation compose for a progressive frame: no field offset, deinterlace
-        // never runs (not really interlaced), output size from 13.3.
+        // The same choices as the CPU presentation compose (13.3, 13.4). A progressive frame has no field offset
+        // and no deinterlace; an interlaced one (IN-381, scale > 1 only) gets the 13.3 step 3 offset of one native
+        // row in the field's phase and the GPU deinterlace below, both counted in native rows.
         const display::DeinterlaceMode effective =
             s.settings_.deinterlace == display::DeinterlaceMode::Auto
                 ? display::resolve_auto_deinterlace(layout, layout.ffmd, s.displayRegs_.scanmsk_active)
@@ -2715,6 +2826,15 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
         const display::OutputSize size =
             display::merge_output_size(layout, effective == display::DeinterlaceMode::Off, 1);
         if (size.width == 0 || size.height == 0) return false;
+        const bool interlaced = layout.really_interlaced;
+        const int vblankField = RowFieldOfDisplayField(s.oddField_);
+        const int fieldPhase = vblankField ^ (s.settings_.bottomFieldFirst ? 1 : 0);
+        const int32_t offsetNativeRows =
+            interlaced ? display::interlace_offset_rows(true, layout.ffmd, effective, 1, fieldPhase) : 0;
+        const bool deinterlace = interlaced && effective != display::DeinterlaceMode::Off;
+        if (interlaced && (size.width > gpu::kGpuDeinterlaceWidth || size.height > gpu::kGpuDeinterlaceRows)) {
+            return false;  // larger than the deinterlace images: the CPU presentation at 1x
+        }
         // The GLM is made current for the circuits (stale pages uploaded, drawn targets swizzled).
         for (std::size_t i = 0; i < 2; ++i) {
             if (!available[i]) continue;
@@ -2771,6 +2891,8 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
                 const std::size_t from = i == 0 ? 5u : 17u;
                 const std::size_t at = i == 0 ? 5u : 18u;
                 std::copy(parameters.begin() + from, parameters.begin() + from + 12, scaled.begin() + at);
+                // 13.3 step 3 at scale: the destination moves down by one native row in the odd phase.
+                scaled[at + 9] = static_cast<uint32_t>(static_cast<int32_t>(scaled[at + 9]) + offsetNativeRows);
                 const display::CircuitRect& circuit = layout.circuits[i];
                 const auto psm = memory::decodePsm(circuit.psm);
                 if (!available[i] || !psm) continue;
@@ -2826,6 +2948,10 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
         } else {
             composed = s.gpu_.ComposeDisplay(parameters, size.width, size.height, error);
         }
+        if (composed && interlaced) {
+            if (offsetNativeRows != 0) s.counters.interlaceOffsetFrames++;
+            if (deinterlace) composed = s.DeinterlaceGpu(effective, vblankField, outWidth, outHeight, error);
+        }
         const bool fxaa = composed && s.fxaa_;
         if (fxaa) composed = s.gpu_.ApplyFxaa(outWidth, outHeight, error);  // IN-376
         if (!composed || !s.gpu_.Flush(false, error)) {
@@ -2841,6 +2967,9 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
         out.height = outHeight;
         out.fxaa = fxaa;
         out.image = fxaa ? s.gpu_.FxaaImage() : s.gpu_.DisplayImage();
+        s.gpuComposeVblank_ = s.vblanks_;
+        s.lastGpuFrame_ = out;
+        s.lastGpuFrameDeinterlaced_ = deinterlace;
     }
     s.timings_.composeUs = composeUs;
     s.counters.composeUs += composeUs;

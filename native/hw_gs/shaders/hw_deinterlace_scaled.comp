@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: MIT
+//
+// Deinterlace of the scaled presentation frame (TASK-027 M12, chapter 13.4 at an internal scale, IN-381). Copyright
+// (c) 2026 GT4Recomp contributors. Written from docs/hw-renderer-spec chapters 13.3 and 13.4, clean room (decision
+// 0070); our own algorithm per 13.4 ("adaptive": Decision), the GPU form of display::Deinterlacer.
+//
+// At scale s the merge image has s output rows per native row. Every row rule of 13.4 is applied per NATIVE row: the
+// field's rows are the native rows whose parity is the field's, the line above and below a missing line are the
+// native rows above and below (s output rows away, same sub-row), and the edges are the first and last native rows.
+// So for an image whose every native pixel is an s x s block this kernel gives exactly the CPU deinterlacer's 1x
+// result blown up (fixture hw_scale_interlaced_present), and real sub-pixel detail inside a native row is kept.
+//
+// Modes (push constant `mode`):
+//   1 weave update: woven rows of the field's parity take the current merge image (all rows when `init`).
+//   2 weave output: the woven image.        3 blend output: vertical 1/4, 1/2, 1/4 of the woven image.
+//   4 bob: the merge image shifted down by s * (1 - field) rows.
+//   5 adaptive: field rows and edge rows pass; a missing row is the previous opposite-parity field's row when the
+//     current and previous same-parity fields agree on the row above, the row and the row below (no channel moves
+//     by more than the threshold), else the average of the rows above and below.
+
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0, r32ui) uniform uimage2D history[4];  // merge images of the last fields
+layout(set = 0, binding = 4, r32ui) uniform uimage2D woven;
+layout(set = 0, binding = 5, r32ui) uniform readonly uimage2D previous_output;
+layout(set = 0, binding = 6, r32ui) uniform writeonly uimage2D display_out;
+
+layout(push_constant) uniform DeinterlaceParameters {
+    uint mode;
+    uint width;       // output pixels (scaled)
+    uint height;
+    uint scale;
+    uint row_parity;  // the field's native row parity (field XOR the _bff setting)
+    uint field;       // the VBlank field (bob shift)
+    uint current;     // history index of this field's merge image
+    uint previous_same;   // history index of the previous same-parity field, or 4 when there is none
+    uint previous_other;  // history index of the previous opposite-parity field, or 4 when there is none
+    uint have_output;     // previous_output holds the last adaptive output of this size
+    uint threshold_permille;  // 13.4 threshold x 1000 (80 = 0.08)
+    uint init;            // weave update: copy every row (first field)
+} pc;
+
+uvec4 unpack_rgba(uint word) {
+    return uvec4(word & 0xFFu, (word >> 8) & 0xFFu, (word >> 16) & 0xFFu, (word >> 24) & 0xFFu);
+}
+
+uint pack_rgba(uvec4 c) {
+    return c.r | (c.g << 8) | (c.b << 16) | (c.a << 24);
+}
+
+uint load_history(uint index, ivec2 p) {
+    return imageLoad(history[index], p).x;
+}
+
+// |a - b| / 255 > threshold on R, G or B.
+bool moved(uint a, uint b) {
+    uvec4 x = unpack_rgba(a);
+    uvec4 y = unpack_rgba(b);
+    uvec3 d = uvec3(abs(ivec3(x.rgb) - ivec3(y.rgb)));
+    uint limit = pc.threshold_permille * 255u;
+    return d.r * 1000u > limit || d.g * 1000u > limit || d.b * 1000u > limit;
+}
+
+void main() {
+    uvec2 gid = gl_GlobalInvocationID.xy;
+    if (gid.x >= pc.width || gid.y >= pc.height) {
+        return;
+    }
+    ivec2 p = ivec2(gid);
+    int s = int(pc.scale);
+    uint native_row = gid.y / pc.scale;
+    uint native_rows = pc.height / pc.scale;
+    bool field_row = (native_row & 1u) == pc.row_parity;
+
+    if (pc.mode == 1u) {
+        if (pc.init != 0u || field_row) {
+            imageStore(woven, p, uvec4(load_history(pc.current, p), 0u, 0u, 0u));
+        }
+        return;
+    }
+    if (pc.mode == 2u) {
+        imageStore(display_out, p, uvec4(imageLoad(woven, p).x, 0u, 0u, 0u));
+        return;
+    }
+    if (pc.mode == 3u) {
+        int up = native_row == 0u ? p.y : p.y - s;
+        int down = native_row + 1u >= native_rows ? p.y : p.y + s;
+        uvec4 a = unpack_rgba(imageLoad(woven, ivec2(p.x, up)).x);
+        uvec4 b = unpack_rgba(imageLoad(woven, p).x);
+        uvec4 c = unpack_rgba(imageLoad(woven, ivec2(p.x, down)).x);
+        imageStore(display_out, p, uvec4(pack_rgba((a + 2u * b + c + 2u) / 4u), 0u, 0u, 0u));
+        return;
+    }
+    if (pc.mode == 4u) {
+        int shift = s * (1 - int(pc.field));
+        int row = clamp(p.y - shift, 0, int(pc.height) - 1);
+        imageStore(display_out, p, uvec4(load_history(pc.current, ivec2(p.x, row)), 0u, 0u, 0u));
+        return;
+    }
+    // mode 5: adaptive.
+    uint here = load_history(pc.current, p);
+    bool edge_row = native_row == 0u || native_row + 1u == native_rows;
+    if (field_row || edge_row) {
+        imageStore(display_out, p, uvec4(here, 0u, 0u, 0u));
+        return;
+    }
+    uint up = load_history(pc.current, ivec2(p.x, p.y - s));
+    uint down = load_history(pc.current, ivec2(p.x, p.y + s));
+    uvec4 bob4 = (unpack_rgba(up) + unpack_rgba(down) + 1u) / 2u;
+    uint bob = pack_rgba(bob4);
+    bool motion = true;
+    if (pc.previous_same < 4u) {
+        motion = moved(up, load_history(pc.previous_same, ivec2(p.x, p.y - s))) ||
+                 moved(here, load_history(pc.previous_same, p)) ||
+                 moved(down, load_history(pc.previous_same, ivec2(p.x, p.y + s)));
+    }
+    uint result = bob;
+    if (!motion) {
+        if (pc.previous_other < 4u) {
+            result = load_history(pc.previous_other, p);
+        } else if (pc.have_output != 0u) {
+            result = imageLoad(previous_output, p).x;
+        }
+    }
+    imageStore(display_out, p, uvec4(result, 0u, 0u, 0u));
+}

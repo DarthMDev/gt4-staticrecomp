@@ -147,6 +147,17 @@ struct GpuDrawer::Impl {
   VkShaderModule fxaaModule = VK_NULL_HANDLE;
   VkPipeline fxaaPipeline = VK_NULL_HANDLE;
   bool create_fxaa(std::string &error);
+  // IN-381: scaled deinterlace (created on first use).
+  bool create_deinterlace(std::string &error);
+  Image deinterlaceHistory[kGpuDeinterlaceHistory];
+  Image deinterlaceWoven;
+  Image deinterlaceOutput;
+  VkDescriptorSetLayout deinterlaceSetLayout = VK_NULL_HANDLE;
+  VkPipelineLayout deinterlaceLayout = VK_NULL_HANDLE;
+  VkShaderModule deinterlaceModule = VK_NULL_HANDLE;
+  VkPipeline deinterlacePipeline = VK_NULL_HANDLE;
+  VkDescriptorPool deinterlacePool = VK_NULL_HANDLE;
+  VkDescriptorSet deinterlaceSet = VK_NULL_HANDLE;
   VkFramebuffer scaledFramebuffer = VK_NULL_HANDLE;
   VkDescriptorSet scaledDescriptorSets[kGpuColourSlots * kGpuDepthSlots] = {};  // current frame set
   VkDescriptorPool scalePool = VK_NULL_HANDLE;
@@ -180,8 +191,14 @@ struct GpuDrawer::Impl {
   // descriptor set index (scaled images, same texel atlas and uniform), positions times s, the 06.3 shift and the
   // scissor times s. Draws into the write-back mode's scratch colour slot are not repeated (nothing presents it).
   // `barrierBetween`: storage-image barriers between draws (the per-primitive path without pixel interlock).
+  bool scaledPaused = false;  // IN-382
   void record_scaled_draws(bool barrierBetween) {
     if (!scaled() || scaledDraws.empty()) return;
+    if (scaledPaused) {
+      stats.scaledDrawsPaused += scaledDraws.size();
+      scaledDraws.clear();
+      return;
+    }
     VkRenderPassBeginInfo pass{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     pass.renderPass = renderPass;
     pass.framebuffer = scaledFramebuffer;
@@ -258,11 +275,16 @@ struct GpuDrawer::Impl {
   void refresh_scaled(bool depthSlot, std::uint32_t slot, std::int32_t x0, std::int32_t y0, std::int32_t x1,
                       std::int32_t y1) {
     if (!scaled()) return;
+    if (scaledPaused) {
+      ++stats.scaledRefreshesPaused;
+      return;
+    }
     x0 = std::max(x0, 0);
     y0 = std::max(y0, 0);
     x1 = std::min(x1, kGpuScaledExtent - 1);
     y1 = std::min(y1, kGpuScaledExtent - 1);
     if (x1 < x0 || y1 < y0) return;
+    mark(kTimeUpload);  // the load before the refresh (12.8 timing: each interval goes to the mark after it)
     full_barrier();
     const std::uint32_t set = depthSlot ? kGpuColourSlots + slot : slot;
     gt4_hwd_vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, upsamplePipeline);
@@ -277,6 +299,7 @@ struct GpuDrawer::Impl {
     recorded_work();
     gt4_hwd_vkCmdDispatch(cmd, (width * scale + 7) / 8, (height * scale + 7) / 8, 1);
     full_barrier();
+    mark(kTimeRefresh);
     ++stats.scaledRefreshes;
     stats.scaledRefreshPixels += static_cast<std::uint64_t>(width) * height;
   }
@@ -657,7 +680,7 @@ struct GpuDrawer::Impl {
 
   // ---- GPU timing (GT4_HW_GPU_TIMING) ----
   enum TimeCategory : std::uint8_t { kTimePass, kTimeDecode, kTimeClut, kTimeSwizzle, kTimeUpload, kTimeDownload,
-                                     kTimeStart };
+                                     kTimeScaled, kTimeRefresh, kTimeStart };
   static constexpr std::uint32_t kQueries = 32768;
   struct QueryState {
     VkQueryPool pool = VK_NULL_HANDLE;
@@ -1024,6 +1047,20 @@ struct GpuDrawer::Impl {
       for (Image &image : scaledShadows) destroyImage(&image);
       for (Image &image : nativeShadows) destroyImage(&image);
       destroyImage(&toneScaled);
+      for (Image &image : deinterlaceHistory) destroyImage(&image);
+      destroyImage(&deinterlaceWoven);
+      destroyImage(&deinterlaceOutput);
+      if (deinterlacePipeline) gt4_hwd_vkDestroyPipeline(device, deinterlacePipeline, nullptr);
+      if (deinterlaceModule) gt4_hwd_vkDestroyShaderModule(device, deinterlaceModule, nullptr);
+      if (deinterlaceLayout) gt4_hwd_vkDestroyPipelineLayout(device, deinterlaceLayout, nullptr);
+      if (deinterlaceSetLayout) gt4_hwd_vkDestroyDescriptorSetLayout(device, deinterlaceSetLayout, nullptr);
+      if (deinterlacePool) gt4_hwd_vkDestroyDescriptorPool(device, deinterlacePool, nullptr);
+      deinterlacePipeline = VK_NULL_HANDLE;
+      deinterlaceModule = VK_NULL_HANDLE;
+      deinterlaceLayout = VK_NULL_HANDLE;
+      deinterlaceSetLayout = VK_NULL_HANDLE;
+      deinterlacePool = VK_NULL_HANDLE;
+      deinterlaceSet = VK_NULL_HANDLE;
       destroyImage(&toneNative);
       if (toneTable.buffer) gt4_hwd_vkDestroyBuffer(device, toneTable.buffer, nullptr);
       if (toneTable.memory) gt4_hwd_vkFreeMemory(device, toneTable.memory, nullptr);
@@ -1127,6 +1164,9 @@ struct GpuDrawer::Impl {
     for (Image &image : scaledShadows) image = Image{};
     for (Image &image : nativeShadows) image = Image{};
     toneScaled = Image{};
+    for (Image &image : deinterlaceHistory) image = Image{};
+    deinterlaceWoven = Image{};
+    deinterlaceOutput = Image{};
     toneNative = Image{};
     scaledTexels = Image{};
     fxaaImage = Image{};
@@ -1455,6 +1495,101 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
 
 // IN-376: the FXAA image (display-sized, GENERAL layout), its descriptor set and kernel. Records the layout change
 // into the current recording.
+bool GpuDrawer::Impl::create_deinterlace(std::string &error) {
+  if (deinterlacePipeline) return true;
+  const std::uint32_t width = kGpuDeinterlaceWidth * scale;
+  const std::uint32_t height = kGpuDeinterlaceRows * scale;
+  Image *images[kGpuDeinterlaceHistory + 2];
+  for (std::uint32_t i = 0; i < kGpuDeinterlaceHistory; ++i) images[i] = &deinterlaceHistory[i];
+  images[kGpuDeinterlaceHistory] = &deinterlaceWoven;
+  images[kGpuDeinterlaceHistory + 1] = &deinterlaceOutput;
+  for (Image *image : images) {
+    if (!make_image(*image, width, height, error)) return false;
+    VkImageMemoryBarrier toGeneral{VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER};
+    toGeneral.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    toGeneral.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    toGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    toGeneral.image = image->image;
+    toGeneral.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+    toGeneral.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT |
+                              VK_ACCESS_TRANSFER_WRITE_BIT;
+    gt4_hw_vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0,
+                                nullptr, 0, nullptr, 1, &toGeneral);
+  }
+  VkDescriptorSetLayoutBinding bindings[4]{};
+  bindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kGpuDeinterlaceHistory, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  bindings[1] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  bindings[2] = {5, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  bindings[3] = {6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  VkDescriptorSetLayoutCreateInfo setInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+  setInfo.bindingCount = 4;
+  setInfo.pBindings = bindings;
+  if (!check(gt4_hwd_vkCreateDescriptorSetLayout(device, &setInfo, nullptr, &deinterlaceSetLayout),
+             "vkCreateDescriptorSetLayout", error)) {
+    return false;
+  }
+  VkPushConstantRange push{VK_SHADER_STAGE_COMPUTE_BIT, 0, 12 * sizeof(std::uint32_t)};
+  VkPipelineLayoutCreateInfo layoutInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+  layoutInfo.setLayoutCount = 1;
+  layoutInfo.pSetLayouts = &deinterlaceSetLayout;
+  layoutInfo.pushConstantRangeCount = 1;
+  layoutInfo.pPushConstantRanges = &push;
+  if (!check(gt4_hwd_vkCreatePipelineLayout(device, &layoutInfo, nullptr, &deinterlaceLayout),
+             "vkCreatePipelineLayout", error)) {
+    return false;
+  }
+  VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kGpuDeinterlaceHistory + 3};
+  VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+  poolInfo.maxSets = 1;
+  poolInfo.poolSizeCount = 1;
+  poolInfo.pPoolSizes = &size;
+  if (!check(gt4_hwd_vkCreateDescriptorPool(device, &poolInfo, nullptr, &deinterlacePool), "vkCreateDescriptorPool",
+             error)) {
+    return false;
+  }
+  VkDescriptorSetAllocateInfo allocate{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+  allocate.descriptorPool = deinterlacePool;
+  allocate.descriptorSetCount = 1;
+  allocate.pSetLayouts = &deinterlaceSetLayout;
+  if (!check(gt4_hwd_vkAllocateDescriptorSets(device, &allocate, &deinterlaceSet), "vkAllocateDescriptorSets", error)) {
+    return false;
+  }
+  VkDescriptorImageInfo history[kGpuDeinterlaceHistory];
+  for (std::uint32_t i = 0; i < kGpuDeinterlaceHistory; ++i) {
+    history[i] = {VK_NULL_HANDLE, deinterlaceHistory[i].view, VK_IMAGE_LAYOUT_GENERAL};
+  }
+  VkDescriptorImageInfo others[3] = {{VK_NULL_HANDLE, deinterlaceWoven.view, VK_IMAGE_LAYOUT_GENERAL},
+                                     {VK_NULL_HANDLE, deinterlaceOutput.view, VK_IMAGE_LAYOUT_GENERAL},
+                                     {VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL}};
+  VkWriteDescriptorSet writes[4]{};
+  for (std::uint32_t i = 0; i < 4; ++i) {
+    writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[i].dstSet = deinterlaceSet;
+    writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  }
+  writes[0].dstBinding = 0;
+  writes[0].descriptorCount = kGpuDeinterlaceHistory;
+  writes[0].pImageInfo = history;
+  for (std::uint32_t i = 0; i < 3; ++i) {
+    writes[i + 1].dstBinding = 4 + i;
+    writes[i + 1].descriptorCount = 1;
+    writes[i + 1].pImageInfo = &others[i];
+  }
+  gt4_hwd_vkUpdateDescriptorSets(device, 4, writes, 0, nullptr);
+  deinterlaceModule = make_module(hwgs::shaders::hw_deinterlace_scaled_words,
+                                  hwgs::shaders::hw_deinterlace_scaled_word_count, error);
+  if (!deinterlaceModule) return false;
+  VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+  info.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+  info.stage.module = deinterlaceModule;
+  info.stage.pName = "main";
+  info.layout = deinterlaceLayout;
+  return check(gt4_hwd_vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, &deinterlacePipeline),
+               "vkCreateComputePipelines", error);
+}
+
 bool GpuDrawer::Impl::create_fxaa(std::string &error) {
   if (fxaaPipeline) return true;
   if (!make_image(fxaaImage, displaySide, displaySide, error)) return false;
@@ -1816,7 +1951,8 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
   }
   recorded_work();
   gt4_hwd_vkCmdEndRenderPass(cmd);
-  if (scaled()) {
+  if (scaled() && !scaledPaused) {
+    mark(kTimePass);  // the 1x run (12.8: the scaled pass is timed on its own)
     // IN-371: the same draws into the scaled images (other images: no barrier against the 1x pass).
     scaledDraws.clear();
     for (const PendingDraw &draw : runDraws) {
@@ -1831,6 +1967,7 @@ bool GpuDrawer::Impl::flush_run(std::string &error) {
       scaledDraws.push_back(scaledDraw);
     }
     record_scaled_draws(false);
+    mark(kTimeScaled);
   }
   mark(kTimePass);
   full_barrier_with_fragment();  // the run's draws -> anything after (target reads, the next run's atlas writes)
@@ -2488,7 +2625,11 @@ bool GpuDrawer::Execute(GpuChunk &chunk, std::string &error) {
     }
     s.recorded_work();
     gt4_hwd_vkCmdEndRenderPass(s.cmd);
-    s.record_scaled_draws(!allTriangles);  // IN-371
+    if (s.scaled() && !s.scaledDraws.empty()) {
+      s.mark(Impl::kTimePass);  // the 1x draws (12.8: the scaled pass is timed on its own)
+      s.record_scaled_draws(!allTriangles);  // IN-371
+      s.mark(Impl::kTimeScaled);
+    }
   }
   s.mark(drawing ? Impl::kTimePass : Impl::kTimeUpload);
 
@@ -2930,6 +3071,73 @@ bool GpuDrawer::CarryTone(std::uint32_t slot, std::int32_t x0, std::int32_t y0, 
   }
   s.mark(Impl::kTimeDownload);
   ++s.stats.toneCarries;
+  return true;
+}
+
+void GpuDrawer::PauseScaled(bool paused) { impl_->scaledPaused = paused; }
+
+bool GpuDrawer::RefreshScaledSlot(bool depthSlot, std::uint32_t slot, std::int32_t x0, std::int32_t y0,
+                                  std::int32_t x1, std::int32_t y1, std::string &error) {
+  Impl &s = *impl_;
+  if (!s.scaled() || slot >= (depthSlot ? kGpuDepthSlots : kGpuColourSlots)) {
+    error = "scaled refresh outside the slots";
+    return false;
+  }
+  if (!s.begin_recording(error)) return false;
+  if (!s.flush_run(error)) return false;
+  s.full_barrier_with_fragment();
+  s.refresh_scaled(depthSlot, slot, x0, y0, x1, y1);
+  return true;
+}
+
+bool GpuDrawer::DeinterlaceScaled(const DeinterlaceStep &step, std::string &error) {
+  Impl &s = *impl_;
+  if (!s.scaled() || step.width == 0 || step.height == 0 || step.width > kGpuDeinterlaceWidth * s.scale ||
+      step.height > kGpuDeinterlaceRows * s.scale || step.current >= kGpuDeinterlaceHistory || step.mode < 2 ||
+      step.mode > 5) {
+    error = "scaled deinterlace outside its images";
+    return false;
+  }
+  if (!s.begin_recording(error)) return false;
+  if (!s.flush_run(error)) return false;
+  if (!s.create_deinterlace(error)) return false;
+  s.full_barrier();  // the compose wrote the display image
+  VkImageCopy region{};
+  region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  region.extent = {step.width, step.height, 1};
+  s.recorded_work();
+  gt4_hwd_vkCmdCopyImage(s.cmd, s.display.image, VK_IMAGE_LAYOUT_GENERAL, s.deinterlaceHistory[step.current].image,
+                         VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+  s.full_barrier();
+  gt4_hwd_vkCmdBindPipeline(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.deinterlacePipeline);
+  gt4_hwd_vkCmdBindDescriptorSets(s.cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.deinterlaceLayout, 0, 1, &s.deinterlaceSet,
+                                  0, nullptr);
+  s.boundComputePipeline = s.deinterlacePipeline;
+  s.boundComputeSet = s.deinterlaceSet;
+  auto dispatch = [&](std::uint32_t mode) {
+    const std::uint32_t push[12] = {mode, step.width, step.height, s.scale, step.rowParity, step.field, step.current,
+                                    step.previousSame, step.previousOther, step.haveOutput ? 1u : 0u,
+                                    step.thresholdPermille, step.initWoven ? 1u : 0u};
+    gt4_hwd_vkCmdPushConstants(s.cmd, s.deinterlaceLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(push), push);
+    s.recorded_work();
+    gt4_hwd_vkCmdDispatch(s.cmd, (step.width + 7) / 8, (step.height + 7) / 8, 1);
+    s.full_barrier();
+  };
+  if (step.mode == 2 || step.mode == 3) {
+    dispatch(1);  // weave update
+    dispatch(step.mode);
+  } else {
+    dispatch(step.mode);
+  }
+  if (step.mode == 5) {
+    s.recorded_work();
+    gt4_hwd_vkCmdCopyImage(s.cmd, s.display.image, VK_IMAGE_LAYOUT_GENERAL, s.deinterlaceOutput.image,
+                           VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+    s.full_barrier();
+  }
+  s.mark(Impl::kTimeDownload);
+  ++s.stats.scaledDeinterlaces;
   return true;
 }
 

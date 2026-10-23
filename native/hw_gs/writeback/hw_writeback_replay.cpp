@@ -189,8 +189,12 @@ int main(int argc, char** argv) {
     // --check-presented (owner test 6, IN-377): every frame's GPU presentation compose (the image the window shows) is
     // read back and its s x s blocks inspected. A frame sourced from 1x memory has every block uniform (each native
     // texel repeated s x s times); a really upscaled frame has edge blocks with several values. Owner test 7 (IN-379,
-    // IN-380): a frame can also be a 1x picture with a few scaled overlays (the HUD), so a frame whose share of mixed
-    // blocks is below kMinDetailShare also counts as low-detail (candidate 270: 5.6% on the race capture; fixed: 69%).
+    // IN-380): a frame can also be a 1x picture with a few scaled overlays (the HUD). IN-381: and a flat 2D menu has
+    // few edges at all. So detail is measured against the frame's own 1x picture: every native pixel that differs
+    // from its right or lower neighbour is an edge, and an upscaled frame has a mixed block along almost every edge
+    // (06.3 moves edges inside the blocks; real sub-pixel detail does the rest). A frame with edges on at least
+    // kMinEdgeShare of its native pixels is low-detail when its mixed blocks are fewer than kMinDetailRatio x its
+    // edges; frames with fewer edges are flat (black screens, fades) and only counted.
     bool checkPresented = false;
     for (int i = 3; i < argc; ++i) {
         if (std::strcmp(argv[i], "--check-presented") == 0) checkPresented = true;
@@ -203,7 +207,8 @@ int main(int argc, char** argv) {
             std::strcmp(argv[i], "--single-buffer") == 0 || std::strcmp(argv[i], "--async-present") == 0 ||
             std::strcmp(argv[i], "--no-batched-writebacks") == 0 ||
             std::strcmp(argv[i], "--gpu-timing") == 0 || std::strcmp(argv[i], "--gpu-compose-check") == 0 ||
-            std::strcmp(argv[i], "--fxaa") == 0 || std::strcmp(argv[i], "--check-presented") == 0) {
+            std::strcmp(argv[i], "--fxaa") == 0 || std::strcmp(argv[i], "--check-presented") == 0 ||
+            std::strcmp(argv[i], "--no-gpu-compose") == 0) {
             --i;  // a flag without a value
             continue;
         }
@@ -304,6 +309,8 @@ int main(int argc, char** argv) {
         if (std::strcmp(argv[i], "--no-clut-defer") == 0) renderer.SetClutDefer(false);                  // IN-370 A/B
         if (std::strcmp(argv[i], "--gpu-timing") == 0) renderer.SetGpuTiming(true);                     // 12.8
         if (std::strcmp(argv[i], "--fxaa") == 0) renderer.SetFxaa(true);                                // IN-376
+        // A/B: every presentation from the CPU compose at 1x (what candidate 271 did for every 480i frame, IN-381).
+        if (std::strcmp(argv[i], "--no-gpu-compose") == 0) renderer.SetGpuCompose(false);
         if (std::strcmp(argv[i], "--chunks-per-submission") == 0 && i + 1 < argc) {                   // IN-358 A/B
             renderer.SetChunksPerSubmission(static_cast<std::uint32_t>(std::strtoul(argv[i + 1], nullptr, 10)));
         }
@@ -355,7 +362,24 @@ int main(int argc, char** argv) {
     std::uint64_t written = 0;
     std::uint64_t presentedFrames = 0, presented1xFrames = 0, presentedMinMixedBlocks = UINT64_MAX;
     std::uint64_t presentedMixedBlocks = 0, presentedBlocks = 0, presentedLowDetailFrames = 0;
-    constexpr double kMinDetailShare = 0.20;
+    constexpr double kMinEdgeShare = 0.005;
+    constexpr double kMinDetailRatio = 0.25;
+    std::uint64_t presentedFlatFrames = 0, presentedEdges = 0;
+    // Edge pixels of the frame's 1x picture (the replay target's compose).
+    const auto nativeEdges = [](const cpuref::FrameImage& image) {
+        std::uint64_t edges = 0;
+        const display::Image& img = image.image;
+        for (std::uint32_t y = 0; y < img.height; ++y) {
+            for (std::uint32_t x = 0; x < img.width; ++x) {
+                const display::Rgba8& p = img.at(x, y);
+                const auto differs = [&](const display::Rgba8& q) { return p.r != q.r || p.g != q.g || p.b != q.b; };
+                if ((x + 1 < img.width && differs(img.at(x + 1, y))) || (y + 1 < img.height && differs(img.at(x, y + 1)))) {
+                    ++edges;
+                }
+            }
+        }
+        return edges;
+    };
     std::string presented1xList;
     const auto onFrame = [&](std::uint64_t frame, const cpuref::FrameImage& image) {
         currentFrame = frame + 1;
@@ -390,12 +414,39 @@ int main(int argc, char** argv) {
                 const std::uint64_t blocks =
                     static_cast<std::uint64_t>(gpuFrame.width / scale) * (gpuFrame.height / scale);
                 presentedBlocks += blocks;
-                if (static_cast<double>(mixed) < kMinDetailShare * static_cast<double>(blocks)) ++presentedLowDetailFrames;
+                const std::uint64_t edges = nativeEdges(image);
+                const std::uint64_t nativePixels =
+                    static_cast<std::uint64_t>(image.image.width) * image.image.height;
+                if (static_cast<double>(edges) < kMinEdgeShare * static_cast<double>(nativePixels)) {
+                    ++presentedFlatFrames;
+                } else {
+                    presentedEdges += edges;
+                    static const bool detailTrace = std::getenv("GT4_REPLAY_DETAIL_TRACE") != nullptr;  // per frame
+                    if (detailTrace) {
+                        std::printf("detail frame=%llu mixed_per_edge=%.3f\n", static_cast<unsigned long long>(frame),
+                                    static_cast<double>(mixed) / static_cast<double>(edges));
+                    }
+                    if (static_cast<double>(mixed) < kMinDetailRatio * static_cast<double>(edges)) ++presentedLowDetailFrames;
+                }
                 if (mixed < presentedMinMixedBlocks) presentedMinMixedBlocks = mixed;
                 if (mixed == 0) {
                     ++presented1xFrames;
                     if (presented1xList.size() < 200) presented1xList += " " + std::to_string(frame);
                 }
+            } else if (!gpuFrame.valid) {
+                // IN-381: no GPU compose this VBlank (before it: every 480i menu frame): the window shows the CPU
+                // presentation compose at 1x, blown up by the present. It counts as a 1x and low-detail frame.
+                ++presentedFrames;
+                ++presented1xFrames;
+                const std::uint64_t edges = nativeEdges(image);
+                if (static_cast<double>(edges) <
+                    kMinEdgeShare * static_cast<double>(image.image.width) * image.image.height) {
+                    ++presentedFlatFrames;
+                } else {
+                    ++presentedLowDetailFrames;
+                }
+                presentedMinMixedBlocks = 0;
+                if (presented1xList.size() < 200) presented1xList += " " + std::to_string(frame) + "(cpu)";
             }
         }
         if (every > 1 && frame % every != 0) return;
@@ -476,9 +527,11 @@ int main(int argc, char** argv) {
         const std::uint64_t frameCount = renderer.TimedFrames();
         if (gpuStats.gpuBusyNs != 0 && frameCount != 0) {
             const double n = static_cast<double>(frameCount) * 1e6;
-            std::printf("gpu_ms_per_frame busy=%.2f pass=%.2f decode=%.2f clut=%.2f swizzle=%.2f upload=%.2f download=%.2f\n",
+            std::printf("gpu_ms_per_frame busy=%.2f pass=%.2f decode=%.2f clut=%.2f swizzle=%.2f upload=%.2f download=%.2f "
+                        "scaled=%.2f refresh=%.2f\n",
                         gpuStats.gpuBusyNs / n, gpuStats.gpuNs[0] / n, gpuStats.gpuNs[1] / n, gpuStats.gpuNs[2] / n,
-                        gpuStats.gpuNs[3] / n, gpuStats.gpuNs[4] / n, gpuStats.gpuNs[5] / n);
+                        gpuStats.gpuNs[3] / n, gpuStats.gpuNs[4] / n, gpuStats.gpuNs[5] / n, gpuStats.gpuNs[6] / n,
+                        gpuStats.gpuNs[7] / n);
         }
     }
     std::printf("textures_cached=%llu textures_from_targets=%llu textures_from_glm=%llu glm_uploads=%llu glm_swizzles=%llu "
@@ -543,9 +596,12 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(presentedFrames ? presentedMinMixedBlocks : 0),
                     presentedFrames ? static_cast<double>(presentedMixedBlocks) / presentedFrames : 0.0);
         if (presented1xFrames) std::printf("presented_1x_list%s\n", presented1xList.c_str());
-        std::printf("presented_low_detail_frames=%llu mean_mixed_share=%.3f (low detail: mixed share below %.2f)\n",
+        std::printf("presented_low_detail_frames=%llu flat_frames=%llu mean_mixed_share=%.3f mixed_per_edge=%.3f "
+                    "(low detail: mixed blocks below %.2f x the 1x edge pixels)\n",
                     static_cast<unsigned long long>(presentedLowDetailFrames),
-                    presentedBlocks ? static_cast<double>(presentedMixedBlocks) / presentedBlocks : 0.0, kMinDetailShare);
+                    static_cast<unsigned long long>(presentedFlatFrames),
+                    presentedBlocks ? static_cast<double>(presentedMixedBlocks) / presentedBlocks : 0.0,
+                    presentedEdges ? static_cast<double>(presentedMixedBlocks) / presentedEdges : 0.0, kMinDetailRatio);
     }
     std::printf("gpu_compose_equal=%llu gpu_compose_different=%llu\n",
                 static_cast<unsigned long long>(target.GpuComposeEqual()),

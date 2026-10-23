@@ -182,11 +182,12 @@ void maybe_profile(Backend &hw) {
   if (now.gpu_busy_ns != was.gpu_busy_ns) {
     std::fprintf(stderr,
                  "[hw] gpu vsync=%llu busy_ms=%.2f pass_ms=%.2f decode_ms=%.2f clut_ms=%.2f swizzle_ms=%.2f "
-                 "upload_ms=%.2f download_ms=%.2f early_submissions=%.2f\n",
+                 "upload_ms=%.2f download_ms=%.2f scaled_ms=%.2f refresh_ms=%.2f early_submissions=%.2f\n",
                  static_cast<unsigned long long>(g_vsyncs), (now.gpu_busy_ns - was.gpu_busy_ns) / n / 1e6,
                  (now.gpu_ns[0] - was.gpu_ns[0]) / n / 1e6, (now.gpu_ns[1] - was.gpu_ns[1]) / n / 1e6,
                  (now.gpu_ns[2] - was.gpu_ns[2]) / n / 1e6, (now.gpu_ns[3] - was.gpu_ns[3]) / n / 1e6,
                  (now.gpu_ns[4] - was.gpu_ns[4]) / n / 1e6, (now.gpu_ns[5] - was.gpu_ns[5]) / n / 1e6,
+                 (now.gpu_ns[6] - was.gpu_ns[6]) / n / 1e6, (now.gpu_ns[7] - was.gpu_ns[7]) / n / 1e6,
                  static_cast<double>(now.gpu_early_submissions - was.gpu_early_submissions) / n);
   }
   // IN-367 efficiency line (owner principle 2026-10-22: measure cost, not only FPS): CPU time of the thread that

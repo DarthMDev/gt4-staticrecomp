@@ -2389,6 +2389,186 @@ int TestScaleFullscreenPasses(const gpu::VulkanHandles& handles) {
     return failures == 0 ? 0 : 1;
 }
 
+// hw_scale_interlaced_present (IN-381): 480i field-mode frames (FFMD = 1, as GT4's menus) presented at an internal
+// scale go through the GPU compose and the GPU deinterlace of 13.3/13.4 counted in native rows.
+//   - Exactness: the field buffer is filled by EE uploads (1x words, so its scaled image is every native pixel as an
+//     s x s block) with per-field lines and a moving half. For every mode (auto = adaptive, weave, bob, blend) and
+//     eight VBlanks of alternating fields, the scaled presentation must equal the CPU presentation compose at 1x
+//     (field offset and stateful deinterlacer) blown up by nearest, pixel for pixel.
+//   - Detail: a sprite drawn into the field buffer must reach the scaled presentation as sub-pixel detail (mixed
+//     s x s blocks), which a 1x presentation (candidate 271 for every 480i frame) cannot have.
+int TestScaleInterlacedPresent(const gpu::VulkanHandles& handles) {
+    constexpr uint32_t kWidth = 64;
+    constexpr uint32_t kRows = 32;  // field buffer rows; the frame is 64 rows
+    auto lineColour = [](uint32_t line, uint32_t x, uint32_t frame) {
+        const uint32_t moving = x >= kWidth / 2 ? frame * 0x00302010u : 0u;  // the right half changes every VBlank
+        return 0x80000000u | (((line * 7u + 3u) & 0xFFu) | (((line * 13u) & 0xFFu) << 8) | ((x * 3u) << 16)) + moving;
+    };
+    auto upload = [&](writeback::Renderer& renderer, uint32_t fieldLine, uint32_t frame) {
+        std::vector<Qword> stream;
+        stream.push_back(PackedTag(4, false, 0, {0xE}));
+        stream.push_back(Qword{(uint64_t{1} << 16) | (uint64_t{1} << 48), 0x50});  // BITBLTBUF: DBP 0, DBW 1, CT32
+        stream.push_back(Qword{0, 0x51});
+        stream.push_back(Qword{uint64_t{kWidth} | (uint64_t{kRows} << 32), 0x52});
+        stream.push_back(Qword{0, 0x53});
+        const uint32_t qwords = kWidth * kRows / 4;
+        stream.push_back(PackedTag(qwords, true, 2, {}));
+        for (uint32_t i = 0; i < qwords; ++i) {
+            const uint32_t row = (i * 4) / kWidth;
+            const uint32_t x = (i * 4) % kWidth;
+            const uint32_t c0 = lineColour(2 * row + fieldLine, x, frame);
+            const uint32_t c1 = lineColour(2 * row + fieldLine, x + 1, frame);
+            const uint32_t c2 = lineColour(2 * row + fieldLine, x + 2, frame);
+            const uint32_t c3 = lineColour(2 * row + fieldLine, x + 3, frame);
+            stream.push_back(Qword{uint64_t{c0} | (uint64_t{c1} << 32), uint64_t{c2} | (uint64_t{c3} << 32)});
+        }
+        renderer.GifTransfer(1, reinterpret_cast<const uint8_t*>(stream.data()), stream.size() * sizeof(Qword));
+    };
+    auto drawSprite = [](writeback::Renderer& renderer) {
+        const uint64_t rgbaq = uint64_t{0x8020E0F0u} | (uint64_t{0x3F800000u} << 32);
+        const std::vector<std::pair<uint64_t, uint64_t>> ad = {
+            {(uint64_t{63} << 16) | (uint64_t{31} << 48), 0x40},             // SCISSOR 64 x 32
+            {0, 0x18},                                                       // XYOFFSET 0
+            {(uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47},               // TEST: ZTE, ALWAYS
+            {uint64_t{0} | (uint64_t{1} << 16), 0x4C},                       // FRAME: page 0, FBW 1, CT32
+            {uint64_t{30} | (uint64_t{1} << 32), 0x4E},                      // ZBUF masked
+            {6, 0x00},                                                       // PRIM: sprite
+            {rgbaq, 0x01},
+            {uint64_t{9 * 16} | (uint64_t{5 * 16} << 16), 0x05},
+            {uint64_t{40 * 16} | (uint64_t{21 * 16} << 16), 0x05}};
+        std::vector<Qword> stream;
+        stream.push_back(PackedTag(static_cast<uint32_t>(ad.size()), true, 0, {0xE}));
+        for (const auto& [data, reg] : ad) stream.push_back(Qword{data, reg});
+        renderer.GifTransfer(1, reinterpret_cast<const uint8_t*>(stream.data()), stream.size() * sizeof(Qword));
+    };
+    auto setup = [&](writeback::Renderer& renderer, display::DeinterlaceMode mode) {
+        writeback::OutputSettings settings;
+        settings.deinterlace = mode;
+        renderer.SetOutputSettings(settings);
+        renderer.WritePrivileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));  // PMODE: RC1, MMOD 1, ALP 255
+        renderer.WritePrivileged(0x12000010u, uint64_t{2} << 13);              // SMODE1: NTSC
+        renderer.WritePrivileged(0x12000020u, 3u);                             // SMODE2: INT, FFMD
+        renderer.WritePrivileged(0x12000060u, 1u);                             // SYNCV: interlaced signal (13.1)
+        renderer.WritePrivileged(0x12000070u, uint64_t{1} << 9);               // DISPFB1: FBP 0, FBW 1, CT32
+        renderer.WritePrivileged(0x12000080u, (uint64_t{3} << 23) | (uint64_t{4 * kWidth - 1} << 32) |
+                                                  (uint64_t{2 * kRows - 1} << 44));  // DISPLAY1: MAGH 3, 64 x 64
+    };
+    int failures = 0;
+    const struct {
+        display::DeinterlaceMode mode;
+        const char* name;
+    } modes[] = {{display::DeinterlaceMode::Auto, "auto (adaptive)"},
+                 {display::DeinterlaceMode::Weave, "weave"},
+                 {display::DeinterlaceMode::Bob, "bob"},
+                 {display::DeinterlaceMode::Blend, "blend"}};
+    for (uint32_t scale : {2u, 4u}) {
+        for (const auto& m : modes) {
+            writeback::Renderer native;
+            writeback::Renderer scaled;
+            std::string error;
+            scaled.SetScale(scale, static_cast<float>(scale));
+            if (!native.Init(handles, error) || !scaled.Init(handles, error)) {
+                std::printf("hw_scale_interlaced_present: init failed: %s\n", error.c_str());
+                return 1;
+            }
+            native.SetSyncMode(true);
+            scaled.SetSyncMode(true);
+            setup(native, m.mode);
+            setup(scaled, m.mode);
+            uint64_t pixelErrors = 0, gpuFrames = 0, compared = 0;
+            for (uint32_t frame = 0; frame < 8; ++frame) {
+                const bool odd = (frame & 1u) != 0;
+                upload(native, odd ? 1u : 0u, frame);
+                upload(scaled, odd ? 1u : 0u, frame);
+                native.SetDisplayField(odd);
+                scaled.SetDisplayField(odd);
+                native.Flush();
+                scaled.Flush();
+                const writeback::FrameOutput reference = native.Compose(writeback::ComposeKind::Presentation);
+                writeback::GpuFrame gpuFrame;
+                std::vector<uint32_t> pixels;
+                if (!scaled.ComposeFrameGpu(gpuFrame) || !scaled.ReadGpuFrame(gpuFrame, pixels)) continue;
+                ++gpuFrames;
+                if (!reference.valid || gpuFrame.width != reference.width * scale ||
+                    gpuFrame.height != reference.height * scale) {
+                    std::printf("    %s scale %u frame %u: size %ux%u vs 1x %ux%u\n", m.name, scale, frame,
+                                gpuFrame.width, gpuFrame.height, reference.width, reference.height);
+                    ++pixelErrors;
+                    continue;
+                }
+                ++compared;
+                for (uint32_t y = 0; y < gpuFrame.height; ++y) {
+                    for (uint32_t x = 0; x < gpuFrame.width; ++x) {
+                        const uint32_t got = pixels[static_cast<size_t>(y) * gpuFrame.width + x] & 0xFFFFFFu;
+                        const uint32_t expected =
+                            reference.pixels[static_cast<size_t>(y / scale) * reference.width + x / scale] & 0xFFFFFFu;
+                        if (got != expected) {
+                            if (pixelErrors < 4) {
+                                std::printf("    %s scale %u frame %u pixel %u,%u: %06x, expected %06x\n", m.name, scale,
+                                            frame, x, y, got, expected);
+                            }
+                            ++pixelErrors;
+                        }
+                    }
+                }
+            }
+            std::printf("  %s scale %u: GPU frames %llu, compared %llu, pixels off the 1x deinterlacer %llu, scaled "
+                        "deinterlaces %llu\n",
+                        m.name, scale, static_cast<unsigned long long>(gpuFrames),
+                        static_cast<unsigned long long>(compared), static_cast<unsigned long long>(pixelErrors),
+                        static_cast<unsigned long long>(scaled.GpuCounters().scaledDeinterlaces));
+            const bool expectsDeinterlace = true;  // every mode here deinterlaces (auto resolves to adaptive: FFMD)
+            if (gpuFrames != 8 || compared != 8 || pixelErrors != 0 ||
+                (expectsDeinterlace && scaled.GpuCounters().scaledDeinterlaces != 8)) {
+                ++failures;
+            }
+            if (native.Failed() || scaled.Failed()) {
+                std::printf("    renderer failed: %s %s\n", native.LastError().c_str(), scaled.LastError().c_str());
+                ++failures;
+            }
+        }
+        // Detail: a sprite drawn into the field buffer shows sub-pixel edges at scale.
+        writeback::Renderer scaled;
+        std::string error;
+        scaled.SetScale(scale, static_cast<float>(scale));
+        if (!scaled.Init(handles, error)) return 1;
+        scaled.SetSyncMode(true);
+        scaled.SetCpuSmallSprites(false);
+        setup(scaled, display::DeinterlaceMode::Auto);
+        uint64_t mixed = 0;
+        bool composed = false;
+        for (uint32_t frame = 0; frame < 2; ++frame) {
+            upload(scaled, frame & 1u, 0);
+            drawSprite(scaled);
+            scaled.SetDisplayField((frame & 1u) != 0);
+            scaled.Flush();
+            writeback::GpuFrame gpuFrame;
+            std::vector<uint32_t> pixels;
+            composed = scaled.ComposeFrameGpu(gpuFrame) && scaled.ReadGpuFrame(gpuFrame, pixels);
+            if (!composed) break;
+            mixed = 0;
+            for (uint32_t by = 0; by < gpuFrame.height / scale; ++by) {
+                for (uint32_t bx = 0; bx < gpuFrame.width / scale; ++bx) {
+                    const uint32_t first = pixels[static_cast<size_t>(by * scale) * gpuFrame.width + bx * scale] & 0xFFFFFFu;
+                    bool uniform = true;
+                    for (uint32_t dy = 0; dy < scale && uniform; ++dy) {
+                        for (uint32_t dx = 0; dx < scale && uniform; ++dx) {
+                            uniform = (pixels[static_cast<size_t>(by * scale + dy) * gpuFrame.width + bx * scale + dx] &
+                                       0xFFFFFFu) == first;
+                        }
+                    }
+                    if (!uniform) ++mixed;
+                }
+            }
+        }
+        std::printf("  drawn sprite scale %u: GPU compose %s, mixed blocks %llu\n", scale, composed ? "yes" : "NO",
+                    static_cast<unsigned long long>(mixed));
+        if (!composed || mixed == 0 || scaled.Failed()) ++failures;
+    }
+    std::printf("hw_scale_interlaced_present: %d failures\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 // hw_postfx_fxaa (IN-376, chapter 13.5): a dark buffer with one bright flat triangle whose long edges are steep
 // and shallow, composed on the GPU at 1x and 2x with and without FXAA. Edge-only FXAA must leave every pixel away
 // from the edges unchanged, change pixels along them, and only produce colours between the two flat colours.
@@ -3011,6 +3191,7 @@ int main(int argc, char** argv) {
     if (name == "hw_postfx_fxaa") return TestPostfxFxaa(handles);
     if (name == "hw_scale_display_shadow") return TestScaleDisplayShadow(handles);
     if (name == "hw_scale_fullscreen_passes") return TestScaleFullscreenPasses(handles);
+    if (name == "hw_scale_interlaced_present") return TestScaleInterlacedPresent(handles);
     std::printf("unknown test: %s\n", name.c_str());
     return 2;
 }

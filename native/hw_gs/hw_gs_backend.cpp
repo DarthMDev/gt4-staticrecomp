@@ -1135,7 +1135,7 @@ RenderCounters Backend::render_counters() const {
   out.gpu_upload_bytes = gpu.uploadBytes;
   out.gpu_readback_bytes = gpu.readbackBytes;
   out.gpu_busy_ns = gpu.gpuBusyNs;
-  for (int i = 0; i < 6; ++i) out.gpu_ns[i] = gpu.gpuNs[i];
+  for (int i = 0; i < 8; ++i) out.gpu_ns[i] = gpu.gpuNs[i];
   out.gpu_early_submissions = gpu.earlySubmissions;
   out.vblanks_interlaced = c.vblanksInterlaced;
   out.vblanks_progressive = c.vblanksProgressive;
