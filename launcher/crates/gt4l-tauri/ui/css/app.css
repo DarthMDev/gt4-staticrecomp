@@ -304,10 +304,19 @@ body.is-home.input-keys #hints { display: none; }
    on its own; narrow or short windows hide it (rules at the end of this file). */
 .home-notes {
   position: absolute; right: 72px; top: 72px; z-index: 2; width: 380px; max-height: calc(100% - 144px);
-  display: flex; flex-direction: column; border-radius: 6px; overflow: hidden;
-  background: rgba(14, 16, 24, 0.42); border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(16px) saturate(1.2);
+  display: flex; flex-direction: column; border-radius: 6px; overflow: hidden; isolation: isolate;
+  /* Dark enough that the text keeps its contrast over a light background picture (owner, 2026-10-23). */
+  background: linear-gradient(160deg, rgba(20, 22, 30, 0.72) 0%, rgba(10, 12, 18, 0.80) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+/* Acrylic: a faint tiled grain (assets/acrylic-grain.png, generated for GT4Recomp) and a soft sheen over the glass,
+   under the text. */
+.home-notes::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: url("../assets/acrylic-grain.png") repeat, linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 40%);
+  opacity: 0.22;
 }
 .home-notes[hidden] { display: none; }
 .home-notes-head {
