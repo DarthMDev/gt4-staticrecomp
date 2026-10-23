@@ -38,6 +38,11 @@ class PinTests(unittest.TestCase):
         self.assertEqual(pin['static_patches']['detail'][0]['new_words'], [0x0C1A29DA])
         self.assertEqual(pin['beta']['records'][1]['size'], 0x55FBBC)
         self.assertEqual(pin['beta']['records'][2]['size'], 0xD45FC)
+        # The beta's two 128-byte container headers are pinned by size and hash only: no disc bytes in git.
+        self.assertNotIn('strings', pin['beta'])
+        self.assertEqual([h['size_bytes'] for h in pin['beta']['headers']], [128, 128])
+        for header in pin['beta']['headers']:
+            self.assertRegex(header['sha256'], r'^[0-9a-f]{64}$')
 
     def test_beta_pin_matches_the_tool(self):
         pin = json.loads((ROOT / 'docs/inputs/spec2-beta.json').read_text(encoding='utf-8'))

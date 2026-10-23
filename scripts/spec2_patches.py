@@ -743,7 +743,7 @@ def main(argv=None):
         document["beta"] = {
             "container_sha256": sha256(beta_payload),
             "entry": beta.entry,
-            "strings": [s.hex() for s in beta.strings],
+            "headers": [{"size_bytes": len(s), "sha256": sha256(s)} for s in beta.strings],
             "records": [{"address": r["address"], "size": r["size"],
                          "sha256": sha256(r["body"])} for r in beta.records],
         }
