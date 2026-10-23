@@ -81,6 +81,8 @@ hw_add_shader(hw_glm_clut "${HW_SHADER_DIR}/hw_glm_clut.comp" comp)
 # M12 upscaling (IN-371/IN-372): scaled-image refresh from 1x words and the display compose at scale.
 hw_add_shader(hw_scale_upsample "${HW_SHADER_DIR}/hw_scale_upsample.comp" comp)
 hw_add_shader(hw_display_compose_scaled "${HW_SHADER_DIR}/hw_display_compose_scaled.comp" comp)
+# IN-379: the scaled image of a frame after GT4's RGB tone curve (09.4 variant A).
+hw_add_shader(hw_scale_tone_carry "${HW_SHADER_DIR}/hw_scale_tone_carry.comp" comp)
 # 13.5 edge-only FXAA of the presentation frame (IN-376).
 hw_add_shader(hw_postfx_fxaa "${HW_SHADER_DIR}/hw_postfx_fxaa.comp" comp)
 hw_add_shader(hw_glm_unswizzle "${HW_SHADER_DIR}/hw_glm_unswizzle.comp" comp)

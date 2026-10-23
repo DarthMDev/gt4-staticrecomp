@@ -170,6 +170,7 @@ struct GpuStats {
     std::uint64_t scaledTextureCopies = 0;  // IN-374: textures copied from a slot's scaled image
     std::uint64_t fxaaFrames = 0;           // IN-376: presentation frames passed through FXAA
     std::uint64_t scaledShadowSaves = 0;    // IN-377: display shadows saved from a dropped slot's scaled image
+    std::uint64_t toneCarries = 0;          // IN-379: scaled images rebuilt after a tone-curve sequence
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
     // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.
@@ -252,11 +253,24 @@ public:
     // scaled compose reads that shadow when its circuit word is kGpuColourSlots + shadow + 1.
     bool SaveScaledShadow(std::uint32_t slot, std::uint32_t shadow, std::int32_t x0, std::int32_t y0, std::int32_t x1,
                           std::int32_t y1, std::string &error);
+    // IN-379 (09.4 variant A at scale): SaveToneSource copies colour slot `slot`'s scaled image and 1x words over the
+    // native rectangle (clipped to kGpuScaledExtent x kGpuShadowRows) before GT4's tone-curve sequence reads it at 1x;
+    // CarryTone then rebuilds colour slot `slot`'s scaled image over the rectangle from that copy through the per-
+    // channel table that maps the saved 1x words to the slot's current 1x words (hw_scale_tone_carry.comp). Only the
+    // scaled image changes.
+    bool SaveToneSource(std::uint32_t slot, std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1,
+                        std::string &error);
+    bool CarryTone(std::uint32_t slot, std::int32_t x0, std::int32_t y0, std::int32_t x1, std::int32_t y1,
+                   std::string &error);
     // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, max(kGpuSurface,
     // kGpuScaledExtent * scale) square, GENERAL layout).
     // As an opaque handle (the VkImage value): this header carries no Vulkan types.
     std::uint64_t DisplayImage() const;
     // Fixtures: the top-left width x height words of the display image, or of the FXAA image (submits and waits).
+    // Diagnostics (GT4_HW_TONE_DUMP): the top-left width x height words of a scaled image: 0 colour slot `slot`'s
+    // scaled image, 1 the saved tone source (scaled), 2 colour slot `slot`'s 1x image (submits and waits).
+    bool ReadImageDebug(std::uint32_t which, std::uint32_t slot, std::uint32_t width, std::uint32_t height,
+                        std::vector<std::uint32_t> &words, std::string &error);
     bool ReadDisplay(std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words, std::string &error,
                      bool fromFxaa = false);
     // 13.5 FXAA (IN-376): records hw_postfx_fxaa.comp over the top-left width x height pixels of the display image
@@ -295,6 +309,8 @@ public:
     const GpuStats &Stats() const;
 
 private:
+    bool read_image(std::uint64_t image, std::uint32_t width, std::uint32_t height, std::vector<std::uint32_t> &words,
+                    std::string &error);
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

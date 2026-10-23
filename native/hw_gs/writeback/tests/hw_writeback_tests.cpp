@@ -2184,6 +2184,211 @@ int TestScaleDisplayShadow(const gpu::VulkanHandles& handles) {
     return failures == 0 ? 0 : 1;
 }
 
+// hw_scale_fullscreen_passes (owner test 7, IN-379/IN-380): the two full-screen passes that made GT4's race look 1x
+// at every scale, each in a minimal capture, checked on the presented scaled frame against the 06.3 exact expectation
+// of the final 1x image (the hw_scale_exact rule: sub-pixel (sx, sy) shows native ((sx - h) / s, (sy - h) / s)).
+//   - "copy": the frame is copied into the shown buffer through a REGION_CLAMP texture whose power-of-two size
+//     (256 x 128) is larger than the rendered area (100 x 60), as GT4's CT16 conversion does (640 x 448 through
+//     1024 x 512). The copy must sample the target's scaled image (IN-380), not the 1x words.
+//   - "tone": after the frame is drawn, a tone sequence reads it through an 8-bit (T8) view into a temporary page and
+//     writes a result back into the same memory through a CT24 view with T8-textured, FIX-blended sprites. The
+//     result is a per-channel function of the frame (Cd - Cd * FIX / 128), like GT4's RGB tone curve, so the scaled
+//     image after the sequence must be that function of the scaled image before it (IN-379).
+// Memory must equal the 1x run (the 1x words stay the only authority). Both cases fail without the fix.
+int TestScaleFullscreenPasses(const gpu::VulkanHandles& handles) {
+    auto rgbaq = [](uint32_t colour) { return uint64_t{colour} | (uint64_t{0x3F800000u} << 32); };
+    auto xy = [](uint32_t x, uint32_t y) { return uint64_t{x * 16} | (uint64_t{y * 16} << 16); };
+    auto uvRaw = [](uint32_t u16, uint32_t v16) { return uint64_t{u16} | (uint64_t{v16} << 16); };
+    const uint64_t kSprite = 6, kTme = 1u << 4, kAbe = 1u << 6, kFst = 1u << 8;
+    auto tex0 = [](uint64_t tbpBlocks, uint64_t tbw, uint64_t psm, uint64_t twLog2, uint64_t thLog2, uint64_t cbpBlocks,
+                   uint64_t cld) {
+        return tbpBlocks | (tbw << 14) | (psm << 20) | (twLog2 << 26) | (thLog2 << 30) | (uint64_t{1} << 34) |
+               (uint64_t{1} << 35) | (cbpBlocks << 37) | (cld << 61);  // TCC, TFX decal, CPSM CT32, CSM 0
+    };
+
+    struct Case {
+        const char* name;
+        cpuref::CaptureWriter capture;
+        uint32_t width, height;
+    };
+    std::vector<Case> cases;
+    {
+        // copy: A = page 0 (CT32, FBW 2, 128 wide), shown buffer B = page 8 (CT32, FBW 2); 100 x 60 picture.
+        Case c{"copy", {}, 100, 60};
+        c.capture.Privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));  // PMODE: RC1, MMOD 1, ALP 255
+        c.capture.Privileged(0x12000010u, uint64_t{2} << 13);               // SMODE1: NTSC
+        c.capture.Privileged(0x12000070u, uint64_t{8} | (uint64_t{2} << 9));  // DISPFB1: page 8, FBW 2, CT32
+        c.capture.Privileged(0x12000080u, (uint64_t{3} << 23) | (uint64_t{399} << 32) | (uint64_t{59} << 44));
+        const std::vector<uint64_t> words = {
+            (uint64_t{127} << 16) | (uint64_t{63} << 48), 0x40, 0, 0x18,
+            (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,                // TEST: ZTE, ALWAYS
+            uint64_t{0} | (uint64_t{2} << 16), 0x4C, uint64_t{30} | (uint64_t{1} << 32), 0x4E,  // FRAME A, ZBUF masked
+            kSprite, 0x00, rgbaq(0x80203040u), 0x01, xy(0, 0), 0x05, xy(100, 60), 0x05,
+            kSprite, 0x00, rgbaq(0x80E04010u), 0x01, xy(7, 5), 0x05, xy(31, 40), 0x05,
+            kSprite, 0x00, rgbaq(0x8010E040u), 0x01, xy(50, 12), 0x05, xy(93, 27), 0x05,
+            uint64_t{8} | (uint64_t{2} << 16), 0x4C,                        // FRAME B
+            tex0(0, 2, 0x00, 8, 7, 0, 0), 0x06,                             // A as CT32, 256 x 128
+            0, 0x14,                                                        // TEX1: nearest
+            uint64_t{2} | (uint64_t{2} << 2) | (uint64_t{99} << 14) | (uint64_t{59} << 34), 0x08,  // REGION_CLAMP
+            kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uvRaw(8, 8), 0x03, xy(0, 0), 0x05,
+            uvRaw(100 * 16 + 8, 60 * 16 + 8), 0x03, xy(100, 60), 0x05};
+        c.capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(words.size() / 2), true, false, 0, 0, {0xE},
+                                                       words));
+        c.capture.FrameEnd(0);
+        cases.push_back(std::move(c));
+    }
+    {
+        // tone: A = page 0 (CT32, FBW 1, 64 x 64, shown); temporary T = page 8; a zero T8 texture at page 16 and a
+        // zero CLUT at page 20, so every textured source colour is 0 and the blend gives Cd - Cd * 0x50 / 128.
+        Case c{"tone", {}, 64, 64};
+        c.capture.Privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));
+        c.capture.Privileged(0x12000010u, uint64_t{2} << 13);
+        c.capture.Privileged(0x12000070u, uint64_t{0} | (uint64_t{1} << 9));  // DISPFB1: page 0, FBW 1, CT32
+        c.capture.Privileged(0x12000080u, (uint64_t{3} << 23) | (uint64_t{255} << 32) | (uint64_t{63} << 44));
+        const uint64_t blendFix = 0 | (uint64_t{1} << 2) | (uint64_t{2} << 4) | (uint64_t{1} << 6) | (uint64_t{0x50} << 32);
+        const std::vector<uint64_t> words = {
+            (uint64_t{63} << 16) | (uint64_t{63} << 48), 0x40, 0, 0x18,
+            (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,
+            uint64_t{0} | (uint64_t{1} << 16), 0x4C, uint64_t{30} | (uint64_t{1} << 32), 0x4E,  // FRAME A (CT32)
+            kSprite, 0x00, rgbaq(0x80406080u), 0x01, xy(0, 0), 0x05, xy(64, 64), 0x05,
+            kSprite, 0x00, rgbaq(0x80E04010u), 0x01, xy(5, 7), 0x05, xy(20, 30), 0x05,
+            kSprite, 0x00, rgbaq(0x8010E040u), 0x01, xy(33, 2), 0x05, xy(60, 11), 0x05,
+            kSprite, 0x00, rgbaq(0x804010E0u), 0x01, xy(10, 40), 0x05, xy(50, 61), 0x05,
+            // The sequence: A read through a T8 view into T ...
+            uint64_t{8} | (uint64_t{1} << 16), 0x4C,                        // FRAME T
+            tex0(0, 2, 0x13, 7, 6, 20 * 32, 1), 0x06,                       // A as T8 (128 x 64), CLUT load
+            0, 0x14, 0, 0x08,                                               // nearest, REPEAT
+            kSprite | kTme | kFst, 0x00, rgbaq(0x80808080u), 0x01, uvRaw(8, 8), 0x03, xy(0, 0), 0x05,
+            uvRaw(64 * 16 + 8, 32 * 16 + 8), 0x03, xy(64, 32), 0x05,
+            // ... then the result written back into A through a CT24 view, T8-textured and FIX-blended.
+            uint64_t{0} | (uint64_t{1} << 16) | (uint64_t{1} << 24), 0x4C,  // FRAME A as CT24
+            tex0(16 * 32, 2, 0x13, 7, 6, 20 * 32, 0), 0x06,                 // the zero T8 page
+            blendFix, 0x42,
+            kSprite | kTme | kAbe | kFst, 0x00, rgbaq(0x80808080u), 0x01, uvRaw(8, 8), 0x03, xy(0, 0), 0x05,
+            uvRaw(64 * 16 + 8, 64 * 16 + 8), 0x03, xy(64, 64), 0x05};
+        c.capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(words.size() / 2), true, false, 0, 0, {0xE},
+                                                       words));
+        c.capture.FrameEnd(0);
+        cases.push_back(std::move(c));
+    }
+
+    struct Run {
+        uint64_t slm = 0;
+        std::vector<uint8_t> native;
+        std::vector<uint32_t> scaled;
+        uint32_t width = 0, height = 0;
+        writeback::Counters counters;
+        gpu::GpuStats stats;
+    };
+    auto replay = [&](const Case& c, uint32_t scale, Run& run, std::string& error) -> bool {
+        writeback::Renderer renderer;
+        renderer.SetScale(scale, static_cast<float>(scale));
+        if (!renderer.Init(handles, error)) return false;
+        renderer.SetSyncMode(true);
+        renderer.SetCpuSmallSprites(false);
+        writeback::WritebackReplayTarget target(renderer, writeback::ComposeKind::Reference);
+        cpuref::ReplaySummary summary;
+        bool got = false;
+        const bool ok = cpuref::ReplayCapture(c.capture.Bytes(), target, summary,
+                                              [&](uint64_t, const cpuref::FrameImage& image) {
+                                                  for (const display::Rgba8& p : image.image.pixels) {
+                                                      run.native.push_back(p.r);
+                                                      run.native.push_back(p.g);
+                                                      run.native.push_back(p.b);
+                                                  }
+                                                  run.width = image.image.width;
+                                                  run.height = image.image.height;
+                                                  run.slm = cpuref::HashLocalMemory(renderer.Slm(), 4u * 1024u * 1024u);
+                                                  writeback::GpuFrame frame;
+                                                  got = scale == 1 || (renderer.ComposeFrameGpu(frame) &&
+                                                                       renderer.ReadGpuFrame(frame, run.scaled) &&
+                                                                       frame.width == scale * image.image.width &&
+                                                                       frame.height == scale * image.image.height);
+                                              },
+                                              error);
+        run.counters = renderer.GetCounters();
+        run.stats = renderer.GpuCounters();
+        if (renderer.Failed()) error += " " + renderer.LastError();
+        return ok && got && !renderer.Failed();
+    };
+
+    int failures = 0;
+    for (const Case& c : cases) {
+        Run base;
+        std::string error;
+        if (!replay(c, 1, base, error) || base.width != c.width || base.height != c.height) {
+            std::printf("hw_scale_fullscreen_passes: %s 1x replay failed (%ux%u): %s\n", c.name, base.width, base.height,
+                        error.c_str());
+            ++failures;
+            continue;
+        }
+        // Blindness: the shown picture has several colours.
+        std::vector<uint32_t> colours;
+        for (size_t i = 0; i + 2 < base.native.size(); i += 3) {
+            const uint32_t v = uint32_t{base.native[i]} | (uint32_t{base.native[i + 1]} << 8) |
+                               (uint32_t{base.native[i + 2]} << 16);
+            if (std::find(colours.begin(), colours.end(), v) == colours.end()) colours.push_back(v);
+        }
+        if (colours.size() < 3) {
+            std::printf("hw_scale_fullscreen_passes: %s shows %zu colours (fixture is blind)\n", c.name, colours.size());
+            ++failures;
+        }
+        for (uint32_t scale = 2; scale <= 4; scale += 2) {
+            Run run;
+            if (!replay(c, scale, run, error)) {
+                std::printf("hw_scale_fullscreen_passes: %s scale %u replay failed: %s\n", c.name, scale, error.c_str());
+                ++failures;
+                continue;
+            }
+            const uint32_t w = base.width, h = base.height, half = scale / 2;
+            uint64_t pixelErrors = 0, mixedBlocks = 0;
+            for (uint32_t sy = 0; sy < h * scale; ++sy) {
+                for (uint32_t sx = 0; sx < w * scale; ++sx) {
+                    const uint32_t nx = (std::max(sx, half) - half) / scale;
+                    const uint32_t ny = (std::max(sy, half) - half) / scale;
+                    const uint8_t* n = &base.native[(static_cast<size_t>(ny) * w + nx) * 3];
+                    const uint32_t expected = uint32_t{n[0]} | (uint32_t{n[1]} << 8) | (uint32_t{n[2]} << 16);
+                    const uint32_t got = run.scaled[static_cast<size_t>(sy) * w * scale + sx] & 0xFFFFFFu;
+                    if (got != expected) {
+                        if (pixelErrors < 4) {
+                            std::printf("    %s scale %u sub-pixel %u,%u: %06x, expected (native %u,%u) %06x\n", c.name,
+                                        scale, sx, sy, got, nx, ny, expected);
+                        }
+                        ++pixelErrors;
+                    }
+                }
+            }
+            for (uint32_t y = 0; y < h; ++y) {
+                for (uint32_t x = 0; x < w; ++x) {
+                    const uint32_t first = run.scaled[(y * scale) * w * scale + x * scale] & 0xFFFFFFu;
+                    bool uniform = true;
+                    for (uint32_t dy = 0; dy < scale && uniform; ++dy) {
+                        for (uint32_t dx = 0; dx < scale && uniform; ++dx) {
+                            uniform = (run.scaled[(y * scale + dy) * w * scale + x * scale + dx] & 0xFFFFFFu) == first;
+                        }
+                    }
+                    if (!uniform) ++mixedBlocks;
+                }
+            }
+            const bool sameMemory = run.slm == base.slm && run.native == base.native;
+            std::printf("  %s scale %u: memory %s, sub-pixels off the 06.3 expectation %llu, mixed blocks %llu, scaled "
+                        "texture copies %llu, tone runs %llu, tone carries %llu\n",
+                        c.name, scale, sameMemory ? "equal" : "DIFFERENT", static_cast<unsigned long long>(pixelErrors),
+                        static_cast<unsigned long long>(mixedBlocks),
+                        static_cast<unsigned long long>(run.stats.scaledTextureCopies),
+                        static_cast<unsigned long long>(run.counters.toneRuns),
+                        static_cast<unsigned long long>(run.counters.toneCarries));
+            const bool toneCase = std::string(c.name) == "tone";
+            if (!sameMemory || pixelErrors != 0 || mixedBlocks == 0 ||
+                (toneCase ? run.counters.toneCarries == 0 : run.stats.scaledTextureCopies == 0)) {
+                ++failures;
+            }
+        }
+    }
+    std::printf("hw_scale_fullscreen_passes: %d failures\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 // hw_postfx_fxaa (IN-376, chapter 13.5): a dark buffer with one bright flat triangle whose long edges are steep
 // and shallow, composed on the GPU at 1x and 2x with and without FXAA. Edge-only FXAA must leave every pixel away
 // from the edges unchanged, change pixels along them, and only produce colours between the two flat colours.
@@ -2805,6 +3010,7 @@ int main(int argc, char** argv) {
     if (name == "hw_scale_exact") return TestScaleExact(handles);
     if (name == "hw_postfx_fxaa") return TestPostfxFxaa(handles);
     if (name == "hw_scale_display_shadow") return TestScaleDisplayShadow(handles);
+    if (name == "hw_scale_fullscreen_passes") return TestScaleFullscreenPasses(handles);
     std::printf("unknown test: %s\n", name.c_str());
     return 2;
 }

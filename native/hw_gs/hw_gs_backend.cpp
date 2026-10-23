@@ -1149,6 +1149,8 @@ RenderCounters Backend::render_counters() const {
   out.scaled_circuits_from_glm = c.scaledCircuitsFromGlm;
   out.scaled_circuits_from_shadows = c.scaledCircuitsFromShadows;
   out.scaled_shadow_saves = c.scaledShadowSaves;
+  out.tone_runs = c.toneRuns;
+  out.tone_carries = c.toneCarries;
   out.gpu_composed_frames = c.gpuComposedFrames;
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;

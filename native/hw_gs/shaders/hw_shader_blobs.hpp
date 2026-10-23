@@ -46,6 +46,8 @@ extern const std::uint32_t hw_scale_upsample_words[];
 extern const std::size_t hw_scale_upsample_word_count;
 extern const std::uint32_t hw_display_compose_scaled_words[];
 extern const std::size_t hw_display_compose_scaled_word_count;
+extern const std::uint32_t hw_scale_tone_carry_words[];  // IN-379
+extern const std::size_t hw_scale_tone_carry_word_count;
 extern const std::uint32_t hw_postfx_fxaa_words[];
 extern const std::size_t hw_postfx_fxaa_word_count;
 

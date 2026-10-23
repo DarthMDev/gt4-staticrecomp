@@ -188,7 +188,9 @@ int main(int argc, char** argv) {
     std::string upscaledDir;     // --upscaled-dir DIR: the GPU presentation compose at that scale (IN-372)
     // --check-presented (owner test 6, IN-377): every frame's GPU presentation compose (the image the window shows) is
     // read back and its s x s blocks inspected. A frame sourced from 1x memory has every block uniform (each native
-    // texel repeated s x s times); a really upscaled frame has edge blocks with several values.
+    // texel repeated s x s times); a really upscaled frame has edge blocks with several values. Owner test 7 (IN-379,
+    // IN-380): a frame can also be a 1x picture with a few scaled overlays (the HUD), so a frame whose share of mixed
+    // blocks is below kMinDetailShare also counts as low-detail (candidate 270: 5.6% on the race capture; fixed: 69%).
     bool checkPresented = false;
     for (int i = 3; i < argc; ++i) {
         if (std::strcmp(argv[i], "--check-presented") == 0) checkPresented = true;
@@ -352,7 +354,8 @@ int main(int argc, char** argv) {
     cpuref::ReplaySummary summary;
     std::uint64_t written = 0;
     std::uint64_t presentedFrames = 0, presented1xFrames = 0, presentedMinMixedBlocks = UINT64_MAX;
-    std::uint64_t presentedMixedBlocks = 0;
+    std::uint64_t presentedMixedBlocks = 0, presentedBlocks = 0, presentedLowDetailFrames = 0;
+    constexpr double kMinDetailShare = 0.20;
     std::string presented1xList;
     const auto onFrame = [&](std::uint64_t frame, const cpuref::FrameImage& image) {
         currentFrame = frame + 1;
@@ -384,6 +387,10 @@ int main(int argc, char** argv) {
                 }
                 ++presentedFrames;
                 presentedMixedBlocks += mixed;
+                const std::uint64_t blocks =
+                    static_cast<std::uint64_t>(gpuFrame.width / scale) * (gpuFrame.height / scale);
+                presentedBlocks += blocks;
+                if (static_cast<double>(mixed) < kMinDetailShare * static_cast<double>(blocks)) ++presentedLowDetailFrames;
                 if (mixed < presentedMinMixedBlocks) presentedMinMixedBlocks = mixed;
                 if (mixed == 0) {
                     ++presented1xFrames;
@@ -516,7 +523,7 @@ int main(int argc, char** argv) {
         const gpu::GpuStats& gpuStats = renderer.GpuCounters();
         std::printf("scale=%u scaled_draws=%llu scaled_passes=%llu scaled_refreshes=%llu scaled_refresh_pixels=%llu "
                     "scaled_composes=%llu circuits_from_slots=%llu circuits_from_glm=%llu circuits_from_shadows=%llu "
-                    "shadow_saves=%llu\n",
+                    "shadow_saves=%llu tone_runs=%llu tone_carries=%llu\n",
                     renderer.Scale(), static_cast<unsigned long long>(gpuStats.scaledDraws),
                     static_cast<unsigned long long>(gpuStats.scaledPasses),
                     static_cast<unsigned long long>(gpuStats.scaledRefreshes),
@@ -525,7 +532,9 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(counters.scaledCircuitsFromSlots),
                     static_cast<unsigned long long>(counters.scaledCircuitsFromGlm),
                     static_cast<unsigned long long>(counters.scaledCircuitsFromShadows),
-                    static_cast<unsigned long long>(counters.scaledShadowSaves));
+                    static_cast<unsigned long long>(counters.scaledShadowSaves),
+                    static_cast<unsigned long long>(counters.toneRuns),
+                    static_cast<unsigned long long>(counters.toneCarries));
     }
     if (checkPresented && scale > 1) {
         std::printf("presented_frames=%llu presented_1x_frames=%llu min_mixed_blocks=%llu mean_mixed_blocks=%.1f\n",
@@ -534,6 +543,9 @@ int main(int argc, char** argv) {
                     static_cast<unsigned long long>(presentedFrames ? presentedMinMixedBlocks : 0),
                     presentedFrames ? static_cast<double>(presentedMixedBlocks) / presentedFrames : 0.0);
         if (presented1xFrames) std::printf("presented_1x_list%s\n", presented1xList.c_str());
+        std::printf("presented_low_detail_frames=%llu mean_mixed_share=%.3f (low detail: mixed share below %.2f)\n",
+                    static_cast<unsigned long long>(presentedLowDetailFrames),
+                    presentedBlocks ? static_cast<double>(presentedMixedBlocks) / presentedBlocks : 0.0, kMinDetailShare);
     }
     std::printf("gpu_compose_equal=%llu gpu_compose_different=%llu\n",
                 static_cast<unsigned long long>(target.GpuComposeEqual()),

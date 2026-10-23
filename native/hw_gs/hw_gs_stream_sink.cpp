@@ -522,7 +522,8 @@ void finish(std::FILE *output) {
   if (counters.scale > 1) {
     std::fprintf(output,
                  "[hw] scale: x%u draws=%llu passes=%llu refreshes=%llu refresh_pixels=%llu composes=%llu "
-                 "circuits_from_slots=%llu circuits_from_glm=%llu circuits_from_shadows=%llu shadow_saves=%llu\n",
+                 "circuits_from_slots=%llu circuits_from_glm=%llu circuits_from_shadows=%llu shadow_saves=%llu "
+                 "tone_runs=%llu tone_carries=%llu\n",
                  counters.scale, static_cast<unsigned long long>(counters.scaled_draws),
                  static_cast<unsigned long long>(counters.scaled_passes),
                  static_cast<unsigned long long>(counters.scaled_refreshes),
@@ -531,7 +532,9 @@ void finish(std::FILE *output) {
                  static_cast<unsigned long long>(counters.scaled_circuits_from_slots),
                  static_cast<unsigned long long>(counters.scaled_circuits_from_glm),
                  static_cast<unsigned long long>(counters.scaled_circuits_from_shadows),
-                 static_cast<unsigned long long>(counters.scaled_shadow_saves));
+                 static_cast<unsigned long long>(counters.scaled_shadow_saves),
+                 static_cast<unsigned long long>(counters.tone_runs),
+                 static_cast<unsigned long long>(counters.tone_carries));
   }
   if (g_dump_every != 0) {
     std::fprintf(output, "[hw] dumps: written=%llu without_image=%llu every=%u dir=%s\n",

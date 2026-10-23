@@ -13,6 +13,7 @@
 #include <bit>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <optional>
 #include <unordered_map>
@@ -225,6 +226,61 @@ gpu::GpuVertex ToGpuVertex(const Vertex& v) {
 
 using Translation = BatchTranslation;
 
+// IN-380: the texels a batch can sample, inclusive: the texture coordinates of its vertices (texture space; the
+// interpolated coordinates of a primitive stay between its vertices', perspective included when every Q has the
+// same sign) widened by one texel for rounding and bilinear neighbours, then put through the wrap mode: CLAMP
+// clamps to the texture, REGION_CLAMP to its region; REPEAT that leaves the texture and REGION_REPEAT give the whole
+// texture. A texture taken from a resident target only needs this rectangle loaded, not the whole power-of-two
+// texture (GT4's full-screen passes sample a 640 x 448 frame through a 1024 x 512 texture).
+PixelRect TextureFootprint(const Batch& batch, const TextureUnit& t, uint32_t width, uint32_t height) {
+    const PixelRect whole{0, 0, static_cast<int32_t>(width) - 1, static_cast<int32_t>(height) - 1};
+    if (batch.vertices.empty()) return whole;
+    double uMin = 0, uMax = 0, vMin = 0, vMax = 0;
+    bool first = true;
+    bool positiveQ = false, negativeQ = false;
+    for (const Vertex& vertex : batch.vertices) {
+        double u = 0, v = 0;
+        if (t.fst) {
+            u = vertex.u / 16.0;
+            v = vertex.v / 16.0;
+        } else {
+            if (!(vertex.q == vertex.q) || vertex.q == 0.0f) return whole;  // NaN or a zero Q: unknown
+            positiveQ = positiveQ || vertex.q > 0.0f;
+            negativeQ = negativeQ || vertex.q < 0.0f;
+            u = static_cast<double>(vertex.s) / vertex.q * width;
+            v = static_cast<double>(vertex.t) / vertex.q * height;
+            if (!(u == u) || !(v == v) || std::abs(u) > 1e6 || std::abs(v) > 1e6) return whole;
+        }
+        uMin = first ? u : std::min(uMin, u);
+        uMax = first ? u : std::max(uMax, u);
+        vMin = first ? v : std::min(vMin, v);
+        vMax = first ? v : std::max(vMax, v);
+        first = false;
+    }
+    if (positiveQ && negativeQ) return whole;
+    auto axis = [](double low, double high, int32_t size, const pixel::WrapAxis& wrap, int32_t& out0, int32_t& out1) {
+        int32_t a = static_cast<int32_t>(std::floor(low)) - 1;
+        int32_t b = static_cast<int32_t>(std::ceil(high)) + 1;
+        if (wrap.mode == pixel::WrapMode::Clamp) {
+            a = std::clamp(a, 0, size - 1);
+            b = std::clamp(b, 0, size - 1);
+        } else if (wrap.mode == pixel::WrapMode::RegionClamp && wrap.minimum >= 0 && wrap.minimum <= wrap.maximum &&
+                   wrap.maximum < size) {
+            a = std::clamp(a, wrap.minimum, wrap.maximum);  // REGION_CLAMP: every sample lies in [MIN, MAX]
+            b = std::clamp(b, wrap.minimum, wrap.maximum);
+        } else if (wrap.mode != pixel::WrapMode::Repeat || a < 0 || b > size - 1) {
+            a = 0;  // region modes, or REPEAT that wraps: the whole axis
+            b = size - 1;
+        }
+        out0 = a;
+        out1 = b;
+    };
+    PixelRect footprint;
+    axis(uMin, uMax, static_cast<int32_t>(width), t.wrapS, footprint.x0, footprint.x1);
+    axis(vMin, vMax, static_cast<int32_t>(height), t.wrapT, footprint.y0, footprint.y1);
+    return footprint;
+}
+
 // Texel rectangle needed by the region wrap modes may exceed 2^TW; the decoded image covers it.
 bool TextureExtent(const TextureUnit& t, uint32_t& width, uint32_t& height) {
     width = 1u << t.twLog2;
@@ -262,7 +318,9 @@ using TextureReadHook = std::function<void(const memory::BufferView&, uint32_t w
 
 // IN-346: asked first for a non-indexed texture; returns the GPU colour slot that holds the texture's memory
 // (exact view, whole extent loaded), so the texels are copied on the GPU, or -1 to decode from the shadow memory.
-using TextureFromTargetHook = std::function<int32_t(const memory::BufferView&, uint32_t width, uint32_t height)>;
+// `footprint`: the texels the batch can sample (inclusive, inside width x height), see TextureFootprint.
+using TextureFromTargetHook =
+    std::function<int32_t(const memory::BufferView&, uint32_t width, uint32_t height, const PixelRect& footprint)>;
 
 // IN-347: asked next; returns true when the texture overlaps GPU-newer target data and the GLM was made
 // current for it (pages uploaded, targets swizzled), so the texels are decoded from the GLM on the GPU.
@@ -367,7 +425,9 @@ void Translate(const Batch& batch, const memory::LocalMemory& local, const clut:
         out.texWidth = width;
         out.texHeight = height;
         const bool rawKind = texture.cls == TexClass::Ct32 || texture.cls == TexClass::Ct24 || texture.cls == TexClass::Ct16;
-        if (rawKind && textureFromTarget) out.textureSlot = textureFromTarget(texture.view, width, height);
+        if (rawKind && textureFromTarget) {
+            out.textureSlot = textureFromTarget(texture.view, width, height, TextureFootprint(batch, texture, width, height));
+        }
         bool gpuClut = false;
         if (out.textureSlot < 0 && textureFromGlm &&
             textureFromGlm(texture.view, width, height, texture.cls == TexClass::Indexed, gpuClut)) {
@@ -1485,6 +1545,7 @@ public:
     }
 
     void DropAll() {
+        toneRun_.active = false;  // IN-379: a reset or auxiliary frame ends a tone sequence without a carry
         for (ResidentSlot& slot : slots_) Drop(slot, false);  // resets and auxiliary frames keep no shadow
         for (DisplayShadow& shadow : shadows_) shadow.valid = false;
     }
@@ -1623,13 +1684,15 @@ public:
         return widened;
     }
 
-    // IN-346: the resident colour slot holding a texture (exact view, whole extent loaded), or -1. Only in
-    // cache mode. The slot is protected from eviction for this batch.
-    int32_t TextureSlotFor(const memory::BufferView& view, uint32_t width, uint32_t height) {
+    // IN-346: the resident colour slot holding a texture (exact view, the sampled texels loaded), or -1. Only in
+    // cache mode. The slot is protected from eviction for this batch. IN-380: the batch's footprint must be loaded,
+    // not the whole power-of-two extent (texels outside the footprint are copied but never sampled).
+    int32_t TextureSlotFor(const memory::BufferView& view, uint32_t width, uint32_t height, const PixelRect& footprint) {
         if (!cacheMode_ || !textureFromTargets_) return -1;
         const PixelRect extent{0, 0, static_cast<int32_t>(width) - 1, static_cast<int32_t>(height) - 1};
+        const PixelRect needed = footprint.Empty() ? extent : footprint;
         for (ResidentSlot& slot : slots_) {
-            if (slot.depth || !slot.hasIdentity || !SameView(slot.view, view) || !Contains(slot.loaded, extent)) continue;
+            if (slot.depth || !slot.hasIdentity || !SameView(slot.view, view) || !Contains(slot.loaded, needed)) continue;
             protectedSlot_ = &slot;
             slot.lastUse = ++slotUses_;
             return static_cast<int32_t>(slot.gpuIndex);
@@ -1868,6 +1931,108 @@ public:
         return true;
     }
 
+    // ---- IN-379: GT4's RGB tone curve at scale (chapter 09.4 variant A, policy 2) -------------------------
+    // Every race frame, GT4 reads its 32-bit frame buffer page by page through 8-bit (T8) views and a ramp CLUT into
+    // a temporary page and writes the result back, through 8-bit views again, into the same memory as a CT24
+    // target. All of that runs at 1x through the GLM (exact), which left the frame's scaled image as the 1x result
+    // blown up (owner test 7). The sequence starts with a T8 batch that reads a resident 32-bit colour target: that
+    // target's scaled image and 1x words are saved. It ends at the first batch that is not T8-textured (or a VBlank
+    // or a compose): the saved view is made resident again (its 1x words are the sequence's exact result) and its
+    // scaled image is rebuilt from the saved one through the per-channel table the 1x words imply
+    // (hw_scale_tone_carry.comp; any pixel the table does not explain stays 1x). Memory is never touched by this.
+    struct ToneRun {
+        bool active = false;
+        memory::BufferView source{};
+        PixelRect saved{};
+    };
+    ToneRun toneRun_;
+
+    void TrackToneRun(const Batch& batch) {
+        if (!cacheMode_ || gpu_.Scale() <= 1 || failed_ || auxiliary_) return;
+        const ContextRegs& ctx = batch.state.ctx;
+        const bool textured = ((batch.state.effectivePrim >> primbit::kTme) & 1u) != 0;
+        const bool indexed8 = textured && tex0::Psm(ctx.tex0) == static_cast<uint32_t>(memory::Psm::T8);
+        if (toneRun_.active) {
+            if (indexed8) return;  // still inside the sequence
+            FinishToneRun();
+        }
+        if (!indexed8) return;
+        const memory::BufferView texture{tex0::Tbp0(ctx.tex0), tex0::Tbw(ctx.tex0), memory::Psm::T8};
+        const int32_t width = 1 << std::min<uint32_t>(tex0::Tw(ctx.tex0), 10u);
+        const int32_t height = 1 << std::min<uint32_t>(tex0::Th(ctx.tex0), 10u);
+        const BlockSpan read = SpanOfRect(texture, 0, 0, width - 1, height - 1);
+        for (const ResidentSlot& slot : slots_) {
+            if (slot.depth || !slot.hasIdentity || slot.loaded.Empty()) continue;
+            if (slot.view.psm != memory::Psm::Ct32 && slot.view.psm != memory::Psm::Ct24) continue;
+            if (!SpansOverlap(LoadedSpan(slot), read)) continue;
+            const PixelRect saved{std::max(slot.loaded.x0, 0), std::max(slot.loaded.y0, 0),
+                                  std::min(slot.loaded.x1, gpu::kGpuScaledExtent - 1),
+                                  std::min(slot.loaded.y1, gpu::kGpuShadowRows - 1)};
+            if (saved.Empty()) return;
+            std::string error;
+            if (!gpu_.SaveToneSource(slot.gpuIndex, saved.x0, saved.y0, saved.x1, saved.y1, error)) {
+                Fail(error);
+                return;
+            }
+            toneRun_.active = true;
+            toneRun_.source = slot.view;
+            toneRun_.saved = saved;
+            counters.toneRuns++;
+            return;
+        }
+    }
+
+    void FinishToneRun() {
+        if (!toneRun_.active) return;
+        toneRun_.active = false;
+        if (failed_) return;
+        // The result is in the same memory, maybe under another 32-bit view (GT4 writes it back as CT24); the next
+        // reader (GT4: the CT32 texture of the CT16 display conversion) finds the source view resident at scale.
+        ResidentSlot& slot = Acquire(false, toneRun_.source);
+        Load(slot, toneRun_.saved);
+        if (failed_ || !Contains(slot.loaded, toneRun_.saved)) return;
+        std::string error;
+        if (!gpu_.CarryTone(slot.gpuIndex, toneRun_.saved.x0, toneRun_.saved.y0, toneRun_.saved.x1, toneRun_.saved.y1,
+                            error)) {
+            Fail(error);
+            return;
+        }
+        counters.toneCarries++;
+        DumpToneRun(slot.gpuIndex);
+    }
+
+    // Diagnostics (GT4_HW_TONE_DUMP=<folder>): the first three tone sequences write the saved scaled source, the
+    // carried scaled image and the 1x result as PPM files.
+    void DumpToneRun(uint32_t gpuSlot) {
+        static const char* folder = std::getenv("GT4_HW_TONE_DUMP");
+        if (!folder || !*folder || counters.toneCarries > 3) return;
+        const uint32_t scale = gpu_.Scale();
+        const uint32_t sw = static_cast<uint32_t>(toneRun_.saved.x1 + 1) * scale;
+        const uint32_t sh = static_cast<uint32_t>(toneRun_.saved.y1 + 1) * scale;
+        const struct {
+            uint32_t which, width, height;
+            const char* name;
+        } images[3] = {{1, sw, sh, "source-scaled"}, {0, sw, sh, "carried-scaled"},
+                       {2, sw / scale, sh / scale, "result-1x"}};
+        for (const auto& image : images) {
+            std::vector<uint32_t> words;
+            std::string error;
+            if (!gpu_.ReadImageDebug(image.which, gpuSlot, image.width, image.height, words, error)) continue;
+            char path[512];
+            std::snprintf(path, sizeof path, "%s\\tone-%llu-%s.ppm", folder,
+                          static_cast<unsigned long long>(counters.toneCarries), image.name);
+            std::FILE* file = std::fopen(path, "wb");
+            if (!file) continue;
+            std::fprintf(file, "P6\n%u %u\n255\n", image.width, image.height);
+            for (uint32_t word : words) {
+                const unsigned char rgb[3] = {static_cast<unsigned char>(word), static_cast<unsigned char>(word >> 8),
+                                              static_cast<unsigned char>(word >> 16)};
+                std::fwrite(rgb, 1, 3, file);
+            }
+            std::fclose(file);
+        }
+    }
+
     void OnBatch(Batch&& batch) override {
         StageTimer batchTimer(counters.batchUs);
         counters.batches++;
@@ -1875,6 +2040,7 @@ public:
             Fail("GPU drawer is not initialised");
             return;
         }
+        TrackToneRun(batch);  // IN-379 (scale > 1 only)
         Translation t;
         // IN-360: reuse the previous batch's vector storage (cleared, capacity kept).
         t.vertices.swap(spareVertices_);
@@ -1903,8 +2069,9 @@ public:
                           }
                       },
                       this,
-                      [this](const memory::BufferView& view, uint32_t width, uint32_t height) -> int32_t {
-                          return TextureSlotFor(view, width, height);
+                      [this](const memory::BufferView& view, uint32_t width, uint32_t height,
+                             const PixelRect& footprint) -> int32_t {
+                          return TextureSlotFor(view, width, height, footprint);
                       },
                       [this](const memory::BufferView& view, uint32_t width, uint32_t height, bool indexed,
                              bool& gpuClut) {
@@ -2238,6 +2405,7 @@ void Renderer::Flush() {
     Impl& s = *impl_;
     s.frontEnd_.VBlank(&kEverything, 1);
     s.frontEnd_.FlushBatch(FlushReason::VBlank);
+    s.FinishToneRun();  // IN-379: a VBlank ends a tone sequence
     // Frame end: publish the CPU cost of the passes that just ran (roadmap requirement 4), so a run
     // without a window still reports translate and execute.
     s.timings_ = s.frameTimings_;
@@ -2527,6 +2695,7 @@ void Renderer::SetDoubleBuffering(bool enabled) { impl_->gpu_.SetDoubleBuffering
 
 bool Renderer::ComposeFrameGpu(GpuFrame& out) {
     Impl& s = *impl_;
+    s.FinishToneRun();  // IN-379: the presentation reads the carried scaled image
     out = GpuFrame{};
     double composeUs = 0.0;
     {

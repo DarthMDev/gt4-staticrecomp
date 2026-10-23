@@ -87,6 +87,10 @@ struct Counters {
     // pixel is still checked against the GLM on the GPU), and the shadows saved.
     std::uint64_t scaledCircuitsFromShadows = 0;
     std::uint64_t scaledShadowSaves = 0;
+    // IN-379: tone-curve sequences (09.4 variant A: 8-bit reads of a 32-bit target) seen at scale, and the scaled
+    // images rebuilt after them.
+    std::uint64_t toneRuns = 0;
+    std::uint64_t toneCarries = 0;
     std::uint64_t glmMergedWords = 0;
     std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).

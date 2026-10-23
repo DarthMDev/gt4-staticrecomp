@@ -112,6 +112,8 @@ struct RenderCounters {
   std::uint64_t scaled_circuits_from_glm = 0;
   std::uint64_t scaled_circuits_from_shadows = 0;  // IN-377: read from a display shadow
   std::uint64_t scaled_shadow_saves = 0;
+  std::uint64_t tone_runs = 0;     // IN-379
+  std::uint64_t tone_carries = 0;
   std::uint64_t gpu_composed_frames = 0;    // presentation frames composed on the GPU (IN-364)
   std::uint64_t gpu_render_passes = 0;      // IN-367 efficiency counters
   std::uint64_t gpu_upload_bytes = 0;
