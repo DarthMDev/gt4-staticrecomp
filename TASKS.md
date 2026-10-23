@@ -607,6 +607,8 @@ the new pins (a slice264 pin set) need an owner decision on the release path. CT
 Planned (owner, 2026-10-23), after TASK-102 (the i18n work touches the same Settings pages). Some players ask for other
 graphics APIs, mostly for older PCs. A new option in the launcher's graphics settings, "Graphics API", default Vulkan,
 with the other hardware backends of the GSdx build; software rendering is never offered.
+Labels (owner, 2026-10-23): Vulkan and Direct3D 12 are the recommended choices; OpenGL and Direct3D 11 are marked
+for older PCs. The UI shows that grouping (for example "Recommended" / "Older PCs").
 
 Research (2026-10-23, read-only, PCSX2-tainted Haiku; gt4recomp-gs at 1.2.1, binary 1.2.0):
 - Confirmed: the release gt4-gs.exe already contains Direct3D 11, Direct3D 12 and OpenGL (imports d3d11, d3d12,
