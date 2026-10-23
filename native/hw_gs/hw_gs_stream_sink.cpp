@@ -438,6 +438,21 @@ bool attach_window(std::uint64_t window, std::uint32_t width, std::uint32_t heig
   return true;
 }
 
+// TASK-080: the race view's display-aspect fill (protocol 1.3 CONTROL display_aspect in pcsx2 mode). Called on the EE
+// thread only when the request changes; the backend reads it atomically at its next present, so no drain is needed.
+std::uint64_t g_display_aspect_changes = 0;
+void display_aspect(bool fill, std::uint32_t ratio_millionths) {
+  backend().set_display_aspect(fill, ratio_millionths);
+  ++g_display_aspect_changes;
+  if (!fill) {
+    std::fprintf(stderr, "[hw] presentation: 16:9 pillarbox\n");
+  } else if (ratio_millionths == 0) {
+    std::fprintf(stderr, "[hw] presentation: fill the whole window\n");
+  } else {
+    std::fprintf(stderr, "[hw] presentation: fill at ratio %.4f\n", ratio_millionths / 1e6);
+  }
+}
+
 void resize_window(std::uint32_t width, std::uint32_t height) {
   std::unique_lock<std::mutex> lock;
   if (g_worker) lock = g_worker->drain();
@@ -468,6 +483,10 @@ void finish(std::FILE *output) {
                static_cast<unsigned long long>(stats.dropped_frames),
                static_cast<unsigned long long>(stats.auxiliary_frames), stats.translate_us, stats.execute_us,
                stats.compose_us, stats.upload_us, stats.present_us);
+  // TASK-080: fill requests received and the rectangle of the last present (window only).
+  std::fprintf(output, "[hw] presentation: aspect_changes=%llu last_rect=%u,%u %ux%u fill=%u\n",
+               static_cast<unsigned long long>(g_display_aspect_changes), stats.present_left, stats.present_top,
+               stats.present_width, stats.present_height, stats.present_fill);
   const RenderCounters counters = stats_counters();
   std::fprintf(output,
                "[hw] counters: batches=%llu primitives=%llu primitives_skipped_texture=%llu batches_empty=%llu "
@@ -503,14 +522,16 @@ void finish(std::FILE *output) {
   if (counters.scale > 1) {
     std::fprintf(output,
                  "[hw] scale: x%u draws=%llu passes=%llu refreshes=%llu refresh_pixels=%llu composes=%llu "
-                 "circuits_from_slots=%llu circuits_from_glm=%llu\n",
+                 "circuits_from_slots=%llu circuits_from_glm=%llu circuits_from_shadows=%llu shadow_saves=%llu\n",
                  counters.scale, static_cast<unsigned long long>(counters.scaled_draws),
                  static_cast<unsigned long long>(counters.scaled_passes),
                  static_cast<unsigned long long>(counters.scaled_refreshes),
                  static_cast<unsigned long long>(counters.scaled_refresh_pixels),
                  static_cast<unsigned long long>(counters.scaled_composes),
                  static_cast<unsigned long long>(counters.scaled_circuits_from_slots),
-                 static_cast<unsigned long long>(counters.scaled_circuits_from_glm));
+                 static_cast<unsigned long long>(counters.scaled_circuits_from_glm),
+                 static_cast<unsigned long long>(counters.scaled_circuits_from_shadows),
+                 static_cast<unsigned long long>(counters.scaled_shadow_saves));
   }
   if (g_dump_every != 0) {
     std::fprintf(output, "[hw] dumps: written=%llu without_image=%llu every=%u dir=%s\n",
@@ -537,6 +558,7 @@ const InProcessSink &hw_in_process_sink() {
     s.gif_reset = &gt4::hw::gif_reset;
     s.attach_window = &gt4::hw::attach_window;
     s.resize_window = &gt4::hw::resize_window;
+    s.display_aspect = &gt4::hw::display_aspect;
     s.finish = &gt4::hw::finish;
     return s;
   }();

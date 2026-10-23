@@ -126,6 +126,8 @@ struct GpuDrawer::Impl {
   std::uint32_t displaySide = kSurfaceSize;
   Image scaledFrames[kGpuColourSlots];
   Image scaledDepths[kGpuDepthSlots];
+  Image scaledShadows[kGpuDisplayShadows];  // IN-377: kGpuScaledExtent * s wide, kGpuShadowRows * s high
+  Image nativeShadows[kGpuDisplayShadows];  // IN-377: the same rectangle's 1x words (kGpuScaledExtent x kGpuShadowRows)
   Image scaledTexels;  // IN-374: a texture copied from a slot's scaled image (graphics binding 4 of scaled sets)
 
   // ---- 13.5 FXAA (IN-376), created on first use ----
@@ -562,11 +564,19 @@ struct GpuDrawer::Impl {
     VkDescriptorBufferInfo buffers[3] = {{glm.buffer, 0, kGlmBytes}, {glmTables.buffer, 0, glmTables.size},
                                          {ring.buffer, 0, kPaletteRingBytes}};
     VkDescriptorImageInfo out{VK_NULL_HANDLE, display.view, VK_IMAGE_LAYOUT_GENERAL};
-    VkDescriptorImageInfo frameViews[kGpuColourSlots];
+    // Sources 0..kGpuColourSlots-1 are the slots' scaled images, then the IN-377 display shadows.
+    VkDescriptorImageInfo frameViews[kGpuColourSlots + kGpuDisplayShadows];
     for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) frameViews[i] = {VK_NULL_HANDLE, scaledFrames[i].view,
                                                                          VK_IMAGE_LAYOUT_GENERAL};
-    VkWriteDescriptorSet writes[5]{};
-    for (std::uint32_t i = 0; i < 5; ++i) {
+    for (std::uint32_t i = 0; i < kGpuDisplayShadows; ++i) {
+      frameViews[kGpuColourSlots + i] = {VK_NULL_HANDLE, scaledShadows[i].view, VK_IMAGE_LAYOUT_GENERAL};
+    }
+    VkDescriptorImageInfo nativeViews[kGpuDisplayShadows];
+    for (std::uint32_t i = 0; i < kGpuDisplayShadows; ++i) {
+      nativeViews[i] = {VK_NULL_HANDLE, nativeShadows[i].view, VK_IMAGE_LAYOUT_GENERAL};
+    }
+    VkWriteDescriptorSet writes[6]{};
+    for (std::uint32_t i = 0; i < 6; ++i) {
       writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       writes[i].dstSet = composeScaledSets[index];
       writes[i].descriptorCount = 1;
@@ -580,10 +590,14 @@ struct GpuDrawer::Impl {
     writes[3].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     writes[3].pImageInfo = &out;
     writes[4].dstBinding = 6;
-    writes[4].descriptorCount = kGpuColourSlots;
+    writes[4].descriptorCount = kGpuColourSlots + kGpuDisplayShadows;
     writes[4].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     writes[4].pImageInfo = frameViews;
-    gt4_hwd_vkUpdateDescriptorSets(device, 5, writes, 0, nullptr);
+    writes[5].dstBinding = 7;
+    writes[5].descriptorCount = kGpuDisplayShadows;
+    writes[5].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    writes[5].pImageInfo = nativeViews;
+    gt4_hwd_vkUpdateDescriptorSets(device, 6, writes, 0, nullptr);
     return true;
   }
 
@@ -883,7 +897,7 @@ struct GpuDrawer::Impl {
     VkCommandBufferBeginInfo begin{VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if (!check(gt4_hw_vkBeginCommandBuffer(cmd, &begin), "vkBeginCommandBuffer", error)) return false;
-    constexpr int kMaxImages = static_cast<int>(2 * (kGpuColourSlots + kGpuDepthSlots) + 3);
+    constexpr int kMaxImages = static_cast<int>(2 * (kGpuColourSlots + kGpuDepthSlots) + 3 + 2 * kGpuDisplayShadows);
     VkImageMemoryBarrier barriers[kMaxImages]{};
     VkImage images[kMaxImages] = {};
     int kImages = 0;
@@ -895,6 +909,8 @@ struct GpuDrawer::Impl {
       for (std::uint32_t i = 0; i < kGpuColourSlots; ++i) images[kImages++] = scaledFrames[i].image;
       for (std::uint32_t i = 0; i < kGpuDepthSlots; ++i) images[kImages++] = scaledDepths[i].image;
       images[kImages++] = scaledTexels.image;
+      for (std::uint32_t i = 0; i < kGpuDisplayShadows; ++i) images[kImages++] = scaledShadows[i].image;
+      for (std::uint32_t i = 0; i < kGpuDisplayShadows; ++i) images[kImages++] = nativeShadows[i].image;
     }
     for (int i = 0; i < kImages; ++i) {
       barriers[i].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -917,6 +933,12 @@ struct GpuDrawer::Impl {
         gt4_hwd_vkCmdClearColorImage(cmd, image.image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
       }
       for (Image &image : scaledDepths) {
+        gt4_hwd_vkCmdClearColorImage(cmd, image.image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
+      }
+      for (Image &image : scaledShadows) {
+        gt4_hwd_vkCmdClearColorImage(cmd, image.image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
+      }
+      for (Image &image : nativeShadows) {
         gt4_hwd_vkCmdClearColorImage(cmd, image.image, VK_IMAGE_LAYOUT_GENERAL, &zero, 1, &range);
       }
     }
@@ -989,6 +1011,8 @@ struct GpuDrawer::Impl {
       destroyImage(&display);
       for (Image &image : scaledFrames) destroyImage(&image);
       for (Image &image : scaledDepths) destroyImage(&image);
+      for (Image &image : scaledShadows) destroyImage(&image);
+      for (Image &image : nativeShadows) destroyImage(&image);
       destroyImage(&scaledTexels);
       destroyImage(&fxaaImage);
       if (fxaaPipeline) gt4_hwd_vkDestroyPipeline(device, fxaaPipeline, nullptr);
@@ -1077,6 +1101,8 @@ struct GpuDrawer::Impl {
     display = Image{};
     for (Image &image : scaledFrames) image = Image{};
     for (Image &image : scaledDepths) image = Image{};
+    for (Image &image : scaledShadows) image = Image{};
+    for (Image &image : nativeShadows) image = Image{};
     scaledTexels = Image{};
     fxaaImage = Image{};
     staging = Resource{};
@@ -1209,6 +1235,15 @@ bool GpuDrawer::Init(const VulkanHandles &handles, std::string &error) {
       if (!s.make_image(image, s.scaledSide, s.scaledSide, error)) return false;
     }
     if (!s.make_image(s.scaledTexels, s.scaledSide, s.scaledSide, error)) return false;
+    for (Impl::Image &image : s.scaledShadows) {
+      if (!s.make_image(image, s.scaledSide, static_cast<std::uint32_t>(kGpuShadowRows) * s.scale, error)) return false;
+    }
+    for (Impl::Image &image : s.nativeShadows) {
+      if (!s.make_image(image, static_cast<std::uint32_t>(kGpuScaledExtent), static_cast<std::uint32_t>(kGpuShadowRows),
+                        error)) {
+        return false;
+      }
+    }
   }
 
   VkDescriptorBufferInfo uniformInfo{s.uniforms.buffer, 0, kUniformBytes};
@@ -1509,9 +1544,11 @@ bool GpuDrawer::Impl::create_scaled_resources(std::string &error) {
     }
   }
 
-  // Kernel pool: 9 upsample sets (2 images each) and 2 compose sets (GLM, tables, ring, display, 6 scaled frames).
+  // Kernel pool: 9 upsample sets (2 images each) and 2 compose sets (GLM, tables, ring, display, 6 scaled frames and
+  // the IN-377 display shadows).
   constexpr std::uint32_t kUpsampleSets = kGpuColourSlots + kGpuDepthSlots;
-  VkDescriptorPoolSize poolSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2 * kUpsampleSets + 2 * (1 + kGpuColourSlots)},
+  VkDescriptorPoolSize poolSizes[2] = {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                        2 * kUpsampleSets + 2 * (1 + kGpuColourSlots + 2 * kGpuDisplayShadows)},
                                        {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2 * 3}};
   VkDescriptorPoolCreateInfo poolInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
   poolInfo.maxSets = kUpsampleSets + 2;
@@ -1585,14 +1622,16 @@ bool GpuDrawer::Impl::create_scaled_resources(std::string &error) {
   }
 
   // Scaled compose kernel (hw_display_compose_scaled.comp): 0 GLM, 1 tables, 2 ring, 4 display, 6 scaled frames.
-  VkDescriptorSetLayoutBinding composeBindings[5]{};
+  VkDescriptorSetLayoutBinding composeBindings[6]{};
   composeBindings[0] = {0, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
   composeBindings[1] = {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
   composeBindings[2] = {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
   composeBindings[3] = {4, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
-  composeBindings[4] = {6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kGpuColourSlots, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  composeBindings[4] = {6, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kGpuColourSlots + kGpuDisplayShadows,
+                        VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
+  composeBindings[5] = {7, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kGpuDisplayShadows, VK_SHADER_STAGE_COMPUTE_BIT, nullptr};
   VkDescriptorSetLayoutCreateInfo composeSetInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-  composeSetInfo.bindingCount = 5;
+  composeSetInfo.bindingCount = 6;
   composeSetInfo.pBindings = composeBindings;
   if (!check(gt4_hwd_vkCreateDescriptorSetLayout(device, &composeSetInfo, nullptr, &composeScaledSetLayout),
              "vkCreateDescriptorSetLayout", error)) {
@@ -2671,6 +2710,44 @@ bool GpuDrawer::ComposeDisplayScaled(const std::vector<std::uint32_t> &parameter
   gt4_hwd_vkCmdDispatch(s.cmd, (outWidth + 7) / 8, (outHeight + 7) / 8, 1);
   s.mark(Impl::kTimeDownload);
   s.full_barrier();
+  return true;
+}
+
+bool GpuDrawer::SaveScaledShadow(std::uint32_t slot, std::uint32_t shadow, std::int32_t x0, std::int32_t y0,
+                                 std::int32_t x1, std::int32_t y1, std::string &error) {
+  Impl &s = *impl_;
+  if (!s.scaled() || slot >= kGpuColourSlots || shadow >= kGpuDisplayShadows) {
+    error = "display shadow save outside the scaled slots";
+    return false;
+  }
+  x0 = std::max(x0, 0);
+  y0 = std::max(y0, 0);
+  x1 = std::min(x1, kGpuScaledExtent - 1);
+  y1 = std::min(y1, kGpuShadowRows - 1);
+  if (x1 < x0 || y1 < y0) return true;  // nothing of the slot lies inside the shadow
+  if (!s.begin_recording(error)) return false;
+  if (!s.flush_run(error)) return false;  // the slot's pending draws come first
+  s.full_barrier_with_fragment();         // scaled draws and refreshes of the slot finish first
+  VkImageCopy region{};
+  region.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  region.dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+  region.srcOffset = {x0 * static_cast<std::int32_t>(s.scale), y0 * static_cast<std::int32_t>(s.scale), 0};
+  region.dstOffset = region.srcOffset;
+  region.extent = {static_cast<std::uint32_t>(x1 - x0 + 1) * s.scale, static_cast<std::uint32_t>(y1 - y0 + 1) * s.scale,
+                   1};
+  s.recorded_work();
+  gt4_hwd_vkCmdCopyImage(s.cmd, s.scaledFrames[slot].image, VK_IMAGE_LAYOUT_GENERAL, s.scaledShadows[shadow].image,
+                         VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+  VkImageCopy native = region;  // the 1x words the compose compares with the GLM, pixel by pixel
+  native.srcOffset = {x0, y0, 0};
+  native.dstOffset = native.srcOffset;
+  native.extent = {static_cast<std::uint32_t>(x1 - x0 + 1), static_cast<std::uint32_t>(y1 - y0 + 1), 1};
+  s.recorded_work();
+  gt4_hwd_vkCmdCopyImage(s.cmd, s.frames[slot].image, VK_IMAGE_LAYOUT_GENERAL, s.nativeShadows[shadow].image,
+                         VK_IMAGE_LAYOUT_GENERAL, 1, &native);
+  s.mark(Impl::kTimeDownload);
+  s.full_barrier();  // a later reuse of the slot (load, draw) and the compose see the copy finished
+  ++s.stats.scaledShadowSaves;
   return true;
 }
 

@@ -33,6 +33,10 @@ struct InProcessSink {
   // Win32 HWND of the game window (as an integer) and its client size. False: no window output.
   bool (*attach_window)(std::uint64_t window, std::uint32_t width, std::uint32_t height) = nullptr;
   void (*resize_window)(std::uint32_t width, std::uint32_t height) = nullptr;
+  // TASK-080 display-aspect fill of the race view (the in-process form of protocol 1.3 CONTROL display_aspect,
+  // GS-STREAM-PROTOCOL 6.7): fill = the largest centred rectangle of ratio_millionths / 1e6 (0 = the whole window);
+  // false = the game's 16:9 pillarbox. Called on the EE thread when the wanted mode changes.
+  void (*display_aspect)(bool fill, std::uint32_t ratio_millionths) = nullptr;
   // End of the run: wait for the GPU and print the session summary.
   void (*finish)(std::FILE *output) = nullptr;
 };

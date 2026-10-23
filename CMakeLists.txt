@@ -149,7 +149,30 @@ if(GT4_HW_GS)
     # IN-372/IN-375: at GT4_HW_SCALE=4 the GPU compose is 4x and the present reduces it by 2x2 box steps first.
     add_test(NAME hw_smoke_window_scaled COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 120 --window --display-640)
     set_tests_properties(hw_smoke_window_scaled PROPERTIES ENVIRONMENT "GT4_RENDERER=hw;GT4_HW_SCALE=4"
-        PASS_REGULAR_EXPRESSION "faults=0\ngpu_composed=120\npresent_rect=[0-9]+,[0-9]+ [0-9]+x[0-9]+ present_16x9=1\npresent_downscale_levels=[1-9] scale=4")
+        PASS_REGULAR_EXPRESSION "faults=0\ngpu_composed=120\npresent_rect=[0-9]+,[0-9]+ [0-9]+x[0-9]+ present_16x9=1\nclient=[0-9]+x[0-9]+ fill=0 present_expected=1\npresent_downscale_levels=[1-9] scale=4")
+    # TASK-080 on CoreGS 2.0 (owner test 6, ultrawide): the race-view display-aspect fill. A 1720 x 720 client (the
+    # owner's 21.5:9) shows 16:9 as a pillarbox without the fill, the whole client at 21.5:9, 21:9 with thin side bars,
+    # and 32:9 letterboxed (never stretched); a 1280 x 720 client letterboxes 21:9. Each rectangle must be exactly the
+    # one gt4::hw::present_rect_for gives (hw_present_rect checks that it equals the default renderer's).
+    add_test(NAME hw_smoke_window_aspect_169 COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 30 --display-640 --client 1720 720)
+    set_tests_properties(hw_smoke_window_aspect_169 PROPERTIES ENVIRONMENT "GT4_RENDERER=hw;GT4_HW_SCALE=2"
+        PASS_REGULAR_EXPRESSION "present_rect=220,0 1280x720 present_16x9=1\nclient=1720x720 fill=0 present_expected=1")
+    add_test(NAME hw_smoke_window_aspect_ultrawide COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 30 --display-640 --client 1720 720 --fill 2.388889)
+    set_tests_properties(hw_smoke_window_aspect_ultrawide PROPERTIES ENVIRONMENT "GT4_RENDERER=hw;GT4_HW_SCALE=2"
+        PASS_REGULAR_EXPRESSION "present_rect=0,0 1720x720 present_16x9=0\nclient=1720x720 fill=1 present_expected=1")
+    add_test(NAME hw_smoke_window_aspect_219 COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 30 --display-640 --client 1720 720 --fill 2.333333)
+    set_tests_properties(hw_smoke_window_aspect_219 PROPERTIES ENVIRONMENT "GT4_RENDERER=hw;GT4_HW_SCALE=2"
+        PASS_REGULAR_EXPRESSION "present_rect=20,0 1680x720 present_16x9=0\nclient=1720x720 fill=1 present_expected=1")
+    add_test(NAME hw_smoke_window_aspect_329 COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 30 --display-640 --client 1720 720 --fill 3.555556)
+    set_tests_properties(hw_smoke_window_aspect_329 PROPERTIES ENVIRONMENT "GT4_RENDERER=hw;GT4_HW_SCALE=2"
+        PASS_REGULAR_EXPRESSION "present_rect=0,118 1720x484 present_16x9=0\nclient=1720x720 fill=1 present_expected=1")
+    add_test(NAME hw_smoke_window_aspect_219_in_169 COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 30 --display-640 --client 1280 720 --fill 2.333333)
+    set_tests_properties(hw_smoke_window_aspect_219_in_169 PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
+        PASS_REGULAR_EXPRESSION "present_rect=0,85 1280x549 present_16x9=0\nclient=1280x720 fill=1 present_expected=1")
+    # The fill requests reach the in-process presenter through main's GS stream seam (no GS process in hw mode).
+    add_test(NAME hw_stream_sink_display_aspect COMMAND $<TARGET_FILE:hw_stream_sink_fixture> --display-aspect)
+    set_tests_properties(hw_stream_sink_display_aspect PROPERTIES ENVIRONMENT "GT4_RENDERER=hw"
+        PASS_REGULAR_EXPRESSION "presentation: fill at ratio 2.3333.*presentation: fill at ratio 3.5556.*presentation: 16:9 pillarbox.*aspect_changes=3 .*PASS: hw stream sink")
     # Fullscreen-style toggles on the hidden window: resize flag, swapchain rebuild, every present under 100 ms.
     add_test(NAME hw_smoke_resize COMMAND $<TARGET_FILE:hw_gs_smoke> --frames 1 --resize-toggles 5)
     set_tests_properties(hw_smoke_resize PROPERTIES ENVIRONMENT "GT4_RENDERER=hw" PASS_REGULAR_EXPRESSION "resize_toggles=5")
@@ -170,5 +193,7 @@ if(GT4_HW_GS)
     set_tests_properties(hw_smoke_unknown_renderer_refused PROPERTIES ENVIRONMENT "GT4_RENDERER=vulkan" WILL_FAIL TRUE)
     set_tests_properties(hw_options hw_present_rect hw_smoke_donor hw_smoke_headless hw_smoke_window
         hw_smoke_parallel_refused hw_smoke_unknown_renderer_refused hw_stream_sink hw_stream_sink_capture_refused hw_stream_sink_deferred_vsync hw_smoke_window_scaled
+        hw_smoke_window_aspect_169 hw_smoke_window_aspect_ultrawide hw_smoke_window_aspect_219 hw_smoke_window_aspect_329
+        hw_smoke_window_aspect_219_in_169 hw_stream_sink_display_aspect
         PROPERTIES RUN_SERIAL TRUE TIMEOUT 300 WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 endif()

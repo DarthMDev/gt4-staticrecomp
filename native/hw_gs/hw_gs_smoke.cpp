@@ -9,12 +9,14 @@
 // Exit codes: 0 success (donor selected: nothing to run), 1 backend failure, 2 usage or option error.
 
 #include "hw_gs_dispatch.hpp"
+#include "hw_gs_present_rect.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <windows.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -28,7 +30,8 @@ gt4::hw::EnvironmentLookup process_environment() {
 }
 
 int usage() {
-  std::fprintf(stderr, "usage: hw_gs_smoke --print-options | [--frames N] [--window]\n");
+  std::fprintf(stderr, "usage: hw_gs_smoke --print-options | [--frames N] [--window] [--display | --display-640] "
+                       "[--client W H] [--fill RATIO] [--resize-toggles N]\n");
   return 2;
 }
 
@@ -68,6 +71,11 @@ int main(int argc, char **argv) {
   bool wideDisplay = false;  // --display-640: the same with GT4's 640 x 448 race display (IN-375 downscale steps)
   std::uint64_t frames = 4200;
   std::uint64_t resize_toggles = 0;
+  // TASK-080 (owner test 6): --client W H sizes the hidden window's client area (an ultrawide 3440 x 1440, say);
+  // --fill R asks for the race-view fill at display ratio R (0 = the whole window), as the game's presentation sink does.
+  std::uint32_t client_width = 0, client_height = 0;
+  bool fill = false;
+  double fill_ratio = 0.0;
   for (int i = 1; i < argc; ++i) {
     const std::string arg = argv[i];
     if (arg == "--print-options") {
@@ -84,6 +92,13 @@ int main(int argc, char **argv) {
     } else if (arg == "--resize-toggles" && i + 1 < argc) {
       resize_toggles = std::strtoull(argv[++i], nullptr, 10);
       use_window = true;
+    } else if (arg == "--client" && i + 2 < argc) {
+      client_width = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 10));
+      client_height = static_cast<std::uint32_t>(std::strtoul(argv[++i], nullptr, 10));
+      use_window = true;
+    } else if (arg == "--fill" && i + 1 < argc) {
+      fill = true;
+      fill_ratio = std::strtod(argv[++i], nullptr);
     } else {
       return usage();
     }
@@ -119,12 +134,21 @@ int main(int argc, char **argv) {
   HWND window = nullptr;
   if (use_window) {
     window = create_hidden_window();
+    if (window && client_width && client_height) {
+      RECT outer{0, 0, static_cast<LONG>(client_width), static_cast<LONG>(client_height)};
+      AdjustWindowRect(&outer, WS_OVERLAPPEDWINDOW, FALSE);
+      SetWindowPos(window, nullptr, 0, 0, outer.right - outer.left, outer.bottom - outer.top,
+                   SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+    }
     if (!window || !backend.attach_window(window, error)) {
       std::fprintf(stderr, "hw_gs_smoke: window: %s\n", error.empty() ? "CreateWindow failed" : error.c_str());
       return 1;
     }
   }
 
+  const std::uint32_t fill_millionths =
+      fill && fill_ratio > 0.0 ? static_cast<std::uint32_t>(std::floor(fill_ratio * 1e6 + 0.5)) : 0u;
+  if (fill) backend.set_display_aspect(true, fill_millionths);
   if (display) {
     backend.write_privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));             // PMODE: RC1, MMOD, ALP 255
     backend.write_privileged(0x12000010u, std::uint64_t{2} << 13);                       // SMODE1: NTSC
@@ -195,6 +219,17 @@ int main(int argc, char **argv) {
     const bool widescreen = w > 0 && h > 0 && (w * 9 >= h * 16 ? w * 9 - h * 16 : h * 16 - w * 9) <= 16;
     std::printf("present_rect=%u,%u %ux%u present_16x9=%d\n", stats.present_left, stats.present_top,
                 stats.present_width, stats.present_height, widescreen ? 1 : 0);
+    // TASK-080: the rectangle must be exactly the one for this client area and fill request.
+    RECT client{};
+    GetClientRect(window, &client);
+    const std::uint64_t packed = gt4::hw::pack_display_aspect(fill, fill_millionths);
+    const gt4::hw::PresentRect expected =
+        gt4::hw::present_rect_for(static_cast<std::uint32_t>(client.right), static_cast<std::uint32_t>(client.bottom),
+                                  gt4::hw::display_aspect_fill(packed), gt4::hw::display_aspect_ratio(packed));
+    const bool exact = expected.left == stats.present_left && expected.top == stats.present_top &&
+                       expected.width == stats.present_width && expected.height == stats.present_height;
+    std::printf("client=%ldx%ld fill=%u present_expected=%d\n", client.right, client.bottom, stats.present_fill,
+                exact ? 1 : 0);
     std::printf("present_downscale_levels=%u scale=%u source=%ux%u\n", stats.present_downscale_levels,
                 backend.render_counters().scale, stats.present_source_width, stats.present_source_height);
   }

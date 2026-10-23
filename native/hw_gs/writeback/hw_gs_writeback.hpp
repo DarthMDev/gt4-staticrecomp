@@ -83,6 +83,10 @@ struct Counters {
     std::uint64_t scaledComposedFrames = 0;
     std::uint64_t scaledCircuitsFromSlots = 0;
     std::uint64_t scaledCircuitsFromGlm = 0;
+    // IN-377: circuits read from a display shadow (the scaled copy of a finished buffer whose slot was dropped; each
+    // pixel is still checked against the GLM on the GPU), and the shadows saved.
+    std::uint64_t scaledCircuitsFromShadows = 0;
+    std::uint64_t scaledShadowSaves = 0;
     std::uint64_t glmMergedWords = 0;
     std::uint64_t gpuClutLoads = 0;           // CLUT loads repeated on the GPU from the GLM (IN-349)         // batches whose texels came from the decoded-texture cache (IN-341)
     // Output stage (13.7 counters and V-01-12).

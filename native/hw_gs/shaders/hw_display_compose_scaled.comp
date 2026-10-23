@@ -5,8 +5,9 @@
 //
 // The progressive presentation compose of hw_display_compose.comp at s x s output pixels per native pixel. A
 // circuit whose buffer is a resident target with a scaled image (parameter word 12 of the circuit = slot + 1) is
-// read from that image at sub-pixel resolution; any other circuit is read from the GLM at 1x (each native texel
-// covers s x s output pixels). Background, merge order and merge alpha are those of the 1x kernel, so at s = 1 the
+// read from that image at sub-pixel resolution, and so is one held in a display shadow (IN-377: word 12 =
+// kGpuColourSlots + shadow + 1); any other circuit is read from the GLM at 1x (each native texel covers s x s
+// output pixels). Background, merge order and merge alpha are those of the 1x kernel, so at s = 1 the
 // two kernels give the same image.
 
 #version 450
@@ -16,12 +17,16 @@
 layout(local_size_x = 8, local_size_y = 8) in;
 
 const uint kScaledColourSlots = 6u;  // gpu::kGpuColourSlots
+const uint kDisplayShadows = 2u;     // gpu::kGpuDisplayShadows (IN-377)
+const uint kScaledSources = kScaledColourSlots + kDisplayShadows;
 
 layout(std430, set = 0, binding = 2) readonly buffer ComposeRing {
     uint compose_words[];
 };
 layout(set = 0, binding = 4, r32ui) uniform writeonly uimage2D hw_display;
-layout(set = 0, binding = 6, r32ui) uniform readonly uimage2D scaled_frames[kScaledColourSlots];
+layout(set = 0, binding = 6, r32ui) uniform readonly uimage2D scaled_frames[kScaledSources];
+// IN-377: the 1x words of each display shadow, saved with its scaled image.
+layout(set = 0, binding = 7, r32ui) uniform readonly uimage2D shadow_words[kDisplayShadows];
 
 layout(push_constant) uniform ComposeParameters {
     uint base;
@@ -73,27 +78,48 @@ bool sample_circuit(uint c, int x, int y, out uvec4 texel) {
     }
     uint slot = param(c + 12u);
     uint format = param(c + 3u);
-    if (slot != 0u && slot <= kScaledColourSlots) {
-        // Sub-pixel source: the read rectangle at scale, stretched over the placement like the 1x kernel does.
-        // 06.3 native mode puts GS coordinate N on the centre of sub-pixel block N, so a primitive that starts on the
-        // buffer's first row or column (P = 0) leaves the first floor(s/2) sub-pixel rows and columns undrawn (the
-        // "top row and left column" of 06.3). The read rectangle's first drawn sub-pixel stands in for them, so the
-        // picture never shows a stale line at its top or left edge (06.9: no black row/column at screen edges).
-        uint undrawn = pc.scale / 2u;
-        uint sx = max(min(uint(x - x0) * srcw / uint(w), srcw * pc.scale - 1u), undrawn);
-        uint sy = max(min(uint(y - y0) * srch / uint(h), srch * pc.scale - 1u), undrawn);
-        uint px = param(c + 4u) * pc.scale + sx;
-        uint py = param(c + 5u) * pc.scale + sy;
+    // The native source pixel of this output pixel (the one the 1x compose shows here).
+    uint nx = uint(x - x0) / pc.scale;
+    uint ny = uint(y - y0) / pc.scale;
+    uint sx1 = min(nx * srcw / uint(w), srcw - 1u);
+    uint sy1 = min(ny * srch / uint(h), srch - 1u);
+    uint gx = uint(int(param(c + 4u)) + int(sx1)) & 2047u;
+    uint gy = uint(int(param(c + 5u)) + int(sy1)) & 2047u;
+    // A resident slot's scaled image is current by construction; only a shadow or the GLM path read the GLM.
+    bool resident = slot != 0u && slot <= kScaledColourSlots;
+    uvec4 native_texel = uvec4(0u);
+    if (!resident) {
+        native_texel = word_colour(glm_read(param(c + 0u), param(c + 1u), param(c + 2u), gx, gy), format);
+    }
+    // Sub-pixel source: the read rectangle at scale, stretched over the placement like the 1x kernel does.
+    // 06.3 native mode puts GS coordinate N on the centre of sub-pixel block N, so a primitive that starts on the
+    // buffer's first row or column (P = 0) leaves the first floor(s/2) sub-pixel rows and columns undrawn (the
+    // "top row and left column" of 06.3). The read rectangle's first drawn sub-pixel stands in for them, so the
+    // picture never shows a stale line at its top or left edge (06.9: no black row/column at screen edges).
+    uint undrawn = pc.scale / 2u;
+    uint sx = max(min(uint(x - x0) * srcw / uint(w), srcw * pc.scale - 1u), undrawn);
+    uint sy = max(min(uint(y - y0) * srch / uint(h), srch * pc.scale - 1u), undrawn);
+    uint px = param(c + 4u) * pc.scale + sx;
+    uint py = param(c + 5u) * pc.scale + sy;
+    if (slot > kScaledColourSlots && slot <= kScaledSources) {
+        // IN-377 display shadow: valid for this sub-pixel only while memory still holds the words saved with it, both at
+        // the native pixel the 1x compose shows here and at the native pixel the sub-pixel was drawn for (06.3).
+        uint shadow = slot - kScaledColourSlots - 1u;
+        uint dx = (px - undrawn) / pc.scale;
+        uint dy = (py - undrawn) / pc.scale;
+        uvec4 saved = word_colour(imageLoad(shadow_words[shadow], ivec2(gx, gy)).x, format);
+        uvec4 drawn_saved = word_colour(imageLoad(shadow_words[shadow], ivec2(dx, dy)).x, format);
+        uvec4 drawn_now = word_colour(glm_read(param(c + 0u), param(c + 1u), param(c + 2u), dx & 2047u, dy & 2047u),
+                                      format);
+        if (saved != native_texel || drawn_saved != drawn_now) {
+            slot = 0u;
+        }
+    }
+    if (slot != 0u && slot <= kScaledSources) {
         texel = word_colour(imageLoad(scaled_frames[slot - 1u], ivec2(px, py)).x, format);
         return true;
     }
-    uint nx = uint(x - x0) / pc.scale;
-    uint ny = uint(y - y0) / pc.scale;
-    uint sx = min(nx * srcw / uint(w), srcw - 1u);
-    uint sy = min(ny * srch / uint(h), srch - 1u);
-    uint gx = uint(int(param(c + 4u)) + int(sx)) & 2047u;
-    uint gy = uint(int(param(c + 5u)) + int(sy)) & 2047u;
-    texel = word_colour(glm_read(param(c + 0u), param(c + 1u), param(c + 2u), gx, gy), format);
+    texel = native_texel;
     return true;
 }
 

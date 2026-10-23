@@ -16,7 +16,7 @@ step; the same state goes to the ai-memory page `decisions/coregs2-implementatio
 | M5 reference II | Arithmetic done on CPU and GPU (bit-exact) and wired into the raster path: blend unit (81 modes), COLCLAMP, PABE, alpha test (8 methods x 4 AFAIL), DATE, FBA, FBMASK, DIMX dither | CTest `pixel_*`, `hw_gpu_*`, `hw_gpu_raster_*` |
 | M6 output | Done except owner test 1: display library, presentation interfaces (IN-331) with `end_frame`/`present_slot`, HWR frame dumps (IN-332; `vram` = reference image, `scanout` = presentation image, IN-338), replay tool (IN-333/IN-334), odd-frame draw loss fixed (IN-335), field offset and deinterlace in the presentation (IN-338) with the adaptive rule corrected (IN-337). Open: IN-336 (triangle precision, inside the gate) | local slice229: `hw_presentation_field_phase`, `display_hw_deint_adaptive`; 42/42 `vram` dumps inside the 2D gate and byte-identical to slice228; presentation replay of the menu capture bob-free on static screens |
 | M7 cache | In progress: resident target slots with LRU (IN-340/IN-344), decoded-texture cache (IN-341), deferred submission (IN-342), textures from targets (IN-346), CPU small sprites (IN-348), GPU CLUT (IN-349), GLM-owned pages instead of write-backs for evictions, overlaps and uploads (IN-350/IN-351); gated by `hw_cache_equals_writeback` and per-frame memory hashes of the menu, car and race captures (identical to the write-back mode). Open: target lists per chapter 05, display from targets, preload, dirty lists, clears, GPU moves | local slice237: race replay 1 write-back per frame (display) instead of 12; headless race 65 -> 38 ms per vsync |
-| M12 upscaling | In owner test: 2x-8x through a presentation-only scaled copy of every target (IN-371..IN-375), FXAA (IN-376, M15 part); 480i menus still 1x | `hw_scale_exact`, `hw_postfx_fxaa`, `hw_smoke_window_scaled`, scale-3 block of `hw_cache_equals_writeback`; memory hashes identical at 6x |
+| M12 upscaling | Owner test 6 failed (half the race frames shown at 1x; ultrawide squeezed); both fixed in local slice270 (IN-377 display shadows, IN-378 display-aspect fill), back in owner test 7. 2x-8x through a presentation-only scaled copy of every target (IN-371..IN-375), FXAA (IN-376, M15 part); 480i menus still 1x | `hw_scale_exact`, `hw_scale_display_shadow`, `hw_postfx_fxaa`, `hw_smoke_window_scaled`, `hw_smoke_window_aspect_*`, `hw_present_rect`, scale-3 block of `hw_cache_equals_writeback`; replay `--check-presented`; memory hashes identical at 6x |
 | M8, M14, M15 (rest), M17, M19 | M8 flare readback done earlier (IN-357..IN-359); others not started | |
 | M9 batching | In progress: one draw per chunk of triangles with an ordered pixel interlock (IN-345); runs of chunks in one render pass with texture preparation hoisted into a texel atlas (IN-352). Open: CLUT loads and GLM operations still cost two barriers each; double-buffered submission (CPU and GPU overlap) | `hw_cache_equals_writeback` and the GPU fixtures in both interlock modes; race barriers 9,500 -> 3,230 per frame |
 | M10 GLM | Started: GLM, decode, swizzle, unswizzle, CLUT, merge and upload kernels (IN-347, IN-349..IN-351) | `hw_glm_decode`, `hw_glm_swizzle`, `hw_glm_unswizzle`, `hw_glm_clut`, `hw_glm_upload_merge`, `hw_glm_host_upload` |
@@ -576,3 +576,28 @@ Still over the owner's 6 ms GS-worker budget in the race. Largest remaining CPU 
 - Ready for owner test 6: `build\hwr-play-scale.ps1 -Scale N [-AA]` (frozen copy `O:\gt4recomp-scratch\coregs2-candidate-250`).
 - Next: owner verdict at 2x-6x vs GSdx; scaled presentation for the 480i menus; textures decoded from the GLM at scale
   where they are targets (mirror); scaled-pass GPU cost; GS-thread CPU (gif front end).
+
+## 2026-10-23 owner test 6 fixes: presented frames at scale, ultrawide fill (local slice270, IN-377/IN-378) - Claude
+
+- `main` 1.2.3 merged (1ca15bc; conflicts: `mtvu_runtime.hpp` comment, journal 2026-10-22).
+- Owner test 6 (slice250, 4x + FXAA, 3440 x 1440) failed: the race looked 1x while the GPU did the 4x work, and the
+  ultrawide race stayed in a 16:9 pillarbox.
+- IN-377, upscaling (Confirmed on the 480p race capture): GT4 shows each of its two CT16 frame buffers the VBlank
+  after it finished it, and in between it uses the first 1,024 blocks of that buffer as the Z32 buffer of a small
+  256-wide target. The depth slot load dropped the shown buffer's colour slot, so every second presented frame was
+  composed from the GLM at 1x (61 of 121 on the capture; the game log had 447 of 1,005 composes "from GLM"). Fix:
+  display shadows (scaled image plus 1x words of a recently shown buffer, saved when its slot is dropped); the scaled
+  compose uses a shadow sub-pixel only where the GLM still holds the saved word, else 1x. Replay `--check-presented`
+  now checks the presented frame itself: 1x-sourced frames 61 -> 1 of 121 at 2x/4x/6x (the one left is the capture's
+  first frame, drawn before the capture started); memory hashes equal to 1x at 2x/4x/6x.
+- IN-378, ultrawide: the TASK-080 fill request went to a GS process that does not exist in hw mode. The in-process
+  presenter now takes it (`InProcessSink::display_aspect`) and fills the largest centred rectangle of the race's display
+  ratio, the same rectangle as the default renderer; menus stay 16:9.
+- New controls: `hw_scale_display_shadow` (fails without the fix), `hw_smoke_window_aspect_{169,ultrawide,219,329,219_in_169}`,
+  `hw_stream_sink_display_aspect`, ratio vectors in `hw_present_rect`; gate helper runs `--check-presented` at 2x/4x/6x.
+- GPU busy per frame, 480p race replay, timestamps on, no presentation compose: 1x 6.5 ms, 2x 9.5, 4x 13.3, 6x 15.6-16.3.
+- Gates (local slice270, release recipe: aspect, slice262 capsule and guard): CTest 241/241 with and without interlock;
+  memory hashes identical on all five captures (night `fifo_hash=3a2fe617a174e7e7`); menu dumps 42/42 = slice228; race
+  frames 42/42 = slice235; default renderer 42/42 = slice214; `--check-presented` 1 of 121 at 2x/4x/6x.
+- Candidate for owner test 7: `O:\gt4recomp-scratch\coregs2-candidate-270` (`gt4vulkan.exe` sha256
+  `b878160b537ba0df9dc515ab11203a1921f379f9af2f58ccc451b606b481e827`), `build\hwr-play-scale.ps1 -Scale 2|4|6 [-AA]`.

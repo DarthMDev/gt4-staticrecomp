@@ -1973,6 +1973,217 @@ int TestScaleExact(const gpu::VulkanHandles& handles) {
     return failures == 0 ? 0 : 1;
 }
 
+// hw_scale_display_shadow (owner test 6, IN-377): GT4's race double buffer at an internal scale. Each frame first draws
+// a small target whose depth buffer lies on the buffer the next VBlank shows (finished one frame earlier), then the
+// back buffer, then shows the other buffer: the depth load drops the shown buffer's colour slot, so before IN-377 the
+// presented frame was composed from the GLM at 1x (no visible upscaling). Two variants:
+//   - read-only depth (ZMSK = 1): memory of the shown buffer does not change. Every shown frame from the third on
+//     must come from a display shadow and match the 06.3 exact expectation of the 1x image at scale (the same
+//     check as hw_scale_exact), so the presented picture is really upscaled.
+//   - depth writes (ZMSK = 0, ZTST ALWAYS): part of the shown buffer's memory changes. Every native pixel the write
+//     changed must be shown from memory (1x), every other one still from the shadow at scale.
+// Memory must equal the 1x run in both variants (the 1x words stay the only authority).
+int TestScaleDisplayShadow(const gpu::VulkanHandles& handles) {
+    auto rgbaq = [](uint32_t colour) { return uint64_t{colour} | (uint64_t{0x3F800000u} << 32); };
+    auto xyz = [](uint32_t x, uint32_t y, uint32_t z) { return uint64_t{x * 16} | (uint64_t{y * 16} << 16) | (uint64_t{z} << 32); };
+    auto frameReg = [](uint64_t page) { return page | (uint64_t{1} << 16); };  // FBW 1, CT32
+    const uint64_t kSprite = 6;
+    const uint64_t kBuffers[2] = {0, 2};  // 64 x 64 CT32 buffers (two pages each)
+    const uint64_t kSmallTarget = 8;      // the small target drawn first each frame
+    constexpr uint32_t kFrames = 6;
+    constexpr uint32_t kFirstChecked = 3;  // the shown buffer was shown before (a display candidate) from here on
+
+    auto makeCapture = [&](bool depthWrites) {
+        cpuref::CaptureWriter capture;
+        capture.Privileged(0x12000000u, 1u | (1u << 5) | (0xFFu << 8));  // PMODE: RC1, MMOD 1, ALP 255
+        capture.Privileged(0x12000010u, uint64_t{2} << 13);               // SMODE1: NTSC
+        capture.Privileged(0x12000080u, (uint64_t{3} << 23) | (uint64_t{255} << 32) | (uint64_t{63} << 44));  // 64 x 64
+        for (uint32_t frame = 0; frame < kFrames; ++frame) {
+            const uint64_t back = kBuffers[frame & 1u];
+            const uint64_t front = kBuffers[(frame + 1u) & 1u];
+            // ZTE with GEQUAL (reads depth) and ZMSK, or ALWAYS with depth writes.
+            const uint64_t test = depthWrites ? ((uint64_t{1} << 16) | (uint64_t{1} << 17))
+                                              : ((uint64_t{1} << 16) | (uint64_t{2} << 17));
+            const uint64_t zbuf = front | (depthWrites ? 0 : (uint64_t{1} << 32));  // Z32 on the shown buffer
+            const std::vector<uint64_t> words = {
+                (uint64_t{63} << 16) | (uint64_t{63} << 48), 0x40, 0, 0x18,
+                test, 0x47, frameReg(kSmallTarget), 0x4C, zbuf, 0x4E,
+                kSprite, 0x00, rgbaq(0x80305070u + frame), 0x01, xyz(4, 4, 0x00ABCDEFu), 0x05, xyz(28, 20, 0x00ABCDEFu), 0x05,
+                (uint64_t{1} << 16) | (uint64_t{1} << 17), 0x47,  // TEST: ZTE, ALWAYS
+                frameReg(back), 0x4C, uint64_t{16} | (uint64_t{1} << 32), 0x4E,  // ZBUF elsewhere, masked
+                kSprite, 0x00, rgbaq(0x80102030u + frame), 0x01, xyz(0, 0, 0), 0x05, xyz(64, 64, 0), 0x05,
+                kSprite, 0x00, rgbaq(0x80E04010u), 0x01, xyz(5 + frame, 7, 0), 0x05, xyz(20, 30, 0), 0x05,
+                kSprite, 0x00, rgbaq(0x8010E040u), 0x01, xyz(33, 2, 0), 0x05, xyz(60, 9 + frame, 0), 0x05,
+                kSprite, 0x00, rgbaq(0x804010E0u), 0x01, xyz(10, 40, 0), 0x05, xyz(50, 61, 0), 0x05};
+            capture.Gif(1, cpuref::CaptureWriter::Packet(static_cast<uint32_t>(words.size() / 2), true, false, 0, 0, {0xE},
+                                                         words));
+            capture.Privileged(0x12000070u, front | (uint64_t{1} << 9));  // DISPFB1: the buffer finished last frame
+            capture.FrameEnd(frame);
+        }
+        return capture;
+    };
+
+    struct Run {
+        std::vector<uint64_t> slm;
+        std::vector<std::vector<uint8_t>> native;   // 1x reference images
+        std::vector<std::vector<uint32_t>> scaled;  // scaled GPU composes (the presented frames)
+        uint32_t width = 0, height = 0;
+        writeback::Counters counters;
+    };
+    auto replay = [&](const cpuref::CaptureWriter& capture, uint32_t scale, Run& run, std::string& error) -> bool {
+        writeback::Renderer renderer;
+        renderer.SetScale(scale, static_cast<float>(scale));
+        if (!renderer.Init(handles, error)) return false;
+        renderer.SetSyncMode(true);
+        renderer.SetCpuSmallSprites(false);  // the flat sprites go through the GPU (and its scaled pass)
+        writeback::WritebackReplayTarget target(renderer, writeback::ComposeKind::Reference);
+        cpuref::ReplaySummary summary;
+        const bool ok = cpuref::ReplayCapture(capture.Bytes(), target, summary,
+                                              [&](uint64_t, const cpuref::FrameImage& image) {
+                                                  std::vector<uint8_t> rgb;
+                                                  for (const display::Rgba8& p : image.image.pixels) {
+                                                      rgb.push_back(p.r);
+                                                      rgb.push_back(p.g);
+                                                      rgb.push_back(p.b);
+                                                  }
+                                                  run.native.push_back(rgb);
+                                                  run.width = image.image.width;
+                                                  run.height = image.image.height;
+                                                  run.slm.push_back(cpuref::HashLocalMemory(renderer.Slm(), 4u * 1024u * 1024u));
+                                                  writeback::GpuFrame gpuFrame;
+                                                  std::vector<uint32_t> pixels;
+                                                  if (scale > 1 && renderer.ComposeFrameGpu(gpuFrame) &&
+                                                      renderer.ReadGpuFrame(gpuFrame, pixels) &&
+                                                      gpuFrame.width == scale * image.image.width &&
+                                                      gpuFrame.height == scale * image.image.height) {
+                                                      run.scaled.push_back(std::move(pixels));
+                                                  } else {
+                                                      run.scaled.emplace_back();
+                                                  }
+                                              },
+                                              error);
+        run.counters = renderer.GetCounters();
+        if (renderer.Failed()) error += " " + renderer.LastError();
+        return ok && !renderer.Failed() && run.native.size() == kFrames;
+    };
+    auto rgbAt = [](const std::vector<uint8_t>& image, uint32_t width, uint32_t x, uint32_t y) {
+        const uint8_t* n = &image[(static_cast<size_t>(y) * width + x) * 3];
+        return uint32_t{n[0]} | (uint32_t{n[1]} << 8) | (uint32_t{n[2]} << 16);
+    };
+
+    int failures = 0;
+    std::string error;
+    const cpuref::CaptureWriter readOnly = makeCapture(false);
+    const cpuref::CaptureWriter writes = makeCapture(true);
+    Run readOnlyBase, writesBase;
+    if (!replay(readOnly, 1, readOnlyBase, error) || !replay(writes, 1, writesBase, error)) {
+        std::printf("hw_scale_display_shadow: 1x replay failed: %s\n", error.c_str());
+        return 1;
+    }
+    // Blindness: the depth writes must change what the shown buffer holds, and the read-only depth must not.
+    uint64_t changedNative = 0;
+    for (uint32_t frame = kFirstChecked; frame < kFrames; ++frame) {
+        for (uint32_t y = 0; y < readOnlyBase.height; ++y) {
+            for (uint32_t x = 0; x < readOnlyBase.width; ++x) {
+                if (rgbAt(readOnlyBase.native[frame], readOnlyBase.width, x, y) !=
+                    rgbAt(writesBase.native[frame], writesBase.width, x, y)) {
+                    ++changedNative;
+                }
+            }
+        }
+    }
+    if (changedNative == 0) {
+        std::printf("hw_scale_display_shadow: the depth writes change no shown pixel (fixture is blind)\n");
+        ++failures;
+    }
+    for (uint32_t scale : {2u, 4u}) {
+        for (const bool depthWrites : {false, true}) {
+            const Run& base = depthWrites ? writesBase : readOnlyBase;
+            Run run;
+            if (!replay(depthWrites ? writes : readOnly, scale, run, error)) {
+                std::printf("hw_scale_display_shadow: scale %u replay failed: %s\n", scale, error.c_str());
+                ++failures;
+                continue;
+            }
+            const uint32_t w = base.width, h = base.height, half = scale / 2;
+            uint64_t pixelErrors = 0, fromMemory = 0, fromScale = 0, framesWithoutEdges = 0;
+            bool sameMemory = true, composed = true;
+            for (uint32_t frame = 0; frame < kFrames; ++frame) {
+                sameMemory = sameMemory && run.slm[frame] == base.slm[frame] && run.native[frame] == base.native[frame];
+                if (frame < kFirstChecked) continue;
+                const std::vector<uint32_t>& pixels = run.scaled[frame];
+                if (pixels.size() != static_cast<size_t>(w) * h * scale * scale) {
+                    composed = false;
+                    continue;
+                }
+                uint64_t mixedBlocks = 0;
+                for (uint32_t sy = 0; sy < h * scale; ++sy) {
+                    for (uint32_t sx = 0; sx < w * scale; ++sx) {
+                        // The native pixel the 1x compose shows here; if the depth writes changed it, memory (1x) wins.
+                        // The shadow is used only where neither that pixel nor the one the sub-pixel was drawn for
+                        // (06.3) changed.
+                        const uint32_t px = sx / scale, py = sy / scale;
+                        const uint32_t dx = (std::max(sx, half) - half) / scale, dy = (std::max(sy, half) - half) / scale;
+                        const bool changed =
+                            rgbAt(base.native[frame], w, px, py) != rgbAt(readOnlyBase.native[frame], w, px, py) ||
+                            rgbAt(base.native[frame], w, dx, dy) != rgbAt(readOnlyBase.native[frame], w, dx, dy);
+                        uint32_t expected = 0;
+                        if (changed) {
+                            expected = rgbAt(base.native[frame], w, px, py);
+                            ++fromMemory;
+                        } else {
+                            // 06.3 native mode (hw_scale_exact): sub-pixel (sx, sy) shows native ((sx - h) / s, (sy - h) / s).
+                            expected = rgbAt(readOnlyBase.native[frame], w, dx, dy);
+                            ++fromScale;
+                        }
+                        const uint32_t got = pixels[static_cast<size_t>(sy) * w * scale + sx] & 0xFFFFFFu;
+                        if (got != expected) {
+                            if (pixelErrors < 6) {
+                                std::printf("    scale %u %s frame %u sub-pixel %u,%u: %06x, expected %06x (%s)\n", scale,
+                                            depthWrites ? "writes" : "read-only", frame, sx, sy, got, expected,
+                                            changed ? "memory changed: 1x" : "unchanged: scaled");
+                            }
+                            ++pixelErrors;
+                        }
+                    }
+                }
+                for (uint32_t y = 0; y < h; ++y) {
+                    for (uint32_t x = 0; x < w; ++x) {
+                        const uint32_t first = pixels[(y * scale) * w * scale + x * scale] & 0xFFFFFFu;
+                        bool uniform = true;
+                        for (uint32_t dy = 0; dy < scale && uniform; ++dy) {
+                            for (uint32_t dx = 0; dx < scale && uniform; ++dx) {
+                                uniform = (pixels[(y * scale + dy) * w * scale + x * scale + dx] & 0xFFFFFFu) == first;
+                            }
+                        }
+                        if (!uniform) ++mixedBlocks;
+                    }
+                }
+                if (mixedBlocks == 0) ++framesWithoutEdges;  // a presented frame that is 1x-sourced
+            }
+            const uint64_t shownChecked = kFrames - kFirstChecked;
+            std::printf("  scale %u %s: memory %s, composes %s, sub-pixels off expectation %llu (from memory %llu, at "
+                        "scale %llu), 1x-sourced frames %llu, circuits from shadows %llu / slots %llu / GLM %llu, "
+                        "shadow saves %llu\n",
+                        scale, depthWrites ? "depth writes" : "read-only depth", sameMemory ? "equal" : "DIFFERENT",
+                        composed ? "all" : "MISSING", static_cast<unsigned long long>(pixelErrors),
+                        static_cast<unsigned long long>(fromMemory), static_cast<unsigned long long>(fromScale),
+                        static_cast<unsigned long long>(framesWithoutEdges),
+                        static_cast<unsigned long long>(run.counters.scaledCircuitsFromShadows),
+                        static_cast<unsigned long long>(run.counters.scaledCircuitsFromSlots),
+                        static_cast<unsigned long long>(run.counters.scaledCircuitsFromGlm),
+                        static_cast<unsigned long long>(run.counters.scaledShadowSaves));
+            if (!sameMemory || !composed || pixelErrors != 0 || framesWithoutEdges != 0 ||
+                run.counters.scaledCircuitsFromShadows < shownChecked || (depthWrites && fromMemory == 0) ||
+                (!depthWrites && fromMemory != 0)) {
+                ++failures;
+            }
+        }
+    }
+    std::printf("hw_scale_display_shadow: %d failures\n", failures);
+    return failures == 0 ? 0 : 1;
+}
+
 // hw_postfx_fxaa (IN-376, chapter 13.5): a dark buffer with one bright flat triangle whose long edges are steep
 // and shallow, composed on the GPU at 1x and 2x with and without FXAA. Edge-only FXAA must leave every pixel away
 // from the edges unchanged, change pixels along them, and only produce colours between the two flat colours.
@@ -2593,6 +2804,7 @@ int main(int argc, char** argv) {
     if (name == "hw_cache_equals_writeback") return TestCacheEqualsWriteback(handles);
     if (name == "hw_scale_exact") return TestScaleExact(handles);
     if (name == "hw_postfx_fxaa") return TestPostfxFxaa(handles);
+    if (name == "hw_scale_display_shadow") return TestScaleDisplayShadow(handles);
     std::printf("unknown test: %s\n", name.c_str());
     return 2;
 }

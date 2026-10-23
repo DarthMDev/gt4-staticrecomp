@@ -1205,6 +1205,10 @@ void set_cursor_policy(bool auto_hide, std::uint32_t hide_delay_ms) {
 void set_display_aspect_mode(DisplayAspectMode mode, std::uint32_t fill_aspect_millionths) {
   const std::uint32_t target = mode == DisplayAspectMode::fill ? fill_aspect_millionths : 0;
   g_display_aspect_wanted.store(static_cast<std::uint64_t>(mode) | (static_cast<std::uint64_t>(target) << 32));
+  // TASK-027: GT4_RENDERER=hw has no GS process to post CONTROL display_aspect to; the in-process presenter takes the
+  // same request directly (owner test 6: without it the widened ultrawide race stayed in the 16:9 pillarbox).
+  if (const InProcessSink *sink = hw_sink(); sink && sink->display_aspect)
+    sink->display_aspect(mode == DisplayAspectMode::fill, target);
 }
 
 std::uint32_t aspect_millionths(double ratio) {

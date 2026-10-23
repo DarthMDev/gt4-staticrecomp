@@ -17,6 +17,7 @@
 #include "writeback/hw_gs_writeback.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <array>
 #include <cstdlib>
@@ -114,6 +115,8 @@ struct Backend::Impl {
   HWND window = nullptr;
   bool resize_pending = false;
   bool initialised = false;
+  // TASK-080: the race view's display-aspect fill request (pack_display_aspect), set from the EE thread.
+  std::atomic<std::uint64_t> display_aspect{0};
 
   // M4: GS front end, shadow local memory and the GPU write-back drawer (writeback/).
   std::unique_ptr<hwgs::writeback::Renderer> renderer;
@@ -630,9 +633,15 @@ struct Backend::Impl {
       // Chapter 13.6 (fixed 16:9, the presentation contract of the default renderer and gt4-gs): the composed
       // frame (640 x 448 for GT4, an anamorphic 16:9 picture with the game's forced widescreen, TASK-079) is
       // stretched into the largest centred 16:9 rectangle. Keeping the frame's own 640:448 ratio showed the
-      // 16:9 game squeezed into 4:3 with side bars (owner test 3). Other screen ratios (TASK-080 fill,
-      // ultrawide) are a later CoreGS 2.0 step: this rectangle is the place to change.
-      const PresentRect rect = present_rect_widescreen(extent.width, extent.height);
+      // 16:9 game squeezed into 4:3 with side bars (owner test 3). TASK-080: when the race view was projected for
+      // another display ratio (ultrawide, 32:9, 16:10) the game asks for the fill and the frame goes into the
+      // largest centred rectangle of that ratio instead, as the default renderer and gt4-gs do (owner test 6 showed
+      // the widened race squeezed into the 16:9 pillarbox).
+      const std::uint64_t aspect = display_aspect.load(std::memory_order_relaxed);
+      const bool fill = display_aspect_fill(aspect);
+      const PresentRect rect = present_rect_for(extent.width, extent.height, fill, display_aspect_ratio(aspect));
+      stats.present_fill = fill ? 1u : 0u;
+      stats.present_fill_millionths = static_cast<std::uint32_t>(aspect >> 32);
       const std::uint32_t dw = rect.width, dh = rect.height;
       const std::int32_t left = static_cast<std::int32_t>(rect.left);
       const std::int32_t top = static_cast<std::int32_t>(rect.top);
@@ -1138,12 +1147,18 @@ RenderCounters Backend::render_counters() const {
   out.scaled_composes = c.scaledComposedFrames;
   out.scaled_circuits_from_slots = c.scaledCircuitsFromSlots;
   out.scaled_circuits_from_glm = c.scaledCircuitsFromGlm;
+  out.scaled_circuits_from_shadows = c.scaledCircuitsFromShadows;
+  out.scaled_shadow_saves = c.scaledShadowSaves;
   out.gpu_composed_frames = c.gpuComposedFrames;
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;
 }
 
 bool Backend::has_window() const { return impl_->window != nullptr; }
+
+void Backend::set_display_aspect(bool fill, std::uint32_t ratio_millionths) {
+  impl_->display_aspect.store(pack_display_aspect(fill, ratio_millionths), std::memory_order_relaxed);
+}
 
 const Options &Backend::options() const { return impl_->options; }
 

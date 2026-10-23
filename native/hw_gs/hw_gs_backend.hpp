@@ -56,9 +56,12 @@ struct Stats {
   double compose_us = 0;                // display composition, last frame
   double upload_us = 0;                 // composed image upload, last present
   double present_us = 0;                // swapchain acquire, submit and present, last present
-  // Destination rectangle of the last presented image inside the swapchain (chapter 13.6: always the largest
-  // centred 16:9 rectangle; GT4 draws its forced 16:9 picture anamorphically into 640 x 448, TASK-079).
+  // Destination rectangle of the last presented image inside the swapchain (chapter 13.6: the largest centred 16:9
+  // rectangle; GT4 draws its forced 16:9 picture anamorphically into 640 x 448, TASK-079), or with the TASK-080 fill
+  // the largest centred rectangle of the race view's display ratio (present_fill = 1).
   std::uint32_t present_left = 0, present_top = 0, present_width = 0, present_height = 0;
+  std::uint32_t present_fill = 0;
+  std::uint32_t present_fill_millionths = 0;  // the fill target ratio x 1e6 (0 = the whole window)
   std::uint32_t present_downscale_levels = 0;  // IN-375: 2x2 box steps before the final blit (upscaled frames)
   std::uint32_t present_source_width = 0, present_source_height = 0;  // the presented frame (scaled size)
 };
@@ -107,6 +110,8 @@ struct RenderCounters {
   std::uint64_t scaled_composes = 0;
   std::uint64_t scaled_circuits_from_slots = 0;
   std::uint64_t scaled_circuits_from_glm = 0;
+  std::uint64_t scaled_circuits_from_shadows = 0;  // IN-377: read from a display shadow
+  std::uint64_t scaled_shadow_saves = 0;
   std::uint64_t gpu_composed_frames = 0;    // presentation frames composed on the GPU (IN-364)
   std::uint64_t gpu_render_passes = 0;      // IN-367 efficiency counters
   std::uint64_t gpu_upload_bytes = 0;
@@ -180,6 +185,10 @@ public:
   void detach_window();
   // Resize and fullscreen only set a flag; recreation happens before the next present.
   void resize_window(std::uint32_t width, std::uint32_t height);
+  // TASK-080 display-aspect fill (the hw form of protocol 1.3 CONTROL display_aspect): with `fill` the next presents
+  // put the picture into the largest centred rectangle of `ratio_millionths` / 1e6 (0 = the whole window) instead of
+  // the 16:9 rectangle. Any thread; effective from the next present.
+  void set_display_aspect(bool fill, std::uint32_t ratio_millionths);
   // One call per guest VBlank: end_frame(phase) then one present_slot(). Headless (no window) only counts.
   void present(PresentPhase phase);
   // The two halves of present() (IN-331 follow-up, roadmap requirement 1): end_frame composes the guest

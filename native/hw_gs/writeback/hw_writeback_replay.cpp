@@ -186,6 +186,13 @@ int main(int argc, char** argv) {
     PixelRect traceRect{0, 0, 2047, 2047};
     std::uint32_t scale = 1;     // --scale N (M12, IN-371): internal resolution of the scaled images
     std::string upscaledDir;     // --upscaled-dir DIR: the GPU presentation compose at that scale (IN-372)
+    // --check-presented (owner test 6, IN-377): every frame's GPU presentation compose (the image the window shows) is
+    // read back and its s x s blocks inspected. A frame sourced from 1x memory has every block uniform (each native
+    // texel repeated s x s times); a really upscaled frame has edge blocks with several values.
+    bool checkPresented = false;
+    for (int i = 3; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--check-presented") == 0) checkPresented = true;
+    }
     for (int i = 3; i + 1 < argc; i += 2) {
         if (std::strcmp(argv[i], "--no-interlock") == 0 || std::strcmp(argv[i], "--no-target-textures") == 0 ||
             std::strcmp(argv[i], "--no-glm") == 0 || std::strcmp(argv[i], "--no-cpu-sprites") == 0 ||
@@ -194,7 +201,7 @@ int main(int argc, char** argv) {
             std::strcmp(argv[i], "--single-buffer") == 0 || std::strcmp(argv[i], "--async-present") == 0 ||
             std::strcmp(argv[i], "--no-batched-writebacks") == 0 ||
             std::strcmp(argv[i], "--gpu-timing") == 0 || std::strcmp(argv[i], "--gpu-compose-check") == 0 ||
-            std::strcmp(argv[i], "--fxaa") == 0) {
+            std::strcmp(argv[i], "--fxaa") == 0 || std::strcmp(argv[i], "--check-presented") == 0) {
             --i;  // a flag without a value
             continue;
         }
@@ -344,6 +351,9 @@ int main(int argc, char** argv) {
     }
     cpuref::ReplaySummary summary;
     std::uint64_t written = 0;
+    std::uint64_t presentedFrames = 0, presented1xFrames = 0, presentedMinMixedBlocks = UINT64_MAX;
+    std::uint64_t presentedMixedBlocks = 0;
+    std::string presented1xList;
     const auto onFrame = [&](std::uint64_t frame, const cpuref::FrameImage& image) {
         currentFrame = frame + 1;
         traceBatch = 0;
@@ -352,6 +362,35 @@ int main(int argc, char** argv) {
                          static_cast<unsigned long long>(cpuref::HashLocalMemory(renderer.Slm(), 4u * 1024u * 1024u)));
         }
         if (!image.valid) return;
+        if (checkPresented && scale > 1) {
+            writeback::GpuFrame gpuFrame;
+            std::vector<std::uint32_t> pixels;
+            if (renderer.ComposeFrameGpu(gpuFrame) && renderer.ReadGpuFrame(gpuFrame, pixels) &&
+                gpuFrame.width % scale == 0 && gpuFrame.height % scale == 0) {
+                std::uint64_t mixed = 0;
+                for (std::uint32_t by = 0; by < gpuFrame.height / scale; ++by) {
+                    for (std::uint32_t bx = 0; bx < gpuFrame.width / scale; ++bx) {
+                        const std::uint32_t first =
+                            pixels[static_cast<std::size_t>(by * scale) * gpuFrame.width + bx * scale] & 0xFFFFFFu;
+                        bool uniform = true;
+                        for (std::uint32_t dy = 0; dy < scale && uniform; ++dy) {
+                            for (std::uint32_t dx = 0; dx < scale && uniform; ++dx) {
+                                uniform = (pixels[static_cast<std::size_t>(by * scale + dy) * gpuFrame.width +
+                                                  bx * scale + dx] & 0xFFFFFFu) == first;
+                            }
+                        }
+                        if (!uniform) ++mixed;
+                    }
+                }
+                ++presentedFrames;
+                presentedMixedBlocks += mixed;
+                if (mixed < presentedMinMixedBlocks) presentedMinMixedBlocks = mixed;
+                if (mixed == 0) {
+                    ++presented1xFrames;
+                    if (presented1xList.size() < 200) presented1xList += " " + std::to_string(frame);
+                }
+            }
+        }
         if (every > 1 && frame % every != 0) return;
         if (!upscaledDir.empty()) {
             writeback::GpuFrame gpuFrame;
@@ -476,14 +515,25 @@ int main(int argc, char** argv) {
     {
         const gpu::GpuStats& gpuStats = renderer.GpuCounters();
         std::printf("scale=%u scaled_draws=%llu scaled_passes=%llu scaled_refreshes=%llu scaled_refresh_pixels=%llu "
-                    "scaled_composes=%llu circuits_from_slots=%llu circuits_from_glm=%llu\n",
+                    "scaled_composes=%llu circuits_from_slots=%llu circuits_from_glm=%llu circuits_from_shadows=%llu "
+                    "shadow_saves=%llu\n",
                     renderer.Scale(), static_cast<unsigned long long>(gpuStats.scaledDraws),
                     static_cast<unsigned long long>(gpuStats.scaledPasses),
                     static_cast<unsigned long long>(gpuStats.scaledRefreshes),
                     static_cast<unsigned long long>(gpuStats.scaledRefreshPixels),
                     static_cast<unsigned long long>(counters.scaledComposedFrames),
                     static_cast<unsigned long long>(counters.scaledCircuitsFromSlots),
-                    static_cast<unsigned long long>(counters.scaledCircuitsFromGlm));
+                    static_cast<unsigned long long>(counters.scaledCircuitsFromGlm),
+                    static_cast<unsigned long long>(counters.scaledCircuitsFromShadows),
+                    static_cast<unsigned long long>(counters.scaledShadowSaves));
+    }
+    if (checkPresented && scale > 1) {
+        std::printf("presented_frames=%llu presented_1x_frames=%llu min_mixed_blocks=%llu mean_mixed_blocks=%.1f\n",
+                    static_cast<unsigned long long>(presentedFrames),
+                    static_cast<unsigned long long>(presented1xFrames),
+                    static_cast<unsigned long long>(presentedFrames ? presentedMinMixedBlocks : 0),
+                    presentedFrames ? static_cast<double>(presentedMixedBlocks) / presentedFrames : 0.0);
+        if (presented1xFrames) std::printf("presented_1x_list%s\n", presented1xList.c_str());
     }
     std::printf("gpu_compose_equal=%llu gpu_compose_different=%llu\n",
                 static_cast<unsigned long long>(target.GpuComposeEqual()),

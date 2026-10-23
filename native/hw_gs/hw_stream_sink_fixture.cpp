@@ -6,6 +6,7 @@
 // `--deferred-vsync` (TASK-084 merge): the MTVU VBlank journal holds the VSYNC at the guest VBlank and posts it from the
 // journal drain after the frame's output (set_vsync_deferral / post_pending_vsync). The hw sink must receive exactly
 // one VSYNC per post, none at the hold, and a post with nothing held must report false.
+// `--display-aspect` (owner test 6): the TASK-080 display-aspect fill requests reach the in-process presenter.
 
 #include "gs_stream/gs_stream_client.hpp"
 
@@ -16,6 +17,7 @@
 int main(int argc, char **argv) {
   namespace stream = gt4::gs_stream;
   const bool deferred = argc > 1 && std::strcmp(argv[1], "--deferred-vsync") == 0;
+  const bool display_aspect = argc > 1 && std::strcmp(argv[1], "--display-aspect") == 0;
   if (!stream::stream_renderer()) {
     std::printf("FAIL: GT4_RENDERER=hw did not select a non-donor renderer\n");
     return 1;
@@ -76,6 +78,14 @@ int main(int argc, char **argv) {
     stream::set_vsync_deferral(false);
   } else {
     for (int frame = 0; frame < 3; ++frame) stream::on_vsync(frame & 1);
+  }
+  if (display_aspect) {
+    // TASK-080 through the seam: the window's presentation sink calls set_display_aspect_mode; with GT4_RENDERER=hw
+    // there is no GS process, so the request must reach the in-process presenter (owner test 6). 21:9 and 32:9 fill,
+    // then back to the 16:9 pillarbox (the session line reports the last state).
+    stream::set_display_aspect_mode(stream::DisplayAspectMode::fill, stream::aspect_millionths(21.0 / 9.0));
+    stream::set_display_aspect_mode(stream::DisplayAspectMode::fill, stream::aspect_millionths(32.0 / 9.0));
+    stream::set_display_aspect_mode(stream::DisplayAspectMode::game_aspect, 0);
   }
   stream::finish(stdout);
   std::printf("PASS: hw stream sink\n");

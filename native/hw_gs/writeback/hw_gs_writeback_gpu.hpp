@@ -130,6 +130,13 @@ struct GpuChunk {
 // (kGpuScaledExtent - 1, kGpuScaledExtent - 1) of each slot; draws and loads outside it reach only the 1x words.
 constexpr std::int32_t kGpuScaledExtent = 1024;
 constexpr std::uint32_t kGpuMaxScale = 8;  // GT4_HW_SCALE range (06.1)
+// Owner test 6 (IN-377): scaled copies of finished display buffers whose target slot was dropped (GT4 reuses the
+// memory of the buffer it shows next as a read-only depth buffer, which drops the colour slot one frame before the
+// buffer is displayed). Each shadow keeps the native rectangle (0, 0) to (kGpuScaledExtent - 1,
+// kGpuShadowRows - 1) at scale with its 1x words; the scaled compose reads it as source kGpuColourSlots + shadow
+// wherever the GLM still holds the saved word (per pixel), and the GLM at 1x elsewhere.
+constexpr std::uint32_t kGpuDisplayShadows = 2;
+constexpr std::int32_t kGpuShadowRows = 512;
 
 // Limits of one Execute() call (the caller splits larger batches).
 constexpr std::uint32_t kGpuMaxVertices = 1u << 20;   // 32 MiB of vertex data
@@ -162,6 +169,7 @@ struct GpuStats {
     std::uint64_t scaledRefreshPixels = 0;  // native pixels refreshed
     std::uint64_t scaledTextureCopies = 0;  // IN-374: textures copied from a slot's scaled image
     std::uint64_t fxaaFrames = 0;           // IN-376: presentation frames passed through FXAA
+    std::uint64_t scaledShadowSaves = 0;    // IN-377: display shadows saved from a dropped slot's scaled image
     // GT4_HW_GPU_TIMING (12.8, roadmap requirement 4): GPU time in ns from timestamps written after every
     // recorded operation; the interval since the previous timestamp is charged to the operation's category
     // (so a barrier wait before an operation counts with it). busy = first to last timestamp per submission.
@@ -239,6 +247,11 @@ public:
     // whose scaled image the circuit reads, plus one (0: read the GLM at 1x). out_* are scaled pixels.
     bool ComposeDisplayScaled(const std::vector<std::uint32_t> &parameters, std::uint32_t outWidth,
                               std::uint32_t outHeight, std::string &error);
+    // IN-377: records a copy of colour slot `slot`'s scaled image over the native rectangle (x0, y0) - (x1, y1)
+    // (inclusive, clipped to the shadow) into display shadow `shadow`, after every draw recorded before it. The
+    // scaled compose reads that shadow when its circuit word is kGpuColourSlots + shadow + 1.
+    bool SaveScaledShadow(std::uint32_t slot, std::uint32_t shadow, std::int32_t x0, std::int32_t y0, std::int32_t x1,
+                          std::int32_t y1, std::string &error);
     // The display image (R32_UINT, RGBA8 packed R | G << 8 | B << 16 | A << 24, max(kGpuSurface,
     // kGpuScaledExtent * scale) square, GENERAL layout).
     // As an opaque handle (the VkImage value): this header carries no Vulkan types.

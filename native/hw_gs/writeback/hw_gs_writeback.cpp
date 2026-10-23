@@ -1091,7 +1091,82 @@ public:
         slot.drawn = PixelRect{};
     }
 
-    void Drop(ResidentSlot& slot) {
+    // IN-377: views the display circuits showed in the last few VBlanks. GT4 double-buffers its race frame: the
+    // buffer it shows next is finished one frame before, and the game then reuses part of that memory as a
+    // read-only depth buffer, which drops its colour slot (and its scaled image) before the VBlank shows it.
+    void NoteDisplayedView(const memory::BufferView& view) {
+        for (const memory::BufferView& known : recentDisplayViews_) {
+            if (SameView(known, view)) return;
+        }
+        recentDisplayViews_[recentDisplayNext_] = view;
+        recentDisplayNext_ = (recentDisplayNext_ + 1u) % recentDisplayViews_.size();
+    }
+    bool RecentlyDisplayed(const memory::BufferView& view) const {
+        for (const memory::BufferView& known : recentDisplayViews_) {
+            if (known.bufferWidth != 0 && SameView(known, view)) return true;
+        }
+        return DisplayedView(view);
+    }
+
+    // IN-377: before a colour slot of a (recently) displayed buffer gives up its image at an internal scale > 1, its
+    // scaled image and its 1x words are copied into a display shadow. The scaled compose shows a shadow sub-pixel
+    // only where the native pixel under it still holds the word saved with it (compared with the GLM per pixel);
+    // any pixel the game changed since is shown from the GLM at 1x. The 1x words stay the only authority (nothing
+    // here reaches memory).
+    void SaveDisplayShadow(const ResidentSlot& slot) {
+        if (failed_ || gpu_.Scale() <= 1 || slot.depth || !slot.hasIdentity || slot.loaded.Empty()) return;
+        if (!RecentlyDisplayed(slot.view)) return;
+        const PixelRect saved{std::max(slot.loaded.x0, 0), std::max(slot.loaded.y0, 0),
+                              std::min(slot.loaded.x1, gpu::kGpuScaledExtent - 1),
+                              std::min(slot.loaded.y1, gpu::kGpuShadowRows - 1)};
+        if (saved.Empty()) return;
+        size_t chosen = shadows_.size();
+        for (size_t i = 0; i < shadows_.size() && chosen == shadows_.size(); ++i) {
+            if (shadows_[i].valid && SameView(shadows_[i].view, slot.view)) chosen = i;
+        }
+        for (size_t i = 0; i < shadows_.size() && chosen == shadows_.size(); ++i) {
+            if (!shadows_[i].valid) chosen = i;
+        }
+        if (chosen == shadows_.size()) {
+            chosen = 0;
+            for (size_t i = 1; i < shadows_.size(); ++i) {
+                if (shadows_[i].savedAt < shadows_[chosen].savedAt) chosen = i;
+            }
+        }
+        std::string error;
+        if (!gpu_.SaveScaledShadow(slot.gpuIndex, static_cast<uint32_t>(chosen), saved.x0, saved.y0, saved.x1,
+                                   saved.y1, error)) {
+            Fail(error);
+            return;
+        }
+        DisplayShadow& shadow = shadows_[chosen];
+        shadow.valid = true;
+        shadow.view = slot.view;
+        shadow.saved = saved;
+        shadow.savedAt = ++shadowSaves_;
+        counters.scaledShadowSaves++;
+    }
+
+    // IN-377: the display shadow holding the whole `read` rectangle of `view`, or -1 (the compose kernel checks every
+    // pixel against the GLM).
+    int32_t DisplayShadowFor(const memory::BufferView& view, const PixelRect& read) const {
+        for (size_t i = 0; i < shadows_.size(); ++i) {
+            const DisplayShadow& shadow = shadows_[i];
+            if (shadow.valid && SameView(shadow.view, view) && Contains(shadow.saved, read)) {
+                return static_cast<int32_t>(i);
+            }
+        }
+        return -1;
+    }
+
+    void Drop(ResidentSlot& slot, bool keepShadow = true) {
+        if (keepShadow) SaveDisplayShadow(slot);
+        static const bool trace = std::getenv("GT4_HW_SCALE_TRACE") != nullptr;  // diagnostic only
+        if (trace && slot.hasIdentity && !slot.depth && DisplayedView(slot.view)) {
+            std::fprintf(stderr, "[scale] drop displayed slot gpu=%u bp=%u bw=%u psm=%u reason=%u\n", slot.gpuIndex,
+                         slot.view.basePointer, slot.view.bufferWidth, static_cast<unsigned>(slot.view.psm),
+                         static_cast<unsigned>(writebackReason_));
+        }
         slot.loaded = PixelRect{};
         slot.drawn = PixelRect{};
         slot.hasIdentity = false;
@@ -1196,6 +1271,12 @@ public:
         for (ResidentSlot& slot : slots_) {
             if (&slot == keep) continue;
             if (SpansOverlap(LoadedSpan(slot), span)) {
+                static const bool trace = std::getenv("GT4_HW_SCALE_TRACE") != nullptr;  // diagnostic only
+                if (trace && keep && slot.hasIdentity && !slot.depth && DisplayedView(slot.view)) {
+                    std::fprintf(stderr, "[scale] overlap by %s slot bp=%u bw=%u psm=%u span=%u+%u\n",
+                                 keep->depth ? "depth" : "colour", keep->view.basePointer, keep->view.bufferWidth,
+                                 static_cast<unsigned>(keep->view.psm), span.begin, span.count);
+                }
                 if (park) {
                     Park(slot);
                 } else {
@@ -1404,7 +1485,8 @@ public:
     }
 
     void DropAll() {
-        for (ResidentSlot& slot : slots_) Drop(slot);
+        for (ResidentSlot& slot : slots_) Drop(slot, false);  // resets and auxiliary frames keep no shadow
+        for (DisplayShadow& shadow : shadows_) shadow.valid = false;
     }
 
     // The slot holding `view`, or the least recently used slot of that kind (written back and dropped).
@@ -1955,6 +2037,17 @@ public:
     static constexpr size_t kTextureCacheEntries = 256;
     bool textureCacheEnabled_ = true;
     std::array<uint64_t, memory::kPagesTotal> pageWrites_{};
+    // IN-377 display shadows.
+    struct DisplayShadow {
+        bool valid = false;
+        memory::BufferView view{};
+        PixelRect saved{};
+        uint64_t savedAt = 0;  // save order (the oldest is replaced)
+    };
+    std::array<DisplayShadow, gpu::kGpuDisplayShadows> shadows_{};
+    uint64_t shadowSaves_ = 0;
+    std::array<memory::BufferView, 4> recentDisplayViews_{};
+    uint32_t recentDisplayNext_ = 0;
     uint64_t writeSequence_ = 0;
     uint64_t textureUses_ = 0;
     std::unordered_map<uint64_t, CachedTexture> textures_;
@@ -2513,6 +2606,7 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
                 const auto psm = memory::decodePsm(circuit.psm);
                 if (!available[i] || !psm) continue;
                 const memory::BufferView view{memory::blockOfPage(circuit.fbp), circuit.fbw, *psm};
+                s.NoteDisplayedView(view);
                 const PixelRect read{circuit.dbx, circuit.dby, circuit.dbx + static_cast<int32_t>(circuit.read_width) - 1,
                                      circuit.dby + static_cast<int32_t>(circuit.read_height) - 1};
                 uint32_t slotWord = 0;
@@ -2523,6 +2617,15 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
                         }
                         slotWord = slot.gpuIndex + 1u;
                         break;
+                    }
+                }
+                bool fromShadow = false;
+                if (slotWord == 0) {
+                    // IN-377: no resident slot holds the buffer; a display shadow may (checked per pixel on the GPU).
+                    const int32_t shadow = s.DisplayShadowFor(view, read);
+                    if (shadow >= 0) {
+                        slotWord = gpu::kGpuColourSlots + static_cast<uint32_t>(shadow) + 1u;
+                        fromShadow = true;
                     }
                 }
                 scaled[at + 12] = slotWord;
@@ -2539,7 +2642,9 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
                                      slot.drawn.y0, slot.drawn.x1, slot.drawn.y1);
                     }
                 }
-                if (slotWord != 0) {
+                if (fromShadow) {
+                    s.counters.scaledCircuitsFromShadows++;
+                } else if (slotWord != 0) {
                     s.counters.scaledCircuitsFromSlots++;
                 } else {
                     s.counters.scaledCircuitsFromGlm++;
