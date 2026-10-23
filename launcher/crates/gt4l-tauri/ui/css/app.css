@@ -460,6 +460,9 @@ body.input-pad nav.side .ring-on { box-shadow: none; }
 .row .ctl .slider { flex: 1; width: auto; min-width: 0; }
 /* TASK-080 Render scale: the readout names the resulting resolution ("100% · 4x · 2560x1792"). */
 .row .ctl.wide { width: min(400px, 62%); }
+/* A row of several buttons (About > Logs): as wide as its buttons, each label on one line (rc4 owner report). */
+.row .ctl.buttons { width: auto; flex-wrap: wrap; row-gap: 8px; }
+.row .ctl.buttons .btn { white-space: nowrap; }
 .row .ctl.wide .val { white-space: nowrap; min-width: 168px; }
 .row .hint-text { font-size: 12px; color: var(--faint); }
 .row.is-disabled .k { color: var(--faint); }

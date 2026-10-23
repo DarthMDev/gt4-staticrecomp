@@ -117,18 +117,37 @@ pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
         |a, b| a.name == b.name && a.vendor_id == b.vendor_id && a.device_id == b.device_id && a.luid == b.luid,
     );
     let mut matched = vec![false; dxgi.len()];
-    let mut cards = Vec::new();
-    for gpu in &vulkan {
+    // Pass 1: the strict rule (LUIDs when both have one) for every Vulkan device, so two identical cards each find their
+    // own adapter first. Pass 2: a device still alone takes a left-over adapter with the same PCI ids (or name), since a
+    // hybrid laptop's Vulkan LUID can differ from every LUID DXGI lists (rc4 owner log).
+    let mut partners: Vec<Option<usize>> = vec![None; vulkan.len()];
+    for (slot, gpu) in vulkan.iter().enumerate() {
         let mine = Identity { name: &gpu.name, vendor_id: gpu.vendor_id, device_id: gpu.device_id, luid: gpu.luid };
-        let partner = dxgi.iter().enumerate().position(|(index, adapter)| {
+        partners[slot] = dxgi.iter().enumerate().position(|(index, adapter)| {
             !matched[index]
                 && same_card(&mine, &Identity { name: &adapter.name, vendor_id: adapter.vendor_id, device_id: adapter.device_id, luid: adapter.luid })
         });
-        let (dxgi_name, memory) = match partner {
-            Some(index) => {
-                matched[index] = true;
-                (Some(dxgi[index].name.clone()), dxgi[index].dedicated_video_memory)
-            }
+        if let Some(index) = partners[slot] {
+            matched[index] = true;
+        }
+    }
+    for (slot, gpu) in vulkan.iter().enumerate() {
+        if partners[slot].is_some() {
+            continue;
+        }
+        let mine = Identity { name: &gpu.name, vendor_id: gpu.vendor_id, device_id: gpu.device_id, luid: None };
+        partners[slot] = dxgi.iter().enumerate().position(|(index, adapter)| {
+            !matched[index]
+                && same_card(&mine, &Identity { name: &adapter.name, vendor_id: adapter.vendor_id, device_id: adapter.device_id, luid: None })
+        });
+        if let Some(index) = partners[slot] {
+            matched[index] = true;
+        }
+    }
+    let mut cards = Vec::new();
+    for (slot, gpu) in vulkan.iter().enumerate() {
+        let (dxgi_name, memory) = match partners[slot] {
+            Some(index) => (Some(dxgi[index].name.clone()), dxgi[index].dedicated_video_memory),
             None => (None, 0),
         };
         cards.push(GpuDevice {
@@ -140,6 +159,29 @@ pub fn merge(vulkan: &[VulkanGpu], dxgi: &[DxgiGpu]) -> Vec<GpuDevice> {
             vendor_id: gpu.vendor_id,
             driver_version: gpu.driver_version,
         });
+    }
+    // DXGI can list one physical card several times with different LUIDs (rc4: this machine's single RX 9060 XT shows up
+    // as three adapters; the owner's hybrid laptop lists each card twice). A DXGI adapter left over after the LUID
+    // matching is therefore a repeat when a Vulkan device or an earlier left-over adapter has the same PCI ids; only an
+    // adapter no other entry explains (a card without Vulkan) becomes a card of its own.
+    let mut kept_ids: Vec<(u32, u32)> =
+        vulkan.iter().filter(|gpu| gpu.vendor_id != 0).map(|gpu| (gpu.vendor_id, gpu.device_id)).collect();
+    let mut kept_names: Vec<String> = vulkan.iter().map(|gpu| key(&gpu.name)).collect();
+    for (index, adapter) in dxgi.iter().enumerate() {
+        if matched[index] {
+            continue;
+        }
+        let repeat = if adapter.vendor_id != 0 {
+            kept_ids.contains(&(adapter.vendor_id, adapter.device_id))
+        } else {
+            kept_names.contains(&key(&adapter.name))
+        };
+        if repeat {
+            matched[index] = true;
+            continue;
+        }
+        kept_ids.push((adapter.vendor_id, adapter.device_id));
+        kept_names.push(key(&adapter.name));
     }
     for (index, adapter) in dxgi.iter().enumerate() {
         if !matched[index] {
@@ -467,6 +509,52 @@ mod tests {
         );
         assert_eq!(cards.len(), 2, "two cards with two LUIDs");
         assert!(cards.iter().all(|card| card.vulkan_name.is_some() && card.dxgi_name.is_some()), "each keeps both names");
+    }
+
+    #[test]
+    fn dxgi_repeats_of_one_card_with_other_luids_are_one_card() {
+        // rc4, the main agent's desktop: one RX 9060 XT; Vulkan reports LUID 0x137b4, DXGI lists the card three times
+        // (LUIDs 0x137b4, 0x268fc, 0x25746) plus the software adapter.
+        let cards = merge(
+            &[card_vulkan("AMD Radeon RX 9060 XT", 0x1002, 0x7590, 0x137b4)],
+            &[
+                card_dxgi("AMD Radeon RX 9060 XT", 0x1002, 0x7590, 0x137b4, 16 * GIB),
+                card_dxgi("AMD Radeon RX 9060 XT", 0x1002, 0x7590, 0x268fc, 16 * GIB),
+                card_dxgi("AMD Radeon RX 9060 XT", 0x1002, 0x7590, 0x25746, 16 * GIB),
+            ],
+        );
+        assert_eq!(cards.len(), 1, "{cards:?}");
+        assert_eq!(cards[0].dxgi_name.as_deref(), Some("AMD Radeon RX 9060 XT"));
+    }
+
+    #[test]
+    fn a_hybrid_laptop_whose_vulkan_luids_match_no_dxgi_luid_gives_two_cards() {
+        // rc4, the owner's laptop log: four entries for two cards; no Vulkan LUID matched a DXGI LUID.
+        let cards = merge(
+            &[
+                card_vulkan("NVIDIA GeForce RTX 3060 Laptop GPU", 0x10de, 0x2560, 0x1_0000_0001),
+                card_vulkan("Intel(R) UHD Graphics", 0x8086, 0x9bc4, 0x1_0000_0002),
+            ],
+            &[
+                card_dxgi("Intel(R) UHD Graphics", 0x8086, 0x9bc4, 0x2_0000_0001, 128 * 1024 * 1024),
+                card_dxgi("NVIDIA GeForce RTX 3060 Laptop GPU", 0x10de, 0x2560, 0x2_0000_0002, 6 * GIB),
+            ],
+        );
+        assert_eq!(cards.len(), 2, "{cards:?}");
+        assert!(cards.iter().all(|card| card.vulkan_name.is_some() && card.dxgi_name.is_some()), "each keeps both names");
+        assert_eq!(cards[0].dedicated_video_memory, 6 * GIB, "the NVIDIA card got its own DXGI adapter");
+    }
+
+    #[test]
+    fn a_card_without_vulkan_listed_twice_by_dxgi_is_one_card() {
+        let cards = merge(
+            &[],
+            &[
+                card_dxgi("Intel(R) HD Graphics 4600", 0x8086, 0x0412, 1, 128 * 1024 * 1024),
+                card_dxgi("Intel(R) HD Graphics 4600", 0x8086, 0x0412, 2, 128 * 1024 * 1024),
+            ],
+        );
+        assert_eq!(cards.len(), 1, "{cards:?}");
     }
 
     #[test]

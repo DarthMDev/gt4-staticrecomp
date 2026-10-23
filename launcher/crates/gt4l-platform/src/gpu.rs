@@ -103,3 +103,24 @@ pub fn card_list(cards: &[GpuDevice]) -> String {
     }
     cards.iter().map(|card| card.name().unwrap_or("unnamed")).collect::<Vec<_>>().join("; ")
 }
+
+#[cfg(test)]
+mod probe_on_this_machine {
+    /// Prints the raw Vulkan devices and DXGI adapters with their PCI ids and LUIDs, then the merged cards. Ignored by
+    /// default: it loads the GPU drivers. Run with `cargo test -p gt4l-platform -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn gpu_inputs_on_this_machine() {
+        if let gt4l_core::system_check::VulkanProbe::Ready { devices, .. } = super::super::system::probe_vulkan() {
+            for device in devices {
+                println!("vulkan {} vendor {:#06x} device {:#06x} type {} luid {:?}", device.name, device.vendor_id,
+                         device.device_id, device.device_type, device.luid.map(|value| format!("{value:#018x}")));
+            }
+        }
+        for adapter in super::dxgi_adapters() {
+            println!("dxgi {} vendor {:#06x} device {:#06x} software {} luid {:?}", adapter.name, adapter.vendor_id,
+                     adapter.device_id, adapter.software, adapter.luid.map(|value| format!("{value:#018x}")));
+        }
+        println!("cards: {}", super::card_list(&super::probe_gpus()));
+    }
+}

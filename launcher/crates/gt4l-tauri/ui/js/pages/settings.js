@@ -667,7 +667,7 @@
       }, GT4.t("about.open_latest_log"));
       content.appendChild(h("div", { class: "row" }, [
         h("div", { class: "k", text: GT4.t("about.logs") }),
-        h("div", { class: "ctl" }, [openLog, openLatest, exportLogs])
+        h("div", { class: "ctl buttons" }, [openLog, openLatest, exportLogs])
       ]));
     }, function (err) {
       content.appendChild(h("p", { class: "loading", text: errorText(err) }));
