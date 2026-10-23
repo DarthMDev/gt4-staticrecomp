@@ -134,7 +134,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑110 | Controller tuning: stick and trigger deadzone, sensitivity, response curve, saturation, pressure, inversion, vibration, live test view | 📋 Planned (owner, 2026-10-23) · release 1.3.1 |
 | TASK‑111 | Logs for bug reports: one-click "Export logs" zip (latest log, recent launcher and game logs, settings, system summary; user name and paths masked), offered after a crash or a lost card | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑112 | Launcher logs: one file per session with INFO, WARN and ERROR lines, the last 20 kept, `latest.log` with the earlier errors, game session folders capped at 20, Open latest log | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
-| TASK‑113 | Spec II race HUD at wide ratios: speed figure and odometer digits stretched and spilling past the gauge (known issue in 1.3.0) | 📋 Planned (owner, 2026-10-23) · next update |
+| TASK‑113 | Spec II race HUD at ultrawide ratios (wider than 16:9): speed figure and odometer digits stretched and spilling past the gauge (known issue in 1.3.0) | 📋 Planned (owner, 2026-10-23) · next update |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -823,10 +823,10 @@ Implemented (rc4, 2026-10-23, `task/101-multi-game`) for release 1.3.0, with TAS
 - Both languages. Unit tests in `gt4l-core/src/logs.rs`: names, rotation at 20, the running file kept, the `latest.log`
   error collection, the legacy migration and the session-folder cap.
 
-### TASK-113 — Spec II race HUD digits at wide ratios
+### TASK-113 — Spec II race HUD digits at ultrawide ratios
 Known issue of 1.3.0 (owner test on rc4, 2026-10-23, ultrawide 3440 x 1440, GSdx 6x): in Spec II only, the race HUD's
 current-speed figure and the odometer digits are stretched horizontally and spill past their place on the gauges; the
-rest of the HUD (gauges, gear, G meter, labels) is right, and GT4 v2.00 is fine. Hypothesis: Spec II draws those digits
+rest of the HUD (gauges, gear, G meter, labels) is right; at 16:9 and narrower it is all right, and GT4 v2.00 is fine at every ratio. Hypothesis: Spec II draws those digits
 through a path the S8 HUD hook (`RaceDisplay::render` 0x1C5040, HUD matrix at this+0x70) does not cover, or with a
 second matrix or sprite list the widening scales twice. Find where Spec II draws the speed and odometer digits, compare
 with v2.00, and extend the Spec II hook table; headless check at 16:9 and 21:9 with frame dumps. Planned for the next
