@@ -155,18 +155,52 @@ Checks (candidate `gt4vulkan.exe` 97,240,064 bytes, sha256 `ca1eff8d90b6df03…`
   All six comparisons are equal, on the final code state (the run was repeated after the last two edits).
 - Open: the release pin set for the new executable (release decision); S8 fills the Spec II table.
 
-### S4 — second-target build: translation done, library/executable pending (2026-10-22)
+### S4 — second-target build: library and executable done (2026-10-22)
 
-- `scripts/spec2_ee_generate.py` runs the pinned donor translator (`private/reference-acceleration-study/eerecomp.exe`,
-  `5aec705e…`) on the derived ELF with the plain-ELF input path: **346 units**, 348 files, 89,992,422 bytes,
-  inventory sha256 `13354c95…`; the translator reports 1,286,297 instructions, 17,061 functions, 148,522 entries and
-  2 rejected seeds. Generic sources only (no decomp names, no seeded entry list), and the plugin segment is translated
-  as code because it is an executable PT_LOAD. Pin [inputs/spec2-ee-generated.json](inputs/spec2-ee-generated.json).
-- The `--out` directory is game-derived and stays in scratch (`O:\gt4recomp-scratch\spec2-s4-generated`), never in git.
-- **Pending**: compile the units into a Spec II `ps2game` library, add a target profile to `native/CMakeLists.txt`
-  (`GT4_TARGET=spec2` must select a different library, its own manifest and its own `gt4vulkan.exe`), then the entry
-  ledger / "no translated code" hunt on a real boot (S7b). The v2.00 CMake profile is pinned by library hash, so a
-  second profile has to be added rather than reused.
+- **Library** [done]: 346 units compiled with clang-cl 23.1.2 into
+  `private/slice274-spec2-ee-producer/game-build/ps2game.lib` (77,369,746 bytes, sha256 `5e483768…`), pinned in
+  [inputs/spec2-ee-libraries.json](inputs/spec2-ee-libraries.json) as profile `spec2`. 12 plugin entry seeds were added
+  after the first boot (see S7b): the plugin's pointer tables live inside its executable segment, which the translator
+  does not scan for datawords. Translation pin: [inputs/spec2-ee-generated.json](inputs/spec2-ee-generated.json)
+  (346 units, inventory `43b02351…`, 1,285,650 instructions, 17,080 functions, 148,756 entries, 2 rejected seeds).
+- **Executable** [done]: `-DGT4_TARGET=spec2 -DGT4_EE_PROFILE=spec2` selects the library and names the output
+  `gt4vulkan-spec2.exe`, so v2.00 is untouched. The perf runtime capsule now accepts the `spec2` profile (it is
+  target-independent code); the license guard capsule stays out until S8. Built at
+  `O:\gt4recomp-scratch\spec2-s4-build\build`.
+- **Pending**: the entry ledger / "no translated code" hunt on a real boot (S7b, blocked) and the later S8 hooks.
+
+### S7b — first headless boot: blocked before the menus (2026-10-22)
+
+What was fixed to get this far:
+
+1. **The translator read the plugin as zeros.** The Spec II file stores the plugin as its own RWX PT_LOAD at
+   `0x0068A480` *inside* the address range of the data PT_LOAD (the beta's data image is zero there). The runtime loads
+   segments in order, so the plugin wins; the donor translator instead reads the *first* segment containing an address
+   (`recomp/elf.cpp`, `Image::word`), so every plugin entry compiled to an empty stub and the boot halted at
+   `0x0068D14C`. Fix: `scripts/spec2_elf_patch.py` now splits the data PT_LOAD around the plugin (data-low, plugin,
+   data-high), which keeps the loaded image byte-identical (0 differing words) and makes every lookup unambiguous.
+   New derived ELF `36f60b1a…`.
+2. **Plugin entry points from its own tables.** With the segment fixed, the boot halted at `0x0068C7C4`, an internal
+   plugin function reached through the plugin's data table at `0x68D068`. Those tables are inside the executable
+   segment, so the translator's dataword source does not see them. 12 addresses (the five `jal` hook targets, the
+   thunk, `0x68C7C4`, `0x68C6E8`) are now explicit entry seeds.
+
+After both fixes the derived image boots headless with **no "no translated code" halt**: 600 and 4,200 frame runs
+complete on the frame limit, with the EE kernel initialised, the syscall table installed, `SetGsCrt` done and the IOP
+running 26 threads.
+
+**Blocker**: the game draws nothing after that — 8 primitives, one GIF tag per frame, no path-3 traffic (v2.00 at the
+same frame: 2,524 primitives, 923 path-2 and 912 path-3 tags). All EE threads end up waiting (the main thread on a
+semaphore after the sound-module init chain at `0x5E5ED0`), and the IOP is idle. Two controls:
+- the **original, unpatched** `SCUS_974.36` behaves identically (8 primitives, 26 IOP threads), so the stall is not
+  caused by our 35 patches, the injector or the derived image;
+- the game requests the IOP reboot with `rom0:UDNL cdrom0:\DNAS310.IMG;1` (the beta's protected runtime) instead of
+  v2.00's `IOPRP300.IMG`; the runtime only logs that request (it serves the system libraries as HLE, so this is not a
+  module-load failure by itself, but the DNAS path is untested).
+
+Next steps for S7b (recorded, not done): trace which semaphore the main thread waits on and who should signal it;
+decide whether the DNAS reboot needs a runtime overlay (a capsule, never the frozen donor); as an S6 experiment, boot
+a scratch ISO copy without one of the new modules (LGAUD/PPP/PPPOE) to see whether the stall is module-driven.
 
 ### S5 — VU0 and VU1: mapping done (2026-10-22)
 
@@ -200,8 +234,9 @@ section of [IOP-MAP](IOP-MAP.md). Tests: `IopTests`.
   every `source: injector` entry of `inputs/spec2-patches.json` after checking the old word, and writes the result to a
   fresh directory. `--revert` removes them again (control run: it reproduces the original hash exactly).
 - Derived image: `private/slice272-spec2-elf/SCUS_974.36`, 6,520,944 bytes, sha256
-  `10a794df128753045b4a9411a30adfa508a59b726507dcb40e3e9f8af648c747`; original `db08421b…`; pin
-  [inputs/spec2-elf.json](inputs/spec2-elf.json).
+  `36f60b1a989b343e98ca55b1f07f051aa83a3fa1a4fcb4acb409adb148afc640`; original `db08421b…`; pin
+  [inputs/spec2-elf.json](inputs/spec2-elf.json). The data PT_LOAD is split around the plugin segment (S7b finding);
+  the loaded image is byte-identical to the un-split form (0 differing words, checked).
 - **The trampoline at 0x001001E8 is kept**, documented: the plugin's init calls the function it replaced
   (`0x005E3AA8`, the beta's own boot initialiser) and one further game function (`0x004E2940`) whose side effects are
   not in the store table. Reproducing only the stores and dropping the call would change behaviour; keeping the call
@@ -209,8 +244,6 @@ section of [IOP-MAP](IOP-MAP.md). Tests: `IopTests`.
   re-reads them. The plugin segment stays translatable code, so its five `jal` hooks and its handlers keep working.
 - Tests: `DerivedElfTests` (apply/revert round trip, refusal on a mismatched old word, pin consistency, every patch
   address inside the text/data image).
-- Open: the translation run for this image is S4 (the donor producer expects the v2.00 CORE policy; a plain-ELF input
-  with its own library and manifests is needed).
 
-### S4 — second-target build (not started)
-### S7 — first boot (not started)
+### S4 — second-target build (done, see below)
+### S7 — first boot (blocked, see S7b below)

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "schema": "spec2-ee-libraries/1",
+  "purpose": "The Spec II EE library: 346 units translated from the derived SCUS_974.36 (TASK-100 S4). Plain translation, no aspect patch; the plugin segment is translated as code.",
+  "profiles": {
+    "spec2": {
+      "path": "private/slice274-spec2-ee-producer/game-build/ps2game.lib",
+      "size_bytes": 77369746,
+      "sha256": "5e4837683cd679d0bdb27a8b03a8ca4d449e9b59b74d5048acb7be8208222c52",
+      "generated_units": "O:/gt4recomp-scratch/spec2-s4-generated (346 units, inventory 43b02351..., see docs/inputs/spec2-ee-generated.json; 12 plugin entry seeds)",
+      "source_elf": "private/slice272-spec2-elf/SCUS_974.36 (36f60b1a...)",
+      "translator": "private/reference-acceleration-study/eerecomp.exe (5aec705e...)",
+      "compiler": "clang-cl 23.1.2 (private/tooling/llvm-23.1.2)",
+      "build": "cmake -S tools/ee_producer -B O:\\gt4recomp-scratch\\spec2-s4-lib-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGT4_DONOR=<assets>/private/references/ps2-web-recomp -DGT4_GENERATED=O:/gt4recomp-scratch/spec2-s4-generated -DGT4_BUILD_TRANSLATOR=OFF; cmake --build ... --target ps2game --parallel 4",
+      "notes": "No whole-image entry seeds: the translator found 148,756 entries. The 12 extra seeds are the plugin segment internal entry points (its own pointer tables plus the first miss), because those tables live inside the executable segment and the translator does not scan it for datawords."
+    }
+  },
+  "target": {
+    "cmake": "-DGT4_TARGET=spec2 -DGT4_EE_PROFILE=spec2",
+    "executable": "gt4vulkan-spec2.exe",
+    "ram_size": 33554432
+  }
+}

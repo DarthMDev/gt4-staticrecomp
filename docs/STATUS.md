@@ -32,6 +32,16 @@ The Spec II translation now runs: `scripts/spec2_ee_generate.py` feeds the deriv
 seeds), pinned in `inputs/spec2-ee-generated.json`; the generated C++ stays in scratch. Still open: the Spec II library
 and its own executable (a second CMake profile), then the first boot.
 
+S4 is now built: `-DGT4_TARGET=spec2 -DGT4_EE_PROFILE=spec2` links the Spec II library
+(`private/slice274-spec2-ee-producer/game-build/ps2game.lib`, `5e483768…`) into `gt4vulkan-spec2.exe`, with v2.00
+untouched. **S7b is blocked before the menus**: the derived image boots headless with no "no translated code" (600 and
+4,200 frames), but the game draws nothing afterwards (8 primitives against v2.00's 2,524 at the same frame), every EE
+thread waits and the IOP is idle. The original unpatched image behaves identically, so the patch set is not the cause.
+Two S7b fixes landed on the way: the plugin PT_LOAD sits inside the data PT_LOAD, so the derived ELF now splits the
+data segment around the plugin (the translator otherwise read zeros for it), and 12 plugin entry seeds cover the
+plugin's own pointer tables. Next: which EE semaphore the main thread waits on, the `DNAS310.IMG` IOP reboot path, and
+an IOP module A/B.
+
 ## Release 1.2.3 published (2026-10-22, hotfix: TASK-092, 093, 094, 096)
 
 Game slice268 (the 1.2.2 game plus the CoreGS 1.1 crash fix and the MTVU test-switch fixes); launcher 1.2.3: GSdx only

@@ -2592,3 +2592,41 @@ cmake -S C:\Antigravity\gt4-wt-100-spec2 -B O:\gt4recomp-scratch\spec2-s3-build\
 - Headless frame identity against slice268 (menus, day, night; `GT4_GS_STREAM_HASH=1`): results in the Progress
   section of SPEC2-PLAN.
 
+## Spec II S4 - second target build (TASK-100)
+
+The target is a separate build that never replaces v2.00:
+
+- `-DGT4_TARGET=spec2` (compile-time `GT4_TARGET_SPEC2`, empty hook table) and `-DGT4_EE_PROFILE=spec2` (the Spec II
+  library, pinned by `docs/inputs/spec2-ee-libraries.json`). CMake refuses a mismatched pair.
+- The output is `gt4vulkan-spec2.exe`; `gt4vulkan.exe` and its pins are untouched.
+- The perf runtime capsule accepts the `spec2` profile (target-independent code); the license guard capsule stays out
+  until S8.
+
+Library: `private/slice274-spec2-ee-producer/game-build/ps2game.lib`, 77,369,746 bytes, sha256 `5e483768…`, built from
+the 346 units in `O:\gt4recomp-scratch\spec2-s4-generated` with clang-cl 23.1.2:
+
+```
+cmake -S tools/ee_producer -B O:\gt4recomp-scratch\spec2-s4-lib-build -G Ninja -DCMAKE_BUILD_TYPE=Release ^
+  -DCMAKE_CXX_COMPILER=<assets>/private/tooling/llvm-23.1.2/bin/clang-cl.exe ^
+  -DGT4_DONOR=<assets>/private/references/ps2-web-recomp -DGT4_PYTHON=<assets>/private/tooling-venv/Scripts/python.exe ^
+  -DGT4_GENERATED=O:/gt4recomp-scratch/spec2-s4-generated -DGT4_BUILD_TRANSLATOR=OFF
+cmake --build O:\gt4recomp-scratch\spec2-s4-lib-build --target ps2game --parallel 4
+```
+
+Executable recipe (worktree needs `-DGT4_PYTHON`): the slice262 capsule recipe with
+`-DGT4_EE_PROFILE=spec2 -DGT4_TARGET=spec2`, build dir `O:\gt4recomp-scratch\spec2-s4-build`.
+
+### S7b findings (blocked before the menus)
+
+- **Program-header overlap**: the plugin PT_LOAD sits inside the data PT_LOAD's address range. The runtime loads in
+  order (plugin wins); the translator reads the first containing segment (zeros). `scripts/spec2_elf_patch.py` splits
+  the data segment around the plugin, which keeps the loaded image identical and makes the lookup unambiguous.
+- **Plugin tables are inside the executable segment**, so the translator's `dataword` source cannot see the plugin's
+  own function pointers: 12 explicit entry seeds were needed (the five hook targets, the thunk, `0x68C7C4`,
+  `0x68C6E8`).
+- After both: 4,200 headless frames, **no "no translated code"**.
+- Open: the game draws nothing after the display init (8 primitives against v2.00's 2,524 at the same frame); all EE
+  threads wait and the IOP is idle. The original unpatched image behaves identically, so the stall is not from the
+  patch set. The game requests the IOP reboot with `DNAS310.IMG` (the beta's protected runtime) instead of
+  `IOPRP300.IMG`; the runtime only logs it. Next: semaphore trace, DNAS reboot overlay, IOP module A/B.
+

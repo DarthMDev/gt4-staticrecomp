@@ -4,17 +4,19 @@
   "input_elf": {
     "path": "SCUS_974.36",
     "size_bytes": 6520944,
-    "sha256": "10a794df128753045b4a9411a30adfa508a59b726507dcb40e3e9f8af648c747"
+    "sha256": "36f60b1a989b343e98ca55b1f07f051aa83a3fa1a4fcb4acb409adb148afc640"
   },
   "translator": {
     "path": "private\\reference-acceleration-study\\eerecomp.exe",
     "size_bytes": 692224,
     "sha256": "5aec705e31da349c941414fd54be264000459c3cb0d22727e7d810b5b24b03c0"
   },
-  "command": "code 1286297 instructions (5024 KiB), functions 17061, entries 148522, rejected seeds 2\n346 units written to O:\\gt4recomp-scratch\\spec2-s4-generated",
+  "command": "inventory only",
+  "stats": "code 1285650 instructions (5022 KiB), functions 17080, entries 148756, rejected seeds 2",
+  "entry_seeds": null,
   "files": 348,
   "units": 346,
-  "inventory_sha256": "13354c95913158f7e5ff2d6ca19ca7a56698c35f6fded3962138f03aa994a31b",
-  "total_bytes": 89992422,
+  "inventory_sha256": "43b0235103d0631d14a89b2f1327241bd78629454dfe73743340410484af2e4e",
+  "total_bytes": 90115371,
   "notes": "Generic sources only (the v2.00 decomp names and seeded entry list do not apply); the plugin segment is translated as code because it is an executable PT_LOAD."
 }

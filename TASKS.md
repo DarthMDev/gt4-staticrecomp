@@ -648,9 +648,19 @@ original exactly. Pins `docs/inputs/spec2-iso.json` and `docs/inputs/spec2-elf.j
 (documented: the init also calls the beta's boot initialiser and one more game function). Tests 21 in
 `tests/python/test_spec2.py`. Open: S4 (plain-ELF translation, own library and executable) and S7b.
 Progress (2026-10-22, S4 translation): `scripts/spec2_ee_generate.py` runs the pinned translator on the derived ELF:
-346 units, 348 files, 89,992,422 bytes, inventory `13354c95…`; 1,286,297 instructions, 17,061 functions, 148,522
-entries, 2 rejected seeds. Pin `docs/inputs/spec2-ee-generated.json`; output stays in scratch. Open: the Spec II
-library and executable (own CMake profile) and S7b.
+346 units, 348 files, inventory `13354c95…`; 1,285,650 instructions, 17,080 functions, 148,756 entries, 2 rejected
+seeds. Pin `docs/inputs/spec2-ee-generated.json`; output stays in scratch. Open: the Spec II library and executable
+(own CMake profile) and S7b.
+Progress (2026-10-22, S4 build done): profile `spec2` in CMake (`-DGT4_TARGET=spec2 -DGT4_EE_PROFILE=spec2`, output
+`gt4vulkan-spec2.exe`); library `private/slice274-spec2-ee-producer/game-build/ps2game.lib` 77,369,746 bytes
+(`5e483768…`), pin `docs/inputs/spec2-ee-libraries.json`. v2.00 untouched.
+Progress (2026-10-22, S7b BLOCKED before the menus): the derived image boots headless with **no "no translated code"**
+(600 and 4,200 frames). Two findings fixed on the way: the plugin PT_LOAD sits inside the data PT_LOAD, so the
+translator read zeros for it (the derived ELF now splits the data segment around the plugin, image still identical);
+and the plugin's own pointer tables are inside its executable segment, so 12 entry seeds were added. The game then
+draws nothing (8 primitives against v2.00's 2,524 at the same frame), all EE threads wait, the IOP is idle. The
+original unpatched image behaves identically, so our patches are not the cause. Next: semaphore trace, the DNAS310
+IOP-reboot path, and an IOP module A/B.
 
 ### TASK-099 — Patch notes panel on the launcher home screen
 Planned (owner, 2026-10-22) for release 1.2.4. The home screen keeps the logo, Play and Settings on the left; a new

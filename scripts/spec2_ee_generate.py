@@ -48,6 +48,10 @@ def main(argv=None):
     parser.add_argument("--assets-root", type=Path, default=Path("C:/Antigravity/gt4-staticrecomp"))
     parser.add_argument("--elf", type=Path, required=True, help="derived SCUS_974.36 (scripts/spec2_elf_patch.py)")
     parser.add_argument("--output", type=Path, required=True, help="fresh directory for the generated units")
+    parser.add_argument("--entries", type=Path, help="entry seed file passed to the translator")
+    parser.add_argument("--stats-line", help="translator stats line recorded in the summary")
+    parser.add_argument("--inventory-only", action="store_true",
+                        help="hash an existing generated directory instead of running the translator")
     parser.add_argument("--json", type=Path)
     args = parser.parse_args(argv)
 
@@ -57,20 +61,33 @@ def main(argv=None):
     translator = args.assets_root / TRANSLATOR
     if translator.stat().st_size != TRANSLATOR_SIZE or sha256(translator) != TRANSLATOR_SHA256:
         raise SystemExit("translator differs from its pin")
-    if args.output.exists() and any(args.output.iterdir()):
-        raise SystemExit("refusing to reuse %s" % args.output)
-    args.output.mkdir(parents=True, exist_ok=True)
-    result = subprocess.run([str(translator), str(args.elf), "--out", str(args.output)], capture_output=True, text=True)
-    if result.returncode != 0:
-        raise SystemExit("translator failed: %s" % (result.stderr or result.stdout))
-    records = inventory(args.output)
+    if args.inventory_only:
+        if not (args.output / "table.cpp").exists():
+            raise SystemExit("no generated units in %s" % args.output)
+        records = inventory(args.output)
+        result = None
+        command = "inventory only"
+    else:
+        if args.output.exists() and any(args.output.iterdir()):
+            raise SystemExit("refusing to reuse %s" % args.output)
+        args.output.mkdir(parents=True, exist_ok=True)
+        arguments = [str(translator), str(args.elf), "--out", str(args.output)]
+        if args.entries:
+            arguments += ["--entries", str(args.entries)]
+        result = subprocess.run(arguments, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise SystemExit("translator failed: %s" % (result.stderr or result.stdout))
+        records = inventory(args.output)
+        command = result.stdout.strip()
     units = [r for r in records if r["name"].startswith("unit_")]
     summary = {
         "schema_version": 1,
         "schema": "spec2-ee-generated/1",
         "input_elf": {"path": args.elf.name, "size_bytes": args.elf.stat().st_size, "sha256": sha256(args.elf)},
         "translator": {"path": str(TRANSLATOR), "size_bytes": TRANSLATOR_SIZE, "sha256": TRANSLATOR_SHA256},
-        "command": result.stdout.strip(),
+        "command": command,
+        "stats": args.stats_line,
+        "entry_seeds": None if not args.entries else {"path": args.entries.name, "sha256": sha256(args.entries)},
         "files": len(records),
         "units": len(units),
         "inventory_sha256": hashlib.sha256(json.dumps(records, sort_keys=True).encode()).hexdigest(),

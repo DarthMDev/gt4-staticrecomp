@@ -325,7 +325,7 @@ class EeGenerateTests(unittest.TestCase):
         self.assertEqual(pin['units'], 346)
         self.assertEqual(pin['files'], pin['units'] + 2)  # table.cpp and the ledger/summary file
         self.assertRegex(pin['inventory_sha256'], r'^[0-9a-f]{64}$')
-        self.assertIn('1286297 instructions', pin['command'])
+        self.assertIn('1285650 instructions', pin['stats'])
 
 
 if __name__ == '__main__':

@@ -67,6 +67,55 @@ def file_offset(segments, address, size=4):
     raise ValueError("address %08x is not file-backed" % address)
 
 
+def split_data_around_plugin(data):
+    """Rewrite the program headers so no segment overlaps the .plugin PT_LOAD.
+
+    The Spec II file stores the plugin as its own RWX PT_LOAD at 0x0068A480, *after* a data PT_LOAD that also covers
+    those addresses (the beta's data image is zero there). The runtime loads the segments in order, so the plugin wins;
+    the donor translator instead reads the *first* segment that contains an address (recomp/elf.cpp, Image::word), so
+    it read the zeros and emitted empty code for every plugin entry. Splitting the data segment around the plugin makes
+    the loaded image identical and every lookup unambiguous.
+    """
+    phoff, = struct.unpack_from("<I", data, 28)
+    phentsize, phnum = struct.unpack_from("<HH", data, 42)
+    headers = [list(struct.unpack_from("<8I", data, phoff + i * phentsize)) for i in range(phnum)]
+    plugin = next((h for h in headers if h[0] == 1 and h[2] == PLUGIN_VA), None)
+    if plugin is None:
+        raise ValueError("no PT_LOAD at the plugin address")
+    data_header = next((h for h in headers if h[0] == 1 and h[2] != PLUGIN_VA
+                        and h[2] < PLUGIN_VA < h[2] + h[5]), None)
+    if data_header is None:
+        raise ValueError("no data PT_LOAD covers the plugin address")
+    if data_header[5] < plugin[5]:
+        raise ValueError("the covering segment is smaller than the plugin")
+    low_size = PLUGIN_VA - data_header[2]
+    high_address = PLUGIN_VA + plugin[4]
+    high_offset = data_header[1] + (high_address - data_header[2])
+    high_size = data_header[4] - (high_address - data_header[2])
+    low = [1, data_header[1], data_header[2], data_header[3], low_size, low_size, data_header[6], data_header[7]]
+    bss = data_header[5] - data_header[4]
+    high = [1, high_offset, high_address, data_header[3] + (high_address - data_header[2]), high_size,
+            high_size + bss, data_header[6], data_header[7]]
+    rewritten = []
+    for header in headers:
+        if header is data_header:
+            rewritten.extend([low, plugin, high])
+        elif header is plugin:
+            continue
+        else:
+            rewritten.append(header)
+    if 52 + 32 * len(rewritten) > 0x1000:
+        raise ValueError("program header table no longer fits before the text")
+    out = bytearray(data)
+    for index, header in enumerate(rewritten):
+        struct.pack_into("<8I", out, phoff + index * phentsize, *header)
+    struct.pack_into("<H", out, 44, len(rewritten))
+    # The old table had phnum entries; zero the leftovers so the file is deterministic.
+    for index in range(len(rewritten), phnum):
+        struct.pack_into("<8I", out, phoff + index * phentsize, *([0] * 8))
+    return bytes(out)
+
+
 def apply_patches(data, patches, reverse=False):
     """Applies (or reverts) every injector patch; returns the new bytes."""
     segments = load_elf(data)
@@ -129,6 +178,8 @@ def main(argv=None):
             parser.error("--iso or --elf is required")
         original, identity = read_iso(args.iso)
     derived = apply_patches(original, patches, reverse=args.revert)
+    if not args.revert:
+        derived = split_data_around_plugin(derived)
 
     summary = {
         "schema_version": 1,
