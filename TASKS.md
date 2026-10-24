@@ -135,7 +135,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑111 | Logs for bug reports: one-click "Export logs" zip (latest log, recent launcher and game logs, settings, system summary; user name and paths masked), offered after a crash or a lost card | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑112 | Launcher logs: one file per session with INFO, WARN and ERROR lines, the last 20 kept, `latest.log` with the earlier errors, game session folders capped at 20, Open latest log | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑113 | Spec II race HUD at ultrawide ratios (wider than 16:9): speed figure and odometer digits stretched and spilling past the gauge (known issue in 1.3.0) | 📋 Planned (owner, 2026-10-23) · next update |
-| TASK‑115 | Game recognition and Discord: Windows Game Mode/Game Bar, AMD and NVIDIA capture (Instant Replay, ShadowPlay) and Discord Rich Presence | 📋 Planned (owner, 2026-10-24) · release 1.3.1 |
+| TASK‑115 | Game recognition and Discord: Windows Game Mode/Game Bar, AMD and NVIDIA capture (Instant Replay, ShadowPlay) and Discord Rich Presence | 📋 Planned (owner, 2026-10-24) · future (1.3.1 or later) |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -886,7 +886,7 @@ Done in the working tree (branch `task/101-multi-game`, release 1.3.0, 2026-10-2
    Owner test pending; no release-notes bullet (rc polish).
 
 ### TASK-115 — Game recognition (Windows, GPU drivers, Discord) and Discord Rich Presence
-Planned (owner, 2026-10-24) for release 1.3.1. Goal: Windows, the AMD and NVIDIA drivers and Discord treat GT4Recomp
+Planned (owner, 2026-10-24) as a future plan (maybe 1.3.1, maybe later; the owner decides when). Goal: Windows, the AMD and NVIDIA drivers and Discord treat GT4Recomp
 as a game, so Game Mode, AMD Instant Replay / NVIDIA ShadowPlay and Discord's "Playing" status work out of the box.
 Facts to start from (main agent, to verify): the picture is drawn by `gt4-gs.exe` (GSdx) into a child window of
 `gt4.exe`, so a driver or overlay sees the 3D work in `gt4-gs.exe` and the window in `gt4.exe`; RivaTuner already
