@@ -446,6 +446,21 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
 
 ## 10. Open items from the scene sweep
 
+- **Owner test 11, 6x on the Nordschleife (2026-10-24, candidate 274 `4e54ad04`):** the upscale reaches the screen
+  (confirmed after the deinterlace-set fix) and the frame is stable at 60 FPS, but two **presentation-only artifacts**
+  appear, both exactly **one native pixel wide** in the 6x image:
+  - a thin vertical line in the sky at x = 2676 of 3840 (column break 20.0 against a 2.9 median in the dump
+    `private/hwr-play-274/dumps-x6/frame_04200.ppm`);
+  - a horizontal banding with a **6-row period**: the row-to-row difference of phase 5 is 4.48 against 2.3-2.6 for the
+    other five phases.
+  The dumps are genuinely 6x (21.7% of 6x6 blocks uniform), so this is not a fallback to 1x for a whole frame: it is
+  a one-native-pixel error inside the scaled image. Candidate sources, in order of likelihood: the IN-379 tone carry
+  and the IN-377 display shadow, which fall back to the 1x word per sub-pixel where their per-pixel check fails (a
+  column or row where the check fails shows one native pixel of 1x content), and the IN-381 field offset for the 892
+  frames that carried one. Next step: count the per-frame fallback sub-pixels of each source in the compose (a counter
+  and a per-row/column histogram) and fix the one that matches the measured rows/columns. Memory, 1x words and
+  readbacks are unaffected.
+
 - **480i races** (without the forced 480p): presented at 1x. The display reads 448 rows of a 224-row field buffer,
   so no scaled image covers the read rectangle. Seen on the old captures `race-9000`, `car-6600` and `night-10000`.
 - **Car-select and track-select menus:** low detail and combing on the rotating 3D car (cause not confirmed).
