@@ -458,7 +458,13 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
     what smooths it there.
   - The dialog ghost and the vertical line are still unexplained; the dialog is a 480i menu, so the IN-381 field offset
     (6,216 of 14,009 frames carried one in the owner's run) and the deinterlace history are the next suspects.
-  - `build\hwr-play-scale.ps1 -Linear` exposes the new filter for an A/B by the owner.
+  - `build\hwr-play-scale.ps1 -Linear` exposes the new filter for an A/B by the owner. He tried it: **no visible change**
+    (as measured).
+  - **Sporadic 1x frames (owner, second run):** 184 of 22,518 VBlanks (0.8%) had no GPU compose (the first run: 64 of
+    5,395), i.e. a single frame flashed at 1x. Instrumented: `Counters::gpuComposeSkips[4]` records the reason (0
+    `GpuComposeApplies` declined, 1 zero output size, 2 an interlaced frame larger than the deinterlace images, 3 the
+    compose or its flush failed) and the sink prints `[hw] compose_skips ...` when any is non-zero. A 4,200-frame
+    headless menu run had none, so the next owner run is what identifies it.
 
 - **Owner test 11, 6x on the Nordschleife (2026-10-24, candidate 274 `4e54ad04`):** the upscale reaches the screen
   (confirmed after the deinterlace-set fix) and the frame is stable at 60 FPS, but two **presentation-only artifacts**
