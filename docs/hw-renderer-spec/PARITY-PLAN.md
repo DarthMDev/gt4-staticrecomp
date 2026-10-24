@@ -460,6 +460,18 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
   frames that carried one. Next step: count the per-frame fallback sub-pixels of each source in the compose (a counter
   and a per-row/column histogram) and fix the one that matches the measured rows/columns. Memory, 1x words and
   readbacks are unaffected.
+- **First bisection (2026-10-24, replay `race480p` at 6x, `GT4_HW_TONE_CARRY=0`, dumps in
+  `O:\gt4recomp-scratch\coregs2-evidence\in384-carry\`):**
+  - The 6-row banding **does** come from the tone carry: with it on the row-to-row differences per phase are
+    [3.12, 3.09, 3.31, 3.13, 3.19, **4.81**] (phase 5 is 1.5x the others, the same shape as the owner's frame);
+    with it off the frame collapses to 1x (phases 0.27-0.30) and phase 5 is the block boundary (9.41), i.e. there is
+    no detail left to band.
+  - The **vertical line is not from the carry**: a strong column break at x ~ 2700 appears with the carry on and off
+    (71.4 and 73.5 against a 2.4 median). It is a real edge of the 1x picture that the compose maps to one native
+    column, so the owner's "line that does not exist" is a 1x-granular feature of the source frame, not a scaled-image
+    fallback. Next: reproduce it with a frame dump of the owner's scene and compare the same column against the 1x
+    `vram` dump of the same frame.
+  - Switch: `GT4_HW_TONE_CARRY=0` (diagnostic only; the race then shows at 1x, so it is a bisection tool).
 
 - **480i races** (without the forced 480p): presented at 1x. The display reads 448 rows of a 224-row field buffer,
   so no scaled image covers the read rectangle. Seen on the old captures `race-9000`, `car-6600` and `night-10000`.

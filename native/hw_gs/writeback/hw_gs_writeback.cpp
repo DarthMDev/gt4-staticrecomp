@@ -2135,6 +2135,12 @@ public:
         ResidentSlot& slot = Acquire(false, toneRun_.source);
         Load(slot, toneRun_.saved);
         if (failed_ || !Contains(slot.loaded, toneRun_.saved)) return;
+        // Diagnostic switch (IN-384 follow-up): with GT4_HW_TONE_CARRY=0 the sequence's scaled result is left at the
+        // plain 1x refresh, which isolates a scaled-image artifact that comes from the carry (the picture then shows
+        // the race at 1x, so this is a bisection tool, not a mode).
+        static const bool carryEnabled = std::getenv("GT4_HW_TONE_CARRY") == nullptr ||
+                                         std::strcmp(std::getenv("GT4_HW_TONE_CARRY"), "0") != 0;
+        if (!carryEnabled) return;
         std::string error;
         if (!gpu_.CarryTone(slot.gpuIndex, toneRun_.saved.x0, toneRun_.saved.y0, toneRun_.saved.x1, toneRun_.saved.y1,
                             error)) {
