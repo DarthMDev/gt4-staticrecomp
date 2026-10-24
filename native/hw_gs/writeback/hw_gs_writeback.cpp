@@ -2148,6 +2148,11 @@ public:
             return;
         }
         counters.toneCarries++;
+        // IN-384 follow-up (owner test 11, sporadic 1x frames): the tone sequence rewrites the frame buffer every
+        // race frame, so a display shadow saved before it no longer matches the GLM and its per-pixel check falls back
+        // to 1x for the WHOLE frame. The slot is resident again with the carried image, so re-save the shadow from it:
+        // the shadow then holds the carried 6x picture and the 1x words the sequence produced, and its check passes.
+        SaveDisplayShadow(slot);
         DumpToneRun(slot.gpuIndex);
     }
 
