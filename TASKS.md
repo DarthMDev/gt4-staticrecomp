@@ -2002,6 +2002,20 @@ ARM64 build, iOS host layers, signing/installation on iPhone 15 Pro Max and
 LAN-over-internet and an online lobby launcher (docs/ONLINE-NOTES.md), in-game
 settings menus.
 
+**Two-player split screen (open, not numbered; owner, 2026-10-24).** Make GT4's own two-player split-screen mode
+(Arcade "2P Battle", `RaceSplitBattle`) work properly with two controllers. Not a priority; map it before any work.
+What we know today:
+- Input: the host feeds only player one. `native/host_io.cpp` polls one XInput slot (the first connected) and SDL3
+  opens one gamepad (`gt4::pad::first_pad`); the guest's second pad port gets nothing. Needs a second guest pad
+  (port 2) fed from a second controller, plus launcher Controls support (player 1 / player 2 assignment, a keyboard
+  layout for player 2 or keyboard + pad).
+- Rendering: split screen has its own path (`RacePS2Base::render_world_split` 0x0034028C, `func_0033EAB8` second
+  view; docs/GS-READBACK-STUDY.md, docs/NATIVE-RENDERER-STUDY.md). In split screen the headlight flares use a constant
+  (only the sun uses the GS readback), so its readback cost is lower.
+- Ultrawide: split screen stays pillarboxed 16:9 today (TASK-080 scene policy); a widened split view is a later
+  question.
+- Owner checks wanted: both players drive, both HUDs right, performance at 60 FPS on both renderers, Spec II too.
+
 **Release plan (owner, 2026-10-22):** big features take a minor version, intermediate updates and hotfixes the
 patch number: 1.2.3 hotfix, 1.2.4 (TASK-097, 098, 099), 1.3.0 Spec II (TASK-100, on GSdx), 1.4.0 wheels (TASK-018) (owner, 2026-10-23: Spec II moved ahead);
 2.0.0 is CoreGS 2.0 (phase 2).
