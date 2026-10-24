@@ -342,8 +342,14 @@
       return svg;
     }
 
+    // The entrance of the page's items runs once, on the first draw (TASK-114 rc5).
+    var entering = true;
     function paint(focusId) {
       GT4.ui.clear(list);
+      if (entering) {
+        entering = false;
+        GT4.enterAnimation(content);
+      }
       if (!items.length) {
         list.classList.remove("lib-list");
         list.appendChild(h("div", { class: "emptystate" }, [
@@ -364,7 +370,9 @@
       }
     }
 
-    function apply(result, message) {
+    // The answer of every list and change command (list, import, new, rename, delete, activate) is the list: it is
+    // drawn and kept in memory for the next open (TASK-114 rc5). `focusId` keeps the focus on that row when drawn again.
+    function apply(result, message, focusId) {
       if (result && typeof result.game === "string") {
         currentGame = result.game || currentGame;
       }
@@ -374,6 +382,7 @@
       }
       if (result && Array.isArray(result.items)) {
         items = result.items;
+        GT4.cache.library[kindName] = result;
       }
       if (result && typeof result.folder === "string" && result.folder) {
         folderText.textContent = result.folder;
@@ -381,7 +390,7 @@
       if (message) {
         GT4.ui.toast(message);
       }
-      paint();
+      paint(focusId);
     }
 
     // An import needs no question: each save or replay names its game, and the launcher files it there.
@@ -462,9 +471,23 @@
     });
 
     // Drawing the list never moves focus: the tab list keeps it until the player presses A (host.entry).
+    // TASK-114 rc5: the list read before draws at once and is read again behind; it is drawn again only when it changed.
+    // Until a list is known, the loading line shows (after 300 ms) instead of the empty state.
+    if (GT4.cache.library[kindName]) {
+      apply(GT4.cache.library[kindName], "");
+    }
+    var cancelLoading = GT4.loadingLater(list, function () {
+      return !!GT4.cache.library[kindName];
+    });
     return GT4.backend.call(kind.list, {}).then(function (result) {
-      apply(result, "");
+      cancelLoading();
+      if (GT4.sameData(GT4.cache.library[kindName], result)) {
+        return;
+      }
+      var focused = list.contains(document.activeElement) ? document.activeElement.getAttribute("data-item-id") : null;
+      apply(result, "", focused || undefined);
     }, function (err) {
+      cancelLoading();
       GT4.ui.toast(GT4.errorText(err), true);
     });
   }

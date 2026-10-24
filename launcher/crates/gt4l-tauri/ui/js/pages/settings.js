@@ -56,7 +56,7 @@
 
   // TASK-114 rc5: the Settings tabs open from memory. `cache` keeps the last settings table, About info and launcher
   // version list that were read; prefetchSettings fills it when the home screen is up, and every read refreshes it.
-  var cache = { table: null, about: null, versions: null };
+  var cache = { table: null, about: null, versions: null, games: null, library: { saves: null, replays: null } };
   // "Loading settings..." shows only when there is no data yet and only after this many ms, so it never flashes.
   var LOADING_DELAY_MS = 300;
   // The entrance of a tab's items: each one starts ENTER_STEP_MS after the previous, and none later than ENTER_CAP_MS.
@@ -92,8 +92,14 @@
     });
   }
 
-  // Reads the settings table and the About info once, so the first tab opened draws at once. Fills only empty slots:
-  // a tab that already read its data keeps it.
+  // The helpers the other tab pages (games-page.js, library.js) share with this one.
+  GT4.cache = cache;
+  GT4.sameData = sameData;
+  GT4.loadingLater = loadingLater;
+  GT4.enterAnimation = enterAnimation;
+
+  // Reads what the Settings tabs show once, so the first tab opened draws at once: the settings table, About info,
+  // the Games list and the Saves and Replays lists. Fills only empty slots: a tab that already read its data keeps it.
   var prefetched = false;
   GT4.prefetchSettings = function () {
     if (prefetched) {
@@ -107,6 +113,15 @@
     });
     call("about_info").then(function (info) {
       cache.about = cache.about || info;
+    }, function () {});
+    call("games_list").then(function (view) {
+      cache.games = cache.games || view;
+    }, function () {});
+    call("saves_list").then(function (view) {
+      cache.library.saves = cache.library.saves || view;
+    }, function () {});
+    call("replays_list").then(function (view) {
+      cache.library.replays = cache.library.replays || view;
     }, function () {});
   };
 

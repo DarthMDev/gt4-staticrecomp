@@ -81,12 +81,19 @@
       ]);
     }
 
+    // The entrance runs once, on the first draw (TASK-114 rc5). Every draw keeps the view in memory (GT4.cache.games).
+    var entering = true;
     function paint(view) {
       GT4.ui.clear(list);
       view.games.forEach(function (game) {
         list.appendChild(card(game));
       });
       firstButton = list.querySelector("button");
+      GT4.cache.games = view;
+      if (entering) {
+        entering = false;
+        GT4.enterAnimation(content);
+      }
     }
 
     content.appendChild(h("h1", { text: GT4.t("games.page_title") }));
@@ -99,7 +106,27 @@
     host.hints([]);
     host.entry(function () { return firstButton || content.querySelector("button"); });
 
-    return GT4.games.list().then(paint, function (err) {
+    // TASK-114 rc5: the list read before draws at once and is read again behind; it is drawn again only when it changed.
+    // Until a list is known, the loading line shows (after 300 ms) instead of an empty page.
+    if (GT4.cache.games) {
+      paint(GT4.cache.games);
+    }
+    var cancelLoading = GT4.loadingLater(list, function () {
+      return !!GT4.cache.games;
+    });
+    return GT4.games.list().then(function (view) {
+      cancelLoading();
+      if (GT4.sameData(GT4.cache.games, view)) {
+        return;
+      }
+      // Focus on a card stays in the list when the list is drawn again.
+      var hadFocus = list.contains(document.activeElement);
+      paint(view);
+      if (hadFocus && firstButton) {
+        firstButton.focus({ preventScroll: true });
+      }
+    }, function (err) {
+      cancelLoading();
       GT4.ui.toast(GT4.errorText(err), true);
     });
   };

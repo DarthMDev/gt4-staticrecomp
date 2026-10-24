@@ -2,11 +2,11 @@
 ## rc5 Settings open at once, TASK-114 item 8 (2026-10-24, `task/101-multi-game`, 1.3.0-rc5)
 
 Implemented, owner test pending; nothing merged or released. The graphics cards are probed once and kept (Play refreshes
-them once), and the Settings tabs open from memory: the settings table, About info and the launcher version list are read
+them once), and the Settings tabs open from memory: the settings table, About info, the launcher version list, the Games list and the Saves and Replays lists are read
 when the home screen is up and drawn again only when something changed. "Loading settings..." appears only with no data
 and after 300 ms. A tab's rows fade in once. Probes per action (code paths): start 1 (unchanged), open a Settings tab 2 to 0,
 save a setting 2 to 0, Play 3 to 1, export logs 1 to 0. Checks: `cargo test --workspace` 556 passed, 0 failed, 5 ignored;
-focus-check en-US 194/194 and pt-BR 201/201; nav-test 150/150 (headless Edge, own server stopped). The monitor list stays
+focus-check en-US 195/195 and pt-BR 202/202; nav-test 150/150 (headless Edge, own server stopped). The monitor list stays
 live (not measured as slow). Not verified: the animation's feel on the owner's machine.
 
 ## rc5 polish, TASK-114 items 5-7 (2026-10-24, `task/101-multi-game`)

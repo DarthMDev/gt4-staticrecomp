@@ -92,6 +92,10 @@
     await wait(40);
     var rows = document.querySelectorAll(".stage .content .row").length;
     check("a loaded tab shows its rows at once, with no loading line", !document.querySelector(".stage .loading") && rows > 0, "rows " + rows);
+    // The Saves list (TASK-114 rc5, item 8 extension): read before, so its header is drawn at once.
+    root.location.hash = "#/settings/saves";
+    await wait(40);
+    check("a loaded Saves tab shows its list at once, with no loading line", !document.querySelector(".stage .loading") && !!document.querySelector(".stage .content .lib-head"), "no list header");
     await wait(250);
   }
 
