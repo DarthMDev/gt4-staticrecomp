@@ -136,6 +136,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑112 | Launcher logs: one file per session with INFO, WARN and ERROR lines, the last 20 kept, `latest.log` with the earlier errors, game session folders capped at 20, Open latest log | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑113 | Spec II race HUD at ultrawide ratios (wider than 16:9): speed figure and odometer digits stretched and spilling past the gauge (known issue in 1.3.0) | 📋 Planned (owner, 2026-10-23) · next update |
 | TASK‑115 | Game recognition and Discord: Windows Game Mode/Game Bar, AMD and NVIDIA capture (Instant Replay, ShadowPlay) and Discord Rich Presence | 📋 Planned (owner, 2026-10-24) · future (1.3.1 or later) |
+| TASK‑116 | George V Paris runs below 60 FPS (43-52 FPS on the owner PC, GSdx Vulkan): profile it with F7/F8 and find the cost (suspected flare readbacks or EE/GS-thread CPU) | 📋 Recorded (owner, 2026-10-24) · F8 report pending |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -907,6 +908,17 @@ Work:
    and the GT4Recomp logo; a Settings > General switch (on by default), off when Discord is not running, no data
    sent anywhere else. In-game details (mode, track, car) need guest-memory reads: a later step.
 Acceptance: the owner sees each feature work on his machines; unit tests for the presence payload and the switch.
+
+### TASK-116 — George V Paris performance
+Recorded (owner, 2026-10-24) on 1.3.0-rc5, Spec II (Arcade unlocks every track), night race on George V Paris,
+GSdx Vulkan 6x, Performance Mode off, owner PC (Ryzen 7 5700X, RX 9060 XT). The owner calls it the heaviest and least
+optimised track of the game. Measured on screen (RivaTuner): 43-52 FPS in the race (60 on the track-select screen),
+frametime spikes to about 23 ms; GPU only 32-42% busy at about 2.5 GHz, CPU about 33% total, so one thread is the limit,
+not the GPU. Hypotheses (unconfirmed): many street lamps with lens flares cause GS readbacks that make the game wait
+for the GS process each frame (the C.S. Route 5 night capture already had 2,928 readbacks), or the EE / VU1 / GS-stream
+thread is saturated by the scene. Next: the owner records an F7/F8 interval on this track (Graphics > Advanced >
+Performance report), the F8 report lands in that session's `game.log`; compare with Nordschleife TT and a day race.
+Applies to GT4 v2.00 too if the track behaves the same there.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
