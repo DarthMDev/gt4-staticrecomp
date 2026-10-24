@@ -146,8 +146,8 @@
     var cardHint = h("p", { class: "cx-hint", text: "" });
     var card = h("section", { class: "cx-card" }, [
       h("div", { class: "cx-card-head" }, [cardGlyph, h("div", { class: "cx-card-title" }, [cardName, cardState])]),
-      h("div", { class: "cx-src" }, [h("span", { class: "cx-src-k", text: "Controller" }), padChipSlot]),
-      h("div", { class: "cx-src" }, [h("span", { class: "cx-src-k", text: "Keyboard" }), keyChipSlot]),
+      h("div", { class: "cx-src" }, [h("span", { class: "cx-src-k", text: GT4.t("controls.view_controller") }), padChipSlot]),
+      h("div", { class: "cx-src" }, [h("span", { class: "cx-src-k", text: GT4.t("controls.view_keyboard") }), keyChipSlot]),
       h("div", { class: "cx-actions" }, [rebindButton, resetButton]),
       cardHint
     ]);
