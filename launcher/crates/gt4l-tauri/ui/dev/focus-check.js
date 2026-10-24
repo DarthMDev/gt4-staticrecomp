@@ -13,6 +13,8 @@
  *                       first Advanced row inside Graphics)
  *   ?scenario=render    only sets the state for docs/launcher/shots/graphics-sections.png (pad focus on Render scale,
  *                       the Graphics section in view)
+ *   ?scenario=general, ?scenario=graphics  only open that Settings tab (screenshots at 1280x720; no checks run)
+ *   Dropdown values (rc6): no .row .select value on General or Graphics wraps, in every language
  */
 (function (root) {
   "use strict";
@@ -997,6 +999,56 @@
     await GT4.backend.call("set_setting", { id: "update_channel", value: "stable" });
   }
 
+  // TASK-114 rc6 (pt-BR owner screenshot): no dropdown value on General or Graphics wraps. A value is one line when it
+  // is nowrap and its box is no taller than its line height (app.css fixes the line height at 16 px). The Language
+  // value is also measured with the longest text it can show, "Automático (Português (Brasil))", in place of its own.
+  function selectValueInfo(select) {
+    var value = select.firstElementChild;
+    var style = getComputedStyle(value);
+    return {
+      text: value.textContent,
+      height: value.getBoundingClientRect().height,
+      line: parseFloat(style.lineHeight),
+      nowrap: style.whiteSpace === "nowrap"
+    };
+  }
+
+  function oneLineProblems(selects) {
+    var problems = [];
+    selects.forEach(function (select) {
+      var info = selectValueInfo(select);
+      if (!info.nowrap || !(info.line > 0) || info.height > info.line + 0.5) {
+        problems.push(info.text + " (" + info.height + "px, line " + info.line + "px)");
+      }
+    });
+    return problems;
+  }
+
+  async function selectValueChecks() {
+    var tabs = ["general", "graphics"];
+    for (var i = 0; i < tabs.length; i++) {
+      await setHash("#/settings/" + tabs[i]);
+      await wait(300);
+      var selects = Array.prototype.slice.call(document.querySelectorAll(".row .select"));
+      var problems = oneLineProblems(selects);
+      check(tabs[i] + " tab: every dropdown value is one line (" + selects.length + " dropdowns)",
+        selects.length > 0 && problems.length === 0, problems.join("; ") || "no dropdowns");
+      if (tabs[i] === "general") {
+        var language = document.querySelector(".row .select[data-setting=\"language\"]");
+        if (language) {
+          var span = language.firstElementChild;
+          var saved = span.textContent;
+          span.textContent = T("choice.language.auto", { language: T("choice.language.pt-BR") });
+          await wait(50);
+          var longProblems = oneLineProblems([language]);
+          span.textContent = saved;
+          check("the Language value stays on one line with its longest text", longProblems.length === 0,
+            longProblems.join("; "));
+        }
+      }
+    }
+  }
+
   async function languageChecks() {
     await localeChecks();
     await languageSwitchChecks();
@@ -1088,6 +1140,12 @@
         await scenarioRender();
         return;
       }
+      if (scenario === "general" || scenario === "graphics") {
+        // The screenshot states of slice 295 (TASK-114 rc6): the tab at 1280x720, nothing focused.
+        await setHash("#/settings/" + scenario);
+        await wait(400);
+        return;
+      }
       await routeChecks();
       await loadedTabChecks();
       await sideWalk();
@@ -1102,6 +1160,7 @@
       await introChecks();
       await versionChecks();
       await languageChecks();
+      await selectValueChecks();
     } catch (err) {
       check("the checks ran to the end", false, String(err && err.message ? err.message : err));
     }

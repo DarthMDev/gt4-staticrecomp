@@ -885,6 +885,12 @@ Done in the working tree (branch `task/101-multi-game`, release 1.3.0, 2026-10-2
    table read that probes nothing); focus-check en-US 195/195 and pt-BR 202/202 (one new check: a loaded Saves tab shows its
    list at once), nav-test 150/150. No locale text added.
    Owner test pending; no release-notes bullet (rc polish).
+9. **Dropdown values stay on one line (rc5, 2026-10-24; pt-BR owner screenshot).** The value of a dropdown is nowrap and
+   cut with an ellipsis when it is too long, with the full text in its tooltip (`app.css` `.select`, `settings.js`). The
+   Language row is wide, so "Automático (Português (Brasil))" fits. The opened list may wrap its names inside the panel.
+   Focus check: every General and Graphics dropdown value is one line, and the Language value stays one line with its
+   longest text, in both languages (en-US 198/198, pt-BR 205/205, nav-test 150/150). Screenshots at 1280x720:
+   `O:\gt4recomp-scratch\slice295-shots\general-pt-BR.png` and `graphics-pt-BR.png`. Owner test pending.
 
 ### TASK-115 — Game recognition (Windows, GPU drivers, Discord) and Discord Rich Presence
 Planned (owner, 2026-10-24) as a future plan (maybe 1.3.1, maybe later; the owner decides when). Goal: Windows, the AMD and NVIDIA drivers and Discord treat GT4Recomp

@@ -336,7 +336,7 @@
       "aria-label": rowLabel(row),
       disabled: !!row.disabled,
       data: { setting: row.id, adjust: "1" }
-    }, [h("span", { text: currentText }), h("span", { class: "chev" })]);
+    }, [h("span", { text: currentText, title: currentText }), h("span", { class: "chev" })]);
     var label = button.querySelector("span");
 
     // A chosen value shows its own label at once; the table is read again after the write.
@@ -344,6 +344,7 @@
       row.current = value;
       currentText = text;
       label.textContent = text;
+      label.title = text;
       commit(ctx, row.id, value);
     }
 
@@ -360,6 +361,7 @@
       row.current = next.value;
       currentText = choiceLabel(row, next);
       label.textContent = currentText;
+      label.title = currentText;
       commit(ctx, row.id, next.value);
     });
 
@@ -393,7 +395,8 @@
         buttons: [{ label: GT4.t("common.cancel") }]
       });
     });
-    return { node: [button] };
+    // The Language row is wide, so the name of the chosen language (Automatico (Portugues (Brasil))) fits in full.
+    return { node: [button], wide: row.id === "language" };
   }
 
   function infoButton(row) {
@@ -585,6 +588,7 @@
     function paint() {
       select.disabled = model.loading;
       label.textContent = model.loading ? GT4.t("versions.loading") : model.installedText;
+      label.title = label.textContent;
       var text = "";
       var warn = false;
       if (model.error) {

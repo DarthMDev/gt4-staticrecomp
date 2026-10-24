@@ -519,6 +519,14 @@ body.input-pad .info:focus .tip { display: block; }
   color: var(--white); background: var(--graphite); text-align: left;
 }
 .select .chev { width: 7px; height: 7px; border-right: 1.5px solid var(--dim); border-bottom: 1.5px solid var(--dim); transform: rotate(45deg) translateY(-2px); flex: none; }
+/* The value never wraps (rc5, pt-BR owner screenshot: "Automatico (Portugues (Brasil))" on two lines). A value too long
+   for the control is cut with an ellipsis; the full text is in the title attribute (settings.js). The line height is fixed,
+   so dev/focus-check.js can compare the value's height with it. */
+.select > span:first-child {
+  flex: 1 1 auto; min-width: 0; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A wide dropdown row (Language) fills its wide control column. */
+.row .ctl.wide .select { width: 100%; }
 
 /* slider: thin bar, paper fill to the value */
 /* 30 px tall; the 2 px track sits in the middle (margin 14 px, so the thumb is centred on it). touch-action pan-y lets a
@@ -840,6 +848,8 @@ body.input-pad .info:focus .tip { display: block; }
 .option:disabled .tag { color: var(--faint); }
 .option .tag { font: 500 11px var(--label); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
 .option .tick { font: 500 13px var(--label); }
+/* Inside the open list a long name may wrap, but it stays inside the panel. */
+.option > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 
 /* ---------- touch (pointer: coarse): slightly more spacing, same look ---------- */
 @media (pointer: coarse) {
