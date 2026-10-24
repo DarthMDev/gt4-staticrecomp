@@ -896,7 +896,9 @@
     check("the Version row has a refresh button", !!document.querySelector("[data-action=\"versions-refresh\"]"), "none");
 
     var tags = await openVersionList();
-    check("Stable lists the stable releases by version, without a draft or a version below rc5", tags.join(",") === "v1.3.2,v1.3.0", tags.join(","));
+    // The running test build (1.3.0-rc6) is not a Stable release, so it comes first, marked Installed (rc5 owner report).
+    check("Stable lists the running build, then the stable releases by version, without a draft or a version below rc5",
+      tags.join(",") === "v1.3.0-rc6,v1.3.2,v1.3.0", tags.join(","));
     closeModals();
 
     // Choosing Beta applies at once and refreshes the list.

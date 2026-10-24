@@ -395,8 +395,7 @@
         buttons: [{ label: GT4.t("common.cancel") }]
       });
     });
-    // The Language row is wide, so the name of the chosen language (Automatico (Portugues (Brasil))) fits in full.
-    return { node: [button], wide: row.id === "language" };
+    return { node: [button] };
   }
 
   function infoButton(row) {
@@ -690,8 +689,15 @@
     }
 
     select.addEventListener("click", function () {
-      var entries = (model.data && model.data.entries) || [];
+      var entries = ((model.data && model.data.entries) || []).slice();
       var dialog = null;
+      // The running build is always on the list, even when GitHub does not list it (a draft test build, or a Stable list
+      // while a newer test build runs), so the dialog never comes up empty (rc5 owner report).
+      var others = entries.filter(function (entry) { return !entry.installed; }).length;
+      if (model.installedText && entries.length === others) {
+        entries.unshift({ tag: "v" + model.installedText, version: model.installedText, date: "", installed: true,
+          candidate: model.installedText.indexOf("-") >= 0 });
+      }
       var items = entries.map(function (entry) {
         return h("button", {
           class: "option",
@@ -718,6 +724,9 @@
       var list = entries.length
         ? h("div", { class: "option-list", role: "listbox" }, items)
         : h("p", { class: "modal-text", text: GT4.t("versions.none") });
+      if (!others) {
+        list = h("div", null, [list, h("p", { class: "modal-text", text: GT4.t("versions.only_installed") })]);
+      }
       dialog = GT4.ui.openDialog({
         title: row.label,
         body: list,
