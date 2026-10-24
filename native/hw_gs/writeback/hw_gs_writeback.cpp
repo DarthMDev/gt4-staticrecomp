@@ -3218,7 +3218,10 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
         const display::DisplayLayout& layout = s.layout_;
         display::MergePlan plan;
         std::array<bool, 2> available{};
-        if (!s.GpuComposeApplies(layout, plan, available)) return false;
+        if (!s.GpuComposeApplies(layout, plan, available)) {
+            ++s.counters.gpuComposeSkips[0];
+            return false;
+        }
         const display::PmodeFields pmode = display::decode_pmode(s.displayRegs_.pmode);
         // The same choices as the CPU presentation compose (13.3, 13.4). A progressive frame has no field offset
         // and no deinterlace; an interlaced one (IN-381, scale > 1 only) gets the 13.3 step 3 offset of one native
@@ -3229,7 +3232,10 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
                 : s.settings_.deinterlace;
         const display::OutputSize size =
             display::merge_output_size(layout, effective == display::DeinterlaceMode::Off, 1);
-        if (size.width == 0 || size.height == 0) return false;
+        if (size.width == 0 || size.height == 0) {
+            ++s.counters.gpuComposeSkips[1];
+            return false;
+        }
         const bool interlaced = layout.really_interlaced;
         const int vblankField = RowFieldOfDisplayField(s.oddField_);
         const int fieldPhase = vblankField ^ (s.settings_.bottomFieldFirst ? 1 : 0);
@@ -3237,6 +3243,7 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
             interlaced ? display::interlace_offset_rows(true, layout.ffmd, effective, 1, fieldPhase) : 0;
         const bool deinterlace = interlaced && effective != display::DeinterlaceMode::Off;
         if (interlaced && (size.width > gpu::kGpuDeinterlaceWidth || size.height > gpu::kGpuDeinterlaceRows)) {
+            ++s.counters.gpuComposeSkips[2];
             return false;  // larger than the deinterlace images: the CPU presentation at 1x
         }
         // The GLM is made current for the circuits (stale pages uploaded, drawn targets swizzled).
@@ -3362,6 +3369,7 @@ bool Renderer::ComposeFrameGpu(GpuFrame& out) {
         const bool fxaa = composed && s.fxaa_;
         if (fxaa) composed = s.gpu_.ApplyFxaa(outWidth, outHeight, error);  // IN-376
         if (!composed || !s.gpu_.Flush(false, error)) {
+            ++s.counters.gpuComposeSkips[3];
             s.Fail(error);
             return false;
         }

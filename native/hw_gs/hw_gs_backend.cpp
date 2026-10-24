@@ -1160,6 +1160,7 @@ RenderCounters Backend::render_counters() const {
   out.tone_strip_batches = c.toneStripBatches;
   out.tone_verify_mismatch_bytes = c.toneVerifyMismatchBytes;
   out.gpu_composed_frames = c.gpuComposedFrames;
+  for (int i = 0; i < 4; ++i) out.gpu_compose_skips[i] = c.gpuComposeSkips[i];
   for (int i = 0; i < 9; ++i) out.writeback_reasons[i] = c.cacheWritebackByReason[i];
   return out;
 }

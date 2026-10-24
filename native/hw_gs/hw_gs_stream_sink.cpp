@@ -219,6 +219,17 @@ void maybe_profile(Backend &hw) {
                    static_cast<double>(now.gpu_upload_bytes - was.gpu_upload_bytes) / n / 1e6,
                    static_cast<double>(now.gpu_readback_bytes - was.gpu_readback_bytes) / n / 1e6,
                    static_cast<double>(now.gpu_scaled_image_bytes) / 1e6);
+      // IN-384 follow-up (owner test 11, sporadic 1x frames): why a VBlank fell back to the CPU 1x presentation.
+      // 0 GpuComposeApplies declined, 1 zero output size, 2 interlaced frame larger than the deinterlace images,
+      // 3 the GPU compose or its flush failed.
+      const unsigned long long skips[4] = {now.gpu_compose_skips[0] - was.gpu_compose_skips[0],
+                                           now.gpu_compose_skips[1] - was.gpu_compose_skips[1],
+                                           now.gpu_compose_skips[2] - was.gpu_compose_skips[2],
+                                           now.gpu_compose_skips[3] - was.gpu_compose_skips[3]};
+      if (skips[0] + skips[1] + skips[2] + skips[3] != 0) {
+        std::fprintf(stderr, "[hw] compose_skips applies=%llu zero_size=%llu too_big=%llu failed=%llu\n", skips[0],
+                     skips[1], skips[2], skips[3]);
+      }
     }
     primed = true;
     lastThreadMs = threadMs;

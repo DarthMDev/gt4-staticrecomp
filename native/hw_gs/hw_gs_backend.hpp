@@ -117,7 +117,8 @@ struct RenderCounters {
   std::uint64_t tone_strip_pages = 0;      // IN-383 (parity plan item 2): pages written by one dispatch
   std::uint64_t tone_strip_batches = 0;    // strip batches those dispatches replaced
   std::uint64_t tone_verify_mismatch_bytes = 0;  // GT4_HW_VERIFY_SHUFFLE: bytes that differ from the batches
-  std::uint64_t gpu_composed_frames = 0;    // presentation frames composed on the GPU (IN-364)
+  std::uint64_t gpu_composed_frames = 0;
+  std::uint64_t gpu_compose_skips[4] = {};  // IN-384: why a VBlank fell back to the 1x CPU presentation    // presentation frames composed on the GPU (IN-364)
   std::uint64_t gpu_render_passes = 0;      // IN-367 efficiency counters
   std::uint64_t gpu_upload_bytes = 0;
   std::uint64_t gpu_readback_bytes = 0;

@@ -79,6 +79,10 @@ struct Counters {
     std::uint64_t displayCaptures = 0;        // display downloads recorded at Flush (IN-355)
     std::uint64_t presentationsFromCapture = 0;  // presentation composes made from a capture (IN-355)
     std::uint64_t gpuComposedFrames = 0;      // presentation frames composed on the GPU (IN-364)
+    // IN-384 follow-up (owner test 11: "sporadic 1x frames"): why a VBlank fell back to the CPU 1x presentation.
+    // 0 GpuComposeApplies declined, 1 zero output size, 2 interlaced frame larger than the deinterlace images,
+    // 3 the GPU compose or its flush failed.
+    std::uint64_t gpuComposeSkips[4] = {};
     // M12 (IN-372): GPU composes at scale, and the circuits of them read from the GLM at 1x (no scaled image).
     std::uint64_t scaledComposedFrames = 0;
     std::uint64_t scaledCircuitsFromSlots = 0;
