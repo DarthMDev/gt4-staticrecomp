@@ -222,8 +222,9 @@ pub fn get_settings_table_of(shared: &Shared) -> Result<Value, String> {
 
 pub fn get_settings_table_with_monitors(shared: &Shared, monitors: &[display_rules::Monitor]) -> Result<Value, String> {
     let state = lock(shared);
-    let integrated_gpu = gt4l_platform::gpu::integrated_gpu_name(state.config.settings.get("graphics_card")).is_some();
-    let cards = gt4l_platform::gpu::probe_gpus();
+    // TASK-114 rc5: one card list, read from the cache (no probe here), serves both the rows and the integrated check.
+    let cards = gt4l_platform::gpu::cached_gpus();
+    let integrated_gpu = gt4l_platform::gpu::integrated_gpu_name_of(state.config.settings.get("graphics_card"), &cards).is_some();
     let mut table = model::settings_table_with_monitors(&state.config.settings, &state.controls, monitors, &cards, integrated_gpu);
     // TASK-091: the launcher's own row (Graphics > Advanced), not a game setting.
     let safe_mode = webview_guard::safe_mode_on(state.user_dirs.root());
@@ -382,7 +383,9 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
     // Only GSdx runs the game (decision 0070, TASK-096): without a verified GSdx, Play stops here with the error.
     // TASK-108 (release 1.3.0): the graphics card and API of this run (automatic unless the player chose them). The
     // stored choices stay as they are; the run uses the resolved API, card and Adapter.
-    let (settings, graphics, cards) = gt4l_platform::gpu::run_settings(&state.config.settings, language);
+    // TASK-114 rc5: Play probes the cards once, so the run sees the hardware of this moment; the rest of Play reads that list.
+    let fresh_cards = gt4l_platform::gpu::refresh_gpus();
+    let (settings, graphics, cards) = gt4l_platform::gpu::run_settings_with_cards(&state.config.settings, language, fresh_cards);
     state::log(&dirs, &format!("graphics: cards [{}]", gt4l_platform::gpu::card_list(&cards)));
     for line in &graphics.log {
         state::log(&dirs, line);
@@ -410,7 +413,7 @@ pub fn prepare_play(shared: &Shared, program_dir: &Path) -> Result<PlayInputs, S
         }
     }
     // Issue #89: on an integrated GPU the untouched default scale plays at 1x (the GPU the system check reports).
-    let integrated_gpu = gt4l_platform::gpu::integrated_gpu_name(settings.get("graphics_card"));
+    let integrated_gpu = gt4l_platform::gpu::integrated_gpu_name_of(settings.get("graphics_card"), &cards);
     let plan = launch::session_plan(&settings, display.as_ref(), integrated_gpu.is_some());
     state::log(
         &dirs,
@@ -1429,4 +1432,35 @@ pub fn default_settings() -> Settings {
 /// Controls file path for a data folder (used by the command tests).
 pub fn controls_file_for(root: &Path) -> PathBuf {
     root.join(controls_file::CONTROLS_FILE_NAME)
+}
+
+#[cfg(test)]
+mod settings_table_probe_tests {
+    use super::*;
+    use gt4l_core::paths::{DataDirs, UserDirs, UserRootSource, USER_FOLDER_NAME};
+    use gt4l_disc::Pins;
+    use std::sync::{Arc, Mutex};
+
+    fn shared_in(root: &Path) -> Shared {
+        let dirs = DataDirs::new(root.join("data"));
+        let user = UserDirs::new(root.join("appdata").join(USER_FOLDER_NAME), UserRootSource::Override);
+        let state = AppState::load_with(dirs, Pins::embedded().expect("embedded pins"), user, None, root.to_path_buf())
+            .expect("state loads");
+        Arc::new(Mutex::new(state))
+    }
+
+    /// TASK-114 rc5: with the cards cached, opening the Settings table probes nothing (the old path probed twice).
+    #[test]
+    fn settings_table_reads_the_cached_cards_without_probing() {
+        let root = std::env::temp_dir().join(format!("gt4l-table-probe-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let shared = shared_in(&root);
+        gt4l_platform::gpu::store_gpus(Vec::new());
+        let before = gt4l_platform::gpu::probe_count();
+        let table = get_settings_table_with_monitors(&shared, &[]).expect("table");
+        assert!(table.get("rows").and_then(Value::as_array).is_some_and(|rows| !rows.is_empty()));
+        assert_eq!(gt4l_platform::gpu::probe_count(), before, "the settings table must read the cache");
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

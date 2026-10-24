@@ -48,6 +48,15 @@
     } else {
       current = page.mount(app);
     }
+    if (name === "home") {
+      // TASK-114 rc5: once the home screen is up, the Settings data is read in the background (once per session), so
+      // the Settings tabs open from memory.
+      root.setTimeout(function () {
+        if (GT4.prefetchSettings) {
+          GT4.prefetchSettings();
+        }
+      }, 0);
+    }
   }
 
   root.addEventListener("hashchange", render);

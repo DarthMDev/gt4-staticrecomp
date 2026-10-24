@@ -54,6 +54,62 @@
 
   var model = GT4.settingsModel;
 
+  // TASK-114 rc5: the Settings tabs open from memory. `cache` keeps the last settings table, About info and launcher
+  // version list that were read; prefetchSettings fills it when the home screen is up, and every read refreshes it.
+  var cache = { table: null, about: null, versions: null };
+  // "Loading settings..." shows only when there is no data yet and only after this many ms, so it never flashes.
+  var LOADING_DELAY_MS = 300;
+  // The entrance of a tab's items: each one starts ENTER_STEP_MS after the previous, and none later than ENTER_CAP_MS.
+  var ENTER_STEP_MS = 18;
+  var ENTER_CAP_MS = 150;
+
+  function sameData(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
+  }
+
+  // Shows the loading line in content after LOADING_DELAY_MS, unless hasData() is true by then. Returns cancel().
+  function loadingLater(content, hasData) {
+    var timer = root.setTimeout(function () {
+      timer = null;
+      if (!hasData()) {
+        content.appendChild(h("p", { class: "loading", text: GT4.t("settings.loading") }));
+      }
+    }, LOADING_DELAY_MS);
+    return function cancel() {
+      if (timer !== null) {
+        root.clearTimeout(timer);
+        timer = null;
+      }
+    };
+  }
+
+  // The rows, headings and notes of a tab fade in and rise (CSS .enter-item in app.css). Called once per tab drawn.
+  function enterAnimation(content) {
+    var items = content.querySelectorAll("h1, h2, p.note, .row, .group, .about-notice, .advanced-foot");
+    Array.prototype.forEach.call(items, function (item, index) {
+      item.classList.add("enter-item");
+      item.style.setProperty("--enter-delay", Math.min(index * ENTER_STEP_MS, ENTER_CAP_MS) + "ms");
+    });
+  }
+
+  // Reads the settings table and the About info once, so the first tab opened draws at once. Fills only empty slots:
+  // a tab that already read its data keeps it.
+  var prefetched = false;
+  GT4.prefetchSettings = function () {
+    if (prefetched) {
+      return;
+    }
+    prefetched = true;
+    call("get_settings_table").then(function (table) {
+      cache.table = cache.table || table;
+    }, function () {
+      prefetched = false;
+    });
+    call("about_info").then(function (info) {
+      cache.about = cache.about || info;
+    }, function () {});
+  };
+
   // Mod and texture rows never show in this build (rowVisible in js/settings-model.js).
   function rowVisible(table, row) {
     return model.rowVisible(table, row, !!GT4.features.mods);
@@ -71,11 +127,11 @@
           return;
         }
         model.applyChange(ctx.table, id, value);
-        ctx.refresh(id);
+        ctx.refresh(id, true);
       },
       function (err) {
         GT4.ui.toast(errorText(err), true);
-        ctx.refresh(id);
+        ctx.refresh(id, true);
       }
     );
   }
@@ -401,7 +457,8 @@
   // Generic settings tab: loads the table, filters rows, renders them.
   // spec = {title, note, filter(row, table), extra(ctx), hooks(ctx)}
   function settingsTab(content, host, spec) {
-    var ctx = { content: content, table: null, refresh: null };
+    // entering: the next draw is the tab's first, so its items get the entrance animation (once per tab).
+    var ctx = { content: content, table: null, refresh: null, entering: true };
 
     function paint(focusId) {
       GT4.ui.clear(content);
@@ -415,16 +472,27 @@
         spec.extra(ctx, host);
       }
       restoreFocus(ctx, focusId);
+      if (ctx.entering) {
+        ctx.entering = false;
+        enterAnimation(content);
+      }
     }
 
+    // Reads the table and draws it when it is new or when `force` is set (a setting was just written). A read that
+    // finds the same table as on screen draws nothing, so a background refresh never redraws the tab.
     var reads = model.readGate();
-    ctx.refresh = function (focusId) {
+    ctx.refresh = function (focusId, force) {
       var ticket = reads.ticket();
       return call("get_settings_table").then(function (table) {
         if (!reads.isLatest(ticket)) {
           return;
         }
+        var changed = force || !ctx.table || !sameData(ctx.table, table);
+        cache.table = table;
         ctx.table = table;
+        if (!changed) {
+          return;
+        }
         // Focus moves back to the row only while it is still inside this tab (the user may have moved to the tab list).
         paint(content.contains(document.activeElement) ? focusId : undefined);
       }, function (err) {
@@ -432,8 +500,21 @@
       });
     };
 
-    content.appendChild(h("p", { class: "loading", text: GT4.t("settings.loading") }));
+    if (cache.table) {
+      // Drawn from memory at once (no loading line); the table is read again behind it.
+      ctx.table = cache.table;
+      paint();
+      if (spec.hooks) {
+        spec.hooks(ctx, host);
+      }
+      ctx.refresh();
+      return Promise.resolve();
+    }
+    var cancelLoading = loadingLater(content, function () {
+      return !!ctx.table;
+    });
     return ctx.refresh().then(function () {
+      cancelLoading();
       if (spec.hooks) {
         spec.hooks(ctx, host);
       }
@@ -450,7 +531,13 @@
   // No (or Cancel, B, outside) puts the dropdown back on the installed version; nothing changes.
   function versionRow(ctx) {
     var row = { id: "launcher_version", label: GT4.t("versions.label"), help: GT4.t("versions.help") };
-    var model = { loading: true, data: null, error: "", installedText: "" };
+    // TASK-114 rc5: the last list read is shown at once; a read behind it refreshes the dropdown.
+    var model = {
+      loading: !cache.versions,
+      data: cache.versions,
+      error: "",
+      installedText: cache.versions ? cache.versions.installed || "" : ""
+    };
     var select = h("button", {
       class: "select",
       type: "button",
@@ -497,13 +584,14 @@
     }
 
     function load() {
-      model.loading = true;
+      model.loading = !model.data;
       model.error = "";
       paint();
       return call("list_launcher_versions").then(function (data) {
         if (!block.isConnected) {
           return;
         }
+        cache.versions = data;
         model.data = data;
         model.installedText = data.installed || "";
         model.loading = false;
@@ -658,7 +746,8 @@
             run: function () {
               call("reset_gs_settings_to_defaults").then(function (table) {
                 ctx.table = table;
-                ctx.refresh();
+                cache.table = table;
+                ctx.refresh(undefined, true);
                 GT4.ui.toast(GT4.t("settings.reset_done"));
               }, function (err) {
                 GT4.ui.toast(errorText(err), true);
@@ -749,8 +838,45 @@
   }
 
   // About: version, notice, disc path, log folder.
+  // TASK-114 rc5: drawn from the About info read before (cache.about) at once, then read again; drawn again only when
+  // the info changed and the focus is not inside the page.
   GT4.tabPages.about = function (content) {
+    var entering = true;
+    function draw(info) {
+      GT4.ui.clear(content);
+      drawAbout(content, info);
+      if (entering) {
+        entering = false;
+        enterAnimation(content);
+      }
+    }
+    var shownInfo = null;
+    if (cache.about) {
+      shownInfo = cache.about;
+      draw(shownInfo);
+    }
+    var cancelLoading = loadingLater(content, function () {
+      return !!shownInfo;
+    });
     return call("about_info").then(function (info) {
+      cancelLoading();
+      var changed = !shownInfo || !sameData(shownInfo, info);
+      cache.about = info;
+      if (!changed || content.contains(document.activeElement)) {
+        return;
+      }
+      shownInfo = info;
+      draw(info);
+    }, function (err) {
+      cancelLoading();
+      if (!shownInfo) {
+        content.appendChild(h("p", { class: "loading", text: errorText(err) }));
+      }
+    });
+  };
+
+  // The About rows of the given info (the page's content, drawn by draw()).
+  function drawAbout(content, info) {
       content.appendChild(h("h1", { text: GT4.t("tab.about") }));
       content.appendChild(h("p", { class: "note", text: "GT4Recomp " + (info.gt4recomp || info.version || "") }));
       content.appendChild(h("p", { class: "note", text: GT4.t("about.gt4gs", { version: info.gt4gs || GT4.t("common.not_installed") }) }));
@@ -856,10 +982,7 @@
         h("div", { class: "k", text: GT4.t("about.logs") }),
         h("div", { class: "ctl buttons" }, [openLog, openLatest, exportLogs])
       ]));
-    }, function (err) {
-      content.appendChild(h("p", { class: "loading", text: errorText(err) }));
-    });
-  };
+  }
 
   // The settings shell: a tab list and the tab's rows, with the two focus levels of js/focus-levels.js.
   //   side     focus on the tab list; the content shows the highlighted tab (preview).

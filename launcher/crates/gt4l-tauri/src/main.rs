@@ -200,6 +200,8 @@ fn main() {
                     state::log(&check_dirs, line);
                 }
                 state::log(&check_dirs, &format!("graphics: cards [{}]", gt4l_platform::gpu::card_list(&cards)));
+                // TASK-114 rc5: the Settings page, the saves and the log read this list; Play refreshes it.
+                gt4l_platform::gpu::store_gpus(cards);
             });
             Ok(())
         })

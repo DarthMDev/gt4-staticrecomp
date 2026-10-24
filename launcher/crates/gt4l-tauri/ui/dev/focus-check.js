@@ -84,6 +84,17 @@
     return wait(250);
   }
 
+  // TASK-114 rc5: a tab read before opens from memory, so its rows are there at once and no loading line shows (the
+  // loading line waits 300 ms and only shows with no data). The check reads the page 40 ms after the hash changes.
+  async function loadedTabChecks() {
+    await setHash("#/settings/graphics");
+    root.location.hash = "#/settings/general";
+    await wait(40);
+    var rows = document.querySelectorAll(".stage .content .row").length;
+    check("a loaded tab shows its rows at once, with no loading line", !document.querySelector(".stage .loading") && rows > 0, "rows " + rows);
+    await wait(250);
+  }
+
   // The tab list has focus, the shown tab is the highlighted one, and nothing in the rows has focus.
   function sideStepOk(tab) {
     return sideTab() === tab && shownTab() === tab && !focusInContent() && sideLevel();
@@ -1074,6 +1085,7 @@
         return;
       }
       await routeChecks();
+      await loadedTabChecks();
       await sideWalk();
       await enterChecks();
       await importEntryCheck();

@@ -1052,3 +1052,19 @@ body.input-pad .info:focus .tip { display: block; }
 .intro.is-reduced .intro-logo, .intro.is-reduced .intro-letter, .intro.is-reduced .intro-line, .intro.is-reduced .intro-sub,
 .intro.is-reduced .intro-skip { opacity: 1; }
 .intro.is-reduced .intro-bar { transform: none; }
+
+/* TASK-114 rc5: the entrance of a Settings tab's items (settings.js enterAnimation). The delay comes from the
+   --enter-delay property set in JS. Pure CSS; reduced motion shows the items at once. */
+@keyframes gt4-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.enter-item {
+  animation: gt4-enter 180ms ease-out both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .enter-item {
+    animation: none;
+  }
+}
