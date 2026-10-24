@@ -479,6 +479,19 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
     kept as an unverified behaviour change. **The artifacts are still undiagnosed**: the next step is the per-source
     fallback counter in the compose (how many sub-pixels of each circuit came from the 1x words, with a per-row and
     per-column histogram), which is the only measurement that can separate a real band from ordinary detail.
+- **Second owner report (2026-10-24, candidate 274, 6x):** 1x is exact and 0 faults in every run; the artifacts are
+  only at scale. Five scenes, each pointing at a different mechanism, so the counter must separate them:
+  - **GT Mode map (480i menu):** thin white *dashed* lines along the map's road edges that do not exist in the game,
+    plus a slightly different texture. The map is a texture decoded from the GLM, i.e. a 1x layer inside the 6x frame
+    (IN-374 limitation): the dashes are the 1x pixel grid showing through a smooth gradient.
+  - **Nordschleife race:** the 3D is sharp and correct, but the car's rear window and hood show a rectangular
+    lattice ("cortes que vazam"), and one full-screen region shows a **checkerboard of ~6-pixel cells** (a 1x layer
+    blown up) — the same 1x-layer mechanism, this time on a texture taken from the GLM instead of a slot.
+  - **Race with the tone curve:** the subtle "linha certa, linha preta" banding, still unexplained (the carry's
+    per-block decision did not change the measured phases).
+  So the artifacts come from at least two sources: **1x layers** (textures decoded from the GLM, which the scaled pass
+  samples at 1x) and **per-sub-pixel fallbacks** (tone carry, display shadow). The counter below must report both, per
+  circuit, with a per-row/column histogram, and each scene above is a test case for the fix.
 
 - **480i races** (without the forced 480p): presented at 1x. The display reads 448 rows of a 224-row field buffer,
   so no scaled image covers the read rectangle. Seen on the old captures `race-9000`, `car-6600` and `night-10000`.
