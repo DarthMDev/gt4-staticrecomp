@@ -136,7 +136,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑112 | Launcher logs: one file per session with INFO, WARN and ERROR lines, the last 20 kept, `latest.log` with the earlier errors, game session folders capped at 20, Open latest log | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑113 | Spec II race HUD at ultrawide ratios (wider than 16:9): speed figure and odometer digits stretched and spilling past the gauge (known issue in 1.3.0) | 📋 Planned (owner, 2026-10-23) · next update |
 | TASK‑115 | Game recognition and Discord: Windows Game Mode/Game Bar, AMD and NVIDIA capture (Instant Replay, ShadowPlay) and Discord Rich Presence | 📋 Planned (owner, 2026-10-24) · future (1.3.1 or later) |
-| TASK‑116 | George V Paris runs below 60 FPS (43-52 FPS on the owner PC, GSdx Vulkan): profile it with F7/F8 and find the cost (suspected flare readbacks or EE/GS-thread CPU) | 📋 Recorded (owner, 2026-10-24) · F8 report pending |
+| TASK‑116 | George V Paris below 60 FPS: one GS readback per frame makes the game wait for VU1 and GSdx; 1.3.1 = no VU1 drain when the readback returns nothing, plus unsynchronized readbacks in gt4-gs 1.2.2 | 📋 Planned (owner, 2026-10-24) · release 1.3.1 |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -925,6 +925,22 @@ for the GS process each frame (the C.S. Route 5 night capture already had 2,928 
 thread is saturated by the scene. Next: the owner records an F7/F8 interval on this track (Graphics > Advanced >
 Performance report), the F8 report lands in that session's `game.log`; compare with Nordschleife TT and a day race.
 Applies to GT4 v2.00 too if the track behaves the same there.
+Diagnosis (two owner F8 intervals, 99 s each, 2026-10-24; details in ai-memory notes/george-v-performance):
+- Accurate readbacks: 55.3 VBlanks/s (92% game speed, 66 audio underruns); EE critical path 17.73 ms of 16.68;
+  about one 2 KB readback per frame, and before it the EE drains the VU1 worker (5.65 ms/frame) and then waits for
+  gt4-gs to render and download (5.28 ms/frame): a serial chain, so the GPU idles at 30-40%.
+- No readbacks (Performance mode): 59.8 VBlanks/s, 99.7% speed, 9% late frames (the dips to ~55 FPS); the game still
+  asks for the readback every frame and the EE still drains the VU1 worker first (5.52 ms/frame) although gt4-gs answers
+  with no data (1.23 ms).
+Plan for 1.3.1 (owner, 2026-10-24):
+1. No VU1 drain when the readback returns nothing: with HWDownloadMode NoReadbacks the game exe answers the readback at
+   once without waiting for the VU1 worker (stream order unchanged). Native change in the game's MTVU / gs_stream client
+   (our MIT code): new v2.00 and Spec II builds, new pins, v2.00 identity checks; expected about 5.5 ms/frame less on
+   George V, enough to hold 60 FPS with Performance mode.
+2. Unsynchronized readbacks: gt4-gs 1.2.2 accepts HWDownloadMode Unsynchronized (fork allow-list and SHA256SUMS; ship
+   with the OpenGL entry of TASK-107); the readback returns the previous frame's data without waiting, so the flares stay
+   and react one frame late, and the game skips the VU1 drain as in step 1. Before shipping, confirm the 2 KB readback is
+   the flare visibility test (game logic must never change) and offer it as a third Readbacks choice after an owner test.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
