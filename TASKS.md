@@ -990,7 +990,8 @@ rc6 scope (fixed values, no player tuning):
 1. TASK-116 step 1 (no VU1 drain on the flare readback in Performance mode), native only, no new ELF:
    - the game reads HWDownloadMode from the INI named by `GT4_GS_CONFIG` (one source of truth, no launcher change);
      A/B kill switch `GT4_GS_READBACK_LOCAL=0` (added to `GS_STREAM_NAMES` in external_runtime_probe.py);
-   - only the 128-qword (64x8) flare readback in mode 2 is answered locally; car icons, loading picture,
+   - only the 128-qword (64x8) flare readback in mode 2 is answered locally (with the previous flare reply, see
+     step 3); car icons, loading picture,
      thumbnail and photo readbacks keep today's drain and round trip;
    - the READ_FIFO record is still posted in journal order without waiting (new journal entry kind, no-wait IPC post),
      so the GS stream hash is unchanged; `sync("download")` becomes lazy (the real drain runs only for non-flare reads);
@@ -1004,8 +1005,11 @@ rc6 scope (fixed values, no player tuning):
    car cull at 40 units a thinning start at 50 never acts.
 3. Gate P0 before enabling either: `GT4_GS_READBACK_LOG=1` logs each readback (size, destination, hash of the reply)
    in Accurate and Performance mode on George V night, a day race, menus, photo and a replay, v2.00 and Spec II.
-   If gt4-gs already answers the flare readback with zeros in Performance mode, the local zero answer is
-   byte-identical, and the flares are already invisible in Performance mode today (owner to confirm on screen).
+   Owner (2026-10-24): in Performance mode the street-light glows show normally on George V, so gt4-gs does NOT
+   answer with zeros there and a local zero answer would hide the flares. Local answer = the previous flare reply:
+   the no-wait READ_FIFO's reply is collected when it completes and copied into the next frame's flare readback
+   (one frame late; the first frame of a race waits as today). P0 shows whether the reply is constant (then the
+   result is byte-identical to rc5) or varies (then one frame late, judged by the owner on screen).
 4. One new v2.00 game build (both changes) and a Spec II build (step 1 only), new `docs/inputs` pins, launcher
    manifest, rc6 notes in both languages, language gate, draft upload.
 Identity: Performance mode off renders as rc5 (headless frame dumps, Nordschleife TT and a night race, GS stream hash
