@@ -472,6 +472,13 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
     fallback. Next: reproduce it with a frame dump of the owner's scene and compare the same column against the 1x
     `vram` dump of the same frame.
   - Switch: `GT4_HW_TONE_CARRY=0` (diagnostic only; the race then shows at 1x, so it is a bisection tool).
+  - **Correction (same day):** the row-phase metric above also rises inside a block wherever the scaled image has real
+    sub-pixel detail (only 18-24% of 6x6 blocks are uniform), so it does not prove the carry causes the banding. A
+    per-native-pixel version of the carry's decision was written and measured: the phases did not move
+    ([3.11, 3.09, 3.29, 3.14, 3.21, 4.76] against [3.12, 3.09, 3.31, 3.13, 3.19, 4.81]), so it was reverted rather than
+    kept as an unverified behaviour change. **The artifacts are still undiagnosed**: the next step is the per-source
+    fallback counter in the compose (how many sub-pixels of each circuit came from the 1x words, with a per-row and
+    per-column histogram), which is the only measurement that can separate a real band from ordinary detail.
 
 - **480i races** (without the forced 480p): presented at 1x. The display reads 448 rows of a 224-row field buffer,
   so no scaled image covers the read rectangle. Seen on the old captures `race-9000`, `car-6600` and `night-10000`.
