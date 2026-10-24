@@ -136,8 +136,8 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑112 | Launcher logs: one file per session with INFO, WARN and ERROR lines, the last 20 kept, `latest.log` with the earlier errors, game session folders capped at 20, Open latest log | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑113 | Spec II race HUD at ultrawide ratios (wider than 16:9): speed figure and odometer digits stretched and spilling past the gauge (known issue in 1.3.0) | 📋 Planned (owner, 2026-10-23) · next update |
 | TASK‑115 | Game recognition and Discord: Windows Game Mode/Game Bar, AMD and NVIDIA capture (Instant Replay, ShadowPlay) and Discord Rich Presence | 📋 Planned (owner, 2026-10-24) · future (1.3.1 or later) |
-| TASK‑116 | George V Paris below 60 FPS: one GS readback per frame makes the game wait for VU1 and GSdx; 1.3.1 = no VU1 drain when the readback returns nothing, plus unsynchronized readbacks in gt4-gs 1.2.2 | 📋 Planned (owner, 2026-10-24) · release 1.3.1 |
-| TASK‑117 | Performance mode, part 2: fewer light flares at night (no halo, distance cull, light caps, far car-light thinning), our own clean implementation in GT4 v2.00, off when Performance mode is off | 📋 Planned (owner, 2026-10-24) · proposed for 1.3.0-rc6 with TASK-116 step 1 |
+| TASK‑116 | George V Paris below 60 FPS: one GS readback per frame makes the game wait for VU1 and GSdx; 1.3.1 = no VU1 drain when the readback returns nothing, plus unsynchronized readbacks in gt4-gs 1.2.2 | 🔧 Step 1 studied (2026-10-24), moved to 1.3.0-rc6 with TASK-117 (owner); step 2 stays 1.3.1 |
+| TASK‑117 | Performance mode, part 2: fewer light flares at night (no halo, distance cull, light caps), our own clean implementation in GT4 v2.00, off when Performance mode is off | 🔧 Study done (2026-10-24), plan below · 1.3.0-rc6 with TASK-116 step 1 (owner) |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -969,6 +969,49 @@ Steps:
    (far lights appearing, flicker, car lights).
 Acceptance: Performance mode on holds 60 FPS on George V Paris (late frames clearly below 9%, F8 report), no visible
 flicker; Performance mode off is unchanged (identity checks); automated tests for the patch table and the switch.
+
+#### rc6 plan after the step 1 studies (2026-10-24; reports in the main agent's scratchpad, key words re-checked)
+Study facts (C = confirmed in the ELF or code, H = high confidence):
+- Track queue fill 0x3B7B70 (count flare+0x1848, limit `slti` 0x3B7BA8), car queue fill 0x3B8530 (count +0xA34,
+  limit `slti` 0x3B8568 = 0x28620064); flare object at RacePS2Base+0xDA0 (C).
+- Visibility test 0x3B7C98 already takes a per-type maximum view depth in f13 (default 1000.0): the distance cull is
+  only a smaller f13 (C). Only two callers, 0x3B7BE4 (track) and 0x3B85C0 (car) (C).
+- Flare draw 0x498198, called only from 0x3B8BA0 and 0x3B8CE8; the halo flag s5 is set at 0x49823C (0x24150001) when
+  f18 > 0, f19 > 0 and depth > 1.0; zeroing f19 before the call removes only the halo (C).
+- **The per-frame 2 KB readback is the flare occlusion test** (H, matches docs/GS-READBACK-STUDY.md): each queued
+  light renders a small depth-tested sample reduced to one pixel of a 64x8 table, read back to flare+0x104 and fed
+  to VU1 as the glow brightness; the EE never reads it. Culling cuts the sampling, VU1 and GS work but keeps the
+  readback while any light is queued.
+- Free code space: zero run 0x495574..0x495FFF (2,700 bytes, unreferenced, ends at the function at 0x496000) (C/H).
+- Direct `jal` is compiled as a direct C++ call; changed ELF words are translated with no seed change; new entries in
+  the hole renumber `unit_00E5` and regenerate its callers plus 00A4, 00A5, 00AD, 00AE (C). The aspect derived-ELF
+  tool (`aspect_elf_patch.py`) needs a "redirect + code block" row type.
+rc6 scope (fixed values, no player tuning):
+1. TASK-116 step 1 (no VU1 drain on the flare readback in Performance mode), native only, no new ELF:
+   - the game reads HWDownloadMode from the INI named by `GT4_GS_CONFIG` (one source of truth, no launcher change);
+     A/B kill switch `GT4_GS_READBACK_LOCAL=0` (added to `GS_STREAM_NAMES` in external_runtime_probe.py);
+   - only the 128-qword (64x8) flare readback in mode 2 is answered locally; car icons, loading picture,
+     thumbnail and photo readbacks keep today's drain and round trip;
+   - the READ_FIFO record is still posted in journal order without waiting (new journal entry kind, no-wait IPC post),
+     so the GS stream hash is unchanged; `sync("download")` becomes lazy (the real drain runs only for non-flare reads);
+   - CTest fixtures for the client, IPC, journal order and the switch; F8 text counter for local answers.
+2. TASK-117 flare limits, derived v2.00 ELF: four `jal` redirects (0x3B7BE4, 0x3B85C0 to our track/car helpers;
+   0x3B8BA0, 0x3B8CE8 to our halo helper) and about 350 bytes of our own helpers at 0x495580; the queue limits of 100
+   stay. Parameters in a host-written guest block next to the HUD block (0x7F10 flags, 0x7F14 track depth 60,
+   0x7F18 car depth 40, 0x7F20 / 0x7F24 caps 12), written at boot and every VBlank from `GT4_FLARE_LIMITS` when
+   Performance mode is on; zero means every helper jumps straight to the original routine.
+   Far car-light pair thinning is left out of rc6: its left/right key needs a lamp-table dump first, and with the
+   car cull at 40 units a thinning start at 50 never acts.
+3. Gate P0 before enabling either: `GT4_GS_READBACK_LOG=1` logs each readback (size, destination, hash of the reply)
+   in Accurate and Performance mode on George V night, a day race, menus, photo and a replay, v2.00 and Spec II.
+   If gt4-gs already answers the flare readback with zeros in Performance mode, the local zero answer is
+   byte-identical, and the flares are already invisible in Performance mode today (owner to confirm on screen).
+4. One new v2.00 game build (both changes) and a Spec II build (step 1 only), new `docs/inputs` pins, launcher
+   manifest, rc6 notes in both languages, language gate, draft upload.
+Identity: Performance mode off renders as rc5 (headless frame dumps, Nordschleife TT and a night race, GS stream hash
+equal, MTVU and VU1 verify clean, hole hash unchanged at the first race frame and at exit, no "no translated code").
+Owner test: George V Paris night F7/F8 with Performance mode on (target: mtvu download and readback wait near 0,
+60 FPS without the dips), flare look on and off.
 
 ### TASK-116 — George V Paris performance
 Recorded (owner, 2026-10-24) on 1.3.0-rc5, Spec II (Arcade unlocks every track), night race on George V Paris,
