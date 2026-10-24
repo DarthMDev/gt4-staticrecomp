@@ -492,6 +492,21 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
   So the artifacts come from at least two sources: **1x layers** (textures decoded from the GLM, which the scaled pass
   samples at 1x) and **per-sub-pixel fallbacks** (tone carry, display shadow). The counter below must report both, per
   circuit, with a per-row/column histogram, and each scene above is a test case for the fix.
+- **Third measurement (2026-10-24, after the five scenes):**
+  - **The 06.3 half-pixel convention is not the bug.** On the same replay frames the shipped native shift (shift = s)
+    gives a box PSNR against the 1x presentation of 27.4-28.0 dB, while `--half-pixel off` (shift = 1, plain 6x
+    tiling) gives 21.7-22.0 dB. The convention stays; a replay flag `--half-pixel native|normal|off` now exists for
+    future comparisons.
+  - **The scaled texture copy ignored the atlas origin** (`hw_pixel_uber.frag`, `fetch_texel_scaled`, added
+    `tex_origin * s` while `Execute` places the copy at (0, 0) of `scaledTexels`). Every texture after the first in a
+    run sampled the wrong region: fixed by dropping the origin term (the image holds exactly the sampled footprint
+    since IN-384). CTest 245/245 in both interlock modes, box PSNR unchanged (27.97 dB on the same frame).
+  - **The lattice on flat backgrounds is magnified dither**, not a fallback: at 6x each 1x pixel is a 6x6 block, so
+    the game's per-pixel dither (one level between neighbours) becomes a visible grid on flat areas. GSdx magnifies
+    the same dither. Recorded as expected behaviour, not a defect.
+  - **Menus (480i) still show alternating-row detail** (even-row difference 0.06-0.16 against 1.5-2.9 on odd rows):
+    that is what a 480i source looks like woven at scale (IN-381), and the map's "dashed" lines are thin field rows of
+    the source. Not a regression of IN-384.
 
 - **480i races** (without the forced 480p): presented at 1x. The display reads 448 rows of a 224-row field buffer,
   so no scaled image covers the read rectangle. Seen on the old captures `race-9000`, `car-6600` and `night-10000`.
