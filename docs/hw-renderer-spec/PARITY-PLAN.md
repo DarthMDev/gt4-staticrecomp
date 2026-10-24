@@ -34,7 +34,7 @@ the owner moved the work to another agent. Read it together with `AGENTS.md`, `d
   - The fast scaled raster itself (the early-Z second pass) is **not** implemented yet.
   - The build tree `O:\gt4recomp-scratch\coregs2-slice270-present\build` matches the branch HEAD; rebuild before use.
 - **Candidate 274:** `O:\gt4recomp-scratch\coregs2-candidate-274`.
-  - `gt4vulkan.exe` sha256 `af1a5f734e17762e0d64274c8e82ff19eca963fe23e837b445e9085280b794bd` (97,969,664 bytes; rebuilt with the scaled-texture origin fix).
+  - `gt4vulkan.exe` sha256 `d059bda04b7dd8f7c2f20148f3fe319642c3d990a968957c808282a8904aa382` (97,969,664 bytes; rebuilt with the scaled-texture origin fix).
   - `build\hwr-play-scale.ps1` defaults to it (`-Candidate`, run folder `private\hwr-play-274`).
   - Contents: IN-384 (scaled images sized to their slot) on top of candidate 273's IN-371..IN-383.
 - **Candidate 273 (owner test 10, superseded):** `O:\gt4recomp-scratch\coregs2-candidate-273`, sha256
@@ -445,6 +445,20 @@ HLE), 07 (CLUT, CLD modes), 04.9 (GLM); IN-347..IN-351, IN-370, IN-379, IN-382.
   GPU load, clock and power in RivaTuner, and the picture.
 
 ## 10. Open items from the scene sweep
+
+- **Owner test 11 comparison against GSdx (2026-10-24):** the owner sent side-by-side shots (GSdx 6x against ours) of
+  the GT Mode map and of an "Info" dialog. Ours shows a fine grid over the flat background, a vertical line, and a
+  ghosted second copy of the dialog text; GSdx is clean. Measured on a headless 6x menu dump (Hue's Home, 3840 x 2688):
+  - The background gradient steps every **6 pixels horizontally** (the 1x texture magnified) and every **2 native rows
+    vertically** (a 480i field has 224 rows, so woven rows come in pairs), a 6 x 12 cell grid. That is the 1x source
+    content at 6x, not a fallback.
+  - `GT4_HW_SCALED_FILTER=linear` (new, default `ps2`) forces bilinear on 1x-sampled textures in the scaled pass. It
+    changes the picture only slightly (mean absolute difference 0.44) and does **not** remove the grid, so the grid is
+    not the nearest texture filter: it is magnified 1x content plus the 480i row pairs. GSdx's own upscaling filter is
+    what smooths it there.
+  - The dialog ghost and the vertical line are still unexplained; the dialog is a 480i menu, so the IN-381 field offset
+    (6,216 of 14,009 frames carried one in the owner's run) and the deinterlace history are the next suspects.
+  - `build\hwr-play-scale.ps1 -Linear` exposes the new filter for an A/B by the owner.
 
 - **Owner test 11, 6x on the Nordschleife (2026-10-24, candidate 274 `4e54ad04`):** the upscale reaches the screen
   (confirmed after the deinterlace-set fix) and the frame is stable at 60 FPS, but two **presentation-only artifacts**
