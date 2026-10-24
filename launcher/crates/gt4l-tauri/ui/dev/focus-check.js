@@ -648,7 +648,12 @@
     var rows = document.querySelectorAll(".game-row");
     check("Settings > Games lists both games", rows.length === 2, String(rows.length));
     var labels = Array.prototype.map.call(rows[0].querySelectorAll("button"), function (b) { return b.textContent; });
-    check("an installed game offers Change disc image and Remove", labels.join("|") === T("games.change_disc") + "|" + T("common.remove"), labels.join("|"));
+    check("an installed game offers Update and Remove", labels.join("|") === T("games.update") + "|" + T("common.remove"), labels.join("|"));
+    var installedDetail = rows[0].querySelector(".val").textContent;
+    check("an installed game names its copy: status, USA v2.00 and size, not the title again",
+      installedDetail.indexOf(T("games.installed") + " · USA v2.00 · ") === 0 && installedDetail.indexOf("Gran Turismo") < 0, installedDetail);
+    check("Spec II is titled with its supported version", rows[1].querySelector(".k span").textContent === "Gran Turismo 4 Spec II v1.10",
+      rows[1].querySelector(".k span").textContent);
     var other = Array.prototype.map.call(rows[1].querySelectorAll("button"), function (b) { return b.textContent; });
     check("a game that is not installed offers Install", other.join("|") === T("common.install"), other.join("|"));
     rows[0].querySelectorAll("button")[1].click();
@@ -1004,10 +1009,16 @@
       check("the first-run setup page is generic: no game is named before the disc is read",
         title === T("setup.set_up") && sub === T("setup.choose_text") && title.indexOf("Spec") < 0, title + " / " + sub);
       current = { state: "checking", step: "checking", progress: 0, bytes_done: 3683418112, bytes_total: 3683418112, renderer_step: "",
-        disc_name: "Gran Turismo 4 Spec II · Spec II 1.10", problem: "", note: "", game: { id: "spec2", name: "Gran Turismo 4 Spec II" } };
+        disc_name: "Gran Turismo 4 Spec II v1.10", problem: "", note: "", game: { id: "spec2", name: "Gran Turismo 4 Spec II" } };
       await wait(900);
       var named = scratch.querySelector("h1").textContent;
       check("after the disc is identified the steps name the game", named === T("setup.checking_title_named", { game: "Gran Turismo 4 Spec II" }), named);
+      var discStep = scratch.querySelector(".steps li .d");
+      check("step 1 says what the disc was recognised as", !!discStep && discStep.textContent === T("setup.recognised", { name: "Gran Turismo 4 Spec II v1.10" }),
+        discStep ? discStep.textContent : "no detail");
+      var stepLabels = Array.prototype.map.call(scratch.querySelectorAll(".steps li .t"), function (node) { return node.textContent; });
+      check("the copy step says it also checks the image, and the step after it is the final check",
+        stepLabels[1] === T("setup.step_copying") && stepLabels[2] === T("setup.step_checking"), stepLabels.join(" | "));
       var copyBar = scratch.querySelector(".steps li .bar i");
       check("the copy step ends at a full bar after the page moved on to checking",
         !!copyBar && copyBar.style.width === "100%" && copyBar.style.transition === "none", copyBar ? copyBar.style.width + " " + copyBar.style.transition : "no bar");

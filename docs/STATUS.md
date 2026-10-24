@@ -1,4 +1,13 @@
 # Current Status
+## rc5 polish, TASK-114 items 5-7 (2026-10-24, `task/101-multi-game`)
+
+Implemented, owner test pending; nothing merged or released. Settings > Games names the version (Spec II v1.10) and shows
+the variant and size; the button is Update; the setup steps say what they do (recognised, copying and checking, final
+check); the launcher is denser on every page (CSS in app.css, changed in place); the launcher icon is the emblem on a white
+rounded square. Checks: `cargo test --workspace` 550 passed, 0 failed, 5 ignored; focus-check en-US 193/193 and pt-BR
+200/200; nav-test 150/150 (headless Edge, own server stopped). Screenshots pt-BR in `O:\gt4recomp-scratch\slice292-shots\`
+(each page at 1280x720 and 1440x900). The launcher executable with the new icon is built at the next release build.
+
 ## rc5 hotfixes, TASK-114 (2026-10-23, `task/101-multi-game`)
 
 Implemented, owner test pending: setup identifies the disc before copying and the first-run page is generic; the copy bar ends

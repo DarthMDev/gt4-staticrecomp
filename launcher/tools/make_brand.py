@@ -28,6 +28,7 @@ INK = (10, 12, 20, 255)
 CARBON = (19, 22, 27, 255)
 PAPER = (248, 248, 248, 255)
 ACCENT = (44, 107, 237, 255)
+LAUNCHER_TILE = (255, 255, 255, 255)
 
 
 def sha256(path: Path) -> str:
@@ -66,17 +67,25 @@ def write_ico(path: Path, emblem: Image.Image, background, badge: bool) -> None:
 
 
 def write_launcher_ico(path: Path, logo: Image.Image) -> None:
-    """The launcher icon (owner, 2026-10-23, release 1.3.0): the whole GT emblem alone on a transparent background, no
-    tile and no play badge. The emblem is the logo's drawn area above the wordmark and left of the "4"."""
+    """The launcher icon (owner, 2026-10-24, rc5): the GT emblem in black on a white rounded square.
+
+    Each size is drawn at 4x and reduced, so the rounded corners are smooth. The corner radius is 22% of the side and
+    the emblem fills 80% of the side, centred. The emblem is the logo's drawn area above the wordmark and left of the
+    "4". The game icon (write_ico) is not changed by this.
+    """
     upper = logo.crop((0, 0, 850, 425))
     emblem = upper.crop(upper.getchannel("A").getbbox())
     images = []
     for size in ICON_SIZES:
-        canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        scale = 4
+        big = size * scale
+        canvas = Image.new("RGBA", (big, big), (0, 0, 0, 0))
+        radius = round(big * 0.22)
+        ImageDraw.Draw(canvas).rounded_rectangle((0, 0, big - 1, big - 1), radius=radius, fill=LAUNCHER_TILE)
         mark = emblem.copy()
-        mark.thumbnail((max(1, round(size * 0.96)),) * 2, Image.LANCZOS)
-        canvas.alpha_composite(mark, ((size - mark.width) // 2, (size - mark.height) // 2))
-        images.append(canvas)
+        mark.thumbnail((round(big * 0.80), round(big * 0.80)), Image.LANCZOS)
+        canvas.alpha_composite(mark, ((big - mark.width) // 2, (big - mark.height) // 2))
+        images.append(canvas.resize((size, size), Image.LANCZOS))
     images[-1].save(path, format="ICO", sizes=[(size, size) for size in ICON_SIZES], append_images=images[:-1])
 
 
@@ -111,7 +120,7 @@ def main() -> int:
         ("emblem-gt.png", "GT emblem cropped from logo-gt4.png", None, "Derived."),
         ("cover-front.png", "Converted to PNG (RGB) from source/cover-front.jpeg", None, "Derived."),
         ("game.ico", "Game executable icon: emblem on dark tile, 10 sizes", None, "Derived (tools/make_brand.py)."),
-        ("launcher.ico", "Launcher icon: the whole GT emblem on a transparent background, 10 sizes", None, "Derived."),
+        ("launcher.ico", "Launcher icon: the GT emblem on a white rounded square, 10 sizes", None, "Derived (tools/make_brand.py)."),
     ]
     for relative, description, url, licence in entries:
         path = BRAND / relative

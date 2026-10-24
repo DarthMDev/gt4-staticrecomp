@@ -48,7 +48,7 @@ pub const DISC_FOLDER: &str = "disc";
 pub const COPY_MARGIN_BYTES: u64 = 512 * 1024 * 1024;
 /// Message shown for every disc that is a PS2 game but not the supported one.
 pub const UNSUPPORTED_MESSAGE: &str =
-    "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328) and Gran Turismo 4 Spec II 1.10 (SCUS-97436).";
+    "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328) and Gran Turismo 4 Spec II v1.10 (SCUS-97436).";
 const HASH_CHUNK_BYTES: usize = 4 * 1024 * 1024;
 pub(crate) const MAX_SYSTEM_CNF_BYTES: u64 = 4096;
 const MAX_CORE_BYTES: u64 = 16 * 1024 * 1024;

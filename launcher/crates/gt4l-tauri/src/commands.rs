@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use gt4controls::{self as controls_file, default_bindings};
 use gt4l_core::display::{self as display_rules, DisplayTarget};
 use gt4l_core::exit::{self, Outcome};
-use gt4l_core::games::{self, Game};
+use gt4l_core::games::{self, Game, GT4};
 use gt4l_core::gs_release;
 use gt4l_core::launch;
 use gt4l_core::paths::{self, DataDirs};
@@ -53,14 +53,18 @@ fn setup_subject(state: &AppState) -> &'static Game {
     }
 }
 
-/// The display name of the disc a game was set up from, as the receipt records it.
-fn installed_disc_name(state: &AppState, game: &'static Game, version: &str) -> String {
+/// The image name the disc a game was set up from was checked as, from its receipt (empty when there is none).
+fn installed_image_name(state: &AppState, game: &'static Game) -> String {
     let dirs = state.game_dirs(game);
-    let image_name = disc_setup::read_receipt(&dirs.prepared()).map(|receipt| receipt.image_name).unwrap_or_default();
-    setup::game_disc_name(game, version, &image_name)
+    disc_setup::read_receipt(&dirs.prepared()).map(|receipt| receipt.image_name).unwrap_or_default()
 }
 
-/// One row of the game list: `{id, name, installed, selected, state, disc_name, folder, size_bytes}`.
+/// The display name of the disc a game was set up from, as the receipt records it.
+fn installed_disc_name(state: &AppState, game: &'static Game, version: &str) -> String {
+    setup::game_disc_name(game, version, &installed_image_name(state, game))
+}
+
+/// One row of the game list: `{id, name, title, variant, installed, selected, state, disc_name, folder, size_bytes}`.
 fn game_row(state: &AppState, game: &'static Game) -> Value {
     let installed = state.installed_of(game);
     let dirs = state.game_dirs(game);
@@ -69,11 +73,15 @@ fn game_row(state: &AppState, game: &'static Game) -> Value {
         Installed::Missing { reason } => (false, String::new(), reason.clone()),
         Installed::NotSetUp => (false, String::new(), String::new()),
     };
-    let disc_name = if ready { installed_disc_name(state, game, &version) } else { String::new() };
+    let image_name = if ready { installed_image_name(state, game) } else { String::new() };
+    let disc_name = if ready { setup::game_disc_name(game, &version, &image_name) } else { String::new() };
+    let variant = if ready { setup::game_variant(game, &version, &image_name) } else { String::new() };
     let size_bytes = if ready { folder_size(&dirs.disc_folder()) + folder_size(&dirs.prepared()) } else { 0 };
     json!({
         "id": game.id,
         "name": game.display_name,
+        "title": setup::game_title(game),
+        "variant": variant,
         "installed": ready,
         "damaged": !ready && !reason.is_empty(),
         "reason": reason,
@@ -110,7 +118,7 @@ pub fn app_state_of(state: &AppState) -> Value {
         .unwrap_or_default();
     let run = &state.setup_run;
     let (screen, problem, disc_name) = if visual_ready() {
-        ("done", String::new(), setup::disc_display_name("2.00"))
+        ("done", String::new(), setup::game_disc_name(&GT4, "2.00", ""))
     } else if state.setup_busy {
         ("checking", String::new(), chosen_name)
     } else if let Installed::Ready { version, .. } = &installed {
@@ -1001,8 +1009,9 @@ fn delete_item(id: &str, shared: &Shared, kind: Kind) -> Result<LibraryView, Str
 
 // Games -----------------------------------------------------------------------------------------
 
-/// `games_list()`: `{selected, any_installed, games: [{id, name, installed, damaged, reason, selected, disc_name, folder,
-/// size_bytes}]}` (Settings > Games and the home selector).
+/// `games_list()`: `{selected, any_installed, games: [{id, name, title, variant, installed, damaged, reason, selected,
+/// disc_name, folder, size_bytes}]}` (Settings > Games and the home selector). `title` is the name shown in Settings
+/// (Spec II names its version); `variant` is what tells this copy apart (`USA v2.00`, `PT-BR`), empty when none.
 #[tauri::command]
 pub fn games_list(shared: State<'_, Shared>) -> Result<Value, String> {
     games_list_of(shared.inner())

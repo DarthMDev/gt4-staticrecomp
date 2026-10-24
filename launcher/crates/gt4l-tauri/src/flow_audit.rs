@@ -233,7 +233,7 @@ fn synthetic_flow_end_to_end() {
     // Accept the good disc; the page then calls setup_start.
     let shared = launch(&dirs, &pins);
     let info = setup::choose_disc_path(&shared, &picked).expect("accepted");
-    assert_eq!(info.name, "Gran Turismo 4 \u{b7} USA \u{b7} v2.00");
+    assert_eq!(info.name, "Gran Turismo 4 (USA v2.00)");
     let recorder = Recorder::default();
     let seen = run_setup(&shared, &recorder, fake_renderer());
     // The poll can catch the final state ("done") between the last state write and the thread's exit (it still sends

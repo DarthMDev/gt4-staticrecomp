@@ -133,15 +133,17 @@
     var running = state === "checking";
     var done = state === "done";
     var discName = setup.disc_name || "";
+    // Step 1 says what the disc was recognised as (the title and the variant, from the disc itself).
+    var recognised = discName ? GT4.t("setup.recognised", { name: discName }) : null;
 
     if (state === "wrong_disc") {
       steps.push(row("01", GT4.t("setup.step_disc"), discName || null, "bad", null, null));
     } else if (running || done) {
-      steps.push(row("01", GT4.t("setup.step_disc"), discName || null, "ok", null, null));
+      steps.push(row("01", GT4.t("setup.step_disc"), recognised, "ok", null, null));
     } else {
       // Not chosen yet ("..." waits for the pick), or the file of a stopped run (no mark).
       steps.push(discName && state === "failed"
-        ? row("01", GT4.t("setup.step_disc"), discName, "none", null, null)
+        ? row("01", GT4.t("setup.step_disc"), recognised, "none", null, null)
         : row("01", GT4.t("setup.step_disc"), discHint(setup), "active", null, null));
     }
     // A refused file, a stopped run and missing game files show the Disc row and the reason only, so the buttons

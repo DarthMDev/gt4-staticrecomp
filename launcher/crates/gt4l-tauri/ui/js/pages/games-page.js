@@ -1,8 +1,8 @@
 /*
  * Settings > Games (TASK-101): the two games, installed or not, the disc each was set up from and the size on disk.
- * Commands (js/games.js): games_list, setup_choose_disc + setup_start (Install, Change disc image), games_remove.
+ * Commands (js/games.js): games_list, setup_choose_disc + setup_start (Install, Update), games_remove.
  *   - Install: opens the disc picker for that game and runs its setup (the Setup page shows the progress).
- *   - Change disc image: the same with a new disc image; the new copy is checked again and replaces the old one only when
+ *   - Update: the same with a new disc image; the new copy is checked again and replaces the old one only when
  *     it is complete.
  *   - Remove: deletes the disc copy and the prepared files of that game, after asking. Its saves and replays are kept.
  */
@@ -45,15 +45,17 @@
     }
 
     function card(game) {
+      // The detail: the status, what tells this copy apart (region and version, or the Spec II image) and the size.
       var status = game.installed
-        ? GT4.t("games.installed") + (game.disc_name ? " · " + game.disc_name : "") + (game.size_bytes ? " · " + GT4.games.size(game.size_bytes) : "")
+        ? [GT4.t("games.installed"), game.variant || "", game.size_bytes ? GT4.games.size(game.size_bytes) : ""]
+          .filter(Boolean).join(" · ")
         : (game.damaged ? GT4.t("games.missing_reason", { reason: game.reason }) : GT4.t("games.not_installed"));
       var buttons = [];
       if (game.installed) {
         buttons.push(h("button", {
           class: "btn small", type: "button",
           on: { click: function () { GT4.games.installGame(game.id, started); } }
-        }, GT4.t("games.change_disc")));
+        }, GT4.t("games.update")));
         buttons.push(h("button", {
           class: "btn small danger", type: "button",
           on: { click: function () { confirmRemove(game); } }
@@ -72,7 +74,7 @@
       }
       return h("div", { class: "row game-row", data: { gameId: game.id } }, [
         h("div", { class: "k" }, [
-          h("span", { text: game.name }),
+          h("span", { text: game.title || game.name }),
           h("span", { class: "val", text: status })
         ]),
         h("div", { class: "ctl" }, buttons)

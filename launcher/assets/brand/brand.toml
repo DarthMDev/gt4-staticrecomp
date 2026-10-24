@@ -50,7 +50,7 @@ licence_note = "Derived (tools/make_brand.py)."
 
 [[asset]]
 path = "launcher.ico"
-description = "Launcher icon: the whole GT emblem on a transparent background, 10 sizes"
-size_bytes = 33835
-sha256 = "9d396ca806843cfae3ba5decb0db6b21a4126b4f0862b109949a00534587d2c0"
-licence_note = "Derived."
+description = "Launcher icon: the GT emblem on a white rounded square, 10 sizes"
+size_bytes = 33596
+sha256 = "acaf7c265af22ae9233e64151b408f5fe1d8511e8c3c8768e4f8904159277131"
+licence_note = "Derived (tools/make_brand.py)."

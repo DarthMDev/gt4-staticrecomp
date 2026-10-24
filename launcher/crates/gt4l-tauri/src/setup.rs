@@ -53,7 +53,7 @@ pub struct DiscInfo {
     pub path: String,
     pub serial: String,
     pub version: String,
-    /// `Gran Turismo 4 · USA · v2.00`, or `Gran Turismo 4 Spec II · 1.10`.
+    /// `Gran Turismo 4 (USA v2.00)`, or `Gran Turismo 4 Spec II v1.10 (PT-BR)`.
     pub name: String,
     /// The game the disc is (`gt4`, `spec2`): the setup that follows installs this game.
     pub game: String,
@@ -64,17 +64,51 @@ pub struct DiscInfo {
     pub requested: Option<String>,
 }
 
-/// The display name of an accepted Gran Turismo 4 disc.
-pub fn disc_display_name(version: &str) -> String {
-    format!("Gran Turismo 4 \u{b7} USA \u{b7} v{version}")
+/// The Spec II version the launcher supports (the only one; other versions have other hashes and are refused).
+pub const SPEC2_VERSION: &str = "1.10";
+
+/// The title of a game as the player sees it: Spec II names its supported version.
+pub fn game_title(game: &Game) -> String {
+    match DiscGame::from_id(game.id) {
+        Some(DiscGame::Spec2) => format!("{} v{SPEC2_VERSION}", game.display_name),
+        _ => game.display_name.to_string(),
+    }
 }
 
-/// The display name of an accepted disc of `game` (`image_name` is the known image, for Spec II).
-pub fn game_disc_name(game: &Game, version: &str, image_name: &str) -> String {
+/// What tells apart copies of one game, or an empty text: the region and version of Gran Turismo 4 (`USA v2.00`), and
+/// for Spec II the pinned image name (`PT-BR`; empty for the plain 1.10 image, and `other image` for an image with the
+/// known executable and an unpinned hash). `image_name` is the receipt's name, empty before the copy was checked.
+pub fn game_variant(game: &Game, version: &str, image_name: &str) -> String {
     match DiscGame::from_id(game.id) {
-        Some(DiscGame::Spec2) if !image_name.is_empty() => format!("{} \u{b7} {image_name}", game.display_name),
-        Some(DiscGame::Spec2) => format!("{} \u{b7} {version}", game.display_name),
-        _ => disc_display_name(version),
+        Some(DiscGame::Spec2) => spec2_variant(image_name),
+        _ => format!("USA v{version}"),
+    }
+}
+
+/// The Spec II part of `game_variant`. The names are the pinned image names (`docs/inputs`), not file names.
+fn spec2_variant(image_name: &str) -> String {
+    let plain = format!("Spec II {SPEC2_VERSION}");
+    if image_name.is_empty() || image_name == plain {
+        return String::new();
+    }
+    let region = image_name
+        .strip_prefix(&format!("{plain} ("))
+        .and_then(|rest| rest.strip_suffix(')'));
+    match region {
+        Some(region) => region.to_string(),
+        None => messages::text("game.variant_other", state::current_language()).to_string(),
+    }
+}
+
+/// The name of an accepted disc of `game`, as the setup shows it: the title and the variant, for example
+/// `Gran Turismo 4 (USA v2.00)` or `Gran Turismo 4 Spec II v1.10 (PT-BR)`.
+pub fn game_disc_name(game: &Game, version: &str, image_name: &str) -> String {
+    let title = game_title(game);
+    let variant = game_variant(game, version, image_name);
+    if variant.is_empty() {
+        title
+    } else {
+        format!("{title} ({variant})")
     }
 }
 

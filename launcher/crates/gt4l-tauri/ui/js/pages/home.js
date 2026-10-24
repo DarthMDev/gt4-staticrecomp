@@ -198,7 +198,7 @@
         versionNext.disabled = locked;
         var label = selectedId === "gt4" || selectedId === "spec2" ? versionNameOf(selectedId) : (game ? game.name : "");
         showName(label, paintedId !== null && paintedId !== selectedId ? (slideFrom || 1) : 0);
-        versionWindow.setAttribute("title", game ? game.name : "");
+        versionWindow.setAttribute("title", game ? (game.title || game.name) : "");
         paintedId = selectedId;
         slideFrom = 0;
         playButton.textContent = installedNow ? GT4.t("common.play") : GT4.t("common.install");

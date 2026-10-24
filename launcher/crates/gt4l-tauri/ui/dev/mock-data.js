@@ -28,15 +28,15 @@
   var setupStart = query.get("setup") || "done";
   var IMAGE_BYTES = 5314478080;
   var SPEC_MESSAGE = "This disc is not supported yet. GT4Recomp supports Gran Turismo 4 (USA, SCUS-97328) and " +
-    "Gran Turismo 4 Spec II 1.10 (SCUS-97436). This is the unmodified GT4 Online Public Beta (SCUS-97436), not Gran Turismo 4 Spec II.";
+    "Gran Turismo 4 Spec II v1.10 (SCUS-97436). This is the unmodified GT4 Online Public Beta (SCUS-97436), not Gran Turismo 4 Spec II.";
 
   // Two games (TASK-101). The mock keeps the same shapes as commands::game_row and app_state.
   var gamesParam = query.get("games") || "gt4";
   var GAME_TABLE = [
-    { id: "gt4", name: "Gran Turismo 4", installed: gamesParam === "gt4" || gamesParam === "both",
-      disc_name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00", size_bytes: 5314478080 + 18000000 },
-    { id: "spec2", name: "Gran Turismo 4 Spec II", installed: gamesParam === "spec2" || gamesParam === "both",
-      disc_name: "Gran Turismo 4 Spec II \u00b7 Spec II 1.10", size_bytes: 3683418112 + 6520944 }
+    { id: "gt4", name: "Gran Turismo 4", title: "Gran Turismo 4", variant: "USA v2.00", installed: gamesParam === "gt4" || gamesParam === "both",
+      disc_name: "Gran Turismo 4 (USA v2.00)", size_bytes: 5314478080 + 18000000 },
+    { id: "spec2", name: "Gran Turismo 4 Spec II", title: "Gran Turismo 4 Spec II v1.10", variant: "", installed: gamesParam === "spec2" || gamesParam === "both",
+      disc_name: "Gran Turismo 4 Spec II v1.10", size_bytes: 3683418112 + 6520944 }
   ];
   var selectedGame = query.get("selected") ||
     (GAME_TABLE.filter(function (game) { return game.installed; })[0] || GAME_TABLE[0]).id;
@@ -49,7 +49,8 @@
       selected: selectedGame,
       any_installed: GAME_TABLE.some(function (game) { return game.installed; }),
       games: GAME_TABLE.map(function (game) {
-        return { id: game.id, name: game.name, installed: game.installed, damaged: false, reason: "",
+        return { id: game.id, name: game.name, title: game.title, variant: game.installed ? game.variant : "",
+          installed: game.installed, damaged: false, reason: "",
           selected: game.id === selectedGame, disc_name: game.installed ? game.disc_name : "",
           folder: "C:\\Program Files\\GT4Recomp\\data\\games\\" + game.id,
           size_bytes: game.installed ? game.size_bytes : 0 };
@@ -58,7 +59,7 @@
   }
 
   var setup = { state: "done", step: "copying", progress: 0, bytes_done: 0, bytes_total: 0, renderer_step: "",
-    disc_name: "Gran Turismo 4 \u00b7 USA \u00b7 v2.00", problem: "", note: "" };
+    disc_name: "Gran Turismo 4 (USA v2.00)", problem: "", note: "" };
   function running(step, progress) {
     setup.state = "checking";
     setup.step = step;
