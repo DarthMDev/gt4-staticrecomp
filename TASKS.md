@@ -135,6 +135,7 @@ See [GS renderer options](docs/GS-RENDERER-OPTIONS.md) and [GSDX-PLAN](docs/GSDX
 | TASK‑111 | Logs for bug reports: one-click "Export logs" zip (latest log, recent launcher and game logs, settings, system summary; user name and paths masked), offered after a crash or a lost card | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑112 | Launcher logs: one file per session with INFO, WARN and ERROR lines, the last 20 kept, `latest.log` with the earlier errors, game session folders capped at 20, Open latest log | 🔧 Implemented on `task/101-multi-game` (rc4, 2026-10-23), owner test pending · release 1.3.0 |
 | TASK‑113 | Spec II race HUD at ultrawide ratios (wider than 16:9): speed figure and odometer digits stretched and spilling past the gauge (known issue in 1.3.0) | 📋 Planned (owner, 2026-10-23) · next update |
+| TASK‑115 | Game recognition and Discord: Windows Game Mode/Game Bar, AMD and NVIDIA capture (Instant Replay, ShadowPlay) and Discord Rich Presence | 📋 Planned (owner, 2026-10-24) · release 1.3.1 |
 | TASK‑093 | Custom textures straight in the Textures folder: gt4-gs 1.2.1 reads the folder itself; the launcher stops creating `replacements` and moves an old `replacements` folder's contents up once gt4-gs 1.2.1 is in use | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑096 | Remove CoreGS 1.1 from the launcher (owner, 2026-10-22): GSdx only, CoreGS 2.0 shown as "Coming soon" (disabled), a stored CoreGS 1.1 choice migrates to GSdx, a GSdx failure shows a clear error instead of falling back; CoreGS 1.1 stays in the game executable, unused by the launcher. For launcher release 1.2.3 | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
 | TASK‑092 | MTVU test switches after TASK-084: `GT4_MTVU=0` and `GT4_MTVU_VERIFY=1` in pcsx2 mode, portable doorbell ordering | ✅ Done (2026-10-22) · release 1.2.3 (owner tested) |
@@ -883,6 +884,29 @@ Done in the working tree (branch `task/101-multi-game`, release 1.3.0, 2026-10-2
    table read that probes nothing); focus-check en-US 195/195 and pt-BR 202/202 (one new check: a loaded Saves tab shows its
    list at once), nav-test 150/150. No locale text added.
    Owner test pending; no release-notes bullet (rc polish).
+
+### TASK-115 — Game recognition (Windows, GPU drivers, Discord) and Discord Rich Presence
+Planned (owner, 2026-10-24) for release 1.3.1. Goal: Windows, the AMD and NVIDIA drivers and Discord treat GT4Recomp
+as a game, so Game Mode, AMD Instant Replay / NVIDIA ShadowPlay and Discord's "Playing" status work out of the box.
+Facts to start from (main agent, to verify): the picture is drawn by `gt4-gs.exe` (GSdx) into a child window of
+`gt4.exe`, so a driver or overlay sees the 3D work in `gt4-gs.exe` and the window in `gt4.exe`; RivaTuner already
+hooks it (owner screenshots). Windows decides "game" from its own list, a fullscreen 3D swap chain, or the player's
+Game Bar choice "Remember this is a game" (stored per user in `HKCU\System\GameConfigStore`); there is no
+manifest flag. AMD Adrenalin and NVIDIA App detect games from their own databases and 3D activity and let players
+add an executable by hand; their Instant Replay can also record the desktop.
+Work:
+1. Identity: version resources on `gt4.exe`, `gt4-spec2.exe` and `gt4-gs.exe` (ProductName "Gran Turismo 4" /
+   "Gran Turismo 4 Spec II", CompanyName "GT4Recomp", FileDescription, icon), window title the game name.
+2. Measure on the owner's machines (AMD Adrenalin, NVIDIA App on the RTX laptop, Windows Game Bar) whether each one
+   detects the game today, in fullscreen and windowed, and what changes it (fullscreen mode, flip-model swap chain in
+   gt4-gs, the identity above). Never write GameConfigStore or driver profiles behind the player's back; if a manual
+   step is needed, a short in-launcher guide ("Add GT4Recomp to AMD Adrenalin / NVIDIA App / Game Bar").
+3. Discord Rich Presence (owner: 1.3.1): the launcher (it stays alive in the tray while the game runs) talks to the
+   local Discord client over its IPC pipe with a permissively licensed crate (MIT/Apache, never GPL), a GT4Recomp
+   Discord application id (owner creates it), and shows "Gran Turismo 4" or "Gran Turismo 4 Spec II", elapsed time
+   and the GT4Recomp logo; a Settings > General switch (on by default), off when Discord is not running, no data
+   sent anywhere else. In-game details (mode, track, car) need guest-memory reads: a later step.
+Acceptance: the owner sees each feature work on his machines; unit tests for the presence payload and the switch.
 
 ### TASK-100 — Spec II support (release 1.3.0)
 Planned (owner, 2026-10-22) for release 1.3.0: Spec II ships before the wheels and before CoreGS 2.0 (owner, 2026-10-23), on GSdx. Scope as decision 0072:
