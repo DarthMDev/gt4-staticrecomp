@@ -185,6 +185,9 @@ int main(int argc, char** argv) {
     bool cacheMode = true;                     // --sync-mode
     PixelRect traceRect{0, 0, 2047, 2047};
     std::uint32_t scale = 1;     // --scale N (M12, IN-371): internal resolution of the scaled images
+    // IN-384 follow-up: --half-pixel native|normal|off sets the 06.3 vertex shift exactly as GT4_HW_HALF_PIXEL does in
+    // the game, so the presentation can be compared between the three conventions.
+    float halfPixelShift = 0.0f;  // 0: the native mode (shift = scale), as the game defaults to
     std::string upscaledDir;     // --upscaled-dir DIR: the GPU presentation compose at that scale (IN-372)
     // --check-presented (owner test 6, IN-377): every frame's GPU presentation compose (the image the window shows) is
     // read back and its s x s blocks inspected. A frame sourced from 1x memory has every block uniform (each native
@@ -252,6 +255,18 @@ int main(int argc, char** argv) {
             upscaledDir = argv[i + 1];
         } else if (std::strcmp(argv[i], "--slm-hashes") == 0) {
             slmHashPath = argv[i + 1];
+        } else if (std::strcmp(argv[i], "--half-pixel") == 0) {
+            const char *mode = argv[i + 1];
+            if (std::strcmp(mode, "off") == 0) {
+                halfPixelShift = 1.0f;
+            } else if (std::strcmp(mode, "normal") == 0) {
+                // The game's GT4_HW_HALF_PIXEL=normal (backend scale_offset_normal).
+                halfPixelShift = scale % 2u == 0u ? static_cast<float>(scale) + 0.2f
+                                 : (scale & 2u) == 0u   ? static_cast<float>(scale) + 0.3f
+                                                        : static_cast<float>(scale) + 0.1f;
+            } else {
+                halfPixelShift = 0.0f;  // native (the default): shift = scale
+            }
         } else if (std::strcmp(argv[i], "--trace-frame") == 0) {
             traceFrame = static_cast<std::uint64_t>(std::strtoull(argv[i + 1], nullptr, 10));
         } else if (std::strcmp(argv[i], "--trace-rect") == 0) {
@@ -288,7 +303,7 @@ int main(int argc, char** argv) {
     handles.queueFamily = headless.family;
     handles.pixelInterlock = headless.interlock;
     std::printf("pixel_interlock=%d scale=%u\n", headless.interlock ? 1 : 0, scale);
-    renderer.SetScale(scale, static_cast<float>(scale));  // 06.3 native half-pixel mode
+    renderer.SetScale(scale, halfPixelShift > 0.0f ? halfPixelShift : static_cast<float>(scale));  // 06.3 half-pixel
     if (!renderer.Init(handles, error)) {
         std::fprintf(stderr, "GPU drawer init failed: %s\n", error.c_str());
         return 1;

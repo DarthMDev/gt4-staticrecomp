@@ -152,7 +152,10 @@ int wrap_scaled(int texel, int s, uint log2_size, uint mode, uint minimum, uint 
 }
 
 ivec4 fetch_texel_scaled(int x, int y, int s) {
-    uint raw = imageLoad(hw_texels_scaled, ivec2(x + int(state.tex_origin_x) * s, y + int(state.tex_origin_y) * s)).x;
+    // IN-384 follow-up: the scaled texel image holds exactly this texture at (0, 0) (the copy in Execute places it
+    // there, sized to the sampled footprint), so the 1x atlas origin must NOT be added here: adding it made every
+    // texture after the first in a run sample the wrong region (the leaking cuts on the car at 6x).
+    uint raw = imageLoad(hw_texels_scaled, ivec2(x, y)).x;
     return hw_texel_colour(state.texel_kind, raw, state.ta0, state.ta1, state.aem != 0u);
 }
 
