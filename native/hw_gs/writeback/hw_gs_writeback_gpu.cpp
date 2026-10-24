@@ -209,6 +209,9 @@ struct GpuDrawer::Impl {
   // scissor times s. Draws into the write-back mode's scratch colour slot are not repeated (nothing presents it).
   // `barrierBetween`: storage-image barriers between draws (the per-primitive path without pixel interlock).
   bool scaledPaused = false;  // IN-382
+  // IN-384 follow-up (owner test 11): GT4_HW_SCALED_FILTER=linear samples the 1x texel atlas bilinearly in the scaled
+  // pass, which smooths the source's 6-pixel steps the way the reference renderer's upscaling filter does.
+  bool scaledLinearFilter = false;
   void record_scaled_draws(bool barrierBetween) {
     if (!scaled() || scaledDraws.empty()) return;
     if (scaledPaused) {
@@ -292,7 +295,8 @@ struct GpuDrawer::Impl {
       std::memcpy(push, sizes, sizeof(sizes));
       push[2] = FloatToBits(static_cast<float>(scale));
       push[3] = FloatToBits(scaleOffset);
-      push[7] = draw.scaledTexture ? scale : 1u;  // IN-374: the texture is the slot's scaled image
+      push[7] = (draw.scaledTexture ? scale : 1u) |
+                (scaledLinearFilter ? 0x80000000u : 0u);  // IN-374 / IN-384: tex_scale + the forced-linear bit
       if (!pushed || std::memcmp(lastPush, push, sizeof(push)) != 0) {
         gt4_hwd_vkCmdPushConstants(cmd, pipelineLayout, kGraphicsPushStages, 0, kPushBytes, push);
         std::memcpy(lastPush, push, sizeof(push));
@@ -3591,6 +3595,8 @@ std::uint64_t GpuDrawer::FxaaImage() const { return reinterpret_cast<std::uint64
 void GpuDrawer::SetScale(std::uint32_t scale, float scaleOffset) {
   impl_->scale = std::clamp<std::uint32_t>(scale, 1u, kGpuMaxScale);
   impl_->scaleOffset = scaleOffset;
+  const char *filter = std::getenv("GT4_HW_SCALED_FILTER");
+  impl_->scaledLinearFilter = filter != nullptr && std::strcmp(filter, "linear") == 0;
 }
 
 std::uint32_t GpuDrawer::Scale() const { return impl_->scale; }

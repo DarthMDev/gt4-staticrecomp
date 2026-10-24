@@ -97,6 +97,10 @@ layout(set = 0, binding = 2, r32ui) uniform uimage2D hw_depth;
 #endif
 layout(set = 0, binding = 3, r32ui) uniform readonly uimage2D hw_texels;
 
+// IN-384 follow-up: set from the top bit of the tex_scale push word (the GPU drawer's GT4_HW_SCALED_FILTER=linear).
+bool g_force_linear = false;
+uint g_tex_scale = 1u;  // pc.tex_scale without the filter bit
+
 // The vertex stage's push constants (hw_vertex.vert), read here for the internal scale (IN-371): the native dither
 // mode of 06.5 indexes DIMX by the native pixel, so each dither cell covers s x s sub-pixels.
 layout(push_constant) uniform VertexPush {
@@ -187,7 +191,11 @@ ivec4 sample_texture_scaled(int uvs, int uvt, int s) {
 
 // SampleTexture of the CPU reference: nearest, or bilinear with the 4-bit weights (IN-305).
 ivec4 sample_texture(int uvs, int uvt) {
-    if (state.tex_linear == 0u) {
+    // IN-384 follow-up (owner test 11): GT4_HW_SCALED_FILTER=linear forces the bilinear path for a texture the game
+    // asks to sample nearest, but only at an internal scale > 1 and only for the 1x texel atlas. A 1x texture
+    // magnified 6x with nearest shows the source's 6-pixel steps (the menu background grid, the map's dashes); the
+    // reference renderer smooths them with its upscaling filter. Off by default (faithful to the GS).
+    if (state.tex_linear == 0u && !(g_force_linear && g_tex_scale <= 1u)) {
         int x = wrap_texel(uvs >> 4, state.tex_log2_w, state.wrap_s, state.wrap_min_s, state.wrap_max_s);
         int y = wrap_texel(uvt >> 4, state.tex_log2_h, state.wrap_t, state.wrap_min_t, state.wrap_max_t);
         return fetch_texel(x, y);
@@ -213,6 +221,9 @@ ivec4 sample_texture(int uvs, int uvt) {
 
 void main() {
     ivec2 pixel = ivec2(floor(gl_FragCoord.xy));
+    // IN-384 follow-up: the top bit of the tex_scale push word requests the forced linear filter for 1x textures.
+    g_force_linear = (pc.tex_scale & 0x80000000u) != 0u;
+    g_tex_scale = pc.tex_scale & 0x7FFFFFFFu;
 
     HwPixelState s;
     s.format = state.format;
@@ -258,7 +269,7 @@ void main() {
             uvs = to_texel_104((in_st.x / q) * scale_s);
             uvt = to_texel_104((in_st.y / q) * scale_t);
         }
-        ivec4 texel = pc.tex_scale > 1u ? sample_texture_scaled(uvs, uvt, int(pc.tex_scale)) : sample_texture(uvs, uvt);
+        ivec4 texel = g_tex_scale > 1u ? sample_texture_scaled(uvs, uvt, int(g_tex_scale)) : sample_texture(uvs, uvt);
         colour = hw_texture_function(state.tfx, state.tcc != 0u, texel, frag);
     }
     if (state.fog_on != 0u) {
