@@ -59,6 +59,15 @@ constexpr std::uint32_t kShutdownTimeoutMs = 3000;
 constexpr std::uint64_t kGifChunkBytes =
     (proto::kDefaultCommandCapacity / 2 - sizeof(proto::RecordHeader) - sizeof(proto::GifPayload)) & ~std::uint64_t(15);
 constexpr std::uint32_t kReadFifoQwordsPerRequest = static_cast<std::uint32_t>(proto::kDefaultResponseCapacity / 16);
+// TASK-116 step 1: the flare visibility table the night race reads back once per frame: 64x8 PSMCT32 = 2048 bytes = 128
+// qwords (docs/GS-READBACK-STUDY.md section 1.1). Unique among every readback measured in the P0 probe (car icons 256
+// and 768, thumbnail 512, loading picture 26,880), so the size is the allow-list key.
+constexpr std::uint32_t kFlareReadbackQwords = 128;
+constexpr std::uint32_t kFlareReadbackBytes = kFlareReadbackQwords * 16;
+// HWDownloadMode value of the launcher's Performance mode (docs/launcher/gs-settings.toml: no-readbacks = 2).
+constexpr int kNoReadbacksMode = 2;
+// TASK-116 step 1: GT4_GS_READBACK_LOCAL (A/B switch, on by default); 0 serves every readback as before.
+constexpr const char *kReadbackLocalSwitch = "GT4_GS_READBACK_LOCAL";
 
 struct Counters {
   std::uint64_t records = 0, bytes = 0, gif_records = 0, gif_bytes = 0, priv = 0, vsyncs = 0, readbacks = 0,
@@ -85,6 +94,8 @@ std::atomic<std::uint64_t> g_display_aspect_wanted{0};
 // TASK-116 step 0 (P0 gate): the guest RAM window of the readback log's destination column (set_guest_ram).
 std::uint8_t *g_guest_ram = nullptr;
 std::uint32_t g_guest_ram_size = 0;
+// TASK-116 step 1: the MTVU journal services of the local flare answer (set_readback_journal).
+ReadbackJournal g_readback_journal{};
 
 // CPU time of the calling thread in microseconds (UINT64_MAX when unavailable).
 std::uint64_t thread_cpu_us() {
@@ -160,6 +171,16 @@ std::uint32_t environment_number(const char *name, std::uint32_t fallback, std::
   if (*end || parsed < low || parsed > high)
     refuse(std::string(name) + "=\"" + value + "\" is not a number from " + std::to_string(low) + " to " + std::to_string(high));
   return static_cast<std::uint32_t>(parsed);
+}
+
+// TASK-116 step 1: GT4_GS_READBACK_LOCAL, the A/B switch of the local flare answer. Unset or 1 = local in Performance
+// mode, 0 = every readback drained and waited for as before.
+bool readback_local_switch() {
+  const char *value = std::getenv(kReadbackLocalSwitch);
+  if (!value || !*value) return true;
+  if (std::strcmp(value, "1") == 0) return true;
+  if (std::strcmp(value, "0") == 0) return false;
+  refuse(std::string(kReadbackLocalSwitch) + "=\"" + value + "\" is not 0 or 1");
 }
 
 // Readback wait times of one F8 interval or of the session (EE wait for each READ_FIFO reply).
@@ -299,36 +320,118 @@ class Client {
     ++counters_.priv;
   }
 
-  bool read_fifo(std::uint8_t *data, std::uint32_t qwords) {
-    for (std::uint32_t done = 0; done < qwords;) {
+  // TASK-116 step 1: true when this READ_FIFO is the flare table answered locally (Performance mode, switch on, journal
+  // registered).
+  bool local_readback(std::uint32_t qwords) const {
+    return readback_local_enabled_ && journal_ready() && qwords == kFlareReadbackQwords;
+  }
+
+  bool journal_ready() const {
+    return g_readback_journal.queue_readback != nullptr && g_readback_journal.drain_download != nullptr;
+  }
+
+  // True when the MTVU download ordering should defer sync("download") for the readback that follows (EE thread).
+  bool local_active() const { return readback_local_enabled_ && journal_ready() && stream() && session_ && !dead_; }
+
+  // The client side of one READ_FIFO record: counters, capture and sequence. The request id in the payload is the
+  // client's own counter, incremented once per record exactly like the session's.
+  void note_readback_request(std::uint32_t qwords) {
+    ++counters_.readbacks;
+    counters_.readback_bytes += std::uint64_t(qwords) * 16;
+    const proto::ReadFifoPayload request{qwords, 0, ++readback_id_};
+    write_capture(RecordType::read_fifo, 0, &request, sizeof request);
+    ++sequence_;
+    count(sizeof request);
+  }
+
+  // The pre-rc6 path: the deferred drain (a real one when the download was deferred), then READ_FIFO and the wait.
+  std::uint32_t accurate_readback(std::uint8_t *out, std::uint32_t qwords) {
+    if (g_readback_journal.drain_download) g_readback_journal.drain_download();
+    note_readback_request(qwords);
+    gt4::perf::Scope wait(gt4::perf::Category::gs_ipc_readback_wait);
+    const std::uint64_t start = now_us();
+    std::uint32_t status = proto::kReadbackFailed;
+    try {
+      status = session_->read_fifo(qwords, out);
+      if (status == proto::kReadbackZeroFilled) ++zero_filled_;
+    } catch (const ipc::IpcError &error) {
+      lost(error.what());
+      std::memset(out, 0, std::size_t(qwords) * 16);
+    }
+    const std::uint64_t waited = now_us() - start;
+    readback_interval_.add(waited);
+    readback_session_.add(waited);
+    readback_probe_.record({frame_, qwords, guest_address(out), status, waited, out}, stderr);
+    return status;
+  }
+
+  // TASK-116 step 1: the flare table, one frame old. Collects the reply of the previous frame's request, copies the cache
+  // into `out` and queues this frame's READ_FIFO behind the journal (no drain, no wait). The first readback of a scene
+  // (no cache yet) waits as today, so the game never starts from a blank table.
+  void local_flare_readback(std::uint8_t *out) {
+    collect_flare_reply();
+    if (!flare_cache_valid_) {
+      accurate_readback(out, kFlareReadbackQwords);
+      std::memcpy(flare_cache_.data(), out, flare_cache_.size());
+      flare_cache_valid_ = true;
+      return;
+    }
+    std::memcpy(out, flare_cache_.data(), flare_cache_.size());
+    if (!g_readback_journal.queue_readback(kFlareReadbackQwords)) {  // no usable journal (MTVU off): serve it accurately
+      readback_local_enabled_ = false;
+      accurate_readback(out, kFlareReadbackQwords);
+      std::memcpy(flare_cache_.data(), out, flare_cache_.size());
+      return;
+    }
+    ++local_answers_;
+    readback_probe_.record({frame_, kFlareReadbackQwords, guest_address(out), proto::kReadbackOk, 0, out}, stderr);
+  }
+
+  // Copies the reply of the request posted in the previous frame, when it is still the one in the response area.
+  void collect_flare_reply() {
+    if (flare_pending_id_ == 0) return;
+    bool collected = false;
+    if (session_ && !dead_) {
+      try {
+        collected = session_->readback_reply(flare_pending_id_, flare_cache_.data(), kFlareReadbackQwords);
+      } catch (const ipc::IpcError &error) {
+        lost(error.what());
+      }
+    }
+    if (collected) {
+      flare_cache_valid_ = true;
+    } else {
+      ++local_stale_;  // not answered yet or replaced by a later request: keep the older reply
+    }
+    flare_pending_id_ = 0;
+  }
+
+  // The MTVU journal drain posts the queued READ_FIFO here, at its stream position, without waiting for the reply.
+  void post_queued_readback(std::uint32_t qwords) {
+    if (!session_ || dead_) return;
+    note_readback_request(qwords);
+    try {
+      flare_pending_id_ = session_->post_read_fifo_nowait(qwords);
+    } catch (const ipc::IpcError &error) {
+      lost(error.what());
+    }
+  }
+
+  void clear_flare_cache() {
+    flare_cache_valid_ = false;
+    flare_pending_id_ = 0;
+  }
+
+  bool read_fifo(std::uint8_t *data, std::uint32_t qwords) {    for (std::uint32_t done = 0; done < qwords;) {
       const std::uint32_t part = std::min(qwords - done, kReadFifoQwordsPerRequest);
-      const proto::ReadFifoPayload request{part, 0, ++readback_id_};
-      ++counters_.readbacks;
-      counters_.readback_bytes += std::uint64_t(part) * 16;
-      write_capture(RecordType::read_fifo, 0, &request, sizeof request);
-      ++sequence_;
-      count(sizeof request);
-      if (stream()) {
-        std::uint8_t *out = data + std::size_t(done) * 16;
-        if (dead_) {
-          std::memset(out, 0, std::size_t(part) * 16);
-        } else {
-          gt4::perf::Scope wait(gt4::perf::Category::gs_ipc_readback_wait);
-          const std::uint64_t start = now_us();
-          std::uint32_t status = proto::kReadbackFailed;
-          try {
-            status = session_->read_fifo(part, out);
-            if (status == proto::kReadbackZeroFilled) ++zero_filled_;
-          } catch (const ipc::IpcError &error) {
-            lost(error.what());
-            std::memset(out, 0, std::size_t(part) * 16);
-          }
-          const std::uint64_t waited = now_us() - start;
-          readback_interval_.add(waited);
-          readback_session_.add(waited);
-          readback_probe_.record(
-              {frame_, part, guest_address(out), status, waited, out}, stderr);
-        }
+      std::uint8_t *out = data + std::size_t(done) * 16;
+      if (!stream() || dead_) {
+        note_readback_request(part);
+        if (stream()) std::memset(out, 0, std::size_t(part) * 16);  // the GS process is gone: zeros, as before
+      } else if (local_readback(part)) {
+        local_flare_readback(out);
+      } else {
+        accurate_readback(out, part);
       }
       done += part;
     }
@@ -370,6 +473,8 @@ class Client {
     const proto::ResetPayload payload{static_cast<std::uint32_t>(kind), mask, 0};
     emit(RecordType::reset, 0, &payload, sizeof payload);
     ++counters_.resets;
+    // TASK-116 step 1: a GS hard reset means a new scene, so the flare table of the last one is not a valid previous reply.
+    if (kind == proto::ResetKind::gs_hard) clear_flare_cache();
   }
 
   void control(proto::ControlKind kind, std::uint64_t a, std::uint64_t b, std::uint64_t c) {
@@ -467,6 +572,11 @@ class Client {
                    static_cast<unsigned long long>(w.frames_waits), w.frames_wait_us / 1000.0, w.response_wait_us / 1000.0);
     }
     if (readback_session_.count) readback_session_.print(output, "session");
+    if (readback_local_enabled_)
+      std::fprintf(output,
+                   "[gs-ipc] session flare readbacks answered locally: %llu (previous reply), %llu without a fresh reply "
+                   "(kept the older table)\n",
+                   static_cast<unsigned long long>(local_answers_), static_cast<unsigned long long>(local_stale_));
     readback_probe_.print_summary(output);
     if (stream_hash_.enabled)
       std::fprintf(output, "[gs-ipc] session stream hash (GT4_GS_STREAM_HASH): records %llu hash %016llx\n",
@@ -545,6 +655,15 @@ class Client {
         refuse(std::string("GT4_GS_CONFIG=") + config + " does not exist");
       config_argument = L" --config \"" + ipc::widen(config) + L"\"";
     }
+    // TASK-116 step 1: Performance mode is the launcher's HWDownloadMode 2 in the very ini the GS process gets
+    // (GT4_GS_CONFIG, one source of truth). An unreadable file or a missing key keeps the flare readback accurate.
+    if (const char *config = std::getenv("GT4_GS_CONFIG"); config && *config) download_mode_ = download_mode_from_ini(config);
+    readback_local_enabled_ = readback_local_switch() && download_mode_ == kNoReadbacksMode;
+    if (readback_local_enabled_)
+      std::fprintf(stderr,
+                   "[gs-ipc] Performance mode (gt4-gs.ini HWDownloadMode=%d): the 128-qword flare readback is answered "
+                   "locally, one frame old, whenever the VU1 journal can carry it; GT4_GS_READBACK_LOCAL=0 turns it off\n",
+                   download_mode_);
     ipc::SessionOptions options;
     options.serial = kGameSerial;
     options.frames_in_flight = frames_in_flight;
@@ -773,6 +892,15 @@ class Client {
                  d.bytes / f, d.records / f, d.gif_records / f, d.gif_bytes / f, d.priv / f, d.readbacks / f,
                  d.readback_bytes / f, static_cast<unsigned long long>(d.vsyncs));
     if (readback_interval_.count) readback_interval_.print(file, "interval");
+    if (readback_local_enabled_) {
+      const std::uint64_t local = local_answers_ - local_answers_baseline_;
+      std::fprintf(file,
+                   "[gs-ipc] flare readback answered locally: %.3f per frame (%llu of %llu readbacks, previous reply, "
+                   "no VU1 drain and no wait)%s\n",
+                   static_cast<double>(local) / f, static_cast<unsigned long long>(local),
+                   static_cast<unsigned long long>(d.readbacks),
+                   journal_ready() ? "" : " [journal not registered: accurate path]");
+    }
     if (stream_hash_.enabled)
       std::fprintf(file, "[gs-ipc] stream hash (GT4_GS_STREAM_HASH) after vsync %llu: records %llu hash %016llx\n",
                    static_cast<unsigned long long>(frame_), static_cast<unsigned long long>(stream_hash_.records),
@@ -870,6 +998,15 @@ class Client {
   std::uint64_t frame_ = 0;
   std::uint64_t readback_id_ = 0;
   std::uint64_t zero_filled_ = 0;
+  // TASK-116 step 1: the local flare answer (Performance mode).
+  int download_mode_ = -1;             // gt4-gs.ini HWDownloadMode (-1: unknown, no local answer)
+  bool readback_local_enabled_ = false;
+  std::array<std::uint8_t, kFlareReadbackBytes> flare_cache_{};
+  bool flare_cache_valid_ = false;
+  std::uint64_t flare_pending_id_ = 0;  // request id of the last queued READ_FIFO (0: none)
+  std::uint64_t local_answers_ = 0;     // flare readbacks answered from the cache
+  std::uint64_t local_answers_baseline_ = 0;
+  std::uint64_t local_stale_ = 0;       // replies that had not arrived (or were replaced) when collected
   proto::StatsPayload last_stats_{};
   bool has_stats_ = false;
   bool dead_ = false;
@@ -881,8 +1018,7 @@ class Client {
   std::uint32_t exit_code_ = 0;
   ReadbackWaits readback_session_;
   ReadbackProbe readback_probe_{ReadbackProbe::enabled_from_environment()};  // TASK-116 step 0 (P0 gate)
-  StreamHash stream_hash_;
-  std::uint32_t handshake_timeout_ms_ = kHandshakeTimeoutMs;
+  StreamHash stream_hash_;  std::uint32_t handshake_timeout_ms_ = kHandshakeTimeoutMs;
   std::uint32_t lost_grace_frames_ = kLostGraceFrames;
   std::uint32_t frames_since_lost_ = 0;
   bool halted_ = false;
@@ -922,6 +1058,7 @@ void Client::reset_interval_hook() {
   if (Client *c = client()) {
     c->baseline_ = c->counters_;
     c->readback_interval_ = {};
+    c->local_answers_baseline_ = c->local_answers_;
     c->privileged_baseline_ = c->privileged_;
     c->stats_baseline_ = c->last_stats_;
     c->has_stats_baseline_ = c->has_stats_;
@@ -1113,6 +1250,17 @@ bool read_fifo(std::uint8_t *data, std::uint32_t qwords) {
 void set_guest_ram(std::uint8_t *base, std::uint32_t size) {
   g_guest_ram = base;
   g_guest_ram_size = size;
+}
+
+void set_readback_journal(const ReadbackJournal &journal) { g_readback_journal = journal; }
+
+bool readback_local_active() {
+  Client *c = client();
+  return c != nullptr && c->local_active();
+}
+
+void post_read_fifo_nowait(std::uint32_t qwords) {
+  if (Client *c = client()) c->post_queued_readback(qwords);
 }
 
 void on_vsync(bool odd_field) {
