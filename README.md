@@ -11,6 +11,7 @@ No JIT, no emulator window, full speed.
 ![Release](https://img.shields.io/badge/release-1.2.3-2ea44f?style=for-the-badge)
 ![Ultrawide](https://img.shields.io/badge/ultrawide-any%20aspect%20ratio-2ea44f?style=for-the-badge)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support%20the%20project-FF5E5B?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/moesuito)
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20server-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/kHfGk4qJt)
 
 ![Code](https://img.shields.io/badge/code-EE%20%C2%B7%20VU0%20%C2%B7%20VU1%20100%25%20AOT%20%C2%B7%20IOP%20libraries%20native-2ea44f)
 ![GS](https://img.shields.io/badge/GS-GSdx%20%2B%20CoreGS%201.1-1f6feb)
@@ -164,6 +165,7 @@ possible.
 - **Contribute:** read [CONTRIBUTING.md](CONTRIBUTING.md) for the rules and the pull request template, then pick a
   task from [TASKS.md](TASKS.md) or an [issue](https://github.com/moesuito/gt4-staticrecomp/issues).
 - **Report bugs:** open an issue with the launcher log (Settings > About > Open log folder).
+- **Talk with us:** join the [GT4Recomp Discord server](https://discord.gg/kHfGk4qJt).
 
 ## Credits
 
