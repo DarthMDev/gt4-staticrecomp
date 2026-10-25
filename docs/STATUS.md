@@ -12,15 +12,16 @@ Implemented and tested headless, owner test pending; nothing merged or released.
   P0 probe (`GT4_GS_READBACK_LOG=1`) answered the gate: in Performance mode gt4-gs returns stale real pixels, not zeros
   (139 distinct replies against 2,161), so the local answer can only be one frame late; the launcher help text of
   Performance Mode was corrected in both languages.
-- **TASK-117 (GT4 v2.00 only):** a derived ELF with four `jal` redirects and our own helpers in the zero padding
-  (`scripts/flare_limits_elf_patch.py`, pinned table and verify mode), a new EE library profile `flare` (8 units differ
-  from the slice208 library) and the host block at 0x7F10 written at every guest VBlank from `GT4_FLARE_LIMITS`. The
-  launcher sends the switch for GT4 v2.00 with Performance Mode on and never for Spec II; a direct start reads the same
-  from the config `gt4-gs.ini`.
+- **TASK-117 (GT4 v2.00 only): built, NOT shipped in rc6.** The derived ELF with four `jal` redirects and our own
+  helpers in the zero padding (`scripts/flare_limits_elf_patch.py`, pinned table and verify mode), the new EE library
+  profile `flare` (8 units differ from the slice208 library) and the host block at 0x7F10 are implemented and tested, but
+  the switch-off identity gate failed: with every helper taking the original path, the night race still diverges from rc5
+  from the first frame that draws flares (dumps from frame 10000; 27,246,609 records against 27,259,715). The rc6 v2.00
+  build keeps the `aspect` library and the launcher sends no flare switch until the cause is found.
 - **Checks:** CTest 46/46 and 47/47 (new `native_gs_readback_probe` and `native_flare_limits`), Python 697 tests OK
   (43 skipped) plus the new ELF patch test, `cargo test -p gt4l-core` 313 passed, MTVU verify 11,000 frames 0 mismatches.
-  The v2.00 identity vs rc5 (frame dumps and GS stream hash with the flare switch off, and the switched-on run with no
-  halts) is the next check, followed by the rc6 builds and the draft.
+  The Accurate identity vs rc5 holds (night stream hash `c091716e3cb40d79`). Next: the rc6 builds (v2.00 on the `aspect`
+  library, Spec II with step 1 only), the pins and the draft.
 
 ## rc5 Settings open at once, TASK-114 item 8 (2026-10-24, `task/101-multi-game`, 1.3.0-rc5)
 

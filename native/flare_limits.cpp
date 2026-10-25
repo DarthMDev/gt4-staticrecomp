@@ -58,7 +58,11 @@ bool write_parameters(std::uint8_t *ram, std::uint32_t ram_size, const Parameter
 
 void at_guest_vblank(std::uint8_t *ram, std::uint32_t ram_size) {
   static const Parameters parameters = parameters_from_switch(std::getenv(kSwitch));
-  write_parameters(ram, ram_size, parameters);
+  const bool wrote = write_parameters(ram, ram_size, parameters);
+  // Diagnostic (GT4_FLARE_LIMITS_LOG=1): the block must stay ours. A non-zero value there would be the game using
+  // 0x7F10, and this re-assert would then be fighting it.
+  if (wrote && parameters == Parameters{} && std::getenv("GT4_FLARE_LIMITS_LOG"))
+    std::fprintf(stderr, "[flare-limits] guest memory at 0x7F10 was not zero; the game writes the parameter block\n");
 }
 
 }  // namespace gt4::flare_limits
