@@ -1,4 +1,27 @@
 # Current Status
+## rc6 performance, TASK-116 step 1 and TASK-117 (2026-10-25, `task/116-117-flare-perf`)
+
+Implemented and tested headless, owner test pending; nothing merged or released.
+
+- **TASK-116 step 1 (both targets' code, no new ELF):** in Performance mode only the 128-qword flare readback is answered
+  locally with the previous reply (one frame old, never a zero table); `sync("download")` no longer drains the VU1 worker
+  for it, the READ_FIFO is still posted in stream order (one record per readback, the night record counts equal the
+  rc5 Performance-mode run), and every other readback keeps the blocking drain and the wait. Result (night race, headless
+  1x): blocking drains 5,026 -> 29, the readback wait total 4,596.6 (Accurate) / 2,329.1 (rc5 Performance) -> 46.1 ms,
+  4,997 of 4,998 flare replies from the cache. The Accurate run still hashes `c091716e3cb40d79` (release 1.3.0 pin). The
+  P0 probe (`GT4_GS_READBACK_LOG=1`) answered the gate: in Performance mode gt4-gs returns stale real pixels, not zeros
+  (139 distinct replies against 2,161), so the local answer can only be one frame late; the launcher help text of
+  Performance Mode was corrected in both languages.
+- **TASK-117 (GT4 v2.00 only):** a derived ELF with four `jal` redirects and our own helpers in the zero padding
+  (`scripts/flare_limits_elf_patch.py`, pinned table and verify mode), a new EE library profile `flare` (8 units differ
+  from the slice208 library) and the host block at 0x7F10 written at every guest VBlank from `GT4_FLARE_LIMITS`. The
+  launcher sends the switch for GT4 v2.00 with Performance Mode on and never for Spec II; a direct start reads the same
+  from the config `gt4-gs.ini`.
+- **Checks:** CTest 46/46 and 47/47 (new `native_gs_readback_probe` and `native_flare_limits`), Python 697 tests OK
+  (43 skipped) plus the new ELF patch test, `cargo test -p gt4l-core` 313 passed, MTVU verify 11,000 frames 0 mismatches.
+  The v2.00 identity vs rc5 (frame dumps and GS stream hash with the flare switch off, and the switched-on run with no
+  halts) is the next check, followed by the rc6 builds and the draft.
+
 ## rc5 Settings open at once, TASK-114 item 8 (2026-10-24, `task/101-multi-game`, 1.3.0-rc5)
 
 Implemented, owner test pending; nothing merged or released. The graphics cards are probed once and kept (Play refreshes

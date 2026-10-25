@@ -379,6 +379,32 @@ fn both_window_modes_pass_window_and_send_gt4_fullscreen_to_the_game_and_the_gs_
     }
 }
 
+// ---- TASK-117: the flare limits of Performance Mode (GT4 v2.00 only) -------------------------------------------------
+
+/// GT4 v2.00 in Performance Mode sends `GT4_FLARE_LIMITS=1`; Accurate mode never does, and Spec II never does (its ELF has
+/// no such guest code in rc6). The variable is always stated by the launcher: an inherited value is scrubbed.
+#[test]
+fn performance_mode_sends_the_flare_limits_to_gt4_v200_only() {
+    let mut performance = Settings::default();
+    performance.set_gs("performance_mode", "no-readbacks").unwrap();
+    let accurate = Settings::default();
+
+    let gt4 = plan_launch(&inputs(), &performance, None, &[]);
+    assert_eq!(env_map(&gt4.environment)["GT4_FLARE_LIMITS"], "1");
+    assert!(!env_map(&plan_launch(&inputs(), &accurate, None, &[]).environment).contains_key("GT4_FLARE_LIMITS"),
+            "Accurate mode keeps the original flares");
+
+    let spec2 = LaunchInputs { elf: Path::new("C:/work/SCUS_974.36"), ..inputs() };
+    assert!(!env_map(&plan_launch(&spec2, &performance, None, &[]).environment).contains_key("GT4_FLARE_LIMITS"),
+            "TASK-117 is GT4 v2.00 only");
+
+    // An inherited switch never reaches the game: scrubbed, and only the launcher's own value comes back.
+    let inherited = vec!["GT4_FLARE_LIMITS".to_string()];
+    let plan = plan_launch(&inputs(), &accurate, None, &inherited);
+    assert_eq!(plan.removed_inherited, vec!["GT4_FLARE_LIMITS".to_string()]);
+    assert!(!env_map(&plan.environment).contains_key("GT4_FLARE_LIMITS"));
+}
+
 // ---- TASK-097: the config file of a direct start ---------------------------------------------------------------------
 
 /// The sample the game's fixture (`native/standalone_fixture.cpp`) parses.

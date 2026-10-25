@@ -5,8 +5,10 @@
 #include "mtvu_measure.hpp"
 #include "mtvu_ring.hpp"
 #include "mtvu_vif_batch.hpp"
+#include "race_display.hpp"
 #include "race_widescreen.hpp"
 #include "display_aspect.hpp"
+#include "flare_limits.hpp"
 #include "perf_probe.hpp"
 
 #include <atomic>
@@ -677,6 +679,8 @@ void vblank_sync() {
   gt4::display::widescreen_hold_at_guest_vblank(ps2::g_ram, 32u << 20);
   // TASK-080: the display request sample drives the race view / pillarbox presentation (native/display_aspect.hpp).
   gt4::display_aspect::at_guest_vblank(ps2::g_ram, 32u << 20);
+  // TASK-117: the flare-limits block of Performance mode (native/flare_limits.hpp; GT4_FLARE_LIMITS).
+  gt4::flare_limits::at_guest_vblank(ps2::g_ram, 32u << 20);
   Runtime &r = rt();
   if (!r.started) return;
   // TASK-084 step 3: in pcsx2 mode the VSYNC is a journal entry after the frame's VU1 output, so the EE does not

@@ -9,7 +9,7 @@ set(GT4_ASSETS_ROOT "${GT4_ROOT}" CACHE PATH "Verified private assets checkout")
 # Accounting layout matches across translation units. Legacy report lines are unchanged (kLegacyCategoryCount).
 add_compile_definitions(GT4_MTVU_RUNTIME)
 set(GT4_EE_PROFILE "production" CACHE STRING "Pinned EE library profile")
-set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation coverage aspect)
+set_property(CACHE GT4_EE_PROFILE PROPERTY STRINGS production baseline recovered observation coverage aspect flare)
 # TASK-100 S3: the game target whose guest addresses the host hooks use (native/game_target.hpp). v200 is the release
 # target; spec2 is the second target of decision 0072 and has no hooks until S8 fills its table.
 set(GT4_TARGET "v200" CACHE STRING "Game target for the host hooks and the guest image")
@@ -47,7 +47,7 @@ set(GT4_SPEC2_CAPSULE_RE "^private/slice27[0-9]-[a-z0-9-]+-runtime$")
 if(GT4_PERF_RUNTIME_SOURCE)
     # TASK-014 slice208: the accepted explicit-seed library (profile coverage) may carry the performance capsule too.
     # TASK-100 S4: the Spec II target uses the same target-independent runtime capsule.
-    if(GT4_SHAPE_RUNTIME_SOURCE OR NOT GT4_EE_PROFILE MATCHES "^(production|coverage|aspect|spec2)$")
+    if(GT4_SHAPE_RUNTIME_SOURCE OR NOT GT4_EE_PROFILE MATCHES "^(production|coverage|aspect|flare|spec2)$")
         message(FATAL_ERROR "Performance profile requires production, coverage, aspect or spec2 EE and no observation overlay")
     endif()
     get_filename_component(PORT "${GT4_PORT_DIR}" ABSOLUTE)
@@ -143,6 +143,18 @@ elseif(GT4_EE_PROFILE STREQUAL "aspect")
     endif()
     set(GAME_LIBRARY "${GT4_ASSETS_ROOT}/${library_path}")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_ROOT}/docs/inputs/slice217-ee-libraries.json")
+elseif(GT4_EE_PROFILE STREQUAL "flare")
+    # TASK-117 (rc6): the TASK-080 P2 rows plus the flare-limits redirects and helpers in the zero padding
+    # (scripts/flare_limits_elf_patch.py; native/flare_limits.cpp fills the block). Pinned by
+    # docs/inputs/slice299-ee-libraries.json.
+    file(READ "${GT4_ROOT}/docs/inputs/slice299-ee-libraries.json" flare_manifest)
+    string(JSON library_path GET "${flare_manifest}" profiles flare path)
+    string(JSON expected_game_library_hash GET "${flare_manifest}" profiles flare sha256)
+    if(NOT library_path MATCHES "^private/slice299-ee-flare-producer/game-build/ps2game\.lib$")
+        message(FATAL_ERROR "Flare library must be the slice299 producer library")
+    endif()
+    set(GAME_LIBRARY "${GT4_ASSETS_ROOT}/${library_path}")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${GT4_ROOT}/docs/inputs/slice299-ee-libraries.json")
 elseif(GT4_EE_PROFILE STREQUAL "spec2")
     # TASK-100 S4/S8c: the Spec II library, translated from the derived SCUS_974.36 (scripts/spec2_elf_patch.py,
     # scripts/spec2_ee_generate.py and the S8c seed generator scripts/spec2_entry_seeds.py). Plain translation: no
@@ -269,7 +281,8 @@ target_compile_options(gt4_pacing PRIVATE /W4)
 # Pure window-mode state and the GT4_FORCE_480P race display index (slice164).
 # TASK-060: cursor auto-hide rule (cursor_autohide.cpp) shared by the window.
 # TASK-080: display aspect (GT4_DISPLAY_ASPECT parse, Hor+/Vert+ matrix scale, scene policy, runtime glue).
-add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp race_widescreen.cpp cursor_autohide.cpp display_aspect.cpp)
+add_library(gt4_quickfix STATIC window_mode.cpp race_display.cpp race_widescreen.cpp cursor_autohide.cpp display_aspect.cpp
+    flare_limits.cpp)
 target_compile_options(gt4_quickfix PRIVATE /W4)
 # TASK-100 S7b: the v2.00 hook fixtures assert the v2.00 guest chains, but gt4_quickfix carries the active target's table
 # (Spec II in a Spec II build). A Spec II build therefore compiles a second copy of the three hook modules pinned to
@@ -867,6 +880,12 @@ add_executable(race_widescreen_fixture race_widescreen_fixture.cpp)
 target_link_libraries(race_widescreen_fixture PRIVATE ${GT4_HOOK_FIXTURE_LIB})
 target_compile_options(race_widescreen_fixture PRIVATE /W4)
 add_executable(display_aspect_fixture display_aspect_fixture.cpp)
+# TASK-117: the flare-limits parameter block (native/flare_limits.hpp); no game addresses, so no v2.00 pin needed.
+add_executable(flare_limits_fixture flare_limits_fixture.cpp)
+target_link_libraries(flare_limits_fixture PRIVATE ${GT4_HOOK_FIXTURE_LIB})
+target_compile_options(flare_limits_fixture PRIVATE /W4)
+add_test(NAME native_flare_limits COMMAND $<TARGET_FILE:flare_limits_fixture>)
+set_tests_properties(native_flare_limits PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 target_link_libraries(display_aspect_fixture PRIVATE ${GT4_HOOK_FIXTURE_LIB})
 target_compile_options(display_aspect_fixture PRIVATE /W4)
 add_executable(cursor_autohide_fixture cursor_autohide_fixture.cpp)
