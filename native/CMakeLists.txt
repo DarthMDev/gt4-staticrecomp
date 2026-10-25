@@ -367,7 +367,8 @@ target_link_libraries(gt4_mtvu_runtime PUBLIC gt4_mtvu_journal gt4_mtvu_measure 
 target_compile_options(gt4_mtvu_runtime PRIVATE /W4)
 # TASK-035: GS stream protocol, shared-memory transport and .gscap v2 files (MIT, no donor or renderer code), the
 # game-side client (linked into the runtime by the slice191 capsule only) and their host-only controls.
-add_library(gt4_gs_stream STATIC gs_stream/gs_stream_ipc.cpp gs_stream/gs_stream_file.cpp)
+add_library(gt4_gs_stream STATIC gs_stream/gs_stream_ipc.cpp gs_stream/gs_stream_file.cpp
+    gs_stream/gs_readback_probe.cpp)
 target_include_directories(gt4_gs_stream PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/gs_stream")
 target_compile_options(gt4_gs_stream PRIVATE /W4)
 add_library(gt4_gs_stream_client STATIC gs_stream/gs_stream_client.cpp)
@@ -384,6 +385,11 @@ add_executable(gs_stream_client_fixture gs_stream/gs_stream_client_fixture.cpp)
 target_link_libraries(gs_stream_client_fixture PRIVATE gt4_gs_stream_client)
 target_compile_definitions(gs_stream_client_fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
 target_compile_options(gs_stream_client_fixture PRIVATE /W4)
+# TASK-116 step 0: the READ_FIFO probe (GT4_GS_READBACK_LOG): HWDownloadMode ini parse, reply hash, aggregation.
+add_executable(gs_readback_probe_fixture gs_stream/gs_readback_probe_fixture.cpp)
+target_link_libraries(gs_readback_probe_fixture PRIVATE gt4_gs_stream)
+target_compile_definitions(gs_readback_probe_fixture PRIVATE _CRT_SECURE_NO_WARNINGS)
+target_compile_options(gs_readback_probe_fixture PRIVATE /W4)
 if(GT4_PERF_FRAME_ONLY)
     target_compile_definitions(gt4_perf_probe PUBLIC GT4_PERF_FRAME_ONLY)
 endif()

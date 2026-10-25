@@ -2,6 +2,7 @@
 // Game-side GS stream backend; see gs_stream_client.hpp and docs/GS-STREAM-PROTOCOL.md section 7.
 #include "gs_stream_client.hpp"
 
+#include "gs_readback_probe.hpp"
 #include "gs_stream_file.hpp"
 #include "gs_stream_ipc.hpp"
 #include "perf_probe.hpp"
@@ -81,6 +82,9 @@ std::uint32_t g_cursor_hide_delay_ms = 3000;
 // TASK-080: display aspect wanted by the game (set_display_aspect_mode), posted after a VSYNC to a 1.3 consumer.
 // Low 32 bits: the mode; high 32 bits: the fill target aspect x 1e6 (0 = the whole window; P2, slice217).
 std::atomic<std::uint64_t> g_display_aspect_wanted{0};
+// TASK-116 step 0 (P0 gate): the guest RAM window of the readback log's destination column (set_guest_ram).
+std::uint8_t *g_guest_ram = nullptr;
+std::uint32_t g_guest_ram_size = 0;
 
 // CPU time of the calling thread in microseconds (UINT64_MAX when unavailable).
 std::uint64_t thread_cpu_us() {
@@ -223,6 +227,14 @@ std::string ascii(const char *text, std::size_t size) {
   return std::string(text, length);
 }
 
+// TASK-116 step 0: the EE RAM address of a host pointer into guest RAM (0 outside it; the probe's destination column).
+std::uint32_t guest_address(const std::uint8_t *address) {
+  if (!g_guest_ram) return 0;
+  const auto value = reinterpret_cast<std::uintptr_t>(address);
+  const auto base = reinterpret_cast<std::uintptr_t>(g_guest_ram);
+  return value >= base && value - base < g_guest_ram_size ? static_cast<std::uint32_t>(value - base) : 0;
+}
+
 // TASK-059: the GS process path. GT4_GS_PROCESS wins; otherwise <executable folder>\gs\gt4-gs.exe (install_paths.cpp)
 // is used when that file exists. Returns an empty string when neither is available.
 std::string gs_process_path() {
@@ -238,6 +250,8 @@ class Client {
     open_capture();
     if (renderer_ == Renderer::pcsx2) {
       start_process();
+      // TASK-116 step 0 (P0 gate): which download mode the GS process was given, so a readback log says what it answers.
+      report_download_mode();
       // TASK-080: in pcsx2 mode the race-view presentation goes to the GS process (CONTROL display_aspect). Installed
       // here so headless runs exercise it too; the game window (window.cpp) installs an equivalent sink later.
       gt4::display_aspect::set_presentation_sink([](bool fill, double ratio) {
@@ -301,8 +315,9 @@ class Client {
         } else {
           gt4::perf::Scope wait(gt4::perf::Category::gs_ipc_readback_wait);
           const std::uint64_t start = now_us();
+          std::uint32_t status = proto::kReadbackFailed;
           try {
-            const std::uint32_t status = session_->read_fifo(part, out);
+            status = session_->read_fifo(part, out);
             if (status == proto::kReadbackZeroFilled) ++zero_filled_;
           } catch (const ipc::IpcError &error) {
             lost(error.what());
@@ -311,6 +326,8 @@ class Client {
           const std::uint64_t waited = now_us() - start;
           readback_interval_.add(waited);
           readback_session_.add(waited);
+          readback_probe_.record(
+              {frame_, part, guest_address(out), status, waited, out}, stderr);
         }
       }
       done += part;
@@ -403,7 +420,18 @@ class Client {
 
   void set_halt(void (*halt)(const char *)) { halt_ = halt; }
 
-  void finish(std::FILE *output) {
+  // TASK-116 step 0 (P0 gate): the download mode the GS process was given, read from the very ini the launcher writes
+  // (GT4_GS_CONFIG), so a readback log says which mode produced the replies. Only with GT4_GS_READBACK_LOG=1.
+  void report_download_mode() {
+    if (!readback_probe_.enabled()) return;
+    const char *path = std::getenv("GT4_GS_CONFIG");
+    const int mode = download_mode_from_ini(path);
+    if (mode >= 0)
+      std::fprintf(stderr, "[gs-readback] gt4-gs.ini HWDownloadMode=%d (%s)\n", mode, path);
+    else
+      std::fprintf(stderr, "[gs-readback] gt4-gs.ini HWDownloadMode unknown (GT4_GS_CONFIG=%s)\n",
+                   path && *path ? path : "unset");
+  }  void finish(std::FILE *output) {
     if (finished_) return;
     finished_ = true;
     capture_.close();  // the capture holds the game's stream; the transport's shutdown request is not part of it
@@ -439,6 +467,7 @@ class Client {
                    static_cast<unsigned long long>(w.frames_waits), w.frames_wait_us / 1000.0, w.response_wait_us / 1000.0);
     }
     if (readback_session_.count) readback_session_.print(output, "session");
+    readback_probe_.print_summary(output);
     if (stream_hash_.enabled)
       std::fprintf(output, "[gs-ipc] session stream hash (GT4_GS_STREAM_HASH): records %llu hash %016llx\n",
                    static_cast<unsigned long long>(stream_hash_.records), static_cast<unsigned long long>(stream_hash_.value));
@@ -851,6 +880,7 @@ class Client {
   bool exit_known_ = false;
   std::uint32_t exit_code_ = 0;
   ReadbackWaits readback_session_;
+  ReadbackProbe readback_probe_{ReadbackProbe::enabled_from_environment()};  // TASK-116 step 0 (P0 gate)
   StreamHash stream_hash_;
   std::uint32_t handshake_timeout_ms_ = kHandshakeTimeoutMs;
   std::uint32_t lost_grace_frames_ = kLostGraceFrames;
@@ -1078,6 +1108,11 @@ std::string format_frame_summary(const FrameCosts &costs) {
 bool read_fifo(std::uint8_t *data, std::uint32_t qwords) {
   Client *c = client();
   return c ? c->read_fifo(data, qwords) : false;
+}
+
+void set_guest_ram(std::uint8_t *base, std::uint32_t size) {
+  g_guest_ram = base;
+  g_guest_ram_size = size;
 }
 
 void on_vsync(bool odd_field) {

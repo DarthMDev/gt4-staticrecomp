@@ -68,6 +68,10 @@ const char *privileged_register_name(int index);
 // Local-to-host FIFO read. Returns true when the stream renderer answered it (data filled); false in donor mode,
 // where the capture only records the request and the donor serves the data.
 bool read_fifo(std::uint8_t *data, std::uint32_t qwords);
+// TASK-116 step 0 (P0 gate): the guest RAM window used to report a READ_FIFO destination as an EE address in the
+// GT4_GS_READBACK_LOG lines. native/game_main.cpp sets it once from ps2::g_ram; unset, the destination is reported as 0.
+// A probe aid only: read_fifo itself does not look at it.
+void set_guest_ram(std::uint8_t *base, std::uint32_t size);
 // Start of the vertical blank, after the donor toggled the field: odd_field is the CSR FIELD bit the EE now reads.
 // The donor toggles the field together with INTC VBLANK_S, before the game's VBLANK_S handler runs, so this is also
 // the display field of the frame that ends here (protocol 1.1 VSYNC.field; docs/GS-STREAM-PROTOCOL.md 6.1).

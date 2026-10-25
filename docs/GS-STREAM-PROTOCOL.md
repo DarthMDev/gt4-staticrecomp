@@ -278,6 +278,11 @@ Rules:
   value is therefore also the display field of the frame that ends at this VSYNC (section 6.1, version 1.1).
 - READ_FIFO: posted from `gs::read_image` (FIFO read or GIF DMA channel 1 reverse transfer), after the MTVU download
   sync; the EE waits for the reply.
+- TASK-116 step 0 (P0 gate): `GT4_GS_READBACK_LOG=1` (a test switch, off by default) prints one `[gs-readback]` line per
+  READ_FIFO reply (frame, guest destination, qwords, status, EE wait, nonzero bytes, first 16 bytes, FNV-1a 64 of the
+  reply, whether it repeated the previous one) and a per-destination summary at exit; it also prints the
+  `HWDownloadMode` of the ini named by `GT4_GS_CONFIG`. It only reads the reply after the client copied it: no record
+  changes, so the stream hash is unchanged (checked against the release 1.3.0 night hash, 2026-10-25).
 - RESET: kind 1 at the donor GS reset, kind 2 (paths 1-3) at a GIF reset.
 - Presentation: none in the game; the consumer presents. CONTROL attach_window and resize carry the game window.
 - Shutdown: at the end of the run the producer posts CONTROL shutdown, waits up to 3 s for the consumer to exit,
